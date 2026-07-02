@@ -10,7 +10,7 @@
 <p align="center">
   <a href="https://dzenanalytics.zentable.ru"><b>🚀 Открыть онлайн</b></a> ·
   <a href="https://zentable.ru">Сервис-партнёр</a> ·
-  <a href="CHANGELOG.md">Что нового — v1.4.5</a> ·
+  <a href="CHANGELOG.md">История изменений</a> ·
   <a href="LICENSE">MIT</a>
 </p>
 
