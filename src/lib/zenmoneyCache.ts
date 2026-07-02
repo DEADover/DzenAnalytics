@@ -17,6 +17,7 @@ import type {
   ZenDiffResponse,
   ZenInstrument,
   ZenMerchant,
+  ZenReminderMarker,
   ZenTag,
   ZenTransaction,
 } from "./zenmoney";
@@ -34,6 +35,11 @@ export interface ZenCache {
   /** Zenmoney «Планы»/budgets. Optional for backward-compat with caches
    *  written before budget sync existed (default to `[]` on read). */
   budgets?: ZenBudget[];
+  /** PLANNED reminder markers only (`state: 'planned'`). Needed to compute a
+   *  budget's effective plan when it's unlocked (raw + planned ops). We drop
+   *  processed/deleted markers on merge to keep the cache lean and self-cleaning.
+   *  `undefined` = never back-filled yet (triggers a one-time forceFetch). */
+  reminderMarkers?: ZenReminderMarker[];
 }
 
 /** Composite key for a budget row — it has no surface `id`. */
@@ -51,6 +57,26 @@ function mergeBudgets(prev: ZenBudget[], incoming: ZenBudget[] | undefined): Zen
   for (const b of prev) map.set(budgetKey(b), b);
   for (const b of inc) map.set(budgetKey(b), b);
   return Array.from(map.values());
+}
+
+/**
+ * Merge reminder markers, then KEEP ONLY the planned ones. A marker that gets
+ * executed arrives in a later diff with `state: 'processed'` (or 'deleted') —
+ * we merge it in by id and then filter it out, so the cache holds exactly the
+ * currently-planned operations (what budgets need) and nothing else. Deletions
+ * ride the generic `deletion` list keyed by object type "reminderMarker".
+ */
+function mergeReminderMarkers(
+  prev: ZenReminderMarker[],
+  incoming: ZenReminderMarker[] | undefined,
+  deletions: ZenDeletion[]
+): ZenReminderMarker[] {
+  const inc = incoming || [];
+  const noChange =
+    inc.length === 0 && deletions.every((d) => d.object !== "reminderMarker");
+  if (noChange) return prev.filter((m) => m.state === "planned");
+  const merged = merge(prev, inc, "reminderMarker", deletions);
+  return merged.filter((m) => m.state === "planned");
 }
 
 export async function loadZenCache(): Promise<ZenCache | null> {
@@ -146,6 +172,9 @@ export function applyDiff(
       transactions: diff.transaction || [],
       user: diff.user || [],
       budgets: diff.budget || [],
+      reminderMarkers: (diff.reminderMarker || []).filter(
+        (m) => m.state === "planned"
+      ),
     });
   }
   const deletions = diff.deletion || [];
@@ -164,6 +193,11 @@ export function applyDiff(
     // user record rarely changes; if diff omits it, keep previous.
     user: diff.user && diff.user.length > 0 ? diff.user : prev.user,
     budgets: mergeBudgets(prev.budgets || [], diff.budget),
+    reminderMarkers: mergeReminderMarkers(
+      prev.reminderMarkers || [],
+      diff.reminderMarker,
+      deletions
+    ),
   });
 }
 
@@ -180,5 +214,6 @@ export function cacheToDiffResponse(cache: ZenCache): ZenDiffResponse {
     transaction: cache.transactions,
     user: cache.user,
     budget: cache.budgets || [],
+    reminderMarker: cache.reminderMarkers || [],
   };
 }

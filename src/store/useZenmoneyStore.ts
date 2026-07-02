@@ -43,8 +43,13 @@ import {
 } from "./useDeletedPayloadsStore";
 import { useSyncLogStore } from "./useSyncLogStore";
 import { useBudgetsStore } from "./useBudgetsStore";
-import { zenPlanList } from "../lib/zenBudgets";
+import {
+  zenPlanList,
+  zenForecastsFromBudgets,
+  plannedOpsByTagMonth,
+} from "../lib/zenBudgets";
 import { formatNum } from "../lib/format";
+import { budgetCellKey } from "../lib/budgets";
 import type { ImportMeta } from "../types";
 
 const TOKEN_KEY = "zenmoneyToken";
@@ -135,6 +140,12 @@ export type SyncStatus = "idle" | "checking" | "syncing" | "ok" | "error";
  */
 export type PushMode = "off" | "manual" | "auto" | "on-sync";
 const PUSH_MODE_DEFAULT: PushMode = "off";
+
+/** Retry cap for a budget edit that keeps getting skipped (its tag isn't in the
+ *  cache). After this many consecutive skips the queue drops it, on the
+ *  assumption the tag was deleted/renamed in Дзен and it can never resolve. High
+ *  enough that a transient miss (tag not synced yet) always clears first. */
+const MAX_BUDGET_EDIT_SKIPS = 5;
 
 export interface LiveAccount {
   /** Account title — matches Transaction.account / outcomeAccount / incomeAccount. */
@@ -233,6 +244,17 @@ export async function getCategoryTagsFromCache(): Promise<CategoryTag[] | null> 
       showOutcome: !!t.showOutcome,
     }))
     .sort((a, b) => a.title.localeCompare(b.title, "ru"));
+}
+
+/**
+ * Zenmoney's OWN auto-forecast amounts («из X»), keyed by zenPlanKey — so the
+ * Budgets page can show «≈»-планы that match Дзен instead of a local median.
+ * Returns null in CSV mode (no cache).
+ */
+export async function getZenForecastsFromCache(): Promise<Map<string, number> | null> {
+  const cache = await loadZenCache();
+  if (!cache) return null;
+  return zenForecastsFromBudgets(cache.budgets, cache.tags);
 }
 
 /**
@@ -482,7 +504,17 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // in full so renames/deletions propagate everywhere.
       const prevCache = opts.force ? null : await loadZenCache();
       const fromTs = prevCache?.serverTimestamp || 0;
-      const diff = await fetchDiff(token, fromTs);
+      // One-time back-fill: existing PLANNED reminder markers are needed to
+      // compute unlocked budgets' effective plan, but an incremental diff never
+      // re-sends already-created ones. If we've never pulled them (field is
+      // absent — not just an empty array), forceFetch the full set once.
+      const needMarkers = !opts.force && prevCache != null && !prevCache.reminderMarkers;
+      const diff = await fetchDiff(
+        token,
+        fromTs,
+        undefined,
+        needMarkers ? ["reminderMarker"] : undefined
+      );
       const nextCache = applyDiff(prevCache, diff);
       await saveZenCache(nextCache);
       const mapped = mapZenmoneyDiff(cacheToDiffResponse(nextCache));
@@ -520,18 +552,51 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // any existing calibration since the API value is authoritative.
       await recalcBalanceCalibration();
 
-      // On a FULL sync, mirror Zenmoney «Планы»/budgets into local budget
-      // lines so they appear automatically (no manual import). Create-only:
-      // categories the user already budgets are left untouched.
-      if (isFull && nextCache.budgets && nextCache.budgets.length > 0) {
-        // Mirror Zenmoney «Планы»/budgets for EVERY month they cover — each
-        // category's line starts at its earliest planned month and carries a
-        // per-month plan via overrides, so past months fill in too.
-        const seeds = zenPlanList(nextCache.budgets, nextCache.tags);
+      // Mirror Zenmoney «Планы»/budgets into local budget lines on EVERY sync
+      // (not just full) so a plan changed in Дзен shows up here automatically —
+      // the incremental diff carries changed budgets too. importFromZen does a
+      // three-way merge: new tags are created, unchanged cells adopt Zen's
+      // value, and cells the user edited locally but hasn't pushed (tracked in
+      // `budgetEdits`) are preserved — see importFromZen for the rationale.
+      if (nextCache.budgets && nextCache.budgets.length > 0) {
+        // Effective plan = stored budget + planned ops for unlocked cells.
+        const planned = plannedOpsByTagMonth(
+          nextCache.reminderMarkers,
+          nextCache.instruments,
+          nextCache.user?.[0]?.currency
+        );
+        const seeds = zenPlanList(nextCache.budgets, nextCache.tags, planned);
         if (seeds.length > 0) {
           const bs = useBudgetsStore.getState();
           if (!bs.loaded) await bs.hydrate();
-          await useBudgetsStore.getState().importFromZen(seeds);
+          const pendingBudgetEdits = await loadBudgetEdits();
+          // A pending edit protects its cell from Zen's value ONLY while it's
+          // still unpushed. Once the cloud plan equals the edit, the edit is
+          // SATISFIED — the value the user set is live in Дзен — so we must:
+          //   • stop protecting the cell (let the line adopt the cloud value,
+          //     which equals the edit anyway), and
+          //   • drop the edit from the queue.
+          // Otherwise a satisfied edit freezes the cell forever: the display
+          // sticks at a stale local number while Дзен moved on (this is the
+          // «у нас 160000, а в Дзене 305000» bug). Cloud plans come straight
+          // from `seeds` (zenPlanList = manual plans), keyed per cell.
+          const cloudByCell = new Map(
+            seeds.map((s) => [
+              budgetCellKey(s.kind, s.category, s.subcategory, s.ym),
+              s.amount,
+            ])
+          );
+          const protectedKeys = new Set<string>();
+          const satisfiedEditIds: string[] = [];
+          for (const [id, e] of Object.entries(pendingBudgetEdits)) {
+            const cell = budgetCellKey(e.kind, e.category, e.subcategory, e.ym);
+            if (cloudByCell.get(cell) === e.amount) satisfiedEditIds.push(id);
+            else protectedKeys.add(cell);
+          }
+          await useBudgetsStore.getState().importFromZen(seeds, protectedKeys);
+          if (satisfiedEditIds.length > 0) {
+            await useBudgetEditsStore.getState().clearMany(satisfiedEditIds);
+          }
         }
       }
 
@@ -808,6 +873,24 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       const doneBudgetIds = Object.keys(budgetEdits).filter(
         (id) => !skippedBudgetIds.has(id)
       );
+      // Auto-drop budget edits that keep getting skipped: a stale edit whose tag
+      // was deleted/renamed in Дзен can never resolve and would retry on every
+      // sync forever. A TRANSIENT miss (tag just not synced yet) clears well
+      // before the cap because the next sync resolves the tag and pushes it.
+      if (skippedBudgetIds.size > 0) {
+        const dropped = await useBudgetEditsStore
+          .getState()
+          .bumpSkips([...skippedBudgetIds], MAX_BUDGET_EDIT_SKIPS);
+        if (dropped.length > 0) {
+          void useSyncLogStore.getState().append({
+            kind: "push",
+            status: "partial",
+            title: "Планы: отброшены зависшие правки",
+            summary: `Правок бюджета не удалось отправить за ${MAX_BUDGET_EDIT_SKIPS} попыток (тег удалён/переименован в Дзене): ${dropped.length}`,
+            durationMs: Date.now() - pushStartedAt,
+          });
+        }
+      }
       if (
         toPush.length === 0 &&
         deletions.length === 0 &&

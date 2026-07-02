@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { applyFilters, presetToRange, useFiltersStore, FILTER_NONE } from "./useFiltersStore";
 import { periodRange } from "../lib/period";
+import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { tx } from "../test/fixtures";
 
 // applyFilters wants a full FiltersState (with action methods). We only
@@ -284,5 +285,39 @@ describe("useFiltersStore reducers", () => {
     expect(after.preset).toBe("month");
     expect(after.categories.size).toBe(0);
     expect(after.search).toBe("");
+  });
+});
+
+describe("applyFilters — «Дополнительно»", () => {
+  const txs = [
+    tx({ id: "a", amountBase: 100, kind: "expense", category: "Еда", comment: "" }),
+    tx({ id: "b", amountBase: 1000, kind: "expense", category: "Еда", comment: "чек" }),
+    tx({ id: "c", amountBase: 5000, kind: "income", category: "Зарплата" }),
+    tx({ id: "d", amountBase: 0, kind: "transfer", category: NO_CATEGORY }),
+  ];
+
+  it("amount range filters by |amountBase|", () => {
+    expect(ids(applyFilters(txs, filt({ minAmount: 1000 })))).toEqual(["b", "c"]);
+    expect(ids(applyFilters(txs, filt({ maxAmount: 1000 })))).toEqual(["a", "b", "d"]);
+    expect(ids(applyFilters(txs, filt({ minAmount: 1000, maxAmount: 1000 })))).toEqual(["b"]);
+  });
+
+  it("type filter keeps only the chosen kinds (refund buckets as expense)", () => {
+    expect(ids(applyFilters(txs, filt({ types: new Set(["income"]) })))).toEqual(["c"]);
+    expect(ids(applyFilters(txs, filt({ types: new Set(["expense", "transfer"]) })))).toEqual(["a", "b", "d"]);
+    const withRefund = [...txs, tx({ id: "r", kind: "refund", amountBase: 50 })];
+    expect(ids(applyFilters(withRefund, filt({ types: new Set(["expense"]) })))).toEqual(["a", "b", "r"]);
+  });
+
+  it("onlyUncategorized keeps «Без категории» / empty only", () => {
+    expect(ids(applyFilters(txs, filt({ onlyUncategorized: true })))).toEqual(["d"]);
+  });
+
+  it("hideZero drops zero-amount ops", () => {
+    expect(ids(applyFilters(txs, filt({ hideZero: true })))).toEqual(["a", "b", "c"]);
+  });
+
+  it("onlyWithComment keeps commented ops only", () => {
+    expect(ids(applyFilters(txs, filt({ onlyWithComment: true })))).toEqual(["b"]);
   });
 });

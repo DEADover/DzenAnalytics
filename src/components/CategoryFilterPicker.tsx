@@ -11,7 +11,7 @@ import { ChevronDown, ChevronRight, Search } from "lucide-react";
 
 // Narrow by default (just the categories + the one-line header); widens by
 // SUB_W to the right when a category is expanded.
-const MENU_BASE = 410;
+const MENU_BASE = 300;
 const SUB_W = 190;
 import clsx from "clsx";
 import { FILTER_NONE } from "../store/useFiltersStore";
@@ -45,10 +45,13 @@ export function CategoryFilterPicker({
   nodes,
   selected,
   onChange,
+  className,
 }: {
   nodes: CategoryNode[];
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
+  /** Extra classes for the outer wrapper (e.g. `flex-1` to fill a row). */
+  className?: string;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -117,7 +120,7 @@ export function CategoryFilterPicker({
     ? "Ничего"
     : isAll
       ? `Все (${total})` // total incl. sub-categories
-      : `Выбрано ${selected.size}`;
+      : `${selected.size} из ${total}`;
 
   // Dropdown header — break it down: «N категорий и M подкатегорий».
   const totalLabel =
@@ -212,7 +215,7 @@ export function CategoryFilterPicker({
   }, [open]);
 
   return (
-    <div className="relative">
+    <div className={clsx("relative", className)}>
       <button
         ref={btnRef}
         onClick={() => {
@@ -220,7 +223,7 @@ export function CategoryFilterPicker({
           setOpen((o) => !o);
         }}
         className={clsx(
-          "btn-ghost text-sm w-full justify-between",
+          "btn-ghost text-xs py-1.5 h-[30px] w-full justify-between",
           !isAll && "border-accent text-accent"
         )}
       >
@@ -239,22 +242,12 @@ export function CategoryFilterPicker({
             >
               <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border/60">
                 <span className="text-xs text-muted whitespace-nowrap truncate">{totalLabel}</span>
-                <div className="flex items-center gap-3 shrink-0">
-                  <button
-                    onClick={() => onChange(new Set())}
-                    disabled={isAll}
-                    className="text-xs text-accent hover:underline disabled:opacity-40 disabled:no-underline whitespace-nowrap"
-                  >
-                    Выбрать все
-                  </button>
-                  <button
-                    onClick={() => onChange(new Set([FILTER_NONE]))}
-                    disabled={isNone}
-                    className="text-xs text-accent hover:underline disabled:opacity-40 disabled:no-underline whitespace-nowrap"
-                  >
-                    Снять все
-                  </button>
-                </div>
+                <button
+                  onClick={() => onChange(isAll ? new Set([FILTER_NONE]) : new Set())}
+                  className="text-xs text-accent hover:underline whitespace-nowrap shrink-0"
+                >
+                  {isAll ? "Снять все" : "Выбрать все"}
+                </button>
               </div>
               <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">
                 <Search className="w-3.5 h-3.5 text-muted shrink-0" />
@@ -263,7 +256,7 @@ export function CategoryFilterPicker({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Поиск категории и подкатегории"
-                  className="bg-transparent text-sm w-full outline-none"
+                  className="bg-transparent text-xs w-full outline-none"
                 />
               </div>
               {searchResults ? (
@@ -279,7 +272,7 @@ export function CategoryFilterPicker({
                           return (
                             <label
                               key={item.key}
-                              className="flex items-center gap-2 px-3 py-1.5 hover:bg-panel2 cursor-pointer text-sm"
+                              className="flex items-center gap-2 px-3 py-1.5 hover:bg-panel2 cursor-pointer text-xs"
                             >
                               <input
                                 type="checkbox"
@@ -298,7 +291,7 @@ export function CategoryFilterPicker({
                       ) : (
                         <label
                           key={item.key}
-                          className="flex items-center gap-2 px-3 py-1.5 hover:bg-panel2 cursor-pointer text-sm"
+                          className="flex items-center gap-2 px-3 py-1.5 hover:bg-panel2 cursor-pointer text-xs"
                         >
                           <input
                             type="checkbox"
@@ -346,7 +339,7 @@ export function CategoryFilterPicker({
                             onClick={() =>
                               n.subs.length > 0 ? toggleActive(n.name) : toggleParent(n)
                             }
-                            className="flex-1 min-w-0 text-left px-1.5 py-1.5 text-sm flex items-center gap-2"
+                            className="flex-1 min-w-0 text-left px-1.5 py-1.5 text-xs flex items-center gap-2"
                           >
                             <CategoryDot category={n.name} size="w-4 h-4" />
                             <span className="truncate flex-1">{n.name}</span>
@@ -375,7 +368,7 @@ export function CategoryFilterPicker({
                       {activeNode.subs.map((s) => (
                         <label
                           key={s}
-                          className="flex items-center gap-2 px-2 py-1.5 hover:bg-panel2 cursor-pointer text-sm"
+                          className="flex items-center gap-2 px-2 py-1.5 hover:bg-panel2 cursor-pointer text-xs"
                         >
                           <input
                             type="checkbox"

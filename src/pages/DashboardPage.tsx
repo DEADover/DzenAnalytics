@@ -371,7 +371,14 @@ export function DashboardPage() {
   const last = months[months.length - 1];
   const prev = months[months.length - 2];
   const lastNetWorth = netWorth.length ? netWorth[netWorth.length - 1].net : 0;
-  const sr = last && last.income > 0 ? last.net / last.income : null;
+  // Savings rate needs income to divide by. The current month often has 0
+  // income for the first days (nothing paid in yet) → fall back to the latest
+  // month that actually had income, so the KPI isn't blank at every month start.
+  const srMonth =
+    last && last.income > 0
+      ? last
+      : [...months].reverse().find((m) => m.income > 0) ?? null;
+  const sr = srMonth ? srMonth.net / srMonth.income : null;
   const expDelta = last && prev && prev.expense > 0 ? (last.expense - prev.expense) / prev.expense : null;
   const incDelta = last && prev && prev.income > 0 ? (last.income - prev.income) / prev.income : null;
 
@@ -496,8 +503,8 @@ export function DashboardPage() {
             {sr !== null ? `${(sr * 100).toFixed(0)}%` : "—"}
           </div>
           <div className="text-xs text-muted mt-1">
-            {sr !== null && last
-              ? `Чистый: ${formatMoney(last.net, base, { signed: true })}`
+            {sr !== null && srMonth
+              ? `Чистый ${formatMoney(srMonth.net, base, { signed: true })} · ${monthLabel(srMonth.ym)}`
               : "—"}
           </div>
         </div>
@@ -723,8 +730,7 @@ export function DashboardPage() {
               <table className="w-full text-base">
                 <thead className="sticky top-0 bg-panel z-10">
                   <tr>
-                    <th className="table-th w-8" aria-hidden />
-                    <th className="table-th">Счёт</th>
+                    <th className="table-th" colSpan={2}>Счёт</th>
                     <th className="table-th">Тип</th>
                     <th className="table-th text-right">Баланс</th>
                   </tr>
@@ -741,7 +747,7 @@ export function DashboardPage() {
                           a.archive ? "opacity-60" : ""
                         }`}
                       >
-                          <td className="table-td">
+                          <td className="table-td w-8">
                             <AccountLogo title={a.title} type={a.type} />
                           </td>
                           <td className="table-td">

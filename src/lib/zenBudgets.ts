@@ -8,10 +8,21 @@
 // siblings, so the mapping stays reversible (needed for push-back).
 //
 // Only MANUAL plans are trusted: a budget counts only when it is NOT an
-// auto-forecast (`isOutcomeForecast`/`isIncomeForecast` false) — never the
-// `*Lock` flag, which real manual plans leave `false`.
+// auto-forecast (`isOutcomeForecast`/`isIncomeForecast` false).
+//
+// EFFECTIVE PLAN vs stored amount: per the API, `income`/`outcome` is the exact
+// budget ONLY when the matching `*Lock` is true. When it's false, Zenmoney adds
+// every PLANNED operation (reminder marker) of that month/tag on top — so the
+// number the app shows = stored amount + planned ops. We fold that in here
+// (see `plannedOpsByTagMonth`), otherwise a category with scheduled income (e.g.
+// «Работа» with a planned salary) reads far too low (or even negative).
 
-import type { ZenBudget, ZenTag } from "./zenmoney";
+import type {
+  ZenBudget,
+  ZenInstrument,
+  ZenReminderMarker,
+  ZenTag,
+} from "./zenmoney";
 
 export type BudgetKind = "expense" | "income";
 
@@ -42,6 +53,55 @@ export function zenPlanKey(
 // UUID. Both must be skipped.
 const NULL_TAG = "00000000-0000-0000-0000-000000000000";
 
+/** Planned income/outcome for one (tag, month), in base currency. */
+export interface PlannedOps {
+  income: number;
+  outcome: number;
+}
+
+/** Key into a {@link plannedOpsByTagMonth} map: raw `tagId|yyyy-MM`. */
+function plannedKey(tagId: string, ym: string): string {
+  return `${tagId}|${ym}`;
+}
+
+/**
+ * Sum PLANNED reminder markers into per-(tag, month) income/outcome totals in
+ * the user's base currency — the amount Zenmoney adds to an UNLOCKED budget to
+ * form its effective plan. Only `state: 'planned'` markers count; each marker's
+ * amount is converted from its own instrument to base (`amount * rate / base
+ * rate`). A marker with several tags contributes to each (Zenmoney attributes
+ * a planned op to every tag it carries).
+ */
+export function plannedOpsByTagMonth(
+  markers: ZenReminderMarker[] | undefined,
+  instruments: ZenInstrument[] | undefined,
+  baseCurrencyId: number | undefined
+): Map<string, PlannedOps> {
+  const out = new Map<string, PlannedOps>();
+  if (!markers || markers.length === 0) return out;
+  const rateById = new Map((instruments || []).map((i) => [i.id, i.rate]));
+  const baseRate =
+    (baseCurrencyId != null ? rateById.get(baseCurrencyId) : undefined) || 1;
+  const toBase = (amt: number, instr: number) =>
+    (amt * (rateById.get(instr) ?? baseRate)) / baseRate;
+  for (const m of markers) {
+    if (m.state !== "planned") continue;
+    const ym = (m.date || "").slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(ym)) continue;
+    if (!m.tag || m.tag.length === 0) continue;
+    const inc = m.income > 0 ? toBase(m.income, m.incomeInstrument) : 0;
+    const outc = m.outcome > 0 ? toBase(m.outcome, m.outcomeInstrument) : 0;
+    if (inc === 0 && outc === 0) continue;
+    for (const tagId of m.tag) {
+      const cur = out.get(plannedKey(tagId, ym)) || { income: 0, outcome: 0 };
+      cur.income += inc;
+      cur.outcome += outc;
+      out.set(plannedKey(tagId, ym), cur);
+    }
+  }
+  return out;
+}
+
 /**
  * Resolve a tag id to `{category, subcategory}`: a sub-tag → its parent's title
  * + own title; a top-level tag → own title + null. `null` when tag is unknown.
@@ -67,9 +127,11 @@ function resolveTag(
  * Unknown tags, the whole-month aggregate, auto-forecast values and
  * zero/negative amounts are skipped.
  */
-export function zenPlanList(
+function collect(
   budgets: ZenBudget[] | undefined,
-  tags: ZenTag[] | undefined
+  tags: ZenTag[] | undefined,
+  wantForecast: boolean,
+  planned?: Map<string, PlannedOps>
 ): ZenPlanEntry[] {
   const out: ZenPlanEntry[] = [];
   if (!budgets || budgets.length === 0) return out;
@@ -81,13 +143,39 @@ export function zenPlanList(
     if (!r) continue;
     const ym = (b.date || "").slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(ym)) continue;
-    // A REAL (user-set) plan is one Zenmoney did NOT auto-forecast.
-    if (!b.isOutcomeForecast && b.outcome > 0)
-      out.push({ kind: "expense", ...r, ym, amount: b.outcome });
-    if (!b.isIncomeForecast && b.income > 0)
-      out.push({ kind: "income", ...r, ym, amount: b.income });
+    // A REAL (user-set) plan is one Zenmoney did NOT auto-forecast; a forecast
+    // is one it DID — `wantForecast` picks which side we return.
+    const outFc = !!b.isOutcomeForecast;
+    const incFc = !!b.isIncomeForecast;
+    // Effective plan: an UNLOCKED side combines the stored amount with that
+    // month's planned operations; a LOCKED side is exact. Only fold into the
+    // real-plan side (forecasts are already Zenmoney's own «из X» estimate).
+    const p = wantForecast ? undefined : planned?.get(plannedKey(b.tag, ym));
+    const outVal = b.outcomeLock ? b.outcome : b.outcome + (p?.outcome ?? 0);
+    const incVal = b.incomeLock ? b.income : b.income + (p?.income ?? 0);
+    if (outFc === wantForecast && outVal > 0)
+      out.push({ kind: "expense", ...r, ym, amount: p ? Math.round(outVal) : outVal });
+    if (incFc === wantForecast && incVal > 0)
+      out.push({ kind: "income", ...r, ym, amount: p ? Math.round(incVal) : incVal });
   }
   return out;
+}
+
+export function zenPlanList(
+  budgets: ZenBudget[] | undefined,
+  tags: ZenTag[] | undefined,
+  planned?: Map<string, PlannedOps>
+): ZenPlanEntry[] {
+  return collect(budgets, tags, false, planned);
+}
+
+/** Zenmoney's OWN auto-forecast amounts (the «из X» values) — used to show
+ *  «≈»-планы that match Дзен, instead of computing our own median. */
+export function zenForecastList(
+  budgets: ZenBudget[] | undefined,
+  tags: ZenTag[] | undefined
+): ZenPlanEntry[] {
+  return collect(budgets, tags, true);
 }
 
 /**
@@ -96,10 +184,23 @@ export function zenPlanList(
  */
 export function zenPlansFromBudgets(
   budgets: ZenBudget[] | undefined,
+  tags: ZenTag[] | undefined,
+  planned?: Map<string, PlannedOps>
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const e of zenPlanList(budgets, tags, planned)) {
+    out.set(zenPlanKey(e.kind, e.category, e.subcategory, e.ym), e.amount);
+  }
+  return out;
+}
+
+/** `Map<key, amount>` of Zenmoney's own auto-forecasts. Key = {@link zenPlanKey}. */
+export function zenForecastsFromBudgets(
+  budgets: ZenBudget[] | undefined,
   tags: ZenTag[] | undefined
 ): Map<string, number> {
   const out = new Map<string, number>();
-  for (const e of zenPlanList(budgets, tags)) {
+  for (const e of zenForecastList(budgets, tags)) {
     out.set(zenPlanKey(e.kind, e.category, e.subcategory, e.ym), e.amount);
   }
   return out;

@@ -126,6 +126,29 @@ export interface ZenBudget {
   isOutcomeForecast?: boolean;
 }
 
+/**
+ * A «планируемая операция» — one concrete dated instance generated from a
+ * reminder. `state` is 'planned' until it's executed (→ 'processed', a real
+ * Transaction is created) or removed ('deleted'). For BUDGETS we care only
+ * about `state: 'planned'`: per the API, with `incomeLock`/`outcomeLock: false`
+ * a budget's effective plan is its stored `income`/`outcome` PLUS every planned
+ * marker's income/outcome that month for the tag. Amounts are in their own
+ * instrument — convert to the user's base currency before summing.
+ */
+export interface ZenReminderMarker {
+  id: string;
+  user: number;
+  changed: number;
+  date: string; // yyyy-MM-dd — the planned operation's date
+  income: number;
+  incomeInstrument: number;
+  outcome: number;
+  outcomeInstrument: number;
+  tag: string[] | null;
+  reminder: string; // Reminder.id this instance was generated from
+  state: "planned" | "processed" | "deleted";
+}
+
 export interface ZenDiffResponse {
   serverTimestamp: number;
   instrument: ZenInstrument[];
@@ -136,7 +159,7 @@ export interface ZenDiffResponse {
   user: { id: number; currency: number; [k: string]: unknown }[];
   budget?: ZenBudget[];
   reminder?: unknown[];
-  reminderMarker?: unknown[];
+  reminderMarker?: ZenReminderMarker[];
   country?: unknown[];
   company?: unknown[];
   deletion?: ZenDeletion[];
@@ -156,7 +179,12 @@ export class ZenApiError extends Error {
 interface DiffRequest {
   currentClientTimestamp: number;
   serverTimestamp: number;
-  // forceFetch?: string[]; // optional, e.g. ["transaction"] to bypass diff caching
+  /** Ask the server to return these entity types IN FULL, as if it were the
+   *  first sync — used to back-fill a type we never pulled before (e.g.
+   *  `reminderMarker`, whose existing planned instances an incremental diff
+   *  would never re-send). Valid names: instrument, company, user, account,
+   *  tag, merchant, budget, reminder, reminderMarker, transaction. */
+  forceFetch?: string[];
 
   // ──────────────────────────────────────────────────────────────────────
   // Optional PUSH sections. Included in the body when the client wants the
@@ -180,12 +208,14 @@ interface DiffRequest {
 export async function fetchDiff(
   token: string,
   serverTimestamp = 0,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  forceFetch?: string[]
 ): Promise<ZenDiffResponse> {
   const body: DiffRequest = {
     currentClientTimestamp: Math.floor(Date.now() / 1000),
     serverTimestamp,
   };
+  if (forceFetch && forceFetch.length > 0) body.forceFetch = forceFetch;
   const res = await fetch(`${API_BASE}/v8/diff/`, {
     method: "POST",
     headers: {

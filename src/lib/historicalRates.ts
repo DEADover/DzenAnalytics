@@ -18,7 +18,7 @@ interface CbrResponse {
 
 const MAX_LOOKBACK_DAYS = 5; // CBR has no weekend/holiday rates — walk back to the last published day.
 const CACHE_PREFIX = "fxRateCbr:";
-const WARM_CONCURRENCY = 8; // parallel CBR fetches when warming many dates.
+const WARM_CONCURRENCY = 12; // parallel CBR fetches when warming many dates.
 const FETCH_TIMEOUT_MS = 8000; // abort a stalled CBR request so warming stays responsive.
 
 /** Day → { currency: rubPerUnit }. The applied historical-rate index. */
@@ -35,6 +35,17 @@ function shiftDate(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Sat/Sun — CBR NEVER publishes a rate on these, so we skip the request
+ *  entirely and let the look-back fall through to the previous business day.
+ *  This matters because the mirror's 404 for a missing day carries no CORS
+ *  header, so a browser fetch of a weekend URL doesn't return status 404 — it
+ *  THROWS `TypeError: Failed to fetch`, costing a doomed request (and a red
+ *  console/network entry) for every weekend op date. */
+export function isWeekendUTC(date: string): boolean {
+  const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return dow === 0 || dow === 6;
+}
+
 /** A day's rates plus whether the result is AUTHORITATIVE — i.e. we know for
  *  sure (data, or a real 404 «no rate for this date»), versus a transient
  *  failure (timeout / network error / 5xx) where we simply couldn't reach CBR.
@@ -46,7 +57,21 @@ interface DayFetch {
   authoritative: boolean;
 }
 
-async function fetchRatesForDate(date: string): Promise<DayFetch> {
+// De-dup concurrent look-ups of the SAME day. When many weekend/holiday dates
+// walk back to the same Friday, the parallel warm workers would otherwise all
+// fetch that Friday at once; sharing one in-flight promise collapses them into
+// a single request. Cleared as soon as it settles (the IDB cache takes over).
+const inFlight = new Map<string, Promise<DayFetch>>();
+
+function fetchRatesForDate(date: string): Promise<DayFetch> {
+  const running = inFlight.get(date);
+  if (running) return running;
+  const p = fetchRatesForDateUncached(date);
+  inFlight.set(date, p);
+  return p.finally(() => inFlight.delete(date));
+}
+
+async function fetchRatesForDateUncached(date: string): Promise<DayFetch> {
   const cacheKey = `${CACHE_PREFIX}${date}`;
   const cached = await db.loadJSON<Record<string, number>>(cacheKey);
   if (cached) return { rates: cached, authoritative: true };
@@ -92,6 +117,9 @@ async function resolveDayRates(
   let allAuthoritative = true;
   for (let back = 0; back <= MAX_LOOKBACK_DAYS; back++) {
     const tryDate = shiftDate(date, -back);
+    // Sat/Sun have no CBR rate — don't waste a (CORS-failing) request; the
+    // loop rolls back to the preceding business day on the next iteration.
+    if (isWeekendUTC(tryDate)) continue;
     const { rates, authoritative } = await fetchRatesForDate(tryDate);
     if (Object.keys(rates).length > 0) {
       return { rates, rateDate: tryDate, authoritative: true };

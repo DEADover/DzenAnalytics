@@ -1285,6 +1285,41 @@ export interface BudgetEdit {
   subcategory: string | null;
   ym: string; // "YYYY-MM"
   amount: number;
+  /** How many pushes in a row skipped this edit (tag missing in cache / no
+   *  userId). The queue auto-drops it once this hits the retry cap so a stale
+   *  edit — its tag was deleted or renamed in Дзен, so it can never resolve —
+   *  doesn't linger forever. A fresh (re-queued) edit carries no `skips`, so
+   *  editing the cell again gives it a clean set of retries. */
+  skips?: number;
+}
+
+/**
+ * Pure core of the queue's skip-retry policy. For each id in `skippedIds` that
+ * still exists, increment its `skips`; DROP the ones that reach `max`. Returns
+ * the updated map, the dropped ids, and whether anything changed (so the caller
+ * can skip a redundant persist). Ids not present are ignored.
+ */
+export function applyBudgetSkipBump(
+  edits: Record<string, BudgetEdit>,
+  skippedIds: string[],
+  max: number
+): { edits: Record<string, BudgetEdit>; dropped: string[]; changed: boolean } {
+  const next = { ...edits };
+  const dropped: string[] = [];
+  let changed = false;
+  for (const id of skippedIds) {
+    const e = next[id];
+    if (!e) continue;
+    changed = true;
+    const skips = (e.skips ?? 0) + 1;
+    if (skips >= max) {
+      delete next[id];
+      dropped.push(id);
+    } else {
+      next[id] = { ...e, skips };
+    }
+  }
+  return { edits: next, dropped, changed };
 }
 
 /** Stable id for a budget edit — (kind, category, subcategory, month). */
@@ -1304,11 +1339,18 @@ export function budgetEditId(e: {
  *
  * To avoid clobbering, we start from the EXISTING cached budget for that
  * (tag, month) and override only the edited side (outcome for expense / income
- * for income), clearing that side's auto-forecast flag so Zenmoney treats it as
- * a manual plan — mirroring how real plans look (`isOutcomeForecast: false`).
+ * for income).
+ *
+ * CRITICAL — we set the edited side's *Lock to `true`. Per the Zenmoney API:
+ * with `incomeLock: false` the effective budget is `income` PLUS every planned
+ * («напоминания») operation's income that month, so pushing our absolute plan
+ * into an unlocked cell makes Zenmoney ADD the scheduled amount on top and the
+ * budget balloons (this was the «суммы стали слишком большие» bug — a 305k plan
+ * showed as 450k). Locking makes `income`/`outcome` the EXACT budget.
  *
  * Edits whose tag isn't in the cache (need a re-sync) are reported in
- * `skipped`; no-ops (cloud already equals the edit) are dropped silently.
+ * `skipped`; no-ops (cloud already equals the edit AS A LOCKED value) are
+ * dropped silently.
  */
 export function buildBudgetPush(
   edits: BudgetEdit[],
@@ -1351,12 +1393,14 @@ export function buildBudgetPush(
     }
     const date = `${e.ym}-01`;
     const existing = existingByKey.get([tag.id, date].join("\u0000"));
-    // No-op: cloud already equals this edit (manual, same amount).
+    // No-op: cloud already equals this edit AS A LOCKED (exact) budget. An
+    // unlocked cell whose number matches is NOT the same effective plan — the
+    // planned operations still get added — so it must be re-pushed as locked.
     if (existing) {
       const same =
         e.kind === "expense"
-          ? existing.outcome === e.amount && existing.isOutcomeForecast === false
-          : existing.income === e.amount && existing.isIncomeForecast === false;
+          ? existing.outcomeLock === true && existing.outcome === e.amount
+          : existing.incomeLock === true && existing.income === e.amount;
       if (same) continue;
     }
     const base: ZenBudget = existing
@@ -1376,9 +1420,11 @@ export function buildBudgetPush(
     const next: ZenBudget = { ...base, user: userId, date, tag: tag.id, changed: stampSeconds };
     if (e.kind === "expense") {
       next.outcome = e.amount;
+      next.outcomeLock = true; // exact budget — Zenmoney must NOT add planned ops
       next.isOutcomeForecast = false;
     } else {
       next.income = e.amount;
+      next.incomeLock = true; // exact budget — Zenmoney must NOT add planned ops
       next.isIncomeForecast = false;
     }
     budgets.push(next);

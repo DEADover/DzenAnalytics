@@ -14,6 +14,7 @@ import {
   buildSankey,
   splitByObligation,
   isObligatoryTx,
+  fireSeries,
 } from "./aggregations";
 import { tx } from "../test/fixtures";
 import type { CurrencyRates } from "../types";
@@ -478,5 +479,59 @@ describe("buildSankey — savings & deficit funding (issue #8)", () => {
     ]);
     expect(data.nodes.some((n) => n.kind === "savings")).toBe(false);
     expect(data.nodes.some((n) => n.kind === "funding")).toBe(false);
+  });
+});
+
+describe("fireSeries — rolling months-of-life", () => {
+  it("months = net worth ÷ rolling avg obligatory expense", () => {
+    // Three months, 100 obligatory expense each. Net worth is seeded flat at
+    // 1200 via the passed series. avg obligatory = 100 → months = 12.
+    const txs = ["01", "02", "03"].map((m, i) =>
+      tx({
+        id: "e" + i,
+        date: `2026-${m}-15`,
+        kind: "expense",
+        category: "Аренда",
+        amount: 100,
+        amountBase: 100,
+      })
+    );
+    const netWorth = [
+      { date: "2026-01-15", net: 1200 },
+      { date: "2026-02-15", net: 1200 },
+      { date: "2026-03-15", net: 1200 },
+    ];
+    // Add 300 income each month to check the rolling income series too.
+    const withIncome = [
+      ...txs,
+      ...["01", "02", "03"].map((m, i) =>
+        tx({ id: "i" + i, date: `2026-${m}-10`, kind: "income", amount: 300, amountBase: 300 })
+      ),
+    ];
+    const series = fireSeries(netWorth, withIncome, {});
+    expect(series).toHaveLength(3);
+    // Every month's trailing-average obligatory spend is 100, income 300.
+    expect(series.every((p) => p.avgObligatory === 100)).toBe(true);
+    expect(series.every((p) => p.avgIncome === 300)).toBe(true);
+    expect(series[2].months).toBeCloseTo(12, 5);
+  });
+
+  it("optional categories don't count toward the obligatory denominator", () => {
+    const txs = [
+      tx({ id: "o", date: "2026-01-15", kind: "expense", category: "Развлечения", amount: 500, amountBase: 500 }),
+      tx({ id: "r", date: "2026-01-16", kind: "expense", category: "Аренда", amount: 100, amountBase: 100 }),
+      tx({ id: "o2", date: "2026-02-15", kind: "expense", category: "Развлечения", amount: 500, amountBase: 500 }),
+      tx({ id: "r2", date: "2026-02-16", kind: "expense", category: "Аренда", amount: 100, amountBase: 100 }),
+    ];
+    const netWorth = [
+      { date: "2026-01-16", net: 1000 },
+      { date: "2026-02-16", net: 1000 },
+    ];
+    // «Развлечения» is optional; only «Аренда» (100/mo) is the denominator.
+    const series = fireSeries(netWorth, txs, { "Развлечения": { required: false } });
+    expect(series[1].avgObligatory).toBe(100);
+    // All-expense average still counts «Развлечения»: (500+100)/mo = 600.
+    expect(series[1].avgExpenseAll).toBe(600);
+    expect(series[1].months).toBeCloseTo(10, 5);
   });
 });

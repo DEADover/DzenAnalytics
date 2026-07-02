@@ -147,7 +147,18 @@ export function ymdKey(iso: string): string {
 export function monthLabel(ym: string): string {
   const [y, m] = ym.split("-");
   const d = new Date(Number(y), Number(m) - 1, 1);
-  return d.toLocaleDateString("ru-RU", { month: "short", year: "2-digit" });
+  const s = d.toLocaleDateString("ru-RU", { month: "short", year: "2-digit" });
+  // Capitalise the month name (ru-RU renders it lowercase: «янв. 24 г.»).
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Like monthLabel but with the FULL month name («Февраль 26 г.») — for tables
+ *  and places where the abbreviated «Февр.» reads poorly. */
+export function monthLabelFull(ym: string): string {
+  const [y, m] = ym.split("-");
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  const s = d.toLocaleDateString("ru-RU", { month: "long", year: "2-digit" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export function toNum(v: unknown): number {
@@ -157,12 +168,12 @@ export function toNum(v: unknown): number {
 }
 
 export const chartTooltipStyle: CSSProperties = {
+  // Opaque surface — a semi-transparent bg let the chart lines bleed through
+  // and read as «полупрозрачный». Solid + shadow keeps it legible.
   background: "var(--tooltip-bg)",
   border: "1px solid var(--tooltip-border)",
   borderRadius: 8,
   color: "rgb(var(--c-text))",
-  backdropFilter: "blur(10px)",
-  WebkitBackdropFilter: "blur(10px)",
   boxShadow:
     "0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)",
 };
@@ -170,6 +181,9 @@ export const chartTooltipStyle: CSSProperties = {
 export const chartTooltipProps = {
   contentStyle: chartTooltipStyle,
   cursor: false as const,
+  // The tooltip wrapper otherwise sits under later-DOM siblings (legend, the
+  // next card) and gets clipped/covered. A high z-index floats it on top.
+  wrapperStyle: { zIndex: 50 },
 };
 
 export const chartGridStroke = "var(--grid)";

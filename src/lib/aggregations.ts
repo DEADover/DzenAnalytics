@@ -1063,6 +1063,120 @@ export function splitByObligation(
   return { obligatory, optional };
 }
 
+export interface FirePoint {
+  ym: string;
+  /** Rolling average monthly OBLIGATORY expense over the trailing window. */
+  avgObligatory: number;
+  /** Rolling average monthly ALL expense (obligatory + optional) over the window. */
+  avgExpenseAll: number;
+  /** Rolling average monthly INCOME over the trailing window. */
+  avgIncome: number;
+  /** Net worth at month end (from the passed series — assets on all counted
+   *  accounts; enable «забалансовые» to include investment portfolios). */
+  net: number;
+  /** «Months of life» = net / avgObligatory — how many months of average
+   *  obligatory spending the accumulated assets cover. */
+  months: number;
+}
+
+/** Enumerate contiguous "YYYY-MM" keys from `from` to `to`, inclusive. */
+function enumerateMonths(from: string, to: string): string[] {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  const out: string[] = [];
+  let y = fy;
+  let m = fm;
+  while (y < ty || (y === ty && m <= tm)) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Rolling «months of life» (FIRE) series — one point per calendar month.
+ *
+ * At each month it takes the net worth at month end and divides it by the
+ * AVERAGE monthly obligatory expense over the trailing `window` months, so the
+ * denominator floats with recent spending and the ratio shows the FIRE runway
+ * over time (`months` ≈ 300 → 100% FIRE on the 4%-rule). Both series the user
+ * asked for come out of this: `avgObligatory` (spending dynamics) and `months`
+ * (the runway). Needs the daily cumulative net-worth series plus the raw
+ * transactions + obligation meta to build the trailing spend.
+ */
+export function fireSeries(
+  netWorth: { date: string; net: number }[],
+  txs: Transaction[],
+  meta: ObligationMeta,
+  window = 12,
+  monthStartDay = 1
+): FirePoint[] {
+  if (netWorth.length === 0 || txs.length === 0) return [];
+
+  // Bucket by the user's REPORTING period, not the raw calendar month, so the
+  // «as-of» date of every point honours «Первый день отчётного месяца». The key
+  // stays a sortable "YYYY-MM" (of the period's start month), like groupByMonth.
+  const periodOf = (d: string) =>
+    monthStartDay === 1 ? d.slice(0, 7) : periodKey(d, monthStartDay);
+
+  // Obligatory expense, all expense (refunds subtract via expenseDelta) and
+  // income per period.
+  const oblByMonth = new Map<string, number>();
+  const allExpByMonth = new Map<string, number>();
+  const incByMonth = new Map<string, number>();
+  let firstTxYm = "9999-99";
+  for (const t of txs) {
+    const ym = periodOf(t.date);
+    if (!ym) continue;
+    if (ym < firstTxYm) firstTxYm = ym;
+    if (t.kind === "income") {
+      incByMonth.set(ym, (incByMonth.get(ym) || 0) + t.amountBase);
+      continue;
+    }
+    if (!affectsExpense(t.kind)) continue;
+    const d = expenseDelta(t);
+    allExpByMonth.set(ym, (allExpByMonth.get(ym) || 0) + d);
+    if (isObligatoryTx(t, meta)) oblByMonth.set(ym, (oblByMonth.get(ym) || 0) + d);
+  }
+
+  const nwFirst = periodOf(netWorth[0].date);
+  const lastYm = periodOf(netWorth[netWorth.length - 1].date);
+  const firstYm = firstTxYm < nwFirst ? firstTxYm : nwFirst;
+  const monthsList = enumerateMonths(firstYm, lastYm);
+  if (monthsList.length === 0) return [];
+
+  // Net worth at each period end: last known cumulative value in that period,
+  // carried forward across periods with no activity.
+  const netByMonth = new Map<string, number>();
+  for (const p of netWorth) netByMonth.set(periodOf(p.date), p.net);
+  let carried = netWorth[0].net;
+  for (const ym of monthsList) {
+    if (netByMonth.has(ym)) carried = netByMonth.get(ym)!;
+    netByMonth.set(ym, carried);
+  }
+
+  const out: FirePoint[] = [];
+  for (let i = 0; i < monthsList.length; i++) {
+    const ym = monthsList[i];
+    const start = Math.max(0, i - window + 1);
+    const slice = monthsList.slice(start, i + 1);
+    const oblSum = slice.reduce((s, m) => s + (oblByMonth.get(m) || 0), 0);
+    const allSum = slice.reduce((s, m) => s + (allExpByMonth.get(m) || 0), 0);
+    const incSum = slice.reduce((s, m) => s + (incByMonth.get(m) || 0), 0);
+    const avgObligatory = slice.length > 0 ? oblSum / slice.length : 0;
+    const avgExpenseAll = slice.length > 0 ? allSum / slice.length : 0;
+    const avgIncome = slice.length > 0 ? incSum / slice.length : 0;
+    const net = netByMonth.get(ym) ?? 0;
+    const months = avgObligatory > 0 ? net / avgObligatory : 0;
+    out.push({ ym, avgObligatory, avgExpenseAll, avgIncome, net, months });
+  }
+  return out;
+}
+
 const ANCHOR_PATTERNS = [
   /начальн[ыо]\s*остат/i,
   /корректировк/i,

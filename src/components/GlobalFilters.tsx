@@ -12,25 +12,20 @@ import {
   Search,
   X,
   ChevronDown,
+  FilterX,
   Filter,
-  Bookmark,
-  BookmarkPlus,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  CalendarRange,
+  SlidersHorizontal,
   Coins,
 } from "lucide-react";
 import { DateField } from "./DateField";
 import { AccountLogo } from "./AccountLogo";
 import { CategoryFilterPicker } from "./CategoryFilterPicker";
+import { MonthPicker } from "./MonthPicker";
 import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { useFiltersStore, FILTER_NONE, type DatePreset } from "../store/useFiltersStore";
-import { useSavedViewsStore } from "../store/useSavedViewsStore";
-import { confirm } from "../store/useConfirmStore";
-import { monthLabel } from "../lib/format";
+import { FiltersMenu } from "./FiltersMenu";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { currencyFlagEmoji } from "../lib/currencyFlag";
 import { pluralRu } from "../lib/plural";
@@ -44,6 +39,12 @@ const PRESETS: { value: DatePreset; label: string }[] = [
   { value: "all", label: "Всё" },
 ];
 
+const OP_TYPES: { value: string; label: string }[] = [
+  { value: "income", label: "Доходы" },
+  { value: "expense", label: "Расходы" },
+  { value: "transfer", label: "Переводы" },
+];
+
 function MultiSelect({
   label,
   options,
@@ -53,6 +54,8 @@ function MultiSelect({
   unitForms,
   searchPlaceholder,
   archivedSet,
+  className,
+  menuMinWidth,
 }: {
   label: string;
   options: string[];
@@ -67,6 +70,10 @@ function MultiSelect({
   /** Options in this set are «archived» — rendered below an «Архивные»
    *  divider (the caller must place them last in `options`). */
   archivedSet?: Set<string>;
+  /** Extra classes for the outer wrapper (e.g. `flex-1` to fill a row). */
+  className?: string;
+  /** Minimum dropdown width in px. Default 288; pass 0 to match the button. */
+  menuMinWidth?: number;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -104,9 +111,7 @@ function MultiSelect({
     ? "Ничего"
     : isAll
       ? `Все (${options.length})`
-      : selected.size === 1
-        ? Array.from(selected)[0]
-        : `Выбрано ${selected.size} из ${options.length}`;
+      : `${selected.size} из ${options.length}`;
 
   // The menu renders in a portal (position: fixed) so it floats above the
   // table below — `absolute` left it under a later stacking context. Its
@@ -120,7 +125,7 @@ function MultiSelect({
     maxHeight: number;
   };
   const [pos, setPos] = useState<MenuPos | null>(null);
-  const MENU_W = 288;
+  const MENU_W = menuMinWidth ?? 288;
 
   useLayoutEffect(() => {
     const el = btnRef.current;
@@ -168,7 +173,7 @@ function MultiSelect({
   }, [open]);
 
   return (
-    <div className="relative">
+    <div className={clsx("relative", className)}>
       <button
         ref={btnRef}
         onClick={() => {
@@ -176,7 +181,7 @@ function MultiSelect({
           setQuery("");
         }}
         className={clsx(
-          "btn-ghost text-sm w-full justify-between",
+          "btn-ghost text-xs py-1.5 h-[30px] w-full justify-between",
           selected.size > 0 && "border-accent text-accent"
         )}
       >
@@ -209,22 +214,12 @@ function MultiSelect({
                     unitForms ?? ["вариант", "варианта", "вариантов"]
                   )}
                 </span>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => onChange(new Set())}
-                    disabled={isAll}
-                    className="text-xs text-accent hover:underline disabled:opacity-40 disabled:no-underline"
-                  >
-                    Выбрать все
-                  </button>
-                  <button
-                    onClick={() => onChange(new Set([FILTER_NONE]))}
-                    disabled={isNone}
-                    className="text-xs text-accent hover:underline disabled:opacity-40 disabled:no-underline"
-                  >
-                    Снять все
-                  </button>
-                </div>
+                <button
+                  onClick={() => onChange(isAll ? new Set([FILTER_NONE]) : new Set())}
+                  className="text-xs text-accent hover:underline"
+                >
+                  {isAll ? "Снять все" : "Выбрать все"}
+                </button>
               </div>
               {showSearch && (
                 <div className="flex items-center gap-2 px-2 py-1.5 mb-1 border-b border-border/60">
@@ -234,7 +229,7 @@ function MultiSelect({
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder={searchPlaceholder ?? `Поиск: ${label.toLowerCase()}`}
-                    className="bg-transparent text-sm w-full outline-none"
+                    className="bg-transparent text-xs w-full outline-none"
                   />
                 </div>
               )}
@@ -253,7 +248,7 @@ function MultiSelect({
                           Архивные
                         </div>
                       )}
-                      <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-panel2 rounded cursor-pointer text-sm">
+                      <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-panel2 rounded cursor-pointer text-xs">
                         <input
                           type="checkbox"
                           checked={isChecked(opt)}
@@ -279,57 +274,21 @@ function MultiSelect({
 
 export function GlobalFilters({
   showDateRange = true,
-}: { showDateRange?: boolean } = {}) {
+  period,
+  onPeriodChange,
+}: {
+  showDateRange?: boolean;
+  /** Controlled period preset — when provided (with onPeriodChange), the period
+   *  pills drive this local state instead of the global filter store, and the
+   *  month-picker / custom-range are hidden. Used by history charts (Cash-flow,
+   *  Trends) that keep their own period without touching the global «месяц». */
+  period?: DatePreset;
+  onPeriodChange?: (p: DatePreset) => void;
+} = {}) {
   const transactions = useDataStore((s) => s.transactions);
   const f = useFiltersStore();
-  const views = useSavedViewsStore((s) => s.views);
-  const addView = useSavedViewsStore((s) => s.add);
-  const removeView = useSavedViewsStore((s) => s.remove);
-  const hydrateViews = useSavedViewsStore((s) => s.hydrate);
-  const viewsLoaded = useSavedViewsStore((s) => s.loaded);
-  const [savedOpen, setSavedOpen] = useState(false);
-  const [saveOpen, setSaveOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-
-  useEffect(() => {
-    if (!viewsLoaded) hydrateViews();
-  }, [viewsLoaded, hydrateViews]);
-
-  function applyView(v: ReturnType<typeof useSavedViewsStore.getState>["views"][number]) {
-    if (v.preset === "month" && v.monthYM) {
-      f.setMonth(v.monthYM);
-    } else {
-      f.setPreset(v.preset);
-      f.setRange(v.from, v.to);
-    }
-    f.resetSet("accounts");
-    f.resetSet("categories");
-    f.resetSet("currencies");
-    for (const a of v.accounts) f.toggleSet("accounts", a);
-    for (const c of v.categories) f.toggleSet("categories", c);
-    for (const c of v.currencies) f.toggleSet("currencies", c);
-    f.setSearch(v.search);
-    f.setExcludeTransfers(v.excludeTransfers);
-    setSavedOpen(false);
-  }
-
-  function saveCurrent() {
-    if (!newName.trim()) return;
-    addView({
-      name: newName.trim(),
-      preset: f.preset,
-      from: f.from,
-      to: f.to,
-      monthYM: f.monthYM,
-      accounts: Array.from(f.accounts),
-      categories: Array.from(f.categories),
-      currencies: Array.from(f.currencies),
-      search: f.search,
-      excludeTransfers: f.excludeTransfers,
-    });
-    setNewName("");
-    setSaveOpen(false);
-  }
+  const controlledPeriod = period !== undefined && onPeriodChange !== undefined;
+  const [additionalOpen, setAdditionalOpen] = useState(false);
 
   // Archived (closed) account titles from the Zenmoney cache — used to sort the
   // archived accounts to the bottom of the filter and group them under a divider.
@@ -408,114 +367,131 @@ export function GlobalFilters({
 
   const currentMonthYM =
     f.preset === "month" && f.monthYM ? f.monthYM : dataRange.maxYM;
-  const canPrev =
-    !!dataRange.minYM && currentMonthYM > dataRange.minYM;
-  const canNext =
-    !!dataRange.maxYM && currentMonthYM < dataRange.maxYM;
 
   // Default preset is now "current month"; treat anything else as user-set.
   const now = new Date();
   const defaultMonthYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const hasExtra =
+    f.excludeTransfers ||
+    f.minAmount != null ||
+    f.maxAmount != null ||
+    f.types.size > 0 ||
+    f.onlyUncategorized ||
+    f.hideZero ||
+    f.onlyWithComment;
+  const extraCount =
+    (f.excludeTransfers ? 1 : 0) +
+    (f.minAmount != null || f.maxAmount != null ? 1 : 0) +
+    (f.types.size > 0 ? 1 : 0) +
+    (f.onlyUncategorized ? 1 : 0) +
+    (f.hideZero ? 1 : 0) +
+    (f.onlyWithComment ? 1 : 0);
   const hasFilters =
     f.accounts.size > 0 ||
     f.categories.size > 0 ||
     f.currencies.size > 0 ||
     f.search.length > 0 ||
+    hasExtra ||
     !(f.preset === "month" && f.monthYM === defaultMonthYM);
 
   if (transactions.length === 0) return null;
 
   return (
-    <div className="card p-3 md:card-pad md:p-5 mb-4 md:mb-6">
-      <div className="flex flex-wrap items-center gap-2 md:gap-3">
-        <div className="flex items-center gap-2 mr-2">
-          <Filter className="w-4 h-4 text-muted" />
-          <span className="text-sm font-medium">Фильтры</span>
-        </div>
+    <div className="card p-3 md:card-pad md:p-4 mb-4 md:mb-6">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* ── Row 1: saved filter · «Дополнительно» │ period │ reset ── */}
+        <FiltersMenu />
 
+        {/* «Дополнительно» — right next to the filter button */}
         <div className="relative">
           <button
-            onClick={() => setSavedOpen((o) => !o)}
+            onClick={() => setAdditionalOpen((o) => !o)}
             className={clsx(
-              "btn-ghost text-xs",
-              views.length > 0 && "border-accent2 text-accent2"
+              "btn-ghost text-xs py-1.5 h-[30px] w-52",
+              hasExtra && "border-accent text-accent"
             )}
-            title="Сохранённые виды"
+            title="Дополнительные фильтры"
           >
-            <Bookmark className="w-3.5 h-3.5" />
-            Виды {views.length > 0 && `(${views.length})`}
+            <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+            <span className="flex-1 min-w-0 text-left truncate">Дополнительно</span>
+            {extraCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-accent-fg text-[11px] font-medium leading-none shrink-0">
+                {extraCount}
+              </span>
+            )}
+            <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
           </button>
-          {savedOpen && (
+          {additionalOpen && (
             <>
-              <div className="fixed inset-0 z-10" onClick={() => setSavedOpen(false)} />
-              <div className="absolute z-20 mt-1 w-72 max-h-80 overflow-auto card p-2 left-0">
-                <div className="text-xs text-muted px-2 py-1 mb-1">
-                  {views.length === 0 ? "Нет сохранённых видов" : "Применить вид"}
-                </div>
-                {views.map((v) => (
-                  <div
-                    key={v.id}
-                    className="flex items-center gap-1 hover:bg-panel2 rounded group"
-                  >
-                    <button
-                      onClick={() => applyView(v)}
-                      className="flex-1 text-left text-sm px-2 py-1.5 truncate"
-                      title={v.name}
-                    >
-                      <Bookmark className="w-3 h-3 inline mr-1.5 text-accent2" />
-                      {v.name}
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const ok = await confirm({
-                          title: "Удалить сохранённый вид?",
-                          message: `«${v.name}» будет удалён из списка.`,
-                          confirmLabel: "Удалить",
-                          tone: "danger",
-                        });
-                        if (ok) removeView(v.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-muted hover:text-expense"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+              <div className="fixed inset-0 z-[70]" onClick={() => setAdditionalOpen(false)} />
+              <div className="absolute z-[80] mt-1 left-0 w-72 card p-2 space-y-3 max-h-[70vh] overflow-auto">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">Тип операции</div>
+                  <div className="flex gap-1">
+                    {OP_TYPES.map((t) => (
+                      <button
+                        key={t.value}
+                        onClick={() => f.toggleType(t.value)}
+                        className={clsx(
+                          "flex-1 px-2 py-1 text-xs rounded-md border transition-colors",
+                          f.types.has(t.value)
+                            ? "bg-accent text-accent-fg border-accent"
+                            : "border-border text-muted hover:text-text"
+                        )}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+                </div>
 
-        <div className="relative">
-          <button
-            onClick={() => setSaveOpen((o) => !o)}
-            className="btn-ghost text-xs"
-            title="Сохранить текущие фильтры"
-          >
-            <BookmarkPlus className="w-3.5 h-3.5" />
-            Сохранить
-          </button>
-          {saveOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setSaveOpen(false)} />
-              <div className="absolute z-20 mt-1 w-64 card p-3 left-0">
-                <div className="label mb-1">Имя вида</div>
-                <input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && saveCurrent()}
-                  placeholder="Например: Еда за 2026"
-                  className="input text-sm mb-2"
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <button onClick={saveCurrent} className="btn-primary text-xs flex-1">
-                    Сохранить
-                  </button>
-                  <button onClick={() => setSaveOpen(false)} className="btn-ghost text-xs">
-                    Отмена
-                  </button>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">Сумма, ₽</div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="от"
+                      value={f.minAmount ?? ""}
+                      onChange={(e) =>
+                        f.setAmountRange(e.target.value === "" ? null : Number(e.target.value), f.maxAmount)
+                      }
+                      className="input text-xs py-1.5 flex-1 min-w-0"
+                    />
+                    <span className="text-muted text-xs">—</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="до"
+                      value={f.maxAmount ?? ""}
+                      onChange={(e) =>
+                        f.setAmountRange(f.minAmount, e.target.value === "" ? null : Number(e.target.value))
+                      }
+                      className="input text-xs py-1.5 flex-1 min-w-0"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-0.5 pt-1 border-t border-border">
+                  {[
+                    { label: "Без переводов между счетами", checked: f.excludeTransfers, on: f.setExcludeTransfers },
+                    { label: "Только без категории", checked: f.onlyUncategorized, on: f.setOnlyUncategorized },
+                    { label: "Скрыть нулевые операции", checked: f.hideZero, on: f.setHideZero },
+                    { label: "Только с комментарием", checked: f.onlyWithComment, on: f.setOnlyWithComment },
+                  ].map((row) => (
+                    <label
+                      key={row.label}
+                      className="flex items-center justify-between gap-2 text-xs px-1.5 py-1.5 rounded hover:bg-panel2 cursor-pointer"
+                    >
+                      <span>{row.label}</span>
+                      <input
+                        type="checkbox"
+                        checked={row.checked}
+                        onChange={(e) => row.on(e.target.checked)}
+                        className="accent-accent shrink-0"
+                      />
+                    </label>
+                  ))}
                 </div>
               </div>
             </>
@@ -523,80 +499,99 @@ export function GlobalFilters({
         </div>
 
         {showDateRange && (
-        <>
-        <div className="flex bg-panel2 rounded-lg p-1 border border-border">
-          {PRESETS.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => f.setPreset(p.value)}
+          <>
+            {/* Date controls — set apart from the rest with dividers. */}
+            <span className="w-px h-6 bg-border mx-1" />
+            <div className="flex bg-panel2 rounded-lg p-0.5 border border-border">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.value}
+                  onClick={() =>
+                    controlledPeriod ? onPeriodChange!(p.value) : f.setPreset(p.value)
+                  }
+                  className={clsx(
+                    // No weight change on active — keeps the control width stable.
+                    "px-2 py-1 text-xs rounded-md transition-colors",
+                    (controlledPeriod ? period === p.value : f.preset === p.value)
+                      ? "bg-accent text-accent-fg"
+                      : "text-muted hover:text-text"
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Month picker + custom range. On pages with a controlled (local)
+                period they stay VISIBLE for visual balance but are greyed out
+                and inert — the period is driven by the pills instead. */}
+            <div
               className={clsx(
-                "px-3 py-1 text-xs rounded-md transition-colors",
-                f.preset === p.value
-                  ? "bg-accent text-accent-fg font-medium"
-                  : "text-muted hover:text-text"
+                "flex items-center gap-2 flex-1 min-w-[220px]",
+                controlledPeriod && "opacity-40 pointer-events-none"
               )}
+              aria-disabled={controlledPeriod || undefined}
+              title={
+                controlledPeriod
+                  ? "На этой странице период задаётся кнопками слева"
+                  : undefined
+              }
             >
-              {p.label}
-            </button>
-          ))}
-        </div>
+              <MonthPicker
+                value={currentMonthYM}
+                minYM={dataRange.minYM}
+                maxYM={dataRange.maxYM}
+                active={!controlledPeriod && f.preset === "month"}
+                onSelect={controlledPeriod ? () => {} : (ym) => f.setMonth(ym)}
+                onStep={
+                  controlledPeriod ? () => {} : (dir) => f.stepMonth(dir, dataRange.maxYM)
+                }
+              />
 
-        <div
-          className={clsx(
-            "flex items-center bg-panel2 rounded-lg p-1 border",
-            f.preset === "month" ? "border-accent" : "border-border"
-          )}
-          title="Перейти к одному месяцу"
-        >
-          <button
-            onClick={() => f.stepMonth(-1, dataRange.maxYM)}
-            disabled={!canPrev}
-            className="p-1 rounded hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Предыдущий месяц"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => f.setMonth(currentMonthYM)}
-            className={clsx(
-              "px-2 py-1 text-xs rounded-md flex items-center gap-1.5 transition-colors min-w-[110px] justify-center",
-              f.preset === "month"
-                ? "bg-accent text-accent-fg font-medium"
-                : "text-muted hover:text-text"
-            )}
-          >
-            <CalendarRange className="w-3 h-3" />
-            {currentMonthYM ? monthLabel(currentMonthYM) : "Месяц"}
-          </button>
-          <button
-            onClick={() => f.stepMonth(1, dataRange.maxYM)}
-            disabled={!canNext}
-            className="p-1 rounded hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Следующий месяц"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <DateField
+                  value={f.from || ""}
+                  onChange={
+                    controlledPeriod
+                      ? () => {}
+                      : (e) => f.setRange(e.target.value || null, f.to)
+                  }
+                  className="input text-xs py-1.5"
+                  wrapperClassName="flex-1 min-w-0"
+                />
+                <span className="text-muted text-xs">—</span>
+                <DateField
+                  value={f.to || ""}
+                  onChange={
+                    controlledPeriod
+                      ? () => {}
+                      : (e) => f.setRange(f.from, e.target.value || null)
+                  }
+                  className="input text-xs py-1.5"
+                  wrapperClassName="flex-1 min-w-0"
+                />
+              </div>
+            </div>
 
-        <div className="flex items-center gap-2">
-          <DateField
-            value={f.from || ""}
-            onChange={(e) => f.setRange(e.target.value || null, f.to)}
-            className="input text-xs py-1.5"
-            wrapperClassName="w-36"
-          />
-          <span className="text-muted">—</span>
-          <DateField
-            value={f.to || ""}
-            onChange={(e) => f.setRange(f.from, e.target.value || null)}
-            className="input text-xs py-1.5"
-            wrapperClassName="w-36"
-          />
-        </div>
-        </>
+            <span className="w-px h-6 bg-border mx-1" />
+          </>
         )}
 
+        <button
+          onClick={f.reset}
+          disabled={!hasFilters}
+          title={hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
+          aria-label="Сбросить все фильтры"
+          className="btn-ghost text-xs py-1.5 px-2 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2"
+        >
+          <FilterX className="w-4 h-4" />
+        </button>
+
+        {/* Break → row 2 with the data controls, filling the full width. */}
+        <div className="basis-full h-0" />
+
         <MultiSelect
+          className="w-52 shrink-0"
           label="Счета"
           options={accounts}
           selected={f.accounts}
@@ -608,6 +603,7 @@ export function GlobalFilters({
         />
 
         <CategoryFilterPicker
+          className="w-52 shrink-0"
           nodes={categoryNodes}
           selected={f.categories}
           onChange={(s) => f.setSet("categories", s)}
@@ -615,6 +611,8 @@ export function GlobalFilters({
 
         {currencies.length > 1 && (
           <MultiSelect
+            className="w-52 shrink-0"
+            menuMinWidth={0}
             label="Валюта"
             options={currencies}
             selected={f.currencies}
@@ -631,13 +629,16 @@ export function GlobalFilters({
           />
         )}
 
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+        <div
+          className="relative flex-1 min-w-[220px]"
+          title="Фильтр по получателю и комментарию — входит в сохранённый фильтр и влияет на все виджеты"
+        >
+          <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-accent2/70 pointer-events-none" />
           <input
             value={f.search}
             onChange={(e) => f.setSearch(e.target.value)}
-            placeholder="Поиск по получателю/комментарию"
-            className="input pl-9 pr-9 text-sm"
+            placeholder="Фильтр: получатель, комментарий"
+            className="input pl-9 pr-9 text-xs py-1.5"
           />
           {f.search && (
             <button
@@ -648,25 +649,6 @@ export function GlobalFilters({
             </button>
           )}
         </div>
-
-        {hasFilters && (
-          <button
-            onClick={f.reset}
-            className="text-xs text-muted hover:text-accent underline"
-          >
-            Сбросить всё
-          </button>
-        )}
-
-        <label className="flex items-center gap-2 ml-auto text-xs text-muted">
-          <input
-            type="checkbox"
-            checked={f.excludeTransfers}
-            onChange={(e) => f.setExcludeTransfers(e.target.checked)}
-            className="accent-accent"
-          />
-          Без переводов
-        </label>
       </div>
     </div>
   );

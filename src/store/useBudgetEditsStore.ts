@@ -6,7 +6,11 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
-import { budgetEditId, type BudgetEdit } from "../lib/zenmoneyPush";
+import {
+  budgetEditId,
+  applyBudgetSkipBump,
+  type BudgetEdit,
+} from "../lib/zenmoneyPush";
 
 const KEY = "budgetEdits";
 
@@ -17,6 +21,10 @@ interface State {
   /** Queue (or replace) a pending plan change for one (tag, month). */
   queue: (edit: BudgetEdit) => Promise<void>;
   clearMany: (ids: string[]) => Promise<void>;
+  /** Increment the skip counter on each id; DROP any that reach `max` retries.
+   *  Returns the dropped ids (for logging). Used to purge edits whose tag no
+   *  longer exists in Дзен so they don't retry on every sync forever. */
+  bumpSkips: (ids: string[], max: number) => Promise<string[]>;
   clearAll: () => Promise<void>;
 }
 
@@ -48,6 +56,19 @@ export const useBudgetEditsStore = create<State>((set, get) => ({
     if (!changed) return;
     await db.saveJSON(KEY, next);
     set({ edits: next });
+  },
+
+  bumpSkips: async (ids, max) => {
+    if (ids.length === 0) return [];
+    const { edits: next, dropped, changed } = applyBudgetSkipBump(
+      get().edits,
+      ids,
+      max
+    );
+    if (!changed) return [];
+    await db.saveJSON(KEY, next);
+    set({ edits: next });
+    return dropped;
   },
 
   clearAll: async () => {

@@ -45,31 +45,48 @@ const PRIMARY = [
   { to: "/categories", label: "Категории", icon: PieChart },
 ];
 
-// Тренды и Цели жили в PRIMARY, но реже всего используются из шести
-// первичных пунктов — перенесли их в Ещё и поставили в самом начале
-// списка (перед Cash-flow), чтобы было легко найти.
-const SECONDARY = [
-  { to: "/trends", label: "Тренды", icon: Activity },
-  { to: "/goals", label: "Цели & FIRE", icon: Target },
-  { to: "/cashflow", label: "Cash-flow", icon: LineChart },
-  { to: "/health", label: "Здоровье", icon: HeartPulse },
-  { to: "/whatif", label: "Что-если", icon: FlaskConical },
-  { to: "/year-review", label: "Год в цифрах", icon: Sparkles },
-  { to: "/digest", label: "Дайджест", icon: Newspaper },
-  { to: "/budgets", label: "Бюджеты", icon: Target },
-  { to: "/50-30-20", label: "50/30/20", icon: Percent },
-  { to: "/calendar", label: "Календарь", icon: CalendarDays },
-  { to: "/sankey", label: "Потоки", icon: GitFork },
-  { to: "/anomalies", label: "Аномалии", icon: Zap },
-  { to: "/duplicates", label: "Дубликаты", icon: Copy },
-  { to: "/uncategorized", label: "Без категории", icon: Tag },
-  { to: "/recurring", label: "Регулярные", icon: Repeat },
-  { to: "/tags", label: "Теги", icon: Hash },
-  { to: "/wordcloud", label: "Облако слов", icon: Cloud },
-  { to: "/compare", label: "Сравнение", icon: GitCompare },
-  { to: "/top", label: "Топ", icon: TrendingUp },
-  { to: "/rules", label: "Правила", icon: Wand2 },
+// «Ещё» разбито на смысловые разделы с заголовками-разделителями:
+// Аналитика (смотреть/понять), Планы (цели и бюджеты), Инструменты
+// (порядок в данных). «Финансовое здоровье» — первым пунктом.
+const SECONDARY_GROUPS = [
+  {
+    title: "Аналитика",
+    items: [
+      { to: "/health", label: "Финансовое здоровье", icon: HeartPulse },
+      { to: "/trends", label: "Тренды", icon: Activity },
+      { to: "/cashflow", label: "Cash-flow", icon: LineChart },
+      { to: "/compare", label: "Сравнение", icon: GitCompare },
+      { to: "/top", label: "Топ", icon: TrendingUp },
+      { to: "/calendar", label: "Календарь", icon: CalendarDays },
+      { to: "/sankey", label: "Потоки", icon: GitFork },
+      { to: "/year-review", label: "Год в цифрах", icon: Sparkles },
+      { to: "/digest", label: "Дайджест", icon: Newspaper },
+    ],
+  },
+  {
+    title: "Планы",
+    items: [
+      { to: "/goals", label: "Цели", icon: Target },
+      { to: "/budgets", label: "Бюджеты", icon: Target },
+      { to: "/50-30-20", label: "50/30/20", icon: Percent },
+      { to: "/whatif", label: "Что-если", icon: FlaskConical },
+    ],
+  },
+  {
+    title: "Инструменты",
+    items: [
+      { to: "/uncategorized", label: "Без категории", icon: Tag },
+      { to: "/duplicates", label: "Дубликаты", icon: Copy },
+      { to: "/anomalies", label: "Аномалии", icon: Zap },
+      { to: "/recurring", label: "Регулярные", icon: Repeat },
+      { to: "/rules", label: "Правила", icon: Wand2 },
+      { to: "/tags", label: "Теги", icon: Hash },
+      { to: "/wordcloud", label: "Облако слов", icon: Cloud },
+    ],
+  },
 ];
+
+const SECONDARY = SECONDARY_GROUPS.flatMap((g) => g.items);
 
 export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -125,24 +142,34 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             {moreOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
-                <div className="absolute z-20 mt-1 w-52 card p-1.5 left-0 max-h-[70vh] overflow-y-auto">
-                  {SECONDARY.map(({ to, label, icon: Icon }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      onClick={() => setMoreOpen(false)}
-                      className={({ isActive }) =>
-                        clsx(
-                          "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
-                          isActive
-                            ? "bg-accent/10 text-accent"
-                            : "text-muted hover:text-text hover:bg-panel2"
-                        )
-                      }
+                <div className="absolute z-20 mt-1 w-56 card p-1.5 left-0 max-h-[70vh] overflow-y-auto">
+                  {SECONDARY_GROUPS.map((group, gi) => (
+                    <div
+                      key={group.title}
+                      className={gi > 0 ? "mt-1 pt-1 border-t border-border" : ""}
                     >
-                      <Icon className="w-4 h-4" />
-                      {label}
-                    </NavLink>
+                      <div className="text-[10px] uppercase tracking-wider text-muted px-3 pt-1 pb-0.5">
+                        {group.title}
+                      </div>
+                      {group.items.map(({ to, label, icon: Icon }) => (
+                        <NavLink
+                          key={to}
+                          to={to}
+                          onClick={() => setMoreOpen(false)}
+                          className={({ isActive }) =>
+                            clsx(
+                              "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
+                              isActive
+                                ? "bg-accent/10 text-accent"
+                                : "text-muted hover:text-text hover:bg-panel2"
+                            )
+                          }
+                        >
+                          <Icon className="w-4 h-4" />
+                          {label}
+                        </NavLink>
+                      ))}
+                    </div>
                   ))}
                 </div>
               </>
@@ -269,26 +296,30 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                   {label}
                 </NavLink>
               ))}
-              <div className="text-[10px] uppercase tracking-wider text-muted px-4 pt-3 pb-1">
-                Ещё
-              </div>
-              {SECONDARY.map(({ to, label, icon: Icon }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  onClick={() => setMobileOpen(false)}
-                  className={({ isActive }) =>
-                    clsx(
-                      "flex items-center gap-3 px-4 py-2.5 text-sm",
-                      isActive
-                        ? "bg-accent/10 text-accent"
-                        : "text-muted hover:text-text hover:bg-panel2"
-                    )
-                  }
-                >
-                  <Icon className="w-4 h-4" />
-                  {label}
-                </NavLink>
+              {SECONDARY_GROUPS.map((group) => (
+                <div key={group.title}>
+                  <div className="text-[10px] uppercase tracking-wider text-muted px-4 pt-3 pb-1">
+                    {group.title}
+                  </div>
+                  {group.items.map(({ to, label, icon: Icon }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      onClick={() => setMobileOpen(false)}
+                      className={({ isActive }) =>
+                        clsx(
+                          "flex items-center gap-3 px-4 py-2.5 text-sm",
+                          isActive
+                            ? "bg-accent/10 text-accent"
+                            : "text-muted hover:text-text hover:bg-panel2"
+                        )
+                      }
+                    >
+                      <Icon className="w-4 h-4" />
+                      {label}
+                    </NavLink>
+                  ))}
+                </div>
               ))}
             </nav>
           </aside>

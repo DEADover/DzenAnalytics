@@ -1,6 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { zenPlanList, zenPlansFromBudgets, zenPlanKey } from "./zenBudgets";
-import type { ZenBudget, ZenTag } from "./zenmoney";
+import {
+  zenPlanList,
+  zenPlansFromBudgets,
+  zenForecastsFromBudgets,
+  zenPlanKey,
+  plannedOpsByTagMonth,
+} from "./zenBudgets";
+import type {
+  ZenBudget,
+  ZenInstrument,
+  ZenReminderMarker,
+  ZenTag,
+} from "./zenmoney";
 
 const tag = (id: string, title: string, parent: string | null = null): ZenTag => ({
   id,
@@ -86,6 +97,93 @@ describe("zenPlansFromBudgets", () => {
       tags
     );
     expect(m.size).toBe(0);
+  });
+});
+
+describe("zenForecastsFromBudgets", () => {
+  const tags = [tag("misc", "Прочее")];
+
+  it("returns ONLY Zenmoney's auto-forecasts (the «из X» values), not manual plans", () => {
+    const fc = zenForecastsFromBudgets(
+      [
+        budget({ tag: "misc", income: 17000, isIncomeForecast: true, date: "2026-07-01" }),
+        budget({ tag: "misc", income: 20000, isIncomeForecast: false, date: "2026-06-01" }), // manual
+      ],
+      tags
+    );
+    expect(fc.get(zenPlanKey("income", "Прочее", null, "2026-07"))).toBe(17000);
+    // The manual plan is NOT a forecast → excluded here.
+    expect(fc.get(zenPlanKey("income", "Прочее", null, "2026-06"))).toBeUndefined();
+  });
+
+  it("is the complement of zenPlansFromBudgets (plans exclude forecasts)", () => {
+    const budgets = [
+      budget({ tag: "misc", income: 17000, isIncomeForecast: true, date: "2026-07-01" }),
+    ];
+    // The forecast shows up in forecasts, and NOT in manual plans.
+    expect(zenForecastsFromBudgets(budgets, tags).size).toBe(1);
+    expect(zenPlansFromBudgets(budgets, tags).size).toBe(0);
+  });
+});
+
+describe("planned operations folding (unlocked budgets)", () => {
+  const tags = [tag("work", "Работа")];
+  const rub: ZenInstrument = { id: 2, title: "RUB", shortTitle: "RUB", symbol: "₽", rate: 1 };
+  const usd: ZenInstrument = { id: 1, title: "USD", shortTitle: "USD", symbol: "$", rate: 90 };
+  const marker = (m: Partial<ZenReminderMarker>): ZenReminderMarker => ({
+    id: "m1",
+    user: 1,
+    changed: 0,
+    date: "2026-07-25",
+    income: 0,
+    incomeInstrument: 2,
+    outcome: 0,
+    outcomeInstrument: 2,
+    tag: ["work"],
+    reminder: "r1",
+    state: "planned",
+    ...m,
+  });
+
+  it("adds planned income to an UNLOCKED budget (Работа: −22000 + 145000 = 123000)", () => {
+    const planned = plannedOpsByTagMonth([marker({ income: 145000 })], [rub], 2);
+    const m = zenPlansFromBudgets(
+      [budget({ tag: "work", income: -22000, incomeLock: false, date: "2026-07-01" })],
+      tags,
+      planned
+    );
+    expect(m.get(zenPlanKey("income", "Работа", null, "2026-07"))).toBe(123000);
+  });
+
+  it("a LOCKED budget ignores planned ops (exact amount)", () => {
+    const planned = plannedOpsByTagMonth([marker({ income: 145000 })], [rub], 2);
+    const m = zenPlansFromBudgets(
+      [budget({ tag: "work", income: 130000, incomeLock: true, date: "2026-07-01" })],
+      tags,
+      planned
+    );
+    expect(m.get(zenPlanKey("income", "Работа", null, "2026-07"))).toBe(130000);
+  });
+
+  it("only 'planned' markers count — processed/deleted are ignored", () => {
+    const planned = plannedOpsByTagMonth(
+      [
+        marker({ id: "a", income: 100000, state: "planned" }),
+        marker({ id: "b", income: 50000, state: "processed" }),
+      ],
+      [rub],
+      2
+    );
+    expect(planned.get("work|2026-07")?.income).toBe(100000);
+  });
+
+  it("converts a foreign-currency planned op to base currency", () => {
+    const planned = plannedOpsByTagMonth(
+      [marker({ income: 1000, incomeInstrument: 1 })], // 1000 USD
+      [rub, usd],
+      2 // base RUB
+    );
+    expect(planned.get("work|2026-07")?.income).toBe(90000); // 1000 * 90 / 1
   });
 });
 

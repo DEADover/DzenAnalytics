@@ -9,9 +9,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
-import { TrendingDown, TrendingUp } from "lucide-react";
 import type { Transaction } from "../types";
-import { Tooltip } from "./Tooltip";
 import { buildMonthCashflow } from "../lib/budgets";
 import {
   formatMoney,
@@ -31,14 +29,22 @@ const EXPENSE = "#EF4444";
  * linear end-of-month forecast (mirrors Zenmoney «Планы» / «План на день»).
  * A readout below states the projected month-end gap: free money or shortfall.
  */
-/** «сегодня» marker label, rendered INSIDE the plot area (just under the top,
- *  anchored left of the line) so it never clips at the chart edge. */
+/** «Сегодня» marker label, rendered INSIDE the plot area at the very top,
+ *  anchored to the RIGHT of the line — so early in the month (when the line
+ *  sits next to the Y axis) it doesn't collide with the axis or its top tick. */
 function TodayLabel({ viewBox }: { viewBox?: { x?: number; y?: number } }) {
   const x = viewBox?.x ?? 0;
   const y = viewBox?.y ?? 0;
   return (
-    <text x={x - 6} y={y + 12} textAnchor="end" fontSize={10} fill={chartAxisStroke}>
-      сегодня
+    <text
+      x={x + 5}
+      y={y + 2}
+      textAnchor="start"
+      fontSize={11}
+      fontWeight={600}
+      fill={chartAxisStroke}
+    >
+      Сегодня
     </text>
   );
 }
@@ -48,63 +54,27 @@ export function MonthCashflowChart({
   ym,
   base,
   onDayClick,
+  plannedIncome,
+  plannedExpense,
 }: {
   transactions: Transaction[];
   ym: string;
   base: string;
   /** Click a day on the chart → drill into that day's transactions. */
   onDayClick?: (day: number) => void;
+  /** Month budget plans — when given, the end-of-month forecast projects to the
+   *  plan (Zen-style) instead of extrapolating the current daily pace. */
+  plannedIncome?: number;
+  plannedExpense?: number;
 }) {
-  const cf = useMemo(() => buildMonthCashflow(transactions, ym), [transactions, ym]);
+  const cf = useMemo(
+    () => buildMonthCashflow(transactions, ym, Date.now(), { plannedIncome, plannedExpense }),
+    [transactions, ym, plannedIncome, plannedExpense]
+  );
   const hasForecast = cf.todayDay > 0 && cf.todayDay < cf.days;
-
-  // Projected month-end balance: > 0 → свободные деньги, < 0 → не хватает.
-  const free = cf.projIncome - cf.projExpense;
-  const tone = free >= 0 ? "income" : "expense";
 
   return (
     <div className="card card-pad">
-      <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
-        <div className="flex gap-6">
-          <div>
-            <div className="label mb-0.5 flex items-center gap-1.5">
-              <TrendingUp className="w-3.5 h-3.5 text-income" /> Поступления
-            </div>
-            <div className="text-lg font-semibold tabular-nums text-income">
-              {formatMoney(cf.factIncome, base)}
-            </div>
-            {hasForecast && (
-              <div className="text-xs text-muted tabular-nums">
-                прогноз {formatMoney(cf.projIncome, base)}
-              </div>
-            )}
-          </div>
-          <div>
-            <div className="label mb-0.5 flex items-center gap-1.5">
-              <TrendingDown className="w-3.5 h-3.5 text-expense" /> Расходы
-            </div>
-            <div className="text-lg font-semibold tabular-nums text-expense">
-              {formatMoney(cf.factExpense, base)}
-            </div>
-            {hasForecast && (
-              <div className="text-xs text-muted tabular-nums">
-                прогноз {formatMoney(cf.projExpense, base)}
-              </div>
-            )}
-          </div>
-        </div>
-        <Tooltip content={hasForecast ? "Прогноз на конец месяца по текущему темпу" : "Итог за месяц"}>
-          <div
-            className={`px-3 py-1.5 rounded-full text-sm font-medium tabular-nums whitespace-nowrap ${
-              tone === "income" ? "bg-income/15 text-income" : "bg-expense/15 text-expense"
-            }`}
-          >
-            {free >= 0 ? "Свободные деньги " : "Не хватает до конца месяца "}
-            {formatMoney(Math.abs(free), base, { signed: false })}
-          </div>
-        </Tooltip>
-      </div>
-
       <div
         className={`h-64 ${onDayClick ? "cursor-pointer" : ""}`}
         onClick={(e) => {

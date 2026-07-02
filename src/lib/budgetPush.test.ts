@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildBudgetPush, budgetEditId, type BudgetEdit } from "./zenmoneyPush";
+import {
+  buildBudgetPush,
+  budgetEditId,
+  applyBudgetSkipBump,
+  type BudgetEdit,
+} from "./zenmoneyPush";
 import type { ZenBudget, ZenTag } from "./zenmoney";
 
 const tag = (id: string, title: string, parent: string | null = null): ZenTag => ({
@@ -56,6 +61,7 @@ describe("buildBudgetPush", () => {
       tag: "food",
       date: "2026-06-01",
       outcome: 51000,
+      outcomeLock: true, // exact budget — Zenmoney must not add planned ops
       isOutcomeForecast: false,
       user: 7,
       changed: 1000,
@@ -88,16 +94,26 @@ describe("buildBudgetPush", () => {
     expect(budgets[0]).toMatchObject({
       tag: "work",
       income: 230000,
+      incomeLock: true, // exact budget — Zenmoney must not add planned ops
       isIncomeForecast: false,
       outcome: 0,
     });
   });
 
-  it("drops a no-op (cloud already equals the edit)", () => {
-    const existing = [budget({ tag: "food", outcome: 51000, isOutcomeForecast: false })];
+  it("drops a no-op only when the cloud value is already LOCKED", () => {
+    const existing = [budget({ tag: "food", outcome: 51000, outcomeLock: true })];
     const { budgets, skipped } = buildBudgetPush([edit({ amount: 51000 })], existing, tags, 1000);
     expect(budgets).toHaveLength(0);
     expect(skipped).toHaveLength(0);
+  });
+
+  it("re-pushes an UNLOCKED cloud value even if the number matches (must lock it)", () => {
+    // Unlocked means Zenmoney adds planned ops on top, so the same number is a
+    // different effective budget — we must re-push it as an exact, locked value.
+    const existing = [budget({ tag: "food", outcome: 51000, outcomeLock: false })];
+    const { budgets } = buildBudgetPush([edit({ amount: 51000 })], existing, tags, 1000);
+    expect(budgets).toHaveLength(1);
+    expect(budgets[0].outcomeLock).toBe(true);
   });
 
   it("re-pushes when an existing cell is an auto-forecast (converts to manual)", () => {
@@ -105,6 +121,7 @@ describe("buildBudgetPush", () => {
     const { budgets } = buildBudgetPush([edit({ amount: 51000 })], existing, tags, 1000);
     expect(budgets).toHaveLength(1);
     expect(budgets[0].isOutcomeForecast).toBe(false);
+    expect(budgets[0].outcomeLock).toBe(true);
   });
 
   it("skips an edit whose tag isn't in the cache", () => {
@@ -122,5 +139,41 @@ describe("buildBudgetPush", () => {
     expect(budgetEditId(edit({ subcategory: null }))).not.toBe(
       budgetEditId(edit({ subcategory: "Алкоголь" }))
     );
+  });
+});
+
+describe("applyBudgetSkipBump (auto-drop stale edits)", () => {
+  const mk = (skips?: number): BudgetEdit => ({
+    kind: "income",
+    category: "Призрак",
+    subcategory: null,
+    ym: "2026-07",
+    amount: 1000,
+    ...(skips !== undefined ? { skips } : {}),
+  });
+
+  it("increments skips below the cap and keeps the edit", () => {
+    const { edits, dropped, changed } = applyBudgetSkipBump({ a: mk() }, ["a"], 5);
+    expect(changed).toBe(true);
+    expect(dropped).toEqual([]);
+    expect(edits.a.skips).toBe(1);
+  });
+
+  it("drops the edit once it reaches the cap", () => {
+    const { edits, dropped } = applyBudgetSkipBump({ a: mk(4) }, ["a"], 5);
+    expect(dropped).toEqual(["a"]);
+    expect(edits.a).toBeUndefined();
+  });
+
+  it("ignores ids that aren't in the queue (no change)", () => {
+    const { dropped, changed } = applyBudgetSkipBump({ a: mk() }, ["ghost"], 5);
+    expect(changed).toBe(false);
+    expect(dropped).toEqual([]);
+  });
+
+  it("only touches the listed ids, leaving others intact", () => {
+    const { edits } = applyBudgetSkipBump({ a: mk(2), b: mk(0) }, ["a"], 5);
+    expect(edits.a.skips).toBe(3);
+    expect(edits.b.skips).toBe(0);
   });
 });

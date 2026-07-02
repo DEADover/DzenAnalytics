@@ -3,6 +3,7 @@ import {
   isValidElement,
   useCallback,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactElement,
@@ -26,45 +27,60 @@ interface Props {
  * from the child's bounding box, so it adds NO wrapper box and never disturbs
  * the surrounding (often flex) layout. Pass a falsy `content` to disable it
  * conditionally without unwrapping (e.g. `content={editing ? null : text}`).
+ *
+ * Positioning measures the bubble's REAL size after it mounts and shifts the
+ * whole box to stay within the viewport — so near a screen edge it slides
+ * sideways instead of squishing into a tall one-word-per-line column.
  */
 export function Tooltip({ content, children, placement = "top", delay = 120 }: Props) {
   const [shown, setShown] = useState(false);
-  const [coords, setCoords] = useState<{ x: number; y: number; below: boolean }>({
-    x: 0,
-    y: 0,
-    below: false,
-  });
   // The anchor DOM node is kept in STATE (not a ref) — a callback ref into
   // setState avoids the `react-hooks/refs` rule that fires on ref-setters passed
   // through cloneElement, and re-running effects on remount is harmless here.
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const bubble = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: 0, top: 0, ready: false });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const id = useId();
-
-  const place = useCallback(() => {
-    if (!anchor) return;
-    const r = anchor.getBoundingClientRect();
-    // Flip below when there isn't room above.
-    const below = placement === "bottom" || r.top < 48;
-    setCoords({
-      x: Math.min(Math.max(r.left + r.width / 2, 8), window.innerWidth - 8),
-      y: below ? r.bottom + 6 : r.top - 6,
-      below,
-    });
-  }, [placement, anchor]);
 
   const open = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      place();
+      setPos((p) => ({ ...p, ready: false }));
       setShown(true);
     }, delay);
-  }, [delay, place]);
+  }, [delay]);
 
   const close = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     setShown(false);
   }, []);
+
+  // Position once the bubble is in the DOM: measure both boxes, centre on the
+  // anchor, then clamp so the whole bubble stays on-screen.
+  useLayoutEffect(() => {
+    if (!shown || !anchor || !bubble.current) return;
+    const reposition = () => {
+      if (!anchor || !bubble.current) return;
+      const a = anchor.getBoundingClientRect();
+      const b = bubble.current.getBoundingClientRect();
+      const m = 8; // viewport margin
+      const below = placement === "bottom" || a.top < b.height + 12;
+      const left = Math.min(
+        Math.max(a.left + a.width / 2 - b.width / 2, m),
+        window.innerWidth - b.width - m
+      );
+      const top = below ? a.bottom + 6 : a.top - b.height - 6;
+      setPos({ left, top, ready: true });
+    };
+    reposition();
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    return () => {
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+    };
+  }, [shown, anchor, placement, content]);
 
   if (!content || !isValidElement(children)) return children;
 
@@ -90,8 +106,7 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
     },
     onFocus: (e: unknown) => {
       call("onFocus")(e);
-      place();
-      setShown(true);
+      open();
     },
     onBlur: (e: unknown) => {
       call("onBlur")(e);
@@ -105,15 +120,16 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
       {shown &&
         createPortal(
           <div
+            ref={bubble}
             role="tooltip"
             id={id}
             style={{
               position: "fixed",
-              left: coords.x,
-              top: coords.y,
-              transform: `translate(-50%, ${coords.below ? "0" : "-100%"})`,
+              left: pos.left,
+              top: pos.top,
+              opacity: pos.ready ? 1 : 0,
             }}
-            className="pointer-events-none z-[100] max-w-xs rounded-md border border-border bg-panel2 px-2 py-1 text-xs text-text shadow-lg whitespace-pre-line"
+            className="pointer-events-none z-[100] w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-lg border border-border bg-panel2 px-3 py-2 text-xs leading-relaxed text-text shadow-lg whitespace-pre-line transition-opacity duration-100"
           >
             {content}
           </div>,

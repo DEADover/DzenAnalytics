@@ -7,9 +7,11 @@ interface Props {
   hint?: ReactNode;
   tone?: "default" | "income" | "expense" | "warn";
   icon?: ReactNode;
+  /** Compact layout — smaller padding/number, for dense metric rows. */
+  dense?: boolean;
 }
 
-export function Stat({ label, value, hint, tone = "default", icon }: Props) {
+export function Stat({ label, value, hint, tone = "default", icon, dense }: Props) {
   const toneClass = {
     default: "text-text",
     income: "text-income",
@@ -17,12 +19,19 @@ export function Stat({ label, value, hint, tone = "default", icon }: Props) {
     warn: "text-warn",
   }[tone];
   return (
-    <div className="card card-pad">
-      <div className="flex items-center justify-between mb-2">
+    <div className={clsx("card", dense ? "p-3" : "card-pad")}>
+      <div className={clsx("flex items-center justify-between", dense ? "mb-0.5" : "mb-2")}>
         <div className="label">{label}</div>
         {icon && <div className="text-muted">{icon}</div>}
       </div>
-      <div className={clsx("stat-num", toneClass)}>{value}</div>
+      <div
+        className={clsx(
+          dense ? "text-xl font-semibold tabular-nums" : "stat-num",
+          toneClass
+        )}
+      >
+        {value}
+      </div>
       {hint && <div className="text-xs text-muted mt-1">{hint}</div>}
     </div>
   );

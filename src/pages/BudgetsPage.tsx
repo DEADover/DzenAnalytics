@@ -11,10 +11,13 @@ import {
   Check,
   X,
   ArrowUp,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
+import { getZenForecastsFromCache } from "../store/useZenmoneyStore";
+import { zenPlanKey } from "../lib/zenBudgets";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
 import { budgetEditId } from "../lib/zenmoneyPush";
@@ -33,6 +36,7 @@ import {
   type BudgetLine,
 } from "../lib/budgets";
 import { formatMoney } from "../lib/format";
+import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { DateField } from "../components/DateField";
@@ -72,6 +76,24 @@ export function BudgetsPage() {
   useEffect(() => {
     if (!loaded) hydrate();
   }, [loaded, hydrate]);
+
+  // Zenmoney's OWN auto-forecasts («из X»). In API mode we show these for
+  // income tags without a manual plan — instead of a local median — so «≈»
+  // planы match Дзен exactly. `zenLoaded` distinguishes «not yet read» from
+  // «CSV mode / no cache» (where the median fallback still applies).
+  const [zenForecasts, setZenForecasts] = useState<Map<string, number> | null>(null);
+  const [zenLoaded, setZenLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    getZenForecastsFromCache().then((m) => {
+      if (!alive) return;
+      setZenForecasts(m);
+      setZenLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [transactions]);
 
   const cur = currentMonth();
   const [ym, setYm] = useState(cur);
@@ -227,10 +249,18 @@ export function BudgetsPage() {
       .map((line): Row => {
         const planned = plannedFor(line, ym);
         const fact = factFor(line, transactions, ym);
-        // Income with no manual plan → fall back to a history forecast (Zen-like
-        // «из X»). Forecasts roll up into the parent but are NEVER pushed to Дзен.
+        // Income with no manual plan → show a forecast «≈ из X». In API mode use
+        // ZENMONEY's own auto-forecast (so numbers match Дзен, and tags Дзен
+        // doesn't forecast get no phantom «≈»); in CSV mode fall back to a local
+        // median. Never pushed to Дзен.
         if (planned === 0 && line.kind === "income") {
-          const fc = forecastFor(line, transactions, ym);
+          let fc = 0;
+          if (!zenLoaded) fc = 0; // still reading cache — avoid a median flash
+          else if (zenForecasts)
+            fc = zenForecasts.get(
+              zenPlanKey(line.kind, line.category, line.subcategory ?? null, ym)
+            ) ?? 0; // API: trust Дзен (missing = no forecast)
+          else fc = forecastFor(line, transactions, ym); // CSV: median estimate
           if (fc > 0) return { line, planned: fc, fact, forecast: true };
         }
         return { line, planned, fact, forecast: false };
@@ -256,7 +286,7 @@ export function BudgetsPage() {
       if (ae !== be) return ae - be;
       return a.line.createdAt < b.line.createdAt ? 1 : a.line.createdAt > b.line.createdAt ? -1 : 0;
     });
-  }, [lines, ym, transactions]);
+  }, [lines, ym, transactions, zenForecasts, zenLoaded]);
   const expenseRows = rows.filter((r) => r.line.kind === "expense");
   const incomeRows = rows.filter((r) => r.line.kind === "income");
 
@@ -282,6 +312,9 @@ export function BudgetsPage() {
     };
     for (const t of transactions) {
       if (!(t.date || "").startsWith(ym)) continue;
+      // «Без категории» isn't a budgetable tag — nothing to plan for the
+      // uncategorized bucket, so don't offer it in «Без бюджета».
+      if (!t.category || t.category === NO_CATEGORY) continue;
       const sub = t.subcategory ?? null;
       if (t.kind === "income") add("income", t.category, sub, t.amountBase);
       else if (affectsExpense(t.kind)) add("expense", t.category, sub, expenseDelta(t));
@@ -462,7 +495,14 @@ export function BudgetsPage() {
 
       {/* Full-width cash-flow widget: cumulative income/expense over the month
           with a linear end-of-month forecast (Zen «Планы» style). */}
-      <MonthCashflowChart transactions={transactions} ym={ym} base={base} onDayClick={openDay} />
+      <MonthCashflowChart
+        transactions={transactions}
+        ym={ym}
+        base={base}
+        onDayClick={openDay}
+        plannedIncome={incPlan}
+        plannedExpense={expPlan}
+      />
 
       <div className="space-y-6">
         <Section
@@ -732,8 +772,9 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <h2 className="font-semibold text-lg">{heading}</h2>
+        <BarLegend isIncome={sectionKind === "income"} />
         {headerAction}
       </div>
       {prepend}
@@ -768,53 +809,76 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
   );
 }
 
-/** Slim flexible progress bar (фактический процент к плану). The solid part is
- *  the actual spend/income; when a current-month forecast is supplied it adds a
- *  lighter same-tone extension to the projected end-of-month value with a tick
- *  marker (Zen «Планы» style). Same height/length on every row; numeric details
+/** Slim progress bar: coloured fill = actual spend/income as a share of the
+ *  plan (tone by status), on a grey «remaining» track. No forecast — a naive
+ *  pace projection early in the month was more alarming than useful (it filled
+ *  the whole bar red on day 2); the month-end forecast lives in the cash-flow
+ *  chart at the top instead. Same height/length on every row; numeric details
  *  live in the tooltip. */
 function BudgetBar({
   ratio,
   isIncome,
-  forecastRatio,
   title,
 }: {
   ratio: number;
   isIncome: boolean;
-  /** projected/plan for the current month; omit to hide the forecast. */
-  forecastRatio?: number;
   title?: string;
 }) {
-  const clamp = (n: number) => Math.min(Math.max(n, 0), 1);
-  const factW = clamp(ratio);
+  const factW = Math.min(Math.max(ratio, 0), 1);
   const tone = BAR_TONE[summaryTone(ratio, isIncome)];
-  // Show the forecast only when it adds something beyond the actual fill.
-  const showForecast = forecastRatio !== undefined && forecastRatio > ratio + 0.001;
-  const fcW = showForecast ? clamp(forecastRatio) : factW;
-  const fcTone = BAR_TONE[summaryTone(forecastRatio ?? ratio, isIncome)];
   return (
     <Tooltip content={title}>
       <div className="relative flex-1 h-2 bg-panel2 rounded-full overflow-hidden">
-        {/* Forecast extension — same tone, faded; sits under the solid fact. */}
-        {showForecast && (
-          <div
-            className={`absolute inset-y-0 left-0 rounded-full opacity-30 ${fcTone}`}
-            style={{ width: `${fcW * 100}%` }}
-          />
-        )}
-        {/* Actual fill. */}
         <div
           className={`absolute inset-y-0 left-0 rounded-full ${tone}`}
           style={{ width: `${factW * 100}%` }}
         />
-        {/* Tick at the projected end-of-month position. */}
-        {showForecast && fcW < 1 && (
-          <div
-            className={`absolute inset-y-0 w-0.5 ${fcTone}`}
-            style={{ left: `calc(${fcW * 100}% - 1px)` }}
-          />
-        )}
       </div>
+    </Tooltip>
+  );
+}
+
+/** ⓘ hint next to a section heading: explains what the bar's colours mean.
+ *  Income and expense read OPPOSITELY (green = «на цель» vs «в пределах»), so
+ *  the copy is kind-specific. */
+function BarLegend({ isIncome }: { isIncome: boolean }) {
+  const swatches = isIncome
+    ? [
+        { c: "bg-income", t: "План выполнен — 100% и больше" },
+        { c: "bg-warn", t: "Почти у цели — 80–100%" },
+        { c: "bg-expense", t: "Недобор — меньше 80%" },
+      ]
+    : [
+        { c: "bg-income", t: "В пределах — меньше 80% лимита" },
+        { c: "bg-warn", t: "Близко к лимиту — 80–100%" },
+        { c: "bg-expense", t: "Лимит превышен — больше 100%" },
+      ];
+  return (
+    <Tooltip
+      placement="bottom"
+      content={
+        <div className="space-y-1.5 text-left leading-snug">
+          <div className="font-medium">Как читать полоску</div>
+          {swatches.map((s) => (
+            <div key={s.t} className="flex items-center gap-2">
+              <span className={`inline-block w-3.5 h-2 rounded-full ${s.c}`} />
+              <span>{s.t}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-2 pt-1.5 mt-1 border-t border-border/60">
+            <span className="inline-block w-3.5 h-2 rounded-full bg-panel2" />
+            <span>Серый фон — сколько ещё осталось до плана</span>
+          </div>
+        </div>
+      }
+    >
+      <button
+        type="button"
+        aria-label="Как читать полоску бюджета"
+        className="text-muted hover:text-text shrink-0"
+      >
+        <HelpCircle className="w-4 h-4" />
+      </button>
     </Tooltip>
   );
 }
@@ -909,21 +973,16 @@ function BudgetRow({
   const cancelEditRef = useRef(false);
 
   const ratio = dispPlanned > 0 ? dispFact / dispPlanned : 0;
-  const projected = monthProgress > 0 ? dispFact / monthProgress : 0;
-  // Forecast fill on the bar — only mid-current-month (a past month is final).
-  const forecastRatio =
-    isCurrent && dispPlanned > 0 ? projected / dispPlanned : undefined;
   const good = isIncome ? ratio >= 1 : ratio < 0.8;
   const near = !isIncome && ratio >= 0.8 && ratio < 1;
   const statusText = isIncome
     ? good ? "План выполнен" : "Недобор"
     : ratio >= 1 ? "Лимит превышен" : near ? "Близко к лимиту" : "В пределах";
   const remaining = isIncome ? dispFact - dispPlanned : dispPlanned - dispFact;
-  // Everything secondary (status, forecast, remaining, month progress) lives in
-  // the bar tooltip so the row stays a single line.
+  // Secondary details (status, remaining, month progress) live in the bar
+  // tooltip so the row stays a single line.
   const barTitle = [
     statusText,
-    isCurrent && dispPlanned > 0 ? `прогноз ${formatMoney(projected, base)}` : null,
     `${isIncome ? "разница" : "осталось"} ${formatMoney(remaining, base, { signed: true })}`,
     isCurrent ? `прошло ${(monthProgress * 100).toFixed(0)}% месяца` : null,
   ]
@@ -996,7 +1055,7 @@ function BudgetRow({
         </button>
       </Tooltip>
 
-      <BudgetBar ratio={ratio} isIncome={isIncome} forecastRatio={forecastRatio} title={barTitle} />
+      <BudgetBar ratio={ratio} isIncome={isIncome} title={barTitle} />
 
       {/* fact / plan — the plan number edits IN PLACE (borderless, no spinner)
           so nothing around it shifts and the «%» pill / pending icon stay put. */}

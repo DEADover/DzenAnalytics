@@ -43,6 +43,23 @@ export interface BudgetLine {
   createdAt: string;
 }
 
+/**
+ * Canonical key for a single budget CELL — one (kind, category, subcategory,
+ * month). Used to mark a plan cell the user edited locally but hasn't pushed,
+ * so a sync won't overwrite it with Zenmoney's (older) value. A plain «|»
+ * separator keeps it debuggable; both the sync producer and the merge consumer
+ * import THIS function, so the exact separator never matters as long as it's
+ * shared.
+ */
+export function budgetCellKey(
+  kind: string,
+  category: string,
+  subcategory: string | null,
+  ym: string
+): string {
+  return [kind, category, subcategory ?? "", ym].join("|");
+}
+
 /** Months elapsed from `a` to `b` (both "YYYY-MM"); negative if b < a. */
 export function monthDiff(a: string, b: string): number {
   const [ay, am] = a.split("-").map(Number);
@@ -207,7 +224,8 @@ export interface MonthCashflow {
 export function buildMonthCashflow(
   txs: Transaction[],
   ym: string,
-  now = Date.now()
+  now = Date.now(),
+  opts?: { plannedIncome?: number; plannedExpense?: number }
 ): MonthCashflow {
   const days = daysInMonth(ym);
   const today = new Date(now);
@@ -226,8 +244,32 @@ export function buildMonthCashflow(
     else if (affectsExpense(t.kind)) expDelta[d] += expenseDelta(t);
   }
 
-  const incPace = todayDay > 0 ? cumulate(incDelta, todayDay) / todayDay : 0;
-  const expPace = todayDay > 0 ? cumulate(expDelta, todayDay) / todayDay : 0;
+  const factIncome = cumulate(incDelta, todayDay);
+  const factExpense = cumulate(expDelta, todayDay);
+  const remaining = days - todayDay;
+  const hasForecast = todayDay > 0 && remaining > 0;
+
+  // Month-end targets. When a budget PLAN is supplied, project to it (Zen-style:
+  // you'll receive/spend at least the planned amount) instead of extrapolating
+  // the current daily pace. Pace extrapolation wildly overstates LUMPY income —
+  // a salary that lands on day 1 would imply ~30× that by month-end (this was
+  // the «свободные деньги 1.9M vs Дзен 141k» bug). Falls back to the pace
+  // projection when no plan is given (dashboard / tests).
+  const usePlan =
+    hasForecast &&
+    (opts?.plannedIncome != null || opts?.plannedExpense != null);
+  let targetIncome: number;
+  let targetExpense: number;
+  if (usePlan) {
+    targetIncome = Math.max(factIncome, opts?.plannedIncome ?? 0);
+    targetExpense = Math.max(factExpense, opts?.plannedExpense ?? 0);
+  } else if (hasForecast) {
+    targetIncome = factIncome + (factIncome / todayDay) * remaining;
+    targetExpense = factExpense + (factExpense / todayDay) * remaining;
+  } else {
+    targetIncome = factIncome;
+    targetExpense = factExpense;
+  }
 
   const points: CashflowPoint[] = [];
   let cumInc = 0;
@@ -241,19 +283,28 @@ export function buildMonthCashflow(
       // The split day anchors BOTH segments so the dashed forecast joins the solid line.
       points.push({ day: d, income: cumInc, expense: cumExp, incomeF: cumInc, expenseF: cumExp });
     } else {
-      const incF = cumulate(incDelta, todayDay) + incPace * (d - todayDay);
-      const expF = cumulate(expDelta, todayDay) + expPace * (d - todayDay);
-      points.push({ day: d, income: null, expense: null, incomeF: incF, expenseF: expF });
+      // Linear ramp from today's actual to the month-end target. (With the
+      // pace target this is identical to the old pace formula.)
+      const t = remaining > 0 ? (d - todayDay) / remaining : 0;
+      points.push({
+        day: d,
+        income: null,
+        expense: null,
+        incomeF: factIncome + (targetIncome - factIncome) * t,
+        expenseF: factExpense + (targetExpense - factExpense) * t,
+      });
     }
   }
 
-  const factIncome = cumulate(incDelta, todayDay);
-  const factExpense = cumulate(expDelta, todayDay);
-  const last = points[points.length - 1];
-  const projIncome = last ? (last.income ?? last.incomeF ?? 0) : 0;
-  const projExpense = last ? (last.expense ?? last.expenseF ?? 0) : 0;
-
-  return { points, todayDay, days, factIncome, factExpense, projIncome, projExpense };
+  return {
+    points,
+    todayDay,
+    days,
+    factIncome,
+    factExpense,
+    projIncome: targetIncome,
+    projExpense: targetExpense,
+  };
 }
 
 /** Σ of `arr[1..n]` (the per-day delta arrays are 1-indexed). */

@@ -13,6 +13,7 @@ import {
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
+  PolarRadiusAxis,
   Radar,
   Legend,
 } from "recharts";
@@ -23,7 +24,6 @@ import {
   applyFilters,
   type DatePreset,
 } from "../store/useFiltersStore";
-import { PeriodPills } from "../components/PeriodPills";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import {
@@ -168,7 +168,6 @@ export function TrendsPage() {
         hint="Помесячная динамика и паттерны по дням недели."
         right={
           <div className="flex flex-wrap gap-2">
-            <PeriodPills value={period} onChange={setPeriod} />
             <div className="flex bg-panel2 rounded-lg p-1 border border-border">
               <button
                 onClick={() => setKind("expense")}
@@ -186,21 +185,23 @@ export function TrendsPage() {
             <div className="flex bg-panel2 rounded-lg p-1 border border-border">
               <button
                 onClick={() => setLevel("top")}
+                title="Группировать по верхнеуровневым категориям"
                 className={`px-3 py-1 text-xs rounded-md ${level === "top" ? "bg-accent text-accent-fg" : "text-muted"}`}
               >
-                Верхний
+                Крупно
               </button>
               <button
                 onClick={() => setLevel("full")}
+                title="Разбивать по подкатегориям"
                 className={`px-3 py-1 text-xs rounded-md ${level === "full" ? "bg-accent text-accent-fg" : "text-muted"}`}
               >
-                С подкат.
+                Детально
               </button>
             </div>
           </div>
         }
       />
-      <GlobalFilters showDateRange={false} />
+      <GlobalFilters period={period} onPeriodChange={setPeriod} />
 
       <div className="card card-pad">
         <div className="flex items-start justify-between mb-3 flex-wrap gap-3">
@@ -332,12 +333,26 @@ export function TrendsPage() {
         </div>
 
         <div className="card card-pad">
-          <div className="font-semibold mb-3">Радар</div>
+          <div className="mb-3">
+            <div className="font-semibold flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-accent" />
+              Радар
+            </div>
+            <div className="text-xs text-muted">
+              Средний чек {kind === "expense" ? "расхода" : "дохода"} за день —
+              форма недели
+            </div>
+          </div>
           <div className="h-64">
             <ResponsiveContainer>
               <RadarChart data={radarData}>
                 <PolarGrid stroke={chartGridStroke} />
                 <PolarAngleAxis dataKey="day" stroke={chartAxisStroke} fontSize={11} />
+                {/* Anchor the radius at 0 so spokes are proportional to the
+                    value — without this Recharts can start the scale at the
+                    data min, collapsing small days to the centre and distorting
+                    the shape. */}
+                <PolarRadiusAxis domain={[0, "auto"]} tick={false} axisLine={false} />
                 <Radar
                   dataKey="value"
                   name="Средний за день"
@@ -388,7 +403,10 @@ export function TrendsPage() {
         </div>
       </div>
 
-      <HourOfWeekHeatmap cells={howCells} kind={kind} base={base} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <HourOfWeekHeatmap cells={howCells} kind={kind} base={base} />
+        <HourOfDayBars cells={howCells} kind={kind} base={base} />
+      </div>
     </div>
   );
 }
@@ -450,14 +468,15 @@ function HourOfWeekHeatmap({
   const dowNames = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
   return (
-    <div className="card card-pad">
-      <div className="font-semibold mb-1">Час недели</div>
-      <div className="text-xs text-muted mb-3">
-        Когда вы {kind === "expense" ? "тратите" : "получаете"}: 7 дней × 24 часа. Время — из поля
-        createdDate.
+    <div className="card card-pad flex flex-col">
+      <div className="font-semibold mb-1">
+        Когда вы {kind === "expense" ? "тратите" : "получаете"}
       </div>
-      <div className="overflow-x-auto">
-        <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `auto repeat(24, minmax(20px, 1fr))` }}>
+      <div className="text-xs text-muted mb-3">
+        По дням недели и часам. Чем темнее клетка — тем больше сумма.
+      </div>
+      <div className="flex-1 flex items-center overflow-x-auto">
+        <div className="grid w-full gap-[2px]" style={{ gridTemplateColumns: `auto repeat(24, minmax(18px, 1fr))` }}>
           <div></div>
           {Array.from({ length: 24 }, (_, h) => (
             <div key={h} className="text-[10px] text-muted text-center">
@@ -520,5 +539,78 @@ function Row({
         );
       })}
     </>
+  );
+}
+
+/** Time-of-day distribution — the column-marginal of the hour-of-week heatmap
+ *  (sum over all weekdays), as a 24-bar chart. Reveals peak spending hours,
+ *  which the heatmap holds but is hard to read as totals. */
+function HourOfDayBars({
+  cells,
+  kind,
+  base,
+}: {
+  cells: { dow: number; hour: number; total: number; count: number }[];
+  kind: "expense" | "income";
+  base: string;
+}) {
+  const data = useMemo(() => {
+    const totals = Array.from({ length: 24 }, () => 0);
+    for (const c of cells) totals[c.hour] += c.total;
+    return totals.map((total, hour) => ({ hour, total: Math.round(total) }));
+  }, [cells]);
+
+  const peak = data.reduce((m, d) => (d.total > m.total ? d : m), data[0]);
+  const color = kind === "expense" ? "#EF4444" : "#10B981";
+
+  return (
+    <div className="card card-pad flex flex-col">
+      <div className="font-semibold mb-1">По часам суток</div>
+      <div className="text-xs text-muted mb-3">
+        Сумма {kind === "expense" ? "расходов" : "доходов"} по каждому часу дня
+        за период.
+        {peak.total > 0 && ` Пик — около ${peak.hour}:00.`}
+      </div>
+      <div className="flex-1 min-h-[240px]">
+        <ResponsiveContainer>
+          <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
+            <XAxis
+              dataKey="hour"
+              stroke={chartAxisStroke}
+              fontSize={11}
+              interval={2}
+              tickFormatter={(h) => `${h}`}
+            />
+            <YAxis
+              stroke={chartAxisStroke}
+              fontSize={11}
+              tickFormatter={(v) => formatNum(v as number, { compact: true })}
+            />
+            <Tooltip
+              {...chartTooltipProps}
+              // The <Bar> colours its <Cell>s individually, so Recharts can't
+              // resolve a series colour for the tooltip item and falls back to
+              // black — invisible in dark theme. Pin it to the theme text colour.
+              itemStyle={{ color: "rgb(var(--c-text))" }}
+              labelFormatter={(h) => `${String(h).padStart(2, "0")}:00–${String(h).padStart(2, "0")}:59`}
+              formatter={(v: unknown) => [
+                formatMoney(toNum(v), base),
+                kind === "expense" ? "Расход" : "Доход",
+              ]}
+            />
+            <Bar dataKey="total" radius={[3, 3, 0, 0]}>
+              {data.map((d) => (
+                <Cell
+                  key={d.hour}
+                  fill={color}
+                  fillOpacity={peak.total > 0 ? 0.35 + 0.65 * (d.total / peak.total) : 0.5}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   );
 }

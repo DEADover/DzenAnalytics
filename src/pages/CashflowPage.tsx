@@ -35,7 +35,6 @@ import {
   applyFilters,
   type DatePreset,
 } from "../store/useFiltersStore";
-import { PeriodPills } from "../components/PeriodPills";
 import { useDrillStore } from "../store/useDrillStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { periodKey } from "../lib/period";
@@ -53,6 +52,7 @@ import { InsightsPanel } from "../components/InsightsPanel";
 import {
   formatMoney,
   monthLabel,
+  monthLabelFull,
   formatNum,
   toNum,
   ymKey,
@@ -191,9 +191,8 @@ export function CashflowPage() {
         icon={LineChartIcon}
         title="Cash-flow"
         hint="Доходы, расходы и чистый поток по месяцам."
-        right={<PeriodPills value={period} onChange={setPeriod} />}
       />
-      <GlobalFilters showDateRange={false} />
+      <GlobalFilters period={period} onPeriodChange={setPeriod} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat
@@ -579,8 +578,8 @@ export function CashflowPage() {
       )}
 
       <div className="card card-pad">
-        <div className="font-semibold mb-3">Помесячная сводка</div>
         <SortableTable<MonthBucket>
+          title="Помесячная сводка"
           data={months}
           rowKey={(m) => m.ym}
           defaultSortKey="ym"
@@ -592,7 +591,7 @@ export function CashflowPage() {
               key: "ym",
               label: "Месяц",
               sortValue: (m) => m.ym,
-              render: (m) => <span className="font-medium">{monthLabel(m.ym)}</span>,
+              render: (m) => <span className="font-medium">{monthLabelFull(m.ym)}</span>,
             },
             {
               key: "income",

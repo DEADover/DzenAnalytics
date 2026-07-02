@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
-import { migrateLegacyBudgets, type BudgetLine, type BudgetKind } from "../lib/budgets";
+import {
+  migrateLegacyBudgets,
+  plannedFor,
+  budgetCellKey,
+  type BudgetLine,
+  type BudgetKind,
+} from "../lib/budgets";
 
 /** A Zenmoney plan row, ready to seed a budget line. */
 export interface ZenPlanSeed {
@@ -29,11 +35,15 @@ interface BudgetsState {
   removeLine: (id: string) => Promise<void>;
   /** Set (or clear, when amount === null) a per-month override for a line. */
   setOverride: (id: string, ym: string, amount: number | null) => Promise<void>;
-  /** Create budget lines from Zenmoney plans for any (kind, category) that
-   *  doesn't have a line yet. Existing lines are left untouched (their plan
-   *  stays the user's; per-line «взять» pulls Zen updates). Called after a
-   *  full sync so budgets appear automatically. */
-  importFromZen: (plans: ZenPlanSeed[]) => Promise<void>;
+  /** Mirror Zenmoney plans into local budget lines. THREE-WAY merge: new tags
+   *  are created; a cell the user hasn't locally edited adopts Zen's value (so a
+   *  plan changed in Дзен shows up here); a cell the user edited locally but not
+   *  yet pushed (its id is in `protectedKeys` = pending budgetEdit ids) is kept.
+   *  Called after every sync so plan changes propagate automatically. */
+  importFromZen: (
+    plans: ZenPlanSeed[],
+    protectedKeys?: Set<string>
+  ) => Promise<void>;
   clearAll: () => Promise<void>;
 }
 
@@ -90,16 +100,24 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
     set({ lines: list });
   },
 
-  importFromZen: async (plans) => {
+  importFromZen: async (plans, protectedKeys) => {
     // Identity is per TAG: (kind, category, subcategory). NUL-joined so titles
     // with «:» don't collide.
     const idOf = (kind: string, category: string, sub: string | null) =>
       [kind, category, sub ?? ""].join("\u0000");
-    const existing = new Set(
-      get().lines.map((l) => idOf(l.kind, l.category, l.subcategory ?? null))
-    );
-    // Group plans by (kind, category, subcategory) → per-month amounts, skipping
-    // tags the user already budgets (never overwrite or duplicate).
+    // `protectedSet` holds `budgetCellKey`s for cells the user edited locally
+    // but hasn't pushed — those are shielded from Zen's value below.
+    const protectedSet = protectedKeys ?? new Set<string>();
+
+    // Zenmoney budgets are the source of truth for plans EXCEPT cells the user
+    // changed locally and hasn't pushed yet (those sit in `budgetEdits`, passed
+    // in as `protectedSet`). Three-way merge:
+    //   • tag with no local line          → create it (seed every planned month);
+    //   • existing line, cell NOT edited   → adopt Zen's value — this is what
+    //                                        makes a plan changed in Дзен appear;
+    //   • existing line, cell edited local → keep local (don't clobber the user's
+    //                                        own 305k with a stale 230k on sync).
+    // Cells Zen doesn't mention are left untouched — we never blank an override.
     const groups = new Map<
       string,
       {
@@ -112,7 +130,6 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
     for (const p of plans) {
       if (!(p.amount > 0)) continue;
       const key = idOf(p.kind, p.category, p.subcategory);
-      if (existing.has(key)) continue;
       let g = groups.get(key);
       if (!g) {
         g = { kind: p.kind, category: p.category, subcategory: p.subcategory, months: new Map() };
@@ -121,14 +138,40 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
       g.months.set(p.ym, p.amount);
     }
     if (groups.size === 0) return;
+
+    const seen = new Set<string>();
+    let changed = false;
+
+    // 1) Update EXISTING lines in place — adopt Zen's per-month value unless the
+    //    cell is locally edited (protected) or already equal.
+    const updated = get().lines.map((l) => {
+      const key = idOf(l.kind, l.category, l.subcategory ?? null);
+      const g = groups.get(key);
+      if (!g) return l;
+      seen.add(key);
+      let next: Record<string, number> | undefined;
+      for (const [ym, amt] of g.months) {
+        if (
+          protectedSet.has(
+            budgetCellKey(l.kind, l.category, l.subcategory ?? null, ym)
+          )
+        )
+          continue;
+        if (plannedFor(l, ym) === amt) continue;
+        if (!next) next = { ...(l.overrides ?? {}) };
+        next[ym] = amt;
+      }
+      if (!next) return l;
+      changed = true;
+      return { ...l, overrides: next };
+    });
+
+    // 2) Create lines for tags with no line yet. Zenmoney plans are PER-MONTH,
+    //    not recurring: store each planned month as an explicit override.
     const additions: BudgetLine[] = [];
-    for (const g of groups.values()) {
+    for (const [key, g] of groups) {
+      if (seen.has(key)) continue;
       const months = [...g.months.keys()].sort();
-      // Zenmoney plans are PER-MONTH, not recurring: a month with no plan is 0,
-      // NOT a carry-forward of an earlier value. So store every planned month as
-      // an explicit override and keep the recurring base at 0 — months Zen
-      // doesn't cover (e.g. a parent the user zeroed this month, budgeting only
-      // its sub-tags) read as «нет плана», not a phantom carried-over amount.
       const overrides: Record<string, number> = {};
       for (const [m, amt] of g.months) overrides[m] = amt;
       additions.push({
@@ -144,7 +187,9 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
         createdAt: new Date().toISOString(),
       });
     }
-    const list = [...get().lines, ...additions];
+
+    if (!changed && additions.length === 0) return;
+    const list = [...updated, ...additions];
     await db.saveJSON(KEY, list);
     set({ lines: list });
   },

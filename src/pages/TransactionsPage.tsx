@@ -5,10 +5,7 @@ import {
   Plus,
   Pencil,
   Trash2,
-  TrendingUp,
-  TrendingDown,
-  Wallet,
-  ListFilter,
+  Scale,
   ListChecks,
   List,
   ArrowUp,
@@ -16,6 +13,9 @@ import {
   ArrowLeftRight,
   Undo2,
   HandCoins,
+  Calendar,
+  Coins,
+  ChevronDown,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDataStore } from "../store/useDataStore";
@@ -40,6 +40,20 @@ import { pluralOps } from "../lib/plural";
 import type { Transaction, TxKind } from "../types";
 
 type SortMode = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
+
+/** Sort options for the compact sort menu. `field` picks the button glyph
+ *  (calendar vs coins), `dir` picks the arrow. */
+const SORT_OPTIONS: {
+  value: SortMode;
+  label: string;
+  field: "date" | "amount";
+  dir: "asc" | "desc";
+}[] = [
+  { value: "date-desc", label: "Дата ↓", field: "date", dir: "desc" },
+  { value: "date-asc", label: "Дата ↑", field: "date", dir: "asc" },
+  { value: "amount-desc", label: "Сумма ↓", field: "amount", dir: "desc" },
+  { value: "amount-asc", label: "Сумма ↑", field: "amount", dir: "asc" },
+];
 
 /** The four operation kinds offered by the «Добавить» dropdown, in the order
  *  the menu shows them. Colours mirror `kindColorClass`. */
@@ -137,6 +151,7 @@ export function TransactionsPage() {
 
   const [pageSearch, setPageSearch] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
+  const [sortOpen, setSortOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [creating, setCreating] = useState<TxKind | null>(null);
   const [creatingDebt, setCreatingDebt] = useState(false);
@@ -362,60 +377,56 @@ export function TransactionsPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat
+          dense
           label="Доходы"
           value={formatMoney(totals.inc, base)}
           tone="income"
-          icon={<TrendingUp className="w-4 h-4" />}
+          icon={<ArrowUp className="w-4 h-4" />}
         />
         <Stat
+          dense
           label="Расходы"
           value={formatMoney(totals.exp, base)}
           tone="expense"
-          icon={<TrendingDown className="w-4 h-4" />}
+          icon={<ArrowDown className="w-4 h-4" />}
         />
         <Stat
+          dense
           label="Прибыль"
           value={formatMoney(totals.net, base, { signed: true })}
           tone={totals.net >= 0 ? "income" : "expense"}
-          icon={<Wallet className="w-4 h-4" />}
+          icon={<Scale className="w-4 h-4" />}
         />
         <Stat
+          dense
           label="Операций"
           value={formatNum(totals.count)}
           icon={<List className="w-4 h-4" />}
-          hint={pageSearch ? `из ${filtered.length} в фильтре` : "под фильтрами"}
+          hint={pageSearch ? `из ${filtered.length} в фильтре` : undefined}
         />
       </div>
 
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[220px]">
+          <div
+            className="relative flex-1 min-w-[220px]"
+            title="Быстрый поиск только по этой таблице (получатель, комментарий, категория, счёт) — не сохраняется и не влияет на другие страницы"
+          >
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input
               value={pageSearch}
               onChange={(e) => setPageSearch(e.target.value)}
-              placeholder="Поиск по получателю/комментарию/категории/счёту"
-              className="input pl-9 text-sm"
+              placeholder="Быстрый поиск по таблице…"
+              className="input pl-9 text-xs py-1.5 h-[30px]"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <ListFilter className="w-3.5 h-3.5 text-muted" />
-            <select
-              value={sortMode}
-              onChange={(e) => setSortMode(e.target.value as SortMode)}
-              className="input text-xs !py-1.5 !px-2 w-auto"
-            >
-              <option value="date-desc">Дата ↓ (новые)</option>
-              <option value="date-asc">Дата ↑ (старые)</option>
-              <option value="amount-desc">Сумма ↓ (крупные)</option>
-              <option value="amount-asc">Сумма ↑ (мелкие)</option>
-            </select>
-          </div>
+          {/* Compact sort — icon button (field glyph + direction) opening a
+              small menu with the four named options. */}
           {apiConnected && (
             <div className="relative" ref={addMenuRef}>
               <button
                 onClick={() => setAddMenuOpen((o) => !o)}
-                className="btn-primary text-xs whitespace-nowrap"
+                className="btn-primary text-xs py-1.5 h-[30px] whitespace-nowrap"
                 title="Добавить новую операцию"
                 aria-haspopup="menu"
                 aria-expanded={addMenuOpen}
@@ -448,13 +459,60 @@ export function TransactionsPage() {
               )}
             </div>
           )}
-          <button onClick={exportCsv} className="btn-ghost text-xs whitespace-nowrap">
+          <div className="relative shrink-0">
+            {(() => {
+              const active = SORT_OPTIONS.find((o) => o.value === sortMode)!;
+              const FieldIcon = active.field === "date" ? Calendar : Coins;
+              const DirIcon = active.dir === "desc" ? ArrowDown : ArrowUp;
+              return (
+                <button
+                  onClick={() => setSortOpen((o) => !o)}
+                  className="btn-ghost text-xs py-1.5 h-[30px] !px-2"
+                  title={`Сортировка: ${active.label}`}
+                  aria-haspopup="menu"
+                  aria-expanded={sortOpen}
+                >
+                  <FieldIcon className="w-3.5 h-3.5" />
+                  <DirIcon className="w-3 h-3" />
+                  <ChevronDown className="w-3 h-3 opacity-60" />
+                </button>
+              );
+            })()}
+            {sortOpen && (
+              <>
+                <div className="fixed inset-0 z-[70]" onClick={() => setSortOpen(false)} />
+                <div className="absolute z-[80] mt-1 left-0 w-28 card p-2">
+                  {SORT_OPTIONS.map((o) => {
+                    const FieldIcon = o.field === "date" ? Calendar : Coins;
+                    return (
+                      <button
+                        key={o.value}
+                        onClick={() => {
+                          setSortMode(o.value);
+                          setSortOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-2 text-left text-xs px-2 py-1.5 rounded hover:bg-panel2 ${
+                          sortMode === o.value
+                            ? "bg-panel2 text-accent2 font-medium"
+                            : ""
+                        }`}
+                      >
+                        <FieldIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span className="flex-1 min-w-0 truncate">{o.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+          <button onClick={exportCsv} className="btn-ghost text-xs py-1.5 h-[30px] whitespace-nowrap">
             <Download className="w-3.5 h-3.5" />
             CSV
           </button>
           <Link
             to="/trash"
-            className="relative btn-ghost text-xs !px-2"
+            className="relative btn-ghost text-xs py-1.5 h-[30px] !px-2"
             title="Удалённые (корзина)"
             aria-label={
               deletedCount > 0
@@ -522,15 +580,15 @@ export function TransactionsPage() {
           </div>
         )}
 
-        {/* Lazy-load sentinel + footer */}
-        {sorted.length > 0 && (
+        {/* Lazy-load sentinel — shown only while more rows remain to load.
+            The total count lives in the «Операций» widget above, so no
+            trailing "Всего N" row is rendered once everything is loaded. */}
+        {showingTail && (
           <div
             ref={sentinelRef}
             className="px-4 py-3 text-center text-xs text-muted border-t border-border"
           >
-            {showingTail
-              ? `Показано ${visibleCount} из ${sorted.length} — прокрутите дальше, чтобы загрузить ещё`
-              : `Всего ${sorted.length} операций`}
+            Показано {visibleCount} из {sorted.length} — прокрутите дальше, чтобы загрузить ещё
           </div>
         )}
       </div>
@@ -690,7 +748,7 @@ function DayGroup({
 
   return (
     <div>
-      <div className="px-4 py-2 border-b border-t border-border bg-panel2/60 flex items-center gap-3 text-base">
+      <div className="px-4 py-2 border-b border-t border-border bg-panel2/60 flex items-center gap-3 text-sm">
         <div className="flex items-baseline gap-2 min-w-0">
           <span className="font-semibold truncate">{label}</span>
           {weekday && <span className="text-[13px] text-muted capitalize">{weekday}</span>}
