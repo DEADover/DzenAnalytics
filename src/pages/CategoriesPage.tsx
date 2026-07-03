@@ -430,11 +430,15 @@ export function CategoriesPage() {
     return { comparable: true, cat, sub };
   }, [transactions, filters, monthStartDay, kind, avgMonths]);
 
-  // «Отклонение» pill — absolute difference of the current period from the
-  // N-month average (Zenmoney «выше/ниже среднего на N ₽»). Colour is semantic:
-  // for expenses spending MORE than usual is «bad» (red), less is «good»
-  // (green); income is the other way round. A category with no baseline
-  // (brand-new, nothing in the prior windows) reads as fully above average.
+  // «Отклонение» — ₽ or % of the N-month average (quick toggle in the header).
+  const [devPct, setDevPct] = useState(false);
+
+  // «Отклонение» pill — difference of the current period from the N-month
+  // average (Zenmoney «выше/ниже среднего на N ₽»), shown either in ₽ or as a
+  // percentage of the average. Colour is semantic: for expenses spending MORE
+  // than usual is «bad» (red), less is «good» (green); income is the other way
+  // round. A category with no baseline (brand-new, nothing in the prior
+  // windows) reads as fully above average → «∞» in percent mode.
   function devPill(cur: number, avg: number | undefined) {
     if (!avgComp.comparable) return <span className="text-muted">—</span>;
     const base0 = avg ?? 0;
@@ -445,12 +449,17 @@ export function CategoriesPage() {
     const up = diff > 0;
     const good = kind === "expense" ? !up : up;
     const cls = good ? "text-income bg-income/10" : "text-expense bg-expense/10";
+    const label = devPct
+      ? base0 >= 0.5
+        ? formatPct(Math.abs(diff) / base0, 0)
+        : "∞"
+      : formatMoney(Math.abs(diff), base);
     return (
       <span
         className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[0.85em] tabular-nums ${cls}`}
         title={up ? "Выше среднего" : "Ниже среднего"}
       >
-        {up ? "▲" : "▼"} {formatMoney(Math.abs(diff), base)}
+        {up ? "▲" : "▼"} {label}
       </span>
     );
   }
@@ -695,12 +704,16 @@ export function CategoriesPage() {
                 >
                   Среднее
                 </span>
-                <span
-                  className="w-28 text-left shrink-0"
-                  title="Насколько текущий период выше/ниже среднего"
+                <button
+                  onClick={() => setDevPct((v) => !v)}
+                  className="w-28 text-left shrink-0 uppercase tracking-wide text-muted hover:text-accent inline-flex items-center gap-1"
+                  title="Насколько текущий период выше/ниже среднего. Клик — переключить ₽ / %"
                 >
                   Отклонение
-                </span>
+                  <span className="normal-case rounded bg-panel2 px-1 text-[0.9em] leading-none text-text">
+                    {devPct ? "%" : "₽"}
+                  </span>
+                </button>
                 <span className="w-8 shrink-0 flex items-center justify-center">
                   {(() => {
                     const expandable = tree.filter((n) => n.subs.some((s) => s.total > 0));
@@ -747,7 +760,7 @@ export function CategoriesPage() {
                           <div className="truncate" title={node.name}>
                             {node.name}
                           </div>
-                          <div className="relative h-2 mt-1">
+                          <div className="relative h-2 mt-1 mr-3">
                             <div className="absolute inset-0 bg-panel2 rounded-full overflow-hidden">
                               <div
                                 className="h-full rounded-full"
@@ -832,7 +845,7 @@ export function CategoriesPage() {
                                   </span>
                                   <div className="flex-1 min-w-0">
                                     <div className="truncate text-muted">{sub.name}</div>
-                                    <div className="relative h-1.5 mt-1">
+                                    <div className="relative h-1.5 mt-1 mr-3">
                                       <div className="absolute inset-0 bg-panel2 rounded-full overflow-hidden">
                                         <div
                                           className="h-full rounded-full"

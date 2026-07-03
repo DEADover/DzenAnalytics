@@ -22,6 +22,7 @@ import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
 import { budgetEditId } from "../lib/zenmoneyPush";
 import { CategoryDot } from "../components/CategoryDot";
+import { Popover } from "../components/Popover";
 import { CategoryCascadePicker, type CategoryNode } from "../components/CategoryCascadePicker";
 import { MonthCashflowChart } from "../components/MonthCashflowChart";
 import { Tooltip } from "../components/Tooltip";
@@ -759,11 +760,19 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
           }
           {...rest}
         />
-        {hasSubs && isOpen && (
-          <div className="border-t border-border">
-            {g.subs.map((s) => (
-              <BudgetRow key={s.line.id} row={s} base={base} nested {...rest} />
-            ))}
+        {hasSubs && (
+          <div
+            className={`grid transition-all duration-300 ease-in-out ${
+              isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="border-t border-border">
+                {g.subs.map((s) => (
+                  <BudgetRow key={s.line.id} row={s} base={base} nested {...rest} />
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -969,6 +978,10 @@ function BudgetRow({
   const [editing, setEditing] = useState(false);
   const [editVal, setEditVal] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  // The «…» actions menu is anchored to this wrapper and rendered via <Popover>
+  // (portal + flip) so it's never clipped by the card, the sub-category overflow
+  // wrapper, or the viewport edge.
+  const menuAnchorRef = useRef<HTMLDivElement>(null);
   // Set on Escape so the input's blur cancels instead of committing.
   const cancelEditRef = useRef(false);
 
@@ -1029,11 +1042,13 @@ function BudgetRow({
       }`}
     >
       {hasSubs ? (
-        <Tooltip content={expanded ? "Свернуть под-категории" : "Показать под-категории"}>
-          <button onClick={onToggle} className="shrink-0 text-muted hover:text-text">
-            <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? "" : "-rotate-90"}`} />
-          </button>
-        </Tooltip>
+        <button
+          onClick={onToggle}
+          className="shrink-0 text-muted hover:text-text"
+          aria-label={expanded ? "Свернуть под-категории" : "Показать под-категории"}
+        >
+          <ChevronDown className={`w-4 h-4 transition-transform duration-300 ease-in-out ${expanded ? "" : "-rotate-90"}`} />
+        </button>
       ) : (
         !nested && <span className="w-4 shrink-0" />
       )}
@@ -1109,7 +1124,7 @@ function BudgetRow({
         </span>
       </Tooltip>
 
-      <div className="relative shrink-0">
+      <div ref={menuAnchorRef} className="relative shrink-0">
         <Tooltip content="Действия">
           <button
             onClick={() => setMenuOpen((o) => !o)}
@@ -1119,24 +1134,25 @@ function BudgetRow({
             <MoreHorizontal className="w-4 h-4" />
           </button>
         </Tooltip>
-        {menuOpen && (
-          <>
-            <div className="fixed inset-0 z-20" onClick={close} />
-            <div className="absolute right-0 top-9 z-30 w-60 card !p-1 text-sm shadow-lg">
-              <MenuItem icon={Pencil} onClick={() => { close(); startEdit(); }}>
-                Изменить план
+        <Popover
+          open={menuOpen}
+          anchorRef={menuAnchorRef}
+          onClose={close}
+          align="right"
+          className="w-60 card !p-1 text-sm shadow-lg"
+        >
+          <MenuItem icon={Pencil} onClick={() => { close(); startEdit(); }}>
+            Изменить план
+          </MenuItem>
+          {planned > 0 && (
+            <>
+              <div className="border-t border-border my-1" />
+              <MenuItem icon={Trash2} danger onClick={() => { close(); clearPlan(); }}>
+                Убрать план на месяц
               </MenuItem>
-              {planned > 0 && (
-                <>
-                  <div className="border-t border-border my-1" />
-                  <MenuItem icon={Trash2} danger onClick={() => { close(); clearPlan(); }}>
-                    Убрать план на месяц
-                  </MenuItem>
-                </>
-              )}
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </Popover>
       </div>
     </div>
   );

@@ -32,6 +32,7 @@ import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { CategoryDot } from "../components/CategoryDot";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
+import { Popover } from "../components/Popover";
 import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
 import { formatMoney, formatNum, displayPayee, secondaryPayee, crossCurrencyReceived } from "../lib/format";
@@ -157,25 +158,11 @@ export function TransactionsPage() {
   const [creatingDebt, setCreatingDebt] = useState(false);
 
   // ── «Добавить» dropdown: pick which kind of operation to create. ─────
+  // Anchored to addMenuRef; opening/closing (outside-click, Esc, scroll) is
+  // handled by <Popover>.
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!addMenuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
-        setAddMenuOpen(false);
-      }
-    };
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setAddMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [addMenuOpen]);
+  const sortAnchorRef = useRef<HTMLDivElement>(null);
 
   // ── Scroll-to-top FAB: shown once the user has scrolled the window
   //    well past the first screen of the (often long) list. ─────────────
@@ -434,32 +421,34 @@ export function TransactionsPage() {
                 <Plus className="w-3.5 h-3.5" />
                 Добавить
               </button>
-              {addMenuOpen && (
-                <div
-                  role="menu"
-                  className="absolute left-0 mt-1 z-30 w-full rounded-lg border border-border bg-panel shadow-xl py-1"
-                >
-                  {ADD_OPTIONS.map((opt, i) => (
-                    <button
-                      key={opt.label}
-                      role="menuitem"
-                      onClick={() => {
-                        setCreating(opt.kind);
-                        setCreatingDebt(!!opt.debt);
-                        setAddMenuOpen(false);
-                      }}
-                      className="animate-menu-item flex items-center gap-2.5 w-full px-3 py-1.5 text-sm text-left hover:bg-panel2"
-                      style={{ animationDelay: `${i * 45}ms` }}
-                    >
-                      <opt.Icon className={`w-4 h-4 ${opt.color}`} />
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <Popover
+                open={addMenuOpen}
+                anchorRef={addMenuRef}
+                onClose={() => setAddMenuOpen(false)}
+                align="left"
+                matchWidth
+                className="rounded-lg border border-border bg-panel shadow-xl py-1"
+              >
+                {ADD_OPTIONS.map((opt, i) => (
+                  <button
+                    key={opt.label}
+                    role="menuitem"
+                    onClick={() => {
+                      setCreating(opt.kind);
+                      setCreatingDebt(!!opt.debt);
+                      setAddMenuOpen(false);
+                    }}
+                    className="animate-menu-item flex items-center gap-2.5 w-full px-3 py-1.5 text-sm text-left hover:bg-panel2"
+                    style={{ animationDelay: `${i * 45}ms` }}
+                  >
+                    <opt.Icon className={`w-4 h-4 ${opt.color}`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </Popover>
             </div>
           )}
-          <div className="relative shrink-0">
+          <div ref={sortAnchorRef} className="relative shrink-0">
             {(() => {
               const active = SORT_OPTIONS.find((o) => o.value === sortMode)!;
               const FieldIcon = active.field === "date" ? Calendar : Coins;
@@ -478,33 +467,34 @@ export function TransactionsPage() {
                 </button>
               );
             })()}
-            {sortOpen && (
-              <>
-                <div className="fixed inset-0 z-[70]" onClick={() => setSortOpen(false)} />
-                <div className="absolute z-[80] mt-1 left-0 w-28 card p-2">
-                  {SORT_OPTIONS.map((o) => {
-                    const FieldIcon = o.field === "date" ? Calendar : Coins;
-                    return (
-                      <button
-                        key={o.value}
-                        onClick={() => {
-                          setSortMode(o.value);
-                          setSortOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2 text-left text-xs px-2 py-1.5 rounded hover:bg-panel2 ${
-                          sortMode === o.value
-                            ? "bg-panel2 text-accent2 font-medium"
-                            : ""
-                        }`}
-                      >
-                        <FieldIcon className="w-3.5 h-3.5 shrink-0" />
-                        <span className="flex-1 min-w-0 truncate">{o.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
+            <Popover
+              open={sortOpen}
+              anchorRef={sortAnchorRef}
+              onClose={() => setSortOpen(false)}
+              align="left"
+              className="w-28 card p-2"
+            >
+              {SORT_OPTIONS.map((o) => {
+                const FieldIcon = o.field === "date" ? Calendar : Coins;
+                return (
+                  <button
+                    key={o.value}
+                    onClick={() => {
+                      setSortMode(o.value);
+                      setSortOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2 text-left text-xs px-2 py-1.5 rounded hover:bg-panel2 ${
+                      sortMode === o.value
+                        ? "bg-panel2 text-accent2 font-medium"
+                        : ""
+                    }`}
+                  >
+                    <FieldIcon className="w-3.5 h-3.5 shrink-0" />
+                    <span className="flex-1 min-w-0 truncate">{o.label}</span>
+                  </button>
+                );
+              })}
+            </Popover>
           </div>
           <button onClick={exportCsv} className="btn-ghost text-xs py-1.5 h-[30px] whitespace-nowrap">
             <Download className="w-3.5 h-3.5" />

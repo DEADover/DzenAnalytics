@@ -445,6 +445,11 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
   // for what the bank actually printed.
   const [payee, setPayee] = useState(tx.brand?.trim() || tx.payee || "");
   const [comment, setComment] = useState(tx.comment);
+  // The comment field is drag-resizable. Its dragged height otherwise sticks to
+  // the single shared <textarea> and «inherits» across the operation-type tabs.
+  // Keying the field by the visible tab remounts it on switch, so each tab shows
+  // the default height and a resize on one tab doesn't carry to the others.
+  const commentKey = isDebt ? "debt" : kind;
   // Whether the current counterparty is a Zenmoney-listed brand (case-
   // insensitive equality — mirrors the push lookup in zenmoneyPush.ts).
   // `null` while the dictionary is still hydrating or the value is empty:
@@ -958,7 +963,10 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
           </div>
         </div>
         <div
-          className="flex-1 overflow-y-auto p-5 space-y-2"
+          // Flex column so the comment field (its `flex-1` below) grows to fill
+          // the leftover height down to the footer — the same bottom edge for
+          // every operation type, regardless of how many fields sit above it.
+          className="flex-1 overflow-y-auto p-5 space-y-2 flex flex-col"
           // Reserve the scrollbar's space at all times so toggling a field
           // (e.g. the cross-currency «Получено» row appearing when you pick a
           // foreign-currency account) doesn't change the content width.
@@ -1092,11 +1100,6 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
                   maxHeight={DROPDOWN_MAX}
                 />
               </Field>
-              {debtAccountTitle && (
-                <div className="text-[11px] text-muted -mt-1.5">
-                  Счёт долга: «{debtAccountTitle}»
-                </div>
-              )}
             </>
           )}
           {/* Account(s): one field for income/expense, two for transfer.
@@ -1139,7 +1142,7 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
           )}
           <div className="grid grid-cols-2 gap-3">
             <Field
-              label={!isDebt && kind === "transfer" ? "Отправлено" : "Сумма"}
+              label="Сумма"
               labelAfter={
                 isForeignCurrency && fxTooltip ? (
                   <span className="relative inline-flex group shrink-0">
@@ -1290,16 +1293,22 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
               )}
             </div>
           )}
-          <Field label="Комментарий">
+          <Field
+            label="Комментарий"
+            // Grows to fill the leftover modal height so the comment ends at the
+            // same bottom edge for every operation type.
+            className="flex-1 flex flex-col min-h-0"
+          >
             <HashtagTextarea
+              key={commentKey}
               value={comment}
               onChange={setComment}
               tags={allTags}
-              rows={2}
-              // Two rows by default so a typical comment shows in full without
-              // clipping; min-h fits two lines + the input's vertical padding.
-              // Still resizable (drag) and scrollable past two lines.
-              className="input text-sm w-full resize-y min-h-[3.75rem]"
+              rows={4}
+              // `flex-1` stretches it to fill the remaining height down to the
+              // footer (same bottom edge for all types); min-h is the floor for
+              // manual (drag) shrinking / the rare no-spare-space case.
+              className="input text-sm w-full resize-y min-h-[3.75rem] flex-1"
             />
           </Field>
         </div>
@@ -1347,16 +1356,20 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
 function Field({
   label,
   labelAfter,
+  className,
   children,
 }: {
   label: string;
   /** Optional inline element rendered right after the label (e.g. a
    *  small status badge), sharing the label's baseline. */
   labelAfter?: React.ReactNode;
+  /** Extra classes on the field wrapper (e.g. `flex-1 flex flex-col` to let a
+   *  textarea grow to fill remaining modal height). */
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className={className}>
       <div className="flex items-center gap-1.5 mb-1">
         <label className="label">{label}</label>
         {labelAfter}

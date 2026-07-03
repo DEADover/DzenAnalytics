@@ -9,7 +9,6 @@ import {
   CartesianGrid,
   Legend,
   ComposedChart,
-  Line,
   type TooltipContentProps,
 } from "recharts";
 import {
@@ -596,7 +595,6 @@ export function AccountsPage() {
                   strokeWidth={2}
                   fill="url(#netfill)"
                 />
-                <Line type="monotone" dataKey="net" stroke="#22D3EE" strokeWidth={0} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           )}
