@@ -15,6 +15,8 @@ import {
   splitByObligation,
   isObligatoryTx,
   fireSeries,
+  statsByDayOfWeek,
+  statsByHourOfWeek,
 } from "./aggregations";
 import { tx } from "../test/fixtures";
 import type { CurrencyRates } from "../types";
@@ -164,6 +166,44 @@ describe("buildScenarioForecast — robust center + tightened band (issue #28)",
     expect(half).toBeCloseTo(Math.hypot(50, 25)); // combined std
     expect(half).toBeLessThan(50 + 25); // strictly tighter than the old stdI+stdE
     expect(f.optimistic - f.realistic).toBeCloseTo(f.realistic - f.pessimistic); // symmetric
+  });
+
+  it("applies calendar-month seasonality with enough history (issue #28 pt.2)", () => {
+    // 24 months: December expense triples, other months flat; income flat.
+    const yms: string[] = [];
+    for (const y of [2023, 2024]) for (let m = 1; m <= 12; m++) yms.push(`${y}-${String(m).padStart(2, "0")}`);
+    const txs = yms.flatMap((ym) => {
+      const dec = ym.endsWith("-12");
+      return [
+        tx({ kind: "income", amount: 500, incomeAccount: "A", date: `${ym}-05` }),
+        tx({ kind: "expense", category: "Х", amount: dec ? 300 : 100, outcomeAccount: "A", date: `${ym}-20` }),
+      ];
+    });
+    const f = buildScenarioForecast(txs, 12, 12); // 12 months ahead → next December included
+    const decF = f.find((p) => p.isForecast && p.ym.endsWith("-12"))!;
+    const junF = f.find((p) => p.isForecast && p.ym.endsWith("-06"))!;
+    expect(junF.expense).toBeCloseTo(100); // typical month ≈ base
+    expect(decF.expense).toBeGreaterThan(junF.expense * 2); // December seasonal spike
+  });
+
+  it("obligatory («постоянные») expenses don't inflate the band (issue #28 pt.2)", () => {
+    // «Аренда» (obligatory) VARIES ±20 but is treated as fixed/predictable;
+    // «Кафе» (optional) is constant. With meta the band collapses to ~0, while
+    // without the split «Аренда»'s variance leaks into the coridor.
+    const months = ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"];
+    const rent = [100, 140, 100, 140, 100, 140];
+    const txs = months.flatMap((ym, i) => [
+      tx({ kind: "income", amount: 500, incomeAccount: "A", date: `${ym}-05` }),
+      tx({ kind: "expense", category: "Аренда", amount: rent[i], outcomeAccount: "A", date: `${ym}-10` }),
+      tx({ kind: "expense", category: "Кафе", amount: 50, outcomeAccount: "A", date: `${ym}-20` }),
+    ]);
+    const meta = { Кафе: { required: false } }; // «Аренда» → obligatory by default
+    const withMeta = buildScenarioForecast(txs, 1, 6, { categoryMeta: meta }).find((p) => p.isForecast)!;
+    const without = buildScenarioForecast(txs, 1, 6).find((p) => p.isForecast)!;
+    const bandWith = withMeta.optimistic - withMeta.realistic;
+    const bandWithout = without.optimistic - without.realistic;
+    expect(bandWith).toBeLessThan(bandWithout); // fixed variance excluded → tighter
+    expect(bandWith).toBeCloseTo(0); // «Кафе» constant → variable part has no variance
   });
 });
 
@@ -533,5 +573,57 @@ describe("fireSeries — rolling months-of-life", () => {
     // All-expense average still counts «Развлечения»: (500+100)/mo = 600.
     expect(series[1].avgExpenseAll).toBe(600);
     expect(series[1].months).toBeCloseTo(10, 5);
+  });
+
+  it("ignores an epoch/1970 net-worth point when choosing the chart start (issue #35)", () => {
+    const txs = [
+      tx({ id: "a", date: "2026-01-15", kind: "expense", category: "Аренда", amount: 100, amountBase: 100 }),
+      tx({ id: "b", date: "2026-02-15", kind: "expense", category: "Аренда", amount: 100, amountBase: 100 }),
+    ];
+    // A phantom 1970 net-worth point must NOT drag the axis back ~56 years.
+    const netWorth = [
+      { date: "1970-01-01", net: 1000 },
+      { date: "2026-01-15", net: 1000 },
+      { date: "2026-02-15", net: 1000 },
+    ];
+    const series = fireSeries(netWorth, txs, {});
+    expect(series[0].ym).toBe("2026-01");
+    expect(series.length).toBeLessThanOrEqual(3); // 2026 months, not 670+ from 1970
+  });
+
+  it("ignores a 1970-dated transaction when choosing the start (issue #35)", () => {
+    const txs = [
+      tx({ id: "old", date: "1970-01-05", kind: "expense", category: "Аренда", amount: 100, amountBase: 100 }),
+      tx({ id: "a", date: "2026-01-15", kind: "expense", category: "Аренда", amount: 100, amountBase: 100 }),
+    ];
+    const netWorth = [
+      { date: "1970-01-05", net: 900 },
+      { date: "2026-01-15", net: 1000 },
+    ];
+    const series = fireSeries(netWorth, txs, {});
+    expect(series[0].ym).toBe("2026-01");
+  });
+});
+
+describe("statsByDayOfWeek / statsByHourOfWeek — refund-aware totals (issue #36)", () => {
+  const txs = [
+    tx({ kind: "expense", amountBase: 100, date: "2026-01-05" }), // Monday
+    tx({ kind: "refund", amountBase: 30, date: "2026-01-05" }),
+    tx({ kind: "income", amountBase: 500, date: "2026-01-06" }),
+  ];
+
+  it("statsByDayOfWeek nets refunds out of the expense total (matches Categories)", () => {
+    const total = statsByDayOfWeek(txs, "expense").reduce((s, b) => s + b.total, 0);
+    expect(total).toBe(70); // 100 expense − 30 refund, not 100
+  });
+
+  it("statsByHourOfWeek nets refunds out of the expense total", () => {
+    const total = statsByHourOfWeek(txs, "expense").reduce((s, c) => s + c.total, 0);
+    expect(total).toBe(70);
+  });
+
+  it("income total is unaffected by refunds/expenses", () => {
+    const total = statsByDayOfWeek(txs, "income").reduce((s, b) => s + b.total, 0);
+    expect(total).toBe(500);
   });
 });

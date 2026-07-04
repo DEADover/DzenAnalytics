@@ -69,8 +69,18 @@ export interface PushItem {
 }
 
 export interface PushBuildResult {
-  /** Ready-to-send transactions. */
+  /** Ready-to-send in-place updates (same id). */
   toPush: PushItem[];
+  /**
+   * Time-of-day edits, pushed as delete-old + create-new-id instead of an
+   * in-place update. Zenmoney IGNORES a changed `created` on an existing
+   * transaction (verified live + mirrors what Zerro does), so the ONLY way to
+   * move a transaction's time is to recreate it under a fresh id. Same
+   * `{ oldId, tx }` shape as a resurrection — the caller creates `tx` and
+   * deletes `oldId` in the SAME push. See `buildResurrections` for the twin
+   * "Zenmoney won't update this in place → recreate" pattern.
+   */
+  recreates: Resurrection[];
   /** Edits we couldn't transform — paired with a human-readable reason. */
   skipped: { id: string; reason: string }[];
 }
@@ -438,7 +448,9 @@ export function buildResurrections(
  */
 export function buildPushItems(
   edits: Record<string, TransactionEdit>,
-  cache: ZenCache
+  cache: ZenCache,
+  stampSeconds: number = Math.floor(Date.now() / 1000),
+  mintId: (oldId: string) => string = resurrectionId
 ): PushBuildResult {
   const transactionsById = new Map(cache.transactions.map((t) => [t.id, t]));
   const tagsByTitle = new Map<string, ZenTag[]>();
@@ -474,7 +486,26 @@ export function buildPushItems(
   }
 
   const toPush: PushItem[] = [];
+  const recreates: Resurrection[] = [];
   const skipped: { id: string; reason: string }[] = [];
+
+  // A built patch is either an in-place update (same id) or — when the user
+  // changed the time-of-day (`created`) — a recreate (new id + delete old),
+  // because Zenmoney silently drops a changed `created` on an existing row.
+  // The comparison is against the cache `original.created`: every branch spreads
+  // `...original` and only `applyCreatedAt` touches `zen.created`, so a diff here
+  // means the user actually moved the time. All other edits (payee, category,
+  // amount, legs…) ride along inside the recreated `tx` unchanged.
+  const emit = (id: string, zen: ZenTransaction, original: ZenTransaction) => {
+    if (zen.created !== original.created) {
+      recreates.push({
+        oldId: id,
+        tx: { ...zen, id: mintId(id), changed: stampSeconds, deleted: false },
+      });
+    } else {
+      toPush.push({ id, zen: { ...zen, changed: stampSeconds } });
+    }
+  };
 
   for (const [id, edit] of Object.entries(edits)) {
     const original = transactionsById.get(id);
@@ -594,8 +625,7 @@ export function buildPushItems(
       zen.payee = payeeStr;
       const mId = merchantsByTitle.get(payeeStr.toLowerCase());
       zen.merchant = mId ?? original.merchant ?? null;
-      zen.changed = Math.floor(Date.now() / 1000);
-      toPush.push({ id, zen });
+      emit(id, zen, original);
       continue;
     }
 
@@ -617,8 +647,7 @@ export function buildPushItems(
       }
       const zen = built.zen!;
       applyDateComment(zen, edit);
-      zen.changed = Math.floor(Date.now() / 1000);
-      toPush.push({ id, zen });
+      emit(id, zen, original);
       continue;
     }
 
@@ -640,8 +669,7 @@ export function buildPushItems(
       }
       const zen = built.zen!;
       applyDateComment(zen, edit);
-      zen.changed = Math.floor(Date.now() / 1000);
-      toPush.push({ id, zen });
+      emit(id, zen, original);
       continue;
     }
 
@@ -873,12 +901,11 @@ export function buildPushItems(
     // Setting it to "now" ensures our edit wins over anything older on
     // the server. (Conflicts where the cloud changed since our last sync
     // are caught pre-push by detectConflicts; see useZenmoneyStore.)
-    zen.changed = Math.floor(Date.now() / 1000);
-
-    toPush.push({ id, zen });
+    // A time-of-day change routes to a recreate instead (see `emit`).
+    emit(id, zen, original);
   }
 
-  return { toPush, skipped };
+  return { toPush, recreates, skipped };
 }
 
 /**

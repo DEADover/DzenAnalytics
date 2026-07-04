@@ -101,10 +101,6 @@ export function CashflowPage() {
   );
   const kpi = useMemo(() => computeKPI(filtered), [filtered]);
   const insights = useMemo(() => buildInsights(filtered), [filtered]);
-  const scenarios = useMemo(
-    () => buildScenarioForecast(filtered, 6, 6, { monthStartDay }),
-    [filtered, monthStartDay]
-  );
   const vsAvg = useMemo(
     () => vsAverageStats(filtered, { monthStartDay }),
     [filtered, monthStartDay]
@@ -124,6 +120,16 @@ export function CashflowPage() {
         monthStartDay
       ),
     [transactions, filters, monthStartDay]
+  );
+
+  // Forecast (seasonality + level + band) is computed from the FULL history
+  // (dimensionFiltered — dimension filters, no period), NOT the selected period:
+  // a short window (<18 мес) drops below the seasonality threshold and the
+  // projection goes flat. The chart still shows only the period's bars — the
+  // historical months are clipped to `months` in chartData below.
+  const scenarios = useMemo(
+    () => buildScenarioForecast(dimensionFiltered, 6, 6, { monthStartDay, categoryMeta }),
+    [dimensionFiltered, monthStartDay, categoryMeta]
   );
 
   const allYears = useMemo(() => {
@@ -166,19 +172,34 @@ export function CashflowPage() {
 
   if (transactions.length === 0) return <EmptyState />;
 
-  const chartData = scenarios.map((p) => ({
-    ym: p.ym,
-    month: monthLabel(p.ym),
-    income: p.isForecast ? null : Math.round(p.income),
-    expense: p.isForecast ? null : Math.round(p.expense),
-    incomeF: p.isForecast ? Math.round(p.income) : null,
-    expenseF: p.isForecast ? Math.round(p.expense) : null,
-    net: p.isForecast ? null : Math.round(p.realistic),
-    netForecastTop: p.isForecast ? Math.round(p.optimistic) : null,
-    netForecastBottom: p.isForecast ? Math.round(p.pessimistic) : null,
-    netForecastMid: p.isForecast ? Math.round(p.realistic) : null,
-    isForecast: p.isForecast,
-  }));
+  // Forecast is built from the full history; show only the SELECTED period's
+  // historical bars (plus the forecast months, always). income/expense are
+  // populated for EVERY month (historical or forecast) so both use the same two
+  // bar series — no empty reserved slots, no gap between past and forecast. The
+  // forecast months are styled apart via <Cell> (lighter + dashed).
+  const periodYms = new Set(months.map((m) => m.ym));
+  const chartData = scenarios
+    .filter((p) => p.isForecast || periodYms.has(p.ym))
+    .map((p) => ({
+      ym: p.ym,
+      month: monthLabel(p.ym),
+      income: Math.round(p.income),
+      expense: Math.round(p.expense),
+      net: p.isForecast ? null : Math.round(p.realistic),
+      netForecastTop: p.isForecast ? Math.round(p.optimistic) : null,
+      netForecastBottom: p.isForecast ? Math.round(p.pessimistic) : null,
+      netForecastMid: p.isForecast ? Math.round(p.realistic) : null,
+      isForecast: p.isForecast,
+    }));
+  // Bridge the solid «Чистый поток» line into the dashed forecast line: give the
+  // last historical month the forecast values too, so the lines/band connect.
+  const lastHistIdx = chartData.reduce((acc, r, i) => (r.isForecast ? acc : i), -1);
+  if (lastHistIdx >= 0) {
+    const n = chartData[lastHistIdx].net;
+    chartData[lastHistIdx].netForecastMid = n;
+    chartData[lastHistIdx].netForecastTop = n;
+    chartData[lastHistIdx].netForecastBottom = n;
+  }
 
   const monthsCount = months.length || 1;
   const avgMonthlyExpense = kpi.expense / monthsCount;
@@ -237,7 +258,7 @@ export function CashflowPage() {
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div>
             <div className="font-semibold">
-              {vizMode === "bars" ? "Доходы и расходы по месяцам" : "Stream graph по категориям"}
+              {vizMode === "bars" ? "Доходы и расходы по месяцам" : "Поток расходов по категориям"}
             </div>
             <div className="text-xs text-muted">
               {vizMode === "bars"
@@ -259,7 +280,7 @@ export function CashflowPage() {
                 className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${vizMode === "stream" ? "bg-accent text-accent-fg" : "text-muted"}`}
               >
                 <Layers className="w-3 h-3" />
-                Stream
+                Поток
               </button>
             </div>
             <div className="text-xs text-muted">{months.length} мес.</div>
@@ -270,6 +291,12 @@ export function CashflowPage() {
           <ResponsiveContainer>
             <ComposedChart
               data={chartData}
+              // Столбцы держим компактной парой у центра месяца, чтобы линия
+              // и коридор прогноза (они идут через центр месяца) визуально
+              // накрывали оба столбца, а не обрывались перед крайним красным.
+              barCategoryGap="30%"
+              barGap={0}
+              maxBarSize={15}
               onClick={(e: unknown) => {
                 const ev = e as { activePayload?: { payload?: { ym?: string } }[] } | undefined;
                 const ym = ev?.activePayload?.[0]?.payload?.ym;
@@ -278,7 +305,15 @@ export function CashflowPage() {
               style={{ cursor: "pointer" }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-              <XAxis dataKey="month" stroke={chartAxisStroke} fontSize={11} />
+              <XAxis
+                dataKey="month"
+                stroke={chartAxisStroke}
+                fontSize={11}
+                // Thin out labels so they don't overlap on long periods
+                // («за всё время» — десятки месяцев, issue #28).
+                minTickGap={40}
+                interval="preserveStartEnd"
+              />
               <YAxis
                 stroke={chartAxisStroke}
                 fontSize={11}
@@ -287,12 +322,67 @@ export function CashflowPage() {
               <Tooltip
                 {...chartTooltipProps}
                 formatter={(v: unknown) => formatMoney(toNum(v), base)}
+                // Прогнозные строки — всегда после фактических (Доходы,
+                // Расходы, Чистый поток), и в прошлых, и в прогнозных месяцах.
+                itemSorter={(item) =>
+                  ({
+                    income: 0,
+                    expense: 1,
+                    net: 2,
+                    netForecastTop: 3,
+                    netForecastBottom: 4,
+                    netForecastMid: 5,
+                  }[String(item.dataKey)] ?? 9)
+                }
               />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="income" name="Доходы" fill="#10B981" radius={[4, 4, 0, 0]} activeBar={false} />
-              <Bar dataKey="expense" name="Расходы" fill="#EF4444" radius={[4, 4, 0, 0]} activeBar={false} />
-              <Bar dataKey="incomeF" name="Прогноз дох." fill="#10B981" fillOpacity={0.35} stroke="#10B981" strokeDasharray="3 3" radius={[4, 4, 0, 0]} activeBar={false} />
-              <Bar dataKey="expenseF" name="Прогноз расх." fill="#EF4444" fillOpacity={0.35} stroke="#EF4444" strokeDasharray="3 3" radius={[4, 4, 0, 0]} activeBar={false} />
+              <Legend
+                wrapperStyle={{ fontSize: 12 }}
+                content={() => (
+                  <div className="flex flex-wrap justify-center gap-4 pt-1 text-xs">
+                    {[
+                      { label: "Доходы", color: "#10B981", bar: true },
+                      { label: "Расходы", color: "#EF4444", bar: true },
+                      { label: "Чистый поток", color: "#22D3EE", bar: false },
+                      { label: "Прогноз", color: "#A78BFA", bar: false, dashed: true },
+                    ].map((it) => (
+                      <span key={it.label} className="inline-flex items-center gap-1.5" style={{ color: it.color }}>
+                        {it.bar ? (
+                          <span style={{ width: 12, height: 12, borderRadius: 2, background: it.color }} />
+                        ) : (
+                          <span style={{ width: 16, borderTop: `2px ${it.dashed ? "dashed" : "solid"} ${it.color}` }} />
+                        )}
+                        {it.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              />
+              {/* Two bar series only (Доходы/Расходы); forecast months are the
+                  same series, styled apart per-point via <Cell> (lighter +
+                  dashed). No separate forecast bars → no reserved empty slots. */}
+              <Bar dataKey="income" name="Доходы" fill="#10B981" radius={[4, 4, 0, 0]} activeBar={false} isAnimationActive={false}>
+                {chartData.map((d, i) => (
+                  <Cell
+                    key={i}
+                    fill="#10B981"
+                    fillOpacity={d.isForecast ? 0.4 : 1}
+                    stroke={d.isForecast ? "#10B981" : undefined}
+                    strokeDasharray={d.isForecast ? "3 3" : undefined}
+                  />
+                ))}
+              </Bar>
+              <Bar dataKey="expense" name="Расходы" fill="#EF4444" radius={[4, 4, 0, 0]} activeBar={false} isAnimationActive={false}>
+                {chartData.map((d, i) => (
+                  <Cell
+                    key={i}
+                    fill="#EF4444"
+                    fillOpacity={d.isForecast ? 0.4 : 1}
+                    stroke={d.isForecast ? "#EF4444" : undefined}
+                    strokeDasharray={d.isForecast ? "3 3" : undefined}
+                  />
+                ))}
+              </Bar>
+              {/* Actual net flow — solid cyan. */}
               <Line
                 type="monotone"
                 dataKey="net"
@@ -300,35 +390,39 @@ export function CashflowPage() {
                 stroke="#22D3EE"
                 strokeWidth={2}
                 dot={{ r: 3 }}
+                isAnimationActive={false}
               />
+              {/* Forecast coridor — violet band (hidden from legend) + dashed
+                  violet «Прогноз» line, distinct from the cyan actual flow. */}
               <Area
                 type="monotone"
                 dataKey="netForecastTop"
-                name="Прогноз: оптимист"
-                stroke="#22D3EE"
-                fill="#22D3EE"
-                fillOpacity={0.08}
-                strokeDasharray="4 3"
-                strokeOpacity={0.5}
+                name="Прогноз (оптимист)"
+                stroke="none"
+                fill="#A78BFA"
+                fillOpacity={0.12}
+                legendType="none"
+                isAnimationActive={false}
               />
               <Area
                 type="monotone"
                 dataKey="netForecastBottom"
-                name="Прогноз: пессимист"
-                stroke="#A78BFA"
+                name="Прогноз (пессимист)"
+                stroke="none"
                 fill="#A78BFA"
-                fillOpacity={0.08}
-                strokeDasharray="4 3"
-                strokeOpacity={0.5}
+                fillOpacity={0.12}
+                legendType="none"
+                isAnimationActive={false}
               />
               <Line
                 type="monotone"
                 dataKey="netForecastMid"
-                name="Прогноз: реалист"
-                stroke="#22D3EE"
+                name="Прогноз (реалист)"
+                stroke="#A78BFA"
                 strokeWidth={2}
-                strokeDasharray="3 3"
+                strokeDasharray="5 3"
                 dot={false}
+                isAnimationActive={false}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -381,7 +475,7 @@ export function CashflowPage() {
           )}
         </div>
         {vsAvg.current && vsAvg.avg.expense > 0 && (
-          <div className="text-xs mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-muted">
+          <div className="text-xs mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-muted text-center">
             <div>
               Расходы текущего месяца:{" "}
               <span
@@ -543,7 +637,23 @@ export function CashflowPage() {
                   }}
                 />
                 <ReferenceLine y={0} stroke={chartGridStroke} />
-                <Bar dataKey="avgExpense" radius={[4, 4, 0, 0]} activeBar={false}>
+                <Legend
+                  content={() => (
+                    <div className="flex flex-wrap justify-center gap-4 pt-1 text-xs">
+                      {[
+                        { label: "Ниже среднего", color: "#10B981" },
+                        { label: "Около среднего", color: "#A78BFA" },
+                        { label: "Выше среднего", color: "#EF4444" },
+                      ].map((it) => (
+                        <span key={it.label} className="inline-flex items-center gap-1.5" style={{ color: it.color }}>
+                          <span style={{ width: 12, height: 12, borderRadius: 2, background: it.color }} />
+                          {it.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                />
+                <Bar dataKey="avgExpense" radius={[4, 4, 0, 0]} activeBar={false} isAnimationActive={false}>
                   {seasonality.map((s, i) => {
                     const dev = s.expenseDeviationPct;
                     const color =

@@ -800,7 +800,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         /* best-effort — push against the (possibly stale) cached state */
       }
 
-      const built = buildPushItems(edits, cache);
+      const built = buildPushItems(edits, cache, Math.floor(Date.now() / 1000));
       const conflictSkips = built.toPush
         .filter((i) => conflicts.has(i.id))
         .map((i) => ({
@@ -816,10 +816,37 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       const toPush = built.toPush.filter(
         (i) => !conflicts.has(i.id) && !deletedSet.has(i.id)
       );
-      const skipped = [...built.skipped, ...conflictSkips];
+      // Time-of-day edits push as delete-old + create-new-id (Zenmoney ignores
+      // a changed `created` on an existing row — verified live; same trick as
+      // buildResurrections). Guard against cloud-conflicts and local deletions
+      // exactly like toPush.
+      const recreates = built.recreates.filter(
+        (r) => !conflicts.has(r.oldId) && !deletedSet.has(r.oldId)
+      );
+      const recreateConflictSkips = built.recreates
+        .filter((r) => conflicts.has(r.oldId))
+        .map((r) => ({
+          id: r.oldId,
+          reason:
+            "операция изменена в облаке после последней синхронизации — обновите и повторите",
+        }));
+      const skipped = [
+        ...built.skipped,
+        ...conflictSkips,
+        ...recreateConflictSkips,
+      ];
       // Locally-deleted transactions → cloud `deletion` entries. Only
       // ids still present in cache produce a deletion (see buildDeletions).
-      const deletions = buildDeletions(deletedIds, cache);
+      // Recreated rows ALSO delete their OLD id in the same request — but not
+      // via useDeletedStore/snapshots, so buildResurrections never revives them
+      // (they're superseded by a new id, not user-deleted).
+      const deletions = [
+        ...buildDeletions(deletedIds, cache),
+        ...buildDeletions(
+          recreates.map((r) => r.oldId),
+          cache
+        ),
+      ];
       // Restored transactions whose cloud row was already deleted → revive
       // them by re-creating under a NEW id (tombstones are sticky — see
       // buildResurrections).
@@ -893,6 +920,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       }
       if (
         toPush.length === 0 &&
+        recreates.length === 0 &&
         deletions.length === 0 &&
         resurrections.length === 0 &&
         draftTxs.length === 0 &&
@@ -942,7 +970,11 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         get().serverTimestamp,
         toPush,
         deletions,
-        [...resurrections.map((r) => r.tx), ...draftTxs],
+        [
+          ...resurrections.map((r) => r.tx),
+          ...recreates.map((r) => r.tx),
+          ...draftTxs,
+        ],
         tagPush.tags,
         budgetPush.budgets
       );
@@ -994,6 +1026,13 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       //    re-introduce a stale value if cloud later changes the field.
       for (const item of toPush) {
         await useEditsStore.getState().clearEdit(item.id);
+      }
+      // Time-recreates clear the overlay on their OLD id — its intent now lives
+      // in the freshly-created new-id row. Leaving it would re-trigger the
+      // recreate on every push (minting the same derived id → server upsert, but
+      // still churn) since the old id is gone from cache.
+      for (const r of recreates) {
+        await useEditsStore.getState().clearEdit(r.oldId);
       }
 
       // 5b) Drop drafts that now live in the cloud (sent + echoed, or stale
@@ -1052,7 +1091,9 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       await db.saveJSON(TIMESTAMP_KEY, response.serverTimestamp);
       await db.saveJSON(LAST_PUSH_KEY, nowIso);
       const result: PushResult = {
-        pushed: toPush.length,
+        // Recreates are edits from the user's POV (they changed the time), so
+        // count them as pushed operations, not as brand-new `created` rows.
+        pushed: toPush.length + recreates.length,
         created: draftTxs.length,
         skipped,
         snapshotId,

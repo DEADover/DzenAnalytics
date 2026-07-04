@@ -784,6 +784,9 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
       // actually changed the time — otherwise a no-op save (or a date-only
       // edit) would needlessly rewrite the original timestamp. The created date
       // follows the accounting date so what you see (Дата + Время) is stored.
+      // NB: on push a `createdAt` change is NOT an in-place update — Zenmoney
+      // ignores a changed `created` on an existing row, so the push pipeline
+      // recreates the operation under a new id (see `buildPushItems`/`emit`).
       if (/^\d{2}:\d{2}$/.test(time) && time !== isoToLocalTime(tx.createdAt)) {
         patch.createdAt = dateTimeToDate(safeDate, time).toISOString();
       }

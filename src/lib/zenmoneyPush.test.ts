@@ -338,13 +338,36 @@ describe("buildPushItems — account change", () => {
     expect(skipped[0].reason).toMatch(/не найден/i);
   });
 
-  it("sets created (unix seconds) from an edited createdAt (the «Время» field)", () => {
+  it("time-of-day edit RECREATES (new id + created) instead of in-place — Zenmoney ignores a changed `created` on an existing row", () => {
     const iso = "2026-06-14T09:30:00.000Z";
-    const { toPush, skipped } = pushIn(fullTx({ outcome: 500, created: 111 }), {
-      createdAt: iso,
-    });
+    const { toPush, recreates, skipped } = pushIn(
+      fullTx({ outcome: 500, created: 111 }),
+      { createdAt: iso }
+    );
     expect(skipped).toHaveLength(0);
-    expect(toPush[0].zen.created).toBe(Math.floor(Date.parse(iso) / 1000));
+    // NOT an in-place update…
+    expect(toPush).toHaveLength(0);
+    // …but a delete-old + create-new-id pair.
+    expect(recreates).toHaveLength(1);
+    expect(recreates[0].oldId).toBe("t1");
+    expect(recreates[0].tx.id).not.toBe("t1");
+    expect(recreates[0].tx.created).toBe(Math.floor(Date.parse(iso) / 1000));
+    expect(recreates[0].tx.deleted).toBe(false);
+    // Non-time fields still carried on the recreated tx.
+    expect(recreates[0].tx.outcome).toBe(500);
+  });
+
+  it("a NON-time edit still updates in place (same id, no recreate)", () => {
+    const { toPush, recreates, skipped } = pushIn(
+      fullTx({ outcome: 500, created: 111, comment: null }),
+      { comment: "новая заметка" }
+    );
+    expect(skipped).toHaveLength(0);
+    expect(recreates).toHaveLength(0);
+    expect(toPush).toHaveLength(1);
+    expect(toPush[0].id).toBe("t1");
+    expect(toPush[0].zen.comment).toBe("новая заметка");
+    expect(toPush[0].zen.created).toBe(111); // unchanged
   });
 
   it("leaves created untouched when the edited createdAt is invalid", () => {
@@ -914,6 +937,21 @@ const pushDebt = (t: ZenTransaction, edit: TransactionEdit) =>
   buildPushItems({ [t.id]: edit }, debtCache(t));
 
 describe("buildPushItems — debt operations", () => {
+  it("a time-of-day edit on a debt op recreates it (new id) and keeps the counterparty", () => {
+    const t = debtTx({ created: 111 });
+    const iso = "2026-06-14T09:30:00.000Z";
+    const { toPush, recreates, skipped } = pushDebt(t, { createdAt: iso });
+    expect(skipped).toHaveLength(0);
+    expect(toPush).toHaveLength(0);
+    expect(recreates).toHaveLength(1);
+    expect(recreates[0].oldId).toBe("d1");
+    expect(recreates[0].tx.id).not.toBe("d1");
+    expect(recreates[0].tx.created).toBe(Math.floor(Date.parse(iso) / 1000));
+    // Debt ops MUST keep a non-null payee — the recreated row carries it.
+    expect(recreates[0].tx.payee).toBe("Иван");
+    expect(recreates[0].tx.incomeAccount).toBe("acc-debt");
+  });
+
   it("changing the counterparty keeps payee set (no «should have payee» error)", () => {
     const t = debtTx();
     // The editor maps «Получатель» to `brand`; the overlay also carries the

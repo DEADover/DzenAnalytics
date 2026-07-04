@@ -770,63 +770,118 @@ export function buildScenarioForecast(
   txs: Transaction[],
   monthsAhead = 6,
   lookback = 6,
-  opts: { monthStartDay?: number } = {}
+  opts: { monthStartDay?: number; categoryMeta?: ObligationMeta } = {}
 ): ScenarioForecast[] {
-  const months = groupByMonth(txs, { monthStartDay: opts.monthStartDay });
-  if (months.length === 0) return [];
-  const recent = months.slice(-lookback);
-  const incomes = recent.map((m) => m.income);
-  const expenses = recent.map((m) => m.expense);
-  const meanI = incomes.reduce((s, v) => s + v, 0) / incomes.length;
-  const meanE = expenses.reduce((s, v) => s + v, 0) / expenses.length;
-  const stdI = Math.sqrt(
-    incomes.reduce((s, v) => s + (v - meanI) ** 2, 0) / incomes.length
-  );
-  const stdE = Math.sqrt(
-    expenses.reduce((s, v) => s + (v - meanE) ** 2, 0) / expenses.length
-  );
+  const startDay = opts.monthStartDay ?? 1;
+  const meta = opts.categoryMeta;
 
-  // Project from the MEDIAN month, not the mean — a single spike month (a bonus,
-  // a big one-off purchase) drags the mean and pushes the «realist» net above a
-  // typical month. Spread: the std of net = income − expense for two independent
-  // series is √(stdI² + stdE²), NOT stdI + stdE. Summing them assumes the worst
-  // income AND worst expense happen together at full 1σ, which over-counts
-  // volatility and sends the «pessimist» far deeper than anything observed
-  // (issue #28). hypot keeps the band realistic and the center consistent with
-  // the projected income/expense bars (medI − medE).
+  // Per-month split: income · FIXED (obligatory «постоянные») expense · VARIABLE
+  // (optional) expense. Постоянные траты повторяются каждый месяц с малой
+  // дисперсией и не сезонны — их проецируем плоско; переменные несут сезонность
+  // и волатильность. Без categoryMeta всё расходное идёт в variable (совместимо
+  // со старым поведением).
+  const map = new Map<string, { income: number; fixed: number; variable: number }>();
+  for (const t of txs) {
+    if (t.kind === "transfer") continue;
+    const ym = startDay === 1 ? ymKey(t.date) : periodKey(t.date, startDay);
+    if (!ym) continue;
+    let b = map.get(ym);
+    if (!b) {
+      b = { income: 0, fixed: 0, variable: 0 };
+      map.set(ym, b);
+    }
+    if (t.kind === "income") {
+      b.income += t.amountBase;
+    } else if (affectsExpense(t.kind)) {
+      const d = expenseDelta(t);
+      if (meta && isObligatoryTx(t, meta)) b.fixed += d;
+      else b.variable += d;
+    }
+  }
+  const months = Array.from(map.entries())
+    .map(([ym, v]) => ({ ym, ...v }))
+    .sort((a, b) => a.ym.localeCompare(b.ym));
+  if (months.length === 0) return [];
+
+  const cMonth = (ym: string): number => Number(ym.slice(5, 7)); // 1..12
   const median = (arr: number[]): number => {
     if (arr.length === 0) return 0;
     const s = [...arr].sort((a, b) => a - b);
     const m = Math.floor(s.length / 2);
     return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
   };
-  const medI = median(incomes);
-  const medE = median(expenses);
-  const medNet = medI - medE;
-  const band = Math.hypot(stdI, stdE);
+  const std = (arr: number[], mean: number): number =>
+    arr.length
+      ? Math.sqrt(arr.reduce((s, v) => s + (v - mean) ** 2, 0) / arr.length)
+      : 0;
 
-  const out: ScenarioForecast[] = months.map((m) => ({
-    ym: m.ym,
-    income: m.income,
-    expense: m.expense,
-    optimistic: m.net,
-    realistic: m.net,
-    pessimistic: m.net,
-    isForecast: false,
-  }));
+  // Multiplicative seasonal factors per calendar month, from the FULL history:
+  // фактор = медиана значений этого календарного месяца / общая медиана. Нужно
+  // ≥18 месяцев истории и ≥2 наблюдения на месяц, иначе фактор = 1 (плоско — как
+  // и было для короткой истории). Кламп 0.3…3 гасит выбросы.
+  const SEASON_MIN_MONTHS = 18;
+  const useSeason = months.length >= SEASON_MIN_MONTHS;
+  const seasonal = (
+    pick: (m: (typeof months)[number]) => number
+  ): Map<number, number> => {
+    const overall = median(months.map(pick));
+    const f = new Map<number, number>();
+    for (let c = 1; c <= 12; c++) {
+      const vals = months.filter((m) => cMonth(m.ym) === c).map(pick);
+      if (!useSeason || vals.length < 2 || overall <= 0) {
+        f.set(c, 1);
+        continue;
+      }
+      f.set(c, Math.max(0.3, Math.min(3, median(vals) / overall)));
+    }
+    return f;
+  };
+  const seasI = seasonal((m) => m.income);
+  const seasV = seasonal((m) => m.variable);
+
+  // Level from the recent window, DESEASONALISED so the base isn't biased by
+  // which calendar months happen to be recent. Fixed part is a flat median.
+  const recent = months.slice(-lookback);
+  const desI = recent.map((m) => m.income / (seasI.get(cMonth(m.ym)) || 1));
+  const desV = recent.map((m) => m.variable / (seasV.get(cMonth(m.ym)) || 1));
+  const levelI = median(desI);
+  const levelV = median(desV);
+  const levelFixed = median(recent.map((m) => m.fixed));
+
+  // Band from the VARIABLE part only (fixed ≈ constant → ~0 volatility). Combine
+  // income & variable-expense std as √(σ²+σ²), not σ+σ — реалистичный
+  // симметричный коридор (issue #28).
+  const band = Math.hypot(std(desI, levelI), std(desV, levelV));
+
+  const out: ScenarioForecast[] = months.map((m) => {
+    const net = m.income - (m.fixed + m.variable);
+    return {
+      ym: m.ym,
+      income: m.income,
+      expense: m.fixed + m.variable,
+      optimistic: net,
+      realistic: net,
+      pessimistic: net,
+      isForecast: false,
+    };
+  });
 
   const last = months[months.length - 1].ym;
   const [ly, lm] = last.split("-").map(Number);
   for (let i = 1; i <= monthsAhead; i++) {
     const d = new Date(ly, lm - 1 + i, 1);
     const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const c = d.getMonth() + 1;
+    const income = levelI * (seasI.get(c) || 1);
+    const expense = levelFixed + levelV * (seasV.get(c) || 1);
+    const net = income - expense;
     out.push({
       ym,
-      income: medI,
-      expense: medE,
-      optimistic: medNet + band,
-      realistic: medNet,
-      pessimistic: medNet - band,
+      income,
+      expense,
+      optimistic: net + band,
+      realistic: net,
+      pessimistic: net - band,
       isForecast: true,
     });
   }
@@ -851,12 +906,15 @@ export function statsByHourOfWeek(
     }
   }
   for (const t of txs) {
-    if (t.kind !== kind) continue;
+    // Refund-aware, same as statsByDayOfWeek / buildHierarchy (issue #36):
+    // for expenses include возвраты and net them out (negative expenseDelta).
+    const include = kind === "expense" ? affectsExpense(t.kind) : t.kind === kind;
+    if (!include) continue;
     const d = new Date(t.createdAt || t.date);
     const dow = d.getDay();
     const hour = d.getHours();
     const cell = cells[dow * 24 + hour];
-    cell.total += t.amountBase;
+    cell.total += kind === "expense" ? expenseDelta(t) : t.amountBase;
     cell.count++;
   }
   return cells;
@@ -1132,7 +1190,11 @@ export function fireSeries(
   for (const t of txs) {
     const ym = periodOf(t.date);
     if (!ym) continue;
-    if (ym < firstTxYm) firstTxYm = ym;
+    // Chart start must be the first REAL month. Ignore implausibly-old dates
+    // (epoch/1970 from a legacy/corrupted op) when picking the earliest month —
+    // same "2000-01-01" threshold as netWorthBasis (issue #35). The op still
+    // counts in the per-month maps; it just can't drag the axis back to 1970.
+    if (t.date >= "2000-01-01" && ym < firstTxYm) firstTxYm = ym;
     if (t.kind === "income") {
       incByMonth.set(ym, (incByMonth.get(ym) || 0) + t.amountBase);
       continue;
@@ -1143,7 +1205,11 @@ export function fireSeries(
     if (isObligatoryTx(t, meta)) oblByMonth.set(ym, (oblByMonth.get(ym) || 0) + d);
   }
 
-  const nwFirst = periodOf(netWorth[0].date);
+  // Net-worth basis guards its own openings against epoch dates, but a bogus
+  // pre-2000 transaction can still seed a 1970 point in the series — skip to the
+  // first plausible net-worth date so it can't anchor the axis (issue #35).
+  const firstPlausibleNw = netWorth.find((p) => p.date >= "2000-01-01");
+  const nwFirst = firstPlausibleNw ? periodOf(firstPlausibleNw.date) : firstTxYm;
   const lastYm = periodOf(netWorth[netWorth.length - 1].date);
   const firstYm = firstTxYm < nwFirst ? firstTxYm : nwFirst;
   const monthsList = enumerateMonths(firstYm, lastYm);
@@ -2057,10 +2123,14 @@ export function statsByDayOfWeek(
   }));
   const dayCount = new Set<string>();
   for (const t of txs) {
-    if (t.kind !== kind) continue;
+    // Same refund-aware rule as buildHierarchy / the other stats: for expenses
+    // include возвраты and net them out (expenseDelta returns a negative), so
+    // the Trends total matches the Categories total (issue #36).
+    const include = kind === "expense" ? affectsExpense(t.kind) : t.kind === kind;
+    if (!include) continue;
     const d = new Date(t.date);
     const wd = d.getDay();
-    buckets[wd].total += t.amountBase;
+    buckets[wd].total += kind === "expense" ? expenseDelta(t) : t.amountBase;
     buckets[wd].count++;
     dayCount.add(`${wd}-${t.date}`);
   }
