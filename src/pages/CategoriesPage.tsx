@@ -686,14 +686,15 @@ export function CategoriesPage() {
           )}
           {view === "bars" && (
             <div
-              className="overflow-y-auto pr-1 max-h-[560px]"
-              // Obeys the «Размер текста в таблицах» slider like the operation
-              // tables: rows inherit this, sub-text is em-relative.
-              style={{ scrollbarGutter: "stable", fontSize: "var(--tbl-font)" }}
+              className="pr-1"
+              // Show EVERY category with spend/income — no inner scrollbar, the
+              // page scrolls instead (issue #34). Obeys the «Размер текста в
+              // таблицах» slider like the operation tables.
+              style={{ fontSize: "var(--tbl-font)" }}
             >
               {/* Column header — same shape & widths as the Donut legend so the
                   two views feel identical. */}
-              <div className="sticky top-0 z-10 bg-panel flex items-center gap-2 px-1.5 pb-1 mb-1 border-b border-border text-[0.85em] text-muted uppercase tracking-wide">
+              <div className="bg-panel flex items-center gap-2 px-1.5 pb-1 mb-1 border-b border-border text-[0.85em] text-muted uppercase tracking-wide">
                 <span className="flex-1 min-w-0">Категория</span>
                 <span className="w-14 text-left shrink-0">%</span>
                 <span className="w-20 text-left shrink-0">Операции</span>

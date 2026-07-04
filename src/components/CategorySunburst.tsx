@@ -332,13 +332,22 @@ export function CategorySunburst({
     <div className="flex flex-col md:flex-row-reverse gap-8 items-start">
       {/* ── Donut (right on desktop, on top when stacked) ──────────────── */}
       {/* Grows to fill the space freed by the narrow table; the ring itself is
-          capped and centred so it stays a sensible size on very wide screens
-          instead of leaving big empty margins. */}
-      <div className="w-full md:flex-1 md:min-w-0 flex justify-center md:mt-2">
-        <div
-          className="relative w-full mx-auto"
-          style={{ maxWidth: 620 }}
-        >
+          capped and centred so it stays a sensible size on very wide screens.
+          On desktop it's STICKY and vertically centred in the viewport, so it
+          stays on screen while the (now un-scrolled, full) legend scrolls past
+          — issue #34. `top`/height leave room for the sticky top nav. */}
+      <div className="w-full md:flex-1 md:min-w-0 md:self-stretch">
+        {/* Donut is STICKY just under the top nav (73px + gap), so it stays on
+            screen while the full (un-scrolled) legend scrolls past — issue #34.
+            The column stretches to the legend's height, which is what gives the
+            sticky element its scroll range; kept at the donut's natural height
+            (not viewport-tall) so it adds no empty space and the range isn't
+            eaten up. It engages once the category list is taller than the donut. */}
+        <div className="flex justify-center md:mt-2 md:sticky md:top-[88px]">
+          <div
+            className="relative w-full mx-auto"
+            style={{ maxWidth: 620 }}
+          >
         <svg
           key={effectiveDrill ?? "__top"}
           viewBox="0 0 320 320"
@@ -424,6 +433,7 @@ export function CategorySunburst({
             <ArrowLeft className="w-6 h-6" strokeWidth={2.5} />
           </div>
         )}
+          </div>
         </div>
       </div>
 
@@ -452,16 +462,16 @@ export function CategorySunburst({
           </span>
         </div>
 
-        {/* Header + rows live in ONE scroll container, so the column widths
-            stay identical even once the scrollbar appears (the header is
-            sticky and shares the rows' exact content width). */}
+        {/* Every category is listed — no inner scrollbar, the page scrolls
+            instead (issue #34). The donut on the other side is sticky-centred,
+            so it stays in view while this long list scrolls. */}
         <div
-          className="overflow-y-auto pr-1 h-[504px] flex flex-col"
+          className="pr-1 flex flex-col"
           // Obeys the «Размер текста в таблицах» slider (rows inherit; sub-text
           // is em-relative), matching the Bars view and operation tables.
-          style={{ scrollbarGutter: "stable", fontSize: "var(--tbl-font)" }}
+          style={{ fontSize: "var(--tbl-font)" }}
         >
-          <div className="shrink-0 sticky top-0 z-10 bg-panel flex items-center gap-2 px-1.5 pb-1 mb-1 border-b border-border text-[0.85em] text-muted uppercase tracking-wide">
+          <div className="shrink-0 bg-panel flex items-center gap-2 px-1.5 pb-1 mb-1 border-b border-border text-[0.85em] text-muted uppercase tracking-wide">
             <span className="flex-1 min-w-0">Категория</span>
             <span className="w-14 text-left shrink-0">%</span>
             <span className="w-20 text-left shrink-0">Операции</span>
