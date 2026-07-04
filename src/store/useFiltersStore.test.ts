@@ -321,3 +321,30 @@ describe("applyFilters — «Дополнительно»", () => {
     expect(ids(applyFilters(txs, filt({ onlyWithComment: true })))).toEqual(["b"]);
   });
 });
+
+describe("applyFilters — исключить внебалансовые счета", () => {
+  const txs = [
+    tx({ id: "card", account: "Карта", outcomeAccount: "Карта", incomeAccount: "Карта" }),
+    tx({ id: "broker", account: "Брокер", outcomeAccount: "Брокер", incomeAccount: "Брокер" }),
+    // Transfer touching an off-balance account (one leg is «Брокер»).
+    tx({ id: "toBroker", kind: "transfer", account: "Карта", outcomeAccount: "Карта", incomeAccount: "Брокер" }),
+  ];
+  const off = new Set(["Брокер"]);
+
+  it("off by default — all ops pass", () => {
+    expect(ids(applyFilters(txs, filt({ offBalanceAccounts: off })))).toEqual(["broker", "card", "toBroker"]);
+  });
+
+  it("drops ops whose account (or a transfer leg) is off-balance", () => {
+    const out = applyFilters(txs, filt({ excludeOffBalance: true, offBalanceAccounts: off }));
+    expect(ids(out)).toEqual(["card"]); // broker + the transfer leg into broker are gone
+  });
+
+  it("no-op when the off-balance set is empty", () => {
+    expect(ids(applyFilters(txs, filt({ excludeOffBalance: true, offBalanceAccounts: new Set() })))).toEqual([
+      "broker",
+      "card",
+      "toBroker",
+    ]);
+  });
+});

@@ -30,11 +30,8 @@ import {
 import { useDataStore } from "../store/useDataStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
-import {
-  useFiltersStore,
-  applyFilters,
-  type DatePreset,
-} from "../store/useFiltersStore";
+import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
+import { useLocalPeriod } from "../hooks/useLocalPeriod";
 import { useDrillStore } from "../store/useDrillStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { periodKey } from "../lib/period";
@@ -83,12 +80,18 @@ export function CashflowPage() {
 
   // This is a history chart, so it has its OWN period (default «12 мес») rather
   // than inheriting the global «месяц» filter — otherwise a first visit would
-  // show a single month. Other global filters (счета/категории/валюты/поиск)
-  // still apply. Mirrors the Calendar page's local-period pattern.
-  const [period, setPeriod] = useState<DatePreset>("12m");
+  // show a single month. Supports presets, a specific month and a custom range.
+  // Other global filters (счета/категории/валюты/поиск) still apply.
+  const lp = useLocalPeriod("12m");
   const effectiveFilters = useMemo(
-    () => ({ ...filters, preset: period, from: null, to: null }),
-    [filters, period]
+    () => ({
+      ...filters,
+      preset: lp.preset,
+      monthYM: lp.monthYM,
+      from: lp.from,
+      to: lp.to,
+    }),
+    [filters, lp.preset, lp.monthYM, lp.from, lp.to]
   );
 
   const filtered = useMemo(
@@ -213,7 +216,7 @@ export function CashflowPage() {
         title="Cash-flow"
         hint="Доходы, расходы и чистый поток по месяцам."
       />
-      <GlobalFilters period={period} onPeriodChange={setPeriod} />
+      <GlobalFilters period={lp} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat

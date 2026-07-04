@@ -25,6 +25,7 @@ import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { useFiltersStore, FILTER_NONE, type DatePreset } from "../store/useFiltersStore";
+import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { currencyFlagEmoji } from "../lib/currencyFlag";
@@ -275,34 +276,43 @@ function MultiSelect({
 export function GlobalFilters({
   showDateRange = true,
   period,
-  onPeriodChange,
 }: {
   showDateRange?: boolean;
-  /** Controlled period preset — when provided (with onPeriodChange), the period
-   *  pills drive this local state instead of the global filter store, and the
-   *  month-picker / custom-range are hidden. Used by history charts (Cash-flow,
-   *  Trends) that keep their own period without touching the global «месяц». */
-  period?: DatePreset;
-  onPeriodChange?: (p: DatePreset) => void;
+  /** Controlled period — when provided, ALL period controls (presets, month
+   *  picker, custom range) drive this page-local controller instead of the
+   *  global filter store, without touching the global «месяц». Used by history
+   *  charts (Cash-flow, Trends). See `useLocalPeriod`. */
+  period?: PeriodController;
 } = {}) {
   const transactions = useDataStore((s) => s.transactions);
   const f = useFiltersStore();
-  const controlledPeriod = period !== undefined && onPeriodChange !== undefined;
+  const controlledPeriod = period !== undefined;
+  // Period slice source: the local controller when controlled, else the store.
+  // Both expose the same fields/handlers (preset/monthYM/from/to + setters).
+  const periodCtl: PeriodController = controlledPeriod ? period : f;
   const [additionalOpen, setAdditionalOpen] = useState(false);
 
   // Archived (closed) account titles from the Zenmoney cache — used to sort the
   // archived accounts to the bottom of the filter and group them under a divider.
   const [archivedAccounts, setArchivedAccounts] = useState<Set<string>>(new Set());
+  // Off-balance account titles → the filter store, so `applyFilters` can honour
+  // the «исключить внебалансовые» option (which needs account metadata the pure
+  // filter can't see). Loaded here since GlobalFilters renders on every page.
+  const offBalanceAccounts = f.offBalanceAccounts;
+  const setOffBalanceAccounts = f.setOffBalanceAccounts;
   useEffect(() => {
     let cancelled = false;
     getLiveAccountsFromCache().then((live) => {
       if (cancelled || !live) return;
       setArchivedAccounts(new Set(live.filter((a) => a.archive).map((a) => a.title)));
+      setOffBalanceAccounts(
+        new Set(live.filter((a) => !a.archive && !a.inBalance).map((a) => a.title))
+      );
     });
     return () => {
       cancelled = true;
     };
-  }, [transactions]);
+  }, [transactions, setOffBalanceAccounts]);
 
   const accounts = useMemo(() => {
     const set = new Set<string>();
@@ -366,7 +376,9 @@ export function GlobalFilters({
   }, [transactions]);
 
   const currentMonthYM =
-    f.preset === "month" && f.monthYM ? f.monthYM : dataRange.maxYM;
+    periodCtl.preset === "month" && periodCtl.monthYM
+      ? periodCtl.monthYM
+      : dataRange.maxYM;
 
   // Default preset is now "current month"; treat anything else as user-set.
   const now = new Date();
@@ -378,14 +390,16 @@ export function GlobalFilters({
     f.types.size > 0 ||
     f.onlyUncategorized ||
     f.hideZero ||
-    f.onlyWithComment;
+    f.onlyWithComment ||
+    f.excludeOffBalance;
   const extraCount =
     (f.excludeTransfers ? 1 : 0) +
     (f.minAmount != null || f.maxAmount != null ? 1 : 0) +
     (f.types.size > 0 ? 1 : 0) +
     (f.onlyUncategorized ? 1 : 0) +
     (f.hideZero ? 1 : 0) +
-    (f.onlyWithComment ? 1 : 0);
+    (f.onlyWithComment ? 1 : 0) +
+    (f.excludeOffBalance ? 1 : 0);
   const hasFilters =
     f.accounts.size > 0 ||
     f.categories.size > 0 ||
@@ -478,6 +492,17 @@ export function GlobalFilters({
                     { label: "Только без категории", checked: f.onlyUncategorized, on: f.setOnlyUncategorized },
                     { label: "Скрыть нулевые операции", checked: f.hideZero, on: f.setHideZero },
                     { label: "Только с комментарием", checked: f.onlyWithComment, on: f.setOnlyWithComment },
+                    // Only offered when the user actually HAS off-balance accounts
+                    // (savings/brokerage) — otherwise the option would be a no-op.
+                    ...(offBalanceAccounts.size > 0
+                      ? [
+                          {
+                            label: "Без внебалансовых счетов",
+                            checked: f.excludeOffBalance,
+                            on: f.setExcludeOffBalance,
+                          },
+                        ]
+                      : []),
                   ].map((row) => (
                     <label
                       key={row.label}
@@ -506,13 +531,11 @@ export function GlobalFilters({
               {PRESETS.map((p) => (
                 <button
                   key={p.value}
-                  onClick={() =>
-                    controlledPeriod ? onPeriodChange!(p.value) : f.setPreset(p.value)
-                  }
+                  onClick={() => periodCtl.setPreset(p.value)}
                   className={clsx(
                     // No weight change on active — keeps the control width stable.
                     "px-2 py-1 text-xs rounded-md transition-colors",
-                    (controlledPeriod ? period === p.value : f.preset === p.value)
+                    periodCtl.preset === p.value
                       ? "bg-accent text-accent-fg"
                       : "text-muted hover:text-text"
                   )}
@@ -522,50 +545,33 @@ export function GlobalFilters({
               ))}
             </div>
 
-            {/* Month picker + custom range. On pages with a controlled (local)
-                period they stay VISIBLE for visual balance but are greyed out
-                and inert — the period is driven by the pills instead. */}
-            <div
-              className={clsx(
-                "flex items-center gap-2 flex-1 min-w-[220px]",
-                controlledPeriod && "opacity-40 pointer-events-none"
-              )}
-              aria-disabled={controlledPeriod || undefined}
-              title={
-                controlledPeriod
-                  ? "На этой странице период задаётся кнопками слева"
-                  : undefined
-              }
-            >
+            {/* Month picker + custom range. Fully live for both the global
+                filter store AND a page-local controlled period (Cash-flow,
+                Trends) — picking a month/range switches the page's period. */}
+            <div className="flex items-center gap-2 flex-1 min-w-[220px]">
               <MonthPicker
                 value={currentMonthYM}
                 minYM={dataRange.minYM}
                 maxYM={dataRange.maxYM}
-                active={!controlledPeriod && f.preset === "month"}
-                onSelect={controlledPeriod ? () => {} : (ym) => f.setMonth(ym)}
-                onStep={
-                  controlledPeriod ? () => {} : (dir) => f.stepMonth(dir, dataRange.maxYM)
-                }
+                active={periodCtl.preset === "month"}
+                onSelect={(ym) => periodCtl.setMonth(ym)}
+                onStep={(dir) => periodCtl.stepMonth(dir, dataRange.maxYM)}
               />
 
               <div className="flex items-center gap-1.5 flex-1 min-w-0">
                 <DateField
-                  value={f.from || ""}
-                  onChange={
-                    controlledPeriod
-                      ? () => {}
-                      : (e) => f.setRange(e.target.value || null, f.to)
+                  value={periodCtl.from || ""}
+                  onChange={(e) =>
+                    periodCtl.setRange(e.target.value || null, periodCtl.to)
                   }
                   className="input text-xs py-1.5"
                   wrapperClassName="flex-1 min-w-0"
                 />
                 <span className="text-muted text-xs">—</span>
                 <DateField
-                  value={f.to || ""}
-                  onChange={
-                    controlledPeriod
-                      ? () => {}
-                      : (e) => f.setRange(f.from, e.target.value || null)
+                  value={periodCtl.to || ""}
+                  onChange={(e) =>
+                    periodCtl.setRange(periodCtl.from, e.target.value || null)
                   }
                   className="input text-xs py-1.5"
                   wrapperClassName="flex-1 min-w-0"

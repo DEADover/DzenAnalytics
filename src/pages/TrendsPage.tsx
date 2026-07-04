@@ -19,11 +19,8 @@ import {
 } from "recharts";
 import { Activity, Calendar } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
-import {
-  useFiltersStore,
-  applyFilters,
-  type DatePreset,
-} from "../store/useFiltersStore";
+import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
+import { useLocalPeriod } from "../hooks/useLocalPeriod";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import {
@@ -67,11 +64,18 @@ export function TrendsPage() {
   const [level, setLevel] = useState<"top" | "full">("top");
   const [selected, setSelected] = useState<string[]>([]);
   // History page → own period (default «12 мес»), not the global «месяц» filter,
-  // so it opens on a meaningful span. Other global filters still apply.
-  const [period, setPeriod] = useState<DatePreset>("12m");
+  // so it opens on a meaningful span. Supports presets, a specific month and a
+  // custom range (issue #36). Other global filters still apply.
+  const lp = useLocalPeriod("12m");
   const effectiveFilters = useMemo(
-    () => ({ ...filters, preset: period, from: null, to: null }),
-    [filters, period]
+    () => ({
+      ...filters,
+      preset: lp.preset,
+      monthYM: lp.monthYM,
+      from: lp.from,
+      to: lp.to,
+    }),
+    [filters, lp.preset, lp.monthYM, lp.from, lp.to]
   );
 
   const filtered = useMemo(() => applyFilters(transactions, effectiveFilters, monthStartDay), [transactions, effectiveFilters, monthStartDay]);
@@ -201,7 +205,7 @@ export function TrendsPage() {
           </div>
         }
       />
-      <GlobalFilters period={period} onPeriodChange={setPeriod} />
+      <GlobalFilters period={lp} />
 
       <div className="card card-pad">
         <div className="flex items-start justify-between mb-3 flex-wrap gap-3">
