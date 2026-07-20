@@ -26,12 +26,47 @@ const FIRE_TARGET = 300;
 
 type Mode = "months" | "expense" | "income";
 type ExpKind = "obligatory" | "all";
+/** X-axis granularity (issue #35). */
+type Scale = "month" | "quarter" | "year";
+/** How far back the chart reaches (issue #35). */
+type Range = "1y" | "3y" | "5y" | "all";
 
 const MODES: { id: Mode; label: string; color: string }[] = [
   { id: "months", label: "Месяцы жизни", color: "#10B981" },
   { id: "expense", label: "Расходы", color: "#EF4444" },
   { id: "income", label: "Доходы", color: "#22D3EE" },
 ];
+
+const SCALES: { id: Scale; label: string }[] = [
+  { id: "month", label: "Месяцы" },
+  { id: "quarter", label: "Кварталы" },
+  { id: "year", label: "Годы" },
+];
+
+const RANGES: { id: Range; label: string; months: number | null }[] = [
+  { id: "1y", label: "1 год", months: 12 },
+  { id: "3y", label: "3 года", months: 36 },
+  { id: "5y", label: "5 лет", months: 60 },
+  { id: "all", label: "Всё", months: null },
+];
+
+const ROMAN = ["I", "II", "III", "IV"];
+
+/** Bucket id for a reporting month under the chosen scale. */
+function bucketOf(ym: string, scale: Scale): string {
+  if (scale === "month") return ym;
+  const [y, m] = ym.split("-");
+  if (scale === "year") return y;
+  return `${y}-Q${Math.floor((Number(m) - 1) / 3) + 1}`;
+}
+
+/** Human label for a bucket id. */
+function bucketLabel(key: string, scale: Scale): string {
+  if (scale === "month") return monthLabel(key);
+  if (scale === "year") return key;
+  const [y, q] = key.split("-Q");
+  return `${ROMAN[Number(q) - 1]} кв. ${y.slice(2)}`;
+}
 
 /**
  * Rolling «months of life» (FIRE) chart. One point per reporting month. A
@@ -52,6 +87,8 @@ export function FireChart({
   const [mode, setMode] = useState<Mode>("months");
   const [expKind, setExpKind] = useState<ExpKind>("obligatory");
   const [expMenuOpen, setExpMenuOpen] = useState(false);
+  const [scale, setScale] = useState<Scale>("month");
+  const [range, setRange] = useState<Range>("all");
   const expRef = useRef<HTMLDivElement>(null);
 
   // Close the «Обязательные/Все» dropdown on outside click.
@@ -72,17 +109,23 @@ export function FireChart({
         : "bg-panel2 border-border text-muted hover:text-text"
     }`;
 
-  const chart = useMemo(
-    () =>
-      data.map((p) => ({
-        ym: p.ym,
-        months: Math.round(p.months * 10) / 10,
-        obligatory: Math.round(p.avgObligatory),
-        expenseAll: Math.round(p.avgExpenseAll),
-        income: Math.round(p.avgIncome),
-      })),
-    [data]
-  );
+  const chart = useMemo(() => {
+    // 1) Period — trailing window over the monthly points.
+    const months = RANGES.find((r) => r.id === range)!.months;
+    const sliced = months ? data.slice(-months) : data;
+    // 2) Scale — every point is a ROLLING snapshot (месяцы жизни, средние за
+    //    12 мес), so a quarter/year is represented by its LAST month, never by
+    //    a sum or an average of averages.
+    const byBucket = new Map<string, (typeof data)[number]>();
+    for (const p of sliced) byBucket.set(bucketOf(p.ym, scale), p);
+    return [...byBucket.entries()].map(([key, p]) => ({
+      key,
+      months: Math.round(p.months * 10) / 10,
+      obligatory: Math.round(p.avgObligatory),
+      expenseAll: Math.round(p.avgExpenseAll),
+      income: Math.round(p.avgIncome),
+    }));
+  }, [data, scale, range]);
 
   if (data.length < 2) return null;
 
@@ -91,7 +134,8 @@ export function FireChart({
   const color = MODES.find((m) => m.id === mode)!.color;
   const asOf = monthLabel(last.ym);
 
-  const monthsMax = Math.max(...data.map((p) => p.months), 0);
+  // Scale the Y axis to what's VISIBLE, so narrowing the period zooms in.
+  const monthsMax = Math.max(...chart.map((p) => p.months), 0);
   const showTarget = monthsMax >= FIRE_TARGET * 0.5;
   const monthsDomainMax = showTarget
     ? Math.round(Math.max(monthsMax, FIRE_TARGET) * 1.05)
@@ -238,6 +282,41 @@ export function FireChart({
             ))}
           </div>
         </div>
+
+        {/* Period + scale of the chart (issue #35). Pushed right so the series
+            pills stay the primary control. */}
+        <div className="ml-auto flex items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 text-xs text-muted">
+            Период
+            <select
+              value={range}
+              onChange={(e) => setRange(e.target.value as Range)}
+              className="input text-xs py-1 px-2 w-auto"
+              title="За какой отрезок истории построить график"
+            >
+              {RANGES.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-xs text-muted">
+            Шкала
+            <select
+              value={scale}
+              onChange={(e) => setScale(e.target.value as Scale)}
+              className="input text-xs py-1 px-2 w-auto"
+              title="Шаг по оси времени: месяцы, кварталы или годы (берётся значение на конец периода)"
+            >
+              {SCALES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       <div className="h-72">
@@ -251,10 +330,10 @@ export function FireChart({
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
             <XAxis
-              dataKey="ym"
+              dataKey="key"
               stroke={chartAxisStroke}
               fontSize={11}
-              tickFormatter={(d) => monthLabel(d as string)}
+              tickFormatter={(d) => bucketLabel(d as string, scale)}
               minTickGap={40}
             />
             <YAxis
@@ -269,7 +348,7 @@ export function FireChart({
             />
             <RTooltip
               {...chartTooltipProps}
-              labelFormatter={(d) => monthLabel(d as string)}
+              labelFormatter={(d) => bucketLabel(d as string, scale)}
               formatter={(v: unknown) =>
                 mode === "months"
                   ? [

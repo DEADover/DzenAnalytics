@@ -28,6 +28,10 @@ function yearsFmt(n: number): string {
   return `${r} ${yearsWord(r)}`;
 }
 
+/** KPI caption that advertises a formula tooltip on hover (issue #35). */
+const kpiLabelCls =
+  "text-xs text-muted cursor-help border-b border-dotted border-muted/60 inline-block";
+
 /**
  * FIRE «financial independence» snapshot — compact «Вариант 5» layout: a slim
  * progress bar (capital → target), a 4-cell KPI band, and an interactive
@@ -108,17 +112,31 @@ export function FireIndependence({
 
       {/* Progress: % пути + лет до цели */}
       <div className="flex items-baseline justify-between flex-wrap gap-2 text-sm mb-1.5">
-        <span className="tabular-nums">
-          <span className={`font-semibold ${fireAchieved ? "text-income" : "text-accent"}`}>
-            {(capitalProgress * 100).toFixed(capitalProgress >= 1 ? 0 : 1)}%
-          </span>{" "}
-          <span className="text-muted">пути</span>
-        </span>
-        <span
-          className={`tabular-nums ${fireAchieved ? "text-income" : Number.isFinite(yearsToFire) ? "text-muted" : "text-expense"}`}
+        <Tooltip
+          content={`Формула: капитал ÷ цель × 100 = ${formatMoney(capital, base)} ÷ ${formatMoney(fireTarget, base)}.`}
         >
-          {yearsHeader}
-        </span>
+          <span className="tabular-nums cursor-help">
+            <span className={`font-semibold ${fireAchieved ? "text-income" : "text-accent"}`}>
+              {(capitalProgress * 100).toFixed(capitalProgress >= 1 ? 0 : 1)}%
+            </span>{" "}
+            <span className="text-muted border-b border-dotted border-muted/60">пути</span>
+          </span>
+        </Tooltip>
+        <Tooltip
+          content={
+            fireAchieved
+              ? "Капитал уже больше цели — снимая ~4% в год, вы покрываете обязательные траты."
+              : Number.isFinite(yearsToFire)
+                ? `Формула: (цель − капитал) ÷ сбережения за год = ${formatMoney(remainingToFire, base)} ÷ (${formatMoney(avgSavings, base)} × 12). Сбережения — средние за последние 6 месяцев.`
+                : `Сбережения не положительные: средний расход (${formatMoney(avgExpense, base)}) больше среднего дохода (${formatMoney(avgIncome, base)}) за последние 6 месяцев, поэтому срок не считается.`
+          }
+        >
+          <span
+            className={`tabular-nums cursor-help border-b border-dotted border-muted/60 ${fireAchieved ? "text-income" : Number.isFinite(yearsToFire) ? "text-muted" : "text-expense"}`}
+          >
+            {yearsHeader}
+          </span>
+        </Tooltip>
       </div>
       <div className="h-2 rounded-full bg-panel2 overflow-hidden">
         <div
@@ -188,32 +206,49 @@ export function FireIndependence({
         </div>
       )}
 
-      {/* KPI band */}
+      {/* KPI band — every metric carries its formula WITH the actual numbers,
+          so the figure can be checked by hand (issue #35). */}
       <div className="rounded-lg border border-border overflow-hidden mt-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border">
           <div className="bg-panel2 p-3 flex items-center">
             <Wallet className="w-4 h-4 text-accent shrink-0 mr-2" />
             <div className="min-w-0">
-              <div className="text-xs text-muted">Капитал</div>
+              <Tooltip
+                content={`Сумма балансов счетов, отмеченных галочкой в списке «Счета в капитале» (учтено ${capitalAccounts.filter((a) => !excluded.includes(a.title)).length} из ${capitalAccounts.length}). Балансы пересчитаны в ${base} по текущему курсу.`}
+              >
+                <div className={kpiLabelCls}>Капитал</div>
+              </Tooltip>
               <div className="text-base font-semibold tabular-nums leading-tight">
                 {formatMoney(capital, base)}
               </div>
             </div>
           </div>
           <div className="bg-panel2 p-3">
-            <div className="text-xs text-muted">Норма сбережений</div>
+            <Tooltip
+              content={`Формула: (доход − расход) ÷ доход × 100. Средние за последние 6 месяцев: доход ${formatMoney(avgIncome, base)}, расход ${formatMoney(avgExpense, base)}, остаётся ${formatMoney(avgSavings, base)} в месяц.`}
+            >
+              <div className={kpiLabelCls}>Норма сбережений</div>
+            </Tooltip>
             <div className={`text-base font-semibold tabular-nums leading-tight ${savingsRate > 0 ? "text-income" : "text-expense"}`}>
               {currentRatePct}%
             </div>
           </div>
           <div className="bg-panel2 p-3">
-            <div className="text-xs text-muted">Обязательные траты в год</div>
+            <Tooltip
+              content={`Формула: среднемесячные обязательные расходы × 12 = ${formatMoney(avgObligatoryMonthly, base)} × 12. Среднее — скользящее за последние 12 месяцев, та же база, что и на графике ниже. Обязательность категории задаётся на странице «Категории».`}
+            >
+              <div className={kpiLabelCls}>Обязательные траты в год</div>
+            </Tooltip>
             <div className="text-base font-semibold tabular-nums leading-tight">
               {formatMoney(annualObligatory, base)}
             </div>
           </div>
           <div className="bg-panel2 p-3">
-            <div className="text-xs text-muted">Цель · ×25</div>
+            <Tooltip
+              content={`Формула: обязательные траты за год × 25 (правило 4%) = ${formatMoney(annualObligatory, base)} × 25. То же самое: среднемесячные обязательные × 300 месяцев.`}
+            >
+              <div className={kpiLabelCls}>Цель · ×25</div>
+            </Tooltip>
             <div className="text-base font-semibold tabular-nums leading-tight text-accent">
               {formatMoney(fireTarget, base)}
             </div>

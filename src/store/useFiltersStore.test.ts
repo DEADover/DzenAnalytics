@@ -348,3 +348,24 @@ describe("applyFilters — исключить внебалансовые сче�
     ]);
   });
 });
+
+describe("applyFilters — переводы в фильтре по счёту (issue #41)", () => {
+  const txs = [
+    // Transfer Карта → Копилка: `account` holds only the SOURCE leg.
+    tx({ id: "move", kind: "transfer", account: "Карта", outcomeAccount: "Карта", incomeAccount: "Копилка" }),
+    tx({ id: "spend", kind: "expense", account: "Карта", outcomeAccount: "Карта", incomeAccount: "Карта" }),
+    tx({ id: "other", kind: "expense", account: "Наличные", outcomeAccount: "Наличные", incomeAccount: "Наличные" }),
+  ];
+
+  it("показывает перевод при выборе счёта-ИСТОЧНИКА", () => {
+    expect(ids(applyFilters(txs, filt({ accounts: new Set(["Карта"]) })))).toEqual(["move", "spend"]);
+  });
+
+  it("показывает перевод и при выборе счёта-ПОЛУЧАТЕЛЯ", () => {
+    expect(ids(applyFilters(txs, filt({ accounts: new Set(["Копилка"]) })))).toEqual(["move"]);
+  });
+
+  it("не притягивает чужие одноногие операции", () => {
+    expect(ids(applyFilters(txs, filt({ accounts: new Set(["Наличные"]) })))).toEqual(["other"]);
+  });
+});
