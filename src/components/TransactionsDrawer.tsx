@@ -542,47 +542,53 @@ export function TransactionsDrawer() {
         <div
           role="region"
           aria-label="Массовые действия"
-          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[55] flex flex-wrap items-center justify-center gap-3 px-4 py-2.5 rounded-xl border border-border bg-panel shadow-xl max-w-[calc(100vw-1.5rem)]"
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[55] rounded-xl border border-border bg-panel shadow-xl max-w-[calc(100vw-1.5rem)] overflow-hidden"
         >
-          <span className="text-sm">
-            Выбрано: <strong className="tabular-nums">{formatNum(selected.size)}</strong>
-          </span>
-          {(selectedTotals.inc > 0 || selectedTotals.exp > 0 || selectedTotals.xfer > 0) && (
-            <span className="flex items-center gap-3 text-sm tabular-nums border-l border-border pl-3">
-              {selectedTotals.inc > 0 && (
-                <span className="flex items-center gap-1 text-income">
-                  <ArrowUp className="w-3.5 h-3.5" />
-                  {formatMoney(selectedTotals.inc, base)}
-                </span>
-              )}
-              {selectedTotals.exp > 0 && (
-                <span className="flex items-center gap-1 text-expense">
-                  <ArrowDown className="w-3.5 h-3.5" />
-                  {formatMoney(selectedTotals.exp, base)}
-                </span>
-              )}
-              {selectedTotals.xfer > 0 && (
-                <span className="flex items-center gap-1 text-muted">
-                  <ArrowLeftRight className="w-3.5 h-3.5" />
-                  {formatMoney(selectedTotals.xfer, base)}
-                </span>
-              )}
+          {/* Row 1: count + per-kind sums of the selection. */}
+          <div className="flex items-center justify-center gap-x-4 gap-y-1 flex-wrap px-4 pt-2.5 pb-2 text-sm">
+            <span>
+              Выбрано: <strong className="tabular-nums">{formatNum(selected.size)}</strong>
             </span>
-          )}
-          <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
-            <Pencil className="w-3.5 h-3.5" />
-            Изменить
-          </button>
-          <button onClick={deleteBulk} className="btn-danger text-sm">
-            <Trash2 className="w-3.5 h-3.5" />
-            Удалить
-          </button>
-          <button
-            onClick={() => setSelected(new Set())}
-            className="btn-ghost text-sm text-muted"
-          >
-            Снять выделение
-          </button>
+            {(selectedTotals.inc > 0 || selectedTotals.exp > 0 || selectedTotals.xfer > 0) && (
+              <span className="flex items-center gap-3 tabular-nums border-l border-border pl-4">
+                {selectedTotals.inc > 0 && (
+                  <span className="flex items-center gap-1 text-income">
+                    <ArrowUp className="w-3.5 h-3.5" />
+                    {formatMoney(selectedTotals.inc, base)}
+                  </span>
+                )}
+                {selectedTotals.exp > 0 && (
+                  <span className="flex items-center gap-1 text-expense">
+                    <ArrowDown className="w-3.5 h-3.5" />
+                    {formatMoney(selectedTotals.exp, base)}
+                  </span>
+                )}
+                {selectedTotals.xfer > 0 && (
+                  <span className="flex items-center gap-1 text-muted">
+                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                    {formatMoney(selectedTotals.xfer, base)}
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+          {/* Row 2: actions. */}
+          <div className="flex items-center justify-center gap-2 flex-wrap px-4 pb-2.5 pt-2 border-t border-border">
+            <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
+              <Pencil className="w-3.5 h-3.5" />
+              Изменить
+            </button>
+            <button onClick={deleteBulk} className="btn-danger text-sm">
+              <Trash2 className="w-3.5 h-3.5" />
+              Удалить
+            </button>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="btn-ghost text-sm text-muted"
+            >
+              Снять выделение
+            </button>
+          </div>
         </div>
       )}
 
