@@ -22,6 +22,8 @@ import { groupByCategory } from "../lib/aggregations";
 import { formatNum } from "../lib/format";
 import { safeCompileRegex, safeTest } from "../lib/safeRegex";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
+import { Stat } from "../components/Stat";
 
 const FIELDS: { value: RuleField; label: string }[] = [
   { value: "payee", label: "Получатель" },
@@ -144,35 +146,30 @@ export function RulesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Wand2 className="w-6 h-6 text-accent" />
-            Правила категоризации
-          </h1>
-          <p className="text-muted text-sm mt-1">
-            Перезаписывают категорию операций при загрузке. Полезно для «Без категории»
-            или для пере-классификации устаревших категорий. Правила обратимы.
-          </p>
-        </div>
-        <button onClick={() => setAdding(!adding)} className="btn-primary text-sm">
-          <Plus className="w-4 h-4" />
-          Правило
-        </button>
-      </div>
+      <PageHeader
+        icon={Wand2}
+        title="Правила категоризации"
+        hint="Перезаписывают категорию операций при загрузке. Полезно для «Без категории» или для пере-классификации устаревших категорий. Правила обратимы."
+        hintWrap
+        right={
+          <button onClick={() => setAdding(!adding)} className="btn-primary text-sm">
+            <Plus className="w-4 h-4" />
+            Правило
+          </button>
+        }
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Активных правил</div>
-          <div className="stat-num">
-            {enabledCount}{" "}
-            <span className="text-muted text-sm font-normal">из {rules.length}</span>
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Изменено операций</div>
-          <div className="stat-num text-accent">{formatNum(totalAffected)}</div>
-        </div>
+        <Stat
+          label="Активных правил"
+          value={
+            <>
+              {enabledCount}{" "}
+              <span className="text-muted text-sm font-normal">из {rules.length}</span>
+            </>
+          }
+        />
+        <Stat label="Изменено операций" tone="accent" value={formatNum(totalAffected)} />
         <div className="card card-pad">
           <div className="label mb-1">Порядок применения</div>
           <div className="text-sm text-muted mt-1">

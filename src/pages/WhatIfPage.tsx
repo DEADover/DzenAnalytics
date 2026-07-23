@@ -19,6 +19,7 @@ import {
 import { netWorthSeries } from "../lib/aggregations";
 import { formatMoney, formatPct } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
 
 const INITIAL: WhatIfInputs = {
   incomeMul: 1,
@@ -94,24 +95,20 @@ export function WhatIfPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FlaskConical className="w-6 h-6 text-accent" />
-            Что-если — сценарии
-          </h1>
-          <p className="text-muted text-sm mt-1">
-            Покрутите слайдеры — увидите, как изменится норма сбережений, срок до
-            FIRE и капитал через 1/5/10 лет.
-          </p>
-        </div>
-        {dirty && (
-          <button onClick={reset} className="btn-ghost text-xs">
-            <RotateCcw className="w-3.5 h-3.5" />
-            Сбросить
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={FlaskConical}
+        title="Что-если — сценарии"
+        hint="Покрутите слайдеры — увидите, как изменится норма сбережений, срок до FIRE и капитал через 1/5/10 лет."
+        hintWrap
+        right={
+          dirty ? (
+            <button onClick={reset} className="btn-ghost text-xs">
+              <RotateCcw className="w-3.5 h-3.5" />
+              Сбросить
+            </button>
+          ) : undefined
+        }
+      />
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* Inputs */}

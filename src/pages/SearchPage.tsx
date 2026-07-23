@@ -7,6 +7,7 @@ import type { TransactionEdit } from "../store/useEditsStore";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { DateField } from "../components/DateField";
@@ -193,15 +194,12 @@ export function SearchPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Search className="w-6 h-6 text-accent" />
-          Поиск
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Полнотекст по получателю, комментарию, категории и счёту. Несколько слов = AND.
-        </p>
-      </div>
+      <PageHeader
+        icon={Search}
+        title="Поиск"
+        hint="Полнотекст по получателю, комментарию, категории и счёту. Несколько слов = AND."
+        hintWrap
+      />
 
       <div className="card card-pad space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

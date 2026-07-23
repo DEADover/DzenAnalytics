@@ -13,6 +13,7 @@ import { formatMoney, formatDate, formatNum, formatPct } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
 import { SortableTable, type Column } from "../components/SortableTable";
 import type { Transaction } from "../types";
@@ -149,15 +150,12 @@ export function UncategorizedPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Tag className="w-6 h-6 text-accent" />
-          Без категории
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Операции без категории — собраны в одном месте. Подсказки ниже помогут быстро их разнести, а правила — категоризировать похожие автоматически.
-        </p>
-      </div>
+      <PageHeader
+        icon={Tag}
+        title="Без категории"
+        hint="Операции без категории — собраны в одном месте. Подсказки ниже помогут быстро их разнести, а правила — категоризировать похожие автоматически."
+        hintWrap
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Stat
