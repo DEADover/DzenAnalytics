@@ -92,7 +92,11 @@ h2,
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg
-           text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+           text-sm font-medium
+           transition-[color,background-color,box-shadow,transform,opacity] duration-150
+           active:scale-[0.97]
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
   }
   .btn-primary {
     @apply btn bg-accent text-accent-fg hover:opacity-90;
@@ -116,7 +120,7 @@ h2,
     @apply text-xs uppercase tracking-wider text-muted font-medium;
   }
   .stat-num {
-    @apply text-2xl font-semibold tabular-nums;
+    @apply text-2xl font-semibold tabular-nums font-mono;
   }
   .pill {
     @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium

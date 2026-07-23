@@ -32,7 +32,7 @@ export function Stat({ label, value, hint, tooltip, tone = "default", icon, dens
       </div>
       <div
         className={clsx(
-          dense ? "text-xl font-semibold tabular-nums" : "stat-num",
+          dense ? "text-xl font-semibold tabular-nums font-mono tracking-tight" : "stat-num",
           toneClass
         )}
       >
