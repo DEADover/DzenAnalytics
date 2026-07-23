@@ -284,7 +284,7 @@ function Hero({
   return (
     <div>
       <div className="label">{label}</div>
-      <div className="text-xl font-bold tabular-nums">{value}</div>
+      <div className="text-xl font-semibold tabular-nums font-mono tracking-tight">{value}</div>
       {showDelta && (
         <div className={`text-xs flex items-center gap-1 mt-1 ${cls}`}>
           {delta > 0 ? (

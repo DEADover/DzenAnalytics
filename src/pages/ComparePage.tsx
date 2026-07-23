@@ -432,6 +432,11 @@ export function ComparePage() {
         <div className="font-semibold mb-3">
           Расходы по категориям: {ranges.a.label} vs {ranges.b.label}
         </div>
+        {compareData.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted">
+            Нет расходов по категориям в выбранных периодах — измените фильтры или периоды.
+          </div>
+        ) : (
         <div style={{ height: Math.max(384, compareData.length * 34 + 48) }}>
           <ResponsiveContainer>
             <BarChart data={compareData} layout="vertical" margin={{ left: 100 }} barGap={2}>
@@ -489,6 +494,7 @@ export function ComparePage() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+        )}
       </div>
     </div>
   );
