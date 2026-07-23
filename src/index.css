@@ -135,6 +135,10 @@ h2,
   }
   .stat-num {
     @apply text-2xl font-semibold tabular-nums font-mono;
+    /* Geist Mono's separator space is as wide as a digit, so «3 667 479»
+       reads too airy. Pull only the group separators together — digits keep
+       their tabular width. */
+    word-spacing: -0.22em;
   }
   .pill {
     @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium

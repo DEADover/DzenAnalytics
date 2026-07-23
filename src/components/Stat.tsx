@@ -34,7 +34,9 @@ export function Stat({ label, value, hint, tooltip, tone = "default", icon, dens
       </div>
       <div
         className={clsx(
-          dense ? "text-xl font-semibold tabular-nums font-mono tracking-tight" : "stat-num",
+          dense
+            ? "text-xl font-semibold tabular-nums font-mono tracking-tight [word-spacing:-0.22em]"
+            : "stat-num",
           toneClass
         )}
       >

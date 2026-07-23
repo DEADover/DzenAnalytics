@@ -369,7 +369,7 @@ function Slider({
     <div className="mb-3 last:mb-0">
       <div className="flex items-center justify-between text-sm">
         <span>{label}</span>
-        <span className="font-mono tabular-nums text-accent">{format(value)}</span>
+        <span className="font-mono tabular-nums text-accent [word-spacing:-0.22em]">{format(value)}</span>
       </div>
       <input
         type="range"
