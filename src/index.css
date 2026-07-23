@@ -201,6 +201,22 @@ body {
 .animate-flash-in { animation: flashSlideDown 0.22s ease-out; }
 .animate-flash-out { animation: flashFadeOut 0.18s ease-in forwards; }
 
+/* Goal edit panel: each field fades + rises in with a slight stagger, so the
+   form assembles itself; the whole panel fades out on close. */
+.goal-edit-fields > * { animation: menuItemIn 0.24s ease-out both; }
+.goal-edit-fields > *:nth-child(1) { animation-delay: 0.02s; }
+.goal-edit-fields > *:nth-child(2) { animation-delay: 0.06s; }
+.goal-edit-fields > *:nth-child(3) { animation-delay: 0.10s; }
+.goal-edit-fields > *:nth-child(4) { animation-delay: 0.14s; }
+.goal-edit-fields > *:nth-child(5) { animation-delay: 0.18s; }
+.goal-edit-fields > *:nth-child(6) { animation-delay: 0.22s; }
+@keyframes goalEditOut { from { opacity: 1; } to { opacity: 0; } }
+.goal-edit-out { animation: goalEditOut 0.16s ease-in forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .goal-edit-fields > *,
+  .goal-edit-out { animation: none; }
+}
+
 .recharts-wrapper svg,
 .recharts-wrapper svg *,
 .recharts-surface,

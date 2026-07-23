@@ -147,6 +147,17 @@ export interface ZenReminderMarker {
   tag: string[] | null;
   reminder: string; // Reminder.id this instance was generated from
   state: "planned" | "processed" | "deleted";
+  /** Account ids of the two legs — a marker carries the same leg structure as
+   *  a transaction, so a planned transfer has two different accounts. */
+  incomeAccount?: string;
+  outcomeAccount?: string;
+  payee?: string | null;
+  comment?: string | null;
+  merchant?: string | null;
+  /** Zenmoney's own split: `false` = операция, которую пользователь запланировал
+   *  сам; `true` = прогноз, достроенный Дзеном по регулярности. */
+  isForecast?: boolean;
+  notify?: boolean;
 }
 
 export interface ZenDiffResponse {

@@ -153,10 +153,16 @@ function collect(
     const p = wantForecast ? undefined : planned?.get(plannedKey(b.tag, ym));
     const outVal = b.outcomeLock ? b.outcome : b.outcome + (p?.outcome ?? 0);
     const incVal = b.incomeLock ? b.income : b.income + (p?.income ?? 0);
+    // Round ONLY where we actually folded planned ops in — that's what creates
+    // the sub-rouble tail. A LOCKED side (or one with no planned ops) carries
+    // Zenmoney's exact figure, which may legitimately be fractional: rounding it
+    // would invent a diff and mark the cell as «ждёт отправки» for nothing.
+    const outAdded = !b.outcomeLock && !!p;
+    const incAdded = !b.incomeLock && !!p;
     if (outFc === wantForecast && outVal > 0)
-      out.push({ kind: "expense", ...r, ym, amount: p ? Math.round(outVal) : outVal });
+      out.push({ kind: "expense", ...r, ym, amount: outAdded ? Math.round(outVal) : outVal });
     if (incFc === wantForecast && incVal > 0)
-      out.push({ kind: "income", ...r, ym, amount: p ? Math.round(incVal) : incVal });
+      out.push({ kind: "income", ...r, ym, amount: incAdded ? Math.round(incVal) : incVal });
   }
   return out;
 }

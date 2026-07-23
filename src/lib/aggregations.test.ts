@@ -17,6 +17,7 @@ import {
   fireSeries,
   statsByDayOfWeek,
   statsByHourOfWeek,
+  transferTotals,
 } from "./aggregations";
 import { tx } from "../test/fixtures";
 import type { CurrencyRates } from "../types";
@@ -625,5 +626,82 @@ describe("statsByDayOfWeek / statsByHourOfWeek — refund-aware totals (issue #3
   it("income total is unaffected by refunds/expenses", () => {
     const total = statsByDayOfWeek(txs, "income").reduce((s, b) => s + b.total, 0);
     expect(total).toBe(500);
+  });
+});
+
+describe("transferTotals — «Переводы» и «Накопления» (issue #42)", () => {
+  const SAV = new Set(["Вклад", "Сейв", "ИИС"]);
+  const xf = (from: string, to: string, amount: number) =>
+    tx({
+      kind: "transfer",
+      amount,
+      amountBase: amount,
+      outcomeAccount: from,
+      incomeAccount: to,
+    });
+
+  it("«Переводы» — сумма всех переводов, той же формулой, что и значок дня", () => {
+    const txs = [
+      xf("Карта", "Вклад", 1000),
+      xf("Вклад", "Карта", 400),
+      tx({ kind: "expense", amount: 50, amountBase: 50 }),
+      tx({ kind: "income", amount: 70, amountBase: 70 }),
+    ];
+    expect(transferTotals(txs, SAV).xfer).toBe(1400);
+  });
+
+  it("перевод НА накопительный счёт — с плюсом", () => {
+    expect(transferTotals([xf("Карта", "Вклад", 1000)], SAV).savings).toBe(1000);
+  });
+
+  it("перевод С накопительного счёта — с минусом", () => {
+    expect(transferTotals([xf("Вклад", "Карта", 1000)], SAV).savings).toBe(-1000);
+  });
+
+  it("накопительный → накопительный даёт ноль и не учитывается", () => {
+    expect(transferTotals([xf("Вклад", "Сейв", 1000)], SAV).savings).toBe(0);
+  });
+
+  it("ноль по накопительным даже при разных суммах ног (валютный перевод)", () => {
+    // Ноги валютного перевода не равны — сложение ± оставило бы курсовой хвост.
+    const t = tx({
+      kind: "transfer",
+      amount: 1000,
+      amountBase: 1000,
+      outcomeAccount: "Вклад",
+      incomeAccount: "ИИС",
+      outcomeAmount: 1000,
+      incomeAmount: 1013,
+    });
+    expect(transferTotals([t], SAV).savings).toBe(0);
+  });
+
+  it("переводы между обычными счетами не трогают «Накопления»", () => {
+    expect(transferTotals([xf("Карта", "Наличные", 500)], SAV).savings).toBe(0);
+  });
+
+  it("доходы и расходы в расчёт не входят", () => {
+    const txs = [
+      tx({ kind: "income", amount: 900, amountBase: 900, incomeAccount: "Вклад" }),
+      tx({ kind: "expense", amount: 300, amountBase: 300, outcomeAccount: "Вклад" }),
+    ];
+    expect(transferTotals(txs, SAV)).toEqual({ xfer: 0, savings: 0 });
+  });
+
+  it("без накопительных счетов (CSV-режим) — только «Переводы»", () => {
+    expect(transferTotals([xf("Карта", "Вклад", 1000)], new Set())).toEqual({
+      xfer: 1000,
+      savings: 0,
+    });
+  });
+
+  it("итог = сумма пополнений минус изъятия", () => {
+    const txs = [
+      xf("Карта", "Вклад", 5000),
+      xf("Карта", "Сейв", 3000),
+      xf("Вклад", "Сейв", 2000), // между накопительными — ноль
+      xf("Сейв", "Карта", 1500),
+    ];
+    expect(transferTotals(txs, SAV)).toEqual({ xfer: 11500, savings: 6500 });
   });
 });

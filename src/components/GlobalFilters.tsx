@@ -588,7 +588,10 @@ export function GlobalFilters({
           disabled={!hasFilters}
           title={hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
           aria-label="Сбросить все фильтры"
-          className="btn-ghost text-xs py-1.5 px-2 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2"
+          // `ml-auto` pins it to the right edge of the row. When the inline date
+          // controls are shown they already grow to fill the row (flex-1), so
+          // this has no effect there and the reset stays next to the divider.
+          className="btn-ghost text-xs py-1.5 px-2 shrink-0 ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2"
         >
           <FilterX className="w-4 h-4" />
         </button>

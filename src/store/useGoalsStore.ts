@@ -5,8 +5,18 @@ export interface Goal {
   id: string;
   name: string;
   target: number;
+  /** Manually entered progress. Ignored while `accountTitle` is set — then the
+   *  bound account's balance is the live progress (issue #45). */
   current: number;
   deadline: string | null;
+  /** Optional Zenmoney account this goal tracks: progress = its balance, so it
+   *  updates by itself on every sync. `null` / absent = manual amount. */
+  accountTitle?: string | null;
+  /** Optional planned monthly contribution to THIS goal. When set (> 0) it
+   *  drives a per-goal forecast independent of the household savings pace, so
+   *  the user can model «если откладывать N в месяц». `null` / absent = only
+   *  the household-pace forecast is shown. */
+  monthlyContribution?: number | null;
   createdAt: string;
 }
 

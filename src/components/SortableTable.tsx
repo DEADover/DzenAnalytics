@@ -28,6 +28,10 @@ interface Props<T> {
   className?: string;
   exportName?: string;
   exportable?: boolean;
+  /** Fixed table layout — column widths come from each column's `width` (not the
+   *  content), so they never shift when the data changes (tab/period switches).
+   *  Pair with `width` on the columns and `truncate` in their renderers. */
+  fixed?: boolean;
   /** Optional heading rendered on the same row as the CSV button (left side),
    *  so a card title and the export control share one line. */
   title?: ReactNode;
@@ -69,6 +73,7 @@ export function SortableTable<T>({
   className,
   exportName,
   exportable = true,
+  fixed = false,
   title,
   renderExpanded,
   isExpanded,
@@ -156,7 +161,7 @@ export function SortableTable<T>({
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className={clsx("w-full text-sm", fixed && "table-fixed")}>
           <thead>
             <tr>
               {expandable && <th className="table-th w-8" aria-hidden />}

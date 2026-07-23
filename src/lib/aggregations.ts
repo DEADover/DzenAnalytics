@@ -2247,3 +2247,35 @@ export function computeKPI(txs: Transaction[]): KPI {
     uniquePayees: payees.size,
   };
 }
+
+/**
+ * «Переводы» и «Накопления» за период (issue #42).
+ *
+ * `xfer` — сумма всех переводов, той же формулой, что и значок «Переводы за
+ * день» в шапке дня, поэтому итог в шапке = сумма дневных значков.
+ *
+ * `savings` — переводы НА накопительные счета минус переводы С них. Перевод
+ * между двумя накопительными счетами даёт ровно ноль и не учитывается: обе
+ * ноги гасят друг друга, деньги не «отложены» заново. Проверяем направления
+ * ЯВНО, а не сложением ±: при переводе между накопительными в разных валютах
+ * ноги не равны, и сумма-разность оставила бы курсовой «хвост».
+ *
+ * `savingsTitles` — названия счетов с признаком «накопительный», ВКЛЮЧАЯ
+ * архивные: пара «архивный ↔ активный» иначе перестала бы схлопываться в ноль.
+ */
+export function transferTotals(
+  txs: Transaction[],
+  savingsTitles: Set<string>
+): { xfer: number; savings: number } {
+  let xfer = 0;
+  let savings = 0;
+  for (const t of txs) {
+    if (t.kind !== "transfer") continue;
+    xfer += t.amountBase;
+    const toSavings = savingsTitles.has(t.incomeAccount);
+    const fromSavings = savingsTitles.has(t.outcomeAccount);
+    if (toSavings && !fromSavings) savings += t.amountBase;
+    else if (fromSavings && !toSavings) savings -= t.amountBase;
+  }
+  return { xfer, savings };
+}

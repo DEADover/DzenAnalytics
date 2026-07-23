@@ -40,6 +40,44 @@ export interface ZenCache {
    *  processed/deleted markers on merge to keep the cache lean and self-cleaning.
    *  `undefined` = never back-filled yet (triggers a one-time forceFetch). */
   reminderMarkers?: ZenReminderMarker[];
+  /** Schema generation of this cache. Drives ONE-TIME back-fills: an
+   *  incremental diff never re-sends entities whose `changed` predates our
+   *  timestamp, so whenever we start consuming a new entity type we must
+   *  `forceFetch` it once. Absent = written before versioning existed. */
+  cacheSchemaVersion?: number;
+}
+
+/** Bump when a new entity type starts being consumed AND needs a back-fill. */
+export const CACHE_SCHEMA_VERSION = 2;
+
+/** Entity types to force-fetch once when upgrading TO that version. */
+const BACKFILL_BY_VERSION: Record<number, string[]> = {
+  1: ["reminderMarker"],
+  2: ["budget"],
+};
+
+/**
+ * Effective schema version of a cache, including ones written before the field
+ * existed: an older build already back-filled `reminderMarkers`, so a cache
+ * that has them is (at least) v1 — otherwise those users would needlessly
+ * re-pull markers, and — worse — a naive `!cache.reminderMarkers` gate would
+ * never fire for them again, which is exactly how the `budget` back-fill was
+ * missed in the first place.
+ */
+export function cacheVersionOf(cache: ZenCache | null | undefined): number {
+  if (!cache) return CACHE_SCHEMA_VERSION; // no cache → full sync pulls everything
+  if (typeof cache.cacheSchemaVersion === "number") return cache.cacheSchemaVersion;
+  return cache.reminderMarkers ? 1 : 0;
+}
+
+/** Entity types this cache still has to back-fill to reach the current schema. */
+export function backfillEntities(cache: ZenCache | null | undefined): string[] {
+  const from = cacheVersionOf(cache);
+  const out = new Set<string>();
+  for (let v = from + 1; v <= CACHE_SCHEMA_VERSION; v++) {
+    for (const e of BACKFILL_BY_VERSION[v] || []) out.add(e);
+  }
+  return [...out];
 }
 
 /** Composite key for a budget row — it has no surface `id`. */
@@ -175,11 +213,15 @@ export function applyDiff(
       reminderMarkers: (diff.reminderMarker || []).filter(
         (m) => m.state === "planned"
       ),
+      cacheSchemaVersion: CACHE_SCHEMA_VERSION,
     });
   }
   const deletions = diff.deletion || [];
   return pruneOrphanTransactions({
     serverTimestamp: diff.serverTimestamp,
+    // Any completed merge leaves the cache at the current schema — the caller
+    // requested whatever back-fill `backfillEntities` asked for.
+    cacheSchemaVersion: CACHE_SCHEMA_VERSION,
     instruments: merge(prev.instruments, diff.instrument, "instrument", deletions),
     accounts: merge(prev.accounts, diff.account, "account", deletions),
     tags: merge(prev.tags, diff.tag, "tag", deletions),

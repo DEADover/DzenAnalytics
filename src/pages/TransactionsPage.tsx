@@ -16,6 +16,7 @@ import {
   Calendar,
   Coins,
   ChevronDown,
+  PiggyBank,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDataStore } from "../store/useDataStore";
@@ -24,11 +25,12 @@ import { useDraftsStore } from "../store/useDraftsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { useZenmoneyStore } from "../store/useZenmoneyStore";
+import { useZenmoneyStore, getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
 import { EditTransactionModal } from "../components/EditTransactionModal";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
+import { transferTotals } from "../lib/aggregations";
 import { CategoryDot } from "../components/CategoryDot";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
@@ -248,6 +250,28 @@ export function TransactionsPage() {
     return arr;
   }, [searched, sortMode]);
 
+  // Titles of accounts marked «накопительный» in Zenmoney — needed for the
+  // «Накопления» total (issue #42). Empty in CSV mode (no live accounts).
+  //
+  // ARCHIVED ones count too. Dropping them looks tidier (a closed account is
+  // often seeded by its OPENING BALANCE and later emptied by a transfer, which
+  // reads as a withdrawal with no matching deposit) — but it silently breaks
+  // the issue's rule that a savings→savings transfer must net to zero: in real
+  // data most such pairs are «архивный ↔ активный», so one leg would fall out
+  // of the set and the transfer would count at full value. The metric is about
+  // TRANSFERS, so opening balances are simply out of scope for it.
+  const [savingsAccounts, setSavingsAccounts] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    getLiveAccountsFromCache().then((live) => {
+      if (cancelled || !live) return;
+      setSavingsAccounts(new Set(live.filter((a) => a.savings).map((a) => a.title)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [transactions]);
+
   const totals = useMemo(() => {
     let inc = 0;
     let exp = 0;
@@ -258,8 +282,9 @@ export function TransactionsPage() {
       // footer — they're not earnings.
       else if (t.kind === "refund") exp -= t.amountBase;
     }
-    return { inc, exp, net: inc - exp, count: searched.length };
-  }, [searched]);
+    const { xfer, savings } = transferTotals(searched, savingsAccounts);
+    return { inc, exp, xfer, savings, net: inc - exp, count: searched.length };
+  }, [searched, savingsAccounts]);
 
   // Lazy reveal: render PAGE_SIZE rows initially; an IntersectionObserver at
   // the bottom of the list increases this by another PAGE_SIZE whenever the
@@ -362,7 +387,7 @@ export function TransactionsPage() {
       />
       <GlobalFilters />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Stat
           dense
           label="Доходы"
@@ -383,6 +408,25 @@ export function TransactionsPage() {
           value={formatMoney(totals.net, base, { signed: true })}
           tone={totals.net >= 0 ? "income" : "expense"}
           icon={<Scale className="w-4 h-4" />}
+        />
+        <Stat
+          dense
+          label="Переводы"
+          value={formatMoney(totals.xfer, base)}
+          icon={<ArrowLeftRight className="w-4 h-4" />}
+          tooltip="Сумма переводов между своими счетами за период"
+        />
+        <Stat
+          dense
+          label="Накопления"
+          value={formatMoney(totals.savings, base, { signed: true })}
+          tone={totals.savings > 0 ? "income" : totals.savings < 0 ? "expense" : "default"}
+          icon={<PiggyBank className="w-4 h-4" />}
+          tooltip={
+            savingsAccounts.size === 0
+              ? "Нет счетов с признаком «накопительный»"
+              : `Переводы НА накопительные счета минус переводы С них. Перевод между двумя накопительными даёт ноль. Учтено счетов: ${savingsAccounts.size} (включая архивные). Начальные остатки счетов не учитываются — только переводы.`
+          }
         />
         <Stat
           dense

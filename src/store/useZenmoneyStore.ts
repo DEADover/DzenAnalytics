@@ -14,6 +14,7 @@ import {
   clearZenCache,
   applyDiff,
   cacheToDiffResponse,
+  backfillEntities,
 } from "../lib/zenmoneyCache";
 import {
   buildPushItems,
@@ -504,16 +505,16 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // in full so renames/deletions propagate everywhere.
       const prevCache = opts.force ? null : await loadZenCache();
       const fromTs = prevCache?.serverTimestamp || 0;
-      // One-time back-fill: existing PLANNED reminder markers are needed to
-      // compute unlocked budgets' effective plan, but an incremental diff never
-      // re-sends already-created ones. If we've never pulled them (field is
-      // absent — not just an empty array), forceFetch the full set once.
-      const needMarkers = !opts.force && prevCache != null && !prevCache.reminderMarkers;
+      // One-time back-fills, driven by the cache's schema version: an
+      // incremental diff never re-sends entities whose `changed` predates our
+      // timestamp, so each newly-consumed entity type must be force-fetched
+      // once. Returns [] for a null cache (a full sync pulls everything anyway).
+      const backfill = backfillEntities(prevCache);
       const diff = await fetchDiff(
         token,
         fromTs,
         undefined,
-        needMarkers ? ["reminderMarker"] : undefined
+        backfill.length > 0 ? backfill : undefined
       );
       const nextCache = applyDiff(prevCache, diff);
       await saveZenCache(nextCache);
