@@ -13,6 +13,7 @@ import { PageHeader } from "../components/PageHeader";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { DuplicateExclusionsModal } from "../components/DuplicateExclusionsModal";
 import { Stat } from "../components/Stat";
+import { Tooltip } from "../components/Tooltip";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 
 export function DuplicatesPage() {
@@ -111,14 +112,15 @@ export function DuplicatesPage() {
         right={
           <div className="flex items-center gap-4 flex-wrap">
             {exclusionsCount > 0 && (
-              <button
-                onClick={() => setExclusionsModalOpen(true)}
-                className="btn-ghost text-xs"
-                title="Управление исключениями «не дубликаты»"
-              >
-                <ShieldOff className="w-3.5 h-3.5" />
-                Исключения ({exclusionsCount})
-              </button>
+              <Tooltip content="Управление исключениями «не дубликаты»">
+                <button
+                  onClick={() => setExclusionsModalOpen(true)}
+                  className="btn-ghost text-xs"
+                >
+                  <ShieldOff className="w-3.5 h-3.5" />
+                  Исключения ({exclusionsCount})
+                </button>
+              </Tooltip>
             )}
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted">Окно (дней)</span>
@@ -184,14 +186,15 @@ export function DuplicatesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => markNotDuplicates(g)}
-                      className="btn-ghost text-xs"
-                      title="Это не дубликаты — больше не помечать эту группу"
-                    >
-                      <ShieldOff className="w-3.5 h-3.5" />
-                      Не дубликаты
-                    </button>
+                    <Tooltip content="Это не дубликаты — больше не помечать эту группу">
+                      <button
+                        onClick={() => markNotDuplicates(g)}
+                        className="btn-ghost text-xs"
+                      >
+                        <ShieldOff className="w-3.5 h-3.5" />
+                        Не дубликаты
+                      </button>
+                    </Tooltip>
                     <button
                       onClick={() => showDrill(first.payee || first.categoryFull, g.txs, "Дубликаты")}
                       className="btn-ghost text-xs"

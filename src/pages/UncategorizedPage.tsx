@@ -15,6 +15,7 @@ import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyl
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
+import { Tooltip } from "../components/Tooltip";
 import { SortableTable, type Column } from "../components/SortableTable";
 import type { Transaction } from "../types";
 import type { RuleField } from "../store/useCategoryRulesStore";
@@ -183,22 +184,24 @@ export function UncategorizedPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={applySelected}
-                disabled={busy || selectedCount === 0}
-                className="btn-primary text-xs"
-                title="Создаст правила (по получателю или комментарию) для выбранных подсказок и применит их"
-              >
-                <Wand2 className="w-3.5 h-3.5" />
-                Применить подсказки ({selectedCount})
-              </button>
-              <button
-                onClick={() => setShowSuggestions(false)}
-                className="btn-ghost text-xs text-muted"
-                title="Скрыть подсказки"
-              >
-                ×
-              </button>
+              <Tooltip content="Создаст правила (по получателю или комментарию) для выбранных подсказок и применит их">
+                <button
+                  onClick={applySelected}
+                  disabled={busy || selectedCount === 0}
+                  className="btn-primary text-xs"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                  Применить подсказки ({selectedCount})
+                </button>
+              </Tooltip>
+              <Tooltip content="Скрыть подсказки">
+                <button
+                  onClick={() => setShowSuggestions(false)}
+                  className="btn-ghost text-xs text-muted"
+                >
+                  ×
+                </button>
+              </Tooltip>
             </div>
           </div>
           {/* Select-all + quick presets. */}
@@ -274,13 +277,8 @@ export function UncategorizedPage() {
                   >
                     {formatPct(s.confidence, 0)}
                   </div>
-                  <button
-                    onClick={() => applyOne(s)}
-                    disabled={busy || applied || !ruleKeyFor(s)}
-                    className={`btn-ghost !p-1.5 text-xs ${
-                      applied ? "text-income" : ""
-                    }`}
-                    title={
+                  <Tooltip
+                    content={
                       applied
                         ? "Применено"
                         : ruleKeyFor(s)
@@ -288,8 +286,16 @@ export function UncategorizedPage() {
                           : "Нет получателя и комментария — правило не создать"
                     }
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  </button>
+                    <button
+                      onClick={() => applyOne(s)}
+                      disabled={busy || applied || !ruleKeyFor(s)}
+                      className={`btn-ghost !p-1.5 text-xs ${
+                        applied ? "text-income" : ""
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 </div>
               );
             })}
