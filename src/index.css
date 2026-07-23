@@ -67,6 +67,14 @@ html {
   overflow-y: scroll;
 }
 
+/* Smooth in-page navigation (anchor jumps, «Наверх»), disabled for users who
+   prefer reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 body {
   margin: 0;
   font-family: "Geist Variable", Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
@@ -109,7 +117,9 @@ h2,
   }
   .input {
     @apply w-full bg-panel2 text-text placeholder:text-muted px-3 py-2 rounded-lg
-           border border-border focus:outline-none focus:border-accent transition-colors;
+           border border-border transition-colors
+           focus:outline-none focus:border-accent
+           focus-visible:ring-2 focus-visible:ring-accent/25;
   }
   /* DateField hides the native <input type="date"> (opacity 0) and paints
      its own Russian layer on top, so the browser's English "dd.mm.yyyy" is
