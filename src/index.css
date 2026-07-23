@@ -69,10 +69,18 @@ html {
 
 body {
   margin: 0;
-  font-family: Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-family: "Geist Variable", Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Large headings and headline numbers read more intentional with slightly
+   tightened tracking — Geist carries the tighter spacing well. */
+h1,
+h2,
+.stat-num {
+  letter-spacing: -0.02em;
 }
 
 @layer components {

@@ -1,6 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, HashRouter } from "react-router-dom";
+// Geist (Vercel) — self-hosted variable fonts, bundled so the standalone build
+// stays offline-friendly. Sans for UI, Mono for tabular numbers.
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
 import "./index.css";
 import App from "./App";
 
