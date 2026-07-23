@@ -13,6 +13,9 @@ import { formatMoney, formatDate, formatNum, formatPct } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
+import { Stat } from "../components/Stat";
+import { Tooltip } from "../components/Tooltip";
 import { SortableTable, type Column } from "../components/SortableTable";
 import type { Transaction } from "../types";
 import type { RuleField } from "../store/useCategoryRulesStore";
@@ -148,32 +151,21 @@ export function UncategorizedPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Tag className="w-6 h-6 text-accent" />
-          Без категории
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Операции без категории — собраны в одном месте. Подсказки ниже помогут быстро их разнести, а правила — категоризировать похожие автоматически.
-        </p>
-      </div>
+      <PageHeader
+        icon={Tag}
+        title="Без категории"
+        hint="Операции без категории — собраны в одном месте. Подсказки ниже помогут быстро их разнести, а правила — категоризировать похожие автоматически."
+        hintWrap
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Найдено</div>
-          <div className="stat-num">{formatNum(list.length)}</div>
-          <div className="text-xs text-muted mt-1">из {formatNum(transactions.length)} всего</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Сумма</div>
-          <div className="stat-num text-warn">
-            {formatMoney(total, base)}
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Доля от всех потоков</div>
-          <div className="stat-num">{(share * 100).toFixed(1)}%</div>
-        </div>
+        <Stat
+          label="Найдено"
+          value={formatNum(list.length)}
+          hint={`из ${formatNum(transactions.length)} всего`}
+        />
+        <Stat label="Сумма" value={formatMoney(total, base)} tone="warn" />
+        <Stat label="Доля от всех потоков" value={`${(share * 100).toFixed(1)}%`} />
       </div>
 
       {/* Smart suggestions */}
@@ -192,22 +184,24 @@ export function UncategorizedPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={applySelected}
-                disabled={busy || selectedCount === 0}
-                className="btn-primary text-xs"
-                title="Создаст правила (по получателю или комментарию) для выбранных подсказок и применит их"
-              >
-                <Wand2 className="w-3.5 h-3.5" />
-                Применить подсказки ({selectedCount})
-              </button>
-              <button
-                onClick={() => setShowSuggestions(false)}
-                className="btn-ghost text-xs text-muted"
-                title="Скрыть подсказки"
-              >
-                ×
-              </button>
+              <Tooltip content="Создаст правила (по получателю или комментарию) для выбранных подсказок и применит их">
+                <button
+                  onClick={applySelected}
+                  disabled={busy || selectedCount === 0}
+                  className="btn-primary text-xs"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                  Применить подсказки ({selectedCount})
+                </button>
+              </Tooltip>
+              <Tooltip content="Скрыть подсказки">
+                <button
+                  onClick={() => setShowSuggestions(false)}
+                  className="btn-ghost text-xs text-muted"
+                >
+                  ×
+                </button>
+              </Tooltip>
             </div>
           </div>
           {/* Select-all + quick presets. */}
@@ -283,13 +277,8 @@ export function UncategorizedPage() {
                   >
                     {formatPct(s.confidence, 0)}
                   </div>
-                  <button
-                    onClick={() => applyOne(s)}
-                    disabled={busy || applied || !ruleKeyFor(s)}
-                    className={`btn-ghost !p-1.5 text-xs ${
-                      applied ? "text-income" : ""
-                    }`}
-                    title={
+                  <Tooltip
+                    content={
                       applied
                         ? "Применено"
                         : ruleKeyFor(s)
@@ -297,8 +286,16 @@ export function UncategorizedPage() {
                           : "Нет получателя и комментария — правило не создать"
                     }
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  </button>
+                    <button
+                      onClick={() => applyOne(s)}
+                      disabled={busy || applied || !ruleKeyFor(s)}
+                      className={`btn-ghost !p-1.5 text-xs ${
+                        applied ? "text-income" : ""
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 </div>
               );
             })}

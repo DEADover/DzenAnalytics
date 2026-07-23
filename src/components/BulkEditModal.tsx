@@ -154,7 +154,7 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
             type="button"
             onClick={onClose}
             className="text-muted hover:text-text"
-            title="Закрыть"
+            aria-label="Закрыть"
           >
             <X className="w-4 h-4" />
           </button>

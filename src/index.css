@@ -67,12 +67,28 @@ html {
   overflow-y: scroll;
 }
 
+/* Smooth in-page navigation (anchor jumps, «Наверх»), disabled for users who
+   prefer reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 body {
   margin: 0;
-  font-family: Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-family: "Geist Variable", Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Large headings and headline numbers read more intentional with slightly
+   tightened tracking — Geist carries the tighter spacing well. */
+h1,
+h2,
+.stat-num {
+  letter-spacing: -0.02em;
 }
 
 @layer components {
@@ -84,7 +100,11 @@ body {
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg
-           text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+           text-sm font-medium
+           transition-[color,background-color,box-shadow,transform,opacity] duration-150
+           active:scale-[0.97]
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
   }
   .btn-primary {
     @apply btn bg-accent text-accent-fg hover:opacity-90;
@@ -95,9 +115,15 @@ body {
   .btn-danger {
     @apply btn bg-expense/10 text-expense hover:bg-expense/20 border border-expense/30;
   }
+  /* Solid warning action (e.g. the confirm button of a «warning»-tone dialog). */
+  .btn-warn {
+    @apply btn bg-warn text-white hover:opacity-90;
+  }
   .input {
     @apply w-full bg-panel2 text-text placeholder:text-muted px-3 py-2 rounded-lg
-           border border-border focus:outline-none focus:border-accent transition-colors;
+           border border-border transition-colors
+           focus:outline-none focus:border-accent
+           focus-visible:ring-2 focus-visible:ring-accent/25;
   }
   /* DateField hides the native <input type="date"> (opacity 0) and paints
      its own Russian layer on top, so the browser's English "dd.mm.yyyy" is
@@ -108,7 +134,7 @@ body {
     @apply text-xs uppercase tracking-wider text-muted font-medium;
   }
   .stat-num {
-    @apply text-2xl font-semibold tabular-nums;
+    @apply text-2xl font-semibold tabular-nums font-mono;
   }
   .pill {
     @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium

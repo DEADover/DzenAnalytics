@@ -8,6 +8,7 @@ import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
 import { useFireCapital } from "../hooks/useFireCapital";
 import { fireSeries } from "../lib/aggregations";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
 import { HealthSummary } from "../components/HealthSummary";
 import { FireChart } from "../components/FireChart";
 import { FireIndependence } from "../components/FireIndependence";
@@ -46,16 +47,12 @@ export function HealthPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <HeartPulse className="w-6 h-6 text-accent" />
-          Финансовое здоровье
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Насколько устойчивы ваши финансы сейчас и как близко до финансовой
-          независимости.
-        </p>
-      </div>
+      <PageHeader
+        icon={HeartPulse}
+        title="Финансовое здоровье"
+        hint="Насколько устойчивы ваши финансы сейчас и как близко до финансовой независимости."
+        hintWrap
+      />
 
       <SectionDivider
         label="Общая оценка"

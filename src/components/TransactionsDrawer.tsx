@@ -18,6 +18,7 @@ import { useDraftsStore } from "../store/useDraftsStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
 import { CategoryDot } from "./CategoryDot";
+import { Tooltip } from "./Tooltip";
 import { EditTransactionModal } from "./EditTransactionModal";
 import { BulkEditModal } from "./BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
@@ -255,18 +256,19 @@ export function TransactionsDrawer() {
             {title}
           </div>
         </div>
-        <button
-          onClick={close}
-          className="btn-ghost text-sm shrink-0"
-          aria-label="Закрыть (Esc)"
-          title="Закрыть (Esc)"
-        >
-          <X className="w-4 h-4" />
-          <span>Закрыть</span>
-          <kbd className="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-panel2 border border-border font-mono">
-            Esc
-          </kbd>
-        </button>
+        <Tooltip content="Закрыть (Esc)">
+          <button
+            onClick={close}
+            className="btn-ghost text-sm shrink-0"
+            aria-label="Закрыть (Esc)"
+          >
+            <X className="w-4 h-4" />
+            <span>Закрыть</span>
+            <kbd className="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-panel2 border border-border font-mono">
+              Esc
+            </kbd>
+          </button>
+        </Tooltip>
       </div>
 
         {transactions.length === 1 && (

@@ -9,8 +9,11 @@ import { detectDuplicates, type DuplicateGroup } from "../lib/aggregations";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { kindColorClass, kindGlyphClass, kindLabel, kindSignGlyph } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { DuplicateExclusionsModal } from "../components/DuplicateExclusionsModal";
+import { Stat } from "../components/Stat";
+import { Tooltip } from "../components/Tooltip";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 
 export function DuplicatesPage() {
@@ -100,61 +103,50 @@ export function DuplicatesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Copy className="w-6 h-6 text-warn" />
-            Дубликаты
-          </h1>
-          <p className="text-muted text-sm mt-1">
-            Подозрительно похожие операции: одинаковая сумма, тот же получатель и тот же тип в
-            пределах окна. Часто бывают при двойном импорте.
-          </p>
-        </div>
-        <div className="flex items-center gap-4 flex-wrap">
-          {exclusionsCount > 0 && (
-            <button
-              onClick={() => setExclusionsModalOpen(true)}
-              className="btn-ghost text-xs"
-              title="Управление исключениями «не дубликаты»"
-            >
-              <ShieldOff className="w-3.5 h-3.5" />
-              Исключения ({exclusionsCount})
-            </button>
-          )}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted">Окно (дней)</span>
-            <input
-              type="range"
-              min="0"
-              max="14"
-              value={windowDays}
-              onChange={(e) => setWindowDays(Number(e.target.value))}
-              className="accent-accent"
-            />
-            <span className="text-xs tabular-nums w-6">{windowDays}</span>
+      <PageHeader
+        icon={Copy}
+        iconTone="text-warn"
+        title="Дубликаты"
+        hint="Подозрительно похожие операции: одинаковая сумма, тот же получатель и тот же тип в пределах окна. Часто бывают при двойном импорте."
+        hintWrap
+        right={
+          <div className="flex items-center gap-4 flex-wrap">
+            {exclusionsCount > 0 && (
+              <Tooltip content="Управление исключениями «не дубликаты»">
+                <button
+                  onClick={() => setExclusionsModalOpen(true)}
+                  className="btn-ghost text-xs"
+                >
+                  <ShieldOff className="w-3.5 h-3.5" />
+                  Исключения ({exclusionsCount})
+                </button>
+              </Tooltip>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted">Окно (дней)</span>
+              <input
+                type="range"
+                min="0"
+                max="14"
+                value={windowDays}
+                onChange={(e) => setWindowDays(Number(e.target.value))}
+                className="accent-accent"
+              />
+              <span className="text-xs tabular-nums w-6">{windowDays}</span>
+            </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Групп дубликатов</div>
-          <div className="stat-num text-warn">{groups.length}</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Всего операций в группах</div>
-          <div className="stat-num">{formatNum(totalCount)}</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Лишняя сумма</div>
-          <div className="stat-num text-expense">
-            {formatMoney(totalDuplicateAmount, base)}
-          </div>
-          <div className="text-xs text-muted mt-1">
-            если все «лишние» копии — действительно дубли
-          </div>
-        </div>
+        <Stat label="Групп дубликатов" value={groups.length} tone="warn" />
+        <Stat label="Всего операций в группах" value={formatNum(totalCount)} />
+        <Stat
+          label="Лишняя сумма"
+          value={formatMoney(totalDuplicateAmount, base)}
+          tone="expense"
+          hint="если все «лишние» копии — действительно дубли"
+        />
       </div>
 
 
@@ -194,14 +186,15 @@ export function DuplicatesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => markNotDuplicates(g)}
-                      className="btn-ghost text-xs"
-                      title="Это не дубликаты — больше не помечать эту группу"
-                    >
-                      <ShieldOff className="w-3.5 h-3.5" />
-                      Не дубликаты
-                    </button>
+                    <Tooltip content="Это не дубликаты — больше не помечать эту группу">
+                      <button
+                        onClick={() => markNotDuplicates(g)}
+                        className="btn-ghost text-xs"
+                      >
+                        <ShieldOff className="w-3.5 h-3.5" />
+                        Не дубликаты
+                      </button>
+                    </Tooltip>
                     <button
                       onClick={() => showDrill(first.payee || first.categoryFull, g.txs, "Дубликаты")}
                       className="btn-ghost text-xs"

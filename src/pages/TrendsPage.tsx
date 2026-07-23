@@ -43,6 +43,7 @@ import type { Transaction } from "../types";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { Stat } from "../components/Stat";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
 import { useEffect } from "react";
@@ -376,35 +377,27 @@ export function TrendsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Будни (среднее за день)</div>
-          <div className={`stat-num ${kind === "expense" ? "text-expense" : "text-income"}`}>
-            {formatMoney(weekdayAvg, base)}
-          </div>
-          <div className="text-xs text-muted mt-1">
-            Всего за будни: {formatMoney(weekdayTotal, base)}
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Выходные (среднее за день)</div>
-          <div className="stat-num text-accent2">
-            {formatMoney(weekendAvg, base)}
-          </div>
-          <div className="text-xs text-muted mt-1">
-            Всего за выходные: {formatMoney(weekendTotal, base)}
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Соотношение</div>
-          <div className="stat-num">
-            {weekdayAvg > 0 ? `${(weekendAvg / weekdayAvg).toFixed(2)}×` : "—"}
-          </div>
-          <div className="text-xs text-muted mt-1">
-            {weekendAvg > weekdayAvg
+        <Stat
+          label="Будни (среднее за день)"
+          tone={kind === "expense" ? "expense" : "income"}
+          value={formatMoney(weekdayAvg, base)}
+          hint={`Всего за будни: ${formatMoney(weekdayTotal, base)}`}
+        />
+        <Stat
+          label="Выходные (среднее за день)"
+          tone="accent2"
+          value={formatMoney(weekendAvg, base)}
+          hint={`Всего за выходные: ${formatMoney(weekendTotal, base)}`}
+        />
+        <Stat
+          label="Соотношение"
+          value={weekdayAvg > 0 ? `${(weekendAvg / weekdayAvg).toFixed(2)}×` : "—"}
+          hint={
+            weekendAvg > weekdayAvg
               ? "В выходные тратите больше за день"
-              : "В будни тратите больше за день"}
-          </div>
-        </div>
+              : "В будни тратите больше за день"
+          }
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -6,10 +6,12 @@ import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { detectAnomalies, detectMonthSpikes, type Anomaly, type MonthSpike } from "../lib/aggregations";
 import { SortableTable, type Column } from "../components/SortableTable";
+import { PageHeader } from "../components/PageHeader";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { formatMoney, formatDate, monthLabel } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
+import { Stat } from "../components/Stat";
 
 export function AnomaliesPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -74,56 +76,51 @@ export function AnomaliesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Zap className="w-6 h-6 text-warn" />
-            Аномалии
-          </h1>
-          <p className="text-muted text-sm mt-1">
-            Авто-детект необычных операций и резких всплесков по категориям. Учитывает фильтры по
-            счетам, валютам, категориям и датам. Всплески считают базу по всей истории (с учётом
-            фильтров, кроме дат).
-          </p>
-        </div>
-        {tab === "transactions" && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted">Чувствительность (σ)</span>
-            <input
-              type="range"
-              min="2"
-              max="4"
-              step="0.5"
-              value={threshold}
-              onChange={(e) => setThreshold(Number(e.target.value))}
-              className="accent-accent"
-            />
-            <span className="text-xs tabular-nums w-8">{threshold.toFixed(1)}</span>
-          </div>
-        )}
-      </div>
+      <PageHeader
+        icon={Zap}
+        iconTone="text-warn"
+        title="Аномалии"
+        hint="Авто-детект необычных операций и резких всплесков по категориям. Учитывает фильтры по счетам, валютам, категориям и датам. Всплески считают базу по всей истории (с учётом фильтров, кроме дат)."
+        hintWrap
+        right={
+          tab === "transactions" ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted">Чувствительность (σ)</span>
+              <input
+                type="range"
+                min="2"
+                max="4"
+                step="0.5"
+                value={threshold}
+                onChange={(e) => setThreshold(Number(e.target.value))}
+                className="accent-accent"
+              />
+              <span className="text-xs tabular-nums w-8">{threshold.toFixed(1)}</span>
+            </div>
+          ) : undefined
+        }
+      />
 
       <GlobalFilters />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Аномальных операций</div>
-          <div className="stat-num text-warn">{anomalies.length}</div>
-          <div className="text-xs text-muted mt-1">σ &gt; {threshold}</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Их сумма</div>
-          <div className="stat-num text-expense">
-            {formatMoney(totalAnomalyAmount, base)}
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Всплески по категориям</div>
-          <div className="stat-num text-warn">{spikes.length}</div>
-          <div className="text-xs text-muted mt-1">
-            Превышение {formatMoney(totalSpikesDelta, base)}
-          </div>
-        </div>
+        <Stat
+          label="Аномальных операций"
+          value={anomalies.length}
+          tone="warn"
+          hint={<>σ &gt; {threshold}</>}
+        />
+        <Stat
+          label="Их сумма"
+          value={formatMoney(totalAnomalyAmount, base)}
+          tone="expense"
+        />
+        <Stat
+          label="Всплески по категориям"
+          value={spikes.length}
+          tone="warn"
+          hint={<>Превышение {formatMoney(totalSpikesDelta, base)}</>}
+        />
       </div>
 
       <div className="flex gap-2 border-b border-border">

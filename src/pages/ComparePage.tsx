@@ -133,7 +133,7 @@ function Delta({ a, b, invert = false }: { a: number; b: number; invert?: boolea
   const tone = positive ? "text-income" : diff === 0 ? "text-muted" : "text-expense";
   const Icon = diff > 0 ? ArrowUpRight : diff < 0 ? ArrowDownRight : Minus;
   return (
-    <span className={`text-xs flex items-center gap-1 ${tone}`}>
+    <span className={`text-xs flex items-center gap-1 tabular-nums ${tone}`}>
       <Icon className="w-3 h-3" />
       {pct !== null ? formatPct(pct, 1) : `${diff >= 0 ? "+" : ""}${formatNum(diff)}`}
     </span>
@@ -432,6 +432,11 @@ export function ComparePage() {
         <div className="font-semibold mb-3">
           Расходы по категориям: {ranges.a.label} vs {ranges.b.label}
         </div>
+        {compareData.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted">
+            Нет расходов по категориям в выбранных периодах — измените фильтры или периоды.
+          </div>
+        ) : (
         <div style={{ height: Math.max(384, compareData.length * 34 + 48) }}>
           <ResponsiveContainer>
             <BarChart data={compareData} layout="vertical" margin={{ left: 100 }} barGap={2}>
@@ -489,6 +494,7 @@ export function ComparePage() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+        )}
       </div>
     </div>
   );

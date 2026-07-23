@@ -13,6 +13,7 @@ import { useDrillStore } from "../store/useDrillStore";
 import { buildDigestHistory, type DigestEntry } from "../lib/digest";
 import { formatMoney, formatPct, formatDate } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
 
 type Tab = "week" | "month";
 
@@ -37,16 +38,12 @@ export function DigestPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Newspaper className="w-6 h-6 text-accent" />
-          Дайджест
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Авто-сгенерированные итоги по неделям и месяцам со сравнением с предыдущим
-          периодом и категориями, где «выстрелило».
-        </p>
-      </div>
+      <PageHeader
+        icon={Newspaper}
+        title="Дайджест"
+        hint="Авто-сгенерированные итоги по неделям и месяцам со сравнением с предыдущим периодом и категориями, где «выстрелило»."
+        hintWrap
+      />
 
       {/* Tabs */}
       <div className="flex items-center gap-2">
@@ -287,7 +284,7 @@ function Hero({
   return (
     <div>
       <div className="label">{label}</div>
-      <div className="text-xl font-bold tabular-nums">{value}</div>
+      <div className="text-xl font-semibold tabular-nums font-mono tracking-tight">{value}</div>
       {showDelta && (
         <div className={`text-xs flex items-center gap-1 mt-1 ${cls}`}>
           {delta > 0 ? (

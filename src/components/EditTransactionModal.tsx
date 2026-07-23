@@ -20,6 +20,7 @@ import {
 } from "../lib/zenmoneyPush";
 import { Combobox, type ComboboxGroup } from "./Combobox";
 import { CategoryCascadePicker, type CategoryNode } from "./CategoryCascadePicker";
+import { Tooltip } from "./Tooltip";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { validateOperation } from "../lib/operationValidation";
 import { DateField } from "./DateField";
@@ -934,6 +935,9 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-tx-title"
         // Fixed height (capped at 90vh on short screens) so the card never
         // changes size between operation kinds — only the inner body scrolls.
         // Keeps the modal from "jumping" while paging through ops with ←/→.
@@ -941,7 +945,7 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
         className="card w-full max-w-lg h-[740px] max-h-[90vh] flex flex-col overflow-hidden"
       >
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
-          <div className="font-semibold flex items-center gap-2">
+          <div id="edit-tx-title" className="font-semibold flex items-center gap-2">
             {isCreate ? (
               <Plus className="w-4 h-4 text-accent2" />
             ) : (
@@ -960,7 +964,11 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
                 перелистывание
               </span>
             )}
-            <button onClick={onClose} className="text-muted hover:text-text">
+            <button
+              onClick={onClose}
+              aria-label="Закрыть"
+              className="text-muted hover:text-text"
+            >
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -1075,22 +1083,24 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
             <>
               <Field label="Операция с долгом">
                 <div className="grid grid-cols-2 gap-1 bg-panel2 border border-border rounded-lg p-0.5 w-full">
-                  <button
-                    type="button"
-                    onClick={() => setDebtOutgoing(true)}
-                    title="Я дал в долг | Я вернул долг"
-                    className={`text-xs py-1.5 px-2 rounded-md whitespace-nowrap ${debtOutgoing ? "bg-warn text-white" : "text-muted"}`}
-                  >
-                    Я дал / вернул
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDebtOutgoing(false)}
-                    title="Мне дали в долг | Мне вернули долг"
-                    className={`text-xs py-1.5 px-2 rounded-md whitespace-nowrap ${!debtOutgoing ? "bg-warn text-white" : "text-muted"}`}
-                  >
-                    Мне дали / вернули
-                  </button>
+                  <Tooltip content="Я дал в долг | Я вернул долг">
+                    <button
+                      type="button"
+                      onClick={() => setDebtOutgoing(true)}
+                      className={`text-xs py-1.5 px-2 rounded-md whitespace-nowrap ${debtOutgoing ? "bg-warn text-white" : "text-muted"}`}
+                    >
+                      Я дал / вернул
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Мне дали в долг | Мне вернули долг">
+                    <button
+                      type="button"
+                      onClick={() => setDebtOutgoing(false)}
+                      className={`text-xs py-1.5 px-2 rounded-md whitespace-nowrap ${!debtOutgoing ? "bg-warn text-white" : "text-muted"}`}
+                    >
+                      Мне дали / вернули
+                    </button>
+                  </Tooltip>
                 </div>
               </Field>
               <Field label={debtOutgoing ? "С какого счёта" : "На какой счёт"}>
@@ -1206,14 +1216,15 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
                   <span>Пересчитано по курсу синхронизации — можно поправить.</span>
                 )}
                 {manualIn && suggestedIn !== null && (
-                  <button
-                    type="button"
-                    onClick={() => setManualIn(false)}
-                    className="text-accent hover:underline"
-                    title={`По курсу: ≈ ${suggestedIn.toLocaleString("ru-RU")} ${inAccCurrency}`}
-                  >
-                    ↻ пересчитать по курсу
-                  </button>
+                  <Tooltip content={`По курсу: ≈ ${suggestedIn.toLocaleString("ru-RU")} ${inAccCurrency}`}>
+                    <button
+                      type="button"
+                      onClick={() => setManualIn(false)}
+                      className="text-accent hover:underline"
+                    >
+                      ↻ пересчитать по курсу
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             </Field>
@@ -1322,15 +1333,16 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
           {isCreate ? (
             <span />
           ) : (
-            <button
-              onClick={handleDelete}
-              disabled={saving}
-              className="btn-danger text-sm"
-              title="Удалить операцию"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Удалить
-            </button>
+            <Tooltip content="Удалить операцию">
+              <button
+                onClick={handleDelete}
+                disabled={saving}
+                className="btn-danger text-sm"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Удалить
+              </button>
+            </Tooltip>
           )}
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="btn-ghost text-sm">
@@ -1403,7 +1415,7 @@ function KindButton({
         : tone === "accent2"
           ? "bg-accent2 text-white"
           : tone === "slate"
-            ? "bg-slate-500 text-white"
+            ? "bg-muted text-white"
             : "bg-warn text-white";
   return (
     <button

@@ -12,6 +12,11 @@ interface Props {
    */
   icon?: ComponentType<{ className?: string }>;
   /**
+   * Icon colour class. Defaults to the accent; pass e.g. `text-warn` for
+   * attention pages (Аномалии, Дубликаты) so the icon keeps its semantics.
+   */
+  iconTone?: string;
+  /**
    * Short subtitle / hint text shown under the title in muted style.
    */
   hint?: ReactNode;
@@ -42,12 +47,19 @@ interface Props {
  *      consistent regardless of which page you land on.
  *   3. A single, predictable slot for page-level actions on the right.
  */
-export function PageHeader({ title, icon: Icon, hint, right, hintWrap }: Props) {
+export function PageHeader({
+  title,
+  icon: Icon,
+  iconTone = "text-accent",
+  hint,
+  right,
+  hintWrap,
+}: Props) {
   return (
     <div className="flex items-end justify-between flex-wrap gap-3">
       <div className="min-w-0">
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          {Icon && <Icon className="w-6 h-6 text-accent shrink-0" />}
+          {Icon && <Icon className={`w-6 h-6 shrink-0 ${iconTone}`} />}
           <span className="truncate">{title}</span>
         </h1>
         {hint && (

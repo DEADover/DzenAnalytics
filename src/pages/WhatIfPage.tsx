@@ -19,6 +19,7 @@ import {
 import { netWorthSeries } from "../lib/aggregations";
 import { formatMoney, formatPct } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
 
 const INITIAL: WhatIfInputs = {
   incomeMul: 1,
@@ -94,24 +95,20 @@ export function WhatIfPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FlaskConical className="w-6 h-6 text-accent" />
-            Что-если — сценарии
-          </h1>
-          <p className="text-muted text-sm mt-1">
-            Покрутите слайдеры — увидите, как изменится норма сбережений, срок до
-            FIRE и капитал через 1/5/10 лет.
-          </p>
-        </div>
-        {dirty && (
-          <button onClick={reset} className="btn-ghost text-xs">
-            <RotateCcw className="w-3.5 h-3.5" />
-            Сбросить
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={FlaskConical}
+        title="Что-если — сценарии"
+        hint="Покрутите слайдеры — увидите, как изменится норма сбережений, срок до FIRE и капитал через 1/5/10 лет."
+        hintWrap
+        right={
+          dirty ? (
+            <button onClick={reset} className="btn-ghost text-xs">
+              <RotateCcw className="w-3.5 h-3.5" />
+              Сбросить
+            </button>
+          ) : undefined
+        }
+      />
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* Inputs */}
@@ -311,9 +308,9 @@ export function WhatIfPage() {
               Прогноз капитала
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <Stat label="через 1 год" value={out.projected1y} base={base} />
-              <Stat label="через 5 лет" value={out.projected5y} base={base} />
-              <Stat label="через 10 лет" value={out.projected10y} base={base} />
+              <MoneyStat label="через 1 год" value={out.projected1y} base={base} />
+              <MoneyStat label="через 5 лет" value={out.projected5y} base={base} />
+              <MoneyStat label="через 10 лет" value={out.projected10y} base={base} />
             </div>
             <div className="text-[11px] text-muted mt-3">
               Линейный прогноз без учёта доходности инвестиций. Реальные суммы при
@@ -388,7 +385,9 @@ function Slider({
   );
 }
 
-function Stat({ label, value, base }: { label: string; value: number; base: string }) {
+// Inline label/value pair used INSIDE a card (not a standalone card tile), so it
+// deliberately does not use the design-system `Stat` (which renders its own card).
+function MoneyStat({ label, value, base }: { label: string; value: number; base: string }) {
   return (
     <div>
       <div className="label">{label}</div>

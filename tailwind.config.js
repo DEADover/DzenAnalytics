@@ -18,7 +18,8 @@ export default {
         warn: "rgb(var(--c-warn) / <alpha-value>)",
       },
       fontFamily: {
-        sans: ["Inter", "-apple-system", "Segoe UI", "system-ui", "sans-serif"],
+        sans: ["Geist Variable", "Inter", "-apple-system", "Segoe UI", "system-ui", "sans-serif"],
+        mono: ["Geist Mono Variable", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       boxShadow: {
         card: "var(--shadow-card)",

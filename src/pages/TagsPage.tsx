@@ -18,6 +18,7 @@ import { CategoryDot } from "../components/CategoryDot";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { SortableTable, type Column } from "../components/SortableTable";
+import { Tooltip } from "../components/Tooltip";
 
 export function TagsPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -127,19 +128,22 @@ export function TagsPage() {
             const score = (t.expense + t.income) / maxTotal;
             const fontSize = 12 + Math.round(score * 16);
             return (
-              <button
+              <Tooltip
                 key={t.tag}
-                onClick={() => openTag(t.tag)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-panel2 hover:border-accent hover:bg-accent/10 transition-colors"
-                style={{ fontSize }}
-                title={`Чистый: ${formatMoney(t.income - t.expense, base, { signed: true })}`}
+                content={`Чистый: ${formatMoney(t.income - t.expense, base, { signed: true })}`}
               >
-                <Hash className="w-3 h-3 text-accent shrink-0" />
-                <span className="font-medium">{t.tag}</span>
-                <span className="text-muted text-xs tabular-nums">
-                  {formatNum(t.count)} {pluralOps(t.count)}
-                </span>
-              </button>
+                <button
+                  onClick={() => openTag(t.tag)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-panel2 hover:border-accent hover:bg-accent/10 transition-colors"
+                  style={{ fontSize }}
+                >
+                  <Hash className="w-3 h-3 text-accent shrink-0" />
+                  <span className="font-medium">{t.tag}</span>
+                  <span className="text-muted text-xs tabular-nums">
+                    {formatNum(t.count)} {pluralOps(t.count)}
+                  </span>
+                </button>
+              </Tooltip>
             );
           })}
         </div>
