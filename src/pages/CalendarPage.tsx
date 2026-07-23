@@ -1,14 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, MousePointerClick } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
-import { dailyExpenseMap, type DayCell } from "../lib/aggregations";
+import { dailyExpenseMap, transferTotals, type DayCell } from "../lib/aggregations";
+import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
+import { plannedOps } from "../lib/plannedOps";
+import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { formatMoney, formatDate, formatNum, ymdKey } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { Tooltip } from "../components/Tooltip";
 
 const WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
 const MONTHS = [
@@ -62,12 +66,41 @@ function binIdx(v: number, thresholds: number[], paletteSize: number): number {
 
 export function CalendarPage() {
   const transactions = useDataStore((s) => s.transactions);
-  const base = useDataStore((s) => s.rates.base);
+  const rates = useDataStore((s) => s.rates);
+  const base = rates.base;
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const showDrill = useDrillStore((s) => s.show);
 
   const [kind, setKind] = useState<"expense" | "income">("expense");
+
+  // Titles of accounts marked «накопительный» — for the «Накопления» tile
+  // (issue #48, reusing the transfer/savings rule from #42). Empty in CSV mode.
+  const [savingsAccounts, setSavingsAccounts] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    getLiveAccountsFromCache().then((live) => {
+      if (cancelled || !live) return;
+      setSavingsAccounts(new Set(live.filter((a) => a.savings).map((a) => a.title)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [transactions]);
+
+  // Planned / forecast operations from Zenmoney (issue #47) — shown here as a
+  // reference figure under the yearly totals (issue #48).
+  const [zenCache, setZenCache] = useState<ZenCache | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadZenCache().then((c) => {
+      if (!cancelled) setZenCache(c);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [transactions]);
+  const planned = useMemo(() => plannedOps(zenCache, rates), [zenCache, rates]);
 
   // The calendar's own year selector IS the time axis here, so the global
   // *date range* must not constrain it — otherwise the default "current
@@ -116,6 +149,28 @@ export function CalendarPage() {
     const thresholds = buildThresholds(values, 8);
     return { total, totalInc, count, max, activeDays, thresholds };
   }, [dayMap, year, kind]);
+
+  // «Накопления» за год: переводы НА накопительные счета минус переводы С них
+  // (перевод между двумя накопительными даёт ноль) — как в разделе «Операции».
+  const savingsYear = useMemo(() => {
+    const yearTxs = filtered.filter((t) => t.date.startsWith(String(year)));
+    return transferTotals(yearTxs, savingsAccounts).savings;
+  }, [filtered, year, savingsAccounts]);
+
+  // Планируемые / прогнозные суммы за год — справочно под годовыми итогами.
+  const plannedYear = useMemo(() => {
+    const inYear = planned.filter((p) => p.date.startsWith(String(year)));
+    const sum = (k: "expense" | "income", forecast: boolean) =>
+      inYear
+        .filter((p) => p.kind === k && p.forecast === forecast)
+        .reduce((s, p) => s + p.amountBase, 0);
+    return {
+      planExpense: sum("expense", false),
+      planIncome: sum("income", false),
+      fcExpense: sum("expense", true),
+      fcIncome: sum("income", true),
+    };
+  }, [planned, year]);
 
   function openDay(date: string) {
     const txs = filtered.filter((t) => t.date === date);
@@ -174,18 +229,34 @@ export function CalendarPage() {
       />
       <GlobalFilters showDateRange={false} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="card card-pad">
           <div className="label mb-1">Расходы за {year}</div>
-          <div className="stat-num text-expense">
+          <YearValue
+            tone="text-expense"
+            tip={plannedTip(plannedYear.planExpense, plannedYear.fcExpense, base)}
+          >
             {formatMoney(yearStats.total, base)}
-          </div>
+          </YearValue>
         </div>
         <div className="card card-pad">
           <div className="label mb-1">Доходы за {year}</div>
-          <div className="stat-num text-income">
+          <YearValue
+            tone="text-income"
+            tip={plannedTip(plannedYear.planIncome, plannedYear.fcIncome, base)}
+          >
             {formatMoney(yearStats.totalInc, base)}
-          </div>
+          </YearValue>
+        </div>
+        {/* «Накопления» за год (issue #48) — сумма из правила #42. */}
+        <div className="card card-pad">
+          <div className="label mb-1">Накопления за {year}</div>
+          <YearValue
+            tone={savingsYear > 0 ? "text-income" : savingsYear < 0 ? "text-expense" : ""}
+            tip="Переводы НА накопительные счета минус переводы С них за год. Перевод между двумя накопительными счетами даёт ноль. Начальные остатки не учитываются — только переводы."
+          >
+            {formatMoney(savingsYear, base, { signed: true })}
+          </YearValue>
         </div>
         <div className="card card-pad">
           <div className="label mb-1">Операций</div>
@@ -229,6 +300,30 @@ export function CalendarPage() {
       </div>
     </div>
   );
+}
+
+/** Tooltip text with the planned (and, if any, forecast) operation sums from
+ *  Zenmoney for a year — moved off the tile face into a hover (issue #48). */
+function plannedTip(plan: number, forecast: number, base: string): string | null {
+  const parts: string[] = [];
+  if (plan > 0) parts.push(`Планируется по Дзен-мани: ${formatMoney(plan, base)}`);
+  if (forecast > 0) parts.push(`Прогноз Дзен-мани: ${formatMoney(forecast, base)}`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** Yearly headline number; when `tip` is set the value gets a hover tooltip
+ *  (and a help cursor) instead of a caption line under it. */
+function YearValue({
+  tone,
+  tip,
+  children,
+}: {
+  tone?: string;
+  tip?: string | null;
+  children: React.ReactNode;
+}) {
+  const num = <div className={`stat-num ${tone ?? ""} ${tip ? "cursor-help" : ""}`}>{children}</div>;
+  return tip ? <Tooltip content={tip}>{num}</Tooltip> : num;
 }
 
 function MonthGrid({
