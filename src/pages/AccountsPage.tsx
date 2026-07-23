@@ -58,6 +58,7 @@ import {
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { Stat } from "../components/Stat";
 import { Sparkline } from "../components/Sparkline";
 import { AccountLogo } from "../components/AccountLogo";
 import { DateField } from "../components/DateField";
@@ -472,36 +473,30 @@ export function AccountsPage() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Совокупный баланс</div>
-          <div className={`stat-num ${lastNetWorth >= 0 ? "text-income" : "text-expense"}`}>
-            {formatMoney(lastNetWorth, base, { signed: true })}
-          </div>
-          <div className="text-xs text-muted mt-1">
-            {scope === "all" ? "Вся история" : "В пределах фильтра"}
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Пиковое значение</div>
-          <div className="stat-num text-accent">
-            {formatMoney(peakNetWorth, base)}
-          </div>
-          <div className="text-xs text-muted mt-1">Максимум за период графика</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Доходы (фильтр)</div>
-          <div className="stat-num text-income">
-            {formatMoney(totalIncome, base)}
-          </div>
-          <div className="text-xs text-muted mt-1">Без переводов между счетами</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Расходы (фильтр)</div>
-          <div className="stat-num text-expense">
-            {formatMoney(totalExpense, base)}
-          </div>
-          <div className="text-xs text-muted mt-1">Без переводов между счетами</div>
-        </div>
+        <Stat
+          label="Совокупный баланс"
+          tone={lastNetWorth >= 0 ? "income" : "expense"}
+          value={formatMoney(lastNetWorth, base, { signed: true })}
+          hint={scope === "all" ? "Вся история" : "В пределах фильтра"}
+        />
+        <Stat
+          label="Пиковое значение"
+          tone="accent"
+          value={formatMoney(peakNetWorth, base)}
+          hint="Максимум за период графика"
+        />
+        <Stat
+          label="Доходы (фильтр)"
+          tone="income"
+          value={formatMoney(totalIncome, base)}
+          hint="Без переводов между счетами"
+        />
+        <Stat
+          label="Расходы (фильтр)"
+          tone="expense"
+          value={formatMoney(totalExpense, base)}
+          hint="Без переводов между счетами"
+        />
       </div>
 
       <div className="card card-pad">
@@ -660,27 +655,23 @@ export function AccountsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Чистая дельта (фильтр)</div>
-          <div
-            className={`stat-num ${totalNet >= 0 ? "text-income" : "text-expense"}`}
-          >
-            {formatMoney(totalNet, base, { signed: true })}
-          </div>
-          <div className="text-xs text-muted mt-1">По текущим фильтрам</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Чистая дельта (вся история)</div>
-          <div className={`stat-num ${totalAllAccounts >= 0 ? "text-income" : "text-expense"}`}>
-            {formatMoney(totalAllAccounts, base, { signed: true })}
-          </div>
-          <div className="text-xs text-muted mt-1">Без фильтров</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Счетов</div>
-          <div className="stat-num">{accountsAll.length}</div>
-          <div className="text-xs text-muted mt-1">{accounts.length} в фильтре</div>
-        </div>
+        <Stat
+          label="Чистая дельта (фильтр)"
+          tone={totalNet >= 0 ? "income" : "expense"}
+          value={formatMoney(totalNet, base, { signed: true })}
+          hint="По текущим фильтрам"
+        />
+        <Stat
+          label="Чистая дельта (вся история)"
+          tone={totalAllAccounts >= 0 ? "income" : "expense"}
+          value={formatMoney(totalAllAccounts, base, { signed: true })}
+          hint="Без фильтров"
+        />
+        <Stat
+          label="Счетов"
+          value={accountsAll.length}
+          hint={`${accounts.length} в фильтре`}
+        />
       </div>
 
       <div className="card card-pad">

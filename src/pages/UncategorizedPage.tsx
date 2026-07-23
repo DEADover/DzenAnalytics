@@ -13,6 +13,7 @@ import { formatMoney, formatDate, formatNum, formatPct } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
+import { Stat } from "../components/Stat";
 import { SortableTable, type Column } from "../components/SortableTable";
 import type { Transaction } from "../types";
 import type { RuleField } from "../store/useCategoryRulesStore";
@@ -159,21 +160,13 @@ export function UncategorizedPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Найдено</div>
-          <div className="stat-num">{formatNum(list.length)}</div>
-          <div className="text-xs text-muted mt-1">из {formatNum(transactions.length)} всего</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Сумма</div>
-          <div className="stat-num text-warn">
-            {formatMoney(total, base)}
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Доля от всех потоков</div>
-          <div className="stat-num">{(share * 100).toFixed(1)}%</div>
-        </div>
+        <Stat
+          label="Найдено"
+          value={formatNum(list.length)}
+          hint={`из ${formatNum(transactions.length)} всего`}
+        />
+        <Stat label="Сумма" value={formatMoney(total, base)} tone="warn" />
+        <Stat label="Доля от всех потоков" value={`${(share * 100).toFixed(1)}%`} />
       </div>
 
       {/* Smart suggestions */}

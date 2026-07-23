@@ -133,7 +133,7 @@ function Delta({ a, b, invert = false }: { a: number; b: number; invert?: boolea
   const tone = positive ? "text-income" : diff === 0 ? "text-muted" : "text-expense";
   const Icon = diff > 0 ? ArrowUpRight : diff < 0 ? ArrowDownRight : Minus;
   return (
-    <span className={`text-xs flex items-center gap-1 ${tone}`}>
+    <span className={`text-xs flex items-center gap-1 tabular-nums ${tone}`}>
       <Icon className="w-3 h-3" />
       {pct !== null ? formatPct(pct, 1) : `${diff >= 0 ? "+" : ""}${formatNum(diff)}`}
     </span>

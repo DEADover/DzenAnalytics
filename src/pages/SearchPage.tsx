@@ -7,6 +7,7 @@ import type { TransactionEdit } from "../store/useEditsStore";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
+import { Stat } from "../components/Stat";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { DateField } from "../components/DateField";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
@@ -314,33 +315,24 @@ export function SearchPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Найдено</div>
-          <div className="stat-num">
-            {formatNum(matches.length)}
-            <span className="text-muted text-sm font-normal ml-2">
-              из {formatNum(transactions.length)}
-            </span>
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Доходы</div>
-          <div className="stat-num text-income">
-            {formatMoney(totals.inc, base)}
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Расходы</div>
-          <div className="stat-num text-expense">
-            {formatMoney(totals.exp, base)}
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Чистый</div>
-          <div className={`stat-num ${totals.net >= 0 ? "text-income" : "text-expense"}`}>
-            {formatMoney(totals.net, base, { signed: true })}
-          </div>
-        </div>
+        <Stat
+          label="Найдено"
+          value={
+            <>
+              {formatNum(matches.length)}
+              <span className="text-muted text-sm font-normal ml-2">
+                из {formatNum(transactions.length)}
+              </span>
+            </>
+          }
+        />
+        <Stat label="Доходы" value={formatMoney(totals.inc, base)} tone="income" />
+        <Stat label="Расходы" value={formatMoney(totals.exp, base)} tone="expense" />
+        <Stat
+          label="Чистый"
+          value={formatMoney(totals.net, base, { signed: true })}
+          tone={totals.net >= 0 ? "income" : "expense"}
+        />
       </div>
 
       {matches.length > 0 && (

@@ -10,6 +10,7 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { formatMoney, formatDate, monthLabel } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
+import { Stat } from "../components/Stat";
 
 export function AnomaliesPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -106,24 +107,23 @@ export function AnomaliesPage() {
       <GlobalFilters />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Аномальных операций</div>
-          <div className="stat-num text-warn">{anomalies.length}</div>
-          <div className="text-xs text-muted mt-1">σ &gt; {threshold}</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Их сумма</div>
-          <div className="stat-num text-expense">
-            {formatMoney(totalAnomalyAmount, base)}
-          </div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Всплески по категориям</div>
-          <div className="stat-num text-warn">{spikes.length}</div>
-          <div className="text-xs text-muted mt-1">
-            Превышение {formatMoney(totalSpikesDelta, base)}
-          </div>
-        </div>
+        <Stat
+          label="Аномальных операций"
+          value={anomalies.length}
+          tone="warn"
+          hint={<>σ &gt; {threshold}</>}
+        />
+        <Stat
+          label="Их сумма"
+          value={formatMoney(totalAnomalyAmount, base)}
+          tone="expense"
+        />
+        <Stat
+          label="Всплески по категориям"
+          value={spikes.length}
+          tone="warn"
+          hint={<>Превышение {formatMoney(totalSpikesDelta, base)}</>}
+        />
       </div>
 
       <div className="flex gap-2 border-b border-border">

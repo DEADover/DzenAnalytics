@@ -311,9 +311,9 @@ export function WhatIfPage() {
               Прогноз капитала
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <Stat label="через 1 год" value={out.projected1y} base={base} />
-              <Stat label="через 5 лет" value={out.projected5y} base={base} />
-              <Stat label="через 10 лет" value={out.projected10y} base={base} />
+              <MoneyStat label="через 1 год" value={out.projected1y} base={base} />
+              <MoneyStat label="через 5 лет" value={out.projected5y} base={base} />
+              <MoneyStat label="через 10 лет" value={out.projected10y} base={base} />
             </div>
             <div className="text-[11px] text-muted mt-3">
               Линейный прогноз без учёта доходности инвестиций. Реальные суммы при
@@ -388,7 +388,9 @@ function Slider({
   );
 }
 
-function Stat({ label, value, base }: { label: string; value: number; base: string }) {
+// Inline label/value pair used INSIDE a card (not a standalone card tile), so it
+// deliberately does not use the design-system `Stat` (which renders its own card).
+function MoneyStat({ label, value, base }: { label: string; value: number; base: string }) {
   return (
     <div>
       <div className="label">{label}</div>

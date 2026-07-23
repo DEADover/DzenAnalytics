@@ -11,6 +11,7 @@ import { kindColorClass, kindGlyphClass, kindLabel, kindSignGlyph } from "../lib
 import { EmptyState } from "../components/EmptyState";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { DuplicateExclusionsModal } from "../components/DuplicateExclusionsModal";
+import { Stat } from "../components/Stat";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 
 export function DuplicatesPage() {
@@ -138,23 +139,14 @@ export function DuplicatesPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="card card-pad">
-          <div className="label mb-1">Групп дубликатов</div>
-          <div className="stat-num text-warn">{groups.length}</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Всего операций в группах</div>
-          <div className="stat-num">{formatNum(totalCount)}</div>
-        </div>
-        <div className="card card-pad">
-          <div className="label mb-1">Лишняя сумма</div>
-          <div className="stat-num text-expense">
-            {formatMoney(totalDuplicateAmount, base)}
-          </div>
-          <div className="text-xs text-muted mt-1">
-            если все «лишние» копии — действительно дубли
-          </div>
-        </div>
+        <Stat label="Групп дубликатов" value={groups.length} tone="warn" />
+        <Stat label="Всего операций в группах" value={formatNum(totalCount)} />
+        <Stat
+          label="Лишняя сумма"
+          value={formatMoney(totalDuplicateAmount, base)}
+          tone="expense"
+          hint="если все «лишние» копии — действительно дубли"
+        />
       </div>
 
 

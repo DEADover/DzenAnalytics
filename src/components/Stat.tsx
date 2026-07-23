@@ -11,7 +11,7 @@ interface Props {
    *  over `hint` for long «как это считается» texts: in a dense metric row one
    *  wordy tile stretches the whole grid. */
   tooltip?: ReactNode;
-  tone?: "default" | "income" | "expense" | "warn";
+  tone?: "default" | "income" | "expense" | "warn" | "accent" | "accent2";
   icon?: ReactNode;
   /** Compact layout — smaller padding/number, for dense metric rows. */
   dense?: boolean;
@@ -23,6 +23,8 @@ export function Stat({ label, value, hint, tooltip, tone = "default", icon, dens
     income: "text-income",
     expense: "text-expense",
     warn: "text-warn",
+    accent: "text-accent",
+    accent2: "text-accent2",
   }[tone];
   const card = (
     <div className={clsx("card", dense ? "p-3" : "card-pad", tooltip && "cursor-help")}>
