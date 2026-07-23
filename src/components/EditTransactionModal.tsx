@@ -934,6 +934,9 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-tx-title"
         // Fixed height (capped at 90vh on short screens) so the card never
         // changes size between operation kinds — only the inner body scrolls.
         // Keeps the modal from "jumping" while paging through ops with ←/→.
@@ -941,7 +944,7 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
         className="card w-full max-w-lg h-[740px] max-h-[90vh] flex flex-col overflow-hidden"
       >
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
-          <div className="font-semibold flex items-center gap-2">
+          <div id="edit-tx-title" className="font-semibold flex items-center gap-2">
             {isCreate ? (
               <Plus className="w-4 h-4 text-accent2" />
             ) : (
@@ -960,7 +963,11 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
                 перелистывание
               </span>
             )}
-            <button onClick={onClose} className="text-muted hover:text-text">
+            <button
+              onClick={onClose}
+              aria-label="Закрыть"
+              className="text-muted hover:text-text"
+            >
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -1403,7 +1410,7 @@ function KindButton({
         : tone === "accent2"
           ? "bg-accent2 text-white"
           : tone === "slate"
-            ? "bg-slate-500 text-white"
+            ? "bg-muted text-white"
             : "bg-warn text-white";
   return (
     <button

@@ -115,6 +115,10 @@ h2,
   .btn-danger {
     @apply btn bg-expense/10 text-expense hover:bg-expense/20 border border-expense/30;
   }
+  /* Solid warning action (e.g. the confirm button of a «warning»-tone dialog). */
+  .btn-warn {
+    @apply btn bg-warn text-white hover:opacity-90;
+  }
   .input {
     @apply w-full bg-panel2 text-text placeholder:text-muted px-3 py-2 rounded-lg
            border border-border transition-colors

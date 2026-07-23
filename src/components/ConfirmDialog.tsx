@@ -69,14 +69,7 @@ export function ConfirmDialog() {
 
   const tone = options.tone || "primary";
   const confirmClass =
-    tone === "danger"
-      ? "btn-danger"
-      : tone === "warning"
-        ? // No btn-warn utility in the design system — compose one
-          // from the warn token. Visually distinct from danger but
-          // less alarming.
-          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-warn text-white hover:opacity-90 transition"
-        : "btn-primary";
+    tone === "danger" ? "btn-danger" : tone === "warning" ? "btn-warn" : "btn-primary";
 
   return (
     <div
@@ -140,7 +133,7 @@ export function ConfirmDialog() {
             type="button"
             onClick={() => close(false)}
             className="shrink-0 text-muted hover:text-text"
-            title="Закрыть"
+            aria-label="Закрыть"
           >
             <X className="w-4 h-4" />
           </button>
