@@ -3,6 +3,9 @@ import {
   X,
   Search,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeftRight,
   Download,
   Sparkles,
   Tag,
@@ -209,6 +212,21 @@ export function TransactionsDrawer() {
     }
     return { inc, exp, net: inc - exp };
   }, [sorted]);
+
+  // Sums of the currently-selected rows, split by kind — shown in the bulk bar.
+  const selectedTotals = useMemo(() => {
+    let inc = 0;
+    let exp = 0;
+    let xfer = 0;
+    for (const t of sorted) {
+      if (!selected.has(t.id)) continue;
+      if (t.kind === "income") inc += t.amountBase;
+      else if (t.kind === "expense") exp += t.amountBase;
+      else if (t.kind === "refund") exp -= t.amountBase;
+      else if (t.kind === "transfer") xfer += t.amountBase;
+    }
+    return { inc, exp, xfer };
+  }, [sorted, selected]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -529,6 +547,28 @@ export function TransactionsDrawer() {
           <span className="text-sm">
             Выбрано: <strong className="tabular-nums">{formatNum(selected.size)}</strong>
           </span>
+          {(selectedTotals.inc > 0 || selectedTotals.exp > 0 || selectedTotals.xfer > 0) && (
+            <span className="flex items-center gap-3 text-sm tabular-nums border-l border-border pl-3">
+              {selectedTotals.inc > 0 && (
+                <span className="flex items-center gap-1 text-income">
+                  <ArrowUp className="w-3.5 h-3.5" />
+                  {formatMoney(selectedTotals.inc, base)}
+                </span>
+              )}
+              {selectedTotals.exp > 0 && (
+                <span className="flex items-center gap-1 text-expense">
+                  <ArrowDown className="w-3.5 h-3.5" />
+                  {formatMoney(selectedTotals.exp, base)}
+                </span>
+              )}
+              {selectedTotals.xfer > 0 && (
+                <span className="flex items-center gap-1 text-muted">
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  {formatMoney(selectedTotals.xfer, base)}
+                </span>
+              )}
+            </span>
+          )}
           <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
             <Pencil className="w-3.5 h-3.5" />
             Изменить

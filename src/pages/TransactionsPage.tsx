@@ -310,6 +310,23 @@ export function TransactionsPage() {
     setSelected(allSelected ? new Set() : new Set(searched.map((t) => t.id)));
   }
 
+  // Sums (in base currency) of the currently-selected rows, split by kind — so
+  // the bulk bar shows how much income / expense / transfer is in the selection.
+  // Refunds subtract from expense, as everywhere else.
+  const selectedTotals = useMemo(() => {
+    let inc = 0;
+    let exp = 0;
+    let xfer = 0;
+    for (const t of searched) {
+      if (!selected.has(t.id)) continue;
+      if (t.kind === "income") inc += t.amountBase;
+      else if (t.kind === "expense") exp += t.amountBase;
+      else if (t.kind === "refund") exp -= t.amountBase;
+      else if (t.kind === "transfer") xfer += t.amountBase;
+    }
+    return { inc, exp, xfer };
+  }, [searched, selected]);
+
   const visible = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -661,6 +678,28 @@ export function TransactionsPage() {
           <span className="text-sm">
             Выбрано: <strong className="tabular-nums">{formatNum(selected.size)}</strong>
           </span>
+          {(selectedTotals.inc > 0 || selectedTotals.exp > 0 || selectedTotals.xfer > 0) && (
+            <span className="flex items-center gap-3 text-sm tabular-nums border-l border-border pl-3">
+              {selectedTotals.inc > 0 && (
+                <span className="flex items-center gap-1 text-income">
+                  <ArrowUp className="w-3.5 h-3.5" />
+                  {formatMoney(selectedTotals.inc, base)}
+                </span>
+              )}
+              {selectedTotals.exp > 0 && (
+                <span className="flex items-center gap-1 text-expense">
+                  <ArrowDown className="w-3.5 h-3.5" />
+                  {formatMoney(selectedTotals.exp, base)}
+                </span>
+              )}
+              {selectedTotals.xfer > 0 && (
+                <span className="flex items-center gap-1 text-muted">
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  {formatMoney(selectedTotals.xfer, base)}
+                </span>
+              )}
+            </span>
+          )}
           <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
             <Pencil className="w-3.5 h-3.5" />
             Изменить
