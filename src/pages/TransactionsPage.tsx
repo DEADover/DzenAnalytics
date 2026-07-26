@@ -37,7 +37,7 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { Popover } from "../components/Popover";
 import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
-import { formatMoney, formatNum, displayPayee, secondaryPayee, crossCurrencyReceived } from "../lib/format";
+import { formatMoney, formatNum, displayPayee, secondaryPayee, crossCurrencyReceived, payeeSearchText } from "../lib/format";
 import { kindColorClass, kindGlyphClass, kindLabel, kindSignGlyph } from "../lib/txKindStyle";
 import { pluralOps } from "../lib/plural";
 import type { Transaction, TxKind } from "../types";
@@ -229,7 +229,9 @@ export function TransactionsPage() {
     const q = pageSearch.trim().toLowerCase();
     if (!q) return filtered;
     return filtered.filter((t) =>
-      `${t.payee} ${t.comment} ${t.categoryFull} ${t.account}`.toLowerCase().includes(q)
+      `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${t.account}`
+        .toLowerCase()
+        .includes(q)
     );
   }, [filtered, pageSearch]);
 
@@ -571,7 +573,7 @@ export function TransactionsPage() {
                 : "Удалённые операции"
             }
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-4 h-4" />
             {deletedCount > 0 && (
               <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-expense text-white text-[10px] leading-4 text-center tabular-nums">
                 {deletedCount}
@@ -706,11 +708,11 @@ export function TransactionsPage() {
           {/* Row 2: actions. */}
           <div className="flex items-center justify-center gap-2 flex-wrap px-4 pb-2.5 pt-2 border-t border-border">
             <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
-              <Pencil className="w-3.5 h-3.5" />
+              <Pencil className="w-4 h-4" />
               Изменить
             </button>
             <button onClick={deleteBulk} className="btn-danger text-sm">
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
               Удалить
             </button>
             <button
@@ -782,7 +784,7 @@ function HeaderRow({
       <div>Контрагент</div>
       <div>Комментарий</div>
       <div className="text-right">Сумма</div>
-      <div className="text-right">Операции</div>
+      <div className="text-center">Действия</div>
     </div>
   );
 }
@@ -1022,28 +1024,28 @@ function Row({
           ) : null;
         })()}
       </div>
-      <div className="flex items-center justify-end gap-0.5">
+      <div className="flex items-center justify-center gap-0.5">
         <button
           onClick={(e) => {
             e.stopPropagation();
             onEdit();
           }}
-          className="p-1 text-muted/50 hover:text-text transition-colors"
+          className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 transition-colors"
           title="Редактировать"
           aria-label="Редактировать операцию"
         >
-          <Pencil className="w-3.5 h-3.5" />
+          <Pencil className="w-4 h-4" />
         </button>
         <button
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
           }}
-          className="p-1 text-muted/50 hover:text-expense transition-colors"
+          className="p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10 transition-colors"
           title="Удалить"
           aria-label="Удалить операцию"
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <Trash2 className="w-4 h-4" />
         </button>
       </div>
     </div>

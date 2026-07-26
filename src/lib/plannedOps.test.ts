@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { plannedOps } from "./plannedOps";
+import { plannedOps, plannedBreakdown } from "./plannedOps";
 import { backfillEntities, cacheVersionOf, CACHE_SCHEMA_VERSION, type ZenCache } from "./zenmoneyCache";
 import type {
   ZenAccount,
@@ -166,5 +166,27 @@ describe("backfillEntities — одноразовые доливки по вер
   it("кэш текущей версии → доливать нечего", () => {
     const current = { ...base, cacheSchemaVersion: CACHE_SCHEMA_VERSION };
     expect(backfillEntities(current)).toEqual([]);
+  });
+});
+
+describe("plannedBreakdown", () => {
+  it("returns both sides when the year has plan and forecast", () => {
+    expect(plannedBreakdown(1200, 340)).toEqual([
+      { label: "План", amount: 1200 },
+      { label: "Прогноз", amount: 340 },
+    ]);
+  });
+
+  it("keeps only the side that has something", () => {
+    expect(plannedBreakdown(1200, 0)).toEqual([{ label: "План", amount: 1200 }]);
+    expect(plannedBreakdown(0, 340)).toEqual([{ label: "Прогноз", amount: 340 }]);
+  });
+
+  it("returns nothing when there is nothing scheduled — the note stays hidden", () => {
+    expect(plannedBreakdown(0, 0)).toEqual([]);
+  });
+
+  it("treats a negative sum as nothing (these totals are unsigned)", () => {
+    expect(plannedBreakdown(-5, -1)).toEqual([]);
   });
 });

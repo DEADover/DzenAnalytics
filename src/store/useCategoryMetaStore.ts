@@ -16,6 +16,11 @@ interface State {
    *  needs/wants source). Used by the Categories editor so the split updates
    *  instantly; the real value rides to the cloud via the tag-edit overlay. */
   setRequired: (category: string, required: boolean | null) => Promise<void>;
+  /** Optimistically patch a category's display meta (colour / icon / type) by
+   *  its meta key (root title or «Parent / Sub»), so dots and charts update the
+   *  instant the editor saves — the real values ride to the cloud via the
+   *  tag-edit overlay and are re-derived on the next sync. */
+  patchMeta: (category: string, partial: Partial<CategoryMeta>) => Promise<void>;
   clear: () => Promise<void>;
 }
 
@@ -44,6 +49,19 @@ export const useCategoryMetaStore = create<State>((set, get) => ({
       [category]: {
         ...(cur || { color: null, icon: null, picture: null }),
         required,
+      },
+    };
+    await db.saveJSON(KEY, next);
+    set({ meta: next });
+  },
+
+  patchMeta: async (category, partial) => {
+    const cur = get().meta[category];
+    const next = {
+      ...get().meta,
+      [category]: {
+        ...(cur || { color: null, icon: null, picture: null }),
+        ...partial,
       },
     };
     await db.saveJSON(KEY, next);

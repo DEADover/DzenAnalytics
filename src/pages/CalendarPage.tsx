@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, MousePointerClick } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { dailyExpenseMap, transferTotals, type DayCell } from "../lib/aggregations";
 import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
-import { plannedOps } from "../lib/plannedOps";
+import clsx from "clsx";
+import { plannedOps, plannedBreakdown } from "../lib/plannedOps";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { formatMoney, formatDate, formatNum, ymdKey } from "../lib/format";
+import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
@@ -220,10 +222,6 @@ export function CalendarPage() {
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
-            <span className="inline-flex items-center gap-1 text-xs text-muted">
-              <MousePointerClick className="w-3.5 h-3.5" />
-              Кликабельный
-            </span>
           </div>
         }
       />
@@ -232,28 +230,45 @@ export function CalendarPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="card card-pad">
           <div className="label mb-1">Расходы за {year}</div>
-          <YearValue
-            tone="text-expense"
-            tip={plannedTip(plannedYear.planExpense, plannedYear.fcExpense, base)}
-          >
+          <YearValue tone="text-expense">
             {formatMoney(yearStats.total, base)}
           </YearValue>
+          <PlannedNote
+            plan={plannedYear.planExpense}
+            forecast={plannedYear.fcExpense}
+            base={base}
+          />
         </div>
         <div className="card card-pad">
           <div className="label mb-1">Доходы за {year}</div>
-          <YearValue
-            tone="text-income"
-            tip={plannedTip(plannedYear.planIncome, plannedYear.fcIncome, base)}
-          >
+          <YearValue tone="text-income">
             {formatMoney(yearStats.totalInc, base)}
           </YearValue>
+          <PlannedNote
+            plan={plannedYear.planIncome}
+            forecast={plannedYear.fcIncome}
+            base={base}
+          />
         </div>
         {/* «Накопления» за год (issue #48) — сумма из правила #42. */}
         <div className="card card-pad">
           <div className="label mb-1">Накопления за {year}</div>
           <YearValue
             tone={savingsYear > 0 ? "text-income" : savingsYear < 0 ? "text-expense" : ""}
-            tip="Переводы НА накопительные счета минус переводы С них за год. Перевод между двумя накопительными счетами даёт ноль. Начальные остатки не учитываются — только переводы."
+            tip={
+              <div className="space-y-1">
+                <div className="font-medium">Как считается</div>
+                <div className="text-muted">
+                  Переводы НА накопительные счета минус переводы С них за год.
+                </div>
+                <div className="text-muted">
+                  Перевод между двумя накопительными даёт ноль.
+                </div>
+                <div className="text-muted">
+                  Начальные остатки не учитываются — только переводы.
+                </div>
+              </div>
+            }
           >
             {formatMoney(savingsYear, base, { signed: true })}
           </YearValue>
@@ -265,7 +280,8 @@ export function CalendarPage() {
         <div className="card card-pad">
           <div className="label mb-1">Активных дней</div>
           <div className="stat-num">
-            {yearStats.activeDays}<span className="text-muted text-sm ml-1">/ 365</span>
+            {yearStats.activeDays}
+            <span className="text-muted text-sm ml-1">/ {daysInYear(year)}</span>
           </div>
         </div>
       </div>
@@ -302,13 +318,51 @@ export function CalendarPage() {
   );
 }
 
-/** Tooltip text with the planned (and, if any, forecast) operation sums from
- *  Zenmoney for a year — moved off the tile face into a hover (issue #48). */
-function plannedTip(plan: number, forecast: number, base: string): string | null {
-  const parts: string[] = [];
-  if (plan > 0) parts.push(`Планируется по Дзен-мани: ${formatMoney(plan, base)}`);
-  if (forecast > 0) parts.push(`Прогноз Дзен-мани: ${formatMoney(forecast, base)}`);
-  return parts.length ? parts.join(" · ") : null;
+/**
+ * «Справочно» line under a year total: what Дзен-мани still has scheduled for
+ * this year (issue #48). Lives on the tile face rather than in a tooltip —
+ * a hover-only number is a number nobody finds.
+ *
+ * Renders nothing at all when there's nothing scheduled, so accounts that don't
+ * use планы/прогнозы don't carry a row of zeroes.
+ */
+function PlannedNote({
+  plan,
+  forecast,
+  base,
+}: {
+  plan: number;
+  forecast: number;
+  base: string;
+}) {
+  const parts = plannedBreakdown(plan, forecast);
+  if (parts.length === 0) return null;
+  return (
+    <Tooltip
+      content={
+        <div className="space-y-1">
+          <div className="font-medium">Ещё не наступившие операции</div>
+          <div>
+            <span className="text-text">План</span>
+            <span className="text-muted"> — вы запланировали их сами</span>
+          </div>
+          <div>
+            <span className="text-text">Прогноз</span>
+            <span className="text-muted"> — Дзен предсказал по регулярным платежам</span>
+          </div>
+        </div>
+      }
+    >
+      <div className="text-xs text-muted mt-1 tabular-nums cursor-help w-max">
+        {parts.map((p, i) => (
+          <span key={p.label}>
+            {i > 0 && " · "}
+            {p.label} {formatMoney(p.amount, base)}
+          </span>
+        ))}
+      </div>
+    </Tooltip>
+  );
 }
 
 /** Yearly headline number; when `tip` is set the value gets a hover tooltip
@@ -319,7 +373,7 @@ function YearValue({
   children,
 }: {
   tone?: string;
-  tip?: string | null;
+  tip?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const num = <div className={`stat-num ${tone ?? ""} ${tip ? "cursor-help" : ""}`}>{children}</div>;
@@ -383,16 +437,22 @@ function MonthGrid({
           const idx = binIdx(v, thresholds, palette.length);
           const bg = palette[idx];
           const isStrong = idx >= Math.ceil(palette.length * 0.55);
-          const tooltip = c.cell
-            ? `${formatDate(c.date)}: ${formatMoney(v, base)} · ${c.cell.count} оп.`
-            : formatDate(c.date);
-          return (
+          // A day can hold operations and still be colourless — the heatmap
+          // shows ONE side (расходы or доходы), so a day with income only is a
+          // flat zero while «Расходы» is selected. It's still clickable, so mark
+          // it: otherwise it looks dead and the click reads as broken.
+          const otherKindOnly = !!c.cell && v === 0;
+          const cell = (
             <button
               key={i}
               onClick={() => c.cell && onClick(c.date)}
               disabled={!c.cell}
-              title={tooltip}
-              className="aspect-square rounded-sm border border-border/40 text-[10px] flex items-center justify-center transition-transform hover:scale-110 hover:border-accent disabled:hover:scale-100 disabled:hover:border-border/40 disabled:cursor-default"
+              className={clsx(
+                "aspect-square rounded-sm text-[10px] flex items-center justify-center transition-transform hover:scale-110 hover:border-accent disabled:hover:scale-100 disabled:cursor-default",
+                otherKindOnly
+                  ? "border border-dashed border-accent/50"
+                  : "border border-border/40 disabled:hover:border-border/40"
+              )}
               style={{ background: bg }}
             >
               <span className={isStrong ? "text-white font-medium" : v > 0 ? "text-text" : "text-muted"}>
@@ -400,8 +460,55 @@ function MonthGrid({
               </span>
             </button>
           );
+          // Only days that HAVE operations get a tooltip: a disabled button
+          // fires no mouse events, so a bubble on an empty day would never show
+          // anyway — and its date is already readable from the grid.
+          if (!c.cell) return cell;
+          return (
+            <Tooltip key={i} content={<DayTip date={c.date} value={v} count={c.cell.count} kind={kind} base={base} />}>
+              {cell}
+            </Tooltip>
+          );
         })}
       </div>
     </div>
   );
+}
+
+/**
+ * Body of a day's tooltip: date on top, then the side the heatmap is showing,
+ * then how many operations. Three short lines beat one long string — the day
+ * cells are 20 px wide, so a single-line bubble ends up wider than the month.
+ */
+function DayTip({
+  date,
+  value,
+  count,
+  kind,
+  base,
+}: {
+  date: string;
+  value: number;
+  count: number;
+  kind: "expense" | "income";
+  base: string;
+}) {
+  const side = kind === "expense" ? "Расходы" : "Доходы";
+  return (
+    <div className="space-y-0.5">
+      <div className="font-medium">{formatDate(date)}</div>
+      <div className={value > 0 ? (kind === "expense" ? "text-expense" : "text-income") : "text-muted"}>
+        {value > 0 ? `${side}: ${formatMoney(value, base)}` : `${side.toLowerCase()} отсутствуют`}
+      </div>
+      <div className="text-muted">
+        {formatNum(count)} {pluralRu(count, ["операция", "операции", "операций"])}
+      </div>
+    </div>
+  );
+}
+
+/** 366 in a leap year — the «активных дней» denominator must match the grid
+ *  actually drawn, which does include 29 February. */
+function daysInYear(year: number): number {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
 }

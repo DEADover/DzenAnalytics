@@ -25,6 +25,26 @@ export function secondaryPayee(t: Pick<Transaction, "payee" | "brand">): string 
   return payee;
 }
 
+/**
+ * Every counterparty spelling a text search must match: the name the row
+ * DISPLAYS (`brand`, from the контрагенты dictionary) plus the raw bank text
+ * underneath it (`payee`).
+ *
+ * Both are needed because they routinely differ — the dictionary says
+ * «STOLICHKI» while the bank line says «Аптека Столички». Searching only
+ * `payee` hid the majority of a counterparty's operations from a search for the
+ * exact name shown in the column (on a real account, ~26% of all operations
+ * with a counterparty). Shared by the global filter, the Операции table search
+ * and the drawer search so the three can't drift apart again.
+ */
+export function payeeSearchText(t: Pick<Transaction, "payee" | "brand">): string {
+  const brand = (t.brand || "").trim();
+  const payee = (t.payee || "").trim();
+  if (!brand) return payee;
+  if (!payee || payee.toLowerCase() === brand.toLowerCase()) return brand;
+  return `${brand} ${payee}`;
+}
+
 const symbolByCurrency: Record<string, string> = {
   RUB: "₽",
   USD: "$",

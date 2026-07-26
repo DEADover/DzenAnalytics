@@ -116,7 +116,7 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
                   <th className="table-th">Тип</th>
                   <th className="table-th">Категория</th>
                   <th className="table-th text-right">Сумма</th>
-                  <th className="table-th w-6" aria-hidden />
+                  <th className="table-th text-right whitespace-nowrap">Действия</th>
                 </tr>
               </thead>
               <tbody>

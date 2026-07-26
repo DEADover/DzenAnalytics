@@ -9,6 +9,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
+import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../store/useDrillStore";
 import { buildDigestHistory, type DigestEntry } from "../lib/digest";
 import { formatMoney, formatPct, formatDate } from "../lib/format";
@@ -18,7 +19,9 @@ import { PageHeader } from "../components/PageHeader";
 type Tab = "week" | "month";
 
 export function DigestPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Digest summaries are pure income/expense analytics → strip turnover /
+  // off-balance flows the user excluded (#14).
+  const transactions = useAnalyticsTransactions();
   const baseCurrency = useDataStore((s) => s.rates.base);
   const showDrill = useDrillStore((s) => s.show);
 

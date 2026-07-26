@@ -5,6 +5,7 @@ import { Combobox } from "./Combobox";
 import { HashtagTextarea } from "./HashtagTextarea";
 import { pluralOps } from "../lib/plural";
 import { extractHashtags } from "../lib/aggregations";
+import { useCategoryDictionary } from "../hooks/useCategoryDictionary";
 import type { Transaction } from "../types";
 import type { TransactionEdit } from "../store/useEditsStore";
 
@@ -68,10 +69,16 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
     };
   }, []);
 
-  // Option lists from the current dataset.
+  // Categories come from the dictionary as well as the dataset, so a category
+  // created in Справочники can be used before it has a single operation.
+  const dict = useCategoryDictionary();
+
   const { categoryOptions, subcatByCategory, payeeOptions, tagOptions } = useMemo(() => {
-    const cats = new Set<string>();
+    const cats = new Set<string>(dict.roots);
     const subByCat = new Map<string, Set<string>>();
+    for (const [root, subs] of dict.subsByRoot) {
+      subByCat.set(root, new Set(subs));
+    }
     const payees = new Set<string>();
     const tags = new Set<string>();
     for (const t of allTransactions) {
@@ -95,7 +102,7 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
       payeeOptions: Array.from(payees).sort(cmp),
       tagOptions: Array.from(tags).sort(cmp),
     };
-  }, [allTransactions]);
+  }, [allTransactions, dict]);
 
   const canApply =
     category.trim() !== "" || payee.trim() !== "" || comment.trim() !== "";

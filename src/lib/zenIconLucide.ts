@@ -21,7 +21,7 @@ import {
   MapPin, BedDouble, Flower, Tag, type LucideIcon,
 } from "lucide-react";
 
-const ZEN_ICON_LUCIDE: Record<string, LucideIcon> = {
+export const ZEN_ICON_LUCIDE: Record<string, LucideIcon> = {
   "1001_bunch_ingredients": ShoppingCart,
   "1002_diningroom": Utensils,
   "1003_bottle_of_water": GlassWater,
@@ -196,6 +196,20 @@ export function zenIconToLucide(iconId: string | null | undefined): LucideIcon |
   if (!iconId) return null;
   return ZEN_ICON_LUCIDE[iconId] || null;
 }
+
+/** All known Zenmoney icon ids, in their declared order — the grid data for the
+ *  category icon picker. De-duplicated by the mapped Lucide component so the
+ *  picker shows each distinct glyph once (many zen ids share a Lucide icon). */
+export const ZEN_ICON_IDS: string[] = (() => {
+  const seen = new Set<LucideIcon>();
+  const out: string[] = [];
+  for (const [id, icon] of Object.entries(ZEN_ICON_LUCIDE)) {
+    if (seen.has(icon)) continue;
+    seen.add(icon);
+    out.push(id);
+  }
+  return out;
+})();
 
 /** Neutral fallback for a known-but-unmapped (or any) category icon slot. */
 export const FALLBACK_CATEGORY_ICON: LucideIcon = Tag;

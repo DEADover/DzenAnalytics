@@ -113,3 +113,22 @@ export function plannedOps(
   out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   return out;
 }
+
+/**
+ * Sums of the planned / forecast operations of one kind in a year, as the
+ * label-value pairs shown under a year total on the Календарь (issue #48).
+ *
+ * Only non-zero sides appear: an account with nothing scheduled shows no note
+ * at all rather than a row of zeroes. Zero and negative sums are both treated
+ * as "nothing" — these are unsigned totals of one direction, so a negative
+ * value would mean the caller summed the wrong thing.
+ */
+export function plannedBreakdown(
+  plan: number,
+  forecast: number
+): { label: string; amount: number }[] {
+  const out: { label: string; amount: number }[] = [];
+  if (plan > 0) out.push({ label: "План", amount: plan });
+  if (forecast > 0) out.push({ label: "Прогноз", amount: forecast });
+  return out;
+}

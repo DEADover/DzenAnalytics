@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -16,6 +16,7 @@ import {
   type SyncLogStatus,
 } from "../store/useSyncLogStore";
 import { confirm } from "../store/useConfirmStore";
+import { pluralRu } from "../lib/plural";
 
 /**
  * Sync log table.
@@ -43,7 +44,17 @@ import { confirm } from "../store/useConfirmStore";
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 const DEFAULT_PAGE_SIZE = 10;
 
-export function SyncLog() {
+interface SyncLogProps {
+  /** Render bare (no card, lighter heading) — for embedding inside the
+   *  «Двусторонняя синхронизация с Дзен-мани» card instead of standing as its
+   *  own section. */
+  embedded?: boolean;
+  /** Live status (queue size, last push…) shown on the heading line. Rendered
+   *  in a fixed-height slot so the row doesn't jump as the text changes. */
+  status?: ReactNode;
+}
+
+export function SyncLog({ embedded, status }: SyncLogProps = {}) {
   const entries = useSyncLogStore((s) => s.entries);
   const loaded = useSyncLogStore((s) => s.loaded);
   const hydrate = useSyncLogStore((s) => s.hydrate);
@@ -72,6 +83,17 @@ export function SyncLog() {
     [entries, safePage, pageSize]
   );
 
+  // Reserve the chevron slot only when something on THIS page can actually
+  // expand — otherwise every «Тип» cell carried an empty 20px indent that the
+  // header didn't have, so the column read as misaligned.
+  const anyExpandable = useMemo(
+    () =>
+      visible.some(
+        (e) => !!e.error || (e.details?.skipped && e.details.skipped.length > 0)
+      ),
+    [visible]
+  );
+
   function toggle(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -82,15 +104,29 @@ export function SyncLog() {
   }
 
   return (
-    <div className="card card-pad">
+    <div className={embedded ? undefined : "card card-pad"}>
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <div className="flex items-center gap-2">
-          <History className="w-5 h-5 text-accent2" />
-          <span className="font-medium">Лог синхронизаций</span>
+          <History className={embedded ? "w-5 h-5 text-accent" : "w-5 h-5 text-accent2"} />
+          <span className="font-medium">
+            {embedded ? "Журнал синхронизаций" : "Лог синхронизаций"}
+          </span>
+          {/* Record count as a labelled chip — a bare «· 8» next to the title
+              didn't say what it counted, and blended into the status text. */}
           {entries.length > 0 && (
-            <span className="text-xs text-muted">· {entries.length}</span>
+            <span className="text-xs text-muted tabular-nums px-2 py-0.5 rounded-md bg-panel2 border border-border shrink-0">
+              {formatN(entries.length)}{" "}
+              {pluralRu(entries.length, ["запись", "записи", "записей"])}
+            </span>
           )}
         </div>
+        {/* Live status sits on the heading line. The slot keeps its height even
+            while empty, so the row never jumps as the text changes. */}
+        {status !== undefined && (
+          <div className="text-xs text-muted flex-1 min-w-0 min-h-5 flex items-center">
+            {status}
+          </div>
+        )}
         <div className="flex items-center gap-3">
           <label className="text-xs text-muted flex items-center gap-2">
             Записей на странице:
@@ -145,10 +181,22 @@ export function SyncLog() {
             >
               <thead>
                 <tr className="text-left text-[0.85em] uppercase tracking-wider text-muted border-b border-border">
-                  <th className="font-medium px-2 py-2 w-6" />
-                  <th className="font-medium px-2 py-2">Тип</th>
-                  <th className="font-medium px-2 py-2">Дата-время</th>
-                  <th className="font-medium px-2 py-2 hidden md:table-cell">
+                  {/* «Тип» absorbs the slack (`w-full`), every other column
+                      hugs its content (`w-px` + nowrap). That keeps the numbers
+                      and status packed on the right instead of each column
+                      getting a share of the empty space. */}
+                  <th className="font-medium px-2 py-2 w-full">
+                    {/* Mirror the row's chevron slot so the label lines up with
+                        the titles below it. */}
+                    <span className="flex items-center gap-1.5">
+                      {anyExpandable && <span className="w-3.5 shrink-0" />}
+                      Тип
+                    </span>
+                  </th>
+                  <th className="font-medium px-2 py-2 w-px whitespace-nowrap text-center">
+                    Дата-время
+                  </th>
+                  <th className="font-medium px-2 py-2 w-px whitespace-nowrap text-center hidden md:table-cell">
                     <HeaderWithHint
                       label="Новых транзакций"
                       hint={
@@ -160,7 +208,7 @@ export function SyncLog() {
                       }
                     />
                   </th>
-                  <th className="font-medium px-2 py-2 hidden md:table-cell">
+                  <th className="font-medium px-2 py-2 w-px whitespace-nowrap text-center hidden md:table-cell">
                     <HeaderWithHint
                       label="Всего транзакций"
                       hint={
@@ -170,8 +218,12 @@ export function SyncLog() {
                       }
                     />
                   </th>
-                  <th className="font-medium px-2 py-2 hidden md:table-cell">Длительность</th>
-                  <th className="font-medium px-2 py-2">Статус</th>
+                  <th className="font-medium px-2 py-2 w-px whitespace-nowrap text-center hidden md:table-cell">
+                    Длительность
+                  </th>
+                  <th className="font-medium px-2 py-2 w-px whitespace-nowrap text-center">
+                    Статус
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -181,6 +233,7 @@ export function SyncLog() {
                     entry={e}
                     expanded={expanded.has(e.id)}
                     onToggle={() => toggle(e.id)}
+                    reserveChevron={anyExpandable}
                   />
                 ))}
               </tbody>
@@ -222,10 +275,13 @@ function LogTableRow({
   entry,
   expanded,
   onToggle,
+  reserveChevron,
 }: {
   entry: SyncLogEntry;
   expanded: boolean;
   onToggle: () => void;
+  /** True when some row on this page is expandable — keeps titles aligned. */
+  reserveChevron: boolean;
 }) {
   const hasDetails =
     !!entry.error ||
@@ -250,52 +306,62 @@ function LogTableRow({
           hasDetails ? "cursor-pointer hover:bg-panel2/40" : ""
         } transition-colors`}
       >
-        <td className="px-2 py-2 align-top">
-          {hasDetails ? (
-            expanded ? (
-              <ChevronDown className="w-3.5 h-3.5 text-muted" />
-            ) : (
-              <ChevronRight className="w-3.5 h-3.5 text-muted" />
-            )
-          ) : null}
-        </td>
-        <td className="px-2 py-2 align-top">
-          <div className="font-medium">{entry.title}</div>
-          {/* Human summary as a sub-line so the result is always
-              visible without expanding — e.g. "удалено: 1",
-              "Отправлено: 1", "+3 новых/изменённых". For deletions
-              this is the only place the count shows, since the
-              numeric columns track new/total transactions only. */}
-          {entry.summary && (
-            <div
-              className="text-xs text-muted"
-              title={capitalize(entry.summary)}
-            >
-              {capitalize(entry.summary)}
+        {/* The expand chevron rides inside the «Тип» cell — as its own column
+            it left an empty gutter down the whole left edge of the table. */}
+        <td className="px-2 py-2 align-middle">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {reserveChevron && (
+              <span className="w-3.5 shrink-0">
+                {hasDetails ? (
+                  expanded ? (
+                    <ChevronDown className="w-3.5 h-3.5 text-muted" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5 text-muted" />
+                  )
+                ) : null}
+              </span>
+            )}
+            <div className="min-w-0">
+              <div className="font-medium truncate">{entry.title}</div>
+              {/* Human summary as a sub-line so the result is always
+                  visible without expanding — e.g. "удалено: 1",
+                  "Отправлено: 1", "+3 новых/изменённых". For deletions
+                  this is the only place the count shows, since the
+                  numeric columns track new/total transactions only. */}
+              {entry.summary && (
+                <div
+                  className="text-muted truncate"
+                  title={capitalize(entry.summary)}
+                >
+                  {capitalize(entry.summary)}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </td>
-        <td className="px-2 py-2 align-top text-muted text-xs tabular-nums whitespace-nowrap">
+        <td className="px-2 py-2 align-middle text-muted tabular-nums whitespace-nowrap text-center">
           {new Date(entry.ts).toLocaleString("ru-RU")}
         </td>
-        <td className="px-2 py-2 align-top tabular-nums hidden md:table-cell">
+        <td className="px-2 py-2 align-middle tabular-nums text-center hidden md:table-cell">
           {newCount !== undefined ? formatN(newCount) : "—"}
         </td>
-        <td className="px-2 py-2 align-top tabular-nums hidden md:table-cell">
+        <td className="px-2 py-2 align-middle tabular-nums text-center hidden md:table-cell">
           {totalCount !== undefined ? formatN(totalCount) : "—"}
         </td>
-        <td className="px-2 py-2 align-top tabular-nums text-muted text-xs whitespace-nowrap hidden md:table-cell">
+        <td className="px-2 py-2 align-middle tabular-nums text-muted text-center whitespace-nowrap hidden md:table-cell">
           {typeof entry.durationMs === "number"
             ? formatDuration(entry.durationMs)
             : "—"}
         </td>
-        <td className="px-2 py-2 align-top">
+        <td className="px-2 py-2 align-middle text-center">
           <StatusBadge status={entry.status} />
         </td>
       </tr>
       {expanded && hasDetails && (
         <tr className="bg-panel2/30 border-b border-border/40">
-          <td colSpan={7} className="px-3 py-3">
+          {/* pl-7 = the row's px-2 (8px) + chevron slot (14px) + gap (6px), so
+              the details line up with the title above instead of the cell edge. */}
+          <td colSpan={6} className="pl-7 pr-3 py-3">
             <div className="text-xs space-y-2">
               {entry.error && (
                 <div className="flex items-start gap-2 p-2 rounded-md bg-expense/5 border border-expense/30 text-expense">

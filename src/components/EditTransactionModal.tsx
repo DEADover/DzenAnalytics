@@ -1251,28 +1251,33 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
                       : "Место платежа"
                 }
                 labelAfter={
-                  // Brand-match status next to the label: ✓ green = listed
-                  // Zenmoney brand, ✗ muted = not. Mirrors the push lookup
-                  // in zenmoneyPush.ts so the icon never lies. Hidden while
-                  // the dictionary is still hydrating or the value is empty.
+                  // Dictionary-match status next to the label: ✓ green = the
+                  // value exists in the контрагенты dictionary, so the push
+                  // stores a LINK to that record; ✗ muted = it doesn't, so the
+                  // push stores plain text and the operation ends up with no
+                  // counterparty record. NB it is not a «brand» flag — Дзен has
+                  // no global brand catalogue, only the user's own dictionary.
+                  // Mirrors the push lookup in zenmoneyPush.ts so the icon
+                  // never lies. Hidden while the dictionary is still hydrating
+                  // or the value is empty.
                   payeeBrandMatch === null ? undefined : (
                     <span
                       className="inline-flex"
                       title={
                         payeeBrandMatch
-                          ? "Бренд из списка Дзен-мани"
-                          : "Получатель не из списка Брендов"
+                          ? "Есть в справочнике контрагентов — сохранится связью с записью"
+                          : "Нет в справочнике контрагентов — сохранится свободным текстом"
                       }
                     >
                       {payeeBrandMatch ? (
                         <BadgeCheck
                           className="w-3.5 h-3.5 text-income"
-                          aria-label="Бренд из списка Дзен-мани"
+                          aria-label="Есть в справочнике контрагентов"
                         />
                       ) : (
                         <BadgeX
                           className="w-3.5 h-3.5 text-muted"
-                          aria-label="Получатель не из списка Брендов"
+                          aria-label="Нет в справочнике контрагентов"
                         />
                       )}
                     </span>

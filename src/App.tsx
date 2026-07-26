@@ -46,10 +46,17 @@ import { useDeletedPayloadsStore } from "./store/useDeletedPayloadsStore";
 import { useDraftsStore } from "./store/useDraftsStore";
 import { useTagEditsStore } from "./store/useTagEditsStore";
 import { useBudgetEditsStore } from "./store/useBudgetEditsStore";
-import { installTruncatedTitles } from "./lib/truncatedTitle";
+import { installNativeTooltips } from "./lib/nativeTooltips";
 import { useDisplayStore } from "./store/useDisplayStore";
 import { useReportPeriodStore } from "./store/useReportPeriodStore";
 import { useOffBalanceStore } from "./store/useOffBalanceStore";
+import { useAnalyticsExclusionStore } from "./store/useAnalyticsExclusionStore";
+import { useNewCategoriesStore } from "./store/useNewCategoriesStore";
+import {
+  useCounterpartyEditsStore,
+  countCounterpartyPending,
+} from "./store/useCounterpartyEditsStore";
+import { useTagDeletionsStore } from "./store/useTagDeletionsStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 
 /**
@@ -101,6 +108,10 @@ function App() {
     useBudgetEditsStore.getState().hydrate();
     useDisplayStore.getState().hydrate();
     useOffBalanceStore.getState().hydrate();
+    useAnalyticsExclusionStore.getState().hydrate();
+    useNewCategoriesStore.getState().hydrate();
+    useCounterpartyEditsStore.getState().hydrate();
+    useTagDeletionsStore.getState().hydrate();
     hydrate();
     backupHydrate();
     reportPeriodHydrate();
@@ -120,9 +131,10 @@ function App() {
     }).catch(() => {});
   }, []);
 
-  // Suppress `title` tooltips on truncated table cells unless the text is
-  // actually clipped (and non-empty). One delegated listener covers every table.
-  useEffect(() => installTruncatedTitles(), []);
+  // Replace every browser-native `title` tooltip with the app's own bubble —
+  // one delegated listener covers the whole app (and absorbs the old rule that
+  // a truncating cell only gets a tooltip while its text is actually clipped).
+  useEffect(() => installNativeTooltips(), []);
 
   // Once the report-period setting is known, reset the filter's "current
   // month" to the matching billing period — so that fresh visits always
@@ -174,7 +186,23 @@ function App() {
         Object.keys(useTagEditsStore.getState().edits).length > 0;
       const hasBudgetEdits =
         Object.keys(useBudgetEditsStore.getState().edits).length > 0;
-      if (!hasEdits && !hasDeletions && !hasDrafts && !hasTagEdits && !hasBudgetEdits)
+      // Справочники: created categories, category deletions, and every kind of
+      // counterparty change (rename / create / delete / merge).
+      const hasNewCats = useNewCategoriesStore.getState().items.length > 0;
+      const hasTagDeletions =
+        Object.keys(useTagDeletionsStore.getState().deletions).length > 0;
+      const hasCpEdits =
+        countCounterpartyPending(useCounterpartyEditsStore.getState()) > 0;
+      if (
+        !hasEdits &&
+        !hasDeletions &&
+        !hasDrafts &&
+        !hasTagEdits &&
+        !hasBudgetEdits &&
+        !hasNewCats &&
+        !hasTagDeletions &&
+        !hasCpEdits
+      )
         return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
@@ -228,6 +256,26 @@ function App() {
       if (Object.keys(s.edits).length === 0) return;
       schedule();
     });
+    // Справочники — created categories, deleted categories, counterparty
+    // changes. These fire only when the queue GREW: a successful push empties
+    // it, so a later edit grows it from zero again, while a PARTIAL clear (some
+    // entries skipped because they need a re-sync) can't re-trigger itself into
+    // a 2-second push loop.
+    const unsubNewCats = useNewCategoriesStore.subscribe((s, p) => {
+      if (s.items === p.items) return;
+      if (s.items.length <= p.items.length) return;
+      schedule();
+    });
+    const unsubTagDeletions = useTagDeletionsStore.subscribe((s, p) => {
+      if (s.deletions === p.deletions) return;
+      if (Object.keys(s.deletions).length <= Object.keys(p.deletions).length) return;
+      schedule();
+    });
+    const unsubCpEdits = useCounterpartyEditsStore.subscribe((s, p) => {
+      const now = countCounterpartyPending(s);
+      if (now === 0 || now <= countCounterpartyPending(p)) return;
+      schedule();
+    });
     return () => {
       if (timer) clearTimeout(timer);
       unsubEdits();
@@ -235,6 +283,9 @@ function App() {
       unsubDrafts();
       unsubTagEdits();
       unsubBudgetEdits();
+      unsubNewCats();
+      unsubTagDeletions();
+      unsubCpEdits();
     };
   }, []);
 

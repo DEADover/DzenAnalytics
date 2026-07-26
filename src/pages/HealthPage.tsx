@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { HeartPulse } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
+import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useHealthScore } from "../hooks/useHealthScore";
@@ -16,6 +17,9 @@ import { SectionDivider } from "../components/SectionDivider";
 
 export function HealthPage() {
   const transactions = useDataStore((s) => s.transactions);
+  // FIRE income/expense rates ignore turnover / off-balance flows (#14); the
+  // net-worth series below stays on raw transactions (it's a balance).
+  const analyticsTx = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
@@ -36,8 +40,8 @@ export function HealthPage() {
   }, [netWorth, capital, capitalAccounts.length]);
 
   const fire = useMemo(
-    () => fireSeries(anchoredNet, transactions, categoryMeta, 12, monthStartDay),
-    [anchoredNet, transactions, categoryMeta, monthStartDay]
+    () => fireSeries(anchoredNet, analyticsTx, categoryMeta, 12, monthStartDay),
+    [anchoredNet, analyticsTx, categoryMeta, monthStartDay]
   );
   const avgObligatoryMonthly = fire.length
     ? fire[fire.length - 1].avgObligatory

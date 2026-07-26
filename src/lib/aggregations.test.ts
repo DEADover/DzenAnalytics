@@ -18,6 +18,7 @@ import {
   statsByDayOfWeek,
   statsByHourOfWeek,
   transferTotals,
+  stripFromAnalytics,
 } from "./aggregations";
 import { tx } from "../test/fixtures";
 import type { CurrencyRates } from "../types";
@@ -703,5 +704,49 @@ describe("transferTotals — «Переводы» и «Накопления» (i
       xf("Сейв", "Карта", 1500),
     ];
     expect(transferTotals(txs, SAV)).toEqual({ xfer: 11500, savings: 6500 });
+  });
+});
+
+describe("stripFromAnalytics — per-category + off-balance exclusion (#14)", () => {
+  const txs = [
+    tx({ kind: "expense", category: "Еда", categoryFull: "Еда", amount: 100, amountBase: 100 }),
+    tx({ kind: "expense", category: "Еда", subcategory: "Кафе", categoryFull: "Еда / Кафе", amount: 40, amountBase: 40 }),
+    tx({ kind: "income", category: "Возмещения", categoryFull: "Возмещения", amount: 500, amountBase: 500 }),
+    tx({ kind: "expense", category: "Техника", categoryFull: "Техника", account: "Брокер", amount: 70, amountBase: 70 }),
+  ];
+
+  it("returns the SAME reference when nothing is excluded", () => {
+    expect(stripFromAnalytics(txs)).toBe(txs);
+    expect(stripFromAnalytics(txs, {})).toBe(txs);
+    expect(stripFromAnalytics(txs, { excludedCategories: new Set(), offBalanceTitles: new Set() })).toBe(txs);
+  });
+
+  it("excluding a ROOT category drops the root and all its subs", () => {
+    const out = stripFromAnalytics(txs, { excludedCategories: new Set(["Еда"]) });
+    expect(out.map((t) => t.categoryFull)).toEqual(["Возмещения", "Техника"]);
+  });
+
+  it("excluding a SUB category drops only that sub, keeping the root", () => {
+    const out = stripFromAnalytics(txs, { excludedCategories: new Set(["Еда / Кафе"]) });
+    expect(out.map((t) => t.categoryFull)).toEqual(["Еда", "Возмещения", "Техника"]);
+  });
+
+  it("off-balance titles drop flows touching that account", () => {
+    const out = stripFromAnalytics(txs, { offBalanceTitles: new Set(["Брокер"]) });
+    expect(out.map((t) => t.category)).toEqual(["Еда", "Еда", "Возмещения"]);
+  });
+
+  it("off-balance drop checks all transfer legs", () => {
+    const xfer = tx({ kind: "transfer", category: "Перевод", categoryFull: "Перевод", account: "Карта", outcomeAccount: "Карта", incomeAccount: "Брокер", amount: 200, amountBase: 200 });
+    const out = stripFromAnalytics([xfer], { offBalanceTitles: new Set(["Брокер"]) });
+    expect(out).toHaveLength(0);
+  });
+
+  it("categories and off-balance combine", () => {
+    const out = stripFromAnalytics(txs, {
+      excludedCategories: new Set(["Возмещения"]),
+      offBalanceTitles: new Set(["Брокер"]),
+    });
+    expect(out.map((t) => t.categoryFull)).toEqual(["Еда", "Еда / Кафе"]);
   });
 });

@@ -22,12 +22,28 @@ import {
   buildDeletions,
   buildResurrections,
   buildTagPush,
+  buildNewCategoriesPush,
+  buildNewMerchantsPush,
+  buildMerchantRenamePush,
+  buildMerchantDeletions,
+  buildMerchantMergePush,
+  buildTagDeletionPush,
   detectConflicts,
   sendPush,
   validateDrafts,
   type PushBuildResult,
 } from "../lib/zenmoneyPush";
 import { useTagEditsStore, loadTagEdits } from "./useTagEditsStore";
+import { useNewCategoriesStore, loadNewCategories } from "./useNewCategoriesStore";
+import {
+  useCounterpartyEditsStore,
+  loadCounterpartyEdits,
+} from "./useCounterpartyEditsStore";
+import {
+  useTagDeletionsStore,
+  loadTagDeletions,
+  toTagDeletions,
+} from "./useTagDeletionsStore";
 import { useBudgetEditsStore, loadBudgetEdits } from "./useBudgetEditsStore";
 import { useDraftsStore, loadDrafts } from "./useDraftsStore";
 import { loadSnapshotIndex, takeSnapshot } from "../lib/cloudSnapshots";
@@ -35,6 +51,7 @@ import { useDataStore } from "./useDataStore";
 import { useCalibrationStore } from "./useCalibrationStore";
 import { useOffBalanceStore } from "./useOffBalanceStore";
 import { toBase } from "../lib/csv";
+import { colorIntToHex } from "../lib/categoryColor";
 import { useCategoryMetaStore } from "./useCategoryMetaStore";
 import { useEditsStore } from "./useEditsStore";
 import { useDeletedStore } from "./useDeletedStore";
@@ -65,15 +82,25 @@ const AUTO_SYNC_VALUE_KEY = "zenmoneyAutoSyncValue";
 const AUTO_SYNC_UNIT_KEY = "zenmoneyAutoSyncUnit";
 
 /**
- * Overlay pending tag edits onto a freshly-mapped `categoryMeta` map so a
- * not-yet-pushed «обязательная» change survives a re-map (sync/push rebuild
- * meta from the cache, which still holds the old value until the edit lands
- * in the cloud). Tag edits are keyed by tag id; meta by category title — we
- * resolve via the cache tags. Mutates and returns `meta`.
+ * Overlay pending tag edits onto a freshly-mapped `categoryMeta` map so
+ * not-yet-pushed changes (обязательность, colour, icon, type) survive a re-map
+ * (sync/push rebuild meta from the cache, which still holds the old values until
+ * the edit lands in the cloud). Tag edits are keyed by tag id; meta by category
+ * title — we resolve via the cache tags. Title/parent renames aren't overlaid
+ * here (they'd move the meta key); the editor reflects those from the tag list
+ * directly, and a sync finalises them. Mutates and returns `meta`.
  */
-function overlayTagEdits<M extends { required?: boolean | null }>(
+function overlayTagEdits<
+  M extends {
+    required?: boolean | null;
+    color?: string | null;
+    icon?: string | null;
+    showIncome?: boolean;
+    showOutcome?: boolean;
+  },
+>(
   meta: Record<string, M>,
-  edits: Record<string, { required: boolean | null }>,
+  edits: Record<string, import("./useTagEditsStore").TagEdit>,
   cacheTags: { id: string; title: string; parent: string | null }[]
 ): Record<string, M> {
   if (Object.keys(edits).length === 0) return meta;
@@ -86,7 +113,14 @@ function overlayTagEdits<M extends { required?: boolean | null }>(
     const title = rootTitleById.get(id);
     if (!title) continue;
     const cur = meta[title];
-    if (cur) meta[title] = { ...cur, required: edit.required };
+    if (!cur) continue;
+    const patched = { ...cur };
+    if (edit.required !== undefined) patched.required = edit.required;
+    if (edit.color !== undefined) patched.color = colorIntToHex(edit.color);
+    if (edit.icon !== undefined) patched.icon = edit.icon;
+    if (edit.showIncome !== undefined) patched.showIncome = edit.showIncome;
+    if (edit.showOutcome !== undefined) patched.showOutcome = edit.showOutcome;
+    meta[title] = patched;
   }
   return meta;
 }
@@ -211,7 +245,42 @@ export async function getBrandTitlesFromCache(): Promise<string[] | null> {
     .sort((a, b) => a.localeCompare(b, "ru"));
 }
 
-/** A category tag (root or sub-tag) for the «обязательная» editor. */
+/** A counterparty (Zenmoney merchant) row for the Справочники editor. */
+export interface Counterparty {
+  id: string;
+  title: string;
+  /** How many non-deleted operations reference this merchant. */
+  count: number;
+  /** Ids of those operations — lets the editor drill into them precisely
+   *  (by id, not by title, which collides across same-named merchants). */
+  txIds: string[];
+}
+
+/**
+ * Контрагенты from the Zenmoney cache, with their operations each. Matching
+ * goes by the RAW `ZenTransaction.merchant` id — the mapped `Transaction` keeps
+ * only the brand TITLE, which collides across same-named merchants. Returns
+ * null in CSV mode (no cache). Sorted by title (ru).
+ */
+export async function getCounterpartiesFromCache(): Promise<Counterparty[] | null> {
+  const cache = await loadZenCache();
+  if (!cache) return null;
+  const byMerchant = new Map<string, string[]>();
+  for (const t of cache.transactions) {
+    if (t.deleted || !t.merchant) continue;
+    const arr = byMerchant.get(t.merchant);
+    if (arr) arr.push(t.id);
+    else byMerchant.set(t.merchant, [t.id]);
+  }
+  return cache.merchants
+    .map((m) => {
+      const txIds = byMerchant.get(m.id) ?? [];
+      return { id: m.id, title: m.title, count: txIds.length, txIds };
+    })
+    .sort((a, b) => a.title.localeCompare(b.title, "ru"));
+}
+
+/** A category tag (root or sub-tag) for the category editor. */
 export interface CategoryTag {
   id: string;
   title: string;
@@ -223,6 +292,10 @@ export interface CategoryTag {
   showIncome: boolean;
   /** Tag accepts expense transactions. */
   showOutcome: boolean;
+  /** Raw Zenmoney icon id (e.g. "5001_coat"), or null. */
+  icon: string | null;
+  /** Raw Zenmoney packed-RGB colour int, or null. */
+  color: number | null;
 }
 
 /**
@@ -243,6 +316,8 @@ export async function getCategoryTagsFromCache(): Promise<CategoryTag[] | null> 
       required: t.required ?? null,
       showIncome: !!t.showIncome,
       showOutcome: !!t.showOutcome,
+      icon: t.icon ?? null,
+      color: t.color ?? null,
     }))
     .sort((a, b) => a.title.localeCompare(b.title, "ru"));
 }
@@ -882,6 +957,50 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         reason: s.reason,
       }));
       skipped.push(...tagSkips);
+      // Locally-created categories → brand-new ZenTag[]. The account's numeric
+      // user id comes from any existing cached tag (there are always defaults).
+      const newCats = await loadNewCategories();
+      const newCatUser = cache.tags[0]?.user;
+      const newCatTags =
+        newCats.length > 0 && newCatUser != null
+          ? buildNewCategoriesPush(newCats, newCatUser, Math.floor(Date.now() / 1000))
+          : [];
+      // Контрагенты (merchants): renames + creates as upserts, removals as
+      // generic deletions with object "merchant".
+      const cpEdits = await loadCounterpartyEdits();
+      const cpStamp = Math.floor(Date.now() / 1000);
+      const cpUser = cache.merchants[0]?.user ?? cache.tags[0]?.user;
+      const cpRename = buildMerchantRenamePush(cpEdits.renames, cache.merchants, cpStamp);
+      const cpNew =
+        cpEdits.created.length > 0 && cpUser != null
+          ? buildNewMerchantsPush(cpEdits.created, cpUser, cpStamp)
+          : [];
+      const merchantUpserts = [...cpRename.merchants, ...cpNew];
+      const merchantDeletions = buildMerchantDeletions(
+        cpEdits.deleted,
+        cache.merchants,
+        cpStamp
+      );
+      skipped.push(...cpRename.skipped);
+      // Duplicate counterparties folded into one: the operations move to the
+      // survivor first, then the duplicate is deleted — both in this request.
+      const cpMerge = buildMerchantMergePush(
+        Object.entries(cpEdits.merges).map(([id, survivorId]) => ({
+          id,
+          survivorId,
+        })),
+        cache,
+        cpStamp
+      );
+      skipped.push(...cpMerge.skipped);
+      // Deleted categories: re-tag (or untag) their operations, then drop the
+      // tags. Built against the fresh cache so «замена» resolves to a live tag.
+      const tagDel = buildTagDeletionPush(
+        toTagDeletions(await loadTagDeletions()),
+        cache,
+        Math.floor(Date.now() / 1000)
+      );
+      skipped.push(...tagDel.skipped);
       // Pending plan/budget changes → ZenBudget upserts. Built against the
       // fresh cache so the (tag, month) cell and its «other side» are current.
       const budgetEdits = await loadBudgetEdits();
@@ -926,6 +1045,11 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         resurrections.length === 0 &&
         draftTxs.length === 0 &&
         tagPush.tags.length === 0 &&
+        newCatTags.length === 0 &&
+        merchantUpserts.length === 0 &&
+        merchantDeletions.length === 0 &&
+        cpMerge.deletions.length === 0 &&
+        tagDel.deletions.length === 0 &&
         budgetPush.budgets.length === 0
       ) {
         const result: PushResult = { pushed: 0, created: 0, skipped, snapshotId };
@@ -970,14 +1094,24 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         token,
         get().serverTimestamp,
         toPush,
-        deletions,
+        [
+          ...deletions,
+          ...merchantDeletions,
+          ...cpMerge.deletions,
+          ...tagDel.deletions,
+        ],
         [
           ...resurrections.map((r) => r.tx),
           ...recreates.map((r) => r.tx),
           ...draftTxs,
+          // Operations re-pointed by a merge / category deletion. Whole rows
+          // rebuilt from cache, so they ride the raw-transaction channel.
+          ...cpMerge.transactions,
+          ...tagDel.transactions,
         ],
-        tagPush.tags,
-        budgetPush.budgets
+        [...tagPush.tags, ...newCatTags],
+        budgetPush.budgets,
+        merchantUpserts
       );
 
       // 4) Merge server response into local cache so subsequent diffs
@@ -995,7 +1129,13 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       //    if the server ever DID echo them, `applyDeletions` dedups by id.)
       const nextCache = applyDiff(cache, {
         ...response,
-        deletion: [...(response.deletion ?? []), ...deletions],
+        deletion: [
+          ...(response.deletion ?? []),
+          ...deletions,
+          ...merchantDeletions,
+          ...cpMerge.deletions,
+          ...tagDel.deletions,
+        ],
       });
       await saveZenCache(nextCache);
 
@@ -1071,6 +1211,33 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       if (sentTagIds.length > 0) {
         await useTagEditsStore.getState().clearMany(sentTagIds);
       }
+      // Created categories now live in the cloud + our cache — drop the local
+      // drafts; they'll come back as normal tags on the next sync.
+      const sentNewCatIds = newCatTags.map((t) => String(t.id));
+      if (sentNewCatIds.length > 0) {
+        await useNewCategoriesStore.getState().removeMany(sentNewCatIds);
+      }
+      // Counterparty renames/creates/deletions/merges that landed — drop the
+      // overlay.
+      if (
+        cpRename.merchants.length > 0 ||
+        cpNew.length > 0 ||
+        merchantDeletions.length > 0 ||
+        cpMerge.deletions.length > 0
+      ) {
+        await useCounterpartyEditsStore.getState().clearPushed({
+          renamedIds: cpRename.merchants.map((m) => String(m.id)),
+          createdIds: cpNew.map((m) => String(m.id)),
+          deletedIds: merchantDeletions.map((d) => String(d.id)),
+          mergedIds: cpMerge.deletions.map((d) => String(d.id)),
+        });
+      }
+      // Deleted categories that landed — drop them from the queue.
+      if (tagDel.deletions.length > 0) {
+        await useTagDeletionsStore
+          .getState()
+          .clearPushed(tagDel.deletions.map((d) => String(d.id)));
+      }
       // Budget edits: clear everything that was sent OR a no-op (already in
       // cloud); keep only the ones we skipped (tag not in cache) for retry.
       // `doneBudgetIds` was computed up-front so the early-return path clears
@@ -1117,6 +1284,23 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         parts.push(`Восстановлено в облаке: ${formatNum(resurrections.length)}`);
       if (tagPush.tags.length > 0)
         parts.push(`Категорий обновлено: ${formatNum(tagPush.tags.length)}`);
+      if (newCatTags.length > 0)
+        parts.push(`Категорий создано: ${formatNum(newCatTags.length)}`);
+      if (merchantUpserts.length > 0)
+        parts.push(`Контрагентов обновлено: ${formatNum(merchantUpserts.length)}`);
+      if (merchantDeletions.length > 0)
+        parts.push(`Контрагентов удалено: ${formatNum(merchantDeletions.length)}`);
+      if (cpMerge.deletions.length > 0)
+        parts.push(`Контрагентов объединено: ${formatNum(cpMerge.deletions.length)}`);
+      if (tagDel.deletions.length > 0)
+        parts.push(`Категорий удалено: ${formatNum(tagDel.deletions.length)}`);
+      // A merge / category deletion silently rewrites operations — the widest
+      // blast radius in a push, so say how many were touched.
+      {
+        const rewritten = cpMerge.transactions.length + tagDel.transactions.length;
+        if (rewritten > 0)
+          parts.push(`Операций переназначено: ${formatNum(rewritten)}`);
+      }
       if (skipped.length > 0)
         parts.push(
           `Пропущено: ${formatNum(skipped.length)}` +

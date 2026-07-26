@@ -55,8 +55,9 @@ export interface Transaction {
    */
   payeeRaw?: string | null;
   /**
-   * Brand title from Zenmoney's curated merchant dictionary
-   * (`ZenTransaction.merchant` → `ZenMerchant.title`). Different from
+   * Counterparty title from the user's OWN Zenmoney merchant dictionary
+   * (`ZenTransaction.merchant` → `ZenMerchant.title`) — Дзен has no global
+   * brand catalogue, so this is whatever the user accumulated. Different from
    * `payee` — payee is what's currently displayed (possibly cleaned
    * by Zenmoney auto-grouping or our local pipeline), brand is the
    * specific merchant entity the user / Zenmoney tagged the

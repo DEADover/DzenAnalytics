@@ -124,9 +124,11 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
   const instrumentsById = new Map<number, ZenInstrument>(
     instrumentList.map((i) => [i.id, i])
   );
-  // Merchant dictionary — Zenmoney's curated brand catalogue. Each
-  // transaction can carry a `merchant` id pointing into this; we
-  // resolve to the brand title and store it on `Transaction.brand`.
+  // Merchant dictionary — the USER'S OWN контрагенты (`{id, user, title}`),
+  // not a curated catalogue: Дзен has no global brand list. (Its only global
+  // dictionary is `company`, a registry of banks behind `Account.company`.)
+  // A transaction's `merchant` id points in here; we resolve it to the title
+  // and store it on `Transaction.brand`.
   const merchantsById = new Map<string, string>(
     merchantList.map((m) => [m.id, m.title])
   );

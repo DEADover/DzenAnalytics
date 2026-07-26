@@ -8,6 +8,7 @@ import {
   Award,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
+import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../store/useDrillStore";
 import {
   buildYearReview,
@@ -31,6 +32,9 @@ function deltaPill(value: number, invertColor = false): {
 
 export function YearReviewPage() {
   const transactions = useDataStore((s) => s.transactions);
+  // The year's income/expense/net/biggest excludes turnover + off-balance flows
+  // (#14); the year SELECTOR still lists every year that has any data.
+  const analyticsTx = useAnalyticsTransactions();
   const baseCurrency = useDataStore((s) => s.rates.base);
   const showDrill = useDrillStore((s) => s.show);
 
@@ -45,8 +49,8 @@ export function YearReviewPage() {
   }, [years, year]);
 
   const review = useMemo<YearReview>(
-    () => buildYearReview(transactions, year),
-    [transactions, year]
+    () => buildYearReview(analyticsTx, year),
+    [analyticsTx, year]
   );
 
   if (transactions.length === 0) return <EmptyState />;

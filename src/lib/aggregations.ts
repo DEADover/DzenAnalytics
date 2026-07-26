@@ -2279,3 +2279,42 @@ export function transferTotals(
   }
   return { xfer, savings };
 }
+
+/**
+ * Drop operations that should not count in the aggregate analytics widgets
+ * (issue #14): pure turnover / mutual-settlement categories the user marked as
+ * «не учитывать в аналитике», plus flows on off-balance accounts.
+ *
+ * A category is matched by ROOT (`tx.category`) or FULL PATH (`tx.categoryFull`),
+ * so excluding a root («Переводы») covers all of its sub-categories, while a
+ * sub-category can be excluded on its own («Родитель / Подкатегория»).
+ *
+ * `offBalanceTitles` is honoured only when passed non-empty — the caller gates
+ * it on the global «учитывать внебалансовые счета» switch (empty set = keep
+ * off-balance flows). A transfer is dropped if ANY of its legs touches such an
+ * account (belt-and-suspenders, same rule as the global filter).
+ *
+ * Pure and allocation-light: returns the same array reference when nothing is
+ * excluded, so callers can keep it inside a `useMemo` without churn.
+ */
+export function stripFromAnalytics(
+  txs: Transaction[],
+  opts: { excludedCategories?: Set<string>; offBalanceTitles?: Set<string> } = {}
+): Transaction[] {
+  const cats = opts.excludedCategories;
+  const accts = opts.offBalanceTitles;
+  const hasCats = !!cats && cats.size > 0;
+  const hasAccts = !!accts && accts.size > 0;
+  if (!hasCats && !hasAccts) return txs;
+  return txs.filter((t) => {
+    if (hasCats && (cats!.has(t.category) || cats!.has(t.categoryFull))) return false;
+    if (
+      hasAccts &&
+      (accts!.has(t.account) ||
+        accts!.has(t.outcomeAccount) ||
+        accts!.has(t.incomeAccount))
+    )
+      return false;
+    return true;
+  });
+}

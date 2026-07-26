@@ -369,3 +369,32 @@ describe("applyFilters — переводы в фильтре по счёту (i
     expect(ids(applyFilters(txs, filt({ accounts: new Set(["Наличные"]) })))).toEqual(["other"]);
   });
 });
+
+describe("applyFilters — поиск по контрагенту (brand + payee)", () => {
+  // The dictionary name and the bank's raw line routinely differ: «STOLICHKI»
+  // vs «Аптека Столички». The Операции table shows the FORMER, so a search for
+  // it must find the row — before the fix only `payee` was searched and most of
+  // a counterparty's operations were unreachable.
+  const txs = [
+    tx({ id: "brandOnly", payee: "APTEKA 4423 MOSCOW", brand: "STOLICHKI" }),
+    tx({ id: "payeeOnly", payee: "STOLICHKI", brand: null }),
+    tx({ id: "both", payee: "STOLICHKI", brand: "STOLICHKI" }),
+    tx({ id: "other", payee: "Пятёрочка", brand: "Пятёрочка" }),
+  ];
+
+  it("finds a row by the counterparty shown in the column, not just the bank text", () => {
+    expect(ids(applyFilters(txs, filt({ search: "STOLICHKI" })))).toEqual([
+      "both",
+      "brandOnly",
+      "payeeOnly",
+    ]);
+  });
+
+  it("still finds a row by its raw bank text", () => {
+    expect(ids(applyFilters(txs, filt({ search: "APTEKA 4423" })))).toEqual(["brandOnly"]);
+  });
+
+  it("does not widen the match to unrelated counterparties", () => {
+    expect(ids(applyFilters(txs, filt({ search: "Пятёрочка" })))).toEqual(["other"]);
+  });
+});

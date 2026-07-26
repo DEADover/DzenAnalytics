@@ -25,7 +25,7 @@ import { Tooltip } from "./Tooltip";
 import { EditTransactionModal } from "./EditTransactionModal";
 import { BulkEditModal } from "./BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
-import { formatMoney, formatDate, formatNum, displayPayee, secondaryPayee, crossCurrencyReceived } from "../lib/format";
+import { formatMoney, formatDate, formatNum, displayPayee, secondaryPayee, crossCurrencyReceived, payeeSearchText } from "../lib/format";
 import { kindColorClass, kindGlyphClass, kindLabel, kindSignGlyph } from "../lib/txKindStyle";
 import type { Transaction } from "../types";
 
@@ -177,7 +177,9 @@ export function TransactionsDrawer() {
     const q = search.trim().toLowerCase();
     const filtered = q
       ? liveTransactions.filter((t) =>
-          `${t.payee} ${t.comment} ${t.categoryFull} ${t.account}`.toLowerCase().includes(q)
+          `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${t.account}`
+            .toLowerCase()
+            .includes(q)
         )
       : liveTransactions;
     const cmp = (a: Transaction, b: Transaction) => {
@@ -400,7 +402,7 @@ export function TransactionsDrawer() {
                   <SortHead label="Контрагент" k="payee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <th className="table-th">Комментарий</th>
                   <SortHead label="Сумма" k="amount" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="right" />
-                  <th className="table-th text-right whitespace-nowrap">Операции</th>
+                  <th className="table-th text-center whitespace-nowrap">Действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -509,22 +511,22 @@ export function TransactionsDrawer() {
                         ) : null;
                       })()}
                     </td>
-                    <td className="table-td w-14 text-right whitespace-nowrap">
+                    <td className="table-td w-14 text-center whitespace-nowrap">
                       <button
                         onClick={() => setEditing(t)}
-                        className="p-1 text-muted/50 hover:text-text transition-colors"
+                        className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 transition-colors"
                         title="Редактировать"
                         aria-label="Редактировать операцию"
                       >
-                        <Pencil className="w-3.5 h-3.5" />
+                        <Pencil className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(t)}
-                        className="p-1 text-muted/50 hover:text-expense transition-colors"
+                        className="p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10 transition-colors"
                         title="Удалить"
                         aria-label="Удалить операцию"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
@@ -575,11 +577,11 @@ export function TransactionsDrawer() {
           {/* Row 2: actions. */}
           <div className="flex items-center justify-center gap-2 flex-wrap px-4 pb-2.5 pt-2 border-t border-border">
             <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
-              <Pencil className="w-3.5 h-3.5" />
+              <Pencil className="w-4 h-4" />
               Изменить
             </button>
             <button onClick={deleteBulk} className="btn-danger text-sm">
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
               Удалить
             </button>
             <button

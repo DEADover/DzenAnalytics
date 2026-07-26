@@ -58,3 +58,50 @@ export function subcategoryColor(
 ): string | null {
   return (fullName && meta[fullName]?.color) || null;
 }
+
+// ── Color codec for the category editor ──────────────────────────────────────
+// Zenmoney stores a tag's colour as a packed RGB integer in the low 24 bits
+// (see `colorIntToCss` in zenmoneyMap.ts). Its own tags commonly carry an alpha
+// byte of 0, so a plain `0xRRGGBB` positive int matches Zenmoney's format and
+// round-trips through the decoder. These are the encode/decode helpers the
+// editor uses to translate between a `#RRGGBB` hex and that int.
+
+/** Swatch palette for the color picker (roughly the Zenmoney/Budgera set). */
+export const CATEGORY_EDIT_PALETTE = [
+  "#EF4444", "#F97316", "#FBBF24", "#86EFAC", "#22C55E", "#166534",
+  "#0D9488", "#2DD4BF", "#38BDF8", "#0EA5E9", "#2563EB", "#818CF8",
+  "#6D28D9", "#A21CAF", "#DB2777", "#F472B6", "#94A3B8", "#3F3F46",
+];
+
+/** `#RRGGBB` (or `RRGGBB`) → Zenmoney packed RGB int, or null if malformed. */
+export function hexToColorInt(hex: string): number | null {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) return null;
+  // 0xRRGGBB, alpha byte 0 — the format the majority of Zenmoney tags use.
+  return parseInt(m[1], 16);
+}
+
+/** Zenmoney packed colour int → `#RRGGBB`, or null when there's no colour. */
+export function colorIntToHex(c: number | null | undefined): string | null {
+  if (c == null) return null;
+  const r = (c >>> 16) & 0xff;
+  const g = (c >>> 8) & 0xff;
+  const b = c & 0xff;
+  return (
+    "#" +
+    [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase()
+  );
+}
+
+/** CSS `rgb(r, g, b)` (as produced by `colorIntToCss`) → `#RRGGBB`, for
+ *  seeding the picker from an already-decoded `categoryMeta.color`. */
+export function cssRgbToHex(css: string | null | undefined): string | null {
+  if (!css) return null;
+  const m = /^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/.exec(css.trim());
+  if (!m) return /^#[0-9a-fA-F]{6}$/.test(css.trim()) ? css.trim().toUpperCase() : null;
+  const [r, g, b] = [m[1], m[2], m[3]].map((x) => Number(x));
+  return (
+    "#" +
+    [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase()
+  );
+}

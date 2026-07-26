@@ -13,6 +13,7 @@ import {
   CircleDashed,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
+import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useGoalsStore, type Goal } from "../store/useGoalsStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
@@ -121,7 +122,8 @@ function goalMetrics(g: Goal, accounts: AccountBalance[], avgSavings: number) {
 }
 
 export function GoalsPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Savings-pace projection must ignore turnover / off-balance flows (#14).
+  const transactions = useAnalyticsTransactions();
   const rates = useDataStore((s) => s.rates);
   const base = rates.base;
   const goals = useGoalsStore((s) => s.goals);

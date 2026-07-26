@@ -16,7 +16,6 @@ import { formatMoney, formatPct } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
-import { CategoryRequiredEditor } from "../components/CategoryRequiredEditor";
 import { CategorySunburst } from "../components/CategorySunburst";
 import { CategoryDot } from "../components/CategoryDot";
 import { KindSwitcher } from "../components/KindSwitcher";
@@ -905,8 +904,6 @@ export function CategoriesPage() {
           )}
         </div>
       </div>
-
-      <CategoryRequiredEditor />
 
       {treemapFull &&
         createPortal(

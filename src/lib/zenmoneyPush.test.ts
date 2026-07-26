@@ -5,6 +5,12 @@ import {
   buildPushItems,
   buildResurrections,
   buildTagPush,
+  buildNewCategoriesPush,
+  buildNewMerchantsPush,
+  buildMerchantRenamePush,
+  buildMerchantDeletions,
+  buildMerchantMergePush,
+  buildTagDeletionPush,
   detectConflicts,
   resurrectionId,
   validateDrafts,
@@ -682,6 +688,374 @@ describe("buildTagPush", () => {
     expect(skipped).toEqual([
       { id: "ghost", reason: expect.stringContaining("не найдена") },
     ]);
+  });
+
+  // ── Full editing: title / parent / type / icon / colour ──
+  const richTags: ZenTag[] = [
+    {
+      id: "r1",
+      title: "Еда",
+      parent: null,
+      showIncome: false,
+      showOutcome: true,
+      icon: "5001_food",
+      color: 0x112233,
+      required: null,
+    } as unknown as ZenTag,
+  ];
+
+  it("renames a tag, preserving every other field", () => {
+    const { tags: out } = buildTagPush({ r1: { title: "Питание" } }, richTags, 9);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      id: "r1",
+      title: "Питание",
+      showOutcome: true,
+      icon: "5001_food",
+      color: 0x112233,
+      changed: 9,
+    });
+  });
+
+  it("changes type (showIncome/showOutcome) and colour together", () => {
+    const { tags: out } = buildTagPush(
+      { r1: { showIncome: true, showOutcome: false, color: 0xff0000 } },
+      richTags,
+      9
+    );
+    expect(out[0]).toMatchObject({ showIncome: true, showOutcome: false, color: 0xff0000 });
+    expect(out[0].title).toBe("Еда"); // untouched
+  });
+
+  it("reparents a tag (root → sub) and sets an icon", () => {
+    const { tags: out } = buildTagPush(
+      { r1: { parent: "p9", icon: "3002_cars" } },
+      richTags,
+      9
+    );
+    expect(out[0]).toMatchObject({ parent: "p9", icon: "3002_cars" });
+  });
+
+  it("drops a net no-op even when several fields are present but unchanged", () => {
+    const { tags: out } = buildTagPush(
+      { r1: { title: "Еда", showOutcome: true, color: 0x112233 } },
+      richTags,
+      9
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("pushes when at least one of several fields actually differs", () => {
+    const { tags: out } = buildTagPush(
+      { r1: { title: "Еда", color: 0x445566 } }, // title same, colour new
+      richTags,
+      9
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].color).toBe(0x445566);
+  });
+});
+
+describe("buildNewCategoriesPush", () => {
+  it("emits a full new tag with the client id, user, stamp and budget flags", () => {
+    const out = buildNewCategoriesPush(
+      [
+        {
+          id: "new-1",
+          title: "Подписки",
+          parent: null,
+          showIncome: false,
+          showOutcome: true,
+          icon: "5001_food",
+          color: 0x223344,
+          required: false,
+        },
+      ],
+      777,
+      42
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      id: "new-1",
+      user: 777,
+      title: "Подписки",
+      parent: null,
+      archive: false,
+      showOutcome: true,
+      showIncome: false,
+      budgetOutcome: true, // mirrors showOutcome
+      budgetIncome: false, // mirrors showIncome
+      icon: "5001_food",
+      color: 0x223344,
+      required: false,
+      picture: null,
+      changed: 42,
+    });
+  });
+
+  it("carries the parent id for a new subcategory", () => {
+    const out = buildNewCategoriesPush(
+      [
+        {
+          id: "sub-1",
+          title: "Кофе",
+          parent: "root-food",
+          showIncome: false,
+          showOutcome: true,
+          icon: null,
+          color: null,
+          required: null,
+        },
+      ],
+      1,
+      5
+    );
+    expect(out[0].parent).toBe("root-food");
+  });
+
+  it("skips an empty-titled draft", () => {
+    const out = buildNewCategoriesPush(
+      [{ id: "x", title: "   ", parent: null, showIncome: false, showOutcome: true, icon: null, color: null, required: null }],
+      1,
+      5
+    );
+    expect(out).toEqual([]);
+  });
+});
+
+describe("контрагенты (merchants) push builders", () => {
+  const cacheMerchants = [
+    { id: "m1", user: 7, title: "Пятёрочка", changed: 100 },
+    { id: "m2", user: 7, title: "Ozon", changed: 100 },
+  ];
+
+  it("creates a brand-new merchant with the client id, user and stamp", () => {
+    const out = buildNewMerchantsPush([{ id: "new-1", title: "Пекарня №4" }], 7, 42);
+    expect(out).toEqual([{ id: "new-1", user: 7, title: "Пекарня №4", changed: 42 }]);
+  });
+
+  it("trims titles and skips empty drafts", () => {
+    const out = buildNewMerchantsPush(
+      [
+        { id: "a", title: "  Кофейня  " },
+        { id: "b", title: "   " },
+      ],
+      7,
+      1
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].title).toBe("Кофейня");
+  });
+
+  it("renames a cached merchant, preserving user and bumping changed", () => {
+    const { merchants, skipped } = buildMerchantRenamePush(
+      { m1: "Пятёрочка у дома" },
+      cacheMerchants,
+      55
+    );
+    expect(skipped).toEqual([]);
+    expect(merchants).toEqual([
+      { id: "m1", user: 7, title: "Пятёрочка у дома", changed: 55 },
+    ]);
+  });
+
+  it("drops a rename that matches the cached title (no-op) or is blank", () => {
+    expect(
+      buildMerchantRenamePush({ m1: "Пятёрочка", m2: "  " }, cacheMerchants, 1).merchants
+    ).toEqual([]);
+  });
+
+  it("reports a rename whose merchant is missing from cache as skipped", () => {
+    const { merchants, skipped } = buildMerchantRenamePush(
+      { ghost: "Кто-то" },
+      cacheMerchants,
+      1
+    );
+    expect(merchants).toEqual([]);
+    expect(skipped).toEqual([
+      { id: "ghost", reason: expect.stringContaining("не найден") },
+    ]);
+  });
+
+  it("builds merchant deletions with object \"merchant\"", () => {
+    const out = buildMerchantDeletions(["m2"], cacheMerchants, 9);
+    expect(out).toEqual([{ id: "m2", object: "merchant", user: 7, stamp: 9 }]);
+  });
+
+  it("skips deleting an id that isn't in the cache (already gone)", () => {
+    expect(buildMerchantDeletions(["ghost"], cacheMerchants, 9)).toEqual([]);
+  });
+});
+
+describe("buildMerchantMergePush", () => {
+  /** Two merchants sharing a title — the duplicate case this exists for. */
+  const merchants = [
+    { id: "keep", user: 7, title: "Авито", changed: 100 },
+    { id: "dup", user: 7, title: "Авито", changed: 100 },
+    { id: "other", user: 7, title: "Ozon", changed: 100 },
+  ];
+  function mergeCache(transactions: ZenTransaction[]): ZenCache {
+    return { ...cache(transactions), merchants };
+  }
+  function tx(id: string, merchant: string | null, deleted = false): ZenTransaction {
+    return { id, user: 7, merchant, deleted, payee: "Авито" } as ZenTransaction;
+  }
+
+  it("re-points the duplicate's operations at the survivor and deletes it", () => {
+    const c = mergeCache([tx("t1", "dup"), tx("t2", "keep"), tx("t3", "other")]);
+    const out = buildMerchantMergePush([{ id: "dup", survivorId: "keep" }], c, 55);
+    expect(out.skipped).toEqual([]);
+    expect(out.transactions).toEqual([
+      { id: "t1", user: 7, merchant: "keep", deleted: false, payee: "Авито", changed: 55 },
+    ]);
+    expect(out.deletions).toEqual([
+      { id: "dup", object: "merchant", user: 7, stamp: 55 },
+    ]);
+  });
+
+  it("still deletes a duplicate that has no operations", () => {
+    const c = mergeCache([tx("t1", "keep")]);
+    const out = buildMerchantMergePush([{ id: "dup", survivorId: "keep" }], c, 1);
+    expect(out.transactions).toEqual([]);
+    expect(out.deletions).toHaveLength(1);
+  });
+
+  it("leaves deleted operations alone", () => {
+    const c = mergeCache([tx("t1", "dup", true)]);
+    expect(
+      buildMerchantMergePush([{ id: "dup", survivorId: "keep" }], c, 1).transactions
+    ).toEqual([]);
+  });
+
+  it("refuses a merge whose survivor is itself being merged away", () => {
+    const c = mergeCache([tx("t1", "dup")]);
+    const out = buildMerchantMergePush(
+      [
+        { id: "dup", survivorId: "other" },
+        { id: "other", survivorId: "keep" },
+      ],
+      c,
+      1
+    );
+    expect(out.skipped).toEqual([
+      { id: "dup", reason: expect.stringContaining("сам объединяется") },
+    ]);
+    // The valid half still goes through.
+    expect(out.deletions.map((d) => d.id)).toEqual(["other"]);
+  });
+
+  it("reports an unknown survivor as skipped and pushes nothing for it", () => {
+    const c = mergeCache([tx("t1", "dup")]);
+    const out = buildMerchantMergePush([{ id: "dup", survivorId: "ghost" }], c, 1);
+    expect(out.deletions).toEqual([]);
+    expect(out.transactions).toEqual([]);
+    expect(out.skipped).toEqual([
+      { id: "dup", reason: expect.stringContaining("не найден") },
+    ]);
+  });
+
+  it("ignores a duplicate that's already gone from the cache", () => {
+    const c = mergeCache([]);
+    const out = buildMerchantMergePush([{ id: "ghost", survivorId: "keep" }], c, 1);
+    expect(out).toEqual({ transactions: [], deletions: [], skipped: [] });
+  });
+});
+
+describe("buildTagDeletionPush", () => {
+  const tags = [
+    { id: "food", user: 7, title: "Еда", parent: null },
+    { id: "cafe", user: 7, title: "Кафе", parent: "food" },
+    { id: "misc", user: 7, title: "Другое", parent: null },
+  ] as ZenTag[];
+  function tagCache(transactions: ZenTransaction[]): ZenCache {
+    return { ...cache(transactions), tags };
+  }
+  function tx(id: string, tag: string[] | null, deleted = false): ZenTransaction {
+    return { id, user: 7, tag, deleted } as ZenTransaction;
+  }
+
+  it("swaps the deleted tag for its replacement and deletes the tag", () => {
+    const c = tagCache([tx("t1", ["cafe"])]);
+    const out = buildTagDeletionPush([{ id: "cafe", replacementId: "misc" }], c, 55);
+    expect(out.skipped).toEqual([]);
+    expect(out.transactions).toEqual([
+      { id: "t1", user: 7, tag: ["misc"], deleted: false, changed: 55 },
+    ]);
+    expect(out.deletions).toEqual([
+      { id: "cafe", object: "tag", user: 7, stamp: 55 },
+    ]);
+  });
+
+  it("leaves the operation without a category when there is no replacement", () => {
+    const c = tagCache([tx("t1", ["cafe"])]);
+    const out = buildTagDeletionPush([{ id: "cafe", replacementId: null }], c, 1);
+    expect(out.transactions[0].tag).toBeNull();
+  });
+
+  it("does not double the replacement when the operation already carries it", () => {
+    const c = tagCache([tx("t1", ["cafe", "misc"])]);
+    const out = buildTagDeletionPush([{ id: "cafe", replacementId: "misc" }], c, 1);
+    expect(out.transactions[0].tag).toEqual(["misc"]);
+  });
+
+  it("keeps the operation's other categories untouched", () => {
+    const c = tagCache([tx("t1", ["cafe", "food"])]);
+    const out = buildTagDeletionPush([{ id: "cafe", replacementId: null }], c, 1);
+    expect(out.transactions[0].tag).toEqual(["food"]);
+  });
+
+  it("refuses to strand subcategories when only the parent is deleted", () => {
+    const c = tagCache([tx("t1", ["food"])]);
+    const out = buildTagDeletionPush([{ id: "food", replacementId: "misc" }], c, 1);
+    expect(out.deletions).toEqual([]);
+    expect(out.transactions).toEqual([]);
+    expect(out.skipped).toEqual([
+      { id: "food", reason: expect.stringContaining("подкатегории") },
+    ]);
+  });
+
+  it("allows deleting a parent together with its subcategories", () => {
+    const c = tagCache([tx("t1", ["cafe"]), tx("t2", ["food"])]);
+    const out = buildTagDeletionPush(
+      [
+        { id: "food", replacementId: "misc" },
+        { id: "cafe", replacementId: "misc" },
+      ],
+      c,
+      1
+    );
+    expect(out.skipped).toEqual([]);
+    expect(out.deletions.map((d) => d.id).sort()).toEqual(["cafe", "food"]);
+    expect(out.transactions.map((t) => t.tag)).toEqual([["misc"], ["misc"]]);
+  });
+
+  it("refuses a replacement that is itself being deleted", () => {
+    const c = tagCache([tx("t1", ["cafe"])]);
+    const out = buildTagDeletionPush(
+      [
+        { id: "cafe", replacementId: "misc" },
+        { id: "misc", replacementId: null },
+      ],
+      c,
+      1
+    );
+    expect(out.skipped).toEqual([
+      { id: "cafe", reason: expect.stringContaining("сама удаляется") },
+    ]);
+    expect(out.deletions.map((d) => d.id)).toEqual(["misc"]);
+  });
+
+  it("leaves deleted operations and untagged ones alone", () => {
+    const c = tagCache([tx("t1", ["cafe"], true), tx("t2", null), tx("t3", [])]);
+    const out = buildTagDeletionPush([{ id: "cafe", replacementId: "misc" }], c, 1);
+    expect(out.transactions).toEqual([]);
+    expect(out.deletions).toHaveLength(1);
+  });
+
+  it("ignores a category that's already gone from the cache", () => {
+    const c = tagCache([]);
+    const out = buildTagDeletionPush([{ id: "ghost", replacementId: null }], c, 1);
+    expect(out).toEqual({ transactions: [], deletions: [], skipped: [] });
   });
 });
 

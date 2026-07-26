@@ -9,6 +9,7 @@ import {
   PiggyBank,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
+import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import {
   computeWhatIfBase,
@@ -39,6 +40,10 @@ function years(v: number): string {
 
 export function WhatIfPage() {
   const transactions = useDataStore((s) => s.transactions);
+  // Income/expense scenario base excludes turnover / off-balance flows (#14);
+  // the net-worth baseline below stays on raw transactions (it's a balance, and
+  // excluded reimbursements are still real money that moved).
+  const analyticsTx = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
   const calibration = useCalibrationStore((s) => s.calibration);
   const calibLoaded = useCalibrationStore((s) => s.loaded);
@@ -48,8 +53,8 @@ export function WhatIfPage() {
     if (!calibLoaded) hydrateCalibration();
   }, [calibLoaded, hydrateCalibration]);
 
-  const baseScenario = useMemo(() => computeWhatIfBase(transactions), [transactions]);
-  const categories = useMemo(() => avgMonthlyByCategory(transactions, 8), [transactions]);
+  const baseScenario = useMemo(() => computeWhatIfBase(analyticsTx), [analyticsTx]);
+  const categories = useMemo(() => avgMonthlyByCategory(analyticsTx, 8), [analyticsTx]);
 
   const currentNetWorth = useMemo(() => {
     const series = netWorthSeries(transactions, calibration);

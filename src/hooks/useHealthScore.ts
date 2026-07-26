@@ -3,11 +3,13 @@ import { useDataStore } from "../store/useDataStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
+import { useAnalyticsExclusionStore } from "../store/useAnalyticsExclusionStore";
 import {
   getLiveAccountsFromCache,
   type LiveAccount,
 } from "../store/useZenmoneyStore";
 import { computeHealthScore, type HealthScore } from "../lib/health";
+import { stripFromAnalytics } from "../lib/aggregations";
 
 /**
  * Financial-health score, computed the same way for every surface that shows it
@@ -29,12 +31,16 @@ export function useHealthScore(): HealthScore | null {
   const metaLoaded = useCategoryMetaStore((s) => s.loaded);
   const hydrateMeta = useCategoryMetaStore((s) => s.hydrate);
   const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
+  const excluded = useAnalyticsExclusionStore((s) => s.excluded);
+  const exclLoaded = useAnalyticsExclusionStore((s) => s.loaded);
+  const hydrateExcl = useAnalyticsExclusionStore((s) => s.hydrate);
   const [liveAccounts, setLiveAccounts] = useState<LiveAccount[] | null>(null);
 
   useEffect(() => {
     if (!calibLoaded) hydrateCalibration();
     if (!metaLoaded) hydrateMeta();
-  }, [calibLoaded, hydrateCalibration, metaLoaded, hydrateMeta]);
+    if (!exclLoaded) hydrateExcl();
+  }, [calibLoaded, hydrateCalibration, metaLoaded, hydrateMeta, exclLoaded, hydrateExcl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,15 +56,28 @@ export function useHealthScore(): HealthScore | null {
     if (transactions.length === 0) return null;
     const toBase = (amt: number, cur: string) =>
       cur === rates.base ? amt : amt * (rates.rates[cur] || 1);
-    const extraLiquid =
+    const offBalance =
       includeOffBalance || !liveAccounts
-        ? 0
-        : liveAccounts
-            .filter((a) => !a.archive && !a.inBalance)
-            .reduce((s, a) => s + toBase(a.balance, a.currency), 0);
+        ? []
+        : liveAccounts.filter((a) => !a.archive && !a.inBalance);
+    const extraLiquid = offBalance.reduce(
+      (s, a) => s + toBase(a.balance, a.currency),
+      0
+    );
+
+    // Savings-rate / obligatory-share metrics ignore turnover + off-balance
+    // flows the user excluded (#14). Emergency-fund cushion (extraLiquid) is a
+    // BALANCE and stays untouched — off-balance accounts still count there.
+    const offBalanceTitles = offBalance.length
+      ? new Set(offBalance.map((a) => a.title))
+      : undefined;
+    const scored = stripFromAnalytics(transactions, {
+      excludedCategories: excluded,
+      offBalanceTitles,
+    });
 
     return computeHealthScore({
-      transactions,
+      transactions: scored,
       baseCurrency,
       calibration,
       categoryMeta,
@@ -72,5 +91,6 @@ export function useHealthScore(): HealthScore | null {
     categoryMeta,
     includeOffBalance,
     liveAccounts,
+    excluded,
   ]);
 }

@@ -54,6 +54,7 @@ import type {
   ZenBudget,
   ZenDeletion,
   ZenDiffResponse,
+  ZenMerchant,
   ZenTag,
   ZenTransaction,
 } from "./zenmoney";
@@ -1243,13 +1244,15 @@ export async function sendPush(
   deletions: ZenDeletion[] = [],
   resurrections: ZenTransaction[] = [],
   tags: ZenTag[] = [],
-  budgets: ZenBudget[] = []
+  budgets: ZenBudget[] = [],
+  merchants: ZenMerchant[] = []
 ): Promise<ZenDiffResponse> {
   const payload: PushPayload = {
     transaction: [...items.map((i) => i.zen), ...resurrections],
     ...(deletions.length > 0 ? { deletion: deletions } : {}),
     ...(tags.length > 0 ? { tag: tags } : {}),
     ...(budgets.length > 0 ? { budget: budgets } : {}),
+    ...(merchants.length > 0 ? { merchant: merchants } : {}),
   };
   // Debug aid: surface the full payload in DevTools so it's easy to
   // verify which fields actually landed in the request body. Disabled
@@ -1275,18 +1278,30 @@ export async function sendPush(
   return pushDiff(token, serverTimestamp, payload);
 }
 
+/** A pending patch onto a tag — only the touched fields are present. Mirrors
+ *  `TagEdit` in useTagEditsStore without importing the store into the pure lib. */
+export interface TagEditPatch {
+  title?: string;
+  parent?: string | null;
+  showIncome?: boolean;
+  showOutcome?: boolean;
+  icon?: string | null;
+  color?: number | null;
+  required?: boolean | null;
+}
+
 /**
- * Build the `ZenTag[]` payload for pending category-tag edits (currently only
- * the «обязательная» `required` flag). Same strategy as transactions: take the
- * ORIGINAL tag from cache and override only the touched field, so we never
- * blank out fields we don't model locally (color, icon, budget*, parent…).
+ * Build the `ZenTag[]` payload for pending category-tag edits (title, parent,
+ * type, icon, colour, «обязательная»). Same strategy as transactions: take the
+ * ORIGINAL tag from cache and override ONLY the fields the patch carries, so we
+ * never blank out fields we don't model locally (budget*, picture…).
  *
- * Edits that map to no cached tag (needs a re-sync) or are a no-op (value
- * already matches the cache) are skipped — the former reported in `skipped`,
- * the latter silently dropped.
+ * Edits that map to no cached tag (needs a re-sync) or are a net no-op (every
+ * present field already matches the cache) are skipped — the former reported in
+ * `skipped`, the latter silently dropped.
  */
 export function buildTagPush(
-  edits: Record<string, { required: boolean | null }>,
+  edits: Record<string, TagEditPatch>,
   cacheTags: ZenTag[],
   stampSeconds: number
 ): { tags: ZenTag[]; skipped: { id: string; reason: string }[] } {
@@ -1299,10 +1314,326 @@ export function buildTagPush(
       skipped.push({ id, reason: "категория не найдена в кэше (нужна синхронизация)" });
       continue;
     }
-    if ((orig.required ?? null) === (edit.required ?? null)) continue; // no-op
-    tags.push({ ...orig, required: edit.required, changed: stampSeconds });
+    const next: ZenTag = { ...orig };
+    let changed = false;
+    // `null` is a meaningful value for required/color/parent, so compare with
+    // ?? null to treat absent-vs-null as equal, and only mark changed on a real
+    // difference. Fields absent from the patch are left at the cached value.
+    if (edit.title !== undefined && edit.title !== orig.title) {
+      next.title = edit.title;
+      changed = true;
+    }
+    if (edit.parent !== undefined && (edit.parent ?? null) !== (orig.parent ?? null)) {
+      next.parent = edit.parent;
+      changed = true;
+    }
+    if (edit.showIncome !== undefined && edit.showIncome !== orig.showIncome) {
+      next.showIncome = edit.showIncome;
+      changed = true;
+    }
+    if (edit.showOutcome !== undefined && edit.showOutcome !== orig.showOutcome) {
+      next.showOutcome = edit.showOutcome;
+      changed = true;
+    }
+    if (edit.icon !== undefined && (edit.icon ?? null) !== (orig.icon ?? null)) {
+      next.icon = edit.icon;
+      changed = true;
+    }
+    if (edit.color !== undefined && (edit.color ?? null) !== (orig.color ?? null)) {
+      next.color = edit.color;
+      changed = true;
+    }
+    if (edit.required !== undefined && (edit.required ?? null) !== (orig.required ?? null)) {
+      next.required = edit.required;
+      changed = true;
+    }
+    if (!changed) continue; // net no-op
+    next.changed = stampSeconds;
+    tags.push(next);
   }
   return { tags, skipped };
+}
+
+/** A locally-created category to be pushed as a brand-new Zenmoney tag. */
+export interface NewCategoryDraft {
+  id: string;
+  title: string;
+  parent: string | null;
+  showIncome: boolean;
+  showOutcome: boolean;
+  icon: string | null;
+  color: number | null;
+  required: boolean | null;
+}
+
+/**
+ * Build the `ZenTag[]` payload for locally-created categories — full new tags
+ * with the client-minted uuid. `user` is the account's numeric id (taken from
+ * any cached tag). Empty-titled drafts are skipped defensively. `budgetIncome`/
+ * `budgetOutcome` mirror the type so the new tag behaves like one made in Дзен.
+ */
+export function buildNewCategoriesPush(
+  items: NewCategoryDraft[],
+  user: number,
+  stampSeconds: number
+): ZenTag[] {
+  const out: ZenTag[] = [];
+  for (const c of items) {
+    if (!c.title.trim()) continue;
+    out.push({
+      id: c.id,
+      user,
+      title: c.title.trim(),
+      parent: c.parent,
+      archive: false,
+      showIncome: c.showIncome,
+      showOutcome: c.showOutcome,
+      budgetIncome: c.showIncome,
+      budgetOutcome: c.showOutcome,
+      required: c.required,
+      icon: c.icon,
+      picture: null,
+      color: c.color,
+      changed: stampSeconds,
+    });
+  }
+  return out;
+}
+
+// ── Контрагенты (Zenmoney merchants) ─────────────────────────────────────────
+// A merchant is a trivial 4-field dictionary entry {id, user, title, changed}.
+// Creates mint a client-side uuid; renames take the cached row and override the
+// title; deletions ride the generic `ZenDeletion` channel with object "merchant".
+
+/** A locally-created counterparty to be pushed as a brand-new merchant. */
+export interface NewCounterpartyDraft {
+  id: string;
+  title: string;
+}
+
+/**
+ * Build the `ZenMerchant[]` payload for locally-created counterparties.
+ * `user` is the account's numeric id (taken from any cached entity).
+ * Empty-titled drafts are skipped defensively.
+ */
+export function buildNewMerchantsPush(
+  items: NewCounterpartyDraft[],
+  user: number,
+  stampSeconds: number
+): ZenMerchant[] {
+  const out: ZenMerchant[] = [];
+  for (const m of items) {
+    if (!m.title.trim()) continue;
+    out.push({ id: m.id, user, title: m.title.trim(), changed: stampSeconds });
+  }
+  return out;
+}
+
+/**
+ * Build the `ZenMerchant[]` payload for renamed counterparties: take the
+ * ORIGINAL cached merchant and override only its title, so we never blank out
+ * fields we don't model. No-ops (title already matches) and unknown ids (need a
+ * re-sync) are skipped — the latter reported in `skipped`.
+ */
+export function buildMerchantRenamePush(
+  renames: Record<string, string>,
+  cacheMerchants: ZenMerchant[],
+  stampSeconds: number
+): { merchants: ZenMerchant[]; skipped: { id: string; reason: string }[] } {
+  const byId = new Map(cacheMerchants.map((m) => [m.id, m]));
+  const merchants: ZenMerchant[] = [];
+  const skipped: { id: string; reason: string }[] = [];
+  for (const [id, rawTitle] of Object.entries(renames)) {
+    const orig = byId.get(id);
+    if (!orig) {
+      skipped.push({ id, reason: "контрагент не найден в кэше (нужна синхронизация)" });
+      continue;
+    }
+    const title = rawTitle.trim();
+    if (!title || title === orig.title) continue; // no-op
+    merchants.push({ ...orig, title, changed: stampSeconds });
+  }
+  return { merchants, skipped };
+}
+
+/**
+ * Build `ZenDeletion[]` for counterparties the user removed. Mirrors the
+ * transaction deletion builder but stamps `object: "merchant"` — the cache
+ * merge already drops deleted merchants from `cache.merchants`.
+ *
+ * Ids missing from the cache are skipped: nothing to delete server-side (the
+ * row is already gone), so the local intent is satisfied.
+ */
+export function buildMerchantDeletions(
+  ids: string[],
+  cacheMerchants: ZenMerchant[],
+  stampSeconds: number
+): ZenDeletion[] {
+  const byId = new Map(cacheMerchants.map((m) => [m.id, m]));
+  const out: ZenDeletion[] = [];
+  for (const id of ids) {
+    const m = byId.get(id);
+    if (!m) continue;
+    out.push({ id, object: "merchant", user: m.user, stamp: stampSeconds });
+  }
+  return out;
+}
+
+/** Two counterparties that are really the same one: `id` is folded into
+ *  `survivorId`, which keeps the operations. */
+export interface MerchantMerge {
+  id: string;
+  survivorId: string;
+}
+
+/**
+ * Build the payload that folds duplicate counterparties into one: every
+ * operation pointing at `id` is re-pointed at `survivorId`, then `id` is
+ * deleted.
+ *
+ * Re-pointing goes by merchant ID, not by title — duplicates share a title by
+ * definition, so a title lookup could not tell the survivor from the copy.
+ * Each operation is rebuilt from the ORIGINAL cached row with `merchant`
+ * overridden, so nothing else on it moves.
+ *
+ * A merge whose survivor is itself being merged away is refused rather than
+ * chased through the chain: one push, one hop, no surprises.
+ */
+export function buildMerchantMergePush(
+  items: MerchantMerge[],
+  cache: ZenCache,
+  stampSeconds: number
+): {
+  transactions: ZenTransaction[];
+  deletions: ZenDeletion[];
+  skipped: { id: string; reason: string }[];
+} {
+  const byId = new Map(cache.merchants.map((m) => [m.id, m]));
+  const transactions: ZenTransaction[] = [];
+  const deletions: ZenDeletion[] = [];
+  const skipped: { id: string; reason: string }[] = [];
+
+  const mergedAway = new Set(items.map((i) => i.id));
+  /** dup id → survivor id, for the ones that passed validation. */
+  const valid = new Map<string, string>();
+
+  for (const { id, survivorId } of items) {
+    const dup = byId.get(id);
+    if (!dup) continue; // already gone server-side — intent satisfied
+    if (id === survivorId) continue; // no-op
+    if (!byId.get(survivorId)) {
+      skipped.push({ id, reason: "контрагент-получатель не найден в кэше (нужна синхронизация)" });
+      continue;
+    }
+    if (mergedAway.has(survivorId)) {
+      skipped.push({ id, reason: "контрагент-получатель сам объединяется — сначала отправьте текущие правки" });
+      continue;
+    }
+    valid.set(id, survivorId);
+    deletions.push({ id, object: "merchant", user: dup.user, stamp: stampSeconds });
+  }
+
+  if (valid.size > 0) {
+    for (const t of cache.transactions) {
+      if (t.deleted || !t.merchant) continue;
+      const survivor = valid.get(t.merchant);
+      if (!survivor) continue;
+      transactions.push({ ...t, merchant: survivor, changed: stampSeconds });
+    }
+  }
+
+  return { transactions, deletions, skipped };
+}
+
+/** A category the user removed, and what happens to its operations. */
+export interface TagDeletion {
+  id: string;
+  /** Category that inherits the operations, or null to leave them without one. */
+  replacementId: string | null;
+}
+
+/**
+ * Build the payload for deleting categories: operations tagged with a removed
+ * category get re-tagged (or untagged), then the tags themselves are deleted.
+ *
+ * Zenmoney holds `tag` as an ARRAY, so a re-tag is a per-element substitution
+ * with de-duplication — an operation already carrying the replacement must not
+ * end up with it twice. An operation left with no tags gets `null`, which is
+ * how Zenmoney spells «без категории».
+ *
+ * Refused (reported in `skipped`, nothing pushed for that id):
+ *  • a category with subcategories that aren't being deleted in the same batch
+ *    — deleting the parent alone would orphan them;
+ *  • a replacement that is missing, or is itself being deleted.
+ */
+export function buildTagDeletionPush(
+  items: TagDeletion[],
+  cache: ZenCache,
+  stampSeconds: number
+): {
+  transactions: ZenTransaction[];
+  deletions: ZenDeletion[];
+  skipped: { id: string; reason: string }[];
+} {
+  const byId = new Map(cache.tags.map((t) => [t.id, t]));
+  const transactions: ZenTransaction[] = [];
+  const deletions: ZenDeletion[] = [];
+  const skipped: { id: string; reason: string }[] = [];
+
+  const doomed = new Set(items.map((i) => i.id));
+  /** doomed tag id → replacement id (or null to just drop it). */
+  const valid = new Map<string, string | null>();
+
+  for (const { id, replacementId } of items) {
+    const tag = byId.get(id);
+    if (!tag) continue; // already gone server-side — intent satisfied
+
+    const strandedChild = cache.tags.find(
+      (t) => t.parent === id && !doomed.has(t.id)
+    );
+    if (strandedChild) {
+      skipped.push({
+        id,
+        reason: `остались подкатегории («${strandedChild.title}») — удалите или перенесите их вместе с категорией`,
+      });
+      continue;
+    }
+    if (replacementId !== null) {
+      if (!byId.get(replacementId)) {
+        skipped.push({ id, reason: "категория-замена не найдена в кэше (нужна синхронизация)" });
+        continue;
+      }
+      if (doomed.has(replacementId)) {
+        skipped.push({ id, reason: "категория-замена сама удаляется — выберите другую" });
+        continue;
+      }
+    }
+    valid.set(id, replacementId);
+    deletions.push({ id, object: "tag", user: tag.user, stamp: stampSeconds });
+  }
+
+  if (valid.size > 0) {
+    for (const t of cache.transactions) {
+      if (t.deleted || !t.tag || t.tag.length === 0) continue;
+      if (!t.tag.some((id) => valid.has(id))) continue;
+      const next: string[] = [];
+      for (const id of t.tag) {
+        if (!valid.has(id)) {
+          if (!next.includes(id)) next.push(id);
+          continue;
+        }
+        const replacement = valid.get(id)!;
+        if (replacement && !next.includes(replacement)) next.push(replacement);
+      }
+      transactions.push({
+        ...t,
+        tag: next.length > 0 ? next : null,
+        changed: stampSeconds,
+      });
+    }
+  }
+
+  return { transactions, deletions, skipped };
 }
 
 /** A pending budget/plan change, queued to push back to Zenmoney «Планы». */
