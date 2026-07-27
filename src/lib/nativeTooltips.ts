@@ -47,7 +47,7 @@ function ensureBubble(): HTMLDivElement {
   b.setAttribute("role", "tooltip");
   // Mirrors the <Tooltip> component's bubble exactly — one visual language.
   b.className =
-    "pointer-events-none fixed z-[100] w-max max-w-[min(20rem,calc(100vw-1rem))] " +
+    "pointer-events-none fixed z-[100] w-max max-w-80 " +
     "rounded-lg border border-border bg-panel2 px-3 py-2 text-xs leading-relaxed " +
     "text-text shadow-lg whitespace-pre-line";
   b.style.opacity = "0";

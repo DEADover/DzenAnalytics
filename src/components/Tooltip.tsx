@@ -28,6 +28,11 @@ interface Props {
  * the surrounding (often flex) layout. Pass a falsy `content` to disable it
  * conditionally without unwrapping (e.g. `content={editing ? null : text}`).
  *
+ * Width is a plain `max-w-80` on purpose: a `min(20rem, 100vw - 1rem)` guard
+ * computed to max-width 0 in the embedded browser (the bubble collapsed to one
+ * character per line), and it isn't needed — the positioning below already
+ * clamps the box inside the viewport.
+ *
  * Positioning measures the bubble's REAL size after it mounts and shifts the
  * whole box to stay within the viewport — so near a screen edge it slides
  * sideways instead of squishing into a tall one-word-per-line column.
@@ -129,7 +134,7 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
               top: pos.top,
               opacity: pos.ready ? 1 : 0,
             }}
-            className="pointer-events-none z-[100] w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-lg border border-border bg-panel2 px-3 py-2 text-xs leading-relaxed text-text shadow-lg whitespace-pre-line transition-opacity duration-100"
+            className="pointer-events-none z-[100] w-max max-w-80 rounded-lg border border-border bg-panel2 px-3 py-2 text-xs leading-relaxed text-text shadow-lg whitespace-pre-line transition-opacity duration-100"
           >
             {content}
           </div>,

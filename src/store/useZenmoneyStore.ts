@@ -600,7 +600,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // already runs payee grouping + category rules + recomputes amountBase.
       const meta: ImportMeta = {
         importedAt: new Date().toISOString(),
-        fileName: `Zen-мани API · ${mapped.accountsActive} счетов · ${mapped.tagsTotal} тегов`,
+        fileName: `Дзен-мани API · ${mapped.accountsActive} счетов · ${mapped.tagsTotal} тегов`,
         totalRows: nextCache.transactions.length,
         parsed: mapped.transactions.length,
         skipped: nextCache.transactions.length - mapped.transactions.length,
@@ -852,7 +852,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // 2) Build push items from the current overlay.
       let cache = await loadZenCache();
       if (!cache) {
-        const msg = "Локальный кэш Zenmoney пуст — сначала синхронизируйтесь";
+        const msg = "Локальный кэш Дзен-мани пуст — сначала синхронизируйтесь";
         set({ pushStatus: "error", pushError: msg });
         throw new Error(msg);
       }
@@ -1197,7 +1197,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       //    calibration (push doesn't move account balances locally).
       const importMeta: ImportMeta = {
         importedAt: new Date().toISOString(),
-        fileName: `Zen-мани API · ${mapped.accountsActive} счетов · ${mapped.tagsTotal} тегов`,
+        fileName: `Дзен-мани API · ${mapped.accountsActive} счетов · ${mapped.tagsTotal} тегов`,
         totalRows: nextCache.transactions.length,
         parsed: mapped.transactions.length,
         skipped: nextCache.transactions.length - mapped.transactions.length,

@@ -682,7 +682,7 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
   async function saveDraft() {
     const cache = await loadZenCache();
     if (!cache) {
-      setError("Создание операций доступно только при синхронизации с Zenmoney.");
+      setError("Создание операций доступно только при синхронизации с Дзен-мани.");
       return;
     }
     const built = buildDraftTransaction(
@@ -705,7 +705,7 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
   async function saveDraftEdit() {
     const cache = await loadZenCache();
     if (!cache) {
-      setError("Создание операций доступно только при синхронизации с Zenmoney.");
+      setError("Создание операций доступно только при синхронизации с Дзен-мани.");
       return;
     }
     const built = buildDraftTransaction(

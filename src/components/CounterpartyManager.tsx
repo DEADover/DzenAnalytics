@@ -290,7 +290,7 @@ export function CounterpartyManager() {
   if (cached === null) {
     return (
       <p className="text-sm text-muted">
-        Справочник контрагентов доступен только в режиме Zenmoney API — нужен
+        Справочник контрагентов доступен только в режиме Дзен-мани API — нужен
         живой список и синхронизация. Подключите Дзен-мани в настройках.
       </p>
     );

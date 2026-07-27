@@ -3,15 +3,22 @@ import { Flame, Wallet, ChevronDown, Check, Info } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFireStore } from "../store/useFireStore";
 import { useFireCapital } from "../hooks/useFireCapital";
+import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { groupByMonth } from "../lib/aggregations";
 import { formatMoney } from "../lib/format";
 import { Tooltip } from "./Tooltip";
+import { TooltipFacts } from "./TooltipFacts";
 
 /** FIRE goal on the 4%-rule: 25 годовых расходов = 300 месяцев. */
 const FIRE_MONTHS = 300;
 
-const INTRO =
-  "FIRE — это когда накоплений столько, что на доход с них можно жить, не завися от зарплаты. Нужная сумма — ваши обязательные расходы за год, умноженные на 25 (правило 4%): снимая около 4% в год, вы покрываете обязательные траты, а накопления не иссякают. Цель считается от обязательных расходов — это порог финансовой безопасности; чтобы сохранить весь текущий уровень жизни, ориентир будет выше.";
+// Пустая строка = абзац: бабл рендерит текст с `whitespace-pre-line`, так что
+// три коротких мысли читаются лучше, чем один плотный блок на пять строк.
+const INTRO = [
+  "FIRE — это когда накоплений столько, что на доход с них можно жить, не завися от зарплаты.",
+  "Нужная сумма — обязательные расходы за год × 25 (правило 4%): снимая около 4% в год, вы покрываете обязательные траты, а накопления не иссякают.",
+  "Цель считается от обязательных расходов — это порог финансовой безопасности. Чтобы сохранить весь текущий уровень жизни, ориентир будет выше.",
+].join("\n\n");
 
 /** Correct Russian plural for «год» (1 год · 2 года · 5 лет). */
 function yearsWord(n: number): string {
@@ -47,7 +54,12 @@ export function FireIndependence({
   /** Render content only (no card wrapper) — for merging with the chart. */
   bare?: boolean;
 }) {
-  const transactions = useDataStore((s) => s.transactions);
+  // Turnover / off-balance flows the user excluded (#14) must NOT inflate the
+  // spending here: the FIRE TARGET already comes in filtered (via
+  // `avgObligatoryMonthly`, computed from the chart's analytics dataset), so
+  // reading the raw feed made one block quote two different realities — the
+  // savings rate and «лет до цели» counted turnover the user had switched off.
+  const transactions = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
   const excluded = useFireStore((s) => s.excluded);
   const toggleExcluded = useFireStore((s) => s.toggle);
@@ -113,7 +125,15 @@ export function FireIndependence({
       {/* Progress: % пути + лет до цели */}
       <div className="flex items-baseline justify-between flex-wrap gap-2 text-sm mb-1.5">
         <Tooltip
-          content={`Формула: капитал ÷ цель × 100 = ${formatMoney(capital, base)} ÷ ${formatMoney(fireTarget, base)}.`}
+          content={
+            <TooltipFacts
+              title="Капитал ÷ цель × 100"
+              facts={[
+                { label: "Капитал", value: formatMoney(capital, base) },
+                { label: "Цель", value: formatMoney(fireTarget, base) },
+              ]}
+            />
+          }
         >
           <span className="tabular-nums cursor-help">
             <span className={`font-semibold ${fireAchieved ? "text-income" : "text-accent"}`}>
@@ -124,11 +144,28 @@ export function FireIndependence({
         </Tooltip>
         <Tooltip
           content={
-            fireAchieved
-              ? "Капитал уже больше цели — снимая ~4% в год, вы покрываете обязательные траты."
-              : Number.isFinite(yearsToFire)
-                ? `Формула: (цель − капитал) ÷ сбережения за год = ${formatMoney(remainingToFire, base)} ÷ (${formatMoney(avgSavings, base)} × 12). Сбережения — средние за последние 6 месяцев.`
-                : `Сбережения не положительные: средний расход (${formatMoney(avgExpense, base)}) больше среднего дохода (${formatMoney(avgIncome, base)}) за последние 6 месяцев, поэтому срок не считается.`
+            fireAchieved ? (
+              "Капитал уже больше цели — снимая ~4% в год, вы покрываете обязательные траты."
+            ) : Number.isFinite(yearsToFire) ? (
+              <TooltipFacts
+                title="(цель − капитал) ÷ сбережения за год"
+                facts={[
+                  { label: "Осталось накопить", value: formatMoney(remainingToFire, base) },
+                  { label: "Откладываете в месяц", value: formatMoney(avgSavings, base) },
+                  { label: "За год", value: formatMoney(avgSavings * 12, base) },
+                ]}
+                note="Сбережения — средние за последние 6 месяцев."
+              />
+            ) : (
+              <TooltipFacts
+                title="Срок не считается: расход больше дохода"
+                facts={[
+                  { label: "Доход", value: formatMoney(avgIncome, base) },
+                  { label: "Расход", value: formatMoney(avgExpense, base) },
+                ]}
+                note="Средние за последние 6 месяцев."
+              />
+            )
           }
         >
           <span
@@ -162,7 +199,7 @@ export function FireIndependence({
         </button>
       ) : (
         <div className="mt-2 text-xs text-muted">
-          Подключите Zen-мани, чтобы капитал считался автоматически по балансам счетов.
+          Подключите Дзен-мани, чтобы капитал считался автоматически по балансам счетов.
         </div>
       )}
       {showAccounts && capitalAccounts.length > 0 && (
@@ -199,7 +236,7 @@ export function FireIndependence({
             );
           })}
           <p className="text-[11px] text-muted pt-1">
-            По умолчанию учитываются все активные счета, включая помеченные в Zen-мани как
+            По умолчанию учитываются все активные счета, включая помеченные в Дзен-мани как
             «вне баланса» (накопительные, брокерские и т.п.). Снимите галочку, чтобы
             исключить счёт из капитала FIRE.
           </p>
@@ -214,7 +251,19 @@ export function FireIndependence({
             <Wallet className="w-4 h-4 text-accent shrink-0 mr-2" />
             <div className="min-w-0">
               <Tooltip
-                content={`Сумма балансов счетов, отмеченных галочкой в списке «Счета в капитале» (учтено ${capitalAccounts.filter((a) => !excluded.includes(a.title)).length} из ${capitalAccounts.length}). Балансы пересчитаны в ${base} по текущему курсу.`}
+                content={
+                  <TooltipFacts
+                    title="Сумма балансов выбранных счетов"
+                    facts={[
+                      {
+                        label: "Счетов учтено",
+                        value: `${capitalAccounts.filter((a) => !excluded.includes(a.title)).length} из ${capitalAccounts.length}`,
+                      },
+                      { label: "Итого", value: formatMoney(capital, base) },
+                    ]}
+                    note={`Выбрать счета — в списке «Счета в капитале» выше. Балансы пересчитаны в ${base} по текущему курсу.`}
+                  />
+                }
               >
                 <div className={kpiLabelCls}>Капитал</div>
               </Tooltip>
@@ -225,7 +274,17 @@ export function FireIndependence({
           </div>
           <div className="bg-panel2 p-3">
             <Tooltip
-              content={`Формула: (доход − расход) ÷ доход × 100. Средние за последние 6 месяцев: доход ${formatMoney(avgIncome, base)}, расход ${formatMoney(avgExpense, base)}, остаётся ${formatMoney(avgSavings, base)} в месяц.`}
+              content={
+                <TooltipFacts
+                  title="(доход − расход) ÷ доход × 100"
+                  facts={[
+                    { label: "Доход", value: formatMoney(avgIncome, base) },
+                    { label: "Расход", value: formatMoney(avgExpense, base) },
+                    { label: "Остаётся в месяц", value: formatMoney(avgSavings, base) },
+                  ]}
+                  note="Средние за последние 6 месяцев."
+                />
+              }
             >
               <div className={kpiLabelCls}>Норма сбережений</div>
             </Tooltip>
@@ -235,7 +294,16 @@ export function FireIndependence({
           </div>
           <div className="bg-panel2 p-3">
             <Tooltip
-              content={`Формула: среднемесячные обязательные расходы × 12 = ${formatMoney(avgObligatoryMonthly, base)} × 12. Среднее — скользящее за последние 12 месяцев, та же база, что и на графике ниже. Обязательность категории задаётся на странице «Категории».`}
+              content={
+                <TooltipFacts
+                  title="Обязательные расходы в месяц × 12"
+                  facts={[
+                    { label: "В месяц", value: formatMoney(avgObligatoryMonthly, base) },
+                    { label: "За год", value: formatMoney(annualObligatory, base) },
+                  ]}
+                  note="Среднее скользящее за 12 месяцев — та же база, что и на графике ниже. Обязательность категории задаётся в Настройках → Справочники."
+                />
+              }
             >
               <div className={kpiLabelCls}>Обязательные траты в год</div>
             </Tooltip>
@@ -245,7 +313,16 @@ export function FireIndependence({
           </div>
           <div className="bg-panel2 p-3">
             <Tooltip
-              content={`Формула: обязательные траты за год × 25 (правило 4%) = ${formatMoney(annualObligatory, base)} × 25. То же самое: среднемесячные обязательные × 300 месяцев.`}
+              content={
+                <TooltipFacts
+                  title="Обязательные за год × 25 — правило 4%"
+                  facts={[
+                    { label: "Обязательные за год", value: formatMoney(annualObligatory, base) },
+                    { label: "Цель", value: formatMoney(fireTarget, base) },
+                  ]}
+                  note="То же самое: среднемесячные обязательные × 300 месяцев."
+                />
+              }
             >
               <div className={kpiLabelCls}>Цель · ×25</div>
             </Tooltip>

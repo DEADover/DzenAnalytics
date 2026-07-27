@@ -1,4 +1,5 @@
 import type { Transaction } from "../types";
+import { formatMoney } from "./format";
 import {
   groupByMonth,
   netWorthSeries,
@@ -105,8 +106,20 @@ function computeSavingsRate(opts: ComputeOptions): HealthComponent {
     score,
     value: rate,
     status: recent.length === 0 ? "na" : classify(score),
+    // Spell out the three numbers behind the percentage: without them the score
+    // can't be checked against the same metric on the FIRE block, and «почему у
+    // меня столько» остаётся без ответа.
+    // Строками, а не одним предложением: бабл рендерит `whitespace-pre-line`,
+    // и три суммы под собой читаются с одного взгляда.
     detail:
-      "Какую долю дохода вы откладываете. Считаем за последние 6 месяцев. Хорошо — от 20%.",
+      "Какую долю дохода вы откладываете: (доход − расход) ÷ доход.\n" +
+      "Считаем за последние 6 месяцев. Хорошо — от 20%." +
+      (recent.length
+        ? `\n\nСредние за период:\n` +
+          `· доход — ${formatMoney(avgIncome, opts.baseCurrency)}\n` +
+          `· расход — ${formatMoney(avgExpense, opts.baseCurrency)}\n` +
+          `· остаётся — ${formatMoney(avgIncome - avgExpense, opts.baseCurrency)} в месяц`
+        : ""),
     hint:
       rate < 0.1
         ? "Стремитесь откладывать 20%. Начните с необязательных трат — кафе, развлечения, подписки: там проще всего высвободить деньги."

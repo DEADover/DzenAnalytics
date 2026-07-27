@@ -177,7 +177,7 @@ export async function downloadSnapshot(id: string): Promise<void> {
       serverTimestamp: snap.serverTimestamp,
       counts: snap.counts,
       note:
-        "Это сырой ответ POST /v8/diff/ от Zenmoney на момент снимка. " +
+        "Это сырой ответ POST /v8/diff/ от Дзен-мани на момент снимка. " +
         "Хранится как safety-net на случай неудачной Push-операции из приложения.",
     },
     diff: snap.raw,

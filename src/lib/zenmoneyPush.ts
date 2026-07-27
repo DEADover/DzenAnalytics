@@ -186,8 +186,8 @@ function buildTransferTarget(
   const dstTitle = edit.incomeAccount ?? orig.inAcc;
   const src = accountsByTitle.get(srcTitle);
   const dst = accountsByTitle.get(dstTitle);
-  if (!src) return { skip: `счёт-источник "${srcTitle}" не найден в Zenmoney` };
-  if (!dst) return { skip: `счёт-получатель "${dstTitle}" не найден в Zenmoney` };
+  if (!src) return { skip: `счёт-источник "${srcTitle}" не найден в Дзен-мани` };
+  if (!dst) return { skip: `счёт-получатель "${dstTitle}" не найден в Дзен-мани` };
   if (src.id === dst.id) {
     return { skip: "перевод между одним и тем же счётом невозможен" };
   }
@@ -273,7 +273,7 @@ function collapseTransfer(
     keepLeg === "outcome" ? original.outcomeInstrument : original.incomeInstrument;
   const wantTitle = edit.account ?? (keepLeg === "outcome" ? orig.outAcc : orig.inAcc);
   const acc = accountsByTitle.get(wantTitle);
-  if (!acc) return { skip: `счёт "${wantTitle}" не найден в Zenmoney` };
+  if (!acc) return { skip: `счёт "${wantTitle}" не найден в Дзен-мани` };
   if (acc.instrument !== keepInstr) {
     return {
       skip: "смена счёта на счёт в другой валюте (мультивалюта) пока не поддерживается — отредактируйте в приложении",
@@ -314,7 +314,7 @@ function collapseTransfer(
       tagsById
     );
     if (!resolved) {
-      return { skip: `категория "${edit.category}" не найдена в тегах Zenmoney` };
+      return { skip: `категория "${edit.category}" не найдена в тегах Дзен-мани` };
     }
     zen.tag = [resolved];
   } else {
@@ -577,7 +577,7 @@ export function buildPushItems(
       ): string | null => {
         if (title === undefined || title === origTitle) return null;
         const a = accountsByTitle.get(title);
-        if (!a) return `счёт "${title}" не найден в Zenmoney`;
+        if (!a) return `счёт "${title}" не найден в Дзен-мани`;
         const curInstr = leg === "outcome" ? original.outcomeInstrument : original.incomeInstrument;
         if (a.instrument !== curInstr) {
           return "смена счёта на счёт в другой валюте у долговой операции пока не поддерживается — отредактируйте в приложении Дзена";
@@ -596,7 +596,7 @@ export function buildPushItems(
         !origIsTransfer && edit.account !== undefined && edit.account !== orig.account
           ? (() => {
               const a = accountsByTitle.get(edit.account!);
-              if (!a) return `счёт "${edit.account}" не найден в Zenmoney`;
+              if (!a) return `счёт "${edit.account}" не найден в Дзен-мани`;
               if (a.instrument !== original.outcomeInstrument)
                 return "смена счёта на счёт в другой валюте у долговой операции пока не поддерживается — отредактируйте в приложении Дзена";
               zen.outcomeAccount = a.id;
@@ -687,7 +687,7 @@ export function buildPushItems(
     if (edit.category && SYNTHETIC_CATEGORIES.has(edit.category)) {
       skipped.push({
         id,
-        reason: `категория "${edit.category}" — локальный ярлык, в Zenmoney такого тега нет`,
+        reason: `категория "${edit.category}" — локальный ярлык, в Дзен-мани такого тега нет`,
       });
       continue;
     }
@@ -792,7 +792,7 @@ export function buildPushItems(
       } else {
         skipped.push({
           id,
-          reason: `валюта "${edit.currency}" не найдена в инструментах Zenmoney`,
+          reason: `валюта "${edit.currency}" не найдена в инструментах Дзен-мани`,
         });
         continue;
       }
@@ -813,7 +813,7 @@ export function buildPushItems(
         if (!resolved) {
           skipped.push({
             id,
-            reason: `категория "${edit.category}"${edit.subcategory ? ` / "${edit.subcategory}"` : ""} не найдена в тегах Zenmoney`,
+            reason: `категория "${edit.category}"${edit.subcategory ? ` / "${edit.subcategory}"` : ""} не найдена в тегах Дзен-мани`,
           });
           continue;
         }
@@ -847,7 +847,7 @@ export function buildPushItems(
     if (edit.account !== undefined && edit.account !== orig.account) {
       const newAcc = accountsByTitle.get(edit.account);
       if (!newAcc) {
-        skipped.push({ id, reason: `счёт "${edit.account}" не найден в Zenmoney` });
+        skipped.push({ id, reason: `счёт "${edit.account}" не найден в Дзен-мани` });
         continue;
       }
       const effInstr =
@@ -1133,7 +1133,7 @@ export function buildDraftTransaction(
     if (!category) return { skip: "укажите категорию" };
     if (category !== NO_CATEGORY) {
       if (SYNTHETIC_CATEGORIES.has(category)) {
-        return { skip: `категория "${category}" — локальный ярлык, тега в Zenmoney нет` };
+        return { skip: `категория "${category}" — локальный ярлык, тега в Дзен-мани нет` };
       }
       const tagId = resolveTagId(
         category,
@@ -1143,7 +1143,7 @@ export function buildDraftTransaction(
       );
       if (!tagId) {
         return {
-          skip: `категория "${category}"${fields.subcategory ? ` / "${fields.subcategory}"` : ""} не найдена в тегах Zenmoney`,
+          skip: `категория "${category}"${fields.subcategory ? ` / "${fields.subcategory}"` : ""} не найдена в тегах Дзен-мани`,
         };
       }
       zen.tag = [tagId];
