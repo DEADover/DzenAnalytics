@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useThemeStore } from "../store/useThemeStore";
+import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { HeaderSyncActions } from "./HeaderSyncActions";
 import logoHorizontal from "../assets/logo-horizontal.svg";
@@ -89,6 +90,9 @@ const SECONDARY_GROUPS = [
 const SECONDARY = SECONDARY_GROUPS.flatMap((g) => g.items);
 
 export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
+  // Ручной режим добавляет в шапку пару кнопок отправки — поле «Команды…»
+  // ужимается на их ширину, чтобы остальные иконки не сдвигались.
+  const manualPush = useZenmoneyStore((s) => s.pushMode) === "manual";
   const [moreOpen, setMoreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const loc = useLocation();
@@ -186,7 +190,13 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             the placeholder text to feel airier. */}
         <button
           onClick={onOpenPalette}
-          className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border bg-panel2 text-muted hover:text-text border-border min-w-[220px] lg:min-w-[260px] justify-between"
+          className={clsx(
+            "hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border bg-panel2 text-muted hover:text-text border-border justify-between",
+            // В ручном режиме шапка несёт ещё два контрола (просмотр + отправка),
+            // и поле поиска ужимается ровно на их ширину — иначе привычные иконки
+            // справа уезжают, стоит переключить режим.
+            manualPush ? "min-w-[130px] lg:min-w-[170px]" : "min-w-[220px] lg:min-w-[260px]"
+          )}
           title="Командная палитра (Ctrl+K)"
         >
           <span className="flex items-center gap-2 min-w-0">

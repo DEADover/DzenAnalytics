@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, CloudDownload, Check, AlertTriangle } from "lucide-react";
+import { RefreshCw, CloudDownload, Check, AlertTriangle, UploadCloud, ListChecks } from "lucide-react";
 import clsx from "clsx";
 import { useZenmoneyStore, type SyncResult } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
 import { formatNum } from "../lib/format";
+import { pluralRu } from "../lib/plural";
+import { usePendingChanges } from "../hooks/usePendingChanges";
+import { PendingChangesModal } from "./PendingChangesModal";
 
 /**
  * Header quick-actions for Zenmoney sync.
@@ -35,6 +38,12 @@ export function HeaderSyncActions() {
   const loaded = useZenmoneyStore((s) => s.loaded);
   const hydrate = useZenmoneyStore((s) => s.hydrate);
   const sync = useZenmoneyStore((s) => s.sync);
+  // Push side of the header (issue #50): in «Вручную» the only way to send
+  // edits used to be a trip into Настройки, which is slow and easy to forget.
+  const pushMode = useZenmoneyStore((s) => s.pushMode);
+  const pushStatus = useZenmoneyStore((s) => s.pushStatus);
+  const pending = usePendingChanges();
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const [flash, setFlash] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   // Two-phase dismiss: while `closing` is true the toast plays its
@@ -127,12 +136,105 @@ export function HeaderSyncActions() {
   const innerBtn =
     "group p-1.5 transition-colors text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:bg-accent/10";
 
+  // Which push controls the header shows, per the mode:
+  //   • «Выключено» — nothing: edits never leave the device.
+  //   • «Авто»      — nothing: they leave on their own.
+  //   • «При синке» — review only; the sync button already sends them.
+  //   • «Вручную»   — review + send, the whole point of the issue.
+  // В «Вручную» кластер виден ВСЕГДА, даже когда отправлять нечего: кнопка не
+  // должна появляться и исчезать, сдвигая привычные иконки под курсором.
+  // Ширину компенсирует поле «Команды…» — оно в этом режиме уже (см. TopNav).
+  // В «При синке» показываем только просмотр и только когда есть что смотреть.
+  const manual = pushMode === "manual";
+  const canReview = manual || (pushMode === "on-sync" && pending.total > 0);
+  const canPush = manual;
+  const nothingToSend = pending.total === 0;
+  const pushing = pushStatus === "syncing";
+
+  async function runPush() {
+    const ok = await confirm({
+      title: `Отправить ${formatNum(pending.total)} ${pluralRu(pending.total, ["изменение", "изменения", "изменений"])} в Дзен-мани?`,
+      message:
+        "Перед отправкой сохраним копию облачного состояния и проверим конфликты. Неподдерживаемые правки будут пропущены — увидите их список в журнале.",
+      confirmLabel: "Отправить",
+    });
+    if (!ok) return;
+    try {
+      const res = await useZenmoneyStore.getState().pushPendingEdits();
+      const parts: string[] = [];
+      if (res.pushed > 0) parts.push(`отправлено ${formatNum(res.pushed)}`);
+      if (res.created > 0) parts.push(`создано ${formatNum(res.created)}`);
+      if (res.skipped.length > 0) parts.push(`пропущено ${formatNum(res.skipped.length)}`);
+      showFlash({
+        tone: res.skipped.length > 0 ? "err" : "ok",
+        text: parts.length ? `Отправка: ${parts.join(", ")}` : "Отправка завершена",
+      });
+    } catch {
+      showFlash({
+        tone: "err",
+        text: useZenmoneyStore.getState().pushError || "Не удалось отправить",
+      });
+    }
+  }
+
   return (
     // `inline-flex items-center` on the wrapper instead of plain
     // block — without this the surrounding header `items-center` row
     // aligns the wrapper as a block element and the segmented control
     // ends up a hair higher than the gear/help icons next to it.
-    <div className="relative inline-flex items-center">
+    <div className="relative inline-flex items-center gap-2">
+      {/* Push cluster — separate from the sync one on purpose: these send data
+          OUT, the pair on the right pulls it IN. Appears only when there is
+          actually something to send, so the header stays quiet otherwise. */}
+      {(canReview || canPush) && (
+        <div className="inline-flex items-stretch rounded-lg border border-accent/40 bg-accent/5 overflow-hidden">
+          {canReview && (
+            <button
+              type="button"
+              onClick={() => setReviewOpen(true)}
+              disabled={nothingToSend}
+              title={
+                nothingToSend
+                  ? "Нет изменений, ожидающих отправки"
+                  : `Просмотреть изменения перед отправкой (${formatNum(pending.total)})`
+              }
+              className={clsx(
+                innerBtn,
+                "rounded-l-lg inline-flex items-center gap-1.5 text-accent",
+                !canPush && "rounded-r-lg"
+              )}
+            >
+              <ListChecks className="w-4 h-4" />
+              {/* min-w держит ширину кластера постоянной, чтобы соседние
+                  иконки не дёргались при 1 → 10 → 100 изменениях. */}
+              <span className="text-xs tabular-nums font-medium min-w-[1.1em] text-left">
+                {formatNum(pending.total)}
+              </span>
+            </button>
+          )}
+          {canReview && canPush && <div className="w-px bg-accent/30 self-stretch" />}
+          {canPush && (
+            <button
+              type="button"
+              onClick={runPush}
+              disabled={pushing || nothingToSend}
+              title={
+                nothingToSend
+                  ? "Нет изменений для отправки"
+                  : "Отправить изменения в Дзен-мани"
+              }
+              className={clsx(
+                innerBtn,
+                "rounded-r-lg text-accent",
+                !canReview && "rounded-l-lg"
+              )}
+            >
+              <UploadCloud className={clsx("w-4 h-4", pushing && "animate-pulse")} />
+            </button>
+          )}
+        </div>
+      )}
+
       <div
         className={clsx(
           "inline-flex items-stretch rounded-lg border bg-panel2 overflow-hidden",
@@ -172,6 +274,8 @@ export function HeaderSyncActions() {
           above. The tone (success / error) is carried by a thin
           left-edge accent bar and the icon colour, not by tinting the
           whole background — keeps the chip neutral and quiet. */}
+      {reviewOpen && <PendingChangesModal onClose={() => setReviewOpen(false)} />}
+
       {flash && (
         <div
           role="status"
