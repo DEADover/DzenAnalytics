@@ -3,6 +3,7 @@ import { RefreshCw, CloudDownload, Check, AlertTriangle, UploadCloud, ListChecks
 import clsx from "clsx";
 import { useZenmoneyStore, type SyncResult } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
+import { snapshotPromiseText } from "../lib/cloudSnapshots";
 import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { usePendingChanges } from "../hooks/usePendingChanges";
@@ -152,10 +153,16 @@ export function HeaderSyncActions() {
   const pushing = pushStatus === "syncing";
 
   async function runPush() {
+    // Фразу про копию облака берём из реальной политики снимков: обещать её
+    // при политике «никогда» — врать пользователю.
+    const snapshotText = await snapshotPromiseText(
+      useZenmoneyStore.getState().snapshotPolicy
+    );
     const ok = await confirm({
       title: `Отправить ${formatNum(pending.total)} ${pluralRu(pending.total, ["изменение", "изменения", "изменений"])} в Дзен-мани?`,
       message:
-        "Перед отправкой сохраним копию облачного состояния и проверим конфликты. Неподдерживаемые правки будут пропущены — увидите их список в журнале.",
+        snapshotText +
+          "Проверим конфликты. Неподдерживаемые правки будут пропущены — увидите их список в журнале.",
       confirmLabel: "Отправить",
     });
     if (!ok) return;

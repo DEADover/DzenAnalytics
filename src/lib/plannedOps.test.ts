@@ -150,17 +150,24 @@ describe("backfillEntities — одноразовые доливки по вер
     expect(backfillEntities(null)).toEqual([]);
   });
 
-  it("совсем старый кэш (без версии и без маркеров) → доливаем и маркеры, и бюджеты", () => {
+  it("совсем старый кэш (без версии и без маркеров) → доливаем всё, чего в нём нет", () => {
     const old = { ...base, reminderMarkers: undefined, cacheSchemaVersion: undefined };
-    expect(backfillEntities(old).sort()).toEqual(["budget", "reminderMarker"]);
+    expect(backfillEntities(old).sort()).toEqual(["budget", "company", "reminderMarker"]);
   });
 
-  it("КЛЮЧЕВОЕ: кэш уже с маркерами, но без версии → доливаем ТОЛЬКО бюджеты", () => {
+  it("КЛЮЧЕВОЕ: кэш уже с маркерами, но без версии → маркеры повторно не тянем", () => {
     // Именно эти пользователи не получили бы ничего при наивном гейте
     // `!cache.reminderMarkers` — ради них и введена версия схемы.
     const afterOldBackfill = { ...base, reminderMarkers: [], cacheSchemaVersion: undefined };
     expect(cacheVersionOf(afterOldBackfill)).toBe(1);
-    expect(backfillEntities(afterOldBackfill)).toEqual(["budget"]);
+    expect(backfillEntities(afterOldBackfill).sort()).toEqual(["budget", "company"]);
+  });
+
+  it("кэш с бюджетами (v2) → остаётся только справочник банков", () => {
+    // Инкрементальный дифф статический справочник не присылает никогда, так
+    // что без явной доливки такой кэш остался бы без названий банков навсегда.
+    const v2 = { ...base, cacheSchemaVersion: 2 };
+    expect(backfillEntities(v2)).toEqual(["company"]);
   });
 
   it("кэш текущей версии → доливать нечего", () => {

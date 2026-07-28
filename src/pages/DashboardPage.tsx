@@ -64,7 +64,7 @@ import {
 } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
 import { AccountLogo } from "../components/AccountLogo";
-import { accountTypeLabel } from "../lib/accountType";
+import { accountKindLabel } from "../lib/accountType";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InsightsPanel } from "../components/InsightsPanel";
@@ -323,6 +323,7 @@ export function DashboardPage() {
           nativeBalance: a.balance,
           nativeCurrency: a.currency,
           type: a.type,
+          savings: a.savings,
           archive: a.archive,
           offBalance: !a.inBalance,
         }))
@@ -338,6 +339,7 @@ export function DashboardPage() {
         type: "",
         archive: false,
         offBalance: false,
+        savings: false,
       }));
   }, [liveAccounts, transactions, base, baseRates, hideZero, hideArchived, includeOffBalance]);
   const hasArchived = !!liveAccounts?.some((a) => a.archive && a.inBalance);
@@ -434,7 +436,7 @@ export function DashboardPage() {
         hint="Ключевые метрики, тренды и быстрые переходы."
       />
 
-      {!apiConnected && (
+      {zenLoaded && !apiConnected && (
         <div data-export-skip="1">
           <QuickCalibration />
         </div>
@@ -759,9 +761,9 @@ export function DashboardPage() {
                             </div>
                           </td>
                           <td className="table-td text-[13px] text-muted whitespace-nowrap">
-                            {accountTypeLabel(a.type)}
+                            {accountKindLabel(a.type, a.savings)}
                             {a.offBalance && (
-                              <span className="ml-1 text-accent2">· вне баланса</span>
+                              <span className="ml-1 text-accent2">· Вне баланса</span>
                             )}
                           </td>
                           <td className="table-td text-right whitespace-nowrap">

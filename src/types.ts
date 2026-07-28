@@ -83,6 +83,13 @@ export interface Transaction {
   /** ISO code of the bank-original operation currency. */
   opCurrency: string | null;
   createdAt: string;
+  /**
+   * «Новая» операция — Дзен-мани помечает так всё, что приехало из банка и
+   * чего пользователь ещё не открывал (поле `viewed: false` в API). В самом
+   * Дзене такие подсвечены; здесь мы их показываем и даём отобрать.
+   * `undefined` у операций из CSV — там этого понятия нет.
+   */
+  unseen?: boolean;
 }
 
 export interface CurrencyRates {

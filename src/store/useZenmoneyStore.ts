@@ -7,6 +7,7 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
 import { fetchDiff, checkToken, ZenApiError } from "../lib/zenmoney";
+import type { ZenTermUnit } from "../lib/zenmoney";
 import { mapZenmoneyDiff } from "../lib/zenmoneyMap";
 import {
   loadZenCache,
@@ -22,6 +23,7 @@ import {
   buildDeletions,
   buildResurrections,
   buildTagPush,
+  buildAccountPush,
   buildNewCategoriesPush,
   buildNewMerchantsPush,
   buildMerchantRenamePush,
@@ -34,6 +36,7 @@ import {
   type PushBuildResult,
 } from "../lib/zenmoneyPush";
 import { useTagEditsStore, loadTagEdits } from "./useTagEditsStore";
+import { useAccountEditsStore, loadAccountEdits } from "./useAccountEditsStore";
 import { useNewCategoriesStore, loadNewCategories } from "./useNewCategoriesStore";
 import {
   useCounterpartyEditsStore,
@@ -46,7 +49,11 @@ import {
 } from "./useTagDeletionsStore";
 import { useBudgetEditsStore, loadBudgetEdits } from "./useBudgetEditsStore";
 import { useDraftsStore, loadDrafts } from "./useDraftsStore";
-import { loadSnapshotIndex, takeSnapshot } from "../lib/cloudSnapshots";
+import {
+  loadSnapshotIndex,
+  takeSnapshot,
+  DAILY_WINDOW_MS,
+} from "../lib/cloudSnapshots";
 import { useDataStore } from "./useDataStore";
 import { useCalibrationStore } from "./useCalibrationStore";
 import { useOffBalanceStore } from "./useOffBalanceStore";
@@ -156,7 +163,6 @@ export function autoSyncToMs(value: number, unit: AutoSyncUnit): number {
  */
 export type SnapshotPolicy = "always" | "daily" | "never";
 const SNAPSHOT_POLICY_DEFAULT: SnapshotPolicy = "daily";
-const DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type SyncStatus = "idle" | "checking" | "syncing" | "ok" | "error";
 
@@ -183,6 +189,9 @@ const PUSH_MODE_DEFAULT: PushMode = "off";
 const MAX_BUDGET_EDIT_SKIPS = 5;
 
 export interface LiveAccount {
+  /** Zenmoney account id — the stable handle for editing / filtering by
+   *  identity rather than by title (titles collide and get renamed). */
+  id: string;
   /** Account title — matches Transaction.account / outcomeAccount / incomeAccount. */
   title: string;
   /** Current balance in the account's native currency. */
@@ -205,6 +214,29 @@ export interface LiveAccount {
    *  on the net-worth timeline (fallback: account's first transaction, else the
    *  global earliest date). */
   startDate: string | null;
+  /** Bank / payment system title, resolved through Zenmoney's global `company`
+   *  dictionary. Null for cash and any account with no bank attached — the
+   *  account title is NOT a fallback here, guessing a bank from «И_Альфа_…»
+   *  is exactly the ambiguity this field exists to remove. */
+  bank: string | null;
+  /** «Личный счёт» — hidden from a shared/family view in Zenmoney. */
+  private: boolean;
+  /** Credit limit (native currency); 0 for accounts without one. */
+  creditLimit: number;
+  /** Заполнен ли полный набор параметров вклада/кредита (дата открытия, срок,
+   *  ставка, капитализация, периодичность выплат). Дзен-мани отвергает такой
+   *  счёт целиком, если хоть одного из них нет, — проверено на живом API. */
+  hasTermParams: boolean;
+  /** Годовая ставка, %. */
+  percent: number | null;
+  /** Капитализация процентов. */
+  capitalization: boolean | null;
+  /** Срок вклада/кредита. */
+  endDateOffset: number | null;
+  endDateOffsetInterval: ZenTermUnit | null;
+  /** Периодичность начисления процентов. */
+  payoffStep: number | null;
+  payoffInterval: ZenTermUnit | null;
 }
 
 /**
@@ -212,11 +244,23 @@ export interface LiveAccount {
  * if the cache is empty / user is in CSV mode. Reading from cache happens
  * lazily — call this from a hook or `useEffect`.
  */
+/** Поля, без которых Дзен-мани не принимает вклад или кредит. */
+const TERM_FIELDS = [
+  "startDate",
+  "endDateOffset",
+  "endDateOffsetInterval",
+  "capitalization",
+  "percent",
+  "payoffStep",
+];
+
 export async function getLiveAccountsFromCache(): Promise<LiveAccount[] | null> {
   const cache = await loadZenCache();
   if (!cache) return null;
   const instrumentsById = new Map(cache.instruments.map((i) => [i.id, i]));
+  const companiesById = new Map((cache.companies || []).map((c) => [c.id, c]));
   return cache.accounts.map((a) => ({
+    id: a.id,
     title: a.title,
     balance: a.balance || 0,
     currency: instrumentsById.get(a.instrument)?.shortTitle || "RUB",
@@ -226,6 +270,18 @@ export async function getLiveAccountsFromCache(): Promise<LiveAccount[] | null> 
     savings: a.savings,
     startBalance: a.startBalance || 0,
     startDate: a.startDate ?? null,
+    bank: a.company != null ? companiesById.get(a.company)?.title ?? null : null,
+    percent: a.percent ?? null,
+    capitalization: a.capitalization ?? null,
+    endDateOffset: a.endDateOffset ?? null,
+    endDateOffsetInterval: a.endDateOffsetInterval ?? null,
+    payoffStep: a.payoffStep ?? null,
+    payoffInterval: a.payoffInterval ?? null,
+    hasTermParams: TERM_FIELDS.every(
+      (f) => (a as unknown as Record<string, unknown>)[f] != null
+    ),
+    private: a.private ?? false,
+    creditLimit: a.creditLimit || 0,
   }));
 }
 
@@ -557,6 +613,23 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     await db.saveJSON(LAST_SYNC_KEY, null);
     await clearZenCache();
     await useCategoryMetaStore.getState().clear();
+    // Очередь неотправленных правок умирает вместе с подключением: она
+    // адресована идентификаторам ТОГО аккаунта, а кэш, по которому эти
+    // идентификаторы разрешаются, только что стёрт. Оставить её — значит
+    // показывать счётчик изменений, которые невозможно применить, и рисковать
+    // тем, что они уедут в другой аккаунт после переподключения.
+    await Promise.all([
+      useEditsStore.getState().clearAll(),
+      useDeletedStore.getState().clearAll(),
+      useDeletedPayloadsStore.getState().clearAll(),
+      useDraftsStore.getState().clearAll(),
+      useTagEditsStore.getState().clearAll(),
+      useAccountEditsStore.getState().clearAll(),
+      useNewCategoriesStore.getState().clear(),
+      useTagDeletionsStore.getState().clearAll(),
+      useCounterpartyEditsStore.getState().clearAll(),
+      useBudgetEditsStore.getState().clearAll(),
+    ]);
     set({
       token: null,
       serverTimestamp: 0,
@@ -957,6 +1030,15 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         reason: s.reason,
       }));
       skipped.push(...tagSkips);
+      // Правки счетов: переименования, тип, признаки, лимиты. Строятся от
+      // свежего кэша, поэтому «правка ради того же значения» до облака не едет.
+      const accEdits = await loadAccountEdits();
+      const accPush = buildAccountPush(
+        accEdits,
+        cache.accounts,
+        Math.floor(Date.now() / 1000)
+      );
+      skipped.push(...accPush.skipped.map((s) => ({ id: s.id, reason: s.reason })));
       // Locally-created categories → brand-new ZenTag[]. The account's numeric
       // user id comes from any existing cached tag (there are always defaults).
       const newCats = await loadNewCategories();
@@ -1045,6 +1127,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         resurrections.length === 0 &&
         draftTxs.length === 0 &&
         tagPush.tags.length === 0 &&
+        accPush.accounts.length === 0 &&
         newCatTags.length === 0 &&
         merchantUpserts.length === 0 &&
         merchantDeletions.length === 0 &&
@@ -1111,7 +1194,8 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         ],
         [...tagPush.tags, ...newCatTags],
         budgetPush.budgets,
-        merchantUpserts
+        merchantUpserts,
+        accPush.accounts
       );
 
       // 4) Merge server response into local cache so subsequent diffs
@@ -1211,6 +1295,11 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       if (sentTagIds.length > 0) {
         await useTagEditsStore.getState().clearMany(sentTagIds);
       }
+      // Правки счетов, доехавшие до облака, больше не нужны в накладке.
+      const sentAccountIds = accPush.accounts.map((a) => String(a.id));
+      if (sentAccountIds.length > 0) {
+        await useAccountEditsStore.getState().clearMany(sentAccountIds);
+      }
       // Created categories now live in the cloud + our cache — drop the local
       // drafts; they'll come back as normal tags on the next sync.
       const sentNewCatIds = newCatTags.map((t) => String(t.id));
@@ -1286,6 +1375,8 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         parts.push(`Категорий обновлено: ${formatNum(tagPush.tags.length)}`);
       if (newCatTags.length > 0)
         parts.push(`Категорий создано: ${formatNum(newCatTags.length)}`);
+      if (accPush.accounts.length > 0)
+        parts.push(`Счетов обновлено: ${formatNum(accPush.accounts.length)}`);
       if (merchantUpserts.length > 0)
         parts.push(`Контрагентов обновлено: ${formatNum(merchantUpserts.length)}`);
       if (merchantDeletions.length > 0)

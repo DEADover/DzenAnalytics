@@ -5,6 +5,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Eye,
   Scale,
   ListChecks,
   List,
@@ -28,6 +29,7 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useZenmoneyStore, getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
 import { EditTransactionModal } from "../components/EditTransactionModal";
+import { Tooltip } from "../components/Tooltip";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { transferTotals } from "../lib/aggregations";
@@ -100,11 +102,14 @@ function transferCounterparty(t: Transaction): string | null {
  *   FULL: date · category · payee · comment · account · amount · edit
  *   NODATE: (используется внутри group-by-day) то же самое без date
  */
-// Leading 32px column = selection checkbox.
+// Leading 32px column = selection checkbox, следом 10px под точку «новая».
+// Колонка есть у ВСЕХ строк, просто у просмотренных она пустая: так пометка
+// ничего не сдвигает, а глазом читается вертикальной дорожкой — сразу видно,
+// сколько нового и где оно кончается.
 const GRID_COLS_FULL =
-  "32px 84px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 88px";
+  "32px 10px 84px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 88px";
 const GRID_COLS_NODATE =
-  "32px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 88px";
+  "32px 10px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 88px";
 
 const PAGE_SIZE = 100;
 
@@ -139,6 +144,7 @@ export function TransactionsPage() {
   const edits = useEditsStore((s) => s.edits);
   const editsLoaded = useEditsStore((s) => s.loaded);
   const hydrateEdits = useEditsStore((s) => s.hydrate);
+  const setEdit = useEditsStore((s) => s.setEdit);
   const setEditMany = useEditsStore((s) => s.setEditMany);
   const setEditEach = useEditsStore((s) => s.setEditEach);
   const reapplyRules = useDataStore((s) => s.reapplyRules);
@@ -156,6 +162,14 @@ export function TransactionsPage() {
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
   const [sortOpen, setSortOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  /** Открыть редактор. Открыли — значит операцию посмотрели: снимаем пометку
+   *  «новая» сразу, как это делает приложение Дзен-мани. */
+  const openEditor = (t: Transaction) => {
+    setEditing(t);
+    if (t.unseen) {
+      void setEdit(t.id, { unseen: false }).then(() => reapplyRules());
+    }
+  };
   const [creating, setCreating] = useState<TxKind | null>(null);
   const [creatingDebt, setCreatingDebt] = useState(false);
 
@@ -296,11 +310,26 @@ export function TransactionsPage() {
   const [prevSorted, setPrevSorted] = useState(sorted);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   if (sorted !== prevSorted) {
+    // Массив пересобирается и при обычной правке операции: правка ложится
+    // накладкой, список строится заново, идентичность ссылки теряется. Раньше
+    // этого хватало, чтобы сбросить выделение и прокрутку, — выделил десять
+    // строк, поправил одну, и выделение исчезло. Сравниваем СОСТАВ: тот же
+    // набор строк в том же порядке — значит поменялось содержимое, а не
+    // фильтр/поиск/сортировка, и трогать ничего не нужно.
+    const sameRows =
+      prevSorted.length === sorted.length &&
+      prevSorted.every((t, i) => t.id === sorted[i].id);
     setPrevSorted(sorted);
-    setVisibleCount(PAGE_SIZE);
-    // Drop selection when the underlying set changes — selected ids
-    // may no longer be visible / relevant.
-    if (selected.size > 0) setSelected(new Set());
+    if (!sameRows) {
+      setVisibleCount(PAGE_SIZE);
+      // Выделение чистим не целиком, а от строк, которых в новом наборе уже
+      // нет: под другим фильтром часть выделенного просто не видна.
+      if (selected.size > 0) {
+        const live = new Set(sorted.map((t) => t.id));
+        const kept = new Set([...selected].filter((id) => live.has(id)));
+        if (kept.size !== selected.size) setSelected(kept);
+      }
+    }
   }
 
   // Selection helpers computed over the full filtered+searched set (not
@@ -310,6 +339,22 @@ export function TransactionsPage() {
   const someSelected = selected.size > 0 && !allSelected;
   function toggleSelectAll() {
     setSelected(allSelected ? new Set() : new Set(searched.map((t) => t.id)));
+  }
+
+  /** Сколько среди выделенных «новых» — кнопку показываем только если есть что
+   *  отмечать, и пишем в ней число, чтобы было понятно, на что она подействует. */
+  const selectedUnseen = useMemo(
+    () => searched.filter((t) => selected.has(t.id) && t.unseen).length,
+    [searched, selected]
+  );
+
+  /** Снять пометку «новая» с выделенных. Правка ложится в ту же накладку, что и
+   *  обычные изменения операции, и уезжает в облако как `viewed: true`. */
+  async function markSeenBulk() {
+    const ids = searched.filter((t) => selected.has(t.id) && t.unseen).map((t) => t.id);
+    if (ids.length === 0) return;
+    await setEditMany(ids, { unseen: false });
+    await reapplyRules();
   }
 
   // Sums (in base currency) of the currently-selected rows, split by kind — so
@@ -603,7 +648,7 @@ export function TransactionsPage() {
                 showTransfers={!filters.excludeTransfers}
                 edits={edits}
                 drafts={drafts}
-                onEdit={setEditing}
+                onEdit={openEditor}
                 onDelete={handleDelete}
                 selected={selected}
                 onToggleSelect={toggleSelect}
@@ -624,7 +669,7 @@ export function TransactionsPage() {
                 tx={t}
                 edited={!!edits[t.id]}
                 draft={!!drafts[t.id]}
-                onEdit={() => setEditing(t)}
+                onEdit={() => openEditor(t)}
                 onDelete={() => handleDelete(t)}
                 selected={selected.has(t.id)}
                 onToggleSelect={() => toggleSelect(t.id)}
@@ -654,7 +699,7 @@ export function TransactionsPage() {
           onNavigate={(dir) => {
             const i = sorted.findIndex((t) => t.id === editing.id);
             const next = sorted[i + dir];
-            if (next) setEditing(next);
+            if (next) openEditor(next);
           }}
         />
       )}
@@ -711,6 +756,13 @@ export function TransactionsPage() {
               <Pencil className="w-4 h-4" />
               Изменить
             </button>
+            {selectedUnseen > 0 && (
+              <button onClick={markSeenBulk} className="btn-ghost text-sm">
+                <Eye className="w-4 h-4" />
+                Отметить просмотренными
+                <span className="tabular-nums text-muted">({selectedUnseen})</span>
+              </button>
+            )}
             <button onClick={deleteBulk} className="btn-danger text-sm">
               <Trash2 className="w-4 h-4" />
               Удалить
@@ -778,6 +830,9 @@ function HeaderRow({
         title="Выбрать всё (под фильтрами)"
         aria-label="Выбрать все операции"
       />
+      {/* Пустая ячейка под дорожку с точками «новая» — колонка есть у всех
+          строк, включая шапку, иначе они разъедутся. */}
+      <div aria-hidden />
       {!grouped && <div>Дата</div>}
       <div>Категория</div>
       <div>Счёт</div>
@@ -894,6 +949,11 @@ function DayGroup({
   );
 }
 
+/** Порог двойного клика: на столько откладывается выделение строки, чтобы
+ *  двойной клик успел его отменить. Меньше — двойной клик начинает мигать
+ *  выделением, больше — выделение ощущается вялым. */
+const DOUBLE_CLICK_MS = 220;
+
 function Row({
   tx,
   edited,
@@ -913,6 +973,19 @@ function Row({
   onToggleSelect: () => void;
   hideDate?: boolean;
 }) {
+  // Одиночный клик выделяет строку, двойной открывает редактор. Проблема в
+  // том, что двойной клик В ЛЮБОМ СЛУЧАЕ проходит через одиночные, и строка
+  // успевает мигнуть выделением. Поэтому выделение откладываем на порог
+  // двойного клика: пришёл второй клик — отменяем, не пришёл — выделяем.
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPendingSelect = () => {
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
+  };
+  useEffect(() => cancelPendingSelect, []);
+
   const template = hideDate ? GRID_COLS_NODATE : GRID_COLS_FULL;
   // Debt rides on kind=transfer, but gets its own accent (amber) instead of
   // the transfer grey — so the feed matches the editor's «Долг» colour.
@@ -923,7 +996,35 @@ function Row({
 
   return (
     <div
-      onDoubleClick={onEdit}
+      // Одиночный клик выделяет строку, двойной открывает редактор. Двойной
+      // клик проходит через два одиночных, поэтому выделение переключается
+      // дважды и возвращается в исходное — состояние остаётся верным.
+      // Клики по кнопкам и ссылкам внутри строки не должны выделять: у них
+      // своё действие, и попутное выделение читалось бы как случайное.
+      onClick={(e) => {
+        // Второй клик двойного — гасим отложенное выделение и уходим.
+        if (e.detail > 1) {
+          cancelPendingSelect();
+          return;
+        }
+        const el = e.target as HTMLElement;
+        // Клики по кнопкам и полям внутри строки не должны выделять: у них
+        // своё действие, и попутное выделение читалось бы как случайное.
+        if (el.closest("button, a, input, label, select, textarea")) return;
+        // Клик с зажатым Shift/Ctrl — привычный системный жест; не трогаем.
+        if (e.shiftKey || e.metaKey || e.ctrlKey) return;
+        // Выделение текста мышью тоже не должно переключать строку.
+        if ((window.getSelection()?.toString() || "").length > 0) return;
+        cancelPendingSelect();
+        clickTimer.current = setTimeout(() => {
+          clickTimer.current = null;
+          onToggleSelect();
+        }, DOUBLE_CLICK_MS);
+      }}
+      onDoubleClick={() => {
+        cancelPendingSelect();
+        onEdit();
+      }}
       className={`grid items-center gap-3 px-3 py-2 border-b border-border/40 cursor-pointer group text-[length:var(--tbl-font)] ${
         selected ? "bg-accent/5" : "hover:bg-panel2/40"
       }`}
@@ -937,6 +1038,20 @@ function Row({
         onChange={onToggleSelect}
         aria-label="Выбрать операцию"
       />
+      {/* «Новая» — операция приехала из банка, и в Дзен-мани её ещё не
+          открывали (`viewed: false`). Черновики не помечаем: у них своя
+          красная точка «не синхронизирована», это про другое. */}
+      <span className="flex items-center justify-center" aria-hidden={!tx.unseen}>
+        {tx.unseen && !draft && (
+          <Tooltip content="Новая — вы ещё не открывали её в Дзен-мани">
+            <span
+              className="w-1.5 h-1.5 rounded-full bg-accent"
+              role="img"
+              aria-label="Новая операция"
+            />
+          </Tooltip>
+        )}
+      </span>
       {!hideDate && (
         <div className="text-muted tabular-nums whitespace-nowrap">
           {tx.date.slice(8, 10)}.{tx.date.slice(5, 7)}.{tx.date.slice(0, 4)}

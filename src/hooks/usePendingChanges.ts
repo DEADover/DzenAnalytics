@@ -18,6 +18,7 @@ import { useDeletedStore } from "../store/useDeletedStore";
 import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
+import { useAccountEditsStore } from "../store/useAccountEditsStore";
 import {
   useCounterpartyEditsStore,
   countCounterpartyPending,
@@ -34,6 +35,8 @@ export interface PendingChanges {
   categories: number;
   /** Counterparty renames + creations + deletions + merges. */
   counterparties: number;
+  /** Правки счетов. */
+  accounts: number;
   /** Operations subtotal — what the rollback list has always covered. */
   operations: number;
   /** Dictionaries subtotal. */
@@ -51,6 +54,7 @@ export function usePendingChanges(): PendingChanges {
   const tagEdits = useTagEditsStore((s) => s.edits);
   const newCats = useNewCategoriesStore((s) => s.items);
   const tagDeletions = useTagDeletionsStore((s) => s.deletions);
+  const accEdits = useAccountEditsStore((s) => s.edits);
   const renames = useCounterpartyEditsStore((s) => s.renames);
   const created = useCounterpartyEditsStore((s) => s.created);
   const cpDeleted = useCounterpartyEditsStore((s) => s.deleted);
@@ -72,6 +76,7 @@ export function usePendingChanges(): PendingChanges {
       Object.keys(tagEdits).length +
       newCats.length +
       Object.keys(tagDeletions).length;
+    const accounts = Object.keys(accEdits).length;
     const counterparties = countCounterpartyPending({
       renames,
       created,
@@ -79,13 +84,14 @@ export function usePendingChanges(): PendingChanges {
       merges,
     });
     const operations = e + d + deleted;
-    const dictionaries = categories + counterparties;
+    const dictionaries = categories + counterparties + accounts;
     return {
       edits: e,
       drafts: d,
       deleted,
       categories,
       counterparties,
+      accounts,
       operations,
       dictionaries,
       total: operations + dictionaries,
@@ -97,6 +103,7 @@ export function usePendingChanges(): PendingChanges {
     tagEdits,
     newCats,
     tagDeletions,
+    accEdits,
     renames,
     created,
     cpDeleted,

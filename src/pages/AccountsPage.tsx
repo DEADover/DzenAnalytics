@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -11,10 +11,22 @@ import {
   ComposedChart,
   type TooltipContentProps,
 } from "recharts";
+import type { LucideIcon } from "lucide-react";
 import {
   Wallet,
   List,
+  Scale,
+  EyeOff,
+  PiggyBank,
   Layers,
+  SlidersHorizontal,
+  ArrowUpDown,
+  ChevronDown,
+  Check,
+  ArrowUp,
+  ArrowDown,
+  Pencil,
+  HelpCircle,
   LineChart as LineChartIcon,
   Settings2,
   Trash2,
@@ -24,14 +36,14 @@ import {
   Archive,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
-import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
+import { useFiltersStore, applyFilters, FILTER_NONE } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { confirm } from "../store/useConfirmStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
-import { useOffBalanceStore } from "../store/useOffBalanceStore";
+import { useAccountEditsStore } from "../store/useAccountEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import type { LiveAccount } from "../store/useZenmoneyStore";
 import {
@@ -61,8 +73,13 @@ import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
 import { Sparkline } from "../components/Sparkline";
 import { AccountLogo } from "../components/AccountLogo";
+import { MultiSelect } from "../components/MultiSelect";
+import { AccountEditModal } from "../components/AccountEditModal";
+import { Popover } from "../components/Popover";
+import { Tooltip as AppTooltip } from "../components/Tooltip";
 import { DateField } from "../components/DateField";
-import { accountTypeLabel } from "../lib/accountType";
+import { ACCOUNT_KINDS, accountKindLabel } from "../lib/accountType";
+import { pluralRu } from "../lib/plural";
 
 const STACK_COLORS = [
   "#22D3EE", "#A78BFA", "#F59E0B", "#10B981", "#EC4899",
@@ -72,6 +89,264 @@ const STACK_COLORS = [
 type View = "stacked" | "single";
 type Scope = "filtered" | "all";
 type AccountsView = "cards" | "table";
+/** Что сортируем. Ключи совпадают с колонками таблицы — по клику в её шапке,
+ *  как в остальных таблицах сервиса; «bank» колонки не имеет и задаётся из
+ *  меню сортировки (оно нужно карточкам, где шапки нет). */
+type SortBy =
+  | "balance"
+  | "alpha"
+  | "bank"
+  | "type"
+  | "delta"
+  | "income"
+  | "expense"
+  | "count";
+type SortDir = "asc" | "desc";
+type GroupBy = "none" | "type" | "bank";
+
+/** Направление по умолчанию при первом клике: у названий — от «А», у чисел —
+ *  от большего. Иначе первый же клик по «Балансу» показывает самые бедные счета. */
+const DEFAULT_DIR: Record<SortBy, SortDir> = {
+  alpha: "asc",
+  bank: "asc",
+  type: "asc",
+  balance: "desc",
+  delta: "desc",
+  income: "desc",
+  expense: "desc",
+  count: "desc",
+};
+
+/** Bucket for accounts with no bank attached — cash, manual accounts, and
+ *  anything imported from CSV (where the bank is simply unknown to us). */
+const NO_BANK = "Без банка";
+/** Bucket for accounts whose type the local cache doesn't know (CSV imports). */
+const NO_TYPE = "Без типа";
+
+const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
+  { value: "none", label: "Без группировки" },
+  { value: "type", label: "По типу счёта" },
+  { value: "bank", label: "По банку" },
+];
+const GROUP_LABEL: Record<GroupBy, string> = {
+  none: "Без группировки",
+  type: "По типу счёта",
+  bank: "По банку",
+};
+
+/** Порядок для карточек. В таблице то же самое делают клики по её шапке,
+ *  поэтому список здесь короткий — только то, что осмысленно без колонок. */
+const CARD_SORT_OPTIONS: { value: SortBy; label: string }[] = [
+  { value: "balance", label: "По сумме" },
+  { value: "alpha", label: "По алфавиту" },
+  { value: "bank", label: "По банку" },
+];
+const CARD_SORT_LABEL: Partial<Record<SortBy, string>> = {
+  balance: "По сумме",
+  alpha: "По алфавиту",
+  bank: "По банку",
+};
+
+/**
+ * Кнопка с выпадающим меню. Одна форма на все три меню шапки — иначе
+ * «Признаки», «Группировка» и «Сортировка» разъедутся по виду и поведению,
+ * хотя стоят в одной строке.
+ */
+function DropdownMenu({
+  label,
+  icon: Icon,
+  active,
+  badge,
+  reserveBadge,
+  minWidth,
+  title,
+  children,
+}: {
+  label: string;
+  icon: LucideIcon;
+  active: boolean;
+  /** Число активных отборов — показывается кружком у подписи. */
+  badge?: number;
+  /** Держать место под кружок, даже когда его нет. */
+  reserveBadge?: boolean;
+  /** Ширина под самую длинную подпись — кнопка не должна расти при выборе. */
+  minWidth?: string;
+  title: string;
+  children: (close: () => void) => ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        title={title}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        style={minWidth ? { minWidth } : undefined}
+        className={`px-3 py-1.5 text-xs rounded-lg border flex items-center gap-1.5 whitespace-nowrap ${
+          active
+            ? "bg-accent/10 border-accent/40 text-accent"
+            : "bg-panel2 border-border text-muted hover:text-text"
+        }`}
+      >
+        <Icon className="w-3.5 h-3.5 shrink-0" />
+        {label}
+        {/* Кружок со счётчиком занимает место всегда — иначе кнопка дёргается
+            при первом же включённом признаке. */}
+        {(badge != null || reserveBadge) && (
+          <span
+            className={`px-1.5 rounded-full text-[10px] leading-4 tabular-nums ${
+              badge != null ? "bg-accent text-accent-fg" : "invisible"
+            }`}
+          >
+            {badge ?? 0}
+          </span>
+        )}
+        <ChevronDown className="w-3 h-3 opacity-60 ml-auto shrink-0" />
+      </button>
+      <Popover
+        open={open}
+        anchorRef={ref}
+        onClose={close}
+        align="left"
+        className="rounded-lg border border-border bg-panel shadow-xl py-1 min-w-[200px]"
+      >
+        {children(close)}
+      </Popover>
+    </div>
+  );
+}
+
+/**
+ * Пометки счёта — «Вне баланса» и «Архив» одинаковыми чипами. Раньше первая
+ * была цветным текстом, вторая — серым: два признака одного рода читались как
+ * разные сущности. Чип отделяет пометку от названия сам по себе, без точки.
+ */
+function AccountMarks({
+  offBalance,
+  archive,
+}: {
+  offBalance: boolean;
+  archive: boolean;
+}) {
+  if (!offBalance && !archive) return null;
+  const chip =
+    "text-[10px] leading-4 px-1.5 rounded-full border whitespace-nowrap shrink-0";
+  return (
+    <span className="flex items-center gap-1 shrink-0">
+      {offBalance && (
+        <span className={`${chip} border-accent2/40 text-accent2 bg-accent2/10`}>
+          Вне баланса
+        </span>
+      )}
+      {archive && (
+        <span className={`${chip} border-border text-muted bg-panel2`}>Архив</span>
+      )}
+    </span>
+  );
+}
+
+/** Пункт меню с галочкой — независимый признак, меню остаётся открытым. */
+function CheckItem({
+  checked,
+  onChange,
+  icon: Icon,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  icon: LucideIcon;
+  label: string;
+}) {
+  return (
+    <label className="flex items-center gap-2.5 px-3 py-1.5 text-xs hover:bg-panel2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        className="accent-accent shrink-0"
+      />
+      <Icon className="w-3.5 h-3.5 text-muted shrink-0" />
+      <span className="whitespace-nowrap">{label}</span>
+    </label>
+  );
+}
+
+/**
+ * Заголовок сортируемой колонки. Стрелка появляется только у активной —
+ * шесть постоянных значков «можно сортировать» шумят сильнее, чем помогают.
+ */
+function SortTh({
+  sortKey,
+  align = "left",
+  active,
+  dir,
+  onSort,
+  children,
+}: {
+  sortKey: SortBy;
+  align?: "left" | "right";
+  active: SortBy;
+  dir: SortDir;
+  onSort: (key: SortBy) => void;
+  children: ReactNode;
+}) {
+  const on = active === sortKey;
+  const Arrow = dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th
+      className={`table-th ${align === "right" ? "text-right" : ""}`}
+      aria-sort={on ? (dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      {/* `uppercase` повторяется здесь не зря: браузер сбрасывает
+          text-transform на кнопках, поэтому без него заголовок-кнопка
+          выпадает из общего вида таблиц сервиса. */}
+      <button
+        onClick={() => onSort(sortKey)}
+        className={`inline-flex items-center gap-1 uppercase tracking-wider hover:text-text ${
+          align === "right" ? "flex-row-reverse" : ""
+        } ${on ? "text-accent" : ""}`}
+      >
+        {children}
+        {on && <Arrow className="w-3 h-3 shrink-0" />}
+      </button>
+    </th>
+  );
+}
+
+/** Пункт меню с выбором одного варианта — меню закрывается после клика. */
+function RadioItem({
+  checked,
+  onSelect,
+  label,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      role="menuitemradio"
+      aria-checked={checked}
+      onClick={onSelect}
+      className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left hover:bg-panel2 ${
+        checked ? "text-accent" : ""
+      }`}
+    >
+      <Check className={`w-3.5 h-3.5 shrink-0 ${checked ? "" : "opacity-0"}`} />
+      <span className="whitespace-nowrap">{label}</span>
+    </button>
+  );
+}
+
+/** Отбор пройден? Пустое множество = «все», {FILTER_NONE} = «ничего». */
+function passesFilter(selected: Set<string>, value: string): boolean {
+  if (selected.size === 0) return true;
+  if (selected.has(FILTER_NONE)) return false;
+  return selected.has(value);
+}
 
 export function AccountsPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -85,9 +360,45 @@ export function AccountsPage() {
   const [scope, setScope] = useState<Scope>("all");
   const [accountsView, setAccountsView] = useState<AccountsView>("table");
   const [hideArchived, setHideArchived] = useState(false);
-  // Off-balance accounts (Zenmoney inBalance:false — savings/brokerage) are
-  // shown only when the global setting (Настройки → Обработка) is on.
-  const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
+  // Отборы и порядок вывода списка счетов. Пустое множество = «все»
+  // (соглашение MultiSelect), поэтому по умолчанию ничего не отфильтровано.
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
+  const [bankFilter, setBankFilter] = useState<Set<string>>(new Set());
+  // Три состояния вместо двух галочек-антонимов: «в балансе» и «вне баланса»
+  // взаимоисключающие, и одновременно включёнными они дали бы пустой список.
+  const [balanceScope, setBalanceScope] = useState<"all" | "in" | "out">("all");
+  const toggleBalanceScope = (v: "in" | "out") =>
+    setBalanceScope((cur) => (cur === v ? "all" : v));
+  const [onlySavings, setOnlySavings] = useState(false);
+  const [sortBy, setSortBy] = useState<SortBy>("balance");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [groupBy, setGroupBy] = useState<GroupBy>("none");
+  // Клик по колонке: та же — переворачиваем порядок, другая — берём её
+  // естественное направление.
+  const sortByColumn = (key: SortBy) => {
+    if (key === sortBy) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortBy(key);
+      setSortDir(DEFAULT_DIR[key]);
+    }
+  };
+  const pickSort = (key: SortBy) => {
+    setSortBy(key);
+    setSortDir(DEFAULT_DIR[key]);
+  };
+  const sortHead = { active: sortBy, dir: sortDir, onSort: sortByColumn };
+  // Редактор счёта. Открывается по карандашу в «Действиях» и по двойному
+  // клику по строке — как в справочниках.
+  const accountEdits = useAccountEditsStore((s) => s.edits);
+  const [editingAccount, setEditingAccount] = useState<LiveAccount | null>(null);
+  const openAccountEditor = (id: string | null) => {
+    // По id, а не по названию: одноимённых счетов в Дзен-мани сколько угодно,
+    // и поиск по названию открывал редактор чужого счёта — правка ложилась на
+    // другой идентификатор, а список не показывал изменений.
+    if (!id) return;
+    const live = (liveAccounts || []).find((a) => a.id === id);
+    if (live) setEditingAccount(live);
+  };
 
   // Real per-account balances (API mode only). CSV mode → null, we fall back
   // to the flow-derived delta and label it honestly.
@@ -154,19 +465,47 @@ export function AccountsPage() {
   // just 0). Credit/debt accounts carry their native sign, so a liability
   // renders negative (red) and reduces the totals correctly.
   const accountRows = useMemo(() => {
-    const liveList = liveAccounts ?? [];
+    // Неотправленная правка накладывается на счёт сразу: пользователь должен
+    // видеть результат до синхронизации. Название — исключение: по нему
+    // сопоставляются операции, поэтому исходное остаётся ключом, а новое
+    // показывается отдельным полем.
+    const liveList = (liveAccounts ?? []).map((a) => {
+      const e = accountEdits[a.id];
+      if (!e) return a;
+      // Баланс пересобираем по той же формуле, что и Дзен: сдвиг начального
+      // остатка сразу виден в списке, иначе правка «баланса» ничего не меняет
+      // на экране до синхронизации.
+      const ops = a.balance - a.startBalance;
+      const startBalance = e.startBalance ?? a.startBalance;
+      return {
+        ...a,
+        balance: startBalance + ops,
+        type: e.type ?? a.type,
+        inBalance: e.inBalance ?? a.inBalance,
+        savings: e.savings ?? a.savings,
+        private: e.private ?? a.private,
+        archive: e.archive ?? a.archive,
+        creditLimit: e.creditLimit ?? a.creditLimit,
+        startBalance,
+        startDate: e.startDate !== undefined ? e.startDate : a.startDate,
+      };
+    });
     const liveByTitle = new Map(liveList.map((a) => [a.title, a]));
     const txByTitle = new Map(accounts.map((a) => [a.account, a]));
     const toBase = (amt: number, cur: string) =>
       cur === base ? amt : amt * (rates.rates[cur] || 1);
 
+    // Список на этой странице — справочник счетов, поэтому внебалансовые счета
+    // в нём есть ВСЕГДА, с пометкой «Вне баланса» и отдельным отбором. Раньше
+    // они то появлялись, то нет: строка добавлялась, если у счёта были операции
+    // в периоде, и молча пропадала, если операций не было. Глобальная настройка
+    // «Счета вне баланса» продолжает управлять расчётами (совокупный баланс,
+    // Главная), но прятать сами счета из их же списка ей незачем.
     const titles = new Set<string>();
     for (const a of accounts) titles.add(a.account);
     for (const a of liveList) {
       // Archived (closed) accounts are kept but grouped below active ones
       // (see the sort), so the user can still review them without clutter up top.
-      // Off-balance accounts only when the global setting opts them in.
-      if (!a.inBalance && !includeOffBalance) continue;
       // Skip dormant zero-balance accounts with no activity — they'd be noise.
       if (Math.abs(a.balance) <= 0.005 && !txByTitle.has(a.title)) continue;
       titles.add(a.title);
@@ -189,6 +528,19 @@ export function AccountsPage() {
         // Only treat as off-balance when the cache actually knows the account;
         // CSV/unknown accounts default to "in balance" (no badge).
         offBalance: live ? !live.inBalance : false,
+        savings: live?.savings ?? false,
+        /** Идентификатор счёта в Дзен-мани; null у строк, собранных из CSV. */
+        id: live?.id ?? null,
+        /** Вид счёта одной подписью — с учётом «накопительного». */
+        kind: live ? accountKindLabel(live.type, live.savings) : "",
+        /** Название с учётом неотправленной правки — только для показа. */
+        displayTitle: (live && accountEdits[live.id]?.title) || title,
+        /** Есть неотправленная правка — строка помечается в списке. */
+        edited: !!(live && accountEdits[live.id]),
+        // Null bank ≠ «no bank»: for a CSV account we simply don't know. Both
+        // land in the same «Без банка» bucket, which is honest — we have no
+        // second source to tell them apart.
+        bank: live?.bank ?? null,
       };
     });
     // Active first, archived grouped below; within each group sort by real
@@ -198,16 +550,186 @@ export function AccountsPage() {
       return (y.balanceBase ?? y.delta) - (x.balanceBase ?? x.delta);
     });
     return rows;
-  }, [accounts, liveAccounts, base, rates, includeOffBalance]);
+  }, [accounts, liveAccounts, accountEdits, base, rates]);
+
+  type AccountRow = (typeof accountRows)[number];
 
   // True when at least one account carries a real (API) balance — drives the
   // headline ("Баланс" vs "Изменение") and the table's column labels.
   const hasRealBalances = accountRows.some((r) => r.balanceBase !== null);
-  // Optional «hide archived» toggle (only useful when some account is archived).
-  const hasArchived = accountRows.some((r) => r.archive);
-  const visibleRows = hideArchived
-    ? accountRows.filter((r) => !r.archive)
-    : accountRows;
+
+  // Отборы предлагают только те значения, что реально есть у пользователя:
+  // список из пяти типов, четыре из которых не встречаются, — это шум.
+  const typeOptions = useMemo(() => {
+    // Полный набор видов из Дзен-мани показываем ВСЕГДА, даже если счетов
+    // такого вида сейчас нет: иначе непонятно, есть ли отбор вообще, и список
+    // молча меняется от того, что завели новый счёт. Виды, которых нет в нашем
+    // списке выбора (служебные «Долги», «Кошелёк»), добавляем по факту данных.
+    const set = new Set(ACCOUNT_KINDS.map((k) => k.label));
+    for (const r of accountRows) set.add(r.kind || NO_TYPE);
+    const list = [...set].filter((t) => t !== NO_TYPE).sort((a, b) => a.localeCompare(b, "ru"));
+    return set.has(NO_TYPE) ? [...list, NO_TYPE] : list;
+  }, [accountRows]);
+  const bankOptions = useMemo(() => {
+    const set = new Set(accountRows.map((r) => r.bank ?? NO_BANK));
+    // «Без банка» всегда последним — это не банк, а его отсутствие.
+    const list = [...set].filter((b) => b !== NO_BANK).sort((a, b) => a.localeCompare(b, "ru"));
+    return set.has(NO_BANK) ? [...list, NO_BANK] : list;
+  }, [accountRows]);
+  const hasBanks = bankOptions.some((b) => b !== NO_BANK);
+  // Переключатель, который у конкретного пользователя ничего не меняет, — это
+  // лишний элемент: показываем только когда есть что отбирать.
+  // Счёт в валюте показывает вторую сумму в скобках — колонке нужно больше
+  // места, но только тем, у кого такие счета есть.
+  const hasForeignCurrency = accountRows.some(
+    (r) => r.nativeCurrency != null && r.nativeCurrency !== base
+  );
+  // Признаки спрятаны в меню, поэтому включённые надо показать снаружи —
+  // иначе непонятно, почему список короче ожидаемого.
+  const effectiveScope = balanceScope;
+  const effectiveSavings = onlySavings;
+  const effectiveHideArchived = hideArchived;
+  const flagsActive =
+    (effectiveScope === "all" ? 0 : 1) +
+    (effectiveSavings ? 1 : 0) +
+    (effectiveHideArchived ? 1 : 0);
+
+  /** Пояснение к колонкам. Раньше висело абзацем над списком и занимало место
+   *  каждый раз, хотя нужно один раз при первом знакомстве. */
+  const listHint = (
+    <div className="space-y-1.5">
+      <div>
+        {hasRealBalances
+          ? "«Баланс» — актуальная сумма из Дзен-мани."
+          : "В CSV нет остатков счетов, поэтому показано «Изменение» — доход минус расход по фильтрам."}
+      </div>
+      <div>«Δ Период» — изменение по текущим фильтрам.</div>
+      <div>Клик по карточке или строке — фильтр графика «Дельта».</div>
+      <div>Кнопка со списком в «Действиях» открывает операции счёта.</div>
+      <div>
+        Список показывает все счета, включая внебалансовые, — они помечены
+        чипом. В расчёты совокупного баланса они попадают только при включённой
+        настройке «Счета вне баланса».
+      </div>
+    </div>
+  );
+
+  const visibleRows = useMemo(() => {
+    const rows = accountRows.filter((r) => {
+      if (effectiveHideArchived && r.archive) return false;
+      if (effectiveScope === "in" && r.offBalance) return false;
+      if (effectiveScope === "out" && !r.offBalance) return false;
+      if (effectiveSavings && !r.savings) return false;
+      if (!passesFilter(typeFilter, r.kind || NO_TYPE)) return false;
+      if (!passesFilter(bankFilter, r.bank ?? NO_BANK)) return false;
+      return true;
+    });
+    // Архивные всегда внизу — при любой сортировке. Закрытый счёт не должен
+    // всплывать над рабочим только потому, что его название начинается на «А».
+    const byArchive = (x: AccountRow, y: AccountRow) =>
+      x.archive === y.archive ? 0 : x.archive ? 1 : -1;
+    const headline = (r: AccountRow) => r.balanceBase ?? r.delta;
+    const sign = sortDir === "asc" ? 1 : -1;
+    return [...rows].sort((x, y) => {
+      const arch = byArchive(x, y);
+      if (arch !== 0) return arch;
+      let cmp = 0;
+      switch (sortBy) {
+        case "alpha":
+          cmp = x.account.localeCompare(y.account, "ru");
+          break;
+        case "bank": {
+          const bx = x.bank ?? "";
+          const by = y.bank ?? "";
+          // Счета без банка — в конец, а не в начало по пустой строке.
+          if (!bx !== !by) return bx ? -1 : 1;
+          cmp = bx.localeCompare(by, "ru");
+          break;
+        }
+        case "type":
+          cmp = (x.kind || NO_TYPE).localeCompare(y.kind || NO_TYPE, "ru");
+          break;
+        case "delta":
+          cmp = x.delta - y.delta;
+          break;
+        case "income":
+          cmp = x.income - y.income;
+          break;
+        case "expense":
+          cmp = x.expense - y.expense;
+          break;
+        case "count":
+          cmp = x.count - y.count;
+          break;
+        default:
+          cmp = headline(x) - headline(y);
+      }
+      // Равные значения — вторым ключом сумма, потом название: иначе строки
+      // прыгают между перерисовками при сортировке по колонке с нулями.
+      if (cmp === 0) cmp = headline(x) - headline(y);
+      if (cmp === 0) return x.account.localeCompare(y.account, "ru");
+      return cmp * sign;
+    });
+  }, [
+    accountRows,
+    effectiveHideArchived,
+    effectiveScope,
+    effectiveSavings,
+    typeFilter,
+    bankFilter,
+    sortBy,
+    sortDir,
+  ]);
+
+  /** Плоский список для вывода: заголовки групп вперемешку со счетами.
+   *  Плоским он сделан намеренно — так и сетка карточек, и таблица остаются
+   *  одним `map`, а заголовок просто занимает всю ширину ряда. */
+  type ListItem =
+    | { kind: "header"; key: string; label: string; count: number; sum: number }
+    | { kind: "row"; key: string; row: AccountRow };
+
+  const listItems = useMemo<ListItem[]>(() => {
+    if (groupBy === "none") {
+      return visibleRows.map((r) => ({ kind: "row", key: r.account, row: r }));
+    }
+    const keyOf = (r: AccountRow) =>
+      groupBy === "bank" ? r.bank ?? NO_BANK : r.kind || NO_TYPE;
+    const groups = new Map<string, AccountRow[]>();
+    for (const r of visibleRows) {
+      const k = keyOf(r);
+      const list = groups.get(k);
+      if (list) list.push(r);
+      else groups.set(k, [r]);
+    }
+    // Группы по убыванию суммы — сначала то, где лежат деньги. Пустой бакет
+    // («Без банка») тонет сам, если он мелкий, и не нуждается в отдельном правиле.
+    const ordered = [...groups.entries()]
+      .map(([label, rows]) => ({
+        label,
+        rows,
+        sum: rows.reduce((s, r) => s + (r.balanceBase ?? r.delta), 0),
+        // Группа целиком из архивных счетов уходит вниз — иначе закрытый вклад
+        // с крупным остатком вставал выше рабочих счетов, хотя внутри списка
+        // архивные мы как раз опускаем.
+        allArchived: rows.every((r) => r.archive),
+      }))
+      .sort((a, b) => {
+        if (a.allArchived !== b.allArchived) return a.allArchived ? 1 : -1;
+        return b.sum - a.sum;
+      });
+    const out: ListItem[] = [];
+    for (const g of ordered) {
+      out.push({
+        kind: "header",
+        key: `h:${g.label}`,
+        label: g.label,
+        count: g.rows.length,
+        sum: g.sum,
+      });
+      for (const r of g.rows) out.push({ kind: "row", key: r.account, row: r });
+    }
+    return out;
+  }, [visibleRows, groupBy]);
   // Real current balance per account (base currency) — only in API mode. Lets
   // the stacked chart show actual balances instead of cumulative-flow-from-zero.
   const realBalancesByAccount = useMemo(() => {
@@ -357,7 +879,7 @@ export function AccountsPage() {
                 Совокупно
               </button>
             </div>
-            {!zenToken && (
+            {zenLoaded && !zenToken && (
               <button
                 onClick={() => setCalibOpen((o) => !o)}
                 className={`btn-ghost text-xs ${calibration ? "border-accent2 text-accent2" : ""}`}
@@ -675,34 +1197,134 @@ export function AccountsPage() {
       </div>
 
       <div className="card card-pad">
-        <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-          <div className="font-semibold flex items-center gap-2">
-            <Wallet className="w-4 h-4" />
-            Счета ({visibleRows.length})
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          {/* Ширина заголовка зафиксирована ровно под трёхзначный счётчик
+              (замер: «Счета (999)» — 115 px): иначе переход с «Счета (1)» на
+              «Счета (999)» сдвигает всю строку кнопок прямо под курсором.
+              Больше не резервируем — лишний запас читается как дыра. */}
+          <div className="font-semibold flex items-center gap-2 mr-1 min-w-[7.5rem]">
+            <Wallet className="w-4 h-4 shrink-0" />
+            <span>
+              Счета (<span className="tabular-nums">{visibleRows.length}</span>)
+            </span>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-          {hasArchived && (
-            <button
-              onClick={() => setHideArchived((v) => !v)}
-              aria-pressed={hideArchived}
-              className={`px-3 py-1.5 text-xs rounded-lg border flex items-center gap-1 ${
-                hideArchived
-                  ? "bg-accent/10 border-accent/40 text-accent"
-                  : "bg-panel2 border-border text-muted hover:text-text"
-              }`}
-              title="Скрыть/показать архивные (закрытые) счета"
+          <MultiSelect
+            label="Тип"
+            options={typeOptions}
+            selected={typeFilter}
+            onChange={setTypeFilter}
+            unitForms={["тип", "типа", "типов"]}
+            menuMinWidth={220}
+            compactSummary
+            summaryMinWidth="3.6rem"
+          />
+          {hasBanks && (
+            <MultiSelect
+              label="Банк"
+              options={bankOptions}
+              selected={bankFilter}
+              onChange={setBankFilter}
+              unitForms={["банк", "банка", "банков"]}
+              menuMinWidth={240}
+              compactSummary
+              summaryMinWidth="4.6rem"
+            />
+          )}
+          <DropdownMenu
+              label="Признаки"
+              icon={SlidersHorizontal}
+              active={flagsActive > 0}
+              badge={flagsActive || undefined}
+              reserveBadge
+              title="Отбор по признакам счёта"
             >
-              <Archive className="w-3.5 h-3.5" />
-              {hideArchived ? "Архивные скрыты" : "Скрыть архивные"}
-            </button>
+              {() => (
+                <>
+                  <CheckItem
+                    checked={effectiveScope === "in"}
+                    onChange={() => toggleBalanceScope("in")}
+                    icon={Scale}
+                    label="Только в балансе"
+                  />
+                  <CheckItem
+                    checked={effectiveScope === "out"}
+                    onChange={() => toggleBalanceScope("out")}
+                    icon={EyeOff}
+                    label="Только вне баланса"
+                  />
+                  <CheckItem
+                    checked={effectiveSavings}
+                    onChange={() => setOnlySavings((v) => !v)}
+                    icon={PiggyBank}
+                    label="Только накопительные"
+                  />
+                  <CheckItem
+                    checked={effectiveHideArchived}
+                    onChange={() => setHideArchived((v) => !v)}
+                    icon={Archive}
+                    label="Скрыть архивные"
+                  />
+                </>
+              )}
+            </DropdownMenu>
+          <DropdownMenu
+            label={groupBy === "none" ? "Группировка" : GROUP_LABEL[groupBy]}
+            icon={Layers}
+            active={groupBy !== "none"}
+            minWidth="10.5rem"
+            title="Группировка списка счетов"
+          >
+            {(close) =>
+              GROUP_OPTIONS.filter((o) => o.value !== "bank" || hasBanks).map((o) => (
+                <RadioItem
+                  key={o.value}
+                  checked={groupBy === o.value}
+                  onSelect={() => {
+                    setGroupBy(o.value);
+                    close();
+                  }}
+                  label={o.label}
+                />
+              ))
+            }
+          </DropdownMenu>
+          {/* Сортировка живёт в шапке таблицы. У карточек шапки нет — там и
+              только там нужно отдельное меню. */}
+          {accountsView === "cards" && (
+            <DropdownMenu
+              label={CARD_SORT_LABEL[sortBy] ?? "Сортировка"}
+              icon={ArrowUpDown}
+              active={sortBy !== "balance"}
+              minWidth="9.5rem"
+              title="Порядок счетов"
+            >
+              {(close) =>
+                CARD_SORT_OPTIONS.filter((o) => o.value !== "bank" || hasBanks).map((o) => (
+                  <RadioItem
+                    key={o.value}
+                    checked={sortBy === o.value}
+                    onSelect={() => {
+                      pickSort(o.value);
+                      close();
+                    }}
+                    label={o.label}
+                  />
+                ))
+              }
+            </DropdownMenu>
           )}
           <div
             role="group"
             aria-label="Вид списка счетов"
-            className="flex bg-panel2 rounded-lg p-1 border border-border"
+            className="ml-auto flex bg-panel2 rounded-lg p-1 border border-border"
           >
             <button
-              onClick={() => setAccountsView("table")}
+              onClick={() => {
+                setAccountsView("table");
+                // В таблице колонки «Банк» нет: заголовки не подсветятся, и
+                // порядок будет выглядеть случайным. Возвращаемся к сумме.
+                if (sortBy === "bank") pickSort("balance");
+              }}
               aria-pressed={accountsView === "table"}
               className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${
                 accountsView === "table" ? "bg-accent text-accent-fg" : "text-muted"
@@ -712,7 +1334,13 @@ export function AccountsPage() {
               Таблица
             </button>
             <button
-              onClick={() => setAccountsView("cards")}
+              onClick={() => {
+                setAccountsView("cards");
+                // «Поступления», «Опер.» и прочие колонки в карточках выбрать
+                // нечем, поэтому меню сортировки показывало бы порядок, которого
+                // в нём нет. Возвращаемся к сумме — она есть на каждой карточке.
+                if (!CARD_SORT_OPTIONS.some((o) => o.value === sortBy)) pickSort("balance");
+              }}
               aria-pressed={accountsView === "cards"}
               className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${
                 accountsView === "cards" ? "bg-accent text-accent-fg" : "text-muted"
@@ -722,18 +1350,61 @@ export function AccountsPage() {
               Карточки
             </button>
           </div>
-          </div>
-        </div>
-        <div className="text-xs text-muted mb-3">
-          {hasRealBalances
-            ? "«Баланс» — актуальная сумма из Дзен-мани. «Δ период» — изменение по текущим фильтрам. "
-            : "В CSV нет остатков счетов — показано «Изменение» (доход − расход) по фильтрам. "}
-          Клик по карточке/строке — фильтр графика «Дельта». «Операции» — список транзакций.
+          <AppTooltip content={listHint} placement="bottom">
+            <button
+              className="btn-ghost !p-1.5 text-muted hover:text-accent shrink-0"
+              aria-label="Как читать список счетов"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+          </AppTooltip>
         </div>
 
-        {accountsView === "cards" ? (
+        {visibleRows.length === 0 ? (
+          <div className="text-center py-10 text-sm text-muted">
+            <div>Под текущие отборы не подошёл ни один счёт.</div>
+            <button
+              onClick={() => {
+                setTypeFilter(new Set());
+                setBankFilter(new Set());
+                setBalanceScope("all");
+                setOnlySavings(false);
+                setHideArchived(false);
+              }}
+              className="btn-ghost text-xs mt-3"
+            >
+              Сбросить отборы
+            </button>
+          </div>
+        ) : accountsView === "cards" ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {visibleRows.map((a) => {
+            {listItems.map((item) => {
+              if (item.kind === "header") {
+                return (
+                  <div
+                    key={item.key}
+                    className="col-span-full flex items-baseline gap-2 min-w-0 pt-2 first:pt-0"
+                  >
+                    {/* Сумма стоит сразу за названием, а не у правого края
+                        сетки: там её отделяла от группы пустая полоса во всю
+                        ширину, и было неясно, к чему она относится. */}
+                    <span className="font-semibold text-sm truncate">{item.label}</span>
+                    <span className="text-xs text-muted whitespace-nowrap">
+                      {formatNum(item.count)}{" "}
+                      {pluralRu(item.count, ["счёт", "счёта", "счетов"])}
+                    </span>
+                    <span className="text-xs text-muted">·</span>
+                    <span
+                      className={`text-sm tabular-nums font-semibold whitespace-nowrap ${
+                        item.sum < 0 ? "text-expense" : "text-text"
+                      }`}
+                    >
+                      {formatMoney(item.sum, base)}
+                    </span>
+                  </div>
+                );
+              }
+              const a = item.row;
               const isSel = selectedAccount === a.account;
               const hasReal = a.balanceBase !== null;
               // Headline = real balance when known, else the flow delta.
@@ -762,27 +1433,45 @@ export function AccountsPage() {
                     <button
                       onClick={() => setSelectedAccount(isSel ? null : a.account)}
                       className="flex items-center gap-2 min-w-0 text-left flex-1"
-                      title={a.account}
+                      title={a.displayTitle}
                     >
                       <AccountLogo title={a.account} type={a.type} />
                       <span className="min-w-0">
                         <span className="font-medium text-sm truncate block">
-                          {a.account}
+                          {a.displayTitle}
                         </span>
                         {hasReal && (
-                          <span className="text-[10px] text-muted">
-                            {accountTypeLabel(a.type)}
-                            {a.offBalance && (
-                              <span className="ml-1 text-accent2">· вне баланса</span>
-                            )}
-                            {a.archive && (
-                              <span className="ml-1 text-muted">· архив</span>
-                            )}
+                          <span className="text-[10px] text-muted flex items-center gap-1.5">
+                            {a.kind}
+                            <AccountMarks offBalance={a.offBalance} archive={a.archive} />
                           </span>
                         )}
                       </span>
                     </button>
-                    <span className="pill text-[10px] shrink-0">{a.count}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {a.edited && (
+                        <span
+                          className="text-[10px] leading-4 px-1.5 rounded-full border border-warn/40 text-warn bg-warn/10 whitespace-nowrap"
+                          title="Правка ещё не отправлена в Дзен-мани"
+                        >
+                          Изменён
+                        </span>
+                      )}
+                      <span className="pill text-[10px]">{a.count}</span>
+                      {hasReal && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAccountEditor(a.id);
+                          }}
+                          className="btn-ghost !p-1 text-muted hover:text-accent"
+                          title="Изменить счёт"
+                          aria-label="Изменить счёт"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <button
                     onClick={() => setSelectedAccount(isSel ? null : a.account)}
@@ -854,31 +1543,79 @@ export function AccountsPage() {
                 the filter (different rows/content) never reflows the columns.
                 Numeric columns are sized to fit million-ruble values so nothing
                 overflows its cell (which would force a horizontal scrollbar). */}
-            <table className="w-full min-w-[960px] text-base table-fixed">
+            <table
+              className={`w-full text-base table-fixed ${
+                hasForeignCurrency ? "min-w-[1180px]" : "min-w-[1090px]"
+              }`}
+            >
               <colgroup>
                 <col />
-                <col style={{ width: 140 }} />
-                <col style={{ width: 132 }} />
-                <col style={{ width: 140 }} />
-                <col style={{ width: 140 }} />
-                <col style={{ width: 64 }} />
-                <col style={{ width: 140 }} />
+                {/* 170px = самая длинная подпись вида счёта («Накопительный
+                    счёт», замер 140px) плюс отступы ячейки: иначе она режется
+                    многоточием у большинства счетов. */}
+                <col style={{ width: 170 }} />
+                <col style={{ width: hasForeignCurrency ? 230 : 140 }} />
+                <col style={{ width: 130 }} />
+                <col style={{ width: 130 }} />
+                <col style={{ width: 126 }} />
+                <col style={{ width: 96 }} />
+                <col style={{ width: 88 }} />
               </colgroup>
               <thead>
                 <tr>
-                  <th className="table-th">Счёт</th>
-                  <th className="table-th text-right">
+                  <SortTh sortKey="alpha" {...sortHead}>
+                    Счёт
+                  </SortTh>
+                  <SortTh sortKey="type" {...sortHead}>
+                    Тип
+                  </SortTh>
+                  <SortTh sortKey="balance" align="right" {...sortHead}>
                     {hasRealBalances ? "Баланс" : "Изменение"}
-                  </th>
-                  <th className="table-th text-right">Δ период</th>
-                  <th className="table-th text-right">Поступления</th>
-                  <th className="table-th text-right">Списания</th>
-                  <th className="table-th text-right">Опер.</th>
-                  <th className="table-th" aria-hidden />
+                  </SortTh>
+                  <SortTh sortKey="income" align="right" {...sortHead}>
+                    Поступления
+                  </SortTh>
+                  <SortTh sortKey="expense" align="right" {...sortHead}>
+                    Списания
+                  </SortTh>
+                  <SortTh sortKey="delta" align="right" {...sortHead}>
+                    Δ Период
+                  </SortTh>
+                  <SortTh sortKey="count" align="right" {...sortHead}>
+                    Операции
+                  </SortTh>
+                  <th className="table-th text-center">Действия</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map((a) => {
+                {listItems.map((item) => {
+                  if (item.kind === "header") {
+                    return (
+                      <tr key={item.key} className="bg-panel2/60">
+                        <td className="table-td font-semibold">
+                          <span className="inline-block max-w-[240px] truncate align-bottom">
+                            {item.label}
+                          </span>
+                          <span className="ml-2 text-xs text-muted font-normal">
+                            {formatNum(item.count)}{" "}
+                            {pluralRu(item.count, ["счёт", "счёта", "счетов"])}
+                          </span>
+                        </td>
+                        <td className="table-td" />
+                        {/* Сумма группы стоит ровно под колонкой баланса —
+                            иначе её пришлось бы искать глазами. */}
+                        <td
+                          className={`table-td text-right tabular-nums font-semibold whitespace-nowrap ${
+                            item.sum < 0 ? "text-expense" : "text-text"
+                          }`}
+                        >
+                          {formatMoney(item.sum, base)}
+                        </td>
+                        <td className="table-td" colSpan={5} />
+                      </tr>
+                    );
+                  }
+                  const a = item.row;
                   const isSel = selectedAccount === a.account;
                   const hasReal = a.balanceBase !== null;
                   const headline = hasReal ? a.balanceBase! : a.delta;
@@ -892,44 +1629,58 @@ export function AccountsPage() {
                     <tr
                       key={a.account}
                       onClick={() => setSelectedAccount(isSel ? null : a.account)}
+                      onDoubleClick={() => openAccountEditor(a.id)}
                       className={`align-middle cursor-pointer group ${
                         isSel ? "bg-accent/10" : "hover:bg-panel2/50"
                       } ${a.archive ? "opacity-60" : ""}`}
                     >
                       <td className="table-td">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <AccountLogo title={a.account} type={a.type} />
-                          <div className="min-w-0">
-                            <div
-                              className="font-medium truncate max-w-[200px] group-hover:text-accent"
-                              title={a.account}
+                        {/* Пометки состояния идут за названием: тип уехал в свою
+                            колонку, а «вне баланса» и «архив» — свойства самого
+                            счёта, не его типа. */}
+                        <div className="flex items-baseline gap-2 min-w-0">
+                          <span className="self-center shrink-0">
+                            <AccountLogo title={a.account} type={a.type} />
+                          </span>
+                          <span
+                            className="font-medium truncate group-hover:text-accent"
+                            title={a.displayTitle}
+                          >
+                            {a.displayTitle}
+                          </span>
+                          {a.edited && (
+                            <span
+                              className="text-[10px] leading-4 px-1.5 rounded-full border border-warn/40 text-warn bg-warn/10 whitespace-nowrap shrink-0"
+                              title="Правка ещё не отправлена в Дзен-мани"
                             >
-                              {a.account}
-                            </div>
-                            {hasReal && (
-                              <div className="text-[13px] text-muted">
-                                {accountTypeLabel(a.type)}
-                                {a.offBalance && (
-                                  <span className="ml-1 text-accent2">· вне баланса</span>
-                                )}
-                                {a.archive && (
-                                  <span className="ml-1 text-muted">· архив</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                              Изменён
+                            </span>
+                          )}
+                          {hasReal && (
+                            <AccountMarks offBalance={a.offBalance} archive={a.archive} />
+                          )}
                         </div>
                       </td>
+                      <td className="table-td text-muted truncate">{a.kind}</td>
                       <td
                         className={`table-td text-right tabular-nums font-semibold whitespace-nowrap ${headlineColor}`}
                         title={formatMoney(headline, base, { decimals: 2 })}
                       >
                         {formatMoney(headline, base, { signed: !hasReal })}
+                        {/* Валюта счёта — в скобках рядом, а не второй строкой:
+                            строка таблицы не должна расти из-за одной суммы. */}
                         {hasReal && a.nativeCurrency && a.nativeCurrency !== base && (
-                          <div className="text-[13px] text-muted font-normal">
-                            {formatMoney(a.nativeBalance!, a.nativeCurrency)}
-                          </div>
+                          <span className="text-[13px] text-muted font-normal">
+                            {" "}
+                            ({formatMoney(a.nativeBalance!, a.nativeCurrency)})
+                          </span>
                         )}
+                      </td>
+                      <td className="table-td text-right tabular-nums text-income whitespace-nowrap">
+                        {formatMoney(a.income, base)}
+                      </td>
+                      <td className="table-td text-right tabular-nums text-expense whitespace-nowrap">
+                        {formatMoney(a.expense, base)}
                       </td>
                       <td
                         className={`table-td text-right tabular-nums whitespace-nowrap ${
@@ -938,27 +1689,39 @@ export function AccountsPage() {
                       >
                         {formatMoney(a.delta, base, { signed: true })}
                       </td>
-                      <td className="table-td text-right tabular-nums text-income whitespace-nowrap">
-                        {formatMoney(a.income, base)}
-                      </td>
-                      <td className="table-td text-right tabular-nums text-expense whitespace-nowrap">
-                        {formatMoney(a.expense, base)}
-                      </td>
                       <td className="table-td text-right tabular-nums text-muted">
                         {formatNum(a.count)}
                       </td>
-                      <td className="table-td text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openAccount(a.account);
-                          }}
-                          className="btn-ghost text-xs !py-1 whitespace-nowrap"
-                          title="Список операций"
-                        >
-                          <List className="w-3 h-3" />
-                          Операции
-                        </button>
+                      <td className="table-td">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openAccount(a.account);
+                            }}
+                            className="btn-ghost !p-1.5 text-muted hover:text-accent"
+                            title="Список операций"
+                            aria-label="Список операций"
+                          >
+                            <List className="w-4 h-4" />
+                          </button>
+                          {/* Редактор счёта — следующая итерация. Кнопка стоит
+                              только у настоящих счетов из Дзен-мани: у строки,
+                              собранной из CSV, править нечего. */}
+                          {hasReal && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAccountEditor(a.id);
+                              }}
+                              className="btn-ghost !p-1.5 text-muted hover:text-accent"
+                              title="Изменить счёт"
+                              aria-label="Изменить счёт"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -968,6 +1731,15 @@ export function AccountsPage() {
           </div>
         )}
       </div>
+
+      {editingAccount && (
+        <AccountEditModal
+          key={editingAccount.id}
+          account={editingAccount}
+          pending={accountEdits[editingAccount.id]}
+          onClose={() => setEditingAccount(null)}
+        />
+      )}
     </div>
   );
 }

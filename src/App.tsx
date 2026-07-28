@@ -45,6 +45,7 @@ import { useDeletedStore } from "./store/useDeletedStore";
 import { useDeletedPayloadsStore } from "./store/useDeletedPayloadsStore";
 import { useDraftsStore } from "./store/useDraftsStore";
 import { useTagEditsStore } from "./store/useTagEditsStore";
+import { useAccountEditsStore } from "./store/useAccountEditsStore";
 import { useBudgetEditsStore } from "./store/useBudgetEditsStore";
 import { installNativeTooltips } from "./lib/nativeTooltips";
 import { useDisplayStore } from "./store/useDisplayStore";
@@ -105,6 +106,7 @@ function App() {
     useDeletedPayloadsStore.getState().hydrate();
     useDraftsStore.getState().hydrate();
     useTagEditsStore.getState().hydrate();
+    useAccountEditsStore.getState().hydrate();
     useBudgetEditsStore.getState().hydrate();
     useDisplayStore.getState().hydrate();
     useOffBalanceStore.getState().hydrate();
@@ -184,6 +186,8 @@ function App() {
         Object.keys(useDraftsStore.getState().drafts).length > 0;
       const hasTagEdits =
         Object.keys(useTagEditsStore.getState().edits).length > 0;
+      const hasAccountEdits =
+        Object.keys(useAccountEditsStore.getState().edits).length > 0;
       const hasBudgetEdits =
         Object.keys(useBudgetEditsStore.getState().edits).length > 0;
       // Справочники: created categories, category deletions, and every kind of
@@ -198,6 +202,7 @@ function App() {
         !hasDeletions &&
         !hasDrafts &&
         !hasTagEdits &&
+        !hasAccountEdits &&
         !hasBudgetEdits &&
         !hasNewCats &&
         !hasTagDeletions &&
@@ -250,6 +255,12 @@ function App() {
       if (Object.keys(s.edits).length === 0) return;
       schedule();
     });
+    // Правки счетов — на том же дебаунсе, что и категории.
+    const unsubAccountEdits = useAccountEditsStore.subscribe((s, p) => {
+      if (s.edits === p.edits) return;
+      if (Object.keys(s.edits).length === 0) return;
+      schedule();
+    });
     // Plan/budget edits push on the same debounce.
     const unsubBudgetEdits = useBudgetEditsStore.subscribe((s, p) => {
       if (s.edits === p.edits) return;
@@ -282,6 +293,7 @@ function App() {
       unsubDeleted();
       unsubDrafts();
       unsubTagEdits();
+      unsubAccountEdits();
       unsubBudgetEdits();
       unsubNewCats();
       unsubTagDeletions();

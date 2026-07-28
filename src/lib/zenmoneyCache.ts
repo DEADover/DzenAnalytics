@@ -13,6 +13,7 @@ import * as db from "./db";
 import type {
   ZenAccount,
   ZenBudget,
+  ZenCompany,
   ZenDeletion,
   ZenDiffResponse,
   ZenInstrument,
@@ -40,6 +41,10 @@ export interface ZenCache {
    *  processed/deleted markers on merge to keep the cache lean and self-cleaning.
    *  `undefined` = never back-filled yet (triggers a one-time forceFetch). */
   reminderMarkers?: ZenReminderMarker[];
+  /** Global bank / payment-system dictionary behind `Account.company`.
+   *  Read-only reference data, ~1700 rows. `undefined` = never pulled yet
+   *  (triggers a one-time forceFetch). */
+  companies?: ZenCompany[];
   /** Schema generation of this cache. Drives ONE-TIME back-fills: an
    *  incremental diff never re-sends entities whose `changed` predates our
    *  timestamp, so whenever we start consuming a new entity type we must
@@ -48,12 +53,15 @@ export interface ZenCache {
 }
 
 /** Bump when a new entity type starts being consumed AND needs a back-fill. */
-export const CACHE_SCHEMA_VERSION = 2;
+export const CACHE_SCHEMA_VERSION = 3;
 
 /** Entity types to force-fetch once when upgrading TO that version. */
 const BACKFILL_BY_VERSION: Record<number, string[]> = {
   1: ["reminderMarker"],
   2: ["budget"],
+  // The bank dictionary is static reference data, so an incremental diff
+  // never re-sends it — existing caches have to ask for it explicitly once.
+  3: ["company"],
 };
 
 /**
@@ -213,6 +221,7 @@ export function applyDiff(
       reminderMarkers: (diff.reminderMarker || []).filter(
         (m) => m.state === "planned"
       ),
+      companies: diff.company || [],
       cacheSchemaVersion: CACHE_SCHEMA_VERSION,
     });
   }
@@ -240,6 +249,7 @@ export function applyDiff(
       diff.reminderMarker,
       deletions
     ),
+    companies: merge(prev.companies || [], diff.company, "company", deletions),
   });
 }
 
@@ -257,5 +267,6 @@ export function cacheToDiffResponse(cache: ZenCache): ZenDiffResponse {
     user: cache.user,
     budget: cache.budgets || [],
     reminderMarker: cache.reminderMarkers || [],
+    company: cache.companies || [],
   };
 }

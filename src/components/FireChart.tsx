@@ -9,7 +9,7 @@ import {
   Tooltip as RTooltip,
   ReferenceLine,
 } from "recharts";
-import { Flame, ChevronDown, Check } from "lucide-react";
+import { Flame, ChevronDown, Check, HelpCircle } from "lucide-react";
 import type { FirePoint } from "../lib/aggregations";
 import {
   formatMoney,
@@ -20,6 +20,7 @@ import {
   chartAxisStroke,
 } from "../lib/format";
 import { Tooltip } from "./Tooltip";
+import { TooltipFacts } from "./TooltipFacts";
 
 /** FIRE goal on the 4%-rule: 25 годовых расходов = 300 месяцев. */
 const FIRE_TARGET = 300;
@@ -144,6 +145,49 @@ export function FireChart({
   const expenseVal =
     expKind === "obligatory" ? last.avgObligatory : last.avgExpenseAll;
 
+  /** Формула целиком: чаще всего спрашивают, что тут капитал и откуда расход. */
+  const howItWorks = (
+    <TooltipFacts
+      title="Месяцы жизни = капитал ÷ средний обязательный расход"
+      facts={[
+        { label: "Капитал", value: formatMoney(last.net, base) },
+        {
+          label: "Расход, среднее за 12 мес",
+          value: formatMoney(last.avgObligatory, base),
+        },
+        {
+          label: "Хватит на",
+          value: `${formatNum(Math.round(last.months))} мес`,
+        },
+        { label: "Цель", value: `${FIRE_TARGET} мес` },
+      ]}
+      note={
+        <>
+          <div>
+            Капитал — сумма остатков по всем счетам, кроме архивных и тех, что вы
+            исключили в блоке «Финансовая независимость».
+          </div>
+          <div className="mt-1.5">
+            Расход — только категории с признаком «Обязательная», усреднённые за
+            последние 12 месяцев. Переводы между своими счетами расходом не
+            считаются, возвраты вычитаются.
+          </div>
+          <div className="mt-1.5">
+            Цель 300 месяцев — это правило 4%: капитал, равный 25 годовым
+            расходам.
+          </div>
+          <div className="mt-1.5">
+            Значение колеблется даже при ровных доходах и расходах: окно
+            скользящее, и каждый месяц из него выпадает месяц годичной давности.
+            Крупная обязательная трата поднимает график ровно через год —
+            когда покидает окно. Курс валют и цена активов двигают капитал сами
+            по себе.
+          </div>
+        </>
+      }
+    />
+  );
+
   const description =
     mode === "months"
       ? "На сколько месяцев жизни хватит накоплений, если тратить только на обязательное. Цель — 300 месяцев."
@@ -191,6 +235,15 @@ export function FireChart({
           <div className="font-semibold flex items-center gap-2">
             <Flame className="w-4 h-4 text-accent" />
             Путь к FIRE
+            <Tooltip content={howItWorks} placement="bottom">
+              <button
+                type="button"
+                className="text-muted hover:text-accent shrink-0"
+                aria-label="Как считается «Путь к FIRE»"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </div>
           <div className="text-xs text-muted mt-1 truncate">{description}</div>
         </div>

@@ -226,7 +226,7 @@ export function FireIndependence({
                     <span className="ml-1.5 text-[10px] pill align-middle">накопит.</span>
                   )}
                   {!a.inBalance && (
-                    <span className="ml-1.5 text-[10px] pill align-middle">вне баланса</span>
+                    <span className="ml-1.5 text-[10px] pill align-middle">Вне баланса</span>
                   )}
                 </span>
                 <span className="tabular-nums text-muted shrink-0">

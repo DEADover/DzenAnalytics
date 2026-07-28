@@ -498,13 +498,18 @@ export function buildPushItems(
   // means the user actually moved the time. All other edits (payee, category,
   // amount, legs…) ride along inside the recreated `tx` unchanged.
   const emit = (id: string, zen: ZenTransaction, original: ZenTransaction) => {
+    // Всё, что мы отправляем, пользователь у себя открывал или правил — значит
+    // операция просмотрена. Дзен-мани держит это в `viewed`, и без явной
+    // установки правка уезжала бы с прежним `viewed: false`, оставляя операцию
+    // «новой» навсегда.
+    const seen = { ...zen, viewed: true };
     if (zen.created !== original.created) {
       recreates.push({
         oldId: id,
-        tx: { ...zen, id: mintId(id), changed: stampSeconds, deleted: false },
+        tx: { ...seen, id: mintId(id), changed: stampSeconds, deleted: false },
       });
     } else {
-      toPush.push({ id, zen: { ...zen, changed: stampSeconds } });
+      toPush.push({ id, zen: { ...seen, changed: stampSeconds } });
     }
   };
 
@@ -1245,7 +1250,8 @@ export async function sendPush(
   resurrections: ZenTransaction[] = [],
   tags: ZenTag[] = [],
   budgets: ZenBudget[] = [],
-  merchants: ZenMerchant[] = []
+  merchants: ZenMerchant[] = [],
+  accounts: ZenAccount[] = []
 ): Promise<ZenDiffResponse> {
   const payload: PushPayload = {
     transaction: [...items.map((i) => i.zen), ...resurrections],
@@ -1253,6 +1259,7 @@ export async function sendPush(
     ...(tags.length > 0 ? { tag: tags } : {}),
     ...(budgets.length > 0 ? { budget: budgets } : {}),
     ...(merchants.length > 0 ? { merchant: merchants } : {}),
+    ...(accounts.length > 0 ? { account: accounts } : {}),
   };
   // Debug aid: surface the full payload in DevTools so it's easy to
   // verify which fields actually landed in the request body. Disabled
@@ -1788,4 +1795,94 @@ export function buildBudgetPush(
     budgets.push(next);
   }
   return { budgets, skipped };
+}
+
+/**
+ * Build the `ZenAccount[]` payload for pending account edits.
+ *
+ * Same contract as {@link buildTagPush}: start from the CACHED account and
+ * override only the fields the patch actually changes, so everything we don't
+ * model — deposit schedules, correction settings, sync keys — round-trips
+ * untouched. An edit that matches the cache is a no-op and never leaves.
+ *
+ * `balance` and `instrument` are deliberately not patchable (see
+ * useAccountEditsStore): the balance is derived server-side and the currency
+ * re-values the account's whole history.
+ */
+export function buildAccountPush(
+  edits: Record<string, import("../store/useAccountEditsStore").AccountEdit>,
+  cacheAccounts: ZenAccount[],
+  stampSeconds: number
+): { accounts: ZenAccount[]; skipped: { id: string; reason: string }[] } {
+  const byId = new Map(cacheAccounts.map((a) => [a.id, a]));
+  const accounts: ZenAccount[] = [];
+  const skipped: { id: string; reason: string }[] = [];
+  for (const [id, edit] of Object.entries(edits)) {
+    const orig = byId.get(id);
+    if (!orig) {
+      skipped.push({ id, reason: "счёт не найден в кэше (нужна синхронизация)" });
+      continue;
+    }
+    const next: ZenAccount = { ...orig };
+    let changed = false;
+    const setIf = <K extends keyof ZenAccount>(key: K, value: ZenAccount[K]) => {
+      // ?? null on both sides: «поля нет» и «поле null» — одно и то же для
+      // необязательных значений, и такая правка не должна считаться изменением.
+      if ((value ?? null) === ((orig[key] as unknown) ?? null)) return;
+      next[key] = value;
+      changed = true;
+    };
+    if (edit.title !== undefined) {
+      const t = edit.title.trim();
+      if (!t) {
+        skipped.push({ id, reason: "пустое название" });
+        continue;
+      }
+      setIf("title", t);
+    }
+    if (edit.type !== undefined) setIf("type", edit.type);
+    if (edit.inBalance !== undefined) setIf("inBalance", edit.inBalance);
+    if (edit.savings !== undefined) setIf("savings", edit.savings);
+    if (edit.private !== undefined) setIf("private", edit.private);
+    if (edit.archive !== undefined) setIf("archive", edit.archive);
+    if (edit.creditLimit !== undefined) setIf("creditLimit", edit.creditLimit);
+    if (edit.startBalance !== undefined) setIf("startBalance", edit.startBalance);
+    if (edit.startDate !== undefined) setIf("startDate", edit.startDate);
+    if (edit.percent !== undefined) setIf("percent", edit.percent);
+    if (edit.capitalization !== undefined)
+      setIf("capitalization", edit.capitalization);
+    if (edit.endDateOffset !== undefined)
+      setIf("endDateOffset", edit.endDateOffset);
+    if (edit.endDateOffsetInterval !== undefined)
+      setIf("endDateOffsetInterval", edit.endDateOffsetInterval);
+    if (edit.payoffStep !== undefined) setIf("payoffStep", edit.payoffStep);
+    if (edit.payoffInterval !== undefined)
+      setIf("payoffInterval", edit.payoffInterval);
+    if (!changed) continue; // net no-op
+    // Вклад и кредит Дзен-мани принимает только с полным набором параметров
+    // (ставка, срок, капитализация, периодичность выплат) — иначе отвечает
+    // 400 и роняет ВЕСЬ пуш, а не одну запись. Проверено на живом API.
+    if (next.type === "deposit" || next.type === "loan") {
+      const raw = next as unknown as Record<string, unknown>;
+      const missing = [
+        "startDate",
+        "endDateOffset",
+        "endDateOffsetInterval",
+        "capitalization",
+        "percent",
+        "payoffStep",
+      ].filter((f) => raw[f] == null);
+      if (missing.length > 0) {
+        skipped.push({
+          id,
+          reason:
+            "Дзен-мани требует у вклада и кредита параметры срока и ставки — заведите такой счёт в самом Дзен-мани",
+        });
+        continue;
+      }
+    }
+    next.changed = stampSeconds;
+    accounts.push(next);
+  }
+  return { accounts, skipped };
 }

@@ -1,15 +1,5 @@
+import { useEffect, useMemo, useState } from "react";
 import {
-  Fragment,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { createPortal } from "react-dom";
-import {
-  Search,
   X,
   ChevronDown,
   FilterX,
@@ -18,18 +8,18 @@ import {
   Coins,
 } from "lucide-react";
 import { DateField } from "./DateField";
+import { MultiSelect } from "./MultiSelect";
 import { AccountLogo } from "./AccountLogo";
 import { CategoryFilterPicker } from "./CategoryFilterPicker";
 import { MonthPicker } from "./MonthPicker";
 import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
-import { useFiltersStore, FILTER_NONE, type DatePreset } from "../store/useFiltersStore";
+import { useFiltersStore, type DatePreset } from "../store/useFiltersStore";
 import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { currencyFlagEmoji } from "../lib/currencyFlag";
-import { pluralRu } from "../lib/plural";
 
 const PRESETS: { value: DatePreset; label: string }[] = [
   { value: "30d", label: "30 дней" },
@@ -46,232 +36,6 @@ const OP_TYPES: { value: string; label: string }[] = [
   { value: "transfer", label: "Переводы" },
 ];
 
-function MultiSelect({
-  label,
-  options,
-  selected,
-  onChange,
-  renderIcon,
-  unitForms,
-  searchPlaceholder,
-  archivedSet,
-  className,
-  menuMinWidth,
-}: {
-  label: string;
-  options: string[];
-  selected: Set<string>;
-  onChange: (next: Set<string>) => void;
-  /** Optional leading icon per option (e.g. account logo / category dot). */
-  renderIcon?: (opt: string) => ReactNode;
-  /** Russian [one, few, many] noun for the count header (e.g. счёт/счёта/счетов). */
-  unitForms?: [string, string, string];
-  /** Override the search placeholder. */
-  searchPlaceholder?: string;
-  /** Options in this set are «archived» — rendered below an «Архивные»
-   *  divider (the caller must place them last in `options`). */
-  archivedSet?: Set<string>;
-  /** Extra classes for the outer wrapper (e.g. `flex-1` to fill a row). */
-  className?: string;
-  /** Minimum dropdown width in px. Default 288; pass 0 to match the button. */
-  menuMinWidth?: number;
-}) {
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  // Search appears only for longer lists (currency etc. don't need it).
-  const showSearch = options.length > 8;
-  const q = query.trim().toLowerCase();
-  const filteredOptions = q
-    ? options.filter((o) => o.toLowerCase().includes(q))
-    : options;
-
-  // Set semantics: empty = ALL, {FILTER_NONE} = NONE, else a subset.
-  const isAll = selected.size === 0;
-  const isNone = selected.has(FILTER_NONE);
-  const isChecked = (opt: string) => isAll || (!isNone && selected.has(opt));
-
-  // Toggle one option, normalising the result back to the canonical empty
-  // set (all) or the {FILTER_NONE} marker (none).
-  const toggle = (opt: string) => {
-    const eff = isNone
-      ? new Set<string>()
-      : isAll
-        ? new Set(options)
-        : new Set(selected);
-    eff.delete(FILTER_NONE);
-    if (eff.has(opt)) eff.delete(opt);
-    else eff.add(opt);
-    if (eff.size >= options.length) onChange(new Set()); // all → empty
-    else if (eff.size === 0) onChange(new Set([FILTER_NONE])); // none
-    else onChange(eff);
-  };
-
-  const summary = isNone
-    ? "Ничего"
-    : isAll
-      ? `Все (${options.length})`
-      : `${selected.size} из ${options.length}`;
-
-  // The menu renders in a portal (position: fixed) so it floats above the
-  // table below — `absolute` left it under a later stacking context. Its
-  // left edge lines up with the button; it flips up if there's more room
-  // above (and the menu fits there).
-  type MenuPos = {
-    left: number;
-    width: number;
-    top?: number;
-    bottom?: number;
-    maxHeight: number;
-  };
-  const [pos, setPos] = useState<MenuPos | null>(null);
-  const MENU_W = menuMinWidth ?? 288;
-
-  useLayoutEffect(() => {
-    const el = btnRef.current;
-    let next: MenuPos | null = null;
-    if (open && el) {
-      const r = el.getBoundingClientRect();
-      const width = Math.max(r.width, MENU_W);
-      const estH = Math.min(options.length * 32 + 44 + (showSearch ? 40 : 0), 360);
-      const below = window.innerHeight - r.bottom - 8;
-      const above = r.top - 8;
-      const flipUp = above > below && above >= Math.min(estH, 48);
-      next = flipUp
-        ? {
-            left: r.left,
-            width,
-            bottom: window.innerHeight - r.top + 4,
-            maxHeight: Math.min(estH, above),
-          }
-        : {
-            left: r.left,
-            width,
-            top: r.bottom + 4,
-            maxHeight: Math.min(estH, below),
-          };
-    }
-    setPos(next);
-  }, [open, options.length, showSearch]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onScroll = (e: Event) => {
-      const t = e.target;
-      if (menuRef.current && t instanceof Node && menuRef.current.contains(t)) {
-        return;
-      }
-      setOpen(false);
-    };
-    const onResize = () => setOpen(false);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onResize);
-    };
-  }, [open]);
-
-  return (
-    <div className={clsx("relative", className)}>
-      <button
-        ref={btnRef}
-        onClick={() => {
-          setOpen((o) => !o);
-          setQuery("");
-        }}
-        className={clsx(
-          "btn-ghost text-xs py-1.5 h-[30px] w-full justify-between",
-          selected.size > 0 && "border-accent text-accent"
-        )}
-      >
-        <span className="truncate max-w-[180px]">
-          {label}: {summary}
-        </span>
-        <ChevronDown className="w-4 h-4 shrink-0" />
-      </button>
-      {open &&
-        pos &&
-        createPortal(
-          <>
-            <div className="fixed inset-0 z-[70]" onClick={() => setOpen(false)} />
-            <div
-              ref={menuRef}
-              className="fixed z-[80] overflow-auto card p-2"
-              style={{
-                left: pos.left,
-                width: pos.width,
-                top: pos.top,
-                bottom: pos.bottom,
-                maxHeight: pos.maxHeight,
-              }}
-            >
-              <div className="flex items-center justify-between gap-2 px-2 py-1 mb-1 border-b border-border/60">
-                <span className="text-xs text-muted">
-                  {options.length}{" "}
-                  {pluralRu(
-                    options.length,
-                    unitForms ?? ["вариант", "варианта", "вариантов"]
-                  )}
-                </span>
-                <button
-                  onClick={() => onChange(isAll ? new Set([FILTER_NONE]) : new Set())}
-                  className="text-xs text-accent hover:underline"
-                >
-                  {isAll ? "Снять все" : "Выбрать все"}
-                </button>
-              </div>
-              {showSearch && (
-                <div className="flex items-center gap-2 px-2 py-1.5 mb-1 border-b border-border/60">
-                  <Search className="w-3.5 h-3.5 text-muted shrink-0" />
-                  <input
-                    autoFocus
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={searchPlaceholder ?? `Поиск: ${label.toLowerCase()}`}
-                    className="bg-transparent text-xs w-full outline-none"
-                  />
-                </div>
-              )}
-              {filteredOptions.length === 0 ? (
-                <div className="px-2 py-2 text-xs text-muted">Ничего не найдено</div>
-              ) : (
-                filteredOptions.map((opt, i) => {
-                  // First archived option → render an «Архивные» divider above it.
-                  const showArchivedHeader =
-                    !!archivedSet?.has(opt) &&
-                    (i === 0 || !archivedSet.has(filteredOptions[i - 1]));
-                  return (
-                    <Fragment key={opt}>
-                      {showArchivedHeader && (
-                        <div className="mt-1 pt-1 border-t border-border px-2 pb-0.5 text-[11px] uppercase tracking-wide text-muted">
-                          Архивные
-                        </div>
-                      )}
-                      <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-panel2 rounded cursor-pointer text-xs">
-                        <input
-                          type="checkbox"
-                          checked={isChecked(opt)}
-                          onChange={() => toggle(opt)}
-                          className="accent-accent shrink-0"
-                        />
-                        {renderIcon && (
-                          <span className="shrink-0">{renderIcon(opt)}</span>
-                        )}
-                        <span className="truncate">{opt}</span>
-                      </label>
-                    </Fragment>
-                  );
-                })
-              )}
-            </div>
-          </>,
-          document.body
-        )}
-    </div>
-  );
-}
 
 export function GlobalFilters({
   showDateRange = true,
@@ -391,6 +155,7 @@ export function GlobalFilters({
     f.onlyUncategorized ||
     f.hideZero ||
     f.onlyWithComment ||
+    f.onlyNew ||
     f.excludeOffBalance;
   const extraCount =
     (f.excludeTransfers ? 1 : 0) +
@@ -399,6 +164,7 @@ export function GlobalFilters({
     (f.onlyUncategorized ? 1 : 0) +
     (f.hideZero ? 1 : 0) +
     (f.onlyWithComment ? 1 : 0) +
+    (f.onlyNew ? 1 : 0) +
     (f.excludeOffBalance ? 1 : 0);
   const hasFilters =
     f.accounts.size > 0 ||
@@ -492,6 +258,7 @@ export function GlobalFilters({
                     { label: "Только без категории", checked: f.onlyUncategorized, on: f.setOnlyUncategorized },
                     { label: "Скрыть нулевые операции", checked: f.hideZero, on: f.setHideZero },
                     { label: "Только с комментарием", checked: f.onlyWithComment, on: f.setOnlyWithComment },
+                    { label: "Только новые", checked: f.onlyNew, on: f.setOnlyNew },
                     // Only offered when the user actually HAS off-balance accounts
                     // (savings/brokerage) — otherwise the option would be a no-op.
                     ...(offBalanceAccounts.size > 0

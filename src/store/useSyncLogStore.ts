@@ -68,7 +68,13 @@ export const useSyncLogStore = create<State>((set, get) => ({
 
   hydrate: async () => {
     const stored = await db.loadJSON<SyncLogEntry[]>(KEY);
-    set({ entries: stored || [], loaded: true });
+    // Значение из хранилища может оказаться не тем, чего мы ждём — после сбоя
+    // записи или отката на другую версию. Строку, например, React честно
+    // разложит на символы и уронит таблицу. Берём только массив объектов.
+    const entries = Array.isArray(stored)
+      ? stored.filter((e): e is SyncLogEntry => !!e && typeof e === "object")
+      : [];
+    set({ entries, loaded: true });
   },
 
   append: async (entry) => {

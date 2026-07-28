@@ -301,6 +301,10 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
       createdAt: zt.created
         ? new Date(zt.created * 1000).toISOString()
         : `${zt.date}T00:00:00Z`,
+      // `viewed: false` — операция приехала из банка и её ещё не открывали.
+      // Храним инверсию: «новая» читается лучше, чем «не просмотренная», и
+      // отсутствие поля (CSV) не превращается в «новая».
+      unseen: zt.viewed === false,
     });
   }
 

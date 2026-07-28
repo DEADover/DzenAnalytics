@@ -874,3 +874,34 @@ function roughByteSize(obj: unknown): number {
     return 0;
   }
 }
+
+/** Окно «свежести» снимка для политики «раз в сутки». */
+export const DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Что честно написать в подтверждении отправки про копию облака.
+ *
+ * Раньше диалог обещал «перед отправкой сохраним копию» всегда — даже при
+ * политике «никогда», когда копия не делается вовсе. Обещание, которое не
+ * выполняется, хуже отсутствия обещания: на него рассчитывают.
+ *
+ * Возвращает готовое предложение с пробелом на конце либо пустую строку.
+ */
+export async function snapshotPromiseText(
+  policy: "always" | "daily" | "never"
+): Promise<string> {
+  if (policy === "never") return "";
+  if (policy === "always") {
+    return "Перед отправкой сохраним копию облачного состояния. ";
+  }
+  const newest = (await loadSnapshotIndex())[0];
+  const fresh = newest && Date.now() - newest.createdAt < DAILY_WINDOW_MS;
+  if (!fresh) return "Перед отправкой сохраним копию облачного состояния. ";
+  const when = new Date(newest.createdAt).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `Копия облака уже есть — от ${when}, новую сегодня делать не будем. `;
+}

@@ -42,6 +42,11 @@ export function QuickCalibration() {
   const anchors = useMemo(() => detectBalanceAnchors(transactions), [transactions]);
 
   if (transactions.length === 0) return null;
+  // Both flags come from IndexedDB and land a tick AFTER the transactions do,
+  // so deciding on their default values flashes the banner at every page load —
+  // for API users it then vanishes once the token arrives, which reads as a
+  // glitch. Say nothing until we actually know.
+  if (!zenLoaded || !calibLoaded) return null;
   // API auto-calibrates on every sync; never show the manual banner.
   if (zenToken) return null;
   if (calibration && !editing && dismissed) return null;

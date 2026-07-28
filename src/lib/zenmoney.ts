@@ -35,7 +35,48 @@ export interface ZenAccount {
   startDate: string | null;
   creditLimit: number;
   syncID: string[] | null;
+  /** Bank / payment system behind this account — an id into the global
+   *  `company` dictionary (see {@link ZenCompany}). Null for cash, manual
+   *  accounts and anything the user never tied to a bank. */
+  company: number | null;
+  // ── Параметры вклада и кредита ──────────────────────────────────────────
+  // Дзен-мани требует ВЕСЬ этот набор у `deposit` и `loan` и отвергает такой
+  // счёт целиком, если хоть одно поле пустое (проверено на живом API:
+  // «Loan or deposit account should have startDate, endDateOffset,
+  // endDateOffsetInterval, capitalization, percent and payoffStep filled»).
+  // У остальных видов счёта поля равны null.
+  /** Годовая ставка в процентах. */
+  percent?: number | null;
+  /** Капитализация процентов. */
+  capitalization?: boolean | null;
+  /** Срок: число единиц (вместе с `endDateOffsetInterval`). */
+  endDateOffset?: number | null;
+  endDateOffsetInterval?: ZenTermUnit | null;
+  /** Периодичность начисления процентов (вместе с `payoffInterval`). */
+  payoffStep?: number | null;
+  payoffInterval?: ZenTermUnit | null;
   changed: number;
+}
+
+/** Единица измерения срока у вкладов и кредитов. */
+export type ZenTermUnit = "day" | "week" | "month" | "year";
+
+/**
+ * A bank / payment system from Zenmoney's GLOBAL dictionary — read-only for
+ * us, maintained on their side (~1700 entries). `Account.company` points here.
+ *
+ * We keep it because the account's own title is not a reliable bank marker:
+ * «И_Альфа_…» and «Альфа-ба» are the same bank to a human and two different
+ * strings to a computer, so grouping accounts by bank has to go through this
+ * id — exactly how Дзен groups them on its own «Счета» screen.
+ */
+export interface ZenCompany {
+  id: number;
+  title: string;
+  fullTitle?: string | null;
+  www?: string | null;
+  country?: number | null;
+  changed?: number;
 }
 
 export interface ZenTag {
@@ -172,7 +213,7 @@ export interface ZenDiffResponse {
   reminder?: unknown[];
   reminderMarker?: ZenReminderMarker[];
   country?: unknown[];
-  company?: unknown[];
+  company?: ZenCompany[];
   deletion?: ZenDeletion[];
 }
 

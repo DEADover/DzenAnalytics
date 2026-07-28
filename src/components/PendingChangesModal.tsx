@@ -10,6 +10,7 @@ import {
   Undo2,
   Tags,
   Users,
+  Wallet,
   ChevronDown,
   ArrowRight,
   ListChecks,
@@ -23,20 +24,25 @@ import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useTagEditsStore } from "../store/useTagEditsStore";
+import { useAccountEditsStore } from "../store/useAccountEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import {
   getCategoryTagsFromCache,
   getCounterpartiesFromCache,
+  getLiveAccountsFromCache,
   useZenmoneyStore,
   type CategoryTag,
   type Counterparty,
+  type LiveAccount,
 } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
+import { snapshotPromiseText } from "../lib/cloudSnapshots";
 import { EditTransactionModal } from "./EditTransactionModal";
 import { CategoryDot } from "./CategoryDot";
 import { formatMoney, formatDate, displayPayee } from "../lib/format";
+import { accountKindLabel } from "../lib/accountType";
 import { pluralRu } from "../lib/plural";
 import { kindLabel, kindColorClass } from "../lib/txKindStyle";
 import type { Transaction } from "../types";
@@ -151,10 +157,13 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
   // Названия берём из кэша: правки хранятся по id, а показать надо человеку.
   const [cacheTags, setCacheTags] = useState<CategoryTag[]>([]);
   const [cacheCps, setCacheCps] = useState<Counterparty[]>([]);
+  const [cacheAccounts, setCacheAccounts] = useState<LiveAccount[]>([]);
+  const accountEdits = useAccountEditsStore((s) => s.edits);
   useEffect(() => {
     let alive = true;
     getCategoryTagsFromCache().then((t) => alive && setCacheTags(t ?? []));
     getCounterpartiesFromCache().then((c) => alive && setCacheCps(c ?? []));
+    getLiveAccountsFromCache().then((a) => alive && setCacheAccounts(a ?? []));
     return () => {
       alive = false;
     };
@@ -295,6 +304,109 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
     return out;
   }, [newCats, tagEdits, tagDeletions, tagTitle, cacheTags]);
 
+  const accountItems = useMemo<DictItem[]>(() => {
+    const byId = new Map(cacheAccounts.map((a) => [a.id, a]));
+    const yesNo = (v: boolean | undefined | null) => (v ? "Да" : "Нет");
+    const out: DictItem[] = [];
+    for (const [id, patch] of Object.entries(accountEdits)) {
+      const was = byId.get(id);
+      const diff: FieldDiff[] = [];
+      if (patch.title !== undefined)
+        diff.push({ label: "Название", from: was?.title ?? "—", to: patch.title });
+      // Вид счёта — это пара (type, savings), поэтому и в разборе правок он
+      // одной строкой: «Банковский счёт → Накопительный счёт» понятнее, чем
+      // два отдельных изменения, из которых по одному ничего не ясно.
+      if (patch.type !== undefined || patch.savings !== undefined)
+        diff.push({
+          label: "Вид счёта",
+          from: was ? accountKindLabel(was.type, was.savings) : "—",
+          to: accountKindLabel(
+            patch.type ?? was?.type ?? "",
+            patch.savings ?? was?.savings
+          ),
+        });
+      if (patch.inBalance !== undefined)
+        diff.push({ label: "В балансе", from: yesNo(was?.inBalance), to: yesNo(patch.inBalance) });
+      if (patch.private !== undefined)
+        diff.push({ label: "Личный", from: yesNo(was?.private), to: yesNo(patch.private) });
+      if (patch.archive !== undefined)
+        diff.push({ label: "Архивный", from: yesNo(was?.archive), to: yesNo(patch.archive) });
+      if (patch.creditLimit !== undefined)
+        diff.push({
+          label: "Кредитный лимит",
+          from: formatMoney(was?.creditLimit ?? 0, was?.currency ?? ""),
+          to: formatMoney(patch.creditLimit, was?.currency ?? ""),
+        });
+      if (patch.startBalance !== undefined && was) {
+        // Показываем то, что человек правил, — баланс, а не служебный
+        // начальный остаток, который сдвинулся под капотом.
+        const ops = was.balance - was.startBalance;
+        diff.push({
+          label: "Баланс",
+          from: formatMoney(was.balance, was.currency),
+          to: formatMoney(patch.startBalance + ops, was.currency),
+        });
+      }
+      const unitRu = (u: string | null | undefined) =>
+        u === "year" ? "г." : u === "day" ? "дн." : u === "week" ? "нед." : "мес.";
+      const payoffRu = (step?: number | null, interval?: string | null) =>
+        interval === "year" && step === 1
+          ? "Раз в год"
+          : interval === "month" && step === 3
+            ? "Ежеквартально"
+            : interval === "month" && step === 1
+              ? "Ежемесячно"
+              : "В конце срока";
+      if (patch.percent !== undefined)
+        diff.push({
+          label: "Ставка",
+          from: was?.percent != null ? `${was.percent} %` : "не указана",
+          to: patch.percent != null ? `${patch.percent} %` : "не указана",
+        });
+      if (patch.capitalization !== undefined)
+        diff.push({
+          label: "Капитализация",
+          from: yesNo(was?.capitalization),
+          to: yesNo(patch.capitalization),
+        });
+      if (patch.endDateOffset !== undefined || patch.endDateOffsetInterval !== undefined)
+        diff.push({
+          label: "Срок",
+          from:
+            was?.endDateOffset != null
+              ? `${was.endDateOffset} ${unitRu(was.endDateOffsetInterval)}`
+              : "не указан",
+          to: `${patch.endDateOffset ?? was?.endDateOffset ?? "—"} ${unitRu(
+            patch.endDateOffsetInterval ?? was?.endDateOffsetInterval
+          )}`,
+        });
+      if (patch.payoffStep !== undefined || patch.payoffInterval !== undefined)
+        diff.push({
+          label: "Начисление процентов",
+          from: payoffRu(was?.payoffStep, was?.payoffInterval),
+          to: payoffRu(
+            patch.payoffStep ?? was?.payoffStep,
+            patch.payoffInterval ?? was?.payoffInterval
+          ),
+        });
+      if (patch.startDate !== undefined)
+        diff.push({
+          label: "Дата открытия",
+          from: was?.startDate ? formatDate(was.startDate) : "не указана",
+          to: patch.startDate ? formatDate(patch.startDate) : "не указана",
+        });
+      out.push({
+        key: `acc:${id}`,
+        action: "edit",
+        title: patch.title ?? was?.title ?? "счёт удалён из Дзен-мани",
+        note: diff.map((d) => d.label).join(", ") || "Изменено",
+        diff,
+        revert: () => useAccountEditsStore.getState().revert(id),
+      });
+    }
+    return out;
+  }, [accountEdits, cacheAccounts]);
+
   const counterpartyItems = useMemo<DictItem[]>(() => {
     const out: DictItem[] = [];
     for (const c of cpCreated) {
@@ -342,15 +454,22 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
     draftItems.length +
     deletedItems.length +
     categoryItems.length +
+    accountItems.length +
     counterpartyItems.length;
 
   /** Отправка прямо отсюда: пользователь уже просмотрел список и решил — гонять
    *  его обратно в настройки за кнопкой незачем. */
   async function pushAll() {
+    // Фразу про копию облака берём из реальной политики снимков: обещать её
+    // при политике «никогда» — врать пользователю.
+    const snapshotText = await snapshotPromiseText(
+      useZenmoneyStore.getState().snapshotPolicy
+    );
     const ok = await confirm({
       title: `Отправить ${total} ${pluralRu(total, ["изменение", "изменения", "изменений"])} в Дзен-мани?`,
       message:
-        "Перед отправкой сохраним копию облачного состояния и проверим конфликты. Неподдерживаемые правки будут пропущены — их список появится в журнале синхронизаций.",
+        snapshotText +
+          "Проверим конфликты. Неподдерживаемые правки будут пропущены — их список появится в журнале синхронизаций.",
       confirmLabel: "Отправить",
     });
     if (!ok) return;
@@ -374,7 +493,8 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
     await clearAllDrafts();
     if (deletedIds.length) await restoreManyDeleted(deletedIds);
     // Справочники — по одному, у каждого стора своя семантика отмены.
-    for (const it of [...categoryItems, ...counterpartyItems]) await it.revert();
+    for (const it of [...categoryItems, ...accountItems, ...counterpartyItems])
+      await it.revert();
     await reapply();
   }
 
@@ -503,6 +623,13 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
                 openKey={openKey}
                 onToggle={toggle}
                 withDot
+              />
+              <DictGroup
+                icon={<Wallet className="w-4 h-4 text-accent" />}
+                title="Счета"
+                items={accountItems}
+                openKey={openKey}
+                onToggle={toggle}
               />
               <DictGroup
                 icon={<Users className="w-4 h-4 text-accent" />}

@@ -39,7 +39,11 @@ export type EditableField =
   // Destination-leg amount/currency — only meaningful for a cross-currency
   // transfer, where the two legs hold different sums in their own currencies.
   | "incomeAmount"
-  | "incomeCurrency";
+  | "incomeCurrency"
+  // Снятие пометки «новая»: в Дзен-мани это поле `viewed`. Держим его здесь,
+  // а не отдельным хранилищем, чтобы отметка ехала в облако тем же путём, что
+  // и обычная правка, и так же откатывалась построчно.
+  | "unseen";
 
 export type TransactionEdit = Partial<Pick<Transaction, EditableField>>;
 

@@ -9,6 +9,7 @@ import {
   History,
   Trash2,
   Info,
+  HelpCircle,
 } from "lucide-react";
 import {
   useSyncLogStore,
@@ -227,9 +228,9 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
                 </tr>
               </thead>
               <tbody>
-                {visible.map((e) => (
+                {visible.map((e, i) => (
                   <LogTableRow
-                    key={e.id}
+                    key={e.id ?? `row-${i}`}
                     entry={e}
                     expanded={expanded.has(e.id)}
                     onToggle={() => toggle(e.id)}
@@ -481,7 +482,14 @@ function StatusBadge({ status }: { status: SyncLogStatus }) {
       cls: "text-expense bg-expense/10 border-expense/30",
     },
   }[status];
-  const { Icon, label, cls } = conf;
+  // Незнакомый статус — не повод ронять всю страницу настроек: запись могла
+  // прийти из другой версии или пережить сбой записи. Показываем нейтральный
+  // значок с самим значением, чтобы было видно, что именно не распозналось.
+  const { Icon, label, cls } = conf ?? {
+    Icon: HelpCircle,
+    label: String(status || "—"),
+    cls: "text-muted bg-panel2 border-border",
+  };
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded-md border ${cls} whitespace-nowrap`}
