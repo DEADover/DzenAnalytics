@@ -9,7 +9,14 @@ vi.mock("./db", () => ({
   },
 }));
 
-import { fetchHistoricalRubRates, isWeekendUTC } from "./historicalRates";
+import {
+  fetchHistoricalRubRates,
+  isWeekendUTC,
+  isNoQuoteDayUTC,
+  resetMirrorProbe,
+} from "./historicalRates";
+
+const LATEST_URL = "https://www.cbr-xml-daily.ru/daily_json.js";
 
 // Mock the CBR mirror: 200 + fake rates on business days; a weekend URL THROWS
 // `TypeError: Failed to fetch` — exactly what the real mirror does (its 404 has
@@ -34,8 +41,37 @@ function installFetch() {
   }) as unknown as typeof fetch;
 }
 
+/**
+ * Mirror where a set of dates is simply MISSING from the archive — the real
+ * failure mode behind issue #53. A missing day 404s without a CORS header, so
+ * in a browser it surfaces as `TypeError: Failed to fetch`, exactly like a dead
+ * network. `mirrorUp` decides what the reachability probe answers.
+ */
+function installFetchWithGaps(missing: string[], mirrorUp = true) {
+  fetchCalls = [];
+  const gap = new Set(missing);
+  globalThis.fetch = vi.fn(async (input: unknown) => {
+    const url = String(input);
+    fetchCalls.push(url);
+    if (url === LATEST_URL) {
+      if (!mirrorUp) throw new TypeError("Failed to fetch");
+      return { ok: true, status: 200 } as unknown as Response;
+    }
+    const date = dateFromUrl(url);
+    if (gap.has(date) || isWeekendUTC(date)) throw new TypeError("Failed to fetch");
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ Valute: { USD: { Value: 90, Nominal: 1 } } }),
+    } as unknown as Response;
+  }) as unknown as typeof fetch;
+}
+
+const archiveCalls = () => fetchCalls.filter((u) => u !== LATEST_URL);
+
 beforeEach(() => {
   store.clear();
+  resetMirrorProbe();
   installFetch();
 });
 
@@ -86,5 +122,73 @@ describe("historicalRates — weekend skip & de-dup", () => {
       `[bench] ${dates.length} dates (${weekendDates} weekend) → ` +
         `${fetchCalls.length} requests, ${new Set(fetchCalls).size} unique, ${ms}ms`
     );
+  });
+});
+
+describe("historicalRates — пропуски в архиве ЦБ (issue #53)", () => {
+  it("не запрашивает праздники: 8 января не уходит в сеть", async () => {
+    expect(isNoQuoteDayUTC("2026-01-08")).toBe(true); // Thu, но праздник
+    installFetchWithGaps([]);
+    await fetchHistoricalRubRates(["2026-01-08"]);
+    expect(archiveCalls().map(dateFromUrl)).not.toContain("2026-01-08");
+  });
+
+  it("новогодний провал в архиве перекрывается окном отката", async () => {
+    // В 2026-м архив прыгает с 31 декабря сразу на 13 января.
+    const gap: string[] = [];
+    for (let d = 1; d <= 12; d++) {
+      gap.push(`2026-01-${String(d).padStart(2, "0")}`);
+    }
+    installFetchWithGaps(gap);
+    const out = await fetchHistoricalRubRates(["2026-01-09"]);
+    // Курс нашёлся — по последней публикации перед праздниками.
+    expect(out["2026-01-09"]?.USD).toBe(90);
+    expect(archiveCalls().map(dateFromUrl)).toContain("2025-12-31");
+  });
+
+  it("отсутствующая дата запоминается как пропуск и не перезапрашивается", async () => {
+    // Понедельник, которого просто нет в архиве зеркала.
+    installFetchWithGaps(["2026-07-20"]);
+    await fetchHistoricalRubRates(["2026-07-20"]);
+    expect(archiveCalls().map(dateFromUrl)).toContain("2026-07-20");
+
+    // Второй прогрев (новая сессия страницы: кэш дат в IDB остаётся).
+    installFetchWithGaps(["2026-07-20"]);
+    resetMirrorProbe();
+    await fetchHistoricalRubRates(["2026-07-20"]);
+    expect(archiveCalls().map(dateFromUrl)).not.toContain("2026-07-20");
+  });
+
+  it("когда сервис курсов лежит, дата НЕ считается пропуском и будет перезапрошена", async () => {
+    // Полный обрыв: не отвечает ни архив, ни проверочный документ.
+    const allDates = ["2026-07-20", "2026-07-17", "2026-07-16", "2026-07-15",
+      "2026-07-14", "2026-07-13", "2026-07-10", "2026-07-09", "2026-07-08",
+      "2026-07-07", "2026-07-06", "2026-07-03", "2026-07-02", "2026-07-01"];
+    installFetchWithGaps(allDates, /* mirrorUp */ false);
+    const out = await fetchHistoricalRubRates(["2026-07-20"]);
+    // Ничего достоверного — дата остаётся «неизвестной», а не «курса нет».
+    expect(out["2026-07-20"]).toBeUndefined();
+
+    // Сервис поднялся — дата запрашивается снова и разрешается.
+    installFetchWithGaps([]);
+    resetMirrorProbe();
+    const retry = await fetchHistoricalRubRates(["2026-07-20"]);
+    expect(retry["2026-07-20"]?.USD).toBe(90);
+  });
+
+  it("при недоступном сервисе не перебирает всё окно отката на каждую дату", async () => {
+    // Полный офлайн: любой адрес падает.
+    fetchCalls = [];
+    globalThis.fetch = vi.fn(async (input: unknown) => {
+      fetchCalls.push(String(input));
+      throw new TypeError("Failed to fetch");
+    }) as unknown as typeof fetch;
+
+    const dates = ["2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06"];
+    const out = await fetchHistoricalRubRates(dates);
+    // Ничего не разрешилось и — главное — ничего не записалось как «курса нет».
+    expect(Object.keys(out)).toHaveLength(0);
+    // Без короткого замыкания это было бы ~11 рабочих дней окна на каждую дату.
+    expect(archiveCalls().length).toBeLessThan(dates.length * 4);
   });
 });

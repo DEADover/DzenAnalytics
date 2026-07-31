@@ -7,6 +7,7 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { detectAnomalies, detectMonthSpikes, type Anomaly, type MonthSpike } from "../lib/aggregations";
 import { SortableTable, type Column } from "../components/SortableTable";
 import { PageHeader } from "../components/PageHeader";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { formatMoney, formatDate, monthLabel } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
@@ -83,21 +84,54 @@ export function AnomaliesPage() {
         hint="Авто-детект необычных операций и резких всплесков по категориям. Учитывает фильтры по счетам, валютам, категориям и датам. Всплески считают базу по всей истории (с учётом фильтров, кроме дат)."
         hintWrap
         right={
-          tab === "transactions" ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted">Чувствительность (σ)</span>
+          <div className="flex items-center gap-2">
+            {tab === "transactions" && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted">Чувствительность (σ)</span>
               <input
                 type="range"
                 min="2"
                 max="4"
                 step="0.5"
                 value={threshold}
-                onChange={(e) => setThreshold(Number(e.target.value))}
-                className="accent-accent"
-              />
-              <span className="text-xs tabular-nums w-8">{threshold.toFixed(1)}</span>
-            </div>
-          ) : undefined
+                  onChange={(e) => setThreshold(Number(e.target.value))}
+                  className="accent-accent"
+                />
+                <span className="text-xs tabular-nums w-8">
+                  {threshold.toFixed(1)}
+                </span>
+              </div>
+            )}
+            <InfoPopover>
+              <p>
+                <InfoTerm>Операции-выбросы</InfoTerm> — те, что сильно выбиваются
+                из привычных сумм. Для каждой категории и для каждого получателя
+                считаем средний чек и разброс вокруг него, а потом ищем операции,
+                которые ушли от среднего больше чем на{" "}
+                <InfoTerm>{threshold.toFixed(1)} разброса</InfoTerm> — это и есть
+                ползунок «Чувствительность». Поставьте меньше — попадёт больше
+                операций.
+              </p>
+              <p>
+                Считаем только расходы. Категория или получатель участвуют,
+                начиная с <InfoTerm>5 операций</InfoTerm>: на трёх покупках
+                «обычная сумма» — это ещё не статистика. В строке видно, с чем
+                сравнивали: «обычный чек у «Пятёрочки» — 900 ₽, эта в 4.2× больше».
+              </p>
+              <p>
+                <InfoTerm>Всплески по категориям</InfoTerm> — про месяцы, а не про
+                отдельные покупки. Траты категории за месяц сравниваем со средним
+                за <InfoTerm>три предыдущих месяца</InfoTerm> и показываем те, где
+                стало больше хотя бы в полтора раза. Возвраты вычитаются, поэтому
+                месяц с полностью возвращённой покупкой всплеском не считается.
+              </p>
+              <p>
+                Обе вкладки учитывают отборы сверху. Единственное исключение —
+                база для всплесков: она берётся по всей истории, иначе сравнивать
+                текущий месяц было бы не с чем.
+              </p>
+            </InfoPopover>
+          </div>
         }
       />
 

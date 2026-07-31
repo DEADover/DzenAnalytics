@@ -21,6 +21,7 @@ import {
   GitFork,
   Wand2,
   HelpCircle,
+  Table,
   Cloud,
   HeartPulse,
   FlaskConical,
@@ -54,6 +55,8 @@ const SECONDARY_GROUPS = [
     title: "Аналитика",
     items: [
       { to: "/health", label: "Финансовое здоровье", icon: HeartPulse },
+      { to: "/report", label: "Доходы и расходы", icon: Table },
+      { to: "/dynamics", label: "Динамика", icon: Activity },
       { to: "/trends", label: "Тренды", icon: Activity },
       { to: "/cashflow", label: "Cash-flow", icon: LineChart },
       { to: "/compare", label: "Сравнение", icon: GitCompare },

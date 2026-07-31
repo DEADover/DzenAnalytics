@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   X,
   ChevronDown,
@@ -10,11 +10,12 @@ import {
 import { DateField } from "./DateField";
 import { MultiSelect } from "./MultiSelect";
 import { AccountLogo } from "./AccountLogo";
+import { accountKindLabel } from "../lib/accountType";
 import { CategoryFilterPicker } from "./CategoryFilterPicker";
 import { MonthPicker } from "./MonthPicker";
 import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
-import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
+import { getLiveAccountsFromCache, getCategoryTagsFromCache } from "../store/useZenmoneyStore";
 import { useFiltersStore, type DatePreset } from "../store/useFiltersStore";
 import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
@@ -36,6 +37,9 @@ const OP_TYPES: { value: string; label: string }[] = [
   { value: "transfer", label: "Переводы" },
 ];
 
+
+/** Служебные категории, которые держим наверху списка без заголовка группы. */
+const PINNED_CATEGORIES = ["Корректировка"];
 
 export function GlobalFilters({
   showDateRange = true,
@@ -59,6 +63,37 @@ export function GlobalFilters({
   // Archived (closed) account titles from the Zenmoney cache — used to sort the
   // archived accounts to the bottom of the filter and group them under a divider.
   const [archivedAccounts, setArchivedAccounts] = useState<Set<string>>(new Set());
+  /** Название счёта → его вид («Карта», «Депозит», …). Пусто в режиме CSV: там
+   *  метаданных счетов нет, и группировать нечем. */
+  const [accountKinds, setAccountKinds] = useState<Map<string, string>>(new Map());
+  /** Название категории → расходная она или доходная, по справочнику Дзен-мани.
+   *  Пусто в режиме CSV — тогда тип выводим из самих операций. */
+  const [tagKinds, setTagKinds] = useState<Map<string, "expense" | "income" | "both">>(
+    new Map()
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void getCategoryTagsFromCache().then((tags) => {
+      if (cancelled || !tags) return;
+      const m = new Map<string, "expense" | "income" | "both">();
+      for (const t of tags) {
+        if (t.parent) continue; // тип задаёт корневая категория
+        m.set(
+          t.title,
+          t.showOutcome && t.showIncome
+            ? "both"
+            : t.showIncome
+              ? "income"
+              : "expense"
+        );
+      }
+      setTagKinds(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [transactions]);
   // Off-balance account titles → the filter store, so `applyFilters` can honour
   // the «исключить внебалансовые» option (which needs account metadata the pure
   // filter can't see). Loaded here since GlobalFilters renders on every page.
@@ -69,6 +104,9 @@ export function GlobalFilters({
     getLiveAccountsFromCache().then((live) => {
       if (cancelled || !live) return;
       setArchivedAccounts(new Set(live.filter((a) => a.archive).map((a) => a.title)));
+      setAccountKinds(
+        new Map(live.map((a) => [a.title, accountKindLabel(a.type, a.savings)]))
+      );
       setOffBalanceAccounts(
         new Set(live.filter((a) => !a.archive && !a.inBalance).map((a) => a.title))
       );
@@ -81,44 +119,91 @@ export function GlobalFilters({
   const accounts = useMemo(() => {
     const set = new Set<string>();
     for (const t of transactions) if (t.account) set.add(t.account);
-    // Active accounts first (alpha), archived grouped at the bottom (alpha).
+    // Архивные — вниз; внутри активных группируем по виду счёта, чтобы список
+    // читался так же, как страница «Счета». Внутри вида — по алфавиту.
     return Array.from(set).sort((a, b) => {
       const aa = archivedAccounts.has(a);
       const ba = archivedAccounts.has(b);
       if (aa !== ba) return aa ? 1 : -1;
+      const ka = accountKinds.get(a) ?? "";
+      const kb = accountKinds.get(b) ?? "";
+      if (ka !== kb) return ka.localeCompare(kb, "ru");
       return a.localeCompare(b, "ru");
     });
-  }, [transactions, archivedAccounts]);
+  }, [transactions, archivedAccounts, accountKinds]);
+
+  /** Заголовок группы для пикера счетов: архивные идут под своим разделителем,
+   *  который рисует сам MultiSelect, поэтому им группу не назначаем. */
+  const accountGroup = useCallback(
+    (title: string) =>
+      archivedAccounts.has(title) ? null : (accountKinds.get(title) ?? null),
+    [archivedAccounts, accountKinds]
+  );
 
   // Parent categories each with their observed sub-categories — for the cascade
   // category filter (parent on the left, subs on the right).
   const categoryNodes = useMemo(() => {
-    const map = new Map<string, { subs: Set<string>; hasBare: boolean }>();
+    const map = new Map<
+      string,
+      { subs: Set<string>; hasBare: boolean; seenIncome: boolean; seenExpense: boolean }
+    >();
     for (const t of transactions) {
       if (!t.category) continue;
       let e = map.get(t.category);
       if (!e) {
-        e = { subs: new Set<string>(), hasBare: false };
+        e = { subs: new Set<string>(), hasBare: false, seenIncome: false, seenExpense: false };
         map.set(t.category, e);
       }
       // A transaction tagged with just the parent (no sub) is "bare" — a
       // distinct leaf from any «Category / Subcategory».
       if (t.subcategory) e.subs.add(t.subcategory);
       else e.hasBare = true;
+      if (t.kind === "income") e.seenIncome = true;
+      else if (t.kind === "expense" || t.kind === "refund") e.seenExpense = true;
     }
+    // Тип берём из справочника Дзен-мани, а если его нет (режим CSV) — выводим
+    // из самих операций: категория, встреченная только в доходах, доходная.
+    const kindOf = (name: string, e: { seenIncome: boolean; seenExpense: boolean }) => {
+      const fromTags = tagKinds.get(name);
+      if (fromTags) return fromTags;
+      if (e.seenIncome && e.seenExpense) return "both" as const;
+      if (e.seenIncome) return "income" as const;
+      if (e.seenExpense) return "expense" as const;
+      return undefined;
+    };
+    // Доходных категорий обычно единицы, расходных — десятки, поэтому короткий
+    // список идёт первым. Смешанные («и расход, и доход») — в хвост: их мало и
+    // они не то, что ищут в первую очередь.
+    const ORDER = { income: 0, expense: 1, both: 2 } as const;
     const real = [...map.entries()]
       .filter(([name]) => name !== NO_CATEGORY)
       .map(([name, e]) => ({
         name,
         hasBare: e.hasBare,
+        kind: kindOf(name, e),
         subs: [...e.subs].sort((a, b) => a.localeCompare(b, "ru")),
       }))
-      .sort((a, b) => a.name.localeCompare(b.name, "ru"));
-    // Pin «Без категории» first (mirrors the edit-modal picker) so the
-    // uncategorized leaf is always an obvious, selectable filter — handy for
-    // hunting down operations that still need a category.
-    return [{ name: NO_CATEGORY, hasBare: true, subs: [] }, ...real];
-  }, [transactions]);
+      .sort(
+        (a, b) =>
+          (a.kind ? ORDER[a.kind] : 3) - (b.kind ? ORDER[b.kind] : 3) ||
+          a.name.localeCompare(b.name, "ru")
+      );
+    // Наверх и без заголовка группы — «Без категории» и «Корректировка».
+    // Первая всегда под рукой: по ней ищут операции, которым забыли категорию.
+    // Вторая формально «и расход, и доход» и заводила бы себе отдельную группу
+    // из одной строки — а по смыслу это служебная запись, а не статья бюджета.
+    const pinnedNames = new Set([NO_CATEGORY, ...PINNED_CATEGORIES]);
+    const pinned = real.filter((n) => pinnedNames.has(n.name)).map((n) => ({
+      ...n,
+      // Тип убираем намеренно: без него строка не получает заголовок группы.
+      kind: undefined,
+    }));
+    return [
+      { name: NO_CATEGORY, hasBare: true, subs: [] },
+      ...pinned,
+      ...real.filter((n) => !pinnedNames.has(n.name)),
+    ];
+  }, [transactions, tagKinds]);
 
   const currencies = useMemo(() => {
     const set = new Set<string>();
@@ -376,6 +461,7 @@ export function GlobalFilters({
           unitForms={["счёт", "счёта", "счетов"]}
           searchPlaceholder="Поиск счёта"
           archivedSet={archivedAccounts}
+          groupOf={accountGroup}
         />
 
         <CategoryFilterPicker

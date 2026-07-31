@@ -21,6 +21,7 @@ import { netWorthSeries } from "../lib/aggregations";
 import { formatMoney, formatPct } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 
 const INITIAL: WhatIfInputs = {
   incomeMul: 1,
@@ -106,12 +107,38 @@ export function WhatIfPage() {
         hint="Покрутите слайдеры — увидите, как изменится норма сбережений, срок до FIRE и капитал через 1/5/10 лет."
         hintWrap
         right={
-          dirty ? (
-            <button onClick={reset} className="btn-ghost text-xs">
-              <RotateCcw className="w-3.5 h-3.5" />
-              Сбросить
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {dirty && (
+              <button onClick={reset} className="btn-ghost text-xs">
+                <RotateCcw className="w-3.5 h-3.5" />
+                Сбросить
+              </button>
+            )}
+            <InfoPopover>
+              <p>
+                За точку отсчёта берём ваши{" "}
+                <InfoTerm>средние доход и расход за 6 месяцев</InfoTerm>.
+                Слайдеры меняют именно их: «расходы −10%» — это десять процентов
+                от среднего месячного расхода, а не от какой-то одной покупки.
+              </p>
+              <p>
+                Дальше всё считается в лоб, без процентов на остаток:{" "}
+                <InfoTerm>откладываете в месяц = доход − расход + «отложить
+                дополнительно»</InfoTerm>, а капитал через год — это стартовый
+                капитал плюс двенадцать таких месяцев. Инвестиционной доходности
+                здесь нет намеренно: это прикидка «что будет, если жить так же»,
+                а не прогноз портфеля.
+              </p>
+              <p>
+                <InfoTerm>Срок до FIRE</InfoTerm> — сколько лет копить до суммы,
+                на проценты с которой можно жить: годовые расходы{" "}
+                <InfoTerm>× 25</InfoTerm> (это правило 4%). Обратите внимание:
+                цель считается от НОВЫХ расходов, поэтому урезание трат
+                приближает FIRE дважды — и копится больше, и цель становится
+                меньше.
+              </p>
+            </InfoPopover>
+          </div>
         }
       />
 

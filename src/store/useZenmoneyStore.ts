@@ -949,7 +949,17 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         /* best-effort — push against the (possibly stale) cached state */
       }
 
-      const built = buildPushItems(edits, cache, Math.floor(Date.now() / 1000));
+      // Контрагенты нужны ДО сборки операций: заведённый локально контрагент
+      // едет в этом же запросе, и операция должна ссылаться на его id, а не
+      // падать обратно в свободный текст.
+      const cpEdits = await loadCounterpartyEdits();
+      const built = buildPushItems(
+        edits,
+        cache,
+        Math.floor(Date.now() / 1000),
+        undefined,
+        cpEdits.created
+      );
       const conflictSkips = built.toPush
         .filter((i) => conflicts.has(i.id))
         .map((i) => ({
@@ -1049,7 +1059,6 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           : [];
       // Контрагенты (merchants): renames + creates as upserts, removals as
       // generic deletions with object "merchant".
-      const cpEdits = await loadCounterpartyEdits();
       const cpStamp = Math.floor(Date.now() / 1000);
       const cpUser = cache.merchants[0]?.user ?? cache.tags[0]?.user;
       const cpRename = buildMerchantRenamePush(cpEdits.renames, cache.merchants, cpStamp);

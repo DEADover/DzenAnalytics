@@ -36,6 +36,9 @@ interface State extends Persisted {
   /** Rename a cached merchant. Passing the cached title clears the overlay. */
   rename: (id: string, title: string | undefined) => Promise<void>;
   addNew: (item: NewCounterparty) => Promise<void>;
+  /** Завести сразу нескольких — одна запись в IDB на всю пачку, иначе разбор
+   *  получателей без контрагента писал бы файл по разу на строку. */
+  addManyNew: (items: NewCounterparty[]) => Promise<void>;
   /** Rename an unpushed new counterparty. */
   renameNew: (id: string, title: string) => Promise<void>;
   /** Remove a counterparty: an unpushed draft is dropped outright, a cached one
@@ -99,6 +102,11 @@ export const useCounterpartyEditsStore = create<State>((set, get) => {
 
     addNew: async (item) => {
       await persist({ ...snapshot(), created: [...get().created, item] });
+    },
+
+    addManyNew: async (items) => {
+      if (items.length === 0) return;
+      await persist({ ...snapshot(), created: [...get().created, ...items] });
     },
 
     renameNew: async (id, title) => {

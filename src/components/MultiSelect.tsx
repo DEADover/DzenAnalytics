@@ -31,6 +31,7 @@ export function MultiSelect({
   unitForms,
   searchPlaceholder,
   archivedSet,
+  groupOf,
   className,
   menuMinWidth,
   compactSummary,
@@ -49,6 +50,11 @@ export function MultiSelect({
   /** Options in this set are «archived» — rendered below an «Архивные»
    *  divider (the caller must place them last in `options`). */
   archivedSet?: Set<string>;
+  /** Заголовок группы для варианта — над первым вариантом каждой группы
+   *  рисуется разделитель. Список должен быть УЖЕ отсортирован по группам,
+   *  иначе один заголовок появится несколько раз. `null` — вариант вне групп
+   *  (такие держите в начале списка). */
+  groupOf?: (opt: string) => string | null;
   /** Extra classes for the outer wrapper (e.g. `flex-1` to fill a row). */
   className?: string;
   /** Minimum dropdown width in px. Default 288; pass 0 to match the button. */
@@ -237,11 +243,28 @@ export function MultiSelect({
                   const showArchivedHeader =
                     !!archivedSet?.has(opt) &&
                     (i === 0 || !archivedSet.has(filteredOptions[i - 1]));
+                  // Первый вариант группы → заголовок над ним. Считаем по
+                  // ОТФИЛЬТРОВАННОМУ списку, иначе при поиске заголовок остался
+                  // бы висеть над пустотой.
+                  const group = groupOf?.(opt) ?? null;
+                  const showGroupHeader =
+                    group !== null &&
+                    (i === 0 || (groupOf?.(filteredOptions[i - 1]) ?? null) !== group);
                   return (
                     <Fragment key={opt}>
                       {showArchivedHeader && (
                         <div className="mt-1 pt-1 border-t border-border px-2 pb-0.5 text-[11px] uppercase tracking-wide text-muted">
                           Архивные
+                        </div>
+                      )}
+                      {showGroupHeader && (
+                        <div
+                          className={clsx(
+                            "px-2 pb-0.5 text-[11px] uppercase tracking-wide text-muted",
+                            i > 0 && "mt-1 pt-1 border-t border-border"
+                          )}
+                        >
+                          {group}
                         </div>
                       )}
                       <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-panel2 rounded cursor-pointer text-xs">

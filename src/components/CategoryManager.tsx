@@ -19,7 +19,6 @@ import {
   Pencil,
   Check,
   Plus,
-  HelpCircle,
   Trash2,
   Undo2,
 } from "lucide-react";
@@ -45,6 +44,7 @@ import {
   CategoryDeleteModal,
   type ReplacementOption,
 } from "./CategoryDeleteModal";
+import { InfoPopover } from "./InfoPopover";
 import { CountSortHeader, type SortMode } from "./CountSortHeader";
 
 /** What the edit/create modal is currently doing. */
@@ -76,7 +76,6 @@ export function CategoryManager() {
   // The edit/create modal (name/type/parent/colour/icon/обязательность).
   const [modal, setModal] = useState<ModalState>(null);
   // «?» info popover next to the toolbar.
-  const [infoOpen, setInfoOpen] = useState(false);
   const [sort, setSort] = useState<SortMode>("title");
   // Category colours (for the parent→child rail), keyed by title.
   const meta = useCategoryMetaStore((s) => s.meta);
@@ -315,24 +314,7 @@ export function CategoryManager() {
           )}
         </div>
 
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={() => setInfoOpen((v) => !v)}
-            aria-expanded={infoOpen}
-            aria-label="Как это работает"
-            title="Как это работает"
-            className={clsx(
-              "p-1.5 rounded-md",
-              infoOpen ? "text-accent bg-accent/10" : "text-muted hover:text-accent hover:bg-panel2"
-            )}
-          >
-            <HelpCircle className="w-5 h-5" />
-          </button>
-          {infoOpen && (
-            <>
-              <div className="fixed inset-0 z-20" onClick={() => setInfoOpen(false)} />
-              <div className="absolute right-0 z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2 text-xs text-muted">
+        <InfoPopover label="Как это работает">
                 <p>
                   Кнопка <strong className="text-text">карандаша</strong> (или
                   двойной клик по строке) открывает редактирование: <strong className="text-text">название</strong>,{" "}
@@ -369,10 +351,7 @@ export function CategoryManager() {
                   Исключение корневой категории охватывает и подкатегории. Настройка
                   локальная, в облако не уходит.
                 </p>
-              </div>
-            </>
-          )}
-        </div>
+              </InfoPopover>
 
         {pendingCount > 0 && (
           <span className="text-xs text-warn tabular-nums shrink-0">

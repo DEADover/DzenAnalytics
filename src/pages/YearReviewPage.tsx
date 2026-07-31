@@ -17,6 +17,7 @@ import {
 } from "../lib/yearReview";
 import { formatMoney, formatNum, formatPct, monthLabel } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 
 function deltaPill(value: number, invertColor = false): {
   text: string;
@@ -89,6 +90,25 @@ export function YearReviewPage() {
         </div>
         <div className="flex items-center gap-2">
           <YearSwitcher year={year} years={years} onChange={setYear} />
+          <InfoPopover>
+            <p>
+              Всё на странице считается за <InfoTerm>календарный год</InfoTerm> —
+              с 1 января по 31 декабря, независимо от того, с какого числа у вас
+              начинается месяц в других отчётах. Проценты рядом с суммами —
+              сравнение с тем же периодом прошлого года; если данных за прошлый
+              год нет, их и не показываем.
+            </p>
+            <p>
+              Переводы между своими счетами в доход и расход не идут. Операции,
+              исключённые из аналитики на странице «Категории» (обороты,
+              взаимозачёты), сюда тоже не попадают — иначе рекорды набирались бы
+              из перекладываний между своими же счетами.
+            </p>
+            <p>
+              Текущий год показывается как есть, по накопленным на сегодня
+              данным: в январе итоги будут скромные, это не ошибка.
+            </p>
+          </InfoPopover>
         </div>
       </div>
 

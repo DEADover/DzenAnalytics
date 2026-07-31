@@ -10,10 +10,10 @@ import {
   Pencil,
   Trash2,
   Plus,
-  HelpCircle,
   Undo2,
   X,
   Combine,
+  UserPlus,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -22,11 +22,14 @@ import {
   type Counterparty,
 } from "../store/useZenmoneyStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
+import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { confirm } from "../store/useConfirmStore";
 import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
+import { Combobox } from "./Combobox";
+import { InfoPopover } from "./InfoPopover";
 import { CountSortHeader, type SortMode } from "./CountSortHeader";
 import {
   CounterpartyDeleteModal,
@@ -63,10 +66,23 @@ function dupKey(title: string): string {
   return title.trim().toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ");
 }
 
+/** Получатель, который есть в операциях, но не привязан к контрагенту: банк
+ *  прислал его строкой, и в справочнике Дзен-мани записи под него нет. */
+interface OrphanPayee {
+  title: string;
+  count: number;
+  txIds: string[];
+  /** Контрагент с таким названием в справочнике уже есть — заводить не надо,
+   *  достаточно привязать операции. */
+  inDictionary: boolean;
+}
+
 type ModalState =
   | { kind: "create" }
   | { kind: "rename"; row: Row }
   | { kind: "delete"; rows: Row[] }
+  /** Привязка получателя под другим именем: «11043 MOP SBP» → «Магнит». */
+  | { kind: "adopt"; payee: OrphanPayee }
   | null;
 
 export function CounterpartyManager() {
@@ -85,11 +101,13 @@ export function CounterpartyManager() {
   const [cached, setCached] = useState<Counterparty[] | null | "loading">("loading");
   const [query, setQuery] = useState("");
   const [modal, setModal] = useState<ModalState>(null);
-  const [infoOpen, setInfoOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortMode>("title");
   // «Дубли» view — the flat list is replaced by the duplicate groups.
   const [dupOnly, setDupOnly] = useState(false);
+  // «Без контрагента» view — получатели из операций, которых нет в справочнике.
+  const [orphanOnly, setOrphanOnly] = useState(false);
+  const [orphanSel, setOrphanSel] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!loaded) hydrate();
@@ -187,6 +205,47 @@ export function CounterpartyManager() {
       (a, b) => b.total - a.total || a.survivor.title.localeCompare(b.survivor.title, "ru")
     );
   }, [cached, renames, deletedSet, merges]);
+
+  // Обратная сторона справочника: получатели, которые есть в операциях, но
+  // контрагента под собой не имеют. В Дзен-мани у операции два поля — ссылка на
+  // контрагента (`merchant`, у нас `brand`) и свободный текст от банка
+  // (`payee`). Пока ссылки нет, получатель живёт строкой: его не переименовать
+  // разом, не объединить с дублями и не найти в справочнике.
+  const orphanPayees = useMemo<OrphanPayee[]>(() => {
+    const live = new Set(
+      allRows
+        .filter((r) => !r.isDeleted && r.mergedInto === undefined)
+        .map((r) => dupKey(r.title))
+    );
+    const byKey = new Map<string, OrphanPayee>();
+    for (const t of transactions) {
+      if (t.brand && t.brand.trim()) continue; // контрагент уже привязан
+      const title = (t.payee || "").trim();
+      if (!title) continue;
+      const key = dupKey(title);
+      const cur = byKey.get(key);
+      if (cur) {
+        cur.count += 1;
+        cur.txIds.push(t.id);
+      } else {
+        byKey.set(key, {
+          title,
+          count: 1,
+          txIds: [t.id],
+          inDictionary: live.has(key),
+        });
+      }
+    }
+    return [...byKey.values()].sort(
+      (a, b) => b.count - a.count || a.title.localeCompare(b.title, "ru")
+    );
+  }, [transactions, allRows]);
+
+  // Разобрали всех — возвращаемся к справочнику: кнопка отбора исчезает вместе
+  // с последней строкой, и вид остался бы пустым без выхода.
+  useEffect(() => {
+    if (orphanPayees.length === 0) setOrphanOnly(false);
+  }, [orphanPayees.length]);
 
   // Selection is scoped to what's visible; drop ids that vanished (filtered
   // out, pushed away) so the bulk bar never acts on stale rows.
@@ -286,6 +345,59 @@ export function CounterpartyManager() {
     );
   }
 
+  /**
+   * Завести контрагентов под выбранных получателей и привязать к ним операции.
+   *
+   * Две записи, а не одна: контрагент уходит в справочник, а операции получают
+   * правку «Получатель» — тем же слоем, что и правка из редактора операции,
+   * поэтому её видно в списке на отправку и можно откатить построчно. Если
+   * контрагент с таким названием уже есть, заводим только связь.
+   */
+  async function adoptPayees(items: OrphanPayee[], renameTo?: string) {
+    if (items.length === 0) return;
+    // Имя, под которым получатель попадёт в справочник и в операции. Своё имя
+    // задаётся только для одной строки — переименовать пачку одним словом
+    // нечем.
+    const targetOf = (o: OrphanPayee) => (renameTo ?? "").trim() || o.title;
+    const liveKeys = new Set(
+      allRows
+        .filter((r) => !r.isDeleted && r.mergedInto === undefined)
+        .map((r) => dupKey(r.title))
+    );
+    const ops = items.reduce((n, o) => n + o.count, 0);
+    const toCreate = items.filter((o) => !liveKeys.has(dupKey(targetOf(o))));
+    const ok = await confirm({
+      title: renameTo?.trim()
+        ? `Привязать как «${renameTo.trim()}»?`
+        : `Привязать ${formatNum(items.length)} ${pluralRu(items.length, ["получателя", "получателей", "получателей"])}?`,
+      message:
+        (renameTo?.trim()
+          ? `У операций получатель сменится с «${items[0].title}» на «${renameTo.trim()}». `
+          : "") +
+        (toCreate.length > 0
+          ? `В справочнике появится ${formatNum(toCreate.length)} ${pluralRu(toCreate.length, ["новая запись", "новые записи", "новых записей"])}` +
+            (toCreate.length < items.length ? ", остальные уже есть. " : ". ")
+          : "Все записи в справочнике уже есть. ") +
+        `Контрагент проставится у ${formatNum(ops)} ${pluralRu(ops, ["операции", "операций", "операций"])} — вместо текста от банка там будет ссылка на запись справочника. ` +
+        "Всё уйдёт в Дзен-мани при отправке в облако; до неё правки можно откатить в списке изменений.",
+      confirmLabel: "Привязать",
+    });
+    if (!ok) return;
+    await useCounterpartyEditsStore.getState().addManyNew(
+      toCreate.map((o) => ({ id: crypto.randomUUID(), title: targetOf(o) }))
+    );
+    const patches: Record<string, TransactionEdit> = {};
+    for (const o of items) {
+      const target = targetOf(o);
+      for (const id of o.txIds) patches[id] = { brand: target };
+    }
+    await useEditsStore.getState().setEditEach(patches);
+    // Правки надо наложить на набор, иначе разобранные получатели останутся в
+    // списке до перезагрузки — как это делает и редактор операции.
+    await useDataStore.getState().reapplyRules();
+    setOrphanSel(new Set());
+  }
+
   // CSV mode — no Zenmoney cache, nothing to edit / sync.
   if (cached === null) {
     return (
@@ -320,63 +432,84 @@ export function CounterpartyManager() {
           )}
         </div>
 
-        <div className="relative shrink-0">
+        <InfoPopover label="Как это работает">
+                <p>
+                  <strong className="text-text">Контрагент</strong> — это запись
+                  в справочнике: «Магнит», «Пятёрочка». Операция на неё
+                  ссылается. А банк часто присылает получателя просто строкой —
+                  «MAGNIT 7712 MOSCOW»; запись под такую строку Дзен-мани сам не
+                  заводит, и операция остаётся без контрагента.
+                </p>
+                <p>
+                  Разница простая. Запись переименовали один раз — новое имя
+                  встало сразу во всех её операциях. Со строкой так не выйдет:
+                  «SPAR 317» и «SPAR317» так и останутся двумя разными
+                  получателями, и в отчётах будут двумя строками.
+                </p>
+                <p>
+                  Здесь контрагента можно{" "}
+                  <strong className="text-text">переименовать</strong> (карандаш
+                  или двойной клик по строке),{" "}
+                  <strong className="text-text">удалить</strong> и{" "}
+                  <strong className="text-text">добавить</strong> нового. Всё
+                  копится локально и уезжает в Дзен-мани при отправке в облако.
+                </p>
+                <p>
+                  В столбце <strong className="text-text">«Операций»</strong>{" "}
+                  видно, сколько операций на него ссылается. При удалении их
+                  можно{" "}
+                  <strong className="text-text">перенести на другого</strong> —
+                  так же делается и замена контрагента. Если не переносить,
+                  получатель у этих операций сотрётся, и после отправки в облако
+                  обратно его не вернуть.
+                </p>
+                <p>
+                  <strong className="text-text">«Без контрагента»</strong> — те
+                  самые получатели-строки. Карандаш даёт задать имя: например,
+                  свести «MAGNIT 7712 MOSCOW» к уже заведённому «Магниту». Значок
+                  с плюсом заводит контрагента прямо под этим именем. В обоих
+                  случаях получатель проставится во всех операциях строки, а если
+                  запись с таким именем уже есть — операции просто привяжутся к
+                  ней. Правку видно в списке изменений, откатить можно
+                  построчно.
+                </p>
+                <p>
+                  <strong className="text-text">«Дубли»</strong> — записи с
+                  одинаковым именем: Дзен-мани заводит отдельную под каждое
+                  написание получателя, и их набираются сотни.{" "}
+                  <strong className="text-text">Объединение</strong> сводит их в
+                  одну — операции переезжают на самую крупную, лишние удаляются.
+                </p>
+              </InfoPopover>
+
+        {orphanPayees.length > 0 && (
           <button
             type="button"
-            onClick={() => setInfoOpen((v) => !v)}
-            aria-expanded={infoOpen}
-            aria-label="Как это работает"
-            title="Как это работает"
+            onClick={() => {
+              setOrphanOnly((v) => !v);
+              setDupOnly(false);
+            }}
+            aria-pressed={orphanOnly}
+            title="Получатели, которые есть в операциях, но записи в справочнике под собой не имеют"
             className={clsx(
-              "p-1.5 rounded-md",
-              infoOpen ? "text-accent bg-accent/10" : "text-muted hover:text-accent hover:bg-panel2"
+              "text-sm flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border shrink-0",
+              orphanOnly
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border text-muted hover:text-text hover:bg-panel2"
             )}
           >
-            <HelpCircle className="w-5 h-5" />
+            <UserPlus className="w-4 h-4" />
+            Без контрагента
+            <span className="tabular-nums">{formatNum(orphanPayees.length)}</span>
           </button>
-          {infoOpen && (
-            <>
-              <div className="fixed inset-0 z-20" onClick={() => setInfoOpen(false)} />
-              <div className="absolute right-0 z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2 text-xs text-muted">
-                <p>
-                  <strong className="text-text">Контрагенты</strong> — справочник
-                  получателей и плательщиков Дзен-мани. Именно из него
-                  подставляется <strong className="text-text">«Получатель»</strong>{" "}
-                  в операциях.
-                </p>
-                <p>
-                  Можно <strong className="text-text">переименовать</strong>{" "}
-                  (карандаш или двойной клик по строке),{" "}
-                  <strong className="text-text">удалить</strong>{" "}
-                  (корзина, в том числе несколько сразу) и{" "}
-                  <strong className="text-text">добавить</strong> нового. Правки
-                  копятся локально и уходят в Дзен-мани при отправке в облако
-                  (режим API).
-                </p>
-                <p>
-                  Столбец <strong className="text-text">«Операций»</strong> —
-                  сколько операций ссылается на контрагента. При удалении можно{" "}
-                  <strong className="text-text">перенести их на другого</strong> —
-                  так же делается и замена контрагента. Если не переносить,
-                  получатель у этих операций очистится, и после отправки в облако
-                  вернуть его уже нельзя.
-                </p>
-                <p>
-                  <strong className="text-text">«Дубли»</strong> показывает
-                  контрагентов с одинаковым названием — Дзен-мани заводит отдельную
-                  запись под каждое написание получателя.{" "}
-                  <strong className="text-text">Объединение</strong> переносит
-                  операции на запись с наибольшим их числом, а лишние удаляет.
-                </p>
-              </div>
-            </>
-          )}
-        </div>
-
+        )}
         {dupGroups.length > 0 && (
           <button
             type="button"
-            onClick={() => setDupOnly((v) => !v)}
+            onClick={() => {
+              setDupOnly((v) => !v);
+              setOrphanOnly(false);
+            }}
             aria-pressed={dupOnly}
             title="Контрагенты с одинаковым названием"
             className={clsx(
@@ -527,7 +660,145 @@ export function CounterpartyManager() {
         </div>
       )}
 
-      {!dupOnly && (
+      {orphanOnly && (
+        <div className="border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border bg-panel">
+            {/* Объяснение прямо тут, а не только под «?»: вопрос «а что это
+                вообще такое» возникает ровно на этом экране. */}
+            <div className="text-sm min-w-0">
+              <div>
+                Операций без контрагента:{" "}
+                <strong className="tabular-nums">
+                  {formatNum(orphanPayees.reduce((n, o) => n + o.count, 0))}
+                </strong>
+              </div>
+              <div className="text-xs text-muted">
+                Получатель у них — текст от банка, а не запись справочника
+              </div>
+            </div>
+            <button
+              onClick={() =>
+                adoptPayees(
+                  orphanSel.size > 0
+                    ? orphanPayees.filter((o) => orphanSel.has(dupKey(o.title)))
+                    : orphanPayees
+                )
+              }
+              className="btn-primary text-sm shrink-0"
+            >
+              <UserPlus className="w-4 h-4" />
+              {orphanSel.size > 0
+                ? `Привязать выбранных (${formatNum(orphanSel.size)})`
+                : "Привязать всех"}
+            </button>
+          </div>
+          <div
+            className="max-h-[440px] overflow-y-auto"
+            style={{ fontSize: "var(--tbl-font)" }}
+          >
+            <div className="sticky top-0 z-10 bg-panel border-b border-border flex items-center gap-3 px-3 py-2 text-[0.85em] text-muted uppercase tracking-wide">
+              <span className="w-6 shrink-0 flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  checked={
+                    orphanPayees.length > 0 && orphanSel.size === orphanPayees.length
+                  }
+                  onChange={() =>
+                    setOrphanSel((s) =>
+                      s.size === orphanPayees.length
+                        ? new Set()
+                        : new Set(orphanPayees.map((o) => dupKey(o.title)))
+                    )
+                  }
+                  aria-label="Выделить все"
+                  className="accent-[var(--accent)] cursor-pointer"
+                />
+              </span>
+              <span className="flex-1 min-w-0">Получатель</span>
+              <span className="w-20 shrink-0 text-right">Операций</span>
+              <span className="w-20 shrink-0 text-center whitespace-nowrap">Действия</span>
+            </div>
+            <div className="divide-y divide-border/60">
+              {orphanPayees.map((o) => {
+                const key = dupKey(o.title);
+                return (
+                  <div key={key} className="px-3 py-2 flex items-center gap-3">
+                    <span className="w-6 shrink-0 flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={orphanSel.has(key)}
+                        onChange={() =>
+                          setOrphanSel((s) => {
+                            const next = new Set(s);
+                            if (next.has(key)) next.delete(key);
+                            else next.add(key);
+                            return next;
+                          })
+                        }
+                        aria-label={`Выбрать «${o.title}»`}
+                        className="accent-[var(--accent)] cursor-pointer"
+                      />
+                    </span>
+                    <span className="flex-1 min-w-0 flex items-center gap-2">
+                      <span className="truncate">{o.title}</span>
+                      {/* Такой контрагент уже заведён — значит операции просто не
+                          связаны с ним, и заводить второго не нужно. */}
+                      {o.inDictionary && (
+                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-panel2 text-muted shrink-0">
+                          есть в справочнике
+                        </span>
+                      )}
+                    </span>
+                    <span className="w-20 shrink-0 text-right">
+                      <button
+                        onClick={() => {
+                          const ids = new Set(o.txIds);
+                          showDrill(
+                            o.title,
+                            transactions.filter((t) => ids.has(t.id)),
+                            "Получатель"
+                          );
+                        }}
+                        title="Показать операции этого получателя"
+                        className="tabular-nums text-muted hover:text-accent hover:underline px-1 rounded"
+                      >
+                        {formatNum(o.count)}
+                      </button>
+                    </span>
+                    {/* Два действия, как и в основной таблице: под своим именем
+                        и «как есть». Банковскую строку почти всегда хочется
+                        переименовать, поэтому карандаш стоит первым. */}
+                    <span className="w-20 shrink-0 flex items-center justify-center gap-0.5">
+                      <button
+                        onClick={() => setModal({ kind: "adopt", payee: o })}
+                        title={`Привязать под другим именем — например, к уже заведённому контрагенту`}
+                        aria-label={`Привязать «${o.title}» под другим именем`}
+                        className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => adoptPayees([o])}
+                        title={
+                          o.inDictionary
+                            ? `Проставить контрагента «${o.title}» в ${formatNum(o.count)} ${pluralRu(o.count, ["операции", "операциях", "операциях"])} — запись в справочнике уже есть`
+                            : `Завести контрагента «${o.title}» и проставить его в ${formatNum(o.count)} ${pluralRu(o.count, ["операции", "операциях", "операциях"])}`
+                        }
+                        aria-label={`Привязать получателя «${o.title}» как есть`}
+                        className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                      </button>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!dupOnly && !orphanOnly && (
       <div className="border border-border rounded-lg overflow-hidden">
         <div
           className="max-h-[440px] overflow-y-auto"
@@ -663,7 +934,11 @@ export function CounterpartyManager() {
       {modal && modal.kind !== "delete" && (
         <CounterpartyModal
           row={modal.kind === "rename" ? modal.row : undefined}
+          payee={modal.kind === "adopt" ? modal.payee : undefined}
           existing={rows.map((r) => ({ id: r.id, title: r.title }))}
+          onAdopt={(title) =>
+            modal.kind === "adopt" ? adoptPayees([modal.payee], title) : undefined
+          }
           onClose={() => setModal(null)}
         />
       )}
@@ -686,19 +961,25 @@ export function CounterpartyManager() {
   );
 }
 
-/** Create / rename dialog — a single «Название» field, in the app's style. */
+/** Create / rename dialog — a single «Название» field, in the app's style.
+ *  В режиме привязки (`payee`) то же поле отвечает на другой вопрос: под каким
+ *  именем получатель попадёт в справочник и в операции. */
 function CounterpartyModal({
   row,
+  payee,
   existing,
+  onAdopt,
   onClose,
 }: {
   row?: Row;
+  payee?: OrphanPayee;
   existing: { id: string; title: string }[];
+  onAdopt?: (title: string) => void | Promise<void>;
   onClose: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [title, setTitle] = useState(row?.title ?? "");
+  const [title, setTitle] = useState(row?.title ?? payee?.title ?? "");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -719,10 +1000,19 @@ function CounterpartyModal({
   const duplicate = existing.some(
     (e) => e.id !== row?.id && e.title.toLowerCase() === trimmed.toLowerCase()
   );
-  const canSave = trimmed.length > 0 && !duplicate && trimmed !== row?.title;
+  // При привязке совпадение с существующим — не ошибка, а второй сценарий:
+  // операции уедут на уже заведённого контрагента, нового не появится.
+  const canSave = payee
+    ? trimmed.length > 0
+    : trimmed.length > 0 && !duplicate && trimmed !== row?.title;
 
   async function save() {
     if (!canSave) return;
+    if (payee) {
+      await onAdopt?.(trimmed);
+      onClose();
+      return;
+    }
     const store = useCounterpartyEditsStore.getState();
     if (row) {
       if (row.isNew) await store.renameNew(row.id, trimmed);
@@ -748,7 +1038,11 @@ function CounterpartyModal({
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border rounded-t-2xl">
           <div id="cp-modal-title" className="font-semibold">
-            {row ? "Редактирование контрагента" : "Новый контрагент"}
+            {payee
+              ? "Привязать получателя"
+              : row
+                ? "Редактирование контрагента"
+                : "Новый контрагент"}
           </div>
           <button
             type="button"
@@ -761,22 +1055,47 @@ function CounterpartyModal({
         </div>
 
         <div className="px-5 py-4">
+          {payee && (
+            <p className="text-xs text-muted mb-3">
+              Сейчас у{" "}
+              <strong className="text-text tabular-nums">
+                {formatNum(payee.count)}
+              </strong>{" "}
+              {pluralRu(payee.count, ["операции", "операций", "операций"])}{" "}
+              получатель — текст от банка «{payee.title}». Задайте имя, под которым
+              их собрать: можно оставить как есть или выбрать уже заведённого
+              контрагента.
+            </p>
+          )}
           <label htmlFor="cp-name" className="label block mb-1">
             Название
           </label>
-          <input
-            id="cp-name"
-            ref={inputRef}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && save()}
-            placeholder="Например, Магнит у дома"
-            autoComplete="off"
-            className="input w-full text-sm"
-          />
+          {/* В привязке — с подсказками из справочника: чаще всего банковскую
+              строку нужно свести к уже существующему контрагенту. */}
+          {payee ? (
+            <Combobox
+              value={title}
+              options={existing.map((e) => e.title)}
+              onChange={setTitle}
+              placeholder="Например, Магнит у дома"
+            />
+          ) : (
+            <input
+              id="cp-name"
+              ref={inputRef}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && save()}
+              placeholder="Например, Магнит у дома"
+              autoComplete="off"
+              className="input w-full text-sm"
+            />
+          )}
           {duplicate && (
-            <p className="text-xs text-warn mt-1">
-              Контрагент с таким названием уже есть.
+            <p className={clsx("text-xs mt-1", payee ? "text-muted" : "text-warn")}>
+              {payee
+                ? "Такой контрагент уже есть — операции привяжутся к нему, новая запись не появится."
+                : "Контрагент с таким названием уже есть."}
             </p>
           )}
         </div>
@@ -791,7 +1110,7 @@ function CounterpartyModal({
             disabled={!canSave}
             className="btn-primary text-sm"
           >
-            {row ? "Сохранить" : "Создать"}
+            {payee ? "Привязать" : row ? "Сохранить" : "Создать"}
           </button>
         </div>
       </div>

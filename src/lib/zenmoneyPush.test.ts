@@ -17,6 +17,9 @@ import {
   type DraftFields,
 } from "./zenmoneyPush";
 import { NO_CATEGORY } from "./zenmoneyMap";
+import { buildRulePlan } from "./rulePlan";
+import type { StoredRule } from "./ruleEngine";
+import type { Transaction } from "../types";
 import type { ZenCache } from "./zenmoneyCache";
 import type { ZenAccount, ZenInstrument, ZenTag, ZenTransaction } from "./zenmoney";
 import type { TransactionEdit } from "../store/useEditsStore";
@@ -616,6 +619,122 @@ describe("buildPushItems — clear category («Без категории»)", ()
     const miss = buildPushItems({ x: { category: "Призрак" } as TransactionEdit }, catCache(t));
     expect(miss.toPush).toHaveLength(0);
     expect(miss.skipped[0].reason).toMatch(/не найдена/);
+  });
+});
+
+// Правила — не отдельный канал в облако: кнопка «Применить правила» кладёт
+// патчи в тот же слой правок, что и редактор операции, а отсюда их забирает
+// тот же `buildPushItems`. Тест держит этот стык: патч берётся не руками, а из
+// настоящего `buildRulePlan`, поэтому изменение его формы уронит проверку.
+describe("buildPushItems — правки, записанные правилами", () => {
+  const ruleCache = (t: ZenTransaction): ZenCache => ({
+    serverTimestamp: 0,
+    instruments: [{ id: 2, shortTitle: "RUB" } as ZenInstrument],
+    accounts: [{ id: ACC, title: "Карта" } as ZenAccount],
+    tags: [
+      { id: "t-prod", title: "Продукты", parent: null, archive: false } as ZenTag,
+      { id: "t-eda", title: "Еда дома", parent: null, archive: false } as ZenTag,
+    ],
+    merchants: [],
+    transactions: [t],
+    user: [],
+  });
+
+  const rule: StoredRule = {
+    id: "r1",
+    enabled: true,
+    title: "",
+    conditions: [
+      { field: "payee", op: "contains", value: "Магнит", caseInsensitive: true },
+    ],
+    join: "and",
+    actions: [
+      { kind: "setCategory", value: "Еда дома" },
+      { kind: "setComment", value: "по правилу" },
+    ],
+    createdAt: "",
+  };
+
+  /** Операция, как её отдаёт Дзен-мани: своя категория, пустой комментарий. */
+  const local = {
+    id: "x",
+    date: "2026-07-01",
+    category: "Продукты",
+    subcategory: null,
+    categoryFull: "Продукты",
+    categoryOriginal: "Продукты",
+    subcategoryOriginal: null,
+    categoryFullOriginal: "Продукты",
+    payee: "Магнит у дома",
+    payeeOriginal: "Магнит у дома",
+    comment: "",
+    outcomeAccount: "Карта",
+    outcomeAmount: 500,
+    outcomeCurrency: "RUB",
+    incomeAccount: "",
+    incomeAmount: 0,
+    incomeCurrency: "RUB",
+    kind: "expense",
+    amount: 500,
+    currency: "RUB",
+    account: "Карта",
+    amountBase: 500,
+  } as Transaction;
+
+  it("патч из плана правил уезжает тем же путём: категория — тегом, комментарий — текстом", () => {
+    const plan = buildRulePlan([local], [rule], new Set(["r1"]), {}, new Set(), null);
+    expect(plan.pending).toHaveLength(1);
+
+    const { toPush, skipped } = buildPushItems(
+      { x: plan.pending[0].patch },
+      ruleCache(fullTx({ id: "x", outcome: 500, tag: ["t-prod"] }))
+    );
+
+    expect(skipped).toHaveLength(0);
+    expect(toPush).toHaveLength(1);
+    expect(toPush[0].zen.tag).toEqual(["t-eda"]);
+    expect(toPush[0].zen.comment).toBe("по правилу");
+  });
+
+  it("ссылается на контрагента, заведённого локально: он едет в этом же запросе", () => {
+    const t = fullTx({ id: "x", outcome: 500 });
+    const { toPush, skipped } = buildPushItems(
+      { x: { brand: "Новый контрагент" } as TransactionEdit },
+      ruleCache(t),
+      100,
+      undefined,
+      [{ id: "cp-draft-1", title: "Новый контрагент" }]
+    );
+    expect(skipped).toHaveLength(0);
+    expect(toPush[0].zen.merchant).toBe("cp-draft-1");
+  });
+
+  it("при совпадении названия предпочитает контрагента из облака, а не черновик", () => {
+    const t = fullTx({ id: "x", outcome: 500 });
+    const cache = ruleCache(t);
+    cache.merchants = [{ id: "m-cloud", title: "Магнит" } as never];
+    const { toPush } = buildPushItems(
+      { x: { brand: "Магнит" } as TransactionEdit },
+      cache,
+      100,
+      undefined,
+      [{ id: "cp-draft-2", title: "Магнит" }]
+    );
+    expect(toPush[0].zen.merchant).toBe("m-cloud");
+  });
+
+  it("получателя от правила отправляет мерчантом, как и правку из редактора", () => {
+    const withPayee: StoredRule = {
+      ...rule,
+      actions: [{ kind: "setPayee", value: "Магнит" }],
+    };
+    const plan = buildRulePlan([local], [withPayee], new Set(["r1"]), {}, new Set(), null);
+    expect(plan.pending[0].patch.brand).toBe("Магнит");
+
+    const cacheWithMerchant = ruleCache(fullTx({ id: "x", outcome: 500 }));
+    cacheWithMerchant.merchants = [{ id: "m-1", title: "Магнит" } as never];
+    const { toPush } = buildPushItems({ x: plan.pending[0].patch }, cacheWithMerchant);
+    expect(toPush[0].zen.merchant).toBe("m-1");
   });
 });
 

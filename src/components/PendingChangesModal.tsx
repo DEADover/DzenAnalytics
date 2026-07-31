@@ -55,6 +55,9 @@ interface Aspect {
   keys: string[];
   label: string;
   get: (t: Transaction) => string;
+  /** Чем читать сторону «было», если она не совпадает с обычным значением.
+   *  Нужно там, где исходную транзакцию мог переписать производный слой. */
+  getBefore?: (t: Transaction) => string;
 }
 
 const dash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
@@ -76,6 +79,12 @@ const ASPECTS: Aspect[] = [
     keys: ["category", "subcategory", "categoryFull"],
     label: "Категория",
     get: (t) => dash(t.categoryFull),
+    // «Было» — категория от Дзен-мани. В `transactionsRaw` её мог переписать
+    // слой правил, и тогда правка, записанная кнопкой «Применить правила»,
+    // сравнивалась бы сама с собой и не показывалась в списке на отправку —
+    // хотя в облако уедет именно смена категории. Тот же расчёт, что в
+    // `buildRulePlan`.
+    getBefore: (t) => dash(t.categoryFullOriginal || t.categoryFull),
   },
   { keys: ["payee", "brand"], label: "Получатель", get: (t) => dash(displayPayee(t)) },
   { keys: ["comment"], label: "Комментарий", get: (t) => dash(t.comment) },
@@ -111,7 +120,7 @@ function diffOf(before: Transaction | undefined, after: Transaction, patch: Tran
   for (const a of ASPECTS) {
     if (!a.keys.some((k) => touched.has(k))) continue;
     const to = a.get(after);
-    const from = before ? a.get(before) : "—";
+    const from = before ? (a.getBefore ?? a.get)(before) : "—";
     if (from === to) continue;
     out.push({ label: a.label, from, to });
   }

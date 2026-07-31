@@ -15,6 +15,7 @@ import { buildDigestHistory, type DigestEntry } from "../lib/digest";
 import { formatMoney, formatPct, formatDate } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 
 type Tab = "week" | "month";
 
@@ -46,6 +47,25 @@ export function DigestPage() {
         title="Дайджест"
         hint="Авто-сгенерированные итоги по неделям и месяцам со сравнением с предыдущим периодом и категориями, где «выстрелило»."
         hintWrap
+        right={
+          <InfoPopover>
+            <p>
+              Итоги считаются только по <InfoTerm>завершённым периодам</InfoTerm>:
+              текущего месяца и текущей недели в списке нет — на середине месяца
+              сравнивать не с чем, любые «−40% к прошлому» были бы неправдой.
+              Недели считаем с понедельника, храним последние 26.
+            </p>
+            <p>
+              Все сравнения — с <InfoTerm>предыдущим таким же периодом</InfoTerm>:
+              месяц с месяцем, неделя с неделей. Проценты в карточках категорий —
+              оттуда же: насколько потратили больше или меньше, чем в прошлый раз.
+            </p>
+            <p>
+              Общие фильтры сверху здесь не применяются, но операции, исключённые
+              из аналитики на странице «Категории», в дайджест не попадают.
+            </p>
+          </InfoPopover>
+        }
       />
 
       {/* Tabs */}

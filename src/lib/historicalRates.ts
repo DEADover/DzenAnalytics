@@ -16,10 +16,18 @@ interface CbrResponse {
   Valute: Record<string, { Value: number; Nominal: number }>;
 }
 
-const MAX_LOOKBACK_DAYS = 5; // CBR has no weekend/holiday rates — walk back to the last published day.
+// CBR has no weekend/holiday rates — walk back to the last published day. The
+// window has to clear the New Year holidays, the longest gap in the year: in
+// 2026 the archive jumps straight from 31 December to 13 January (12 days with
+// no quote). A shorter window left every foreign-currency operation in the first
+// half of January without a historical rate at all.
+const MAX_LOOKBACK_DAYS = 16;
 const CACHE_PREFIX = "fxRateCbr:";
 const WARM_CONCURRENCY = 12; // parallel CBR fetches when warming many dates.
 const FETCH_TIMEOUT_MS = 8000; // abort a stalled CBR request so warming stays responsive.
+/** Always present and CORS-enabled — used only to tell «зеркало лежит» from
+ *  «на эту дату курса нет». See `mirrorIsUp()`. */
+const CBR_LATEST_URL = "https://www.cbr-xml-daily.ru/daily_json.js";
 
 /** Day → { currency: rubPerUnit }. The applied historical-rate index. */
 export type HistDayRates = Record<string, Record<string, number>>;
@@ -44,6 +52,90 @@ function shiftDate(date: string, days: number): string {
 export function isWeekendUTC(date: string): boolean {
   const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
   return dow === 0 || dow === 6;
+}
+
+/** Федеральные нерабочие дни (ММ-ДД) — ЦБ в них курс не публикует. Список
+ *  фиксированный: переносы выходных сюда не входят, такой день просто получит
+ *  один запрос-мимо и запомнится как пропуск. */
+const RU_HOLIDAYS_MMDD = new Set([
+  "01-01", "01-02", "01-03", "01-04", "01-05", "01-06", "01-07", "01-08",
+  "02-23", "03-08", "05-01", "05-09", "06-12", "11-04",
+]);
+
+/** День, на который курса заведомо не будет: выходной или праздник. Такие даты
+ *  мы не запрашиваем вовсе — и потому, что запрос обречён, и потому, что 404 с
+ *  этого зеркала приходит БЕЗ CORS-заголовка: в браузере он превращается в
+ *  красный `TypeError: Failed to fetch` в консоли. */
+export function isNoQuoteDayUTC(date: string): boolean {
+  return isWeekendUTC(date) || RU_HOLIDAYS_MMDD.has(date.slice(5, 10));
+}
+
+/**
+ * Жив ли сервис курсов.
+ *
+ * Отличить «зеркало недоступно» от «на эту дату курса нет» из браузера нельзя:
+ * 404 на отсутствующий день приходит без CORS-заголовков, поэтому `fetch`
+ * бросает `TypeError: Failed to fetch` — ровно как при обрыве сети. Спрашиваем
+ * у зеркала документ с последним курсом (он есть всегда и CORS отдаёт): ответил
+ * — значит зеркало живо и ошибка относится к конкретной дате, её можно записать
+ * как настоящий пропуск. Без этой проверки каждый праздник переспрашивался при
+ * КАЖДОМ прогреве — вечно, с новой ошибкой в консоли (issue #53).
+ *
+ * Ответ живёт недолго (MIRROR_PROBE_TTL_MS): «зеркало живо» — это разрешение
+ * записать дату как пропуск НАВСЕГДА, поэтому проверка не должна устаревать.
+ * Иначе сеть, отвалившаяся посреди долгого прогрева, тихо превратила бы весь
+ * остаток дат в «курса нет». Неудачу не кэшируем вовсе.
+ */
+const MIRROR_PROBE_TTL_MS = 60_000;
+let mirrorUpProbe: Promise<boolean> | null = null;
+let mirrorUpProbeAt = 0;
+let mirrorDownAt = 0;
+
+/** Сервис только что не ответил на проверку — обречённые запросы можно не
+ *  делать вовсе. Без этого прогрев в офлайне честно перебирал всё окно отката
+ *  на КАЖДУЮ дату: сотня операций в валюте превращалась в тысячу мёртвых
+ *  запросов и в такую же гору ошибок в консоли. */
+function mirrorKnownDown(): boolean {
+  return mirrorDownAt > 0 && Date.now() - mirrorDownAt < MIRROR_PROBE_TTL_MS;
+}
+function mirrorIsUp(): Promise<boolean> {
+  if (mirrorUpProbe && Date.now() - mirrorUpProbeAt < MIRROR_PROBE_TTL_MS) {
+    return mirrorUpProbe;
+  }
+  mirrorUpProbeAt = Date.now();
+  const probe = (async () => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      try {
+        const res = await fetch(CBR_LATEST_URL, { signal: controller.signal });
+        return res.ok;
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch {
+      return false;
+    }
+  })();
+  mirrorUpProbe = probe;
+  void probe.then((up) => {
+    if (up) {
+      mirrorDownAt = 0;
+    } else {
+      // Неудачу не кэшируем как обещание — сеть могла моргнуть; но помним
+      // момент, чтобы не долбиться в мёртвый сервис весь прогрев.
+      mirrorUpProbe = null;
+      mirrorDownAt = Date.now();
+    }
+  });
+  return probe;
+}
+
+/** Сбросить память о доступности зеркала — для повторной попытки по кнопке. */
+export function resetMirrorProbe(): void {
+  mirrorUpProbe = null;
+  mirrorUpProbeAt = 0;
+  mirrorDownAt = 0;
 }
 
 /** A day's rates plus whether the result is AUTHORITATIVE — i.e. we know for
@@ -102,7 +194,14 @@ async function fetchRatesForDateUncached(date: string): Promise<DayFetch> {
     // 5xx / 429 / other — transient. Don't cache; allow a retry later.
     return { rates: {}, authoritative: false };
   } catch {
-    // Network failure / timeout / abort — transient. Don't cache.
+    // Либо зеркало недоступно, либо этого дня просто нет в архиве: 404 оттуда
+    // приходит без CORS-заголовка, и браузер в обоих случаях даёт TypeError.
+    // Спрашиваем у зеркала, живо ли оно, — и только тогда решаем, можно ли
+    // запомнить дату как пропуск.
+    if (await mirrorIsUp()) {
+      await db.saveJSON(cacheKey, {});
+      return { rates: {}, authoritative: true };
+    }
     return { rates: {}, authoritative: false };
   }
 }
@@ -116,10 +215,13 @@ async function resolveDayRates(
 ): Promise<{ rates: Record<string, number>; rateDate: string; authoritative: boolean }> {
   let allAuthoritative = true;
   for (let back = 0; back <= MAX_LOOKBACK_DAYS; back++) {
+    // Сервис лежит — откатываться дальше некуда, все запросы всё равно упадут.
+    if (mirrorKnownDown()) return { rates: {}, rateDate: date, authoritative: false };
     const tryDate = shiftDate(date, -back);
-    // Sat/Sun have no CBR rate — don't waste a (CORS-failing) request; the
-    // loop rolls back to the preceding business day on the next iteration.
-    if (isWeekendUTC(tryDate)) continue;
+    // Выходные и праздники ЦБ не котирует — не тратим обречённый запрос (он
+    // ещё и падает по CORS, засоряя консоль); цикл сам откатится к ближайшему
+    // рабочему дню на следующей итерации.
+    if (isNoQuoteDayUTC(tryDate)) continue;
     const { rates, authoritative } = await fetchRatesForDate(tryDate);
     if (Object.keys(rates).length > 0) {
       return { rates, rateDate: tryDate, authoritative: true };

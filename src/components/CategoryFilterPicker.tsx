@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -12,6 +13,13 @@ import { ChevronDown, ChevronRight, Search } from "lucide-react";
 // Narrow by default (just the categories + the one-line header); widens by
 // SUB_W to the right when a category is expanded.
 const MENU_BASE = 300;
+
+/** Подписи разделителей в списке категорий. */
+const KIND_LABELS = {
+  expense: "Расходные",
+  income: "Доходные",
+  both: "И расход, и доход",
+} as const;
 const SUB_W = 190;
 import clsx from "clsx";
 import { FILTER_NONE } from "../store/useFiltersStore";
@@ -20,6 +28,10 @@ import { CategoryDot } from "./CategoryDot";
 
 export interface CategoryNode {
   name: string;
+  /** Тип категории в терминах Дзен-мани: расходная, доходная или обе сразу.
+   *  Задаёт разделители в списке; `undefined` — тип неизвестен (режим CSV),
+   *  такие категории идут без заголовка. */
+  kind?: "expense" | "income" | "both";
   /** True when the category has «bare» transactions (tagged with just the
    *  parent, no sub) — a distinct leaf, toggled only via the parent checkbox. */
   hasBare: boolean;
@@ -317,12 +329,29 @@ export function CategoryFilterPicker({
                     className="shrink-0 overflow-y-auto"
                     style={{ width: pos.width - (active ? SUB_W : 0) }}
                   >
-                    {nodes.map((n) => {
+                    {nodes.map((n, i) => {
                       const st = catState(n);
                       const isActive = n.name === active;
+                      // Заголовок над первой категорией каждого типа. Список уже
+                      // отсортирован по типу, поэтому достаточно сравнить с
+                      // предыдущей строкой.
+                      const groupLabel =
+                        n.kind && n.kind !== nodes[i - 1]?.kind
+                          ? KIND_LABELS[n.kind]
+                          : null;
                       return (
+                        <Fragment key={n.name}>
+                        {groupLabel && (
+                          <div
+                            className={clsx(
+                              "px-2 pb-0.5 text-[11px] uppercase tracking-wide text-muted",
+                              i > 0 && "mt-1 pt-1 border-t border-border"
+                            )}
+                          >
+                            {groupLabel}
+                          </div>
+                        )}
                         <div
-                          key={n.name}
                           className={clsx("flex items-center gap-1 pr-1", isActive && "bg-panel2")}
                         >
                           <input
@@ -355,6 +384,7 @@ export function CategoryFilterPicker({
                             )}
                           </button>
                         </div>
+                        </Fragment>
                       );
                     })}
                   </div>

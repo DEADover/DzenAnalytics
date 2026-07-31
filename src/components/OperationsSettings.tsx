@@ -4,6 +4,8 @@ import clsx from "clsx";
 import { CategoryManager } from "./CategoryManager";
 import { CounterpartyManager } from "./CounterpartyManager";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
+import { useDictionaryCounts } from "../hooks/useDictionaries";
+import { formatNum } from "../lib/format";
 
 type SubTab = "categories" | "counterparties";
 
@@ -18,6 +20,18 @@ type SubTab = "categories" | "counterparties";
  */
 export function OperationsSettings() {
   const [sub, setSub] = useState<SubTab>("categories");
+  const counts = useDictionaryCounts();
+
+  const tabs: { id: SubTab; label: string; icon: typeof Tags; count: number | null }[] =
+    [
+      { id: "categories", label: "Категории", icon: Tags, count: counts.categories },
+      {
+        id: "counterparties",
+        label: "Контрагенты",
+        icon: Users,
+        count: counts.counterparties,
+      },
+    ];
 
   return (
     <div className="card card-pad">
@@ -37,34 +51,39 @@ export function OperationsSettings() {
         aria-label="Разделы справочников"
         className="flex items-center gap-1 border-b border-border mb-4"
       >
-        <button
-          role="tab"
-          aria-selected={sub === "categories"}
-          onClick={() => setSub("categories")}
-          className={clsx(
-            "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-            sub === "categories"
-              ? "border-accent text-text"
-              : "border-transparent text-muted hover:text-text"
-          )}
-        >
-          <Tags className="w-4 h-4" />
-          Категории
-        </button>
-        <button
-          role="tab"
-          aria-selected={sub === "counterparties"}
-          onClick={() => setSub("counterparties")}
-          className={clsx(
-            "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-            sub === "counterparties"
-              ? "border-accent text-text"
-              : "border-transparent text-muted hover:text-text"
-          )}
-        >
-          <Users className="w-4 h-4" />
-          Контрагенты
-        </button>
+        {tabs.map((t) => {
+          const active = sub === t.id;
+          return (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setSub(t.id)}
+              className={clsx(
+                "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                active
+                  ? "border-accent text-text"
+                  : "border-transparent text-muted hover:text-text"
+              )}
+            >
+              <t.icon className="w-4 h-4" />
+              {t.label}
+              {/* Число записей — сразу на обеих вкладках: сколько всего в
+                  справочнике, видно не открывая его. Без кэша Дзен-мани
+                  справочника нет вовсе, тогда и числа нет. */}
+              {t.count !== null && (
+                <span
+                  className={clsx(
+                    "text-xs tabular-nums rounded px-1.5 py-0.5",
+                    active ? "bg-accent/10 text-accent" : "bg-panel2 text-muted"
+                  )}
+                >
+                  {formatNum(t.count)}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {sub === "categories" && <CategoryManager />}

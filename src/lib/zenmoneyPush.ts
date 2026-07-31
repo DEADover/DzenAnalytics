@@ -451,7 +451,12 @@ export function buildPushItems(
   edits: Record<string, TransactionEdit>,
   cache: ZenCache,
   stampSeconds: number = Math.floor(Date.now() / 1000),
-  mintId: (oldId: string) => string = resurrectionId
+  mintId: (oldId: string) => string = resurrectionId,
+  /** Контрагенты, заведённые локально и ещё не уехавшие в облако. Они попадают
+   *  в ТОТ ЖЕ запрос, что и операции, поэтому ссылаться на их id можно уже
+   *  сейчас — иначе «завести контрагента и поставить его в операцию» до первой
+   *  отправки молча превращалось бы в свободный текст. */
+  newMerchants: { id: string; title: string }[] = []
 ): PushBuildResult {
   const transactionsById = new Map(cache.transactions.map((t) => [t.id, t]));
   const tagsByTitle = new Map<string, ZenTag[]>();
@@ -484,6 +489,12 @@ export function buildPushItems(
     if (!key) continue;
     // First-seen wins — Zenmoney shouldn't have duplicates, but be safe.
     if (!merchantsByTitle.has(key)) merchantsByTitle.set(key, m.id);
+  }
+  // Локальные черновики — после кэша: если контрагент с таким названием уже
+  // есть в облаке, ссылаемся на него, а не плодим второго.
+  for (const m of newMerchants) {
+    const key = (m.title || "").trim().toLowerCase();
+    if (key && !merchantsByTitle.has(key)) merchantsByTitle.set(key, m.id);
   }
 
   const toPush: PushItem[] = [];
@@ -940,6 +951,33 @@ export function detectConflicts(
     if (f !== undefined && f > (cached.get(id) ?? 0)) out.add(id);
   }
   return out;
+}
+
+/**
+ * Индекс тегов Дзен-мани для проверки «а такая категория вообще существует» —
+ * по тому же правилу, по которому её ищет отправка. Нужно, чтобы предупреждать
+ * ДО отправки, а не показывать пропуск постфактум в логе синхронизации.
+ * Возвращает готовую функцию: справочник разбирается один раз, а не на каждую
+ * из тысяч проверяемых операций.
+ */
+export function makeCategoryChecker(
+  tags: ZenTag[]
+): (category: string, subcategory: string | null) => boolean {
+  const byTitle = new Map<string, ZenTag[]>();
+  const byId = new Map<string, ZenTag>();
+  for (const t of tags) {
+    byId.set(t.id, t);
+    const list = byTitle.get(t.title) ?? [];
+    list.push(t);
+    byTitle.set(t.title, list);
+  }
+  return (category, subcategory) => {
+    // Тег таким операциям не нужен вовсе — отправке ничего не мешает.
+    if (!category || category === NO_CATEGORY || SYNTHETIC_CATEGORIES.has(category)) {
+      return true;
+    }
+    return resolveTagId(category, subcategory, byTitle, byId) !== null;
+  };
 }
 
 /**

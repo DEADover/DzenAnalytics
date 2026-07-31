@@ -79,6 +79,12 @@ interface DataState {
   histDayRates: HistDayRates;
   /** Background warm progress, or null when idle/done. Drives the UI chip. */
   histWarming: { done: number; total: number } | null;
+  /** Сколько дат прошлый прогрев так и не смог разрешить — сервис курсов ЦБ был
+   *  недоступен. Больше нуля = в аналитике часть валютных операций посчитана по
+   *  текущему курсу, а не по курсу на свою дату. Показывается пользователем
+   *  предупреждением: раньше об этом можно было узнать только из консоли
+   *  (issue #53). */
+  histRatesUnavailable: number;
   importMeta: ImportMeta | null;
   payeeGroupingEnabled: boolean;
   loaded: boolean;
@@ -87,6 +93,8 @@ interface DataState {
    *  then reprice. Fire-and-forget; safe to call repeatedly (only fetches the
    *  gaps). No-op when the base currency isn't RUB (CBR is RUB-centric). */
   warmHistoricalRates: () => Promise<void>;
+  /** Убрать предупреждение о недогруженных курсах, ничего не перезапрашивая. */
+  dismissHistRatesWarning: () => void;
   setTransactions: (txs: Transaction[], meta: ImportMeta) => Promise<void>;
   mergeTransactions: (
     incoming: Transaction[],
@@ -308,6 +316,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   rates: DEFAULT_RATES,
   histDayRates: {},
   histWarming: null,
+  histRatesUnavailable: 0,
   importMeta: null,
   payeeGroupingEnabled: false,
   loaded: false,
@@ -362,6 +371,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     const dates = Array.from(missing);
     const total = dates.length;
     set({ histWarming: { done: 0, total } });
+    let unresolved = 0;
     try {
       // Fetch and PERSIST in chunks. Saving the resolved index after every
       // chunk (not just at the very end) means an interrupted warm — the user
@@ -373,6 +383,9 @@ export const useDataStore = create<DataState>((set, get) => ({
       for (let i = 0; i < dates.length; i += CHUNK) {
         const chunk = dates.slice(i, i + CHUNK);
         const fetched = await fetchHistoricalRubRates(chunk);
+        // Даты, по которым не пришло ничего достоверного, остаются «пропущены»
+        // и будут перезапрошены позже — но пользователю об этом надо сказать.
+        unresolved += chunk.length - Object.keys(fetched).length;
         const merged = { ...get().histDayRates, ...fetched };
         await db.saveJSON(HIST_RATES_KEY, merged);
         set({ histDayRates: merged });
@@ -385,9 +398,11 @@ export const useDataStore = create<DataState>((set, get) => ({
       const final = await finalize(raw, rates);
       set({ transactions: final, transactionsRaw: raw });
     } finally {
-      set({ histWarming: null });
+      set({ histWarming: null, histRatesUnavailable: unresolved });
     }
   },
+
+  dismissHistRatesWarning: () => set({ histRatesUnavailable: 0 }),
 
   setTransactions: async (txs, meta) => {
     const { payeeGroupingEnabled } = get();

@@ -137,7 +137,9 @@ export function Combobox({
           placeholder={placeholder}
           // Extra right-padding when the clear-X is showing, otherwise
           // the typed value collides with two stacked icons.
-          className={`input text-sm w-full ${clearable && value ? "pr-12" : "pr-7"} ${!allowCustom ? "cursor-pointer" : ""}`}
+          // `h-10` — та же высота, что задаёт себе `Select`: в строке действия
+          // они стоят рядом, и разница в пиксель читается как перекос.
+          className={`input h-10 text-sm w-full ${clearable && value ? "pr-12" : "pr-7"} ${!allowCustom ? "cursor-pointer" : ""}`}
         />
         {clearable && value && (
           <button

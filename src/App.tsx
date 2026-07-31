@@ -13,6 +13,8 @@ import { CashflowPage } from "./pages/CashflowPage";
 import { TransactionsPage } from "./pages/TransactionsPage";
 import { Budget503020Page } from "./pages/Budget503020Page";
 import { CategoriesPage } from "./pages/CategoriesPage";
+import { ReportPage } from "./pages/ReportPage";
+import { DynamicsPage } from "./pages/DynamicsPage";
 import { AccountsPage } from "./pages/AccountsPage";
 import { TopPage } from "./pages/TopPage";
 import { ComparePage } from "./pages/ComparePage";
@@ -371,6 +373,8 @@ function App() {
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/cashflow" element={<CashflowPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/report" element={<ReportPage />} />
+            <Route path="/dynamics" element={<DynamicsPage />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/tags" element={<TagsPage />} />

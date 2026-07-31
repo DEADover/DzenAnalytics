@@ -18,6 +18,7 @@ import { plannedOps, type PlannedOp } from "../lib/plannedOps";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Stat } from "../components/Stat";
 import { SortableTable, type Column } from "../components/SortableTable";
 
@@ -484,6 +485,39 @@ export function RecurringPage() {
         title="Регулярные платежи"
         icon={Repeat}
         hint="Планы из Дзен-мани и автодетект подписок по вашей истории. Глобальные фильтры здесь не применяются."
+        right={
+          <InfoPopover label="Как находятся регулярные платежи">
+            <p>
+              Вкладка <InfoTerm>«Планы»</InfoTerm> — то, что вы сами завели в
+              Дзен-мани. Вкладка <InfoTerm>«Найденные»</InfoTerm> — наша догадка:
+              подписки и абонентские платежи, которые видно по истории, даже если
+              вы их нигде не отмечали.
+            </p>
+            <p>
+              Ищем так: берём расходы, группируем по получателю и валюте и
+              оставляем те, где набралось хотя бы{" "}
+              <InfoTerm>3 платежа</InfoTerm> в{" "}
+              <InfoTerm>двух разных месяцах</InfoTerm>, а промежуток между ними —
+              от <InfoTerm>5 до 95 дней</InfoTerm>. Разовая покупка и платежи раз
+              в год под это не подходят. Дальше смотрим, насколько ровные суммы и
+              промежутки: если и то и другое сильно скачет, платёж не считается
+              регулярным.
+            </p>
+            <p>
+              <InfoTerm>«≈ в месяц»</InfoTerm> — сумма всех найденных платежей,
+              приведённая к месяцу: недельный считается как четыре с небольшим,
+              квартальный — как треть.{" "}
+              <InfoTerm>«≈ в год»</InfoTerm> — это же число, умноженное на 12,
+              то есть оценка при неизменных подписках, а не факт за прошлый год.
+            </p>
+            <p>
+              Пометка <InfoTerm>«Затих»</InfoTerm> означает, что платёж молчит
+              дольше двух своих циклов плюс две недели: для месячной подписки это
+              примерно 75 дней. Скорее всего, её уже отменили — такие не попадают
+              в ближайшие списания.
+            </p>
+          </InfoPopover>
+        }
       />
 
       {/* Page-level tabs: Zen plans vs our own detection (#3). */}
