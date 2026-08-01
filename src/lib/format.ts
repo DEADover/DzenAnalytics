@@ -85,6 +85,15 @@ export function getMoneyFractionDigits(): number {
   return _moneyFractionDigits;
 }
 
+/**
+ * Знак валюты для подписей, где сумма не выводится, а ожидается: «Сумма, ₽»,
+ * переключатель «₽ / %». Раньше такие подписи были захардкожены рублём и
+ * врали, если базовая валюта другая (issue #57).
+ */
+export function currencySymbol(currency: Currency): string {
+  return symbolByCurrency[currency] || currency;
+}
+
 export function formatMoney(
   amount: number,
   currency: Currency = "RUB",

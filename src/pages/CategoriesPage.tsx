@@ -12,7 +12,7 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { affectsExpense, expenseDelta } from "../lib/txKindStyle";
 import { colorForCategory, subcategoryColor } from "../lib/categoryColor";
-import { formatMoney, formatPct } from "../lib/format";
+import { formatMoney, formatPct, currencySymbol } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
@@ -707,11 +707,11 @@ export function CategoriesPage() {
                 <button
                   onClick={() => setDevPct((v) => !v)}
                   className="w-28 text-left shrink-0 uppercase tracking-wide text-muted hover:text-accent inline-flex items-center gap-1"
-                  title="Насколько текущий период выше/ниже среднего. Клик — переключить ₽ / %"
+                  title={`Насколько текущий период выше/ниже среднего. Клик — переключить ${currencySymbol(base)} / %`}
                 >
                   Отклонение
                   <span className="normal-case rounded bg-panel2 px-1 text-[0.9em] leading-none text-text">
-                    {devPct ? "%" : "₽"}
+                    {devPct ? "%" : currencySymbol(base)}
                   </span>
                 </button>
                 <span className="w-8 shrink-0 flex items-center justify-center">

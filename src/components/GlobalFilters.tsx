@@ -13,6 +13,7 @@ import { AccountLogo } from "./AccountLogo";
 import { accountKindLabel } from "../lib/accountType";
 import { CategoryFilterPicker } from "./CategoryFilterPicker";
 import { MonthPicker } from "./MonthPicker";
+import { currencySymbol } from "../lib/format";
 import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
 import { getLiveAccountsFromCache, getCategoryTagsFromCache } from "../store/useZenmoneyStore";
@@ -53,6 +54,8 @@ export function GlobalFilters({
   period?: PeriodController;
 } = {}) {
   const transactions = useDataStore((s) => s.transactions);
+  // Отбор сравнивает суммы в базовой валюте, поэтому и подпись — по ней.
+  const base = useDataStore((s) => s.rates.base);
   const f = useFiltersStore();
   const controlledPeriod = period !== undefined;
   // Period slice source: the local controller when controlled, else the store.
@@ -311,7 +314,9 @@ export function GlobalFilters({
                 </div>
 
                 <div>
-                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">Сумма, ₽</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">
+                    Сумма, {currencySymbol(base)}
+                  </div>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { displayPayee, secondaryPayee, payeeSearchText } from "./format";
+import { displayPayee, secondaryPayee, payeeSearchText, currencySymbol } from "./format";
 
 describe("payeeSearchText", () => {
   it("includes both the dictionary name and the raw bank text when they differ", () => {
@@ -95,5 +95,17 @@ describe("secondaryPayee — источник второй строки", () => 
     expect(
       secondaryPayee({ payee: "Aliexpress", brand: "AliExpress", payeeRaw: null }, "statement")
     ).toBeNull();
+  });
+});
+
+describe("currencySymbol — подписи без суммы (#57)", () => {
+  it("знает ходовые валюты", () => {
+    expect(currencySymbol("RUB")).toBe("₽");
+    expect(currencySymbol("USD")).toBe("$");
+    expect(currencySymbol("EUR")).toBe("€");
+  });
+
+  it("для незнакомой валюты показывает её код, а не рубль", () => {
+    expect(currencySymbol("XYZ")).toBe("XYZ");
   });
 });

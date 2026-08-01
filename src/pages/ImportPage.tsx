@@ -1433,7 +1433,7 @@ export function ImportPage() {
               className="tabular-nums font-medium text-expense whitespace-nowrap"
               style={{ fontSize: "var(--tbl-font)" }}
             >
-              −1 234 ₽
+              {formatMoney(-1234, rates.base)}
             </span>
           </div>
         </SettingRow>
