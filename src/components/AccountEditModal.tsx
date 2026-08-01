@@ -8,6 +8,7 @@ import {
   Percent,
 } from "lucide-react";
 import clsx from "clsx";
+import { Switch } from "./Switch";
 import type { LiveAccount } from "../store/useZenmoneyStore";
 import { useAccountEditsStore, type AccountEdit } from "../store/useAccountEditsStore";
 import { ACCOUNT_KINDS, accountKindLabel } from "../lib/accountType";
@@ -584,18 +585,11 @@ function FlagRow({
         <span className="block text-sm">{label}</span>
         <span className="block text-xs text-muted truncate">{hint}</span>
       </span>
-      <span
-        className={clsx(
-          "w-9 h-5 rounded-full shrink-0 relative transition-colors",
-          on ? "bg-accent" : "bg-panel2 border border-border"
-        )}
-      >
-        <span
-          className={clsx(
-            "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all",
-            on ? "left-[18px]" : "left-0.5"
-          )}
-        />
+      {/* Пилюля общая с настройками — одна форма у булевого контрола во всём
+          сервисе. Кликается вся строка, поэтому сам переключатель не
+          перехватывает событие. */}
+      <span className="pointer-events-none">
+        <Switch checked={on} onChange={() => {}} label={label} />
       </span>
     </button>
   );

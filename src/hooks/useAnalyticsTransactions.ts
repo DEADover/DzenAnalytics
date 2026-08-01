@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDataStore } from "../store/useDataStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
-import { useAnalyticsExclusionStore } from "../store/useAnalyticsExclusionStore";
+import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import {
   getLiveAccountsFromCache,
   type LiveAccount,
@@ -10,9 +10,9 @@ import { stripFromAnalytics } from "../lib/aggregations";
 import type { Transaction } from "../types";
 
 /**
- * Transactions with the «не учитывать в аналитике» exclusions applied (issue
- * #14): categories the user marked as pure turnover / mutual-settlement, plus —
- * when «учитывать внебалансовые счета» is OFF — flows on off-balance accounts.
+ * Операции активного РАЗРЕЗА (issue #14): без категорий и счетов, которые
+ * пользователь вынес из аналитики, и — пока «учитывать внебалансовые счета»
+ * выключено — без потоков по внебалансовым счетам.
  *
  * The aggregate widgets that show a single «доход / расход / поток» picture
  * (Цели & FIRE, Здоровье, Что-Если, Год в цифрах, Дайджест) read raw
@@ -25,9 +25,11 @@ import type { Transaction } from "../types";
  */
 export function useAnalyticsTransactions(): Transaction[] {
   const transactions = useDataStore((s) => s.transactions);
-  const excluded = useAnalyticsExclusionStore((s) => s.excluded);
-  const exclLoaded = useAnalyticsExclusionStore((s) => s.loaded);
-  const hydrateExcl = useAnalyticsExclusionStore((s) => s.hydrate);
+  const slices = useSlicesStore((s) => s.slices);
+  const activeId = useSlicesStore((s) => s.activeId);
+  const exclLoaded = useSlicesStore((s) => s.loaded);
+  const hydrateExcl = useSlicesStore((s) => s.hydrate);
+  const slice = activeSlice({ slices, activeId });
   const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
   const [liveAccounts, setLiveAccounts] = useState<LiveAccount[] | null>(null);
 
@@ -55,8 +57,20 @@ export function useAnalyticsTransactions(): Transaction[] {
     return titles.length ? new Set(titles) : undefined;
   }, [includeOffBalance, liveAccounts]);
 
+  const excluded = useMemo(
+    () => new Set(slice.excludedCategories),
+    [slice.excludedCategories]
+  );
+  // Счета разреза и внебалансовые складываются: и то и другое — «эти деньги в
+  // картину не входят», разделять их в селекторе незачем.
+  const skipAccounts = useMemo(() => {
+    const out = new Set(slice.excludedAccounts);
+    if (offBalanceTitles) for (const t of offBalanceTitles) out.add(t);
+    return out.size ? out : undefined;
+  }, [slice.excludedAccounts, offBalanceTitles]);
+
   return useMemo(
-    () => stripFromAnalytics(transactions, { excludedCategories: excluded, offBalanceTitles }),
-    [transactions, excluded, offBalanceTitles]
+    () => stripFromAnalytics(transactions, { excludedCategories: excluded, offBalanceTitles: skipAccounts }),
+    [transactions, excluded, skipAccounts]
   );
 }

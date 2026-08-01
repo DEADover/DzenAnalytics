@@ -150,6 +150,8 @@ export function HeaderSyncActions() {
   const canReview = manual || (pushMode === "on-sync" && pending.total > 0);
   const canPush = manual;
   const nothingToSend = pending.total === 0;
+  /** Есть что отправить — панель подсвечивается акцентом. */
+  const hasPending = (canReview || canPush) && pending.total > 0;
   const pushing = pushStatus === "syncing";
 
   async function runPush() {
@@ -189,65 +191,64 @@ export function HeaderSyncActions() {
     // block — without this the surrounding header `items-center` row
     // aligns the wrapper as a block element and the segmented control
     // ends up a hair higher than the gear/help icons next to it.
-    <div className="relative inline-flex items-center gap-2">
-      {/* Push cluster — separate from the sync one on purpose: these send data
-          OUT, the pair on the right pulls it IN. Appears only when there is
-          actually something to send, so the header stays quiet otherwise. */}
-      {(canReview || canPush) && (
-        <div className="inline-flex items-stretch rounded-lg border border-accent/40 bg-accent/5 overflow-hidden">
-          {canReview && (
-            <button
-              type="button"
-              onClick={() => setReviewOpen(true)}
-              disabled={nothingToSend}
-              title={
-                nothingToSend
-                  ? "Нет изменений, ожидающих отправки"
-                  : `Просмотреть изменения перед отправкой (${formatNum(pending.total)})`
-              }
-              className={clsx(
-                innerBtn,
-                "rounded-l-lg inline-flex items-center gap-1.5 text-accent",
-                !canPush && "rounded-r-lg"
-              )}
-            >
-              <ListChecks className="w-4 h-4" />
-              {/* min-w держит ширину кластера постоянной, чтобы соседние
-                  иконки не дёргались при 1 → 10 → 100 изменениях. */}
-              <span className="text-xs tabular-nums font-medium min-w-[1.1em] text-left">
-                {formatNum(pending.total)}
-              </span>
-            </button>
-          )}
-          {canReview && canPush && <div className="w-px bg-accent/30 self-stretch" />}
-          {canPush && (
-            <button
-              type="button"
-              onClick={runPush}
-              disabled={pushing || nothingToSend}
-              title={
-                nothingToSend
-                  ? "Нет изменений для отправки"
-                  : "Отправить изменения в Дзен-мани"
-              }
-              className={clsx(
-                innerBtn,
-                "rounded-r-lg text-accent",
-                !canReview && "rounded-l-lg"
-              )}
-            >
-              <UploadCloud className={clsx("w-4 h-4", pushing && "animate-pulse")} />
-            </button>
-          )}
-        </div>
-      )}
-
+    <div className="relative inline-flex items-center shrink-0">
+      {/* Одна панель на всё, что общается с облаком: отправку и загрузку.
+          Рамка подсвечивается акцентом, только когда есть что отправлять, —
+          в спокойном состоянии панель не тянет на себя внимание. */}
       <div
         className={clsx(
-          "inline-flex items-stretch rounded-lg border bg-panel2 overflow-hidden",
-          error && !busy && !flash ? "border-expense/40" : "border-border"
+          "inline-flex items-stretch rounded-lg border overflow-hidden",
+          error && !busy && !flash
+            ? "border-expense/40 bg-panel2"
+            : hasPending
+              ? "border-accent/40 bg-accent/5"
+              : "border-border bg-panel2"
         )}
       >
+        {(canReview || canPush) && (
+          <>
+            {canReview && (
+              <button
+                type="button"
+                onClick={() => setReviewOpen(true)}
+                disabled={nothingToSend}
+                title={
+                  nothingToSend
+                    ? "Нет изменений, ожидающих отправки"
+                    : `Просмотреть изменения перед отправкой (${formatNum(pending.total)})`
+                }
+                className={clsx(
+                  innerBtn,
+                  "rounded-l-lg inline-flex items-center gap-1.5 text-accent"
+                )}
+              >
+                <ListChecks className="w-4 h-4" />
+                {/* min-w держит ширину кластера постоянной, чтобы соседние
+                    иконки не дёргались при 1 → 10 → 100 изменениях. */}
+                <span className="text-xs tabular-nums font-medium min-w-[1.1em] text-left">
+                  {formatNum(pending.total)}
+                </span>
+              </button>
+            )}
+            {canReview && canPush && <div className="w-px bg-accent/30 self-stretch" />}
+            {canPush && (
+              <button
+                type="button"
+                onClick={runPush}
+                disabled={pushing || nothingToSend}
+                title={
+                  nothingToSend
+                    ? "Нет изменений для отправки"
+                    : "Отправить изменения в Дзен-мани"
+                }
+                className={clsx(innerBtn, "text-accent")}
+              >
+                <UploadCloud className={clsx("w-4 h-4", pushing && "animate-pulse")} />
+              </button>
+            )}
+            <div className="w-px bg-border self-stretch" />
+          </>
+        )}
         <button
           type="button"
           onClick={runIncremental}

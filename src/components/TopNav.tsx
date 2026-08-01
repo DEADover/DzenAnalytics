@@ -34,9 +34,10 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useThemeStore } from "../store/useThemeStore";
-import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { HeaderSyncActions } from "./HeaderSyncActions";
+import { SliceSwitcher } from "./SliceSwitcher";
+import { useSlicesStore } from "../store/useSlicesStore";
 import logoHorizontal from "../assets/logo-horizontal.svg";
 import logoHorizontalDark from "../assets/logo-horizontal-dark.svg";
 
@@ -93,19 +94,19 @@ const SECONDARY_GROUPS = [
 const SECONDARY = SECONDARY_GROUPS.flatMap((g) => g.items);
 
 export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
-  // Ручной режим добавляет в шапку пару кнопок отправки — поле «Команды…»
-  // ужимается на их ширину, чтобы остальные иконки не сдвигались.
-  const manualPush = useZenmoneyStore((s) => s.pushMode) === "manual";
   const [moreOpen, setMoreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const loc = useLocation();
+  // Переключатель разреза появляется только со второго разреза — от этого
+  // зависит, нужен ли разделитель внутри панели.
+  const hasSlices = useSlicesStore((s) => s.slices.length) > 1;
   const theme = useThemeStore((s) => s.resolved);
 
   const inSecondary = SECONDARY.some((s) => loc.pathname === s.to);
 
   return (
     <header className="border-b border-border bg-panel/80 backdrop-blur sticky top-0 z-30">
-      <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-3 flex items-center gap-3 md:gap-6">
+      <div className="w-full px-4 md:px-6 py-3 flex items-center gap-3 md:gap-6">
         <img
           src={theme === "dark" ? logoHorizontalDark : logoHorizontal}
           alt="DzenAnalytics"
@@ -187,42 +188,33 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         {/* Spacer on mobile pushes right group to the end */}
         <div className="flex-1 lg:hidden" />
 
-        {/* Command palette trigger. Widened (min/max width with
-            `justify-between`) so it reads more as a search field than
-            a button — the ⌘K hotkey sits flush right, leaving room for
-            the placeholder text to feel airier. */}
-        <button
-          onClick={onOpenPalette}
-          className={clsx(
-            "hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border bg-panel2 text-muted hover:text-text border-border justify-between",
-            // В ручном режиме шапка несёт ещё два контрола (просмотр + отправка),
-            // и поле поиска ужимается ровно на их ширину — иначе привычные иконки
-            // справа уезжают, стоит переключить режим.
-            manualPush ? "min-w-[130px] lg:min-w-[170px]" : "min-w-[220px] lg:min-w-[260px]"
+        {/* Зона данных: то, что меняет картину на экране — поиск, разрез и
+            обмен с облаком. Отделена от системных кнопок справа не рамкой ради
+            рамки, а смыслом: слева работа с данными, справа настройки вида. */}
+        <div className="inline-flex items-stretch shrink-0 rounded-lg border border-border bg-panel2 overflow-hidden">
+          <button
+            onClick={onOpenPalette}
+            className="p-1.5 text-muted hover:text-accent hover:bg-accent/10 transition-colors"
+            title="Команды и поиск (⌘K / Ctrl+K)"
+            aria-label="Команды и поиск"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+          {hasSlices && (
+            <>
+              <div className="w-px bg-border self-stretch" />
+              <SliceSwitcher inline />
+            </>
           )}
-          title="Командная палитра (Ctrl+K)"
-        >
-          <span className="flex items-center gap-2 min-w-0">
-            <Search className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Команды…</span>
-          </span>
-          <kbd className="kbd hidden lg:inline-block shrink-0">⌘K</kbd>
-        </button>
-        <button
-          onClick={onOpenPalette}
-          className="md:hidden p-1.5 rounded-lg border border-border bg-panel2 text-muted"
-          title="Командная палитра"
-        >
-          <Search className="w-4 h-4" />
-        </button>
+        </div>
 
-        <ThemeSwitcher />
-
-        {/* Zenmoney sync quick actions — incremental + full re-sync.
-            Hidden when no token is configured (CSV-mode users see a
-            clean header without dangling icons). Lives next to the
-            gear because that's where the token gets connected. */}
         <HeaderSyncActions />
+
+        {/* Системная зона — приглушена и отодвинута к краю: сюда заходят
+            изредка. Отступ делаем `ml-auto`, а не распоркой: лишний элемент в
+            строке добавил бы к ширине ещё два зазора. */}
+        <div className="lg:ml-auto flex items-center gap-1.5 shrink-0">
+        <ThemeSwitcher />
 
         {/* Settings — gear icon. Active style matches PRIMARY nav (bg-accent/10
             text-accent) so the whole header speaks one design language. */}
@@ -231,10 +223,10 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
           title="Настройки"
           className={({ isActive }) =>
             clsx(
-              "group relative p-1.5 rounded-lg border transition-colors",
+              "group relative p-1.5 rounded-lg transition-colors",
               isActive
-                ? "bg-accent/10 border-accent/30 text-accent"
-                : "border-border bg-panel2 text-muted hover:text-accent hover:border-accent/50"
+                ? "bg-accent/10 text-accent"
+                : "text-muted hover:text-accent hover:bg-accent/10"
             )
           }
         >
@@ -249,15 +241,16 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
           title="Справка"
           className={({ isActive }) =>
             clsx(
-              "group relative p-1.5 rounded-lg border transition-colors",
+              "group relative p-1.5 rounded-lg transition-colors",
               isActive
-                ? "bg-accent/10 border-accent/30 text-accent"
-                : "border-border bg-panel2 text-muted hover:text-accent hover:border-accent/50"
+                ? "bg-accent/10 text-accent"
+                : "text-muted hover:text-accent hover:bg-accent/10"
             )
           }
         >
           <HelpCircle className="w-4 h-4 transition-transform duration-300 ease-out group-hover:scale-110" />
         </NavLink>
+        </div>
 
         {/* Mobile burger */}
         <button

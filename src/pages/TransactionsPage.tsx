@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDataStore } from "../store/useDataStore";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
@@ -973,6 +974,8 @@ function Row({
   onToggleSelect: () => void;
   hideDate?: boolean;
 }) {
+  // Что показывать второй строкой под контрагентом — настройка «Оформления».
+  const statementLine = useDisplayStore((s) => s.statementLine);
   // Одиночный клик выделяет строку, двойной открывает редактор. Проблема в
   // том, что двойной клик В ЛЮБОМ СЛУЧАЕ проходит через одиночные, и строка
   // успевает мигнуть выделением. Поэтому выделение откладываем на порог
@@ -1100,7 +1103,7 @@ function Row({
       <div className="min-w-0">
         {(() => {
           const primary = displayPayee(tx) || transferCounterparty(tx) || "";
-          const secondary = secondaryPayee(tx);
+          const secondary = statementLine ? secondaryPayee(tx, "statement") : null;
           const tooltip = secondary ? `${primary} — ${secondary}` : primary;
           return (
             <>

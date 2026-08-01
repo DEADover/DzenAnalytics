@@ -5,10 +5,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Trash2,
-  Coins,
+  Palette,
   Replace,
   Layers,
-  Users,
   Download,
   Database,
   Cloud,
@@ -21,18 +20,15 @@ import {
   Link as LinkIcon,
   Unlink,
   Clock,
-  CalendarRange,
-  Wallet,
   Settings,
   History,
   CloudDownload,
   CloudUpload,
   Info,
   ChevronDown,
-  HardDrive,
-  RotateCcw,
-  ALargeSmall,
   Calculator,
+  HardDrive,
+  ALargeSmall,
   ArrowLeftRight,
   HelpCircle,
   ArrowRight,
@@ -42,6 +38,11 @@ import { SyncLog } from "../components/SyncLog";
 import { OperationsSettings } from "../components/OperationsSettings";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { PendingChangesModal } from "../components/PendingChangesModal";
+import { SlicesSettings } from "../components/SlicesSettings";
+import { SettingRow } from "../components/SettingRow";
+import { InfoTerm } from "../components/InfoPopover";
+import { Switch } from "../components/Switch";
+import { Segmented } from "../components/Segmented";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDataStore } from "../store/useDataStore";
 import { useGoalsStore } from "../store/useGoalsStore";
@@ -62,7 +63,7 @@ import { Combobox } from "../components/Combobox";
 import { PageHeader } from "../components/PageHeader";
 import { formatNum, formatDate, formatMoney } from "../lib/format";
 import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
-import { buildPayeeAliasMap } from "../lib/payeeNormalize";
+import { useThemeStore } from "../store/useThemeStore";
 import { parseAndValidateBackup, buildBackupPayload, restoreBackupPayload } from "../lib/backup";
 import { useCategoryRulesStore } from "../store/useCategoryRulesStore";
 import { useDeletedPayloadsStore } from "../store/useDeletedPayloadsStore";
@@ -93,6 +94,7 @@ const TABLE_FONT_LABELS: Record<TableFontLevel, string> = {
   5: "Очень крупный",
 };
 
+/* Отключено вместе с блоком «Группировка получателей» — см. ниже.
 function AutoGroupRow({
   from,
   autoTo,
@@ -150,7 +152,7 @@ function AutoGroupRow({
         title={overridden ? "Изменено вручную" : "Авто-группировка"}
       />
       {/* Fixed-width slot so the row width doesn't jump when the reset
-          button appears/disappears on override. */}
+          button appears/disappears on override. *\/}
       <span className="w-7 shrink-0 flex items-center justify-center">
         {overridden && (
           <button
@@ -165,6 +167,7 @@ function AutoGroupRow({
     </div>
   );
 }
+*/
 
 export function ImportPage() {
   const nav = useNavigate();
@@ -176,9 +179,17 @@ export function ImportPage() {
   const setBase = useDataStore((s) => s.setBase);
   const transactions = useDataStore((s) => s.transactions);
   const meta = useDataStore((s) => s.importMeta);
-  const payeeGrouping = useDataStore((s) => s.payeeGroupingEnabled);
-  const setPayeeGrouping = useDataStore((s) => s.setPayeeGrouping);
+  // Отключено вместе с блоком «Группировка получателей»:
+  // const payeeGrouping = useDataStore((s) => s.payeeGroupingEnabled);
+  // const setPayeeGrouping = useDataStore((s) => s.setPayeeGrouping);
+  // Тема: в шапке переключаются только светлая и тёмная, а «как в системе»
+  // до этого нигде не выбиралась — жила в хранилище без интерфейса.
+  const themeMode = useThemeStore((s) => s.mode);
+  const resolvedTheme = useThemeStore((s) => s.resolved);
+  const setThemeMode = useThemeStore((s) => s.setMode);
   const fractionDigits = useDisplayStore((s) => s.fractionDigits);
+  const statementLine = useDisplayStore((s) => s.statementLine);
+  const setStatementLine = useDisplayStore((s) => s.setStatementLine);
   const setFractionDigits = useDisplayStore((s) => s.setFractionDigits);
   const tableFontLevel = useDisplayStore((s) => s.tableFontLevel);
   const setTableFontLevel = useDisplayStore((s) => s.setTableFontLevel);
@@ -342,7 +353,27 @@ export function ImportPage() {
   // reporting period, backups) into four logical buckets so the
   // page stops being a 2000-line scroll.
   type SettingsTab = "source" | "operations" | "interface" | "processing" | "backups";
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>("source");
+  // Вкладку можно открыть ссылкой: /settings?tab=operations. Так карточка
+  // «Разрезы данных» уводит прямо в справочник категорий, а не просто
+  // перезагружает ту же страницу.
+  const [searchParams] = useSearchParams();
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(() => {
+    const q = searchParams.get("tab");
+    return q === "operations" || q === "interface" || q === "processing" || q === "backups"
+      ? q
+      : "source";
+  });
+  // Ссылка на другую вкладку с этой же страницы меняет только query — маршрут
+  // остаётся прежним, компонент не перемонтируется, и начального значения
+  // мало: без этого «справочник категорий» из карточки разрезов менял адрес,
+  // но оставлял открытой ту же вкладку.
+  useEffect(() => {
+    const q = searchParams.get("tab");
+    if (q === "operations" || q === "interface" || q === "processing" || q === "backups") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSettingsTab(q);
+    }
+  }, [searchParams]);
 
   // Inner tab inside the Бэкапы section — local files vs cloud
   // snapshots. Mirrors the Источник данных card pattern.
@@ -361,7 +392,6 @@ export function ImportPage() {
   //   • CSV tab — if there's CSV-imported data and no token
   //   • API tab — for fresh installs (most users connect via API)
   type SourceTab = "api" | "csv";
-  const [searchParams] = useSearchParams();
   const [sourceTab, setSourceTab] = useState<SourceTab>(() => {
     // The empty-state cards deep-link here with ?source=api|csv — honour
     // that first so the user lands on the source they picked.
@@ -466,21 +496,28 @@ export function ImportPage() {
 
   // Manual payee aliases — user-curated overrides on top of (or in
   // place of) the fuzzy auto-grouping above.
-  const manualAliases = usePayeeAliasStore((s) => s.aliases);
+  // Отключено вместе с блоком «Группировка получателей»: сами алиасы никуда
+  // не делись и продолжают применяться в пайплайне, но править их отсюда
+  // больше нельзя.
+  // const manualAliases = usePayeeAliasStore((s) => s.aliases);
+  // const aliasesLoaded = usePayeeAliasStore((s) => s.loaded);
+  // const aliasesHydrate = usePayeeAliasStore((s) => s.hydrate);
+  // const addAlias = usePayeeAliasStore((s) => s.add);
+  // const removeAlias = usePayeeAliasStore((s) => s.remove);
+  // Гидратацию оставляем: сохранённые алиасы продолжают применяться к данным.
   const aliasesLoaded = usePayeeAliasStore((s) => s.loaded);
   const aliasesHydrate = usePayeeAliasStore((s) => s.hydrate);
-  const addAlias = usePayeeAliasStore((s) => s.add);
-  const removeAlias = usePayeeAliasStore((s) => s.remove);
   const reapplyRules = useDataStore((s) => s.reapplyRules);
   useEffect(() => {
     if (!aliasesLoaded) aliasesHydrate();
   }, [aliasesLoaded, aliasesHydrate]);
-  const [aliasFrom, setAliasFrom] = useState("");
-  const [aliasTo, setAliasTo] = useState("");
+  // const [aliasFrom, setAliasFrom] = useState("");
+  // const [aliasTo, setAliasTo] = useState("");
 
   // Distinct payees from the current dataset — used as datalist options
   // for the manual alias inputs so the user can pick existing names by
   // typing a few letters.
+/* Отключено вместе с блоком «Группировка получателей».
   const allPayeeOptions = useMemo(() => {
     const set = new Set<string>();
     for (const t of transactions) {
@@ -489,15 +526,21 @@ export function ImportPage() {
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, "ru"));
   }, [transactions]);
+*/
+
 
   // Manual aliases as a from→to lookup, for marking which auto-grouping
   // rows the user has overridden.
+/* Отключено вместе с блоком «Группировка получателей».
   const manualAliasMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of manualAliases) m.set(a.from, a.to);
     return m;
   }, [manualAliases]);
+*/
 
+
+/* Отключено вместе с блоком «Группировка получателей».
   async function submitAlias() {
     const f = aliasFrom.trim();
     const t = aliasTo.trim();
@@ -507,11 +550,16 @@ export function ImportPage() {
     setAliasFrom("");
     setAliasTo("");
   }
+*/
 
+
+/* Отключено вместе с блоком «Группировка получателей».
   async function dropAlias(from: string) {
     await removeAlias(from);
     await reapplyRules();
   }
+*/
+
 
   // Report period (reporting month start day)
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
@@ -687,12 +735,15 @@ export function ImportPage() {
     if (file) handleFile(file);
   }
 
+/* Отключено вместе с блоком «Группировка получателей».
   const aliasPreview = (() => {
     if (transactions.length === 0) return null;
     const allPayees = transactions.map((t) => t.payeeOriginal || t.payee).filter(Boolean);
     const aliases = buildPayeeAliasMap(allPayees);
     return aliases;
   })();
+*/
+
 
   return (
     <div className="space-y-6">
@@ -1240,96 +1291,152 @@ export function ImportPage() {
 
       {settingsTab === "interface" && (<>
 
+      {/* Одна карточка вместо трёх отдельных: настройки вида короткие, а
+          каждая со своим абзацем пояснений занимала пол-экрана. */}
       <div className="card card-pad">
-        <SettingsSectionHeader icon={Coins} title="Формат сумм" className="mb-3" />
+        <SettingsSectionHeader icon={Palette} title="Внешний вид" className="mb-1" />
         <p className="text-xs text-muted mb-3">
-          Показывать ли дробную часть — два знака после запятой (копейки,
-          центы и т.п., в зависимости от валюты). Влияет на все суммы: KPI,
-          карточки, таблицы, операции и подсказки. На осях графиков всегда
-          компактный вид.
+          Как сервис выглядит и в каком виде показывает суммы.
         </p>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div
-            role="group"
-            aria-label="Дробная часть сумм"
-            className="flex bg-panel2 rounded-lg p-1 border border-border"
-          >
-            <button
-              onClick={() => setFractionDigits(0)}
-              aria-pressed={fractionDigits === 0}
-              className={`px-3 py-1 text-sm rounded-md ${
-                fractionDigits === 0 ? "bg-accent text-accent-fg" : "text-muted"
-              }`}
-            >
-              Без дробной части
-            </button>
-            <button
-              onClick={() => setFractionDigits(2)}
-              aria-pressed={fractionDigits === 2}
-              className={`px-3 py-1 text-sm rounded-md ${
-                fractionDigits === 2 ? "bg-accent text-accent-fg" : "text-muted"
-              }`}
-            >
-              С дробной частью
-            </button>
-          </div>
-          <span className="text-xs text-muted tabular-nums">
-            Пример: {formatMoney(1234.1, rates.base)}
-          </span>
-        </div>
-      </div>
 
-      <div className="card card-pad">
-        <SettingsSectionHeader
-          icon={ALargeSmall}
-          title="Размер текста в таблицах"
-          className="mb-3"
-        />
-        <p className="text-xs text-muted mb-4">
-          Размер шрифта в списках операций — лента «Операции», поиск, окно
-          операций (Drawer), дубликаты, корзина и подобные таблицы. Пять
-          градаций: от компактной до крупной.
-        </p>
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-muted text-[12px]" aria-hidden>
-              А
-            </span>
-            <input
-              type="range"
-              min={1}
-              max={5}
-              step={1}
-              value={tableFontLevel}
-              onChange={(e) =>
-                setTableFontLevel(Number(e.target.value) as TableFontLevel)
-              }
-              className="w-56 accent-accent cursor-pointer"
-              aria-label="Размер текста в таблицах"
+        <SettingRow
+          title="Тема"
+          status={
+            themeMode === "auto"
+              ? `Как в системе — сейчас ${resolvedTheme === "dark" ? "тёмная" : "светлая"}`
+              : themeMode === "dark"
+                ? "Тёмная"
+                : "Светлая"
+          }
+          help={
+            <p>
+              «Как в системе» следует за настройкой оформления в вашей ОС и
+              переключается вместе с ней — в том числе по расписанию, если оно
+              там настроено. Кнопка в шапке переключает между светлой и тёмной
+              напрямую.
+            </p>
+          }
+          control={
+            <Segmented
+              label="Тема оформления"
+              value={themeMode}
+              onChange={(m) => setThemeMode(m)}
+              options={[
+                { value: "light", label: "Светлая" },
+                { value: "dark", label: "Тёмная" },
+                { value: "auto", label: "Как в системе" },
+              ]}
             />
-            <span className="text-muted text-[18px]" aria-hidden>
-              А
+          }
+        />
+
+        <SettingRow
+          title="Дробная часть сумм"
+          status={`Например: ${formatMoney(1234.1, rates.base)}`}
+          help={
+            <p>
+              Показывать ли копейки, центы и прочую мелочь. Влияет на все суммы:
+              KPI, карточки, таблицы, операции и подсказки. На осях графиков
+              суммы всегда компактные — там дробная часть только мешает.
+            </p>
+          }
+          control={
+            <Segmented
+              label="Дробная часть сумм"
+              value={fractionDigits}
+              onChange={(v) => setFractionDigits(v)}
+              options={[
+                { value: 0, label: "1 234", title: "Без дробной части" },
+                { value: 2, label: "1 234,10", title: "С дробной частью" },
+              ]}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Строка из выписки"
+          status={
+            statementLine
+              ? "Показывается под контрагентом"
+              : "Скрыта — только название контрагента"
+          }
+          help={
+            <>
+              <p>
+                Под названием контрагента можно показывать то, что напечатал
+                банк, — поле <InfoTerm>«В выписке»</InfoTerm> из редактора
+                операции. Строка появляется только у операций с заполненным{" "}
+                <InfoTerm>«Местом платежа»</InfoTerm> и только когда текст банка
+                отличается от названия контрагента.
+              </p>
+              <p>
+                Пригодится, когда банк печатает не то, что вы видите в
+                контрагенте: у магазина в выписке может стоять номер терминала
+                («MARKET 1234 MOSCOW»), а у перевода по СБП — тот, кому деньги
+                ушли на самом деле. Если это только мешает — выключите, и в
+                списках останется одно название.
+              </p>
+            </>
+          }
+          control={
+            <Switch
+              checked={statementLine}
+              label="Показывать строку из выписки"
+              onChange={(next) => setStatementLine(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Размер текста в таблицах"
+          status={`${TABLE_FONT_LABELS[tableFontLevel]} (${tableFontLevel}/5)`}
+          help={
+            <p>
+              Размер шрифта в списках операций: лента «Операции», поиск, окно
+              операций, дубликаты, корзина и подобные таблицы. Остальной
+              интерфейс не меняется.
+            </p>
+          }
+          control={
+            <div className="flex items-center gap-2">
+              <span className="text-muted text-[12px]" aria-hidden>
+                А
+              </span>
+              <input
+                type="range"
+                min={1}
+                max={5}
+                step={1}
+                value={tableFontLevel}
+                onChange={(e) =>
+                  setTableFontLevel(Number(e.target.value) as TableFontLevel)
+                }
+                className="w-40 accent-accent cursor-pointer"
+                aria-label="Размер текста в таблицах"
+              />
+              <span className="text-muted text-[18px]" aria-hidden>
+                А
+              </span>
+            </div>
+          }
+        >
+          {/* Живой пример — на той же CSS-переменной, что и таблицы, поэтому
+              масштабируется прямо во время перетаскивания. */}
+          <div className="mt-3 rounded-lg border border-border bg-panel2/40 px-3 py-2 flex items-center justify-between gap-3">
+            <span
+              className="text-muted truncate"
+              style={{ fontSize: "var(--tbl-font)" }}
+            >
+              01.06.2026 · Пятёрочка · Еда дома
+            </span>
+            <span
+              className="tabular-nums font-medium text-expense whitespace-nowrap"
+              style={{ fontSize: "var(--tbl-font)" }}
+            >
+              −1 234 ₽
             </span>
           </div>
-          <span className="text-xs text-muted tabular-nums">
-            {TABLE_FONT_LABELS[tableFontLevel]} ({tableFontLevel}/5)
-          </span>
-        </div>
-        {/* Live preview — uses the live CSS var, so it rescales as you drag. */}
-        <div className="mt-4 rounded-lg border border-border bg-panel2/40 px-3 py-2 flex items-center justify-between gap-3">
-          <span
-            className="text-muted truncate"
-            style={{ fontSize: "var(--tbl-font)" }}
-          >
-            01.06.2026 · Пятёрочка · Еда дома
-          </span>
-          <span
-            className="tabular-nums font-medium text-expense whitespace-nowrap"
-            style={{ fontSize: "var(--tbl-font)" }}
-          >
-            −1 234 ₽
-          </span>
-        </div>
+        </SettingRow>
       </div>
 
       </>)}
@@ -1340,20 +1447,37 @@ export function ImportPage() {
           it sits first in the tab. */}
       {settingsTab === "processing" && (<>
 
+      {/* Одна карточка на всю вкладку: раньше это были три отдельных блока,
+          каждый с абзацем пояснений над контролом, и вкладка читалась как
+          стена текста. Здесь строки, а подробности — за знаками вопроса. */}
       <div className="card card-pad">
         <SettingsSectionHeader
-          icon={Coins}
-          title={zenToken ? "Валюта" : `Курсы валют (к ${rates.base})`}
-          className="mb-3"
+          icon={Calculator}
+          title="Как считать"
+          className="mb-1"
         />
-        <p className="text-xs text-muted mb-4">
-          {zenToken
-            ? "Курсы тянутся из Дзен-мани при каждой синхронизации — настраивать вручную не нужно. Здесь только выбор базовой валюты, в которой показываются KPI и графики."
-            : "Используются для сведения операций в разных валютах в единую базу. Меняйте здесь, если нужны точные курсы. Все суммы пересчитываются автоматически."}
+        <p className="text-xs text-muted mb-3">
+          Базовые правила, по которым собираются все KPI, графики и отчёты.
         </p>
-        <div className={zenToken ? "" : "mb-4"}>
-          <label className="label block mb-1">Базовая валюта</label>
-          <div className="flex items-center gap-2">
+
+        <SettingRow
+          title="Базовая валюта"
+          status={`Все суммы и графики показываются в ${rates.base}`}
+          help={
+            <>
+              <p>
+                Валюта, в которую сводятся операции всех остальных валют. Меняя
+                её, вы меняете только представление — сами операции остаются в
+                своих валютах.
+              </p>
+              <p>
+                {zenToken
+                  ? "Курсы приходят из Дзен-мани при каждой синхронизации, настраивать их вручную не нужно."
+                  : "В режиме CSV курсы задаются вручную ниже — по ним и сводятся суммы."}
+              </p>
+            </>
+          }
+          control={
             <div className="w-32">
               <Combobox
                 value={rates.base}
@@ -1365,95 +1489,36 @@ export function ImportPage() {
                 maxHeight="min(40vh, 280px)"
               />
             </div>
-            <span className="text-xs text-muted">
-              В этой валюте показываются все KPI и графики
-            </span>
-          </div>
-        </div>
-        {!zenToken && (() => {
-          // Priority currencies show up first; everything else stays
-          // hidden behind a "Показать ещё N" button so the section
-          // doesn't sprawl with rarely-used currencies on first open.
-          const priority = ["RUB", "USD", "EUR", "GBP"];
-          const allEntries = Object.entries(rates.rates).sort(([a], [b]) => {
-            const pa = priority.indexOf(a);
-            const pb = priority.indexOf(b);
-            if (pa !== -1 && pb !== -1) return pa - pb;
-            if (pa !== -1) return -1;
-            if (pb !== -1) return 1;
-            return a.localeCompare(b);
-          });
-          const visible = showAllRates ? allEntries : allEntries.slice(0, 4);
-          const hiddenCount = allEntries.length - visible.length;
-          return (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {visible.map(([cur, val]) => (
-                  <div key={cur}>
-                    <label className="label block mb-1">1 {cur} =</label>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={val}
-                        onChange={(e) => setRate(cur, Number(e.target.value) || 0)}
-                        disabled={cur === rates.base}
-                        className="input text-sm"
-                      />
-                      <span className="text-xs text-muted">{rates.base}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {(hiddenCount > 0 || showAllRates) && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllRates((v) => !v)}
-                  className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline"
-                >
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform ${
-                      showAllRates ? "rotate-180" : ""
-                    }`}
-                  />
-                  {showAllRates
-                    ? "Свернуть"
-                    : `Показать ещё ${hiddenCount} ${
-                        hiddenCount === 1
-                          ? "валюту"
-                          : hiddenCount < 5
-                            ? "валюты"
-                            : "валют"
-                      }`}
-                </button>
-              )}
-            </>
-          );
-        })()}
-      </div>
-
-      </>)}
-
-      {settingsTab === "processing" && (<>
-      {/* Отчётный период — поднят наверх, потому что это базовая
-          настройка, которая влияет на все KPI и графики. Дальше
-          идёт уже более точечная работа с получателями. */}
-      <div className="card card-pad">
-        <SettingsSectionHeader
-          icon={CalendarRange}
-          title="Первый день отчётного месяца"
-          className="mb-3"
+          }
         />
-        <p className="text-xs text-muted mb-3">
-          Многие ведут аналитику не «1 число — последнее число», а от зарплаты
-          до зарплаты — например с 11-го по 10-е. Здесь можно задать день, с
-          которого начинается ваш расчётный месяц. Влияет на: фильтр «Месяц»,
-          бары и таблицу Cash-flow, hero-KPI «Доход / Расход за …», «Топ-10
-          категорий за …» и drill-down по месяцу.
-        </p>
-        <div className="flex items-center gap-3 flex-wrap">
-          <label className="text-sm flex items-center gap-2">
-            <span className="text-muted">День месяца:</span>
+
+        <SettingRow
+          title="Первый день отчётного месяца"
+          status={
+            monthStartDay === 1
+              ? "Календарный месяц"
+              : `С ${monthStartDay}-го числа по ${monthStartDay - 1}-е следующего`
+          }
+          help={
+            <>
+              <p>
+                Многие ведут учёт не «с 1-го по последнее», а от зарплаты до
+                зарплаты — например с 11-го по 10-е. Здесь задаётся день, с
+                которого начинается ваш расчётный месяц.
+              </p>
+              <p>
+                Влияет на фильтр «Месяц», бары и таблицу Cash-flow, KPI «Доход /
+                Расход за …», «Топ-10 категорий» и переход в операции месяца.
+                «Год к году» и сезонность остаются по календарю: там месяц имеет
+                смысл только как календарный.
+              </p>
+              <p>
+                Допустимы значения 1–28. Числа 29, 30 и 31 есть не в каждом
+                месяце, поэтому их не предлагаем.
+              </p>
+            </>
+          }
+          control={
             <input
               type="number"
               min={1}
@@ -1463,67 +1528,139 @@ export function ImportPage() {
                 const n = Number(e.target.value);
                 if (Number.isFinite(n)) setMonthStartDay(n);
               }}
+              aria-label="День начала расчётного месяца"
               className="input text-sm w-20 tabular-nums"
             />
-          </label>
-          <span className="text-xs text-muted">
-            {monthStartDay === 1
-              ? "Календарный месяц (по умолчанию)."
-              : `Каждый период длится с ${monthStartDay}-го числа по ${monthStartDay - 1}-е следующего месяца.`}
-          </span>
-        </div>
-        <p className="text-[11px] text-muted mt-3">
-          Допустимы значения 1–28 (29/30/31 пропускаем — этих чисел нет в
-          каждом месяце). Год к году и сезонность остаются по календарю — там
-          месяц имеет смысл только как календарный.
-        </p>
+          }
+        />
+
+        <SettingRow
+          title="Счета вне баланса"
+          status={
+            includeOffBalance
+              ? "Учитываются в списках и в совокупном балансе"
+              : "Скрыты из списков и не входят в совокупный баланс"
+          }
+          help={
+            <>
+              <p>
+                В Дзен-мани счёт можно пометить как «вне баланса» — накопительные,
+                брокерские, всё, что вы не держите в повседневном балансе. По
+                умолчанию мы это повторяем: такие счета не мешаются в списках и
+                не попадают в «Совокупный баланс».
+              </p>
+              <p>
+                Переключатель влияет на списки счетов (Главная, «Счета») и на
+                совокупный баланс с графиком капитала. Цель FIRE настраивается
+                отдельно — там свой выбор счетов.
+              </p>
+            </>
+          }
+          control={
+            <Switch
+              checked={includeOffBalance}
+              label="Учитывать счета вне баланса"
+              onChange={async (next) => {
+                await setIncludeOffBalance(next);
+                // Пересобираем привязку баланса, чтобы «Совокупный баланс»
+                // обновился сразу (только режим API; для CSV — no-op).
+                await recalcBalanceCalibration();
+              }}
+            />
+          }
+        />
+
+        {!zenToken && (
+          <SettingRow
+            title="Курсы валют"
+            status={`Заданы вручную, к ${rates.base}`}
+            help={
+              <p>
+                В режиме CSV курсы неоткуда взять автоматически. Задайте те, по
+                которым хотите сводить суммы; при подключении Дзен-мани они
+                начнут приходить сами.
+              </p>
+            }
+          >
+            {(() => {
+              // Ходовые валюты сверху, остальные — за кнопкой: иначе строка
+              // разрастается редкими валютами при первом же открытии.
+              const priority = ["RUB", "USD", "EUR", "GBP"];
+              const allEntries = Object.entries(rates.rates).sort(([a], [b]) => {
+                const pa = priority.indexOf(a);
+                const pb = priority.indexOf(b);
+                if (pa !== -1 && pb !== -1) return pa - pb;
+                if (pa !== -1) return -1;
+                if (pb !== -1) return 1;
+                return a.localeCompare(b);
+              });
+              const visible = showAllRates ? allEntries : allEntries.slice(0, 4);
+              const hiddenCount = allEntries.length - visible.length;
+              return (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                    {visible.map(([cur, val]) => (
+                      <div key={cur}>
+                        <label className="label block mb-1">1 {cur} =</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={val}
+                            onChange={(e) => setRate(cur, Number(e.target.value) || 0)}
+                            disabled={cur === rates.base}
+                            className="input text-sm"
+                          />
+                          <span className="text-xs text-muted">{rates.base}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {(hiddenCount > 0 || showAllRates) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllRates((v) => !v)}
+                      className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                    >
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform ${
+                          showAllRates ? "rotate-180" : ""
+                        }`}
+                      />
+                      {showAllRates
+                        ? "Свернуть"
+                        : `Показать ещё ${hiddenCount} ${
+                            hiddenCount === 1
+                              ? "валюту"
+                              : hiddenCount < 5
+                                ? "валюты"
+                                : "валют"
+                          }`}
+                    </button>
+                  )}
+                </>
+              );
+            })()}
+          </SettingRow>
+        )}
       </div>
 
-      {/* Счета вне баланса — глобальный переключатель. Влияет на списки счетов
-          (Дашборд, Счета) и на «Совокупный баланс» / net-worth. */}
-      <div className="card card-pad">
-        <SettingsSectionHeader
-          icon={Wallet}
-          title="Счета вне баланса"
-          className="mb-3"
-        />
-        <p className="text-xs text-muted mb-3">
-          В Дзен-мани счёт можно пометить как «вне баланса» (накопительные,
-          брокерские — деньги, которые вы не держите в повседневном балансе). По
-          умолчанию такие счета скрыты в списках и не входят в «Совокупный
-          баланс». Включите, чтобы учитывать их везде.
-        </p>
-        <label className="flex items-center gap-3 p-3 bg-panel2 rounded-lg border border-border cursor-pointer">
-          <input
-            type="checkbox"
-            checked={includeOffBalance}
-            onChange={async (e) => {
-              await setIncludeOffBalance(e.target.checked);
-              // Re-anchor the net-worth calibration so «Совокупный баланс»
-              // updates immediately (API mode only; no-op for CSV).
-              await recalcBalanceCalibration();
-            }}
-            className="accent-accent w-4 h-4"
-          />
-          <div className="flex-1">
-            {/* Static label — the checkbox already carries the on/off state, a
-                label that renames itself just makes the row twitch. */}
-            <div className="font-medium text-sm">
-              Учитывать счета вне баланса
-            </div>
-            <div className="text-xs text-muted">
-              Влияет на списки счетов (Дашборд, «Счета») и на «Совокупный
-              баланс» / график net-worth. Цель FIRE настраивается отдельно
-              своим выбором счетов.
-            </div>
-          </div>
-        </label>
-      </div>
+      {/* «Группировка получателей» отключена (2026-08).
+          Её задачу лучше решает справочник контрагентов: там получатель —
+          настоящая запись Дзен-мани, переименование уезжает в облако и
+          действует у всех операций сразу, а «Без контрагента» разбирает
+          строки от банка адресно. Авто-нормализация же склеивала по догадке
+          и жила только в этом браузере.
+
+          Блок оставлен закомментированным: если решим вернуть — код здесь,
+          вместе с ним в `useDataStore` живут `payeeGroupingEnabled`,
+          `applyPayeeGrouping` и ручные алиасы.
+
 
       {/* Группировка получателей — единый блок: авто-нормализация +
           ручные правила. Раньше были две отдельные карточки, теперь
           объединены, потому что обе работают с одним и тем же
-          концептом (один и тот же payee, несколько написаний). */}
+          концептом (один и тот же payee, несколько написаний). *\/}
       {transactions.length > 0 && (
         <div className="card card-pad">
           <SettingsSectionHeader
@@ -1540,7 +1677,7 @@ export function ImportPage() {
             её переключателя.
           </p>
 
-          {/* — Auto grouping toggle — */}
+          {/* — Auto grouping toggle — *\/}
           <label className="flex items-center gap-3 p-3 bg-panel2 rounded-lg border border-border cursor-pointer">
             <input
               type="checkbox"
@@ -1595,13 +1732,13 @@ export function ImportPage() {
             </details>
           )}
 
-          {/* — Manual aliases — */}
+          {/* — Manual aliases — *\/}
           <div className="mt-5 pt-5 border-t border-border">
             <div className="text-sm font-medium mb-3">Ручные правила</div>
 
             {/* Add new alias. Combobox (not a native <input list>) so the
                 suggestions dropdown is width- and height-bounded — the
-                native datalist popup spilled across the whole viewport. */}
+                native datalist popup spilled across the whole viewport. *\/}
             <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto] items-center gap-2 mb-3">
               <Combobox
                 value={aliasFrom}
@@ -1631,7 +1768,7 @@ export function ImportPage() {
               </button>
             </div>
 
-            {/* Existing aliases */}
+            {/* Existing aliases *\/}
             {manualAliases.length === 0 ? (
               <div className="text-xs text-muted">
                 Пока нет ручных правил. Используйте поля выше, чтобы добавить
@@ -1669,6 +1806,11 @@ export function ImportPage() {
           </div>
         </div>
       )}
+      */}
+
+      {/* Разрезы — в самом низу: настройка редкая, а места занимает больше
+          остальных. Сверху то, что трогают чаще. */}
+      <SlicesSettings />
 
       </>)}
 

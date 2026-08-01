@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useDrillStore } from "../store/useDrillStore";
 import { useDataStore } from "../store/useDataStore";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { useEditsStore } from "../store/useEditsStore";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
@@ -53,6 +54,7 @@ function transferCounterparty(t: Transaction): string | null {
 export function TransactionsDrawer() {
   const { open, title, subtitle, transactions, close, show } = useDrillStore();
   const base = useDataStore((s) => s.rates.base);
+  const statementLine = useDisplayStore((s) => s.statementLine);
   const allTransactions = useDataStore((s) => s.transactions);
   const deleteTransaction = useDataStore((s) => s.deleteTransaction);
   const reapplyRules = useDataStore((s) => s.reapplyRules);
@@ -475,7 +477,7 @@ export function TransactionsDrawer() {
                     <td className="table-td max-w-[180px]">
                       {(() => {
                         const primary = displayPayee(t) || transferCounterparty(t) || "";
-                        const secondary = secondaryPayee(t);
+                        const secondary = statementLine ? secondaryPayee(t, "statement") : null;
                         const tooltip = secondary ? `${primary} — ${secondary}` : primary;
                         return (
                           <div className="min-w-0">

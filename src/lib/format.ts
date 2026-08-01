@@ -16,13 +16,24 @@ export function displayPayee(t: Pick<Transaction, "payee" | "brand">): string {
  * differs from the brand. Returns null if there's no brand or the
  * payee is already the same string — avoids the noisy "Wildberries /
  * Wildberries" double-render.
+ *
+ * Сравниваем нормализованно: «AliExpress» и «Aliexpress» — это одно и то же
+ * написание, и вторая строка под первой читалась как сбой, а не как полезная
+ * подробность. Разными считаем только те, что действительно различаются.
  */
-export function secondaryPayee(t: Pick<Transaction, "payee" | "brand">): string | null {
+export function secondaryPayee(
+  t: Pick<Transaction, "payee" | "brand" | "payeeRaw">,
+  /** `statement` — показывать строку из банковской выписки (`payeeRaw`)
+   *  вместо свободного текста получателя. Настройка «Оформления». */
+  source: "payee" | "statement" = "payee"
+): string | null {
   if (!t.brand) return null;
-  const payee = (t.payee || "").trim();
+  const secondary = ((source === "statement" ? t.payeeRaw : t.payee) || "").trim();
   const brand = t.brand.trim();
-  if (!payee || payee === brand) return null;
-  return payee;
+  if (!secondary) return null;
+  const norm = (v: string) => v.toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ");
+  if (norm(secondary) === norm(brand)) return null;
+  return secondary;
 }
 
 /**

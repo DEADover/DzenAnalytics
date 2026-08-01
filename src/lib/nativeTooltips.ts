@@ -107,10 +107,14 @@ function stash(el: HTMLElement): string | null {
 
 function restore(el: Element): void {
   const saved = el.getAttribute(STASH);
-  if (saved != null) {
-    el.setAttribute("title", saved);
-    el.removeAttribute(STASH);
-  }
+  if (saved == null) return;
+  // Пока подсказка висела, компонент мог перерисоваться и поставить НОВЫЙ
+  // `title` — так бывает у кнопок-переключателей, где текст зависит от
+  // состояния. Возвращать сохранённый в этом случае нельзя: затрём свежий
+  // текст старым, и React больше его не поправит — он уверен, что атрибут
+  // уже нужного значения. Поэтому кладём обратно, только если атрибута нет.
+  if (el.getAttribute("title") == null) el.setAttribute("title", saved);
+  el.removeAttribute(STASH);
 }
 
 function onOver(e: Event): void {

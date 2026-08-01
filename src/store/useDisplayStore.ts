@@ -49,45 +49,68 @@ interface DisplayState {
   fractionDigits: FractionDigits;
   /** Operation-table text size, 1 (small) … 5 (large). */
   tableFontLevel: TableFontLevel;
+  /**
+   * Что показывать второй строкой под контрагентом в ленте «Операции»:
+   * `false` — свободный текст получателя (как было), `true` — строку из
+   * банковской выписки. Второе полезно при оплате по СБП и через
+   * посредников: контрагент говорит «AliExpress», а деньги ушли «Сергей Г.».
+   */
+  statementLine: boolean;
   loaded: boolean;
   hydrate: () => Promise<void>;
   setFractionDigits: (n: FractionDigits) => Promise<void>;
   setTableFontLevel: (level: TableFontLevel) => Promise<void>;
+  setStatementLine: (on: boolean) => Promise<void>;
 }
 
 export const useDisplayStore = create<DisplayState>((set, get) => ({
   fractionDigits: 0,
   tableFontLevel: DEFAULT_TABLE_FONT_LEVEL,
+  statementLine: false,
   loaded: false,
 
   hydrate: async () => {
     const stored = await db.loadJSON<{
       fractionDigits?: number;
       tableFontLevel?: number;
+      statementLine?: boolean;
     }>(KEY);
     const fd: FractionDigits = stored?.fractionDigits === 2 ? 2 : 0;
     const level = normalizeLevel(stored?.tableFontLevel);
     setMoneyFractionDigits(fd); // sync the formatter before first paint
     applyTableFont(level); // sync the CSS var before first paint
-    set({ fractionDigits: fd, tableFontLevel: level, loaded: true });
+    set({
+      fractionDigits: fd,
+      tableFontLevel: level,
+      statementLine: stored?.statementLine === true,
+      loaded: true,
+    });
   },
 
   setFractionDigits: async (n) => {
     setMoneyFractionDigits(n); // update the formatter FIRST…
     set({ fractionDigits: n }); // …then trigger a re-render of subscribers
-    await db.saveJSON(KEY, {
-      fractionDigits: n,
-      tableFontLevel: get().tableFontLevel,
-    });
+    await db.saveJSON(KEY, { ...persisted(get()), fractionDigits: n });
   },
 
   setTableFontLevel: async (level) => {
     const lvl = normalizeLevel(level);
     applyTableFont(lvl);
     set({ tableFontLevel: lvl });
-    await db.saveJSON(KEY, {
-      fractionDigits: get().fractionDigits,
-      tableFontLevel: lvl,
-    });
+    await db.saveJSON(KEY, { ...persisted(get()), tableFontLevel: lvl });
+  },
+
+  setStatementLine: async (on) => {
+    set({ statementLine: on });
+    await db.saveJSON(KEY, { ...persisted(get()), statementLine: on });
   },
 }));
+
+/** Всё, что кладём в IDB, — одним местом, чтобы сеттеры не забывали поля. */
+function persisted(s: DisplayState) {
+  return {
+    fractionDigits: s.fractionDigits,
+    tableFontLevel: s.tableFontLevel,
+    statementLine: s.statementLine,
+  };
+}

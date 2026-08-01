@@ -3,7 +3,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
-import { useAnalyticsExclusionStore } from "../store/useAnalyticsExclusionStore";
+import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import {
   getLiveAccountsFromCache,
   type LiveAccount,
@@ -31,9 +31,11 @@ export function useHealthScore(): HealthScore | null {
   const metaLoaded = useCategoryMetaStore((s) => s.loaded);
   const hydrateMeta = useCategoryMetaStore((s) => s.hydrate);
   const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
-  const excluded = useAnalyticsExclusionStore((s) => s.excluded);
-  const exclLoaded = useAnalyticsExclusionStore((s) => s.loaded);
-  const hydrateExcl = useAnalyticsExclusionStore((s) => s.hydrate);
+  const slices = useSlicesStore((s) => s.slices);
+  const activeId = useSlicesStore((s) => s.activeId);
+  const exclLoaded = useSlicesStore((s) => s.loaded);
+  const hydrateExcl = useSlicesStore((s) => s.hydrate);
+  const slice = activeSlice({ slices, activeId });
   const [liveAccounts, setLiveAccounts] = useState<LiveAccount[] | null>(null);
 
   useEffect(() => {
@@ -68,12 +70,11 @@ export function useHealthScore(): HealthScore | null {
     // Savings-rate / obligatory-share metrics ignore turnover + off-balance
     // flows the user excluded (#14). Emergency-fund cushion (extraLiquid) is a
     // BALANCE and stays untouched — off-balance accounts still count there.
-    const offBalanceTitles = offBalance.length
-      ? new Set(offBalance.map((a) => a.title))
-      : undefined;
+    const skipAccounts = new Set(slice.excludedAccounts);
+    for (const a of offBalance) skipAccounts.add(a.title);
     const scored = stripFromAnalytics(transactions, {
-      excludedCategories: excluded,
-      offBalanceTitles,
+      excludedCategories: new Set(slice.excludedCategories),
+      offBalanceTitles: skipAccounts.size ? skipAccounts : undefined,
     });
 
     return computeHealthScore({
@@ -91,6 +92,6 @@ export function useHealthScore(): HealthScore | null {
     categoryMeta,
     includeOffBalance,
     liveAccounts,
-    excluded,
+    slice,
   ]);
 }

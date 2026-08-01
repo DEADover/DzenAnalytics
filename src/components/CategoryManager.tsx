@@ -30,7 +30,7 @@ import {
 } from "../store/useZenmoneyStore";
 import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
-import { useAnalyticsExclusionStore } from "../store/useAnalyticsExclusionStore";
+import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { useNewCategoriesStore, type NewCategory } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { useDataStore } from "../store/useDataStore";
@@ -95,8 +95,12 @@ export function CategoryManager() {
   }, [transactions]);
   // «Не учитывать в аналитике» set (#14). Keyed the same way as categoryMeta:
   // root by title, sub by «Родитель / Подкатегория».
-  const excluded = useAnalyticsExclusionStore((s) => s.excluded);
-  const toggleExcluded = useAnalyticsExclusionStore((s) => s.toggle);
+  // Галочка правит АКТИВНЫЙ разрез — в шапке колонки написано, какой именно.
+  const sliceList = useSlicesStore((s) => s.slices);
+  const sliceActiveId = useSlicesStore((s) => s.activeId);
+  const toggleExcluded = useSlicesStore((s) => s.toggleCategory);
+  const slice = activeSlice({ slices: sliceList, activeId: sliceActiveId });
+  const excluded = useMemo(() => new Set(slice.excludedCategories), [slice]);
 
   // (Re)load the category tags from cache. Re-runs after a sync (serverTimestamp
   // bumps) so freshly-pulled `required` values show up.
@@ -474,8 +478,8 @@ export function CategoryManager() {
                           aria-pressed={rExcluded}
                           title={
                             rExcluded
-                              ? "Исключена из аналитики (вместе с подкатегориями) — вернуть"
-                              : "Учитывается в аналитике — исключить (оборот / взаимозачёт)"
+                              ? `Не учитывается в аналитике вместе с подкатегориями (Разрез «${slice.name}»)`
+                              : `Учитывается в аналитике (Разрез «${slice.name}»)`
                           }
                           aria-label={
                             rExcluded ? "Вернуть категорию в аналитику" : "Исключить категорию из аналитики"
@@ -618,8 +622,8 @@ export function CategoryManager() {
                                     rExcluded
                                       ? "Исключена вместе с родительской категорией"
                                       : cOwnExcluded
-                                        ? "Исключена из аналитики — вернуть"
-                                        : "Учитывается в аналитике — исключить (оборот / взаимозачёт)"
+                                        ? `Не учитывается в аналитике (Разрез «${slice.name}»)`
+                                        : `Учитывается в аналитике (Разрез «${slice.name}»)`
                                   }
                                   aria-label={
                                     cExcluded

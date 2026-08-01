@@ -53,7 +53,7 @@ import { installNativeTooltips } from "./lib/nativeTooltips";
 import { useDisplayStore } from "./store/useDisplayStore";
 import { useReportPeriodStore } from "./store/useReportPeriodStore";
 import { useOffBalanceStore } from "./store/useOffBalanceStore";
-import { useAnalyticsExclusionStore } from "./store/useAnalyticsExclusionStore";
+import { useSlicesStore } from "./store/useSlicesStore";
 import { useNewCategoriesStore } from "./store/useNewCategoriesStore";
 import {
   useCounterpartyEditsStore,
@@ -112,7 +112,7 @@ function App() {
     useBudgetEditsStore.getState().hydrate();
     useDisplayStore.getState().hydrate();
     useOffBalanceStore.getState().hydrate();
-    useAnalyticsExclusionStore.getState().hydrate();
+    useSlicesStore.getState().hydrate();
     useNewCategoriesStore.getState().hydrate();
     useCounterpartyEditsStore.getState().hydrate();
     useTagDeletionsStore.getState().hydrate();
@@ -343,7 +343,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col">
       <TopNav onOpenPalette={() => setPaletteOpen(true)} />
-      <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 md:px-6 py-4 md:py-6">
+      <main className="flex-1 w-full px-4 md:px-6 py-4 md:py-6">
         <Routes>
           <Route element={<PlainLayout />}>
             <Route path="/" element={<DashboardPage />} />
@@ -387,7 +387,7 @@ function App() {
         </Routes>
       </main>
       <footer className="border-t border-border mt-4">
-        <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-3 flex items-center justify-center gap-2.5 text-xs text-muted">
+        <div className="w-full px-4 md:px-6 py-3 flex items-center justify-center gap-2.5 text-xs text-muted">
           <span>
             DzenAnalytics{" "}
             <span className="tabular-nums">v{__APP_VERSION__}</span>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, RotateCcw, Undo2, Info } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDeletedPayloadsStore } from "../store/useDeletedPayloadsStore";
@@ -37,6 +38,7 @@ import type { Transaction } from "../types";
 export function TrashPage() {
   const transactionsRaw = useDataStore((s) => s.transactionsRaw);
   const rates = useDataStore((s) => s.rates);
+  const statementLine = useDisplayStore((s) => s.statementLine);
   const restoreTransaction = useDataStore((s) => s.restoreTransaction);
   const restoreTransactionMany = useDataStore((s) => s.restoreTransactionMany);
   const purgeDeleted = useDataStore((s) => s.purgeDeleted);
@@ -205,7 +207,7 @@ export function TrashPage() {
             <tbody>
               {deletedTxs.map((t) => {
                 const primary = displayPayee(t) || "";
-                const secondary = secondaryPayee(t);
+                const secondary = statementLine ? secondaryPayee(t, "statement") : null;
                 return (
                   <tr key={t.id} className="align-middle">
                     <td className="table-td whitespace-nowrap text-muted">

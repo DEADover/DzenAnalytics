@@ -11,6 +11,7 @@ import {
   Legend,
 } from "recharts";
 import { useDataStore } from "../store/useDataStore";
+import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { computeKPI, groupByCategory } from "../lib/aggregations";
@@ -141,7 +142,9 @@ function Delta({ a, b, invert = false }: { a: number; b: number; invert?: boolea
 }
 
 export function ComparePage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Сравнение периодов — это доходы и расходы, поэтому обороты и взаимозачёты
+  // из него исключаются так же, как из остальных сводных виджетов (#14).
+  const transactions = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
   const filters = useFiltersStore();
 

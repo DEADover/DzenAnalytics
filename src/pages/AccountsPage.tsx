@@ -11,11 +11,13 @@ import {
   ComposedChart,
   type TooltipContentProps,
 } from "recharts";
+import clsx from "clsx";
 import type { LucideIcon } from "lucide-react";
 import {
   Wallet,
   List,
   Scale,
+  Eye,
   EyeOff,
   PiggyBank,
   Layers,
@@ -40,6 +42,7 @@ import { useFiltersStore, applyFilters, FILTER_NONE } from "../store/useFiltersS
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
+import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { confirm } from "../store/useConfirmStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
@@ -287,7 +290,7 @@ function SortTh({
   children,
 }: {
   sortKey: SortBy;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
   active: SortBy;
   dir: SortDir;
   onSort: (key: SortBy) => void;
@@ -297,7 +300,7 @@ function SortTh({
   const Arrow = dir === "asc" ? ArrowUp : ArrowDown;
   return (
     <th
-      className={`table-th ${align === "right" ? "text-right" : ""}`}
+      className={`table-th ${align === "right" ? "text-right" : align === "center" ? "text-center" : ""}`}
       aria-sort={on ? (dir === "asc" ? "ascending" : "descending") : "none"}
     >
       {/* `uppercase` повторяется здесь не зря: браузер сбрасывает
@@ -416,6 +419,22 @@ export function AccountsPage() {
   const showDrill = useDrillStore((s) => s.show);
   const calibration = useCalibrationStore((s) => s.calibration);
   const setCalibration = useCalibrationStore((s) => s.set);
+  // Активный разрез: галочка «В аналитике» у счёта правит именно его (#14).
+  const sliceList = useSlicesStore((s) => s.slices);
+  const sliceActiveId = useSlicesStore((s) => s.activeId);
+  const setSliceAccounts = useSlicesStore((s) => s.setAccounts);
+  const currentSlice = activeSlice({ slices: sliceList, activeId: sliceActiveId });
+  const sliceName = currentSlice.name;
+  const sliceExcludedAccounts = useMemo(
+    () => new Set(currentSlice.excludedAccounts),
+    [currentSlice]
+  );
+  const toggleSliceAccount = (title: string) => {
+    const next = new Set(sliceExcludedAccounts);
+    if (next.has(title)) next.delete(title);
+    else next.add(title);
+    return setSliceAccounts(currentSlice.id, [...next]);
+  };
   const clearCalibration = useCalibrationStore((s) => s.clear);
   const hydrateCalibration = useCalibrationStore((s) => s.hydrate);
   // API auto-calibrates on every sync — hide the manual UI when connected.
@@ -1545,7 +1564,7 @@ export function AccountsPage() {
                 overflows its cell (which would force a horizontal scrollbar). */}
             <table
               className={`w-full text-base table-fixed ${
-                hasForeignCurrency ? "min-w-[1180px]" : "min-w-[1090px]"
+                hasForeignCurrency ? "min-w-[1212px]" : "min-w-[1122px]"
               }`}
             >
               <colgroup>
@@ -1559,7 +1578,7 @@ export function AccountsPage() {
                 <col style={{ width: 130 }} />
                 <col style={{ width: 126 }} />
                 <col style={{ width: 96 }} />
-                <col style={{ width: 88 }} />
+                <col style={{ width: 120 }} />
               </colgroup>
               <thead>
                 <tr>
@@ -1581,7 +1600,7 @@ export function AccountsPage() {
                   <SortTh sortKey="delta" align="right" {...sortHead}>
                     Δ Период
                   </SortTh>
-                  <SortTh sortKey="count" align="right" {...sortHead}>
+                  <SortTh sortKey="count" align="center" {...sortHead}>
                     Операции
                   </SortTh>
                   <th className="table-th text-center">Действия</th>
@@ -1689,7 +1708,7 @@ export function AccountsPage() {
                       >
                         {formatMoney(a.delta, base, { signed: true })}
                       </td>
-                      <td className="table-td text-right tabular-nums text-muted">
+                      <td className="table-td text-center tabular-nums text-muted">
                         {formatNum(a.count)}
                       </td>
                       <td className="table-td">
@@ -1704,6 +1723,38 @@ export function AccountsPage() {
                             aria-label="Список операций"
                           >
                             <List className="w-4 h-4" />
+                          </button>
+                          {/* Исключение счёта из сводной аналитики — та же
+                              галочка «В аналитике», что у категорий, и правит
+                              она активный разрез (#14). */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void toggleSliceAccount(a.account);
+                            }}
+                            aria-pressed={sliceExcludedAccounts.has(a.account)}
+                            className={clsx(
+                              "btn-ghost !p-1.5",
+                              sliceExcludedAccounts.has(a.account)
+                                ? "text-warn bg-warn/10"
+                                : "text-muted hover:text-accent"
+                            )}
+                            title={
+                              sliceExcludedAccounts.has(a.account)
+                                ? `Не учитывается в аналитике (Разрез «${sliceName}»)`
+                                : `Учитывается в аналитике (Разрез «${sliceName}»)`
+                            }
+                            aria-label={
+                              sliceExcludedAccounts.has(a.account)
+                                ? "Вернуть счёт в аналитику"
+                                : "Исключить счёт из аналитики"
+                            }
+                          >
+                            {sliceExcludedAccounts.has(a.account) ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
                           </button>
                           {/* Редактор счёта — следующая итерация. Кнопка стоит
                               только у настоящих счетов из Дзен-мани: у строки,

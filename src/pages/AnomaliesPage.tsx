@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Zap, TrendingUp } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
+import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../store/useDrillStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -15,7 +16,9 @@ import { EmptyState } from "../components/EmptyState";
 import { Stat } from "../components/Stat";
 
 export function AnomaliesPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Обороты и взаимозачёты не аномалии, а шум: категории, помеченные «не
+  // учитывать в аналитике», и внебалансовые счета до детектора не доходят (#14).
+  const transactions = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
   const showDrill = useDrillStore((s) => s.show);
   const filters = useFiltersStore();
