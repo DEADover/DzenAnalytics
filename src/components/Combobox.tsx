@@ -44,6 +44,15 @@ export interface ComboboxProps {
    */
   portal?: boolean;
   /**
+   * Разрешить НАБОР для поиска, оставив выбор только из списка.
+   *
+   * Отличается от `allowCustom`: там введённый текст сразу становится
+   * значением, здесь он лишь сужает список, а значением становится выбранный
+   * пункт. Нужно спискам на десятки строк — крутить их до нужного дольше, чем
+   * набрать три буквы. Незакрытый набор при уходе из поля откатывается.
+   */
+  searchable?: boolean;
+  /**
    * Неизменяемый знак в начале поля — например «#» у хэштега.
    *
    * Рисуется поверх поля и не участвует в значении: в `value` и в списке
@@ -73,6 +82,7 @@ export function Combobox({
   clearable = false,
   portal = false,
   prefix,
+  searchable = false,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
@@ -109,10 +119,17 @@ export function Combobox({
       // закрывал бы список раньше, чем срабатывал сам выбор.
       if (popupRef.current?.contains(target)) return;
       setOpen(false);
+      // Недонабранный запрос — не значение. Ушли из поля, ничего не выбрав —
+      // возвращаем то, что выбрано на самом деле, иначе в поле остался бы
+      // обрывок вроде «нал», которого нет ни в списке, ни в данных.
+      if (searchable && !allowCustom) {
+        setQuery(value);
+        setFiltering(false);
+      }
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
-  }, [open]);
+  }, [open, searchable, allowCustom, value]);
 
   useLayoutEffect(() => {
     if (!open || !portal) {
@@ -189,27 +206,38 @@ export function Combobox({
         <input
           value={query}
           onChange={(e) => {
-            if (!allowCustom) return;
+            if (!allowCustom && !searchable) return;
             setQuery(e.target.value);
-            onChange(e.target.value);
+            // В режиме поиска набранное — это запрос, а не значение: наружу
+            // уходит только выбранный из списка пункт.
+            if (allowCustom) onChange(e.target.value);
             setFiltering(true);
             if (!open) setOpen(true);
           }}
-          readOnly={!allowCustom}
+          readOnly={!allowCustom && !searchable}
           onFocus={() => {
             setFiltering(false);
             setOpen(true);
           }}
           onClick={() => {
-            setFiltering(false);
             setOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && open) {
+              e.stopPropagation();
+              setOpen(false);
+              if (searchable && !allowCustom) {
+                setQuery(value);
+                setFiltering(false);
+              }
+            }
           }}
           placeholder={placeholder}
           // Extra right-padding when the clear-X is showing, otherwise
           // the typed value collides with two stacked icons.
           // `h-10` — та же высота, что задаёт себе `Select`: в строке действия
           // они стоят рядом, и разница в пиксель читается как перекос.
-          className={`input h-10 text-sm w-full ${clearable && value ? "pr-12" : "pr-7"} ${!allowCustom ? "cursor-pointer" : ""} ${prefix ? "pl-7" : ""}`}
+          className={`input h-10 text-sm w-full ${clearable && value ? "pr-12" : "pr-7"} ${!allowCustom && !searchable ? "cursor-pointer" : ""} ${prefix ? "pl-7" : ""}`}
         />
         {prefix && (
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none">

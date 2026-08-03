@@ -258,6 +258,10 @@ export function HashtagRenameModal({
                 options={otherHashtags}
                 onChange={setMergeTo}
                 allowCustom={false}
+                // Набор фильтрует список, но значением становится только
+                // выбранный тег: тегов бывают десятки, крутить их дольше,
+                // чем набрать три буквы.
+                searchable
                 clearable
                 prefix="#"
                 // Тело окна прокручиваемое — без портала список тегов
@@ -265,7 +269,7 @@ export function HashtagRenameModal({
                 portal
                 placeholder={
                   otherHashtags.length > 0
-                    ? "Выберите существующий тег"
+                    ? "Найдите или выберите тег"
                     : "Других тегов пока нет"
                 }
               />
