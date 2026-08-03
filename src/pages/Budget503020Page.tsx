@@ -113,7 +113,7 @@ export function Budget503020Page() {
         hint="Нужды / желания / сбережения против бюджетного ориентира 50/30/20."
         right={<PeriodPills value={period} onChange={setPeriod} />}
       />
-      <GlobalFilters showDateRange={false} />
+      <GlobalFilters showDateRange={false} dateRangeHint="Правило 50/30/20 считается за месяц, выбранный ниже" />
 
       <details className="card card-pad text-sm group">
         <summary className="cursor-pointer flex items-center gap-2 font-medium list-none">

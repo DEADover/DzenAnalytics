@@ -1258,16 +1258,26 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       //    intent now lives in cloud truth (and in our cache), so
       //    applying it on top again would be a no-op at best, or worse
       //    re-introduce a stale value if cloud later changes the field.
-      for (const item of toPush) {
-        await useEditsStore.getState().clearEdit(item.id);
-      }
-      // Time-recreates clear the overlay on their OLD id — its intent now lives
-      // in the freshly-created new-id row. Leaving it would re-trigger the
-      // recreate on every push (minting the same derived id → server upsert, but
-      // still churn) since the old id is gone from cache.
-      for (const r of recreates) {
-        await useEditsStore.getState().clearEdit(r.oldId);
-      }
+      //
+      //    Снимаем ОДНОЙ операцией, а не циклом по одной правке. Каждый
+      //    `clearEdit` копирует всю карту правок, пишет её в IndexedDB и
+      //    дёргает `set()` — то есть перерисовывает всех подписчиков: счётчик
+      //    в шапке, ленту операций, открытый список изменений. На сотне правок
+      //    (а массовое переименование хэштега делает их пачками) это сотня
+      //    записей и сотня перерисовок — заметная заморозка ровно в момент
+      //    завершения отправки.
+      //
+      //    Побочно чинится лишний пуш: подписка в `App.tsx` перевзводит
+      //    двухсекундный таймер автоотправки, пока карта не опустела. При
+      //    очистке по одной она пустела только на последней итерации, и через
+      //    пару секунд уходил ещё один `pushPendingEdits` — он завершался по
+      //    «нечего отправлять», но успевал сделать полный `fetchDiff`.
+      //
+      //    Time-recreates снимают накладку со СТАРОГО id: её смысл теперь живёт
+      //    в свежесозданной строке с новым id. Оставь мы её — пересоздание
+      //    повторялось бы на каждом пуше, ведь старого id в кэше уже нет.
+      const pushedIds = [...toPush.map((i) => i.id), ...recreates.map((r) => r.oldId)];
+      await useEditsStore.getState().clearMany(pushedIds);
 
       // 5b) Drop drafts that now live in the cloud (sent + echoed, or stale
       //     ones that were already there). The mapper re-creates them from

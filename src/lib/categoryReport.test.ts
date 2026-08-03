@@ -87,9 +87,10 @@ describe("categoryReport — сборка таблицы", () => {
     expect(parent.depth).toBe(0);
     expect(parent.total).toBe(400);
     expect(parent.ownTotal).toBe(50);
+    // По алфавиту, а не по сумме: «Кафе» дешевле «Продуктов», но идёт первым.
     expect(kids.map((k) => [k.label, k.total, k.depth])).toEqual([
-      ["Продукты", 250, 1],
       ["Кафе", 100, 1],
+      ["Продукты", 250, 1],
     ]);
     // Итог группы = сумма родительских строк, дети не считаются дважды.
     expect(r.expenseTotal).toBe(400);
@@ -137,5 +138,124 @@ describe("categoryReport — сборка таблицы", () => {
     expect(r.income).toEqual([]);
     expect(r.expense).toEqual([]);
     expect(r.netTotal).toBe(0);
+  });
+});
+
+describe("categoryReport — порядок строк", () => {
+  it("строки идут по алфавиту, а не по сумме", () => {
+    const t = [
+      tx({ date: "2026-07-01", amountBase: 1, category: "Автомобиль" }),
+      tx({ date: "2026-07-01", amountBase: 999, category: "Яблоки" }),
+      tx({ date: "2026-07-01", amountBase: 500, category: "Бензин" }),
+    ];
+    expect(buildCategoryReport(t, "month", 1).expense.map((x) => x.label)).toEqual([
+      "Автомобиль",
+      "Бензин",
+      "Яблоки",
+    ]);
+  });
+
+  it("подкатегории тоже идут по алфавиту под своим родителем", () => {
+    const t = [
+      tx({ date: "2026-07-01", amountBase: 10, category: "Еда", subcategory: "Ресторан" }),
+      tx({ date: "2026-07-01", amountBase: 900, category: "Еда", subcategory: "Кафе" }),
+    ];
+    const r = buildCategoryReport(t, "month", 1);
+    expect(r.expense.map((x) => x.label)).toEqual(["Еда", "Кафе", "Ресторан"]);
+  });
+
+  it("«Без категории» остаётся последней, а не всплывает к «Б»", () => {
+    const t = [
+      tx({ date: "2026-07-01", amountBase: 10, category: "Без категории" }),
+      tx({ date: "2026-07-01", amountBase: 10, category: "Автомобиль" }),
+      tx({ date: "2026-07-01", amountBase: 10, category: "Яблоки" }),
+    ];
+    const r = buildCategoryReport(t, "month", 1);
+    expect(r.expense.map((x) => x.label)).toEqual([
+      "Автомобиль",
+      "Яблоки",
+      "Без категории",
+    ]);
+  });
+
+  it("порядок не зависит от сумм — при их смене строки не переезжают", () => {
+    const at = (a: number, b: number) =>
+      buildCategoryReport(
+        [
+          tx({ date: "2026-07-01", amountBase: a, category: "Автомобиль" }),
+          tx({ date: "2026-07-01", amountBase: b, category: "Яблоки" }),
+        ],
+        "month",
+        1
+      ).expense.map((x) => x.label);
+    expect(at(1, 999)).toEqual(at(999, 1));
+  });
+});
+
+describe("categoryReport — что может и чего не может пропасть из отчёта", () => {
+  // Регрессия на жалобу «в отчёте не видно категорию Зарплата» (issue #37).
+  // Сама пропажа была визуальной — шапка таблицы накрывала первую строку блока
+  // «Доход». Эти тесты закрепляют, что на уровне ДАННЫХ доходную категорию
+  // выкинуть нечем, и заодно перечисляют два случая, когда операция в отчёт
+  // действительно не попадает.
+  it("доходная категория попадает в отчёт при любой сумме", () => {
+    for (const amountBase of [1, 0.5, 180000]) {
+      const r = buildCategoryReport(
+        [tx({ date: "2026-07-05", amountBase, category: "Зарплата", kind: "income" })],
+        "month",
+        1
+      );
+      expect(r.income.map((x) => x.label)).toContain("Зарплата");
+    }
+  });
+
+  it("доход с нулевой суммой строку всё равно создаёт", () => {
+    const r = buildCategoryReport(
+      [tx({ date: "2026-07-05", amountBase: 0, category: "Зарплата", kind: "income" })],
+      "month",
+      1
+    );
+    expect(r.income.map((x) => x.label)).toContain("Зарплата");
+  });
+
+  it("доход остаётся в отчёте вместе с подкатегорией", () => {
+    const r = buildCategoryReport(
+      [
+        tx({ date: "2026-07-05", amountBase: 100, category: "Зарплата", kind: "income" }),
+        tx({
+          date: "2026-07-06",
+          amountBase: 50,
+          category: "Зарплата",
+          subcategory: "Премия",
+          kind: "income",
+        }),
+      ],
+      "month",
+      1
+    );
+    expect(r.income.map((x) => x.label)).toEqual(["Зарплата", "Премия"]);
+    // Сумма родителя включает подкатегорию.
+    expect(r.income[0].total).toBe(150);
+  });
+
+  it("перевод между своими счетами в отчёт не попадает вовсе", () => {
+    const r = buildCategoryReport(
+      [tx({ date: "2026-07-05", amountBase: 180000, category: "Зарплата", kind: "transfer" })],
+      "month",
+      1
+    );
+    expect(r.income).toEqual([]);
+    expect(r.expense).toEqual([]);
+  });
+
+  it("возврат уходит в расход отрицательной суммой, а не в доход", () => {
+    const r = buildCategoryReport(
+      [tx({ date: "2026-07-05", amountBase: 500, category: "Зарплата", kind: "refund" })],
+      "month",
+      1
+    );
+    expect(r.income).toEqual([]);
+    expect(r.expense.map((x) => x.label)).toEqual(["Зарплата"]);
+    expect(r.expense[0].total).toBe(-500);
   });
 });

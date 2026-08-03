@@ -188,7 +188,7 @@ export function CalendarPage() {
       <PageHeader
         icon={CalendarDays}
         title="Календарь"
-        hint={`Тепловая карта по дням года. Клик по дню — операции.`}
+        hint="Тепловая карта по дням года. Клик по дню — операции."
         right={
           <div className="flex flex-wrap gap-2 items-center">
             <div className="flex bg-panel2 rounded-lg p-1 border border-border">
@@ -225,7 +225,7 @@ export function CalendarPage() {
           </div>
         }
       />
-      <GlobalFilters showDateRange={false} />
+      <GlobalFilters showDateRange={false} dateRangeHint="Период задаётся календарём ниже" />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="card card-pad">

@@ -7,10 +7,12 @@ import { useDataStore } from "../store/useDataStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useFiltersStore, applyFilters, presetToRange } from "../store/useFiltersStore";
-import { periodRange, shiftPeriod } from "../lib/period";
+import { previousWindows } from "../lib/period";
+import { buildHierarchy, type CategoryNode } from "../lib/aggregations";
+import { DeviationPill } from "../components/DeviationPill";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
-import { affectsExpense, expenseDelta } from "../lib/txKindStyle";
+import { affectsExpense } from "../lib/txKindStyle";
 import { colorForCategory, subcategoryColor } from "../lib/categoryColor";
 import { formatMoney, formatPct, currencySymbol } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
@@ -276,56 +278,6 @@ function TreemapCell({
 
 type View = "rings" | "treemap" | "bars";
 
-interface SubNode {
-  name: string;
-  fullName: string;
-  total: number;
-  count: number;
-}
-interface CategoryNode {
-  name: string;
-  total: number;
-  count: number;
-  subs: SubNode[];
-}
-
-function buildHierarchy(txs: Transaction[], kind: "expense" | "income"): CategoryNode[] {
-  const map = new Map<string, CategoryNode>();
-  for (const t of txs) {
-    // For the expense view, include refunds (signed negative) so a
-    // returned purchase shrinks the category's bar in the hierarchy.
-    // Income view stays strict — refunds are not income.
-    const include = kind === "expense" ? affectsExpense(t.kind) : t.kind === kind;
-    if (!include) continue;
-    const delta = kind === "expense" ? expenseDelta(t) : t.amountBase;
-    let node = map.get(t.category);
-    if (!node) {
-      node = { name: t.category, total: 0, count: 0, subs: [] };
-      map.set(t.category, node);
-    }
-    node.total += delta;
-    node.count++;
-    if (t.subcategory) {
-      let sub = node.subs.find((s) => s.name === t.subcategory);
-      if (!sub) {
-        sub = { name: t.subcategory, fullName: t.categoryFull, total: 0, count: 0 };
-        node.subs.push(sub);
-      }
-      sub.total += delta;
-      sub.count++;
-    }
-  }
-  for (const node of map.values()) {
-    node.subs.sort((a, b) => b.total - a.total);
-  }
-  // Drop categories that fully cancel out (sum exactly 0); but keep
-  // negative ones — those are a useful flag that "категория ушла
-  // в минус из-за возвратов" and the user might want to look.
-  return Array.from(map.values())
-    .filter((n) => n.total !== 0)
-    .sort((a, b) => b.total - a.total);
-}
-
 export function CategoriesPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
@@ -385,26 +337,15 @@ export function CategoriesPage() {
     };
     if (!curRange.from || !curRange.to) return empty;
 
-    // Build the N previous windows.
-    const windows: { from: string; to: string }[] = [];
-    if (filters.preset === "month" && filters.monthYM) {
-      for (let k = 1; k <= avgMonths; k++) {
-        windows.push(periodRange(shiftPeriod(filters.monthYM, -k), monthStartDay));
-      }
-    } else {
-      const fromD = new Date(curRange.from);
-      const toD = new Date(curRange.to);
-      const lenDays =
-        Math.round((toD.getTime() - fromD.getTime()) / 86_400_000) + 1;
-      const iso = (d: Date) => d.toISOString().slice(0, 10);
-      for (let k = 1; k <= avgMonths; k++) {
-        const f = new Date(fromD);
-        f.setDate(f.getDate() - lenDays * k);
-        const t = new Date(toD);
-        t.setDate(t.getDate() - lenDays * k);
-        windows.push({ from: iso(f), to: iso(t) });
-      }
-    }
+    // N предыдущих окон. Общая функция с «Сравнением периодов», где на том же
+    // среднем строится период Б, — чтобы два экрана не разошлись в том, что
+    // считают «предыдущими месяцами».
+    const windows = previousWindows(
+      { from: curRange.from, to: curRange.to },
+      avgMonths,
+      filters.preset === "month" ? filters.monthYM : null,
+      monthStartDay
+    );
 
     // Sum each category/subcategory across all windows, then divide by N.
     const catSum = new Map<string, number>();
@@ -438,28 +379,20 @@ export function CategoriesPage() {
   // than usual is «bad» (red), less is «good» (green); income is the other way
   // round. A category with no baseline (brand-new, nothing in the prior
   // windows) reads as fully above average → «∞» in percent mode.
+  /** Отклонение от среднего за N месяцев. Разметка — общая с «Сравнением». */
   function devPill(cur: number, avg: number | undefined) {
-    if (!avgComp.comparable) return <span className="text-muted">—</span>;
-    const base0 = avg ?? 0;
-    const diff = cur - base0;
-    if (Math.abs(diff) < 0.5) {
-      return <span className="text-[0.85em] text-muted tabular-nums">≈ среднее</span>;
-    }
-    const up = diff > 0;
-    const good = kind === "expense" ? !up : up;
-    const cls = good ? "text-income bg-income/10" : "text-expense bg-expense/10";
-    const label = devPct
-      ? base0 >= 0.5
-        ? formatPct(Math.abs(diff) / base0, 0)
-        : "∞"
-      : formatMoney(Math.abs(diff), base);
     return (
-      <span
-        className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[0.85em] tabular-nums ${cls}`}
-        title={up ? "Выше среднего" : "Ниже среднего"}
-      >
-        {up ? "▲" : "▼"} {label}
-      </span>
+      <DeviationPill
+        current={cur}
+        baseline={avg}
+        base={base}
+        asPct={devPct}
+        kind={kind}
+        comparable={avgComp.comparable}
+        sameLabel="≈ среднее"
+        upTitle="Выше среднего"
+        downTitle="Ниже среднего"
+      />
     );
   }
 

@@ -95,6 +95,15 @@ const SYNTHETIC_CATEGORIES = new Set(["Долг", "Перевод"]);
 const DEBT_ACCOUNT_TYPES = new Set(["loan", "credit", "debt"]);
 
 /**
+ * Поля правки, которые не меняют структуру операции: их можно наложить прямо
+ * на строку из кэша, не пересобирая ноги, счета и категории.
+ *
+ * `unseen` здесь потому, что отметку «просмотрено» проставляет сам `emit` —
+ * отдельной обработки она не требует.
+ */
+const NON_STRUCTURAL_FIELDS = new Set(["comment", "date", "createdAt", "unseen"]);
+
+/**
  * Replays the forward-mapper classification for a raw ZenTransaction so
  * we can tell what `kind` / `account` / `outcomeAccount` / `incomeAccount`
  * our local model originally derived from it. Used to decide whether an
@@ -539,12 +548,52 @@ export function buildPushItems(
       continue;
     }
 
+    const origIsDebt =
+      DEBT_ACCOUNT_TYPES.has(accountsById.get(original.outcomeAccount)?.type || "") ||
+      DEBT_ACCOUNT_TYPES.has(accountsById.get(original.incomeAccount)?.type || "");
+
+    // ── Branch 0 (FIRST): edit with no structural change ──────────────
+    // Правка тронула только комментарий, дату, время или отметку
+    // «просмотрено» — пересобирать операцию незачем: патчим строку из кэша
+    // на месте.
+    //
+    // Это не оптимизация, а сохранность данных. Ниже ветка A для перевода
+    // пересобирает ОБЕ ноги через `buildTransferTarget`, а тот принудительно
+    // ставит `tag: null, merchant: null, payee: debtPayee` — у обычного
+    // перевода `debtPayee` равен null. То есть человек, поправивший один
+    // комментарий, терял в облаке получателя и привязку к контрагенту. По той
+    // же причине ветка D пересчитывала `merchant` из текста плательщика и
+    // могла молча проставить бренд, которого никто не выбирал.
+    //
+    // Испортить тут нечего по построению: основа — та самая строка, что уже
+    // лежит на сервере, и меняются в ней ровно те поля, которые правил человек.
+    //
+    // Признак «неструктурности» — набор ключей правки, а не сравнение
+    // значений. Окно правки операции кладёт в патч ТОЛЬКО изменённые поля
+    // (см. `EditTransactionModal`), поэтому любой посторонний ключ означает
+    // настоящее изменение, и мы честно уходим в разбор ниже. Ошибиться в эту
+    // сторону безопасно: правка просто пойдёт прежним путём.
+    const editedFields = Object.keys(edit);
+    const nonStructural =
+      editedFields.length > 0 &&
+      editedFields.every((f) => NON_STRUCTURAL_FIELDS.has(f));
+    // Долговая операция без плательщика — единственное исключение: ветка D
+    // ниже отказывается от неё осознанно, потому что сервер требует `payee`.
+    // Менять этот отказ здесь, без возможности проверить ответ сервера, не
+    // будем.
+    const debtWithoutPayee = origIsDebt && !(original.payee || "").trim();
+    if (nonStructural && !debtWithoutPayee) {
+      const zen: ZenTransaction = { ...original };
+      applyDateComment(zen, edit);
+      emit(id, zen, original);
+      continue;
+    }
+
     // Hard "no" for unsupported edit fields — but ONLY when the value
     // actually differs from what the forward mapper would have derived
-    // from the original. The Edit-modal currently stashes every field
-    // into the patch even when the user didn't touch it (so a payee-
-    // only edit still carries `kind` / `account` / both legs unchanged).
-    // Comparing against the original lets us treat those as no-ops.
+    // from the original. The Edit-modal only stores fields the user actually
+    // changed, but a patch can accumulate across saves — comparing against
+    // the original lets us treat unchanged carry-overs as no-ops.
     const orig = classifyOriginal(original, accountsById, tagsById);
     const targetKind: TxKind = (edit.kind as TxKind | undefined) ?? orig.kind;
 
@@ -560,9 +609,6 @@ export function buildPushItems(
     // structure (leg roles, amounts, tag, merchant) and only apply the
     // counterparty, account-id swaps, date and comment. Structural edits we
     // can't round-trip safely (type flip, amount, currency) are refused.
-    const origIsDebt =
-      DEBT_ACCOUNT_TYPES.has(accountsById.get(original.outcomeAccount)?.type || "") ||
-      DEBT_ACCOUNT_TYPES.has(accountsById.get(original.incomeAccount)?.type || "");
     if (origIsDebt) {
       if (targetKind !== orig.kind) {
         skipped.push({

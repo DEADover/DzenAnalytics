@@ -44,9 +44,21 @@ const PINNED_CATEGORIES = ["Корректировка"];
 
 export function GlobalFilters({
   showDateRange = true,
+  dateRangeHint,
   period,
 }: {
+  /**
+   * Управляет ли эта панель периодом. `false` — контролы дат остаются на месте,
+   * но становятся НЕАКТИВНЫМИ.
+   *
+   * Раньше они просто исчезали, и панель на страницах со своим периодом
+   * («Сравнение», «Календарь», «50/30/20») выглядела короче, чем на остальных.
+   * Одинаковая на вид панель, часть которой погашена, читается спокойнее, чем
+   * панель, у которой каждый раз разный набор контролов.
+   */
   showDateRange?: boolean;
+  /** Чем объяснить, почему даты недоступны. Показывается подсказкой. */
+  dateRangeHint?: string;
   /** Controlled period — when provided, ALL period controls (presets, month
    *  picker, custom range) drive this page-local controller instead of the
    *  global filter store, without touching the global «месяц». Used by history
@@ -380,11 +392,28 @@ export function GlobalFilters({
           )}
         </div>
 
-        {showDateRange && (
+        {
           <>
             {/* Date controls — set apart from the rest with dividers. */}
             <span className="w-px h-6 bg-border mx-1" />
-            <div className="flex bg-panel2 rounded-lg p-0.5 border border-border">
+            {/* Обёртка НЕ инертна: на ней висит подсказка, объясняющая, почему
+                даты погашены. Инертен только внутренний слой — он убирает
+                контролы и из мыши, и из обхода с клавиатуры, иначе по ним можно
+                было бы протабиться и нажать. Событие наведения при этом
+                проходит наверх, к обёртке, и подсказка показывается. */}
+            <div
+              className={clsx(
+                "flex items-center gap-2 flex-1 min-w-[220px]",
+                !showDateRange && "opacity-45"
+              )}
+              title={!showDateRange ? dateRangeHint : undefined}
+              aria-disabled={!showDateRange || undefined}
+            >
+            <div
+              className={clsx("contents", !showDateRange && "pointer-events-none")}
+              inert={!showDateRange}
+            >
+            <div className="flex bg-panel2 rounded-lg p-0.5 border border-border shrink-0">
               {PRESETS.map((p) => (
                 <button
                   key={p.value}
@@ -436,9 +465,11 @@ export function GlobalFilters({
               </div>
             </div>
 
+            </div>
+            </div>
             <span className="w-px h-6 bg-border mx-1" />
           </>
-        )}
+        }
 
         <button
           onClick={f.reset}

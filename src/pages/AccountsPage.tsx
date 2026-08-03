@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -483,12 +483,21 @@ export function AccountsPage() {
   // operations in the period still show up (their delta/income/expense are
   // just 0). Credit/debt accounts carry their native sign, so a liability
   // renders negative (red) and reduces the totals correctly.
-  const accountRows = useMemo(() => {
+  /** Пересчёт суммы в базовую валюту — нужен и таблице, и якорю графика. */
+  const toBase = useCallback(
+    (amt: number, cur: string) => (cur === base ? amt : amt * (rates.rates[cur] || 1)),
+    [base, rates]
+  );
+
+  // Живые счета с наложенными неотправленными правками. Вынесено из мемо
+  // строк таблицы, потому что якорь остатков для графика обязан строиться по
+  // ВСЕМ счетам, а не по тем, что уцелели после отборов списка.
+  const liveList = useMemo(() => {
     // Неотправленная правка накладывается на счёт сразу: пользователь должен
     // видеть результат до синхронизации. Название — исключение: по нему
     // сопоставляются операции, поэтому исходное остаётся ключом, а новое
     // показывается отдельным полем.
-    const liveList = (liveAccounts ?? []).map((a) => {
+    return (liveAccounts ?? []).map((a) => {
       const e = accountEdits[a.id];
       if (!e) return a;
       // Баланс пересобираем по той же формуле, что и Дзен: сдвиг начального
@@ -509,10 +518,11 @@ export function AccountsPage() {
         startDate: e.startDate !== undefined ? e.startDate : a.startDate,
       };
     });
+  }, [liveAccounts, accountEdits]);
+
+  const accountRows = useMemo(() => {
     const liveByTitle = new Map(liveList.map((a) => [a.title, a]));
     const txByTitle = new Map(accounts.map((a) => [a.account, a]));
-    const toBase = (amt: number, cur: string) =>
-      cur === base ? amt : amt * (rates.rates[cur] || 1);
 
     // Список на этой странице — справочник счетов, поэтому внебалансовые счета
     // в нём есть ВСЕГДА, с пометкой «Вне баланса» и отдельным отбором. Раньше
@@ -569,7 +579,7 @@ export function AccountsPage() {
       return (y.balanceBase ?? y.delta) - (x.balanceBase ?? x.delta);
     });
     return rows;
-  }, [accounts, liveAccounts, accountEdits, base, rates]);
+  }, [accounts, liveList, accountEdits, toBase]);
 
   type AccountRow = (typeof accountRows)[number];
 
@@ -753,11 +763,15 @@ export function AccountsPage() {
   // the stacked chart show actual balances instead of cumulative-flow-from-zero.
   const realBalancesByAccount = useMemo(() => {
     const m: Record<string, number> = {};
-    for (const r of accountRows) {
-      if (r.balanceBase != null) m[r.account] = r.balanceBase;
-    }
+    // Именно по живым счетам, а НЕ по строкам таблицы. Строки — это список, из
+    // которого намеренно выброшены спящие счета с нулевым остатком и без
+    // операций в окне фильтра. Стопка же строится по всей истории, и такой
+    // выброшенный счёт оставался без якоря: вместо ровного нуля линия
+    // показывала накопленный поток, а «Итого» расходилось с совокупным
+    // балансом ровно на эту величину (issue #59).
+    for (const a of liveList) m[a.title] = toBase(a.balance, a.currency);
     return m;
-  }, [accountRows]);
+  }, [liveList, toBase]);
   const series = useMemo(
     () => dailyBalanceSeries(filtered, selectedAccount ?? undefined),
     [filtered, selectedAccount]

@@ -26,6 +26,7 @@ export const SCALE_LABELS: Record<ReportScale, string> = {
   total: "Всего одним столбцом",
 };
 
+
 export interface ReportColumn {
   /** Ключ периода: «2026-07» / «2026-Q3» / «2026» / «all». */
   key: string;
@@ -220,21 +221,21 @@ function buildRows(acc: Acc, columns: ReportColumn[]): ReportRow[] {
   }
 
   const out: ReportRow[] = [];
+  // По алфавиту. Сортировка по убыванию суммы (как было раньше) для сводника
+  // читается «вразнобой»: глаз ищет конкретную статью, а её место в списке
+  // зависит от сумм и переезжает при каждой смене периода.
+  const cmp = (a: ReportRow, b: ReportRow) => a.label.localeCompare(b.label, "ru");
   // «Без категории» всегда последней — она про недоделанную разметку, а не про
-  // траты, и в начале списка только мешает.
+  // траты; по алфавиту она иначе всплывала бы к «Б», в середину списка.
   const sorted = Array.from(parents.values()).sort((a, b) => {
     const aNo = a.key === NO_CATEGORY;
     const bNo = b.key === NO_CATEGORY;
     if (aNo !== bNo) return aNo ? 1 : -1;
-    if (b.total !== a.total) return b.total - a.total;
-    return a.label.localeCompare(b.label, "ru");
+    return cmp(a, b);
   });
   for (const p of sorted) {
     out.push(p);
-    const kids = (children.get(p.key) ?? []).sort(
-      (a, b) => b.total - a.total || a.label.localeCompare(b.label, "ru")
-    );
-    out.push(...kids);
+    out.push(...(children.get(p.key) ?? []).sort(cmp));
   }
   return out;
 }

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, X } from "lucide-react";
 
 /**
@@ -33,6 +34,23 @@ export interface ComboboxProps {
    * letting the user type a free-form clear.
    */
   clearable?: boolean;
+  /**
+   * Рисовать список в портале, позиционируя его по месту поля.
+   *
+   * Нужно там, где Combobox стоит внутри прокручиваемой области: обычный
+   * абсолютный список обрезается контейнером с `overflow`, и из десятка
+   * вариантов видно полтора. По умолчанию выключено — остальным местам портал
+   * не нужен, а он всё-таки отвязывает список от потока документа.
+   */
+  portal?: boolean;
+  /**
+   * Неизменяемый знак в начале поля — например «#» у хэштега.
+   *
+   * Рисуется поверх поля и не участвует в значении: в `value` и в списке
+   * вариантов лежит чистое имя. Так поле выглядит одинаково с обычным вводом,
+   * где такой же префикс стоит слева от текста.
+   */
+  prefix?: string;
 }
 
 /**
@@ -53,6 +71,8 @@ export function Combobox({
   maxHeight = "min(50vh, 320px)",
   allowCustom = true,
   clearable = false,
+  portal = false,
+  prefix,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
@@ -61,6 +81,14 @@ export function Combobox({
   // for the current value).
   const [filtering, setFiltering] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  /** Координаты списка в режиме портала: он вне потока и позиционируется сам. */
+  const [pos, setPos] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
 
   // Sync the editable input text when the controlled `value` changes
   // externally. This is the canonical "mirror a prop into local input
@@ -75,11 +103,49 @@ export function Combobox({
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      // В режиме портала список — не потомок контейнера, иначе выбор варианта
+      // закрывал бы список раньше, чем срабатывал сам выбор.
+      if (popupRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || !portal) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const r = containerRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const gap = 4;
+      const below = window.innerHeight - r.bottom - gap - 8;
+      const above = r.top - gap - 8;
+      // Разворачиваем вверх, если снизу теснее: у поля в нижней половине окна
+      // список иначе уходит за край экрана.
+      const dropUp = below < 160 && above > below;
+      const maxHeight = Math.max(120, Math.min(320, dropUp ? above : below));
+      setPos({
+        left: r.left,
+        top: dropUp ? r.top - gap - maxHeight : r.bottom + gap,
+        width: r.width,
+        maxHeight,
+      });
+    };
+    place();
+    // `true` — ловим прокрутку любого предка, а не только окна: поле как раз и
+    // живёт внутри прокручиваемой области.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, portal]);
 
   const filtered = useMemo(() => {
     if (!filtering) return options;
@@ -113,6 +179,10 @@ export function Combobox({
     setOpen(false);
   }
 
+  /** В режиме портала список уезжает в body, иначе остаётся на месте. */
+  const renderPopup = (node: React.ReactElement) =>
+    portal ? (pos ? createPortal(node, document.body) : null) : node;
+
   return (
     <div ref={containerRef} className="relative">
       <div className="relative">
@@ -139,8 +209,13 @@ export function Combobox({
           // the typed value collides with two stacked icons.
           // `h-10` — та же высота, что задаёт себе `Select`: в строке действия
           // они стоят рядом, и разница в пиксель читается как перекос.
-          className={`input h-10 text-sm w-full ${clearable && value ? "pr-12" : "pr-7"} ${!allowCustom ? "cursor-pointer" : ""}`}
+          className={`input h-10 text-sm w-full ${clearable && value ? "pr-12" : "pr-7"} ${!allowCustom ? "cursor-pointer" : ""} ${prefix ? "pl-7" : ""}`}
         />
+        {prefix && (
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none">
+            {prefix}
+          </span>
+        )}
         {clearable && value && (
           <button
             type="button"
@@ -175,10 +250,19 @@ export function Combobox({
           />
         </button>
       </div>
-      {open && popupHasItems && (
+      {open && popupHasItems && renderPopup(
         <div
-          className="absolute z-10 mt-1 w-full bg-panel border border-border rounded-lg shadow-lg overflow-y-auto"
-          style={{ maxHeight }}
+          ref={popupRef}
+          className={
+            portal
+              ? "fixed z-[70] bg-panel border border-border rounded-lg shadow-lg overflow-y-auto"
+              : "absolute z-10 mt-1 w-full bg-panel border border-border rounded-lg shadow-lg overflow-y-auto"
+          }
+          style={
+            portal && pos
+              ? { left: pos.left, top: pos.top, width: pos.width, maxHeight: pos.maxHeight }
+              : { maxHeight }
+          }
         >
           {filteredGroups
             ? filteredGroups.map((g) => (

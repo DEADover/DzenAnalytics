@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { HelpCircle } from "lucide-react";
 import clsx from "clsx";
@@ -60,6 +60,21 @@ export function InfoPopover({
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
+  }, [open]);
+
+  // Escape закрывает панель. Клика мимо мало: с клавиатуры её было не убрать
+  // вовсе, а по всему сервису Escape закрывает любой слой поверх страницы —
+  // и здесь он должен работать так же.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      // Возвращаем фокус на знак вопроса — иначе он повисает в пустоте.
+      btnRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
   return (

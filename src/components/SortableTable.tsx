@@ -12,6 +12,12 @@ export interface Column<T> {
   sortable?: boolean;
   sortValue?: (row: T) => string | number | null | undefined;
   exportValue?: (row: T) => string | number | null | undefined;
+  /**
+   * Не выгружать колонку в CSV. Нужно колонкам действий: кнопки в файле
+   * бессмысленны, а `exportValue: () => ""` убирал только значения — сам
+   * столбец с заголовком оставался, добавляя каждой строке пустую ячейку.
+   */
+  exportSkip?: boolean;
   render: (row: T, index: number) => ReactNode;
 }
 
@@ -115,10 +121,11 @@ export function SortableTable<T>({
   }
 
   function exportCsv() {
-    const header = columns.map((c) => csvEscape(c.label)).join(";");
+    const cols = columns.filter((c) => !c.exportSkip);
+    const header = cols.map((c) => csvEscape(c.label)).join(";");
     const lines = [header];
     for (const row of sorted) {
-      const cells = columns.map((c) => {
+      const cells = cols.map((c) => {
         let val: unknown;
         if (c.exportValue) val = c.exportValue(row);
         else if (c.sortValue) val = c.sortValue(row);

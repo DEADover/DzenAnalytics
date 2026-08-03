@@ -159,6 +159,17 @@ export interface StackedBalancePoint {
   [account: string]: number | string;
 }
 
+/**
+ * Раньше этой даты у нас не бывает настоящих операций.
+ *
+ * Дзен-мани отдаёт операции и счета с «эпоховой» датой 1970 года — след
+ * legacy-записей. Такая точка растягивает ось на полвека, и весь реальный
+ * диапазон схлопывается в правый край: смена периода в фильтре перестаёт быть
+ * заметной. Тот же порог уже стоит в `netWorthBasis` и в выборе первого месяца
+ * для динамики (issue #35).
+ */
+const EARLIEST_PLAUSIBLE_DATE = "2000-01-01";
+
 export function stackedBalanceByAccount(
   allTxs: Transaction[],
   topN = 8,
@@ -191,6 +202,10 @@ export function stackedBalanceByAccount(
   const accountSet = new Set(topAccounts);
 
   const days = new Map<string, Map<string, number>>();
+  // Поток «эпоховых» операций (1970 год). Он НЕ выбрасывается — иначе поедут
+  // остатки, — а складывается в стартовое значение линии. Точки на оси такая
+  // операция при этом не создаёт.
+  const opening = new Map<string, number>();
   // Per-account flow contributed by unsynced drafts, binned the same way as
   // `days`. Subtracted from the running total before anchoring so the cloud
   // balance reconciles against the synced flow only (issue #18).
@@ -198,16 +213,21 @@ export function stackedBalanceByAccount(
   for (const t of allTxs) {
     const d = ymdKey(t.date);
     if (!d) continue;
+    const tooOld = d < EARLIEST_PLAUSIBLE_DATE;
     const unsynced = unsyncedIds ? unsyncedIds.has(t.id) : false;
     const apply = (acc: string, delta: number) => {
       if (!acc) return;
       const key = accountSet.has(acc) ? acc : "Прочие";
-      let dayMap = days.get(d);
-      if (!dayMap) {
-        dayMap = new Map();
-        days.set(d, dayMap);
+      if (tooOld) {
+        opening.set(key, (opening.get(key) || 0) + delta);
+      } else {
+        let dayMap = days.get(d);
+        if (!dayMap) {
+          dayMap = new Map();
+          days.set(d, dayMap);
+        }
+        dayMap.set(key, (dayMap.get(key) || 0) + delta);
       }
-      dayMap.set(key, (dayMap.get(key) || 0) + delta);
       if (unsynced) unsyncedFlow.set(key, (unsyncedFlow.get(key) || 0) + delta);
     };
     if (t.kind === "expense") apply(t.outcomeAccount, -t.amountBase);
@@ -227,7 +247,8 @@ export function stackedBalanceByAccount(
 
   const sortedDates = Array.from(days.keys()).sort();
   const running: Record<string, number> = {};
-  for (const a of accountList) running[a] = 0;
+  // Линия стартует не с нуля, а с потока, накопленного «эпоховыми» операциями.
+  for (const a of accountList) running[a] = opening.get(a) || 0;
 
   const series: StackedBalancePoint[] = [];
   for (const date of sortedDates) {
@@ -1496,7 +1517,21 @@ export function topTransactions(
     .slice(0, limit);
 }
 
-const HASHTAG_RE = /#([\p{L}\p{N}_-]+)/gu;
+/**
+ * Хэштег в комментарии. Левой границы нет намеренно: «оплата#налоги» — тоже
+ * тег, так его видит и Дзен-мани. Правая граница — первый символ вне класса.
+ *
+ * Экспортируется, потому что переименование тега ОБЯЗАНО находить ровно те же
+ * вхождения, что и разбор: разойдись они — и текст комментария перестанет
+ * соответствовать тому, что показано в таблице тегов.
+ *
+ * ⚠️ Регулярка общая и с флагом `g`, поэтому у неё есть `lastIndex`. Пользуйтесь
+ * только `matchAll` — он работает с копией и `lastIndex` не двигает. Прямые
+ * `.test()` / `.exec()` на ней будут через раз возвращать ложь: состояние
+ * утечёт между вызовами из разных модулей. Нужен разовый матч — соберите свою
+ * регулярку без `g`.
+ */
+export const HASHTAG_RE = /#([\p{L}\p{N}_-]+)/gu;
 
 export function extractHashtags(text: string): string[] {
   if (!text) return [];
@@ -2245,6 +2280,88 @@ export function computeKPI(txs: Transaction[]): KPI {
     daysSpan,
     uniqueCategories: cats.size,
     uniquePayees: payees.size,
+  };
+}
+
+export interface SubNode {
+  name: string;
+  fullName: string;
+  total: number;
+  count: number;
+}
+
+export interface CategoryNode {
+  name: string;
+  total: number;
+  count: number;
+  subs: SubNode[];
+}
+
+/**
+ * Дерево «категория → подкатегории» с суммами и числом операций.
+ *
+ * Жило внутри «Категорий», пока не понадобилось «Сравнению периодов»: там из
+ * него строятся те же строки-полосы. Две копии такой сборки неминуемо разошлись
+ * бы в мелочах — например в том, как учитывается возврат.
+ */
+export function buildHierarchy(
+  txs: Transaction[],
+  kind: "expense" | "income"
+): CategoryNode[] {
+  const map = new Map<string, CategoryNode>();
+  for (const t of txs) {
+    // В расходах учитываем возвраты со знаком минус: возвращённая покупка
+    // укорачивает полосу своей категории. В доходах строго — возврат не доход.
+    const include = kind === "expense" ? affectsExpense(t.kind) : t.kind === kind;
+    if (!include) continue;
+    const delta = kind === "expense" ? expenseDelta(t) : t.amountBase;
+    let node = map.get(t.category);
+    if (!node) {
+      node = { name: t.category, total: 0, count: 0, subs: [] };
+      map.set(t.category, node);
+    }
+    node.total += delta;
+    node.count++;
+    if (t.subcategory) {
+      let sub = node.subs.find((s) => s.name === t.subcategory);
+      if (!sub) {
+        sub = { name: t.subcategory, fullName: t.categoryFull, total: 0, count: 0 };
+        node.subs.push(sub);
+      }
+      sub.total += delta;
+      sub.count++;
+    }
+  }
+  for (const node of map.values()) {
+    node.subs.sort((a, b) => b.total - a.total);
+  }
+  // Категории, схлопнувшиеся ровно в ноль, убираем; ушедшие в минус оставляем —
+  // это полезный сигнал «возвраты перекрыли траты», и на него стоит взглянуть.
+  return Array.from(map.values())
+    .filter((n) => n.total !== 0)
+    .sort((a, b) => b.total - a.total);
+}
+
+/**
+ * Свести KPI нескольких периодов к среднему за один — для сравнения «текущий
+ * месяц против среднего за 3/6/12».
+ *
+ * Делится НЕ всё. Складываемые величины (доход, расход, чистый поток, число
+ * операций, длина отрезка) делятся на количество периодов. А `avgExpense` и
+ * `avgIncome` — это уже средние НА ОПЕРАЦИЮ, и делить их на число месяцев
+ * означало бы «средний чек, делённый на три», то есть бессмыслицу. Счётчики
+ * различных категорий и получателей тоже остаются как есть: «в среднем 3,5
+ * категории» — не та величина, которую можно показать человеку.
+ */
+export function scaleKPI(kpi: KPI, periods: number): KPI {
+  if (periods <= 1) return kpi;
+  return {
+    ...kpi,
+    income: kpi.income / periods,
+    expense: kpi.expense / periods,
+    net: kpi.net / periods,
+    count: kpi.count / periods,
+    daysSpan: kpi.daysSpan / periods,
   };
 }
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Hash } from "lucide-react";
+import { Hash, Pencil } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -18,7 +18,7 @@ import { CategoryDot } from "../components/CategoryDot";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { SortableTable, type Column } from "../components/SortableTable";
-import { Tooltip } from "../components/Tooltip";
+import { HashtagRenameModal } from "../components/HashtagRenameModal";
 
 export function TagsPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -61,10 +61,49 @@ export function TagsPage() {
     return [...tags].sort((a, b) => a.tag.localeCompare(b.tag, "ru"));
   }, [tags, cloudAlpha]);
 
+  // Какой тег сейчас переименовывают. Окно берёт операции из стора само —
+  // здешний `filtered` для этого не годится: переименовать тег только внутри
+  // выбранного периода значит расщепить его надвое.
+  const [renaming, setRenaming] = useState<string | null>(null);
+
   function openTag(tag: string) {
     const txs = filtered.filter((t) => extractHashtags(t.comment).includes(tag));
     showDrill(`#${tag}`, txs, "Операции с тегом");
   }
+
+  /** Тот же дрилл, но сузенный до одной категории или подкатегории тега. */
+  function openTagCategory(tag: string, category: string, sub?: string) {
+    const txs = filtered.filter(
+      (t) =>
+        extractHashtags(t.comment).includes(tag) &&
+        t.category === category &&
+        (sub === undefined || t.subcategory === sub)
+    );
+    showDrill(
+      `#${tag} · ${sub ?? category}`,
+      txs,
+      sub ? "Операции с тегом по подкатегории" : "Операции с тегом по категории"
+    );
+  }
+
+  /**
+   * Счётчик операций — кнопка, открывающая список. Клик по строке раскрывает
+   * разбивку по категориям, поэтому всплытие обязательно останавливаем: иначе
+   * одно нажатие делало бы сразу два дела.
+   */
+  const countButton = (count: number, onOpen: () => void, title: string) => (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+      className="tabular-nums text-muted hover:text-accent hover:underline underline-offset-2"
+      title={title}
+    >
+      {count}
+    </button>
+  );
 
   if (transactions.length === 0) return <EmptyState />;
 
@@ -83,31 +122,29 @@ export function TagsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Подпись под заголовком — статичная. Цифры выборки живут рядом с тем,
+          что они описывают: счётчики тегов — в шапке облака, знаменатели
+          процентов — в шапке таблицы. Заголовок должен объяснять страницу, а не
+          пересказывать её содержимое. */}
       <PageHeader
         icon={Hash}
         title="Теги"
-        hint={
-          <>
-            {tags.length} {pluralRu(tags.length, ["тег", "тега", "тегов"])} в{" "}
-            {taggedCount} {pluralRu(taggedCount, ["операции", "операциях", "операциях"])}
-            {totalExpense > 0 && ` · по тегам ${formatMoney(totalExpense, base)}`}.{" "}
-            Проценты — доля от всех расходов за период
-            {periodExpense > 0 ? ` (${formatMoney(periodExpense, base)}` : ""}
-            {periodExpense > 0 && periodIncome > 0
-              ? ` · доходов ${formatMoney(periodIncome, base)})`
-              : periodExpense > 0
-                ? ")"
-                : ""}
-            . Клик по облаку — операции, по строке таблицы — разбивка по категориям.
-          </>
-        }
+        hint="Группировка операций по хэштегам из комментариев. Клик по облаку или по числу операций — список операций, по строке таблицы — разбивка по категориям."
         hintWrap
       />
       <GlobalFilters />
 
       <div className="card card-pad">
         <div className="flex items-center justify-between mb-4 gap-3">
-          <div className="font-semibold">Облако тегов</div>
+          <div className="font-semibold flex items-baseline gap-2 flex-wrap min-w-0">
+            <span>Облако тегов</span>
+            <span className="text-xs font-normal text-muted">
+              {tags.length} {pluralRu(tags.length, ["тег", "тега", "тегов"])} в{" "}
+              {taggedCount}{" "}
+              {pluralRu(taggedCount, ["операции", "операциях", "операциях"])}
+              {totalExpense > 0 && ` · по тегам ${formatMoney(totalExpense, base)}`}
+            </span>
+          </div>
           <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
             <button
               onClick={() => setCloudAlpha(false)}
@@ -128,22 +165,18 @@ export function TagsPage() {
             const score = (t.expense + t.income) / maxTotal;
             const fontSize = 12 + Math.round(score * 16);
             return (
-              <Tooltip
+              <button
                 key={t.tag}
-                content={`Чистый: ${formatMoney(t.income - t.expense, base, { signed: true })}`}
+                onClick={() => openTag(t.tag)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-panel2 hover:border-accent hover:bg-accent/10 transition-colors"
+                style={{ fontSize }}
               >
-                <button
-                  onClick={() => openTag(t.tag)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-panel2 hover:border-accent hover:bg-accent/10 transition-colors"
-                  style={{ fontSize }}
-                >
-                  <Hash className="w-3 h-3 text-accent shrink-0" />
-                  <span className="font-medium">{t.tag}</span>
-                  <span className="text-muted text-xs tabular-nums">
-                    {formatNum(t.count)} {pluralOps(t.count)}
-                  </span>
-                </button>
-              </Tooltip>
+                <Hash className="w-3 h-3 text-accent shrink-0" />
+                <span className="font-medium">{t.tag}</span>
+                <span className="text-muted text-xs tabular-nums">
+                  {formatNum(t.count)} {pluralOps(t.count)}
+                </span>
+              </button>
             );
           })}
         </div>
@@ -151,7 +184,18 @@ export function TagsPage() {
 
       <div className="card card-pad">
         <SortableTable<TagBucket>
-          title="Все теги"
+          title={
+            <span className="flex items-baseline gap-2 flex-wrap min-w-0">
+              <span>Все теги</span>
+              {periodExpense > 0 && (
+                <span className="text-xs font-normal text-muted">
+                  Проценты — доля от всех расходов за период (
+                  {formatMoney(periodExpense, base)}
+                  {periodIncome > 0 && ` · доходов ${formatMoney(periodIncome, base)}`})
+                </span>
+              )}
+            </span>
+          }
           data={tags}
           rowKey={(t) => t.tag}
           defaultSortKey="total"
@@ -173,7 +217,7 @@ export function TagsPage() {
               {
                 key: "expense",
                 label: "Расход",
-                align: "right",
+                align: "center",
                 sortValue: (t) => t.expense,
                 render: (t) => (
                   <span className="tabular-nums text-expense">
@@ -184,7 +228,7 @@ export function TagsPage() {
               {
                 key: "income",
                 label: "Доход",
-                align: "right",
+                align: "center",
                 sortValue: (t) => t.income,
                 render: (t) => (
                   <span className="tabular-nums text-income">
@@ -195,14 +239,15 @@ export function TagsPage() {
               {
                 key: "count",
                 label: "Операций",
-                align: "right",
+                align: "center",
                 sortValue: (t) => t.count,
-                render: (t) => <span className="text-muted">{t.count}</span>,
+                render: (t) =>
+                  countButton(t.count, () => openTag(t.tag), `Показать операции с тегом #${t.tag}`),
               },
               {
                 key: "total",
                 label: "Доля от расходов",
-                align: "right",
+                align: "center",
                 sortValue: (t) => (periodExpense > 0 ? t.expense / periodExpense : 0),
                 render: (t) => (
                   <span className="tabular-nums text-muted">
@@ -215,7 +260,7 @@ export function TagsPage() {
               {
                 key: "incomeShare",
                 label: "Доля от дохода",
-                align: "right",
+                align: "center",
                 sortValue: (t) => (periodIncome > 0 ? t.income / periodIncome : 0),
                 render: (t) => (
                   <span className="tabular-nums text-muted">
@@ -223,6 +268,36 @@ export function TagsPage() {
                       ? formatPct(t.income / periodIncome, 1)
                       : "—"}
                   </span>
+                ),
+              },
+              {
+                key: "actions",
+                label: "Действия",
+                align: "center",
+                // Именно длина в CSS, а не Tailwind-класс: SortableTable кладёт
+                // `width` прямо в инлайновый стиль, и «w-24» браузер молча
+                // выбрасывает как невалидное значение.
+                width: "6rem",
+                sortable: false,
+                // Кнопки в выгрузке бессмысленны — колонку в CSV не берём вовсе.
+                exportSkip: true,
+                render: (t) => (
+                  <div className="flex items-center justify-center">
+                    <button
+                      type="button"
+                      // Клик по строке раскрывает разбивку по категориям —
+                      // без остановки всплытия карандаш заодно её дёргал бы.
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRenaming(t.tag);
+                      }}
+                      className="btn-ghost !p-1.5 text-muted hover:text-accent"
+                      title="Переименовать тег или перенести операции в другой"
+                      aria-label={`Переименовать тег #${t.tag}`}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  </div>
                 ),
               },
             ] as Column<TagBucket>[]
@@ -235,7 +310,7 @@ export function TagsPage() {
               return (
                 <tr className="bg-panel2/20">
                   <td className="table-td" />
-                  <td className="table-td text-xs text-muted" colSpan={6}>
+                  <td className="table-td text-xs text-muted" colSpan={7}>
                     Нет операций по категориям
                   </td>
                 </tr>
@@ -250,23 +325,31 @@ export function TagsPage() {
                     <span className="truncate">{n.category}</span>
                   </span>
                 </td>
-                <td className="table-td text-right tabular-nums text-expense">
+                <td className="table-td text-center tabular-nums text-expense">
                   {n.expense > 0 ? formatMoney(n.expense, base) : "—"}
                 </td>
-                <td className="table-td text-right tabular-nums text-income">
+                <td className="table-td text-center tabular-nums text-income">
                   {n.income > 0 ? formatMoney(n.income, base) : "—"}
                 </td>
-                <td className="table-td text-right text-muted">{n.count}</td>
-                <td className="table-td text-right tabular-nums text-muted">
+                <td className="table-td text-center">
+                  {countButton(
+                    n.count,
+                    () => openTagCategory(t.tag, n.category),
+                    `Показать операции с тегом #${t.tag} в категории «${n.category}»`
+                  )}
+                </td>
+                <td className="table-td text-center tabular-nums text-muted">
                   {periodExpense > 0 && n.expense > 0
                     ? formatPct(n.expense / periodExpense, 1)
                     : "—"}
                 </td>
-                <td className="table-td text-right tabular-nums text-muted">
+                <td className="table-td text-center tabular-nums text-muted">
                   {periodIncome > 0 && n.income > 0
                     ? formatPct(n.income / periodIncome, 1)
                     : "—"}
                 </td>
+                {/* Под колонку действий — переименовывать можно только тег целиком. */}
+                <td className="table-td" />
               </tr>,
               ...n.subs.map((s) => (
                 <tr
@@ -284,29 +367,43 @@ export function TagsPage() {
                       <span className="truncate">{s.name}</span>
                     </span>
                   </td>
-                  <td className="table-td text-right tabular-nums">
+                  <td className="table-td text-center tabular-nums">
                     {s.expense > 0 ? formatMoney(s.expense, base) : "—"}
                   </td>
-                  <td className="table-td text-right tabular-nums">
+                  <td className="table-td text-center tabular-nums">
                     {s.income > 0 ? formatMoney(s.income, base) : "—"}
                   </td>
-                  <td className="table-td text-right">{s.count}</td>
-                  <td className="table-td text-right tabular-nums">
+                  <td className="table-td text-center">
+                    {countButton(
+                      s.count,
+                      () => openTagCategory(t.tag, n.category, s.name),
+                      `Показать операции с тегом #${t.tag} в подкатегории «${s.name}»`
+                    )}
+                  </td>
+                  <td className="table-td text-center tabular-nums">
                     {periodExpense > 0 && s.expense > 0
                       ? formatPct(s.expense / periodExpense, 1)
                       : "—"}
                   </td>
-                  <td className="table-td text-right tabular-nums">
+                  <td className="table-td text-center tabular-nums">
                     {periodIncome > 0 && s.income > 0
                       ? formatPct(s.income / periodIncome, 1)
                       : "—"}
                   </td>
+                  <td className="table-td" />
                 </tr>
               )),
             ]);
           }}
         />
       </div>
+
+      {renaming && (
+        <HashtagRenameModal
+          hashtag={renaming}
+          onClose={() => setRenaming(null)}
+        />
+      )}
     </div>
   );
 }

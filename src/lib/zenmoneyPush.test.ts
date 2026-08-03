@@ -21,7 +21,13 @@ import { buildRulePlan } from "./rulePlan";
 import type { StoredRule } from "./ruleEngine";
 import type { Transaction } from "../types";
 import type { ZenCache } from "./zenmoneyCache";
-import type { ZenAccount, ZenInstrument, ZenTag, ZenTransaction } from "./zenmoney";
+import type {
+  ZenAccount,
+  ZenInstrument,
+  ZenMerchant,
+  ZenTag,
+  ZenTransaction,
+} from "./zenmoney";
 import type { TransactionEdit } from "../store/useEditsStore";
 
 /** Minimal ZenTransaction — buildDeletions only reads id/user/deleted. */
@@ -1610,5 +1616,102 @@ describe("buildDraftTransaction — debt", () => {
     );
     expect(r.zen).toBeUndefined();
     expect(r.skip).toMatch(/контрагент/i);
+  });
+});
+
+describe("buildPushItems — правка без структурных изменений", () => {
+  it("у перевода сохраняет получателя и контрагента", () => {
+    // Разбор дефекта: правка одного лишь комментария уходила в ветку, которая
+    // пересобирает обе ноги, а та ставит payee/merchant/tag в null. Человек
+    // правил комментарий — и терял в облаке получателя.
+    const t = transferTx({ payee: "Иванов И.И.", merchant: "m-1", comment: "перевод #налоги" });
+    const res = pushIn(t, { comment: "перевод #Налоги" });
+
+    expect(res.skipped).toEqual([]);
+    expect(res.toPush).toHaveLength(1);
+    const zen = res.toPush[0].zen;
+    expect(zen.payee).toBe("Иванов И.И.");
+    expect(zen.merchant).toBe("m-1");
+    expect(zen.comment).toBe("перевод #Налоги");
+    // Ноги перевода не тронуты.
+    expect(zen.outcomeAccount).toBe("acc-1");
+    expect(zen.incomeAccount).toBe("acc-2");
+    expect(zen.outcome).toBe(500);
+    expect(zen.income).toBe(500);
+  });
+
+  it("меняет ровно комментарий, отметку просмотра и метку времени", () => {
+    const t = transferTx({ payee: "Иванов И.И.", merchant: "m-1", comment: "было" });
+    const res = buildPushItems({ [t.id]: { comment: "стало" } }, multiCache(t), 777);
+    const zen = res.toPush[0].zen;
+    const changedKeys = (Object.keys(zen) as (keyof ZenTransaction)[])
+      .filter((k) => zen[k] !== t[k])
+      .sort();
+    expect(changedKeys).toEqual(["changed", "comment", "viewed"]);
+    expect(zen.changed).toBe(777);
+    expect(zen.viewed).toBe(true);
+  });
+
+  it("пустой комментарий уезжает как null", () => {
+    const t = transferTx({ comment: "было", payee: "Иванов И.И." });
+    expect(pushIn(t, { comment: "" }).toPush[0].zen.comment).toBeNull();
+  });
+
+  it("правка даты у перевода тоже не пересобирает ноги", () => {
+    const t = transferTx({ date: "2026-08-01", payee: "Иванов И.И.", merchant: "m-1" });
+    const zen = pushIn(t, { date: "2026-08-09" }).toPush[0].zen;
+    expect(zen.date).toBe("2026-08-09");
+    expect(zen.payee).toBe("Иванов И.И.");
+    expect(zen.merchant).toBe("m-1");
+  });
+
+  it("у долговой операции не подменяет контрагента по совпадению названия", () => {
+    // Ветка долгов пересчитывала merchant из текста плательщика: если имя
+    // совпадало со справочником, у операции появлялся бренд, которого никто
+    // не выбирал.
+    const t = debtTx({ payee: "Иван", merchant: null, comment: "было" });
+    const withMerchant: ZenCache = {
+      ...debtCache(t),
+      merchants: [{ id: "m-ivan", title: "Иван" } as ZenMerchant],
+    };
+    const res = buildPushItems({ [t.id]: { comment: "стало" } }, withMerchant);
+    expect(res.skipped).toEqual([]);
+    expect(res.toPush[0].zen.merchant).toBeNull();
+    expect(res.toPush[0].zen.payee).toBe("Иван");
+  });
+
+  it("долговую операцию без плательщика по-прежнему не отправляет", () => {
+    // Сервер требует у долговой операции непустой payee, а проверить его ответ
+    // здесь нечем — осознанный отказ ветки долгов сохраняем.
+    const t = debtTx({ payee: null, comment: "было" });
+    const res = pushDebt(t, { comment: "стало" });
+    expect(res.toPush).toEqual([]);
+    expect(res.skipped[0].reason).toMatch(/плательщик/);
+  });
+
+  it("структурная правка идёт прежним путём", () => {
+    // Смена счёта обязана пересобрать операцию — иначе правка потерялась бы.
+    const t = transferTx({ payee: "Иванов И.И." });
+    const zen = pushIn(t, { comment: "новый", outcomeAccount: "Наличные", incomeAccount: "Карта" })
+      .toPush[0].zen;
+    expect(zen.outcomeAccount).toBe("acc-2");
+    expect(zen.incomeAccount).toBe("acc-1");
+  });
+
+  it("смена времени пересоздаёт операцию и сохраняет получателя", () => {
+    // Дзен-мани молча игнорирует изменённый `created` у существующей строки,
+    // поэтому такая правка уходит пересозданием — но данные терять нельзя.
+    const t = transferTx({ created: 111, payee: "Иванов И.И.", merchant: "m-1" });
+    const res = buildPushItems(
+      { [t.id]: { createdAt: "2026-06-14T09:30:00.000Z" } },
+      multiCache(t),
+      777,
+      (old) => `${old}-new`
+    );
+    expect(res.toPush).toEqual([]);
+    expect(res.recreates).toHaveLength(1);
+    expect(res.recreates[0].oldId).toBe("t1");
+    expect(res.recreates[0].tx.payee).toBe("Иванов И.И.");
+    expect(res.recreates[0].tx.merchant).toBe("m-1");
   });
 });

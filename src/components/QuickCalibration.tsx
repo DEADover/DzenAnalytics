@@ -3,7 +3,10 @@ import { Settings2, CheckCircle2, X, Sparkles, Pencil, Trash2 } from "lucide-rea
 import { useDataStore } from "../store/useDataStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { confirm } from "../store/useConfirmStore";
-import { useZenmoneyStore } from "../store/useZenmoneyStore";
+import {
+  useZenmoneyStore,
+  getLiveAccountsFromCache,
+} from "../store/useZenmoneyStore";
 import {
   detectBalanceAnchors,
   cumulativeNetAt,
@@ -30,6 +33,34 @@ export function QuickCalibration() {
     if (!zenLoaded) zenHydrate();
   }, [calibLoaded, hydrate, zenLoaded, zenHydrate]);
 
+  /**
+   * Второй, независимый признак режима API — кэш счетов Дзен-мани.
+   *
+   * Одного токена мало. Он живёт в своём ключе IndexedDB, и любой путь, на
+   * котором тот прочитался позже остальных, показывает подключённому человеку
+   * баннер ручной калибровки — на секунды, до появления токена. Само по себе
+   * это выглядит как сбой: калибровка при синхронизации проставляется
+   * автоматически, и трогать её руками незачем.
+   *
+   * Кэш счетов бывает только у того, кто хоть раз синхронизировался, поэтому
+   * его наличие — надёжное «это API-режим». `null` значит «ещё не знаем»: пока
+   * не выяснили, не показываем ничего.
+   */
+  const [hasZenCache, setHasZenCache] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getLiveAccountsFromCache()
+      .then((list) => {
+        if (!cancelled) setHasZenCache((list?.length ?? 0) > 0);
+      })
+      .catch(() => {
+        if (!cancelled) setHasZenCache(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [dismissed, setDismissed] = useState(false);
   const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState("");
@@ -46,9 +77,12 @@ export function QuickCalibration() {
   // so deciding on their default values flashes the banner at every page load —
   // for API users it then vanishes once the token arrives, which reads as a
   // glitch. Say nothing until we actually know.
-  if (!zenLoaded || !calibLoaded) return null;
-  // API auto-calibrates on every sync; never show the manual banner.
-  if (zenToken) return null;
+  if (!zenLoaded || !calibLoaded || hasZenCache === null) return null;
+  // API auto-calibrates on every sync; never show the manual banner. Проверяем
+  // ДВА признака: токен и кэш счетов. Второй закрывает случай, когда токен по
+  // какой-то причине читается позже прочего, — иначе подключённый человек
+  // видит вспышку баннера на первых секундах.
+  if (zenToken || hasZenCache) return null;
   if (calibration && !editing && dismissed) return null;
   if (!calibration && dismissed) return null;
 

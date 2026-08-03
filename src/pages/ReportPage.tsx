@@ -4,7 +4,6 @@ import {
   Download,
   ChevronRight,
   ChevronDown,
-  Loader2,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
@@ -20,7 +19,12 @@ import {
   type ReportScale,
   type ReportRow,
 } from "../lib/categoryReport";
-import { exportCategoryReportXlsx } from "../lib/categoryReportXlsx";
+import {
+  exportCategoryReportXlsx,
+  type XlsxNumberStyle,
+} from "../lib/categoryReportXlsx";
+import { ReportExportModal } from "../components/ReportExportModal";
+import { InfoPopover } from "../components/InfoPopover";
 import { formatMoney } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
@@ -46,7 +50,7 @@ export function ReportPage() {
 
   const [scale, setScale] = useState<ReportScale>("month");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [exporting, setExporting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Отчёт — про всю историю ведения бюджета, поэтому у страницы свой период
   // (по умолчанию «Всё»), а не глобальный «текущий месяц»: иначе при первом
@@ -120,15 +124,14 @@ export function ReportPage() {
     drill(title, txs, col ? col.label : "Итого за период");
   }
 
-  async function exportXlsx() {
-    setExporting(true);
+  /** Имя файла показываем в окне выгрузки, поэтому считаем его в одном месте. */
+  const exportFileName = `Доходы и расходы (${SCALE_LABELS[
+    scale
+  ].toLowerCase()}) ${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+  async function exportXlsx(style: XlsxNumberStyle) {
     try {
-      const stamp = new Date().toISOString().slice(0, 10);
-      await exportCategoryReportXlsx(
-        report,
-        base,
-        `Доходы и расходы (${SCALE_LABELS[scale].toLowerCase()}) ${stamp}.xlsx`
-      );
+      await exportCategoryReportXlsx(report, base, exportFileName, style);
     } catch {
       // Молчаливый провал выгрузки хуже отсутствия кнопки: человек ждёт файл,
       // а его нет и никто об этом не сказал.
@@ -139,8 +142,9 @@ export function ReportPage() {
         confirmLabel: "Понятно",
         tone: "warning",
       });
-    } finally {
-      setExporting(false);
+      // Пробрасываем дальше, чтобы окно выгрузки осталось открытым и человек
+      // мог попробовать снова, не начиная путь с кнопки.
+      throw new Error("export failed");
     }
   }
 
@@ -161,7 +165,7 @@ export function ReportPage() {
       <GlobalFilters period={lp} />
 
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="label">Столбцы</span>
+        <span className="label">Разбивка</span>
         <div className="flex bg-panel2 rounded-lg p-1 border border-border">
           {SCALES.map((s) => (
             <button
@@ -175,23 +179,67 @@ export function ReportPage() {
             </button>
           ))}
         </div>
+        <InfoPopover label="Как считаются суммы">
+          <p>
+            <strong className="text-text">Доход</strong> — только поступления,{" "}
+            <strong className="text-text">Расход</strong> — только траты.{" "}
+            <strong className="text-text">Разница</strong> внизу — доход минус
+            расход за тот же период.
+          </p>
+          <p>
+            <strong className="text-text">Переводы между своими счетами</strong>{" "}
+            в отчёт не попадают вовсе: деньги не потрачены и не заработаны, они
+            просто переехали с одного счёта на другой. Долговые операции — тоже.
+          </p>
+          <p>
+            <strong className="text-text">Возврат уменьшает расход</strong> своей
+            категории, а не считается доходом. Купили на 60 000 и вернули 52 000
+            — в категории останется 8 000, а не «60 000 расхода и 52 000
+            дохода».
+          </p>
+          <p>
+            Поэтому расход может быть{" "}
+            <strong className="text-text">отрицательным</strong>: если за месяц
+            вернули больше, чем потратили. Обычная причина — покупка была в одном
+            месяце, а возврат пришёл в следующем: трата попала в один столбец,
+            возврат в соседний. Если же в такой категории копятся деньги, которые
+            по смыслу вовсе не возврат покупки (компенсация, перевод от близких,
+            продажа), — категорию стоит сделать доходной в Дзен-мани, и эти
+            операции переедут в «Доход».
+          </p>
+          <p>
+            <strong className="text-text">Сумма категории включает</strong> её
+            подкатегории, а <strong className="text-text">итог блока</strong> —
+            сумму категорий, поэтому подкатегории не считаются дважды.
+          </p>
+          <p>
+            <strong className="text-text">Клик по любой сумме</strong> покажет
+            операции, из которых она сложилась, — включая возвраты. Это самый
+            быстрый способ разобраться в неожиданной цифре.
+          </p>
+        </InfoPopover>
         {/* Выгрузка — в одной строке с настройкой столбцов: кнопка относится к
             тому, что ниже, а не к заголовку страницы. */}
         <span className="flex-1 min-w-2" />
         <button
           className="btn-ghost text-sm shrink-0"
-          onClick={exportXlsx}
-          disabled={empty || exporting}
+          onClick={() => setExportOpen(true)}
+          disabled={empty}
           title="Скачать отчёт в Excel"
         >
-          {exporting ? (
-            <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-          ) : (
-            <Download className="w-4 h-4" aria-hidden />
-          )}
+          <Download className="w-4 h-4" aria-hidden />
           Excel
         </button>
       </div>
+
+      {exportOpen && (
+        <ReportExportModal
+          baseCurrency={base}
+          fileName={exportFileName}
+          onExport={exportXlsx}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
 
       {empty ? (
         <div className="card card-pad text-sm text-muted text-center py-10">
@@ -331,9 +379,17 @@ function Th({
       className={`table-th bg-panel whitespace-nowrap ${
         align === "right" ? "text-right" : ""
       } ${
-        // Паркуем под шапкой приложения: таблица скроллится вместе со страницей,
-        // а не внутри своего блока, поэтому top-0 увёл бы заголовки под неё.
-        sticky ? "sticky top-[var(--app-header-h)] z-20" : ""
+        // ТОЛЬКО top-0.
+        //
+        // Здесь стоял отступ на высоту шапки приложения — в расчёте на то, что
+        // таблица прокручивается вместе со страницей. Но обёртка таблицы это
+        // `overflow-x-auto`, а любой не-`visible` overflow делает блок СВОИМ
+        // контейнером прокрутки: `sticky` отсчитывается от него, а не от окна.
+        // Прокрутки по вертикали внутри контейнера нет, поэтому заголовки не
+        // «прилипали», а просто ВСЕГДА висели на 72px ниже своей строки — и
+        // накрывали собой первую строку блока «Доход» (z-30 против z-10 у
+        // строк). У человека с зарплатой первой по сумме пропадала ровно она.
+        sticky ? "sticky top-0 z-20" : ""
       } ${
         first ? "left-0 z-30 min-w-[15rem]" : ""
       }`}

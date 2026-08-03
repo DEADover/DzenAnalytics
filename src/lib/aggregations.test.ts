@@ -8,6 +8,7 @@ import {
   hashtagCategoryTrees,
   detectRecurring,
   stackedBalanceByAccount,
+  type StackedBalancePoint,
   buildScenarioForecast,
   netWorthSeries,
   netWorthBasis,
@@ -19,6 +20,7 @@ import {
   statsByHourOfWeek,
   transferTotals,
   stripFromAnalytics,
+  scaleKPI,
 } from "./aggregations";
 import { tx } from "../test/fixtures";
 import type { CurrencyRates } from "../types";
@@ -748,5 +750,88 @@ describe("stripFromAnalytics — per-category + off-balance exclusion (#14)", ()
       offBalanceTitles: new Set(["Брокер"]),
     });
     expect(out.map((t) => t.categoryFull)).toEqual(["Еда", "Еда / Кафе"]);
+  });
+});
+
+describe("scaleKPI", () => {
+  const kpi = {
+    income: 300,
+    expense: 150,
+    net: 150,
+    count: 9,
+    avgExpense: 50,
+    avgIncome: 100,
+    daysSpan: 90,
+    uniqueCategories: 4,
+    uniquePayees: 7,
+  };
+
+  it("делит складываемые величины на число периодов", () => {
+    const s = scaleKPI(kpi, 3);
+    expect(s.income).toBe(100);
+    expect(s.expense).toBe(50);
+    expect(s.net).toBe(50);
+    expect(s.count).toBe(3);
+    expect(s.daysSpan).toBe(30);
+  });
+
+  it("НЕ трогает средние на операцию — их делить бессмысленно", () => {
+    const s = scaleKPI(kpi, 3);
+    expect(s.avgExpense).toBe(kpi.avgExpense);
+    expect(s.avgIncome).toBe(kpi.avgIncome);
+  });
+
+  it("НЕ трогает счётчики различных категорий и получателей", () => {
+    const s = scaleKPI(kpi, 3);
+    expect(s.uniqueCategories).toBe(kpi.uniqueCategories);
+    expect(s.uniquePayees).toBe(kpi.uniquePayees);
+  });
+
+  it("один период и меньше оставляют KPI как есть", () => {
+    expect(scaleKPI(kpi, 1)).toBe(kpi);
+    expect(scaleKPI(kpi, 0)).toBe(kpi);
+  });
+});
+
+describe("stackedBalanceByAccount — issue #59", () => {
+  const last = (r: { series: StackedBalancePoint[] }) => r.series[r.series.length - 1];
+
+  it("счёт с нулевым остатком заканчивается нулём, а не накопленным потоком", () => {
+    // «Наличные»: за историю пришло 5 000 переводом, реальный остаток — 0.
+    // Без якоря линия показывала +5 000, и «Итого» расходилось с совокупным
+    // балансом ровно на эту величину.
+    const txs = [
+      tx({ date: "2026-01-10", kind: "transfer", outcomeAccount: "Карта", incomeAccount: "Наличные", amount: 5000 }),
+      tx({ date: "2026-03-10", kind: "income", incomeAccount: "Карта", amount: 12000 }),
+    ];
+    const r = stackedBalanceByAccount(txs, 8, { Карта: 7000, Наличные: 0 });
+    const p = last(r);
+    expect(p["Наличные"]).toBe(0);
+    expect(p["Карта"]).toBe(7000);
+    // «Итого» = совокупный баланс по API.
+    expect(p.total).toBe(7000);
+  });
+
+  it("операция 1970 года не создаёт точку на оси, но её поток сохраняется", () => {
+    // Дзен-мани отдаёт legacy-записи с эпоховой датой. Одна такая растягивала
+    // ось на полвека, и реальный диапазон схлопывался в правый край.
+    const txs = [
+      tx({ date: "1970-01-01", kind: "income", incomeAccount: "Карта", amount: 300 }),
+      tx({ date: "2026-08-01", kind: "income", incomeAccount: "Карта", amount: 1000 }),
+    ];
+    const r = stackedBalanceByAccount(txs, 8);
+    expect(r.series.map((s) => s.date)).toEqual(["2026-08-01"]);
+    // Поток «эпоховой» операции ушёл в стартовое значение линии: 300 + 1000.
+    expect(last(r)["Карта"]).toBe(1300);
+  });
+
+  it("с якорем эпоховая операция не сдвигает конечный остаток", () => {
+    const txs = [
+      tx({ date: "1970-01-01", kind: "expense", outcomeAccount: "Карта", amount: 500 }),
+      tx({ date: "2026-08-01", kind: "income", incomeAccount: "Карта", amount: 1000 }),
+    ];
+    const r = stackedBalanceByAccount(txs, 8, { Карта: 9000 });
+    expect(r.series.map((s) => s.date)).toEqual(["2026-08-01"]);
+    expect(last(r)["Карта"]).toBe(9000);
   });
 });
