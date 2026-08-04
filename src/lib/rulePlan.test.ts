@@ -209,3 +209,34 @@ describe("план применения правил", () => {
     expect(second.rows[0].changes[2].to).toBe("[купон] Выплата купона");
   });
 });
+
+describe("устаревший получатель в правиле — issue #60", () => {
+  it("контрагента больше нет в справочнике — строка блокируется, а не просится в работу", () => {
+    // Правило требует «Сбербанк», но контрагента переименовали. Записать это
+    // нельзя: отправка положит имя свободным текстом, при возврате из облака
+    // получатель окажется пустым, и правило запросится снова — так «ждут
+    // записи» и не уходило после «Применить правила».
+    const t = tx({ id: "a", comment: "Выплата купона" });
+    const справочник = (title: string) => title === "Сбер";
+    const plan = buildRulePlan([t], [coupon], all, {}, new Set(), anyCategory, справочник);
+
+    expect(plan.pending).toHaveLength(0);
+    expect(plan.rows[0].status).toBe("blocked");
+    expect(plan.rows[0].blockedPayee).toBe("Сбербанк");
+  });
+
+  it("контрагент на месте — правило работает как обычно", () => {
+    const t = tx({ id: "a", comment: "Выплата купона" });
+    const справочник = (title: string) => title === "Сбербанк";
+    const plan = buildRulePlan([t], [coupon], all, {}, new Set(), anyCategory, справочник);
+
+    expect(plan.rows[0].status).toBe("pending");
+    expect(plan.rows[0].patch.brand).toBe("Сбербанк");
+  });
+
+  it("без подключения к Дзен-мани справочника нет — не блокируем ничего", () => {
+    const t = tx({ id: "a", comment: "Выплата купона" });
+    const plan = buildRulePlan([t], [coupon], all, {}, new Set(), null, null);
+    expect(plan.rows[0].status).toBe("pending");
+  });
+});

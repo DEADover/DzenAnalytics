@@ -42,6 +42,7 @@ export const FIELD_LABELS: Record<RuleField, string> = {
   payee: "Получатель",
   comment: "Комментарий",
   category: "Текущая категория",
+  account: "Счёт",
 };
 
 /** Условие проверки. `empty`/`not_empty` значения не требуют. */
@@ -201,6 +202,11 @@ export function conditionValues(t: Transaction, field: RuleField): string[] {
       return [t.comment ?? ""];
     case "category":
       return [t.categoryFullOriginal || t.categoryFull || ""];
+    // У перевода счёт не один: списание идёт с одного, зачисление на другой.
+    // Возвращаем обе ноги, иначе условие «Счёт = Карта» не поймало бы перевод
+    // НА карту — а человек его ждёт.
+    case "account":
+      return [t.account ?? "", t.outcomeAccount ?? "", t.incomeAccount ?? ""];
     // Поле не из нашего списка — правило приехало из чужого бэкапа или из
     // будущей версии. Проверять нечего.
     default:

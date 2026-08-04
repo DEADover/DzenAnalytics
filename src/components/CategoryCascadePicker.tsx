@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { CategoryDot } from "./CategoryDot";
 
@@ -19,6 +20,14 @@ interface Props {
   /** Hide the «Без подкатегории» (parent-only) option for these categories —
    *  used when the parent itself is already taken (e.g. already budgeted). */
   hideParentOption?: (category: string) => boolean;
+  /**
+   * Рисовать выпадающую часть в портале, позиционируя её по месту поля.
+   *
+   * Нужно внутри прокручиваемых областей — в теле модального окна обычный
+   * абсолютный список обрезается контейнером с `overflow`, и до нижних
+   * категорий приходится прокручивать само окно.
+   */
+  portal?: boolean;
 }
 
 /**
@@ -38,17 +47,67 @@ export function CategoryCascadePicker({
   placeholder = "Выберите категорию",
   maxHeight = "min(46vh, 280px)",
   hideParentOption,
+  portal = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   // Which parent's sub-categories are shown on the right.
   const [activeParent, setActiveParent] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    listHeight: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !portal) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const r = ref.current?.getBoundingClientRect();
+      if (!r) return;
+      const gap = 4;
+      // Поле поиска и рамки съедают часть высоты — их закладываем, иначе
+      // список вылезает за край экрана ровно на эту величину.
+      const CHROME = 52;
+      const below = window.innerHeight - r.bottom - gap - 8;
+      const above = r.top - gap - 8;
+      // Разворачиваем вверх, если снизу теснее: у поля в нижней части окна
+      // нижние категории иначе оказывались за краем экрана и не прокручивались
+      // — сам список `fixed`, а страница под ним никуда не едет.
+      const dropUp = below < 220 && above > below;
+      const space = Math.max(160, (dropUp ? above : below) - CHROME);
+      const listHeight = Math.min(280, space);
+      setPos({
+        left: r.left,
+        top: dropUp ? r.top - gap - (listHeight + CHROME) : r.bottom + gap,
+        width: r.width,
+        listHeight,
+      });
+    };
+    place();
+    // `true` — ловим прокрутку любого предка, а не только окна.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, portal]);
 
   useEffect(() => {
     if (!open) return;
     function onDoc(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (ref.current?.contains(target)) return;
+      // В портале выпадающая часть — не потомок поля, иначе выбор категории
+      // закрывал бы список раньше, чем срабатывал сам выбор.
+      if (popupRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -123,6 +182,12 @@ export function CategoryCascadePicker({
       : category
     : "";
 
+  /** Сколько отдать под колонки: в портале — по свободному месту на экране. */
+  const listMaxHeight = portal && pos ? `${pos.listHeight}px` : maxHeight;
+
+  /** В режиме портала выпадающая часть уезжает в body, иначе остаётся на месте. */
+  const renderPopup = (node: React.ReactElement) =>
+    portal ? (pos ? createPortal(node, document.body) : null) : node;
   return (
     <div ref={ref} className="relative">
       <button
@@ -140,8 +205,16 @@ export function CategoryCascadePicker({
           className={`w-4 h-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && (
-        <div className="absolute z-10 mt-1 w-full bg-panel border border-border rounded-lg shadow-lg overflow-hidden">
+      {open && renderPopup(
+        <div
+          ref={popupRef}
+          className={
+            portal
+              ? "fixed z-[70] bg-panel border border-border rounded-lg shadow-lg overflow-hidden"
+              : "absolute z-10 mt-1 w-full bg-panel border border-border rounded-lg shadow-lg overflow-hidden"
+          }
+          style={portal && pos ? { left: pos.left, top: pos.top, width: pos.width } : undefined}
+        >
           <div className="flex items-center gap-2 px-2.5 py-2 border-b border-border">
             <Search className="w-3.5 h-3.5 text-muted shrink-0" />
             <input
@@ -155,7 +228,7 @@ export function CategoryCascadePicker({
           {searchLeaves ? (
             /* Search mode — one flat list with directly-selectable leaves,
                sub-categories included (issue #21). */
-            <div className="overflow-y-auto" style={{ maxHeight }}>
+            <div className="overflow-y-auto" style={{ maxHeight: listMaxHeight }}>
               {searchLeaves.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-muted">Ничего не найдено</div>
               ) : (
@@ -192,7 +265,7 @@ export function CategoryCascadePicker({
               )}
             </div>
           ) : (
-          <div className="flex" style={{ maxHeight }}>
+          <div className="flex" style={{ maxHeight: listMaxHeight }}>
             {/* Left — top-level categories */}
             <div className="w-1/2 overflow-y-auto border-r border-border/60">
               {filtered.length === 0 ? (

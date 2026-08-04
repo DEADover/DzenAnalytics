@@ -479,3 +479,54 @@ describe("правила — хранилище", () => {
     expect(describeCategoryRule(r)).toBe("Получатель не заполнено → Получатель = «Сбербанк»");
   });
 });
+
+describe("переименование контрагента в правилах — issue #60", () => {
+  beforeEach(async () => {
+    disk.clear();
+    await useCategoryRulesStore.getState().hydrate();
+  });
+
+  const withPayee = (value: string, condValue = value) => ({
+    enabled: true,
+    title: "П",
+    conditions: [{ field: "payee" as const, op: "equals" as const, value: condValue, caseInsensitive: false }],
+    join: "and" as const,
+    actions: [{ kind: "setPayee" as const, value }],
+  });
+
+  it("меняет имя и в действии, и в точном условии", async () => {
+    const store = useCategoryRulesStore.getState();
+    await store.add(withPayee("Старое"));
+    const touched = await useCategoryRulesStore.getState().renamePayee("Старое", "Новое");
+    expect(touched).toBe(1);
+    const r = useCategoryRulesStore.getState().rules[0];
+    expect(r.actions?.[0].value).toBe("Новое");
+    expect(r.conditions?.[0].value).toBe("Новое");
+  });
+
+  it("не трогает «содержит» — там значение это кусок строки", async () => {
+    const store = useCategoryRulesStore.getState();
+    await store.add({
+      enabled: true,
+      title: "П",
+      conditions: [{ field: "payee", op: "contains", value: "Старое", caseInsensitive: false }],
+      join: "and",
+      actions: [{ kind: "setCategory", value: "Еда" }],
+    });
+    const touched = await useCategoryRulesStore.getState().renamePayee("Старое", "Новое");
+    expect(touched).toBe(0);
+    expect(useCategoryRulesStore.getState().rules[0].conditions?.[0].value).toBe("Старое");
+  });
+
+  it("чужие имена не задевает", async () => {
+    const store = useCategoryRulesStore.getState();
+    await store.add(withPayee("Другое"));
+    expect(await useCategoryRulesStore.getState().renamePayee("Старое", "Новое")).toBe(0);
+  });
+
+  it("переименование в себя — не операция", async () => {
+    const store = useCategoryRulesStore.getState();
+    await store.add(withPayee("Имя"));
+    expect(await useCategoryRulesStore.getState().renamePayee("Имя", "Имя")).toBe(0);
+  });
+});

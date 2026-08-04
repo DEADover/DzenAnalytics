@@ -208,7 +208,9 @@ export function RulePreviewModal({
                           {STATUS_LABEL[row.status]}
                           {row.status === "blocked" && row.blockedCategory
                             ? `: «${row.blockedCategory}»`
-                            : ""}
+                            : row.status === "blocked" && row.blockedPayee
+                              ? `: контрагента «${row.blockedPayee}» больше нет`
+                              : ""}
                         </span>
                       </div>
                       <div className="mt-1 space-y-0.5">

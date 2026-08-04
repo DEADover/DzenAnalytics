@@ -1329,12 +1329,20 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // overlay.
       if (
         cpRename.merchants.length > 0 ||
+        // Исполненные «пустышки» тоже повод зайти сюда: если в очереди ТОЛЬКО
+        // они, отправлять нечего, но и висеть им незачем.
+        cpRename.satisfied.length > 0 ||
         cpNew.length > 0 ||
         merchantDeletions.length > 0 ||
         cpMerge.deletions.length > 0
       ) {
         await useCounterpartyEditsStore.getState().clearPushed({
-          renamedIds: cpRename.merchants.map((m) => String(m.id)),
+          // Вместе с отправленными вычищаем и те, что отправлять было нечего:
+          // иначе такая запись остаётся в очереди навсегда (issue #60).
+          renamedIds: [
+            ...cpRename.merchants.map((m) => String(m.id)),
+            ...cpRename.satisfied,
+          ],
           createdIds: cpNew.map((m) => String(m.id)),
           deletedIds: merchantDeletions.map((d) => String(d.id)),
           mergedIds: cpMerge.deletions.map((d) => String(d.id)),

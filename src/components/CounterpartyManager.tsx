@@ -4,6 +4,7 @@
 // through the normal Push flow, mirroring the categories editor.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLazyList } from "../hooks/useLazyList";
 import { createPortal } from "react-dom";
 import {
   Search,
@@ -22,6 +23,7 @@ import {
   type Counterparty,
 } from "../store/useZenmoneyStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
+import { useCategoryRulesStore } from "../store/useCategoryRulesStore";
 import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
@@ -249,6 +251,15 @@ export function CounterpartyManager() {
 
   // Selection is scoped to what's visible; drop ids that vanished (filtered
   // out, pushed away) so the bulk bar never acts on stale rows.
+  // Список показываем порциями по мере прокрутки страницы: контрагентов бывают
+  // сотни, а собственная прокрутка внутри карточки означала бы две полосы
+  // прокрутки сразу.
+  const lazy = useLazyList(rows, 100);
+  // Те же порции у вспомогательных видов: дублей и «без контрагента» тоже
+  // бывают сотни.
+  const lazyDups = useLazyList(dupGroups, 60);
+  const lazyOrphans = useLazyList(orphanPayees, 100);
+
   const visibleIds = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
   const selectedVisible = useMemo(
     () => [...selected].filter((id) => visibleIds.has(id)),
@@ -592,7 +603,6 @@ export function CounterpartyManager() {
             </button>
           </div>
           <div
-            className="max-h-[440px] overflow-y-auto"
             style={{ fontSize: "var(--tbl-font)" }}
           >
             {/* Column header — the counts need a name, and the fixed widths
@@ -603,7 +613,7 @@ export function CounterpartyManager() {
               <span className="w-36 shrink-0 text-right">Действия</span>
             </div>
             <div className="divide-y divide-border/60">
-            {dupGroups.map((g) => (
+            {lazyDups.visible.map((g) => (
               <div key={g.key} className="px-3 py-2 flex items-start gap-3">
                 {/* Survivor first, then the copies — each on its own line with
                     its own operations count, so it's obvious what moves where. */}
@@ -693,7 +703,6 @@ export function CounterpartyManager() {
             </button>
           </div>
           <div
-            className="max-h-[440px] overflow-y-auto"
             style={{ fontSize: "var(--tbl-font)" }}
           >
             <div className="sticky top-0 z-10 bg-panel border-b border-border flex items-center gap-3 px-3 py-2 text-[0.85em] text-muted uppercase tracking-wide">
@@ -719,7 +728,7 @@ export function CounterpartyManager() {
               <span className="w-20 shrink-0 text-center whitespace-nowrap">Действия</span>
             </div>
             <div className="divide-y divide-border/60">
-              {orphanPayees.map((o) => {
+              {lazyOrphans.visible.map((o) => {
                 const key = dupKey(o.title);
                 return (
                   <div key={key} className="px-3 py-2 flex items-center gap-3">
@@ -800,10 +809,7 @@ export function CounterpartyManager() {
 
       {!dupOnly && !orphanOnly && (
       <div className="border border-border rounded-lg overflow-hidden">
-        <div
-          className="max-h-[440px] overflow-y-auto"
-          style={{ fontSize: "var(--tbl-font)" }}
-        >
+        <div style={{ fontSize: "var(--tbl-font)" }}>
           <div className="sticky top-0 z-10 bg-panel border-b border-border flex items-center gap-3 px-3 py-2 text-[0.85em] text-muted uppercase tracking-wide">
             <span className="w-6 shrink-0 flex items-center justify-center">
               <input
@@ -829,7 +835,7 @@ export function CounterpartyManager() {
             </div>
           ) : (
             <div className="divide-y divide-border/60">
-              {rows.map((row) => {
+              {lazy.visible.map((row) => {
                 // A merged row is on its way out too — same struck-through
                 // treatment as a delete, but it says where the operations went.
                 const gone = row.isDeleted || row.mergedInto !== undefined;
@@ -925,6 +931,15 @@ export function CounterpartyManager() {
                 </div>
                 );
               })}
+              {lazy.hasMore && (
+                <div
+                  ref={lazy.sentinelRef}
+                  className="px-3 py-3 text-center text-xs text-muted"
+                >
+                  Показано {lazy.shown} из {lazy.total} — прокрутите дальше, чтобы
+                  загрузить ещё
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1017,6 +1032,11 @@ function CounterpartyModal({
     if (row) {
       if (row.isNew) await store.renameNew(row.id, trimmed);
       else await store.rename(row.id, trimmed);
+      // Правила ссылаются на контрагента ТЕКСТОМ, а не записью справочника.
+      // Не перепиши мы их здесь — правило продолжило бы требовать старое имя,
+      // которого в справочнике уже нет: правка не приживается, а «ждут записи»
+      // не гаснет (issue #60).
+      await useCategoryRulesStore.getState().renamePayee(row.title, trimmed);
     } else {
       await store.addNew({ id: crypto.randomUUID(), title: trimmed });
     }

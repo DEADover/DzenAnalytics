@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { ReactNode } from "react";
 import { ChevronDown, X } from "lucide-react";
 
 /**
@@ -44,6 +45,12 @@ export interface ComboboxProps {
    */
   portal?: boolean;
   /**
+   * Значок слева от пункта — логотип счёта, точка категории и подобное.
+   * Тот же приём, что в панели фильтров: без значка список названий читается
+   * заметно хуже.
+   */
+  renderIcon?: (option: string) => ReactNode;
+  /**
    * Разрешить НАБОР для поиска, оставив выбор только из списка.
    *
    * Отличается от `allowCustom`: там введённый текст сразу становится
@@ -83,6 +90,7 @@ export function Combobox({
   portal = false,
   prefix,
   searchable = false,
+  renderIcon,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
@@ -310,11 +318,12 @@ export function Combobox({
                         key={opt}
                         type="button"
                         onClick={() => commit(opt)}
-                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 ${
+                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center gap-2 ${
                           isCurrent ? "bg-panel2/60 text-accent" : ""
                         }`}
                       >
-                        {opt}
+                        {renderIcon && <span className="shrink-0">{renderIcon(opt)}</span>}
+                        <span className="truncate">{opt}</span>
                       </button>
                     );
                   })}
@@ -327,11 +336,12 @@ export function Combobox({
                     key={opt}
                     type="button"
                     onClick={() => commit(opt)}
-                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 ${
+                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center gap-2 ${
                       isCurrent ? "bg-panel2/60 text-accent" : ""
                     }`}
                   >
-                    {opt}
+                    {renderIcon && <span className="shrink-0">{renderIcon(opt)}</span>}
+                    <span className="truncate">{opt}</span>
                   </button>
                 );
               })}

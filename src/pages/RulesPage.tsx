@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { accountKindLabel } from "../lib/accountType";
+import { getLiveAccountsFromCache, getBrandTitlesFromCache } from "../store/useZenmoneyStore";
 import {
   Wand2,
   Plus,
@@ -124,6 +126,51 @@ export function RulesPage() {
     return [...popular, ...rest];
   }, [transactions]);
 
+  /**
+   * Счета для условия «Счёт»: плоский список и разбивка по виду счёта.
+   *
+   * Вид («Карта», «Депозит», «Долги») берётся из справочника Дзен-мани, как в
+   * панели фильтров, — чтобы список читался одинаково в обоих местах. В режиме
+   * CSV метаданных нет, тогда группировки просто не будет.
+   */
+  const [accountKinds, setAccountKinds] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    void getLiveAccountsFromCache().then((live) => {
+      if (cancelled || !live) return;
+      const m = new Map<string, string>();
+      for (const a of live) m.set(a.title, accountKindLabel(a.type, a.savings));
+      setAccountKinds(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const allAccounts = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of transactions) {
+      for (const a of [t.account, t.outcomeAccount, t.incomeAccount]) {
+        if (a) set.add(a);
+      }
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [transactions]);
+
+  const accountGroups = useMemo(() => {
+    if (accountKinds.size === 0) return undefined;
+    const byKind = new Map<string, string[]>();
+    for (const title of allAccounts) {
+      const kind = accountKinds.get(title) || "Прочие";
+      const list = byKind.get(kind);
+      if (list) list.push(title);
+      else byKind.set(kind, [title]);
+    }
+    return [...byKind.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], "ru"))
+      .map(([label, items]) => ({ label, items }));
+  }, [allAccounts, accountKinds]);
+
   const allPayees = useMemo(() => {
     const set = new Set<string>();
     for (const t of transactions) {
@@ -168,11 +215,41 @@ export function RulesPage() {
     [zenTags]
   );
 
+  /**
+   * Названия контрагентов из справочника — чтобы отличить живое правило от
+   * устаревшего. Правило хранит получателя текстом; после переименования или
+   * удаления контрагента имя в правиле может уже никому не соответствовать.
+   */
+  const [brandTitles, setBrandTitles] = useState<string[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getBrandTitlesFromCache().then((list) => {
+      if (!cancelled) setBrandTitles(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const payeeOk = useMemo(() => {
+    if (!brandTitles) return null;
+    const set = new Set(brandTitles.map((t) => t.trim().toLowerCase()));
+    return (title: string) => set.has(title.trim().toLowerCase());
+  }, [brandTitles]);
+
   /** План по ВЫБРАННЫМ правилам — то, что показывает окно и то, что запишется. */
   const plan = useMemo(
     () =>
-      buildRulePlan(transactionsRaw, rules, selectedIds, edits, deletedSet, categoryOk),
-    [transactionsRaw, rules, selectedIds, edits, deletedSet, categoryOk]
+      buildRulePlan(
+        transactionsRaw,
+        rules,
+        selectedIds,
+        edits,
+        deletedSet,
+        categoryOk,
+        payeeOk
+      ),
+    [transactionsRaw, rules, selectedIds, edits, deletedSet, categoryOk, payeeOk]
   );
 
   function openMatches(rule: StoredCategoryRule) {
@@ -630,6 +707,8 @@ export function RulesPage() {
           transactions={transactionsRaw}
           categories={allCategories}
           payees={allPayees}
+          accounts={allAccounts}
+          accountGroups={accountGroups}
           onClose={() => setEditing(null)}
           onSave={saveRule}
         />

@@ -1530,10 +1530,23 @@ export function buildMerchantRenamePush(
   renames: Record<string, string>,
   cacheMerchants: ZenMerchant[],
   stampSeconds: number
-): { merchants: ZenMerchant[]; skipped: { id: string; reason: string }[] } {
+): {
+  merchants: ZenMerchant[];
+  skipped: { id: string; reason: string }[];
+  /**
+   * Переименования, которые отправлять НЕЧЕГО: в кэше уже стоит нужное имя.
+   *
+   * Их обязательно надо вернуть отдельно и вычистить из очереди наравне с
+   * отправленными. Раньше такая запись просто пропускалась: не уезжала, потому
+   * что отправлять нечего, и не очищалась, потому что чистится только реально
+   * отправленное, — метка «есть несохранённое» висела вечно (issue #60).
+   */
+  satisfied: string[];
+} {
   const byId = new Map(cacheMerchants.map((m) => [m.id, m]));
   const merchants: ZenMerchant[] = [];
   const skipped: { id: string; reason: string }[] = [];
+  const satisfied: string[] = [];
   for (const [id, rawTitle] of Object.entries(renames)) {
     const orig = byId.get(id);
     if (!orig) {
@@ -1541,10 +1554,15 @@ export function buildMerchantRenamePush(
       continue;
     }
     const title = rawTitle.trim();
-    if (!title || title === orig.title) continue; // no-op
+    if (!title || title === orig.title) {
+      // Пустое имя — незаполненная форма, а не команда; совпавшее — уже на
+      // месте. И то и другое считаем исполненным.
+      satisfied.push(id);
+      continue;
+    }
     merchants.push({ ...orig, title, changed: stampSeconds });
   }
-  return { merchants, skipped };
+  return { merchants, skipped, satisfied };
 }
 
 /**

@@ -1715,3 +1715,35 @@ describe("buildPushItems — правка без структурных изме
     expect(res.recreates[0].tx.merchant).toBe("m-1");
   });
 });
+
+describe("buildMerchantRenamePush — issue #60", () => {
+  const m = (id: string, title: string) =>
+    ({ id, user: 1, title, changed: 1 }) as ZenMerchant;
+
+  it("обычное переименование уходит в облако", () => {
+    const res = buildMerchantRenamePush({ "m1": "Новое" }, [m("m1", "Старое")], 777);
+    expect(res.merchants.map((x) => x.title)).toEqual(["Новое"]);
+    expect(res.satisfied).toEqual([]);
+  });
+
+  it("имя уже совпадает — считаем исполненным, а не молча пропускаем", () => {
+    // Раньше такая запись не уезжала (отправлять нечего) и не вычищалась
+    // (чистится только отправленное) — метка «есть несохранённое» висела вечно.
+    const res = buildMerchantRenamePush({ "m1": "Магнит" }, [m("m1", "Магнит")], 777);
+    expect(res.merchants).toEqual([]);
+    expect(res.satisfied).toEqual(["m1"]);
+  });
+
+  it("пустое имя тоже закрываем, а не копим", () => {
+    const res = buildMerchantRenamePush({ "m1": "   " }, [m("m1", "Магнит")], 777);
+    expect(res.merchants).toEqual([]);
+    expect(res.satisfied).toEqual(["m1"]);
+  });
+
+  it("контрагента нет в кэше — это по-прежнему пропуск с причиной", () => {
+    const res = buildMerchantRenamePush({ "нет": "Новое" }, [m("m1", "Старое")], 777);
+    expect(res.merchants).toEqual([]);
+    expect(res.satisfied).toEqual([]);
+    expect(res.skipped[0].reason).toMatch(/не найден/);
+  });
+});

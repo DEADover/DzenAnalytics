@@ -10,6 +10,7 @@
 // treats `required !== false` as a need.
 
 import { useEffect, useMemo, useState } from "react";
+import { useLazyList } from "../hooks/useLazyList";
 import { Link } from "react-router-dom";
 import {
   Search,
@@ -177,6 +178,12 @@ export function CategoryManager() {
       }))
       .sort((a, b) => cmp(a.root.title, a.root.title, b.root.title, b.root.title));
   }, [tags, allTags, query, sort, countByFull]);
+
+  // Показываем порциями по мере прокрутки страницы: режем ВЕРХНИЙ уровень,
+  // подкатегории едут вместе со своим родителем — иначе группа разорвалась бы
+  // посередине. Внутренней прокрутки у списка больше нет, она давала вторую
+  // полосу прокрутки поверх страничной.
+  const lazyGroups = useLazyList(groups, 60);
 
   const pendingCount =
     Object.keys(tagEdits).length +
@@ -386,7 +393,6 @@ export function CategoryManager() {
           line up regardless of whether the list overflows. */}
       <div className="border border-border rounded-lg overflow-hidden">
         <div
-          className="max-h-[440px] overflow-y-auto"
           // Obeys the «Размер текста в таблицах» slider — rows inherit this.
           style={{ fontSize: "var(--tbl-font)" }}
         >
@@ -408,7 +414,7 @@ export function CategoryManager() {
             </div>
           ) : (
             <div className="divide-y divide-border/60">
-              {groups.map(({ root, children }) => {
+              {lazyGroups.visible.map(({ root, children }) => {
                 const hasKids = children.length > 0;
                 const rail = colorForCategory(root.title, meta);
                 const rEdit = tagEdits[root.id];
@@ -688,6 +694,15 @@ export function CategoryManager() {
                   </div>
                 );
               })}
+              {lazyGroups.hasMore && (
+                <div
+                  ref={lazyGroups.sentinelRef}
+                  className="px-3 py-3 text-center text-xs text-muted"
+                >
+                  Показано {lazyGroups.shown} из {lazyGroups.total} — прокрутите
+                  дальше, чтобы загрузить ещё
+                </div>
+              )}
             </div>
           )}
         </div>

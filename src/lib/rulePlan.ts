@@ -33,6 +33,8 @@ export interface RuleRow {
   status: "pending" | "written" | "same" | "blocked";
   /** Категория, которой нет в справочнике Дзен-мани (для `blocked`). */
   blockedCategory?: string;
+  /** Получатель, которого нет в справочнике Дзен-мани, — правило устарело. */
+  blockedPayee?: string;
 }
 
 export interface RulePlan {
@@ -58,6 +60,7 @@ const dash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
  * @param edits      слой правок — чтобы не предлагать записать записанное.
  * @param deletedSet локально удалённые операции: их не трогаем вовсе.
  * @param categoryOk «такая категория есть в Дзен-мани»; без токена — `null`.
+ * @param payeeOk    «такой контрагент есть в Дзен-мани»; без токена — `null`.
  */
 export function buildRulePlan(
   raw: Transaction[],
@@ -65,7 +68,8 @@ export function buildRulePlan(
   ruleIds: ReadonlySet<string>,
   edits: Record<string, TransactionEdit>,
   deletedSet: Set<string>,
-  categoryOk: ((category: string, subcategory: string | null) => boolean) | null
+  categoryOk: ((category: string, subcategory: string | null) => boolean) | null,
+  payeeOk: ((title: string) => boolean) | null = null
 ): RulePlan {
   if (ruleIds.size === 0)
     return { rows: [], pending: [], skipped: [], skippedCount: 0 };
@@ -94,6 +98,28 @@ export function buildRulePlan(
         changes: [],
         status: "blocked",
         blockedCategory: patch.categoryFull,
+      });
+      continue;
+    }
+
+    // Получателя нет в справочнике — правило ссылается на имя, которого больше
+    // не существует: контрагента переименовали или удалили. Записывать такое
+    // бессмысленно: отправка положит имя свободным текстом, при возврате из
+    // облака получатель окажется пустым, и правило запросится снова — так и
+    // крутилось «ждут записи», которое не уходило после «Применить» (issue
+    // #60). Показываем строку заблокированной и называем причину.
+    if (
+      patch.brand !== undefined &&
+      payeeOk &&
+      (patch.brand ?? "").trim() &&
+      !payeeOk((patch.brand ?? "").trim())
+    ) {
+      rows.push({
+        tx: t,
+        patch: {},
+        changes: [],
+        status: "blocked",
+        blockedPayee: (patch.brand ?? "").trim(),
       });
       continue;
     }

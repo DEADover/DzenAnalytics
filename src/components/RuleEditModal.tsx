@@ -7,12 +7,10 @@ import {
   Plus,
   Trash2,
   HelpCircle,
-  AlertTriangle,
   Clock,
 } from "lucide-react";
 import clsx from "clsx";
 import {
-  ACTION_LABELS,
   CONDITION_OP_LABELS,
   FIELD_LABELS,
   VALUELESS_OPS,
@@ -20,6 +18,8 @@ import {
   compileCondition,
   compileRuleV2,
   describeRule,
+  joinCategoryFull,
+  splitCategoryFull,
   ruleMatchesV2,
   type CategoryRuleV2,
   type ConditionJoin,
@@ -28,10 +28,16 @@ import {
   type RuleActionKind,
   type RuleCondition,
   type RuleField,
+  type RuleTargetField,
 } from "../lib/ruleEngine";
 import { displayPayee, formatDate, formatMoney, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { CategoryDot } from "./CategoryDot";
+import { AccountLogo } from "./AccountLogo";
+import {
+  CategoryCascadePicker,
+  type CategoryNode,
+} from "./CategoryCascadePicker";
 import { Select } from "./Select";
 import { Tooltip } from "./Tooltip";
 import { Combobox } from "./Combobox";
@@ -45,9 +51,33 @@ const RULE_OPS: { value: ConditionOp; label: string }[] = (
   Object.keys(CONDITION_OP_LABELS) as ConditionOp[]
 ).map((value) => ({ value, label: CONDITION_OP_LABELS[value] }));
 
-const RULE_ACTIONS: { value: RuleActionKind; label: string }[] = (
-  Object.keys(ACTION_LABELS) as RuleActionKind[]
-).map((value) => ({ value, label: ACTION_LABELS[value] }));
+/**
+ * Что правило меняет — три цели, а не пять видов действия.
+ *
+ * Раньше в одном списке лежали «Комментарий», «Дописать в начало комментария» и
+ * «Дописать в конец комментария»: выбор поля и способ записи были свалены в
+ * кучу, а длинные подписи распирали окно. Теперь сначала выбирают ЧТО менять,
+ * и уже для комментария — КАК.
+ */
+const ACTION_TARGETS: { value: RuleTargetField; label: string }[] = [
+  { value: "category", label: "Категория" },
+  { value: "payee", label: "Получатель" },
+  { value: "comment", label: "Комментарий" },
+];
+
+/** Способ записи комментария. Внутри правила это по-прежнему три вида действия. */
+const COMMENT_MODES: { value: RuleActionKind; label: string }[] = [
+  { value: "setComment", label: "Новый комментарий" },
+  { value: "prependComment", label: "Дописать в начало" },
+  { value: "appendComment", label: "Дописать в конец" },
+];
+
+/** Вид действия по умолчанию для выбранной цели. */
+const DEFAULT_KIND: Record<RuleTargetField, RuleActionKind> = {
+  category: "setCategory",
+  payee: "setPayee",
+  comment: "setComment",
+};
 
 /** Черновик правила — то, что редактируется в окне. */
 export interface RuleDraft {
@@ -69,6 +99,10 @@ interface Props {
   categories: string[];
   /** Подсказки получателей для действия «Получатель». */
   payees: string[];
+  /** Названия счетов — для пикера в условии «Счёт». */
+  accounts: string[];
+  /** Те же счета, разложенные по виду («Карта», «Депозит»…). Нет в режиме CSV. */
+  accountGroups?: { label: string; items: string[] }[];
   onClose: () => void;
   onSave: (draft: RuleDraft) => void | Promise<void>;
 }
@@ -171,11 +205,38 @@ export function RuleEditModal({
   transactions,
   categories,
   payees,
+  accounts,
+  accountGroups,
   onClose,
   onSave,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [showMatches, setShowMatches] = useState(false);
+
+  /**
+   * Категории для каскадного пикера: верхний уровень — родители, справа их
+   * подкатегории. Тот же компонент, что в окне правки операции, — иначе выбор
+   * категории в правилах выглядел бы иначе, чем везде.
+   */
+  const categoryNodes = useMemo<CategoryNode[]>(() => {
+    const subs = new Map<string, Set<string>>();
+    for (const full of categories) {
+      // Разделитель тот же, что разбирает `splitCategoryFull`.
+      const parts = full.split(/\s*\/\s*/).filter(Boolean);
+      const parent = parts[0];
+      if (!parent) continue;
+      const rest = parts.slice(1).join(" / ");
+      const bucket = subs.get(parent) ?? new Set<string>();
+      if (rest) bucket.add(rest);
+      subs.set(parent, bucket);
+    }
+    return [...subs.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], "ru"))
+      .map(([name, set]) => ({
+        name,
+        subs: [...set].sort((x, y) => x.localeCompare(y, "ru")),
+      }));
+  }, [categories]);
   const [draft, setDraft] = useState<RuleDraft>(() =>
     rule
       ? {
@@ -218,6 +279,11 @@ export function RuleEditModal({
 
   /** Правило, каким оно уйдёт в движок: значения обрезаны, у операций без
    *  значения оно очищено — «не заполнено» с текстом в поле сбивало бы с толку. */
+  /** Цели, которые ещё не заняты: по одному действию на поле. */
+  const freeTargets = ACTION_TARGETS.filter(
+    (t) => !draft.actions.some((a) => actionTarget(a.kind) === t.value)
+  );
+
   const cleaned = useMemo<CategoryRuleV2>(
     () => ({
       id: rule?.id ?? "preview",
@@ -300,14 +366,6 @@ export function RuleEditModal({
   /** Поля, которым назначено больше одного действия: движок внутри правила
    *  перезаписывает, поэтому применится последнее — и об этом надо сказать
    *  прямо на спорных строках. */
-  const doubleTargets = (() => {
-    const seen = new Map<string, number>();
-    for (const a of cleaned.actions) {
-      const target = actionTarget(a.kind);
-      seen.set(target, (seen.get(target) ?? 0) + 1);
-    }
-    return new Set([...seen.entries()].filter(([, n]) => n > 1).map(([t]) => t));
-  })();
 
   async function save() {
     if (!canSave) return;
@@ -434,12 +492,20 @@ export function RuleEditModal({
                     <div className="flex items-center gap-2">
                       <Select
                         className="flex-1 min-w-0"
+                        ariaLabel="Поле условия"
+                        portal
                         value={c.field}
                         options={RULE_FIELDS}
-                        onChange={(v) => patchCondition(c.id!, { field: v })}
+                        onChange={(v) =>
+                          // Значение осмысленно только внутри своего поля:
+                          // название счёта в поле комментария — мусор.
+                          patchCondition(c.id!, { field: v, value: "" })
+                        }
                       />
                       <Select
                         className="flex-1 min-w-0"
+                        ariaLabel="Условие"
+                        portal
                         value={c.op}
                         options={RULE_OPS}
                         onChange={(v) => patchCondition(c.id!, { op: v })}
@@ -463,6 +529,27 @@ export function RuleEditModal({
                         прячем, чтобы не спрашивать то, что не будет учтено. */}
                     {!VALUELESS_OPS.has(c.op) && (
                       <div className="flex items-center gap-2">
+                        {/* У счёта значение — не свободный текст, а название из
+                            списка: набирать его руками негде и незачем. Для
+                            «содержит» и регулярных выражений поле остаётся
+                            текстовым — там как раз нужен кусок строки. */}
+                        {c.field === "account" && c.op === "equals" ? (
+                          <div className="flex-1 min-w-0">
+                            <Combobox
+                              value={c.value}
+                              options={accounts}
+                              groups={accountGroups}
+                              renderIcon={(title) => (
+                                <AccountLogo title={title} size={18} />
+                              )}
+                              allowCustom={false}
+                              searchable
+                              portal
+                              onChange={(v) => patchCondition(c.id!, { value: v })}
+                              placeholder="Поиск счёта"
+                            />
+                          </div>
+                        ) : (
                         <input
                           value={c.value}
                           onChange={(e) => patchCondition(c.id!, { value: e.target.value })}
@@ -471,6 +558,7 @@ export function RuleEditModal({
                           aria-label="Значение условия"
                           aria-invalid={c.op === "regex" && brokenRegex.has(c.id!)}
                         />
+                        )}
                         {c.op === "regex" && (
                           <Tooltip content={REGEX_HINT} placement="bottom">
                             <button
@@ -524,89 +612,134 @@ export function RuleEditModal({
           <div>
             <div className="label mb-2">То</div>
             <div className="space-y-2">
-              {draft.actions.map((a) => (
-                <div key={a.id} className="flex items-center gap-2">
-                  <Select
-                    className="w-64 shrink-0"
-                    value={a.kind}
-                    options={RULE_ACTIONS}
-                    onChange={(v) => patchAction(a.id!, { kind: v })}
-                  />
-                  <div className="flex-1 min-w-0">
-                    {a.kind === "setCategory" ? (
-                      <Combobox
-                        value={a.value}
-                        options={categories}
-                        onChange={(v) => patchAction(a.id!, { value: v })}
-                        placeholder="Еда дома / Алкоголь"
-                      />
-                    ) : a.kind === "setPayee" ? (
-                      <Combobox
-                        value={a.value}
-                        options={payees}
-                        onChange={(v) => patchAction(a.id!, { value: v })}
-                        placeholder="Сбербанк"
-                      />
-                    ) : (
-                      <input
-                        value={a.value}
-                        onChange={(e) => patchAction(a.id!, { value: e.target.value })}
-                        placeholder={
-                          a.kind === "setComment" ? "Новый комментарий" : "[купон]"
-                        }
-                        className={FIELD}
-                        aria-label="Значение действия"
+              {draft.actions.map((a) => {
+                const target = actionTarget(a.kind);
+                // Цель, занятая ДРУГИМ действием, из списка убирается: одно
+                // правило не может задавать одно и то же поле дважды —
+                // применилось бы последнее, а человек видел бы два действия.
+                const takenByOthers = new Set(
+                  draft.actions.filter((x) => x.id !== a.id).map((x) => actionTarget(x.kind))
+                );
+                const targetOptions = ACTION_TARGETS.filter(
+                  (o) => o.value === target || !takenByOthers.has(o.value)
+                );
+                return (
+                  <div key={a.id} className="flex items-center gap-2 min-w-0">
+                    <Select
+                      className="w-36 shrink-0"
+                      ariaLabel="Что менять"
+                      portal
+                      value={target}
+                      options={targetOptions}
+                      onChange={(v) =>
+                        patchAction(a.id!, {
+                          kind: DEFAULT_KIND[v],
+                          // Значение осмысленно только внутри своей цели:
+                          // категория в поле комментария — мусор.
+                          value: "",
+                        })
+                      }
+                    />
+                    {target === "comment" && (
+                      <Select
+                        className="w-52 shrink-0"
+                        ariaLabel="Как записать комментарий"
+                        portal
+                        value={a.kind}
+                        options={COMMENT_MODES}
+                        onChange={(v) => patchAction(a.id!, { kind: v })}
                       />
                     )}
-                  </div>
-                  {/* Оговорки живут на своей строке значком, а не абзацем под
-                      формой: относятся они к конкретному действию. */}
-                  {doubleTargets.has(actionTarget(a.kind)) && (
-                    <Tooltip
-                      content={`«${FIELD_LABELS[actionTarget(a.kind) as RuleField] ?? actionTarget(a.kind)}» задаётся в правиле дважды — применится последнее действие`}
+                    <div className="flex-1 min-w-0">
+                      {target === "category" ? (
+                        <CategoryCascadePicker
+                          category={a.value.trim() ? splitCategoryFull(a.value).category : ""}
+                          subcategory={
+                            a.value.trim() ? splitCategoryFull(a.value).subcategory ?? "" : ""
+                          }
+                          categories={categoryNodes}
+                          portal
+                          onChange={(cat, sub) =>
+                            patchAction(a.id!, { value: joinCategoryFull(cat, sub || null) })
+                          }
+                        />
+                      ) : target === "payee" ? (
+                        <Combobox
+                          value={a.value}
+                          options={payees}
+                          portal
+                          onChange={(v) => patchAction(a.id!, { value: v })}
+                          placeholder="Сбербанк"
+                        />
+                      ) : (
+                        <input
+                          value={a.value}
+                          onChange={(e) => patchAction(a.id!, { value: e.target.value })}
+                          placeholder={
+                            a.kind === "setComment" ? "Новый комментарий" : "[купон]"
+                          }
+                          className={FIELD}
+                          aria-label="Значение действия"
+                        />
+                      )}
+                    </div>
+                    {/* Место под значок держим всегда: иначе строка дёргалась бы
+                        каждый раз, когда в поле появляется первый символ. */}
+                    <span className="w-4 shrink-0 flex justify-center">
+                      {NEEDS_APPLY.has(a.kind) && a.value.trim().length > 0 && (
+                        <Tooltip content="Появится в операциях только после кнопки «Применить правила»">
+                          <button
+                            type="button"
+                            className="text-muted"
+                            aria-label="Применяется не сразу"
+                          >
+                            <Clock className="w-4 h-4" />
+                          </button>
+                        </Tooltip>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraft((d) => ({
+                          ...d,
+                          actions: d.actions.filter((x) => x.id !== a.id),
+                        }))
+                      }
+                      className="btn-ghost !p-1.5 text-muted hover:text-expense shrink-0"
+                      title="Удалить действие"
+                      aria-label="Удалить действие"
                     >
-                      <button
-                        type="button"
-                        className="text-warn shrink-0"
-                        aria-label="Поле задано дважды"
-                      >
-                        <AlertTriangle className="w-4 h-4" />
-                      </button>
-                    </Tooltip>
-                  )}
-                  {NEEDS_APPLY.has(a.kind) && a.value.trim().length > 0 && (
-                    <Tooltip content="Появится в операциях только после кнопки «Применить правила»">
-                      <button
-                        type="button"
-                        className="text-muted shrink-0"
-                        aria-label="Применяется не сразу"
-                      >
-                        <Clock className="w-4 h-4" />
-                      </button>
-                    </Tooltip>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraft((d) => ({
-                        ...d,
-                        actions: d.actions.filter((x) => x.id !== a.id),
-                      }))
-                    }
-                    className="btn-ghost !p-1.5 text-muted hover:text-expense shrink-0"
-                    title="Удалить действие"
-                    aria-label="Удалить действие"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             <button
               type="button"
-              onClick={() => setDraft((d) => ({ ...d, actions: [...d.actions, newAction()] }))}
-              className="btn-ghost text-xs mt-2"
+              disabled={freeTargets.length === 0}
+              onClick={() =>
+                setDraft((d) => {
+                  const used = new Set(d.actions.map((x) => actionTarget(x.kind)));
+                  const next = ACTION_TARGETS.find((t) => !used.has(t.value));
+                  if (!next) return d;
+                  return {
+                    ...d,
+                    actions: [
+                      ...d.actions,
+                      { id: nextId(), kind: DEFAULT_KIND[next.value], value: "" },
+                    ],
+                  };
+                })
+              }
+              className="btn-ghost text-xs mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              title={
+                freeTargets.length === 0
+                  ? "Все поля уже заданы: категория, получатель и комментарий"
+                  : "Добавить действие"
+              }
             >
               <Plus className="w-3.5 h-3.5" />
               Действие

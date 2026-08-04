@@ -6,7 +6,7 @@ import {
   hasWhatFilters,
   type SavedView,
 } from "./useSavedViewsStore";
-import type { DatePreset } from "./useFiltersStore";
+import { useFiltersStore, type DatePreset } from "./useFiltersStore";
 
 const view = (v: Partial<SavedView>): SavedView => ({
   id: "v1",
@@ -85,5 +85,73 @@ describe("periodSignature", () => {
     expect(periodSignature({ preset: "all", from: null, to: null })).toBe(
       periodSignature({ preset: "all", from: null, to: null, monthYM: null })
     );
+  });
+});
+
+describe("применение сохранённого фильтра воспроизводит период целиком", () => {
+  const f = () => useFiltersStore.getState();
+
+  /** То, что делает `applyView` с периодом. */
+  const applyPeriod = (v: SavedView) => {
+    if (v.includePeriod ?? true) {
+      f().setPeriod({
+        preset: v.preset,
+        from: v.from,
+        to: v.to,
+        monthYM: v.monthYM ?? null,
+      });
+    }
+  };
+
+  const liveState = () => ({
+    accounts: [...f().accounts],
+    categories: [...f().categories],
+    currencies: [...f().currencies],
+    search: f().search,
+    excludeTransfers: f().excludeTransfers,
+    preset: f().preset,
+    from: f().from,
+    to: f().to,
+    monthYM: f().monthYM,
+  });
+
+  it("пресетный фильтр поверх произвольного диапазона не оставляет старых дат", () => {
+    // Прошлый фильтр оставил диапазон; поля дат в панели показывают from/to
+    // всегда, независимо от пресета, поэтому хвост был виден пользователю.
+    f().setRange("2025-03-01", "2025-03-31");
+    const ytd = view({ id: "v-ytd", preset: "ytd", from: null, to: null, monthYM: null, includePeriod: true });
+    applyPeriod(ytd);
+    expect(f().preset).toBe("ytd");
+    expect(f().from).toBeNull();
+    expect(f().to).toBeNull();
+  });
+
+  it("применённый фильтр не считается изменённым сразу после применения", () => {
+    f().setRange("2025-03-01", "2025-03-31");
+    const ytd = view({ id: "v-ytd", preset: "ytd", from: null, to: null, monthYM: null, includePeriod: true });
+    applyPeriod(ytd);
+    expect(matchesView(ytd, liveState())).toBe(true);
+  });
+
+  it("фильтр без периода не трогает период, а следующий за ним — проставляет свой", () => {
+    // Ровно порядок из отчёта: период → фильтр без периода → фильтр с периодом.
+    f().setMonth("2025-11");
+    const noPeriod = view({ id: "v-nop", preset: "all", monthYM: null, includePeriod: false });
+    applyPeriod(noPeriod);
+    expect(f().preset).toBe("month");
+    expect(f().monthYM).toBe("2025-11");
+
+    const ytd = view({ id: "v-ytd", preset: "ytd", from: null, to: null, monthYM: null, includePeriod: true });
+    applyPeriod(ytd);
+    expect(f().preset).toBe("ytd");
+    expect(f().monthYM).toBeNull();
+    expect(matchesView(ytd, liveState())).toBe(true);
+  });
+
+  it("переключение пресета руками сбрасывает произвольный диапазон", () => {
+    f().setRange("2025-03-01", "2025-03-31");
+    f().setPreset("30d");
+    expect(f().from).toBeNull();
+    expect(f().to).toBeNull();
   });
 });

@@ -207,10 +207,18 @@ export function CommandPalette({ open, onClose }: Props) {
         icon: Bookmark,
         action: () => {
           const f = filtersStore.getState();
-          if (v.preset === "month" && v.monthYM) f.setMonth(v.monthYM);
-          else {
-            f.setPreset(v.preset);
-            f.setRange(v.from, v.to);
+          // Период — одним присваиванием и только если вид его захватывает.
+          // Прежде здесь после `setPreset` сразу звался `setRange`, а тот
+          // принудительно ставит «Свои даты»: вид из палитры всегда применялся
+          // произвольным диапазоном, каким бы ни был его пресет. Признак
+          // «без периода» тут вообще не учитывался.
+          if (v.includePeriod ?? true) {
+            f.setPeriod({
+              preset: v.preset,
+              from: v.from,
+              to: v.to,
+              monthYM: v.monthYM ?? null,
+            });
           }
           f.resetSet("accounts");
           f.resetSet("categories");

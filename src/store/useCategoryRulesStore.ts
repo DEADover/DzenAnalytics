@@ -15,7 +15,7 @@ import {
   type StoredRule,
 } from "../lib/ruleEngine";
 
-export type RuleField = "payee" | "comment" | "category";
+export type RuleField = "payee" | "comment" | "category" | "account";
 
 /**
  * Операция условия. Раньше их было четыре — теперь это тот же список, что у
@@ -67,6 +67,20 @@ interface RulesState {
   add: (r: NewRule | NewRuleV2) => Promise<void>;
   addMany: (rs: (NewRule | NewRuleV2)[]) => Promise<number>;
   update: (id: string, patch: Partial<NewRuleV2>) => Promise<void>;
+  /**
+   * Переписать в правилах имя контрагента: старое → новое.
+   *
+   * Правило хранит получателя ТЕКСТОМ, а не ссылкой на запись справочника.
+   * Переименовали контрагента — и правило продолжало требовать старое имя,
+   * которого в справочнике уже нет: правка не приживалась, и «ждут записи»
+   * висело вечно (issue #60).
+   *
+   * Меняем только ТОЧНЫЕ совпадения: у условий «содержит» и «регулярное
+   * выражение» значение — кусок строки, и подменять его в нём нельзя.
+   *
+   * Возвращает число изменённых правил.
+   */
+  renamePayee: (from: string, to: string) => Promise<number>;
   remove: (id: string) => Promise<void>;
   move: (id: string, dir: -1 | 1) => Promise<void>;
 }
@@ -175,6 +189,46 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
     return fresh.length;
+  },
+
+  renamePayee: async (from, to) => {
+    const oldTitle = from.trim();
+    const newTitle = to.trim();
+    if (!oldTitle || !newTitle || oldTitle === newTitle) return 0;
+    // Зовут отсюда со страницы «Настройки», где список правил мог ещё ни разу
+    // не читаться: без этого мы прошлись бы по пустому массиву и молча ничего
+    // не переименовали. Проверено вживую — именно так и получилось.
+    if (!get().loaded) await get().hydrate();
+    let touched = 0;
+    const list = get().rules.map((r) => {
+      let changed = false;
+      const next = { ...r } as StoredCategoryRule;
+      if (Array.isArray(next.actions)) {
+        next.actions = next.actions.map((a) => {
+          if (a.kind === "setPayee" && a.value === oldTitle) {
+            changed = true;
+            return { ...a, value: newTitle };
+          }
+          return a;
+        });
+      }
+      if (Array.isArray(next.conditions)) {
+        next.conditions = next.conditions.map((c) => {
+          if (c.field === "payee" && c.op === "equals" && c.value === oldTitle) {
+            changed = true;
+            return { ...c, value: newTitle };
+          }
+          return c;
+        });
+      }
+      if (!changed) return r;
+      touched++;
+      return next;
+    });
+    if (touched === 0) return 0;
+    await db.saveJSON("categoryRules", list);
+    set({ rules: list });
+    return touched;
   },
 
   update: async (id, patch) => {

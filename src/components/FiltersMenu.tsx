@@ -96,9 +96,17 @@ export function FiltersMenu() {
     f.setSearch(v.search);
     f.setExcludeTransfers(v.excludeTransfers);
     if (v.includePeriod ?? true) {
-      if (v.preset === "month" && v.monthYM) f.setMonth(v.monthYM);
-      else if (v.preset === "custom") f.setRange(v.from, v.to);
-      else f.setPreset(v.preset);
+      // Период воспроизводим ЦЕЛИКОМ. Поштучные сеттеры оставляли хвосты от
+      // прошлого фильтра: `setPreset` не сбрасывал произвольный диапазон, и
+      // поля дат продолжали показывать старый период, а сам вид сразу же
+      // считался «изменённым», потому что его снимок с живым состоянием
+      // не совпадал.
+      f.setPeriod({
+        preset: v.preset,
+        from: v.from,
+        to: v.to,
+        monthYM: v.monthYM ?? null,
+      });
     }
     setActiveId(v.id);
     closeAll();

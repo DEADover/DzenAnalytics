@@ -520,7 +520,7 @@ export function AccountsPage() {
     });
   }, [liveAccounts, accountEdits]);
 
-  const accountRows = useMemo(() => {
+  const accountRowsResult = useMemo(() => {
     const liveByTitle = new Map(liveList.map((a) => [a.title, a]));
     const txByTitle = new Map(accounts.map((a) => [a.account, a]));
 
@@ -532,11 +532,18 @@ export function AccountsPage() {
     // Главная), но прятать сами счета из их же списка ей незачем.
     const titles = new Set<string>();
     for (const a of accounts) titles.add(a.account);
+    // Сколько живых счетов вообще не попало в список: нулевой остаток и ни
+    // одной операции в окне фильтра. Нужно, чтобы подпись под итогом честно
+    // говорила, что показано не всё.
+    let dormant = 0;
     for (const a of liveList) {
       // Archived (closed) accounts are kept but grouped below active ones
       // (see the sort), so the user can still review them without clutter up top.
       // Skip dormant zero-balance accounts with no activity — they'd be noise.
-      if (Math.abs(a.balance) <= 0.005 && !txByTitle.has(a.title)) continue;
+      if (Math.abs(a.balance) <= 0.005 && !txByTitle.has(a.title)) {
+        dormant++;
+        continue;
+      }
       titles.add(a.title);
     }
 
@@ -578,9 +585,12 @@ export function AccountsPage() {
       if (x.archive !== y.archive) return x.archive ? 1 : -1;
       return (y.balanceBase ?? y.delta) - (x.balanceBase ?? x.delta);
     });
-    return rows;
+    return { rows, dormant };
   }, [accounts, liveList, accountEdits, toBase]);
 
+  /** Спящие счета, не попавшие в список вовсе (нулевой остаток и без операций). */
+  const dormantCount = accountRowsResult.dormant;
+  const accountRows = accountRowsResult.rows;
   type AccountRow = (typeof accountRows)[number];
 
   // True when at least one account carries a real (API) balance — drives the
@@ -709,6 +719,29 @@ export function AccountsPage() {
     sortBy,
     sortDir,
   ]);
+
+  /**
+   * Итог по ТОМУ, ЧТО СЕЙЧАС ВИДНО в списке.
+   *
+   * KPI наверху считает совокупный баланс по всем счетам и отборы не знает,
+   * а сумма до сих пор существовала только в заголовке группы. Отобрал
+   * накопительные — и сколько на них всего, узнать было негде.
+   *
+   * Формула та же, что у заголовков групп: реальный остаток, а где его нет
+   * (CSV) — изменение за период, иначе строка списка и итог считались бы
+   * по-разному.
+   */
+  /**
+   * Сколько счетов НЕ показано: спящие нули, которые в список не попадают
+   * вовсе, плюс отсеянные отборами. Без этой цифры итог по списку и KPI
+   * «Совокупный баланс» стоят рядом разными числами и выглядят как ошибка.
+   */
+  const hiddenCount = dormantCount + (accountRows.length - visibleRows.length);
+
+  const visibleTotal = useMemo(
+    () => visibleRows.reduce((sum, r) => sum + (r.balanceBase ?? r.delta), 0),
+    [visibleRows]
+  );
 
   /** Плоский список для вывода: заголовки групп вперемешку со счетами.
    *  Плоским он сделан намеренно — так и сетка карточек, и таблица остаются
@@ -1241,6 +1274,31 @@ export function AccountsPage() {
               Счета (<span className="tabular-nums">{visibleRows.length}</span>)
             </span>
           </div>
+          {/* Итог по видимому списку. Показываем всегда, когда есть что
+              складывать: при включённых отборах это ответ на «сколько всего
+              на накопительных», а без них — просто сумма всех счетов. */}
+          {visibleRows.length > 0 && (
+            <span
+              className="text-xs text-muted tabular-nums shrink-0 mr-1"
+              title={
+                (hasRealBalances
+                  ? "Сумма остатков по счетам из списка"
+                  : "Сумма изменений за период по счетам из списка") +
+                (hiddenCount > 0
+                  ? hiddenCount === dormantCount
+                    ? `. Не показано счетов: ${hiddenCount} — с нулевым остатком и без операций`
+                    : dormantCount > 0
+                      ? `. Не показано счетов: ${hiddenCount}, из них ${dormantCount} с нулевым остатком и без операций, остальные отсеяны отборами`
+                      : `. Не показано счетов: ${hiddenCount} — отсеяны отборами`
+                  : "")
+              }
+            >
+              {hasRealBalances ? "Остаток" : "Изменение"}:{" "}
+              <span className="text-text font-medium">
+                {formatMoney(visibleTotal, base)}
+              </span>
+            </span>
+          )}
           <MultiSelect
             label="Тип"
             options={typeOptions}
