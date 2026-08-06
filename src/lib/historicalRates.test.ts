@@ -14,6 +14,8 @@ import {
   isWeekendUTC,
   isNoQuoteDayUTC,
   resetMirrorProbe,
+  retryAfterMs,
+  setRateRequestIntervalMs,
 } from "./historicalRates";
 
 const LATEST_URL = "https://www.cbr-xml-daily.ru/daily_json.js";
@@ -72,6 +74,9 @@ const archiveCalls = () => fetchCalls.filter((u) => u !== LATEST_URL);
 beforeEach(() => {
   store.clear();
   resetMirrorProbe();
+  // Боевой темп — один запрос в секунду; прогон девяноста дат с ним занял бы
+  // полторы минуты. Сам темп проверяется отдельным блоком ниже.
+  setRateRequestIntervalMs(0);
   installFetch();
 });
 
@@ -122,6 +127,91 @@ describe("historicalRates — weekend skip & de-dup", () => {
       `[bench] ${dates.length} dates (${weekendDates} weekend) → ` +
         `${fetchCalls.length} requests, ${new Set(fetchCalls).size} unique, ${ms}ms`
     );
+  });
+});
+
+describe("historicalRates — темп запросов", () => {
+  it("запросы идут по одному и с паузой, а не залпом", async () => {
+    // Условия зеркала: не более 1 запроса в секунду. Раньше прогрев шёл
+    // двенадцатью параллельными потоками без пауз — под сотню запросов в
+    // секунду, и сервис отвечал отлупом, который приложение показывало как
+    // «зеркало недоступно».
+    setRateRequestIntervalMs(30);
+    const at: number[] = [];
+    fetchCalls = [];
+    globalThis.fetch = vi.fn(async (input: unknown) => {
+      fetchCalls.push(String(input));
+      at.push(performance.now());
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ Valute: { USD: { Value: 90, Nominal: 1 } } }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    // Пять будних дней подряд — пять сетевых запросов.
+    await fetchHistoricalRubRates([
+      "2026-03-16",
+      "2026-03-17",
+      "2026-03-18",
+      "2026-03-19",
+      "2026-03-20",
+    ]);
+    expect(at).toHaveLength(5);
+    for (let i = 1; i < at.length; i++) {
+      // С запасом на таймер: важно, что пауза ЕСТЬ, а не что она ровно 30 мс.
+      expect(at[i] - at[i - 1], `запрос ${i}`).toBeGreaterThanOrEqual(20);
+    }
+  });
+
+  it("даты идут от свежих к старым", async () => {
+    // Прогрев большой истории занимает минуты — пусть сначала уточнится то, на
+    // что человек смотрит.
+    setRateRequestIntervalMs(0);
+    installFetch();
+    await fetchHistoricalRubRates(["2026-03-16", "2026-03-20", "2026-03-18"]);
+    expect(archiveCalls().map(dateFromUrl)).toEqual([
+      "2026-03-20",
+      "2026-03-18",
+      "2026-03-16",
+    ]);
+  });
+
+  it("кэшированные даты сети не трогают вовсе", async () => {
+    // Иначе секундный темп растянул бы ПОВТОРНЫЙ прогрев на пустом месте.
+    setRateRequestIntervalMs(0);
+    installFetch();
+    await fetchHistoricalRubRates(["2026-03-17", "2026-03-18"]);
+    expect(archiveCalls()).toHaveLength(2);
+
+    installFetch();
+    const t0 = performance.now();
+    await fetchHistoricalRubRates(["2026-03-17", "2026-03-18"]);
+    expect(archiveCalls()).toHaveLength(0);
+    expect(performance.now() - t0).toBeLessThan(200);
+  });
+});
+
+describe("retryAfterMs", () => {
+  it("понимает секунды", () => {
+    expect(retryAfterMs("5")).toBe(5000);
+    expect(retryAfterMs("0")).toBe(0);
+  });
+
+  it("понимает HTTP-дату", () => {
+    const at = new Date(Date.now() + 3000).toUTCString();
+    expect(retryAfterMs(at)).toBeGreaterThan(1500);
+    expect(retryAfterMs(at)).toBeLessThanOrEqual(4000);
+  });
+
+  it("без заголовка и на мусоре берёт запасное значение", () => {
+    expect(retryAfterMs(null)).toBe(5000);
+    expect(retryAfterMs("скоро")).toBe(5000);
+  });
+
+  it("не даёт увести паузу за разумный предел", () => {
+    // Сервис (или прокси) может прислать сутки — вставать на сутки мы не будем.
+    expect(retryAfterMs("86400")).toBe(60_000);
   });
 });
 

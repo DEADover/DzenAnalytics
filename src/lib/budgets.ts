@@ -1,5 +1,6 @@
 import type { Transaction } from "../types";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
+import { ALL_ACCOUNTS, budgetHits, type BudgetScope } from "./budgetScope";
 
 /**
  * Budget model — "plan/fact by month", richer than the old flat
@@ -143,18 +144,18 @@ export function monthlyEquivalent(line: BudgetLine): number {
 export function factFor(
   line: BudgetLine,
   txs: Transaction[],
-  ym: string
+  ym: string,
+  scope: BudgetScope = ALL_ACCOUNTS
 ): number {
   const lineSub = line.subcategory ?? null;
   let sum = 0;
   for (const t of txs) {
-    if (t.category !== line.category) continue;
-    if ((t.subcategory ?? null) !== lineSub) continue;
     if (!t.date.startsWith(ym)) continue;
-    if (line.kind === "income") {
-      if (t.kind === "income") sum += t.amountBase;
-    } else if (affectsExpense(t.kind)) {
-      sum += expenseDelta(t);
+    for (const hit of budgetHits(t, scope)) {
+      if (hit.kind !== line.kind) continue;
+      if (hit.category !== line.category) continue;
+      if (hit.subcategory !== lineSub) continue;
+      sum += hit.amount;
     }
   }
   return sum;
@@ -171,16 +172,29 @@ export function forecastFor(
   line: BudgetLine,
   txs: Transaction[],
   ym: string,
-  lookback = 6
+  lookback = 6,
+  scope: BudgetScope = ALL_ACCOUNTS
 ): number {
   const vals: number[] = [];
-  for (let i = 1; i <= lookback; i++) vals.push(factFor(line, txs, addMonths(ym, -i)));
+  for (let i = 1; i <= lookback; i++)
+    vals.push(factFor(line, txs, addMonths(ym, -i), scope));
   vals.sort((a, b) => a - b);
   const mid = Math.floor(vals.length / 2);
   const median =
     vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
   const rounded = Math.round(median / 100) * 100;
   return rounded >= 100 ? rounded : 0;
+}
+
+/**
+ * Состояние статьи по отношению факта к плану. У расхода и дохода логика
+ * зеркальная: перебрать план по расходу — плохо, по доходу — ровно наоборот.
+ * Одна функция на месячный вид и годовой свод, чтобы цвета не разъезжались.
+ */
+export type BudgetTone = "income" | "warn" | "expense";
+export function budgetTone(ratio: number, isIncome: boolean): BudgetTone {
+  if (isIncome) return ratio >= 1 ? "income" : ratio >= 0.8 ? "warn" : "expense";
+  return ratio < 0.8 ? "income" : ratio <= 1 ? "warn" : "expense";
 }
 
 /** Days in the calendar month of a "YYYY-MM" string. */

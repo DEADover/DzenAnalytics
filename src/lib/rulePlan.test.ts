@@ -59,14 +59,22 @@ describe("план применения правил", () => {
 
     expect(plan.rows).toHaveLength(1);
     expect(plan.pending).toHaveLength(1);
+    // У каждого изменения подписано правило, которое его сделало.
     expect(plan.rows[0].changes).toEqual([
-      { label: "Категория", from: "Без категории", to: "Доходы / Купоны", state: "pending" },
-      { label: "Получатель", from: "—", to: "Сбербанк", state: "pending" },
+      {
+        label: "Категория",
+        from: "Без категории",
+        to: "Доходы / Купоны",
+        state: "pending",
+        rule: "Купоны",
+      },
+      { label: "Получатель", from: "—", to: "Сбербанк", state: "pending", rule: "Купоны" },
       {
         label: "Комментарий",
         from: "Выплата купона",
         to: "[купон] Выплата купона",
         state: "pending",
+        rule: "Купоны",
       },
     ]);
     expect(plan.rows[0].patch).toEqual({
@@ -76,6 +84,42 @@ describe("план применения правил", () => {
       brand: "Сбербанк",
       comment: "[купон] Выплата купона",
     });
+  });
+
+  it("подписывает каждое изменение своим правилом, когда их несколько", () => {
+    // Поле занимает ПЕРВОЕ высказавшееся о нём правило, поэтому у одной
+    // операции подписи у строк разные — по одной подписи на операцию было бы
+    // враньём.
+    const category: StoredRule = {
+      id: "cat",
+      enabled: true,
+      title: "Категория купонов",
+      conditions: [{ field: "comment", op: "contains", value: "купон", caseInsensitive: true }],
+      join: "and",
+      actions: [{ kind: "setCategory", value: "Доходы / Купоны" }],
+      createdAt: "",
+    };
+    const payee: StoredRule = {
+      id: "pay",
+      enabled: true,
+      title: "Получатель Сбербанк",
+      conditions: [{ field: "comment", op: "contains", value: "купон", caseInsensitive: true }],
+      join: "and",
+      actions: [{ kind: "setPayee", value: "Сбербанк" }],
+      createdAt: "",
+    };
+    const plan = buildRulePlan(
+      [tx({ id: "a", comment: "Выплата купона" })],
+      [category, payee],
+      new Set(["cat", "pay"]),
+      {},
+      new Set(),
+      null
+    );
+    expect(plan.rows[0].changes.map((c) => [c.label, c.rule])).toEqual([
+      ["Категория", "Категория купонов"],
+      ["Получатель", "Получатель Сбербанк"],
+    ]);
   });
 
   it("категорию берёт от Дзен-мани, а не от уже сработавшего правила", () => {

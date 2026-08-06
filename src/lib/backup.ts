@@ -8,7 +8,41 @@
 
 import * as db from "./db";
 
-export const BACKUP_VERSION = 1;
+// Версия 2 добавила настройки и правки, которых в списке не было: правки
+// счетов, контрагентов и категорий, планы бюджета, разрезы данных, оформление.
+// Старые бэкапы (version 1) читаются как раньше — недостающие ключи просто
+// пропускаются при восстановлении.
+export const BACKUP_VERSION = 2;
+
+/**
+ * Ключи, которые в бэкап НЕ идут, и почему.
+ *
+ * Список нужен не для кода, а для теста-сторожа: он сверяет всё, что
+ * приложение пишет в базу, с суммой «в бэкапе» и «здесь». Появился новый
+ * стор — тест упадёт и заставит принять решение. Раньше такого датчика не
+ * было, и список бэкапа отстал на десяток ключей: пользователи теряли правки
+ * счетов, контрагентов, настройки бюджета и разрезы данных.
+ */
+export const BACKUP_EXCLUDED_KEYS: Record<string, string> = {
+  // Секреты — не должны покидать устройство в открытом JSON.
+  zenmoneyToken: "токен доступа",
+  zenmoneyCache: "сырой кэш сущностей Дзен-мани, тянет за собой весь объём",
+  // Привязка к подключению. Без токена бесполезны, а восстановленный режим
+  // «Авто» ещё и начал бы пушить в облако, когда токен появится.
+  zenmoneyPushMode: "режим отправки — восстанавливать опасно",
+  zenmoneyPushEnabled: "настройка подключения",
+  zenmoneyAutoSyncEnabled: "настройка подключения",
+  zenmoneyAutoSyncUnit: "настройка подключения",
+  zenmoneyAutoSyncValue: "настройка подключения",
+  zenmoneySnapshotPolicy: "настройка подключения",
+  zenmoneyLastSyncAt: "метка времени, восстанавливать нечего",
+  zenmoneyLastPushAt: "метка времени, восстанавливать нечего",
+  zenmoneyServerTimestamp: "точка синхронизации, привязана к токену",
+  // Производное: восстановится само.
+  cloudSnapshotIndex: "снимки облака, их объём в бэкапе неуместен",
+  syncLog: "журнал синхронизаций",
+  backupLastAt: "метка времени последнего бэкапа",
+};
 
 /**
  * Every `meta`-store key that's part of a full local snapshot — the SINGLE
@@ -26,6 +60,12 @@ export const BACKUP_META_KEYS = [
   // settings / analytics config
   "budgets", // legacy flat budgets (Record<category, number>)
   "budgetsV2", // plan/fact budget lines (BudgetLine[])
+  // Исторические курсы ЦБ по датам. Формально это кэш, и раньше он в бэкап не
+  // шёл — «подтянется заново». Но тянется он теперь не быстрее одного запроса
+  // в секунду (условия сервиса курсов), то есть три года валютной истории это
+  // минут двенадцать ожидания, а при недоступном зеркале суммы не сойдутся
+  // вовсе. Цена вопроса — 0,6 МБ на те же три года, и она того стоит.
+  "histDayRates",
   "goals",
   "calibration",
   "fireExcludedAccounts",
@@ -39,12 +79,23 @@ export const BACKUP_META_KEYS = [
   "reportPeriod",
   "categoryRules",
   "duplicateExclusions",
+  "budgetSettings", // периметр счетов, переводы, вид и прогноз бюджета
+  "dataSlices", // разрезы данных
+  "displaySettings", // оформление: размер текста в таблицах, копейки и т.п.
+  "analyticsExcludedCategories", // категории, убранные из аналитики
+  "categoryMeta", // иконки и цвета категорий
+  "backupInterval", // как часто напоминать о бэкапе
   // un-pushed local changes
   "transactionEdits",
   "pendingTransactions", // drafts (new operations)
   "deletedTransactions",
   "deletedPayloads",
   "tagEdits",
+  "tagDeletions",
+  "accountEdits",
+  "counterpartyEdits",
+  "newCategories",
+  "budgetEdits", // планы бюджета, ещё не уехавшие в Дзен-мани
 ] as const;
 
 export interface BackupPayload {

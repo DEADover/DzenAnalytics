@@ -32,6 +32,8 @@ const SYNTHETIC_CATEGORIES: Record<
 > = {
   Долг: { icon: HandCoins, color: SYNTHETIC_CATEGORY_COLORS["Долг"] },
   Перевод: { icon: ArrowLeftRight, color: SYNTHETIC_CATEGORY_COLORS["Перевод"] },
+  // Статья бюджета — во множественном числе; значок и цвет те же.
+  Переводы: { icon: ArrowLeftRight, color: SYNTHETIC_CATEGORY_COLORS["Переводы"] },
 };
 
 /**

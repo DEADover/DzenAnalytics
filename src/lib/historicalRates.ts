@@ -23,8 +23,132 @@ interface CbrResponse {
 // half of January without a historical rate at all.
 const MAX_LOOKBACK_DAYS = 16;
 const CACHE_PREFIX = "fxRateCbr:";
-const WARM_CONCURRENCY = 12; // parallel CBR fetches when warming many dates.
+/**
+ * Сколько дат обрабатываем параллельно.
+ *
+ * К СЕТИ это отношения не имеет — все запросы идут через очередь `throttle()`
+ * по одному в секунду. Параллельность нужна только чтобы быстро пролетать даты,
+ * которые уже лежат в кэше: их обработка сети не требует вовсе, и гнать их
+ * строго по одной значило бы растянуть повторный прогрев на пустом месте.
+ */
+const WARM_CONCURRENCY = 4;
 const FETCH_TIMEOUT_MS = 8000; // abort a stalled CBR request so warming stays responsive.
+
+// ── Темп запросов ────────────────────────────────────────────────────────────
+//
+// Условия зеркала: не более 1 запроса в секунду, 30 в минуту, 10 000 в сутки.
+// Раньше прогрев шёл двенадцатью параллельными потоками без пауз — это под сотню
+// запросов в секунду, то есть превышение примерно в сто раз. Сервис на такое
+// отвечает отлупом, а приложение видело его как «зеркало недоступно»: мы сами
+// себе и делали ту недоступность, на которую жаловались.
+//
+// Число запросов сократить нельзя — пакетного эндпоинта у зеркала нет, только
+// по дню. Поэтому ограничиваем ТЕМП. Суточный лимит и так не грозит: каждая
+// дата запрашивается раз в жизни (кэш дня вечен, архив ЦБ неизменен), а
+// выходные и праздники не запрашиваются вовсе.
+
+/** Минимальный промежуток между запросами. Меняется только тестами. */
+let requestIntervalMs = 1000;
+
+/** Для тестов: без этого прогон с реальной секундной паузой длился бы минуты. */
+export function setRateRequestIntervalMs(ms: number): void {
+  requestIntervalMs = ms;
+}
+
+let lastRequestAt = 0;
+/** Цепочка промисов: каждый следующий запрос ждёт своей очереди. */
+let requestGate: Promise<void> = Promise.resolve();
+
+// ── Часы очереди ─────────────────────────────────────────────────────────────
+//
+// Пауза отсчитывается таймером В ВОРКЕРЕ, а не в странице. Причина замерена:
+// в скрытой вкладке браузер душит таймеры главного потока — `setInterval(1000)`
+// дал 6 срабатываний за 40 секунд, тогда как тот же таймер в Web Worker выдал
+// 33 ровно по 1000 мс. На таймере страницы фоновый прогрев курсов практически
+// останавливался: паузы между запросами доходили до минуты.
+//
+// Воркер собирается из строки через Blob — отдельным файлом он не пережил бы
+// standalone-сборку, где всё приложение это один HTML.
+
+const TIMER_WORKER_SRC =
+  "onmessage=(e)=>{const{id,ms}=e.data;setTimeout(()=>postMessage(id),ms)}";
+
+/** `undefined` — ещё не пробовали, `null` — воркеры недоступны. */
+let timerWorker: Worker | null | undefined;
+let timerSeq = 0;
+const timerWaiters = new Map<number, () => void>();
+
+function getTimerWorker(): Worker | null {
+  if (timerWorker !== undefined) return timerWorker;
+  try {
+    const url = URL.createObjectURL(
+      new Blob([TIMER_WORKER_SRC], { type: "text/javascript" })
+    );
+    const w = new Worker(url);
+    URL.revokeObjectURL(url);
+    w.onmessage = (e: MessageEvent<number>) => {
+      const done = timerWaiters.get(e.data);
+      if (done) {
+        timerWaiters.delete(e.data);
+        done();
+      }
+    };
+    timerWorker = w;
+  } catch {
+    // Нет Worker/Blob (тесты в node, редкий браузер, запрет CSP) — падаем на
+    // таймер страницы: медленнее в фоне, но работает.
+    timerWorker = null;
+  }
+  return timerWorker;
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  const w = getTimerWorker();
+  if (!w) return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    const id = ++timerSeq;
+    timerWaiters.set(id, resolve);
+    w.postMessage({ id, ms });
+  });
+}
+
+/**
+ * Дождаться своей очереди на сетевой запрос.
+ *
+ * Темп держится и в свёрнутой вкладке — паузу отсчитывает воркер (см. `sleep`),
+ * а его таймеры браузер не душит.
+ */
+function throttle(): Promise<void> {
+  const turn = requestGate.then(async () => {
+    const wait = requestIntervalMs - (Date.now() - lastRequestAt);
+    if (wait > 0) await sleep(wait);
+    lastRequestAt = Date.now();
+  });
+  // Ошибку в цепочке гасим: одна упавшая очередь не должна заблокировать все
+  // последующие запросы навсегда.
+  requestGate = turn.catch(() => {});
+  return turn;
+}
+
+/**
+ * Притормозить очередь: сервис попросил подождать (429) или ответил ошибкой.
+ * Двигаем метку последнего запроса вперёд — ждать будет вся очередь, а не
+ * только тот, кто получил отлуп.
+ */
+function backoff(ms: number): void {
+  lastRequestAt = Math.max(lastRequestAt, Date.now() + ms - requestIntervalMs);
+}
+
+/** `Retry-After` в миллисекундах: секунды или HTTP-дата. */
+export function retryAfterMs(header: string | null, fallback = 5000): number {
+  if (!header) return fallback;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 60_000);
+  const at = Date.parse(header);
+  if (Number.isFinite(at)) return Math.min(Math.max(at - Date.now(), 0), 60_000);
+  return fallback;
+}
 /** Always present and CORS-enabled — used only to tell «зеркало лежит» from
  *  «на эту дату курса нет». See `mirrorIsUp()`. */
 const CBR_LATEST_URL = "https://www.cbr-xml-daily.ru/daily_json.js";
@@ -105,6 +229,7 @@ function mirrorIsUp(): Promise<boolean> {
   mirrorUpProbeAt = Date.now();
   const probe = (async () => {
     try {
+      await throttle();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       try {
@@ -169,6 +294,7 @@ async function fetchRatesForDateUncached(date: string): Promise<DayFetch> {
   if (cached) return { rates: cached, authoritative: true };
 
   try {
+    await throttle();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     let res: Response;
@@ -191,6 +317,10 @@ async function fetchRatesForDateUncached(date: string): Promise<DayFetch> {
       await db.saveJSON(cacheKey, {});
       return { rates: {}, authoritative: true };
     }
+    // 429 — мы всё-таки перебрали темп: тормозим ВСЮ очередь на столько, на
+    // сколько просит сервис. Немедленный повтор тем же залпом только продлил бы
+    // отлуп — ровно так и выглядела «недоступность» раньше.
+    if (res.status === 429) backoff(retryAfterMs(res.headers?.get?.("Retry-After") ?? null));
     // 5xx / 429 / other — transient. Don't cache; allow a retry later.
     return { rates: {}, authoritative: false };
   } catch {
@@ -267,7 +397,10 @@ export async function fetchHistoricalRubRates(
   dates: string[],
   onProgress?: (done: number, total: number) => void
 ): Promise<HistDayRates> {
-  const unique = Array.from(new Set(dates));
+  // От свежих к старым: темп ограничен секундой на запрос, и прогрев большой
+  // истории идёт минутами — пусть сначала уточнятся те месяцы, на которые
+  // человек смотрит, а не операции трёхлетней давности.
+  const unique = Array.from(new Set(dates)).sort((a, b) => b.localeCompare(a));
   const out: HistDayRates = {};
   let done = 0;
   let next = 0;

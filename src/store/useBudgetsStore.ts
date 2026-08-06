@@ -18,6 +18,15 @@ export interface ZenPlanSeed {
   amount: number;
 }
 
+/** План одной статьи на один месяц — единица массового заполнения. */
+export interface PlanUpsert {
+  kind: BudgetKind;
+  category: string;
+  subcategory: string | null;
+  ym: string;
+  amount: number;
+}
+
 const KEY = "budgetsV2";
 const LEGACY_KEY = "budgets";
 
@@ -35,6 +44,11 @@ interface BudgetsState {
   removeLine: (id: string) => Promise<void>;
   /** Set (or clear, when amount === null) a per-month override for a line. */
   setOverride: (id: string, ym: string, amount: number | null) => Promise<void>;
+  /** Задать план сразу нескольким статьям за ОДНУ запись. Поштучный вызов
+   *  `addLine`/`setOverride` в цикле здесь не годится: каждый из них читает
+   *  список, ждёт запись в базу и кладёт свою версию обратно — из шести правок
+   *  доезжала последняя. */
+  applyPlans: (items: PlanUpsert[]) => Promise<void>;
   /** Mirror Zenmoney plans into local budget lines. THREE-WAY merge: new tags
    *  are created; a cell the user hasn't locally edited adopts Zen's value (so a
    *  plan changed in Дзен shows up here); a cell the user edited locally but not
@@ -96,6 +110,46 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
       const hasAny = Object.keys(overrides).length > 0;
       return { ...l, overrides: hasAny ? overrides : undefined };
     });
+    await db.saveJSON(KEY, list);
+    set({ lines: list });
+  },
+
+  applyPlans: async (items) => {
+    if (items.length === 0) return;
+    const idOf = (kind: string, category: string, sub: string | null) =>
+      [kind, category, sub ?? ""].join("\u0000");
+    // Одна правка на статью: если одна и та же статья пришла дважды, побеждает
+    // последняя — как и при обычном редактировании.
+    const wanted = new Map<string, PlanUpsert>();
+    for (const it of items) wanted.set(idOf(it.kind, it.category, it.subcategory), it);
+
+    const seen = new Set<string>();
+    const updated = get().lines.map((l) => {
+      const key = idOf(l.kind, l.category, l.subcategory ?? null);
+      const it = wanted.get(key);
+      if (!it) return l;
+      seen.add(key);
+      return { ...l, overrides: { ...(l.overrides ?? {}), [it.ym]: it.amount } };
+    });
+
+    const additions: BudgetLine[] = [];
+    for (const [key, it] of wanted) {
+      if (seen.has(key) || it.amount <= 0) continue;
+      additions.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        category: it.category,
+        subcategory: it.subcategory,
+        kind: it.kind,
+        amount: 0,
+        recurrence: "monthly",
+        startMonth: it.ym,
+        endMonth: null,
+        overrides: { [it.ym]: it.amount },
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    const list = [...updated, ...additions];
     await db.saveJSON(KEY, list);
     set({ lines: list });
   },

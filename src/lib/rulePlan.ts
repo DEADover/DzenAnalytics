@@ -11,7 +11,13 @@
  * этих граблях первая версия правил уже стояла.
  */
 
-import { previewRules, mergeHits, type StoredRule } from "./ruleEngine";
+import {
+  describeRule,
+  mergeHits,
+  migrateRule,
+  previewRules,
+  type StoredRule,
+} from "./ruleEngine";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { displayPayee } from "./format";
 import type { Transaction } from "../types";
@@ -23,6 +29,10 @@ export interface RuleFieldChange {
   to: string;
   /** `same` — правило просит то, что уже стоит; `written` — правка уже записана. */
   state: "pending" | "written" | "same";
+  /** Правило, занявшее это поле, — человекочитаемо. Поля одной операции могут
+   *  достаться РАЗНЫМ правилам, поэтому подпись у каждого изменения своя, а не
+   *  одна на строку. */
+  rule?: string;
 }
 
 export interface RuleRow {
@@ -74,7 +84,30 @@ export function buildRulePlan(
   if (ruleIds.size === 0)
     return { rows: [], pending: [], skipped: [], skippedCount: 0 };
 
-  const byTx = mergeHits(previewRules(raw, rules, ruleIds));
+  const hits = previewRules(raw, rules, ruleIds);
+  const byTx = mergeHits(hits);
+  // Кто занял какое поле. Поле забирает ПЕРВОЕ высказавшееся о нём правило
+  // (см. `collectRuleHits`), поэтому и здесь запоминаем первого — иначе подпись
+  // указала бы на правило, которое до этого поля так и не добралось.
+  const ownerOf = new Map<string, Map<string, string>>();
+  for (const h of hits) {
+    let owners = ownerOf.get(h.txId);
+    if (!owners) {
+      owners = new Map();
+      ownerOf.set(h.txId, owners);
+    }
+    for (const field of Object.keys(h.patch)) {
+      if (!owners.has(field)) owners.set(field, h.ruleId);
+    }
+  }
+  const ruleName = new Map(
+    rules.map((r) => [r.id, describeRule(migrateRule(r))] as const)
+  );
+  const owner = (txId: string, field: string) => {
+    const id = ownerOf.get(txId)?.get(field);
+    return id ? ruleName.get(id) : undefined;
+  };
+
   const rows: RuleRow[] = [];
   const skips = new Map<string, number>();
 
@@ -130,20 +163,22 @@ export function buildRulePlan(
 
     const add = (
       label: string,
+      field: string,
       from: string,
       to: string,
       alreadyWritten: boolean,
       apply: () => void
     ) => {
+      const rule = owner(t.id, field);
       if (from === to) {
-        changes.push({ label, from, to, state: "same" });
+        changes.push({ label, from, to, state: "same", rule });
         return;
       }
       if (alreadyWritten) {
-        changes.push({ label, from, to, state: "written" });
+        changes.push({ label, from, to, state: "written", rule });
         return;
       }
-      changes.push({ label, from, to, state: "pending" });
+      changes.push({ label, from, to, state: "pending", rule });
       apply();
     };
 
@@ -152,6 +187,7 @@ export function buildRulePlan(
       const from = t.categoryFullOriginal || t.categoryFull;
       add(
         "Категория",
+        "categoryFull",
         dash(from),
         dash(patch.categoryFull),
         written?.categoryFull === patch.categoryFull,
@@ -165,6 +201,7 @@ export function buildRulePlan(
     if (patch.brand !== undefined) {
       add(
         "Получатель",
+        "brand",
         dash(displayPayee(t)),
         dash(patch.brand),
         written?.brand === patch.brand,
@@ -176,6 +213,7 @@ export function buildRulePlan(
     if (patch.comment !== undefined) {
       add(
         "Комментарий",
+        "comment",
         dash(t.comment),
         dash(patch.comment),
         written?.comment === patch.comment,

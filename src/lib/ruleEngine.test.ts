@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   migrateRule,
+  allConditions,
   isV2,
   conditionValues,
   conditionMatches,
@@ -11,6 +12,7 @@ import {
   ruleActionsToEdit,
   collectRuleHits,
   applyRulesV2,
+  restoreRuleCategories,
   previewRules,
   mergeHits,
   describeRule,
@@ -55,15 +57,26 @@ function cond(p: Partial<RuleCondition> = {}): RuleCondition {
   return { field: "payee", op: "contains", value: "", caseInsensitive: true, ...p };
 }
 
-function rule(p: Partial<CategoryRuleV2> = {}): CategoryRuleV2 {
+/**
+ * Правило для тестов. `conditions` — сокращение для «одна группа с этими
+ * условиями и связкой `join`»: так записано подавляющее большинство проверок, и
+ * так же выглядит правило, созданное до появления групп. Многогрупповые случаи
+ * задают `groups` напрямую.
+ */
+function rule(
+  p: Partial<CategoryRuleV2> & { conditions?: RuleCondition[] } = {}
+): CategoryRuleV2 {
+  const { conditions, groups, join, ...rest } = p;
   return {
     id: "r",
     enabled: true,
-    conditions: [cond({ value: "магнит" })],
-    join: "and",
+    groups:
+      groups ??
+      [{ join: join ?? "and", conditions: conditions ?? [cond({ value: "магнит" })] }],
+    join: groups ? (join ?? "and") : "and",
     actions: [{ kind: "setCategory", value: "Еда" }],
     createdAt: "2026-07-01T00:00:00Z",
-    ...p,
+    ...rest,
   };
 }
 
@@ -85,7 +98,7 @@ describe("правила — миграция первого поколения"
     expect(v2.id).toBe("old");
     expect(v2.createdAt).toBe("2026-01-01T00:00:00Z");
     expect(v2.join).toBe("and");
-    expect(v2.conditions).toEqual([
+    expect(allConditions(v2)).toEqual([
       {
         field: "comment",
         op: "starts_with",
@@ -106,7 +119,7 @@ describe("правила — миграция первого поколения"
     // на форму полагаться нельзя. Такое правило должно просто ничего не делать.
     const broken = { id: "x", enabled: true, createdAt: "", actions: [{ kind: "setCategory", value: "Еда" }] };
     const v2 = migrateRule(broken as unknown as CategoryRuleV2);
-    expect(v2.conditions).toEqual([]);
+    expect(allConditions(v2)).toEqual([]);
     expect(v2.join).toBe("and");
     expect(ruleMatchesV2(tx({ payee: "Магнит" }), v2)).toBe(false);
     expect(applyRulesV2([tx({ payee: "Магнит" })], [v2])[0].categoryFull).toBe("Без категории");
@@ -247,7 +260,9 @@ describe("правила — объединение условий", () => {
   });
 
   it("ИЛИ — достаточно одного", () => {
-    const any = rule({ ...both, join: "or" });
+    // Связка живёт в ГРУППЕ, поэтому пересобираем группу, а не правило: у
+    // правила `join` теперь про то, как складываются группы между собой.
+    const any = rule({ conditions: both.groups[0].conditions, join: "or" });
     expect(ruleMatchesV2(tx({ brand: "Сбербанк" }), any)).toBe(true);
     expect(ruleMatchesV2(tx({ brand: "Сбербанк", categoryFullOriginal: "Еда" }), any)).toBe(
       false
@@ -257,6 +272,119 @@ describe("правила — объединение условий", () => {
   it("правило без условий не подходит ни к чему", () => {
     // Пустой список — это недописанное правило, а не «применить ко всем».
     expect(ruleMatchesV2(tx(), rule({ conditions: [] }))).toBe(false);
+  });
+});
+
+describe("правила — группы условий (issue #61)", () => {
+  /** Тот самый случай из issue: (комментарий 1 ИЛИ 2) И категория содержит 3. */
+  const mixed = rule({
+    join: "and",
+    groups: [
+      {
+        join: "or",
+        conditions: [
+          cond({ field: "comment", op: "contains", value: "1" }),
+          cond({ field: "comment", op: "contains", value: "2" }),
+        ],
+      },
+      {
+        join: "and",
+        conditions: [cond({ field: "category", op: "contains", value: "3" })],
+      },
+    ],
+  });
+
+  const t = (comment: string, category: string) =>
+    tx({ comment, categoryFullOriginal: category });
+
+  it("скобки работают: одного из ИЛИ мало без второй группы", () => {
+    expect(ruleMatchesV2(t("платёж 1", "Счёт 3"), mixed)).toBe(true);
+    expect(ruleMatchesV2(t("платёж 2", "Счёт 3"), mixed)).toBe(true);
+    expect(ruleMatchesV2(t("платёж 9", "Счёт 3"), mixed)).toBe(false);
+    expect(ruleMatchesV2(t("платёж 1", "Счёт 9"), mixed)).toBe(false);
+  });
+
+  it("плоской связкой это выразить было нельзя — сравниваем с ней", () => {
+    // И по всем трём: «1 И 2 И 3» — не подходит ни одна операция из примера.
+    const flat = rule({
+      join: "and",
+      conditions: [
+        cond({ field: "comment", op: "contains", value: "1" }),
+        cond({ field: "comment", op: "contains", value: "2" }),
+        cond({ field: "category", op: "contains", value: "3" }),
+      ],
+    });
+    expect(ruleMatchesV2(t("платёж 1", "Счёт 3"), flat)).toBe(false);
+    // ИЛИ по всем трём: подходит и то, что не должно.
+    const loose = rule({
+      join: "or",
+      conditions: [
+        cond({ field: "comment", op: "contains", value: "1" }),
+        cond({ field: "comment", op: "contains", value: "2" }),
+        cond({ field: "category", op: "contains", value: "3" }),
+      ],
+    });
+    expect(ruleMatchesV2(t("платёж 1", "Счёт 9"), loose)).toBe(true);
+  });
+
+  it("ИЛИ между группами", () => {
+    const either = rule({
+      join: "or",
+      groups: [
+        { join: "and", conditions: [cond({ field: "payee", op: "contains", value: "магнит" })] },
+        { join: "and", conditions: [cond({ field: "comment", op: "contains", value: "купон" })] },
+      ],
+    });
+    expect(ruleMatchesV2(tx({ payee: "Магнит" }), either)).toBe(true);
+    expect(ruleMatchesV2(tx({ comment: "Выплата купона" }), either)).toBe(true);
+    expect(ruleMatchesV2(tx({ payee: "Лента" }), either)).toBe(false);
+  });
+
+  it("пустая группа не решает за правило", () => {
+    // В редакторе группа живёт, пока в ней не стёрли последнее условие. При «И»
+    // пустая группа обнулила бы правило, при «ИЛИ» — разрешила бы всё.
+    const withEmpty = rule({
+      join: "and",
+      groups: [
+        { join: "and", conditions: [cond({ field: "payee", op: "contains", value: "магнит" })] },
+        { join: "and", conditions: [] },
+      ],
+    });
+    expect(ruleMatchesV2(tx({ payee: "Магнит" }), withEmpty)).toBe(true);
+    expect(ruleMatchesV2(tx({ payee: "Лента" }), withEmpty)).toBe(false);
+    const orEmpty = rule({ join: "or", groups: [{ join: "and", conditions: [] }] });
+    expect(ruleMatchesV2(tx({ payee: "Магнит" }), orEmpty)).toBe(false);
+  });
+
+  it("выражения достаются своим условиям, а не соседним", () => {
+    // Ключ кэша сквозной по всем группам: перепутанный индекс отдал бы
+    // выражение чужому условию, и правило совпадало бы не с тем.
+    const r = rule({
+      join: "and",
+      groups: [
+        { join: "and", conditions: [cond({ field: "payee", op: "regex", value: "^магн" })] },
+        { join: "and", conditions: [cond({ field: "comment", op: "regex", value: "купон$" })] },
+      ],
+    });
+    const compiled = compileRuleV2(r);
+    expect([...compiled.keys()]).toEqual([0, 1]);
+    expect(ruleMatchesV2(tx({ payee: "Магнит", comment: "Выплата купон" }), r, compiled)).toBe(
+      true
+    );
+    expect(ruleMatchesV2(tx({ payee: "Магнит", comment: "купон в начале" }), r, compiled)).toBe(
+      false
+    );
+  });
+
+  it("описание правила расставляет скобки только там, где они нужны", () => {
+    expect(describeRule(mixed)).toBe(
+      "(Комментарий содержит «1» ИЛИ Комментарий содержит «2») И Текущая категория содержит «3»" +
+        " → Категория = «Еда»"
+    );
+    // Одна группа — скобок нет.
+    expect(describeRule(rule({ conditions: [cond({ value: "магнит" })] }))).toBe(
+      "Получатель содержит «магнит» → Категория = «Еда»"
+    );
   });
 });
 
@@ -425,6 +553,32 @@ describe("правила — порядок и захват полей", () => {
     expect(hits).toHaveLength(1);
     expect(hits[0].ruleId).toBe("a");
     expect(hits[0].patch.categoryFull).toBe("Еда");
+  });
+});
+
+describe("restoreRuleCategories — конвейер данных без автоприменения", () => {
+  it("возвращает категорию, записанную правилом в прошлых версиях", () => {
+    // У тех, кто пользовался прежними версиями, категория от правила уже лежит
+    // в сохранённых операциях. Без отката она осталась бы там навсегда.
+    const applied = applyRulesV2(
+      [tx({ payee: "Магнит" })],
+      [rule({ actions: [{ kind: "setCategory", value: "Еда" }] })]
+    );
+    expect(applied[0].categoryFull).toBe("Еда");
+    const restored = restoreRuleCategories(applied);
+    expect(restored[0].categoryFull).toBe("Без категории");
+    expect(restored[0].category).toBe("Без категории");
+  });
+
+  it("операцию без исходной категории не портит", () => {
+    const t = tx({ payee: "Магнит" });
+    const out = restoreRuleCategories([{ ...t, categoryFullOriginal: undefined }]);
+    expect(out[0].categoryFull).toBe(t.categoryFull);
+  });
+
+  it("вызов дважды ничего не меняет", () => {
+    const once = restoreRuleCategories([tx({ payee: "Магнит" })]);
+    expect(restoreRuleCategories(once)).toEqual(once);
   });
 });
 

@@ -15,19 +15,22 @@
  * в новую форму, ничего не теряя. Хранилище может содержать смесь — в IndexedDB
  * у людей лежат правила, созданные прошлыми версиями приложения.
  *
- * ГДЕ ЧТО ПРИМЕНЯЕТСЯ. Правила живут в двух слоях, и это не случайность:
+ * ГДЕ ЧТО ПРИМЕНЯЕТСЯ. Одна схема на все три поля: правило само по себе не
+ * меняет НИЧЕГО. Категория, получатель и комментарий попадают в операцию только
+ * через слой правок — `previewRules` → `buildRulePlan` → кнопка «Проверить и
+ * применить», и только у отмеченных там операций.
  *
- *   1. Категория применяется в слое операций (`applyRulesV2`) — она обратима
- *      сама по себе, потому что исходную кладёт импорт в `categoryFullOriginal`.
- *      Выключил правило — категория вернулась, без всякой «отмены».
- *   2. Получатель и комментарий применяются ТОЛЬКО через слой правок
- *      (`previewRules` → `buildRulePlan` → «Применить правила»). Откатывать их
- *      в слое операций не во что: `payeeOriginal` — это текст банка ДО
- *      группировки получателей, а исходного комментария не хранит никто.
- *      Поэтому обратимость обеспечивает снятие правки, а не выключение правила.
+ * Так было не всегда: категория раньше применялась сама, в слое операций
+ * (`applyRulesV2`), потому что её легко откатить — исходную кладёт импорт в
+ * `categoryFullOriginal`. Ценой была ложь в интерфейсе: операция менялась ещё
+ * до того, как её показали, и снятая в окне галочка ничего не отменяла
+ * (issue #62). Автоприменение вернётся отдельной управляемой возможностью;
+ * `applyRulesV2` для неё оставлен, но в конвейер данных не подключён — там
+ * теперь `restoreRuleCategories`, возвращающая исходную категорию.
  *
- * Такое разделение честнее ещё и потому, что получатель с комментарием всё
- * равно обязаны уехать в облако (issue #51), а туда уезжает только слой правок.
+ * Отсюда же и обратимость: отменяется всё одинаково — снятием правки в списке
+ * изменений, а не выключением правила. И в облако (issue #51) уезжает ровно то,
+ * что записано, потому что туда уезжает только слой правок.
  */
 
 import type { Transaction } from "../types";
@@ -126,23 +129,75 @@ export function actionTarget(kind: RuleActionKind): RuleTargetField {
   return "comment";
 }
 
+/**
+ * Группа условий — скобка в выражении правила.
+ *
+ * Двух уровней хватает на всё, что встречается в жизни: внутри группы одна
+ * связка, между группами другая. Одной связкой на всё правило нельзя было
+ * выразить даже «(комментарий содержит 1 ИЛИ 2) И категория содержит 3»
+ * (issue #61).
+ */
+export interface RuleConditionGroup {
+  /** Ключ строки в редакторе; на смысл правила не влияет. */
+  id?: string;
+  /** Связка ВНУТРИ группы. */
+  join: ConditionJoin;
+  conditions: RuleCondition[];
+}
+
 export interface CategoryRuleV2 {
   id: string;
   enabled: boolean;
   /** Своё название. С несколькими условиями строка «если …» уже не читается. */
   title?: string;
-  conditions: RuleCondition[];
+  /** Группы условий. Внутри группы — её собственная связка. */
+  groups: RuleConditionGroup[];
+  /** Связка МЕЖДУ группами. У правила с одной группой значения не имеет. */
   join: ConditionJoin;
   actions: RuleAction[];
+  /**
+   * Применять само — к операциям, которых раньше не было (пришли синхронизацией
+   * или импортом). Записывает ровно то же и туда же, что и кнопка, поэтому
+   * автоприменённое видно в списке изменений и откатывается построчно.
+   *
+   * К УЖЕ имеющимся операциям не применяется никогда: одна галочка не должна
+   * молча переписать всю историю. Для них есть кнопка.
+   */
+  autoApply?: boolean;
   createdAt: string;
 }
 
-/** Правило любого поколения — то, что реально лежит в хранилище. */
-export type StoredRule = CategoryRuleV1 | CategoryRuleV2;
+/**
+ * Правило второго поколения ДО появления групп: связка одна на плоский список
+ * условий. Ровно так оно и лежит в IndexedDB у всех, кто не переоткрывал свои
+ * правила после обновления, — и в чужих бэкапах тоже.
+ */
+export interface CategoryRuleV2Flat extends Omit<CategoryRuleV2, "groups"> {
+  conditions: RuleCondition[];
+  groups?: undefined;
+}
 
-export function isV2(r: StoredRule): r is CategoryRuleV2 {
-  const v2 = r as CategoryRuleV2;
-  return Array.isArray(v2.conditions) || Array.isArray(v2.actions);
+/** Правило любого поколения — то, что реально лежит в хранилище. */
+export type StoredRule = CategoryRuleV1 | CategoryRuleV2 | CategoryRuleV2Flat;
+
+export function isV2(r: StoredRule): r is CategoryRuleV2 | CategoryRuleV2Flat {
+  const v2 = r as CategoryRuleV2 & { conditions?: unknown };
+  return (
+    Array.isArray(v2.groups) ||
+    Array.isArray(v2.conditions) ||
+    Array.isArray(v2.actions)
+  );
+}
+
+/**
+ * Все условия правила подряд, без деления на группы.
+ *
+ * Нужна тем, кому структура безразлична: пересчёт имени контрагента в правилах,
+ * ключ дедупликации, проверка «правило вообще дописано». Единственный источник
+ * истины при этом — группы; плоский список только выводится из них.
+ */
+export function allConditions(rule: CategoryRuleV2): RuleCondition[] {
+  return rule.groups.flatMap((g) => g.conditions);
 }
 
 /**
@@ -156,27 +211,47 @@ export function isV2(r: StoredRule): r is CategoryRuleV2 {
  */
 export function migrateRule(r: StoredRule): CategoryRuleV2 {
   if (isV2(r)) {
-    if (Array.isArray(r.conditions) && Array.isArray(r.actions)) return r;
+    const legacy = r as CategoryRuleV2 & { conditions?: RuleCondition[] };
+    if (Array.isArray(legacy.groups) && Array.isArray(r.actions)) return legacy;
+    // Правило, записанное до появления групп: связка у него была одна на все
+    // условия — ровно то, чем теперь является ОДНА группа. Связка между
+    // группами при единственной группе ни на что не влияет.
+    const groups: RuleConditionGroup[] = Array.isArray(legacy.groups)
+      ? legacy.groups
+      : [
+          {
+            join: r.join === "or" ? "or" : "and",
+            conditions: Array.isArray(legacy.conditions) ? legacy.conditions : [],
+          },
+        ];
     return {
       ...r,
-      conditions: Array.isArray(r.conditions) ? r.conditions : [],
+      groups,
       actions: Array.isArray(r.actions) ? r.actions : [],
-      join: r.join === "or" ? "or" : "and",
+      join: "and",
     };
   }
   return {
     id: r.id,
     enabled: r.enabled,
-    conditions: [
+    groups: [
       {
-        field: r.field,
-        op: r.op,
-        value: r.value,
-        caseInsensitive: r.caseInsensitive,
+        join: "and",
+        conditions: [
+          {
+            field: r.field,
+            op: r.op,
+            value: r.value,
+            caseInsensitive: r.caseInsensitive,
+          },
+        ],
       },
     ],
     join: "and",
     actions: [{ kind: "setCategory", value: r.category }],
+    // Правила первого поколения автоприменения не знали — включать его за
+    // пользователя нельзя, это запись в операции.
+    autoApply: false,
     createdAt: r.createdAt,
   };
 }
@@ -257,12 +332,21 @@ export function compileCondition(c: RuleCondition): RegExp | null {
   return cachedRegex(c.value, c.caseInsensitive ? "iu" : "u");
 }
 
-/** Собрать выражения всех условий правила разом — по индексу условия. */
+/**
+ * Собрать выражения всех условий правила разом.
+ *
+ * Ключ — сквозной номер условия в обходе групп сверху вниз. Тот же обход, что и
+ * в `ruleMatchesV2`, иначе выражение досталось бы чужому условию.
+ */
 export function compileRuleV2(rule: CategoryRuleV2): Map<number, RegExp | null> {
   const out = new Map<number, RegExp | null>();
-  rule.conditions.forEach((c, i) => {
-    if (c.op === "regex") out.set(i, compileCondition(c));
-  });
+  let i = 0;
+  for (const g of rule.groups) {
+    for (const c of g.conditions) {
+      if (c.op === "regex") out.set(i, compileCondition(c));
+      i++;
+    }
+  }
   return out;
 }
 
@@ -309,22 +393,36 @@ export function conditionMatches(
   return false;
 }
 
-/** Подходит ли операция под правило целиком (И / ИЛИ по условиям). */
+/**
+ * Подходит ли операция под правило целиком: внутри группы — её связка, между
+ * группами — связка правила.
+ *
+ * Пустые группы пропускаем: в редакторе группа живёт, пока в ней не стёрли
+ * последнее условие, и пустая не должна ни требовать выполнения (при «И» она
+ * обнулила бы правило), ни разрешать всё (при «ИЛИ»).
+ */
 export function ruleMatchesV2(
   t: Transaction,
   rule: CategoryRuleV2,
   compiled?: Map<number, RegExp | null>
 ): boolean {
+  let i = 0;
+  const results: boolean[] = [];
+  for (const g of rule.groups) {
+    const inner: boolean[] = [];
+    for (const c of g.conditions) {
+      inner.push(conditionMatches(t, c, compiled?.get(i)));
+      i++;
+    }
+    if (inner.length === 0) continue;
+    // Всё, что не «ИЛИ», считаем «И»: более строгий вариант — безопасный ответ
+    // на мусор в поле.
+    results.push(g.join === "or" ? inner.some(Boolean) : inner.every(Boolean));
+  }
   // Правило без условий подошло бы ко всему подряд — это не «применить ко
   // всем», а недописанное правило.
-  if (rule.conditions.length === 0) return false;
-  const test = (c: RuleCondition, i: number) =>
-    conditionMatches(t, c, compiled?.get(i));
-  // Всё, что не «ИЛИ», считаем «И»: более строгий вариант — безопасный ответ на
-  // мусор в поле.
-  return rule.join === "or"
-    ? rule.conditions.some(test)
-    : rule.conditions.every(test);
+  if (results.length === 0) return false;
+  return rule.join === "or" ? results.some(Boolean) : results.every(Boolean);
 }
 
 /** Есть ли у правила хоть одно действие, которое что-то делает. Правило с
@@ -479,7 +577,7 @@ function prepare(
   const active = rules
     .map(migrateRule)
     .filter(
-      (r) => (!requireEnabled || r.enabled) && r.conditions.length > 0 && ruleHasEffect(r)
+      (r) => (!requireEnabled || r.enabled) && allConditions(r).length > 0 && ruleHasEffect(r)
     );
   const compiled = new Map<string, Map<number, RegExp | null>>();
   for (const r of active) compiled.set(r.id, compileRuleV2(r));
@@ -490,13 +588,36 @@ function prepare(
  *  предпросмотр считают условия от исходной категории — иначе однажды
  *  сработавшее правило перестало бы совпадать с самим собой. */
 function withOriginalCategory(t: Transaction): Transaction {
+  const full = t.categoryFullOriginal ?? t.categoryFull;
+  // Полное имя — источник истины, и из него же добираются части. У операции из
+  // старой версии или чужого бэкапа `categoryOriginal` может не быть вовсе:
+  // тогда `categoryFull` вернулся бы к исходному, а `category` осталась бы от
+  // правила — операция с расходящимися полями, и таблицы посчитали бы её
+  // по-разному.
+  const split = splitCategoryFull(full);
   return {
     ...t,
-    category: t.categoryOriginal ?? t.category,
+    category: t.categoryOriginal ?? split.category,
     subcategory:
-      t.subcategoryOriginal !== undefined ? t.subcategoryOriginal : t.subcategory,
-    categoryFull: t.categoryFullOriginal ?? t.categoryFull,
+      t.subcategoryOriginal !== undefined ? t.subcategoryOriginal : split.subcategory,
+    categoryFull: full,
   };
+}
+
+/**
+ * Вернуть всем операциям исходную категорию из Дзен-мани.
+ *
+ * Это шаг конвейера данных вместо прежнего автоприменения: правила больше
+ * ничего не меняют сами, всё — только по кнопке «Проверить и применить», и
+ * только у отмеченных операций. Функция нужна ещё и как разовая починка: у тех,
+ * кто пользовался прежними версиями, категория от правила уже записана в
+ * сохранённых операциях, и без отката она осталась бы там навсегда.
+ *
+ * Категории, применённые кнопкой, при этом остаются: они живут в слое правок,
+ * который накладывается поверх, а не в самой операции.
+ */
+export function restoreRuleCategories(txs: Transaction[]): Transaction[] {
+  return txs.map(withOriginalCategory);
 }
 
 /**
@@ -507,6 +628,11 @@ function withOriginalCategory(t: Transaction): Transaction {
  * Поэтому выключение или удаление правила возвращает всё как было.
  *
  * Получатель и комментарий здесь НЕ применяются — см. шапку файла.
+ *
+ * ⚠️ СЕЙЧАС НЕ ПОДКЛЮЧЕНО к конвейеру данных. Автоприменение убрано: правила
+ * меняли категорию сами, до всякого подтверждения, и снятая в окне галочка
+ * этого не отменяла (issue #62). Функция и её тесты оставлены целыми, потому
+ * что автоприменение решено вернуть отдельной, управляемой возможностью.
  */
 export function applyRulesV2(txs: Transaction[], rules: StoredRule[]): Transaction[] {
   const { active, compiled } = prepare(rules);
@@ -571,18 +697,31 @@ export function mergeHits(hits: RuleHit[]): Record<string, TransactionEdit> {
 /** Человекочитаемое описание правила — для строки таблицы и заголовка окна. */
 export function describeRule(rule: CategoryRuleV2): string {
   if (rule.title?.trim()) return rule.title.trim();
-  const join = rule.join === "and" ? " И " : " ИЛИ ";
-  const conds = rule.conditions
-    .map((c) => {
-      const f = FIELD_LABELS[c.field];
-      if (VALUELESS_OPS.has(c.op)) return `${f} ${CONDITION_OP_LABELS[c.op]}`;
-      // В списке операций «регулярное выражение» — название приёма, а во фразе
-      // на его месте нужен предлог, иначе выходит «Получатель регулярное
-      // выражение «^яндекс»».
-      const op = c.op === "regex" ? "по выражению" : CONDITION_OP_LABELS[c.op];
-      return `${f} ${op} «${c.value}»`;
-    })
-    .join(join);
+  const word = (j: ConditionJoin) => (j === "or" ? " ИЛИ " : " И ");
+  const describeOne = (c: RuleCondition) => {
+    const f = FIELD_LABELS[c.field];
+    if (VALUELESS_OPS.has(c.op)) return `${f} ${CONDITION_OP_LABELS[c.op]}`;
+    // В списке операций «регулярное выражение» — название приёма, а во фразе
+    // на его месте нужен предлог, иначе выходит «Получатель регулярное
+    // выражение «^яндекс»».
+    const op = c.op === "regex" ? "по выражению" : CONDITION_OP_LABELS[c.op];
+    return `${f} ${op} «${c.value}»`;
+  };
+  const parts = rule.groups
+    .filter((g) => g.conditions.length > 0)
+    .map((g) => g.conditions.map(describeOne).join(word(g.join)));
+  // Скобки — только там, где без них фраза читается неоднозначно: у группы из
+  // одного условия и у правила из одной группы скобки лишний шум.
+  const conds =
+    parts.length > 1
+      ? parts
+          .map((p, i) =>
+            rule.groups.filter((g) => g.conditions.length > 0)[i].conditions.length > 1
+              ? `(${p})`
+              : p
+          )
+          .join(word(rule.join))
+      : (parts[0] ?? "");
   const acts = rule.actions
     .map((a) => `${ACTION_LABELS[a.kind]} = «${a.value}»`)
     .join(", ");

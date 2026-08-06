@@ -1,7 +1,7 @@
 {
   "name": "dzenanalytics",
   "private": true,
-  "version": "1.6.3",
+  "version": "1.6.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,6 +19,7 @@
     "@fontsource-variable/geist-mono": "^5.3.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "fflate": "^0.8.3",
     "html-to-image": "^1.11.13",
     "idb": "^8.0.3",
     "lucide-react": "^1.14.0",

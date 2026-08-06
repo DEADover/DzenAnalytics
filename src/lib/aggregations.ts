@@ -712,16 +712,32 @@ export interface DuplicateGroup {
   totalAmount: number;
 }
 
+/**
+ * Подозрительно похожие операции: один вид, один получатель, одна сумма, одна
+ * валюта, один счёт — и рядом по времени.
+ *
+ * `windowDays = 0` (по умолчанию) означает «в один и тот же день». Раньше по
+ * умолчанию стояло три дня, и ежедневная одинаковая покупка — кофе по дороге на
+ * работу — попадала в дубли каждый день (issue #66). Задвоение платежа
+ * случается в один день, поэтому строгий вариант и есть правильный по
+ * умолчанию; ползунок на странице по-прежнему расширяет окно, когда банк
+ * проводит копию следующим днём.
+ */
 export function detectDuplicates(
   txs: Transaction[],
-  windowDays = 3,
+  windowDays = 0,
   /** Signatures the user marked «не дубликаты» — never flagged again. */
   excluded?: Set<string>
 ): DuplicateGroup[] {
   const groups = new Map<string, Transaction[]>();
   for (const t of txs) {
     if (t.kind === "transfer") continue;
-    const sig = `${t.kind}|${t.payee || "?"}|${Math.round(t.amount)}|${t.currency}`;
+    // Счёт — часть приметы (issue #66). Одна и та же покупка, списанная с ДВУХ
+    // РАЗНЫХ карт, — это две разные операции, а не задвоение: банк не может
+    // провести один платёж дважды по разным счетам.
+    const sig = `${t.kind}|${t.payee || "?"}|${Math.round(t.amount)}|${t.currency}|${
+      t.account || "?"
+    }`;
     if (!groups.has(sig)) groups.set(sig, []);
     groups.get(sig)!.push(t);
   }
@@ -1535,8 +1551,20 @@ export const HASHTAG_RE = /#([\p{L}\p{N}_-]+)/gu;
 
 export function extractHashtags(text: string): string[] {
   if (!text) return [];
+  // Повторы схлопываем: один и тот же тег, набранный в комментарии дважды, —
+  // это одна пометка, а не две. Иначе `groupByHashtag` прибавлял сумму операции
+  // за каждое вхождение, и в «Тегах» она задваивалась, хотя в «Операциях» была
+  // посчитана один раз (issue #63).
+  //
+  // Регистр при этом НЕ схлопываем: «#еда» и «#Еда» — разные теги, так весь
+  // сервис их и считает (см. окно переименования тега).
+  const seen = new Set<string>();
   const out: string[] = [];
-  for (const m of text.matchAll(HASHTAG_RE)) out.push(m[1]);
+  for (const m of text.matchAll(HASHTAG_RE)) {
+    if (seen.has(m[1])) continue;
+    seen.add(m[1]);
+    out.push(m[1]);
+  }
   return out;
 }
 

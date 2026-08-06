@@ -2,6 +2,7 @@ import { create } from "zustand";
 import * as db from "../lib/db";
 import type { Transaction } from "../types";
 import {
+  allConditions,
   migrateRule,
   ruleMatchesV2,
   compileCondition,
@@ -12,6 +13,7 @@ import {
   type ConditionOp,
   type RuleAction,
   type RuleCondition,
+  type RuleConditionGroup,
   type StoredRule,
 } from "../lib/ruleEngine";
 
@@ -57,8 +59,17 @@ export type StoredCategoryRule = CategoryRuleV2;
 
 /** Новое правило первого поколения — как его создают подсказки категорий. */
 export type NewRule = Omit<CategoryRule, "id" | "createdAt">;
-/** Новое правило второго поколения. */
-export type NewRuleV2 = Omit<CategoryRuleV2, "id" | "createdAt">;
+/**
+ * Новое правило второго поколения.
+ *
+ * `groups` необязательны: правило можно задать и плоским списком `conditions` —
+ * это форма до появления групп, и она сворачивается в одну группу. Так пишут
+ * подсказки категорий и всё, что собирает правило на лету.
+ */
+export type NewRuleV2 = Omit<CategoryRuleV2, "id" | "createdAt" | "groups"> & {
+  groups?: RuleConditionGroup[];
+  conditions?: RuleCondition[];
+};
 
 interface RulesState {
   rules: StoredCategoryRule[];
@@ -99,16 +110,38 @@ type RuleLike = Partial<CategoryRule> &
  * бы из старых плоских полей, которые ещё лежат в том же объекте на диске.
  */
 function normalizeRule(r: RuleLike): StoredCategoryRule {
-  const hasV2 = Array.isArray(r.conditions) || Array.isArray(r.actions);
+  const legacyConditions = (r as { conditions?: RuleCondition[] }).conditions;
+  const hasV2 =
+    Array.isArray(r.groups) || Array.isArray(legacyConditions) || Array.isArray(r.actions);
   if (hasV2) {
+    // Группы — единственная форма условий на диске. Правило, записанное до их
+    // появления, сворачивается в одну группу со своей прежней связкой; связка
+    // правила становится межгрупповой и при единственной группе ни на что не
+    // влияет.
+    const groups: RuleConditionGroup[] = Array.isArray(r.groups)
+      ? r.groups.map((g) => ({
+          join: g?.join === "or" ? "or" : "and",
+          conditions: Array.isArray(g?.conditions) ? g.conditions : [],
+        }))
+      : [
+          {
+            join: r.join === "or" ? "or" : "and",
+            conditions: Array.isArray(legacyConditions) ? legacyConditions : [],
+          },
+        ];
     return {
       id: r.id,
       enabled: r.enabled ?? true,
       createdAt: r.createdAt,
-      conditions: Array.isArray(r.conditions) ? r.conditions : [],
-      join: r.join === "or" ? "or" : "and",
+      groups,
+      join: Array.isArray(r.groups) && r.join === "or" ? "or" : "and",
       actions: Array.isArray(r.actions) ? r.actions : [],
       ...(r.title !== undefined ? { title: r.title } : {}),
+      // Нормализация пересобирает правило по полям, поэтому каждое новое поле
+      // надо проносить здесь явно — иначе оно молча теряется при первой же
+      // правке. Пишем только когда включено: у большинства правил
+      // автоприменения нет, и лишний `false` в хранилище только шумит.
+      ...(r.autoApply ? { autoApply: true } : {}),
     };
   }
   return migrateRule({
@@ -130,11 +163,18 @@ function normalizeRule(r: RuleLike): StoredCategoryRule {
  */
 function ruleKey(r: RuleLike): string {
   const v2 = normalizeRule(r);
-  const conds = v2.conditions
-    .map((c) => {
-      const v = c.caseInsensitive ? c.value.toLowerCase() : c.value;
-      return `${c.field} ${c.op} ${c.caseInsensitive ? "i" : "s"} ${v}`;
-    })
+  const conds = v2.groups
+    .map(
+      (g) =>
+        `${g.join}(` +
+        g.conditions
+          .map((c) => {
+            const v = c.caseInsensitive ? c.value.toLowerCase() : c.value;
+            return `${c.field} ${c.op} ${c.caseInsensitive ? "i" : "s"} ${v}`;
+          })
+          .join(" & ") +
+        ")"
+    )
     .join(" & ");
   const acts = v2.actions.map((a) => `${a.kind}=${a.value}`).join(" & ");
   return `${v2.join} [${conds}] → [${acts}]`;
@@ -212,14 +252,17 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
           return a;
         });
       }
-      if (Array.isArray(next.conditions)) {
-        next.conditions = next.conditions.map((c) => {
-          if (c.field === "payee" && c.op === "equals" && c.value === oldTitle) {
-            changed = true;
-            return { ...c, value: newTitle };
-          }
-          return c;
-        });
+      if (Array.isArray(next.groups)) {
+        next.groups = next.groups.map((g) => ({
+          ...g,
+          conditions: (g.conditions ?? []).map((c) => {
+            if (c.field === "payee" && c.op === "equals" && c.value === oldTitle) {
+              changed = true;
+              return { ...c, value: newTitle };
+            }
+            return c;
+          }),
+        }));
       }
       if (!changed) return r;
       touched++;
@@ -232,7 +275,20 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
   },
 
   update: async (id, patch) => {
-    const list = get().rules.map((r) => (r.id === id ? normalizeRule({ ...r, ...patch }) : r));
+    // Патч в плоской форме сворачиваем в группу здесь: у правила на диске
+    // группы уже есть, и нормализация предпочла бы их — плоские условия из
+    // патча молча потерялись бы.
+    const { conditions, ...rest } = patch;
+    const next =
+      conditions && !patch.groups
+        ? {
+            ...rest,
+            groups: [
+              { join: patch.join === "or" ? ("or" as const) : ("and" as const), conditions },
+            ],
+          }
+        : rest;
+    const list = get().rules.map((r) => (r.id === id ? normalizeRule({ ...r, ...next }) : r));
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
   },
@@ -260,7 +316,7 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
  *  тогда движок соберёт их сам (они кэшируются по тексту, так что это не
  *  дороже). */
 export function compileRule(r: StoredRule): RegExp | null {
-  const first = migrateRule(r).conditions[0];
+  const first = allConditions(migrateRule(r))[0];
   return first ? compileCondition(first) : null;
 }
 
@@ -280,7 +336,7 @@ export function ruleMatches(
   // Готовое выражение имеет смысл только для правила с единственным условием —
   // у остальных движок берёт своё из кэша.
   const compiled =
-    compiledRegex !== undefined && v2.conditions.length === 1
+    compiledRegex !== undefined && allConditions(v2).length === 1
       ? new Map([[0, compiledRegex]])
       : undefined;
   return ruleMatchesV2(t, v2, compiled);
@@ -292,12 +348,13 @@ export function describeCategoryRule(r: StoredRule): string {
 }
 
 /**
- * Применить правила ко всему набору операций — в слое операций.
+ * Применить правила ко всему набору операций — в слое операций (только
+ * категория).
  *
- * Меняется только категория: она обратима сама по себе, потому что исходную
- * кладёт импорт. Получателя и комментарий правила ставят через слой правок
- * («Применить правила»), и откатываются они снятием правки — подробности в
- * шапке `ruleEngine.ts`.
+ * ⚠️ В конвейере данных НЕ используется: автоприменение убрано, теперь все три
+ * поля меняются одинаково — кнопкой «Проверить и применить» и только у
+ * отмеченных операций (issue #62). Оставлено вместе с тестами под будущее
+ * управляемое автоприменение; подробности в шапке `ruleEngine.ts`.
  */
 export function applyCategoryRules(
   txs: Transaction[],

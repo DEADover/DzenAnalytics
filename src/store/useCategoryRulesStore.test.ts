@@ -12,6 +12,11 @@ vi.mock("../lib/db", () => ({
 }));
 
 import {
+  allConditions,
+  migrateRule,
+  type CategoryRuleV2Flat,
+} from "../lib/ruleEngine";
+import {
   useCategoryRulesStore,
   ruleMatches,
   compileRule,
@@ -36,8 +41,9 @@ function rule(p: Partial<CategoryRule>): CategoryRule {
   };
 }
 
-/** Правило второго поколения — то, что пишется на диск сейчас. */
-function v2rule(p: Partial<StoredCategoryRule>): StoredCategoryRule {
+/** Правило второго поколения ДО групп — так оно лежит в базе у людей.
+ *  Через него же проверяется, что миграция читает старую форму. */
+function v2rule(p: Partial<CategoryRuleV2Flat>): CategoryRuleV2Flat {
   return {
     id: "r",
     enabled: true,
@@ -174,6 +180,51 @@ describe("правила — совпадение операции с услов
   });
 });
 
+describe("правила — автоприменение", () => {
+  it("галочка доживает до диска и переживает следующую правку", async () => {
+    // Нормализация пересобирает правило по полям, и новое поле теряется, если
+    // его не пронести явно: галочка в таблице ставилась и тут же слетала.
+    disk.clear();
+    useCategoryRulesStore.setState({ rules: [], loaded: true });
+    await useCategoryRulesStore.getState().add({
+      enabled: true,
+      conditions: [{ field: "payee", op: "contains", value: "магнит", caseInsensitive: true }],
+      join: "and",
+      actions: [{ kind: "setCategory", value: "Еда" }],
+    });
+    const id = useCategoryRulesStore.getState().rules[0].id;
+
+    await useCategoryRulesStore.getState().update(id, { autoApply: true });
+    expect(useCategoryRulesStore.getState().rules[0].autoApply).toBe(true);
+    expect((disk.get("categoryRules") as { autoApply?: boolean }[])[0].autoApply).toBe(true);
+
+    // Правка любого другого поля галочку не сбрасывает.
+    await useCategoryRulesStore.getState().update(id, { title: "Магнит" });
+    expect(useCategoryRulesStore.getState().rules[0].autoApply).toBe(true);
+
+    await useCategoryRulesStore.getState().update(id, { autoApply: false });
+    expect(useCategoryRulesStore.getState().rules[0].autoApply).toBeUndefined();
+  });
+
+  it("правило первого поколения автоприменения не получает", async () => {
+    disk.set("categoryRules", [
+      {
+        id: "old",
+        enabled: true,
+        field: "payee",
+        op: "contains",
+        value: "магнит",
+        caseInsensitive: true,
+        category: "Еда",
+        createdAt: "2026-01-01T00:00:00Z",
+      },
+    ]);
+    useCategoryRulesStore.setState({ rules: [], loaded: false });
+    await useCategoryRulesStore.getState().hydrate();
+    expect(useCategoryRulesStore.getState().rules[0].autoApply).toBe(false);
+  });
+});
+
 describe("правила — хранилище", () => {
   it("читает смесь поколений и разворачивает старые правила", async () => {
     const stored = [
@@ -203,7 +254,7 @@ describe("правила — хранилище", () => {
     const rules = useCategoryRulesStore.getState().rules;
     expect(rules).toHaveLength(2);
     // Старое правило получило условия и действия, не потеряв ни поля.
-    expect(rules[0].conditions).toEqual([
+    expect(allConditions(migrateRule(rules[0]))).toEqual([
       { field: "payee", op: "contains", value: "магнит", caseInsensitive: true },
     ]);
     expect(rules[0].actions).toEqual([{ kind: "setCategory", value: "Еда" }]);
@@ -235,7 +286,7 @@ describe("правила — хранилище", () => {
 
     const saved = (disk.get("categoryRules") as StoredCategoryRule[])[0];
     expect(saved.enabled).toBe(false);
-    expect(saved.conditions).toEqual([
+    expect(allConditions(migrateRule(saved))).toEqual([
       { field: "payee", op: "contains", value: "магнит", caseInsensitive: true },
     ]);
     expect(saved.actions).toEqual([{ kind: "setCategory", value: "Еда" }]);
@@ -268,7 +319,7 @@ describe("правила — хранилище", () => {
     });
     const saved = disk.get("categoryRules") as StoredCategoryRule[];
     expect(saved).toHaveLength(1);
-    expect(saved[0].conditions).toHaveLength(2);
+    expect(allConditions(migrateRule(saved[0]))).toHaveLength(2);
     expect(saved[0].actions).toHaveLength(2);
     // Плоских полей первого поколения на диске больше нет: два представления
     // одного правила в одной записи — это два источника истины.
@@ -289,7 +340,7 @@ describe("правила — хранилище", () => {
       category: "Еда",
     });
     const saved = disk.get("categoryRules") as StoredCategoryRule[];
-    expect(saved[0].conditions).toEqual([
+    expect(allConditions(migrateRule(saved[0]))).toEqual([
       { field: "payee", op: "contains", value: "магнит", caseInsensitive: true },
     ]);
     expect(saved[0].actions).toEqual([{ kind: "setCategory", value: "Еда" }]);
@@ -375,7 +426,7 @@ describe("правила — хранилище", () => {
     });
     const r = useCategoryRulesStore.getState().rules[0];
     expect(r.title).toBe("Купоны");
-    expect(r.conditions).toEqual([
+    expect(allConditions(migrateRule(r))).toEqual([
       { field: "comment", op: "regex", value: "^Купон", caseInsensitive: false },
     ]);
     expect(r.actions).toEqual([{ kind: "setCategory", value: "Доходы / Купоны" }]);
@@ -397,7 +448,7 @@ describe("правила — хранилище", () => {
     });
     const id = useCategoryRulesStore.getState().rules[0].id;
     await useCategoryRulesStore.getState().update(id, { enabled: false });
-    expect(useCategoryRulesStore.getState().rules[0].conditions).toHaveLength(2);
+    expect(allConditions(migrateRule(useCategoryRulesStore.getState().rules[0]))).toHaveLength(2);
   });
 
   it("порядок правил меняется и сохраняется", async () => {
@@ -501,7 +552,7 @@ describe("переименование контрагента в правила�
     expect(touched).toBe(1);
     const r = useCategoryRulesStore.getState().rules[0];
     expect(r.actions?.[0].value).toBe("Новое");
-    expect(r.conditions?.[0].value).toBe("Новое");
+    expect(allConditions(migrateRule(r))[0].value).toBe("Новое");
   });
 
   it("не трогает «содержит» — там значение это кусок строки", async () => {
@@ -515,7 +566,7 @@ describe("переименование контрагента в правила�
     });
     const touched = await useCategoryRulesStore.getState().renamePayee("Старое", "Новое");
     expect(touched).toBe(0);
-    expect(useCategoryRulesStore.getState().rules[0].conditions?.[0].value).toBe("Старое");
+    expect(allConditions(migrateRule(useCategoryRulesStore.getState().rules[0]))[0].value).toBe("Старое");
   });
 
   it("чужие имена не задевает", async () => {

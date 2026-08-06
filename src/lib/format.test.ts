@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { displayPayee, secondaryPayee, payeeSearchText, currencySymbol } from "./format";
+import {
+  currencySymbol,
+  displayPayee,
+  formatNum,
+  formatPct,
+  payeeSearchText,
+  secondaryPayee,
+} from "./format";
 
 describe("payeeSearchText", () => {
   it("includes both the dictionary name and the raw bank text when they differ", () => {
@@ -107,5 +114,48 @@ describe("currencySymbol — подписи без суммы (#57)", () => {
 
   it("для незнакомой валюты показывает её код, а не рубль", () => {
     expect(currencySymbol("XYZ")).toBe("XYZ");
+  });
+});
+
+describe("formatNum — округление по модулю", () => {
+  it("копейки отбрасываются одинаково у плюса и у минуса", () => {
+    // Сравнение самого значения давало «20 010» и «−20 010,09» в одной колонке.
+    expect(formatNum(20010.09).replace(/ /g, " ")).toBe("20 010");
+    expect(formatNum(-20010.09).replace(/ /g, " ")).toBe("-20 010");
+  });
+
+  it("мелкие суммы копейки сохраняют — тоже с обеих сторон нуля", () => {
+    expect(formatNum(12.34)).toBe("12,34");
+    expect(formatNum(-12.34)).toBe("-12,34");
+  });
+
+  it("граница ровно в тысяче", () => {
+    expect(formatNum(999.99)).toBe("999,99");
+    expect(formatNum(-999.99)).toBe("-999,99");
+    expect(formatNum(1000.5).replace(/ /g, " ")).toBe("1 001");
+    expect(formatNum(-1000.5).replace(/ /g, " ")).toBe("-1 001");
+  });
+});
+
+describe("formatPct", () => {
+  it("дробная часть отделяется запятой, как и все числа в интерфейсе", () => {
+    // `toFixed` ставил точку, и рядом с «18 000 ₽» появлялось «18.0%».
+    expect(formatPct(0.18)).toBe("18,0%");
+    expect(formatPct(-0.055)).toBe("−5,5%");
+  });
+
+  it("округление до нуля не оставляет минус перед нулём", () => {
+    // «−0,0%» читается как ошибка, а не как «почти не изменилось».
+    expect(formatPct(-0.0004)).toBe("0,0%");
+  });
+
+  it("разрядность задаётся вызывающим", () => {
+    expect(formatPct(0.18, 0)).toBe("18%");
+    expect(formatPct(0.1836, 2)).toBe("18,36%");
+  });
+
+  it("не-число даёт прочерк, а не «NaN%»", () => {
+    expect(formatPct(Number.NaN)).toBe("—");
+    expect(formatPct(Infinity)).toBe("—");
   });
 });

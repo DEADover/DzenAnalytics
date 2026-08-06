@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, ArrowRight, ListChecks, Info, Loader2 } from "lucide-react";
+import { X, ArrowRight, ListChecks, Info, Loader2, Pencil } from "lucide-react";
+import { useDataStore } from "../store/useDataStore";
+import { EditTransactionModal } from "./EditTransactionModal";
+import { Tooltip } from "./Tooltip";
 import clsx from "clsx";
 import { type RulePlan, type RuleRow } from "../lib/rulePlan";
 import { formatMoney, formatNum, formatDate, displayPayee } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { CategoryDot } from "./CategoryDot";
+import { Segmented } from "./Segmented";
 import type { Transaction } from "../types";
 
 /**
@@ -28,8 +32,13 @@ function rowTitle(t: Transaction): string {
  *  Выбор и запись работают по всему набору, не только по видимой части. */
 const RENDER_LIMIT = 300;
 
+/**
+ * Пометка состояния строки. У «к записи» её нет намеренно: окно и открывается
+ * на таких строках, метка стояла бы у каждой и не сообщала бы ничего. Метка
+ * нужна там, где строка ведёт себя НЕ так, как ожидаешь.
+ */
 const STATUS_LABEL: Record<RuleRow["status"], string> = {
-  pending: "К записи",
+  pending: "",
   written: "Уже записано",
   same: "Уже соответствует",
   blocked: "Нет категории в Дзен-мани",
@@ -45,17 +54,13 @@ const STATUS_TONE: Record<RuleRow["status"], string> = {
 export function RulePreviewModal({
   plan,
   ruleCount,
-  preselect,
   notes,
   onApply,
   onClose,
 }: {
   plan: RulePlan;
-  /** Сколько правил выбрано — заголовок должен отвечать «по чему это». */
+  /** Сколько правил включено — заголовок должен отвечать «по чему это». */
   ruleCount: number;
-  /** «Применить правила» открывает окно с уже отмеченными строками, «Проверить
-   *  правила» — с пустым выбором. План при этом один и тот же. */
-  preselect: boolean;
   /** Что случится после записи: режим отправки, откат, необратимость. */
   notes: string[];
   onApply: (rows: RuleRow[]) => Promise<void>;
@@ -65,16 +70,33 @@ export function RulePreviewModal({
     () => plan.pending.map((r) => r.tx.id),
     [plan]
   );
-  const [selected, setSelected] = useState<Set<string>>(() =>
-    preselect ? new Set(pendingIds) : new Set()
-  );
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(pendingIds));
   const [applying, setApplying] = useState(false);
+  // Показываем сразу то, ради чего окно чаще всего и открывают: строки к записи.
+  // В общем списке они тонули — уже записанные и совпадающие совпадения бывают
+  // на порядок многочисленнее, а выбрать их всё равно нельзя.
+  const [filter, setFilter] = useState<"pending" | "all">(
+    plan.pending.length > 0 ? "pending" : "all"
+  );
+  // Правка операции прямо отсюда: увидел в разборе, что правило хочет не того, —
+  // поправил операцию, не теряя окно. План пересчитается сам, он считается от
+  // тех же данных.
+  const [editing, setEditing] = useState<Transaction | null>(null);
+  // Открываем ОТОБРАЖАЕМУЮ операцию, а не строку плана: план считается по
+  // исходникам (правки ещё не наложены), и редактор показал бы старые значения.
+  const displayed = useDataStore((s) => s.transactions);
+  const openEditor = (id: string, fallback: Transaction) =>
+    setEditing(displayed.find((t) => t.id === id) ?? fallback);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Пока сверху открыт редактор операции, Escape принадлежит ему: иначе одно
+    // нажатие закрывало бы оба окна разом.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !editing) onClose();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, editing]);
 
   const allSelected = pendingIds.length > 0 && selected.size === pendingIds.length;
 
@@ -99,7 +121,22 @@ export function RulePreviewModal({
     }
   }
 
-  const shown = plan.rows.slice(0, RENDER_LIMIT);
+  const visible = filter === "pending" ? plan.pending : plan.rows;
+  const shown = visible.slice(0, RENDER_LIMIT);
+
+  /**
+   * Называть правило есть смысл, только когда их в разборе несколько. С одним
+   * правилом подпись повторялась бы у каждой строки, ничего не добавляя: оно
+   * названо в шапке окна и на странице.
+   */
+  const showRule = useMemo(() => {
+    const names = new Set<string>();
+    for (const row of plan.rows) {
+      for (const c of row.changes) if (c.rule) names.add(c.rule);
+      if (names.size > 1) return true;
+    }
+    return false;
+  }, [plan]);
 
   return createPortal(
     <div
@@ -120,7 +157,7 @@ export function RulePreviewModal({
             <div className="min-w-0">
               <div className="font-semibold truncate">Что изменят правила</div>
               <div className="text-xs text-muted">
-                Правил выбрано: {ruleCount} · Совпадений:{" "}
+                Правил включено: {ruleCount} · Совпадений:{" "}
                 {formatNum(plan.rows.length)} · К записи:{" "}
                 {formatNum(plan.pending.length)}
               </div>
@@ -137,11 +174,17 @@ export function RulePreviewModal({
         </div>
 
         {plan.rows.length > 0 && (
-          <div className="flex items-center gap-3 px-5 py-2 border-b border-border shrink-0 text-xs text-muted">
+          <div className="flex items-center gap-3 px-5 py-2 border-b border-border shrink-0 text-xs text-muted flex-wrap">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={allSelected}
+                // Частичный выбор показываем третьим состоянием: пустая
+                // галочка при «Отмечено: 134 из 138» читается как «не выбрано
+                // ничего».
+                ref={(el) => {
+                  if (el) el.indeterminate = selected.size > 0 && !allSelected;
+                }}
                 onChange={() =>
                   setSelected(allSelected ? new Set() : new Set(pendingIds))
                 }
@@ -154,9 +197,33 @@ export function RulePreviewModal({
             <span className="tabular-nums">
               Отмечено: {formatNum(selected.size)} из {formatNum(pendingIds.length)}
             </span>
-            {plan.rows.length > RENDER_LIMIT && (
+            {/* Переключатель показываем, только когда наборы РАЗНЫЕ. Если всё
+                совпадение и есть «к записи», обе кнопки дают один и тот же
+                список с одинаковым числом — контрол, который ничего не
+                переключает. */}
+            {plan.pending.length !== plan.rows.length && (
+              <Segmented
+                size="sm"
+                label="Какие строки показывать"
+                value={filter}
+                onChange={(v) => setFilter(v)}
+                options={[
+                  {
+                    value: "pending" as const,
+                    label: `К записи (${formatNum(plan.pending.length)})`,
+                    title: "Только то, что правила изменят",
+                  },
+                  {
+                    value: "all" as const,
+                    label: `Все (${formatNum(plan.rows.length)})`,
+                    title: "Весь разбор: и уже записанное, и совпадающее",
+                  },
+                ]}
+              />
+            )}
+            {visible.length > RENDER_LIMIT && (
               <span className="ml-auto">
-                Показаны первые {RENDER_LIMIT} из {formatNum(plan.rows.length)} —
+                Показаны первые {RENDER_LIMIT} из {formatNum(visible.length)} —
                 выбор и запись работают по всему списку
               </span>
             )}
@@ -164,16 +231,29 @@ export function RulePreviewModal({
         )}
 
         <div className="overflow-y-auto px-5 py-3 flex-1">
-          {plan.rows.length === 0 ? (
+          {visible.length === 0 ? (
             <div className="text-center text-muted text-sm py-10">
               {ruleCount === 0
-                ? "Отметьте правила в колонке «Выбор» — покажу, что они сделают."
-                : "Ни одна операция не подходит под выбранные правила."}
+                ? "Все правила выключены — включите нужные, и покажу, что они сделают."
+                : plan.rows.length === 0
+                  ? "Ни одна операция не подходит под выбранные правила."
+                  : "Записывать нечего: правила уже применены. Переключитесь на «Все», чтобы увидеть весь разбор."}
             </div>
           ) : (
             <div className="space-y-0.5">
               {shown.map((row) => {
                 const selectable = row.status === "pending";
+                // Строки «было = станет» показываем, только если у операции
+                // больше ничего нет. Иначе они пустой шум: «Еда дома → Еда
+                // дома» рядом с настоящей правкой ничего не сообщает.
+                const meaningful = row.changes.filter((c) => c.state !== "same");
+                const changes = meaningful.length > 0 ? meaningful : row.changes;
+                // Одно правило на всю операцию — подписываем строку один раз, а
+                // не каждое изменение.
+                const rowRules = new Set(
+                  changes.map((c) => c.rule).filter((r): r is string => !!r)
+                );
+                const oneRule = rowRules.size === 1 ? [...rowRules][0] : null;
                 return (
                   <div
                     key={row.tx.id}
@@ -199,22 +279,32 @@ export function RulePreviewModal({
                         <span className="text-xs text-muted whitespace-nowrap">
                           {formatDate(row.tx.date)}
                         </span>
-                        <span
-                          className={clsx(
-                            "text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap",
-                            STATUS_TONE[row.status]
-                          )}
-                        >
-                          {STATUS_LABEL[row.status]}
-                          {row.status === "blocked" && row.blockedCategory
-                            ? `: «${row.blockedCategory}»`
-                            : row.status === "blocked" && row.blockedPayee
-                              ? `: контрагента «${row.blockedPayee}» больше нет`
-                              : ""}
-                        </span>
+                        {/* Чьё это изменение. Пока правило одно на весь разбор,
+                            подпись молчит: она повторялась бы в каждой строке,
+                            а её и так видно в шапке окна. */}
+                        {showRule && oneRule && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-panel2 text-muted whitespace-nowrap max-w-[14rem] truncate">
+                            {oneRule}
+                          </span>
+                        )}
+                        {STATUS_LABEL[row.status] && (
+                          <span
+                            className={clsx(
+                              "text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap",
+                              STATUS_TONE[row.status]
+                            )}
+                          >
+                            {STATUS_LABEL[row.status]}
+                            {row.status === "blocked" && row.blockedCategory
+                              ? `: «${row.blockedCategory}»`
+                              : row.status === "blocked" && row.blockedPayee
+                                ? `: контрагента «${row.blockedPayee}» больше нет`
+                                : ""}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-1 space-y-0.5">
-                        {row.changes.map((c) => (
+                        {changes.map((c) => (
                           <div
                             key={c.label}
                             className="flex items-baseline gap-2 text-xs"
@@ -234,6 +324,16 @@ export function RulePreviewModal({
                             >
                               {c.to}
                             </span>
+                            {/* Построчная подпись — только когда поля операции
+                                достались РАЗНЫМ правилам. Если правило одно,
+                                оно уже названо в шапке строки. */}
+                            {showRule && !oneRule && c.rule && (
+                              <Tooltip content={`Правило: ${c.rule}`}>
+                                <span className="ml-auto shrink-0 text-[10px] text-muted max-w-[12rem] truncate">
+                                  {c.rule}
+                                </span>
+                              </Tooltip>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -246,6 +346,19 @@ export function RulePreviewModal({
                     >
                       {formatMoney(row.tx.amount, row.tx.currency)}
                     </div>
+                    {/* Правка доступна у ЛЮБОЙ строки, включая уже записанные и
+                        совпадающие: разбор часто и открывают затем, чтобы
+                        поправить саму операцию. */}
+                    <Tooltip content="Открыть операцию">
+                      <button
+                        type="button"
+                        onClick={() => openEditor(row.tx.id, row.tx)}
+                        className="btn-ghost !p-1.5 text-muted hover:text-accent shrink-0"
+                        aria-label={`Открыть операцию: ${rowTitle(row.tx)}`}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    </Tooltip>
                   </div>
                 );
               })}
@@ -298,6 +411,14 @@ export function RulePreviewModal({
           </button>
         </div>
       </div>
+
+      {editing && (
+        <EditTransactionModal
+          key={editing.id}
+          tx={editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>,
     document.body
   );

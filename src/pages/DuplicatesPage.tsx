@@ -36,7 +36,7 @@ export function DuplicatesPage() {
   const exclusionsCount = Object.keys(exclusions).length;
   const [exclusionsModalOpen, setExclusionsModalOpen] = useState(false);
 
-  const [windowDays, setWindowDays] = useState(3);
+  const [windowDays, setWindowDays] = useState(0);
   const groups = useMemo(
     () => detectDuplicates(transactions, windowDays, excludedSet),
     [transactions, windowDays, excludedSet]

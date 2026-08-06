@@ -266,9 +266,21 @@ export function buildMonthDigest(
   };
 }
 
-/** Build a history of all completed weeks and months observed in the data. */
+/** «ГГГГ-ММ-ДД» → полночь ЭТОГО дня по местному времени. */
+function ymdToLocalDate(ymd: string): Date {
+  const [y, m, d] = ymd.slice(0, 10).split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+/**
+ * Build a history of all completed weeks and months observed in the data.
+ *
+ * `today` вынесен в параметр, чтобы поведение на границе месяца можно было
+ * проверить тестом, а не ждать первого числа.
+ */
 export function buildDigestHistory(
-  transactions: Transaction[]
+  transactions: Transaction[],
+  today = new Date()
 ): DigestEntry[] {
   if (transactions.length === 0) return [];
 
@@ -279,13 +291,16 @@ export function buildDigestHistory(
     if (t.date < minDate) minDate = t.date;
     if (t.date > maxDate) maxDate = t.date;
   }
-  const minD = new Date(minDate);
-  const maxD = new Date(maxDate);
+  // Разбираем «ГГГГ-ММ-ДД» по частям, а не через `new Date(строка)`: та читает
+  // дату как UTC, а весь остальной счёт здесь ведётся в местном времени. К
+  // западу от Гринвича из-за этого последний месяц с данными мог выпасть из
+  // свода целиком — граница уезжала на день назад.
+  const minD = ymdToLocalDate(minDate);
+  const maxD = ymdToLocalDate(maxDate);
 
   const out: DigestEntry[] = [];
 
   // Months: every full month from minD's month to maxD's month minus 1 (we exclude current incomplete).
-  const today = new Date();
   const lastFullMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const startMonth = new Date(minD.getFullYear(), minD.getMonth(), 1);
   for (

@@ -45,10 +45,6 @@ import { Switch } from "../components/Switch";
 import { Segmented } from "../components/Segmented";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDataStore } from "../store/useDataStore";
-import { useGoalsStore } from "../store/useGoalsStore";
-import { useBudgetsStore } from "../store/useBudgetsStore";
-import { useCalibrationStore } from "../store/useCalibrationStore";
-import { useSavedViewsStore } from "../store/useSavedViewsStore";
 import { useZenmoneyStore, recalcBalanceCalibration } from "../store/useZenmoneyStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import { useCloudSnapshotStore } from "../store/useCloudSnapshotStore";
@@ -65,8 +61,6 @@ import { formatNum, formatDate, formatMoney } from "../lib/format";
 import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { parseAndValidateBackup, buildBackupPayload, restoreBackupPayload } from "../lib/backup";
-import { useCategoryRulesStore } from "../store/useCategoryRulesStore";
-import { useDeletedPayloadsStore } from "../store/useDeletedPayloadsStore";
 import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
@@ -74,7 +68,6 @@ import {
   useCounterpartyEditsStore,
   countCounterpartyPending,
 } from "../store/useCounterpartyEditsStore";
-import { useDuplicateExclusionsStore } from "../store/useDuplicateExclusionsStore";
 import * as db from "../lib/db";
 
 type Mode = "replace" | "merge";
@@ -597,11 +590,6 @@ export function ImportPage() {
   const [mode, setMode] = useState<Mode>(transactions.length > 0 ? "merge" : "replace");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const goalsHydrate = useGoalsStore((s) => s.hydrate);
-  const budgetsHydrate = useBudgetsStore((s) => s.hydrate);
-  const calibHydrate = useCalibrationStore((s) => s.hydrate);
-  const viewsHydrate = useSavedViewsStore((s) => s.hydrate);
-  const dataHydrate = useDataStore((s) => s.hydrate);
   const backupRef = useRef<HTMLInputElement>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupMsg, setBackupMsg] = useState<string | null>(null);
@@ -649,32 +637,20 @@ export function ImportPage() {
       // builder — incl. local edits/drafts/deletions/rules so un-pushed work
       // survives a restore).
       await restoreBackupPayload(dump);
-      // Re-hydrate the OVERLAY stores FIRST so their in-memory state reflects
-      // the freshly-restored disk data, THEN rebuild the data pipeline (which
-      // reads edits/rules/deletions through those stores).
-      await Promise.all([
-        useEditsStore.getState().hydrate(),
-        useCategoryRulesStore.getState().hydrate(),
-        useDraftsStore.getState().hydrate(),
-        useDeletedStore.getState().hydrate(),
-        useDeletedPayloadsStore.getState().hydrate(),
-        useTagEditsStore.getState().hydrate(),
-        useDuplicateExclusionsStore.getState().hydrate(),
-        aliasesHydrate(),
-      ]);
-      await Promise.all([
-        dataHydrate(),
-        goalsHydrate(),
-        budgetsHydrate(),
-        calibHydrate(),
-        viewsHydrate(),
-        reportPeriodHydrate(),
-        useOffBalanceStore.getState().hydrate(),
-      ]);
       const restoredCount = Array.isArray(dump.transactions)
         ? dump.transactions.length
         : 0;
-      setBackupMsg(`Восстановлено: ${formatNum(restoredCount)} операций`);
+      setBackupMsg(
+        `Восстановлено: ${formatNum(restoredCount)} операций. Обновляем страницу…`
+      );
+      // Перезагрузка, а не поимённое пере-чтение сторов.
+      //
+      // Раньше здесь был список из полутора десятков `hydrate()`, и он молча
+      // отставал ровно так же, как список ключей бэкапа: восстановленные
+      // настройки бюджета, разрезы и оформление не появлялись до ручной
+      // перезагрузки. Перезагрузка снимает этот класс ошибок целиком — все
+      // сторы поднимаются штатным путём, и забыть что-то физически нельзя.
+      setTimeout(() => window.location.reload(), 1200);
     } catch (e) {
       setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Ошибка импорта backup'а");
     } finally {
@@ -1860,9 +1836,12 @@ export function ImportPage() {
             <span className="font-medium">Бэкап всех данных</span>
           </div>
         <p className="text-xs text-muted mb-3">
-          Экспортирует JSON со всеми транзакциями, бюджетами, целями, калибровкой, видами,
-          тегами категорий, инфляцией и настройкой группировки. Импорт восстанавливает
-          всё одним файлом.
+          Экспортирует JSON со всем, что живёт только здесь: операции, бюджеты и их
+          настройки, цели, калибровка, виды, разрезы данных, оформление, правила
+          категоризации, иконки и цвета категорий, курсы валют по датам и{" "}
+          <strong>несинхронизированные правки</strong> — операций, счетов,
+          контрагентов, категорий и планов. Токен Дзен-мани в файл не попадает.
+          Импорт восстанавливает всё одним файлом и обновляет страницу.
         </p>
         <div className="flex flex-wrap gap-2">
           <button

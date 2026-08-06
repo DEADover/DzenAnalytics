@@ -10,9 +10,6 @@ import {
   HelpCircle,
   Pencil,
   ListChecks,
-  CheckCheck,
-  Circle,
-  CircleCheck,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -54,23 +51,18 @@ const TARGET_LABELS: Record<RuleTargetField, string> = {
   comment: "Комментарий",
 };
 
-/** Поля, которые правило меняет только через «Применить правила»: в слое
- *  операций им не во что откатываться (см. шапку `ruleEngine.ts`). */
-const NEEDS_APPLY: ReadonlySet<RuleTargetField> = new Set<RuleTargetField>([
-  "payee",
-  "comment",
-]);
-
 /**
  * «Правила категоризации» — справочник правил в том же виде, что «Счета» и
  * справочники операций: карточка с панелью действий сверху и таблицей ниже,
  * иконки-действия в колонке «Действия», создание и правка — в модалке.
  *
- * Две кнопки, один план. «Проверить правила» и «Применить правила» открывают
- * ОДНО и то же окно с одним и тем же расчётом (`buildRulePlan`) — различие
- * только в том, отмечены ли строки заранее. Два независимых плана на одной
- * странице разошлись бы в числах, и объяснить разницу пользователю было бы
- * нечем. Прежняя кнопка «Записать в операции» в этот же поток и свернулась.
+ * Одна кнопка, один план. Раньше кнопок было две — «Проверить правила» и
+ * «Применить правила», — но открывали они одно и то же окно с одним и тем же
+ * расчётом (`buildRulePlan`), различаясь лишь тем, отмечены ли строки заранее;
+ * разницу приходилось объяснять абзацем в справке. Теперь «Проверить и
+ * применить» открывает разбор, а запись живёт внутри окна — перед необратимым
+ * действием список всегда на глазах. Все числа на странице считаются из ОДНОГО
+ * плана: два независимых расчёта разошлись бы, и объяснить разницу было бы нечем.
  */
 export function RulesPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -99,15 +91,21 @@ export function RulesPage() {
   const [editing, setEditing] = useState<StoredCategoryRule | "create" | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [zenTags, setZenTags] = useState<ZenTag[] | null>(null);
-  /** Окно предпросмотра: `preselect` — открыто кнопкой «Применить правила». */
-  const [preview, setPreview] = useState<{ preselect: boolean } | null>(null);
+  /** Окно «Что изменят правила» — разбор и запись за один заход. */
+  const [preview, setPreview] = useState(false);
 
-  /** Храним СНЯТЫЕ галочки, а не выбранные: новое правило тогда попадает в
-   *  выбор само, и не приходится синхронизировать множество со списком. */
-  const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
+  /**
+   * Правила, по которым считается план, — просто ВКЛЮЧЁННЫЕ.
+   *
+   * Рядом с «Включено» была ещё колонка «Выбор»: она отбирала правила для
+   * предпросмотра, ничего не меняя в данных. Два очень похожих переключателя в
+   * соседних колонках читались как одно и то же, а разницу приходилось
+   * объяснять в справке. Отбор «применить только это правило» вернём отдельным
+   * действием в строке (issue #61) — оно и точнее, и не спорит с «Включено».
+   */
   const selectedIds = useMemo(
-    () => new Set(rules.filter((r) => !unchecked.has(r.id)).map((r) => r.id)),
-    [rules, unchecked]
+    () => new Set(rules.filter((r) => r.enabled).map((r) => r.id)),
+    [rules]
   );
 
   const allCategories = useMemo(() => {
@@ -265,7 +263,7 @@ export function RulesPage() {
     const patch = {
       enabled: draft.enabled,
       title: draft.title,
-      conditions: draft.conditions,
+      groups: draft.groups,
       join: draft.join,
       actions: draft.actions,
     };
@@ -278,7 +276,7 @@ export function RulesPage() {
     const ok = await confirm({
       title: "Удалить правило?",
       message:
-        "Категория операций, которые оно меняло, вернётся к исходной. Получатель и комментарий, уже записанные кнопкой «Применить правила», останутся — их отменяют откатом правки в списке изменений.",
+        "Правило перестанет предлагать изменения. То, что уже записано кнопкой «Проверить и применить», останется — это обычные правки операций, их отменяют построчно в списке изменений.",
       confirmLabel: "Удалить",
       tone: "danger",
     });
@@ -312,7 +310,7 @@ export function RulesPage() {
         ? "Отправка в Дзен-мани сейчас выключена — правки останутся на этом устройстве, пока вы её не включите."
         : "Дальше правки уедут в Дзен-мани тем же путём, что и правки из редактора операции."
       : "Дзен-мани не подключён — правки останутся только на этом устройстве.",
-    "Отменить можно построчно в списке изменений. Выключение правила записанную правку не отменяет: категория вернётся, а получатель и комментарий останутся до отката правки.",
+    "Отменить можно построчно в списке изменений. Выключение правила записанное не отменяет: правки живут отдельно от правил.",
   ];
 
   return (
@@ -393,28 +391,30 @@ export function RulesPage() {
                     комментарий. Двигать — стрелками в колонке «№».
                   </p>
                   <p>
-                    <strong className="text-text">Категория обратима:</strong> она
-                    живёт в вычисляемом слое — выключили правило, и категория
-                    вернулась к той, что пришла из Дзен-мани.
-                  </p>
-                  <p>
                     <strong className="text-text">
-                      Получатель и комментарий — нет.
+                      Само по себе правило ничего не меняет.
                     </strong>{" "}
-                    Возвращать их не во что: исходного комментария не хранит никто, а
-                    получатель до группировки — это текст банка. Поэтому такие правила
-                    ничего не меняют в операциях, пока вы не нажмёте{" "}
-                    <strong className="text-text">«Применить правила»</strong>, а
-                    отменяются они откатом правки в списке изменений, а не выключением
-                    правила.
+                    Категория, получатель и комментарий попадают в операции только
+                    через кнопку{" "}
+                    <strong className="text-text">«Проверить и применить»</strong> и
+                    только у тех операций, что отмечены в окне.
                   </p>
                   <p>
-                    <strong className="text-text">«Проверить правила»</strong> и{" "}
-                    <strong className="text-text">«Применить правила»</strong>{" "}
-                    открывают одно окно с одним расчётом: первая — с пустым выбором,
-                    вторая — с уже отмеченными строками. Считается по правилам,
-                    отмеченным в колонке «Выбор»; выбранное правило показывается, даже
-                    если оно выключено.
+                    <strong className="text-text">Автоприменение</strong> — та же
+                    запись, но без кнопки и только для операций, которых раньше не
+                    было: пришли синхронизацией или импортом. Уже имеющиеся оно не
+                    трогает никогда, для них есть кнопка.
+                  </p>
+                  <p>
+                    Записанное становится обычной правкой операции: отменяется
+                    построчно в списке изменений, а не выключением правила.
+                  </p>
+                  <p>
+                    <strong className="text-text">«Проверить и применить»</strong>{" "}
+                    открывает разбор: сначала строки, которые правила изменят, —
+                    переключателем в окне можно посмотреть и остальные совпадения.
+                    Записывается только отмеченное. Считается по всем включённым
+                    правилам; у каждого изменения подписано, чьё оно.
                   </p>
                   <p>
                     Правила создаются и со страницы{" "}
@@ -428,25 +428,18 @@ export function RulesPage() {
 
           <span className="flex-1 min-w-2" />
 
+          {/* Одна кнопка на оба сценария: окно и раньше было одно, а две кнопки
+              отличались лишь тем, отмечены ли строки заранее. Разницу
+              приходилось объяснять абзацем в справке — значит её и не было. */}
           <button
             type="button"
-            onClick={() => setPreview({ preselect: false })}
+            onClick={() => setPreview(true)}
             disabled={selectedIds.size === 0}
             className="btn-ghost text-sm shrink-0"
-            title="Показать операции, которые попадают под выбранные правила"
+            title="Показать, что сделают выбранные правила, и записать отмеченное"
           >
             <ListChecks className="w-4 h-4" aria-hidden />
-            Проверить правила ({formatNum(plan.rows.length)})
-          </button>
-          <button
-            type="button"
-            onClick={() => setPreview({ preselect: true })}
-            disabled={selectedIds.size === 0 || plan.pending.length === 0}
-            className="btn-ghost text-sm shrink-0"
-            title="Записать результат выбранных правил в операции"
-          >
-            <CheckCheck className="w-4 h-4" aria-hidden />
-            Применить правила ({formatNum(plan.pending.length)})
+            Проверить и применить ({formatNum(plan.pending.length)})
           </button>
           <button
             type="button"
@@ -460,8 +453,7 @@ export function RulesPage() {
 
         {selectedIds.size === 0 && rules.length > 0 && (
           <div className="mb-3 rounded-lg border border-border bg-panel2/50 px-3 py-2 text-xs text-muted">
-            Ни одно правило не выбрано — отметьте нужные в колонке «Выбор», чтобы
-            проверить или применить их.
+            Все правила выключены — включите нужные, чтобы проверить и применить их.
           </div>
         )}
 
@@ -495,15 +487,20 @@ export function RulesPage() {
             <table className="w-full" style={{ fontSize: "var(--tbl-font)" }}>
               <thead>
                 <tr>
+                  {/* Сначала СУТЬ правила, потом переключатели: читают строку
+                      слева направо, и «что это за правило» важнее, чем его
+                      состояние. Ширина «Что меняет» фиксирована по трём
+                      возможным ярлыкам — больше полей у правила не бывает. */}
+                  {/* Ширина у всех колонок своя, а `w-full` у «Правила» —
+                      приём для авторазметки таблицы: колонка забирает ВЕСЬ
+                      остаток. Название правила бывает длинной фразой из его же
+                      условий, и место нужно именно ему. */}
                   <th className="table-th w-20">№</th>
-                  {/* Выбор и «Включено» — разные вещи: первое влияет только на
-                      предпросмотр, второе на данные. Поэтому и подписи разные,
-                      и контролы выглядят по-разному. */}
-                  <th className="table-th w-16 text-center">Выбор</th>
+                  <th className="table-th w-full">Правило</th>
+                  <th className="table-th w-72 min-w-[18rem]">Что меняет</th>
                   <th className="table-th w-24 text-center">Включено</th>
-                  <th className="table-th">Правило</th>
-                  <th className="table-th">Что меняет</th>
-                  <th className="table-th text-right">Совпадений</th>
+                  <th className="table-th w-32 text-center">Автоприменение</th>
+                  <th className="table-th w-28 text-center">Совпадений</th>
                   <th className="table-th text-center w-24">Действия</th>
                 </tr>
               </thead>
@@ -559,41 +556,45 @@ export function RulesPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="table-td text-center">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setUnchecked((s) => {
-                              const next = new Set(s);
-                              if (next.has(rule.id)) next.delete(rule.id);
-                              else next.add(rule.id);
-                              return next;
-                            });
-                          }}
-                          aria-pressed={checked}
-                          className={clsx(
-                            "p-1 rounded-md align-middle",
-                            checked
-                              ? "text-accent hover:bg-accent/10"
-                              : "text-muted hover:text-accent hover:bg-panel2"
-                          )}
-                          title={
-                            checked
-                              ? "Убрать правило из проверки"
-                              : "Взять правило в проверку"
-                          }
-                          aria-label="Правило выбрано для проверки и применения"
+                      {/* `max-w-0` в паре с `w-full` у заголовка — то, что
+                          заставляет колонку ЗАНЯТЬ остаток и при этом обрезать
+                          длинное название, а не растягивать таблицу за край
+                          экрана. Правило без своего имени описывается фразой из
+                          собственных условий, и она бывает очень длинной;
+                          целиком её показывает подсказка. */}
+                      <td className="table-td max-w-0">
+                        <div
+                          className="truncate font-medium group-hover:text-accent"
+                          title={describeRule(rule)}
                         >
-                          {/* Кружок, а не квадратик: рядом стоит настоящий
-                              флажок «Включено», и две одинаковые галочки в
-                              строке читались бы как одно и то же. */}
-                          {checked ? (
-                            <CircleCheck className="w-4 h-4" />
+                          {describeRule(rule) || "Правило не дописано"}
+                        </div>
+                        {!ruleHasEffect(rule) && (
+                          <div className="text-xs text-warn mt-0.5">
+                            Ни одно действие не заполнено — правило ничего не делает
+                          </div>
+                        )}
+                      </td>
+                      <td className="table-td whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          {targets.length === 0 ? (
+                            <span className="text-muted">—</span>
                           ) : (
-                            <Circle className="w-4 h-4" />
+                            // Раньше получатель с комментарием выделялись
+                            // предупреждающим цветом: они, в отличие от
+                            // категории, менялись только после записи. Теперь
+                            // так работают все три поля — выделять нечего.
+                            targets.map((t) => (
+                              <span
+                                key={t}
+                                className="pill"
+                                title={`${TARGET_LABELS[t]} изменится после кнопки «Проверить и применить»`}
+                              >
+                                {TARGET_LABELS[t]}
+                              </span>
+                            ))
                           )}
-                        </button>
+                        </div>
                       </td>
                       <td className="table-td text-center">
                         <input
@@ -610,47 +611,30 @@ export function RulesPage() {
                           aria-label="Правило включено"
                         />
                       </td>
-                      <td className="table-td">
-                        {/* Без переносов: на узком экране строка иначе вырастает
-                            в столбик — таблица лучше прокрутится вбок, как на
-                            «Счетах». */}
-                        <div
-                          className="whitespace-nowrap font-medium group-hover:text-accent"
-                          title={describeRule(rule)}
-                        >
-                          {describeRule(rule) || "Правило не дописано"}
-                        </div>
-                        {!ruleHasEffect(rule) && (
-                          <div className="text-xs text-warn mt-0.5">
-                            Ни одно действие не заполнено — правило ничего не делает
-                          </div>
-                        )}
+                      <td className="table-td text-center">
+                        {/* Автоприменение работает только у включённого правила —
+                            у выключенного галочка ничего не значит и потому
+                            недоступна. */}
+                        <input
+                          type="checkbox"
+                          checked={!!rule.autoApply && rule.enabled}
+                          disabled={!rule.enabled}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) =>
+                            void update(rule.id, { autoApply: e.target.checked })
+                          }
+                          className="accent-accent w-4 h-4 align-middle disabled:opacity-40"
+                          title={
+                            !rule.enabled
+                              ? "Сначала включите правило"
+                              : rule.autoApply
+                                ? "Не применять к новым операциям автоматически"
+                                : "Применять к новым операциям автоматически, без кнопки"
+                          }
+                          aria-label="Автоприменение к новым операциям"
+                        />
                       </td>
-                      <td className="table-td whitespace-nowrap">
-                        <div className="flex items-center gap-1">
-                          {targets.length === 0 ? (
-                            <span className="text-muted">—</span>
-                          ) : (
-                            targets.map((t) => (
-                              <span
-                                key={t}
-                                className={clsx(
-                                  "pill",
-                                  NEEDS_APPLY.has(t) && "border-warn/40 text-warn"
-                                )}
-                                title={
-                                  NEEDS_APPLY.has(t)
-                                    ? `${TARGET_LABELS[t]} меняется только после кнопки «Применить правила»`
-                                    : "Категория меняется сразу и обратима"
-                                }
-                              >
-                                {TARGET_LABELS[t]}
-                              </span>
-                            ))
-                          )}
-                        </div>
-                      </td>
-                      <td className="table-td text-right tabular-nums">
+                      <td className="table-td text-center tabular-nums">
                         {count > 0 ? (
                           <button
                             onClick={(e) => {
@@ -718,10 +702,9 @@ export function RulesPage() {
         <RulePreviewModal
           plan={plan}
           ruleCount={selectedIds.size}
-          preselect={preview.preselect}
           notes={previewNotes}
           onApply={applyRows}
-          onClose={() => setPreview(null)}
+          onClose={() => setPreview(false)}
         />
       )}
     </div>

@@ -4,6 +4,7 @@ import {
   computeKPI,
   cumulativeNetAt,
   extractHashtags,
+  groupByHashtag,
   detectDuplicates,
   hashtagCategoryTrees,
   detectRecurring,
@@ -423,6 +424,103 @@ describe("extractHashtags", () => {
   it("returns an empty array for text without hashtags or empty input", () => {
     expect(extractHashtags("обычный комментарий")).toEqual([]);
     expect(extractHashtags("")).toEqual([]);
+  });
+
+  it("схлопывает повтор одного тега — это одна пометка, а не две", () => {
+    expect(extractHashtags("#еда обед #еда")).toEqual(["еда"]);
+  });
+
+  it("не схлопывает теги, различающиеся регистром", () => {
+    // «#еда» и «#Еда» — разные теги во всём сервисе.
+    expect(extractHashtags("#еда и #Еда")).toEqual(["еда", "Еда"]);
+  });
+
+  it("сохраняет порядок первого появления", () => {
+    expect(extractHashtags("#б #а #б #в")).toEqual(["б", "а", "в"]);
+  });
+});
+
+describe("groupByHashtag: повтор тега в комментарии (issue #63)", () => {
+  it("не задваивает сумму и количество операции", () => {
+    const [bucket] = groupByHashtag([
+      tx({ id: "t1", comment: "#еда обед #еда", amount: 500, kind: "expense" }),
+    ]);
+    expect(bucket.expense).toBe(500);
+    expect(bucket.count).toBe(1);
+    expect(bucket.txIds).toEqual(["t1"]);
+  });
+
+  it("разные теги в одном комментарии по-прежнему считаются каждый", () => {
+    const buckets = groupByHashtag([
+      tx({ id: "t1", comment: "#еда #кафе", amount: 500, kind: "expense" }),
+    ]);
+    expect(buckets.map((b) => [b.tag, b.expense, b.count])).toEqual([
+      ["еда", 500, 1],
+      ["кафе", 500, 1],
+    ]);
+  });
+});
+
+describe("hashtagCategoryTrees: повтор тега в комментарии (issue #63)", () => {
+  it("не задваивает статью внутри тега", () => {
+    const nodes = hashtagCategoryTrees([
+      tx({
+        id: "t1",
+        comment: "#еда #еда",
+        amount: 500,
+        kind: "expense",
+        category: "Продукты",
+      }),
+    ]).get("еда")!;
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].expense).toBe(500);
+    expect(nodes[0].count).toBe(1);
+  });
+});
+
+describe("detectDuplicates: приметы дубля (issue #66)", () => {
+  it("по умолчанию — только один и тот же день", () => {
+    // Ежедневная одинаковая покупка дублем не является.
+    const daily = [
+      tx({ id: "d1", date: "2026-01-10", payee: "Кофейня", amount: 250, account: "Карта" }),
+      tx({ id: "d2", date: "2026-01-11", payee: "Кофейня", amount: 250, account: "Карта" }),
+      tx({ id: "d3", date: "2026-01-12", payee: "Кофейня", amount: 250, account: "Карта" }),
+    ];
+    expect(detectDuplicates(daily)).toEqual([]);
+    // А два списания одним днём — да.
+    const twice = [
+      tx({ id: "t1", date: "2026-01-10", payee: "Кофейня", amount: 250, account: "Карта" }),
+      tx({ id: "t2", date: "2026-01-10", payee: "Кофейня", amount: 250, account: "Карта" }),
+    ];
+    expect(detectDuplicates(twice)).toHaveLength(1);
+  });
+
+  it("разные счета — не дубль, даже в один день", () => {
+    // Один платёж не может пройти дважды по разным счетам.
+    const cards = [
+      tx({ id: "c1", date: "2026-01-10", payee: "Кофейня", amount: 250, account: "Карта" }),
+      tx({ id: "c2", date: "2026-01-10", payee: "Кофейня", amount: 250, account: "Наличные" }),
+    ];
+    expect(detectDuplicates(cards)).toEqual([]);
+  });
+
+  it("счёт попал в примету — старые исключения её не перекрывают", () => {
+    const twice = [
+      tx({ id: "t1", date: "2026-01-10", payee: "Кофейня", amount: 250, account: "Карта" }),
+      tx({ id: "t2", date: "2026-01-10", payee: "Кофейня", amount: 250, account: "Карта" }),
+    ];
+    const [g] = detectDuplicates(twice);
+    expect(g.signature).toContain("Карта");
+    expect(detectDuplicates(twice, 0, new Set([g.signature]))).toEqual([]);
+  });
+
+  it("окно по-прежнему расширяется вручную", () => {
+    const nextDay = [
+      tx({ id: "n1", date: "2026-01-10", payee: "Кофейня", amount: 250, account: "Карта" }),
+      tx({ id: "n2", date: "2026-01-11", payee: "Кофейня", amount: 250, account: "Карта" }),
+    ];
+    expect(detectDuplicates(nextDay, 0)).toEqual([]);
+    expect(detectDuplicates(nextDay, 3)).toHaveLength(1);
   });
 });
 

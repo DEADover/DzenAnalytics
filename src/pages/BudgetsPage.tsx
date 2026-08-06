@@ -12,6 +12,8 @@ import {
   X,
   ArrowUp,
   HelpCircle,
+  Wand2,
+  Download,
   type LucideIcon,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
@@ -25,22 +27,35 @@ import { CategoryDot } from "../components/CategoryDot";
 import { Popover } from "../components/Popover";
 import { CategoryCascadePicker, type CategoryNode } from "../components/CategoryCascadePicker";
 import { MonthCashflowChart } from "../components/MonthCashflowChart";
+import { BudgetFillModal, type FillItem } from "../components/BudgetFillModal";
+import { BudgetYearTable } from "../components/BudgetYearTable";
+import { BudgetSettingsPopover } from "../components/BudgetSettingsPopover";
+import { buildBudgetYear } from "../lib/budgetYear";
+import { buildBudgetDashboard } from "../lib/budgetDashboard";
+import { BudgetDashboardPrint } from "../components/BudgetDashboardPrint";
+import { budgetHits, insidePerimeter, transactionsForCell } from "../lib/budgetScope";
+import { useBudgetSettingsStore } from "../store/useBudgetSettingsStore";
+import { Segmented } from "../components/Segmented";
 import { Tooltip } from "../components/Tooltip";
 import { groupByCategory } from "../lib/aggregations";
-import { affectsExpense, expenseDelta } from "../lib/txKindStyle";
 import {
   plannedFor,
   factFor,
   forecastFor,
   addMonths,
+  budgetTone,
   type BudgetKind,
   type BudgetLine,
 } from "../lib/budgets";
 import { formatMoney } from "../lib/format";
-import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { DateField } from "../components/DateField";
+import {
+  BudgetExportModal,
+  budgetExportFileName,
+  type BudgetExportFormat,
+} from "../components/BudgetExportModal";
 
 function currentMonth(): string {
   const d = new Date();
@@ -67,6 +82,7 @@ export function BudgetsPage() {
   const lines = useBudgetsStore((s) => s.lines);
   const addLine = useBudgetsStore((s) => s.addLine);
   const setOverride = useBudgetsStore((s) => s.setOverride);
+  const applyPlans = useBudgetsStore((s) => s.applyPlans);
   const hydrate = useBudgetsStore((s) => s.hydrate);
   const loaded = useBudgetsStore((s) => s.loaded);
   // Plan changes queue here and flush via the normal Push flow (Settings push
@@ -74,9 +90,28 @@ export function BudgetsPage() {
   const queueBudget = useBudgetEditsStore((s) => s.queue);
   const budgetEdits = useBudgetEditsStore((s) => s.edits);
 
+  // Настройки бюджета: периметр счетов, переводы, вид и прогноз по умолчанию.
+  const settings = useBudgetSettingsStore();
+  const settingsLoaded = settings.loaded;
+  const hydrateSettings = settings.hydrate;
+
   useEffect(() => {
     if (!loaded) hydrate();
   }, [loaded, hydrate]);
+  useEffect(() => {
+    if (!settingsLoaded) hydrateSettings();
+  }, [settingsLoaded, hydrateSettings]);
+
+  const scope = useMemo(
+    () => ({
+      accounts: new Set(settings.accounts),
+      perimeterTransfers: settings.perimeterTransfers,
+    }),
+    [settings.accounts, settings.perimeterTransfers]
+  );
+  // График движения денег считает сам по операциям — ему отдаём только то, что
+  // внутри периметра.
+  const scopedTx = useMemo(() => insidePerimeter(transactions, scope), [transactions, scope]);
 
   // Zenmoney's OWN auto-forecasts («из X»). In API mode we show these for
   // income tags without a manual plan — instead of a local median — so «≈»
@@ -239,6 +274,105 @@ export function BudgetsPage() {
     void queueBudget({ ...tag, ym, amount });
   }
 
+  // ── Вид: месяц или годовой свод ──
+  const [view, setView] = useState<"month" | "year">("month");
+  // Настройки приезжают из базы асинхронно, поэтому вид по умолчанию ставим
+  // один раз — после этого переключатель принадлежит пользователю.
+  const viewApplied = useRef(false);
+  useEffect(() => {
+    if (!settingsLoaded || viewApplied.current) return;
+    viewApplied.current = true;
+    setView(settings.defaultView);
+  }, [settingsLoaded, settings.defaultView]);
+
+  const year = Number(ym.slice(0, 4));
+  const yearReport = useMemo(
+    () => buildBudgetYear(lines, transactions, year, scope),
+    [lines, transactions, year, scope]
+  );
+  /** Сдвиг года сохраняет месяц: вернувшись в месячный вид, попадаешь в тот же. */
+  const shiftYear = (d: number) => setYm((m) => addMonths(m, d * 12));
+
+  // ── Выгрузка годового отчёта в Excel ──
+  const prevYearReport = useMemo(
+    () => buildBudgetYear(lines, transactions, year - 1, scope),
+    [lines, transactions, year, scope]
+  );
+  /**
+   * Месяц, по которому считаются показатели «за месяц» и отрезок «с начала
+   * года». Для прошедшего года это декабрь — иначе годовой отчёт обрезался бы
+   * на случайном месяце, выбранном в месячном виде. Для текущего — текущий.
+   */
+  const defaultReportMonth =
+    year === Number(cur.slice(0, 4)) ? Number(cur.slice(5, 7)) - 1 : 11;
+  /**
+   * Выбранный вручную месяц отчёта; `null` — «как обычно», по правилу выше.
+   *
+   * Держим именно так, а не готовым числом: при переходе на другой год выбор
+   * «как обычно» должен переехать вместе с ним, а не остаться прошлогодним
+   * декабрём. В Excel месяц потом переключается прямо в книге, а PDF — растр,
+   * и там это единственная возможность выбрать.
+   */
+  const [pickedMonth, setPickedMonth] = useState<number | null>(null);
+  const reportMonthIndex = pickedMonth ?? defaultReportMonth;
+  /** Дашборд для печати — та же модель, что уходит в Excel. */
+  const printDashboard = useMemo(
+    () => buildBudgetDashboard(yearReport, prevYearReport, reportMonthIndex),
+    [yearReport, prevYearReport, reportMonthIndex]
+  );
+  const [exportOpen, setExportOpen] = useState(false);
+
+  /** Собрать и отдать файл. Ошибку пробрасываем: по ней окно остаётся открытым,
+   *  чтобы можно было попробовать ещё раз, не проходя путь до кнопки заново. */
+  const runExport = async (format: BudgetExportFormat) => {
+    const fileName = budgetExportFileName(year, reportMonthIndex, format);
+    try {
+      if (format === "xlsx") {
+        const { exportBudgetYearXlsx } = await import("../lib/budgetYearXlsx");
+        await exportBudgetYearXlsx(
+          yearReport,
+          prevYearReport,
+          reportMonthIndex,
+          base,
+          fileName
+        );
+      } else {
+        const { downloadDashboardPdf } = await import("../lib/budgetPdf");
+        // Печатная вёрстка живёт порталом на `body` и на экране скрыта — на
+        // время съёмки её показывают за краем окна (см. `downloadDashboardPdf`).
+        const root = document.querySelector<HTMLElement>(".print-root");
+        if (!root) throw new Error("Печатная вёрстка не найдена");
+        await downloadDashboardPdf(root, fileName, `Бюджет ${year}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert(
+        format === "xlsx"
+          ? "Годовой отчёт не выгрузился в Excel. Попробуйте ещё раз — а если повторится, напишите нам."
+          : "Отчёт не выгрузился в PDF. Попробуйте ещё раз — а если повторится, напишите нам."
+      );
+      throw e;
+    }
+  };
+
+  // ── Заполнение по среднему ──
+  const [fillOpen, setFillOpen] = useState(false);
+  /** Разложить предложенные суммы по статьям. Планы пишутся одной правкой
+   *  (иначе шесть параллельных записей затирают друг друга), а в очередь
+   *  отправки в Дзен-мани каждая статья идёт своей строкой. */
+  function applyFill(items: FillItem[]) {
+    void applyPlans(items.map((it) => ({ ...it, ym })));
+    for (const it of items) {
+      void queueBudget({
+        kind: it.kind,
+        category: it.category,
+        subcategory: it.subcategory,
+        ym,
+        amount: it.amount,
+      });
+    }
+  }
+
   const rows = useMemo<Row[]>(() => {
     const inWindow = lines
       // A line belongs to a month only while it's inside its validity window
@@ -249,7 +383,7 @@ export function BudgetsPage() {
       )
       .map((line): Row => {
         const planned = plannedFor(line, ym);
-        const fact = factFor(line, transactions, ym);
+        const fact = factFor(line, transactions, ym, scope);
         // Income with no manual plan → show a forecast «≈ из X». In API mode use
         // ZENMONEY's own auto-forecast (so numbers match Дзен, and tags Дзен
         // doesn't forecast get no phantom «≈»); in CSV mode fall back to a local
@@ -261,7 +395,7 @@ export function BudgetsPage() {
             fc = zenForecasts.get(
               zenPlanKey(line.kind, line.category, line.subcategory ?? null, ym)
             ) ?? 0; // API: trust Дзен (missing = no forecast)
-          else fc = forecastFor(line, transactions, ym); // CSV: median estimate
+          else fc = forecastFor(line, transactions, ym, 6, scope); // CSV: median estimate
           if (fc > 0) return { line, planned: fc, fact, forecast: true };
         }
         return { line, planned, fact, forecast: false };
@@ -277,10 +411,10 @@ export function BudgetsPage() {
     // bottom of the list; the rest keep the newest-first order.
     const catFact = new Map<string, number>();
     for (const r of budgeted) {
-      const key = `${r.line.kind} ${r.line.category}`;
+      const key = `${r.line.kind}\u0000${r.line.category}`;
       catFact.set(key, (catFact.get(key) ?? 0) + r.fact);
     }
-    const isEmpty = (r: Row) => (catFact.get(`${r.line.kind} ${r.line.category}`) ?? 0) === 0;
+    const isEmpty = (r: Row) => (catFact.get(`${r.line.kind}\u0000${r.line.category}`) ?? 0) === 0;
     return budgeted.sort((a, b) => {
       const ae = isEmpty(a) ? 1 : 0;
       const be = isEmpty(b) ? 1 : 0;
@@ -313,12 +447,12 @@ export function BudgetsPage() {
     };
     for (const t of transactions) {
       if (!(t.date || "").startsWith(ym)) continue;
-      // «Без категории» isn't a budgetable tag — nothing to plan for the
-      // uncategorized bucket, so don't offer it in «Без бюджета».
-      if (!t.category || t.category === NO_CATEGORY) continue;
-      const sub = t.subcategory ?? null;
-      if (t.kind === "income") add("income", t.category, sub, t.amountBase);
-      else if (affectsExpense(t.kind)) add("expense", t.category, sub, expenseDelta(t));
+      // Тем же правилом, что и суммы: периметр счетов, переводы через границу и
+      // отсев «Без категории» — всё внутри `budgetHit`.
+      // Попаданий может быть два: у перевода списание идёт в расходы, а
+      // зачисление — в доходы.
+      for (const hit of budgetHits(t, scope))
+        add(hit.kind, hit.category, hit.subcategory, hit.amount);
     }
     // A tag belongs in «Без бюджета» only if it isn't ALREADY shown in the
     // budget section above. That includes income tags shown via a history
@@ -333,22 +467,29 @@ export function BudgetsPage() {
       .sort((a, b) => b.fact - a.fact);
   }, [transactions, ym, rows]);
 
-  function openCategory(cat: string, sub: string | null) {
-    const txs = transactions.filter(
-      (t) =>
-        t.category === cat &&
-        (t.subcategory ?? null) === sub &&
-        t.date.startsWith(ym)
+  /** Операции статьи за месяц — по умолчанию за выбранный, но годовой свод
+   *  открывает свою ячейку, поэтому месяц передаётся явно. */
+  function openCategory(
+    cat: string,
+    sub: string | null,
+    month = ym,
+    kind?: BudgetKind
+  ) {
+    const txs = transactionsForCell(
+      transactions,
+      scope,
+      { kind, category: cat, subcategory: sub },
+      month
     );
     const label = sub ? `${cat} › ${sub}` : cat;
-    showDrill(`${label} · ${ym}`, txs, "Бюджет");
+    showDrill(`${label} · ${month}`, txs, "Бюджет");
   }
 
   // Click a day on the cash-flow chart → drill into that day's operations.
   function openDay(day: number) {
     const dd = String(day).padStart(2, "0");
     const date = `${ym}-${dd}`;
-    const txs = transactions.filter((t) => t.date.startsWith(date));
+    const txs = scopedTx.filter((t) => t.date.startsWith(date));
     if (txs.length === 0) return;
     showDrill(`${day} · ${ym}`, txs, "День");
   }
@@ -359,9 +500,22 @@ export function BudgetsPage() {
   const expFact = expenseRows.reduce((s, r) => s + r.fact, 0);
   const incPlan = incomeRows.reduce((s, r) => s + r.planned, 0);
   const incFact = incomeRows.reduce((s, r) => s + r.fact, 0);
-  // Дельта = доходы − расходы, отдельно по плану и по факту.
+  // Переводы за месяц — отдельно от статей: они не траты и не поступления, а
+  // оборот по счетам. Показываются второй строкой в карточках.
+  let expTransfers = 0;
+  let incTransfers = 0;
+  for (const t of transactions) {
+    if (!(t.date || "").startsWith(ym)) continue;
+    for (const hit of budgetHits(t, scope)) {
+      if (!hit.transfer) continue;
+      if (hit.kind === "expense") expTransfers += hit.amount;
+      else incTransfers += hit.amount;
+    }
+  }
+  // Дельта = доходы − расходы, отдельно по плану и по факту. Переводы входят в
+  // обе части и внутри бюджета гасятся; перевод наружу — настоящий отток.
   const planDelta = incPlan - expPlan;
-  const factDelta = incFact - expFact;
+  const factDelta = incFact + incTransfers - (expFact + expTransfers);
 
   // Inline draft row (appears inside a section after the «+»). Mirrors a normal
   // budget row: category/sub picker · amount · ✓ · ✗.
@@ -435,36 +589,110 @@ export function BudgetsPage() {
         hint="План и факт по категориям и под-категориям, помесячно, с синхронизацией в Дзен."
       />
 
-      {/* Toolbar: month nav (left) + «без бюджета» toggle (right) */}
+      {/* Панель: вид и период (слева), действия (справа). */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <Tooltip content="Предыдущий месяц">
-            <button onClick={() => setYm((m) => addMonths(m, -1))} className="btn-ghost !p-2">
+          <Segmented
+            size="sm"
+            label="Вид бюджета"
+            value={view}
+            onChange={(v) => setView(v)}
+            options={[
+              { value: "month" as const, label: "Месяц", title: "План и факт выбранного месяца" },
+              { value: "year" as const, label: "Год", title: "Двенадцать месяцев плана и факта с итогами" },
+            ]}
+            className="mr-1.5"
+          />
+          <Tooltip content={view === "year" ? "Предыдущий год" : "Предыдущий месяц"}>
+            <button
+              onClick={() => (view === "year" ? shiftYear(-1) : setYm((m) => addMonths(m, -1)))}
+              className="btn-ghost !p-2"
+            >
               <ChevronLeft className="w-4 h-4" />
             </button>
           </Tooltip>
-          <DateField
-            granularity="month"
-            value={ym}
-            onChange={(e) => e.target.value && setYm(e.target.value)}
-            className="input text-sm font-medium min-w-[150px]"
-          />
-          <Tooltip content="Следующий месяц">
-            <button onClick={() => setYm((m) => addMonths(m, 1))} className="btn-ghost !p-2">
+          {view === "year" ? (
+            <span className="text-sm font-medium tabular-nums px-3 py-1.5 rounded-lg bg-panel2 border border-border">
+              {year}
+            </span>
+          ) : (
+            <DateField
+              granularity="month"
+              value={ym}
+              onChange={(e) => e.target.value && setYm(e.target.value)}
+              className="input text-sm font-medium min-w-[150px]"
+            />
+          )}
+          <Tooltip content={view === "year" ? "Следующий год" : "Следующий месяц"}>
+            <button
+              onClick={() => (view === "year" ? shiftYear(1) : setYm((m) => addMonths(m, 1)))}
+              className="btn-ghost !p-2"
+            >
               <ChevronRight className="w-4 h-4" />
             </button>
           </Tooltip>
-          {!isCurrent && (
+          {(view === "year" ? year !== Number(cur.slice(0, 4)) : !isCurrent) && (
             <button
               onClick={() => setYm(cur)}
               className="text-xs text-accent hover:underline ml-1"
             >
-              текущий
+              {view === "year" ? "Текущий год" : "Текущий"}
             </button>
           )}
         </div>
+        <div className="flex items-center gap-2">
+          {view === "year" && (
+            <Tooltip content="Годовой отчёт файлом: таблицами в Excel или сводкой в PDF">
+              <button onClick={() => setExportOpen(true)} className="btn-ghost text-sm">
+                <Download className="w-4 h-4" />
+                Экспорт
+              </button>
+            </Tooltip>
+          )}
+          <Tooltip content="Подставить суммы по истории операций">
+            <button onClick={() => setFillOpen(true)} className="btn-ghost text-sm">
+              <Wand2 className="w-4 h-4" />
+              Заполнить по среднему
+            </button>
+          </Tooltip>
+          <BudgetSettingsPopover transactions={transactions} />
+        </div>
       </div>
 
+      {fillOpen && (
+        <BudgetFillModal
+          ym={ym}
+          transactions={transactions}
+          lines={lines}
+          base={base}
+          scope={scope}
+          defaultMonths={settings.forecastMonths}
+          defaultBasis={settings.forecastBasis}
+          onApply={applyFill}
+          onClose={() => setFillOpen(false)}
+        />
+      )}
+
+      {exportOpen && (
+        <BudgetExportModal
+          year={year}
+          month={reportMonthIndex}
+          onMonthChange={setPickedMonth}
+          onExport={runExport}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
+
+      {view === "year" && (
+        <>
+          <BudgetYearTable report={yearReport} base={base} onOpenCell={openCategory} />
+          {/* На экране скрыта, при печати — единственное, что попадёт на лист. */}
+          <BudgetDashboardPrint dashboard={printDashboard} base={base} />
+        </>
+      )}
+
+      {view === "month" && (
+        <>
       {/* Summary: расходы / доходы / дельта — у каждого явные «Факт» и «План» */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <PlanFactCard
@@ -474,6 +702,7 @@ export function BudgetsPage() {
           factClass="text-expense"
           base={base}
           kind="expense"
+          withTransfers={expFact + expTransfers}
         />
         <PlanFactCard
           title="Общий план доходов"
@@ -482,6 +711,7 @@ export function BudgetsPage() {
           factClass="text-income"
           base={base}
           kind="income"
+          withTransfers={incFact + incTransfers}
         />
         <PlanFactCard
           title="Дельта (доходы − расходы)"
@@ -497,7 +727,7 @@ export function BudgetsPage() {
       {/* Full-width cash-flow widget: cumulative income/expense over the month
           with a linear end-of-month forecast (Zen «Планы» style). */}
       <MonthCashflowChart
-        transactions={transactions}
+        transactions={scopedTx}
         ym={ym}
         base={base}
         onDayClick={openDay}
@@ -588,17 +818,16 @@ export function BudgetsPage() {
             </div>
           )}
         </div>
+        </>
+      )}
     </div>
   );
 }
 
 /** Summary card showing «Факт» (prominent, coloured) and «План» side by side. */
-// Summary-card state colour: for income «good» = met-or-over, «warn» = close;
-// for expense «good» = well under, «warn» = near/at the limit, «bad» = over.
-function summaryTone(ratio: number, isIncome: boolean): "income" | "warn" | "expense" {
-  if (isIncome) return ratio >= 1 ? "income" : ratio >= 0.8 ? "warn" : "expense";
-  return ratio < 0.8 ? "income" : ratio <= 1 ? "warn" : "expense";
-}
+// Состояние (цвет пилюли и полоски) считает общий `budgetTone` — тот же, что и
+// в годовом своде.
+const summaryTone = budgetTone;
 
 function PlanFactCard({
   title,
@@ -608,6 +837,7 @@ function PlanFactCard({
   base,
   signed = false,
   kind,
+  withTransfers,
 }: {
   title: string;
   fact: number;
@@ -616,6 +846,8 @@ function PlanFactCard({
   base: string;
   signed?: boolean;
   kind: "expense" | "income" | "delta";
+  /** Тот же факт, но вместе с переводами. Не задан — строки не будет. */
+  withTransfers?: number;
 }) {
   return (
     <div className="card card-pad">
@@ -623,6 +855,13 @@ function PlanFactCard({
       <div className={`stat-num ${factClass} mb-3`}>
         {formatMoney(fact, base, { signed })}
       </div>
+      {/* Оборот по счетам показываем ОТДЕЛЬНОЙ строкой, а не вместо факта:
+          перекладывание денег между своими счетами тратой не является. */}
+      {withTransfers !== undefined && withTransfers !== fact && (
+        <div className="-mt-2 mb-3 text-[13px] text-muted tabular-nums">
+          {formatMoney(withTransfers, base, { signed })} включая переводы
+        </div>
+      )}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm px-3 py-1 rounded-full bg-panel2 text-muted tabular-nums whitespace-nowrap">
           План {formatMoney(plan, base, { signed })}

@@ -7,7 +7,10 @@ import {
   type HistDayRates,
 } from "../lib/historicalRates";
 import { buildPayeeAliasMap } from "../lib/payeeNormalize";
-import { applyCategoryRules, type CategoryRule } from "./useCategoryRulesStore";
+import { restoreRuleCategories, type StoredRule } from "../lib/ruleEngine";
+import { autoApplyPatches } from "../lib/ruleAutoApply";
+import { makeCategoryChecker } from "../lib/zenmoneyPush";
+
 import { applyEdits } from "../lib/applyEdits";
 import { useEditsStore } from "./useEditsStore";
 import { useDeletedStore, loadDeletedSet } from "./useDeletedStore";
@@ -234,9 +237,48 @@ async function pushAfterRestore(): Promise<void> {
   }
 }
 
-async function loadRules(): Promise<CategoryRule[]> {
-  const data = await db.loadJSON<CategoryRule[]>("categoryRules");
-  return data || [];
+/**
+ * Прогнать правила с автоприменением по операциям, которых раньше не было, и
+ * записать результат в слой правок — ровно так же, как это делает кнопка.
+ *
+ * Новыми считаем те, чьих идентификаторов не было в прошлом наборе. Если
+ * прошлого набора не было вовсе (первая синхронизация, полный переимпорт),
+ * автоприменение не срабатывает: «новых» там вся история, а молча переписать
+ * её и отправить в Дзен-мани — не то, чего ждут от галочки.
+ */
+async function autoApplyToNew(
+  raw: Transaction[],
+  previousIds: Set<string>
+): Promise<void> {
+  if (previousIds.size === 0) return;
+  const fresh = raw.filter((t) => !previousIds.has(t.id));
+  if (fresh.length === 0) return;
+  const rules = await db.loadJSON<StoredRule[]>("categoryRules");
+  if (!rules || rules.length === 0) return;
+
+  // Справочники Дзен-мани — из кэша: без них правило может записать категорию,
+  // которой в облаке нет, и правка навсегда зависнет неотправленной.
+  const cache = await loadZenCache();
+  const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
+  const payeeOk = cache?.merchants
+    ? (() => {
+        const set = new Set(
+          cache.merchants.map((m) => (m.title ?? "").trim().toLowerCase())
+        );
+        return (title: string) => set.has(title.trim().toLowerCase());
+      })()
+    : null;
+
+  const patches = autoApplyPatches(
+    fresh,
+    rules,
+    await loadEditsFromStore(),
+    await loadDeletedSet(),
+    categoryOk,
+    payeeOk
+  );
+  if (Object.keys(patches).length === 0) return;
+  await useEditsStore.getState().setEditEach(patches);
 }
 
 async function loadEditsFromStore(): Promise<
@@ -322,14 +364,13 @@ export const useDataStore = create<DataState>((set, get) => ({
   loaded: false,
 
   hydrate: async () => {
-    const [txs, savedRates, savedHist, meta, grouping, rules, manualAliases] =
+    const [txs, savedRates, savedHist, meta, grouping, manualAliases] =
       await Promise.all([
         db.loadTransactions(),
         db.loadRates(),
         db.loadJSON<HistDayRates>(HIST_RATES_KEY),
         db.loadImportMeta(),
         db.loadJSON<boolean>("payeeGrouping"),
-        loadRules(),
         loadManualAliasesFromStore(),
       ]);
     const rates = mergeRatesWithDefaults(savedRates);
@@ -338,7 +379,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     set({ histDayRates: hist });
     let raw = recalcBase(txs, rates, hist);
     raw = applyPayeeGrouping(raw, grouping || false, manualAliases);
-    raw = applyCategoryRules(raw, rules);
+    raw = restoreRuleCategories(raw);
     const final = await finalize(raw, rates);
     set({
       transactions: final,
@@ -368,7 +409,10 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
     if (missing.size === 0) return;
 
-    const dates = Array.from(missing);
+    // От свежих к старым — прогрев идёт по одному запросу в секунду (условия
+    // сервиса курсов), и на большой истории это минуты. Сортируем ДО нарезки на
+    // куски: сортировка внутри куска порядок между кусками не поменяет.
+    const dates = Array.from(missing).sort((a, b) => b.localeCompare(a));
     const total = dates.length;
     set({ histWarming: { done: 0, total } });
     let unresolved = 0;
@@ -408,13 +452,16 @@ export const useDataStore = create<DataState>((set, get) => ({
     const { payeeGroupingEnabled } = get();
     const rates = ensureCurrenciesInRates(get().rates, txs);
     if (rates !== get().rates) await db.saveRates(rates);
-    const rules = await loadRules();
     const manualAliases = await loadManualAliasesFromStore();
+    // Синхронизация Дзен-мани приходит сюда ПОЛНЫМ набором, поэтому «новые»
+    // определяем по прошлому составу, а не по размеру входящего.
+    const previousIds = new Set(get().transactionsRaw.map((t) => t.id));
     let raw = recalcBase(txs, rates, get().histDayRates);
     raw = applyPayeeGrouping(raw, payeeGroupingEnabled, manualAliases);
-    raw = applyCategoryRules(raw, rules);
+    raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
     await db.saveImportMeta(meta);
+    await autoApplyToNew(raw, previousIds);
     const final = await finalize(raw, rates);
     set({ transactions: final, transactionsRaw: raw, rates, importMeta: meta });
     void get().warmHistoricalRates();
@@ -424,15 +471,15 @@ export const useDataStore = create<DataState>((set, get) => ({
     const { payeeGroupingEnabled, transactionsRaw: existing } = get();
     const rates = ensureCurrenciesInRates(get().rates, incoming);
     if (rates !== get().rates) await db.saveRates(rates);
-    const rules = await loadRules();
     const manualAliases = await loadManualAliasesFromStore();
     const existingIds = new Set(existing.map((t) => t.id));
     const fresh = incoming.filter((t) => !existingIds.has(t.id));
     const combined = [...existing, ...fresh];
     let raw = recalcBase(combined, rates, get().histDayRates);
     raw = applyPayeeGrouping(raw, payeeGroupingEnabled, manualAliases);
-    raw = applyCategoryRules(raw, rules);
+    raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
+    await autoApplyToNew(raw, existingIds);
     const mergedMeta: ImportMeta = {
       ...meta,
       parsed: existing.length + fresh.length,
@@ -463,11 +510,10 @@ export const useDataStore = create<DataState>((set, get) => ({
       rates: { ...get().rates.rates, [currency]: value },
     };
     await db.saveRates(rates);
-    const rules = await loadRules();
     const manualAliases = await loadManualAliasesFromStore();
     let raw = recalcBase(get().transactionsRaw, rates, get().histDayRates);
     raw = applyPayeeGrouping(raw, get().payeeGroupingEnabled, manualAliases);
-    raw = applyCategoryRules(raw, rules);
+    raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
     const final = await finalize(raw, rates);
     set({ rates, transactions: final, transactionsRaw: raw });
@@ -492,11 +538,10 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
     const rates: CurrencyRates = { base: newBase, rates: nextRates };
     await db.saveRates(rates);
-    const rules = await loadRules();
     const manualAliases = await loadManualAliasesFromStore();
     let raw = recalcBase(get().transactionsRaw, rates, get().histDayRates);
     raw = applyPayeeGrouping(raw, get().payeeGroupingEnabled, manualAliases);
-    raw = applyCategoryRules(raw, rules);
+    raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
     const final = await finalize(raw, rates);
     set({ rates, transactions: final, transactionsRaw: raw });
@@ -505,11 +550,10 @@ export const useDataStore = create<DataState>((set, get) => ({
   setPayeeGrouping: async (enabled) => {
     await db.saveJSON("payeeGrouping", enabled);
     const { transactionsRaw: existing, rates } = get();
-    const rules = await loadRules();
     const manualAliases = await loadManualAliasesFromStore();
     let raw = recalcBase(existing, rates, get().histDayRates);
     raw = applyPayeeGrouping(raw, enabled, manualAliases);
-    raw = applyCategoryRules(raw, rules);
+    raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
     const final = await finalize(raw, rates);
     set({ payeeGroupingEnabled: enabled, transactions: final, transactionsRaw: raw });
@@ -517,11 +561,10 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   reapplyRules: async () => {
     const { transactionsRaw: existing, rates, payeeGroupingEnabled } = get();
-    const rules = await loadRules();
     const manualAliases = await loadManualAliasesFromStore();
     let raw = recalcBase(existing, rates, get().histDayRates);
     raw = applyPayeeGrouping(raw, payeeGroupingEnabled, manualAliases);
-    raw = applyCategoryRules(raw, rules);
+    raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
     const final = await finalize(raw, rates);
     set({ transactions: final, transactionsRaw: raw });

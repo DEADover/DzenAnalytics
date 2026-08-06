@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   HelpCircle,
-  Clock,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -17,6 +16,7 @@ import {
   actionTarget,
   compileCondition,
   compileRuleV2,
+  allConditions,
   describeRule,
   joinCategoryFull,
   splitCategoryFull,
@@ -27,6 +27,7 @@ import {
   type RuleAction,
   type RuleActionKind,
   type RuleCondition,
+  type RuleConditionGroup,
   type RuleField,
   type RuleTargetField,
 } from "../lib/ruleEngine";
@@ -84,7 +85,8 @@ export interface RuleDraft {
   enabled: boolean;
   /** Своё название. Пустое — значит правило описывается своими условиями. */
   title: string;
-  conditions: RuleCondition[];
+  /** Группы условий: внутри группы своя связка, между группами — `join`. */
+  groups: RuleConditionGroup[];
   join: ConditionJoin;
   actions: RuleAction[];
 }
@@ -121,21 +123,19 @@ const newCondition = (): RuleCondition => ({
 
 const newAction = (): RuleAction => ({ id: nextId(), kind: "setCategory", value: "" });
 
+const newGroup = (): RuleConditionGroup => ({
+  id: nextId(),
+  join: "and",
+  conditions: [newCondition()],
+});
+
 const EMPTY: RuleDraft = {
   enabled: true,
   title: "",
-  conditions: [newCondition()],
+  groups: [newGroup()],
   join: "and",
   actions: [newAction()],
 };
-
-/** Действие, которое видно в операциях только после «Применить правила». */
-const NEEDS_APPLY: ReadonlySet<RuleActionKind> = new Set<RuleActionKind>([
-  "setPayee",
-  "setComment",
-  "prependComment",
-  "appendComment",
-]);
 
 /** Единый вид поля в окне: `Select` рисует себя как `.input h-10` с текстом
  *  `text-sm`, поэтому обычные поля должны задавать то же самое — иначе соседние
@@ -182,6 +182,62 @@ const REGEX_HINT = (
  *  бы окно на каждое нажатие клавиши в условии, а листать его никто не станет.
  *  Правило при этом применяется ко всем совпадениям, не только к показанным. */
 const MATCH_LIMIT = 50;
+
+/**
+ * Связка между соседними карточками — И или ИЛИ.
+ *
+ * Переключатель показываем только на ПЕРВОМ стыке: связка одна на весь уровень,
+ * и три одинаковых переключателя подряд создавали бы впечатление, что их можно
+ * задать по-разному. На остальных стыках — то же слово, но текстом.
+ */
+function JoinRow({
+  value,
+  editable,
+  onChange,
+  label,
+  andTitle,
+  orTitle,
+  staticTitle,
+}: {
+  value: ConditionJoin;
+  editable: boolean;
+  onChange: (next: ConditionJoin) => void;
+  label: string;
+  andTitle: string;
+  orTitle: string;
+  staticTitle: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      {editable ? (
+        <div className="flex items-center gap-1" role="group" aria-label={label}>
+          {(["and", "or"] as const).map((j) => (
+            <button
+              key={j}
+              type="button"
+              onClick={() => onChange(j)}
+              aria-pressed={value === j}
+              title={j === "and" ? andTitle : orTitle}
+              className={clsx(
+                "px-2 py-0.5 rounded-md text-xs font-medium border transition-colors",
+                value === j
+                  ? "bg-accent/10 border-accent/40 text-accent"
+                  : "bg-panel2 border-border text-muted hover:text-text"
+              )}
+            >
+              {j === "and" ? "И" : "ИЛИ"}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <span className="px-2 text-xs font-medium text-muted" title={staticTitle}>
+          {value === "and" ? "И" : "ИЛИ"}
+        </span>
+      )}
+      <span className="h-px flex-1 bg-border" aria-hidden />
+    </div>
+  );
+}
 
 /** Чем подписать операцию в списке совпадений: получателем, а если его нет —
  *  комментарием. У операций без получателя это единственная зацепка. */
@@ -244,9 +300,14 @@ export function RuleEditModal({
           title: rule.title ?? "",
           // Ключи строк проставляем при открытии: в хранилище их может не быть,
           // а списку нужен стабильный key, иначе React путает строки при удалении.
-          conditions: (rule.conditions.length ? rule.conditions : [newCondition()]).map(
-            (c) => ({ ...c, id: c.id ?? nextId() })
-          ),
+          groups: (rule.groups.length ? rule.groups : [newGroup()]).map((g) => ({
+            ...g,
+            id: g.id ?? nextId(),
+            conditions: (g.conditions.length ? g.conditions : [newCondition()]).map((c) => ({
+              ...c,
+              id: c.id ?? nextId(),
+            })),
+          })),
           join: rule.join,
           actions: (rule.actions.length ? rule.actions : [newAction()]).map((a) => ({
             ...a,
@@ -266,8 +327,30 @@ export function RuleEditModal({
   function patchCondition(id: string, patch: Partial<RuleCondition>) {
     setDraft((d) => ({
       ...d,
-      conditions: d.conditions.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      groups: d.groups.map((g) => ({
+        ...g,
+        conditions: g.conditions.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      })),
     }));
+  }
+
+  function patchGroup(id: string, patch: Partial<RuleConditionGroup>) {
+    setDraft((d) => ({
+      ...d,
+      groups: d.groups.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+    }));
+  }
+
+  /** Убрать условие; вместе с последним условием уходит и сама группа —
+   *  пустая скобка в выражении ничего не значит. Последнюю группу оставляем:
+   *  правилу нужно хоть одно место, куда добавить условие. */
+  function removeCondition(id: string) {
+    setDraft((d) => {
+      const groups = d.groups
+        .map((g) => ({ ...g, conditions: g.conditions.filter((c) => c.id !== id) }))
+        .filter((g) => g.conditions.length > 0);
+      return { ...d, groups: groups.length ? groups : [newGroup()] };
+    });
   }
 
   function patchAction(id: string, patch: Partial<RuleAction>) {
@@ -279,6 +362,9 @@ export function RuleEditModal({
 
   /** Правило, каким оно уйдёт в движок: значения обрезаны, у операций без
    *  значения оно очищено — «не заполнено» с текстом в поле сбивало бы с толку. */
+  /** Групп больше одной — тогда и только тогда рисуем «скобки». */
+  const multiGroup = draft.groups.length > 1;
+
   /** Цели, которые ещё не заняты: по одному действию на поле. */
   const freeTargets = ACTION_TARGETS.filter(
     (t) => !draft.actions.some((a) => actionTarget(a.kind) === t.value)
@@ -290,9 +376,12 @@ export function RuleEditModal({
       enabled: draft.enabled,
       title: draft.title.trim(),
       join: draft.join,
-      conditions: draft.conditions.map((c) => ({
-        ...c,
-        value: VALUELESS_OPS.has(c.op) ? "" : c.value.trim(),
+      groups: draft.groups.map((g) => ({
+        ...g,
+        conditions: g.conditions.map((c) => ({
+          ...c,
+          value: VALUELESS_OPS.has(c.op) ? "" : c.value.trim(),
+        })),
       })),
       actions: draft.actions.map((a) => ({ ...a, value: a.value.trim() })),
       createdAt: rule?.createdAt ?? "",
@@ -300,17 +389,30 @@ export function RuleEditModal({
     [draft, rule]
   );
 
-  /** Условия, которые уже можно проверять: у остальных ещё не введено значение. */
-  const usableConditions = useMemo(
-    () => cleaned.conditions.filter((c) => VALUELESS_OPS.has(c.op) || c.value.length > 0),
+  /** Группы, из которых выкинуты условия без значения, — на них считается
+   *  счётчик совпадений. Недописанное условие не должно ни отсекать операции,
+   *  ни (внутри «ИЛИ») пропускать всё подряд. */
+  const usableGroups = useMemo(
+    () =>
+      cleaned.groups
+        .map((g) => ({
+          ...g,
+          conditions: g.conditions.filter(
+            (c) => VALUELESS_OPS.has(c.op) || c.value.length > 0
+          ),
+        }))
+        .filter((g) => g.conditions.length > 0),
     [cleaned]
+  );
+  const usableConditions = useMemo(() => allConditions(cleaned), [cleaned]).filter(
+    (c) => VALUELESS_OPS.has(c.op) || c.value.length > 0
   );
 
   /** Условия с несобирающимся выражением — подсвечиваем именно их поле, а не
    *  пишем общую строку «где-то ошибка» под формой. */
   const brokenRegex = useMemo(() => {
     const bad = new Set<string>();
-    for (const c of cleaned.conditions) {
+    for (const c of allConditions(cleaned)) {
       if (c.op === "regex" && c.value.length > 0 && compileCondition(c) === null) {
         bad.add(c.id!);
       }
@@ -324,22 +426,22 @@ export function RuleEditModal({
   // чём: счётчик отвечает на вопрос «сколько операций подойдёт под условия»,
   // и должен работать, пока действие ещё не заполнено.
   const matches = useMemo(() => {
-    if (usableConditions.length === 0) return [];
-    const probe: CategoryRuleV2 = { ...cleaned, conditions: usableConditions };
+    if (usableGroups.length === 0) return [];
+    const probe: CategoryRuleV2 = { ...cleaned, groups: usableGroups };
     const compiled = compileRuleV2(probe);
     return transactions.filter((t) => ruleMatchesV2(t, probe, compiled));
-  }, [cleaned, usableConditions, transactions]);
+  }, [cleaned, usableGroups, transactions]);
 
   const count = matches.length;
 
   // --- Валидация. Правило без условий подошло бы ко всему подряд, правило без
   // действий ничего не делает, а действие без значения движок молча пропустит —
   // о каждом из трёх случаев пользователю надо сказать до сохранения.
-  const emptyConditionValue = cleaned.conditions.some(
+  const emptyConditionValue = allConditions(cleaned).some(
     (c) => !VALUELESS_OPS.has(c.op) && c.value.length === 0
   );
   const emptyActionValue = cleaned.actions.some((a) => a.value.length === 0);
-  const noConditions = cleaned.conditions.length === 0;
+  const noConditions = allConditions(cleaned).length === 0;
   const noActions = cleaned.actions.length === 0;
   const canSave =
     !noConditions && !noActions && !emptyConditionValue && !emptyActionValue;
@@ -373,7 +475,7 @@ export function RuleEditModal({
       enabled: cleaned.enabled,
       title: draft.title.trim(),
       join: cleaned.join,
-      conditions: cleaned.conditions,
+      groups: cleaned.groups,
       actions: cleaned.actions,
     });
     onClose();
@@ -441,52 +543,43 @@ export function RuleEditModal({
 
             {/* Связка И/ИЛИ стоит МЕЖДУ карточками, а не в заголовке: там она
                 читалась как свойство раздела, хотя описывает стык условий.
-                Слово «если» у первой строки убрано — заголовок уже сказал это. */}
+                Слово «если» у первой строки убрано — заголовок уже сказал это.
+
+                Условия живут в группах — это скобки выражения. Пока группа одна,
+                рамки вокруг неё нет: у простого правила лишняя коробка только
+                утяжеляет форму. */}
             <div className="space-y-2">
-              {draft.conditions.map((c, i) => (
+              {draft.groups.map((g, gi) => (
+                <Fragment key={g.id}>
+                  {gi > 0 && (
+                    <JoinRow
+                      value={draft.join}
+                      editable={gi === 1}
+                      onChange={(j) => setDraft((d) => ({ ...d, join: j }))}
+                      label="Как объединять группы"
+                      andTitle="Должны выполниться все группы"
+                      orTitle="Достаточно одной группы"
+                      staticTitle="Связка одна на все группы — меняется переключателем выше"
+                    />
+                  )}
+                  <div
+                    className={clsx(
+                      "space-y-2",
+                      multiGroup && "rounded-xl border border-accent/30 bg-panel2/20 p-2"
+                    )}
+                  >
+              {g.conditions.map((c, i) => (
                 <Fragment key={c.id}>
                   {i > 0 && (
-                    <div className="flex items-center gap-2">
-                      {i === 1 ? (
-                        <div
-                          className="flex items-center gap-1"
-                          role="group"
-                          aria-label="Как объединять условия"
-                        >
-                          {(["and", "or"] as const).map((j) => (
-                            <button
-                              key={j}
-                              type="button"
-                              onClick={() => setDraft((d) => ({ ...d, join: j }))}
-                              aria-pressed={draft.join === j}
-                              title={
-                                j === "and"
-                                  ? "Должны выполниться все условия"
-                                  : "Достаточно одного условия"
-                              }
-                              className={clsx(
-                                "px-2 py-0.5 rounded-md text-xs font-medium border transition-colors",
-                                draft.join === j
-                                  ? "bg-accent/10 border-accent/40 text-accent"
-                                  : "bg-panel2 border-border text-muted hover:text-text"
-                              )}
-                            >
-                              {j === "and" ? "И" : "ИЛИ"}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        // Связка у правила одна на все условия, поэтому дальше
-                        // она только показывается — переключатель выше меняет всё.
-                        <span
-                          className="px-2 text-xs font-medium text-muted"
-                          title="Связка одна на все условия — меняется переключателем выше"
-                        >
-                          {draft.join === "and" ? "И" : "ИЛИ"}
-                        </span>
-                      )}
-                      <span className="h-px flex-1 bg-border" aria-hidden />
-                    </div>
+                    <JoinRow
+                      value={g.join}
+                      editable={i === 1}
+                      onChange={(j) => patchGroup(g.id!, { join: j })}
+                      label="Как объединять условия в группе"
+                      andTitle="Должны выполниться все условия группы"
+                      orTitle="Достаточно одного условия группы"
+                      staticTitle="Связка одна на всю группу — меняется переключателем выше"
+                    />
                   )}
                   <div className="rounded-lg border border-border bg-panel2/40 p-2 space-y-2">
                     <div className="flex items-center gap-2">
@@ -512,12 +605,7 @@ export function RuleEditModal({
                       />
                       <button
                         type="button"
-                        onClick={() =>
-                          setDraft((d) => ({
-                            ...d,
-                            conditions: d.conditions.filter((x) => x.id !== c.id),
-                          }))
-                        }
+                        onClick={() => removeCondition(c.id!)}
                         className="btn-ghost !p-1.5 text-muted hover:text-expense shrink-0"
                         title="Удалить условие"
                         aria-label="Удалить условие"
@@ -529,10 +617,13 @@ export function RuleEditModal({
                         прячем, чтобы не спрашивать то, что не будет учтено. */}
                     {!VALUELESS_OPS.has(c.op) && (
                       <div className="flex items-center gap-2">
-                        {/* У счёта значение — не свободный текст, а название из
-                            списка: набирать его руками негде и незачем. Для
-                            «содержит» и регулярных выражений поле остаётся
-                            текстовым — там как раз нужен кусок строки. */}
+                        {/* У счёта и категории значение — не свободный текст, а
+                            название из списка: набирать его руками негде и
+                            незачем, а у категории ещё и легко ошибиться —
+                            сравнение идёт с полным путём «Родитель / Ребёнок»,
+                            и «Кафе» вместо «Еда / Кафе» молча не совпадёт ни с
+                            чем. Для «содержит» и регулярных выражений поле
+                            остаётся текстовым — там как раз нужен кусок строки. */}
                         {c.field === "account" && c.op === "equals" ? (
                           <div className="flex-1 min-w-0">
                             <Combobox
@@ -547,6 +638,26 @@ export function RuleEditModal({
                               portal
                               onChange={(v) => patchCondition(c.id!, { value: v })}
                               placeholder="Поиск счёта"
+                            />
+                          </div>
+                        ) : c.field === "category" && c.op === "equals" ? (
+                          <div className="flex-1 min-w-0">
+                            <CategoryCascadePicker
+                              category={
+                                c.value.trim() ? splitCategoryFull(c.value).category : ""
+                              }
+                              subcategory={
+                                c.value.trim()
+                                  ? splitCategoryFull(c.value).subcategory ?? ""
+                                  : ""
+                              }
+                              categories={categoryNodes}
+                              portal
+                              onChange={(cat, sub) =>
+                                patchCondition(c.id!, {
+                                  value: joinCategoryFull(cat, sub || null),
+                                })
+                              }
                             />
                           </div>
                         ) : (
@@ -594,18 +705,33 @@ export function RuleEditModal({
                   </div>
                 </Fragment>
               ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        patchGroup(g.id!, { conditions: [...g.conditions, newCondition()] })
+                      }
+                      className="btn-ghost text-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Условие
+                    </button>
+                  </div>
+                </Fragment>
+              ))}
             </div>
 
-            <button
-              type="button"
-              onClick={() =>
-                setDraft((d) => ({ ...d, conditions: [...d.conditions, newCondition()] }))
-              }
-              className="btn-ghost text-xs mt-2"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Условие
-            </button>
+            <Tooltip content="Отдельная скобка: внутри неё будет своя связка И/ИЛИ">
+              <button
+                type="button"
+                onClick={() =>
+                  setDraft((d) => ({ ...d, groups: [...d.groups, newGroup()] }))
+                }
+                className="btn-ghost text-xs mt-2"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Группа условий
+              </button>
+            </Tooltip>
           </div>
 
           {/* --- Действия -------------------------------------------------- */}
@@ -683,21 +809,6 @@ export function RuleEditModal({
                         />
                       )}
                     </div>
-                    {/* Место под значок держим всегда: иначе строка дёргалась бы
-                        каждый раз, когда в поле появляется первый символ. */}
-                    <span className="w-4 shrink-0 flex justify-center">
-                      {NEEDS_APPLY.has(a.kind) && a.value.trim().length > 0 && (
-                        <Tooltip content="Появится в операциях только после кнопки «Применить правила»">
-                          <button
-                            type="button"
-                            className="text-muted"
-                            aria-label="Применяется не сразу"
-                          >
-                            <Clock className="w-4 h-4" />
-                          </button>
-                        </Tooltip>
-                      )}
-                    </span>
                     <button
                       type="button"
                       onClick={() =>
@@ -759,6 +870,14 @@ export function RuleEditModal({
                   <>
                     Подойдёт <strong className="tabular-nums">{formatNum(count)}</strong>{" "}
                     {pluralRu(count, ["операция", "операции", "операций"])}
+                    {/* Раньше про отложенную запись говорил значок у каждого
+                        действия. Теперь так работают все три поля — значит это
+                        свойство правила, а не отдельного действия, и сказать о
+                        нём достаточно один раз. */}
+                    <span className="block text-xs text-muted mt-0.5">
+                      Изменятся после кнопки «Проверить и применить» и только те, что
+                      вы отметите в окне
+                    </span>
                   </>
                 ) : (
                   <span className="text-muted">Совпадений нет</span>

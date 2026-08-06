@@ -133,7 +133,7 @@ export function ReportExportModal({
           <button type="button" className="btn-ghost text-sm" onClick={onClose} disabled={busy}>
             Отмена
           </button>
-          <button type="button" className="btn text-sm" onClick={run} disabled={busy}>
+          <button type="button" className="btn-primary text-sm" onClick={run} disabled={busy}>
             {busy ? (
               <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
             ) : (

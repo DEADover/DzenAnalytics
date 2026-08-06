@@ -143,7 +143,10 @@ export function crossCurrencyReceived(
 export function formatNum(value: number, opts?: { compact?: boolean }): string {
   return new Intl.NumberFormat("ru-RU", {
     notation: opts?.compact ? "compact" : "standard",
-    maximumFractionDigits: opts?.compact ? 1 : value >= 1000 ? 0 : 2,
+    // Округляем по МОДУЛЮ: сравнение самого значения отбрасывало копейки только
+    // у положительных, и в колонке рядом стояли «20 010» и «−20 010,09». В
+    // таблице с выравниванием по правому краю такой ряд выглядит рваным.
+    maximumFractionDigits: opts?.compact ? 1 : Math.abs(value) >= 1000 ? 0 : 2,
   }).format(value);
 }
 
@@ -173,7 +176,20 @@ export function formatDate(
 
 export function formatPct(value: number, digits = 1): string {
   if (!Number.isFinite(value)) return "—";
-  return `${(value * 100).toFixed(digits)}%`;
+  // Через Intl, а не `toFixed`: тот всегда ставит ТОЧКУ, и в русском интерфейсе
+  // рядом с «18 000 ₽» появлялось «18.0%». Остальные числа в приложении и так
+  // идут через ru-RU — процент просто отстал.
+  // Знак рисуем сами — типографским минусом «−», как в `formatMoney`: иначе в
+  // одной строке соседствовали бы «−5 000 ₽» и «-5,5%».
+  const pct = value * 100;
+  const body = new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Math.abs(pct));
+  // Округление может съесть знак: −0,04% при одном знаке — это «0,0%», и
+  // минус перед нулём выглядел бы ошибкой.
+  const signed = pct < 0 && Number(body.replace(/[^\d]/g, "")) !== 0;
+  return `${signed ? "−" : ""}${body}%`;
 }
 
 export function ymKey(iso: string): string {

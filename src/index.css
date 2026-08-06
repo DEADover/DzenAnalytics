@@ -266,6 +266,245 @@ h2,
   outline: none !important;
 }
 
+/* ── Печатный дашборд бюджета ──────────────────────────────────────────────
+   Отдельная вёрстка под альбомный A4 (см. BudgetDashboardPrint). На экране её
+   нет вовсе; при печати, наоборот, прячется всё остальное — иначе в PDF уехали
+   бы шапка приложения и широкая таблица, ради которой печать когда-то и
+   убрали. Цвета печатаются принудительно: без `print-color-adjust` браузер
+   выкидывает фон, и от полос диаграмм остаются пустые дорожки. */
+.print-root {
+  display: none;
+}
+
+/* Съёмка в PDF. Вёрстку надо ПОКАЗАТЬ — скрытый `display: none` узел снять
+   нельзя, у него нет размеров, — но так, чтобы пользователь ничего не заметил
+   и страница под ним не дёрнулась. Отсюда `fixed` за левым краем окна.
+   Размер листа фиксируем в пикселях: 1123 × 794 при 96 dpi это те же
+   пропорции, что у альбомного A4, и картинка ляжет на лист без искажений. */
+.print-root.print-export {
+  display: block;
+  position: fixed;
+  left: -20000px;
+  top: 0;
+  z-index: -1;
+  background: #fff;
+  color: #111827;
+  font-family: Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+.print-root.print-export .print-page {
+  width: 1123px;
+  height: 794px;
+  padding: 38px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* Оформление печатной вёрстки. Живёт СНАРУЖИ `@media print`, потому что этот
+   же макет снимается в картинку для PDF — а при съёмке печатных правил нет,
+   и внутри `@media print` они бы просто не применились. На экране всё это
+   не видно: сам `.print-root` скрыт. */
+.print-head {
+    border-bottom: 1.5pt solid #111827;
+    padding-bottom: 3mm;
+    margin-bottom: 5mm;
+  }
+.print-head h1 {
+    font-size: 20pt;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+.print-head h2 {
+    font-size: 14pt;
+    font-weight: 700;
+    margin: 0;
+  }
+.print-head p {
+    font-size: 9pt;
+    color: #6b7280;
+    margin: 1mm 0 0;
+  }
+.print-head-slim {
+    border-bottom-width: 0.75pt;
+    padding-bottom: 2mm;
+    margin-bottom: 4mm;
+  }
+/* Плитки показателей. */
+  .print-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4mm;
+    margin-bottom: 6mm;
+  }
+.print-kpi {
+    border: 0.75pt solid #e5e7eb;
+    border-top: 2.5pt solid #9ca3af;
+    border-radius: 1.5mm;
+    padding: 3mm;
+    break-inside: avoid;
+  }
+.print-kpi-expense { border-top-color: #dc2626; }
+.print-kpi-income { border-top-color: #16a34a; }
+.print-kpi-delta { border-top-color: #0891b2; }
+.print-kpi-title {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+  }
+.print-kpi-value {
+    font-size: 16pt;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 1.5mm 0;
+    font-variant-numeric: tabular-nums;
+  }
+.print-kpi-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5mm;
+    font-size: 8pt;
+    color: #6b7280;
+  }
+.print-up { color: #16a34a; }
+.print-down { color: #dc2626; }
+/* Бублики. */
+  .print-donuts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6mm;
+  }
+.print-donut {
+    border: 0.75pt solid #e5e7eb;
+    border-radius: 1.5mm;
+    padding: 3mm;
+    break-inside: avoid;
+  }
+.print-donut-body {
+    display: flex;
+    align-items: center;
+    gap: 5mm;
+  }
+.print-donut-svg {
+    width: 32mm;
+    height: 32mm;
+    flex: none;
+  }
+.print-donut-legend {
+    display: grid;
+    gap: 1.5mm;
+    font-size: 9pt;
+    margin: 0;
+  }
+.print-donut-legend dt {
+    font-size: 7.5pt;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+.print-donut-legend dd {
+    margin: 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+/* Полосовые диаграммы: подпись · дорожка · значение. */
+  .print-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+  }
+.print-chart {
+    border: 0.75pt solid #e5e7eb;
+    border-radius: 1.5mm;
+    padding: 2.5mm 3mm;
+    break-inside: avoid;
+  }
+.print-chart-title {
+    font-size: 9pt;
+    font-weight: 700;
+    margin-bottom: 2mm;
+  }
+.print-bars {
+    display: grid;
+    grid-template-columns: 38mm 1fr 24mm;
+    align-items: center;
+    row-gap: 1mm;
+    column-gap: 2mm;
+  }
+.print-bar-label {
+    font-size: 7.5pt;
+    color: #374151;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+.print-bar-track {
+    position: relative;
+    height: 3mm;
+    background: #f3f4f6;
+    border-radius: 0.5mm;
+  }
+/* Двусторонняя шкала: ноль посередине, минус растёт влево. */
+  .print-bar-centered {
+    background: linear-gradient(to right, #f3f4f6 calc(50% - 0.15mm), #d1d5db calc(50% - 0.15mm), #d1d5db calc(50% + 0.15mm), #f3f4f6 calc(50% + 0.15mm));
+  }
+.print-bar-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 0.5mm;
+  }
+.print-chart-note {
+    font-weight: 400;
+    color: #6b7280;
+  }
+.print-bar-value {
+    font-size: 7.5pt;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+.print-note {
+    font-size: 8pt;
+    color: #6b7280;
+    margin-top: 5mm;
+  }
+
+@media print {
+  /* Прячем приложение, оставляя только печатную вёрстку. Она вынесена
+     порталом на `body`, поэтому хватает одного селектора верхнего уровня. */
+  body > *:not(.print-root) {
+    display: none !important;
+  }
+  @page {
+      size: A4 landscape;
+      margin: 10mm;
+    }
+  html,
+    body,
+    #root {
+      background: #fff !important;
+      color: #111827 !important;
+      min-height: 0;
+    }
+  .print-root {
+      display: block;
+      font-family: Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
+      color: #111827;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  .print-page {
+      break-after: page;
+      page-break-after: always;
+    }
+  .print-page:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
+}
+
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgb(var(--c-border)); border-radius: 6px; }
