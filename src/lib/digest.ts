@@ -261,10 +261,30 @@ export function buildMonthDigest(
   /** Массив уже отсортирован по дате — тогда отрезок берётся двоичным поиском. */
   sorted = false
 ): DigestEntry | null {
+  const cur = txsInRange(transactions, ymdLocal(start), ymdLocal(end), sorted);
+  // Месяца без операций для одиночного вызова нет: карточке «прошлый месяц» на
+  // Главной нечего показывать. В ленте это решается иначе — см. monthEntry.
+  if (cur.length === 0) return null;
+  return monthEntry(transactions, start, end, sorted);
+}
+
+/**
+ * Месячная сводка БЕЗ проверки на пустоту.
+ *
+ * Пустой месяц внутри истории — это факт, а не отсутствие данных: «в июле не
+ * было ни одной операции» надо показать, а не молча пропустить. Пропущенный
+ * месяц читается как поломка — именно так и выглядело, когда лента обрывалась
+ * на июне при данных до августа (issue #65).
+ */
+function monthEntry(
+  transactions: Transaction[],
+  start: Date,
+  end: Date,
+  sorted: boolean
+): DigestEntry {
   const startIso = ymdLocal(start);
   const endIso = ymdLocal(end);
   const cur = txsInRange(transactions, startIso, endIso, sorted);
-  if (cur.length === 0) return null;
 
   const prevStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
   const prevEnd = new Date(start.getFullYear(), start.getMonth(), 0);
@@ -341,17 +361,26 @@ export function buildDigestHistory(
   );
 
   // Months: every full month from minD's month to maxD's month minus 1 (we exclude current incomplete).
+  //
+  // Месяцы идут СПЛОШЬ, включая пустые: месяц без единой операции внутри
+  // истории — это факт, и показать его надо. Раньше такие месяцы молча
+  // выпадали, и лента обрывалась там, где на самом деле был просто провал в
+  // данных: у человека с операциями по июнь и с августа последним месяцем
+  // оказывался июнь, хотя июль существует и он пустой (issue #65). Ленту недель
+  // это вводило в заблуждение вдвойне: их подписи («27 июл–2 авг») перешагивают
+  // границу месяца, и казалось, что данные за июль есть.
+  //
+  // Границы — от первого месяца с данными до последнего ЗАВЕРШЁННОГО месяца, но
+  // не дальше месяца последней операции: выдумывать пустые месяцы после конца
+  // истории незачем, там просто нечего показывать.
   const lastFullMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const lastDataMonth = new Date(maxD.getFullYear(), maxD.getMonth(), 1);
+  const until = lastDataMonth < lastFullMonth ? lastDataMonth : lastFullMonth;
   const startMonth = new Date(minD.getFullYear(), minD.getMonth(), 1);
-  for (
-    let m = new Date(startMonth);
-    m <= lastFullMonth && m <= maxD;
-    m.setMonth(m.getMonth() + 1)
-  ) {
+  for (let m = new Date(startMonth); m <= until; m.setMonth(m.getMonth() + 1)) {
     const start = new Date(m.getFullYear(), m.getMonth(), 1);
     const end = new Date(m.getFullYear(), m.getMonth() + 1, 0);
-    const entry = buildMonthDigest(byDate, start, end, true);
-    if (entry) out.push(entry);
+    out.push(monthEntry(byDate, start, end, true));
   }
 
   // Недели: все завершённые, до первой недели с данными — так же, как месяцы.
