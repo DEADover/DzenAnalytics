@@ -85,8 +85,13 @@ export function DigestPage() {
         </div>
       ) : (
         <div className="grid md:grid-cols-[260px_1fr] gap-4">
-          {/* Sidebar list */}
-          <div className="card p-1.5 max-h-[600px] overflow-y-auto">
+          {/* Список периодов. На широком экране панель тянется во всю высоту
+              правой колонки: карточка вынута из потока, поэтому длинный список
+              не растягивает строку сетки под себя, а прокручивается внутри. С
+              фиксированной высотой панель обрывалась заметно выше разборов
+              справа, и низ страницы оставался пустым. */}
+          <div className="relative min-h-[16rem]">
+          <div className="card p-1.5 max-h-[60vh] overflow-y-auto md:max-h-none md:absolute md:inset-0">
             {filtered.map((e) => {
               const isActive = e.id === current?.id;
               return (
@@ -109,6 +114,7 @@ export function DigestPage() {
                 </button>
               );
             })}
+          </div>
           </div>
 
           {/* Detail */}
