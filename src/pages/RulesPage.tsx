@@ -41,6 +41,7 @@ import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
 import { Segmented } from "../components/Segmented";
+import { Tooltip } from "../components/Tooltip";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
 import { buildRulePlan, type RuleRow } from "../lib/rulePlan";
@@ -91,6 +92,35 @@ const MODE_OPTIONS: { value: RuleMode; label: string; title: string }[] = [
     title: "Само размечает новые операции при синхронизации, без кнопки",
   },
 ];
+
+/**
+ * Что рассказывает подсказка над галочками.
+ *
+ * Заголовка у колонки нет намеренно: одно слово («Выбор», «Прогнать») смысла не
+ * добавляло — из него всё равно не понять, чем галочка отличается от режима и
+ * зачем она нужна. Объяснять надо сценарий, а он в заголовок не влезает.
+ */
+const PICK_HELP = (
+  <span className="block space-y-1.5">
+    <span className="block font-medium">Какие правила прогнать сейчас</span>
+    <span className="block">
+      Кнопка «Проверить и применить» разбирает только отмеченные правила —
+      число на ней всегда считается по галочкам. Эта, в шапке, отмечает и
+      снимает все разом.
+    </span>
+    <span className="block">
+      Пригодится, когда правил много, а прогнать нужно одно: снимите все,
+      отметьте нужное и нажмите кнопку. Иначе пришлось бы выключать все
+      остальные правила по очереди, а потом возвращать им прежний режим.
+    </span>
+    <span className="block">
+      Галочки живут до перезагрузки страницы — потом снова отмечены все
+      работающие правила. Ничего испортить ими нельзя: на сами правила они не
+      влияют, за это отвечает «Режим». Правило в режиме «Выкл» отметить нельзя —
+      оно не сработает, прогонять нечего.
+    </span>
+  </span>
+);
 
 function ruleMode(rule: { enabled: boolean; autoApply?: boolean }): RuleMode {
   if (!rule.enabled) return "off";
@@ -558,21 +588,12 @@ export function RulesPage() {
                       приём для авторазметки таблицы: колонка забирает ВЕСЬ
                       остаток. Название правила бывает длинной фразой из его же
                       условий, и место нужно именно ему. */}
-                  {/* Колонка подписана глаголом и тем же словом, что стоит на
-                      кнопке: без подписи было непонятно, что вообще делает
-                      галочка и чем отличается от режима. Галочка в шапке — это
-                      и есть «Отметить все» / «Снять все»: отдельные кнопки
-                      заняли бы место в панели ради того, что в таблицах и так
-                      делают шапкой. */}
-                  <th className="table-th w-28">
-                    <label
-                      className="flex items-center gap-1.5 cursor-pointer select-none"
-                      title={
-                        allPicked
-                          ? "Снять все — ни одно правило не пойдёт в прогон"
-                          : "Отметить все работающие правила"
-                      }
-                    >
+                  {/* Колонка без подписи: короткое слово над галочками смысла
+                      не добавляло, а объяснить нужно не одно слово, а зачем эти
+                      галочки вообще. Всё объяснение — в подсказке; галочка в
+                      шапке заодно отмечает и снимает все разом. */}
+                  <th className="table-th w-12 text-center">
+                    <Tooltip content={PICK_HELP} placement="bottom">
                       <input
                         type="checkbox"
                         checked={allPicked}
@@ -587,8 +608,7 @@ export function RulesPage() {
                         className="accent-accent w-4 h-4 align-middle disabled:opacity-40"
                         aria-label={allPicked ? "Снять все правила" : "Отметить все правила"}
                       />
-                      Прогнать
-                    </label>
+                    </Tooltip>
                   </th>
                   <th className="table-th w-20">№</th>
                   <th className="table-th w-full">Правило</th>
