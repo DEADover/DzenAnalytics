@@ -17,6 +17,7 @@ import { currencySymbol } from "../lib/format";
 import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
 import { getLiveAccountsFromCache, getCategoryTagsFromCache } from "../store/useZenmoneyStore";
+import { accountOptions } from "../lib/accountOptions";
 import { useFiltersStore, type DatePreset } from "../store/useFiltersStore";
 import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
@@ -136,21 +137,19 @@ export function GlobalFilters({
     };
   }, [transactions, setOffBalanceAccounts]);
 
-  const accounts = useMemo(() => {
-    const set = new Set<string>();
-    for (const t of transactions) if (t.account) set.add(t.account);
-    // Архивные — вниз; внутри активных группируем по виду счёта, чтобы список
-    // читался так же, как страница «Счета». Внутри вида — по алфавиту.
-    return Array.from(set).sort((a, b) => {
-      const aa = archivedAccounts.has(a);
-      const ba = archivedAccounts.has(b);
-      if (aa !== ba) return aa ? 1 : -1;
-      const ka = accountKinds.get(a) ?? "";
-      const kb = accountKinds.get(b) ?? "";
-      if (ka !== kb) return ka.localeCompare(kb, "ru");
-      return a.localeCompare(b, "ru");
-    });
-  }, [transactions, archivedAccounts, accountKinds]);
+  // Список счетов — операции ПЛЮС справочник Дзен-мани: счёт без операций в
+  // загруженных данных на странице «Счета» есть, и в отборе он тоже должен
+  // быть (issue #67). `accountKinds` знает все счета справочника и пуст в
+  // режиме CSV — там остаются одни операции.
+  const accounts = useMemo(
+    () =>
+      accountOptions(
+        transactions.map((t) => t.account),
+        accountKinds.keys(),
+        { archived: archivedAccounts, kinds: accountKinds }
+      ),
+    [transactions, archivedAccounts, accountKinds]
+  );
 
   /** Заголовок группы для пикера счетов: архивные идут под своим разделителем,
    *  который рисует сам MultiSelect, поэтому им группу не назначаем. */
