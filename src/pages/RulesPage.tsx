@@ -40,6 +40,7 @@ import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
+import { Switch } from "../components/Switch";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
 import { buildRulePlan, type RuleRow } from "../lib/rulePlan";
@@ -95,18 +96,38 @@ export function RulesPage() {
   const [preview, setPreview] = useState(false);
 
   /**
-   * Правила, по которым считается план, — просто ВКЛЮЧЁННЫЕ.
+   * Правила, отобранные для прогона, — по ним считается план и по ним же
+   * работает кнопка «Проверить и применить».
    *
-   * Рядом с «Включено» была ещё колонка «Выбор»: она отбирала правила для
-   * предпросмотра, ничего не меняя в данных. Два очень похожих переключателя в
-   * соседних колонках читались как одно и то же, а разницу приходилось
-   * объяснять в справке. Отбор «применить только это правило» вернём отдельным
-   * действием в строке (issue #61) — оно и точнее, и не спорит с «Включено».
+   * Отбор и «Включено» — разные вещи, и путать их нельзя: выключенное правило
+   * не действует вообще, а невыбранное просто не участвует в ЭТОМ прогоне.
+   * Один раз колонку «Выбор» убрали — именно из-за того, что две соседние
+   * галочки читались как одно и то же, — и вместе с ней пропала возможность
+   * прогнать часть правил (issue #61). Вернули, но «Включено» теперь
+   * переключатель-пилюля: спутать его с галочкой отбора уже нельзя.
+   *
+   * `null` — «ничего руками не трогали», и тогда отобраны все включённые.
+   * Так новое правило само попадает в прогон, а не молча выпадает из него.
    */
-  const selectedIds = useMemo(
-    () => new Set(rules.filter((r) => r.enabled).map((r) => r.id)),
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const enabledIds = useMemo(
+    () => rules.filter((r) => r.enabled).map((r) => r.id),
     [rules]
   );
+  const selectedIds = useMemo(() => {
+    if (!picked) return new Set(enabledIds);
+    // Выключенное правило из отбора выпадает само: держать его отмеченным
+    // значило бы обещать прогон, которого не будет.
+    return new Set(enabledIds.filter((id) => picked.has(id)));
+  }, [picked, enabledIds]);
+  const allPicked = enabledIds.length > 0 && selectedIds.size === enabledIds.length;
+  const togglePicked = (id: string, on: boolean) =>
+    setPicked((prev) => {
+      const next = new Set(prev ?? enabledIds);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const allCategories = useMemo(() => {
     const set = new Set<string>();
@@ -453,7 +474,9 @@ export function RulesPage() {
 
         {selectedIds.size === 0 && rules.length > 0 && (
           <div className="mb-3 rounded-lg border border-border bg-panel2/50 px-3 py-2 text-xs text-muted">
-            Все правила выключены — включите нужные, чтобы проверить и применить их.
+            {enabledIds.length === 0
+              ? "Все правила выключены — включите нужные, чтобы проверить и применить их."
+              : "Не отмечено ни одного правила — отметьте те, что нужно прогнать, галочкой слева."}
           </div>
         )}
 
@@ -495,6 +518,26 @@ export function RulesPage() {
                       приём для авторазметки таблицы: колонка забирает ВЕСЬ
                       остаток. Название правила бывает длинной фразой из его же
                       условий, и место нужно именно ему. */}
+                  {/* Галочка в шапке — это и есть «Отметить все» / «Снять
+                      все»: отдельные кнопки заняли бы место в панели ради того,
+                      что в таблицах и так делают шапкой. */}
+                  <th className="table-th w-12 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allPicked}
+                      ref={(el) => {
+                        if (el)
+                          el.indeterminate = !allPicked && selectedIds.size > 0;
+                      }}
+                      disabled={enabledIds.length === 0}
+                      onChange={(e) =>
+                        setPicked(e.target.checked ? new Set(enabledIds) : new Set())
+                      }
+                      className="accent-accent w-4 h-4 align-middle disabled:opacity-40"
+                      title={allPicked ? "Снять все" : "Отметить все"}
+                      aria-label={allPicked ? "Снять все правила" : "Отметить все правила"}
+                    />
+                  </th>
                   <th className="table-th w-20">№</th>
                   <th className="table-th w-full">Правило</th>
                   <th className="table-th w-72 min-w-[18rem]">Что меняет</th>
@@ -525,6 +568,24 @@ export function RulesPage() {
                         !rule.enabled && "opacity-60"
                       )}
                     >
+                      <td className="table-td text-center">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!rule.enabled}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => togglePicked(rule.id, e.target.checked)}
+                          className="accent-accent w-4 h-4 align-middle disabled:opacity-40"
+                          title={
+                            !rule.enabled
+                              ? "Правило выключено — в прогон не попадёт"
+                              : checked
+                                ? "Не прогонять это правило"
+                                : "Прогнать это правило"
+                          }
+                          aria-label="Правило отобрано для прогона"
+                        />
+                      </td>
                       <td className="table-td">
                         <div className="flex items-center gap-1">
                           <span className="tabular-nums text-muted w-5">{idx + 1}</span>
@@ -596,20 +657,22 @@ export function RulesPage() {
                           )}
                         </div>
                       </td>
-                      <td className="table-td text-center">
-                        <input
-                          type="checkbox"
-                          checked={rule.enabled}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) =>
-                            void update(rule.id, { enabled: e.target.checked }).then(
-                              reapplyRules
-                            )
-                          }
-                          className="accent-accent w-4 h-4 align-middle"
+                      <td
+                        className="table-td text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span
+                          className="inline-flex"
                           title={rule.enabled ? "Выключить правило" : "Включить правило"}
-                          aria-label="Правило включено"
-                        />
+                        >
+                          <Switch
+                            checked={rule.enabled}
+                            onChange={(next) =>
+                              void update(rule.id, { enabled: next }).then(reapplyRules)
+                            }
+                            label="Правило включено"
+                          />
+                        </span>
                       </td>
                       <td className="table-td text-center">
                         {/* Автоприменение работает только у включённого правила —
