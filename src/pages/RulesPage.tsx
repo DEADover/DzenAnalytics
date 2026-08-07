@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { accountKindLabel } from "../lib/accountType";
 import { getLiveAccountsFromCache, getBrandTitlesFromCache } from "../store/useZenmoneyStore";
 import {
@@ -42,6 +42,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
 import { Segmented } from "../components/Segmented";
 import { Tooltip } from "../components/Tooltip";
+import { Popover } from "../components/Popover";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
 import { buildRulePlan, type RuleRow } from "../lib/rulePlan";
@@ -153,6 +154,7 @@ export function RulesPage() {
   /** null — окно закрыто, «create» — новое правило, иначе редактируем. */
   const [editing, setEditing] = useState<StoredCategoryRule | "create" | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
+  const infoRef = useRef<HTMLDivElement>(null);
   const [zenTags, setZenTags] = useState<ZenTag[] | null>(null);
   /** Окно «Что изменят правила» — разбор и запись за один заход. */
   const [preview, setPreview] = useState(false);
@@ -449,7 +451,7 @@ export function RulesPage() {
             </span>
           </div>
 
-          <div className="relative shrink-0">
+          <div ref={infoRef} className="relative shrink-0">
             <button
               type="button"
               onClick={() => setInfoOpen((v) => !v)}
@@ -465,10 +467,17 @@ export function RulesPage() {
             >
               <HelpCircle className="w-5 h-5" />
             </button>
-            {infoOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setInfoOpen(false)} />
-                <div className="absolute left-0 z-30 mt-2 w-96 max-w-[calc(100vw-2rem)] border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2 text-xs text-muted">
+            {/* Панель объясняет весь раздел и потому длинная. Держим её на
+                `Popover`: он висит порталом, разворачивается вверх, когда снизу
+                тесно, и клампится в экран — раньше низ объяснения уходил под
+                край окна и до него надо было прокручивать страницу. */}
+            <Popover
+              open={infoOpen}
+              anchorRef={infoRef}
+              onClose={() => setInfoOpen(false)}
+              className="w-96 max-w-[calc(100vw-2rem)]"
+            >
+                <div className="max-h-[70vh] overflow-y-auto border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2 text-xs text-muted">
                   <p>
                     Правило отбирает операции по условиям (несколько условий
                     объединяются <strong className="text-text">И</strong> или{" "}
@@ -485,16 +494,45 @@ export function RulesPage() {
                     <strong className="text-text">
                       Само по себе правило ничего не меняет.
                     </strong>{" "}
-                    Категория, получатель и комментарий попадают в операции только
+                    Категория, получатель и комментарий попадают в операции либо
                     через кнопку{" "}
-                    <strong className="text-text">«Проверить и применить»</strong> и
-                    только у тех операций, что отмечены в окне.
+                    <strong className="text-text">«Проверить и применить»</strong>,
+                    либо сами — если у правила стоит режим «Авто».
                   </p>
                   <p>
-                    <strong className="text-text">Автоприменение</strong> — та же
-                    запись, но без кнопки и только для операций, которых раньше не
-                    было: пришли синхронизацией или импортом. Уже имеющиеся оно не
-                    трогает никогда, для них есть кнопка.
+                    <strong className="text-text">«Режим»</strong> — что правило
+                    делает вообще, три состояния:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 pl-1">
+                    <li>
+                      <strong className="text-text">Выкл</strong> — не работает
+                      нигде. Так правило откладывают, не удаляя.
+                    </li>
+                    <li>
+                      <strong className="text-text">По кнопке</strong> — работает
+                      только через «Проверить и применить»: пока не нажали, в
+                      операциях всё как было.
+                    </li>
+                    <li>
+                      <strong className="text-text">Авто</strong> — размечает само,
+                      без кнопки, но только операции, которых раньше не было:
+                      пришли синхронизацией или импортом. Уже имеющиеся не трогает
+                      никогда, для них есть кнопка.
+                    </li>
+                  </ul>
+                  <p>
+                    <strong className="text-text">Галочки в первом столбце</strong> —
+                    про другое: какие правила разобрать кнопкой{" "}
+                    <strong className="text-text">сейчас</strong>. Число на кнопке
+                    считается по отмеченным. Нужно, когда правил много, а прогнать
+                    надо одно: снимаете все, отмечаете нужное, нажимаете. Иначе
+                    пришлось бы выключать остальные по очереди и потом возвращать
+                    им режим.
+                  </p>
+                  <p>
+                    Отметки живут до перезагрузки страницы и на сами правила не
+                    влияют — испортить ими ничего нельзя. Правило в режиме «Выкл»
+                    отметить нельзя: прогонять нечего.
                   </p>
                   <p>
                     Записанное становится обычной правкой операции: отменяется
@@ -504,8 +542,9 @@ export function RulesPage() {
                     <strong className="text-text">«Проверить и применить»</strong>{" "}
                     открывает разбор: сначала строки, которые правила изменят, —
                     переключателем в окне можно посмотреть и остальные совпадения.
-                    Записывается только отмеченное. Считается по всем включённым
-                    правилам; у каждого изменения подписано, чьё оно.
+                    Записывается только отмеченное; у каждого изменения подписано,
+                    какое правило его сделало. Любую операцию оттуда же можно
+                    поправить руками.
                   </p>
                   <p>
                     Правила создаются и со страницы{" "}
@@ -513,8 +552,7 @@ export function RulesPage() {
                     быстрый способ заполнить пробелы.
                   </p>
                 </div>
-              </>
-            )}
+            </Popover>
           </div>
 
           <span className="flex-1 min-w-2" />
