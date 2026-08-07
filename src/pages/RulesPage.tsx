@@ -558,25 +558,37 @@ export function RulesPage() {
                       приём для авторазметки таблицы: колонка забирает ВЕСЬ
                       остаток. Название правила бывает длинной фразой из его же
                       условий, и место нужно именно ему. */}
-                  {/* Галочка в шапке — это и есть «Отметить все» / «Снять
-                      все»: отдельные кнопки заняли бы место в панели ради того,
-                      что в таблицах и так делают шапкой. */}
-                  <th className="table-th w-12 text-center">
-                    <input
-                      type="checkbox"
-                      checked={allPicked}
-                      ref={(el) => {
-                        if (el)
-                          el.indeterminate = !allPicked && selectedIds.size > 0;
-                      }}
-                      disabled={enabledIds.length === 0}
-                      onChange={(e) =>
-                        setPicked(e.target.checked ? new Set(enabledIds) : new Set())
+                  {/* Колонка подписана глаголом и тем же словом, что стоит на
+                      кнопке: без подписи было непонятно, что вообще делает
+                      галочка и чем отличается от режима. Галочка в шапке — это
+                      и есть «Отметить все» / «Снять все»: отдельные кнопки
+                      заняли бы место в панели ради того, что в таблицах и так
+                      делают шапкой. */}
+                  <th className="table-th w-28">
+                    <label
+                      className="flex items-center gap-1.5 cursor-pointer select-none"
+                      title={
+                        allPicked
+                          ? "Снять все — ни одно правило не пойдёт в прогон"
+                          : "Отметить все работающие правила"
                       }
-                      className="accent-accent w-4 h-4 align-middle disabled:opacity-40"
-                      title={allPicked ? "Снять все" : "Отметить все"}
-                      aria-label={allPicked ? "Снять все правила" : "Отметить все правила"}
-                    />
+                    >
+                      <input
+                        type="checkbox"
+                        checked={allPicked}
+                        ref={(el) => {
+                          if (el)
+                            el.indeterminate = !allPicked && selectedIds.size > 0;
+                        }}
+                        disabled={enabledIds.length === 0}
+                        onChange={(e) =>
+                          setPicked(e.target.checked ? new Set(enabledIds) : new Set())
+                        }
+                        className="accent-accent w-4 h-4 align-middle disabled:opacity-40"
+                        aria-label={allPicked ? "Снять все правила" : "Отметить все правила"}
+                      />
+                      Прогнать
+                    </label>
                   </th>
                   <th className="table-th w-20">№</th>
                   <th className="table-th w-full">Правило</th>
@@ -617,12 +629,12 @@ export function RulesPage() {
                           className="accent-accent w-4 h-4 align-middle disabled:opacity-40"
                           title={
                             !rule.enabled
-                              ? "Правило выключено — в прогон не попадёт"
+                              ? "Режим «Выкл» — правило не сработает, прогонять нечего"
                               : checked
-                                ? "Не прогонять это правило"
-                                : "Прогнать это правило"
+                                ? "Не прогонять это правило по кнопке «Проверить и применить»"
+                                : "Прогнать это правило по кнопке «Проверить и применить»"
                           }
-                          aria-label="Правило отобрано для прогона"
+                          aria-label="Прогнать это правило"
                         />
                       </td>
                       <td className="table-td">
