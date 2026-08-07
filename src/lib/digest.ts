@@ -99,9 +99,38 @@ function weekLabel(start: Date, end: Date): string {
 function txsInRange(
   transactions: Transaction[],
   startIso: string,
-  endIso: string
+  endIso: string,
+  sorted = false
 ): Transaction[] {
-  return transactions.filter((t) => t.date >= startIso && t.date <= endIso);
+  if (!sorted) return transactions.filter((t) => t.date >= startIso && t.date <= endIso);
+  // По отсортированному массиву отрезок вырезается двоичным поиском. Разница
+  // видна на ленте целиком: периодов там три с половиной сотни, и каждый гнал
+  // по всей истории дважды — свой отрезок и предыдущий.
+  return transactions.slice(lowerBound(transactions, startIso), upperBound(transactions, endIso));
+}
+
+/** Первый индекс, где дата не меньше `iso`. */
+function lowerBound(a: Transaction[], iso: string): number {
+  let lo = 0;
+  let hi = a.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (a[mid].date < iso) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** Первый индекс, где дата больше `iso`. Граница включительная, как у фильтра. */
+function upperBound(a: Transaction[], iso: string): number {
+  let lo = 0;
+  let hi = a.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (a[mid].date <= iso) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 function aggregate(txs: Transaction[]): {
@@ -170,11 +199,13 @@ export function lastCompleteWeekDigest(
 export function buildWeekDigest(
   transactions: Transaction[],
   start: Date,
-  end: Date
+  end: Date,
+  /** Массив уже отсортирован по дате — тогда отрезок берётся двоичным поиском. */
+  sorted = false
 ): DigestEntry | null {
   const startIso = ymdLocal(start);
   const endIso = ymdLocal(end);
-  const cur = txsInRange(transactions, startIso, endIso);
+  const cur = txsInRange(transactions, startIso, endIso, sorted);
   if (cur.length === 0) return null;
 
   // Previous week
@@ -182,7 +213,7 @@ export function buildWeekDigest(
   prevStart.setDate(prevStart.getDate() - 7);
   const prevEnd = new Date(end);
   prevEnd.setDate(prevEnd.getDate() - 7);
-  const prev = txsInRange(transactions, ymdLocal(prevStart), ymdLocal(prevEnd));
+  const prev = txsInRange(transactions, ymdLocal(prevStart), ymdLocal(prevEnd), sorted);
 
   const curAgg = aggregate(cur);
   const prevAgg = aggregate(prev);
@@ -226,16 +257,18 @@ export function lastCompleteMonthDigest(
 export function buildMonthDigest(
   transactions: Transaction[],
   start: Date,
-  end: Date
+  end: Date,
+  /** Массив уже отсортирован по дате — тогда отрезок берётся двоичным поиском. */
+  sorted = false
 ): DigestEntry | null {
   const startIso = ymdLocal(start);
   const endIso = ymdLocal(end);
-  const cur = txsInRange(transactions, startIso, endIso);
+  const cur = txsInRange(transactions, startIso, endIso, sorted);
   if (cur.length === 0) return null;
 
   const prevStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
   const prevEnd = new Date(start.getFullYear(), start.getMonth(), 0);
-  const prev = txsInRange(transactions, ymdLocal(prevStart), ymdLocal(prevEnd));
+  const prev = txsInRange(transactions, ymdLocal(prevStart), ymdLocal(prevEnd), sorted);
 
   const curAgg = aggregate(cur);
   const prevAgg = aggregate(prev);
@@ -300,6 +333,13 @@ export function buildDigestHistory(
 
   const out: DigestEntry[] = [];
 
+  // Сортируем ОДИН раз — дальше каждый период вырезается двоичным поиском.
+  // Периодов в ленте три с половиной сотни, и линейный проход по всей истории
+  // на каждый из них ощущался задержкой при открытии страницы.
+  const byDate = [...transactions].sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : 0
+  );
+
   // Months: every full month from minD's month to maxD's month minus 1 (we exclude current incomplete).
   const lastFullMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const startMonth = new Date(minD.getFullYear(), minD.getMonth(), 1);
@@ -310,19 +350,26 @@ export function buildDigestHistory(
   ) {
     const start = new Date(m.getFullYear(), m.getMonth(), 1);
     const end = new Date(m.getFullYear(), m.getMonth() + 1, 0);
-    const entry = buildMonthDigest(transactions, start, end);
+    const entry = buildMonthDigest(byDate, start, end, true);
     if (entry) out.push(entry);
   }
 
-  // Weeks: last 26 weeks before this Monday.
+  // Недели: все завершённые, до первой недели с данными — так же, как месяцы.
+  //
+  // Раньше здесь стоял предел в 26 недель, ничем не объявленный. На истории в
+  // пару лет получалась нелепица: месяцев тридцать с лишним, а недель — двадцать
+  // шесть, и полгода назад лента просто обрывалась. Цикл и так останавливается
+  // на первой неделе без данных, предел был лишним.
   const thisMonday = startOfMondayWeek(today);
-  for (let i = 1; i <= 26; i++) {
+  // Страховка от зацикливания на битой дате: сто лет недель — заведомо больше
+  // любой реальной истории.
+  for (let i = 1; i <= 5200; i++) {
     const wStart = new Date(thisMonday);
     wStart.setDate(wStart.getDate() - 7 * i);
     const wEnd = new Date(wStart);
     wEnd.setDate(wEnd.getDate() + 6);
     if (wEnd < minD) break;
-    const entry = buildWeekDigest(transactions, wStart, wEnd);
+    const entry = buildWeekDigest(byDate, wStart, wEnd, true);
     if (entry) out.push(entry);
   }
 
