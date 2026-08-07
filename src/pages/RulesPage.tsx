@@ -40,7 +40,7 @@ import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
-import { Switch } from "../components/Switch";
+import { Segmented } from "../components/Segmented";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
 import { buildRulePlan, type RuleRow } from "../lib/rulePlan";
@@ -65,6 +65,38 @@ const TARGET_LABELS: Record<RuleTargetField, string> = {
  * действием список всегда на глазах. Все числа на странице считаются из ОДНОГО
  * плана: два независимых расчёта разошлись бы, и объяснить разницу было бы нечем.
  */
+/**
+ * Режим правила — одно свойство с тремя состояниями вместо двух флажков.
+ *
+ * `enabled` и `autoApply` независимыми переключателями выглядели как две
+ * настройки, хотя автоприменение у выключенного правила не значит ничего и
+ * стояло погашенным. Плюс рядом жила галочка отбора, и две одинаковые с виду
+ * галочки в соседних колонках приходилось объяснять словами.
+ *
+ * Теперь вид контрола отвечает смыслу: сегмент — про само правило и живёт в
+ * базе, галочка слева — про текущий прогон и живёт до перезагрузки.
+ */
+type RuleMode = "off" | "manual" | "auto";
+
+const MODE_OPTIONS: { value: RuleMode; label: string; title: string }[] = [
+  { value: "off", label: "Выкл", title: "Правило не работает нигде" },
+  {
+    value: "manual",
+    label: "По кнопке",
+    title: "Работает только через «Проверить и применить»",
+  },
+  {
+    value: "auto",
+    label: "Авто",
+    title: "Само размечает новые операции при синхронизации, без кнопки",
+  },
+];
+
+function ruleMode(rule: { enabled: boolean; autoApply?: boolean }): RuleMode {
+  if (!rule.enabled) return "off";
+  return rule.autoApply ? "auto" : "manual";
+}
+
 export function RulesPage() {
   const transactions = useDataStore((s) => s.transactions);
   const transactionsRaw = useDataStore((s) => s.transactionsRaw);
@@ -202,6 +234,14 @@ export function RulesPage() {
   /** Сколько операций подходит под условия каждого правила — считаем тем же
    *  движком, что и применение, по исходникам: у уже сработавшего правила счёт
    *  по текущим значениям показал бы ноль. */
+  /** Записать режим. Оба поля задаём явно: иначе у выключенного правила
+   *  осталось бы висеть `autoApply: true`, невидимое на экране. */
+  const setMode = (id: string, mode: RuleMode) =>
+    update(id, {
+      enabled: mode !== "off",
+      autoApply: mode === "auto",
+    }).then(reapplyRules);
+
   const matchCounts = useMemo(() => {
     const out = new Map<string, number>();
     for (const r of rules) {
@@ -541,8 +581,7 @@ export function RulesPage() {
                   <th className="table-th w-20">№</th>
                   <th className="table-th w-full">Правило</th>
                   <th className="table-th w-72 min-w-[18rem]">Что меняет</th>
-                  <th className="table-th w-24 text-center">Включено</th>
-                  <th className="table-th w-32 text-center">Автоприменение</th>
+                  <th className="table-th w-52 text-center">Режим</th>
                   <th className="table-th w-28 text-center">Совпадений</th>
                   <th className="table-th text-center w-24">Действия</th>
                 </tr>
@@ -661,40 +700,12 @@ export function RulesPage() {
                         className="table-td text-center"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <span
-                          className="inline-flex"
-                          title={rule.enabled ? "Выключить правило" : "Включить правило"}
-                        >
-                          <Switch
-                            checked={rule.enabled}
-                            onChange={(next) =>
-                              void update(rule.id, { enabled: next }).then(reapplyRules)
-                            }
-                            label="Правило включено"
-                          />
-                        </span>
-                      </td>
-                      <td className="table-td text-center">
-                        {/* Автоприменение работает только у включённого правила —
-                            у выключенного галочка ничего не значит и потому
-                            недоступна. */}
-                        <input
-                          type="checkbox"
-                          checked={!!rule.autoApply && rule.enabled}
-                          disabled={!rule.enabled}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) =>
-                            void update(rule.id, { autoApply: e.target.checked })
-                          }
-                          className="accent-accent w-4 h-4 align-middle disabled:opacity-40"
-                          title={
-                            !rule.enabled
-                              ? "Сначала включите правило"
-                              : rule.autoApply
-                                ? "Не применять к новым операциям автоматически"
-                                : "Применять к новым операциям автоматически, без кнопки"
-                          }
-                          aria-label="Автоприменение к новым операциям"
+                        <Segmented
+                          size="sm"
+                          label="Режим правила"
+                          value={ruleMode(rule)}
+                          onChange={(next) => void setMode(rule.id, next)}
+                          options={MODE_OPTIONS}
                         />
                       </td>
                       <td className="table-td text-center tabular-nums">
