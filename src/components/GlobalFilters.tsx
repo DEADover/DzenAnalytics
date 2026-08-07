@@ -23,11 +23,16 @@ import { FiltersMenu } from "./FiltersMenu";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { currencyFlagEmoji } from "../lib/currencyFlag";
 
-const PRESETS: { value: DatePreset; label: string }[] = [
+const PRESETS: { value: DatePreset; label: string; title?: string }[] = [
   { value: "30d", label: "30 дней" },
   { value: "3m", label: "3 мес" },
   { value: "6m", label: "6 мес" },
   { value: "12m", label: "12 мес" },
+  {
+    value: "year",
+    label: "Год",
+    title: "Календарный год целиком — листается стрелками, в отличие от скользящих «12 мес»",
+  },
   { value: "ytd", label: "С начала года" },
   { value: "all", label: "Всё" },
 ];
@@ -239,10 +244,10 @@ export function GlobalFilters({
     };
   }, [transactions]);
 
+  // Год якорится тем же `monthYM`, поэтому пикеру он подходит как есть.
+  const anchored = periodCtl.preset === "month" || periodCtl.preset === "year";
   const currentMonthYM =
-    periodCtl.preset === "month" && periodCtl.monthYM
-      ? periodCtl.monthYM
-      : dataRange.maxYM;
+    anchored && periodCtl.monthYM ? periodCtl.monthYM : dataRange.maxYM;
 
   // Default preset is now "current month"; treat anything else as user-set.
   const now = new Date();
@@ -418,6 +423,7 @@ export function GlobalFilters({
                 <button
                   key={p.value}
                   onClick={() => periodCtl.setPreset(p.value)}
+                  title={p.title}
                   className={clsx(
                     // No weight change on active — keeps the control width stable.
                     "px-2 py-1 text-xs rounded-md transition-colors",
@@ -439,9 +445,11 @@ export function GlobalFilters({
                 value={currentMonthYM}
                 minYM={dataRange.minYM}
                 maxYM={dataRange.maxYM}
-                active={periodCtl.preset === "month"}
+                active={anchored}
+                mode={periodCtl.preset === "year" ? "year" : "month"}
                 onSelect={(ym) => periodCtl.setMonth(ym)}
-                onStep={(dir) => periodCtl.stepMonth(dir, dataRange.maxYM)}
+                onSelectYear={(y) => periodCtl.setYear(y)}
+                onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
               />
 
               <div className="flex items-center gap-1.5 flex-1 min-w-0">

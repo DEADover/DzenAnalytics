@@ -14,22 +14,32 @@ const MONTHS = [
  * a month + year picker (year nav + a 3×4 month grid). Months outside the
  * available data range [minYM, maxYM] are disabled. Used by GlobalFilters, so
  * it covers every page with the month filter.
+ *
+ * В режиме `year` тот же контрол листает ГОДЫ: подпись — «2026», стрелки
+ * шагают на год, в списке годы вместо месяцев. Отдельного контрола не делаем
+ * намеренно — место в панели одно, и переключение единицы не должно менять
+ * расположение кнопок под рукой (issue #64).
  */
 export function MonthPicker({
   value,
   minYM,
   maxYM,
   active,
+  mode = "month",
   onSelect,
+  onSelectYear,
   onStep,
 }: {
-  /** Currently shown month, "YYYY-MM". */
+  /** Currently shown month, "YYYY-MM". В режиме года берётся только год. */
   value: string;
   minYM: string;
   maxYM: string;
   /** Whether the month filter is the active date mode. */
   active: boolean;
+  /** Что выбираем — месяц или год. */
+  mode?: "month" | "year";
   onSelect: (ym: string) => void;
+  onSelectYear?: (year: number) => void;
   onStep: (dir: -1 | 1) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -40,10 +50,14 @@ export function MonthPicker({
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
 
-  const canPrev = !!minYM && value > minYM;
-  const canNext = !!maxYM && value < maxYM;
+  const year = Number(value?.slice(0, 4)) || new Date().getFullYear();
   const minY = Number(minYM?.slice(0, 4)) || 1970;
   const maxY = Number(maxYM?.slice(0, 4)) || 3000;
+  const isYear = mode === "year";
+  const canPrev = isYear ? year > minY : !!minYM && value > minYM;
+  const canNext = isYear ? year < maxY : !!maxYM && value < maxYM;
+  const years: number[] = [];
+  for (let y = maxY; y >= minY; y--) years.push(y);
 
   // Sync the visible year to the selected month whenever the picker opens.
   useEffect(() => {
@@ -89,13 +103,13 @@ export function MonthPicker({
         "flex items-center bg-panel2 rounded-lg p-0.5 border",
         active ? "border-accent" : "border-border"
       )}
-      title="Перейти к одному месяцу"
+      title={isYear ? "Перейти к одному году" : "Перейти к одному месяцу"}
     >
       <button
         onClick={() => onStep(-1)}
         disabled={!canPrev}
         className="p-1 rounded hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed"
-        title="Предыдущий месяц"
+        title={isYear ? "Предыдущий год" : "Предыдущий месяц"}
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
@@ -111,7 +125,7 @@ export function MonthPicker({
         )}
       >
         <CalendarRange className="w-3 h-3" />
-        {value ? monthLabel(value) : "Месяц"}
+        {isYear ? year : value ? monthLabel(value) : "Месяц"}
         <ChevronDown className={clsx("w-3 h-3 transition-transform", open && "rotate-180")} />
       </button>
 
@@ -119,7 +133,7 @@ export function MonthPicker({
         onClick={() => onStep(1)}
         disabled={!canNext}
         className="p-1 rounded hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed"
-        title="Следующий месяц"
+        title={isYear ? "Следующий год" : "Следующий месяц"}
       >
         <ChevronRight className="w-4 h-4" />
       </button>
@@ -134,6 +148,28 @@ export function MonthPicker({
               className="fixed z-[80] card p-3 w-64"
               style={{ left: pos.left, top: pos.top, bottom: pos.bottom }}
             >
+              {isYear ? (
+                <div className="grid grid-cols-3 gap-1 max-h-64 overflow-y-auto">
+                  {years.map((y) => (
+                    <button
+                      key={y}
+                      onClick={() => {
+                        onSelectYear?.(y);
+                        setOpen(false);
+                      }}
+                      className={clsx(
+                        "px-2 py-2 rounded-md text-sm tabular-nums transition-colors",
+                        y === year
+                          ? "bg-accent text-accent-fg font-medium"
+                          : "text-text hover:bg-panel2"
+                      )}
+                    >
+                      {y}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+              <>
               <div className="flex items-center justify-between mb-2">
                 <button
                   onClick={() => setViewYear((y) => y - 1)}
@@ -180,6 +216,8 @@ export function MonthPicker({
                   );
                 })}
               </div>
+              </>
+              )}
             </div>
           </>,
           document.body

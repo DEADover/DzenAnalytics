@@ -398,3 +398,72 @@ describe("applyFilters — поиск по контрагенту (brand + payee
     expect(ids(applyFilters(txs, filt({ search: "Пятёрочка" })))).toEqual(["other"]);
   });
 });
+
+describe("пресет «Год»", () => {
+  it("год — двенадцать отчётных месяцев подряд, а не «1 января — 31 декабря»", () => {
+    // При отчётном периоде с 11-го числа год идёт так же, как считается каждый
+    // его месяц, — иначе январь попал бы в отчёт дважды: началом и хвостом.
+    expect(presetToRange("year", null, "2025-06", 11)).toEqual({
+      from: "2025-01-11",
+      to: "2026-01-10",
+    });
+  });
+
+  it("при обычном отчётном периоде это календарный год", () => {
+    expect(presetToRange("year", null, "2025-06", 1)).toEqual({
+      from: "2025-01-01",
+      to: "2025-12-31",
+    });
+  });
+
+  it("месяц якоря на отрезок не влияет — важен только год", () => {
+    const a = presetToRange("year", null, "2025-01", 1);
+    const b = presetToRange("year", null, "2025-12", 1);
+    expect(a).toEqual(b);
+  });
+
+  it("«Год» и «12 мес» — разные вещи", () => {
+    // «12 мес» отсчитывается от последней операции, а не от границ года.
+    const year = presetToRange("year", "2026-08-07", "2026-08", 1);
+    const rolling = presetToRange("12m", "2026-08-07", "2026-08", 1);
+    expect(year).not.toEqual(rolling);
+    expect(year.from).toBe("2026-01-01");
+    expect(rolling.from).toBe("2025-08-07");
+  });
+
+  it("без якоря отрезка нет — а не «весь период»", () => {
+    expect(presetToRange("year", "2026-08-07", null, 1)).toEqual({
+      from: null,
+      to: null,
+    });
+  });
+});
+
+describe("stepPeriod", () => {
+  it("в режиме года шагает на год, сохраняя месяц якоря", () => {
+    const s = useFiltersStore.getState();
+    s.setYear(2025);
+    useFiltersStore.getState().stepPeriod(-1, "2026-08");
+    expect(useFiltersStore.getState().preset).toBe("year");
+    expect(useFiltersStore.getState().monthYM?.slice(0, 4)).toBe("2024");
+  });
+
+  it("в режиме месяца шагает на месяц", () => {
+    useFiltersStore.getState().setMonth("2026-03");
+    useFiltersStore.getState().stepPeriod(1, "2026-08");
+    expect(useFiltersStore.getState().preset).toBe("month");
+    expect(useFiltersStore.getState().monthYM).toBe("2026-04");
+  });
+
+  it("переключение «Месяц ↔ Год» оставляет там же, где был", () => {
+    useFiltersStore.getState().setMonth("2024-07");
+    useFiltersStore.getState().setPreset("year");
+    // Год берётся из якоря — 2024, а не текущий.
+    expect(
+      presetToRange("year", null, useFiltersStore.getState().monthYM, 1).from
+    ).toBe("2024-01-01");
+    useFiltersStore.getState().setYear(2022);
+    // Месяц якоря сохранён: вернувшись в «Месяц», попадаешь в июль.
+    expect(useFiltersStore.getState().monthYM).toBe("2022-07");
+  });
+});

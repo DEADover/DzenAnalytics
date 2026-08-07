@@ -18,12 +18,14 @@ export interface PeriodController {
   setPreset: (p: DatePreset) => void;
   setRange: (from: string | null, to: string | null) => void;
   setMonth: (ym: string) => void;
-  stepMonth: (delta: number, fallbackMaxYM: string) => void;
+  setYear: (year: number) => void;
+  /** Шагнуть на соседний период — единица берётся из пресета: месяц или год. */
+  stepPeriod: (delta: number, fallbackMaxYM: string) => void;
 }
 
 /**
  * Local, page-scoped period. Same semantics as the store's period setters
- * (setRange → preset "custom", setMonth/stepMonth → preset "month"), just held
+ * (setRange → preset "custom", setMonth/stepPeriod → preset "month"/"year"), just held
  * in component state so it never touches the global «месяц».
  */
 export function useLocalPeriod(defaultPreset: DatePreset = "12m"): PeriodController {
@@ -82,10 +84,15 @@ export function useLocalPeriod(defaultPreset: DatePreset = "12m"): PeriodControl
         setPreset("month");
         setMonthYM(ym);
       },
-      stepMonth: (delta: number, fallbackMaxYM: string) => {
-        const cur = preset === "month" && monthYM ? monthYM : fallbackMaxYM;
-        setPreset("month");
-        setMonthYM(shiftPeriod(cur, delta));
+      setYear: (year: number) => {
+        setPreset("year");
+        setMonthYM(`${year}-${(monthYM ?? currentPeriod(1)).slice(5, 7)}`);
+      },
+      stepPeriod: (delta: number, fallbackMaxYM: string) => {
+        const anchored = preset === "month" || preset === "year";
+        const cur = anchored && monthYM ? monthYM : fallbackMaxYM;
+        setPreset(preset === "year" ? "year" : "month");
+        setMonthYM(shiftPeriod(cur, delta * (preset === "year" ? 12 : 1)));
       },
     }),
     [preset, monthYM, from, to]
