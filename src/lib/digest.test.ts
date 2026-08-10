@@ -212,6 +212,30 @@ describe("длинная история не съедает последний �
       .filter((e) => e.period === "month")
       .map((e) => e.label);
     expect(months[0]).toBe("Июль 2026");
-    expect(months.length).toBeGreaterThan(600);
+    // Полвека пустоты между 1970-м и наши днями в ленту не идут — остаются
+    // только месяцы с операциями и короткие провалы между ними.
+    expect(months).toEqual(["Июль 2026", "Июнь 2026", "Март 1970"]);
+  });
+});
+
+describe("длинные пробелы не заполняются пустыми месяцами", () => {
+  const day = (iso: string) => tx({ date: iso, amount: 100, kind: "expense" });
+
+  it("одна операция 1970 года не растягивает ленту на полвека", () => {
+    const hist = buildDigestHistory(
+      [day("1970-01-05"), day("2026-06-10"), day("2026-07-10")],
+      new Date(2026, 7, 11)
+    );
+    const months = hist.filter((e) => e.period === "month").map((e) => e.label);
+    expect(months).toEqual(["Июль 2026", "Июнь 2026", "Январь 1970"]);
+  });
+
+  it("короткий провал остаётся — это факт, а не мусор", () => {
+    const hist = buildDigestHistory(
+      [day("2026-05-10"), day("2026-08-05")],
+      new Date(2026, 7, 11)
+    );
+    const months = hist.filter((e) => e.period === "month").map((e) => e.label);
+    expect(months).toEqual(["Июль 2026", "Июнь 2026", "Май 2026"]);
   });
 });
