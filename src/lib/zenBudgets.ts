@@ -12,8 +12,8 @@
 //
 // EFFECTIVE PLAN vs stored amount: per the API, `income`/`outcome` is the exact
 // budget ONLY when the matching `*Lock` is true. When it's false, Zenmoney adds
-// every PLANNED operation (reminder marker) of that month/tag on top — so the
-// number the app shows = stored amount + planned ops. We fold that in here
+// the month's PLANNED operations (reminder markers) that are STILL AHEAD — уже
+// исполненный план не прибавляется, его место занял факт. We fold that in here
 // (see `plannedOpsByTagMonth`), otherwise a category with scheduled income (e.g.
 // «Работа» with a planned salary) reads far too low (or even negative).
 
@@ -75,7 +75,9 @@ function plannedKey(tagId: string, ym: string): string {
 export function plannedOpsByTagMonth(
   markers: ZenReminderMarker[] | undefined,
   instruments: ZenInstrument[] | undefined,
-  baseCurrencyId: number | undefined
+  baseCurrencyId: number | undefined,
+  /** Сегодня, «ГГГГ-ММ-ДД». Планы этого дня и позже — впереди. */
+  todayIso = new Date().toISOString().slice(0, 10)
 ): Map<string, PlannedOps> {
   const out = new Map<string, PlannedOps>();
   if (!markers || markers.length === 0) return out;
@@ -86,6 +88,13 @@ export function plannedOpsByTagMonth(
     (amt * (rateById.get(instr) ?? baseRate)) / baseRate;
   for (const m of markers) {
     if (m.state !== "planned") continue;
+    // Только то, что ЕЩЁ ВПЕРЕДИ. Прошедший план либо уже исполнился — и тогда
+    // его место занял факт, — либо не исполнился, и обещать его задним числом
+    // неправильно. Дзен-мани так и считает: «планы до 31 августа 305 000» — это
+    // 133 188 поступлений плюс 171 812 остатка, а не сумма всех планов месяца.
+    // Без этого условия план уже пришедшей зарплаты прибавлялся второй раз и
+    // строка «Работа» показывала 465 900 вместо 305 000.
+    if ((m.date || "") < todayIso) continue;
     const ym = (m.date || "").slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(ym)) continue;
     if (!m.tag || m.tag.length === 0) continue;
