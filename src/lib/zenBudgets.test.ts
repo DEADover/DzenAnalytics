@@ -214,3 +214,39 @@ describe("zenPlanList", () => {
     });
   });
 });
+
+describe("живой случай «Работа»: сложение верно, мешают застрявшие планы", () => {
+  const tagsWork = [tag("work", "Работа")];
+  const rubW: ZenInstrument = { id: 2, title: "RUB", shortTitle: "RUB", symbol: "₽", rate: 1 };
+  const mk = (id: string, income: number, date: string): ZenReminderMarker => ({
+    id, user: 1, changed: 0, date, income, incomeInstrument: 2, outcome: 0,
+    outcomeInstrument: 2, tag: ["work"], reminder: "r" + id, state: "planned",
+  });
+
+  it("план 145 000 плюс запланированный аванс 160 000 дают 305 000, как в Дзен-мани", () => {
+    const planned = plannedOpsByTagMonth([mk("аванс", 160000, "2026-08-25")], [rubW], 2);
+    const m = zenPlansFromBudgets(
+      [budget({ tag: "work", income: 145000, incomeLock: false, date: "2026-08-01" })],
+      tagsWork,
+      planned
+    );
+    expect(m.get(zenPlanKey("income", "Работа", null, "2026-08"))).toBe(305000);
+  });
+
+  it("застрявший план уже пришедшей зарплаты завышает сумму", () => {
+    // Так и получилось «320 900» вместо «305 000»: зарплата пришла, а её план
+    // остался в кэше со статусом «запланировано». Чинится не здесь, а чисткой
+    // кэша планов (#71) — здесь только фиксируем причину.
+    const planned = plannedOpsByTagMonth(
+      [mk("аванс", 160000, "2026-08-25"), mk("зарплата-уже-пришла", 160900.33, "2026-08-10")],
+      [rubW],
+      2
+    );
+    const m = zenPlansFromBudgets(
+      [budget({ tag: "work", income: 145000, incomeLock: false, date: "2026-08-01" })],
+      tagsWork,
+      planned
+    );
+    expect(m.get(zenPlanKey("income", "Работа", null, "2026-08"))).toBe(465900);
+  });
+});
