@@ -263,3 +263,22 @@ describe("живой случай «Работа»: сложение верно,
     expect(planned.get("work|2026-08")?.income).toBe(50000);
   });
 });
+
+describe("прогноз Дзена не прибавляется к плану", () => {
+  const rubF: ZenInstrument = { id: 2, title: "RUB", shortTitle: "RUB", symbol: "₽", rate: 1 };
+  const mkF = (id: string, income: number, isForecast: boolean): ZenReminderMarker => ({
+    id, user: 1, changed: 0, date: "2026-08-25", income, incomeInstrument: 2,
+    outcome: 0, outcomeInstrument: 2, tag: ["work"], reminder: "r" + id,
+    state: "planned", isForecast,
+  });
+
+  it("считается только назначенная операция, не достроенная Дзеном", () => {
+    const planned = plannedOpsByTagMonth(
+      [mkF("аванс", 160000, false), mkF("прогноз-зарплаты", 160900.33, true)],
+      [rubF],
+      2,
+      "2026-08-11"
+    );
+    expect(planned.get("work|2026-08")?.income).toBe(160000);
+  });
+});
