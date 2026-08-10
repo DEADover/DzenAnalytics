@@ -337,51 +337,56 @@ export function buildDigestHistory(
 ): DigestEntry[] {
   if (transactions.length === 0) return [];
 
-  // Find data range
-  let minDate = transactions[0].date;
-  let maxDate = transactions[0].date;
-  for (const t of transactions) {
-    if (t.date < minDate) minDate = t.date;
-    if (t.date > maxDate) maxDate = t.date;
-  }
-  // Разбираем «ГГГГ-ММ-ДД» по частям, а не через `new Date(строка)`: та читает
-  // дату как UTC, а весь остальной счёт здесь ведётся в местном времени. К
-  // западу от Гринвича из-за этого последний месяц с данными мог выпасть из
-  // свода целиком — граница уезжала на день назад.
-  const minD = ymdToLocalDate(minDate);
-  const maxD = ymdToLocalDate(maxDate);
+  // Записи с негодной датой отбрасываем сразу: по ним нельзя ни отсортировать
+  // массив, ни искать в нём. Сравнение с `undefined` всегда ложно, поэтому одна
+  // такая запись способна испортить порядок, а за ним и двоичный поиск.
+  const byDate = transactions
+    .filter((t) => typeof t.date === "string" && t.date.length >= 10)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (byDate.length === 0) return [];
+
+  // Границы истории берём из уже отсортированного массива — с датами из него же
+  // работают и все отрезки ниже.
+  const minD = ymdToLocalDate(byDate[0].date);
 
   const out: DigestEntry[] = [];
 
-  // Сортируем ОДИН раз — дальше каждый период вырезается двоичным поиском.
-  // Периодов в ленте три с половиной сотни, и линейный проход по всей истории
-  // на каждый из них ощущался задержкой при открытии страницы.
-  const byDate = [...transactions].sort((a, b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : 0
-  );
-
-  // Months: every full month from minD's month to maxD's month minus 1 (we exclude current incomplete).
+  // Месяцы: от первого месяца с данными до последнего ЗАВЕРШЁННОГО.
   //
-  // Месяцы идут СПЛОШЬ, включая пустые: месяц без единой операции внутри
-  // истории — это факт, и показать его надо. Раньше такие месяцы молча
-  // выпадали, и лента обрывалась там, где на самом деле был просто провал в
-  // данных: у человека с операциями по июнь и с августа последним месяцем
-  // оказывался июнь, хотя июль существует и он пустой (issue #65). Ленту недель
-  // это вводило в заблуждение вдвойне: их подписи («27 июл–2 авг») перешагивают
-  // границу месяца, и казалось, что данные за июль есть.
+  // Верхнюю границу больше НЕ задаёт дата последней операции. Это была
+  // единственная причина, по которой лента месяцев могла оборваться раньше
+  // ленты недель: у недель такой границы нет, они идут от сегодняшнего
+  // понедельника назад. Стоило чему-нибудь исказить «дату последней операции» —
+  // и месяцы кончались там, где недели показывали данные (issue #65).
   //
-  // Границы — от первого месяца с данными до последнего ЗАВЕРШЁННОГО месяца, но
-  // не дальше месяца последней операции: выдумывать пустые месяцы после конца
-  // истории незачем, там просто нечего показывать.
+  // Пустые месяцы внутри истории остаются: месяц без единой операции — это
+  // факт, а пропущенный читается как поломка. Отрезаем только хвост пустых
+  // месяцев после конца данных — выдумывать их до сегодняшнего дня незачем.
   const lastFullMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const lastDataMonth = new Date(maxD.getFullYear(), maxD.getMonth(), 1);
-  const until = lastDataMonth < lastFullMonth ? lastDataMonth : lastFullMonth;
   const startMonth = new Date(minD.getFullYear(), minD.getMonth(), 1);
-  for (let m = new Date(startMonth); m <= until; m.setMonth(m.getMonth() + 1)) {
+  const months: { entry: DigestEntry; empty: boolean; endIso: string }[] = [];
+  for (let m = new Date(startMonth); m <= lastFullMonth; m.setMonth(m.getMonth() + 1)) {
     const start = new Date(m.getFullYear(), m.getMonth(), 1);
     const end = new Date(m.getFullYear(), m.getMonth() + 1, 0);
-    out.push(monthEntry(byDate, start, end, true));
+    const endIso = ymdLocal(end);
+    months.push({
+      entry: monthEntry(byDate, start, end, true),
+      empty: txsInRange(byDate, ymdLocal(start), endIso, true).length === 0,
+      endIso,
+    });
   }
+  // Отрезаем только ПУСТОЙ хвост и только после последней операции: месяц с
+  // данными выпасть не может ни при каких обстоятельствах, а пустой июль между
+  // июнем и августом остаётся — он и есть ответ на вопрос «куда делся июль».
+  const lastIso = byDate[byDate.length - 1].date.slice(0, 10);
+  while (
+    months.length > 0 &&
+    months[months.length - 1].empty &&
+    months[months.length - 1].endIso >= lastIso
+  ) {
+    months.pop();
+  }
+  for (const m of months) out.push(m.entry);
 
   // Недели: все завершённые, до первой недели с данными — так же, как месяцы.
   //

@@ -152,3 +152,48 @@ describe("вырезание отрезка двоичным поиском", ()
     expect(d?.prevExpense).toBe(1);
   });
 });
+
+describe("лента месяцев не обрывается раньше ленты недель (#65)", () => {
+  const day = (iso: string) => tx({ date: iso, amount: 1000, kind: "expense" });
+
+  it("месяц с операциями не может выпасть, даже если «последняя операция» испорчена", () => {
+    // У недель верхней границы нет, у месяцев была — дата последней операции.
+    // Стоило чему-нибудь её исказить, и месяцы кончались там, где недели
+    // показывали данные. Здесь запись без даты отбрасывается, а июль остаётся.
+    const txs = [
+      day("2026-06-15"),
+      day("2026-07-15"),
+      day("2026-07-22"),
+      tx({ date: undefined as unknown as string, amount: 1000, kind: "expense" }),
+    ];
+    const hist = buildDigestHistory(txs, new Date(2026, 7, 7));
+    const months = hist.filter((e) => e.period === "month").map((e) => e.label);
+    const weeks = hist.filter((e) => e.period === "week").map((e) => e.label);
+    expect(months).toContain("Июль 2026");
+    // Ровно тот же набор месяцев, что и у недель: раз есть неделя целиком
+    // внутри месяца — есть и месяц.
+    expect(weeks.some((w) => w.includes("июл"))).toBe(true);
+  });
+
+  it("операции с негодной датой не ломают порядок и поиск", () => {
+    const txs = [
+      day("2026-05-10"),
+      tx({ date: "" as string, amount: 1000, kind: "expense" }),
+      day("2026-06-10"),
+      tx({ date: null as unknown as string, amount: 1000, kind: "expense" }),
+      day("2026-07-10"),
+    ];
+    const hist = buildDigestHistory(txs, new Date(2026, 7, 7));
+    expect(hist.filter((e) => e.period === "month").map((e) => e.label)).toEqual([
+      "Июль 2026",
+      "Июнь 2026",
+      "Май 2026",
+    ]);
+  });
+
+  it("одни негодные записи — свод пустой, а не падение", () => {
+    expect(
+      buildDigestHistory([tx({ date: undefined as unknown as string, amount: 1 })])
+    ).toEqual([]);
+  });
+});
