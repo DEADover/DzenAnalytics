@@ -10,12 +10,20 @@
 // Only MANUAL plans are trusted: a budget counts only when it is NOT an
 // auto-forecast (`isOutcomeForecast`/`isIncomeForecast` false).
 //
-// EFFECTIVE PLAN vs stored amount: per the API, `income`/`outcome` is the exact
-// budget ONLY when the matching `*Lock` is true. When it's false, Zenmoney adds
-// every PLANNED operation (reminder marker) of that month/tag on top — so the
-// number the app shows = stored amount + planned ops. We fold that in here
-// (see `plannedOpsByTagMonth`), otherwise a category with scheduled income (e.g.
-// «Работа» with a planned salary) reads far too low (or even negative).
+// EFFECTIVE PLAN vs stored amount: `income`/`outcome` is the plan as the user
+// set it. Когда сторона «не залочена» и числа НЕТ, Дзен-мани показывает вместо
+// него сумму запланированных операций месяца по этому тегу — её мы и
+// подставляем (см. `plannedOpsByTagMonth`), иначе категория с запланированной
+// зарплатой читалась бы нулём.
+//
+// А вот складывать планы с УЖЕ ЗАДАННЫМ числом нельзя. Так было до этого, и на
+// живом аккаунте выходило «133 188 из 320 900» там, где сам Дзен показывает
+// «133 188 из 160 000»: план 160 000 не залочен, рядом запланированная зарплата
+// 160 900 — и мы прибавляли её к заданному числу.
+//
+// Правило по трём наблюдавшимся случаям: положительное число — это план, и он
+// и есть ответ; ноль или минус — не план, а поправка к запланированному
+// («планов на 145 000, но 22 000 из них не жду» → 123 000).
 
 import type {
   ZenBudget,
@@ -147,18 +155,23 @@ function collect(
     // is one it DID — `wantForecast` picks which side we return.
     const outFc = !!b.isOutcomeForecast;
     const incFc = !!b.isIncomeForecast;
-    // Effective plan: an UNLOCKED side combines the stored amount with that
-    // month's planned operations; a LOCKED side is exact. Only fold into the
-    // real-plan side (forecasts are already Zenmoney's own «из X» estimate).
+    // Заданное число выигрывает. Запланированные операции подставляются только
+    // туда, где числа нет вовсе и сторона не залочена. Прогнозные строки не
+    // трогаем — это уже собственная оценка Дзена «из X».
     const p = wantForecast ? undefined : planned?.get(plannedKey(b.tag, ym));
-    const outVal = b.outcomeLock ? b.outcome : b.outcome + (p?.outcome ?? 0);
-    const incVal = b.incomeLock ? b.income : b.income + (p?.income ?? 0);
-    // Round ONLY where we actually folded planned ops in — that's what creates
-    // the sub-rouble tail. A LOCKED side (or one with no planned ops) carries
-    // Zenmoney's exact figure, which may legitimately be fractional: rounding it
-    // would invent a diff and mark the cell as «ждёт отправки» for nothing.
-    const outAdded = !b.outcomeLock && !!p;
-    const incAdded = !b.incomeLock && !!p;
+    // Положительное число — это план, заданный человеком, и он и есть ответ.
+    // Ноль или минус — не план, а ПОПРАВКА к запланированному: Дзен так хранит
+    // «планов на 145 000, но 22 000 из них не жду» и показывает 123 000.
+    const outFallback = !b.outcomeLock && !(b.outcome > 0);
+    const incFallback = !b.incomeLock && !(b.income > 0);
+    const outVal = outFallback ? (p?.outcome ?? 0) + b.outcome : b.outcome;
+    const incVal = incFallback ? (p?.income ?? 0) + b.income : b.income;
+    // Округляем ТОЛЬКО подставленную сумму планов — это она даёт копеечный
+    // хвост. Собственное число Дзена может быть дробным законно, и округление
+    // выдумало бы расхождение и пометило ячейку как «ждёт отправки» на пустом
+    // месте.
+    const outAdded = outFallback && !!p;
+    const incAdded = incFallback && !!p;
     if (outFc === wantForecast && outVal > 0)
       out.push({ kind: "expense", ...r, ym, amount: outAdded ? Math.round(outVal) : outVal });
     if (incFc === wantForecast && incVal > 0)

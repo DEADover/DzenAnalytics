@@ -214,3 +214,47 @@ describe("zenPlanList", () => {
     });
   });
 });
+
+describe("заданный план не складывается с запланированными операциями", () => {
+  const tags = [tag("work", "Работа")];
+  const rub: ZenInstrument = { id: 2, title: "RUB", shortTitle: "RUB", symbol: "₽", rate: 1 };
+  const marker = (m: Partial<ZenReminderMarker>): ZenReminderMarker => ({
+    id: "m1", user: 1, changed: 0, date: "2026-08-25", income: 0, incomeInstrument: 2,
+    outcome: 0, outcomeInstrument: 2, tag: ["work"], reminder: "r1",
+    state: "planned", ...m,
+  });
+
+  it("живой случай: 160 000 плана и 160 900 запланированных дают 160 000, а не 320 900", () => {
+    // На аккаунте пользователя Дзен показывал «133 188 из 160 000», а мы —
+    // «из 320 900»: план не залочен, и мы прибавляли к нему зарплату.
+    const planned = plannedOpsByTagMonth([marker({ income: 160900.33 })], [rub], 2);
+    const m = zenPlansFromBudgets(
+      [budget({ tag: "work", income: 160000, incomeLock: false, date: "2026-08-01" })],
+      tags,
+      planned
+    );
+    expect(m.get(zenPlanKey("income", "Работа", null, "2026-08"))).toBe(160000);
+  });
+
+  it("пустая сторона показывает сумму запланированных", () => {
+    // Ради этого случая сложение и вводилось: без плана категория с
+    // запланированной зарплатой читалась бы нулём.
+    const planned = plannedOpsByTagMonth([marker({ income: 145000 })], [rub], 2);
+    const m = zenPlansFromBudgets(
+      [budget({ tag: "work", income: 0, incomeLock: false, date: "2026-08-01" })],
+      tags,
+      planned
+    );
+    expect(m.get(zenPlanKey("income", "Работа", null, "2026-08"))).toBe(145000);
+  });
+
+  it("залоченный план не трогают запланированные операции", () => {
+    const planned = plannedOpsByTagMonth([marker({ income: 160900 })], [rub], 2);
+    const m = zenPlansFromBudgets(
+      [budget({ tag: "work", income: 130000, incomeLock: true, date: "2026-08-01" })],
+      tags,
+      planned
+    );
+    expect(m.get(zenPlanKey("income", "Работа", null, "2026-08"))).toBe(130000);
+  });
+});
