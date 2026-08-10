@@ -359,58 +359,21 @@ export function buildDigestHistory(
   // понедельника назад. Стоило чему-нибудь исказить «дату последней операции» —
   // и месяцы кончались там, где недели показывали данные (issue #65).
   //
-  // Пустые месяцы внутри истории остаются: месяц без единой операции — это
-  // факт, а пропущенный читается как поломка. Отрезаем только хвост пустых
-  // месяцев после конца данных — выдумывать их до сегодняшнего дня незачем.
-  // Шагаем по НОМЕРУ месяца, а не по дате. Прежний цикл двигал объект Date
-  // через `setMonth`, и на длинной истории он накапливал сдвиг переводов часов:
-  // «1 июля 00:00» становилось «1 июля 01:00», сравнение с границей переставало
-  // выполняться, и ровно ПОСЛЕДНИЙ месяц выпадал из ленты. У человека с
-  // историей с 1970-х это 678 шагов — там сдвиг набирается наверняка (issue #65).
+  // Месяц без единой операции в ленту не идёт. Короткое время было наоборот —
+  // я показывал такие месяцы с нулями, чтобы список не обрывался «в никуда»,
+  // когда в середине истории провал. Повод отпал: пропажа месяца, ради которой
+  // это делалось, оказалась ошибкой перебора выше (сдвиг переводов часов), а
+  // побочный эффект остался — одна случайная операция многолетней давности
+  // растягивала ленту на сотни строк «0,00 ₽» (issue #65).
   const monthIndex = (y: number, m: number) => y * 12 + m;
   const lastIndex = monthIndex(today.getFullYear(), today.getMonth()) - 1;
   const startIndex = monthIndex(minD.getFullYear(), minD.getMonth());
-  const months: { entry: DigestEntry; empty: boolean; endIso: string }[] = [];
   for (let i = startIndex; i <= lastIndex; i++) {
     const y = Math.floor(i / 12);
     const mo = i % 12;
-    const start = new Date(y, mo, 1);
-    const end = new Date(y, mo + 1, 0);
-    const endIso = ymdLocal(end);
-    months.push({
-      entry: monthEntry(byDate, start, end, true),
-      empty: txsInRange(byDate, ymdLocal(start), endIso, true).length === 0,
-      endIso,
-    });
+    const entry = buildMonthDigest(byDate, new Date(y, mo, 1), new Date(y, mo + 1, 0), true);
+    if (entry) out.push(entry);
   }
-  // Отрезаем только ПУСТОЙ хвост и только после последней операции: месяц с
-  // данными выпасть не может ни при каких обстоятельствах, а пустой июль между
-  // июнем и августом остаётся — он и есть ответ на вопрос «куда делся июль».
-  // Длинный пробел выкидываем целиком. Пустой месяц — это факт, когда он один
-  // среди месяцев с данными: «в июле не было ни одной операции». Но одна
-  // случайная операция 1970 года растягивала ленту на полвека строк «0,00 ₽» —
-  // это не факт, а мусор. Короткий провал (до трёх месяцев) оставляем.
-  const MAX_GAP = 3;
-  for (let i = 0; i < months.length; ) {
-    if (!months[i].empty) {
-      i++;
-      continue;
-    }
-    let j = i;
-    while (j < months.length && months[j].empty) j++;
-    if (j - i > MAX_GAP) months.splice(i, j - i);
-    else i = j;
-  }
-
-  const lastIso = byDate[byDate.length - 1].date.slice(0, 10);
-  while (
-    months.length > 0 &&
-    months[months.length - 1].empty &&
-    months[months.length - 1].endIso >= lastIso
-  ) {
-    months.pop();
-  }
-  for (const m of months) out.push(m.entry);
 
   // Недели: все завершённые, до первой недели с данными — так же, как месяцы.
   //
