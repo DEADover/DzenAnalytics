@@ -35,7 +35,12 @@ import { BudgetSettingsPopover } from "../components/BudgetSettingsPopover";
 import { buildBudgetYear } from "../lib/budgetYear";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
 import { BudgetDashboardPrint } from "../components/BudgetDashboardPrint";
-import { budgetHits, insidePerimeter, transactionsForCell } from "../lib/budgetScope";
+import {
+  budgetHits,
+  insidePerimeter,
+  transactionsForCell,
+  TRANSFER_CATEGORY,
+} from "../lib/budgetScope";
 import { useBudgetSettingsStore } from "../store/useBudgetSettingsStore";
 import { Segmented } from "../components/Segmented";
 import { Tooltip } from "../components/Tooltip";
@@ -511,6 +516,12 @@ export function BudgetsPage() {
       .filter(
         (u) =>
           u.fact > 0 &&
+          // Переводы планировать нельзя и не нужно. «Переводы» — наша
+          // собственная статья, в справочнике Дзен-мани такого тега нет:
+          // заведённый по ней план навсегда завис бы неотправленным. Да и по
+          // сути перевод между своими счетами не доход и не расход — его
+          // показывают, чтобы видеть обороты, а не чтобы на него планировать.
+          u.category !== TRANSFER_CATEGORY &&
           !shown.has(budgetKey(u.kind, u.category, u.subcategory)) &&
           !parentBudgeted(u)
       )
