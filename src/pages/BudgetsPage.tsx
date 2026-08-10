@@ -1044,9 +1044,17 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
           rollupFact={
             hasSubs ? parent.fact + g.subs.reduce((s, r) => s + r.fact, 0) : undefined
           }
+          // План категории — это план ВСЕЙ категории, а не добавка к планам
+          // под-категорий. Раньше они складывались: при «Кот 10 000» и «Собака
+          // 25 000» строка «Животные» показывала 35 000, а стоило поставить ей
+          // 37 000 — становилось 72 000. Человек имеет в виду другое: вся
+          // категория стоит 37 000, из них 35 000 уже расписаны. Своего плана
+          // нет — показываем сумму под-категорий, как и раньше.
           rollupPlanned={
             hasSubs
-              ? parent.planned + g.subs.reduce((s, r) => s + r.planned, 0)
+              ? parent.planned > 0
+                ? parent.planned
+                : g.subs.reduce((s, r) => s + r.planned, 0)
               : undefined
           }
           {...rest}
