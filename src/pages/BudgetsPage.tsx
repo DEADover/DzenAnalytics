@@ -169,15 +169,21 @@ export function BudgetsPage() {
     const days = daysInMonth(ym);
     const income = new Array(days + 1).fill(0);
     const expense = new Array(days + 1).fill(0);
+    // Периметр счетов действует и на планы: если бюджет сужен до карты, чужой
+    // счёт не должен подрисовывать ступеньку на графике. Пустой периметр —
+    // все счета, как и везде в разделе.
+    const inScope = (account: string) =>
+      scope.accounts.size === 0 || scope.accounts.has(account);
     for (const p of zenPlanned) {
       if (p.forecast || !p.date.startsWith(ym)) continue;
+      if (!inScope(p.account)) continue;
       const d = Number(p.date.slice(8, 10));
       if (!(d >= 1 && d <= days)) continue;
       if (p.kind === "income") income[d] += p.amountBase;
       else if (p.kind === "expense") expense[d] += p.amountBase;
     }
     return { income, expense };
-  }, [zenPlanned, ym]);
+  }, [zenPlanned, ym, scope]);
 
   // ── Inline add: a draft row inside the «Расходы»/«Доходы» section ──
   const [draftKind, setDraftKind] = useState<BudgetKind | null>(null);
