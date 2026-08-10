@@ -29,6 +29,7 @@ import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useZenmoneyStore, getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
+import { pluralRu } from "../lib/plural";
 import { EditTransactionModal } from "../components/EditTransactionModal";
 import { Tooltip } from "../components/Tooltip";
 import { BulkEditModal } from "../components/BulkEditModal";
@@ -125,6 +126,32 @@ export function TransactionsPage() {
   const deleteTransaction = useDataStore((s) => s.deleteTransaction);
   const deleteTransactionMany = useDataStore((s) => s.deleteTransactionMany);
   const deletedCount = useDeletedStore((s) => s.deletedIds.length);
+  const purgeDeleted = useDataStore((s) => s.purgeDeleted);
+  const pushMode = useZenmoneyStore((s) => s.pushMode);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const trashRef = useRef<HTMLDivElement>(null);
+
+  /** Очистить корзину — тот же вопрос и то же действие, что на её странице:
+   *  безвозвратное удаление обязано спрашивать одинаково, откуда бы его ни
+   *  запустили. */
+  async function emptyTrash() {
+    const n = deletedCount;
+    if (n === 0) return;
+    const ops = pluralRu(n, ["операция", "операции", "операций"]);
+    const willBe = pluralRu(n, ["будет", "будут", "будут"]);
+    const ok = await confirm({
+      title: "Очистить корзину окончательно?",
+      message:
+        `${formatNum(n)} ${ops} ${willBe} безвозвратно удалены из локального хранилища и исчезнут из корзины — восстановить их будет нельзя.` +
+        (pushMode !== "off"
+          ? " Уже удалённые в облаке Дзен-мани остаются удалёнными; операции, удаление которых ещё не отправлено в облако, могут вернуться при полной синхронизации."
+          : ""),
+      confirmLabel: "Очистить корзину",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await purgeDeleted();
+  }
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
@@ -609,23 +636,75 @@ export function TransactionsPage() {
             <Download className="w-3.5 h-3.5" />
             CSV
           </button>
-          <Link
-            to="/trash"
-            className="relative btn-ghost text-xs py-1.5 h-[30px] !px-2"
-            title="Удалённые (корзина)"
-            aria-label={
-              deletedCount > 0
-                ? `Удалённые операции: ${deletedCount}`
-                : "Удалённые операции"
-            }
-          >
-            <Trash2 className="w-4 h-4" />
-            {deletedCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-expense text-white text-[10px] leading-4 text-center tabular-nums">
-                {deletedCount}
-              </span>
+          {/* Корзина — меню, а не ссылка: чтобы очистить её, приходилось идти на
+              отдельную страницу и возвращаться обратно. Пустая корзина остаётся
+              простой ссылкой: меню из одного пункта — лишний клик. */}
+          <div ref={trashRef} className="relative">
+            {deletedCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => setTrashOpen((o) => !o)}
+                aria-haspopup="menu"
+                aria-expanded={trashOpen}
+                aria-label={`Удалённые операции: ${deletedCount}`}
+                title="Корзина"
+                className="relative btn-ghost text-xs py-1.5 h-[30px] !px-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-expense text-white text-[10px] leading-4 text-center tabular-nums">
+                  {deletedCount}
+                </span>
+              </button>
+            ) : (
+              <Link
+                to="/trash"
+                className="relative btn-ghost text-xs py-1.5 h-[30px] !px-2"
+                title="Корзина пуста"
+                aria-label="Удалённые операции"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Link>
             )}
-          </Link>
+            <Popover
+              open={trashOpen}
+              anchorRef={trashRef}
+              onClose={() => setTrashOpen(false)}
+              align="right"
+              className="card p-1.5 shadow-lg w-64"
+            >
+              <Link
+                to="/trash"
+                onClick={() => setTrashOpen(false)}
+                className="w-full text-left rounded-lg px-3 py-2 hover:bg-panel2 flex gap-3 items-start"
+              >
+                <Eye className="w-4 h-4 mt-0.5 shrink-0 text-accent" />
+                <span>
+                  <span className="block text-sm font-medium">Просмотреть</span>
+                  <span className="block text-xs text-muted">
+                    Список удалённых, поштучное восстановление
+                  </span>
+                </span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setTrashOpen(false);
+                  void emptyTrash();
+                }}
+                className="w-full text-left rounded-lg px-3 py-2 hover:bg-panel2 flex gap-3 items-start"
+              >
+                <Trash2 className="w-4 h-4 mt-0.5 shrink-0 text-expense" />
+                <span>
+                  <span className="block text-sm font-medium">Очистить</span>
+                  <span className="block text-xs text-muted">
+                    Удалить {formatNum(deletedCount)}{" "}
+                    {pluralRu(deletedCount, ["операцию", "операции", "операций"])}{" "}
+                    безвозвратно
+                  </span>
+                </span>
+              </button>
+            </Popover>
+          </div>
         </div>
 
         {sorted.length === 0 ? (
