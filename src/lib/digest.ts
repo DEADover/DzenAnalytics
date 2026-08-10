@@ -362,12 +362,20 @@ export function buildDigestHistory(
   // Пустые месяцы внутри истории остаются: месяц без единой операции — это
   // факт, а пропущенный читается как поломка. Отрезаем только хвост пустых
   // месяцев после конца данных — выдумывать их до сегодняшнего дня незачем.
-  const lastFullMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const startMonth = new Date(minD.getFullYear(), minD.getMonth(), 1);
+  // Шагаем по НОМЕРУ месяца, а не по дате. Прежний цикл двигал объект Date
+  // через `setMonth`, и на длинной истории он накапливал сдвиг переводов часов:
+  // «1 июля 00:00» становилось «1 июля 01:00», сравнение с границей переставало
+  // выполняться, и ровно ПОСЛЕДНИЙ месяц выпадал из ленты. У человека с
+  // историей с 1970-х это 678 шагов — там сдвиг набирается наверняка (issue #65).
+  const monthIndex = (y: number, m: number) => y * 12 + m;
+  const lastIndex = monthIndex(today.getFullYear(), today.getMonth()) - 1;
+  const startIndex = monthIndex(minD.getFullYear(), minD.getMonth());
   const months: { entry: DigestEntry; empty: boolean; endIso: string }[] = [];
-  for (let m = new Date(startMonth); m <= lastFullMonth; m.setMonth(m.getMonth() + 1)) {
-    const start = new Date(m.getFullYear(), m.getMonth(), 1);
-    const end = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+  for (let i = startIndex; i <= lastIndex; i++) {
+    const y = Math.floor(i / 12);
+    const mo = i % 12;
+    const start = new Date(y, mo, 1);
+    const end = new Date(y, mo + 1, 0);
     const endIso = ymdLocal(end);
     months.push({
       entry: monthEntry(byDate, start, end, true),

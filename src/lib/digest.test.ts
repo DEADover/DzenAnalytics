@@ -197,3 +197,21 @@ describe("лента месяцев не обрывается раньше ле�
     ).toEqual([]);
   });
 });
+
+describe("длинная история не съедает последний месяц (#65)", () => {
+  it("история с 1970-х: июль на месте", () => {
+    // 678 месяцев назад — столько шагов делал прежний цикл по датам, накапливая
+    // сдвиг переводов часов, и ровно последний месяц выпадал.
+    const txs = [
+      tx({ date: "1970-03-15", amount: 100, kind: "expense" }),
+      tx({ date: "2026-06-15", amount: 100, kind: "expense" }),
+      tx({ date: "2026-07-15", amount: 100, kind: "expense" }),
+      tx({ date: "2026-08-05", amount: 100, kind: "expense" }),
+    ];
+    const months = buildDigestHistory(txs, new Date(2026, 7, 11))
+      .filter((e) => e.period === "month")
+      .map((e) => e.label);
+    expect(months[0]).toBe("Июль 2026");
+    expect(months.length).toBeGreaterThan(600);
+  });
+});
