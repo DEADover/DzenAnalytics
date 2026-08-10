@@ -56,6 +56,8 @@ export function MonthCashflowChart({
   onDayClick,
   plannedIncome,
   plannedExpense,
+  plannedIncomeByDay,
+  plannedExpenseByDay,
 }: {
   transactions: Transaction[];
   ym: string;
@@ -66,10 +68,20 @@ export function MonthCashflowChart({
    *  plan (Zen-style) instead of extrapolating the current daily pace. */
   plannedIncome?: number;
   plannedExpense?: number;
+  /** Запланированные операции Дзен-мани по дням месяца: прогноз рисует их
+   *  ступенькой в свой день, а не размазывает ровно до конца месяца. */
+  plannedIncomeByDay?: number[];
+  plannedExpenseByDay?: number[];
 }) {
   const cf = useMemo(
-    () => buildMonthCashflow(transactions, ym, Date.now(), { plannedIncome, plannedExpense }),
-    [transactions, ym, plannedIncome, plannedExpense]
+    () =>
+      buildMonthCashflow(transactions, ym, Date.now(), {
+        plannedIncome,
+        plannedExpense,
+        plannedIncomeByDay,
+        plannedExpenseByDay,
+      }),
+    [transactions, ym, plannedIncome, plannedExpense, plannedIncomeByDay, plannedExpenseByDay]
   );
   const hasForecast = cf.todayDay > 0 && cf.todayDay < cf.days;
 

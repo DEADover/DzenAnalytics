@@ -1,15 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  monthDiff,
-  addMonths,
-  plannedFor,
-  monthlyEquivalent,
-  factFor,
-  forecastFor,
-  buildMonthCashflow,
-  migrateLegacyBudgets,
-  type BudgetLine,
-} from "./budgets";
+import { monthDiff, addMonths, plannedFor, monthlyEquivalent, factFor, forecastFor, buildMonthCashflow, migrateLegacyBudgets, type BudgetLine, ownSubsIndex, ownSubsFor } from "./budgets";
 import { tx } from "../test/fixtures";
 
 const line = (over: Partial<BudgetLine> = {}): BudgetLine => ({
@@ -106,15 +96,42 @@ describe("factFor", () => {
     expect(factFor(l, txs, "2026-04")).toBe(0);
   });
 
-  it("per-tag: parent line counts only parent-direct txs, sub line only its sub", () => {
+  it("план на категорию проедается тратами по её под-категориям (#70)", () => {
+    // Человек, который не готов делить «Медицину» на «Лекарства» и «Лечение»,
+    // планирует саму категорию. Раньше такой план видел только операции,
+    // помеченные категорией напрямую, и уезжал в «Без трат в этом месяце».
     const mixed = [
       tx({ category: "Еда", subcategory: null, kind: "expense", amountBase: 1000, date: "2026-03-05" }),
       tx({ category: "Еда", subcategory: "Алкоголь", kind: "expense", amountBase: 400, date: "2026-03-06" }),
     ];
-    // Parent budget (subcategory null) ignores the «Алкоголь» sub-tag spend.
-    expect(factFor(line({ category: "Еда", subcategory: null }), mixed, "2026-03")).toBe(1000);
-    // Sub budget counts only its own tag.
+    expect(factFor(line({ category: "Еда", subcategory: null }), mixed, "2026-03")).toBe(1400);
+    // Строка под-категории по-прежнему считает только свой тег.
     expect(factFor(line({ category: "Еда", subcategory: "Алкоголь" }), mixed, "2026-03")).toBe(400);
+  });
+
+  it("под-категория со своим бюджетом не считается дважды", () => {
+    // Иначе 400 ₽ попали бы и в строку «Алкоголь», и в итог «Еды».
+    const mixed = [
+      tx({ category: "Еда", subcategory: null, kind: "expense", amountBase: 1000, date: "2026-03-05" }),
+      tx({ category: "Еда", subcategory: "Алкоголь", kind: "expense", amountBase: 400, date: "2026-03-06" }),
+    ];
+    const lines = [
+      line({ category: "Еда", subcategory: null }),
+      line({ category: "Еда", subcategory: "Алкоголь" }),
+    ];
+    const idx = ownSubsIndex(lines);
+    expect(factFor(lines[0], mixed, "2026-03", undefined, ownSubsFor(idx, lines[0]))).toBe(1000);
+    expect(factFor(lines[1], mixed, "2026-03", undefined, ownSubsFor(idx, lines[1]))).toBe(400);
+  });
+
+  it("чужая категория в индекс не попадает", () => {
+    const idx = ownSubsIndex([line({ category: "Дом", subcategory: "Ремонт" })]);
+    expect(ownSubsFor(idx, line({ category: "Еда", subcategory: null }))).toBeUndefined();
+  });
+
+  it("доходная и расходная строки не путаются", () => {
+    const idx = ownSubsIndex([line({ category: "Еда", subcategory: "Алкоголь", kind: "income" })]);
+    expect(ownSubsFor(idx, line({ category: "Еда", subcategory: null, kind: "expense" }))).toBeUndefined();
   });
 });
 
@@ -201,5 +218,64 @@ describe("migrateLegacyBudgets", () => {
   it("returns [] for null/empty input", () => {
     expect(migrateLegacyBudgets(null, "2026-06")).toEqual([]);
     expect(migrateLegacyBudgets({}, "2026-06")).toEqual([]);
+  });
+});
+
+describe("запланированные операции на графике месяца (#72)", () => {
+  const day = (d: number, kind: "income" | "expense", amt: number) =>
+    tx({ date: `2026-08-${String(d).padStart(2, "0")}`, kind, amountBase: amt, amount: amt });
+  const now = new Date(2026, 7, 7, 12).getTime(); // 7 августа
+
+  it("зарплата 15-го рисуется ступенькой, а не размазывается", () => {
+    const byDay = new Array(32).fill(0);
+    byDay[15] = 90000;
+    const flow = buildMonthCashflow([day(3, "expense", 1000)], "2026-08", now, {
+      plannedIncomeByDay: byDay,
+    });
+    const at = (d: number) => flow.points.find((p) => p.day === d)!;
+    // До 15-го дохода не обещаем, с 15-го — вся сумма сразу.
+    expect(at(14).incomeF).toBe(0);
+    expect(at(15).incomeF).toBe(90000);
+    expect(at(31).incomeF).toBe(90000);
+  });
+
+  it("операция на прошедший день в прогноз не идёт", () => {
+    // Она либо уже случилась и лежит в факте, либо не случилась — обещать её
+    // задним числом неправильно.
+    const byDay = new Array(32).fill(0);
+    byDay[3] = 50000;
+    const flow = buildMonthCashflow([], "2026-08", now, { plannedIncomeByDay: byDay });
+    expect(flow.points.find((p) => p.day === 31)!.incomeF).toBe(0);
+  });
+
+  it("остаток плана, не покрытый операциями, идёт ровно", () => {
+    const byDay = new Array(32).fill(0);
+    byDay[15] = 40000;
+    const flow = buildMonthCashflow([], "2026-08", now, {
+      plannedIncome: 100000,
+      plannedIncomeByDay: byDay,
+    });
+    const at = (d: number) => flow.points.find((p) => p.day === d)!.incomeF!;
+    expect(at(31)).toBeCloseTo(100000, 6);
+    // Ступенька видна: между 14-м и 15-м скачок больше ровного шага.
+    expect(at(15) - at(14)).toBeGreaterThan(at(14) - at(13));
+  });
+
+  it("операции крупнее плана поднимают цель, а не обрезаются", () => {
+    const byDay = new Array(32).fill(0);
+    byDay[20] = 150000;
+    const flow = buildMonthCashflow([], "2026-08", now, {
+      plannedIncome: 100000,
+      plannedIncomeByDay: byDay,
+    });
+    expect(flow.projIncome).toBe(150000);
+  });
+
+  it("без запланированных операций прогноз прежний", () => {
+    const withNone = buildMonthCashflow([day(3, "income", 30000)], "2026-08", now, {
+      plannedIncome: 90000,
+    });
+    expect(withNone.projIncome).toBe(90000);
+    expect(withNone.points.find((p) => p.day === 31)!.incomeF).toBeCloseTo(90000, 6);
   });
 });

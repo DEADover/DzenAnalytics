@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyDiff, type ZenCache } from "./zenmoneyCache";
+import { applyDiff, CACHE_SCHEMA_VERSION, type ZenCache } from "./zenmoneyCache";
 import type {
   ZenAccount,
   ZenTransaction,
@@ -101,5 +101,53 @@ describe("applyDiff — transaction deletions", () => {
       deletion: [del("t1", "transaction"), del("t3", "transaction")],
     } as ZenDiffResponse;
     expect(applyDiff(prev, diff).transactions.map((t) => t.id)).toEqual(["t2"]);
+  });
+});
+
+describe("операции удалённого плана (#71)", () => {
+  const marker = (id: string, reminder: string, date: string) => ({
+    id, user: 1, changed: 1, date, income: 0, incomeInstrument: 2,
+    outcome: 1000, outcomeInstrument: 2, tag: null, reminder,
+    state: "planned" as const,
+  });
+  const base = (markers: ReturnType<typeof marker>[]) => ({
+    serverTimestamp: 1, instruments: [], accounts: [], tags: [], merchants: [],
+    transactions: [], user: [], budgets: [], companies: [],
+    reminderMarkers: markers, cacheSchemaVersion: CACHE_SCHEMA_VERSION,
+  });
+
+  it("удаление плана уносит его будущие операции", () => {
+    // Дзен-мани сообщает об удалении самого плана, а не каждой его операции.
+    // Раньше операции оставались у нас навсегда и висели «просроченными».
+    const next = applyDiff(base([marker("m1", "r1", "2026-07-01"), marker("m2", "r2", "2026-07-02")]), {
+      serverTimestamp: 2,
+      deletion: [{ id: "r1", object: "reminder", stamp: 2, user: 1 }],
+    } as never);
+    expect(next.reminderMarkers?.map((m) => m.id)).toEqual(["m2"]);
+  });
+
+  it("операции живого плана остаются на месте", () => {
+    const next = applyDiff(base([marker("m1", "r1", "2026-07-01")]), {
+      serverTimestamp: 2,
+    } as never);
+    expect(next.reminderMarkers).toHaveLength(1);
+  });
+
+  it("перезабор заменяет список целиком — так уходят уже осиротевшие", () => {
+    // Ответ сервера — полная правда: чего в нём нет, того нет и в Дзен-мани.
+    const next = applyDiff(
+      base([marker("старый", "r0", "2025-01-01"), marker("m1", "r1", "2026-07-01")]),
+      { serverTimestamp: 2, reminderMarker: [marker("m1", "r1", "2026-07-01")] } as never,
+      { replaceMarkers: true }
+    );
+    expect(next.reminderMarkers?.map((m) => m.id)).toEqual(["m1"]);
+  });
+
+  it("без перезабора ответ сервера — добавка, а не замена", () => {
+    const next = applyDiff(
+      base([marker("m1", "r1", "2026-07-01")]),
+      { serverTimestamp: 2, reminderMarker: [marker("m2", "r2", "2026-07-02")] } as never
+    );
+    expect(next.reminderMarkers?.map((m) => m.id).sort()).toEqual(["m1", "m2"]);
   });
 });

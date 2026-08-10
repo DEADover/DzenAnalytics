@@ -53,7 +53,7 @@ export interface ZenCache {
 }
 
 /** Bump when a new entity type starts being consumed AND needs a back-fill. */
-export const CACHE_SCHEMA_VERSION = 3;
+export const CACHE_SCHEMA_VERSION = 4;
 
 /** Entity types to force-fetch once when upgrading TO that version. */
 const BACKFILL_BY_VERSION: Record<number, string[]> = {
@@ -62,6 +62,10 @@ const BACKFILL_BY_VERSION: Record<number, string[]> = {
   // The bank dictionary is static reference data, so an incremental diff
   // never re-sends it — existing caches have to ask for it explicitly once.
   3: ["company"],
+  // Разовый полный перезабор планов: у тех, кто уже накопил осиротевшие
+  // маркеры (план удалён в Дзен-мани, а его операции остались у нас), список
+  // заменяется ответом сервера целиком — см. `replaceMarkers` в `applyDiff`.
+  4: ["reminderMarker"],
 };
 
 /**
@@ -111,18 +115,34 @@ function mergeBudgets(prev: ZenBudget[], incoming: ZenBudget[] | undefined): Zen
  * we merge it in by id and then filter it out, so the cache holds exactly the
  * currently-planned operations (what budgets need) and nothing else. Deletions
  * ride the generic `deletion` list keyed by object type "reminderMarker".
+ *
+ * УДАЛЁННЫЙ ПЛАН уносит с собой свои операции. Дзен-мани сообщает об удалении
+ * самого плана (`reminder`), а не каждой его будущей операции по отдельности —
+ * и маркеры оставались у нас навсегда. Со стороны это выглядело так: в разделе
+ * «Регулярные платежи» висят просроченные операции, которых нет ни в
+ * приложении, ни на сайте Дзен-мани, и убрать их нечем (issue #71).
+ *
+ * `replace` — ответ сервера считается полным списком, а не добавкой. Так идёт
+ * разовый перезабор при обновлении схемы: он вычищает то, что уже осиротело.
  */
 function mergeReminderMarkers(
   prev: ZenReminderMarker[],
   incoming: ZenReminderMarker[] | undefined,
-  deletions: ZenDeletion[]
+  deletions: ZenDeletion[],
+  replace = false
 ): ZenReminderMarker[] {
   const inc = incoming || [];
+  const deadReminders = new Set(
+    deletions.filter((d) => d.object === "reminder").map((d) => String(d.id))
+  );
+  const alive = (list: ZenReminderMarker[]) =>
+    list.filter((m) => m.state === "planned" && !deadReminders.has(String(m.reminder)));
+  if (replace) return alive(inc);
   const noChange =
-    inc.length === 0 && deletions.every((d) => d.object !== "reminderMarker");
-  if (noChange) return prev.filter((m) => m.state === "planned");
-  const merged = merge(prev, inc, "reminderMarker", deletions);
-  return merged.filter((m) => m.state === "planned");
+    inc.length === 0 &&
+    deletions.every((d) => d.object !== "reminderMarker" && d.object !== "reminder");
+  if (noChange) return alive(prev);
+  return alive(merge(prev, inc, "reminderMarker", deletions));
 }
 
 export async function loadZenCache(): Promise<ZenCache | null> {
@@ -202,7 +222,11 @@ function pruneOrphanTransactions(cache: ZenCache): ZenCache {
  */
 export function applyDiff(
   prev: ZenCache | null,
-  diff: ZenDiffResponse
+  diff: ZenDiffResponse,
+  opts: {
+    /** Ответ сервера по планам — полный список, а не добавка к нашему. */
+    replaceMarkers?: boolean;
+  } = {}
 ): ZenCache {
   if (!prev) {
     // Empty / very-new accounts can come back from the API with whole
@@ -247,7 +271,8 @@ export function applyDiff(
     reminderMarkers: mergeReminderMarkers(
       prev.reminderMarkers || [],
       diff.reminderMarker,
-      deletions
+      deletions,
+      opts.replaceMarkers
     ),
     companies: merge(prev.companies || [], diff.company, "company", deletions),
   });

@@ -664,7 +664,12 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         undefined,
         backfill.length > 0 ? backfill : undefined
       );
-      const nextCache = applyDiff(prevCache, diff);
+      // Перезабор планов — полный список, а не добавка: только так из кэша
+      // уходят операции удалённых планов, о которых Дзен-мани сообщил
+      // удалением самого плана, а не каждой операции (issue #71).
+      const nextCache = applyDiff(prevCache, diff, {
+        replaceMarkers: backfill.includes("reminderMarker"),
+      });
       await saveZenCache(nextCache);
       const mapped = mapZenmoneyDiff(cacheToDiffResponse(nextCache));
       const isFull = fromTs === 0;

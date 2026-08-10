@@ -136,16 +136,28 @@ export function monthlyEquivalent(line: BudgetLine): number {
  *   • expense line → Σ expenseDelta (expense minus refunds) over the tag;
  *   • income line  → Σ amountBase of income transactions over the tag.
  *
- * Per-tag matching: a parent line (`subcategory: null`) counts only
- * transactions tagged directly with the parent (subcategory === null); a
- * sub-line counts only its own sub-tag. This mirrors how a Zenmoney «План»
- * tracks exactly one tag, so план/факт line up with what Дзен shows.
+ * Подсчёт по тегам:
+ *
+ * • строка ПОД-КАТЕГОРИИ считает только свой под-тег;
+ * • строка КАТЕГОРИИ считает всю категорию — и траты по самой категории, и
+ *   траты по её под-категориям.
+ *
+ * Второе правило появилось не сразу. Раньше план на категорию видел только
+ * операции, помеченные ею напрямую, — а человек, который не готов делить
+ * «Медицину» на «Лекарства» и «Лечение», планирует именно категорию. Траты по
+ * под-категории такой план не проедали: «Медицина» уезжала в «Без трат в этом
+ * месяце», хотя деньги потрачены (issue #70).
+ *
+ * `ownSubs` — под-категории, у которых есть СВОЯ строка бюджета. Их суммы
+ * категория не забирает, иначе одни и те же деньги посчитались бы дважды: и в
+ * строке «Лекарства», и в итоге «Медицины».
  */
 export function factFor(
   line: BudgetLine,
   txs: Transaction[],
   ym: string,
-  scope: BudgetScope = ALL_ACCOUNTS
+  scope: BudgetScope = ALL_ACCOUNTS,
+  ownSubs?: ReadonlySet<string>
 ): number {
   const lineSub = line.subcategory ?? null;
   let sum = 0;
@@ -154,11 +166,41 @@ export function factFor(
     for (const hit of budgetHits(t, scope)) {
       if (hit.kind !== line.kind) continue;
       if (hit.category !== line.category) continue;
-      if (hit.subcategory !== lineSub) continue;
+      if (lineSub === null) {
+        // Строка категории: берём и её собственные траты, и под-категории —
+        // кроме тех, что бюджетируются отдельно.
+        if (hit.subcategory !== null && ownSubs?.has(hit.subcategory)) continue;
+      } else if (hit.subcategory !== lineSub) {
+        continue;
+      }
       sum += hit.amount;
     }
   }
   return sum;
+}
+
+/**
+ * Под-категории, у которых есть собственная строка бюджета, по ключу
+ * «тип + категория». Нужна `factFor`, чтобы строка категории не забирала себе
+ * суммы, уже посчитанные отдельной строкой под-категории.
+ */
+export function ownSubsIndex(lines: BudgetLine[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const l of lines) {
+    if (!l.subcategory) continue;
+    const key = `${l.kind}\u0000${l.category}`;
+    if (!out.has(key)) out.set(key, new Set());
+    out.get(key)!.add(l.subcategory);
+  }
+  return out;
+}
+
+/** Под-категории со своим бюджетом для конкретной строки. */
+export function ownSubsFor(
+  index: Map<string, Set<string>>,
+  line: BudgetLine
+): Set<string> | undefined {
+  return index.get(`${line.kind}\u0000${line.category}`);
 }
 
 /**
@@ -239,7 +281,13 @@ export function buildMonthCashflow(
   txs: Transaction[],
   ym: string,
   now = Date.now(),
-  opts?: { plannedIncome?: number; plannedExpense?: number }
+  opts?: {
+    plannedIncome?: number;
+    plannedExpense?: number;
+    /** Запланированные операции по дням месяца, 1-индексированные массивы. */
+    plannedIncomeByDay?: number[];
+    plannedExpenseByDay?: number[];
+  }
 ): MonthCashflow {
   const days = daysInMonth(ym);
   const today = new Date(now);
@@ -285,9 +333,26 @@ export function buildMonthCashflow(
     targetExpense = factExpense;
   }
 
+  // Запланированные операции рисуются СТУПЕНЬКОЙ в свой день, а не размазываются
+  // ровной линией до конца месяца. Зарплата 15-го — это событие с датой, и на
+  // графике должно быть видно, когда именно деньги придут (issue #72). Остаток
+  // плана, не покрытый конкретными операциями, по-прежнему идёт ровно.
+  const futInc = futureByDay(opts?.plannedIncomeByDay, todayDay, days);
+  const futExp = futureByDay(opts?.plannedExpenseByDay, todayDay, days);
+  const futIncTotal = cumulate(futInc, days);
+  const futExpTotal = cumulate(futExp, days);
+  // Цель месяца не меньше, чем факт плюс уже назначенные операции: иначе
+  // ступенька увела бы линию выше собственного прогноза.
+  targetIncome = Math.max(targetIncome, factIncome + futIncTotal);
+  targetExpense = Math.max(targetExpense, factExpense + futExpTotal);
+  const smoothInc = Math.max(0, targetIncome - factIncome - futIncTotal);
+  const smoothExp = Math.max(0, targetExpense - factExpense - futExpTotal);
+
   const points: CashflowPoint[] = [];
   let cumInc = 0;
   let cumExp = 0;
+  let stepInc = 0;
+  let stepExp = 0;
   for (let d = 1; d <= days; d++) {
     cumInc += incDelta[d];
     cumExp += expDelta[d];
@@ -297,15 +362,15 @@ export function buildMonthCashflow(
       // The split day anchors BOTH segments so the dashed forecast joins the solid line.
       points.push({ day: d, income: cumInc, expense: cumExp, incomeF: cumInc, expenseF: cumExp });
     } else {
-      // Linear ramp from today's actual to the month-end target. (With the
-      // pace target this is identical to the old pace formula.)
+      stepInc += futInc[d];
+      stepExp += futExp[d];
       const t = remaining > 0 ? (d - todayDay) / remaining : 0;
       points.push({
         day: d,
         income: null,
         expense: null,
-        incomeF: factIncome + (targetIncome - factIncome) * t,
-        expenseF: factExpense + (targetExpense - factExpense) * t,
+        incomeF: factIncome + stepInc + smoothInc * t,
+        expenseF: factExpense + stepExp + smoothExp * t,
       });
     }
   }
@@ -319,6 +384,24 @@ export function buildMonthCashflow(
     projIncome: targetIncome,
     projExpense: targetExpense,
   };
+}
+
+/**
+ * Суммы запланированных операций по дням — только те, что ещё впереди.
+ *
+ * Операция, назначенная на уже прошедший день, но так и не проведённая, в
+ * прогноз не идёт: она либо случилась и уже лежит в факте, либо не случилась, и
+ * обещать её задним числом неправильно.
+ */
+function futureByDay(
+  byDay: number[] | undefined,
+  todayDay: number,
+  days: number
+): number[] {
+  const out = new Array(days + 1).fill(0);
+  if (!byDay) return out;
+  for (let d = todayDay + 1; d <= days; d++) out[d] = byDay[d] ?? 0;
+  return out;
 }
 
 /** Σ of `arr[1..n]` (the per-day delta arrays are 1-indexed). */
