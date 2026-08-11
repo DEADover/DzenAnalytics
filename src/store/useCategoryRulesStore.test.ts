@@ -581,3 +581,43 @@ describe("переименование контрагента в правила�
     expect(await useCategoryRulesStore.getState().renamePayee("Имя", "Имя")).toBe(0);
   });
 });
+
+describe("reorder — перетаскивание правил", () => {
+  const mk = (id: string) =>
+    ({
+      id,
+      name: id,
+      enabled: true,
+      order: 0,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      match: "all",
+      groups: [{ id: "g" + id, join: "all", conditions: [] }],
+      actions: [],
+    }) as unknown as StoredCategoryRule;
+  const ids = () => useCategoryRulesStore.getState().rules.map((r) => r.id);
+
+  beforeEach(() => {
+    useCategoryRulesStore.setState({ rules: [mk("a"), mk("b"), mk("c"), mk("d")], loaded: true });
+  });
+
+  it("вынимает правило и вставляет на новое место, а не меняет местами", async () => {
+    // Через десяток строк обмен местами дал бы совсем другой порядок.
+    await useCategoryRulesStore.getState().reorder("a", 2);
+    expect(ids()).toEqual(["b", "c", "a", "d"]);
+  });
+
+  it("перетаскивание снизу вверх", async () => {
+    await useCategoryRulesStore.getState().reorder("d", 0);
+    expect(ids()).toEqual(["d", "a", "b", "c"]);
+  });
+
+  it("бросок на своё же место ничего не меняет", async () => {
+    await useCategoryRulesStore.getState().reorder("b", 1);
+    expect(ids()).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("индекс за пределами списка прижимается к краю", async () => {
+    await useCategoryRulesStore.getState().reorder("a", 99);
+    expect(ids()).toEqual(["b", "c", "d", "a"]);
+  });
+});

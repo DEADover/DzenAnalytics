@@ -94,6 +94,8 @@ interface RulesState {
   renamePayee: (from: string, to: string) => Promise<number>;
   remove: (id: string) => Promise<void>;
   move: (id: string, dir: -1 | 1) => Promise<void>;
+  /** Переставить правило на место с индексом `to` (перетаскиванием). */
+  reorder: (id: string, to: number) => Promise<void>;
 }
 
 /** Что угодно похожее на правило: своё, из чужого бэкапа, любого поколения. */
@@ -306,6 +308,21 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     const j = idx + dir;
     if (j < 0 || j >= list.length) return;
     [list[idx], list[j]] = [list[j], list[idx]];
+    await db.saveJSON("categoryRules", list);
+    set({ rules: list });
+  },
+
+  // Перетаскивание вынимает правило и вставляет на новое место, а не меняет
+  // местами с соседом: при переносе через десяток строк обмен местами дал бы
+  // совсем другой порядок.
+  reorder: async (id, to) => {
+    const list = [...get().rules];
+    const from = list.findIndex((r) => r.id === id);
+    if (from < 0) return;
+    const target = Math.max(0, Math.min(list.length - 1, to));
+    if (from === target) return;
+    const [moved] = list.splice(from, 1);
+    list.splice(target, 0, moved);
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
   },

@@ -8,6 +8,7 @@ import {
   ChevronUp,
   ChevronDown,
   HelpCircle,
+  GripVertical,
   Pencil,
   ListChecks,
 } from "lucide-react";
@@ -133,6 +134,7 @@ export function RulesPage() {
   const update = useCategoryRulesStore((s) => s.update);
   const remove = useCategoryRulesStore((s) => s.remove);
   const move = useCategoryRulesStore((s) => s.move);
+  const reorder = useCategoryRulesStore((s) => s.reorder);
   const hydrate = useCategoryRulesStore((s) => s.hydrate);
   const loaded = useCategoryRulesStore((s) => s.loaded);
 
@@ -163,6 +165,9 @@ export function RulesPage() {
    * Так новое правило само попадает в прогон, а не молча выпадает из него.
    */
   const [picked, setPicked] = useState<Set<string> | null>(null);
+  /** Перетаскиваемое правило и строка, над которой оно сейчас висит. */
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
   const enabledIds = useMemo(
     () => rules.filter((r) => r.enabled).map((r) => r.id),
     [rules]
@@ -625,11 +630,38 @@ export function RulesPage() {
                   return (
                     <tr
                       key={rule.id}
+                      draggable
+                      onDragStart={(e) => {
+                        setDragId(rule.id);
+                        e.dataTransfer.effectAllowed = "move";
+                        // Без этого Firefox не начинает перетаскивание вовсе.
+                        e.dataTransfer.setData("text/plain", rule.id);
+                      }}
+                      onDragOver={(e) => {
+                        if (!dragId || dragId === rule.id) return;
+                        e.preventDefault(); // разрешаем бросить сюда
+                        e.dataTransfer.dropEffect = "move";
+                        setDragOver(rule.id);
+                      }}
+                      onDragLeave={() => setDragOver((v) => (v === rule.id ? null : v))}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const from = dragId;
+                        setDragId(null);
+                        setDragOver(null);
+                        if (from && from !== rule.id) void reorder(from, idx).then(reapplyRules);
+                      }}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setDragOver(null);
+                      }}
                       onDoubleClick={() => setEditing(rule)}
                       className={clsx(
                         "align-middle cursor-pointer group hover:bg-panel2/50",
                         checked && "bg-accent/5",
-                        !rule.enabled && "opacity-60"
+                        !rule.enabled && "opacity-60",
+                        dragId === rule.id && "opacity-40",
+                        dragOver === rule.id && "outline outline-2 -outline-offset-2 outline-accent"
                       )}
                     >
                       <td className="table-td text-center">
@@ -652,6 +684,13 @@ export function RulesPage() {
                       </td>
                       <td className="table-td">
                         <div className="flex items-center gap-1">
+                          {/* Ручка — подсказка, что строку можно тащить. Тянется
+                              вся строка, но без видимого захвата об этом никто
+                              не догадается. */}
+                          <GripVertical
+                            className="w-3.5 h-3.5 text-muted/50 group-hover:text-muted cursor-grab shrink-0"
+                            aria-hidden
+                          />
                           <span className="tabular-nums text-muted w-5">{idx + 1}</span>
                           <span className="flex flex-col">
                             <button
