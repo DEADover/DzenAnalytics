@@ -973,3 +973,31 @@ describe("дубли: разные покупки в одном магазине
     expect(groups).toHaveLength(0);
   });
 });
+
+describe("дубли: подкатегории", () => {
+  const buy = (p: Parameters<typeof tx>[0]) =>
+    tx({ date: "2026-06-30", kind: "expense", amount: 500, amountBase: 500,
+         payee: "Фуд Сити", account: "Кошелек", ...p });
+
+  it("соседние подкатегории одной категории — не дубль", () => {
+    expect(detectDuplicates([
+      buy({ categoryFull: "Продукты / Орехи, семечки" }),
+      buy({ categoryFull: "Продукты / Овощи, фрукты" }),
+    ])).toHaveLength(0);
+  });
+
+  it("категория и её подкатегория не спорят — это уточнение", () => {
+    // Копию могли уточнить руками до подкатегории, а вторую оставить как есть.
+    expect(detectDuplicates([
+      buy({ categoryFull: "Продукты" }),
+      buy({ categoryFull: "Продукты / Орехи, семечки" }),
+    ])).toHaveLength(1);
+  });
+
+  it("одинаковая подкатегория — дубль", () => {
+    expect(detectDuplicates([
+      buy({ categoryFull: "Продукты / Орехи, семечки" }),
+      buy({ categoryFull: "Продукты / Орехи, семечки" }),
+    ])).toHaveLength(1);
+  });
+});

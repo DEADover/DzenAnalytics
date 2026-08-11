@@ -737,7 +737,19 @@ function contradicts(a: Transaction, b: Transaction): boolean {
     const r = (y || "").trim().toLowerCase();
     return l !== "" && r !== "" && l !== r;
   };
-  return differ(a.comment, b.comment) || differ(a.categoryFull, b.categoryFull);
+  // У категорий сравниваем ПОЛНЫЙ путь «Категория / Подкатегория», поэтому
+  // «Орехи» и «Овощи» внутри «Продуктов» — уже противоречие. А вот «Продукты» и
+  // «Продукты / Орехи» не спорят: вторая просто уточняет первую, ровно как
+  // пустой комментарий не спорит с заполненным.
+  const refines = (x?: string | null, y?: string | null) => {
+    const l = (x || "").trim().toLowerCase();
+    const r = (y || "").trim().toLowerCase();
+    return l !== "" && r !== "" && (r.startsWith(l + " / ") || l.startsWith(r + " / "));
+  };
+  return (
+    differ(a.comment, b.comment) ||
+    (differ(a.categoryFull, b.categoryFull) && !refines(a.categoryFull, b.categoryFull))
+  );
 }
 
 export function detectDuplicates(
