@@ -638,7 +638,7 @@ export function RulesPage() {
                         e.dataTransfer.setData("text/plain", rule.id);
                       }}
                       onDragOver={(e) => {
-                        if (!dragId || dragId === rule.id) return;
+                        if (dragId === rule.id) return;
                         e.preventDefault(); // разрешаем бросить сюда
                         e.dataTransfer.dropEffect = "move";
                         setDragOver(rule.id);
@@ -646,7 +646,10 @@ export function RulesPage() {
                       onDragLeave={() => setDragOver((v) => (v === rule.id ? null : v))}
                       onDrop={(e) => {
                         e.preventDefault();
-                        const from = dragId;
+                        // Id берём из самого события, а не из состояния: между
+                        // началом перетаскивания и броском состояние может ещё
+                        // не обновиться, и бросок молча ничего бы не сделал.
+                        const from = e.dataTransfer.getData("text/plain") || dragId;
                         setDragId(null);
                         setDragOver(null);
                         if (from && from !== rule.id) void reorder(from, idx).then(reapplyRules);
