@@ -723,6 +723,23 @@ export interface DuplicateGroup {
  * умолчанию; ползунок на странице по-прежнему расширяет окно, когда банк
  * проводит копию следующим днём.
  */
+/**
+ * Различают ли операции комментарий или категория.
+ *
+ * Задвоение приходит копией: те же поля, часто пустой комментарий у одной из
+ * них. А две РАЗНЫЕ покупки в одном магазине на одну сумму различаются именно
+ * этим. Противоречием считаем только когда ОБА значения заполнены и различны:
+ * пустое поле у одной из операций копию не исключает.
+ */
+function contradicts(a: Transaction, b: Transaction): boolean {
+  const differ = (x?: string | null, y?: string | null) => {
+    const l = (x || "").trim().toLowerCase();
+    const r = (y || "").trim().toLowerCase();
+    return l !== "" && r !== "" && l !== r;
+  };
+  return differ(a.comment, b.comment) || differ(a.categoryFull, b.categoryFull);
+}
+
 export function detectDuplicates(
   txs: Transaction[],
   windowDays = 0,
@@ -751,7 +768,13 @@ export function detectDuplicates(
       const days =
         (+new Date(list[i].date) - +new Date(cluster[cluster.length - 1].date)) /
         86400000;
-      if (days <= windowDays) {
+      // Комментарий и категория в примету не входят — иначе копия, у которой
+      // импорт не проставил комментарий, перестала бы считаться копией. Но
+      // если оба значения заполнены и РАЗНЫЕ, это разные покупки: «Кешью по
+      // 120» и «Томаты по 200» в одном магазине на одну сумму дублями не
+      // являются.
+      const sameThing = !cluster.some((c) => contradicts(c, list[i]));
+      if (days <= windowDays && sameThing) {
         cluster.push(list[i]);
       } else {
         if (cluster.length >= 2) {

@@ -933,3 +933,43 @@ describe("stackedBalanceByAccount — issue #59", () => {
     expect(last(r)["Карта"]).toBe(9000);
   });
 });
+
+describe("дубли: разные покупки в одном магазине", () => {
+  const buy = (p: Parameters<typeof tx>[0]) =>
+    tx({ date: "2026-06-30", kind: "expense", amount: 500, amountBase: 500,
+         payee: "Фуд Сити", account: "Кошелек", ...p });
+
+  it("разные комментарий и категория — не дубль", () => {
+    // Скриншот из жизни: «Кешью по 120» и «Томаты по 200» на 500 ₽ в один день.
+    const groups = detectDuplicates([
+      buy({ comment: "Кешью по 120", categoryFull: "Продукты / Орехи, семечки" }),
+      buy({ comment: "Томаты по 200", categoryFull: "Продукты / Овощи, фрукты" }),
+    ]);
+    expect(groups).toHaveLength(0);
+  });
+
+  it("настоящая копия ловится, даже если у одной нет комментария", () => {
+    // Импорт часто приносит копию без комментария — она всё ещё копия.
+    const groups = detectDuplicates([
+      buy({ comment: "Кешью по 120", categoryFull: "Продукты / Орехи, семечки" }),
+      buy({ comment: "", categoryFull: "Продукты / Орехи, семечки" }),
+    ]);
+    expect(groups).toHaveLength(1);
+  });
+
+  it("одинаковые комментарии — по-прежнему дубль", () => {
+    const groups = detectDuplicates([
+      buy({ comment: "Кешью по 120" }),
+      buy({ comment: "Кешью по 120" }),
+    ]);
+    expect(groups).toHaveLength(1);
+  });
+
+  it("различие только в категории тоже разводит операции", () => {
+    const groups = detectDuplicates([
+      buy({ categoryFull: "Продукты / Орехи, семечки" }),
+      buy({ categoryFull: "Продукты / Овощи, фрукты" }),
+    ]);
+    expect(groups).toHaveLength(0);
+  });
+});
