@@ -455,7 +455,15 @@ export const useDataStore = create<DataState>((set, get) => ({
     const manualAliases = await loadManualAliasesFromStore();
     // Синхронизация Дзен-мани приходит сюда ПОЛНЫМ набором, поэтому «новые»
     // определяем по прошлому составу, а не по размеру входящего.
-    const previousIds = new Set(get().transactionsRaw.map((t) => t.id));
+    // Прошлый состав берём с диска, если в памяти его ещё нет. Синхронизация
+    // может прийти раньше, чем стор успел подняться (авто-синк на открытии), —
+    // тогда «прошлого» будто бы нет вовсе, все операции считаются новыми, и
+    // автоприменение молча пропускается: оно намеренно не трогает первый
+    // импорт. Отсюда и жалобы «автоприменение не работает».
+    const inMemory = get().transactionsRaw;
+    const previousIds = new Set(
+      (inMemory.length > 0 ? inMemory : await db.loadTransactions()).map((t) => t.id)
+    );
     let raw = recalcBase(txs, rates, get().histDayRates);
     raw = applyPayeeGrouping(raw, payeeGroupingEnabled, manualAliases);
     raw = restoreRuleCategories(raw);
