@@ -273,7 +273,7 @@ export function ReportPage() {
         <div
           className={
             stickyHeader
-              ? "card overflow-auto max-h-[88vh]"
+              ? "card overflow-auto max-h-[calc(100vh-6rem)] sticky top-[73px]"
               : "card overflow-x-auto"
           }
         >
@@ -309,7 +309,7 @@ export function ReportPage() {
                   )}
                 </Th>
                 {report.columns.map((c) => (
-                  <Th key={c.key} sticky align="right">
+                  <Th key={c.key} sticky={stickyHeader} align="right">
                     {c.label}
                   </Th>
                 ))}
