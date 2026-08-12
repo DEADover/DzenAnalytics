@@ -418,10 +418,9 @@ export function BudgetsPage() {
     }
   }
 
-  /** Под-категории со своим бюджетом — по ним строка категории не задваивает. */
-  const ownSubs = useMemo(() => ownSubsIndex(lines), [lines]);
-
   const rows = useMemo<Row[]>(() => {
+    // Первый проход — только планы: от фактов они не зависят, а факт категории
+    // зависит от того, какие под-строки в итоге окажутся на экране (issue #70).
     const inWindow = lines
       // A line belongs to a month only while it's inside its validity window
       // [startMonth, endMonth]. A budget that starts in June must NOT appear
@@ -429,11 +428,8 @@ export function BudgetsPage() {
       .filter(
         (line) => ym >= line.startMonth && (!line.endMonth || ym <= line.endMonth)
       )
-      .map((line): Row => {
+      .map((line) => {
         const planned = plannedFor(line, ym);
-        // Строка категории забирает и траты по её под-категориям — кроме тех, у
-        // которых есть свой бюджет (issue #70).
-        const fact = factFor(line, transactions, ym, scope, ownSubsFor(ownSubs, line));
         // Income with no manual plan → show a forecast «≈ из X». In API mode use
         // ZENMONEY's own auto-forecast (so numbers match Дзен, and tags Дзен
         // doesn't forecast get no phantom «≈»); in CSV mode fall back to a local
@@ -446,16 +442,25 @@ export function BudgetsPage() {
               zenPlanKey(line.kind, line.category, line.subcategory ?? null, ym)
             ) ?? 0; // API: trust Дзен (missing = no forecast)
           else fc = forecastFor(line, transactions, ym, 6, scope); // CSV: median estimate
-          if (fc > 0) return { line, planned: fc, fact, forecast: true };
+          if (fc > 0) return { line, planned: fc, forecast: true };
         }
-        return { line, planned, fact, forecast: false };
+        return { line, planned, forecast: false };
       });
     // Show only TAGS actually budgeted this month (план > 0). A sub-tag with no
     // own plan is NOT rolled into its parent (Zenmoney puts such spending under
     // «Вне плана»), so a parent never overstates % when one child is budgeted and
     // another is only auto-forecast (e.g. Банки → Кэшбек budgeted, Проценты only
     // forecast). Unbudgeted tags surface under «Без бюджета».
-    const budgeted = inWindow.filter((r) => r.planned > 0);
+    const shown = inWindow.filter((r) => r.planned > 0);
+    // Второй проход — факты. Строка категории забирает и траты по своим
+    // под-категориям, кроме тех, что показаны отдельной строкой прямо здесь.
+    const ownSubs = ownSubsIndex(shown);
+    const budgeted = shown.map(
+      (r): Row => ({
+        ...r,
+        fact: factFor(r.line, transactions, ym, scope, ownSubsFor(ownSubs, r.line)),
+      })
+    );
     // A category counts as «with operations» when its rollup fact (own + sub-tags)
     // is non-zero. Categories without any operations this month sink to the very
     // bottom of the list; the rest keep the newest-first order.

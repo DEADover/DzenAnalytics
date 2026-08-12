@@ -119,18 +119,37 @@ describe("factFor", () => {
       line({ category: "Еда", subcategory: null }),
       line({ category: "Еда", subcategory: "Алкоголь" }),
     ];
-    const idx = ownSubsIndex(lines);
+    const idx = ownSubsIndex(lines.map((l) => ({ line: l, planned: 5000 })));
     expect(factFor(lines[0], mixed, "2026-03", undefined, ownSubsFor(idx, lines[0]))).toBe(1000);
     expect(factFor(lines[1], mixed, "2026-03", undefined, ownSubsFor(idx, lines[1]))).toBe(400);
   });
 
+  it("под-категория с нулевым планом траты у категории не забирает (#70)", () => {
+    // Строка с планом 0 на экране не показывается. Если категория всё равно
+    // отдаёт ей траты, деньги исчезают отовсюду: под-строки нет, а «Еда»
+    // уезжает в «Без трат в этом месяце» с фактом 0.
+    const mixed = [
+      tx({ category: "Еда", subcategory: "Алкоголь", kind: "expense", amountBase: 400, date: "2026-03-06" }),
+    ];
+    const parent = line({ category: "Еда", subcategory: null });
+    const idx = ownSubsIndex([
+      { line: parent, planned: 5000 },
+      { line: line({ category: "Еда", subcategory: "Алкоголь" }), planned: 0 },
+    ]);
+    expect(factFor(parent, mixed, "2026-03", undefined, ownSubsFor(idx, parent))).toBe(400);
+  });
+
   it("чужая категория в индекс не попадает", () => {
-    const idx = ownSubsIndex([line({ category: "Дом", subcategory: "Ремонт" })]);
+    const idx = ownSubsIndex([
+      { line: line({ category: "Дом", subcategory: "Ремонт" }), planned: 5000 },
+    ]);
     expect(ownSubsFor(idx, line({ category: "Еда", subcategory: null }))).toBeUndefined();
   });
 
   it("доходная и расходная строки не путаются", () => {
-    const idx = ownSubsIndex([line({ category: "Еда", subcategory: "Алкоголь", kind: "income" })]);
+    const idx = ownSubsIndex([
+      { line: line({ category: "Еда", subcategory: "Алкоголь", kind: "income" }), planned: 5000 },
+    ]);
     expect(ownSubsFor(idx, line({ category: "Еда", subcategory: null, kind: "expense" }))).toBeUndefined();
   });
 });

@@ -180,14 +180,24 @@ export function factFor(
 }
 
 /**
- * Под-категории, у которых есть собственная строка бюджета, по ключу
+ * Под-категории, чьи траты показаны ОТДЕЛЬНОЙ строкой, по ключу
  * «тип + категория». Нужна `factFor`, чтобы строка категории не забирала себе
- * суммы, уже посчитанные отдельной строкой под-категории.
+ * суммы, уже посчитанные строкой под-категории.
+ *
+ * На вход идут строки ВМЕСТЕ с планом на нужный месяц, и учитываются только
+ * те, у кого план больше нуля. Признака «строка существует» тут мало: строка с
+ * планом 0 на экране не показывается вовсе, и если категория всё равно отдаёт
+ * ей свои траты, деньги пропадают с экрана целиком — под-строки нет, а из
+ * категории они вычтены (issue #70). Нулевые строки встречаются пачками:
+ * бюджет завели и обнулили, а строка осталась.
  */
-export function ownSubsIndex(lines: BudgetLine[]): Map<string, Set<string>> {
+export function ownSubsIndex(
+  rows: readonly { line: BudgetLine; planned: number }[]
+): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();
-  for (const l of lines) {
+  for (const { line: l, planned } of rows) {
     if (!l.subcategory) continue;
+    if (planned <= 0) continue;
     const key = `${l.kind}\u0000${l.category}`;
     if (!out.has(key)) out.set(key, new Set());
     out.get(key)!.add(l.subcategory);
