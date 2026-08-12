@@ -102,13 +102,33 @@ export function ReportPage() {
       .querySelectorAll("thead th")
       .forEach((th) => next.push(th.getBoundingClientRect().width));
     const w = table.getBoundingClientRect().width;
-    // Оба состояния меняем ТОЛЬКО при настоящем расхождении: этот замер бежит
+    // Высота двойника меряется ЗДЕСЬ ЖЕ, а не отдельным эффектом при монтаже:
+    // карточки может не быть на первом кадре (пустой отбор, данные ещё не
+    // приехали), и тогда одноразовый замер не случится никогда — двойник
+    // останется без отрицательного отступа, а шапка нарисуется дважды.
+    const clone = cloneRef.current;
+    if (clone) {
+      const ch = clone.getBoundingClientRect().height;
+      setCloneHeight((prev) => (Math.abs(prev - ch) < 0.5 ? prev : ch));
+    }
+    // Состояния меняем ТОЛЬКО при настоящем расхождении: этот замер бежит
     // после каждого рендера, и безусловный `set` крутил бы рендеры вечно.
-    setColWidths((prev) =>
-      prev.length === next.length && prev.every((v, i) => Math.abs(v - next[i]) < 0.5)
-        ? prev
-        : next
-    );
+    //
+    // Сравниваем по НАКОПЛЕННОМУ сдвигу, а не по каждому столбцу отдельно:
+    // при полусотне столбцов систематическая разница «чуть меньше допуска»
+    // складывается, и к правому краю двойник уезжает на десяток пикселей,
+    // хотя поштучно всё «в пределах».
+    setColWidths((prev) => {
+      if (prev.length !== next.length) return next;
+      let a = 0;
+      let b = 0;
+      for (let i = 0; i < next.length; i++) {
+        a += prev[i];
+        b += next[i];
+        if (Math.abs(a - b) >= 0.5) return next;
+      }
+      return prev;
+    });
     setTableWidth((prev) => (Math.abs(prev - w) < 0.5 ? prev : w));
     // Ширины могли измениться так, что браузер прижал прокрутку двойника к
     // новому пределу — тогда он разъезжается с таблицей до следующего движения
@@ -142,28 +162,19 @@ export function ReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Высота двойника нужна, чтобы подтянуть таблицу под него отрицательным
-  // отступом: иначе двойник занял бы в потоке лишнюю строку и над таблицей
-  // появилась бы пустая полоса.
-  useLayoutEffect(() => {
-    const el = cloneRef.current;
-    if (!el) return;
-    const measure = () => setCloneHeight(el.getBoundingClientRect().height);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
   // Горизонтальная прокрутка: двойник повторяет её за настоящей таблицей.
   // Обёртка двойника — тоже контейнер прокрутки (`overflow-x: hidden`), и
   // благодаря этому закреплённый первый столбец внутри неё работает сам,
   // без ручных сдвигов.
-  const syncScroll = () => {
-    const from = scrollerRef.current;
-    const to = cloneClipRef.current;
+  //
+  // Синхронизация двусторонняя, но эха не будет: присваивание `scrollLeft` само
+  // поднимает `scroll` у получателя, а сравнение ДО записи обрывает цепочку —
+  // встречный обработчик увидит равные значения и ничего не сделает.
+  const copyScroll = (from: HTMLElement | null, to: HTMLElement | null) => {
     if (from && to && to.scrollLeft !== from.scrollLeft) to.scrollLeft = from.scrollLeft;
   };
+  const syncScroll = () => copyScroll(scrollerRef.current, cloneClipRef.current);
+  const syncBack = () => copyScroll(cloneClipRef.current, scrollerRef.current);
   useLayoutEffect(syncScroll, [colWidths, tableWidth]);
 
   /**
@@ -188,6 +199,9 @@ export function ReportPage() {
             aria-label={allCollapsed ? "Развернуть все" : "Свернуть все"}
             aria-expanded={!allCollapsed}
             tabIndex={forClone ? -1 : undefined}
+            // Мышь фокусирует кнопку даже с `tabIndex={-1}`, а фокус внутри
+            // `aria-hidden`-поддерева — это то, чего быть не должно.
+            onMouseDown={forClone ? (e) => e.preventDefault() : undefined}
           >
             {allCollapsed ? (
               <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden />
@@ -407,18 +421,32 @@ export function ReportPage() {
           За выбранный период нет доходов и расходов — измените отбор выше.
         </div>
       ) : (
-        <div className="card">
+        // `overflow-clip`, а НЕ `overflow-hidden`: скруглённые углы карточки
+        // надо вернуть — непрозрачные ячейки шапки закрашивают их, — но
+        // `hidden` сделал бы карточку контейнером прокрутки и убил бы
+        // закрепление. `clip` контейнером прокрутки не становится.
+        <div className="card overflow-clip">
           {/* Двойник строки заголовков: липнет под шапку приложения, пока
               таблица на экране. Лежит ПЕРЕД таблицей и вынут из потока
               отрицательным отступом ниже, поэтому пока страница не прокручена
-              он стоит ровно на месте настоящей шапки. */}
+              он стоит ровно на месте настоящей шапки.
+              `select-none` — чтобы выделение таблицы не забирало заголовки
+              дважды: копия в буфере давала лишнюю строку «Категория». */}
           <div
             ref={cloneRef}
-            className="sticky z-20"
+            className="sticky z-20 select-none"
             style={{ top: "var(--app-header-h)" }}
             aria-hidden
           >
-            <div ref={cloneClipRef} className="overflow-x-hidden">
+            {/* Прокрутка настоящая, а не только программная: иначе жест вбок
+                по закреплённой полосе на телефоне не двигал бы ничего, а
+                браузер мог принять его за «назад». Полосу прячем — она уже
+                есть у таблицы. */}
+            <div
+              ref={cloneClipRef}
+              className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              onScroll={syncBack}
+            >
               <table
                 className="text-sm border-separate border-spacing-0"
                 style={{
@@ -543,9 +571,15 @@ function Th({
       } ${
         // Вертикально заголовки не липнут: этим занят отдельный слой-двойник
         // над таблицей. `sticky` здесь — только ради горизонтали, без него
-        // `left-0` ничего не держит. Слои НИЖЕ шапки приложения (z-30), иначе
-        // прилипшая ячейка налезает на неё при прокрутке.
-        first ? "sticky left-0 z-[25] min-w-[15rem]" : ""
+        // `left-0` ничего не держит.
+        //
+        // Слой НИЖЕ двойника (z-20): пока настоящая строка заголовков ещё не
+        // ушла за линию закрепления, они перекрываются на пару десятков
+        // пикселей, и с бо́льшим слоем настоящая ячейка проступала поверх
+        // двойника — заголовок первого столбца двоился при прокрутке. Выше
+        // ячеек тела (z-10), чтобы столбец категорий закрывал их при
+        // прокрутке вбок.
+        first ? "sticky left-0 z-[15] min-w-[15rem]" : ""
       }`}
     >
       {children}
