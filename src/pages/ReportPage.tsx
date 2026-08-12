@@ -24,7 +24,6 @@ import {
   type XlsxNumberStyle,
 } from "../lib/categoryReportXlsx";
 import { ReportExportModal } from "../components/ReportExportModal";
-import { useDisplayStore } from "../store/useDisplayStore";
 import { InfoPopover } from "../components/InfoPopover";
 import { formatMoney } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
@@ -33,21 +32,6 @@ import { PageHeader } from "../components/PageHeader";
 import type { Transaction } from "../types";
 
 const SCALES: ReportScale[] = ["month", "quarter", "year", "total"];
-
-/** Ниже этого таблица с закреплённой шапкой превращается в щёлку — на совсем
- *  низком окне лучше отдать место таблице и дать странице прокрутиться. */
-const MIN_TABLE_HEIGHT = 280;
-
-/**
- * Что оставляем под таблицей: подвал с версией плюс воздух.
- *
- * Числом, а не замером: подвал живёт в общей обёртке приложения и прижат к низу
- * окна флексом, так что «сколько там контента ниже» из разметки честно не
- * достаётся. Промах в пару десятков пикселей безопасен — страница прокрутится
- * на эти пиксели, а шапка таблицы всё равно останется на виду: чтобы она ушла
- * под шапку приложения, прокрутить надо на всю высоту панели отборов.
- */
-const BOTTOM_RESERVE = 88;
 
 /**
  * «Доходы и расходы» — сводная таблица категорий по периодам (issue #54).
@@ -58,8 +42,6 @@ const BOTTOM_RESERVE = 88;
  * такую сводку приходилось собирать руками в Гугл-таблице.
  */
 export function ReportPage() {
-  const stickyHeader = useDisplayStore((s) => s.stickyReportHeader);
-  const setStickyReportHeader = useDisplayStore((s) => s.setStickyReportHeader);
   const all = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
   const filters = useFiltersStore();
@@ -71,48 +53,161 @@ export function ReportPage() {
   const [exportOpen, setExportOpen] = useState(false);
 
   /**
-   * Высота таблицы в режиме с закреплённой шапкой.
+   * Закреплённая шапка при таблице во весь рост.
    *
-   * Считается по месту, а не задаётся в CSS. Закреплённая шапка держится за
-   * верх СВОЕГО контейнера прокрутки — значит контейнер обязан помещаться в
-   * экран целиком, иначе страница начинает прокручиваться сама и утаскивает
-   * шапку наверх, под шапку приложения. Ровно это и было: карточку сделали
-   * `sticky`, но липкий элемент может «плавать» только в пределах родителя, и
-   * на последних десятках пикселей прокрутки он всё равно уезжал, унося
-   * заголовки столбцов с собой.
+   * Эти два свойства спорят друг с другом на уровне CSS. Заголовкам нужна
+   * `position: sticky`, а она отсчитывается от БЛИЖАЙШЕГО прокручиваемого
+   * предка — им оказывается обёртка с `overflow-x: auto`, без которой не
+   * прожить: столбцов бывает под полсотни. По вертикали эта обёртка не
+   * прокручивается, поэтому прилипать заголовкам не к чему. Обойти сочетанием
+   * `overflow-x: auto` + `overflow-y: clip` нельзя: по спецификации `clip`
+   * в такой паре вычисляется в `hidden`, обёртка всё равно остаётся
+   * контейнером прокрутки (проверено — заголовки уезжают).
    *
-   * Верх карточки зависит от панели отборов сверху — а она переносится по
-   * строкам на узком экране, так что фиксированный `calc(100vh − …)` тут врёт.
-   * Меряем сами: сколько осталось от экрана под карточку, за вычетом всего,
-   * что идёт после неё (подвал).
+   * Поэтому шапку рисуем ДВАЖДЫ. Настоящая живёт в таблице и задаёт ширины
+   * столбцов, а поверх лежит её двойник в липкой обёртке. Обёртка — прямой
+   * потомок карточки, её ближайший прокручиваемый предок — сама страница,
+   * так что она честно липнет под шапку приложения и отлипает ровно тогда,
+   * когда таблица кончилась.
+   *
+   * Двойник совпадает с оригиналом до пикселя: ширины столбцов снимаются с
+   * настоящей таблицы и навязываются ему через `colgroup` + `table-layout:
+   * fixed`, а горизонтальная прокрутка повторяется присвоением `scrollLeft`.
+   * Пока страница не прокручена, двойник стоит ровно на месте оригинала и
+   * неотличим от него.
    */
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [tableMaxH, setTableMaxH] = useState<number | null>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const cloneClipRef = useRef<HTMLDivElement>(null);
+  const cloneRef = useRef<HTMLDivElement>(null);
+  const [colWidths, setColWidths] = useState<number[]>([]);
+  const [tableWidth, setTableWidth] = useState(0);
+  const [cloneHeight, setCloneHeight] = useState(0);
+
+  // Ширины столбцов и общая ширина таблицы. Меняются от всего: свернули
+  // категорию, переключили разбивку, потянули окно, подгрузились данные —
+  // поэтому следим за элементами, а не перечисляем поводы вручную.
+  //
+  // Следим ЗА ДВУМЯ: за таблицей и за её контейнером. Одной таблицы мало —
+  // когда открывается разбор операций, он блокирует прокрутку страницы, полоса
+  // прокрутки исчезает, контейнер становится шире, и столбцы перераспределяются
+  // на пару пикселей каждый. По закрытии всё возвращается, но наблюдатель за
+  // таблицей об этом уже не сообщал, и двойник оставался с прежними ширинами —
+  // к концу таблицы набегало ~36px расхождения.
+  const measure = () => {
+    const table = tableRef.current;
+    if (!table) return;
+    const next: number[] = [];
+    table
+      .querySelectorAll("thead th")
+      .forEach((th) => next.push(th.getBoundingClientRect().width));
+    const w = table.getBoundingClientRect().width;
+    // Оба состояния меняем ТОЛЬКО при настоящем расхождении: этот замер бежит
+    // после каждого рендера, и безусловный `set` крутил бы рендеры вечно.
+    setColWidths((prev) =>
+      prev.length === next.length && prev.every((v, i) => Math.abs(v - next[i]) < 0.5)
+        ? prev
+        : next
+    );
+    setTableWidth((prev) => (Math.abs(prev - w) < 0.5 ? prev : w));
+    // Ширины могли измениться так, что браузер прижал прокрутку двойника к
+    // новому пределу — тогда он разъезжается с таблицей до следующего движения
+    // мыши. Возвращаем на место сразу.
+    syncScroll();
+  };
+
+  // Меряем ПОСЛЕ КАЖДОГО РЕНДЕРА, без списка зависимостей. Наблюдателя за
+  // таблицей мало: `ResizeObserver` на <table> о росте таблицы после первого
+  // кадра не сообщал, из-за чего двойник навсегда оставался с шириной первого
+  // замера и к правому краю набегало ~36px расхождения. Рендер же случается на
+  // каждый повод, который вообще способен сдвинуть столбцы: свернули категорию,
+  // сменили разбивку, приехали данные, поменяли отбор.
+  useLayoutEffect(measure);
+
+  // …а наблюдатель и `resize` остаются для того, что рендера не вызывает:
+  // потянули окно, поменялся масштаб, доехали шрифты.
   useLayoutEffect(() => {
-    if (!stickyHeader) {
-      setTableMaxH(null);
-      return;
-    }
-    const el = cardRef.current;
-    if (!el) return;
-    const measure = () => {
-      const docTop = el.getBoundingClientRect().top + window.scrollY;
-      const h = window.innerHeight - docTop - BOTTOM_RESERVE;
-      // Замер не зациклится: верх карточки от её собственной высоты не зависит,
-      // так что следующий проход даст то же число, а React на нём остановится.
-      setTableMaxH(Math.max(MIN_TABLE_HEIGHT, Math.round(h)));
-    };
-    measure();
-    // Панель отборов может перевёрстываться (перенос строк, смена разбивки) —
-    // тогда верх карточки уезжает и высоту надо пересчитать.
+    const table = tableRef.current;
+    const scroller = scrollerRef.current;
+    if (!table || !scroller) return;
     const ro = new ResizeObserver(measure);
-    if (el.parentElement) ro.observe(el.parentElement);
+    ro.observe(table);
+    ro.observe(scroller);
     window.addEventListener("resize", measure);
+    void document.fonts?.ready.then(measure);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [stickyHeader]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Высота двойника нужна, чтобы подтянуть таблицу под него отрицательным
+  // отступом: иначе двойник занял бы в потоке лишнюю строку и над таблицей
+  // появилась бы пустая полоса.
+  useLayoutEffect(() => {
+    const el = cloneRef.current;
+    if (!el) return;
+    const measure = () => setCloneHeight(el.getBoundingClientRect().height);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Горизонтальная прокрутка: двойник повторяет её за настоящей таблицей.
+  // Обёртка двойника — тоже контейнер прокрутки (`overflow-x: hidden`), и
+  // благодаря этому закреплённый первый столбец внутри неё работает сам,
+  // без ручных сдвигов.
+  const syncScroll = () => {
+    const from = scrollerRef.current;
+    const to = cloneClipRef.current;
+    if (from && to && to.scrollLeft !== from.scrollLeft) to.scrollLeft = from.scrollLeft;
+  };
+  useLayoutEffect(syncScroll, [colWidths, tableWidth]);
+
+  /**
+   * Ячейки строки заголовков. Рисуются и в таблице, и в двойнике — из одного
+   * места, иначе они однажды разъедутся.
+   *
+   * У двойника кнопка «Свернуть все» кликается мышью, но убрана из обхода с
+   * клавиатуры и от читалок (`aria-hidden` на всей обёртке): для них есть
+   * настоящая шапка, а два одинаковых заголовка подряд только запутали бы.
+   */
+  const headerCells = (forClone: boolean) => (
+    <>
+      <Th first>
+        {/* Свернуть/развернуть всё живёт в шапке своей колонки — там же, где
+            стоят шевроны отдельных категорий, и не занимает отдельную строку
+            над таблицей. */}
+        {hasSubcategories ? (
+          <button
+            onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(allParents))}
+            className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-text"
+            title={allCollapsed ? "Развернуть все" : "Свернуть все"}
+            aria-label={allCollapsed ? "Развернуть все" : "Свернуть все"}
+            aria-expanded={!allCollapsed}
+            tabIndex={forClone ? -1 : undefined}
+          >
+            {allCollapsed ? (
+              <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5 shrink-0" aria-hidden />
+            )}
+            Категория
+          </button>
+        ) : (
+          "Категория"
+        )}
+      </Th>
+      {report.columns.map((c) => (
+        <Th key={c.key} align="right">
+          {c.label}
+        </Th>
+      ))}
+      {showTotal && <Th align="right">Итого</Th>}
+    </>
+  );
 
   // Отчёт — про всю историю ведения бюджета, поэтому у страницы свой период
   // (по умолчанию «Всё»), а не глобальный «текущий месяц»: иначе при первом
@@ -241,36 +336,10 @@ export function ReportPage() {
             </button>
           ))}
         </div>
-        {/* Вид таблицы — это размен, который нельзя решить за человека:
-            закреплённой шапке нужен свой контейнер прокрутки, а тогда таблица
-            перестаёт разворачиваться во весь рост. */}
-        <span className="label ml-2">Вид</span>
-        <div className="flex bg-panel2 rounded-lg p-1 border border-border">
-          {[
-            {
-              on: false,
-              label: "Вся таблица",
-              title: "Во весь рост, прокручивается страница",
-            },
-            {
-              on: true,
-              label: "Закреплённая шапка",
-              title:
-                "Таблица по высоте экрана: строка периодов и столбец категорий держатся на виду",
-            },
-          ].map((v) => (
-            <button
-              key={String(v.on)}
-              onClick={() => void setStickyReportHeader(v.on)}
-              title={v.title}
-              className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-                stickyHeader === v.on ? "bg-accent text-accent-fg" : "text-muted hover:text-text"
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
+        {/* Переключателя «Вид» здесь больше нет: он существовал только потому,
+            что закреплённая шапка и таблица во весь рост считались
+            несовместимыми. Теперь работает и то и другое сразу, и выбирать
+            человеку не из чего. */}
         <InfoPopover label="Как считаются суммы">
           <p>
             <strong className="text-text">Доход</strong> — только поступления,{" "}
@@ -338,57 +407,51 @@ export function ReportPage() {
           За выбранный период нет доходов и расходов — измените отбор выше.
         </div>
       ) : (
-        <div
-          ref={cardRef}
-          className={stickyHeader ? "card overflow-auto" : "card overflow-x-auto"}
-          style={
-            stickyHeader && tableMaxH != null
-              ? { maxHeight: `${tableMaxH}px` }
-              : undefined
-          }
-        >
+        <div className="card">
+          {/* Двойник строки заголовков: липнет под шапку приложения, пока
+              таблица на экране. Лежит ПЕРЕД таблицей и вынут из потока
+              отрицательным отступом ниже, поэтому пока страница не прокручена
+              он стоит ровно на месте настоящей шапки. */}
+          <div
+            ref={cloneRef}
+            className="sticky z-20"
+            style={{ top: "var(--app-header-h)" }}
+            aria-hidden
+          >
+            <div ref={cloneClipRef} className="overflow-x-hidden">
+              <table
+                className="text-sm border-separate border-spacing-0"
+                style={{
+                  tableLayout: "fixed",
+                  width: tableWidth > 0 ? `${tableWidth}px` : undefined,
+                }}
+              >
+                <colgroup>
+                  {colWidths.map((w, i) => (
+                    <col key={i} style={{ width: `${w}px` }} />
+                  ))}
+                </colgroup>
+                <thead>
+                  <tr>{headerCells(true)}</tr>
+                </thead>
+              </table>
+            </div>
+          </div>
           {/* Вертикально не режем — таблицу видно целиком, прокручивается сама
               страница. Вбок прокрутка нужна: столбцов-периодов может быть
               несколько десятков. */}
-          <table className="w-full text-sm border-separate border-spacing-0">
+          <div
+            ref={scrollerRef}
+            className="overflow-x-auto"
+            style={cloneHeight > 0 ? { marginTop: `${-cloneHeight}px` } : undefined}
+            onScroll={syncScroll}
+          >
+          <table
+            ref={tableRef}
+            className="w-full text-sm border-separate border-spacing-0"
+          >
             <thead>
-              <tr>
-                <Th sticky={stickyHeader} first>
-                  {/* Свернуть/развернуть всё живёт в шапке своей колонки —
-                      там же, где стоят шевроны отдельных категорий, и не
-                      занимает отдельную строку над таблицей. */}
-                  {hasSubcategories ? (
-                    <button
-                      onClick={() =>
-                        setCollapsed(allCollapsed ? new Set() : new Set(allParents))
-                      }
-                      className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-text"
-                      title={allCollapsed ? "Развернуть все" : "Свернуть все"}
-                      aria-label={allCollapsed ? "Развернуть все" : "Свернуть все"}
-                      aria-expanded={!allCollapsed}
-                    >
-                      {allCollapsed ? (
-                        <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                      ) : (
-                        <ChevronDown className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                      )}
-                      Категория
-                    </button>
-                  ) : (
-                    "Категория"
-                  )}
-                </Th>
-                {report.columns.map((c) => (
-                  <Th key={c.key} sticky={stickyHeader} align="right">
-                    {c.label}
-                  </Th>
-                ))}
-                {showTotal && (
-                  <Th sticky={stickyHeader} align="right">
-                    Итого
-                  </Th>
-                )}
-              </tr>
+              <tr>{headerCells(false)}</tr>
             </thead>
             <tbody>
               <GroupRow
@@ -451,6 +514,7 @@ export function ReportPage() {
               />
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>
@@ -466,12 +530,10 @@ function hasKids(rows: ReportRow[], row: ReportRow): boolean {
 function Th({
   children,
   align = "left",
-  sticky,
   first,
 }: {
   children: React.ReactNode;
   align?: "left" | "right";
-  sticky?: boolean;
   first?: boolean;
 }) {
   return (
@@ -479,18 +541,10 @@ function Th({
       className={`table-th bg-panel whitespace-nowrap ${
         align === "right" ? "text-right" : ""
       } ${
-        // ТОЛЬКО top-0: отсчёт идёт от карточки таблицы — она и есть
-        // контейнер прокрутки в липком виде. Отступ на высоту шапки приложения,
-        // который тут когда-то стоял, опускал заголовки на 72px ниже своей
-        // строки и накрывал ими первую строку блока «Доход».
-        sticky ? "sticky top-0 z-20" : ""
-      } ${
-        // `sticky` тут нужен и для горизонтали: без него `left-0` ничего не
-        // держит. Поэтому у первого столбца класс ставим всегда, даже когда
-        // липкая шапка выключена — столбец категорий держался слева и раньше.
-        // Слои НИЖЕ шапки приложения (z-30), иначе прилипшая ячейка налезает
-        // на неё при прокрутке. Угловая (первый столбец + строка заголовков)
-        // должна быть выше остальных прилипших, но всё равно под шапкой.
+        // Вертикально заголовки не липнут: этим занят отдельный слой-двойник
+        // над таблицей. `sticky` здесь — только ради горизонтали, без него
+        // `left-0` ничего не держит. Слои НИЖЕ шапки приложения (z-30), иначе
+        // прилипшая ячейка налезает на неё при прокрутке.
         first ? "sticky left-0 z-[25] min-w-[15rem]" : ""
       }`}
     >

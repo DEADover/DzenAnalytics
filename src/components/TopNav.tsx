@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   PieChart,
@@ -104,8 +104,32 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
 
   const inSecondary = SECONDARY.some((s) => loc.pathname === s.to);
 
+  // Высота шапки уезжает в CSS-переменную: под неё паркуются липкие шапки
+  // таблиц. Числом её не задать — она зависит от размера корневого шрифта
+  // (у человека с крупным системным шрифтом это уже не 73px, а 90+), от
+  // рамки снизу и от переносов на узком экране. Раньше константа стояла
+  // прямо в стилях, и при увеличенном шрифте шапка приложения накрывала
+  // заголовки столбцов.
+  const headerRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const apply = () =>
+      document.documentElement.style.setProperty(
+        "--app-header-h",
+        `${el.getBoundingClientRect().height}px`
+      );
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <header className="border-b border-border bg-panel/80 backdrop-blur sticky top-0 z-30">
+    <header
+      ref={headerRef}
+      className="border-b border-border bg-panel/80 backdrop-blur sticky top-0 z-30"
+    >
       <div className="w-full px-4 md:px-6 py-3 flex items-center gap-3 md:gap-6">
         <img
           src={theme === "dark" ? logoHorizontalDark : logoHorizontal}
