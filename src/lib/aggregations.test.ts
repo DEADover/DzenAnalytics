@@ -1001,3 +1001,27 @@ describe("дубли: подкатегории", () => {
     ])).toHaveLength(1);
   });
 });
+
+describe("дубли: копейки", () => {
+  const fee = (amount: number) =>
+    tx({ date: "2023-11-27", kind: "expense", amount, amountBase: amount,
+         payee: "", account: "И_Т_ИИС", categoryFull: "Инвестиции / Комиссия" });
+
+  it("комиссии 0,22 и 0,01 — разные операции", () => {
+    // Округление до целых рублей делало обе нулём и склеивало в одну группу.
+    expect(detectDuplicates([fee(0.22), fee(0.01)])).toHaveLength(0);
+  });
+
+  it("одинаковые копеечные суммы по-прежнему дубль", () => {
+    expect(detectDuplicates([fee(0.22), fee(0.22)])).toHaveLength(1);
+  });
+
+  it("суммы, различающиеся меньше копейки, считаются одинаковыми", () => {
+    // Дробная арифметика: 0.1 + 0.2 = 0.30000000000000004.
+    expect(detectDuplicates([fee(0.1 + 0.2), fee(0.3)])).toHaveLength(1);
+  });
+
+  it("рубли не склеиваются с соседними", () => {
+    expect(detectDuplicates([fee(100.4), fee(99.6)])).toHaveLength(0);
+  });
+});
