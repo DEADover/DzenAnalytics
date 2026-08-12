@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Table as TableIcon,
   Download,
@@ -34,6 +34,21 @@ import type { Transaction } from "../types";
 
 const SCALES: ReportScale[] = ["month", "quarter", "year", "total"];
 
+/** Ниже этого таблица с закреплённой шапкой превращается в щёлку — на совсем
+ *  низком окне лучше отдать место таблице и дать странице прокрутиться. */
+const MIN_TABLE_HEIGHT = 280;
+
+/**
+ * Что оставляем под таблицей: подвал с версией плюс воздух.
+ *
+ * Числом, а не замером: подвал живёт в общей обёртке приложения и прижат к низу
+ * окна флексом, так что «сколько там контента ниже» из разметки честно не
+ * достаётся. Промах в пару десятков пикселей безопасен — страница прокрутится
+ * на эти пиксели, а шапка таблицы всё равно останется на виду: чтобы она ушла
+ * под шапку приложения, прокрутить надо на всю высоту панели отборов.
+ */
+const BOTTOM_RESERVE = 88;
+
 /**
  * «Доходы и расходы» — сводная таблица категорий по периодам (issue #54).
  *
@@ -54,6 +69,50 @@ export function ReportPage() {
   const [scale, setScale] = useState<ReportScale>("month");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [exportOpen, setExportOpen] = useState(false);
+
+  /**
+   * Высота таблицы в режиме с закреплённой шапкой.
+   *
+   * Считается по месту, а не задаётся в CSS. Закреплённая шапка держится за
+   * верх СВОЕГО контейнера прокрутки — значит контейнер обязан помещаться в
+   * экран целиком, иначе страница начинает прокручиваться сама и утаскивает
+   * шапку наверх, под шапку приложения. Ровно это и было: карточку сделали
+   * `sticky`, но липкий элемент может «плавать» только в пределах родителя, и
+   * на последних десятках пикселей прокрутки он всё равно уезжал, унося
+   * заголовки столбцов с собой.
+   *
+   * Верх карточки зависит от панели отборов сверху — а она переносится по
+   * строкам на узком экране, так что фиксированный `calc(100vh − …)` тут врёт.
+   * Меряем сами: сколько осталось от экрана под карточку, за вычетом всего,
+   * что идёт после неё (подвал).
+   */
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [tableMaxH, setTableMaxH] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (!stickyHeader) {
+      setTableMaxH(null);
+      return;
+    }
+    const el = cardRef.current;
+    if (!el) return;
+    const measure = () => {
+      const docTop = el.getBoundingClientRect().top + window.scrollY;
+      const h = window.innerHeight - docTop - BOTTOM_RESERVE;
+      // Замер не зациклится: верх карточки от её собственной высоты не зависит,
+      // так что следующий проход даст то же число, а React на нём остановится.
+      setTableMaxH(Math.max(MIN_TABLE_HEIGHT, Math.round(h)));
+    };
+    measure();
+    // Панель отборов может перевёрстываться (перенос строк, смена разбивки) —
+    // тогда верх карточки уезжает и высоту надо пересчитать.
+    const ro = new ResizeObserver(measure);
+    if (el.parentElement) ro.observe(el.parentElement);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [stickyHeader]);
 
   // Отчёт — про всю историю ведения бюджета, поэтому у страницы свой период
   // (по умолчанию «Всё»), а не глобальный «текущий месяц»: иначе при первом
@@ -183,13 +242,22 @@ export function ReportPage() {
           ))}
         </div>
         {/* Вид таблицы — это размен, который нельзя решить за человека:
-            липкая шапка требует, чтобы у таблицы был свой контейнер прокрутки,
-            а тогда она перестаёт разворачиваться во весь рост. */}
+            закреплённой шапке нужен свой контейнер прокрутки, а тогда таблица
+            перестаёт разворачиваться во весь рост. */}
         <span className="label ml-2">Вид</span>
         <div className="flex bg-panel2 rounded-lg p-1 border border-border">
           {[
-            { on: false, label: "Во весь рост", title: "Таблица целиком, прокручивается страница" },
-            { on: true, label: "Липкая шапка", title: "Своя прокрутка: строка периодов и столбец категорий держатся" },
+            {
+              on: false,
+              label: "Вся таблица",
+              title: "Во весь рост, прокручивается страница",
+            },
+            {
+              on: true,
+              label: "Закреплённая шапка",
+              title:
+                "Таблица по высоте экрана: строка периодов и столбец категорий держатся на виду",
+            },
           ].map((v) => (
             <button
               key={String(v.on)}
@@ -271,10 +339,12 @@ export function ReportPage() {
         </div>
       ) : (
         <div
-          className={
-            stickyHeader
-              ? "card overflow-auto max-h-[calc(100vh-6rem)] sticky top-[73px]"
-              : "card overflow-x-auto"
+          ref={cardRef}
+          className={stickyHeader ? "card overflow-auto" : "card overflow-x-auto"}
+          style={
+            stickyHeader && tableMaxH != null
+              ? { maxHeight: `${tableMaxH}px` }
+              : undefined
           }
         >
           {/* Вертикально не режем — таблицу видно целиком, прокручивается сама
