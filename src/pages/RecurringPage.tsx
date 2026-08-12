@@ -9,6 +9,8 @@ import {
   Coins,
   Sparkles,
   ListChecks,
+  Trash2,
+  Undo2,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
@@ -21,6 +23,8 @@ import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Stat } from "../components/Stat";
 import { SortableTable, type Column } from "../components/SortableTable";
+import { confirm } from "../store/useConfirmStore";
+import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 
 // One pill per coarse cadence bucket, plus an "all" pseudo-option.
 // Order matches the user's likely usage frequency on this page:
@@ -124,6 +128,8 @@ export function RecurringPage() {
     () => planned.filter((p) => p.date < todayIso && !p.forecast),
     [planned, todayIso]
   );
+  // Просроченные, снятые вручную и ещё не уехавшие в облако (issue #71).
+  const queuedDeletions = usePlannedDeletionsStore((s) => s.deletions);
   /** Upcoming, ignoring tab & period — this decides whether the section shows at
    *  all, so an empty tab/period can never make the whole card disappear. */
   const plannedUpcoming = useMemo(
@@ -155,6 +161,36 @@ export function RecurringPage() {
       ),
     [plannedInPeriod, effectiveTab]
   );
+
+  const plannedTitle = (p: PlannedOp) =>
+    p.payee || p.comment || p.category || "—";
+
+  /**
+   * Убрать просроченную операцию — и у себя, и в Дзен-мани (issue #71).
+   *
+   * У РАЗОВОГО плана удаляем сам план: снести одну его операцию мало, останется
+   * пустой шаблон, невидимый и здесь, и в Дзен-мани. Во всех остальных случаях —
+   * только эту дату: у повторяющегося плана удаление целиком снесло бы серию
+   * вперёд, а если план ещё не подтянут из облака (`repeating === null`), мы
+   * просто не знаем, какой он, и осторожность важнее.
+   */
+  async function askDeletePlanned(p: PlannedOp) {
+    const title = plannedTitle(p);
+    const when = formatDate(p.date, "short");
+    const wholePlan = p.repeating === false;
+    const ok = await confirm({
+      title: wholePlan ? "Удалить план в Дзен-мани?" : "Убрать просроченную операцию?",
+      message: wholePlan
+        ? `Разовый план «${title}» от ${when} будет удалён в Дзен-мани вместе с этой операцией.`
+        : `Операция от ${when} исчезнет из плана «${title}». Сам план и его будущие операции останутся.`,
+      confirmLabel: "Удалить",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await usePlannedDeletionsStore
+      .getState()
+      .remove({ id: p.id, wholePlan, date: p.date, title });
+  }
 
   const allCandidates = useMemo(() => detectRecurring(transactions), [transactions]);
   const [cadenceFilter, setCadenceFilter] = useState<CadenceFilter>("all");
@@ -612,17 +648,57 @@ export function RecurringPage() {
                   Просрочено: {formatNum(plannedOverdue.length)}
                 </div>
                 <div className="space-y-1.5">
-                  {plannedOverdue.slice(0, 8).map((p) => (
-                    <div key={p.id} className="flex items-center gap-3 text-sm">
-                      <span className="text-warn tabular-nums w-20 shrink-0">
-                        {formatDate(p.date, "short")}
-                      </span>
-                      <span className="flex-1 min-w-0 truncate">
-                        {p.payee || p.comment || p.category || "—"}
-                      </span>
-                      <span className="shrink-0">{plannedAmount(p, base)}</span>
-                    </div>
-                  ))}
+                  {plannedOverdue.slice(0, 8).map((p) => {
+                    const queued = queuedDeletions[p.id] !== undefined;
+                    return (
+                      <div key={p.id} className="flex items-center gap-3 text-sm">
+                        <span
+                          className={`tabular-nums w-20 shrink-0 ${
+                            queued ? "text-muted line-through" : "text-warn"
+                          }`}
+                        >
+                          {formatDate(p.date, "short")}
+                        </span>
+                        <span
+                          className={`flex-1 min-w-0 truncate ${
+                            queued ? "text-muted line-through" : ""
+                          }`}
+                        >
+                          {plannedTitle(p)}
+                        </span>
+                        <span className={`shrink-0 ${queued ? "text-muted line-through" : ""}`}>
+                          {plannedAmount(p, base)}
+                        </span>
+                        {queued ? (
+                          <button
+                            type="button"
+                            className="shrink-0 p-1.5 rounded-md text-muted hover:text-fg hover:bg-panel"
+                            aria-label="Вернуть операцию"
+                            title="Удаление ждёт отправки — вернуть"
+                            onClick={() =>
+                              usePlannedDeletionsStore.getState().restore(p.id)
+                            }
+                          >
+                            <Undo2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="shrink-0 p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10"
+                            aria-label="Удалить операцию"
+                            title={
+                              p.repeating === false
+                                ? "Удалить разовый план в Дзен-мани"
+                                : "Убрать эту дату из плана в Дзен-мани"
+                            }
+                            onClick={() => askDeletePlanned(p)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 {plannedOverdue.length > 8 && (
                   <div className="text-[11px] text-muted pt-1.5">

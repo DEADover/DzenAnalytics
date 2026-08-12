@@ -18,6 +18,7 @@ import {
   Store,
   UploadCloud,
   SquarePen,
+  CalendarClock,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
@@ -27,6 +28,7 @@ import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useAccountEditsStore } from "../store/useAccountEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
+import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import {
   getCategoryTagsFromCache,
@@ -158,6 +160,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
   const tagEdits = useTagEditsStore((s) => s.edits);
   const newCats = useNewCategoriesStore((s) => s.items);
   const tagDeletions = useTagDeletionsStore((s) => s.deletions);
+  const plannedDeletions = usePlannedDeletionsStore((s) => s.deletions);
   const cpRenames = useCounterpartyEditsStore((s) => s.renames);
   const cpCreated = useCounterpartyEditsStore((s) => s.created);
   const cpDeleted = useCounterpartyEditsStore((s) => s.deleted);
@@ -458,13 +461,31 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
     return out;
   }, [cpCreated, cpRenames, cpMerges, cpDeleted, cpTitle]);
 
+  // Просроченные запланированные операции, снятые вручную (issue #71). Подпись
+  // и дату берём из очереди, а не из кэша: после отправки операции там уже нет,
+  // а строка должна оставаться читаемой до самого конца.
+  const plannedItems = useMemo<DictItem[]>(
+    () =>
+      Object.values(plannedDeletions).map((p) => ({
+        key: `plan:${p.id}`,
+        action: "delete" as const,
+        title: p.title,
+        note: p.wholePlan
+          ? `Разовый план от ${formatDate(p.date, "short")} · Удаление в Дзен-мани`
+          : `Операция от ${formatDate(p.date, "short")} · Сам план останется`,
+        revert: () => usePlannedDeletionsStore.getState().restore(p.id),
+      })),
+    [plannedDeletions]
+  );
+
   const total =
     editItems.length +
     draftItems.length +
     deletedItems.length +
     categoryItems.length +
     accountItems.length +
-    counterpartyItems.length;
+    counterpartyItems.length +
+    plannedItems.length;
 
   /** Отправка прямо отсюда: пользователь уже просмотрел список и решил — гонять
    *  его обратно в настройки за кнопкой незачем. */
@@ -502,7 +523,12 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
     await clearAllDrafts();
     if (deletedIds.length) await restoreManyDeleted(deletedIds);
     // Справочники — по одному, у каждого стора своя семантика отмены.
-    for (const it of [...categoryItems, ...accountItems, ...counterpartyItems])
+    for (const it of [
+      ...categoryItems,
+      ...accountItems,
+      ...counterpartyItems,
+      ...plannedItems,
+    ])
       await it.revert();
     await reapply();
   }
@@ -644,6 +670,13 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
                 icon={<Users className="w-4 h-4 text-accent" />}
                 title="Контрагенты"
                 items={counterpartyItems}
+                openKey={openKey}
+                onToggle={toggle}
+              />
+              <DictGroup
+                icon={<CalendarClock className="w-4 h-4 text-accent" />}
+                title="Планы"
+                items={plannedItems}
                 openKey={openKey}
                 onToggle={toggle}
               />

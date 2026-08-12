@@ -141,6 +141,27 @@ describe("plannedOps — маппинг планируемых операций"
     expect(plannedOps(null, rates)).toEqual([]);
     expect(plannedOps({ ...cache([]), reminderMarkers: undefined }, rates)).toEqual([]);
   });
+
+  it("видно, разовый план или повторяющийся (#71)", () => {
+    // От этого зависит, что удалять: у разового — сам план, у повторяющегося —
+    // только просроченную дату.
+    const c = {
+      ...cache([
+        marker({ id: "разовая", reminder: "r1", outcome: 100 }),
+        marker({ id: "ежемесячная", reminder: "r2", outcome: 100 }),
+        marker({ id: "ничья", reminder: "нет-такого", outcome: 100 }),
+      ]),
+      reminders: [
+        { id: "r1", user: 1, changed: 0, interval: null, step: null, startDate: "2022-04-14" },
+        { id: "r2", user: 1, changed: 0, interval: "month", step: 1, startDate: "2022-04-14" },
+      ],
+    };
+    const byId = new Map(plannedOps(c, rates).map((p) => [p.id, p.repeating]));
+    expect(byId.get("разовая")).toBe(false);
+    expect(byId.get("ежемесячная")).toBe(true);
+    // План не подтянут — не знаем, и врать не будем.
+    expect(byId.get("ничья")).toBe(null);
+  });
 });
 
 describe("backfillEntities — одноразовые доливки по версии кэша", () => {
@@ -152,7 +173,12 @@ describe("backfillEntities — одноразовые доливки по вер
 
   it("совсем старый кэш (без версии и без маркеров) → доливаем всё, чего в нём нет", () => {
     const old = { ...base, reminderMarkers: undefined, cacheSchemaVersion: undefined };
-    expect(backfillEntities(old).sort()).toEqual(["budget", "company", "reminderMarker"]);
+    expect(backfillEntities(old).sort()).toEqual([
+      "budget",
+      "company",
+      "reminder",
+      "reminderMarker",
+    ]);
   });
 
   it("КЛЮЧЕВОЕ: кэш уже с маркерами, но без версии → маркеры повторно не тянем", () => {
@@ -165,15 +191,20 @@ describe("backfillEntities — одноразовые доливки по вер
     expect(backfillEntities(afterOldBackfill).sort()).toEqual([
       "budget",
       "company",
+      "reminder",
       "reminderMarker",
     ]);
   });
 
-  it("кэш с бюджетами (v2) → остаётся только справочник банков", () => {
+  it("кэш с бюджетами (v2) → справочник банков, перезабор операций и сами планы", () => {
     // Инкрементальный дифф статический справочник не присылает никогда, так
     // что без явной доливки такой кэш остался бы без названий банков навсегда.
     const v2 = { ...base, cacheSchemaVersion: 2 };
-    expect(backfillEntities(v2).sort()).toEqual(["company", "reminderMarker"]);
+    expect(backfillEntities(v2).sort()).toEqual([
+      "company",
+      "reminder",
+      "reminderMarker",
+    ]);
   });
 
   it("кэш текущей версии → доливать нечего", () => {

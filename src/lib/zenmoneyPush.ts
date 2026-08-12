@@ -55,6 +55,7 @@ import type {
   ZenDeletion,
   ZenDiffResponse,
   ZenMerchant,
+  ZenReminderMarker,
   ZenTag,
   ZenTransaction,
 } from "./zenmoney";
@@ -1987,4 +1988,50 @@ export function buildAccountPush(
     accounts.push(next);
   }
   return { accounts, skipped };
+}
+
+/**
+ * Удаление ПРОСРОЧЕННОЙ запланированной операции (issue #71).
+ *
+ * У Дзен-мани две сущности: сам план (`reminder`) и по одной операции
+ * (`reminderMarker`) на каждую его дату. Что именно удалять — зависит от плана:
+ *
+ *   • разовый план  → удаляем ПЛАН. Убить одну его операцию мало: останется
+ *     пустой шаблон, невидимый и в Дзен-мани, и у нас;
+ *   • повторяющийся → удаляем только ОПЕРАЦИЮ. Удалить план значило бы снести
+ *     всю серию вперёд, а просили убрать одну просроченную дату.
+ *
+ * Удалённый план уносит свои операции сам — за этим следит слияние кэша.
+ * Поэтому два удаления одного и того же плана схлопываются в одно.
+ *
+ * Операции, которых уже нет в кэше, пропускаются: удалять нечего, намерение и
+ * так исполнено.
+ */
+export interface PlannedDeletion {
+  /** id операции (`reminderMarker`), которую человек убирает. */
+  id: string;
+  /** Удалять план целиком — так у разовых планов. */
+  wholePlan: boolean;
+}
+
+export function buildPlannedDeletions(
+  items: PlannedDeletion[],
+  markers: ZenReminderMarker[],
+  stampSeconds: number
+): ZenDeletion[] {
+  const byId = new Map(markers.map((m) => [m.id, m]));
+  const out: ZenDeletion[] = [];
+  const seen = new Set<string>();
+  for (const it of items) {
+    const m = byId.get(it.id);
+    if (!m) continue;
+    const object = it.wholePlan ? "reminder" : "reminderMarker";
+    const id = it.wholePlan ? m.reminder : m.id;
+    if (!id) continue;
+    const key = `${object} ${id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id, object, user: m.user, stamp: stampSeconds });
+  }
+  return out;
 }

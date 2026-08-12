@@ -60,6 +60,7 @@ import {
   countCounterpartyPending,
 } from "./store/useCounterpartyEditsStore";
 import { useTagDeletionsStore } from "./store/useTagDeletionsStore";
+import { usePlannedDeletionsStore } from "./store/usePlannedDeletionsStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 
 /**
@@ -116,6 +117,7 @@ function App() {
     useNewCategoriesStore.getState().hydrate();
     useCounterpartyEditsStore.getState().hydrate();
     useTagDeletionsStore.getState().hydrate();
+    usePlannedDeletionsStore.getState().hydrate();
     hydrate();
     backupHydrate();
     reportPeriodHydrate();
@@ -199,6 +201,8 @@ function App() {
         Object.keys(useTagDeletionsStore.getState().deletions).length > 0;
       const hasCpEdits =
         countCounterpartyPending(useCounterpartyEditsStore.getState()) > 0;
+      const hasPlannedDeletions =
+        Object.keys(usePlannedDeletionsStore.getState().deletions).length > 0;
       if (
         !hasEdits &&
         !hasDeletions &&
@@ -208,7 +212,8 @@ function App() {
         !hasBudgetEdits &&
         !hasNewCats &&
         !hasTagDeletions &&
-        !hasCpEdits
+        !hasCpEdits &&
+        !hasPlannedDeletions
       )
         return;
       if (timer) clearTimeout(timer);
@@ -284,6 +289,11 @@ function App() {
       if (Object.keys(s.deletions).length <= Object.keys(p.deletions).length) return;
       schedule();
     });
+    const unsubPlannedDeletions = usePlannedDeletionsStore.subscribe((s, p) => {
+      if (s.deletions === p.deletions) return;
+      if (Object.keys(s.deletions).length <= Object.keys(p.deletions).length) return;
+      schedule();
+    });
     const unsubCpEdits = useCounterpartyEditsStore.subscribe((s, p) => {
       const now = countCounterpartyPending(s);
       if (now === 0 || now <= countCounterpartyPending(p)) return;
@@ -299,6 +309,7 @@ function App() {
       unsubBudgetEdits();
       unsubNewCats();
       unsubTagDeletions();
+      unsubPlannedDeletions();
       unsubCpEdits();
     };
   }, []);

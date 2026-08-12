@@ -30,6 +30,7 @@ import {
   buildMerchantDeletions,
   buildMerchantMergePush,
   buildTagDeletionPush,
+  buildPlannedDeletions,
   detectConflicts,
   sendPush,
   validateDrafts,
@@ -47,6 +48,10 @@ import {
   loadTagDeletions,
   toTagDeletions,
 } from "./useTagDeletionsStore";
+import {
+  usePlannedDeletionsStore,
+  loadPlannedDeletions,
+} from "./usePlannedDeletionsStore";
 import { useBudgetEditsStore, loadBudgetEdits } from "./useBudgetEditsStore";
 import { useDraftsStore, loadDrafts } from "./useDraftsStore";
 import {
@@ -627,6 +632,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       useAccountEditsStore.getState().clearAll(),
       useNewCategoriesStore.getState().clear(),
       useTagDeletionsStore.getState().clearAll(),
+      usePlannedDeletionsStore.getState().clearAll(),
       useCounterpartyEditsStore.getState().clearAll(),
       useBudgetEditsStore.getState().clearAll(),
     ]);
@@ -1097,6 +1103,19 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         Math.floor(Date.now() / 1000)
       );
       skipped.push(...tagDel.skipped);
+      // Просроченные запланированные операции, снятые вручную (issue #71):
+      // у разового плана удаляется сам план, у повторяющегося — одна его дата.
+      const plannedQueue = Object.values(await loadPlannedDeletions());
+      const plannedDel = buildPlannedDeletions(
+        plannedQueue,
+        cache.reminderMarkers ?? [],
+        Math.floor(Date.now() / 1000)
+      );
+      // Снимаем с очереди ВСЮ пачку, а не только отправленное: операция, которой
+      // в кэше уже нет, удалена и без нас — намерение исполнено. Иначе такая
+      // запись висела бы в списке изменений вечно. Список фиксируем здесь, до
+      // отправки, чтобы не потерять то, что человек добавит по ходу.
+      const plannedDoneIds = plannedQueue.map((p) => p.id);
       // Pending plan/budget changes → ZenBudget upserts. Built against the
       // fresh cache so the (tag, month) cell and its «other side» are current.
       const budgetEdits = await loadBudgetEdits();
@@ -1147,6 +1166,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         merchantDeletions.length === 0 &&
         cpMerge.deletions.length === 0 &&
         tagDel.deletions.length === 0 &&
+        plannedDel.length === 0 &&
         budgetPush.budgets.length === 0
       ) {
         const result: PushResult = { pushed: 0, created: 0, skipped, snapshotId };
@@ -1196,6 +1216,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           ...merchantDeletions,
           ...cpMerge.deletions,
           ...tagDel.deletions,
+          ...plannedDel,
         ],
         [
           ...resurrections.map((r) => r.tx),
@@ -1233,6 +1254,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           ...merchantDeletions,
           ...cpMerge.deletions,
           ...tagDel.deletions,
+          ...plannedDel,
         ],
       });
       await saveZenCache(nextCache);
@@ -1358,6 +1380,10 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         await useTagDeletionsStore
           .getState()
           .clearPushed(tagDel.deletions.map((d) => String(d.id)));
+      }
+      // Удалённые просроченные планы — снимаем с очереди.
+      if (plannedDoneIds.length > 0) {
+        await usePlannedDeletionsStore.getState().clearPushed(plannedDoneIds);
       }
       // Budget edits: clear everything that was sent OR a no-op (already in
       // cloud); keep only the ones we skipped (tag not in cache) for retry.

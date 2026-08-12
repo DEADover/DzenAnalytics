@@ -96,6 +96,7 @@ export const BACKUP_META_KEYS = [
   "counterpartyEdits",
   "newCategories",
   "budgetEdits", // планы бюджета, ещё не уехавшие в Дзен-мани
+  "plannedDeletions", // просроченные планы, снятые вручную (issue #71)
 ] as const;
 
 export interface BackupPayload {

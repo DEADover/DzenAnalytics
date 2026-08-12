@@ -18,6 +18,7 @@ import type {
   ZenDiffResponse,
   ZenInstrument,
   ZenMerchant,
+  ZenReminder,
   ZenReminderMarker,
   ZenTag,
   ZenTransaction,
@@ -41,6 +42,10 @@ export interface ZenCache {
    *  processed/deleted markers on merge to keep the cache lean and self-cleaning.
    *  `undefined` = never back-filled yet (triggers a one-time forceFetch). */
   reminderMarkers?: ZenReminderMarker[];
+  /** Сами ПЛАНЫ (шаблоны) — только чтобы отличать разовый от повторяющегося,
+   *  когда человек удаляет просроченную операцию (issue #71).
+   *  `undefined` = ещё не забирали (разовый forceFetch). */
+  reminders?: ZenReminder[];
   /** Global bank / payment-system dictionary behind `Account.company`.
    *  Read-only reference data, ~1700 rows. `undefined` = never pulled yet
    *  (triggers a one-time forceFetch). */
@@ -53,7 +58,7 @@ export interface ZenCache {
 }
 
 /** Bump when a new entity type starts being consumed AND needs a back-fill. */
-export const CACHE_SCHEMA_VERSION = 4;
+export const CACHE_SCHEMA_VERSION = 5;
 
 /** Entity types to force-fetch once when upgrading TO that version. */
 const BACKFILL_BY_VERSION: Record<number, string[]> = {
@@ -66,6 +71,9 @@ const BACKFILL_BY_VERSION: Record<number, string[]> = {
   // маркеры (план удалён в Дзен-мани, а его операции остались у нас), список
   // заменяется ответом сервера целиком — см. `replaceMarkers` в `applyDiff`.
   4: ["reminderMarker"],
+  // Сами планы: раньше мы их выбрасывали, поэтому инкрементальный diff их
+  // больше не пришлёт — нужен разовый полный запрос.
+  5: ["reminder"],
 };
 
 /**
@@ -245,6 +253,7 @@ export function applyDiff(
       reminderMarkers: (diff.reminderMarker || []).filter(
         (m) => m.state === "planned"
       ),
+      reminders: diff.reminder || [],
       companies: diff.company || [],
       cacheSchemaVersion: CACHE_SCHEMA_VERSION,
     });
@@ -274,6 +283,7 @@ export function applyDiff(
       deletions,
       opts.replaceMarkers
     ),
+    reminders: merge(prev.reminders || [], diff.reminder, "reminder", deletions),
     companies: merge(prev.companies || [], diff.company, "company", deletions),
   });
 }

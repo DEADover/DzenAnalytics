@@ -168,6 +168,31 @@ export interface ZenBudget {
 }
 
 /**
+ * Сам ПЛАН — шаблон, из которого Дзен-мани порождает планируемые операции.
+ *
+ * Нужен ровно для одного: понять, разовый план или повторяющийся. Без этого
+ * «удалить просроченную операцию» — игра вслепую: у разового удалять надо весь
+ * план (иначе останется пустой невидимый шаблон), а у повторяющегося — только
+ * одну его операцию, иначе снесём всю серию вперёд (issue #71).
+ *
+ * `interval: null` = разовый. У повторяющегося `interval` + `step` задают шаг
+ * («month» + 1 = ежемесячно), а `points` — дни внутри шага.
+ */
+export interface ZenReminder {
+  id: string;
+  user: number;
+  changed: number;
+  /** "day" | "week" | "month" | "year", либо null у разового плана. */
+  interval: string | null;
+  step: number | null;
+  points?: number[] | null;
+  startDate: string;
+  endDate?: string | null;
+  payee?: string | null;
+  comment?: string | null;
+}
+
+/**
  * A «планируемая операция» — one concrete dated instance generated from a
  * reminder. `state` is 'planned' until it's executed (→ 'processed', a real
  * Transaction is created) or removed ('deleted'). For BUDGETS we care only
@@ -210,7 +235,7 @@ export interface ZenDiffResponse {
   transaction: ZenTransaction[];
   user: { id: number; currency: number; [k: string]: unknown }[];
   budget?: ZenBudget[];
-  reminder?: unknown[];
+  reminder?: ZenReminder[];
   reminderMarker?: ZenReminderMarker[];
   country?: unknown[];
   company?: ZenCompany[];

@@ -11,6 +11,7 @@ import {
   buildMerchantDeletions,
   buildMerchantMergePush,
   buildTagDeletionPush,
+  buildPlannedDeletions,
   detectConflicts,
   resurrectionId,
   validateDrafts,
@@ -25,6 +26,7 @@ import type {
   ZenAccount,
   ZenInstrument,
   ZenMerchant,
+  ZenReminderMarker,
   ZenTag,
   ZenTransaction,
 } from "./zenmoney";
@@ -1745,5 +1747,53 @@ describe("buildMerchantRenamePush — issue #60", () => {
     expect(res.merchants).toEqual([]);
     expect(res.satisfied).toEqual([]);
     expect(res.skipped[0].reason).toMatch(/не найден/);
+  });
+});
+
+describe("buildPlannedDeletions", () => {
+  const marker = (id: string, reminder: string): ZenReminderMarker => ({
+    id,
+    user: 42,
+    changed: 1,
+    date: "2022-04-14",
+    income: 0,
+    incomeInstrument: 2,
+    outcome: 574,
+    outcomeInstrument: 2,
+    tag: null,
+    reminder,
+    state: "planned",
+  });
+  const markers = [marker("m1", "план-1"), marker("m2", "план-1"), marker("m3", "план-2")];
+
+  it("разовый план удаляется целиком, а не одной своей операцией", () => {
+    // Иначе в Дзен-мани остался бы пустой шаблон, невидимый и там, и у нас.
+    expect(buildPlannedDeletions([{ id: "m3", wholePlan: true }], markers, 9)).toEqual([
+      { id: "план-2", object: "reminder", user: 42, stamp: 9 },
+    ]);
+  });
+
+  it("у повторяющегося плана уходит только одна дата", () => {
+    expect(buildPlannedDeletions([{ id: "m1", wholePlan: false }], markers, 9)).toEqual([
+      { id: "m1", object: "reminderMarker", user: 42, stamp: 9 },
+    ]);
+  });
+
+  it("две операции одного плана схлопываются в одно удаление плана", () => {
+    const out = buildPlannedDeletions(
+      [
+        { id: "m1", wholePlan: true },
+        { id: "m2", wholePlan: true },
+      ],
+      markers,
+      9
+    );
+    expect(out).toEqual([{ id: "план-1", object: "reminder", user: 42, stamp: 9 }]);
+  });
+
+  it("операции нет в кэше — удалять нечего, намерение и так исполнено", () => {
+    expect(buildPlannedDeletions([{ id: "призрак", wholePlan: true }], markers, 9)).toEqual(
+      []
+    );
   });
 });

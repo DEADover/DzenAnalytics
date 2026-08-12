@@ -17,6 +17,11 @@ export type PlannedKind = "expense" | "income" | "transfer";
 
 export interface PlannedOp {
   id: string;
+  /** id самого плана (`reminder`), из которого порождена эта дата. */
+  reminder: string;
+  /** Повторяющийся план (есть `interval`) или разовый. `null` — сам план не
+   *  найден в кэше: он ещё не подтянут или уже удалён. */
+  repeating: boolean | null;
   date: string;
   kind: PlannedKind;
   /** Amount in the BASE currency (like `Transaction.amountBase`). */
@@ -45,6 +50,9 @@ export function plannedOps(
   const accountById = new Map(cache.accounts.map((a) => [a.id, a]));
   const instrumentById = new Map(cache.instruments.map((i) => [i.id, i]));
   const tagById = new Map(cache.tags.map((t) => [t.id, t]));
+  // Сами планы нужны ровно для одного: отличить разовый от повторяющегося,
+  // когда просроченную операцию удаляют (issue #71).
+  const reminderById = new Map((cache.reminders || []).map((r) => [r.id, r]));
 
   const toBase = (amount: number, instrumentId: number) => {
     const code = instrumentById.get(instrumentId)?.shortTitle || rates.base;
@@ -97,8 +105,11 @@ export function plannedOps(
       account = inAcc?.title || "";
     }
 
+    const plan = reminderById.get(m.reminder);
     out.push({
       id: m.id,
+      reminder: m.reminder,
+      repeating: plan ? plan.interval != null : null,
       date: m.date,
       kind,
       amountBase,

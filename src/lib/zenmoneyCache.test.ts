@@ -150,4 +150,34 @@ describe("операции удалённого плана (#71)", () => {
     );
     expect(next.reminderMarkers?.map((m) => m.id).sort()).toEqual(["m1", "m2"]);
   });
+
+  it("сами планы тоже лежат в кэше — по ним видно, разовый план или нет", () => {
+    // Без этого «удалить просроченную операцию» — игра вслепую: у разового надо
+    // удалять план целиком, у повторяющегося — только одну дату.
+    const plan = (id: string, interval: string | null) => ({
+      id, user: 1, changed: 1, interval, step: interval ? 1 : null,
+      startDate: "2022-04-14",
+    });
+    const next = applyDiff(base([marker("m1", "r1", "2026-07-01")]), {
+      serverTimestamp: 2,
+      reminder: [plan("r1", null), plan("r2", "month")],
+    } as never);
+    expect(next.reminders?.map((r) => r.interval)).toEqual([null, "month"]);
+  });
+
+  it("удалённый план уходит и из списка планов", () => {
+    const next = applyDiff(
+      {
+        ...base([]),
+        reminders: [
+          { id: "r1", user: 1, changed: 1, interval: null, step: null, startDate: "2022-04-14" },
+        ],
+      },
+      {
+        serverTimestamp: 2,
+        deletion: [{ id: "r1", object: "reminder", stamp: 2, user: 1 }],
+      } as never
+    );
+    expect(next.reminders).toEqual([]);
+  });
 });

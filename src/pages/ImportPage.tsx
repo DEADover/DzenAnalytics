@@ -64,6 +64,7 @@ import { parseAndValidateBackup, buildBackupPayload, restoreBackupPayload } from
 import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
+import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import {
   useCounterpartyEditsStore,
   countCounterpartyPending,
@@ -258,10 +259,12 @@ export function ImportPage() {
   const cpCreated = useCounterpartyEditsStore((s) => s.created);
   const cpDeleted = useCounterpartyEditsStore((s) => s.deleted);
   const cpMerges = useCounterpartyEditsStore((s) => s.merges);
+  const plannedDeletionsMap = usePlannedDeletionsStore((s) => s.deletions);
   const dictPendingCount =
     Object.keys(tagEditsMap).length +
     newCatsItems.length +
     Object.keys(tagDeletionsMap).length +
+    Object.keys(plannedDeletionsMap).length +
     countCounterpartyPending({
       renames: cpRenames,
       created: cpCreated,

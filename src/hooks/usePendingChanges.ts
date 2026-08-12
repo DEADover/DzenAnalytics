@@ -19,6 +19,7 @@ import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { useAccountEditsStore } from "../store/useAccountEditsStore";
+import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import {
   useCounterpartyEditsStore,
   countCounterpartyPending,
@@ -37,6 +38,8 @@ export interface PendingChanges {
   counterparties: number;
   /** Правки счетов. */
   accounts: number;
+  /** Просроченные запланированные операции, снятые вручную (issue #71). */
+  plans: number;
   /** Operations subtotal — what the rollback list has always covered. */
   operations: number;
   /** Dictionaries subtotal. */
@@ -59,6 +62,7 @@ export function usePendingChanges(): PendingChanges {
   const created = useCounterpartyEditsStore((s) => s.created);
   const cpDeleted = useCounterpartyEditsStore((s) => s.deleted);
   const merges = useCounterpartyEditsStore((s) => s.merges);
+  const plannedDeletions = usePlannedDeletionsStore((s) => s.deletions);
 
   // Count ONLY deletions still backed by a cloud row: once pushed, the row
   // leaves `transactionsRaw` but its id lingers in `deletedIds` as a permanent
@@ -83,8 +87,11 @@ export function usePendingChanges(): PendingChanges {
       deleted: cpDeleted,
       merges,
     });
+    const plans = Object.keys(plannedDeletions).length;
     const operations = e + d + deleted;
-    const dictionaries = categories + counterparties + accounts;
+    // Удаление просроченного плана — такое же справочное изменение, как
+    // удаление категории: своя строка в списке, свой откат.
+    const dictionaries = categories + counterparties + accounts + plans;
     return {
       edits: e,
       drafts: d,
@@ -92,6 +99,7 @@ export function usePendingChanges(): PendingChanges {
       categories,
       counterparties,
       accounts,
+      plans,
       operations,
       dictionaries,
       total: operations + dictionaries,
@@ -108,5 +116,6 @@ export function usePendingChanges(): PendingChanges {
     created,
     cpDeleted,
     merges,
+    plannedDeletions,
   ]);
 }
