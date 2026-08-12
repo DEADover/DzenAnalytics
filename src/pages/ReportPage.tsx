@@ -24,6 +24,7 @@ import {
   type XlsxNumberStyle,
 } from "../lib/categoryReportXlsx";
 import { ReportExportModal } from "../components/ReportExportModal";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { InfoPopover } from "../components/InfoPopover";
 import { formatMoney } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
@@ -42,6 +43,8 @@ const SCALES: ReportScale[] = ["month", "quarter", "year", "total"];
  * такую сводку приходилось собирать руками в Гугл-таблице.
  */
 export function ReportPage() {
+  const stickyHeader = useDisplayStore((s) => s.stickyReportHeader);
+  const setStickyReportHeader = useDisplayStore((s) => s.setStickyReportHeader);
   const all = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
   const filters = useFiltersStore();
@@ -179,6 +182,27 @@ export function ReportPage() {
             </button>
           ))}
         </div>
+        {/* Вид таблицы — это размен, который нельзя решить за человека:
+            липкая шапка требует, чтобы у таблицы был свой контейнер прокрутки,
+            а тогда она перестаёт разворачиваться во весь рост. */}
+        <span className="label ml-2">Вид</span>
+        <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+          {[
+            { on: false, label: "Во весь рост", title: "Таблица целиком, прокручивается страница" },
+            { on: true, label: "Липкая шапка", title: "Своя прокрутка: строка периодов и столбец категорий держатся" },
+          ].map((v) => (
+            <button
+              key={String(v.on)}
+              onClick={() => void setStickyReportHeader(v.on)}
+              title={v.title}
+              className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                stickyHeader === v.on ? "bg-accent text-accent-fg" : "text-muted hover:text-text"
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
         <InfoPopover label="Как считаются суммы">
           <p>
             <strong className="text-text">Доход</strong> — только поступления,{" "}
@@ -246,14 +270,20 @@ export function ReportPage() {
           За выбранный период нет доходов и расходов — измените отбор выше.
         </div>
       ) : (
-        <div className="card overflow-x-auto">
+        <div
+          className={
+            stickyHeader
+              ? "card overflow-auto max-h-[88vh]"
+              : "card overflow-x-auto"
+          }
+        >
           {/* Вертикально не режем — таблицу видно целиком, прокручивается сама
               страница. Вбок прокрутка нужна: столбцов-периодов может быть
               несколько десятков. */}
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
               <tr>
-                <Th sticky first>
+                <Th sticky={stickyHeader} first>
                   {/* Свернуть/развернуть всё живёт в шапке своей колонки —
                       там же, где стоят шевроны отдельных категорий, и не
                       занимает отдельную строку над таблицей. */}
@@ -284,7 +314,7 @@ export function ReportPage() {
                   </Th>
                 ))}
                 {showTotal && (
-                  <Th sticky align="right">
+                  <Th sticky={stickyHeader} align="right">
                     Итого
                   </Th>
                 )}
@@ -391,7 +421,10 @@ function Th({
         // строк). У человека с зарплатой первой по сумме пропадала ровно она.
         sticky ? "sticky top-0 z-20" : ""
       } ${
-        first ? "left-0 z-30 min-w-[15rem]" : ""
+        // `sticky` тут нужен и для горизонтали: без него `left-0` ничего не
+        // держит. Поэтому у первого столбца класс ставим всегда, даже когда
+        // липкая шапка выключена — столбец категорий держался слева и раньше.
+        first ? "sticky left-0 z-30 min-w-[15rem]" : ""
       }`}
     >
       {children}

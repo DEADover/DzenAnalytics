@@ -56,17 +56,28 @@ interface DisplayState {
    * посредников: контрагент говорит «AliExpress», а деньги ушли «Сергей Г.».
    */
   statementLine: boolean;
+  /**
+   * Как показывать широкую таблицу отчёта: `false` — во весь рост, прокручивает
+   * страница; `true` — своя высота и прокрутка, шапка и первый столбец держатся.
+   *
+   * Это размен, а не задача с одним верным ответом: липкая шапка требует, чтобы
+   * у таблицы был свой контейнер прокрутки, а тогда таблица перестаёт
+   * разворачиваться. Кому что важнее — решает сам.
+   */
+  stickyReportHeader: boolean;
   loaded: boolean;
   hydrate: () => Promise<void>;
   setFractionDigits: (n: FractionDigits) => Promise<void>;
   setTableFontLevel: (level: TableFontLevel) => Promise<void>;
   setStatementLine: (on: boolean) => Promise<void>;
+  setStickyReportHeader: (on: boolean) => Promise<void>;
 }
 
 export const useDisplayStore = create<DisplayState>((set, get) => ({
   fractionDigits: 0,
   tableFontLevel: DEFAULT_TABLE_FONT_LEVEL,
   statementLine: false,
+  stickyReportHeader: false,
   loaded: false,
 
   hydrate: async () => {
@@ -74,6 +85,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       fractionDigits?: number;
       tableFontLevel?: number;
       statementLine?: boolean;
+      stickyReportHeader?: boolean;
     }>(KEY);
     const fd: FractionDigits = stored?.fractionDigits === 2 ? 2 : 0;
     const level = normalizeLevel(stored?.tableFontLevel);
@@ -83,6 +95,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       fractionDigits: fd,
       tableFontLevel: level,
       statementLine: stored?.statementLine === true,
+      stickyReportHeader: stored?.stickyReportHeader === true,
       loaded: true,
     });
   },
@@ -104,6 +117,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     set({ statementLine: on });
     await db.saveJSON(KEY, { ...persisted(get()), statementLine: on });
   },
+
+  setStickyReportHeader: async (on) => {
+    set({ stickyReportHeader: on });
+    await db.saveJSON(KEY, { ...persisted(get()), stickyReportHeader: on });
+  },
 }));
 
 /** Всё, что кладём в IDB, — одним местом, чтобы сеттеры не забывали поля. */
@@ -112,5 +130,6 @@ function persisted(s: DisplayState) {
     fractionDigits: s.fractionDigits,
     tableFontLevel: s.tableFontLevel,
     statementLine: s.statementLine,
+    stickyReportHeader: s.stickyReportHeader,
   };
 }
