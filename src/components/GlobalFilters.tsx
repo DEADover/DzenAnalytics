@@ -51,6 +51,8 @@ const PINNED_CATEGORIES = ["Корректировка"];
 export function GlobalFilters({
   showDateRange = true,
   dateRangeHint,
+  dimmed = false,
+  dimmedHint,
   period,
 }: {
   /**
@@ -65,6 +67,17 @@ export function GlobalFilters({
   showDateRange?: boolean;
   /** Чем объяснить, почему даты недоступны. Показывается подсказкой. */
   dateRangeHint?: string;
+  /**
+   * Панель целиком не действует на то, что сейчас на экране: гасим её и не даём
+   * трогать. Тот же приём, что и с датами выше, только на всю панель.
+   *
+   * Убирать панель совсем нельзя: она общая для всего приложения, и её пропажа
+   * читалась бы как «фильтров тут не бывает». Погашенная панель на месте
+   * говорит правду: они есть, но этим данным не указ.
+   */
+  dimmed?: boolean;
+  /** Чем объяснить, почему панель погашена. Строкой под ней. */
+  dimmedHint?: string;
   /** Controlled period — when provided, ALL period controls (presets, month
    *  picker, custom range) drive this page-local controller instead of the
    *  global filter store, without touching the global «месяц». Used by history
@@ -281,7 +294,17 @@ export function GlobalFilters({
   if (transactions.length === 0) return null;
 
   return (
-    <div className="card p-3 md:card-pad md:p-4 mb-4 md:mb-6">
+    <div className="mb-4 md:mb-6">
+      <div
+        className={clsx(
+          "card p-3 md:card-pad md:p-4",
+          // `inert` снимает и клики, и обход с клавиатуры, и внимание читалок —
+          // одним атрибутом, без перебора всех контролов внутри.
+          dimmed && "opacity-45 grayscale select-none"
+        )}
+        inert={dimmed || undefined}
+        aria-disabled={dimmed || undefined}
+      >
       <div className="flex flex-wrap items-center gap-2">
         {/* ── Row 1: saved filter · «Дополнительно» │ period │ reset ── */}
         <FiltersMenu />
@@ -555,6 +578,10 @@ export function GlobalFilters({
           )}
         </div>
       </div>
+      </div>
+      {dimmed && dimmedHint && (
+        <div className="text-xs text-muted mt-1.5 px-1">{dimmedHint}</div>
+      )}
     </div>
   );
 }

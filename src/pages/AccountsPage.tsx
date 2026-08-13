@@ -17,6 +17,8 @@ import clsx from "clsx";
 import type { LucideIcon } from "lucide-react";
 import {
   Wallet,
+  Landmark,
+  ArrowLeftRight,
   List,
   Scale,
   Eye,
@@ -77,6 +79,7 @@ import {
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { PageTabs } from "../components/PageTabs";
 import { Stat } from "../components/Stat";
 import { Sparkline } from "../components/Sparkline";
 import { AccountLogo } from "../components/AccountLogo";
@@ -95,6 +98,12 @@ const STACK_COLORS = [
 
 type View = "stacked" | "single";
 type Scope = "filtered" | "all";
+/**
+ * Разделы страницы. «Капитал» — остатки и их история, отбору не подчиняются.
+ * «Движение» — обороты и список счетов, там отбор и работает. Раньше и то и
+ * другое лежало вперемешку на одном полотне.
+ */
+type AccountsTab = "capital" | "flow";
 type AccountsView = "cards" | "table";
 /** Что сортируем. Ключи совпадают с колонками таблицы — по клику в её шапке,
  *  как в остальных таблицах сервиса; «bank» колонки не имеет и задаётся из
@@ -363,6 +372,7 @@ export function AccountsPage() {
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [tab, setTab] = useState<AccountsTab>("capital");
   const [view, setView] = useState<View>("stacked");
   const [scope, setScope] = useState<Scope>("all");
   const [accountsView, setAccountsView] = useState<AccountsView>("table");
@@ -473,6 +483,9 @@ export function AccountsPage() {
   const filtered = useMemo(() => applyFilters(transactions, filters, monthStartDay), [transactions, filters, monthStartDay]);
   // Набора «операции под отбором» для остатков больше нет: остаток на дату
   // складывается из всей истории до неё, а отбор выбирает лишь окно показа.
+
+  /** Панель фильтров сейчас ни на что не влияет — гасим её. */
+  const filtersIdle = tab === "capital" && scope === "all";
 
   const accounts = useMemo(() => balancesByAccount(filtered), [filtered]);
   const accountsAll = useMemo(() => balancesByAccount(transactions), [transactions]);
@@ -1026,9 +1039,65 @@ export function AccountsPage() {
           </div>
         }
       />
-      <GlobalFilters />
+      {/* Вкладки, а не один длинный список блоков: на странице живут два разных
+          сюжета — «сколько у меня всего» и «что происходило по отбору». Раньше
+          они шли вперемешку, и понять, на что действует панель фильтров, было
+          нельзя: соседние карточки «Чистая дельта (фильтр)» и «Чистая дельта
+          (вся история)» стояли вплотную. */}
+      <PageTabs
+        value={tab}
+        onChange={setTab}
+        label="Разделы страницы «Счета»"
+        className="-mt-2"
+        tabs={[
+          {
+            id: "capital",
+            label: "Капитал",
+            icon: Landmark,
+            title: "Остатки и их история. Отбору не подчиняется",
+          },
+          {
+            id: "flow",
+            label: "Движение",
+            icon: ArrowLeftRight,
+            title: "Обороты и счета по выбранному отбору",
+          },
+        ]}
+      />
 
-      {calibOpen && !zenToken && (
+      {/* Стоит ПЕРЕД панелью фильтров, потому что решает её судьбу: в режиме
+          «Вся история» отбор ни на что не влияет и панель ниже гаснет. Порядок
+          чтения — причина, потом следствие. */}
+      <div className={tab === "capital" ? "flex items-center gap-2 flex-wrap" : "hidden"}>
+        <span className="label">Считать по</span>
+        <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+          <button
+            onClick={() => setScope("all")}
+            className={`px-3 py-1 text-xs rounded-md ${scope === "all" ? "bg-accent text-accent-fg" : "text-muted"}`}
+          >
+            Вся история
+          </button>
+          <button
+            onClick={() => setScope("filtered")}
+            className={`px-3 py-1 text-xs rounded-md ${scope === "filtered" ? "bg-accent text-accent-fg" : "text-muted"}`}
+          >
+            По фильтрам
+          </button>
+        </div>
+        <span className="text-xs text-muted">
+          Окно показа. Сами остатки всегда считаются по всей истории
+        </span>
+      </div>
+
+      {/* Панель гаснет ровно тогда, когда ни на что не влияет: на «Капитале» в
+          режиме «Вся история». В режиме «По фильтрам» отбор выбирает окно
+          показа, и панель снова в деле. */}
+      <GlobalFilters
+        dimmed={filtersIdle}
+        dimmedHint="Отбор не применяется: показана вся история остатков"
+      />
+
+      {tab === "capital" && calibOpen && !zenToken && (
         <div className="card card-pad bg-accent2/5 border-accent2/40">
           <div className="font-semibold mb-2 flex items-center gap-2">
             <Settings2 className="w-4 h-4 text-accent2" />
@@ -1128,32 +1197,11 @@ export function AccountsPage() {
         </div>
       )}
 
-      {/* Стоит НАД тем, что пересчитывает: двумя показателями справа и обоими
-          графиками ниже. «Доходы» и «Расходы» сюда не входят — они всегда по
-          фильтру, о чём сказано в их подписях. */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="label">Считать по</span>
-        <div className="flex bg-panel2 rounded-lg p-1 border border-border">
-          <button
-            onClick={() => setScope("all")}
-            className={`px-3 py-1 text-xs rounded-md ${scope === "all" ? "bg-accent text-accent-fg" : "text-muted"}`}
-          >
-            Вся история
-          </button>
-          <button
-            onClick={() => setScope("filtered")}
-            className={`px-3 py-1 text-xs rounded-md ${scope === "filtered" ? "bg-accent text-accent-fg" : "text-muted"}`}
-          >
-            По фильтрам
-          </button>
-        </div>
-        <span className="text-xs text-muted">
-          Окно показа: совокупный баланс, пиковое значение и оба графика.
-          Сами остатки всегда считаются по всей истории
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div
+        className={
+          tab === "capital" ? "grid grid-cols-2 md:grid-cols-2 gap-4" : "hidden"
+        }
+      >
         <Stat
           label="Совокупный баланс"
           tone={noWindowData ? "accent" : lastNetWorth >= 0 ? "income" : "expense"}
@@ -1180,21 +1228,43 @@ export function AccountsPage() {
                 : "Максимум в отобранном периоде"
           }
         />
+      </div>
+
+      {/* ── «Движение»: всё, что подчиняется отбору ─────────────────────── */}
+      <div
+        className={
+          tab === "flow" ? "grid grid-cols-2 md:grid-cols-4 gap-4" : "hidden"
+        }
+      >
         <Stat
-          label="Доходы (фильтр)"
+          label="Доходы"
           tone="income"
           value={formatMoney(totalIncome, base)}
-          hint="Без переводов между счетами"
+          hint="По отбору, без переводов между счетами"
         />
         <Stat
-          label="Расходы (фильтр)"
+          label="Расходы"
           tone="expense"
           value={formatMoney(totalExpense, base)}
-          hint="Без переводов между счетами"
+          hint="По отбору, без переводов между счетами"
+        />
+        <Stat
+          label="Чистая дельта"
+          tone={totalNet >= 0 ? "income" : "expense"}
+          value={formatMoney(totalNet, base, { signed: true })}
+          hint="По отбору"
+        />
+        <Stat
+          label="Чистая дельта (вся история)"
+          tone={totalAllAccounts >= 0 ? "income" : "expense"}
+          value={formatMoney(totalAllAccounts, base, { signed: true })}
+          // Стоит рядом с «по отбору» намеренно: эти два числа сравнивают, и в
+          // этом весь их смысл. Раньше пара терялась в середине страницы.
+          hint="Для сравнения, без отбора"
         />
       </div>
 
-      <div className="card card-pad">
+      <div className={tab === "capital" ? "card card-pad" : "hidden"}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="font-semibold">
@@ -1360,11 +1430,11 @@ export function AccountsPage() {
         </div>
       </div>
 
-      <div className="card card-pad">
+      <div className={tab === "flow" ? "card card-pad" : "hidden"}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="font-semibold">
-              {selectedAccount ? `Дельта по счёту: ${selectedAccount}` : "Дельта по фильтру"}
+              {selectedAccount ? `Дельта по счёту: ${selectedAccount}` : "Дельта по отбору"}
             </div>
             <div className="text-xs text-muted">
               Изменение баланса за период (нарастающим итогом)
@@ -1418,27 +1488,11 @@ export function AccountsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Stat
-          label="Чистая дельта (фильтр)"
-          tone={totalNet >= 0 ? "income" : "expense"}
-          value={formatMoney(totalNet, base, { signed: true })}
-          hint="По текущим фильтрам"
-        />
-        <Stat
-          label="Чистая дельта (вся история)"
-          tone={totalAllAccounts >= 0 ? "income" : "expense"}
-          value={formatMoney(totalAllAccounts, base, { signed: true })}
-          hint="Без фильтров"
-        />
-        <Stat
-          label="Счетов"
-          value={accountsAll.length}
-          hint={`${accounts.length} в фильтре`}
-        />
-      </div>
-
-      <div className="card card-pad">
+      {/* Ряд «Чистая дельта (фильтр) / (вся история) / Счетов» уехал наверх, к
+          остальным показателям отбора: он и был показателями, просто стоял
+          после графиков. Счётчик счетов при этом слился с заголовком списка —
+          там же, где он и нужен. */}
+      <div className={tab === "flow" ? "card card-pad" : "hidden"}>
         <div className="flex items-center gap-2 flex-wrap mb-3">
           {/* Ширина заголовка зафиксирована ровно под трёхзначный счётчик
               (замер: «Счета (999)» — 115 px): иначе переход с «Счета (1)» на
@@ -1447,7 +1501,14 @@ export function AccountsPage() {
           <div className="font-semibold flex items-center gap-2 mr-1 min-w-[7.5rem]">
             <Wallet className="w-4 h-4 shrink-0" />
             <span>
-              Счета (<span className="tabular-nums">{visibleRows.length}</span>)
+              Счета (<span className="tabular-nums">{visibleRows.length}</span>
+              {visibleRows.length !== accountsAll.length && (
+                <span className="text-muted font-normal">
+                  {" "}
+                  из <span className="tabular-nums">{accountsAll.length}</span>
+                </span>
+              )}
+              )
             </span>
           </div>
           {/* Итог по видимому списку. Показываем всегда, когда есть что
