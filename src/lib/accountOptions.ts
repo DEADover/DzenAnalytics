@@ -44,3 +44,31 @@ export function accountOptions(
     return a.localeCompare(b, "ru");
   });
 }
+
+/**
+ * Доля счёта в капитале, 0…1.
+ *
+ * Считается ТОЛЬКО от положительных остатков: с долгами в знаменателе доля
+ * теряет смысл — при активах 1 млн и долге 900 тыс. сумма всех остатков
+ * 100 тыс., и счёт на 500 тыс. получил бы «долю» в 500 %. Поэтому знаменатель
+ * — сколько всего денег ЕСТЬ, а долги в него не входят и своей доли не имеют.
+ *
+ * `null` — доли нет: у счёта долг или ноль, либо считать не от чего.
+ */
+export function capitalShare(
+  balance: number | null,
+  positiveTotal: number
+): number | null {
+  if (balance == null || balance <= 0) return null;
+  if (!(positiveTotal > 0)) return null;
+  return balance / positiveTotal;
+}
+
+/** Сумма положительных остатков — знаменатель для {@link capitalShare}. */
+export function positiveBalanceTotal(
+  balances: Iterable<number | null>
+): number {
+  let sum = 0;
+  for (const b of balances) if (b != null && b > 0) sum += b;
+  return sum;
+}

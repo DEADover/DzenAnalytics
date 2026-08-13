@@ -66,6 +66,7 @@ import {
 import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
 import {
   formatMoney,
+  formatPct,
   chartTooltipStyle,
   formatNum,
   axisFractionDigits,
@@ -80,6 +81,7 @@ import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { PageTabs } from "../components/PageTabs";
+import { capitalShare, positiveBalanceTotal } from "../lib/accountOptions";
 import { Stat } from "../components/Stat";
 import { Sparkline } from "../components/Sparkline";
 import { AccountLogo } from "../components/AccountLogo";
@@ -484,8 +486,10 @@ export function AccountsPage() {
   // Набора «операции под отбором» для остатков больше нет: остаток на дату
   // складывается из всей истории до неё, а отбор выбирает лишь окно показа.
 
+  /** Вкладка «Капитал»: список показывает остатки, а не обороты за период. */
+  const capitalView = tab === "capital";
   /** Панель фильтров сейчас ни на что не влияет — гасим её. */
-  const filtersIdle = tab === "capital" && scope === "all";
+  const filtersIdle = capitalView && scope === "all";
 
   const accounts = useMemo(() => balancesByAccount(filtered), [filtered]);
   const accountsAll = useMemo(() => balancesByAccount(transactions), [transactions]);
@@ -540,7 +544,12 @@ export function AccountsPage() {
 
   const accountRowsResult = useMemo(() => {
     const liveByTitle = new Map(liveList.map((a) => [a.title, a]));
-    const txByTitle = new Map(accounts.map((a) => [a.account, a]));
+    // На «Капитале» список строится по ВСЕЙ истории: остаток на счёте не
+    // зависит от того, какие операции сейчас отобраны, и счёт не должен
+    // пропадать из перечня только потому, что в выбранном периоде по нему не
+    // было движения. На «Движении» наоборот — там показаны обороты за отбор.
+    const source = capitalView ? accountsAll : accounts;
+    const txByTitle = new Map(source.map((a) => [a.account, a]));
 
     // Список на этой странице — справочник счетов, поэтому внебалансовые счета
     // в нём есть ВСЕГДА, с пометкой «Вне баланса» и отдельным отбором. Раньше
@@ -549,7 +558,7 @@ export function AccountsPage() {
     // «Счета вне баланса» продолжает управлять расчётами (совокупный баланс,
     // Главная), но прятать сами счета из их же списка ей незачем.
     const titles = new Set<string>();
-    for (const a of accounts) titles.add(a.account);
+    for (const a of source) titles.add(a.account);
     // Сколько живых счетов вообще не попало в список: нулевой остаток и ни
     // одной операции в окне фильтра. Нужно, чтобы подпись под итогом честно
     // говорила, что показано не всё.
@@ -604,7 +613,7 @@ export function AccountsPage() {
       return (y.balanceBase ?? y.delta) - (x.balanceBase ?? x.delta);
     });
     return { rows, dormant };
-  }, [accounts, liveList, accountEdits, toBase]);
+  }, [accounts, accountsAll, capitalView, liveList, accountEdits, toBase]);
 
   /** Спящие счета, не попавшие в список вовсе (нулевой остаток и без операций). */
   const dormantCount = accountRowsResult.dormant;
@@ -691,7 +700,11 @@ export function AccountsPage() {
       const arch = byArchive(x, y);
       if (arch !== 0) return arch;
       let cmp = 0;
-      switch (sortBy) {
+      // Столбца может не быть на этой вкладке — тогда сортировка по нему
+      // читалась бы как случайный порядок. Откатываемся на сумму.
+      const flowKeys = ["income", "expense", "delta", "count"];
+      const key = capitalView && flowKeys.includes(sortBy) ? "balance" : sortBy;
+      switch (key) {
         case "alpha":
           cmp = x.account.localeCompare(y.account, "ru");
           break;
@@ -736,6 +749,7 @@ export function AccountsPage() {
     bankFilter,
     sortBy,
     sortDir,
+    capitalView,
   ]);
 
   /**
@@ -756,8 +770,24 @@ export function AccountsPage() {
    */
   const hiddenCount = dormantCount + (accountRows.length - visibleRows.length);
 
+  /**
+   * Число, которым строка представлена в итогах и заголовках групп.
+   *
+   * На «Капитале» это остаток (в CSV, где остатков нет, — накопленное с нуля),
+   * на «Движении» — изменение за отобранный период. Раньше формула была одна на
+   * оба случая, и на вкладке про обороты в итоге стояли остатки.
+   */
+  const rowHeadline = useCallback(
+    (r: AccountRow) => (capitalView ? r.balanceBase ?? r.delta : r.delta),
+    [capitalView]
+  );
   const visibleTotal = useMemo(
-    () => visibleRows.reduce((sum, r) => sum + (r.balanceBase ?? r.delta), 0),
+    () => visibleRows.reduce((sum, r) => sum + rowHeadline(r), 0),
+    [visibleRows, rowHeadline]
+  );
+  /** Знаменатель для доли в капитале — только положительные остатки. */
+  const positiveTotal = useMemo(
+    () => positiveBalanceTotal(visibleRows.map((r) => r.balanceBase ?? r.delta)),
     [visibleRows]
   );
 
@@ -787,7 +817,7 @@ export function AccountsPage() {
       .map(([label, rows]) => ({
         label,
         rows,
-        sum: rows.reduce((s, r) => s + (r.balanceBase ?? r.delta), 0),
+        sum: rows.reduce((s, r) => s + rowHeadline(r), 0),
         // Группа целиком из архивных счетов уходит вниз — иначе закрытый вклад
         // с крупным остатком вставал выше рабочих счетов, хотя внутри списка
         // архивные мы как раз опускаем.
@@ -1491,11 +1521,11 @@ export function AccountsPage() {
         </div>
       </div>
 
-      {/* Ряд «Чистая дельта (фильтр) / (вся история) / Счетов» уехал наверх, к
-          остальным показателям отбора: он и был показателями, просто стоял
-          после графиков. Счётчик счетов при этом слился с заголовком списка —
-          там же, где он и нужен. */}
-      <div className={tab === "flow" ? "card card-pad" : "hidden"}>
+      {/* Список счетов виден на ОБЕИХ вкладках: это опора страницы, и прятать
+          его за вкладкой — значит отвечать на вопрос «сколько у меня есть» без
+          перечня счетов. Вкладка меняет не наличие списка, а его столбцы:
+          остаток и доля против оборотов за период. */}
+      <div className="card card-pad">
         <div className="flex items-center gap-2 flex-wrap mb-3">
           {/* Два показателя строки набраны одинаково: жирная подпись — значение
               обычным. Так строка читается парами «что : сколько», а не гонкой
@@ -1520,8 +1550,10 @@ export function AccountsPage() {
             <span
               className="text-sm tabular-nums shrink-0 mr-1"
               title={
-                (hasRealBalances
-                  ? "Сумма остатков по счетам из списка"
+                (capitalView
+                  ? hasRealBalances
+                    ? "Сумма остатков по счетам из списка"
+                    : "Сумма накопленного с нуля по счетам из списка"
                   : "Сумма изменений за период по счетам из списка") +
                 (hiddenCount > 0
                   ? hiddenCount === dormantCount
@@ -1533,7 +1565,12 @@ export function AccountsPage() {
               }
             >
               <span className="font-semibold">
-                {hasRealBalances ? "Общий остаток" : "Общее изменение"}:
+                {capitalView
+                  ? hasRealBalances
+                    ? "Общий остаток"
+                    : "Всего накоплено"
+                  : "Общее изменение"}
+                :
               </span>{" "}
               {formatMoney(visibleTotal, base)}
             </span>
@@ -1737,8 +1774,9 @@ export function AccountsPage() {
               const a = item.row;
               const isSel = selectedAccount === a.account;
               const hasReal = a.balanceBase !== null;
-              // Headline = real balance when known, else the flow delta.
-              const headline = hasReal ? a.balanceBase! : a.delta;
+              // На «Движении» крупное число карточки — изменение за период, а
+              // не остаток: иначе оно отвечало бы на вопрос соседней вкладки.
+              const headline = capitalView ? (hasReal ? a.balanceBase! : a.delta) : a.delta;
               const headlineNeg = headline < 0;
               // Real balances are neutral when positive (match dashboard);
               // a flow delta keeps income/expense colouring.
@@ -1808,7 +1846,7 @@ export function AccountsPage() {
                     className="block text-left w-full"
                   >
                     <div className="text-[10px] uppercase tracking-wider text-muted">
-                      {hasReal ? "Баланс" : "Изменение"}
+                      {capitalView ? (hasReal ? "Остаток" : "Накоплено") : "Изменение"}
                     </div>
                     <div className="flex items-end justify-between gap-2">
                       <div className="min-w-0">
@@ -1839,21 +1877,34 @@ export function AccountsPage() {
                       />
                     </div>
                     <div className="text-xs text-muted flex justify-between mt-2 mb-3">
-                      {hasReal ? (
-                        <span title="Изменение по текущим фильтрам">
-                          Δ {formatMoney(a.delta, base, { signed: true })}
-                        </span>
+                      {capitalView ? (
+                        <>
+                          <span title="Доля от суммы положительных остатков. У долгов доли нет">
+                            {(() => {
+                              const share = capitalShare(
+                                a.balanceBase ?? a.delta,
+                                positiveTotal
+                              );
+                              return share == null ? "" : `Доля ${formatPct(share * 100)}`;
+                            })()}
+                          </span>
+                          <span />
+                        </>
                       ) : (
-                        <span />
+                        <>
+                          <span title="Изменение по текущим отборам">
+                            Δ {formatMoney(a.delta, base, { signed: true })}
+                          </span>
+                          <span className="flex gap-2">
+                            <span className="text-income">
+                              +{formatMoney(a.income, base)}
+                            </span>
+                            <span className="text-expense">
+                              −{formatMoney(a.expense, base)}
+                            </span>
+                          </span>
+                        </>
                       )}
-                      <span className="flex gap-2">
-                        <span className="text-income">
-                          +{formatMoney(a.income, base)}
-                        </span>
-                        <span className="text-expense">
-                          −{formatMoney(a.expense, base)}
-                        </span>
-                      </span>
                     </div>
                   </button>
                   <button
@@ -1884,11 +1935,19 @@ export function AccountsPage() {
                     счёт», замер 140px) плюс отступы ячейки: иначе она режется
                     многоточием у большинства счетов. */}
                 <col style={{ width: 170 }} />
-                <col style={{ width: hasForeignCurrency ? 230 : 140 }} />
-                <col style={{ width: 130 }} />
-                <col style={{ width: 130 }} />
-                <col style={{ width: 126 }} />
-                <col style={{ width: 96 }} />
+                {capitalView ? (
+                  <>
+                    <col style={{ width: hasForeignCurrency ? 230 : 140 }} />
+                    <col style={{ width: 110 }} />
+                  </>
+                ) : (
+                  <>
+                    <col style={{ width: 130 }} />
+                    <col style={{ width: 130 }} />
+                    <col style={{ width: 126 }} />
+                    <col style={{ width: 96 }} />
+                  </>
+                )}
                 <col style={{ width: 120 }} />
               </colgroup>
               <thead>
@@ -1899,21 +1958,35 @@ export function AccountsPage() {
                   <SortTh sortKey="type" {...sortHead}>
                     Тип
                   </SortTh>
-                  <SortTh sortKey="balance" align="right" {...sortHead}>
-                    {hasRealBalances ? "Баланс" : "Изменение"}
-                  </SortTh>
-                  <SortTh sortKey="income" align="right" {...sortHead}>
-                    Поступления
-                  </SortTh>
-                  <SortTh sortKey="expense" align="right" {...sortHead}>
-                    Списания
-                  </SortTh>
-                  <SortTh sortKey="delta" align="right" {...sortHead}>
-                    Δ Период
-                  </SortTh>
-                  <SortTh sortKey="count" align="center" {...sortHead}>
-                    Операции
-                  </SortTh>
+                  {/* Столбцы по вкладке: на «Капитале» — сколько лежит и какая
+                      это доля, на «Движении» — что происходило за период. Раньше
+                      и то и другое стояло в одной таблице, из-за чего строка
+                      отвечала сразу на два разных вопроса. */}
+                  {capitalView ? (
+                    <>
+                      <SortTh sortKey="balance" align="right" {...sortHead}>
+                        {hasRealBalances ? "Остаток" : "Накоплено"}
+                      </SortTh>
+                      <SortTh sortKey="balance" align="right" {...sortHead}>
+                        Доля
+                      </SortTh>
+                    </>
+                  ) : (
+                    <>
+                      <SortTh sortKey="income" align="right" {...sortHead}>
+                        Поступления
+                      </SortTh>
+                      <SortTh sortKey="expense" align="right" {...sortHead}>
+                        Списания
+                      </SortTh>
+                      <SortTh sortKey="delta" align="right" {...sortHead}>
+                        Δ Период
+                      </SortTh>
+                      <SortTh sortKey="count" align="center" {...sortHead}>
+                        Операции
+                      </SortTh>
+                    </>
+                  )}
                   <th className="table-th text-center">Действия</th>
                 </tr>
               </thead>
@@ -2006,22 +2079,39 @@ export function AccountsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="table-td text-right tabular-nums text-income whitespace-nowrap">
-                        {formatMoney(a.income, base)}
-                      </td>
-                      <td className="table-td text-right tabular-nums text-expense whitespace-nowrap">
-                        {formatMoney(a.expense, base)}
-                      </td>
-                      <td
-                        className={`table-td text-right tabular-nums whitespace-nowrap ${
-                          a.delta >= 0 ? "text-income" : "text-expense"
-                        }`}
-                      >
-                        {formatMoney(a.delta, base, { signed: true })}
-                      </td>
-                      <td className="table-td text-center tabular-nums text-muted">
-                        {formatNum(a.count)}
-                      </td>
+                      {capitalView ? (
+                        <td
+                          className="table-td text-right tabular-nums text-muted whitespace-nowrap"
+                          title="Доля от суммы положительных остатков. У долгов доли нет"
+                        >
+                          {(() => {
+                            const share = capitalShare(
+                              a.balanceBase ?? a.delta,
+                              positiveTotal
+                            );
+                            return share == null ? "—" : formatPct(share * 100);
+                          })()}
+                        </td>
+                      ) : (
+                        <>
+                          <td className="table-td text-right tabular-nums text-income whitespace-nowrap">
+                            {formatMoney(a.income, base)}
+                          </td>
+                          <td className="table-td text-right tabular-nums text-expense whitespace-nowrap">
+                            {formatMoney(a.expense, base)}
+                          </td>
+                          <td
+                            className={`table-td text-right tabular-nums whitespace-nowrap ${
+                              a.delta >= 0 ? "text-income" : "text-expense"
+                            }`}
+                          >
+                            {formatMoney(a.delta, base, { signed: true })}
+                          </td>
+                          <td className="table-td text-center tabular-nums text-muted">
+                            {formatNum(a.count)}
+                          </td>
+                        </>
+                      )}
                       <td className="table-td">
                         <div className="flex items-center justify-center gap-1">
                           <button
