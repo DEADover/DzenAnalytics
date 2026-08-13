@@ -1497,25 +1497,20 @@ export function AccountsPage() {
           там же, где он и нужен. */}
       <div className={tab === "flow" ? "card card-pad" : "hidden"}>
         <div className="flex items-center gap-2 flex-wrap mb-3">
-          {/* Ширина заголовка зафиксирована ровно под трёхзначный счётчик
-              (замер: «Счета (999)» — 115 px): иначе переход с «Счета (1)» на
-              «Счета (999)» сдвигает всю строку кнопок прямо под курсором.
-              Больше не резервируем — лишний запас читается как дыра. */}
-          <div className="font-semibold flex items-center gap-2 mr-1 min-w-[7.5rem]">
+          {/* Два показателя строки набраны одинаково: жирная подпись — значение
+              обычным. Так строка читается парами «что : сколько», а не гонкой
+              за самым заметным числом. Ширина не резервируется: при мелком
+              кегле запас под трёхзначный счётчик читался бы дырой. */}
+          <div className="text-sm flex items-center gap-1.5 mr-1">
             <Wallet className="w-4 h-4 shrink-0" />
-            {/* Счётчик целиком внутри скобок и одним стилем: «11» и «из 29» —
-                части одного числа, разнести их по разным кеглям значит порвать
-                заголовок пополам. «из N» появляется только когда отбор часть
-                счетов прячет. */}
-            <span>
-              Счета (<span className="tabular-nums">{visibleRows.length}</span>
+            <span className="font-semibold">Счета:</span>
+            {/* «11 из 29» — части одного числа, поэтому одним стилем.
+                «из N» появляется, только когда отбор часть счетов прячет. */}
+            <span className="tabular-nums">
+              {visibleRows.length}
               {visibleRows.length !== accountsAll.length && (
-                <>
-                  {" из "}
-                  <span className="tabular-nums">{accountsAll.length}</span>
-                </>
+                <> из {accountsAll.length}</>
               )}
-              )
             </span>
           </div>
           {/* Итог по видимому списку. Показываем всегда, когда есть что
@@ -1523,10 +1518,7 @@ export function AccountsPage() {
               на накопительных», а без них — просто сумма всех счетов. */}
           {visibleRows.length > 0 && (
             <span
-              // Тот же кегль, что и у заголовка рядом: два соседних числа,
-              // набранные разным размером, читаются как разные по важности —
-              // а это одна и та же строка про один и тот же список.
-              className="text-muted tabular-nums shrink-0 mr-1"
+              className="text-sm tabular-nums shrink-0 mr-1"
               title={
                 (hasRealBalances
                   ? "Сумма остатков по счетам из списка"
@@ -1540,10 +1532,10 @@ export function AccountsPage() {
                   : "")
               }
             >
-              {hasRealBalances ? "Остаток" : "Изменение"}:{" "}
-              <span className="text-text font-medium">
-                {formatMoney(visibleTotal, base)}
-              </span>
+              <span className="font-semibold">
+                {hasRealBalances ? "Общий остаток" : "Общее изменение"}:
+              </span>{" "}
+              {formatMoney(visibleTotal, base)}
             </span>
           )}
           <MultiSelect
