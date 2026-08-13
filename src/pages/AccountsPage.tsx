@@ -1885,7 +1885,7 @@ export function AccountsPage() {
                                 a.balanceBase ?? a.delta,
                                 positiveTotal
                               );
-                              return share == null ? "" : `Доля ${formatPct(share * 100)}`;
+                              return share == null ? "" : `Доля ${formatPct(share)}`;
                             })()}
                           </span>
                           <span />
@@ -1926,7 +1926,11 @@ export function AccountsPage() {
                 overflows its cell (which would force a horizontal scrollbar). */}
             <table
               className={`w-full text-base table-fixed ${
-                hasForeignCurrency ? "min-w-[1212px]" : "min-w-[1122px]"
+                // Минимум под НАБОР столбцов этой вкладки: на «Капитале» их
+                // пять, и ширина от восьми растянула бы таблицу пустотой.
+                capitalView
+                  ? hasForeignCurrency ? "min-w-[760px]" : "min-w-[670px]"
+                  : hasForeignCurrency ? "min-w-[1212px]" : "min-w-[1122px]"
               }`}
             >
               <colgroup>
@@ -2005,8 +2009,9 @@ export function AccountsPage() {
                           </span>
                         </td>
                         <td className="table-td" />
-                        {/* Сумма группы стоит ровно под колонкой баланса —
-                            иначе её пришлось бы искать глазами. */}
+                        {/* Сумма группы стоит ровно под колонкой с деньгами:
+                            на «Капитале» это остаток, на «Движении» — поступления.
+                            Хвост добивается пустыми ячейками до конца строки. */}
                         <td
                           className={`table-td text-right tabular-nums font-semibold whitespace-nowrap ${
                             item.sum < 0 ? "text-expense" : "text-text"
@@ -2014,7 +2019,7 @@ export function AccountsPage() {
                         >
                           {formatMoney(item.sum, base)}
                         </td>
-                        <td className="table-td" colSpan={5} />
+                        <td className="table-td" colSpan={capitalView ? 2 : 4} />
                       </tr>
                     );
                   }
@@ -2065,20 +2070,22 @@ export function AccountsPage() {
                         </div>
                       </td>
                       <td className="table-td text-muted truncate">{a.kind}</td>
-                      <td
-                        className={`table-td text-right tabular-nums font-semibold whitespace-nowrap ${headlineColor}`}
-                        title={formatMoney(headline, base, { decimals: 2 })}
-                      >
-                        {formatMoney(headline, base, { signed: !hasReal })}
-                        {/* Валюта счёта — в скобках рядом, а не второй строкой:
-                            строка таблицы не должна расти из-за одной суммы. */}
-                        {hasReal && a.nativeCurrency && a.nativeCurrency !== base && (
-                          <span className="text-[13px] text-muted font-normal">
-                            {" "}
-                            ({formatMoney(a.nativeBalance!, a.nativeCurrency)})
-                          </span>
-                        )}
-                      </td>
+                      {capitalView && (
+                        <td
+                          className={`table-td text-right tabular-nums font-semibold whitespace-nowrap ${headlineColor}`}
+                          title={formatMoney(headline, base, { decimals: 2 })}
+                        >
+                          {formatMoney(headline, base, { signed: !hasReal })}
+                          {/* Валюта счёта — в скобках рядом, а не второй строкой:
+                              строка таблицы не должна расти из-за одной суммы. */}
+                          {hasReal && a.nativeCurrency && a.nativeCurrency !== base && (
+                            <span className="text-[13px] text-muted font-normal">
+                              {" "}
+                              ({formatMoney(a.nativeBalance!, a.nativeCurrency)})
+                            </span>
+                          )}
+                        </td>
+                      )}
                       {capitalView ? (
                         <td
                           className="table-td text-right tabular-nums text-muted whitespace-nowrap"
@@ -2089,7 +2096,7 @@ export function AccountsPage() {
                               a.balanceBase ?? a.delta,
                               positiveTotal
                             );
-                            return share == null ? "—" : formatPct(share * 100);
+                            return share == null ? "—" : formatPct(share);
                           })()}
                         </td>
                       ) : (
