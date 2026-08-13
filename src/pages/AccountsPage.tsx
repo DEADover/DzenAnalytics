@@ -922,36 +922,11 @@ export function AccountsPage() {
         hint="Данные по всем счетам, их балансы и другая аналитика."
         right={
           <div className="flex flex-wrap gap-2">
-            <div className="flex bg-panel2 rounded-lg p-1 border border-border">
-              <button
-                onClick={() => setScope("all")}
-                className={`px-3 py-1 text-xs rounded-md ${scope === "all" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                Вся история
-              </button>
-              <button
-                onClick={() => setScope("filtered")}
-                className={`px-3 py-1 text-xs rounded-md ${scope === "filtered" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                По фильтрам
-              </button>
-            </div>
-            <div className="flex bg-panel2 rounded-lg p-1 border border-border">
-              <button
-                onClick={() => setView("stacked")}
-                className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${view === "stacked" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                <Layers className="w-3 h-3" />
-                По счетам
-              </button>
-              <button
-                onClick={() => setView("single")}
-                className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${view === "single" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                <LineChartIcon className="w-3 h-3" />
-                Совокупно
-              </button>
-            </div>
+            {/* Переключатели «Вся история / По фильтрам» и «По счетам /
+                Совокупно» жили здесь, в шапке страницы, и по ним нельзя было
+                понять, на что каждый влияет. Теперь каждый стоит там, где
+                действует: первый — над блоком показателей и графиков, которые
+                он пересчитывает, второй — в карточке своего графика. */}
             {zenLoaded && !zenToken && (
               <button
                 onClick={() => setCalibOpen((o) => !o)}
@@ -1067,6 +1042,30 @@ export function AccountsPage() {
         </div>
       )}
 
+      {/* Стоит НАД тем, что пересчитывает: двумя показателями справа и обоими
+          графиками ниже. «Доходы» и «Расходы» сюда не входят — они всегда по
+          фильтру, о чём сказано в их подписях. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="label">Считать по</span>
+        <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+          <button
+            onClick={() => setScope("all")}
+            className={`px-3 py-1 text-xs rounded-md ${scope === "all" ? "bg-accent text-accent-fg" : "text-muted"}`}
+          >
+            Вся история
+          </button>
+          <button
+            onClick={() => setScope("filtered")}
+            className={`px-3 py-1 text-xs rounded-md ${scope === "filtered" ? "bg-accent text-accent-fg" : "text-muted"}`}
+          >
+            По фильтрам
+          </button>
+        </div>
+        <span className="text-xs text-muted">
+          Совокупный баланс, пиковое значение и оба графика
+        </span>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat
           label="Совокупный баланс"
@@ -1078,7 +1077,13 @@ export function AccountsPage() {
           label="Пиковое значение"
           tone="accent"
           value={formatMoney(peakNetWorth, base)}
-          hint="Максимум за период графика"
+          // Тот же набор операций, что и у «Совокупного баланса», — значит и
+          // подпись должна честно называть его, а не молчать про отбор.
+          hint={
+            scope === "all"
+              ? "Максимум за всю историю"
+              : "Максимум в пределах фильтра"
+          }
         />
         <Stat
           label="Доходы (фильтр)"
@@ -1104,16 +1109,37 @@ export function AccountsPage() {
                   : "Накопленный поток по счетам (стопкой)"
                 : "Совокупный баланс (одной линией)"}
             </div>
+            {/* Подпись говорит про отбор ровно то, что есть на деле. Раньше у
+                стопки стояло «без фильтров» всегда — а она строится из того же
+                набора операций, что и остальное, и в режиме «По фильтрам»
+                фильтры на неё влияют. */}
             <div className="text-xs text-muted">
               {view === "stacked"
                 ? hasRealBalances
-                  ? "Реальные остатки по счетам · вся история, без фильтров"
-                  : "Накопление с нуля, без стартовых остатков · без фильтров"
-                : scope === "all"
-                  ? "Все транзакции, без учёта фильтров"
-                  : "С учётом фильтров"}
+                  ? "Реальные остатки по счетам"
+                  : "Накопление с нуля, без стартовых остатков"
+                : "Совокупный баланс на каждый день"}
+              {scope === "all" ? " · вся история" : " · в пределах фильтра"}
               {view === "stacked" && ` · топ-${stacked.accounts.length} счетов`}
             </div>
+          </div>
+          <div className="flex bg-panel2 rounded-lg p-1 border border-border shrink-0">
+            <button
+              onClick={() => setView("stacked")}
+              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${view === "stacked" ? "bg-accent text-accent-fg" : "text-muted"}`}
+              title="Разложить по счетам, стопкой"
+            >
+              <Layers className="w-3 h-3" />
+              По счетам
+            </button>
+            <button
+              onClick={() => setView("single")}
+              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${view === "single" ? "bg-accent text-accent-fg" : "text-muted"}`}
+              title="Одна линия: активы минус долги"
+            >
+              <LineChartIcon className="w-3 h-3" />
+              Совокупно
+            </button>
           </div>
         </div>
         <div className="h-96">
