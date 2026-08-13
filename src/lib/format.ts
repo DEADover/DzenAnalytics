@@ -244,3 +244,6 @@ export const chartTooltipProps = {
 
 export const chartGridStroke = "var(--grid)";
 export const chartAxisStroke = "rgb(var(--c-muted))";
+/** Линия итога поверх стопки. Цвет текста, а не палитры счетов: итог — не
+ *  ещё одна доля, а сумма всех, и путать его с ними нельзя. */
+export const chartTotalStroke = "rgb(var(--c-text))";

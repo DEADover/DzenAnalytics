@@ -9,6 +9,8 @@ import {
   CartesianGrid,
   Legend,
   ComposedChart,
+  Line,
+  ReferenceLine,
   type TooltipContentProps,
 } from "recharts";
 import clsx from "clsx";
@@ -69,6 +71,7 @@ import {
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
+  chartTotalStroke,
 } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
@@ -831,12 +834,16 @@ export function AccountsPage() {
   const renderStackedTooltip = ({ active, payload, label }: TooltipContentProps) => {
     if (!active || !payload || payload.length === 0) return null;
     const datum = payload[0]?.payload as { total?: number } | undefined;
-    const total = datum?.total ?? payload.reduce((s, p) => s + toNum(p.value), 0);
+    // Линия итога — часть того же графика, поэтому приезжает в payload наравне
+    // со счетами. В список счетов её пускать нельзя: итог уже стоит отдельной
+    // строкой внизу, иначе он был бы там дважды.
+    const rows = payload.filter((p) => p.dataKey !== "total");
+    const total = datum?.total ?? rows.reduce((s, p) => s + toNum(p.value), 0);
     return (
       <div style={chartTooltipStyle}>
         <div className="text-xs text-muted mb-1">{formatDate(label as string)}</div>
         <div className="space-y-0.5">
-          {payload.map((p) => (
+          {rows.map((p) => (
             <div key={String(p.dataKey)} className="flex items-center gap-3 text-sm">
               <span
                 className="w-2.5 h-2.5 rounded-[2px] shrink-0"
@@ -1112,7 +1119,14 @@ export function AccountsPage() {
         <div className="h-96">
           {view === "stacked" ? (
             <ResponsiveContainer>
-              <AreaChart data={stacked.series}>
+              {/* `stackOffset="sign"`: активы растут вверх от нуля, долги — вниз,
+                  каждый от своей стороны. Без него стопка складывается подряд, и
+                  долг, нарисованный после активов, утягивает всю ленту вниз, а
+                  следующий актив поднимает обратно: нижний край ленты
+                  оказывается не итогом, а самой глубокой точкой этого блуждания
+                  — и зависит от порядка счетов. Отсюда и брались −5 млн на оси
+                  при итоге −3,7 млн. */}
+              <ComposedChart data={stacked.series} stackOffset="sign">
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
                   dataKey="date"
@@ -1128,6 +1142,7 @@ export function AccountsPage() {
                 />
                 <Tooltip {...chartTooltipProps} content={renderStackedTooltip} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
+                <ReferenceLine y={0} stroke={chartAxisStroke} strokeWidth={1} />
                 {stacked.accounts.map((acc, i) => (
                   <Area
                     key={acc}
@@ -1139,7 +1154,21 @@ export function AccountsPage() {
                     fillOpacity={0.7}
                   />
                 ))}
-              </AreaChart>
+                {/* Итог отдельной линией: в стопке со знаками его негде увидеть —
+                    активы и долги разведены по разные стороны от нуля, а разница
+                    между ними нигде не нарисована. Раньше число из подсказки не
+                    совпадало ни с одним краем ленты, и это выглядело ошибкой. */}
+                <Line
+                  type="monotone"
+                  dataKey="total"
+                  name="Итого"
+                  stroke={chartTotalStroke}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           ) : (
             <ResponsiveContainer>
