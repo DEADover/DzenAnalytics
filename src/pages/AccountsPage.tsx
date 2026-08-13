@@ -1503,24 +1503,30 @@ export function AccountsPage() {
               Больше не резервируем — лишний запас читается как дыра. */}
           <div className="font-semibold flex items-center gap-2 mr-1 min-w-[7.5rem]">
             <Wallet className="w-4 h-4 shrink-0" />
+            {/* Счётчик целиком внутри скобок и одним стилем: «11» и «из 29» —
+                части одного числа, разнести их по разным кеглям значит порвать
+                заголовок пополам. «из N» появляется только когда отбор часть
+                счетов прячет. */}
             <span>
-              Счета (<span className="tabular-nums">{visibleRows.length}</span>)
+              Счета (<span className="tabular-nums">{visibleRows.length}</span>
+              {visibleRows.length !== accountsAll.length && (
+                <>
+                  {" из "}
+                  <span className="tabular-nums">{accountsAll.length}</span>
+                </>
+              )}
+              )
             </span>
           </div>
-          {/* Сколько счетов всего — той же приглушённой строкой, что и остаток, а
-              не вторым шрифтом внутри жирного заголовка: заголовок должен быть
-              однородным. Появляется, только когда отбор часть счетов прячет. */}
-          {visibleRows.length !== accountsAll.length && (
-            <span className="text-xs text-muted shrink-0 mr-1">
-              из <span className="tabular-nums">{accountsAll.length}</span>
-            </span>
-          )}
           {/* Итог по видимому списку. Показываем всегда, когда есть что
               складывать: при включённых отборах это ответ на «сколько всего
               на накопительных», а без них — просто сумма всех счетов. */}
           {visibleRows.length > 0 && (
             <span
-              className="text-xs text-muted tabular-nums shrink-0 mr-1"
+              // Тот же кегль, что и у заголовка рядом: два соседних числа,
+              // набранные разным размером, читаются как разные по важности —
+              // а это одна и та же строка про один и тот же список.
+              className="text-muted tabular-nums shrink-0 mr-1"
               title={
                 (hasRealBalances
                   ? "Сумма остатков по счетам из списка"
