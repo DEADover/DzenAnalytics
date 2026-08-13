@@ -470,7 +470,8 @@ export function AccountsPage() {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const filtered = useMemo(() => applyFilters(transactions, filters, monthStartDay), [transactions, filters, monthStartDay]);
-  const baseTxs = scope === "all" ? transactions : filtered;
+  // Набора «операции под отбором» для остатков больше нет: остаток на дату
+  // складывается из всей истории до неё, а отбор выбирает лишь окно показа.
 
   const accounts = useMemo(() => balancesByAccount(filtered), [filtered]);
   const accountsAll = useMemo(() => balancesByAccount(transactions), [transactions]);
@@ -812,22 +813,61 @@ export function AccountsPage() {
     () => dailyBalanceSeries(filtered, selectedAccount ?? undefined),
     [filtered, selectedAccount]
   );
-  // Unsynced drafts live in `baseTxs` but not in the API balances — keep them
+  // Unsynced drafts are walked in the series but are not in the API balances —
+  // keep them
   // out of the stacked chart's real-balance anchor so the line isn't shifted
   // by the draft amount (issue #18).
   const drafts = useDraftsStore((s) => s.drafts);
   const unsyncedIds = useMemo(() => new Set(Object.keys(drafts)), [drafts]);
-  const stacked = useMemo(
+  /**
+   * Окно показа для остатков.
+   *
+   * Остаток на дату складывается из ВСЕЙ истории до неё — отбор не может его
+   * изменить, он может только выбрать, какой кусок показать. Раньше графики
+   * строились прямо из отобранных операций, а конец всё равно привязывался к
+   * сегодняшнему реальному балансу: при периоде «2024» декабрь 2024-го
+   * рисовался на уровне остатка за июнь 2026-го, и «Совокупный баланс»
+   * показывал сегодняшнее число с подписью «в пределах фильтра».
+   *
+   * `null` — показываем всё. Иначе — только даты отобранных операций.
+   */
+  const viewWindow = useMemo(() => {
+    if (scope === "all" || filtered.length === 0) return null;
+    let from = filtered[0].date;
+    let to = filtered[0].date;
+    for (const t of filtered) {
+      if (t.date < from) from = t.date;
+      if (t.date > to) to = t.date;
+    }
+    return { from, to };
+  }, [scope, filtered]);
+  /** Отбор пуст — показывать нечего, и подменять это всей историей нельзя. */
+  const emptyWindow = scope === "filtered" && filtered.length === 0;
+  const clip = useCallback(
+    <T extends { date: string }>(series: T[]): T[] => {
+      if (emptyWindow) return [];
+      if (!viewWindow) return series;
+      return series.filter((p) => p.date >= viewWindow.from && p.date <= viewWindow.to);
+    },
+    [viewWindow, emptyWindow]
+  );
+
+  const stackedAll = useMemo(
     () =>
       stackedBalanceByAccount(
-        baseTxs,
+        transactions,
         8,
         hasRealBalances ? realBalancesByAccount : null,
         unsyncedIds
       ),
-    [baseTxs, hasRealBalances, realBalancesByAccount, unsyncedIds]
+    [transactions, hasRealBalances, realBalancesByAccount, unsyncedIds]
   );
-  const netWorth = useNetWorthSeries(baseTxs);
+  const stacked = useMemo(
+    () => ({ ...stackedAll, series: clip(stackedAll.series) }),
+    [stackedAll, clip]
+  );
+  const netWorthAll = useNetWorthSeries(transactions);
+  const netWorth = useMemo(() => clip(netWorthAll), [netWorthAll, clip]);
 
   // Stacked-chart tooltip: per-account rows + a bold «Итого» — the day's net
   // worth, which the chart already carries on each datum as `total` (issue #27).
@@ -911,8 +951,14 @@ export function AccountsPage() {
   const totalExpense = kpi.expense;
 
   const totalAllAccounts = accountsAll.reduce((s, a) => s + a.balance, 0);
-  const peakNetWorth = netWorth.reduce((m, p) => Math.max(m, p.net), 0);
+  // Пик считаем по тому, что в окне, а не «не ниже нуля»: при отборе, где всё
+  // время был минус, ноль был бы выдуманным максимумом.
+  const peakNetWorth = netWorth.length
+    ? netWorth.reduce((m, p) => Math.max(m, p.net), netWorth[0].net)
+    : 0;
   const lastNetWorth = netWorth.length ? netWorth[netWorth.length - 1].net : 0;
+  /** В окне нет ни одного дня — числа показывать нечем, и ноль тут соврал бы. */
+  const noWindowData = netWorth.length === 0;
 
   return (
     <div className="space-y-6">
@@ -1062,27 +1108,36 @@ export function AccountsPage() {
           </button>
         </div>
         <span className="text-xs text-muted">
-          Совокупный баланс, пиковое значение и оба графика
+          Окно показа: совокупный баланс, пиковое значение и оба графика.
+          Сами остатки всегда считаются по всей истории
         </span>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat
           label="Совокупный баланс"
-          tone={lastNetWorth >= 0 ? "income" : "expense"}
-          value={formatMoney(lastNetWorth, base, { signed: true })}
-          hint={scope === "all" ? "Вся история" : "В пределах фильтра"}
+          tone={noWindowData ? "accent" : lastNetWorth >= 0 ? "income" : "expense"}
+          value={noWindowData ? "—" : formatMoney(lastNetWorth, base, { signed: true })}
+          hint={
+            noWindowData
+              ? "В отборе нет операций"
+              : scope === "all"
+                ? "На последний день истории"
+                : "На конец отобранного периода"
+          }
         />
         <Stat
           label="Пиковое значение"
           tone="accent"
-          value={formatMoney(peakNetWorth, base)}
-          // Тот же набор операций, что и у «Совокупного баланса», — значит и
-          // подпись должна честно называть его, а не молчать про отбор.
+          value={noWindowData ? "—" : formatMoney(peakNetWorth, base)}
+          // То же окно, что и у «Совокупного баланса», — значит и подпись
+          // должна честно называть его, а не молчать про отбор.
           hint={
-            scope === "all"
-              ? "Максимум за всю историю"
-              : "Максимум в пределах фильтра"
+            noWindowData
+              ? "В отборе нет операций"
+              : scope === "all"
+                ? "Максимум за всю историю"
+                : "Максимум в отобранном периоде"
           }
         />
         <Stat
@@ -1119,7 +1174,9 @@ export function AccountsPage() {
                   ? "Реальные остатки по счетам"
                   : "Накопление с нуля, без стартовых остатков"
                 : "Совокупный баланс на каждый день"}
-              {scope === "all" ? " · вся история" : " · в пределах фильтра"}
+              {/* Про ОКНО, а не про способ счёта: остатки всегда из всей
+                  истории, отбор лишь выбирает показанный кусок. */}
+              {scope === "all" ? " · вся история" : " · отобранный период"}
               {view === "stacked" && ` · топ-${stacked.accounts.length} счетов`}
             </div>
           </div>
