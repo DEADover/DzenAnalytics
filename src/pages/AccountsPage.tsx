@@ -1054,7 +1054,10 @@ export function AccountsPage() {
             id: "capital",
             label: "Капитал",
             icon: Landmark,
-            title: "Остатки и их история. Отбору не подчиняется",
+            // Не «отбору не подчиняется»: на этой вкладке есть режим «По
+            // фильтрам», и отбор в нём вполне работает — просто выбирает
+            // показанный период, а не пересчитывает суммы.
+            title: "Остатки и их история. Отбор может сузить период показа, но не меняет сами суммы",
           },
           {
             id: "flow",
@@ -1501,16 +1504,17 @@ export function AccountsPage() {
           <div className="font-semibold flex items-center gap-2 mr-1 min-w-[7.5rem]">
             <Wallet className="w-4 h-4 shrink-0" />
             <span>
-              Счета (<span className="tabular-nums">{visibleRows.length}</span>
-              {visibleRows.length !== accountsAll.length && (
-                <span className="text-muted font-normal">
-                  {" "}
-                  из <span className="tabular-nums">{accountsAll.length}</span>
-                </span>
-              )}
-              )
+              Счета (<span className="tabular-nums">{visibleRows.length}</span>)
             </span>
           </div>
+          {/* Сколько счетов всего — той же приглушённой строкой, что и остаток, а
+              не вторым шрифтом внутри жирного заголовка: заголовок должен быть
+              однородным. Появляется, только когда отбор часть счетов прячет. */}
+          {visibleRows.length !== accountsAll.length && (
+            <span className="text-xs text-muted shrink-0 mr-1">
+              из <span className="tabular-nums">{accountsAll.length}</span>
+            </span>
+          )}
           {/* Итог по видимому списку. Показываем всегда, когда есть что
               складывать: при включённых отборах это ответ на «сколько всего
               на накопительных», а без них — просто сумма всех счетов. */}
