@@ -140,14 +140,40 @@ export function crossCurrencyReceived(
   return formatMoney(t.incomeAmount, t.incomeCurrency);
 }
 
-export function formatNum(value: number, opts?: { compact?: boolean }): string {
+export function formatNum(
+  value: number,
+  opts?: { compact?: boolean; fractionDigits?: number }
+): string {
   return new Intl.NumberFormat("ru-RU", {
     notation: opts?.compact ? "compact" : "standard",
     // Округляем по МОДУЛЮ: сравнение самого значения отбрасывало копейки только
     // у положительных, и в колонке рядом стояли «20 010» и «−20 010,09». В
     // таблице с выравниванием по правому краю такой ряд выглядит рваным.
-    maximumFractionDigits: opts?.compact ? 1 : Math.abs(value) >= 1000 ? 0 : 2,
+    maximumFractionDigits:
+      opts?.fractionDigits ??
+      (opts?.compact ? 1 : Math.abs(value) >= 1000 ? 0 : 2),
   }).format(value);
+}
+
+/**
+ * Сколько знаков после запятой нужно подписям оси, чтобы соседние деления не
+ * слились в одинаковые.
+ *
+ * Сокращённая запись («3,8 млн») округляет до одного знака — этого хватает,
+ * пока ось идёт от нуля. Но если ось подстроена под данные и весь размах
+ * укладывается в сотые доли миллиона, все деления превращаются в «3,8 млн»,
+ * и читать ось нечем. Считаем от размаха: чем он у́же относительно самих
+ * чисел, тем больше знаков нужно.
+ */
+export function axisFractionDigits(min: number, max: number): number {
+  const span = Math.abs(max - min);
+  const scale = Math.max(Math.abs(min), Math.abs(max));
+  if (span === 0 || scale === 0) return 1;
+  // Сокращённая запись делит на «тысячи/миллионы/миллиарды» — знаки считаем
+  // относительно ЭТОЙ единицы, иначе легко ошибиться на порядок.
+  const unit = Math.pow(1000, Math.floor(Math.log10(scale) / 3));
+  const step = span / 5; // примерно столько между соседними делениями
+  return Math.min(4, Math.max(1, Math.ceil(Math.log10(unit / step))));
 }
 
 export function formatDate(

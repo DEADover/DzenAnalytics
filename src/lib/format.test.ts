@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  axisFractionDigits,
   currencySymbol,
   displayPayee,
   formatNum,
@@ -157,5 +158,32 @@ describe("formatPct", () => {
   it("не-число даёт прочерк, а не «NaN%»", () => {
     expect(formatPct(Number.NaN)).toBe("—");
     expect(formatPct(Infinity)).toBe("—");
+  });
+});
+
+describe("axisFractionDigits", () => {
+  it("ось от нуля обходится одним знаком", () => {
+    // «0 · 950 тыс. · 1,9 млн · 2,9 млн · 3,8 млн» — деления и так различимы.
+    expect(axisFractionDigits(0, 3_800_000)).toBe(1);
+  });
+
+  it("узкий размах требует больше знаков, иначе все деления «3,8 млн»", () => {
+    // Ровно тот случай, ради которого функция и появилась: баланс 3,79–3,82 млн
+    // за месяц. С одним знаком вся ось читается как одно и то же число.
+    expect(axisFractionDigits(3_790_000, 3_820_000)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("знаков не больше четырёх — дальше подпись не прочитать", () => {
+    expect(axisFractionDigits(3_800_000, 3_800_001)).toBe(4);
+  });
+
+  it("плоская линия не роняет расчёт", () => {
+    expect(axisFractionDigits(1000, 1000)).toBe(1);
+    expect(axisFractionDigits(0, 0)).toBe(1);
+  });
+
+  it("тысячи считаются от своей единицы, а не от миллионов", () => {
+    expect(axisFractionDigits(0, 8000)).toBe(1);
+    expect(axisFractionDigits(7900, 8000)).toBeGreaterThanOrEqual(2);
   });
 });

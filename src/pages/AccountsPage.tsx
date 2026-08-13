@@ -66,6 +66,7 @@ import {
   formatMoney,
   chartTooltipStyle,
   formatNum,
+  axisFractionDigits,
   formatDate,
   toNum,
   chartTooltipProps,
@@ -869,6 +870,36 @@ export function AccountsPage() {
   const netWorthAll = useNetWorthSeries(transactions);
   const netWorth = useMemo(() => clip(netWorthAll), [netWorthAll, clip]);
 
+  /**
+   * Нижняя граница оси у стопки — ровно сумма отрицательных слоёв (ноль, если
+   * долгов в окне нет).
+   *
+   * Автоматика тут промахивается: она смотрит на минимум ОТДЕЛЬНОГО счёта, а не
+   * на сумму отрицательной части, и на пустое место под нулём уходила четверть
+   * высоты — стопка при этом упиралась в потолок.
+   */
+  const stackFloor = useMemo(() => {
+    let floor = 0;
+    let peak = 0;
+    for (const point of stacked.series) {
+      let neg = 0;
+      let pos = 0;
+      for (const acc of stacked.accounts) {
+        const v = point[acc] as number;
+        if (typeof v !== "number") continue;
+        if (v < 0) neg += v;
+        else pos += v;
+      }
+      if (neg < floor) floor = neg;
+      if (pos > peak) peak = pos;
+    }
+    // Копеечный минус (закрытая карта в −300 ₽ при активах в миллионы) — не
+    // повод разводить слои по знаку: ось всё равно округлит низ до целого
+    // деления и отдаст под него четверть высоты. Порог в сотую долю от пика
+    // отделяет настоящие долги от такой мелочи.
+    return Math.abs(floor) >= peak * 0.01 ? floor : 0;
+  }, [stacked]);
+
   // Stacked-chart tooltip: per-account rows + a bold «Итого» — the day's net
   // worth, which the chart already carries on each datum as `total` (issue #27).
   const renderStackedTooltip = ({ active, payload, label }: TooltipContentProps) => {
@@ -959,6 +990,15 @@ export function AccountsPage() {
   const lastNetWorth = netWorth.length ? netWorth[netWorth.length - 1].net : 0;
   /** В окне нет ни одного дня — числа показывать нечем, и ноль тут соврал бы. */
   const noWindowData = netWorth.length === 0;
+  // Точность подписей оси у графика «Совокупно»: ось там подстроена под данные,
+  // и на узком размахе одного знака не хватает — все деления читаются как одно
+  // и то же число.
+  const netWorthDigits = noWindowData
+    ? 1
+    : axisFractionDigits(
+        netWorth.reduce((m, p) => Math.min(m, p.net), netWorth[0].net),
+        netWorth.reduce((m, p) => Math.max(m, p.net), netWorth[0].net)
+      );
 
   return (
     <div className="space-y-6">
@@ -1209,7 +1249,15 @@ export function AccountsPage() {
                   оказывается не итогом, а самой глубокой точкой этого блуждания
                   — и зависит от порядка счетов. Отсюда и брались −5 млн на оси
                   при итоге −3,7 млн. */}
-              <ComposedChart data={stacked.series} stackOffset="sign">
+              <ComposedChart
+                data={stacked.series}
+                // Разводить слои по знаку нужно только когда знаки и правда
+                // разные. Если в окне все счета в плюсе, «sign» ничего не
+                // меняет по смыслу, но заставляет ось резервировать место под
+                // отрицательную половину — четверть высоты уходит в пустоту, а
+                // стопка упирается в потолок.
+                stackOffset={stackFloor < 0 ? "sign" : "none"}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
                   dataKey="date"
@@ -1222,6 +1270,11 @@ export function AccountsPage() {
                   stroke={chartAxisStroke}
                   fontSize={11}
                   tickFormatter={(v) => formatNum(v, { compact: true })}
+                  // Ноль обязателен — высота слоя и есть сумма, от чего-то
+                  // другого её отмерять нельзя. Но и ниже нуля пустоту держать
+                  // незачем: если долгов в окне нет, ось начинается ровно с
+                  // нуля, а не отдаёт четверть высоты под пустое место.
+                  domain={[stackFloor, "auto"]}
                 />
                 <Tooltip {...chartTooltipProps} content={renderStackedTooltip} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -1273,7 +1326,18 @@ export function AccountsPage() {
                 <YAxis
                   stroke={chartAxisStroke}
                   fontSize={11}
-                  tickFormatter={(v) => formatNum(v, { compact: true })}
+                  // Одна линия — здесь ноль не обязателен, и держать его вредно:
+                  // на коротком окне баланс меняется на доли процента, ось от
+                  // нуля сплющивает всё движение в прямую под потолком. Ось
+                  // подстраивается под данные — видно, что происходило.
+                  // У стопки так нельзя: там высота слоя и есть сумма.
+                  domain={["auto", "auto"]}
+                  tickFormatter={(v) =>
+                    formatNum(v, {
+                      compact: true,
+                      fractionDigits: netWorthDigits,
+                    })
+                  }
                 />
                 <Tooltip
                   {...chartTooltipProps}
