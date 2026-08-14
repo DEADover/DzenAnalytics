@@ -249,7 +249,7 @@ describe("netWorthBasis (issue #3)", () => {
     title: "X", currency: "RUB", startBalance: 0, startDate: null, archive: false, inBalance: true, ...over,
   });
 
-  it("includes only non-archived in-balance accounts and dates openings", () => {
+  it("берёт счета в балансе, включая закрытые, и датирует стартовые остатки", () => {
     const live = [
       acc({ title: "A", startBalance: 100000, startDate: "2020-01-01" }),
       acc({ title: "B", startBalance: 5000, startDate: null }), // no startDate → earliest tx
@@ -258,9 +258,25 @@ describe("netWorthBasis (issue #3)", () => {
     ];
     const txs = [tx({ account: "B", outcomeAccount: "B", date: "2021-03-01" })];
     const { accounts, openings } = netWorthBasis(live, txs, RUB, false);
-    expect([...accounts].sort()).toEqual(["A", "B"]);
+    // Закрытый счёт остаётся: в прошлом на нём лежали настоящие деньги, и без
+    // него кривая совокупного баланса занижала всю историю.
+    expect([...accounts].sort()).toEqual(["A", "B", "Old"]);
+    expect(accounts.has("Off")).toBe(false);
     expect(openings).toContainEqual({ date: "2020-01-01", amount: 100000 });
     expect(openings).toContainEqual({ date: "2021-03-01", amount: 5000 }); // fell back to first tx
+  });
+
+  it("история закрытого счёта не пропадает из совокупного баланса", () => {
+    // Тот самый случай: счёт закрыли в этом году, но в прошлые годы на нём
+    // были деньги. Раньше из 32 счетов в расчёт попадали 12, и максимум за всю
+    // историю выходил на миллион меньше, чем в самом Дзен-мани.
+    const live = [
+      acc({ title: "Живой", startBalance: 1000, startDate: "2020-01-01" }),
+      acc({ title: "Закрытый", startBalance: 500000, startDate: "2020-01-01", archive: true }),
+    ];
+    const { accounts, openings } = netWorthBasis(live, [], RUB, false);
+    expect(accounts.has("Закрытый")).toBe(true);
+    expect(openings).toContainEqual({ date: "2020-01-01", amount: 500000 });
   });
 
   it("includes off-balance accounts when the toggle is on", () => {
