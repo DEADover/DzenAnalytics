@@ -660,19 +660,46 @@ export function AccountsPage() {
    *  каждый раз, хотя нужно один раз при первом знакомстве. */
   const listHint = (
     <div className="space-y-1.5">
-      <div>
-        {hasRealBalances
-          ? "«Баланс» — актуальная сумма из Дзен-мани."
-          : "В CSV нет остатков счетов, поэтому показано «Изменение» — доход минус расход по фильтрам."}
-      </div>
-      <div>«Δ Период» — изменение по текущим фильтрам.</div>
-      <div>Клик по карточке или строке — фильтр графика «Дельта».</div>
-      <div>Кнопка со списком в «Действиях» открывает операции счёта.</div>
-      <div>
-        Список показывает все счета, включая внебалансовые, — они помечены
-        чипом. В расчёты совокупного баланса они попадают только при включённой
-        настройке «Счета вне баланса».
-      </div>
+      {/* Подсказка называет ровно те колонки, что сейчас на экране: вкладки
+          показывают разные наборы, и общий текст описывал половину не того. */}
+      {capitalView ? (
+        <>
+          <div>
+            {hasRealBalances
+              ? "«Остаток» — текущая сумма на счёте из Дзен-мани."
+              : "«Накоплено» — доход минус расход с начала истории: в CSV остатков счетов нет."}
+          </div>
+          <div>
+            «Доля» — процент от суммы положительных остатков. У долгов доли нет.
+          </div>
+          <div>Клик по строке выбирает счёт для графика на вкладке «Движение».</div>
+        </>
+      ) : (
+        <>
+          <div>
+            «Поступления» и «Списания» — доход и расход за период, без переводов
+            между своими счетами.
+          </div>
+          <div>«Изменение» — поступления минус списания.</div>
+          <div>Клик по строке оставляет на графике только этот счёт.</div>
+        </>
+      )}
+      <div>Кнопка со списком показывает операции счёта.</div>
+      {/* Ни карандаша, ни пометок «Вне баланса» в CSV нет: править нечего и
+          признак взять неоткуда — обещать их там нельзя. */}
+      {hasRealBalances && (
+        <>
+          <div>
+            Карандаш открывает редактор счёта — в таблице ещё и двойной клик по
+            строке.
+          </div>
+          <div>
+            Счета вне баланса всегда есть в списке, с пометкой. В совокупный
+            баланс они входят только при включённой настройке «Счета вне
+            баланса».
+          </div>
+        </>
+      )}
     </div>
   );
 
@@ -765,6 +792,14 @@ export function AccountsPage() {
    * «Совокупный баланс» стоят рядом разными числами и выглядят как ошибка.
    */
   const hiddenCount = dormantCount + (accountRows.length - visibleRows.length);
+  /**
+   * Сколько счетов всего — знаменатель для «N из M» в шапке списка.
+   *
+   * Раньше здесь стояло число счетов, по которым ЕСТЬ операции, и у кого счетов
+   * без движения больше, чем скрыто отборами, выходило «9 из 5». Настоящий
+   * знаменатель — все известные счета: показанные, отсеянные отборами и спящие.
+   */
+  const totalAccounts = accountRows.length + dormantCount;
 
   /**
    * Число, которым строка представлена в итогах и заголовках групп.
@@ -1053,13 +1088,19 @@ export function AccountsPage() {
         netWorth.reduce((m, p) => Math.min(m, p.net), netWorth[0].net),
         netWorth.reduce((m, p) => Math.max(m, p.net), netWorth[0].net)
       );
+  // Мелкие счета стопка сводит в один слой «Прочие». Подпись под графиком
+  // обязана это сказать: иначе кажется, что счетов у пользователя ровно
+  // столько, сколько слоёв. Раньше там стояло «топ-N счетов», и N включало
+  // сам слой «Прочие» — то есть было на единицу больше настоящих счетов.
+  const stackHasOther = stacked.accounts.includes("Прочие");
+  const stackTopCount = stacked.accounts.length - (stackHasOther ? 1 : 0);
 
   return (
     <div className="space-y-6">
       <PageHeader
         icon={Wallet}
         title="Счета"
-        hint="Данные по всем счетам, их балансы и другая аналитика."
+        hint="Остатки на счетах, их история и обороты за период."
         right={
           <div className="flex flex-wrap gap-2">
             {/* Переключатели «Вся история / По фильтрам» и «По счетам /
@@ -1095,16 +1136,15 @@ export function AccountsPage() {
             id: "capital",
             label: "Капитал",
             icon: Landmark,
-            // Не «отбору не подчиняется»: на этой вкладке есть режим «По
-            // фильтрам», и отбор в нём вполне работает — просто выбирает
-            // показанный период, а не пересчитывает суммы.
-            title: "Остатки и их история. Отбор может сузить период показа, но не меняет сами суммы",
+            // Не «отбору не подчиняется»: период на этой вкладке работает —
+            // просто выбирает показанный отрезок, а не пересчитывает суммы.
+            title: "Сколько денег на счетах и как менялось",
           },
           {
             id: "flow",
             label: "Движение",
             icon: ArrowLeftRight,
-            title: "Обороты и счета по выбранному отбору",
+            title: "Поступления и списания за выбранный период",
           },
         ]}
       />
@@ -1115,6 +1155,16 @@ export function AccountsPage() {
           «Считать по» тут когда-то стоял и просто повторял «Всё» из периода. */}
       <GlobalFilters />
 
+      {/* Панель одна на всю страницу, а на «Капитале» работает только период —
+          и молчать об этом нельзя: человек выбирает счёт в отборе, числа не
+          двигаются, и это выглядит поломкой, а не правилом. */}
+      {tab === "capital" && (
+        <div className="-mt-4 text-xs text-muted">
+          На этой вкладке действует только период: остаток на дату складывается
+          из всей истории до неё, отборы по счетам и категориям его не меняют.
+        </div>
+      )}
+
       {tab === "capital" && calibOpen && !zenToken && (
         <div className="card card-pad bg-accent2/5 border-accent2/40">
           <div className="font-semibold mb-2 flex items-center gap-2">
@@ -1122,22 +1172,23 @@ export function AccountsPage() {
             Калибровка совокупного баланса
           </div>
           <p className="text-xs text-muted mb-4">
-            CSV не содержит начальных остатков счетов — поэтому без калибровки график показывает
-            <em> изменение</em> богатства, а не реальный баланс. Введите вашу <b>текущую</b> сумму
-            на всех счетах — весь график сдвинется так, чтобы на эту дату показал указанное
-            значение.
+            В CSV нет начальных остатков счетов, поэтому без калибровки график
+            показывает <em>изменение</em>, а не реальный баланс. Укажите, сколько
+            у вас было на всех счетах в выбранный день, — весь график сдвинется
+            на эту разницу.
           </p>
 
           {anchors.length > 0 && (
             <div className="mb-3 p-3 rounded-lg bg-panel2 border border-border flex items-start gap-3">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium">
-                  В данных найдены {anchors.length} «якорных» операций
+                  Найдены операции с известным остатком: {anchors.length}
                 </div>
                 <div className="text-xs text-muted mt-1">
-                  Дзен-мани иногда экспортирует «Корректировка остатка» / «Начальный остаток» как
-                  обычные транзакции. Самая свежая:{" "}
-                  {anchors[0].tx.date} · {anchors[0].tx.categoryFull}
+                  Дзен-мани иногда выгружает «Корректировка остатка» и
+                  «Начальный остаток» обычными операциями — по ним дату и сумму
+                  можно не вводить вручную. Самая свежая: {anchors[0].tx.date} ·{" "}
+                  {anchors[0].tx.categoryFull}
                 </div>
               </div>
               <button onClick={applyAnchor} className="btn-ghost text-xs whitespace-nowrap">
@@ -1209,8 +1260,9 @@ export function AccountsPage() {
             </div>
           </div>
           <div className="text-xs text-muted mt-3">
-            Применяется только к графику «Совокупно» и KPI-карточке «Совокупный баланс».
-            Сток-чарт «По счетам» остаётся «от нуля» — он показывает изменения, не остатки.
+            Действует только на график «Совокупно» и на показатель «Совокупный
+            баланс». График «По счетам» остаётся от нуля — он показывает
+            изменение, а не остатки.
           </div>
         </div>
       )}
@@ -1226,24 +1278,24 @@ export function AccountsPage() {
           value={noWindowData ? "—" : formatMoney(lastNetWorth, base, { signed: true })}
           hint={
             noWindowData
-              ? "В отборе нет операций"
+              ? "В выбранном периоде нет операций"
               : viewWindow
                 ? "На конец выбранного периода"
                 : "На последний день истории"
           }
         />
         <Stat
-          label="Пиковое значение"
+          label="Наибольший баланс"
           tone="accent"
           value={noWindowData ? "—" : formatMoney(peakNetWorth, base)}
           // То же окно, что и у «Совокупного баланса», — значит и подпись
-          // должна честно называть его, а не молчать про отбор.
+          // должна честно называть его, а не молчать про период.
           hint={
             noWindowData
-              ? "В отборе нет операций"
+              ? "В выбранном периоде нет операций"
               : viewWindow
-                ? "Максимум в выбранном периоде"
-                : "Максимум за всю историю"
+                ? "В выбранном периоде"
+                : "За всю историю"
           }
         />
       </div>
@@ -1258,27 +1310,27 @@ export function AccountsPage() {
           label="Доходы"
           tone="income"
           value={formatMoney(totalIncome, base)}
-          hint="По отбору, без переводов между счетами"
+          hint="Без переводов между счетами"
         />
         <Stat
           label="Расходы"
           tone="expense"
           value={formatMoney(totalExpense, base)}
-          hint="По отбору, без переводов между счетами"
+          hint="Без переводов между счетами"
         />
         <Stat
-          label="Чистая дельта"
+          label="Изменение по отбору"
           tone={totalNet >= 0 ? "income" : "expense"}
           value={formatMoney(totalNet, base, { signed: true })}
-          hint="По отбору"
+          hint="Доходы минус расходы"
         />
         <Stat
-          label="Чистая дельта (вся история)"
+          label="Изменение за всю историю"
           tone={totalAllAccounts >= 0 ? "income" : "expense"}
           value={formatMoney(totalAllAccounts, base, { signed: true })}
           // Стоит рядом с «по отбору» намеренно: эти два числа сравнивают, и в
           // этом весь их смысл. Раньше пара терялась в середине страницы.
-          hint="Для сравнения, без отбора"
+          hint="Для сравнения — без отбора"
         />
       </div>
 
@@ -1288,31 +1340,38 @@ export function AccountsPage() {
             <div className="font-semibold">
               {view === "stacked"
                 ? hasRealBalances
-                  ? "Баланс по счетам (стопкой)"
-                  : "Накопленный поток по счетам (стопкой)"
-                : "Совокупный баланс (одной линией)"}
+                  ? "Остатки по счетам"
+                  : "Накоплено по счетам"
+                : "Совокупный баланс"}
             </div>
-            {/* Подпись говорит про отбор ровно то, что есть на деле. Раньше у
+            {/* Подпись говорит про период ровно то, что есть на деле. Раньше у
                 стопки стояло «без фильтров» всегда — а она строится из того же
-                набора операций, что и остальное, и в режиме «По фильтрам»
-                фильтры на неё влияют. */}
+                набора операций, что и остальное. */}
             <div className="text-xs text-muted">
               {view === "stacked"
                 ? hasRealBalances
-                  ? "Реальные остатки по счетам"
-                  : "Накопление с нуля, без стартовых остатков"
-                : "Совокупный баланс на каждый день"}
-              {/* Про ОКНО, а не про способ счёта: остатки всегда из всей
-                  истории, отбор лишь выбирает показанный кусок. */}
+                  ? "Каждый счёт своим слоем"
+                  : "Накопление с нуля, без начальных остатков"
+                : "Активы минус долги на каждый день"}
+              {/* Про ОТРЕЗОК, а не про способ счёта: остатки всегда из всей
+                  истории, период лишь выбирает показанный кусок. */}
               {viewWindow ? " · выбранный период" : " · вся история"}
-              {view === "stacked" && ` · топ-${stacked.accounts.length} счетов`}
+              {/* Без «Прочих» подпись молчит: слои строятся по операциям, и
+                  счёт вообще без движения в стопку не попадает — сказать тут
+                  «все счета» значило бы соврать. */}
+              {view === "stacked" && stackHasOther &&
+                ` · ${stackTopCount} ${pluralRu(stackTopCount, [
+                  "крупнейший счёт",
+                  "крупнейших счёта",
+                  "крупнейших счетов",
+                ])}, остальные — в «Прочие»`}
             </div>
           </div>
           <div className="flex bg-panel2 rounded-lg p-1 border border-border shrink-0">
             <button
               onClick={() => setView("stacked")}
               className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${view === "stacked" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              title="Разложить по счетам, стопкой"
+              title="Разложить по счетам"
             >
               <Layers className="w-3 h-3" />
               По счетам
@@ -1320,7 +1379,7 @@ export function AccountsPage() {
             <button
               onClick={() => setView("single")}
               className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${view === "single" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              title="Одна линия: активы минус долги"
+              title="Одной линией: активы минус долги"
             >
               <LineChartIcon className="w-3 h-3" />
               Совокупно
@@ -1452,10 +1511,12 @@ export function AccountsPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="font-semibold">
-              {selectedAccount ? `Дельта по счёту: ${selectedAccount}` : "Дельта по отбору"}
+              {selectedAccount
+                ? `Изменение по счёту: ${selectedAccount}`
+                : "Изменение по отбору"}
             </div>
             <div className="text-xs text-muted">
-              Изменение баланса за период (нарастающим итогом)
+              Нарастающим итогом с начала периода
             </div>
           </div>
           {selectedAccount && (
@@ -1489,9 +1550,12 @@ export function AccountsPage() {
               <Tooltip
                 {...chartTooltipProps}
                 labelFormatter={(d) => formatDate(d as string)}
+                // Линия идёт от нуля и копит изменение за период — это не
+                // остаток на счёте, и называть её «Балансом» нельзя: число
+                // расходилось бы с колонкой «Остаток» в списке под графиком.
                 formatter={(v: unknown, n: unknown) => [
                   formatMoney(toNum(v), base, { signed: true }),
-                  n === "balance" ? "Баланс" : "Дельта",
+                  n === "balance" ? "Накоплено" : "За день",
                 ]}
               />
               <Area
@@ -1523,9 +1587,7 @@ export function AccountsPage() {
                 «из N» появляется, только когда отбор часть счетов прячет. */}
             <span className="tabular-nums">
               {visibleRows.length}
-              {visibleRows.length !== accountsAll.length && (
-                <> из {accountsAll.length}</>
-              )}
+              {visibleRows.length !== totalAccounts && <> из {totalAccounts}</>}
             </span>
           </div>
           {/* Итог по видимому списку. Показываем всегда, когда есть что
@@ -1538,14 +1600,14 @@ export function AccountsPage() {
                 (capitalView
                   ? hasRealBalances
                     ? "Сумма остатков по счетам из списка"
-                    : "Сумма накопленного с нуля по счетам из списка"
+                    : "Сумма накопленного по счетам из списка"
                   : "Сумма изменений за период по счетам из списка") +
                 (hiddenCount > 0
                   ? hiddenCount === dormantCount
-                    ? `. Не показано счетов: ${hiddenCount} — с нулевым остатком и без операций`
+                    ? `. Не показано ещё ${hiddenCount} — с нулевым остатком и без операций`
                     : dormantCount > 0
-                      ? `. Не показано счетов: ${hiddenCount}, из них ${dormantCount} с нулевым остатком и без операций, остальные отсеяны отборами`
-                      : `. Не показано счетов: ${hiddenCount} — отсеяны отборами`
+                      ? `. Не показано ещё ${hiddenCount}: ${dormantCount} с нулевым остатком и без операций, остальные скрыты отборами`
+                      : `. Не показано ещё ${hiddenCount} — скрыты отборами`
                   : "")
               }
             >
@@ -1714,7 +1776,7 @@ export function AccountsPage() {
 
         {visibleRows.length === 0 ? (
           <div className="text-center py-10 text-sm text-muted">
-            <div>Под текущие отборы не подошёл ни один счёт.</div>
+            <div>Ни один счёт не подошёл под отбор.</div>
             <button
               onClick={() => {
                 setTypeFilter(new Set());
@@ -1810,7 +1872,16 @@ export function AccountsPage() {
                           Изменён
                         </span>
                       )}
-                      <span className="pill text-[10px]">{a.count}</span>
+                      <span
+                        className="pill text-[10px]"
+                        title={
+                          capitalView
+                            ? "Операций за всю историю"
+                            : "Операций за период"
+                        }
+                      >
+                        {a.count}
+                      </span>
                       {hasReal && (
                         <button
                           onClick={(e) => {
@@ -1876,17 +1947,16 @@ export function AccountsPage() {
                           <span />
                         </>
                       ) : (
+                        // Изменение за период — это и есть крупное число
+                        // карточки на этой вкладке, поэтому строкой ниже оно
+                        // стояло второй раз. Осталась пара, которой в заголовке
+                        // нет: сколько пришло и сколько ушло.
                         <>
-                          <span title="Изменение по текущим отборам">
-                            Δ {formatMoney(a.delta, base, { signed: true })}
+                          <span className="text-income" title="Поступления за период">
+                            +{formatMoney(a.income, base)}
                           </span>
-                          <span className="flex gap-2">
-                            <span className="text-income">
-                              +{formatMoney(a.income, base)}
-                            </span>
-                            <span className="text-expense">
-                              −{formatMoney(a.expense, base)}
-                            </span>
+                          <span className="text-expense" title="Списания за период">
+                            −{formatMoney(a.expense, base)}
                           </span>
                         </>
                       )}
@@ -1969,7 +2039,7 @@ export function AccountsPage() {
                         Списания
                       </SortTh>
                       <SortTh sortKey="delta" align="right" {...sortHead}>
-                        Δ Период
+                        Изменение
                       </SortTh>
                       <SortTh sortKey="count" align="center" {...sortHead}>
                         Операции
