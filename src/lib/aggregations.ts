@@ -172,7 +172,9 @@ const EARLIEST_PLAUSIBLE_DATE = "2000-01-01";
 
 export function stackedBalanceByAccount(
   allTxs: Transaction[],
-  topN = 8,
+  /** Сколько счетов показать отдельными слоями; остальные — в «Прочие».
+   *  Счетов меньше — слоёв меньше, «Прочих» не будет вовсе. */
+  topN = 9,
   /** Real current balance per account title (base currency), API mode only.
    *  When given, each line is shifted to END at the real balance — turning the
    *  «накопленный поток с нуля» into an actual balance-over-time, so the stack
@@ -223,6 +225,24 @@ export function stackedBalanceByAccount(
         .slice(0, topN)
         .map((b) => b.account);
   const accountSet = new Set(topAccounts);
+
+  // «Прочие» из одного счёта ничего не обобщают — только прячут его имя под
+  // безымянным слоем. Такой счёт показываем отдельно: слоёв ровно столько же,
+  // а в легенде вместо «Прочие» стоит настоящее название.
+  if (!only) {
+    const rest = new Set<string>();
+    for (const b of balances) if (!accountSet.has(b.account)) rest.add(b.account);
+    if (realBalances) {
+      for (const [acc, bal] of Object.entries(realBalances)) {
+        if (bal != null && Math.abs(bal) > 0.005 && !accountSet.has(acc)) rest.add(acc);
+      }
+    }
+    if (rest.size === 1) {
+      const [extra] = rest;
+      topAccounts.push(extra);
+      accountSet.add(extra);
+    }
+  }
 
   const days = new Map<string, Map<string, number>>();
   // Поток «эпоховых» операций (1970 год). Он НЕ выбрасывается — иначе поедут

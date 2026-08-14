@@ -569,10 +569,19 @@ export function AccountsPage() {
     // говорила, что показано не всё.
     let dormant = 0;
     for (const a of liveList) {
+      const hasOps = txByTitle.has(a.title);
+      // На «Движении» список отвечает на вопрос «что происходило», и счёт без
+      // единой операции в периоде там лишний, даже если на нём лежат деньги:
+      // строка из одних нулей ничего не рассказывает. На «Капитале» ровно
+      // наоборот — есть остаток, значит счёт в перечне.
+      if (!capitalView) {
+        if (!hasOps) dormant++;
+        continue;
+      }
       // Archived (closed) accounts are kept but grouped below active ones
       // (see the sort), so the user can still review them without clutter up top.
       // Skip dormant zero-balance accounts with no activity — they'd be noise.
-      if (Math.abs(a.balance) <= 0.005 && !txByTitle.has(a.title)) {
+      if (Math.abs(a.balance) <= 0.005 && !hasOps) {
         dormant++;
         continue;
       }
@@ -690,6 +699,10 @@ export function AccountsPage() {
             между своими счетами.
           </div>
           <div>«Изменение» — поступления минус списания.</div>
+          <div>
+            Счета без операций за период в списке не показаны — их остатки
+            смотрите на «Капитале».
+          </div>
           <div>Клик по строке оставляет на графике только этот счёт.</div>
         </>
       )}
@@ -809,6 +822,10 @@ export function AccountsPage() {
    * знаменатель — все известные счета: показанные, отсеянные отборами и спящие.
    */
   const totalAccounts = accountRows.length + dormantCount;
+  /** Почему счёт вообще не попал в список — на вкладках причины разные. */
+  const dormantReason = capitalView
+    ? "с нулевым остатком и без операций"
+    : "без операций за период";
 
   /**
    * Число, которым строка представлена в итогах и заголовках групп.
@@ -982,7 +999,9 @@ export function AccountsPage() {
     () =>
       stackedBalanceByAccount(
         transactions,
-        8,
+        // Девять слоёв плюс «Прочие» — ровно столько цветов в палитре, так что
+        // повторов не будет. Счетов меньше — слоёв меньше.
+        9,
         hasRealBalances ? realBalancesByAccount : null,
         unsyncedIds,
         chartOnly
@@ -1684,9 +1703,9 @@ export function AccountsPage() {
                   : "Сумма изменений за период по счетам из списка") +
                 (hiddenCount > 0
                   ? hiddenCount === dormantCount
-                    ? `. Не показано ещё ${hiddenCount} — с нулевым остатком и без операций`
+                    ? `. Не показано ещё ${hiddenCount} — ${dormantReason}`
                     : dormantCount > 0
-                      ? `. Не показано ещё ${hiddenCount}: ${dormantCount} с нулевым остатком и без операций, остальные скрыты отборами`
+                      ? `. Не показано ещё ${hiddenCount}: ${dormantCount} ${dormantReason}, остальные скрыты отборами`
                       : `. Не показано ещё ${hiddenCount} — скрыты отборами`
                   : "")
               }

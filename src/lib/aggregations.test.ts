@@ -111,8 +111,16 @@ describe("stackedBalanceByAccount — real-balance anchoring", () => {
       tx({ kind: "expense", amount: 999_000, outcomeAccount: "C", date: "2026-01-02" }),
       tx({ kind: "income", amount: 100, incomeAccount: "A", date: "2026-01-01" }),
       tx({ kind: "income", amount: 100, incomeAccount: "B", date: "2026-01-01" }),
+      // D — второй «лишний» счёт: с одним «Прочих» не бывает, он вышел бы
+      // отдельным слоем и правило ранжирования проверить было бы нечем.
+      tx({ kind: "income", amount: 100, incomeAccount: "D", date: "2026-01-01" }),
     ];
-    const { accounts } = stackedBalanceByAccount(t, 2, { A: 900_000, B: 800_000, C: 1000 });
+    const { accounts } = stackedBalanceByAccount(t, 2, {
+      A: 900_000,
+      B: 800_000,
+      C: 1000,
+      D: 500,
+    });
     expect(accounts).toEqual(expect.arrayContaining(["A", "B", "Прочие"]));
     expect(accounts).not.toContain("C"); // small balance → folded into «Прочие»
   });
@@ -962,17 +970,18 @@ describe("stackedBalanceByAccount — issue #59", () => {
 
 describe("stackedBalanceByAccount — отбор счетов для графика", () => {
   const last = (r: { series: StackedBalancePoint[] }) => r.series[r.series.length - 1];
-  const real = { Карта: 7000, Наличные: 3000, Вклад: 50_000 };
+  const real = { Карта: 7000, Наличные: 3000, Вклад: 50_000, Копилка: 1000 };
   const txs = [
     tx({ date: "2026-01-10", kind: "income", incomeAccount: "Карта", amount: 1000 }),
     tx({ date: "2026-02-10", kind: "income", incomeAccount: "Наличные", amount: 2000 }),
     tx({ date: "2026-03-10", kind: "income", incomeAccount: "Вклад", amount: 5000 }),
+    tx({ date: "2026-03-11", kind: "income", incomeAccount: "Копилка", amount: 500 }),
   ];
 
   it("без отбора — прежнее поведение: топ-N и «Прочие»", () => {
     const r = stackedBalanceByAccount(txs, 2, real);
     expect(r.accounts).toEqual(["Вклад", "Карта", "Прочие"]);
-    expect(last(r).total).toBe(60_000);
+    expect(last(r).total).toBe(61_000);
   });
 
   it("пустой список считается как «без отбора»", () => {
@@ -996,13 +1005,37 @@ describe("stackedBalanceByAccount — отбор счетов для графи�
     expect(r.accounts).toEqual(["Вклад", "Наличные"]);
   });
 
+  it("«Прочие» из одного счёта не собираем — показываем его своим слоем", () => {
+    // Счетов ровно на один больше, чем слоёв: свалка из одного счёта ничего не
+    // обобщает, только прячет его название.
+    const r = stackedBalanceByAccount(txs, 3, real);
+    expect(r.accounts).toEqual(["Вклад", "Карта", "Наличные", "Копилка"]);
+    expect(r.accounts).not.toContain("Прочие");
+    expect(last(r).total).toBe(61_000);
+  });
+
+  it("счёт без операций тоже считается «лишним» — «Прочие» из него не делаем", () => {
+    // «Копилка» есть только в остатках: правило должно видеть и такие счета,
+    // иначе рядом с тремя слоями встали бы «Прочие» с одной «Копилкой».
+    const noOps = txs.filter((t) => t.incomeAccount !== "Копилка");
+    const r = stackedBalanceByAccount(noOps, 3, real);
+    expect(r.accounts).toContain("Копилка");
+    expect(r.accounts).not.toContain("Прочие");
+    expect(last(r)["Копилка"]).toBe(1000);
+  });
+
   it("дни чужих операций остаются на оси — линия не рвётся", () => {
     // Выбрана одна «Карта», а операции есть и по другим счетам. Без сохранения
     // дней ось схлопнулась бы до одной точки 10 января.
     const r = stackedBalanceByAccount(txs, 8, real, null, ["Карта"]);
-    expect(r.series.map((s) => s.date)).toEqual(["2026-01-10", "2026-02-10", "2026-03-10"]);
+    expect(r.series.map((s) => s.date)).toEqual([
+      "2026-01-10",
+      "2026-02-10",
+      "2026-03-10",
+      "2026-03-11",
+    ]);
     // Остаток «Карты» на чужих днях не меняется.
-    expect(r.series.map((s) => s["Карта"])).toEqual([7000, 7000, 7000]);
+    expect(r.series.map((s) => s["Карта"])).toEqual([7000, 7000, 7000, 7000]);
   });
 
   it("выбранный счёт без операций рисуется своим остатком, а не пропадает", () => {
