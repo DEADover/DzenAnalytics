@@ -99,7 +99,6 @@ const STACK_COLORS = [
 ];
 
 type View = "stacked" | "single";
-type Scope = "filtered" | "all";
 /**
  * Разделы страницы. «Капитал» — остатки и их история, отбору не подчиняются.
  * «Движение» — обороты и список счетов, там отбор и работает. Раньше и то и
@@ -376,7 +375,6 @@ export function AccountsPage() {
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [tab, setTab] = useState<AccountsTab>("capital");
   const [view, setView] = useState<View>("stacked");
-  const [scope, setScope] = useState<Scope>("all");
   const [accountsView, setAccountsView] = useState<AccountsView>("table");
   const [hideArchived, setHideArchived] = useState(false);
   // Отборы и порядок вывода списка счетов. Пустое множество = «все»
@@ -488,8 +486,6 @@ export function AccountsPage() {
 
   /** Вкладка «Капитал»: список показывает остатки, а не обороты за период. */
   const capitalView = tab === "capital";
-  /** Панель фильтров сейчас ни на что не влияет — гасим её. */
-  const filtersIdle = capitalView && scope === "all";
 
   const accounts = useMemo(() => balancesByAccount(filtered), [filtered]);
   const accountsAll = useMemo(() => balancesByAccount(transactions), [transactions]);
@@ -875,18 +871,33 @@ export function AccountsPage() {
    *
    * `null` — показываем всё. Иначе — только даты отобранных операций.
    */
+  const byPeriod = useMemo(
+    () =>
+      applyFilters(
+        transactions,
+        {
+          ...filters,
+          accounts: new Set<string>(),
+          categories: new Set<string>(),
+          currencies: new Set<string>(),
+          search: "",
+        },
+        monthStartDay
+      ),
+    [transactions, filters, monthStartDay]
+  );
   const viewWindow = useMemo(() => {
-    if (scope === "all" || filtered.length === 0) return null;
-    let from = filtered[0].date;
-    let to = filtered[0].date;
-    for (const t of filtered) {
+    if (byPeriod.length === 0 || byPeriod.length === transactions.length) return null;
+    let from = byPeriod[0].date;
+    let to = byPeriod[0].date;
+    for (const t of byPeriod) {
       if (t.date < from) from = t.date;
       if (t.date > to) to = t.date;
     }
     return { from, to };
-  }, [scope, filtered]);
-  /** Отбор пуст — показывать нечего, и подменять это всей историей нельзя. */
-  const emptyWindow = scope === "filtered" && filtered.length === 0;
+  }, [byPeriod, transactions.length]);
+  /** В выбранном периоде нет ни одной операции — подменять это всей историей нельзя. */
+  const emptyWindow = byPeriod.length === 0 && transactions.length > 0;
   const clip = useCallback(
     <T extends { date: string }>(series: T[]): T[] => {
       if (emptyWindow) return [];
@@ -1098,37 +1109,11 @@ export function AccountsPage() {
         ]}
       />
 
-      {/* Стоит ПЕРЕД панелью фильтров, потому что решает её судьбу: в режиме
-          «Вся история» отбор ни на что не влияет и панель ниже гаснет. Порядок
-          чтения — причина, потом следствие. */}
-      <div className={tab === "capital" ? "flex items-center gap-2 flex-wrap" : "hidden"}>
-        <span className="label">Считать по</span>
-        <div className="flex bg-panel2 rounded-lg p-1 border border-border">
-          <button
-            onClick={() => setScope("all")}
-            className={`px-3 py-1 text-xs rounded-md ${scope === "all" ? "bg-accent text-accent-fg" : "text-muted"}`}
-          >
-            Вся история
-          </button>
-          <button
-            onClick={() => setScope("filtered")}
-            className={`px-3 py-1 text-xs rounded-md ${scope === "filtered" ? "bg-accent text-accent-fg" : "text-muted"}`}
-          >
-            По фильтрам
-          </button>
-        </div>
-        <span className="text-xs text-muted">
-          Окно показа. Сами остатки всегда считаются по всей истории
-        </span>
-      </div>
-
-      {/* Панель гаснет ровно тогда, когда ни на что не влияет: на «Капитале» в
-          режиме «Вся история». В режиме «По фильтрам» отбор выбирает окно
-          показа, и панель снова в деле. */}
-      <GlobalFilters
-        dimmed={filtersIdle}
-        dimmedHint="Отбор не применяется: показана вся история остатков"
-      />
+      {/* Панель больше не гаснет: отбор в деле на обеих вкладках. На «Капитале»
+          окно показа задаёт ПЕРИОД (в нём есть «Всё» — это и есть вся история),
+          на «Движении» работает весь отбор целиком. Отдельный переключатель
+          «Считать по» тут когда-то стоял и просто повторял «Всё» из периода. */}
+      <GlobalFilters />
 
       {tab === "capital" && calibOpen && !zenToken && (
         <div className="card card-pad bg-accent2/5 border-accent2/40">
@@ -1242,9 +1227,9 @@ export function AccountsPage() {
           hint={
             noWindowData
               ? "В отборе нет операций"
-              : scope === "all"
-                ? "На последний день истории"
-                : "На конец отобранного периода"
+              : viewWindow
+                ? "На конец выбранного периода"
+                : "На последний день истории"
           }
         />
         <Stat
@@ -1256,9 +1241,9 @@ export function AccountsPage() {
           hint={
             noWindowData
               ? "В отборе нет операций"
-              : scope === "all"
-                ? "Максимум за всю историю"
-                : "Максимум в отобранном периоде"
+              : viewWindow
+                ? "Максимум в выбранном периоде"
+                : "Максимум за всю историю"
           }
         />
       </div>
@@ -1319,7 +1304,7 @@ export function AccountsPage() {
                 : "Совокупный баланс на каждый день"}
               {/* Про ОКНО, а не про способ счёта: остатки всегда из всей
                   истории, отбор лишь выбирает показанный кусок. */}
-              {scope === "all" ? " · вся история" : " · отобранный период"}
+              {viewWindow ? " · выбранный период" : " · вся история"}
               {view === "stacked" && ` · топ-${stacked.accounts.length} счетов`}
             </div>
           </div>
