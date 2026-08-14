@@ -960,6 +960,65 @@ describe("stackedBalanceByAccount — issue #59", () => {
   });
 });
 
+describe("stackedBalanceByAccount — отбор счетов для графика", () => {
+  const last = (r: { series: StackedBalancePoint[] }) => r.series[r.series.length - 1];
+  const real = { Карта: 7000, Наличные: 3000, Вклад: 50_000 };
+  const txs = [
+    tx({ date: "2026-01-10", kind: "income", incomeAccount: "Карта", amount: 1000 }),
+    tx({ date: "2026-02-10", kind: "income", incomeAccount: "Наличные", amount: 2000 }),
+    tx({ date: "2026-03-10", kind: "income", incomeAccount: "Вклад", amount: 5000 }),
+  ];
+
+  it("без отбора — прежнее поведение: топ-N и «Прочие»", () => {
+    const r = stackedBalanceByAccount(txs, 2, real);
+    expect(r.accounts).toEqual(["Вклад", "Карта", "Прочие"]);
+    expect(last(r).total).toBe(60_000);
+  });
+
+  it("пустой список считается как «без отбора»", () => {
+    const r = stackedBalanceByAccount(txs, 2, real, null, []);
+    expect(r.accounts).toEqual(["Вклад", "Карта", "Прочие"]);
+  });
+
+  it("с отбором — ровно выбранные счета, без «Прочих»", () => {
+    const r = stackedBalanceByAccount(txs, 8, real, null, ["Карта", "Наличные"]);
+    expect(r.accounts).toEqual(["Карта", "Наличные"]);
+    expect(r.accounts).not.toContain("Прочие");
+    // «Итого» — сумма выбранных, а НЕ совокупный баланс: 50 000 «Вклада» в
+    // стопку не попали ни слоем, ни в «Прочие».
+    expect(last(r).total).toBe(10_000);
+    expect(last(r)["Карта"]).toBe(7000);
+    expect(last(r)["Наличные"]).toBe(3000);
+  });
+
+  it("слои идут по весу счёта, а не в порядке выбора", () => {
+    const r = stackedBalanceByAccount(txs, 8, real, null, ["Наличные", "Вклад"]);
+    expect(r.accounts).toEqual(["Вклад", "Наличные"]);
+  });
+
+  it("дни чужих операций остаются на оси — линия не рвётся", () => {
+    // Выбрана одна «Карта», а операции есть и по другим счетам. Без сохранения
+    // дней ось схлопнулась бы до одной точки 10 января.
+    const r = stackedBalanceByAccount(txs, 8, real, null, ["Карта"]);
+    expect(r.series.map((s) => s.date)).toEqual(["2026-01-10", "2026-02-10", "2026-03-10"]);
+    // Остаток «Карты» на чужих днях не меняется.
+    expect(r.series.map((s) => s["Карта"])).toEqual([7000, 7000, 7000]);
+  });
+
+  it("выбранный счёт без операций рисуется своим остатком, а не пропадает", () => {
+    const r = stackedBalanceByAccount(
+      txs,
+      8,
+      { ...real, Брокерский: 12_000 },
+      null,
+      ["Карта", "Брокерский"]
+    );
+    expect(r.accounts).toEqual(["Брокерский", "Карта"]);
+    expect(last(r)["Брокерский"]).toBe(12_000);
+    expect(last(r).total).toBe(19_000);
+  });
+});
+
 describe("дубли: разные покупки в одном магазине", () => {
   const buy = (p: Parameters<typeof tx>[0]) =>
     tx({ date: "2026-06-30", kind: "expense", amount: 500, amountBase: 500,

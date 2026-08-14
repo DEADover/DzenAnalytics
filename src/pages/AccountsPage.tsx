@@ -375,6 +375,10 @@ export function AccountsPage() {
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [tab, setTab] = useState<AccountsTab>("capital");
   const [view, setView] = useState<View>("stacked");
+  // Какие счета показывать слоями на «Остатках по счетам». Пусто — как было:
+  // восемь крупнейших, остальные в «Прочие». Соглашение множества общее с
+  // MultiSelect: пусто = все, {FILTER_NONE} = ничего.
+  const [chartAccounts, setChartAccounts] = useState<Set<string>>(new Set());
   const [accountsView, setAccountsView] = useState<AccountsView>("table");
   const [hideArchived, setHideArchived] = useState(false);
   // Отборы и порядок вывода списка счетов. Пустое множество = «все»
@@ -942,15 +946,39 @@ export function AccountsPage() {
     [viewWindow, emptyWindow]
   );
 
+  /** Варианты отбора для графика — тот же перечень счетов, что и в списке под
+   *  ним, в том же порядке: архивные внизу, как ждёт MultiSelect. */
+  const chartAccountOptions = useMemo(
+    () => accountRows.map((r) => r.account),
+    [accountRows]
+  );
+  const chartArchived = useMemo(
+    () => new Set(accountRows.filter((r) => r.archive).map((r) => r.account)),
+    [accountRows]
+  );
+  /**
+   * Счета, выбранные для стопки. `null` — отбора нет, работает автоматика
+   * (восемь крупнейших и «Прочие»). Пустой массив — пользователь снял все
+   * галочки: рисовать нечего, и подменять это «всеми» нельзя.
+   */
+  const chartOnly = useMemo<string[] | null>(() => {
+    if (chartAccounts.size === 0) return null;
+    if (chartAccounts.has(FILTER_NONE)) return [];
+    return [...chartAccounts];
+  }, [chartAccounts]);
+  const chartFiltered = chartOnly !== null && chartOnly.length > 0;
+  const chartNothingPicked = chartOnly !== null && chartOnly.length === 0;
+
   const stackedAll = useMemo(
     () =>
       stackedBalanceByAccount(
         transactions,
         8,
         hasRealBalances ? realBalancesByAccount : null,
-        unsyncedIds
+        unsyncedIds,
+        chartOnly
       ),
-    [transactions, hasRealBalances, realBalancesByAccount, unsyncedIds]
+    [transactions, hasRealBalances, realBalancesByAccount, unsyncedIds, chartOnly]
   );
   const stacked = useMemo(
     () => ({ ...stackedAll, series: clip(stackedAll.series) }),
@@ -1348,26 +1376,61 @@ export function AccountsPage() {
                 стопки стояло «без фильтров» всегда — а она строится из того же
                 набора операций, что и остальное. */}
             <div className="text-xs text-muted">
-              {view === "stacked"
-                ? hasRealBalances
-                  ? "Каждый счёт своим слоем"
-                  : "Накопление с нуля, без начальных остатков"
-                : "Активы минус долги на каждый день"}
-              {/* Про ОТРЕЗОК, а не про способ счёта: остатки всегда из всей
-                  истории, период лишь выбирает показанный кусок. */}
-              {viewWindow ? " · выбранный период" : " · вся история"}
-              {/* Без «Прочих» подпись молчит: слои строятся по операциям, и
-                  счёт вообще без движения в стопку не попадает — сказать тут
-                  «все счета» значило бы соврать. */}
-              {view === "stacked" && stackHasOther &&
-                ` · ${stackTopCount} ${pluralRu(stackTopCount, [
-                  "крупнейший счёт",
-                  "крупнейших счёта",
-                  "крупнейших счетов",
-                ])}, остальные — в «Прочие»`}
+              {view === "stacked" && chartNothingPicked ? (
+                // Ни одного счёта не отмечено — рисовать нечего, и рассказывать
+                // про слои и период тут значило бы описывать пустое место.
+                "Счета для показа не выбраны"
+              ) : (
+                <>
+                  {view === "stacked"
+                    ? chartFiltered
+                      ? // При отборе «Итого» — сумма выбранных счетов, а не
+                        // совокупный баланс. Промолчать об этом нельзя: рядом
+                        // стоит показатель «Совокупный баланс» с другим числом.
+                        "Только выбранные счета · «Итого» — их сумма"
+                      : hasRealBalances
+                        ? "Каждый счёт своим слоем"
+                        : "Накопление с нуля, без начальных остатков"
+                    : "Активы минус долги на каждый день"}
+                  {/* Про ОТРЕЗОК, а не про способ счёта: остатки всегда из всей
+                      истории, период лишь выбирает показанный кусок. */}
+                  {viewWindow ? " · выбранный период" : " · вся история"}
+                  {/* Без «Прочих» подпись молчит: слои строятся по операциям, и
+                      счёт вообще без движения в стопку не попадает — сказать
+                      тут «все счета» значило бы соврать. */}
+                  {view === "stacked" &&
+                    (chartFiltered
+                      ? ` · ${chartOnly!.length} из ${chartAccountOptions.length}`
+                      : stackHasOther
+                        ? ` · ${stackTopCount} ${pluralRu(stackTopCount, [
+                            "крупнейший счёт",
+                            "крупнейших счёта",
+                            "крупнейших счетов",
+                          ])}, остальные — в «Прочие»`
+                        : "")}
+                </>
+              )}
             </div>
           </div>
-          <div className="flex bg-panel2 rounded-lg p-1 border border-border shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Отбор счетов — только у стопки: «Совокупно» показывает активы
+                минус долги целиком, и выкидывать оттуда счета нельзя, конец
+                кривой прибит к сумме ВСЕХ реальных остатков. */}
+            {view === "stacked" && chartAccountOptions.length > 1 && (
+              <MultiSelect
+                className="w-48 shrink-0"
+                label="Счета"
+                options={chartAccountOptions}
+                selected={chartAccounts}
+                onChange={setChartAccounts}
+                renderIcon={(name) => <AccountLogo title={name} size={18} />}
+                unitForms={["счёт", "счёта", "счетов"]}
+                searchPlaceholder="Поиск счёта"
+                archivedSet={chartArchived}
+                compactSummary
+              />
+            )}
+            <div className="flex bg-panel2 rounded-lg p-1 border border-border shrink-0">
             <button
               onClick={() => setView("stacked")}
               className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${view === "stacked" ? "bg-accent text-accent-fg" : "text-muted"}`}
@@ -1384,10 +1447,21 @@ export function AccountsPage() {
               <LineChartIcon className="w-3 h-3" />
               Совокупно
             </button>
+            </div>
           </div>
         </div>
         <div className="h-96">
-          {view === "stacked" ? (
+          {view === "stacked" && chartNothingPicked ? (
+            <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted">
+              <div>Не выбрано ни одного счёта.</div>
+              <button
+                onClick={() => setChartAccounts(new Set())}
+                className="btn-ghost text-xs"
+              >
+                Показать все
+              </button>
+            </div>
+          ) : view === "stacked" ? (
             <ResponsiveContainer>
               {/* `stackOffset="sign"`: активы растут вверх от нуля, долги — вниз,
                   каждый от своей стороны. Без него стопка складывается подряд, и

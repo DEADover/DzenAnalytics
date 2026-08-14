@@ -183,7 +183,16 @@ export function stackedBalanceByAccount(
    *  line SHAPE, but are excluded from the real-balance anchor reconciliation —
    *  so the line ends at the projected balance (cloud + draft) and the whole
    *  historical baseline isn't shifted down by the draft amount. Issue #18. */
-  unsyncedIds?: Set<string> | null
+  unsyncedIds?: Set<string> | null,
+  /**
+   * Счета, выбранные пользователем. Заданы — рисуем РОВНО их, каждый своим
+   * слоем: ни автоматической восьмёрки крупнейших, ни свалки «Прочие».
+   * Остальные счета в стопку не попадают вовсе, поэтому «Итого» — сумма
+   * выбранных, а не совокупный баланс; подпись у графика обязана это сказать.
+   *
+   * Пустой список / `null` — прежнее поведение (топ-N плюс «Прочие»).
+   */
+  onlyAccounts?: readonly string[] | null
 ): { series: StackedBalancePoint[]; accounts: string[] } {
   const balances = balancesByAccount(allTxs);
   // Pick the «biggest» accounts. With real balances (API mode, where the chart
@@ -194,11 +203,25 @@ export function stackedBalanceByAccount(
     realBalances
       ? Math.abs(realBalances[b.account] ?? 0)
       : Math.abs(b.balance) + b.income + b.expense;
-  const topAccounts = balances
-    .slice()
-    .sort((a, b) => score(b) - score(a))
-    .slice(0, topN)
-    .map((b) => b.account);
+  const only =
+    onlyAccounts && onlyAccounts.length > 0 ? new Set(onlyAccounts) : null;
+  // Порядок слоёв один и тот же при отборе и без него — по «весу» счёта, чтобы
+  // крупный лежал в основании стопки. Выбранный счёт без единой операции в
+  // `balances` не значится: его вес берём из реального остатка, иначе он молча
+  // выпадал бы из графика.
+  const byTitle = new Map(balances.map((b) => [b.account, b]));
+  const weight = (title: string) => {
+    const b = byTitle.get(title);
+    if (b) return score(b);
+    return realBalances ? Math.abs(realBalances[title] ?? 0) : 0;
+  };
+  const topAccounts = only
+    ? [...only].sort((a, b) => weight(b) - weight(a))
+    : balances
+        .slice()
+        .sort((a, b) => score(b) - score(a))
+        .slice(0, topN)
+        .map((b) => b.account);
   const accountSet = new Set(topAccounts);
 
   const days = new Map<string, Map<string, number>>();
@@ -217,16 +240,16 @@ export function stackedBalanceByAccount(
     const unsynced = unsyncedIds ? unsyncedIds.has(t.id) : false;
     const apply = (acc: string, delta: number) => {
       if (!acc) return;
-      const key = accountSet.has(acc) ? acc : "Прочие";
+      const key = accountSet.has(acc) ? acc : only ? null : "Прочие";
+      // День остаётся на оси, даже если операция прошла по невыбранному счёту:
+      // иначе при отборе пары счетов ось теряла бы почти все точки, а линии
+      // рвались на длинные прямые между редкими днями.
+      if (!tooOld && !days.has(d)) days.set(d, new Map());
+      if (key === null) return;
       if (tooOld) {
         opening.set(key, (opening.get(key) || 0) + delta);
       } else {
-        let dayMap = days.get(d);
-        if (!dayMap) {
-          dayMap = new Map();
-          days.set(d, dayMap);
-        }
-        dayMap.set(key, (dayMap.get(key) || 0) + delta);
+        days.get(d)!.set(key, (days.get(d)!.get(key) || 0) + delta);
       }
       if (unsynced) unsyncedFlow.set(key, (unsyncedFlow.get(key) || 0) + delta);
     };
@@ -242,7 +265,8 @@ export function stackedBalanceByAccount(
   }
 
   const accountList = [...topAccounts];
-  const hasOther = Array.from(days.values()).some((m) => m.has("Прочие"));
+  const hasOther =
+    !only && Array.from(days.values()).some((m) => m.has("Прочие"));
   if (hasOther) accountList.push("Прочие");
 
   const sortedDates = Array.from(days.keys()).sort();
