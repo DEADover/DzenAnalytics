@@ -63,3 +63,6 @@ dev-logs/
 ROADMAP.md
 # Detailed README backup — kept locally, not part of the published repo.
 README.full.md
+
+# Рабочие файлы сессий (черновики, выгрузки для разбора) — не для репозитория
+.scratch/
