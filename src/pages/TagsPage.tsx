@@ -304,6 +304,10 @@ export function TagsPage() {
           }
           isExpanded={(t) => expanded.has(t.tag)}
           onToggleExpand={(t) => toggle(t.tag)}
+          // Раскрыть все теги сразу — иконкой в шапке колонки со шевронами.
+          onToggleAllExpanded={(expand) =>
+            setExpanded(expand ? new Set(tags.map((t) => t.tag)) : new Set())
+          }
           renderExpanded={(t) => {
             const nodes = catTrees.get(t.tag);
             if (!nodes || nodes.length === 0) {

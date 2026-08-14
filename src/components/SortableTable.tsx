@@ -51,6 +51,13 @@ interface Props<T> {
   renderExpanded?: (row: T) => ReactNode;
   isExpanded?: (row: T) => boolean;
   onToggleExpand?: (row: T) => void;
+  /**
+   * «Раскрыть / свернуть все» иконкой в шапке колонки-шеврона. Без этого
+   * обработчика шапка там пустая, как и была. Аргумент говорит, что просят:
+   * `true` — раскрыть всё, `false` — свернуть; какие именно строки этому
+   * соответствуют, решает страница — таблица её набора не знает.
+   */
+  onToggleAllExpanded?: (expand: boolean) => void;
 }
 
 function csvEscape(v: unknown): string {
@@ -84,6 +91,7 @@ export function SortableTable<T>({
   renderExpanded,
   isExpanded,
   onToggleExpand,
+  onToggleAllExpanded,
 }: Props<T>) {
   const expandable = !!renderExpanded;
   const [sortKey, setSortKey] = useState<string | undefined>(defaultSortKey);
@@ -149,6 +157,10 @@ export function SortableTable<T>({
 
   const visible = limit ? sorted.slice(0, limit) : sorted;
   const showExport = exportable && sorted.length > 0;
+  // Раскрыто всё — считаем по ПОКАЗАННЫМ строкам: кнопка в шапке отвечает за
+  // то, что видно, а не за скрытый хвост под `limit`.
+  const allExpanded =
+    expandable && visible.length > 0 && visible.every((row) => !!isExpanded?.(row));
 
   return (
     <div className={clsx(className)}>
@@ -171,7 +183,28 @@ export function SortableTable<T>({
         <table className={clsx("w-full text-sm", fixed && "table-fixed")}>
           <thead>
             <tr>
-              {expandable && <th className="table-th w-8" aria-hidden />}
+              {expandable &&
+                (onToggleAllExpanded && visible.length > 0 ? (
+                  <th className="table-th w-8">
+                    <button
+                      type="button"
+                      onClick={() => onToggleAllExpanded(!allExpanded)}
+                      aria-expanded={allExpanded}
+                      title={allExpanded ? "Свернуть все" : "Раскрыть все"}
+                      aria-label={allExpanded ? "Свернуть все" : "Раскрыть все"}
+                      className="-m-1 p-1 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                    >
+                      <ChevronDown
+                        className={clsx(
+                          "w-4 h-4 transition-transform duration-300",
+                          !allExpanded && "-rotate-90"
+                        )}
+                      />
+                    </button>
+                  </th>
+                ) : (
+                  <th className="table-th w-8" aria-hidden />
+                ))}
               {columns.map((c) => {
                 const sortable = c.sortable !== false && !!c.sortValue;
                 const active = sortKey === c.key;

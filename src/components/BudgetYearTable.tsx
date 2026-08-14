@@ -168,7 +168,7 @@ export function BudgetYearTable({
               onClick={() => toggle(opts.group!)}
               className="shrink-0 text-muted hover:text-text"
               aria-label={
-                expanded.has(opts.group) ? "Свернуть под-категории" : "Показать под-категории"
+                expanded.has(opts.group) ? "Свернуть подкатегории" : "Показать подкатегории"
               }
             >
               <ChevronDown
@@ -242,8 +242,8 @@ export function BudgetYearTable({
               aria-expanded={sectionExpanded(section)}
               aria-label={
                 sectionExpanded(section)
-                  ? `Свернуть под-категории: ${heading}`
-                  : `Раскрыть под-категории: ${heading}`
+                  ? `Свернуть подкатегории: ${heading}`
+                  : `Раскрыть подкатегории: ${heading}`
               }
             >
               <ChevronDown

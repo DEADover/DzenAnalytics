@@ -658,7 +658,7 @@ export function BudgetsPage() {
       <PageHeader
         icon={Wallet}
         title="Бюджет"
-        hint="План и факт по категориям и под-категориям, помесячно, с синхронизацией в Дзен."
+        hint="План и факт по категориям и подкатегориям, помесячно, с синхронизацией в Дзен."
       />
 
       {/* Панель: вид и период (слева), действия (справа). */}
@@ -1011,6 +1011,15 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
       else next.add(cat);
       return next;
     });
+  // Раскрыть/свернуть всё сразу — как на «Категориях», «Сравнении» и в отчёте
+  // «Доходы и расходы». Кнопки нет, когда раскрывать нечего: у всех категорий
+  // раздела нет подкатегорий с планом.
+  const expandable = order.filter((cat) => (groups.get(cat)?.subs.length ?? 0) > 0);
+  const allExpanded =
+    expandable.length > 0 && expandable.every((cat) => expanded.has(cat));
+  const toggleAll = () =>
+    setExpanded(allExpanded ? new Set() : new Set(expandable));
+
   // Budgeted categories with no spending this month collapse under a spoiler.
   const [emptyOpen, setEmptyOpen] = useState(false);
 
@@ -1103,7 +1112,42 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <h2 className="font-semibold text-lg">{heading}</h2>
+        {/* Шеврон у заголовка раскрывает подкатегории всего раздела — ровно
+            как в годовом виде этой же страницы. Раскрывать нечего (ни у одной
+            категории нет подкатегорий с планом) — кнопки нет вовсе, а не висит
+            неработающей. */}
+        <h2 className="font-semibold text-lg">
+          {expandable.length > 0 ? (
+            <Tooltip
+              content={
+                allExpanded
+                  ? "Свернуть подкатегории раздела"
+                  : "Раскрыть подкатегории раздела"
+              }
+            >
+              <button
+                type="button"
+                onClick={toggleAll}
+                aria-expanded={allExpanded}
+                aria-label={
+                  allExpanded
+                    ? `Свернуть подкатегории: ${heading}`
+                    : `Раскрыть подкатегории: ${heading}`
+                }
+                className="flex items-center gap-1.5 hover:text-accent"
+              >
+                <ChevronDown
+                  className={`w-4 h-4 shrink-0 transition-transform duration-300 ${
+                    allExpanded ? "" : "-rotate-90"
+                  }`}
+                />
+                {heading}
+              </button>
+            </Tooltip>
+          ) : (
+            heading
+          )}
+        </h2>
         <BarLegend isIncome={sectionKind === "income"} />
         {headerAction}
       </div>
@@ -1366,7 +1410,8 @@ function BudgetRow({
         <button
           onClick={onToggle}
           className="shrink-0 text-muted hover:text-text"
-          aria-label={expanded ? "Свернуть под-категории" : "Показать под-категории"}
+          aria-expanded={expanded}
+          aria-label={expanded ? "Свернуть подкатегории" : "Показать подкатегории"}
         >
           <ChevronDown className={`w-4 h-4 transition-transform duration-300 ease-in-out ${expanded ? "" : "-rotate-90"}`} />
         </button>
