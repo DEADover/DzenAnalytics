@@ -56,6 +56,12 @@ import { confirm } from "../store/useConfirmStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { useAccountEditsStore } from "../store/useAccountEditsStore";
+import {
+  useAccountsViewStore,
+  type AccountsSortBy,
+  type AccountsSortDir,
+  type AccountsGroupBy,
+} from "../store/useAccountsViewStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import type { LiveAccount } from "../store/useZenmoneyStore";
 import {
@@ -103,28 +109,12 @@ const STACK_COLORS = [
   "#3B82F6", "#84CC16", "#F97316", "#14B8A6", "#6B7280",
 ];
 
-type View = "stacked" | "single";
-/**
- * Разделы страницы. «Капитал» — остатки и их история, отбору не подчиняются.
- * «Движение» — обороты и список счетов, там отбор и работает. Раньше и то и
- * другое лежало вперемешку на одном полотне.
- */
-type AccountsTab = "capital" | "flow";
-type AccountsView = "cards" | "table";
-/** Что сортируем. Ключи совпадают с колонками таблицы — по клику в её шапке,
- *  как в остальных таблицах сервиса; «bank» колонки не имеет и задаётся из
- *  меню сортировки (оно нужно карточкам, где шапки нет). */
-type SortBy =
-  | "balance"
-  | "alpha"
-  | "bank"
-  | "type"
-  | "delta"
-  | "income"
-  | "expense"
-  | "count";
-type SortDir = "asc" | "desc";
-type GroupBy = "none" | "type" | "bank";
+// Типы настроек показа переехали в свой стор вместе с самими настройками:
+// страница их только читает. «Капитал» — остатки и их история, «Движение» —
+// обороты за период; раньше и то и другое лежало вперемешку на одном полотне.
+type SortBy = AccountsSortBy;
+type SortDir = AccountsSortDir;
+type GroupBy = AccountsGroupBy;
 
 /** Направление по умолчанию при первом клике: у названий — от «А», у чисел —
  *  от большего. Иначе первый же клик по «Балансу» показывает самые бедные счета. */
@@ -378,40 +368,57 @@ export function AccountsPage() {
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
-  const [tab, setTab] = useState<AccountsTab>("capital");
-  const [view, setView] = useState<View>("stacked");
-  // Какие счета показывать слоями на «Остатках по счетам». Пусто — как было:
-  // восемь крупнейших, остальные в «Прочие». Соглашение множества общее с
-  // MultiSelect: пусто = все, {FILTER_NONE} = ничего.
-  const [chartAccounts, setChartAccounts] = useState<Set<string>>(new Set());
-  const [accountsView, setAccountsView] = useState<AccountsView>("table");
-  const [hideArchived, setHideArchived] = useState(false);
-  // Отборы и порядок вывода списка счетов. Пустое множество = «все»
-  // (соглашение MultiSelect), поэтому по умолчанию ничего не отфильтровано.
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
-  const [bankFilter, setBankFilter] = useState<Set<string>>(new Set());
+  // Настройки показа живут в сторе и переживают уход на другую страницу —
+  // раньше они были `useState` и обнулялись при каждом возврате сюда.
+  const prefs = useAccountsViewStore();
+  const patchPrefs = useAccountsViewStore((s) => s.patch);
+  const prefsLoaded = useAccountsViewStore((s) => s.loaded);
+  const hydratePrefs = useAccountsViewStore((s) => s.hydrate);
+  useEffect(() => {
+    if (!prefsLoaded) void hydratePrefs();
+  }, [prefsLoaded, hydratePrefs]);
+
+  const tab = prefs.tab;
+  const setTab = (next: typeof tab) => void patchPrefs({ tab: next });
+  const view = prefs.chartView;
+  const setView = (next: typeof view) => void patchPrefs({ chartView: next });
+  const accountsView = prefs.listView;
+  const hideArchived = prefs.hideArchived;
+  const balanceScope = prefs.balanceScope;
+  const onlySavings = prefs.onlySavings;
+  const sortBy = prefs.sortBy;
+  const sortDir = prefs.sortDir;
+  const groupBy = prefs.groupBy;
+  // Множества собираем из хранимых массивов: в IDB `Set` не кладётся, а вся
+  // страница ниже работает именно множествами (соглашение MultiSelect —
+  // пусто = «все», {FILTER_NONE} = «ничего»).
+  const chartAccounts = useMemo(
+    () => new Set(prefs.chartAccounts),
+    [prefs.chartAccounts]
+  );
+  const setChartAccounts = (next: Set<string>) =>
+    void patchPrefs({ chartAccounts: [...next] });
+  const typeFilter = useMemo(() => new Set(prefs.typeFilter), [prefs.typeFilter]);
+  const setTypeFilter = (next: Set<string>) =>
+    void patchPrefs({ typeFilter: [...next] });
+  const bankFilter = useMemo(() => new Set(prefs.bankFilter), [prefs.bankFilter]);
+  const setBankFilter = (next: Set<string>) =>
+    void patchPrefs({ bankFilter: [...next] });
   // Три состояния вместо двух галочек-антонимов: «в балансе» и «вне баланса»
   // взаимоисключающие, и одновременно включёнными они дали бы пустой список.
-  const [balanceScope, setBalanceScope] = useState<"all" | "in" | "out">("all");
   const toggleBalanceScope = (v: "in" | "out") =>
-    setBalanceScope((cur) => (cur === v ? "all" : v));
-  const [onlySavings, setOnlySavings] = useState(false);
-  const [sortBy, setSortBy] = useState<SortBy>("balance");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [groupBy, setGroupBy] = useState<GroupBy>("none");
+    void patchPrefs({ balanceScope: balanceScope === v ? "all" : v });
   // Клик по колонке: та же — переворачиваем порядок, другая — берём её
   // естественное направление.
   const sortByColumn = (key: SortBy) => {
-    if (key === sortBy) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortBy(key);
-      setSortDir(DEFAULT_DIR[key]);
+    if (key === sortBy) {
+      void patchPrefs({ sortDir: sortDir === "asc" ? "desc" : "asc" });
+    } else {
+      void patchPrefs({ sortBy: key, sortDir: DEFAULT_DIR[key] });
     }
   };
-  const pickSort = (key: SortBy) => {
-    setSortBy(key);
-    setSortDir(DEFAULT_DIR[key]);
-  };
+  const pickSort = (key: SortBy) =>
+    void patchPrefs({ sortBy: key, sortDir: DEFAULT_DIR[key] });
   const sortHead = { active: sortBy, dir: sortDir, onSort: sortByColumn };
   // Редактор счёта. Открывается по карандашу в «Действиях» и по двойному
   // клику по строке — как в справочниках.
@@ -1767,13 +1774,15 @@ export function AccountsPage() {
                   />
                   <CheckItem
                     checked={effectiveSavings}
-                    onChange={() => setOnlySavings((v) => !v)}
+                    onChange={() => void patchPrefs({ onlySavings: !onlySavings })}
                     icon={PiggyBank}
                     label="Только накопительные"
                   />
                   <CheckItem
                     checked={effectiveHideArchived}
-                    onChange={() => setHideArchived((v) => !v)}
+                    onChange={() =>
+                      void patchPrefs({ hideArchived: !hideArchived })
+                    }
                     icon={Archive}
                     label="Скрыть архивные"
                   />
@@ -1793,7 +1802,7 @@ export function AccountsPage() {
                   key={o.value}
                   checked={groupBy === o.value}
                   onSelect={() => {
-                    setGroupBy(o.value);
+                    void patchPrefs({ groupBy: o.value });
                     close();
                   }}
                   label={o.label}
@@ -1832,12 +1841,16 @@ export function AccountsPage() {
             className="ml-auto flex bg-panel2 rounded-lg p-1 border border-border"
           >
             <button
-              onClick={() => {
-                setAccountsView("table");
-                // В таблице колонки «Банк» нет: заголовки не подсветятся, и
-                // порядок будет выглядеть случайным. Возвращаемся к сумме.
-                if (sortBy === "bank") pickSort("balance");
-              }}
+              onClick={() =>
+                void patchPrefs({
+                  listView: "table",
+                  // В таблице колонки «Банк» нет: заголовки не подсветятся, и
+                  // порядок будет выглядеть случайным. Возвращаемся к сумме.
+                  ...(sortBy === "bank"
+                    ? { sortBy: "balance" as const, sortDir: DEFAULT_DIR.balance }
+                    : {}),
+                })
+              }
               aria-pressed={accountsView === "table"}
               className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${
                 accountsView === "table" ? "bg-accent text-accent-fg" : "text-muted"
@@ -1847,13 +1860,18 @@ export function AccountsPage() {
               Таблица
             </button>
             <button
-              onClick={() => {
-                setAccountsView("cards");
-                // «Поступления», «Опер.» и прочие колонки в карточках выбрать
-                // нечем, поэтому меню сортировки показывало бы порядок, которого
-                // в нём нет. Возвращаемся к сумме — она есть на каждой карточке.
-                if (!CARD_SORT_OPTIONS.some((o) => o.value === sortBy)) pickSort("balance");
-              }}
+              onClick={() =>
+                void patchPrefs({
+                  listView: "cards",
+                  // «Поступления», «Опер.» и прочие колонки в карточках выбрать
+                  // нечем, поэтому меню сортировки показывало бы порядок,
+                  // которого в нём нет. Возвращаемся к сумме — она есть на
+                  // каждой карточке.
+                  ...(CARD_SORT_OPTIONS.some((o) => o.value === sortBy)
+                    ? {}
+                    : { sortBy: "balance" as const, sortDir: DEFAULT_DIR.balance }),
+                })
+              }
               aria-pressed={accountsView === "cards"}
               className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${
                 accountsView === "cards" ? "bg-accent text-accent-fg" : "text-muted"
@@ -1877,13 +1895,15 @@ export function AccountsPage() {
           <div className="text-center py-10 text-sm text-muted">
             <div>Ни один счёт не подошёл под отбор.</div>
             <button
-              onClick={() => {
-                setTypeFilter(new Set());
-                setBankFilter(new Set());
-                setBalanceScope("all");
-                setOnlySavings(false);
-                setHideArchived(false);
-              }}
+              onClick={() =>
+                void patchPrefs({
+                  typeFilter: [],
+                  bankFilter: [],
+                  balanceScope: "all",
+                  onlySavings: false,
+                  hideArchived: false,
+                })
+              }
               className="btn-ghost text-xs mt-3"
             >
               Сбросить отборы

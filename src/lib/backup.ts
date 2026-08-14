@@ -82,6 +82,7 @@ export const BACKUP_META_KEYS = [
   "budgetSettings", // периметр счетов, переводы, вид и прогноз бюджета
   "dataSlices", // разрезы данных
   "displaySettings", // оформление: размер текста в таблицах, копейки и т.п.
+  "accountsView", // как настроена страница «Счета»: вкладка, отборы, порядок
   "analyticsExcludedCategories", // категории, убранные из аналитики
   "categoryMeta", // иконки и цвета категорий
   "backupInterval", // как часто напоминать о бэкапе
