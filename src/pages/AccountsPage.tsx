@@ -42,7 +42,12 @@ import {
   Archive,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
-import { useFiltersStore, applyFilters, FILTER_NONE } from "../store/useFiltersStore";
+import {
+  useFiltersStore,
+  applyFilters,
+  presetToRange,
+  FILTER_NONE,
+} from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
@@ -908,35 +913,39 @@ export function AccountsPage() {
    * рисовался на уровне остатка за июнь 2026-го, и «Совокупный баланс»
    * показывал сегодняшнее число с подписью «в пределах фильтра».
    *
-   * `null` — показываем всё. Иначе — только даты отобранных операций.
+   * `null` — показываем всё. Иначе — границы выбранного периода.
+   *
+   * Окно берётся ПРЯМО из периода, а не из отфильтрованных операций. Раньше
+   * оно считалось по `applyFilters` с руками занулёнными счетами, категориями,
+   * валютами и поиском — и всё, что не попало в этот список, продолжало
+   * двигать границы: отбор «сумма от 10 000» в «Дополнительно» менял, какие
+   * ДАТЫ видно на графике остатков. Диапазон периода такого сделать не может
+   * по устройству, и список полей больше не надо поддерживать руками.
    */
-  const byPeriod = useMemo(
-    () =>
-      applyFilters(
-        transactions,
-        {
-          ...filters,
-          accounts: new Set<string>(),
-          categories: new Set<string>(),
-          currencies: new Set<string>(),
-          search: "",
-        },
-        monthStartDay
-      ),
-    [transactions, filters, monthStartDay]
-  );
   const viewWindow = useMemo(() => {
-    if (byPeriod.length === 0 || byPeriod.length === transactions.length) return null;
-    let from = byPeriod[0].date;
-    let to = byPeriod[0].date;
-    for (const t of byPeriod) {
-      if (t.date < from) from = t.date;
-      if (t.date > to) to = t.date;
-    }
-    return { from, to };
-  }, [byPeriod, transactions.length]);
+    const maxDate = transactions.reduce((m, t) => (t.date > m ? t.date : m), "");
+    // «custom» presetToRange не разворачивает — свои даты лежат прямо в отборе.
+    const r =
+      filters.preset === "custom"
+        ? { from: filters.from, to: filters.to }
+        : presetToRange(filters.preset, maxDate, filters.monthYM, monthStartDay);
+    if (!r.from && !r.to) return null;
+    return { from: r.from ?? "", to: r.to ?? "9999-12-31" };
+  }, [
+    transactions,
+    filters.preset,
+    filters.from,
+    filters.to,
+    filters.monthYM,
+    monthStartDay,
+  ]);
   /** В выбранном периоде нет ни одной операции — подменять это всей историей нельзя. */
-  const emptyWindow = byPeriod.length === 0 && transactions.length > 0;
+  const emptyWindow = useMemo(() => {
+    if (!viewWindow || transactions.length === 0) return false;
+    return !transactions.some(
+      (t) => t.date >= viewWindow.from && t.date <= viewWindow.to
+    );
+  }, [transactions, viewWindow]);
   const clip = useCallback(
     <T extends { date: string }>(series: T[]): T[] => {
       if (emptyWindow) return [];
@@ -1181,17 +1190,14 @@ export function AccountsPage() {
           окно показа задаёт ПЕРИОД (в нём есть «Всё» — это и есть вся история),
           на «Движении» работает весь отбор целиком. Отдельный переключатель
           «Считать по» тут когда-то стоял и просто повторял «Всё» из периода. */}
-      <GlobalFilters />
-
-      {/* Панель одна на всю страницу, а на «Капитале» работает только период —
-          и молчать об этом нельзя: человек выбирает счёт в отборе, числа не
-          двигаются, и это выглядит поломкой, а не правилом. */}
-      {tab === "capital" && (
-        <div className="-mt-4 text-xs text-muted">
-          На этой вкладке действует только период: остаток на дату складывается
-          из всей истории до неё, отборы по счетам и категориям его не меняют.
-        </div>
-      )}
+      {/* На «Капитале» живой только период: остаток на дату складывается из
+          всей истории до неё, и отборы по счетам, категориям и суммам его не
+          меняют. Раз не меняют — гасим, иначе на экране два отбора «Счета»
+          (общий и свой у графика) и не понять, какой чем управляет. */}
+      <GlobalFilters
+        showDataFilters={tab !== "capital"}
+        dataFiltersHint="На «Капитале» работает только период: остаток на дату складывается из всей истории до неё. Какие счета показать на графике — в его карточке. Отборы по счетам, категориям и суммам живут на вкладке «Движение»."
+      />
 
       {tab === "capital" && calibOpen && !zenToken && (
         <div className="card card-pad bg-accent2/5 border-accent2/40">

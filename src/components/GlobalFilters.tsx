@@ -51,6 +51,8 @@ const PINNED_CATEGORIES = ["Корректировка"];
 export function GlobalFilters({
   showDateRange = true,
   dateRangeHint,
+  showDataFilters = true,
+  dataFiltersHint,
   dimmed = false,
   dimmedHint,
   period,
@@ -67,6 +69,20 @@ export function GlobalFilters({
   showDateRange?: boolean;
   /** Чем объяснить, почему даты недоступны. Показывается подсказкой. */
   dateRangeHint?: string;
+  /**
+   * Работают ли отборы ДАННЫХ: сохранённый фильтр, «Дополнительно», счета,
+   * категории, валюта, поиск. `false` — они остаются на месте, но гаснут и не
+   * нажимаются, а период при этом живой. Зеркало `showDateRange`, только с
+   * другой стороны панели.
+   *
+   * Нужно там, где страница считает по всей истории и слушает только период
+   * («Счета» → «Капитал»): без этого рядом стоят два отбора «Счета» — общий,
+   * который на остатки не влияет, и свой у графика, — и понять, какой чем
+   * управляет, нельзя.
+   */
+  showDataFilters?: boolean;
+  /** Чем объяснить, почему отборы данных недоступны. Подсказкой и строкой под панелью. */
+  dataFiltersHint?: string;
   /**
    * Панель целиком не действует на то, что сейчас на экране: гасим её и не даём
    * трогать. Тот же приём, что и с датами выше, только на всю панель.
@@ -307,6 +323,20 @@ export function GlobalFilters({
       >
       <div className="flex flex-wrap items-center gap-2">
         {/* ── Row 1: saved filter · «Дополнительно» │ period │ reset ── */}
+        {/* Обёртка НЕ инертна — на ней подсказка, почему отборы погашены;
+            инертен внутренний слой. Тот же приём, что у дат ниже. */}
+        <div
+          className={clsx(
+            "flex items-center gap-2",
+            !showDataFilters && "opacity-45"
+          )}
+          title={!showDataFilters ? dataFiltersHint : undefined}
+          aria-disabled={!showDataFilters || undefined}
+        >
+        <div
+          className={clsx("contents", !showDataFilters && "pointer-events-none")}
+          inert={!showDataFilters}
+        >
         <FiltersMenu />
 
         {/* «Дополнительно» — right next to the filter button */}
@@ -418,6 +448,8 @@ export function GlobalFilters({
             </>
           )}
         </div>
+        </div>
+        </div>
 
         {
           <>
@@ -503,8 +535,14 @@ export function GlobalFilters({
 
         <button
           onClick={f.reset}
-          disabled={!hasFilters}
-          title={hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
+          disabled={!hasFilters || !showDataFilters}
+          title={
+            !showDataFilters
+              ? dataFiltersHint
+              : hasFilters
+                ? "Сбросить все фильтры"
+                : "Фильтры не заданы"
+          }
           aria-label="Сбросить все фильтры"
           // `ml-auto` pins it to the right edge of the row. When the inline date
           // controls are shown they already grow to fill the row (flex-1), so
@@ -517,6 +555,18 @@ export function GlobalFilters({
         {/* Break → row 2 with the data controls, filling the full width. */}
         <div className="basis-full h-0" />
 
+        <div
+          className={clsx(
+            "basis-full flex flex-wrap items-center gap-2",
+            !showDataFilters && "opacity-45"
+          )}
+          title={!showDataFilters ? dataFiltersHint : undefined}
+          aria-disabled={!showDataFilters || undefined}
+        >
+        <div
+          className={clsx("contents", !showDataFilters && "pointer-events-none")}
+          inert={!showDataFilters}
+        >
         <MultiSelect
           className="w-52 shrink-0"
           label="Счета"
@@ -577,11 +627,17 @@ export function GlobalFilters({
             </button>
           )}
         </div>
+        </div>
+        </div>
       </div>
       </div>
-      {dimmed && dimmedHint && (
-        <div className="text-xs text-muted mt-1.5 px-1">{dimmedHint}</div>
-      )}
+      {/* Строка-объяснение под панелью. Погашенная панель без слов читается как
+          поломка, поэтому причина всегда рядом. */}
+      {(dimmed && dimmedHint) || (!showDataFilters && dataFiltersHint) ? (
+        <div className="text-xs text-muted mt-1.5 px-1">
+          {dimmed ? dimmedHint : dataFiltersHint}
+        </div>
+      ) : null}
     </div>
   );
 }
