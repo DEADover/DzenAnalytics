@@ -1381,6 +1381,16 @@ export interface NetWorthOptions {
    *  in/outflow, one within the set nets to zero. Together with `openings` this
    *  makes the series end exactly at the real total of these accounts. */
   accounts?: Set<string> | null;
+  /**
+   * Куда обязан прийти КОНЕЦ кривой — сумма реальных остатков этих счетов.
+   *
+   * Без привязки кривая складывается из стартовых остатков и операций, и любая
+   * мелочь, которую эта сумма не объясняет, копится: стартовые остатки
+   * переводятся в рубли по сегодняшнему курсу, а операции — по курсу ЦБ на
+   * дату, так что валютная переоценка на кривую не попадает вовсе. Сдвигаем всю
+   * кривую на постоянную величину: форма — из операций, конец — из правды.
+   */
+  anchorTo?: number | null;
 }
 
 /** Subset of `LiveAccount` (avoids a store→lib import) needed to seed openings. */
@@ -1391,6 +1401,8 @@ export interface NetWorthAccount {
   startDate: string | null;
   archive: boolean;
   inBalance: boolean;
+  /** Текущий остаток в валюте счёта — им кривая привязывается к правде. */
+  balance: number;
 }
 
 /**
@@ -1403,7 +1415,12 @@ export function netWorthBasis(
   txs: Transaction[],
   rates: CurrencyRates,
   includeOffBalance: boolean
-): { accounts: Set<string>; openings: { date: string; amount: number }[] } {
+): {
+  accounts: Set<string>;
+  openings: { date: string; amount: number }[];
+  /** Сумма текущих остатков включённых счетов, в базовой валюте. */
+  total: number;
+} {
   const earliest = new Map<string, string>();
   let globalEarliest = "";
   for (const t of txs) {
@@ -1420,6 +1437,7 @@ export function netWorthBasis(
     currency === rates.base ? amount : amount * (rates.rates[currency] || 1);
   const accounts = new Set<string>();
   const openings: { date: string; amount: number }[] = [];
+  let total = 0;
   for (const a of liveAccounts) {
     // Архивные счета УЧАСТВУЮТ. Раньше они выбрасывались целиком — и вместе с
     // ними исчезала вся их история: счёт, закрытый в этом году, в прошлые годы
@@ -1432,6 +1450,7 @@ export function netWorthBasis(
     // показывает.
     if (!a.inBalance && !includeOffBalance) continue;
     accounts.add(a.title);
+    total += toBaseAmt(a.balance, a.currency);
     if (a.startBalance) {
       // Zenmoney occasionally hands back an epoch/1970 `startDate` (legacy or
       // import artifact). Such a date would plant a phantom opening balance «at
@@ -1445,7 +1464,7 @@ export function netWorthBasis(
       if (date) openings.push({ date, amount: toBaseAmt(a.startBalance, a.currency) });
     }
   }
-  return { accounts, openings };
+  return { accounts, openings, total };
 }
 
 export function netWorthSeries(
@@ -1496,7 +1515,17 @@ export function netWorthSeries(
     net += days.get(d)!;
     return { date: d, net };
   });
-  if (!calibration) return raw;
+  if (!calibration) {
+    // Привязка к реальным остаткам: сдвигаем всю кривую так, чтобы её конец
+    // совпал с суммой остатков. Ручная калибровка сильнее — она и есть заявление
+    // человека «на эту дату у меня было столько», и спорить с ней нечем.
+    const anchor = opts?.anchorTo;
+    if (anchor != null && raw.length > 0) {
+      const shift = anchor - raw[raw.length - 1].net;
+      if (shift !== 0) return raw.map((p) => ({ date: p.date, net: p.net + shift }));
+    }
+    return raw;
+  }
 
   let rawAtCal = 0;
   for (const p of raw) {

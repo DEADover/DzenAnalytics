@@ -246,7 +246,7 @@ describe("netWorthSeries — openings & account membership (issue #3)", () => {
 describe("netWorthBasis (issue #3)", () => {
   const RUB: CurrencyRates = { base: "RUB", rates: { RUB: 1 } };
   const acc = (over: Partial<Parameters<typeof netWorthBasis>[0][number]>) => ({
-    title: "X", currency: "RUB", startBalance: 0, startDate: null, archive: false, inBalance: true, ...over,
+    title: "X", currency: "RUB", startBalance: 0, startDate: null, archive: false, inBalance: true, balance: 0, ...over,
   });
 
   it("берёт счета в балансе, включая закрытые, и датирует стартовые остатки", () => {
@@ -264,6 +264,16 @@ describe("netWorthBasis (issue #3)", () => {
     expect(accounts.has("Off")).toBe(false);
     expect(openings).toContainEqual({ date: "2020-01-01", amount: 100000 });
     expect(openings).toContainEqual({ date: "2021-03-01", amount: 5000 }); // fell back to first tx
+  });
+
+  it("сумма остатков возвращается вместе с базисом", () => {
+    const live = [
+      acc({ title: "A", balance: 100 }),
+      acc({ title: "Б", balance: 250 }),
+      acc({ title: "Вне", balance: 999, inBalance: false }),
+    ];
+    expect(netWorthBasis(live, [], RUB, false).total).toBe(350);
+    expect(netWorthBasis(live, [], RUB, true).total).toBe(1349);
   });
 
   it("история закрытого счёта не пропадает из совокупного баланса", () => {
@@ -1044,5 +1054,44 @@ describe("дубли: копейки", () => {
 
   it("рубли не склеиваются с соседними", () => {
     expect(detectDuplicates([fee(100.4), fee(99.6)])).toHaveLength(0);
+  });
+});
+
+describe("привязка кривой к реальным остаткам", () => {
+  it("конец кривой садится ровно на сумму остатков, форма не меняется", () => {
+    // Операции объясняют только 300 из 500: остальное — курсовая переоценка и
+    // прочее, чего в потоках нет. Раньше кривая на этом и заканчивалась.
+    const txs = [
+      tx({ kind: "income", incomeAccount: "A", amountBase: 100, date: "2024-01-01" }),
+      tx({ kind: "income", incomeAccount: "A", amountBase: 200, date: "2024-02-01" }),
+    ];
+    const opts = { accounts: new Set(["A"]), anchorTo: 500 };
+    const s = netWorthSeries(txs, null, opts);
+    expect(s[s.length - 1].net).toBe(500);
+    // Сдвиг общий, поэтому расстояние между точками осталось прежним.
+    expect(s[1].net - s[0].net).toBe(200);
+  });
+
+  it("без привязки всё как было", () => {
+    const txs = [tx({ kind: "income", incomeAccount: "A", amountBase: 100, date: "2024-01-01" })];
+    const s = netWorthSeries(txs, null, { accounts: new Set(["A"]) });
+    expect(s[s.length - 1].net).toBe(100);
+  });
+
+  it("ручная калибровка сильнее привязки", () => {
+    // Калибровка — заявление человека «на эту дату у меня было столько».
+    const txs = [
+      tx({ kind: "income", incomeAccount: "A", amountBase: 100, date: "2024-01-01" }),
+      tx({ kind: "income", incomeAccount: "A", amountBase: 100, date: "2024-02-01" }),
+    ];
+    const s = netWorthSeries(txs, { date: "2024-02-01", amount: 1000 }, {
+      accounts: new Set(["A"]),
+      anchorTo: 999999,
+    });
+    expect(s[s.length - 1].net).toBe(1000);
+  });
+
+  it("пустая история не падает и не выдумывает точку", () => {
+    expect(netWorthSeries([], null, { accounts: new Set(["A"]), anchorTo: 500 })).toEqual([]);
   });
 });

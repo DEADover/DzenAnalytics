@@ -39,15 +39,22 @@ export function useNetWorthSeries(
   return useMemo(() => {
     if (liveAccounts && liveAccounts.length > 0) {
       const basis = netWorthBasis(liveAccounts, txs, rates, includeOffBalance);
-      // Opening balances give the curve its SHAPE, but a manual calibration —
-      // when the user set one — is their ground-truth current balance and MUST
-      // still win. Passing `null` here used to silently drop it: once the live
-      // accounts loaded (async), the chart flipped from the correct calibrated
-      // value to the raw opening-seeded total, which can be off (e.g. an
-      // account with a bogus 1970 `startDate`, or an off-balance mismatch vs
-      // Zenmoney's headline). Anchoring to the calibration cancels any such
-      // offset and kills the «верный → завышенный» flicker.
-      return netWorthSeries(txs, calibration, basis);
+      // Конец кривой прибиваем к сумме реальных остатков: форма — из операций,
+      // конец — из правды. Без этого копилось всё, чего операции не объясняют,
+      // — прежде всего валютная переоценка (стартовые остатки переводятся по
+      // сегодняшнему курсу, а операции по курсу ЦБ на дату операции).
+      //
+      // Ручную калибровку здесь НЕ применяем, хотя в CSV-режиме она главнее.
+      // Её и предлагают только без подключённого Дзен-мани — она нужна там, где
+      // реальных остатков взять негде. Когда остатки есть, старая калибровка
+      // молча прибивала кривую к устаревшему числу: у одного аккаунта она
+      // осталась с прежних времён и держала итог на 1 492 ₽ ниже настоящего,
+      // ровно на остаток закрытого счёта.
+      //
+      // Прежняя причина не пускать сюда `null` («кривая прыгала с верного
+      // калиброванного значения на завышенное») ушла вместе с привязкой: теперь
+      // без калибровки конец кривой и есть сумма остатков.
+      return netWorthSeries(txs, null, { ...basis, anchorTo: basis.total });
     }
     // CSV / no cache — keep the manual-calibration behaviour.
     return netWorthSeries(txs, calibration);
