@@ -249,6 +249,18 @@ export function stackedBalanceByAccount(
   // остатки, — а складывается в стартовое значение линии. Точки на оси такая
   // операция при этом не создаёт.
   const opening = new Map<string, number>();
+  /**
+   * День первой операции слоя — раньше него счёта на графике нет.
+   *
+   * Без этого счёт, открытый в 2022-м, тянулся ровной полкой с самого левого
+   * края оси: линия привязана к СЕГОДНЯШНЕМУ остатку, и до первой операции она
+   * показывала «остаток минус весь поток» — то есть деньги, которых тогда на
+   * счёте не было (а лежали они, скорее всего, на другом счёте, и в сумме
+   * считались дважды).
+   */
+  const firstDay = new Map<string, string>();
+  /** Слои с «эпоховым» потоком: у них история начинается раньше самой оси. */
+  const fromEpoch = new Set<string>();
   // Per-account flow contributed by unsynced drafts, binned the same way as
   // `days`. Subtracted from the running total before anchoring so the cloud
   // balance reconciles against the synced flow only (issue #18).
@@ -268,8 +280,11 @@ export function stackedBalanceByAccount(
       if (key === null) return;
       if (tooOld) {
         opening.set(key, (opening.get(key) || 0) + delta);
+        fromEpoch.add(key);
       } else {
         days.get(d)!.set(key, (days.get(d)!.get(key) || 0) + delta);
+        const seen = firstDay.get(key);
+        if (seen === undefined || d < seen) firstDay.set(key, d);
       }
       if (unsynced) unsyncedFlow.set(key, (unsyncedFlow.get(key) || 0) + delta);
     };
@@ -294,6 +309,20 @@ export function stackedBalanceByAccount(
   // Линия стартует не с нуля, а с потока, накопленного «эпоховыми» операциями.
   for (const a of accountList) running[a] = opening.get(a) || 0;
 
+  /**
+   * Счёт «уже есть» на эту дату.
+   *
+   * До первой операции слоя показывать нечего: остаток мы знаем только с того
+   * дня, когда счёт впервые появился в данных. Счёт с «эпоховым» потоком или
+   * вовсе без операций (выбран отбором, но движения не было) считается
+   * существующим всегда — других сведений о нём у нас нет.
+   */
+  const alive = (a: string, date: string) => {
+    if (fromEpoch.has(a)) return true;
+    const start = firstDay.get(a);
+    return start === undefined || date >= start;
+  };
+
   const series: StackedBalancePoint[] = [];
   for (const date of sortedDates) {
     const dayMap = days.get(date)!;
@@ -303,8 +332,9 @@ export function stackedBalanceByAccount(
     const point: StackedBalancePoint = { date, total: 0 };
     let total = 0;
     for (const a of accountList) {
-      point[a] = Math.round(running[a]);
-      total += running[a];
+      const v = alive(a, date) ? running[a] : 0;
+      point[a] = Math.round(v);
+      total += v;
     }
     point.total = Math.round(total);
     series.push(point);
@@ -338,7 +368,9 @@ export function stackedBalanceByAccount(
     for (const point of series) {
       let total = 0;
       for (const a of accountList) {
-        const v = (point[a] as number) + offset[a];
+        // Сдвиг к реальному остатку — только тем дням, когда счёт уже был:
+        // иначе он же и рисовал бы ту самую полку до открытия счёта.
+        const v = alive(a, point.date) ? (point[a] as number) + offset[a] : 0;
         point[a] = Math.round(v);
         total += v;
       }

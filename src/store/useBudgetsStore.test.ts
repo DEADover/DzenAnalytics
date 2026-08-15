@@ -12,6 +12,9 @@ vi.mock("../lib/db", () => ({
 
 import { useBudgetsStore, type PlanUpsert } from "./useBudgetsStore";
 import { plannedFor, type BudgetLine } from "../lib/budgets";
+import { plannedOpsByTagMonth, zenPlanList } from "../lib/zenBudgets";
+import { buildBudgetYear } from "../lib/budgetYear";
+import type { ZenBudget, ZenInstrument, ZenReminderMarker, ZenTag } from "../lib/zenmoney";
 
 const KEY = "budgetsV2";
 
@@ -111,5 +114,62 @@ describe("applyPlans", () => {
   it("пустой список ничего не пишет", async () => {
     await useBudgetsStore.getState().applyPlans([]);
     expect(disk.has(KEY)).toBe(false);
+  });
+});
+
+describe("плановые операции в цифрах бюджета", () => {
+  // Дзен-мани считает план незалоченной статьи как «записанная сумма ПЛЮС
+  // запланированные операции этого месяца, которые ещё впереди». Мы повторяем
+  // это при синхронизации — и здесь проверяем, что результат доезжает и до
+  // месячного вида, и до годового: цифры и полосы читают одни и те же строки.
+  const rub: ZenInstrument = { id: 2, title: "RUB", shortTitle: "RUB", symbol: "₽", rate: 1 };
+  const workTag: ZenTag = {
+    id: "work", user: 1, changed: 0, title: "Работа", parent: null, archive: false,
+    showIncome: true, showOutcome: false, budgetIncome: true, budgetOutcome: false,
+    required: null, color: null, icon: null, picture: null,
+  };
+  const zenBudget: ZenBudget = {
+    user: 1, changed: 0, date: "2026-08-01", tag: "work",
+    income: 145_000, incomeLock: false, outcome: 0, outcomeLock: false,
+  };
+  const advance: ZenReminderMarker = {
+    id: "аванс", user: 1, changed: 0, date: "2026-08-25", income: 160_000,
+    incomeInstrument: 2, outcome: 0, outcomeInstrument: 2, tag: ["work"],
+    reminder: "r1", state: "planned",
+  };
+
+  /** Ровно та цепочка, что отрабатывает синхронизация. */
+  async function importWithPlanned(markers: ZenReminderMarker[], today: string) {
+    const planned = plannedOpsByTagMonth(markers, [rub], 2, today);
+    await useBudgetsStore
+      .getState()
+      .importFromZen(zenPlanList([zenBudget], [workTag], planned));
+    return useBudgetsStore.getState().lines;
+  }
+
+  it("запланированный аванс входит и в план месяца, и в годовую таблицу", async () => {
+    const lines = await importWithPlanned([advance], "2026-08-01");
+    // Месячный вид: карточки и полосы считают план через `plannedFor`.
+    expect(plannedFor(lines[0], "2026-08")).toBe(305_000);
+    // Годовой свод: та же строка, тот же месяц.
+    const year = buildBudgetYear(lines, [], 2026);
+    const row = year.income.groups[0].total;
+    expect(row.cells[7].plan).toBe(305_000); // август
+    expect(row.plan).toBe(305_000); // и за год столько же — план только на август
+    expect(year.income.totals[7].plan).toBe(305_000);
+  });
+
+  it("на факт плановая операция не влияет — она ещё не случилась", async () => {
+    const lines = await importWithPlanned([advance], "2026-08-01");
+    const year = buildBudgetYear(lines, [], 2026);
+    expect(year.income.groups[0].total.fact).toBe(0);
+    expect(year.income.totals[7].fact).toBe(0);
+  });
+
+  it("исполненный план в цифры второй раз не идёт", async () => {
+    // Зарплата пришла 10-го: её план остался в кэше, но место уже занял факт.
+    const paid: ZenReminderMarker = { ...advance, id: "зарплата", date: "2026-08-10" };
+    const lines = await importWithPlanned([advance, paid], "2026-08-11");
+    expect(plannedFor(lines[0], "2026-08")).toBe(305_000);
   });
 });

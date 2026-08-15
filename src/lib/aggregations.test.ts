@@ -104,6 +104,61 @@ describe("stackedBalanceByAccount — real-balance anchoring", () => {
     expect(series[0].A).toBe(1100);
   });
 
+  it("счёт не показывается до своей первой операции", () => {
+    // Обращение пользователя: счёт открыт в марте 2022, а на графике ровная
+    // полка с 2016-го. Линия привязана к сегодняшнему остатку, и до первой
+    // операции она показывала «остаток минус весь поток» — деньги, которых на
+    // счёте тогда не было.
+    const t = [
+      tx({ kind: "income", amount: 1000, incomeAccount: "Старый", date: "2016-04-17" }),
+      tx({ kind: "income", amount: 572_100, incomeAccount: "Новый", date: "2022-03-11" }),
+    ];
+    const { series } = stackedBalanceByAccount(t, 8, { Старый: 1000, Новый: 572_100 });
+    const first = series[0];
+    expect(first.date).toBe("2016-04-17");
+    expect(first["Новый"]).toBe(0); // счёта ещё нет
+    expect(first["Старый"]).toBe(1000);
+    expect(first.total).toBe(1000); // и в сумму он не входит
+    const last = series[series.length - 1];
+    expect(last["Новый"]).toBe(572_100);
+    expect(last.total).toBe(573_100);
+  });
+
+  it("отбор одного счёта: до открытия — ноль, а не остаток", () => {
+    const t = [
+      tx({ kind: "income", amount: 1000, incomeAccount: "Старый", date: "2016-04-17" }),
+      tx({ kind: "expense", amount: 100, outcomeAccount: "Старый", date: "2020-01-01" }),
+      tx({ kind: "income", amount: 572_100, incomeAccount: "Новый", date: "2022-03-11" }),
+    ];
+    const { series } = stackedBalanceByAccount(
+      t,
+      8,
+      { Старый: 900, Новый: 572_100 },
+      null,
+      ["Новый"]
+    );
+    // Ось осталась полной — дни чужих операций её задают, — но до 2022-03-11
+    // выбранный счёт стоит на нуле.
+    expect(series[0].date).toBe("2016-04-17");
+    expect(series[0]["Новый"]).toBe(0);
+    expect(series[0].total).toBe(0);
+    const opened = series.find((p) => p.date === "2022-03-11")!;
+    expect(opened["Новый"]).toBe(572_100);
+  });
+
+  it("операции 1970 года оставляют счёт существующим с начала оси", () => {
+    // «Эпоховые» записи Дзен-мани точку на оси не создают, но поток от них
+    // ложится в стартовое значение — счёт был и до первой видимой операции.
+    const t = [
+      tx({ kind: "income", amount: 500, incomeAccount: "Старый", date: "1970-01-01" }),
+      tx({ kind: "income", amount: 100, incomeAccount: "Другой", date: "2016-04-17" }),
+      tx({ kind: "expense", amount: 50, outcomeAccount: "Старый", date: "2020-01-01" }),
+    ];
+    const { series } = stackedBalanceByAccount(t, 8);
+    expect(series[0].date).toBe("2016-04-17");
+    expect(series[0]["Старый"]).toBe(500);
+  });
+
   it("ranks top accounts by real balance (not turnover) in API mode", () => {
     const t = [
       // C: huge turnover, tiny balance — would top a turnover ranking.

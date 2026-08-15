@@ -18,12 +18,19 @@
  */
 
 import type { BudgetKind } from "./budgets";
-import { hasTransfers, yearDiff, type BudgetYearReport, type YearSection } from "./budgetYear";
-import { TRANSFER_CATEGORY } from "./budgetScope";
+import {
+  hasTransfers,
+  yearDiff,
+  type BudgetYearReport,
+  type YearGroup,
+  type YearSection,
+} from "./budgetYear";
 
 const MONTHS = 12;
 
 export interface DashboardRow {
+  /** Направление статьи: у дохода «больше плана» — это хорошо, у расхода наоборот. */
+  kind: BudgetKind;
   category: string;
   /** null = строка самой категории (со всеми её под-категориями внутри). */
   subcategory: string | null;
@@ -38,6 +45,15 @@ export interface DashboardRow {
   planByMonth: number[];
   /** Двенадцать месяцев прошлого года; нули, если статьи тогда не было. */
   prevFactByMonth: number[];
+}
+
+/** Раздел дашборда — свой лист в PDF и своя вкладка на экране. */
+export type DashboardSectionKey = "expense" | "income" | "transfer";
+
+export interface DashboardSection {
+  key: DashboardSectionKey;
+  title: string;
+  rows: DashboardRow[];
 }
 
 /** Свод раздела (расходы или доходы) по двенадцати месяцам. */
@@ -61,10 +77,20 @@ export interface BudgetDashboard {
   expense: DashboardTotals;
   income: DashboardTotals;
   /**
-   * Все статьи расходов с под-категориями — основа диаграмм. Категория идёт
-   * своим итогом (вместе с под-категориями), сразу за ней — её под-категории.
+   * Все статьи расходов с под-категориями — основа диаграмм в Excel. Категория
+   * идёт своим итогом (вместе с под-категориями), сразу за ней — её
+   * под-категории.
    */
   rows: DashboardRow[];
+  /**
+   * То же самое, но разложенное по разделам: расходы, доходы, переводы.
+   *
+   * В PDF каждый раздел уходит на свой лист, на экране — на свою вкладку.
+   * Смешивать их на одной диаграмме нельзя: полоса дохода рядом с полосой
+   * расхода читается как сравнение, хотя это разные стороны бюджета. Переводы
+   * идут последними — это оборот по счетам, а не статья (issue #68).
+   */
+  sections: DashboardSection[];
 }
 
 /** Значение месяца `m` (0-инд.). */
@@ -142,24 +168,31 @@ export function buildBudgetDashboard(
 ): BudgetDashboard {
   const m = Math.min(MONTHS - 1, Math.max(0, monthIndex));
 
-  // Прошлый год ищем по паре «категория + под-категория»: у под-категорий
-  // имена повторяются между категориями («Кафе» может быть и у «Еды», и у
-  // «Развлечений»), и ключа из одного имени мало.
-  const prevKey = (category: string, sub: string | null) => `${category} ${sub ?? ""}`;
+  // Прошлый год ищем по тройке «направление + категория + под-категория»: имена
+  // повторяются и между категориями («Кафе» может быть и у «Еды», и у
+  // «Развлечений»), и между разделами — «Переводы» есть и в расходах, и в
+  // доходах, и ключа из одного имени мало.
+  const prevKey = (kind: BudgetKind, category: string, sub: string | null) =>
+    `${kind} ${category} ${sub ?? ""}`;
   const prevCells = new Map<string, { plan: number; fact: number }[]>();
-  for (const g of prev.expense.groups) {
-    prevCells.set(prevKey(g.category, null), g.total.cells);
-    for (const s of g.subs) prevCells.set(prevKey(g.category, s.subcategory), s.cells);
+  for (const section of [prev.expense, prev.income]) {
+    for (const g of section.groups) {
+      prevCells.set(prevKey(section.kind, g.category, null), g.total.cells);
+      for (const s of g.subs)
+        prevCells.set(prevKey(section.kind, g.category, s.subcategory), s.cells);
+    }
   }
 
   const rowOf = (
+    kind: BudgetKind,
     category: string,
     subcategory: string | null,
     label: string,
     cells: { plan: number; fact: number }[]
   ): DashboardRow => {
-    const before = prevCells.get(prevKey(category, subcategory));
+    const before = prevCells.get(prevKey(kind, category, subcategory));
     return {
+      kind,
       category,
       subcategory,
       label,
@@ -175,33 +208,60 @@ export function buildBudgetDashboard(
   const alive = (r: DashboardRow) =>
     r.factByMonth.some((v) => v !== 0) || r.planByMonth.some((v) => v !== 0);
 
-  // Порядок — по факту за год: сортировать под выбранный месяц нельзя, он
-  // меняется в файле, а строки на листе уже записаны.
-  const byYear = (a: DashboardRow, b: DashboardRow) =>
-    ytd(b.factByMonth, 11) - ytd(a.factByMonth, 11) ||
-    ytd(b.planByMonth, 11) - ytd(a.planByMonth, 11);
+  /**
+   * Строки раздела в том же порядке, в каком статьи стоят в годовом своде.
+   *
+   * Своей сортировки здесь нет намеренно: порядок задан один раз настройкой
+   * бюджета, и таблица на экране, Excel и PDF обязаны идти одинаково. Раньше
+   * дашборд пересортировывал строки по факту сам — и отчёт расходился с
+   * таблицей, из которой он собран.
+   */
+  const rowsOf = (
+    section: YearSection,
+    keep: (g: YearGroup) => boolean,
+    label: (category: string, sub: string | null) => string
+  ): DashboardRow[] =>
+    section.groups
+      .filter(keep)
+      .map((g) => ({
+        parent: rowOf(section.kind, g.category, null, label(g.category, null), g.total.cells),
+        subs: g.subs
+          .map((s) =>
+            rowOf(
+              section.kind,
+              g.category,
+              s.subcategory,
+              label(g.category, s.subcategory),
+              s.cells
+            )
+          )
+          .filter(alive),
+      }))
+      .filter((x) => alive(x.parent) || x.subs.length > 0)
+      .flatMap((x) => [x.parent, ...x.subs]);
 
-  // Переводы — первой строкой, как и в таблице на экране: оборот по счетам не
-  // стоит искать среди статей по величине суммы.
-  const byGroup = (
-    a: { parent: DashboardRow },
-    b: { parent: DashboardRow }
-  ) =>
-    Number(b.parent.category === TRANSFER_CATEGORY) -
-      Number(a.parent.category === TRANSFER_CATEGORY) || byYear(a.parent, b.parent);
+  const plainLabel = (category: string, sub: string | null) =>
+    sub ? `${category} · ${sub}` : category;
+  const notTransfer = (g: YearGroup) => !g.transfer;
+  const onlyTransfer = (g: YearGroup) => !!g.transfer;
 
-  const groups = report.expense.groups
-    .map((g) => ({
-      parent: rowOf(g.category, null, g.category, g.total.cells),
-      subs: g.subs
-        .map((s) =>
-          rowOf(g.category, s.subcategory, `${g.category} · ${s.subcategory}`, s.cells)
-        )
-        .filter(alive)
-        .sort(byYear),
-    }))
-    .filter((x) => alive(x.parent) || x.subs.length > 0)
-    .sort(byGroup);
+  // Переводы двух разделов лежат под одним именем «Переводы», поэтому на общем
+  // листе им нужна подпись со стороной: списание — это ушедшие деньги,
+  // зачисление — пришедшие, а под-категория у обоих это счёт по ту сторону.
+  const transferRows = [
+    ...rowsOf(report.expense, onlyTransfer, (_, sub) =>
+      sub ? `Списание · ${sub}` : "Переводы — списания"
+    ),
+    ...rowsOf(report.income, onlyTransfer, (_, sub) =>
+      sub ? `Зачисление · ${sub}` : "Переводы — зачисления"
+    ),
+  ];
+
+  const sections: DashboardSection[] = [
+    { key: "expense", title: "Расходы", rows: rowsOf(report.expense, notTransfer, plainLabel) },
+    { key: "income", title: "Доходы", rows: rowsOf(report.income, notTransfer, plainLabel) },
+    { key: "transfer", title: "Переводы", rows: transferRows },
+  ].filter((s) => s.rows.length > 0) as DashboardSection[];
 
   return {
     year: report.year,
@@ -209,6 +269,9 @@ export function buildBudgetDashboard(
     monthIndex: m,
     expense: totalsOf(report.expense, prev.expense),
     income: totalsOf(report.income, prev.income),
-    rows: groups.flatMap((x) => [x.parent, ...x.subs]),
+    // Лист Excel рисует диаграммы по расходам целиком — вместе со статьёй
+    // переводов, которая в годовом своде стоит последней.
+    rows: rowsOf(report.expense, () => true, plainLabel),
+    sections,
   };
 }

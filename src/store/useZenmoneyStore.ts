@@ -15,7 +15,7 @@ import {
   clearZenCache,
   applyDiff,
   cacheToDiffResponse,
-  backfillEntities,
+  forceFetchFor,
 } from "../lib/zenmoneyCache";
 import {
   buildPushItems,
@@ -659,11 +659,11 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // in full so renames/deletions propagate everywhere.
       const prevCache = opts.force ? null : await loadZenCache();
       const fromTs = prevCache?.serverTimestamp || 0;
-      // One-time back-fills, driven by the cache's schema version: an
-      // incremental diff never re-sends entities whose `changed` predates our
-      // timestamp, so each newly-consumed entity type must be force-fetched
-      // once. Returns [] for a null cache (a full sync pulls everything anyway).
-      const backfill = backfillEntities(prevCache);
+      // Что дозапросить явно. При инкрементальной синхронизации это разовые
+      // до-качивания по версии схемы; при полной (кэша нет) — весь список
+      // сразу: `serverTimestamp = 0` возвращает операции и счета, но НЕ
+      // исполненные операции планов, справочник банков и сами планы.
+      const backfill = forceFetchFor(prevCache);
       const diff = await fetchDiff(
         token,
         fromTs,
@@ -723,7 +723,13 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         const planned = plannedOpsByTagMonth(
           nextCache.reminderMarkers,
           nextCache.instruments,
-          nextCache.user?.[0]?.currency
+          nextCache.user?.[0]?.currency,
+          undefined,
+          // Исполненные плановые операции переводим по курсу ЦБ на их день —
+          // тем же, каким посчитан их факт. Иначе валютная подписка даёт в
+          // плане переоценку, и остаток по статье не сходится с Дзен-мани.
+          (dateIso, code) => useDataStore.getState().histDayRates[dateIso]?.[code] ?? null,
+          (id) => nextCache.instruments.find((i) => i.id === id)?.shortTitle
         );
         const seeds = zenPlanList(nextCache.budgets, nextCache.tags, planned);
         if (seeds.length > 0) {

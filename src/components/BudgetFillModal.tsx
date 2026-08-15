@@ -49,6 +49,7 @@ export function BudgetFillModal({
   scope,
   defaultMonths = 3,
   defaultBasis = "average",
+  onParamsChange,
   onApply,
   onClose,
 }: {
@@ -62,6 +63,13 @@ export function BudgetFillModal({
   /** Значения из настроек бюджета: с ними окно и открывается. */
   defaultMonths?: number;
   defaultBasis?: ForecastBasis;
+  /**
+   * Выбранные период и способ — обратно в настройки, чтобы в следующий раз
+   * окно открылось с ними же. Настройки раздела про это больше не спрашивают:
+   * период и способ нужны только здесь, и спрашивать их в двух местах значило
+   * держать два ответа на один вопрос.
+   */
+  onParamsChange?: (params: { months: number; basis: ForecastBasis }) => void;
   onApply: (items: FillItem[]) => void;
   onClose: () => void;
 }) {
@@ -273,14 +281,20 @@ export function BudgetFillModal({
               size="sm"
               label="За какой период считать"
               value={months}
-              onChange={setMonths}
+              onChange={(v) => {
+                setMonths(v);
+                onParamsChange?.({ months: v, basis });
+              }}
               options={PERIODS}
             />
             <Segmented
               size="sm"
               label="Как считать сумму"
               value={basis}
-              onChange={(v) => setBasis(v as ForecastBasis)}
+              onChange={(v) => {
+                setBasis(v as ForecastBasis);
+                onParamsChange?.({ months, basis: v as ForecastBasis });
+              }}
               options={[
                 { value: "average", label: "Среднее", title: "Среднее арифметическое за период" },
                 { value: "median", label: "Медиана", title: "Середина ряда — устойчива к разовым всплескам" },

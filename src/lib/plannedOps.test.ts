@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { plannedOps, plannedBreakdown } from "./plannedOps";
-import { backfillEntities, cacheVersionOf, CACHE_SCHEMA_VERSION, type ZenCache } from "./zenmoneyCache";
+import {
+  backfillEntities,
+  cacheVersionOf,
+  forceFetchFor,
+  CACHE_SCHEMA_VERSION,
+  FULL_SYNC_ENTITIES,
+  type ZenCache,
+} from "./zenmoneyCache";
 import type {
   ZenAccount,
   ZenInstrument,
@@ -167,7 +174,7 @@ describe("plannedOps — маппинг планируемых операций"
 describe("backfillEntities — одноразовые доливки по версии кэша", () => {
   const base = cache([]);
 
-  it("нет кэша → ничего доливать не нужно (полный синк и так всё заберёт)", () => {
+  it("нет кэша → доливать нечего: список для этого случая строит forceFetchFor", () => {
     expect(backfillEntities(null)).toEqual([]);
   });
 
@@ -210,6 +217,40 @@ describe("backfillEntities — одноразовые доливки по вер
   it("кэш текущей версии → доливать нечего", () => {
     const current = { ...base, cacheSchemaVersion: CACHE_SCHEMA_VERSION };
     expect(backfillEntities(current)).toEqual([]);
+  });
+});
+
+describe("forceFetchFor — что запрашиваем явно при синхронизации", () => {
+  const base = cache([]);
+
+  it("КЛЮЧЕВОЕ: полная синхронизация (кэша нет) запрашивает всё явно", () => {
+    // `serverTimestamp = 0` возвращает операции и счета, но НЕ исполненные
+    // операции планов: из-за этого после «очистить и синхронизировать заново»
+    // план месяца выходил меньше дзеновского ровно на их сумму, и повторная
+    // полная синхронизация не помогала — версия схемы уже совпадала, доливать
+    // было нечего.
+    expect(forceFetchFor(null).sort()).toEqual([
+      "budget",
+      "company",
+      "reminder",
+      "reminderMarker",
+    ]);
+    expect(forceFetchFor(undefined).sort()).toEqual(FULL_SYNC_ENTITIES.slice().sort());
+  });
+
+  it("кэш свежей версии → ничего лишнего не запрашиваем", () => {
+    const current = { ...base, cacheSchemaVersion: CACHE_SCHEMA_VERSION };
+    expect(forceFetchFor(current)).toEqual([]);
+  });
+
+  it("кэш отставшей версии → тот же список, что и у доливки", () => {
+    const v5 = { ...base, cacheSchemaVersion: 5 };
+    expect(forceFetchFor(v5)).toEqual(backfillEntities(v5));
+    expect(forceFetchFor(v5)).toEqual(["reminderMarker"]);
+  });
+
+  it("в списке нет повторов: один и тот же тип встречается в нескольких версиях", () => {
+    expect(FULL_SYNC_ENTITIES.length).toBe(new Set(FULL_SYNC_ENTITIES).size);
   });
 });
 

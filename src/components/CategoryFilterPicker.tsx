@@ -116,6 +116,15 @@ export function CategoryFilterPicker({
     }
     commit(eff);
   };
+  /** Отметить или снять сразу все листья — кнопка в заголовке типа. */
+  const setMany = (leaves: string[], on: boolean) => {
+    const eff = effective();
+    for (const l of leaves) {
+      if (on) eff.add(l);
+      else eff.delete(l);
+    }
+    commit(eff);
+  };
 
   const catState = (n: CategoryNode): "all" | "some" | "none" => {
     const leaves = leavesOf(n);
@@ -339,16 +348,37 @@ export function CategoryFilterPicker({
                         n.kind && n.kind !== nodes[i - 1]?.kind
                           ? KIND_LABELS[n.kind]
                           : null;
+                      // Листья всего типа — на них действует кнопка в его
+                      // заголовке. Считаем один раз на заголовок, а не на
+                      // каждую строку списка.
+                      const kindLeaves = groupLabel
+                        ? nodes.filter((x) => x.kind === n.kind).flatMap(leavesOf)
+                        : [];
+                      const kindAllOn =
+                        kindLeaves.length > 0 && kindLeaves.every(leafChecked);
                       return (
                         <Fragment key={n.name}>
                         {groupLabel && (
                           <div
                             className={clsx(
-                              "px-2 pb-0.5 text-[11px] uppercase tracking-wide text-muted",
+                              "flex items-center justify-between gap-2 px-2 pb-0.5",
                               i > 0 && "mt-1 pt-1 border-t border-border"
                             )}
                           >
-                            {groupLabel}
+                            <span className="text-[11px] uppercase tracking-wide text-muted truncate">
+                              {groupLabel}
+                            </span>
+                            {/* Весь тип разом — иначе расходных категорий три
+                                десятка, и «оставить только доходы» это тридцать
+                                щелчков. */}
+                            <button
+                              type="button"
+                              onClick={() => setMany(kindLeaves, !kindAllOn)}
+                              aria-label={`${kindAllOn ? "Снять все" : "Выбрать все"}: ${groupLabel}`}
+                              className="text-[11px] text-accent hover:underline shrink-0"
+                            >
+                              {kindAllOn ? "Снять все" : "Выбрать все"}
+                            </button>
                           </div>
                         )}
                         <div

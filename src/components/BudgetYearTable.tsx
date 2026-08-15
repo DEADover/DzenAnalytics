@@ -1,10 +1,11 @@
-import { Fragment, useState } from "react";
-import { ChevronDown, HelpCircle } from "lucide-react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { ChevronDown, Coins, HelpCircle, Scale, Target } from "lucide-react";
 import {
   hasTransfers,
   yearDiff,
   type BudgetYearReport,
   type YearCell,
+  type YearGroup,
   type YearRow,
   type YearSection,
 } from "../lib/budgetYear";
@@ -14,6 +15,7 @@ import { AccountLogo } from "./AccountLogo";
 import { CategoryDot } from "./CategoryDot";
 import { TRANSFER_CATEGORY } from "../lib/budgetScope";
 import { Tooltip } from "./Tooltip";
+import { TooltipFacts } from "./TooltipFacts";
 
 /** Три колонки на месяц плюс столько же на год — их и заполняем. */
 const SUB_COLUMNS = ["План", "Факт", "Разница"] as const;
@@ -41,10 +43,13 @@ function num(v: number): React.ReactNode {
 export function BudgetYearTable({
   report,
   base,
+  hideEmpty,
   onOpenCell,
 }: {
   report: BudgetYearReport;
   base: string;
+  /** Прятать статьи, по которым за год не было ни одной операции. */
+  hideEmpty: boolean;
   /** Клик по факту — операции этой статьи за этот месяц. */
   onOpenCell: (
     category: string,
@@ -71,7 +76,12 @@ export function BudgetYearTable({
    * и раскрываться они должны порознь.
    */
   const sectionKeys = (section: YearSection) =>
-    section.groups.filter((g) => g.subs.length > 0).map((g) => `${section.kind} ${g.category}`);
+    // Только по видимым статьям: раскрывать то, что спрятано под спойлером
+    // «Без операций за год», кнопке нечего. И под-категории считаем те же, что
+    // покажутся, — иначе шеврон открывал бы пустоту.
+    visibleGroups(section)
+      .filter((g) => subsOf(g).length > 0)
+      .map((g) => `${section.kind} ${g.category}`);
   const sectionExpanded = (section: YearSection) => {
     const keys = sectionKeys(section);
     return keys.length > 0 && keys.every((k) => expanded.has(k));
@@ -85,8 +95,108 @@ export function BudgetYearTable({
       return next;
     });
 
+  /**
+   * Статьи без единой операции за год — под спойлером, как «Без трат в этом
+   * месяце» в месячном виде (issue #68).
+   *
+   * Настройка задаёт только НАЧАЛЬНОЕ состояние: щелчок по разделителю тут же
+   * важнее того, что записано в настройках, но и переключение настройки при
+   * открытой таблице не должно проходить мимо. Отсюда «своё значение, а если
+   * его нет — из настройки».
+   */
+  const [emptyOpen, setEmptyOpen] = useState<Partial<Record<BudgetKind, boolean>>>({});
+  const emptyShown = (kind: BudgetKind) => emptyOpen[kind] ?? !hideEmpty;
+  const toggleEmpty = (kind: BudgetKind) =>
+    setEmptyOpen((prev) => ({ ...prev, [kind]: !(prev[kind] ?? !hideEmpty) }));
+
   /** Всего колонок — для заголовков разделов на всю ширину. */
   const COLS = 1 + (report.months.length + 1) * SUB_COLUMNS.length;
+
+  /**
+   * Закреплённая шапка — тем же способом, что в отчёте «Доходы и расходы»
+   * (см. подробный разбор в `ReportPage`).
+   *
+   * Коротко: `position: sticky` отсчитывается от ближайшего прокручиваемого
+   * предка, а им здесь неизбежно оказывается обёртка с `overflow-x: auto` —
+   * без неё сорока колонкам не прожить. По вертикали она не прокручивается,
+   * прилипать не к чему. Поэтому шапку рисуем ДВАЖДЫ: настоящая живёт в
+   * таблице и задаёт ширины, а поверх лежит её двойник в липкой обёртке,
+   * которой ближайший прокручиваемый предок — сама страница.
+   *
+   * Отличие от отчёта одно: шапка тут в две строки — месяцы и тройки
+   * «План · Факт · Разница», — поэтому ширины снимаются со ВТОРОЙ строки
+   * (в первой ячейки на три колонки каждая) плюс со столбца статей.
+   */
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const cloneRef = useRef<HTMLDivElement>(null);
+  const cloneClipRef = useRef<HTMLDivElement>(null);
+  const [colWidths, setColWidths] = useState<number[]>([]);
+  const [tableWidth, setTableWidth] = useState(0);
+  const [cloneHeight, setCloneHeight] = useState(0);
+
+  const copyScroll = (from: HTMLElement | null, to: HTMLElement | null) => {
+    if (from && to && to.scrollLeft !== from.scrollLeft) to.scrollLeft = from.scrollLeft;
+  };
+  const syncScroll = () => copyScroll(scrollerRef.current, cloneClipRef.current);
+  const syncBack = () => copyScroll(cloneClipRef.current, scrollerRef.current);
+
+  const measure = () => {
+    const table = tableRef.current;
+    if (!table) return;
+    const rows = table.querySelectorAll("thead tr");
+    const next: number[] = [];
+    const first = rows[0]?.querySelector("th");
+    if (first) next.push(first.getBoundingClientRect().width);
+    rows[1]?.querySelectorAll("th").forEach((th) => next.push(th.getBoundingClientRect().width));
+    const w = table.getBoundingClientRect().width;
+    const clone = cloneRef.current;
+    if (clone) {
+      const ch = clone.getBoundingClientRect().height;
+      setCloneHeight((prev) => (Math.abs(prev - ch) < 0.5 ? prev : ch));
+    }
+    // Меняем состояние только при настоящем расхождении — замер бежит после
+    // каждого рендера, и безусловный `set` крутил бы рендеры вечно. Сравниваем
+    // по НАКОПЛЕННОМУ сдвигу: на сорока колонках систематическая разница «чуть
+    // меньше допуска» складывается, и к правому краю двойник уезжает.
+    setColWidths((prev) => {
+      if (prev.length !== next.length) return next;
+      let a = 0;
+      let b = 0;
+      for (let i = 0; i < next.length; i++) {
+        a += prev[i];
+        b += next[i];
+        if (Math.abs(a - b) >= 0.5) return next;
+      }
+      return prev;
+    });
+    setTableWidth((prev) => (Math.abs(prev - w) < 0.5 ? prev : w));
+    syncScroll();
+  };
+
+  // После каждого рендера: столбцы двигает всё — раскрыли подкатегории,
+  // открыли спойлер пустых статей, приехали данные, сменился год.
+  useLayoutEffect(measure);
+
+  // …а наблюдатель и `resize` — для того, что рендера не вызывает: потянули
+  // окно, доехали шрифты.
+  useLayoutEffect(() => {
+    const table = tableRef.current;
+    const scroller = scrollerRef.current;
+    if (!table || !scroller) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(table);
+    ro.observe(scroller);
+    window.addEventListener("resize", measure);
+    void document.fonts?.ready.then(measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useLayoutEffect(syncScroll, [colWidths, tableWidth]);
 
   /**
    * Тройка ячеек одного месяца. Клик живёт на ФАКТЕ: за ним стоят операции, а
@@ -118,10 +228,32 @@ export function BudgetYearTable({
             num(c.fact)
           ) : (
             <Tooltip
-              content={`${label} · план ${formatMoney(c.plan, base)} · факт ${formatMoney(
-                c.fact,
-                base
-              )}${note ? ` · ${note}` : ""}`}
+              content={
+                // Те же три колонки, что и в таблице, только столбиком и с
+                // цветом у разницы: одной фразой через точки подсказка
+                // читалась как поток, а списком серых фраз — как пелена.
+                <TooltipFacts
+                  title={label}
+                  facts={[
+                    { label: "План", value: formatMoney(c.plan, base), icon: <Target /> },
+                    {
+                      label: "Факт",
+                      value: formatMoney(c.fact, base),
+                      icon: <Coins />,
+                      strong: true,
+                    },
+                    {
+                      label: "Разница",
+                      value: formatMoney(diff, base, { signed: true }),
+                      icon: <Scale />,
+                      // Знак уже приведён к «больше нуля — хорошо».
+                      tone: diff >= 0 ? "income" : "expense",
+                      strong: true,
+                    },
+                  ]}
+                  note={note && <span className="italic">{note}</span>}
+                />
+              }
             >
               <button
                 type="button"
@@ -154,10 +286,15 @@ export function BudgetYearTable({
     row: YearRow,
     opts: { nested?: boolean; group?: string; own?: YearRow }
   ) => (
-    <tr key={row.key} className={opts.nested ? "text-muted" : ""}>
+    // Подсветка всей строки под курсором: у таблицы под сорок колонок, и вести
+    // глаз от названия статьи до нужного месяца без опоры не получалось.
+    // Закреплённый первый столбец красится отдельно и НЕПРОЗРАЧНЫМ цветом:
+    // под ним при прокрутке уезжают ячейки этой же строки, и полупрозрачная
+    // подсветка показала бы их насквозь.
+    <tr key={row.key} className={`group ${opts.nested ? "text-muted" : ""} hover:bg-panel2`}>
       <th
         scope="row"
-        className={`sticky left-0 bg-panel text-left font-normal px-2 py-1 ${
+        className={`sticky left-0 bg-panel group-hover:bg-panel2 text-left font-normal px-2 py-1 ${
           opts.nested ? "pl-9" : ""
         }`}
       >
@@ -200,7 +337,7 @@ export function BudgetYearTable({
         const own = opts.own?.cells[i];
         const note =
           own && (own.plan !== 0 || own.fact !== 0)
-            ? `из них своих ${formatMoney(own.fact, base)}`
+            ? `Из них своих ${formatMoney(own.fact, base)}`
             : undefined;
         return monthCells(
           c,
@@ -222,6 +359,57 @@ export function BudgetYearTable({
       )}
     </tr>
   );
+
+  /**
+   * Было ли по строке движение за год.
+   *
+   * С допуском в половину копейки: суммы приходят в базовой валюте, после
+   * пересчёта по курсу дня в них остаются хвосты вроде 0,004 — на экране это
+   * всё равно «0», и строка из нулей считалась бы «с движением».
+   */
+  const moved = (row: YearRow) => Math.abs(row.fact) >= 0.005;
+
+  /**
+   * Статьи с движением за год и статьи без него — в списке они идут порознь.
+   *
+   * Статья с НАЗНАЧЕННОЙ операцией считается живой: операции ещё не было по
+   * определению, но дата и сумма известны — прятать её значит прятать ровно то,
+   * ради чего строка и появилась.
+   */
+  const shows = (g: YearGroup) => moved(g.total) || !!g.total.scheduled;
+  const liveGroups = (section: YearSection) => section.groups.filter(shows);
+  const emptyGroups = (section: YearSection) => section.groups.filter((g) => !shows(g));
+  const visibleGroups = (section: YearSection) =>
+    emptyShown(section.kind) ? section.groups : liveGroups(section);
+  /** План спрятанных статей — он всё равно учтён в итоге раздела. */
+  const emptyPlan = (section: YearSection) =>
+    emptyGroups(section).reduce((s, g) => s + g.total.plan, 0);
+
+  /**
+   * Под-категории категории — с тем же отбором, что и сами категории.
+   *
+   * Прятать только категории целиком мало: у живой категории под-категория без
+   * единой операции за год — та же строка из прочерков, просто на уровень
+   * ниже. Открывается тем же переключателем «Статьи без операций».
+   */
+  const subsOf = (g: YearGroup) =>
+    emptyShown(g.total.kind) ? g.subs : g.subs.filter(moved);
+
+  /** Строка категории и, если раскрыта, её под-категории. */
+  const groupRows = (g: YearGroup) => {
+    const subs = subsOf(g);
+    return (
+      <Fragment key={g.category}>
+        {dataRow(g.total, {
+          group: subs.length > 0 ? `${g.total.kind} ${g.category}` : undefined,
+          own: subs.length > 0 ? g.parent : undefined,
+        })}
+        {subs.length > 0 &&
+          expanded.has(`${g.total.kind} ${g.category}`) &&
+          subs.map((s) => dataRow(s, { nested: true }))}
+      </Fragment>
+    );
+  };
 
   const sectionBody = (section: YearSection, heading: string) => (
     <tbody className="divide-y divide-border/60">
@@ -265,17 +453,43 @@ export function BudgetYearTable({
           </td>
         </tr>
       )}
-      {section.groups.map((g) => (
-        <Fragment key={g.category}>
-          {dataRow(g.total, {
-            group: g.subs.length > 0 ? `${section.kind} ${g.category}` : undefined,
-            own: g.subs.length > 0 ? g.parent : undefined,
-          })}
-          {g.subs.length > 0 &&
-            expanded.has(`${section.kind} ${g.category}`) &&
-            g.subs.map((s) => dataRow(s, { nested: true }))}
-        </Fragment>
-      ))}
+      {liveGroups(section).map(groupRows)}
+      {/* Статья с планом, но без единой операции за год — это строка, в которой
+          нечего читать. Она никуда не девается: разделитель говорит, сколько
+          таких статей, и открывает их. Итоги раздела всегда считаются по всем
+          статьям, включая скрытые. */}
+      {emptyGroups(section).length > 0 && (
+        <>
+          <tr>
+            <td colSpan={COLS} className="px-2 py-2">
+              <button
+                type="button"
+                onClick={() => toggleEmpty(section.kind)}
+                aria-expanded={emptyShown(section.kind)}
+                className="w-full flex items-center gap-3 text-xs text-muted hover:text-text"
+              >
+                <span className="h-px flex-1 bg-border" />
+                <ChevronDown
+                  className={`w-3.5 h-3.5 shrink-0 transition-transform ${
+                    emptyShown(section.kind) ? "" : "-rotate-90"
+                  }`}
+                />
+                {/* План скрытых статей называем прямо: он входит в «Итого», и
+                    без этой подписи итог не сходился бы с суммой видимых
+                    строк — а объяснения этому на экране не было бы. */}
+                <span className="whitespace-nowrap">
+                  Без операций за год · {emptyGroups(section).length}
+                  {emptyPlan(section) > 0 && (
+                    <> · план за год {formatMoney(emptyPlan(section), base)}</>
+                  )}
+                </span>
+                <span className="h-px flex-1 bg-border" />
+              </button>
+            </td>
+          </tr>
+          {emptyShown(section.kind) && emptyGroups(section).map(groupRows)}
+        </>
+      )}
       <tr className="font-medium border-t-2 border-border">
         <th scope="row" className="sticky left-0 bg-panel text-left px-2 py-1">
           Итого {heading.toLowerCase()}
@@ -357,84 +571,151 @@ export function BudgetYearTable({
     );
   };
 
-  return (
-    <div className="card overflow-x-auto">
-      <table className="w-full text-xs border-separate border-spacing-0">
-        <thead>
-          <tr>
-            <th
-              rowSpan={2}
-              className="sticky left-0 bg-panel text-left px-2 py-2 min-w-[13rem] align-bottom"
+  /**
+   * Две строки шапки. Рисуются и в таблице, и в двойнике — из одного места,
+   * иначе они однажды разъедутся.
+   *
+   * В двойнике кнопка подсказки убрана из обхода с клавиатуры и от читалок
+   * (`aria-hidden` на всей обёртке): для них есть настоящая шапка, а два
+   * одинаковых заголовка подряд только запутали бы.
+   */
+  const headerRows = (forClone: boolean) => (
+    <>
+      <tr>
+        <th
+          rowSpan={2}
+          className="sticky left-0 z-[15] bg-panel text-left px-2 py-2 min-w-[13rem] align-bottom"
+        >
+          {/* Пояснение к колонкам — в подсказке, а не строкой над таблицей:
+              читают его один раз, а место оно занимало всегда. */}
+          <span className="inline-flex items-center gap-1.5">
+            Статья
+            <Tooltip
+              content={
+                <>
+                  Суммы в {base}. «Разница» у расходов — сколько осталось до
+                  плана, у доходов — насколько план перевыполнен; больше нуля
+                  везде значит «хорошо».
+                </>
+              }
             >
-              {/* Пояснение к колонкам — в подсказке, а не строкой над таблицей:
-                  читают его один раз, а место оно занимало всегда. */}
-              <span className="inline-flex items-center gap-1.5">
-                Статья
-                <Tooltip
-                  content={
-                    <>
-                      Суммы в {base}. «Разница» у расходов — сколько осталось до
-                      плана, у доходов — насколько план перевыполнен; больше нуля
-                      везде значит «хорошо».
-                    </>
-                  }
-                >
-                  <button
-                    type="button"
-                    aria-label="Как читать таблицу"
-                    className="text-muted hover:text-accent"
-                  >
-                    <HelpCircle className="w-3.5 h-3.5" />
-                  </button>
-                </Tooltip>
-              </span>
-            </th>
-            {report.months.map((m) => (
-              <th
-                key={m}
-                colSpan={SUB_COLUMNS.length}
-                className="px-1 pt-2 pb-0.5 text-center font-medium border-l border-border/60"
+              <button
+                type="button"
+                aria-label="Как читать таблицу"
+                className="text-muted hover:text-accent"
+                tabIndex={forClone ? -1 : undefined}
+                // Мышь фокусирует кнопку даже с `tabIndex={-1}`, а фокус внутри
+                // `aria-hidden`-поддерева — это то, чего быть не должно.
+                onMouseDown={forClone ? (e) => e.preventDefault() : undefined}
               >
-                {/* Полное название: тройка колонок под ним всё равно шире
-                    любого месяца, и сокращать было незачем. Год убираем — он
-                    один на всю таблицу и назван в шапке страницы. */}
-                {monthLabelFull(m).replace(/\s\d+ г\.$/, "")}
-              </th>
-            ))}
+                <HelpCircle className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip>
+          </span>
+        </th>
+        {report.months.map((m) => (
+          <th
+            key={m}
+            colSpan={SUB_COLUMNS.length}
+            className="bg-panel px-1 pt-2 pb-0.5 text-center font-medium border-l border-border/60"
+          >
+            {/* Полное название: тройка колонок под ним всё равно шире
+                любого месяца, и сокращать было незачем. Год убираем — он
+                один на всю таблицу и назван в шапке страницы. */}
+            {monthLabelFull(m).replace(/\s\d+ г\.$/, "")}
+          </th>
+        ))}
+        <th
+          colSpan={SUB_COLUMNS.length}
+          className="bg-panel px-1 pt-2 pb-0.5 text-center font-semibold border-l border-border"
+        >
+          За год
+        </th>
+      </tr>
+      <tr className="text-muted">
+        {[...report.months, "год"].map((m) =>
+          SUB_COLUMNS.map((s, i) => (
             <th
-              colSpan={SUB_COLUMNS.length}
-              className="px-1 pt-2 pb-0.5 text-center font-semibold border-l border-border"
+              key={`${m} ${s}`}
+              className={`bg-panel pb-1.5 text-right font-normal min-w-[5rem] ${
+                i === 0 ? GROUP_EDGE : i === SUB_COLUMNS.length - 1 ? "pl-2 pr-4" : "px-2"
+              }`}
             >
-              За год
+              {s}
             </th>
-          </tr>
-          <tr className="text-muted">
-            {[...report.months, "год"].map((m) =>
-              SUB_COLUMNS.map((s, i) => (
-                <th
-                  key={`${m} ${s}`}
-                  className={`pb-1.5 text-right font-normal min-w-[5rem] ${
-                    i === 0 ? GROUP_EDGE : i === SUB_COLUMNS.length - 1 ? "pl-2 pr-4" : "px-2"
-                  }`}
-                >
-                  {s}
-                </th>
-              ))
-            )}
-          </tr>
-        </thead>
+          ))
+        )}
+      </tr>
+    </>
+  );
+
+  return (
+    // `overflow-clip`, а НЕ `overflow-hidden`: скруглённые углы карточки надо
+    // вернуть — непрозрачные ячейки шапки закрашивают их, — но `hidden` сделал
+    // бы карточку контейнером прокрутки и убил бы закрепление.
+    <div className="card overflow-clip">
+      {/* Двойник шапки: липнет под шапку приложения, пока таблица на экране.
+          Лежит ПЕРЕД таблицей и вынут из потока отрицательным отступом ниже,
+          поэтому до прокрутки стоит ровно на месте настоящей шапки.
+          `select-none` — чтобы выделение таблицы не забирало заголовки дважды. */}
+      <div
+        ref={cloneRef}
+        className="sticky z-20 select-none"
+        style={{ top: "var(--app-header-h)" }}
+        aria-hidden
+      >
+        {/* Прокрутка настоящая, а не только программная: иначе жест вбок по
+            закреплённой полосе на телефоне не двигал бы ничего. Полосу прячем —
+            она уже есть у таблицы. */}
+        <div
+          ref={cloneClipRef}
+          className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onScroll={syncBack}
+        >
+          <table
+            className="text-xs border-separate border-spacing-0"
+            style={{
+              tableLayout: "fixed",
+              width: tableWidth > 0 ? `${tableWidth}px` : undefined,
+            }}
+          >
+            <colgroup>
+              {colWidths.map((w, i) => (
+                <col key={i} style={{ width: `${w}px` }} />
+              ))}
+            </colgroup>
+            <thead>{headerRows(true)}</thead>
+          </table>
+        </div>
+      </div>
+      <div
+        ref={scrollerRef}
+        className="overflow-x-auto"
+        style={cloneHeight > 0 ? { marginTop: `${-cloneHeight}px` } : undefined}
+        onScroll={syncScroll}
+      >
+      <table
+        ref={tableRef}
+        className="w-full text-xs border-separate border-spacing-0"
+      >
+        <thead>{headerRows(false)}</thead>
         {sectionBody(report.expense, "Расходы")}
         {sectionBody(report.income, "Доходы")}
         <tfoot>
           <tr className="border-t-2 border-border">
+            {/* Не «Дельта»: в этой же таблице «Разница» — это колонка внутри
+                месяца, и одно слово на две разные величины путало бы. Полное
+                «Доходы − расходы» читается без легенды и совпадает по смыслу с
+                карточкой месяца и показателем дашборда. */}
             <th scope="row" className="sticky left-0 bg-panel text-left px-2 py-1.5 font-medium">
-              Дельта
+              Доходы − расходы
             </th>
             {report.delta.map((c, i) => deltaCells(c, report.months[i]))}
             {deltaCells({ plan: deltaPlan, fact: deltaFact }, "год")}
           </tr>
         </tfoot>
       </table>
+      </div>
     </div>
   );
 }

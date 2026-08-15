@@ -97,8 +97,18 @@ interface Props {
   /** Операции ДО правок — правила видят именно их, значит и счётчик совпадений
    *  должен считаться по ним, иначе он покажет одно, а правило сделает другое. */
   transactions: Transaction[];
-  /** Подсказки категорий для действия «Категория». */
+  /**
+   * Категории из истории операций — для УСЛОВИЯ «Категория равна». Там нужны и
+   * старые имена: правило на то и заводят, чтобы поймать операции с категорией,
+   * которой в справочнике уже нет.
+   */
   categories: string[];
+  /**
+   * Живой справочник категорий Дзен-мани — для ДЕЙСТВИЯ «Категория». Записать
+   * можно только то, что примет отправка. `null` без подключения — тогда
+   * действие выбирается из того же списка, что и условие.
+   */
+  liveCategories?: CategoryNode[] | null;
   /** Подсказки получателей для действия «Получатель». */
   payees: string[];
   /** Названия счетов — для пикера в условии «Счёт». */
@@ -260,6 +270,7 @@ export function RuleEditModal({
   rule,
   transactions,
   categories,
+  liveCategories,
   payees,
   accounts,
   accountGroups,
@@ -783,7 +794,9 @@ export function RuleEditModal({
                           subcategory={
                             a.value.trim() ? splitCategoryFull(a.value).subcategory ?? "" : ""
                           }
-                          categories={categoryNodes}
+                          // Записать правило может только живую категорию:
+                          // старые имена из истории отправка не примет.
+                          categories={liveCategories ?? categoryNodes}
                           portal
                           onChange={(cat, sub) =>
                             patchAction(a.id!, { value: joinCategoryFull(cat, sub || null) })

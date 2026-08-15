@@ -267,8 +267,16 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
       }
       s.add(sub);
     };
-    for (const [cat, subs] of subcatByCategory)
-      for (const sub of subs) addSub(cat, sub);
+    // Подкатегории из ИСТОРИИ операций — только когда живого справочника нет
+    // (выгрузка CSV). При синхронизации с Дзен-мани справочник и есть правда:
+    // в истории остаются имена подкатегорий, которых в Дзен-мани уже нет —
+    // удалённых, убранных в архив или переехавших к другому родителю. Выбрать
+    // такую было можно, а сохранить нельзя: отправка ищет тег по живому
+    // справочнику и отвечала «категория не найдена».
+    if (!cacheTags) {
+      for (const [cat, subs] of subcatByCategory)
+        for (const sub of subs) addSub(cat, sub);
+    }
     const realTop = new Set<string>();
     if (cacheTags) {
       const byId = new Map(cacheTags.map((t) => [t.id, t] as const));
@@ -276,7 +284,7 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
         if (t.archive) continue;
         if (t.parent) {
           const parent = byId.get(t.parent);
-          if (parent) addSub(parent.title, t.title);
+          if (parent && !parent.archive) addSub(parent.title, t.title);
         } else {
           realTop.add(t.title);
         }
@@ -287,11 +295,20 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
     // both as its own category and as a sub elsewhere).
     const childNames = new Set<string>();
     for (const subs of subsMap.values()) for (const s of subs) childNames.add(s);
+    // Живые названия тегов: с ними сверяется отправка. Категории, которой в
+    // справочнике уже нет, в списке быть не должно — сохранить операцию с ней
+    // всё равно не выйдет.
+    const liveTitles = cacheTags
+      ? new Set(cacheTags.filter((t) => !t.archive).map((t) => t.title))
+      : null;
     const tops = categoryOptions.filter(
       // Drop full-path «Parent / Sub» entries — categoryMeta carries those keys
       // (for same-named-sub icons), but the first level is top-level only; subs
       // are reached via the right panel.
-      (c) => !c.includes(" / ") && (realTop.has(c) || !childNames.has(c))
+      (c) =>
+        !c.includes(" / ") &&
+        (realTop.has(c) || !childNames.has(c)) &&
+        (!liveTitles || liveTitles.has(c))
     );
     // Always offer «Без категории» (pinned first) so a category can be REMOVED —
     // Zenmoney has no uncategorized tag, so this maps to a tag-less operation on

@@ -152,7 +152,26 @@ describe("buildBudgetDashboard", () => {
     );
     const d = buildBudgetDashboard(buildBudgetYear([], txs, 2026), empty(), 0);
     expect(d.rows).toHaveLength(15);
-    expect(d.rows[0].category).toBe("К14");
+    expect(d.rows.map((r) => r.category)).toContain("К14");
+  });
+
+  it("порядок статей берётся из годового свода, а не считается заново", () => {
+    // Дашборд собран из той же таблицы, что и на экране: своя сортировка тут
+    // означала бы, что отчёт и таблица идут в разном порядке (issue #68).
+    const txs = [
+      tx({ date: "2026-01-10", amountBase: 1000, category: "Еда" }),
+      tx({ date: "2026-01-10", amountBase: 9000, category: "Дом" }),
+    ];
+    const byAmount = buildBudgetYear([], txs, 2026, undefined, "amount");
+    expect(buildBudgetDashboard(byAmount, empty(), 0).rows.map((r) => r.category)).toEqual([
+      "Дом",
+      "Еда",
+    ]);
+    const byAlpha = buildBudgetYear([], txs, 2026, undefined, "alpha");
+    expect(buildBudgetDashboard(byAlpha, empty(), 0).rows.map((r) => r.category)).toEqual([
+      "Дом",
+      "Еда",
+    ]);
   });
 
   it("под-категории идут следом за своей категорией", () => {
@@ -168,15 +187,15 @@ describe("buildBudgetDashboard", () => {
     );
     const d = buildBudgetDashboard(r, empty(), 0);
     expect(d.rows.map((x) => x.label)).toEqual([
+      "Дом",
       "Еда",
       "Еда · Кафе",
       "Еда · Продукты",
-      "Дом",
     ]);
     // Строка категории — это её ИТОГ вместе с под-категориями.
-    expect(atMonth(d.rows[0].factByMonth, 0)).toBe(7000);
-    expect(d.rows[0].subcategory).toBeNull();
-    expect(d.rows[1].subcategory).toBe("Кафе");
+    expect(atMonth(d.rows[1].factByMonth, 0)).toBe(7000);
+    expect(d.rows[1].subcategory).toBeNull();
+    expect(d.rows[2].subcategory).toBe("Кафе");
   });
 
   it("под-категории прошлого года ищутся по паре «категория + под-категория»", () => {
@@ -245,6 +264,89 @@ describe("buildBudgetDashboard", () => {
     expect(atMonth(d.expense.factAllByMonth, 0)).toBe(30_200);
     expect(d.expense.hasTransfers).toBe(true);
     expect(d.income.hasTransfers).toBe(true);
+  });
+
+  it("разделы идут расходами, доходами и переводами в конце", () => {
+    const scope = { accounts: new Set<string>(), perimeterTransfers: true };
+    const r = buildBudgetYear(
+      [],
+      [
+        tx({ date: "2026-01-10", amountBase: 30_000, category: "Еда" }),
+        tx({ date: "2026-01-11", amountBase: 90_000, kind: "income", category: "Зарплата" }),
+        tx({
+          date: "2026-01-12",
+          kind: "transfer",
+          category: "Переводы",
+          account: "Карта",
+          outcomeAccount: "Карта",
+          incomeAccount: "Накопительный",
+          amountBase: 200,
+        }),
+      ],
+      2026,
+      scope
+    );
+    const d = buildBudgetDashboard(r, empty(), 0);
+    expect(d.sections.map((s) => s.title)).toEqual(["Расходы", "Доходы", "Переводы"]);
+    expect(d.sections[0].rows.map((x) => x.label)).toEqual(["Еда"]);
+    expect(d.sections[1].rows.map((x) => x.label)).toEqual(["Зарплата"]);
+    // Переводы собраны с обеих сторон: списание и зачисление — разные строки.
+    expect(d.sections[2].rows.map((x) => x.label)).toEqual([
+      "Переводы — списания",
+      "Списание · Накопительный",
+      "Переводы — зачисления",
+      "Зачисление · Карта",
+    ]);
+    expect(d.sections[1].rows[0].kind).toBe("income");
+  });
+
+  it("пустого раздела в дашборде нет", () => {
+    const r = buildBudgetYear([], [tx({ date: "2026-01-10", amountBase: 100 })], 2026);
+    expect(buildBudgetDashboard(r, empty(), 0).sections.map((s) => s.key)).toEqual(["expense"]);
+  });
+
+  it("переводы в расходах остаются последней строкой листа Excel", () => {
+    const scope = { accounts: new Set<string>(), perimeterTransfers: true };
+    const r = buildBudgetYear(
+      [],
+      [
+        tx({ date: "2026-01-10", amountBase: 30_000, category: "Яхта" }),
+        tx({
+          date: "2026-01-12",
+          kind: "transfer",
+          category: "Переводы",
+          account: "Карта",
+          outcomeAccount: "Карта",
+          incomeAccount: "Накопительный",
+          amountBase: 200,
+        }),
+      ],
+      2026,
+      scope
+    );
+    const labels = buildBudgetDashboard(r, empty(), 0).rows.map((x) => x.label);
+    expect(labels[0]).toBe("Яхта");
+    expect(labels[labels.length - 2]).toBe("Переводы");
+  });
+
+  it("прошлый год у доходов не путается с одноимённой статьёй расходов", () => {
+    // «Банки» бывают и расходом (комиссии), и доходом (проценты).
+    const cur = buildBudgetYear(
+      [],
+      [tx({ date: "2026-01-10", amountBase: 100, kind: "income", category: "Банки" })],
+      2026
+    );
+    const prev = buildBudgetYear(
+      [],
+      [
+        tx({ date: "2025-01-10", amountBase: 700, category: "Банки" }),
+        tx({ date: "2025-01-11", amountBase: 40, kind: "income", category: "Банки" }),
+      ],
+      2025
+    );
+    const d = buildBudgetDashboard(cur, prev, 0);
+    const income = d.sections.find((s) => s.key === "income")!.rows[0];
+    expect(ytd(income.prevFactByMonth, 0)).toBe(40);
   });
 
   it("месяц за пределами года прижимается к границе", () => {

@@ -9,16 +9,19 @@ import {
   ytd,
   type BudgetDashboard,
   type DashboardRow,
+  type DashboardSection,
 } from "../lib/budgetDashboard";
 import {
   donutSlices,
   hasNegative,
-  paginate,
+  paginateGroups,
   printBars,
   rowsPerPage,
+  SHEET_PORTRAIT,
   type PrintBar,
 } from "../lib/budgetPrint";
 import { formatMoney, formatPct, monthLabelFull } from "../lib/format";
+import { MONTHS } from "./BudgetExportModal";
 
 /**
  * Печатный дашборд бюджета — то, что уходит в PDF.
@@ -47,10 +50,14 @@ const C_REST = "#E5E7EB";
  * шести». Читать это невозможно — одну и ту же таблицу приходится собирать по
  * листам. Теперь наоборот: пара разрезов показывается целиком, и только если
  * статей действительно много, она продолжается на следующем листе.
+ *
+ * Пара идёт друг под другом на книжном листе: полосе так достаётся вся ширина
+ * страницы, а списку статей — высота (issue #68).
+ *
+ * Сколько статей влезет на лист, считается от его высоты и от ЧИСЛА диаграмм
+ * на нём — прямо в разметке, потому что у переводов плана нет и диаграмма там
+ * остаётся одна.
  */
-const CHART_ROWS = 1;
-/** Сколько статей влезает: считается от высоты листа, а не подбирается. */
-const ROWS_PER_PAGE = rowsPerPage(CHART_ROWS);
 
 /**
  * Предел шкалы у диаграмм роста: ±100 %.
@@ -83,9 +90,22 @@ function money(v: number | null, base: string): string {
 }
 
 /** Горизонтальная диаграмма: подпись, полоса, значение. */
+/** Сумма полугодия: `from` — 0 (январь–июнь) или 6 (июль–декабрь). */
+function halfSum(values: number[], from: number): number {
+  let sum = 0;
+  for (let i = from; i < from + 6; i++) sum += values[i] ?? 0;
+  return sum;
+}
+
+/** Красим только минус: плюс в отчёте — обычное дело, минус надо заметить. */
+function diffClass(income: number[], expense: number[], idx: number): string | undefined {
+  return (income[idx] ?? 0) - (expense[idx] ?? 0) < 0 ? "print-months-minus" : undefined;
+}
+
 function BarChart({
   title,
   bars,
+  rows,
   color,
   base,
   percent = false,
@@ -94,6 +114,8 @@ function BarChart({
 }: {
   title: string;
   bars: PrintBar[];
+  /** Те же строки, из которых собраны полосы, — по ним рисуется дерево. */
+  rows: DashboardRow[];
   color: string;
   base: string;
   /** Значения — доли, а не деньги. */
@@ -106,20 +128,43 @@ function BarChart({
   const centered = hasNegative(bars);
   return (
     <div className="print-chart">
-      <div className="print-chart-title">
-        {title}
-        {percent && <span className="print-chart-note"> · шкала до ±100 %</span>}
-      </div>
+      {/* Без приписки «шкала до ±100 %»: у обрезанной полосы есть штриховка,
+          а точное значение стоит справа от неё — подпись в заголовке только
+          отвлекала. Как и на экране. */}
+      <div className="print-chart-title">{title}</div>
       <div className="print-bars">
-        {bars.map((b) => {
+        {bars.map((b, i) => {
+          // Под-категория — по самой строке, а не по подписи: у переводов под
+          // «под-категорией» лежит счёт по ту сторону, и разбирать «·» в
+          // тексте значило бы гадать по строке там, где есть готовое поле.
+          const row = rows[i];
+          const sub = row?.subcategory ?? null;
+          // Родитель мог остаться на предыдущем листе: страницы режутся по
+          // числу строк. Тогда ветка бессмысленна — пишем полное имя, как
+          // раньше, иначе на листе висело бы одинокое «Кот».
+          const parentHere =
+            !!sub &&
+            rows.slice(0, i).some((r) => r.category === row.category && r.subcategory === null);
+          const more =
+            !!sub && !!rows[i + 1]?.subcategory && rows[i + 1]?.category === row.category;
           const bad = invertSign ? !b.negative : b.negative;
           const tone = bySign ? (bad ? C_BAD : C_GOOD) : color;
           const width = `${(b.ratio * (centered ? 50 : 100)).toFixed(2)}%`;
           return (
             <Fragment key={b.label}>
-              <div className="print-bar-label" title={b.label}>
-                {b.label}
-              </div>
+              {sub && parentHere ? (
+                <div className="print-bar-label print-bar-sub" title={b.label}>
+                  <span
+                    className={`print-bar-elbow-v${more ? " print-bar-elbow-more" : ""}`}
+                  />
+                  <span className="print-bar-elbow-h" />
+                  <span className="print-bar-name">{sub}</span>
+                </div>
+              ) : (
+                <div className="print-bar-label" title={b.label}>
+                  {b.label}
+                </div>
+              )}
               <div className={`print-bar-track${centered ? " print-bar-centered" : ""}`}>
                 {/* Полоса — просто блок с шириной в процентах: в печати это
                     ведёт себя одинаково в любом браузере. */}
@@ -217,6 +262,14 @@ function Donut({
             <dt>План</dt>
             <dd>{money(plan, base)}</dd>
           </div>
+          {/* Третье число — то, ради которого на кольцо и смотрят. На экране
+              оно есть, и в отчёте должно быть тем же. */}
+          <div>
+            <dt>{plan - fact >= 0 ? "Осталось" : "Сверх плана"}</dt>
+            <dd className={plan - fact >= 0 ? "print-up" : "print-down"}>
+              {money(Math.abs(plan - fact), base)}
+            </dd>
+          </div>
         </dl>
       </div>
     </div>
@@ -231,6 +284,7 @@ function Kpi({
   prev,
   base,
   tone,
+  withTransfers,
 }: {
   title: string;
   fact: number;
@@ -238,16 +292,24 @@ function Kpi({
   prev: number;
   base: string;
   tone: "expense" | "income" | "delta";
+  /** Тот же факт вместе с переводами — второй строкой, как на экране. */
+  withTransfers?: number;
 }) {
   const g = growth(fact, prev);
+  // У расхода рост — это «хуже», у дохода и разницы — «лучше»: зелёный на
+  // выросших тратах читался бы как похвала.
+  const goodGrowth = g !== null && (tone === "expense" ? g < 0 : g >= 0);
   return (
     <div className={`print-kpi print-kpi-${tone}`}>
       <div className="print-kpi-title">{title}</div>
       <div className="print-kpi-value">{formatMoney(fact, base, { signed: tone === "delta" })}</div>
+      {withTransfers !== undefined && withTransfers !== fact && (
+        <div className="print-kpi-extra">{money(withTransfers, base)} включая переводы</div>
+      )}
       <div className="print-kpi-meta">
         {plan !== null && <span>План {money(plan, base)}</span>}
         {g !== null && (
-          <span className={g >= 0 ? "print-up" : "print-down"}>
+          <span className={goodGrowth ? "print-up" : "print-down"}>
             {g >= 0 ? "▲" : "▼"} {formatPct(Math.abs(g))} к прошлому году
           </span>
         )}
@@ -278,16 +340,28 @@ export function BudgetDashboardPrint({ dashboard: d, base }: Props) {
       percent ? { cap: PCT_CAP } : {}
     );
 
-  /** Пары разрезов: каждая пара занимает свои листы целиком. */
-  const spreads: {
+  interface ChartSpec {
     title: string;
-    charts: { title: string; pick: (r: DashboardRow) => number | null; color: string; percent?: boolean; bySign?: boolean; invertSign?: boolean }[];
-  }[] = [
+    pick: (r: DashboardRow) => number | null;
+    color: string;
+    percent?: boolean;
+    bySign?: boolean;
+    /** Диаграмма про план: разделу без планов её показывать нечего. */
+    needsPlan?: boolean;
+  }
+
+  /** Пары разрезов: каждая пара занимает свои листы целиком. */
+  const spreads: { title: string; charts: ChartSpec[] }[] = [
     {
-      title: "Факт и план за месяц",
+      title: "План и факт за месяц",
       charts: [
         { title: "Факт — месяц", pick: (r) => atMonth(r.factByMonth, m), color: C_FACT },
-        { title: "План — месяц", pick: (r) => atMonth(r.planByMonth, m), color: C_PLAN },
+        {
+          title: "План — месяц",
+          pick: (r) => atMonth(r.planByMonth, m),
+          color: C_PLAN,
+          needsPlan: true,
+        },
       ],
     },
     {
@@ -296,14 +370,18 @@ export function BudgetDashboardPrint({ dashboard: d, base }: Props) {
         { title: "Факт — с начала года", pick: (r) => ytd(r.factByMonth, m), color: C_FACT },
         {
           title: "Отклонение от плана — с начала года",
-          pick: (r) => variance(ytd(r.factByMonth, m), ytd(r.planByMonth, m), "expense"),
+          // Знак приводится к «больше нуля — хорошо» по направлению самой
+          // статьи: у дохода перевыполнение плана и недобор читаются наоборот,
+          // чем у расхода, а на одном листе теперь бывают и те, и другие.
+          pick: (r) => variance(ytd(r.factByMonth, m), ytd(r.planByMonth, m), r.kind),
           color: C_GOOD,
           bySign: true,
+          needsPlan: true,
         },
       ],
     },
     {
-      title: "Рост расходов",
+      title: "Рост",
       charts: [
         {
           title: "Рост к прошлому месяцу",
@@ -311,7 +389,6 @@ export function BudgetDashboardPrint({ dashboard: d, base }: Props) {
           color: C_BAD,
           percent: true,
           bySign: true,
-          invertSign: true,
         },
         {
           title: "Рост к прошлому году",
@@ -319,20 +396,44 @@ export function BudgetDashboardPrint({ dashboard: d, base }: Props) {
           color: C_BAD,
           percent: true,
           bySign: true,
-          invertSign: true,
         },
       ],
     },
   ];
 
+  /** Есть ли в разделе планы: у переводов их не бывает — их не планируют. */
+  const hasPlan = (section: DashboardSection) =>
+    section.rows.some((r) => r.planByMonth.some((v) => v !== 0));
+
   return createPortal(
     <div className="print-root" aria-hidden="true">
       <section className="print-page">
-        <header className="print-head">
-          <h1>Бюджет {d.year} — годовой отчёт</h1>
-          <p>
-            {monthName} {d.year} · с начала года: январь — {monthName.toLowerCase()}
-          </p>
+        {/* Титул отчёта: слева — что это, справа — за что и с чем сравнивается.
+            Раньше всё лежало одной серой строкой через точки («Август 2026 · с
+            начала года: январь — август»), и чтобы понять, что за отрезок и с
+            каким годом сравнение, её приходилось разбирать словами. Теперь это
+            подписи и значения — как в остальных подсказках раздела. */}
+        <header className="print-head print-cover">
+          <div>
+            <h1>Бюджет {d.year}</h1>
+            <p className="print-cover-kind">Годовой отчёт по статьям</p>
+          </div>
+          <dl className="print-cover-meta">
+            <div>
+              <dt>Месяц показателей</dt>
+              <dd>
+                {monthName} {d.year}
+              </dd>
+            </div>
+            <div>
+              <dt>С начала года</dt>
+              <dd>Январь — {monthName.toLowerCase()}</dd>
+            </div>
+            <div>
+              <dt>Сравнение</dt>
+              <dd>{d.year - 1}</dd>
+            </div>
+          </dl>
         </header>
 
         <div className="print-kpis">
@@ -343,6 +444,7 @@ export function BudgetDashboardPrint({ dashboard: d, base }: Props) {
             prev={atMonth(e.prevFactByMonth, m)}
             base={base}
             tone="expense"
+            withTransfers={e.hasTransfers ? atMonth(e.factAllByMonth, m) : undefined}
           />
           <Kpi
             title="Расходы с начала года"
@@ -351,6 +453,7 @@ export function BudgetDashboardPrint({ dashboard: d, base }: Props) {
             prev={ytd(e.prevFactByMonth, m)}
             base={base}
             tone="expense"
+            withTransfers={e.hasTransfers ? ytd(e.factAllByMonth, m) : undefined}
           />
           <Kpi
             title="Доходы с начала года"
@@ -359,6 +462,7 @@ export function BudgetDashboardPrint({ dashboard: d, base }: Props) {
             prev={ytd(i.prevFactByMonth, m)}
             base={base}
             tone="income"
+            withTransfers={i.hasTransfers ? ytd(i.factAllByMonth, m) : undefined}
           />
           <Kpi
             title="Разница с начала года"
@@ -385,46 +489,133 @@ export function BudgetDashboardPrint({ dashboard: d, base }: Props) {
           />
         </div>
 
-        {e.hasTransfers && (
-          <p className="print-note">
-            «Разница» считается вместе с переводами — внутри бюджета они гасят
-            друг друга. Расход без переводов за месяц:{" "}
-            {money(mFact(e), base)}, вместе с ними{" "}
-            {money(atMonth(e.factAllByMonth, m), base)}.
-          </p>
-        )}
+        {/* Помесячный свод: та самая таблица, которую ждут от годового отчёта.
+            Раньше нижняя половина титульного листа пустовала, а «сколько вышло
+            в каждом месяце» приходилось собирать глазами по диаграммам.
+            Полугодиями в два столбца — так двенадцать месяцев ложатся в высоту
+            листа и используют его ширину. Суммы по статьям, без переводов: они
+            внутри бюджета гасят друг друга, и итог сходится с плитками.
+            Колонок три, а не пять: план помесячно стоит на самих диаграммах, а
+            шесть колонок в двух таблицах при шрифте от 10 пунктов на лист уже
+            не влезали — числа обрезало правым краем. */}
+        <div className="print-months-pair">
+          {[0, 6].map((from) => (
+            <table className="print-months" key={from}>
+              <thead>
+                <tr>
+                  <th>{from === 0 ? "I полугодие" : "II полугодие"}</th>
+                  <th>Расход</th>
+                  <th>Доход</th>
+                  <th>Разница</th>
+                </tr>
+              </thead>
+              <tbody>
+                {MONTHS.slice(from, from + 6).map((name, k) => {
+                  const idx = from + k;
+                  return (
+                    <tr key={name}>
+                      <td>{name}</td>
+                      <td>{money(atMonth(e.factByMonth, idx), base)}</td>
+                      <td>{money(atMonth(i.factByMonth, idx), base)}</td>
+                      <td className={diffClass(i.factByMonth, e.factByMonth, idx)}>
+                        {formatMoney(
+                          atMonth(i.factByMonth, idx) - atMonth(e.factByMonth, idx),
+                          base,
+                          { signed: true }
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr>
+                  <td>Итого</td>
+                  <td>{money(halfSum(e.factByMonth, from), base)}</td>
+                  <td>{money(halfSum(i.factByMonth, from), base)}</td>
+                  <td
+                    className={
+                      halfSum(i.factByMonth, from) - halfSum(e.factByMonth, from) < 0
+                        ? "print-months-minus"
+                        : undefined
+                    }
+                  >
+                    {formatMoney(
+                      halfSum(i.factByMonth, from) - halfSum(e.factByMonth, from),
+                      base,
+                      { signed: true }
+                    )}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          ))}
+        </div>
+
       </section>
 
-      {spreads.flatMap((spread) => {
-        const chunks = paginate(d.rows, ROWS_PER_PAGE);
-        return chunks.map((rows, chunkIndex) => (
-          <section className="print-page" key={`${spread.title}-${chunkIndex}`}>
-            <header className="print-head print-head-slim">
-              <h2>
-                {spread.title}
-                {chunks.length > 1 ? ` · ${chunkIndex + 1} из ${chunks.length}` : ""}
-              </h2>
-              <p>
-                {monthName} {d.year} · сравнение с {d.year - 1}
-              </p>
-            </header>
-            <div className="print-grid">
-              {spread.charts.map((c) => (
-                <BarChart
-                  key={c.title}
-                  title={c.title}
-                  bars={bars(rows, c.pick, c.percent)}
-                  color={c.color}
-                  base={base}
-                  percent={c.percent}
-                  bySign={c.bySign}
-                  invertSign={c.invertSign}
-                />
-              ))}
-            </div>
-          </section>
-        ));
-      })}
+      {/* Дальше — разрезы по статьям, каждый на книжных листах и с разрывом
+          страницы между разделами: расходы, доходы и в самом конце переводы
+          (issue #68). Раньше всё это лежало одной кучей на альбомных листах, и
+          доходы в отчёт не попадали вовсе. */}
+      {spreads.flatMap((spread) =>
+        d.sections.flatMap((section) => {
+          const charts = spread.charts.filter((c) => !c.needsPlan || hasPlan(section));
+          if (charts.length === 0) return [];
+          // Статьи, по которым В ЭТОМ РАЗРЕЗЕ нет ни одного значения, на лист не
+          // идут: строка «— 0 ₽» ничего не сообщает, а у переводов таких было
+          // больше половины (счёт есть, но в декабре по нему не двигали). Отбор
+          // ровно по тем диаграммам, что стоят на листе: статья с планом, но без
+          // факта, остаётся — иначе исчезло бы то, ради чего смотрят план.
+          const alive = section.rows.filter((r) =>
+            charts.some((c) => {
+              const v = c.pick(r);
+              return v !== null && v !== 0;
+            })
+          );
+          if (alive.length === 0) return [];
+          // Сколько строк влезет — считаем по ЧИСЛУ ДИАГРАММ на этом листе, а
+          // не по двум всегда: у переводов плана нет, вторая диаграмма
+          // отпадает, и лист с восемнадцатью строками наполовину пустовал.
+          const chunks = paginateGroups(
+            alive,
+            rowsPerPage(charts.length, SHEET_PORTRAIT),
+            (r) => r.subcategory !== null
+          );
+          return chunks.map((rows, chunkIndex) => (
+            <section
+              className="print-page print-portrait"
+              key={`${spread.title}-${section.key}-${chunkIndex}`}
+            >
+              <header className="print-head print-head-slim">
+                <h2>
+                  {section.title} · {spread.title.toLowerCase()}
+                  {chunks.length > 1 ? ` · ${chunkIndex + 1} из ${chunks.length}` : ""}
+                </h2>
+                <p>
+                  {monthName} {d.year} · сравнение с {d.year - 1}
+                </p>
+              </header>
+              <div className="print-column">
+                {charts.map((c) => (
+                  <BarChart
+                    key={c.title}
+                    title={c.title}
+                    bars={bars(rows, c.pick, c.percent)}
+                    rows={rows}
+                    color={c.color}
+                    base={base}
+                    percent={c.percent}
+                    // У расхода рост — это «хуже», у дохода наоборот. Переводы
+                    // не красим по знаку вовсе: оборот по счетам сам по себе не
+                    // бывает ни хорошим, ни плохим.
+                    bySign={c.bySign && section.key !== "transfer"}
+                    invertSign={section.key === "expense"}
+                  />
+                ))}
+              </div>
+            </section>
+          ));
+        })
+      )}
     </div>,
     document.body
   );

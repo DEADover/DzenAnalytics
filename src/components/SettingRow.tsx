@@ -15,6 +15,7 @@ export function SettingRow({
   status,
   help,
   control,
+  dense,
   children,
 }: {
   title: string;
@@ -24,22 +25,53 @@ export function SettingRow({
   help?: ReactNode;
   /** Контрол справа: поле, переключатель, пикер. */
   control?: ReactNode;
+  /**
+   * Плотнее по вертикали — для всплывающих окон, где настройки идут подряд и
+   * список должен помещаться целиком, не уезжая за край экрана. На странице
+   * настроек воздух уместен, во всплывающем окне он выходит боком.
+   */
+  dense?: boolean;
   /** Раскрывающееся содержимое под строкой — редактор на всю ширину. */
   children?: ReactNode;
 }) {
   return (
-    <div className="py-3 border-b border-border/60 last:border-b-0">
+    <div className={`${dense ? "py-1.5" : "py-3"} border-b border-border/60 last:border-b-0`}>
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 text-sm">
-            <span>{title}</span>
-            {help && <InfoPopover label={`${title} — подробнее`}>{help}</InfoPopover>}
-          </div>
+          <SettingLabel title={title} help={help} />
           {status && <div className="text-xs text-muted mt-0.5">{status}</div>}
         </div>
         {control && <div className="shrink-0">{control}</div>}
       </div>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Название настройки со знаком вопроса.
+ *
+ * Знак вопроса идёт СТРОКОЙ ТЕКСТА, а не отдельной ячейкой рядом: у длинного
+ * названия текст переносится, ячейка при этом остаётся во всю ширину колонки —
+ * и знак вопроса уезжал к правому краю, за версту от слова, к которому
+ * относится.
+ *
+ * Вынесено отдельно, потому что тем же должны выглядеть и под-настройки внутри
+ * строки (например «Способ расчёта» под прогнозом): иначе у них другой шрифт и
+ * подсказки нет вовсе.
+ */
+export function SettingLabel({ title, help }: { title: string; help?: ReactNode }) {
+  return (
+    // Название и знак вопроса — одной строкой, без переносов. Если рядом с
+    // контролом им уже не хватает места, на другую строку уезжает контрол
+    // (у строки `flex-wrap`), а не половина названия.
+    <div className="text-sm whitespace-nowrap">
+      {title}
+      {help && (
+        <span className="inline-flex align-middle ml-1">
+          <InfoPopover label={`${title} — подробнее`}>{help}</InfoPopover>
+        </span>
+      )}
     </div>
   );
 }

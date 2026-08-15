@@ -165,6 +165,29 @@ describe("операции удалённого плана (#71)", () => {
     expect(next.reminders?.map((r) => r.interval)).toEqual([null, "month"]);
   });
 
+  it("КЛЮЧЕВОЕ: полная синхронизация сохраняет ИСПОЛНЕННЫЕ операции планов", () => {
+    // Пустой кэш — это ветка «поверить ответу целиком», и раньше она оставляла
+    // только плановые. Из-за этого после «очистить и скачать заново» план
+    // месяца выходил меньше дзеновского ровно на сумму уже прошедших плановых
+    // операций, и повторная полная синхронизация не помогала.
+    const today = new Date().toISOString().slice(0, 10);
+    const done = { ...marker("m2", "r2", today), state: "processed" as const };
+    const next = applyDiff(null, {
+      serverTimestamp: 2,
+      reminderMarker: [marker("m1", "r1", "2026-07-01"), done],
+    } as never);
+    expect(next.reminderMarkers?.map((m) => m.id).sort()).toEqual(["m1", "m2"]);
+  });
+
+  it("полная синхронизация всё же выбрасывает удалённые операции планов", () => {
+    const dropped = { ...marker("m3", "r3", "2026-07-03"), state: "deleted" as const };
+    const next = applyDiff(null, {
+      serverTimestamp: 2,
+      reminderMarker: [marker("m1", "r1", "2026-07-01"), dropped],
+    } as never);
+    expect(next.reminderMarkers?.map((m) => m.id)).toEqual(["m1"]);
+  });
+
   it("удалённый план уходит и из списка планов", () => {
     const next = applyDiff(
       {

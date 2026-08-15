@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -41,6 +41,7 @@ import {
   Table as TableIcon,
   Archive,
 } from "lucide-react";
+import { debtsByCounterparty, NO_COUNTERPARTY } from "../lib/debts";
 import { useDataStore } from "../store/useDataStore";
 import {
   useFiltersStore,
@@ -131,6 +132,9 @@ const DEFAULT_DIR: Record<SortBy, SortDir> = {
 
 /** Bucket for accounts with no bank attached — cash, manual accounts, and
  *  anything imported from CSV (where the bank is simply unknown to us). */
+/** Типы счетов Дзен-мани, которые считаются долговыми. */
+const DEBT_TYPES = new Set(["debt", "loan", "credit"]);
+
 const NO_BANK = "Без банка";
 /** Bucket for accounts whose type the local cache doesn't know (CSV imports). */
 const NO_TYPE = "Без типа";
@@ -553,6 +557,35 @@ export function AccountsPage() {
       };
     });
   }, [liveAccounts, accountEdits]);
+
+  /** Раскрытые долговые счета: разбивка по контрагентам под строкой счёта. */
+  const [openDebts, setOpenDebts] = useState<Set<string>>(new Set());
+  const toggleDebts = (account: string) =>
+    setOpenDebts((prev) => {
+      const next = new Set(prev);
+      if (next.has(account)) next.delete(account);
+      else next.add(account);
+      return next;
+    });
+
+  /** Операции, по которым считаем долги: как и сама строка счёта — вся история
+   *  на «Капитале» и отобранный период на «Движении». */
+  const debtSource = capitalView ? transactions : filtered;
+
+  /** Названия долговых счетов — по справочнику Дзен-мани. */
+  const debtAccountTitles = useMemo(
+    () => new Set(liveList.filter((a) => DEBT_TYPES.has(a.type)).map((a) => a.title)),
+    [liveList]
+  );
+
+  /** Разбивка по контрагентам для каждого долгового счёта. */
+  const debtsByAccount = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof debtsByCounterparty>>();
+    for (const title of debtAccountTitles) {
+      m.set(title, debtsByCounterparty(debtSource, new Set([title])));
+    }
+    return m;
+  }, [debtAccountTitles, debtSource]);
 
   const accountRowsResult = useMemo(() => {
     const liveByTitle = new Map(liveList.map((a) => [a.title, a]));
@@ -1120,6 +1153,24 @@ export function AccountsPage() {
       (t) => t.outcomeAccount === account || t.incomeAccount === account
     );
     showDrill(account, txs, "Операции по счёту");
+  }
+
+  /**
+   * Долги по людям — то, чего в самом Дзен-мани нет.
+   *
+   * Там счёт «Долги» один на всех: сколько должны вам и сколько должны вы,
+   * свалено в один остаток. Кто за ним стоит, известно из самой операции — в
+   * поле «Контрагент», — поэтому строку долгового счёта можно раскрыть и
+   * увидеть разбивку. Считаем по тому же набору операций, что и сама строка:
+   * на «Капитале» — по всей истории, на «Движении» — за отбор.
+   */
+  function openDebtCounterparty(account: string, payee: string) {
+    const txs = debtSource.filter(
+      (t) =>
+        (t.outcomeAccount === account || t.incomeAccount === account) &&
+        ((t.payee || "").trim() || NO_COUNTERPARTY) === payee
+    );
+    showDrill(`${account} · ${payee}`, txs, "Долги");
   }
 
   if (transactions.length === 0) return <EmptyState />;
@@ -2207,9 +2258,14 @@ export function AccountsPage() {
                     : hasReal
                       ? "text-text"
                       : "text-income";
+                  // Долговой счёт раскрывается по контрагентам; если долговых
+                  // операций нет вовсе, раскрывать нечего — шеврона тоже нет.
+                  const debtRows = debtsByAccount.get(a.account)?.rows ?? [];
+                  const debt = debtRows.length > 0;
+                  const debtsOpen = debt && openDebts.has(a.account);
                   return (
+                    <Fragment key={a.account}>
                     <tr
-                      key={a.account}
                       onClick={() => setSelectedAccount(isSel ? null : a.account)}
                       onDoubleClick={() => openAccountEditor(a.id)}
                       className={`align-middle cursor-pointer group ${
@@ -2230,6 +2286,35 @@ export function AccountsPage() {
                           >
                             {a.displayTitle}
                           </span>
+                          {/* У долгового счёта остаток — это сумма по разным
+                              людям, и сам по себе он мало что говорит. Шеврон
+                              раскрывает, кто должен вам и кому должны вы.
+                              Стоит ПОСЛЕ названия: слева он сдвигал бы все
+                              строки списка вправо от заголовка колонки ради
+                              одной. */}
+                          {debt && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleDebts(a.account);
+                              }}
+                              aria-expanded={debtsOpen}
+                              aria-label={
+                                debtsOpen ? "Свернуть контрагентов" : "Показать контрагентов"
+                              }
+                              title={
+                                debtsOpen ? "Свернуть контрагентов" : "Показать контрагентов"
+                              }
+                              className="self-center shrink-0 -my-1 p-1 rounded text-muted hover:text-accent hover:bg-panel2"
+                            >
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 transition-transform ${
+                                  debtsOpen ? "" : "-rotate-90"
+                                }`}
+                              />
+                            </button>
+                          )}
                           {a.edited && (
                             <span
                               className="text-[10px] leading-4 px-1.5 rounded-full border border-warn/40 text-warn bg-warn/10 whitespace-nowrap shrink-0"
@@ -2357,6 +2442,61 @@ export function AccountsPage() {
                         </div>
                       </td>
                     </tr>
+                    {/* Разбивка долгового счёта по людям: знак — со стороны
+                        владельца счетов, плюс значит «должны вам». Клик по
+                        строке открывает операции этого контрагента. */}
+                    {debtsOpen &&
+                      debtRows.map((d) => (
+                        <tr
+                          key={`${a.account} ${d.payee}`}
+                          onClick={() => openDebtCounterparty(a.account, d.payee)}
+                          title={`Операции: ${d.payee}`}
+                          className="cursor-pointer bg-panel2/30 hover:bg-panel2/70"
+                        >
+                          {/* Имя и «сколько раз» — одной ячейкой, чтобы длинный
+                              хвост не лез под колонку действий и не обрезался.
+                              Отступ и полоска слева говорят, что строка
+                              подчинена счёту выше. */}
+                          <td className="table-td !py-1.5">
+                            <div className="pl-6 ml-2 border-l-2 border-border min-w-0">
+                              <div
+                                className={`text-sm truncate ${d.settled ? "text-muted" : ""}`}
+                              >
+                                {d.payee}
+                              </div>
+                              <div className="text-[11px] text-muted">
+                                {formatNum(d.count)}{" "}
+                                {pluralRu(d.count, ["операция", "операции", "операций"])} ·
+                                последняя {formatDate(d.last)}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="table-td !py-1.5 text-xs text-muted whitespace-nowrap align-middle">
+                            {d.settled
+                              ? "Рассчитались"
+                              : d.amount > 0
+                                ? "Должны вам"
+                                : "Должны вы"}
+                          </td>
+                          {/* Сумма встаёт под ту же колонку, что и у счёта:
+                              на «Капитале» это остаток, на «Движении» —
+                              изменение за период. */}
+                          {!capitalView && <td className="table-td !py-1.5" colSpan={2} />}
+                          <td
+                            className={`table-td !py-1.5 text-right tabular-nums whitespace-nowrap align-middle ${
+                              d.settled
+                                ? "text-muted"
+                                : d.amount > 0
+                                  ? "text-income"
+                                  : "text-expense"
+                            }`}
+                          >
+                            {formatMoney(Math.abs(d.amount), base)}
+                          </td>
+                          <td className="table-td !py-1.5" colSpan={capitalView ? 2 : 3} />
+                        </tr>
+                      ))}
+                    </Fragment>
                   );
                 })}
               </tbody>

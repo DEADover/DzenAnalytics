@@ -34,6 +34,9 @@ import { useDeletedStore } from "../store/useDeletedStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { makeCategoryChecker } from "../lib/zenmoneyPush";
 import { loadZenCache } from "../lib/zenmoneyCache";
+import { liveCategoryNodes } from "../lib/categoryTree";
+import { NO_CATEGORY } from "../lib/zenmoneyMap";
+import type { CategoryNode } from "../components/CategoryCascadePicker";
 import type { ZenTag } from "../lib/zenmoney";
 import { groupByCategory } from "../lib/aggregations";
 import { formatNum } from "../lib/format";
@@ -299,6 +302,24 @@ export function RulesPage() {
     () => (zenTags ? makeCategoryChecker(zenTags) : null),
     [zenTags]
   );
+
+  /**
+   * Категории для ДЕЙСТВИЯ правила — по живому справочнику Дзен-мани.
+   *
+   * Условие правила по-прежнему выбирается из истории (`allCategories`): туда
+   * и нужны старые имена, иначе не поймать операции с категорией, которой уже
+   * нет. А вот записать правило может только то, что примет отправка, — иначе
+   * правка навсегда зависнет с «Категория не найдена в Дзен-мани».
+   *
+   * Без подключения (`zenTags === null`) живого справочника нет — тогда список
+   * остаётся прежним, из истории.
+   */
+  const liveCategories = useMemo<CategoryNode[] | null>(() => {
+    if (!zenTags) return null;
+    // «Без категории» — это очистка тега, а не поиск по справочнику: правило
+    // «убрать категорию» должно оставаться возможным.
+    return [{ name: NO_CATEGORY, subs: [] }, ...liveCategoryNodes(zenTags)];
+  }, [zenTags]);
 
   /**
    * Названия контрагентов из справочника — чтобы отличить живое правило от
@@ -831,6 +852,7 @@ export function RulesPage() {
           rule={editing === "create" ? undefined : editing}
           transactions={transactionsRaw}
           categories={allCategories}
+          liveCategories={liveCategories}
           payees={allPayees}
           accounts={allAccounts}
           accountGroups={accountGroups}

@@ -3,6 +3,7 @@ import * as db from "../lib/db";
 import {
   migrateLegacyBudgets,
   plannedFor,
+  lockedFor,
   budgetCellKey,
   type BudgetLine,
   type BudgetKind,
@@ -16,6 +17,8 @@ export interface ZenPlanSeed {
   subcategory: string | null;
   ym: string; // "YYYY-MM"
   amount: number;
+  /** Замок Дзен-мани: сумма точная, под-категории уже внутри неё. */
+  locked?: boolean;
 }
 
 /** План одной статьи на один месяц — единица массового заполнения. */
@@ -179,6 +182,8 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
         category: string;
         subcategory: string | null;
         months: Map<string, number>;
+        /** Месяцы с замком: «сумма точная, под-категории уже внутри». */
+        locks: Map<string, boolean>;
       }
     >();
     for (const p of plans) {
@@ -186,10 +191,17 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
       const key = idOf(p.kind, p.category, p.subcategory);
       let g = groups.get(key);
       if (!g) {
-        g = { kind: p.kind, category: p.category, subcategory: p.subcategory, months: new Map() };
+        g = {
+          kind: p.kind,
+          category: p.category,
+          subcategory: p.subcategory,
+          months: new Map(),
+          locks: new Map(),
+        };
         groups.set(key, g);
       }
       g.months.set(p.ym, p.amount);
+      g.locks.set(p.ym, !!p.locked);
     }
     if (groups.size === 0) return;
 
@@ -204,6 +216,7 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
       if (!g) return l;
       seen.add(key);
       let next: Record<string, number> | undefined;
+      let nextLocks: Record<string, boolean> | undefined;
       for (const [ym, amt] of g.months) {
         if (
           protectedSet.has(
@@ -211,13 +224,25 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
           )
         )
           continue;
+        // Замок приезжает вместе с суммой: он меняет не число, а его смысл
+        // («вся категория» против «только своё»), и отстать от суммы не должен.
+        const lock = !!g.locks.get(ym);
+        if (lockedFor(l, ym) !== lock) {
+          nextLocks = nextLocks ?? { ...(l.locks ?? {}) };
+          if (lock) nextLocks[ym] = true;
+          else delete nextLocks[ym];
+        }
         if (plannedFor(l, ym) === amt) continue;
         if (!next) next = { ...(l.overrides ?? {}) };
         next[ym] = amt;
       }
-      if (!next) return l;
+      if (!next && !nextLocks) return l;
       changed = true;
-      return { ...l, overrides: next };
+      return {
+        ...l,
+        ...(next ? { overrides: next } : {}),
+        ...(nextLocks ? { locks: nextLocks } : {}),
+      };
     });
 
     // 2) Create lines for tags with no line yet. Zenmoney plans are PER-MONTH,
@@ -228,6 +253,8 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
       const months = [...g.months.keys()].sort();
       const overrides: Record<string, number> = {};
       for (const [m, amt] of g.months) overrides[m] = amt;
+      const locks: Record<string, boolean> = {};
+      for (const [m, on] of g.locks) if (on) locks[m] = true;
       additions.push({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         category: g.category,
@@ -238,6 +265,7 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
         startMonth: months[0],
         endMonth: null,
         overrides,
+        ...(Object.keys(locks).length > 0 ? { locks } : {}),
         createdAt: new Date().toISOString(),
       });
     }

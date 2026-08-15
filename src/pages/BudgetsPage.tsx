@@ -14,6 +14,10 @@ import {
   HelpCircle,
   Wand2,
   Download,
+  CalendarClock,
+  Target,
+  Scale,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
@@ -21,11 +25,13 @@ import { useDrillStore } from "../store/useDrillStore";
 import { getZenForecastsFromCache } from "../store/useZenmoneyStore";
 import { loadZenCache } from "../lib/zenmoneyCache";
 import { plannedOps, type PlannedOp } from "../lib/plannedOps";
+import { plannedPlans } from "../lib/plannedPlans";
 import { zenPlanKey } from "../lib/zenBudgets";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
 import { budgetEditId } from "../lib/zenmoneyPush";
 import { CategoryDot } from "../components/CategoryDot";
+import { AccountLogo } from "../components/AccountLogo";
 import { Popover } from "../components/Popover";
 import { CategoryCascadePicker, type CategoryNode } from "../components/CategoryCascadePicker";
 import { MonthCashflowChart } from "../components/MonthCashflowChart";
@@ -35,15 +41,17 @@ import { BudgetSettingsPopover } from "../components/BudgetSettingsPopover";
 import { buildBudgetYear } from "../lib/budgetYear";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
 import { BudgetDashboardPrint } from "../components/BudgetDashboardPrint";
+import { BudgetDashboardView } from "../components/BudgetDashboardView";
 import {
   budgetHits,
   insidePerimeter,
   transactionsForCell,
   TRANSFER_CATEGORY,
 } from "../lib/budgetScope";
-import { useBudgetSettingsStore } from "../store/useBudgetSettingsStore";
+import { useBudgetSettingsStore, type BudgetView } from "../store/useBudgetSettingsStore";
 import { Segmented } from "../components/Segmented";
 import { Tooltip } from "../components/Tooltip";
+import { TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import { groupByCategory } from "../lib/aggregations";
 import {
   plannedFor,
@@ -51,6 +59,8 @@ import {
   forecastFor,
   addMonths,
   budgetTone,
+  compareBudgetRows,
+  lockedFor,
   ownSubsIndex,
   ownSubsFor,
   type BudgetKind,
@@ -82,6 +92,11 @@ interface Row {
   fact: number;
   /** True when `planned` is a forecast (no manual plan this month). */
   forecast: boolean;
+  /** План задан точной суммой (замок Дзен-мани). У категории это значит «вся
+   *  категория целиком»: планы под-категорий уже внутри и не складываются. */
+  locked?: boolean;
+  /** План взят из назначенной операции Дзен-мани, своего плана у статьи нет. */
+  scheduled?: boolean;
 }
 
 export function BudgetsPage() {
@@ -184,6 +199,43 @@ export function BudgetsPage() {
     }
     return { income, expense };
   }, [zenPlanned, ym, scope]);
+
+  /**
+   * План из НАЗНАЧЕННЫХ операций Дзен-мани.
+   *
+   * Дзен прибавляет запланированные операции к плану статьи, но только если
+   * план у неё заведён. Статья без плана в бюджете не появлялась вовсе —
+   * оплата назначена, сумма известна, а строки нет до самого списания. Этот
+   * список закрывает ровно такие статьи: он показывается там, где своего плана
+   * нет, никуда не сохраняется и в Дзен-мани не уходит.
+   */
+  const plannedAsPlan = useMemo(
+    () => plannedPlans(zenPlanned, scope),
+    [zenPlanned, scope]
+  );
+
+  /**
+   * «Ещё в плане» по статьям выбранного месяца — назначенные операции, которые
+   * ещё впереди.
+   *
+   * Дзен-мани делит остаток по статье надвое: что уже назначено на конкретные
+   * даты и что ещё свободно. У нас была одна полоса «потрачено из плана», и по
+   * ней нельзя было понять, свободны эти деньги или уже расписаны.
+   */
+  const aheadByTag = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const m = new Map<string, { sum: number; ops: PlannedOp[] }>();
+    for (const p of plannedPlans(zenPlanned, scope, today)) {
+      if (p.ym !== ym || p.ahead <= 0) continue;
+      // Ключ тот же, что у `budgetKey` ниже; собираем его здесь, чтобы не
+      // тянуть объявление функции выше по файлу.
+      m.set([p.kind, p.category, p.subcategory ?? ""].join("\u0000"), {
+        sum: p.ahead,
+        ops: p.aheadOps,
+      });
+    }
+    return m;
+  }, [zenPlanned, scope, ym]);
 
   // ── Inline add: a draft row inside the «Расходы»/«Доходы» section ──
   const [draftKind, setDraftKind] = useState<BudgetKind | null>(null);
@@ -319,8 +371,8 @@ export function BudgetsPage() {
     void queueBudget({ ...tag, ym, amount });
   }
 
-  // ── Вид: месяц или годовой свод ──
-  const [view, setView] = useState<"month" | "year">("month");
+  // ── Вид: месяц, годовой свод или сводка по году ──
+  const [view, setView] = useState<BudgetView>("month");
   // Настройки приезжают из базы асинхронно, поэтому вид по умолчанию ставим
   // один раз — после этого переключатель принадлежит пользователю.
   const viewApplied = useRef(false);
@@ -331,17 +383,25 @@ export function BudgetsPage() {
   }, [settingsLoaded, settings.defaultView]);
 
   const year = Number(ym.slice(0, 4));
+  /** Годовые виды — свод и дашборд: обоим нужен весь год данных и «Экспорт». */
+  const yearView = view !== "month";
+  /**
+   * Период в шапке — месяц. Годом он остаётся только в годовом своде: там на
+   * экране все двенадцать месяцев сразу, и выбирать из них нечего.
+   */
+  const monthPeriod = view !== "year";
+  const rowOrder = settings.rowOrder;
   const yearReport = useMemo(
-    () => buildBudgetYear(lines, transactions, year, scope),
-    [lines, transactions, year, scope]
+    () => buildBudgetYear(lines, transactions, year, scope, rowOrder, plannedAsPlan),
+    [lines, transactions, year, scope, rowOrder, plannedAsPlan]
   );
   /** Сдвиг года сохраняет месяц: вернувшись в месячный вид, попадаешь в тот же. */
   const shiftYear = (d: number) => setYm((m) => addMonths(m, d * 12));
 
   // ── Выгрузка годового отчёта в Excel ──
   const prevYearReport = useMemo(
-    () => buildBudgetYear(lines, transactions, year - 1, scope),
-    [lines, transactions, year, scope]
+    () => buildBudgetYear(lines, transactions, year - 1, scope, rowOrder),
+    [lines, transactions, year, scope, rowOrder]
   );
   /**
    * Месяц, по которому считаются показатели «за месяц» и отрезок «с начала
@@ -359,7 +419,25 @@ export function BudgetsPage() {
    * и там это единственная возможность выбрать.
    */
   const [pickedMonth, setPickedMonth] = useState<number | null>(null);
-  const reportMonthIndex = pickedMonth ?? defaultReportMonth;
+  /**
+   * Месяц показателей. На дашборде он берётся ПРЯМО ИЗ ПЕРИОДА В ШАПКЕ — того
+   * же контрола «‹ Август 2026 ›», что и в месячном виде: отдельная карточка с
+   * двенадцатью кнопками занимала треть первого экрана и была единственным
+   * местом в разделе, где период выбирался не в шапке.
+   */
+  const dashboardMonth = Number(ym.slice(5, 7)) - 1;
+  /** Название месяца по номеру: «Август» с заглавной или «август» в перечне. */
+  const monthOf = (idx: number, capital = false) => {
+    const name = new Date(2000, idx, 1).toLocaleDateString("ru-RU", { month: "long" });
+    return capital ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+  };
+  const reportMonthIndex =
+    view === "dashboard" ? dashboardMonth : (pickedMonth ?? defaultReportMonth);
+  /** Смена месяца отчёта из окна выгрузки: на дашборде она двигает период. */
+  const setReportMonth = (idx: number) => {
+    if (view === "dashboard") setYm(`${year}-${String(idx + 1).padStart(2, "0")}`);
+    else setPickedMonth(idx);
+  };
   /** Дашборд для печати — та же модель, что уходит в Excel. */
   const printDashboard = useMemo(
     () => buildBudgetDashboard(yearReport, prevYearReport, reportMonthIndex),
@@ -444,7 +522,7 @@ export function BudgetsPage() {
           else fc = forecastFor(line, transactions, ym, 6, scope); // CSV: median estimate
           if (fc > 0) return { line, planned: fc, forecast: true };
         }
-        return { line, planned, forecast: false };
+        return { line, planned, forecast: false, locked: lockedFor(line, ym) };
       });
     // Show only TAGS actually budgeted this month (план > 0). A sub-tag with no
     // own plan is NOT rolled into its parent (Zenmoney puts such spending under
@@ -452,31 +530,67 @@ export function BudgetsPage() {
     // another is only auto-forecast (e.g. Банки → Кэшбек budgeted, Проценты only
     // forecast). Unbudgeted tags surface under «Без бюджета».
     const shown = inWindow.filter((r) => r.planned > 0);
+    // Статьи, у которых своего плана нет, но на этот месяц НАЗНАЧЕНА операция:
+    // сумма и дата известны, и держать такую статью вне бюджета до самого
+    // списания незачем. Там, где план есть, ничего не добавляем — Дзен-мани уже
+    // прибавил назначенные операции к нему сам.
+    const withPlan = new Set(
+      shown.map((r) => budgetKey(r.line.kind, r.line.category, r.line.subcategory ?? null))
+    );
+    const scheduled: { line: BudgetLine; planned: number; forecast: boolean; scheduled: true }[] =
+      [];
+    for (const p of plannedAsPlan) {
+      if (p.ym !== ym) continue;
+      const key = budgetKey(p.kind, p.category, p.subcategory);
+      if (withPlan.has(key)) continue;
+      scheduled.push({
+        line: {
+          id: `scheduled:${key}`,
+          category: p.category,
+          subcategory: p.subcategory,
+          kind: p.kind,
+          amount: 0,
+          recurrence: "monthly",
+          startMonth: ym,
+          endMonth: null,
+          createdAt: "",
+        },
+        planned: p.amount,
+        forecast: false,
+        scheduled: true,
+      });
+    }
+    const all = [...shown, ...scheduled];
     // Второй проход — факты. Строка категории забирает и траты по своим
     // под-категориям, кроме тех, что показаны отдельной строкой прямо здесь.
-    const ownSubs = ownSubsIndex(shown);
-    const budgeted = shown.map(
+    const ownSubs = ownSubsIndex(all);
+    const budgeted = all.map(
       (r): Row => ({
         ...r,
         fact: factFor(r.line, transactions, ym, scope, ownSubsFor(ownSubs, r.line)),
       })
     );
-    // A category counts as «with operations» when its rollup fact (own + sub-tags)
-    // is non-zero. Categories without any operations this month sink to the very
-    // bottom of the list; the rest keep the newest-first order.
+    // Порядок статей — общий для всего раздела: по алфавиту или по сумме
+    // (issue #68). Раньше строки шли по времени создания плана — порядок,
+    // который виден только нам, а на экране выглядел случайным. Категории без
+    // трат за месяц отделяет уже сам раздел, отдельным спойлером.
     const catFact = new Map<string, number>();
-    for (const r of budgeted) {
-      const key = `${r.line.kind}\u0000${r.line.category}`;
-      catFact.set(key, (catFact.get(key) ?? 0) + r.fact);
-    }
-    const isEmpty = (r: Row) => (catFact.get(`${r.line.kind}\u0000${r.line.category}`) ?? 0) === 0;
+    const catKey = (r: Row) => `${r.line.kind}\u0000${r.line.category}`;
+    for (const r of budgeted) catFact.set(catKey(r), (catFact.get(catKey(r)) ?? 0) + r.fact);
     return budgeted.sort((a, b) => {
-      const ae = isEmpty(a) ? 1 : 0;
-      const be = isEmpty(b) ? 1 : 0;
-      if (ae !== be) return ae - be;
-      return a.line.createdAt < b.line.createdAt ? 1 : a.line.createdAt > b.line.createdAt ? -1 : 0;
+      if (a.line.category !== b.line.category)
+        return compareBudgetRows(
+          { name: a.line.category, amount: catFact.get(catKey(a)) ?? 0 },
+          { name: b.line.category, amount: catFact.get(catKey(b)) ?? 0 },
+          rowOrder
+        );
+      // Внутри категории первой идёт она сама, следом её под-категории.
+      const as = a.line.subcategory ?? "";
+      const bs = b.line.subcategory ?? "";
+      if (!as || !bs) return as ? 1 : bs ? -1 : 0;
+      return compareBudgetRows({ name: as, amount: a.fact }, { name: bs, amount: b.fact }, rowOrder);
     });
-  }, [lines, ym, transactions, zenForecasts, zenLoaded]);
+  }, [lines, ym, transactions, zenForecasts, zenLoaded, scope, rowOrder, plannedAsPlan]);
   const expenseRows = rows.filter((r) => r.line.kind === "expense");
   const incomeRows = rows.filter((r) => r.line.kind === "income");
 
@@ -536,8 +650,46 @@ export function BudgetsPage() {
           !shown.has(budgetKey(u.kind, u.category, u.subcategory)) &&
           !parentBudgeted(u)
       )
-      .sort((a, b) => b.fact - a.fact);
-  }, [transactions, ym, rows]);
+      // Тем же порядком, что и статьи с планом: список на одной странице,
+      // который местами по алфавиту, а местами по сумме, читается как сбой.
+      .sort((a, b) =>
+        compareBudgetRows(
+          { name: a.subcategory ? `${a.category} ${a.subcategory}` : a.category, amount: a.fact },
+          { name: b.subcategory ? `${b.category} ${b.subcategory}` : b.category, amount: b.fact },
+          rowOrder
+        )
+      );
+  }, [transactions, ym, rows, scope, rowOrder]);
+
+  /**
+   * Переводы за месяц по счетам — то же, что статья «Переводы» в годовом своде
+   * и на дашборде.
+   *
+   * Без этого блока месячный вид оставался единственным местом, где переводов
+   * не видно вовсе: в карточках стояло «включая переводы», а откуда взялась
+   * разница — посмотреть было негде. Планов у переводов нет и быть не может
+   * (см. `unbudgeted`), поэтому и полос с процентами здесь нет — только
+   * обороты по счёту с той стороны.
+   */
+  const transfers = useMemo(() => {
+    const agg = new Map<string, { kind: BudgetKind; account: string; sum: number }>();
+    for (const t of transactions) {
+      if (!(t.date || "").startsWith(ym)) continue;
+      for (const hit of budgetHits(t, scope)) {
+        if (!hit.transfer) continue;
+        const account = hit.subcategory ?? "—";
+        const key = `${hit.kind}\u0000${account}`;
+        const cur = agg.get(key);
+        if (cur) cur.sum += hit.amount;
+        else agg.set(key, { kind: hit.kind, account, sum: hit.amount });
+      }
+    }
+    const side = (kind: BudgetKind) =>
+      [...agg.values()]
+        .filter((x) => x.kind === kind && x.sum > 0)
+        .sort((a, b) => b.sum - a.sum);
+    return { out: side("expense"), in: side("income") };
+  }, [transactions, ym, scope]);
 
   /** Операции статьи за месяц — по умолчанию за выбранный, но годовой свод
    *  открывает свою ячейку, поэтому месяц передаётся явно. */
@@ -568,9 +720,21 @@ export function BudgetsPage() {
 
   if (transactions.length === 0) return <EmptyState />;
 
-  const expPlan = expenseRows.reduce((s, r) => s + r.planned, 0);
+  // План раздела: у категории с ЗАМКОМ планы её под-категорий уже внутри её
+  // числа, и прибавлять их второй раз нельзя — иначе итог раздела больше того,
+  // что показывает Дзен-мани, ровно на сумму таких под-категорий.
+  const lockedParents = new Set(
+    rows
+      .filter((r) => !r.line.subcategory && r.locked)
+      .map((r) => `${r.line.kind}\u0000${r.line.category}`)
+  );
+  const planOf = (r: Row) =>
+    r.line.subcategory && lockedParents.has(`${r.line.kind}\u0000${r.line.category}`)
+      ? 0
+      : r.planned;
+  const expPlan = expenseRows.reduce((s, r) => s + planOf(r), 0);
   const expFact = expenseRows.reduce((s, r) => s + r.fact, 0);
-  const incPlan = incomeRows.reduce((s, r) => s + r.planned, 0);
+  const incPlan = incomeRows.reduce((s, r) => s + planOf(r), 0);
   const incFact = incomeRows.reduce((s, r) => s + r.fact, 0);
   // Переводы за месяц — отдельно от статей: они не траты и не поступления, а
   // оборот по счетам. Показываются второй строкой в карточках.
@@ -658,7 +822,7 @@ export function BudgetsPage() {
       <PageHeader
         icon={Wallet}
         title="Бюджет"
-        hint="План и факт по категориям и подкатегориям, помесячно, с синхронизацией в Дзен."
+        hint="План и факт по статьям: сводка за год, выбранный месяц и помесячная таблица. Планы синхронизируются с Дзен-мани, отчёт выгружается в Excel и PDF."
       />
 
       {/* Панель: вид и период (слева), действия (справа). */}
@@ -669,51 +833,93 @@ export function BudgetsPage() {
             label="Вид бюджета"
             value={view}
             onChange={(v) => setView(v)}
+            // Дашборд первым: с него начинают — «как год в целом», а уже
+            // потом идут вглубь, в месяц и в помесячную таблицу.
             options={[
+              {
+                value: "dashboard" as const,
+                label: "Дашборд",
+                title: "Сводка по году: показатели, выполнение плана и статьи диаграммами",
+              },
               { value: "month" as const, label: "Месяц", title: "План и факт выбранного месяца" },
               { value: "year" as const, label: "Год", title: "Двенадцать месяцев плана и факта с итогами" },
             ]}
             className="mr-1.5"
           />
-          <Tooltip content={view === "year" ? "Предыдущий год" : "Предыдущий месяц"}>
+          <Tooltip content={monthPeriod ? "Предыдущий месяц" : "Предыдущий год"}>
             <button
-              onClick={() => (view === "year" ? shiftYear(-1) : setYm((m) => addMonths(m, -1)))}
+              onClick={() => (monthPeriod ? setYm((m) => addMonths(m, -1)) : shiftYear(-1))}
               className="btn-ghost !p-2"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
           </Tooltip>
-          {view === "year" ? (
-            <span className="text-sm font-medium tabular-nums px-3 py-1.5 rounded-lg bg-panel2 border border-border">
-              {year}
-            </span>
-          ) : (
+          {monthPeriod ? (
             <DateField
               granularity="month"
               value={ym}
               onChange={(e) => e.target.value && setYm(e.target.value)}
-              className="input text-sm font-medium min-w-[150px]"
+              centered
+              // Ширина фиксированная и посчитана под самое длинное сокращение
+              // («Сен. 2026»): при `min-width` кнопка дышала на каждом шаге, и
+              // соседние стрелки ездили вместе с ней. Поля уже обычного поля
+              // ввода — тут не текст набирают, а листают месяцы.
+              className="input text-sm font-medium w-[138px] !px-2"
             />
+          ) : (
+            <span className="text-sm font-medium tabular-nums px-3 py-1.5 rounded-lg bg-panel2 border border-border">
+              {year}
+            </span>
           )}
-          <Tooltip content={view === "year" ? "Следующий год" : "Следующий месяц"}>
+          <Tooltip content={monthPeriod ? "Следующий месяц" : "Следующий год"}>
             <button
-              onClick={() => (view === "year" ? shiftYear(1) : setYm((m) => addMonths(m, 1)))}
+              onClick={() => (monthPeriod ? setYm((m) => addMonths(m, 1)) : shiftYear(1))}
               className="btn-ghost !p-2"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </Tooltip>
-          {(view === "year" ? year !== Number(cur.slice(0, 4)) : !isCurrent) && (
+          {(monthPeriod ? !isCurrent : year !== Number(cur.slice(0, 4))) && (
             <button
               onClick={() => setYm(cur)}
               className="text-xs text-accent hover:underline ml-1"
             >
-              {view === "year" ? "Текущий год" : "Текущий"}
+              {/* Одно слово в обоих видах: рядом стоит сам период, и «текущий
+                  что» из него понятно без повтора. */}
+              Текущий
             </button>
+          )}
+          {/* Что именно считает выбранный месяц — подсказкой, а не строкой на
+              экране: два из трёх фактов видно и так (заголовки плиток и сам
+              период в шапке), а третий нужен раз в жизни. */}
+          {view === "dashboard" && (
+            <Tooltip
+              content={
+                <TooltipFacts
+                  title="Показатели на этом экране"
+                  facts={[
+                    { label: "За месяц", value: `${monthOf(dashboardMonth, true)} ${year}` },
+                    {
+                      label: "С начала года",
+                      value: `Январь — ${monthOf(dashboardMonth)}`,
+                    },
+                  ]}
+                  note={<span className="italic">Прошлый год берётся тем же отрезком</span>}
+                />
+              }
+            >
+              <button
+                type="button"
+                aria-label="За какой период показатели на этом экране"
+                className="text-muted hover:text-text"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+            </Tooltip>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {view === "year" && (
+          {yearView && (
             <Tooltip content="Годовой отчёт файлом: таблицами в Excel или сводкой в PDF">
               <button onClick={() => setExportOpen(true)} className="btn-ghost text-sm">
                 <Download className="w-4 h-4" />
@@ -721,12 +927,19 @@ export function BudgetsPage() {
               </button>
             </Tooltip>
           )}
-          <Tooltip content="Подставить суммы по истории операций">
-            <button onClick={() => setFillOpen(true)} className="btn-ghost text-sm">
-              <Wand2 className="w-4 h-4" />
-              Заполнить по среднему
-            </button>
-          </Tooltip>
+          {/* Заполнение подставляет планы в ОДИН месяц — выбранный. Поэтому
+              кнопка живёт только в месячном виде: в годовом своде на экране
+              двенадцать месяцев сразу, и «в какой из них попадут суммы» —
+              вопрос, которого быть не должно. На дашборде то же самое: это
+              отчёт, а не место, где правят планы. */}
+          {view === "month" && (
+            <Tooltip content="Подставить суммы по истории операций">
+              <button onClick={() => setFillOpen(true)} className="btn-ghost text-sm">
+                <Wand2 className="w-4 h-4" />
+                Заполнить по среднему
+              </button>
+            </Tooltip>
+          )}
           <BudgetSettingsPopover transactions={transactions} />
         </div>
       </div>
@@ -740,6 +953,11 @@ export function BudgetsPage() {
           scope={scope}
           defaultMonths={settings.forecastMonths}
           defaultBasis={settings.forecastBasis}
+          // Окно — единственное место, где эти два вопроса задаются; ответ
+          // запоминается, чтобы в следующий раз оно открылось так же.
+          onParamsChange={({ months, basis }) =>
+            void settings.update({ forecastMonths: months, forecastBasis: basis })
+          }
           onApply={applyFill}
           onClose={() => setFillOpen(false)}
         />
@@ -749,50 +967,66 @@ export function BudgetsPage() {
         <BudgetExportModal
           year={year}
           month={reportMonthIndex}
-          onMonthChange={setPickedMonth}
+          onMonthChange={setReportMonth}
           onExport={runExport}
           onClose={() => setExportOpen(false)}
         />
       )}
 
       {view === "year" && (
-        <>
-          <BudgetYearTable report={yearReport} base={base} onOpenCell={openCategory} />
-          {/* На экране скрыта, при печати — единственное, что попадёт на лист. */}
-          <BudgetDashboardPrint dashboard={printDashboard} base={base} />
-        </>
+        <BudgetYearTable
+          report={yearReport}
+          base={base}
+          hideEmpty={settings.hideEmptyRows}
+          onOpenCell={openCategory}
+        />
       )}
+
+      {view === "dashboard" && (
+        <BudgetDashboardView
+          dashboard={printDashboard}
+          base={base}
+          onOpenRow={(row) =>
+            openCategory(row.category, row.subcategory, yearReport.months[reportMonthIndex], row.kind)
+          }
+        />
+      )}
+
+      {/* Печатная вёрстка: на экране скрыта, в PDF — единственное, что попадёт
+          на лист. Держим её в обоих годовых видах, из каждого есть «Экспорт». */}
+      {yearView && <BudgetDashboardPrint dashboard={printDashboard} base={base} />}
 
       {view === "month" && (
         <>
       {/* Summary: расходы / доходы / дельта — у каждого явные «Факт» и «План» */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <PlanFactCard
-          title="Общий план расходов"
+          title="Расходы за месяц"
           fact={expFact}
           plan={expPlan}
           factClass="text-expense"
           base={base}
           kind="expense"
-          withTransfers={expFact + expTransfers}
+          withTransfers={settings.perimeterTransfers ? expFact + expTransfers : undefined}
         />
         <PlanFactCard
-          title="Общий план доходов"
+          title="Доходы за месяц"
           fact={incFact}
           plan={incPlan}
           factClass="text-income"
           base={base}
           kind="income"
-          withTransfers={incFact + incTransfers}
+          withTransfers={settings.perimeterTransfers ? incFact + incTransfers : undefined}
         />
         <PlanFactCard
-          title="Дельта (доходы − расходы)"
+          title="Разница (доходы − расходы)"
           fact={factDelta}
           plan={planDelta}
           factClass={factDelta >= 0 ? "text-income" : "text-expense"}
           signed
           base={base}
           kind="delta"
+          withTransfers={settings.perimeterTransfers ? factDelta : undefined}
         />
       </div>
 
@@ -820,6 +1054,8 @@ export function BudgetsPage() {
           onOpen={openCategory}
           setPlan={setPlan}
           budgetEdits={budgetEdits}
+          aheadByTag={aheadByTag}
+          hideEmpty={settings.hideEmptyRows}
           headerAction={addButton("expense")}
           prepend={draftKind === "expense" ? draftRow : undefined}
         />
@@ -833,6 +1069,8 @@ export function BudgetsPage() {
           onOpen={openCategory}
           setPlan={setPlan}
           budgetEdits={budgetEdits}
+          aheadByTag={aheadByTag}
+          hideEmpty={settings.hideEmptyRows}
           headerAction={addButton("income")}
           prepend={draftKind === "income" ? draftRow : undefined}
         />
@@ -891,6 +1129,30 @@ export function BudgetsPage() {
               </div>
             </div>
           )}
+        {settings.perimeterTransfers && (transfers.out.length > 0 || transfers.in.length > 0) && (
+          <div className="space-y-3">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <h2 className="font-semibold text-lg">Переводы</h2>
+              <span className="text-sm text-muted">
+                Оборот между своими счетами — ни расход, ни доход, планов у него нет
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TransferList
+                title="Списания"
+                rows={transfers.out}
+                base={base}
+                onOpen={(account) => openCategory(TRANSFER_CATEGORY, account, ym, "expense")}
+              />
+              <TransferList
+                title="Зачисления"
+                rows={transfers.in}
+                base={base}
+                onOpen={(account) => openCategory(TRANSFER_CATEGORY, account, ym, "income")}
+              />
+            </div>
+          </div>
+        )}
         </div>
         </>
       )}
@@ -920,7 +1182,12 @@ function PlanFactCard({
   base: string;
   signed?: boolean;
   kind: "expense" | "income" | "delta";
-  /** Тот же факт, но вместе с переводами. Не задан — строки не будет. */
+  /**
+   * Тот же факт, но вместе с переводами. Задан — под суммой появляется вторая
+   * строка; ЗАДАВАТЬ ЕГО НАДО ВСЕМ ТРЁМ карточкам сразу, когда переводы
+   * учитываются. Иначе у одной карточки строка есть, у другой нет — и пилюли
+   * «План» и «%» встают на разной высоте, хотя карточки стоят в один ряд.
+   */
   withTransfers?: number;
 }) {
   return (
@@ -930,10 +1197,22 @@ function PlanFactCard({
         {formatMoney(fact, base, { signed })}
       </div>
       {/* Оборот по счетам показываем ОТДЕЛЬНОЙ строкой, а не вместо факта:
-          перекладывание денег между своими счетами тратой не является. */}
-      {withTransfers !== undefined && withTransfers !== fact && (
-        <div className="-mt-2 mb-3 text-[13px] text-muted tabular-nums">
-          {formatMoney(withTransfers, base, { signed })} включая переводы
+          перекладывание денег между своими счетами тратой не является. У
+          «Дельты» переводы внутри бюджета гасят друг друга, и вторая сумма
+          совпадает с первой — там строка держит место пустой, чтобы ряд
+          карточек не разъезжался. */}
+      {withTransfers !== undefined && (
+        <div
+          className="-mt-2 mb-3 text-[13px] text-muted tabular-nums"
+          aria-hidden={withTransfers === fact}
+        >
+          {withTransfers === fact ? (
+            <span className="invisible">—</span>
+          ) : (
+            <>
+              {formatMoney(withTransfers, base, { signed })} включая переводы
+            </>
+          )}
         </div>
       )}
       <div className="flex items-center gap-2 flex-wrap">
@@ -978,13 +1257,30 @@ interface SectionProps {
     amount: number
   ) => void;
   budgetEdits: Record<string, unknown>;
+  /** «Ещё в плане» по статьям: назначенные операции, которые ещё впереди. */
+  aheadByTag: Map<string, { sum: number; ops: PlannedOp[] }>;
+  /** Прятать ли категории без движения за месяц (настройка раздела). */
+  hideEmpty: boolean;
   /** «+» button next to the heading. */
   headerAction?: ReactNode;
   /** Inline draft row, rendered at the TOP of the list (new categories first). */
   prepend?: ReactNode;
 }
 
-function Section({ heading, rows, base, headerAction, prepend, ...rest }: SectionProps) {
+function Section({
+  heading,
+  rows,
+  base,
+  hideEmpty,
+  aheadByTag,
+  headerAction,
+  prepend,
+  ...rest
+}: SectionProps) {
+  /** «Ещё в плане» одной строки — по её тегу. */
+  const aheadKey = (r: Row) =>
+    [r.line.kind, r.line.category, r.line.subcategory ?? ""].join("\u0000");
+  const aheadOf = (r: Row) => aheadByTag.get(aheadKey(r))?.sum ?? 0;
   // Group rows by parent category (parent line first, then its sub-tags),
   // preserving the incoming order so the biggest categories stay on top.
   const order: string[] = [];
@@ -1020,8 +1316,12 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
   const toggleAll = () =>
     setExpanded(allExpanded ? new Set() : new Set(expandable));
 
-  // Budgeted categories with no spending this month collapse under a spoiler.
-  const [emptyOpen, setEmptyOpen] = useState(false);
+  // Категории без движения за месяц — под спойлером. Настройка задаёт только
+  // начальное состояние: щелчок по разделителю важнее, но и переключение
+  // настройки при открытой странице не должно проходить мимо.
+  const [emptyPicked, setEmptyPicked] = useState<boolean | null>(null);
+  const emptyOpen = emptyPicked ?? !hideEmpty;
+  const setEmptyOpen = (next: boolean) => setEmptyPicked(next);
 
   // Split categories into those WITH movement this month and those without; the
   // empty ones live under a collapsible divider so the list stays focused on
@@ -1034,7 +1334,11 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
   for (const cat of order) {
     const g = groups.get(cat)!;
     const rollupFact = (g.parent?.fact ?? 0) + g.subs.reduce((s, r) => s + r.fact, 0);
-    (rollupFact === 0 ? emptyCats : withOps).push(cat);
+    // Статья с НАЗНАЧЕННОЙ операцией под спойлер не уходит: операции ещё не
+    // было по определению, но дата и сумма известны — это «ожидается», а не
+    // «пусто», и прятать её значит прятать ровно то, ради чего строка есть.
+    const scheduled = !!g.parent?.scheduled || g.subs.some((r) => r.scheduled);
+    (rollupFact === 0 && !scheduled ? emptyCats : withOps).push(cat);
   }
 
   const renderCat = (cat: string) => {
@@ -1075,17 +1379,26 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
           rollupFact={
             hasSubs ? parent.fact + g.subs.reduce((s, r) => s + r.fact, 0) : undefined
           }
-          // План категории — это план ВСЕЙ категории, а не добавка к планам
-          // под-категорий. Раньше они складывались: при «Кот 10 000» и «Собака
-          // 25 000» строка «Животные» показывала 35 000, а стоило поставить ей
-          // 37 000 — становилось 72 000. Человек имеет в виду другое: вся
-          // категория стоит 37 000, из них 35 000 уже расписаны. Своего плана
-          // нет — показываем сумму под-категорий, как и раньше.
+          // «Ещё в плане» у категории — своё плюс все под-категории, как и факт.
+          rollupAhead={
+            hasSubs
+              ? aheadOf(parent) + g.subs.reduce((s, r) => s + aheadOf(r), 0)
+              : aheadOf(parent)
+          }
+          // План категории — СВОЙ план плюс планы под-категорий, ровно как в
+          // Дзен-мани: «Еда дома 50 000» и «Алкоголь 5 000» дают в строке
+          // категории 55 000. Так же считается и факт строки (свои траты плюс
+          // траты под-категорий) — сравнивать сумму с частью плана значило бы
+          // показывать неверный процент.
+          //
+          // Правка при этом остаётся правкой СВОЕГО плана: введённое число
+          // уменьшается на сумму под-категорий (см. `subsTotal`), поэтому
+          // «поставил 37 000 → стало 72 000» не повторяется.
           rollupPlanned={
             hasSubs
-              ? parent.planned > 0
+              ? parent.locked
                 ? parent.planned
-                : g.subs.reduce((s, r) => s + r.planned, 0)
+                : parent.planned + g.subs.reduce((s, r) => s + r.planned, 0)
               : undefined
           }
           {...rest}
@@ -1099,7 +1412,14 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
             <div className="overflow-hidden">
               <div className="border-t border-border">
                 {g.subs.map((s) => (
-                  <BudgetRow key={s.line.id} row={s} base={base} nested {...rest} />
+                            <BudgetRow
+                    key={s.line.id}
+                    row={s}
+                    base={base}
+                    rollupAhead={aheadOf(s)}
+                    nested
+                    {...rest}
+                  />
                 ))}
               </div>
             </div>
@@ -1148,7 +1468,7 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
             heading
           )}
         </h2>
-        <BarLegend isIncome={sectionKind === "income"} />
+        <BarLegend isIncome={sectionKind === "income"} showTick={rest.isCurrent} />
         {headerAction}
       </div>
       {prepend}
@@ -1157,7 +1477,7 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
         <div className="space-y-3">
           <button
             type="button"
-            onClick={() => setEmptyOpen((o) => !o)}
+            onClick={() => setEmptyOpen(!emptyOpen)}
             className="w-full flex items-center gap-3 text-xs text-muted hover:text-text"
             title={emptyOpen ? `Свернуть категории без ${emptyNoun}` : `Показать категории без ${emptyNoun}`}
           >
@@ -1191,22 +1511,58 @@ function Section({ heading, rows, base, headerAction, prepend, ...rest }: Sectio
  *  live in the tooltip. */
 function BudgetBar({
   ratio,
+  aheadRatio = 0,
+  progress = 0,
   isIncome,
   title,
 }: {
   ratio: number;
+  /** Доля плана, уже расписанная назначенными операциями впереди. */
+  aheadRatio?: number;
+  /**
+   * Доля прошедшего месяца, 0…1. Больше нуля — на полосе появляется насечка
+   * «сегодня». В прошлых и будущих месяцах её нет: там «сегодня» не при чём.
+   */
+  progress?: number;
   isIncome: boolean;
-  title?: string;
+  title?: ReactNode;
 }) {
   const factW = Math.min(Math.max(ratio, 0), 1);
+  // Расписанное показываем СЛЕДОМ за потраченным и бледнее: это ещё не трата,
+  // но и не свободные деньги. Остаток полосы — то, что действительно свободно.
+  const aheadW = Math.min(Math.max(aheadRatio, 0), 1 - factW);
   const tone = BAR_TONE[summaryTone(ratio, isIncome)];
+  const tick = progress > 0 && progress < 1;
   return (
     <Tooltip content={title}>
-      <div className="relative flex-1 h-2 bg-panel2 rounded-full overflow-hidden">
-        <div
-          className={`absolute inset-y-0 left-0 rounded-full ${tone}`}
-          style={{ width: `${factW * 100}%` }}
-        />
+      {/* Обёртка без высоты: она нужна только затем, чтобы насечка вышла ЗА
+          пределы полосы. Внутри полосы её съедал бы `overflow-hidden`, а
+          вровень с краями она читалась бы как ещё один сегмент. */}
+      <div className="relative flex-1">
+        <div className="relative h-2 bg-panel2 rounded-full overflow-hidden">
+          <div
+            className={`absolute inset-y-0 left-0 rounded-full ${tone}`}
+            style={{ width: `${factW * 100}%` }}
+          />
+          {aheadW > 0 && (
+            <div
+              className={`absolute inset-y-0 ${tone} opacity-35`}
+              style={{ left: `${factW * 100}%`, width: `${aheadW * 100}%` }}
+            />
+          )}
+        </div>
+        {/* Засечка «сегодня» — как в Дзен-мани: видно, обгоняет трата ход
+            месяца или отстаёт, и цифру «прошло N% месяца» держать в подсказке
+            больше не нужно. Начертание — то же, что у засечки периода Б на
+            «Сравнении»: цвет от текста, поэтому она различима и поверх цветной
+            заливки, и на сером остатке, и в обеих темах. */}
+        {tick && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 -translate-y-1/2 w-0 border-l-2 border-solid border-text/80"
+            style={{ left: `${(progress * 100).toFixed(2)}%`, height: "200%" }}
+          />
+        )}
       </div>
     </Tooltip>
   );
@@ -1215,7 +1571,7 @@ function BudgetBar({
 /** ⓘ hint next to a section heading: explains what the bar's colours mean.
  *  Income and expense read OPPOSITELY (green = «на цель» vs «в пределах»), so
  *  the copy is kind-specific. */
-function BarLegend({ isIncome }: { isIncome: boolean }) {
+function BarLegend({ isIncome, showTick }: { isIncome: boolean; showTick: boolean }) {
   const swatches = isIncome
     ? [
         { c: "bg-income", t: "План выполнен — 100% и больше" },
@@ -1239,9 +1595,19 @@ function BarLegend({ isIncome }: { isIncome: boolean }) {
               <span>{s.t}</span>
             </div>
           ))}
-          <div className="flex items-center gap-2 pt-1.5 mt-1 border-t border-border/60">
-            <span className="inline-block w-3.5 h-2 rounded-full bg-panel2" />
-            <span>Серый фон — сколько ещё осталось до плана</span>
+          <div className="space-y-1.5 pt-1.5 mt-1 border-t border-border/60">
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-3.5 h-2 rounded-full bg-panel2 ring-1 ring-border" />
+              <span>Серый фон — сколько ещё осталось до плана</span>
+            </div>
+            {showTick && (
+              <div className="flex items-center gap-2">
+                <span className="relative inline-block w-3.5 h-2 rounded-full bg-panel2 ring-1 ring-border">
+                  <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0 h-4 border-l-2 border-solid border-text/80" />
+                </span>
+                <span>Засечка — сегодняшний день месяца</span>
+              </div>
+            )}
           </div>
         </div>
       }
@@ -1263,11 +1629,64 @@ const PILL_TONE: Record<string, string> = {
   expense: "text-expense bg-expense/15",
 };
 
+/**
+ * Одна сторона переводов за месяц: счета с той стороны и суммы, сверху итог.
+ *
+ * Полос и процентов здесь намеренно нет: планировать перевод между своими
+ * счетами не на что, а полоса без плана — это шкала без нуля.
+ */
+function TransferList({
+  title,
+  rows,
+  base,
+  onOpen,
+}: {
+  title: string;
+  rows: { account: string; sum: number }[];
+  base: string;
+  onOpen: (account: string) => void;
+}) {
+  const total = rows.reduce((s, r) => s + r.sum, 0);
+  return (
+    <div className="card">
+      <div className="flex items-baseline justify-between gap-3 px-3 py-2 border-b border-border">
+        <span className="label">{title}</span>
+        <span className="text-sm font-medium tabular-nums">{formatMoney(total, base)}</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-3 py-2.5 text-sm text-muted">В этом месяце не было</div>
+      ) : (
+        <div className="divide-y divide-border">
+          {rows.map((r) => (
+            <button
+              key={r.account}
+              type="button"
+              onClick={() => onOpen(r.account)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-panel2/40"
+            >
+              <AccountLogo title={r.account} size={20} />
+              <span className="text-sm truncate flex-1 min-w-0">{r.account}</span>
+              <span className="text-sm tabular-nums shrink-0">{formatMoney(r.sum, base)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Bar fill — same state tone as the pill (calm under budget, red over). */
 const BAR_TONE: Record<string, string> = {
   income: "bg-income",
   warn: "bg-warn",
   expense: "bg-expense",
+};
+
+/** Тот же статус текстом — заголовок подсказки к полосе. */
+const TONE_TEXT: Record<string, string> = {
+  income: "text-income",
+  warn: "text-warn",
+  expense: "text-expense",
 };
 
 /** Coloured percentage pill (state-aware). Fixed-width column for alignment. */
@@ -1295,7 +1714,13 @@ function PctPill({
   );
 }
 
-interface RowProps extends Omit<SectionProps, "heading" | "summary" | "rows"> {
+interface RowProps
+  extends Omit<
+    SectionProps,
+    "heading" | "summary" | "rows" | "hideEmpty" | "aheadByTag"
+  > {
+  /** «Ещё в плане» по категории целиком (своё + под-категории). */
+  rollupAhead?: number;
   row: Row;
   /** True when rendered indented under its parent category. */
   nested?: boolean;
@@ -1318,6 +1743,7 @@ function BudgetRow({
   onToggle,
   rollupFact,
   rollupPlanned,
+  rollupAhead,
   ym,
   isCurrent,
   monthProgress,
@@ -1351,21 +1777,70 @@ function BudgetRow({
   const cancelEditRef = useRef(false);
 
   const ratio = dispPlanned > 0 ? dispFact / dispPlanned : 0;
+  // «Ещё в плане»: назначенные операции, которые ещё впереди. Дзен-мани делит
+  // остаток надвое — расписанное и свободное; одной полосой «потрачено» этого
+  // не видно.
+  const ahead = rollupAhead ?? 0;
+  const free = dispPlanned - dispFact - ahead;
+  const aheadRatio = dispPlanned > 0 ? ahead / dispPlanned : 0;
   const good = isIncome ? ratio >= 1 : ratio < 0.8;
   const near = !isIncome && ratio >= 0.8 && ratio < 1;
   const statusText = isIncome
     ? good ? "План выполнен" : "Недобор"
     : ratio >= 1 ? "Лимит превышен" : near ? "Близко к лимиту" : "В пределах";
   const remaining = isIncome ? dispFact - dispPlanned : dispPlanned - dispFact;
-  // Secondary details (status, remaining, month progress) live in the bar
-  // tooltip so the row stays a single line.
-  const barTitle = [
-    statusText,
-    `${isIncome ? "разница" : "осталось"} ${formatMoney(remaining, base, { signed: true })}`,
-    isCurrent ? `прошло ${(monthProgress * 100).toFixed(0)}% месяца` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const toneKey = summaryTone(ratio, isIncome);
+  // Подробности строки живут в подсказке к полосе: статус цветом, суммы —
+  // двумя колонками, у каждой метка того сегмента полосы, который она
+  // объясняет. Списком одинаковых серых фраз это читалось как пелена текста.
+  // Хода месяца здесь больше нет — его показывает засечка на самой полосе.
+  //
+  // Строки ВСЕГДА одни и те же, даже когда назначенных операций нет: набор,
+  // который меняется от статьи к статье, заставляет читать подсказку заново
+  // каждый раз. Пустое «ещё в плане» показываем прочерком — это ответ, а не
+  // отсутствие строки.
+  const barFacts: TooltipFact[] = [
+    {
+      label: isIncome ? "Получено" : "Потрачено",
+      value: formatMoney(dispFact, base),
+      swatch: BAR_TONE[toneKey],
+      strong: true,
+    },
+    {
+      label: "Ещё в плане",
+      value: ahead > 0 ? formatMoney(ahead, base) : "—",
+      swatch: `${BAR_TONE[toneKey]} opacity-35`,
+      ...(ahead > 0 ? {} : { tone: "muted" as const }),
+    },
+    free >= 0
+      ? {
+          label: isIncome ? "Ещё ожидается" : "Свободно",
+          value: formatMoney(free, base),
+          // Пустой хвост полосы и фон самой подсказки — один и тот же серый,
+          // поэтому у метки есть обводка: без неё её просто нет.
+          swatch: "bg-panel2 ring-1 ring-border",
+        }
+      : {
+          label: "Сверх плана",
+          value: formatMoney(-free, base),
+          // Куска полосы за планом нет — сама полоса кончается на ста
+          // процентах, поэтому у строки значок, а не метка цвета.
+          icon: <TrendingUp />,
+          // У дохода перебор — это хорошо, у расхода — перерасход. Один цвет
+          // на оба случая соврал бы в половине строк.
+          tone: isIncome ? ("income" as const) : ("expense" as const),
+        },
+    { label: "План", value: formatMoney(dispPlanned, base), icon: <Target /> },
+    {
+      label: isIncome ? "Разница" : "Осталось",
+      value: formatMoney(remaining, base, { signed: true }),
+      icon: isIncome ? <Scale /> : <Wallet />,
+      // Знак уже приведён к «больше нуля — хорошо», поэтому цвет зависит
+      // только от него: недобор дохода и перерасход одинаково красные.
+      tone: remaining >= 0 ? ("income" as const) : ("expense" as const),
+      strong: true,
+    },
+  ];
 
   // On a parent row the shown number is the rollup (own + sub-tags); editing
   // targets the parent's OWN plan. So we prefill with the SHOWN amount and, on
@@ -1402,7 +1877,7 @@ function BudgetRow({
   const isSub = !!line.subcategory;
   return (
     <div
-      className={`flex items-center gap-2.5 px-3 ${nested ? "py-2 pl-10" : "py-2.5"} ${
+      className={`group/row flex items-center gap-2.5 px-3 ${nested ? "py-2 pl-10" : "py-2.5"} ${
         nested ? "hover:bg-panel2/30" : ""
       }`}
     >
@@ -1436,7 +1911,18 @@ function BudgetRow({
         </button>
       </Tooltip>
 
-      <BudgetBar ratio={ratio} isIncome={isIncome} title={barTitle} />
+      <BudgetBar
+        ratio={ratio}
+        aheadRatio={aheadRatio}
+        progress={isCurrent ? monthProgress : 0}
+        isIncome={isIncome}
+        title={
+          <TooltipFacts
+            title={<span className={TONE_TEXT[toneKey]}>{statusText}</span>}
+            facts={barFacts}
+          />
+        }
+      />
 
       {/* fact / plan — the plan number edits IN PLACE (borderless, no spinner)
           so nothing around it shifts and the «%» pill / pending icon stay put. */}
@@ -1466,15 +1952,23 @@ function BudgetRow({
         ) : (
           <Tooltip
             content={
-              row.forecast
-                ? "Прогноз по истории (медиана 6 мес.). Нажмите, чтобы задать свой план"
-                : "Изменить план — нажмите и введите сумму"
+              row.scheduled
+                ? "Сумма назначенной операции Дзен-мани — своего плана у статьи нет. Нажмите, чтобы задать"
+                : row.forecast
+                  ? "Прогноз по истории (медиана 6 мес.). Нажмите, чтобы задать свой план"
+                  : "Изменить план — нажмите и введите сумму"
             }
           >
             <button
               onClick={startEdit}
               className={`hover:text-accent ${row.forecast ? "text-muted italic" : "text-muted"}`}
             >
+              {/* Часы у назначенной операции и «≈» у прогноза: в обоих случаях
+                  план не свой, но причины разные — одну назначили на дату,
+                  вторую достроили по истории. */}
+              {row.scheduled && (
+                <CalendarClock className="inline w-3 h-3 mr-1 -mt-0.5" aria-hidden />
+              )}
               {row.forecast ? "≈ " : ""}
               {dispPlanned > 0 ? formatMoney(dispPlanned, base) : "—"}
             </button>
@@ -1492,9 +1986,16 @@ function BudgetRow({
 
       <div ref={menuAnchorRef} className="relative shrink-0">
         <Tooltip content="Действия">
+          {/* На широком экране кнопка проявляется по наведению на строку: два
+              десятка одинаковых «…» в столбик — это шум, а не управление.
+              Ширина места под неё занята всегда, поэтому ничего не прыгает. На
+              узких экранах наведения нет, и кнопка видна постоянно; открытое
+              меню и фокус с клавиатуры тоже держат её видимой. */}
           <button
             onClick={() => setMenuOpen((o) => !o)}
-            className="btn-ghost !p-1.5 text-muted hover:text-text"
+            className={`btn-ghost !p-1.5 text-muted hover:text-text transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100 sm:focus-visible:opacity-100 ${
+              menuOpen ? "sm:opacity-100" : ""
+            }`}
             aria-label="Действия с бюджетом"
           >
             <MoreHorizontal className="w-4 h-4" />

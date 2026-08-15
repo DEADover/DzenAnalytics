@@ -19,6 +19,39 @@ export type BudgetKind = "expense" | "income";
 /** Как часто действует плановая сумма. */
 export type Recurrence = "monthly" | "quarterly" | "yearly" | "once";
 
+/** Задан ли план месяца точной суммой (замок Дзен-мани). */
+export function lockedFor(line: BudgetLine | null | undefined, ym: string): boolean {
+  return !!line?.locks?.[ym];
+}
+
+/**
+ * Порядок статей в бюджете — один на все виды раздела и на выгрузки.
+ *
+ * «alpha» — по названию, как в справочнике категорий: у статьи всегда одно и то
+ * же место, и её ищут глазами по имени. «amount» — по убыванию суммы, когда
+ * важнее «на что ушло больше всего».
+ */
+export type BudgetRowOrder = "alpha" | "amount";
+
+/**
+ * Сравнение двух статей в выбранном порядке.
+ *
+ * Переводы ВСЕГДА последние, каким бы ни был порядок: это не статья расходов в
+ * ряду прочих, а оборот по счетам, и стоять между «Едой» и «Домом» ему незачем
+ * (issue #68). Признак передаётся отдельно — в разных местах он берётся
+ * по-разному: где-то это имя категории, где-то готовый флаг группы.
+ */
+export function compareBudgetRows(
+  a: { name: string; amount: number; transfer?: boolean },
+  b: { name: string; amount: number; transfer?: boolean },
+  order: BudgetRowOrder
+): number {
+  const byTransfer = Number(!!a.transfer) - Number(!!b.transfer);
+  if (byTransfer !== 0) return byTransfer;
+  if (order === "alpha") return a.name.localeCompare(b.name, "ru");
+  return b.amount - a.amount || a.name.localeCompare(b.name, "ru");
+}
+
 export interface BudgetLine {
   id: string;
   category: string;
@@ -41,6 +74,18 @@ export interface BudgetLine {
   endMonth: string | null;
   /** Точечные правки конкретных месяцев: "YYYY-MM" → сумма. */
   overrides?: Record<string, number>;
+  /**
+   * Месяцы, где план задан ТОЧНОЙ суммой — «замок» Дзен-мани
+   * (`outcomeLock`/`incomeLock`): "YYYY-MM" → true.
+   *
+   * У категории замок меняет смысл числа. Незалоченный план — это только своё:
+   * «Еда дома 50 000» плюс «Алкоголь 5 000» дают в строке категории 55 000.
+   * Залоченный — вся категория целиком: «Животные 36 000» так и остаются
+   * 36 000, а планы «Кота» и «Собаки» уже внутри них. Дзен-мани показывает
+   * ровно так, и без этого признака одну из двух категорий мы неизбежно
+   * считали бы неверно.
+   */
+  locks?: Record<string, boolean>;
   createdAt: string;
 }
 

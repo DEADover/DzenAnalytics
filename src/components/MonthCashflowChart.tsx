@@ -10,7 +10,9 @@ import {
   ReferenceLine,
 } from "recharts";
 import type { Transaction } from "../types";
+import { Scale } from "lucide-react";
 import { buildMonthCashflow } from "../lib/budgets";
+import { TooltipFacts, type TooltipFact } from "./TooltipFacts";
 import {
   formatMoney,
   formatNum,
@@ -46,6 +48,78 @@ function TodayLabel({ viewBox }: { viewBox?: { x?: number; y?: number } }) {
     >
       Сегодня
     </text>
+  );
+}
+
+/**
+ * Подсказка графика — той же вёрсткой, что и подсказки полос в статьях:
+ * заголовок, ниже двумя колонками «подпись → сумма», у каждой строки метка
+ * цвета своей линии. Рехартовская стандартная («Поступления : 157 708 ₽»
+ * серым столбиком) выбивалась из раздела: одни и те же цифры выглядели
+ * по-разному в двух местах одного экрана.
+ */
+/** «Август» — название месяца по «YYYY-MM», для заголовка карточки. */
+function monthNameOf(ym: string): string {
+  return new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1).toLocaleDateString(
+    "ru-RU",
+    { month: "long" }
+  );
+}
+
+/** «13 августа» — подпись дня. Читается как дата, а не как номер строки. */
+function dayLabelOf(ym: string, day: number): string {
+  return new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, day).toLocaleDateString(
+    "ru-RU",
+    { day: "numeric", month: "long" }
+  );
+}
+
+function CashflowTip({
+  active,
+  payload,
+  label,
+  base,
+  ym,
+}: {
+  active?: boolean;
+  payload?: { name?: string; dataKey?: string | number; value?: number | null }[];
+  label?: string | number;
+  base: string;
+  ym: string;
+}) {
+  const rows = (payload ?? []).filter((p) => p.value != null);
+  if (!active || rows.length === 0) return null;
+  const at = (keys: string[]) =>
+    rows.find((p) => keys.includes(String(p.dataKey)))?.value ?? null;
+  const income = at(["income", "incomeF"]);
+  const expense = at(["expense", "expenseF"]);
+  const facts: TooltipFact[] = rows.map((p) => {
+    const key = String(p.dataKey);
+    const forecast = key.endsWith("F");
+    return {
+      label: String(p.name ?? key),
+      value: formatMoney(toNum(p.value), base),
+      // Прогноз бледнее — ровно как его линия на графике.
+      swatch: `${key.startsWith("income") ? "bg-income" : "bg-expense"}${
+        forecast ? " opacity-60" : ""
+      }`,
+      strong: !forecast,
+    };
+  });
+  if (income !== null && expense !== null) {
+    const diff = income - expense;
+    facts.push({
+      label: "Разница",
+      value: formatMoney(diff, base, { signed: true }),
+      icon: <Scale />,
+      tone: diff >= 0 ? "income" : "expense",
+      strong: true,
+    });
+  }
+  return (
+    <div className="rounded-lg border border-border bg-panel2 px-3 py-2 text-xs leading-relaxed text-text shadow-lg">
+      <TooltipFacts title={dayLabelOf(ym, Number(label))} facts={facts} />
+    </div>
   );
 }
 
@@ -87,6 +161,34 @@ export function MonthCashflowChart({
 
   return (
     <div className="card card-pad">
+      {/* Заголовок и легенда: без них на карточке просто две кривые и пунктир —
+          что именно нарисовано и почему линия обрывается на «Сегодня», читатель
+          угадывал. Легенда своя, а не рехартовская: та встаёт отдельной
+          строкой во всю ширину и повторяет четыре имени серий вместо трёх
+          смыслов. */}
+      <div className="flex items-baseline justify-between gap-x-4 gap-y-1 flex-wrap mb-2">
+        <div className="label">Планы на {monthNameOf(ym)}</div>
+        <div className="flex items-center gap-3 text-xs text-muted flex-wrap">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3.5 h-0.5 rounded-full" style={{ background: INCOME }} />
+            Поступления
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3.5 h-0.5 rounded-full" style={{ background: EXPENSE }} />
+            Расходы
+          </span>
+          {hasForecast && (
+            <span className="flex items-center gap-1.5">
+              <span
+                className="inline-block w-3.5 border-t-2 border-dashed"
+                style={{ borderColor: chartAxisStroke }}
+              />
+              Прогноз до конца месяца
+            </span>
+          )}
+          {onDayClick && <span>Клик по дню — его операции</span>}
+        </div>
+      </div>
       <div
         className={`h-64 ${onDayClick ? "cursor-pointer" : ""}`}
         onClick={(e) => {
@@ -119,9 +221,9 @@ export function MonthCashflowChart({
               tickFormatter={(v) => formatNum(v, { compact: true })}
             />
             <ChartTooltip
-              {...chartTooltipProps}
-              labelFormatter={(d) => `День ${d}`}
-              formatter={(v: unknown, name: unknown) => [formatMoney(toNum(v), base), String(name)]}
+              cursor={chartTooltipProps.cursor}
+              wrapperStyle={chartTooltipProps.wrapperStyle}
+              content={<CashflowTip base={base} ym={ym} />}
             />
             {hasForecast && (
               <ReferenceLine

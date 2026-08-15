@@ -3,9 +3,11 @@ import {
   donutSlices,
   hasNegative,
   paginate,
+  paginateGroups,
   printBars,
   rowsPerPage,
   SHEET,
+  SHEET_PORTRAIT,
 } from "./budgetPrint";
 
 const COLORS = { used: "#0891B2", over: "#DC2626", rest: "#E5E7EB" };
@@ -103,6 +105,27 @@ describe("paginate", () => {
     expect(paginate([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
   });
 
+  it("раскладывает строки по листам ПОРОВНУ, а не встык", () => {
+    // Тридцать семь статей по восемнадцать — это 18 + 18 + 1: третий лист
+    // выходил с единственной строкой. Листов столько же, но они ровные.
+    const items = Array.from({ length: 37 }, (_, i) => i);
+    const pages = paginate(items, 18);
+    expect(pages.map((p) => p.length)).toEqual([13, 13, 11]);
+  });
+
+  it("ровное деление не трогает", () => {
+    const items = Array.from({ length: 36 }, (_, i) => i);
+    expect(paginate(items, 18).map((p) => p.length)).toEqual([18, 18]);
+  });
+
+  it("ни один лист не выходит пустым", () => {
+    for (let n = 1; n <= 60; n++) {
+      const pages = paginate(Array.from({ length: n }, (_, i) => i), 18);
+      expect(pages.every((p) => p.length > 0)).toBe(true);
+      expect(pages.flat()).toHaveLength(n);
+    }
+  });
+
   it("короткий список остаётся одной страницей", () => {
     expect(paginate([1, 2], 10)).toEqual([[1, 2]]);
   });
@@ -117,12 +140,51 @@ describe("paginate", () => {
   });
 });
 
+describe("paginateGroups", () => {
+  const rows = (spec: string) => [...spec].map((c, i) => ({ id: i, child: c === "c" }));
+  const child = (r: { child: boolean }) => r.child;
+  const shape = (pages: { child: boolean }[][]) => pages.map((p) => p.map((r) => (r.child ? "c" : "P")).join(""));
+
+  it("категория уезжает на следующий лист вместе со своими под-категориями", () => {
+    // Шесть строк на лист: разрез «PccPcc» встык дал бы «PccPc» + «c» —
+    // одинокая ветка без родителя над ней.
+    expect(shape(paginateGroups(rows("PccPccPcc"), 5, child))).toEqual(["Pcc", "Pcc", "Pcc"]);
+  });
+
+  it("группы складываются на лист, пока влезают", () => {
+    expect(shape(paginateGroups(rows("PcPcPPc"), 4, child))).toEqual(["PcPc", "PPc"]);
+  });
+
+  it("группа больше листа всё-таки делится — иначе строки срежет", () => {
+    expect(shape(paginateGroups(rows("Pcccccc"), 3, child))).toEqual(["Pcc", "ccc", "c"]);
+  });
+
+  it("ни одна строка не теряется и не двоится", () => {
+    for (const spec of ["P", "Pc", "PccPc", "PcccPccccPc", "PPPP"]) {
+      const src = rows(spec);
+      const flat = paginateGroups(src, 4, child).flat();
+      expect(flat).toEqual(src);
+    }
+  });
+
+  it("пустой список — одна пустая страница", () => {
+    expect(paginateGroups([], 5, child)).toEqual([[]]);
+  });
+});
+
 describe("rowsPerPage", () => {
   it("считает, сколько строк влезает на лист", () => {
     // Числа сняты с настоящей вёрстки, а не подобраны. Один ряд — это пара
     // разрезов на лист: так статья видна целиком, а не кусками по восемь.
-    expect(rowsPerPage(1)).toBe(31);
-    expect(rowsPerPage(3)).toBe(8);
+    expect(rowsPerPage(1)).toBe(25);
+    expect(rowsPerPage(3)).toBe(6);
+  });
+
+  it("на книжном листе строк помещается больше, чем на альбомном", () => {
+    // Ради этого разрезы и перевернули: списку статей нужна высота, а не
+    // ширина (issue #68). Два ряда — это две диаграммы разреза друг под другом.
+    expect(rowsPerPage(2, SHEET_PORTRAIT)).toBeGreaterThan(rowsPerPage(2));
+    expect(rowsPerPage(2, SHEET_PORTRAIT)).toBe(18);
   });
 
   it("чем меньше рядов диаграмм, тем больше строк помещается", () => {

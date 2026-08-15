@@ -1,6 +1,14 @@
 import type { Transaction } from "../types";
-import { plannedFor, type BudgetKind, type BudgetLine } from "./budgets";
+import {
+  compareBudgetRows,
+  lockedFor,
+  plannedFor,
+  type BudgetKind,
+  type BudgetLine,
+  type BudgetRowOrder,
+} from "./budgets";
 import { ALL_ACCOUNTS, budgetHits, TRANSFER_CATEGORY, type BudgetScope } from "./budgetScope";
+import type { PlannedPlan } from "./plannedPlans";
 
 /**
  * Годовой свод бюджета: двенадцать месяцев плана и факта по статьям, с итогами
@@ -26,6 +34,13 @@ export interface YearRow {
   cells: YearCell[];
   plan: number;
   fact: number;
+  /** Месяцы, где план категории задан точной суммой (замок Дзен-мани): в них
+   *  планы под-категорий В НЕГО УЖЕ ВХОДЯТ и второй раз не складываются. */
+  locked?: boolean[];
+  /** План (хотя бы за один месяц) взят из назначенной операции Дзен-мани.
+   *  Такую строку не прячут как «без операций»: операции ещё не было по
+   *  определению, но дата и сумма известны. */
+  scheduled?: boolean;
 }
 
 export interface YearGroup {
@@ -125,7 +140,15 @@ export function buildBudgetYear(
   lines: BudgetLine[],
   transactions: Transaction[],
   year: number,
-  scope: BudgetScope = ALL_ACCOUNTS
+  scope: BudgetScope = ALL_ACCOUNTS,
+  order: BudgetRowOrder = "alpha",
+  /**
+   * План из назначенных операций Дзен-мани — для статей, у которых своего
+   * плана на этот месяц нет. Где план есть, он и остаётся: Дзен-мани уже
+   * прибавил к нему запланированные операции сам, и второй раз их считать
+   * нельзя (см. `plannedPlans`).
+   */
+  planned: PlannedPlan[] = []
 ): BudgetYearReport {
   const months = Array.from(
     { length: MONTHS },
@@ -151,7 +174,26 @@ export function buildBudgetYear(
   // План — из строк бюджета: план есть и у месяцев без единой операции.
   for (const l of lines) {
     const r = rowFor(l.kind, l.category, l.subcategory ?? null);
-    for (let i = 0; i < MONTHS; i++) r.cells[i].plan += plannedFor(l, months[i]);
+    for (let i = 0; i < MONTHS; i++) {
+      r.cells[i].plan += plannedFor(l, months[i]);
+      if (lockedFor(l, months[i])) {
+        if (!r.locked) r.locked = Array.from({ length: MONTHS }, () => false);
+        r.locked[i] = true;
+      }
+    }
+  }
+
+  // План из назначенных операций — только туда, где своего плана нет. Строку
+  // при этом заводим: статья с назначенной оплатой должна быть видна в своде
+  // до самого списания, а не появляться задним числом.
+  for (const p of planned) {
+    const i = slot.get(p.ym);
+    if (i === undefined) continue;
+    const r = rowFor(p.kind, p.category, p.subcategory);
+    if (r.cells[i].plan === 0) {
+      r.cells[i].plan = p.amount;
+      r.scheduled = true;
+    }
   }
 
   // Факт — из операций.
@@ -194,13 +236,29 @@ export function buildBudgetYear(
           plan: 0,
           fact: 0,
         };
+      // Свод категории: факт складывается всегда, а ПЛАН под-категорий — только
+      // в месяцах без замка. Залоченный план категории Дзен-мани считает целым:
+      // «Животные 36 000» — это вся категория, «Кот» и «Собака» уже внутри.
       const cells = emptyCells();
       addInto(cells, parent.cells);
-      for (const s of g.subs) addInto(cells, s.cells);
+      for (const s of g.subs) {
+        for (let i = 0; i < MONTHS; i++) {
+          cells[i].fact += s.cells[i].fact;
+          if (!parent.locked?.[i]) cells[i].plan += s.cells[i].plan;
+        }
+      }
       groups.push({
         category,
         parent,
-        subs: g.subs.sort((a, b) => b.fact - a.fact || b.plan - a.plan),
+        // Под-категории — тем же порядком, что и категории: список, где статьи
+        // по алфавиту, а внутри них по сумме, читается как несортированный.
+        subs: g.subs.sort((a, b) =>
+          compareBudgetRows(
+            { name: a.subcategory ?? "", amount: a.fact },
+            { name: b.subcategory ?? "", amount: b.fact },
+            order
+          )
+        ),
         total: {
           key: `${rowKey(kind, category, null)} итого`,
           kind,
@@ -208,18 +266,21 @@ export function buildBudgetYear(
           subcategory: null,
           cells,
           ...totalsOf(cells),
+          // Признак поднимается на свод категории: прячет и показывает список
+          // именно его, а не отдельные под-категории.
+          scheduled: parent.scheduled || g.subs.some((x) => x.scheduled),
         },
         ...(category === TRANSFER_CATEGORY ? { transfer: true } : {}),
       });
     }
-    // Переводы — всегда первой строкой: это не статья расходов в ряду прочих,
-    // а оборот по счетам, и искать его среди «Еды» и «Дома» по величине суммы
-    // неудобно. Остальные — по факту, как и раньше.
-    groups.sort(
-      (a, b) =>
-        Number(!!b.transfer) - Number(!!a.transfer) ||
-        b.total.fact - a.total.fact ||
-        b.total.plan - a.total.plan
+    // Порядок статей — по настройке раздела, а переводы всегда в самом низу:
+    // это не статья расходов в ряду прочих, а оборот по счетам (issue #68).
+    groups.sort((a, b) =>
+      compareBudgetRows(
+        { name: a.category, amount: a.total.fact, transfer: a.transfer },
+        { name: b.category, amount: b.total.fact, transfer: b.transfer },
+        order
+      )
     );
 
     // Два итога: чистый (сколько потрачено/получено) и с переводами (сколько

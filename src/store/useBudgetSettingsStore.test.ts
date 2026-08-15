@@ -38,6 +38,8 @@ describe("useBudgetSettingsStore", () => {
     expect(s.perimeterTransfers).toBe(true);
     expect(s.defaultView).toBe(DEFAULT_BUDGET_SETTINGS.defaultView);
     expect(s.forecastBasis).toBe(DEFAULT_BUDGET_SETTINGS.forecastBasis);
+    expect(s.rowOrder).toBe("alpha");
+    expect(s.hideEmptyRows).toBe(true);
   });
 
   it("правка пишется на диск без служебных полей", async () => {

@@ -166,7 +166,10 @@ describe("buildBudgetYear", () => {
     expect(r.delta[1]).toEqual({ plan: 40_000, fact: 0 });
   });
 
-  it("категории идут по убыванию факта", () => {
+  it("по умолчанию категории идут по алфавиту", () => {
+    // Порядок по названию — тот, к которому привыкли по справочнику категорий:
+    // у статьи всегда одно место, и её находят глазами, а не пересчитывают
+    // заново после каждой траты (issue #68).
     const r = buildBudgetYear(
       [],
       [
@@ -176,6 +179,127 @@ describe("buildBudgetYear", () => {
       2026
     );
     expect(r.expense.groups.map((g) => g.category)).toEqual(["Дом", "Еда"]);
+  });
+
+  it("порядок «по сумме» ставит крупные статьи наверх", () => {
+    const txs = [
+      tx({ date: "2026-01-10", amountBase: 9000, category: "Еда" }),
+      tx({ date: "2026-01-10", amountBase: 1000, category: "Дом" }),
+    ];
+    expect(
+      buildBudgetYear([], txs, 2026, undefined, "amount").expense.groups.map((g) => g.category)
+    ).toEqual(["Еда", "Дом"]);
+    expect(
+      buildBudgetYear([], txs, 2026, undefined, "alpha").expense.groups.map((g) => g.category)
+    ).toEqual(["Дом", "Еда"]);
+  });
+
+  it("под-категории идут тем же порядком, что и категории", () => {
+    const txs = [
+      tx({ date: "2026-01-10", amountBase: 1000, category: "Еда", subcategory: "Кафе" }),
+      tx({ date: "2026-01-11", amountBase: 9000, category: "Еда", subcategory: "Аптека" }),
+    ];
+    const subs = (o: "alpha" | "amount") =>
+      buildBudgetYear([], txs, 2026, undefined, o).expense.groups[0].subs.map(
+        (s) => s.subcategory
+      );
+    expect(subs("alpha")).toEqual(["Аптека", "Кафе"]);
+    expect(subs("amount")).toEqual(["Аптека", "Кафе"]); // 9000 > 1000
+    const swapped = [
+      tx({ date: "2026-01-10", amountBase: 9000, category: "Еда", subcategory: "Кафе" }),
+      tx({ date: "2026-01-11", amountBase: 1000, category: "Еда", subcategory: "Аптека" }),
+    ];
+    expect(
+      buildBudgetYear([], swapped, 2026, undefined, "amount").expense.groups[0].subs.map(
+        (s) => s.subcategory
+      )
+    ).toEqual(["Кафе", "Аптека"]);
+  });
+
+  it("залоченный план категории уже включает под-категории", () => {
+    // «Животные 36 000» с замком в Дзен-мани — это ВСЯ категория: планы «Кота»
+    // и «Собаки» внутри неё, и складывать их второй раз нельзя.
+    const r = buildBudgetYear(
+      [
+        line({ category: "Животные", amount: 0, overrides: { "2026-08": 36_000 }, locks: { "2026-08": true } }),
+        line({ category: "Животные", subcategory: "Кот", amount: 0, overrides: { "2026-08": 10_000 } }),
+        line({ category: "Животные", subcategory: "Собака", amount: 0, overrides: { "2026-08": 25_000 } }),
+      ],
+      [
+        tx({ date: "2026-08-05", amountBase: 4151, category: "Животные", subcategory: "Кот" }),
+        tx({ date: "2026-08-06", amountBase: 7632, category: "Животные", subcategory: "Собака" }),
+      ],
+      2026
+    );
+    const g = r.expense.groups.find((x) => x.category === "Животные")!;
+    expect(g.total.cells[7].plan).toBe(36_000);
+    // Факт по-прежнему складывается: он про деньги, а не про замок.
+    expect(g.total.cells[7].fact).toBe(11_783);
+    expect(r.expense.totals[7].plan).toBe(36_000);
+  });
+
+  it("без замка план категории — своё плюс под-категории", () => {
+    const r = buildBudgetYear(
+      [
+        line({ category: "Еда дома", amount: 0, overrides: { "2026-08": 50_000 } }),
+        line({ category: "Еда дома", subcategory: "Алкоголь", amount: 0, overrides: { "2026-08": 5000 } }),
+      ],
+      [],
+      2026
+    );
+    const g = r.expense.groups.find((x) => x.category === "Еда дома")!;
+    expect(g.total.cells[7].plan).toBe(55_000);
+  });
+
+  it("замок действует помесячно", () => {
+    // В августе замок есть, в сентябре — нет: сентябрь снова складывается.
+    const r = buildBudgetYear(
+      [
+        line({
+          category: "Животные",
+          amount: 0,
+          overrides: { "2026-08": 36_000, "2026-09": 36_000 },
+          locks: { "2026-08": true },
+        }),
+        line({ category: "Животные", subcategory: "Кот", amount: 0, overrides: { "2026-08": 10_000, "2026-09": 10_000 } }),
+      ],
+      [],
+      2026
+    );
+    const g = r.expense.groups.find((x) => x.category === "Животные")!;
+    expect(g.total.cells[7].plan).toBe(36_000);
+    expect(g.total.cells[8].plan).toBe(46_000);
+  });
+
+  it("назначенная операция даёт план статье, у которой своего плана нет", () => {
+    // Оплата назначена на 20-е, сумма известна — статья должна быть видна в
+    // своде до самого списания, а не появляться задним числом.
+    const r = buildBudgetYear([], [], 2026, undefined, "alpha", [
+      { kind: "expense", category: "Дети", subcategory: "Садик", ym: "2026-09", amount: 12_000, ahead: 12_000, aheadOps: [] },
+    ]);
+    const g = r.expense.groups.find((x) => x.category === "Дети")!;
+    expect(g.total.cells[8].plan).toBe(12_000); // сентябрь
+    expect(g.total.cells[8].fact).toBe(0);
+    expect(g.subs[0].subcategory).toBe("Садик");
+    expect(r.expense.totals[8].plan).toBe(12_000);
+    // Признак поднимается на свод категории: по нему таблица не прячет строку
+    // как «без операций за год».
+    expect(g.total.scheduled).toBe(true);
+  });
+
+  it("свой план назначенной операцией не удваивается", () => {
+    // Дзен-мани прибавляет запланированные операции к плану сам — если план
+    // есть, второй раз их считать нельзя.
+    const r = buildBudgetYear(
+      [line({ category: "Дети", kind: "expense", amount: 20_000 })],
+      [],
+      2026,
+      undefined,
+      "alpha",
+      [{ kind: "expense", category: "Дети", subcategory: null, ym: "2026-09", amount: 12_000, ahead: 12_000, aheadOps: [] }]
+    );
+    const g = r.expense.groups.find((x) => x.category === "Дети")!;
+    expect(g.total.cells[8].plan).toBe(20_000);
   });
 
   it("периметр счетов отсекает чужие операции, а перевод наружу становится статьёй", () => {
@@ -195,14 +319,14 @@ describe("buildBudgetYear", () => {
     const scope = { accounts: new Set(["Карта"]), perimeterTransfers: true };
     const r = buildBudgetYear([], txs, 2026, scope);
     expect(r.expense.groups.map((g) => [g.category, g.total.fact])).toEqual([
-      ["Переводы", 30_000],
       ["Еда", 1000],
+      ["Переводы", 30_000],
     ]);
   });
 
-  it("переводы идут первой строкой, а не по величине суммы", () => {
-    // Это не статья расходов в ряду прочих, а оборот по счетам: искать его
-    // где-то в середине списка по величине неудобно.
+  it("переводы идут последней строкой, а не по величине суммы", () => {
+    // Это не статья расходов в ряду прочих, а оборот по счетам: место ему в
+    // конце списка, каким бы ни был порядок остальных (issue #68).
     const scope = { accounts: new Set<string>(), perimeterTransfers: true };
     const r = buildBudgetYear(
       [],
@@ -220,13 +344,15 @@ describe("buildBudgetYear", () => {
         }),
       ],
       2026,
-      scope
+      scope,
+      "amount"
     );
-    // Сумма перевода — самая маленькая, но строка всё равно первая.
-    expect(r.expense.groups.map((g) => g.category)).toEqual(["Переводы", "Дом", "Еда"]);
+    // Сумма перевода — самая маленькая, но дело не в ней: даже с порядком «по
+    // сумме» переводы стоят в конце.
+    expect(r.expense.groups.map((g) => g.category)).toEqual(["Дом", "Еда", "Переводы"]);
     expect(r.income.groups.map((g) => g.category)).toEqual(["Переводы"]);
-    // Остальные — по-прежнему по убыванию факта.
-    expect(r.expense.groups[1].total.fact).toBeGreaterThan(r.expense.groups[2].total.fact);
+    // Остальные — по убыванию факта.
+    expect(r.expense.groups[0].total.fact).toBeGreaterThan(r.expense.groups[1].total.fact);
   });
 
   it("перевод внутри бюджета виден и в расходах, и в доходах", () => {

@@ -346,7 +346,7 @@ describe("buildPushItems — account change", () => {
   it("skips a cross-currency move with no new-currency amount", () => {
     const { toPush, skipped } = pushIn(fullTx({ outcome: 500 }), { account: "Долларовый" });
     expect(toPush).toHaveLength(0);
-    expect(skipped[0].reason).toMatch(/сумму в валюте нового счёта/i);
+    expect(skipped[0].reason).toMatch(/сумму в валюте нового счёта|сумма в валюте нового счёта/i);
   });
 
   it("skips an unknown account", () => {
@@ -487,7 +487,7 @@ describe("buildPushItems — flip to transfer", () => {
       incomeAccount: "Долларовый",
     });
     expect(toPush).toHaveLength(0);
-    expect(skipped[0].reason).toMatch(/сумму зачисления/i);
+    expect(skipped[0].reason).toMatch(/сумм[ау] зачисления/i);
   });
 
   it("skips a transfer to the same account", () => {
@@ -1065,7 +1065,7 @@ describe("buildMerchantMergePush", () => {
       1
     );
     expect(out.skipped).toEqual([
-      { id: "dup", reason: expect.stringContaining("сам объединяется") },
+      { id: "dup", reason: expect.stringContaining("сам сейчас объединяется") },
     ]);
     // The valid half still goes through.
     expect(out.deletions.map((d) => d.id)).toEqual(["other"]);
@@ -1347,7 +1347,7 @@ describe("buildDraftTransaction", () => {
   it("rejects missing/unknown account, category, synthetic category, bad amount/date", () => {
     const c = draftCache();
     expect(buildDraftTransaction({ ...base, account: "Нет" }, c, 1).skip).toMatch(/не найден/);
-    expect(buildDraftTransaction({ ...base, category: "" }, c, 1).skip).toMatch(/категори/);
+    expect(buildDraftTransaction({ ...base, category: "" }, c, 1).skip).toMatch(/категори/i);
     expect(buildDraftTransaction({ ...base, category: "Перевод" }, c, 1).skip).toMatch(/ярлык/);
     expect(buildDraftTransaction({ ...base, category: "Несуществующая" }, c, 1).skip).toMatch(/не найдена/);
     expect(buildDraftTransaction({ ...base, amount: 0 }, c, 1).skip).toMatch(/больше нуля/);
@@ -1373,13 +1373,13 @@ describe("buildDraftTransaction", () => {
       const d = ok();
       const out = validateDrafts(byId([d]), { ...draftCache(), accounts: [] }, 1);
       expect(out.ready).toEqual([]);
-      expect(out.skipped[0].reason).toMatch(/счёт/);
+      expect(out.skipped[0].reason).toMatch(/счёт/i);
     });
 
     it("skips a draft whose category tag is gone", () => {
       const d = ok();
       const out = validateDrafts(byId([d]), { ...draftCache(), tags: [] }, 1);
-      expect(out.skipped[0].reason).toMatch(/категори/);
+      expect(out.skipped[0].reason).toMatch(/категори/i);
     });
 
     it("skips a draft whose id is already live in the cloud (stale)", () => {
@@ -1488,7 +1488,7 @@ describe("buildPushItems — debt operations", () => {
     const t = debtTx({ payee: "" });
     const out = pushDebt(t, { brand: "" } as TransactionEdit);
     expect(out.toPush).toHaveLength(0);
-    expect(out.skipped[0].reason).toMatch(/плательщик/i);
+    expect(out.skipped[0].reason).toMatch(/контрагент/i);
   });
 
   it("refuses an amount change on a debt op", () => {
@@ -1539,7 +1539,7 @@ describe("buildPushItems — debt operations", () => {
       incomeAccount: "Долг",
     } as TransactionEdit);
     expect(out.toPush).toHaveLength(0);
-    expect(out.skipped[0].reason).toMatch(/плательщик/i);
+    expect(out.skipped[0].reason).toMatch(/контрагент/i);
   });
 });
 
@@ -1688,7 +1688,7 @@ describe("buildPushItems — правка без структурных изме
     const t = debtTx({ payee: null, comment: "было" });
     const res = pushDebt(t, { comment: "стало" });
     expect(res.toPush).toEqual([]);
-    expect(res.skipped[0].reason).toMatch(/плательщик/);
+    expect(res.skipped[0].reason).toMatch(/контрагент/i);
   });
 
   it("структурная правка идёт прежним путём", () => {

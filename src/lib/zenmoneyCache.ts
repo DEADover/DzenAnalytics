@@ -58,7 +58,7 @@ export interface ZenCache {
 }
 
 /** Bump when a new entity type starts being consumed AND needs a back-fill. */
-export const CACHE_SCHEMA_VERSION = 5;
+export const CACHE_SCHEMA_VERSION = 6;
 
 /** Entity types to force-fetch once when upgrading TO that version. */
 const BACKFILL_BY_VERSION: Record<number, string[]> = {
@@ -74,7 +74,38 @@ const BACKFILL_BY_VERSION: Record<number, string[]> = {
   // Сами планы: раньше мы их выбрасывали, поэтому инкрементальный diff их
   // больше не пришлёт — нужен разовый полный запрос.
   5: ["reminder"],
+  // ИСПОЛНЕННЫЕ плановые операции: раньше мы их выбрасывали, и план месяца
+  // выходил меньше дзеновского ровно на их сумму. Инкрементальный diff их
+  // повторно не пришлёт — нужен разовый полный запрос.
+  6: ["reminderMarker"],
 };
+
+/**
+ * Типы сущностей, которые ДИФФ САМ ПО СЕБЕ не приносит целиком, — их приходится
+ * запрашивать явно.
+ *
+ * Это ровно те же типы, что стоят в разовых до-качиваниях: справочник банков
+ * статичен, планы и их операции сервер отдаёт окном вокруг «сейчас». Разница в
+ * том, КОГДА список нужен: до-качивание — когда кэш отстал от схемы, а этот —
+ * при ПОЛНОЙ синхронизации, где кэша нет вовсе.
+ */
+export const FULL_SYNC_ENTITIES: string[] = [
+  ...new Set(Object.values(BACKFILL_BY_VERSION).flat()),
+];
+
+/**
+ * Что дозапросить явно при синхронизации с кэшем `cache`.
+ *
+ * Пустой кэш — это НЕ «сервер и так пришлёт всё»: `serverTimestamp = 0` отдаёт
+ * все операции и счета, но исполненные операции планов приходят только по
+ * явному запросу. Из-за этой ошибки полная пересинхронизация делала бюджет
+ * МЕНЬШЕ дзеновского ровно на сумму уже прошедших плановых операций месяца, и
+ * вылечить это повторной полной синхронизацией было невозможно: следующая
+ * версия схемы совпадала, до-качивать было нечего.
+ */
+export function forceFetchFor(cache: ZenCache | null | undefined): string[] {
+  return cache ? backfillEntities(cache) : FULL_SYNC_ENTITIES;
+}
 
 /**
  * Effective schema version of a cache, including ones written before the field
@@ -100,6 +131,21 @@ export function backfillEntities(cache: ZenCache | null | undefined): string[] {
   return [...out];
 }
 
+/**
+ * Сколько месяцев назад держим ИСПОЛНЕННЫЕ плановые операции.
+ *
+ * Двух лет хватает всему, что их читает: месячный вид, годовой свод и
+ * сравнение с прошлым годом на дашборде. Дальше в прошлое план из них не
+ * пересобирается, а список рос бы без конца.
+ */
+const PROCESSED_WINDOW_MONTHS = 24;
+
+/** Граница окна «YYYY-MM-DD» для исполненных операций. */
+function processedHorizon(now: Date = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth() - PROCESSED_WINDOW_MONTHS, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
 /** Composite key for a budget row — it has no surface `id`. */
 function budgetKey(b: ZenBudget): string {
   return `${b.tag ?? "∅"}|${b.date}`;
@@ -118,11 +164,19 @@ function mergeBudgets(prev: ZenBudget[], incoming: ZenBudget[] | undefined): Zen
 }
 
 /**
- * Merge reminder markers, then KEEP ONLY the planned ones. A marker that gets
- * executed arrives in a later diff with `state: 'processed'` (or 'deleted') —
- * we merge it in by id and then filter it out, so the cache holds exactly the
- * currently-planned operations (what budgets need) and nothing else. Deletions
- * ride the generic `deletion` list keyed by object type "reminderMarker".
+ * Merge reminder markers и оставить те, что нужны бюджету: ПЛАНОВЫЕ и
+ * ИСПОЛНЕННЫЕ. Удалённые выбрасываем.
+ *
+ * Исполненные нужны для плана месяца: Дзен-мани считает план незалоченной
+ * статьи как «записанная сумма плюс плановые операции месяца» и уже прошедшие
+ * по плану операции из неё не вычитает — план это сколько всего собирались
+ * потратить, а не сколько осталось. Пока мы держали только будущие, наш план
+ * был меньше дзеновского ровно на сумму исполненных (у «Подписок» — на 2 325 ₽
+ * из 25 045).
+ *
+ * Копятся они не бесконечно: старше `PROCESSED_WINDOW_MONTHS` не храним.
+ * Deletions ride the generic `deletion` list keyed by object type
+ * "reminderMarker".
  *
  * УДАЛЁННЫЙ ПЛАН уносит с собой свои операции. Дзен-мани сообщает об удалении
  * самого плана (`reminder`), а не каждой его будущей операции по отдельности —
@@ -143,8 +197,13 @@ function mergeReminderMarkers(
   const deadReminders = new Set(
     deletions.filter((d) => d.object === "reminder").map((d) => String(d.id))
   );
+  const horizon = processedHorizon();
   const alive = (list: ZenReminderMarker[]) =>
-    list.filter((m) => m.state === "planned" && !deadReminders.has(String(m.reminder)));
+    list.filter(
+      (m) =>
+        !deadReminders.has(String(m.reminder)) &&
+        (m.state === "planned" || (m.state === "processed" && String(m.date) >= horizon))
+    );
   if (replace) return alive(inc);
   const noChange =
     inc.length === 0 &&
@@ -250,9 +309,13 @@ export function applyDiff(
       transactions: diff.transaction || [],
       user: diff.user || [],
       budgets: diff.budget || [],
-      reminderMarkers: (diff.reminderMarker || []).filter(
-        (m) => m.state === "planned"
-      ),
+      // Тот же отбор, что и при слиянии: плановые и недавние исполненные.
+      // Раньше здесь оставались ТОЛЬКО плановые — и полная синхронизация
+      // (а значит и «очистить всё и скачать заново») теряла исполненные
+      // операции планов текущего месяца. План месяца выходил меньше
+      // дзеновского ровно на их сумму, и повторная полная синхронизация уже
+      // ничего не чинила: с точки зрения версии схемы кэш был свежим.
+      reminderMarkers: mergeReminderMarkers([], diff.reminderMarker, [], true),
       reminders: diff.reminder || [],
       companies: diff.company || [],
       cacheSchemaVersion: CACHE_SCHEMA_VERSION,

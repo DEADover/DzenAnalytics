@@ -83,20 +83,76 @@ export function MultiSelect({
   const isNone = selected.has(FILTER_NONE);
   const isChecked = (opt: string) => isAll || (!isNone && selected.has(opt));
 
-  // Toggle one option, normalising the result back to the canonical empty
-  // set (all) or the {FILTER_NONE} marker (none).
-  const toggle = (opt: string) => {
-    const eff = isNone
-      ? new Set<string>()
-      : isAll
-        ? new Set(options)
-        : new Set(selected);
+  /** Текущий выбор как обычное множество — без соглашений «пусто = все». */
+  const effective = () =>
+    isNone ? new Set<string>() : isAll ? new Set(options) : new Set(selected);
+
+  /** Записать выбор, вернув его к каноническому виду: пусто = все,
+   *  {FILTER_NONE} = ничего. */
+  const commit = (eff: Set<string>) => {
     eff.delete(FILTER_NONE);
-    if (eff.has(opt)) eff.delete(opt);
-    else eff.add(opt);
     if (eff.size >= options.length) onChange(new Set()); // all → empty
     else if (eff.size === 0) onChange(new Set([FILTER_NONE])); // none
     else onChange(eff);
+  };
+
+  const toggle = (opt: string) => {
+    const eff = effective();
+    if (eff.has(opt)) eff.delete(opt);
+    else eff.add(opt);
+    commit(eff);
+  };
+
+  /** Отметить или снять сразу группу — по кнопке в её заголовке. */
+  const setMany = (opts: string[], on: boolean) => {
+    const eff = effective();
+    for (const o of opts) {
+      if (on) eff.add(o);
+      else eff.delete(o);
+    }
+    commit(eff);
+  };
+
+  /**
+   * Варианты группы среди ВИДИМЫХ.
+   *
+   * Именно видимых: при поиске список сужен, и кнопка в заголовке должна
+   * делать ровно то, что под ней видно, а не трогать спрятанное.
+   */
+  const membersOf = (group: string | null, archived: boolean) =>
+    filteredOptions.filter((o) =>
+      archived
+        ? !!archivedSet?.has(o)
+        : !archivedSet?.has(o) && (groupOf?.(o) ?? null) === group
+    );
+
+  /** Заголовок группы с кнопкой «Выбрать все / Снять все» на её варианты. */
+  const groupHeader = (
+    title: string,
+    members: string[],
+    className?: string
+  ) => {
+    const allOn = members.length > 0 && members.every(isChecked);
+    return (
+      <div
+        className={clsx(
+          "flex items-center justify-between gap-2 px-2 pb-0.5",
+          className
+        )}
+      >
+        <span className="text-[11px] uppercase tracking-wide text-muted truncate">
+          {title}
+        </span>
+        <button
+          type="button"
+          onClick={() => setMany(members, !allOn)}
+          aria-label={`${allOn ? "Снять все" : "Выбрать все"}: ${title}`}
+          className="text-[11px] text-accent hover:underline shrink-0"
+        >
+          {allOn ? "Снять все" : "Выбрать все"}
+        </button>
+      </div>
+    );
   };
 
   const summary = isNone
@@ -252,21 +308,14 @@ export function MultiSelect({
                     (i === 0 || (groupOf?.(filteredOptions[i - 1]) ?? null) !== group);
                   return (
                     <Fragment key={opt}>
-                      {showArchivedHeader && (
-                        <div className="mt-1 pt-1 border-t border-border px-2 pb-0.5 text-[11px] uppercase tracking-wide text-muted">
-                          Архивные
-                        </div>
-                      )}
-                      {showGroupHeader && (
-                        <div
-                          className={clsx(
-                            "px-2 pb-0.5 text-[11px] uppercase tracking-wide text-muted",
-                            i > 0 && "mt-1 pt-1 border-t border-border"
-                          )}
-                        >
-                          {group}
-                        </div>
-                      )}
+                      {showArchivedHeader &&
+                        groupHeader("Архивные", membersOf(null, true), "mt-1 pt-1 border-t border-border")}
+                      {showGroupHeader &&
+                        groupHeader(
+                          group,
+                          membersOf(group, false),
+                          i > 0 ? "mt-1 pt-1 border-t border-border" : undefined
+                        )}
                       <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-panel2 rounded cursor-pointer text-xs">
                         <input
                           type="checkbox"

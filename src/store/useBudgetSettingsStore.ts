@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
 import type { ForecastBasis } from "../lib/budgetForecast";
+import type { BudgetRowOrder } from "../lib/budgets";
 
 /**
  * Настройки бюджета — свои, а не общие «Разрезы данных».
@@ -9,13 +10,20 @@ import type { ForecastBasis } from "../lib/budgetForecast";
  * разрезы — глобальный инструмент аналитики, и менять ими план с фактом было бы
  * неожиданно. Здесь же отбор счетов — часть самого бюджета: это его периметр.
  */
+/** Три вида раздела: месяц, годовой свод и сводка по году. */
+export type BudgetView = "month" | "year" | "dashboard";
+
 export interface BudgetSettings {
   /** Счета в бюджете. Пустой список = все (соглашение фильтров сервиса). */
   accounts: string[];
   /** Считать переводы, пересекающие границу периметра. */
   perimeterTransfers: boolean;
   /** С какого вида открывать раздел. */
-  defaultView: "month" | "year";
+  defaultView: BudgetView;
+  /** Порядок статей в списках и в выгрузках. */
+  rowOrder: BudgetRowOrder;
+  /** Прятать статьи, по которым за период не было ни одной операции. */
+  hideEmptyRows: boolean;
   /** Окно прогноза по умолчанию в окне «Заполнить по среднему». */
   forecastMonths: number;
   forecastBasis: ForecastBasis;
@@ -25,6 +33,8 @@ export const DEFAULT_BUDGET_SETTINGS: BudgetSettings = {
   accounts: [],
   perimeterTransfers: false,
   defaultView: "month",
+  rowOrder: "alpha",
+  hideEmptyRows: true,
   forecastMonths: 3,
   forecastBasis: "average",
 };
@@ -61,6 +71,8 @@ function pick(s: BudgetSettings): BudgetSettings {
     accounts: s.accounts,
     perimeterTransfers: s.perimeterTransfers,
     defaultView: s.defaultView,
+    rowOrder: s.rowOrder,
+    hideEmptyRows: s.hideEmptyRows,
     forecastMonths: s.forecastMonths,
     forecastBasis: s.forecastBasis,
   };

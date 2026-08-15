@@ -118,19 +118,33 @@ export function donutSlices(
 export const SHEET = {
   /** Лист A4 landscape: 297 × 210 мм. */
   height: 794,
-  /** Поля страницы, 10 мм с каждой стороны. */
-  padding: 38 * 2,
+  /** Поля страницы: 10 мм сверху и 6 мм снизу. */
+  padding: 38 + 23,
   /** Шапка листа со статьями вместе с отступом под ней. */
-  header: 74,
+  header: 76,
   /** Просвет между рядами диаграмм, 5 мм. */
   gap: 19,
   /** Рамка диаграммы: поля, заголовок и отступ под ним. */
-  chrome: 47,
-  /** Высота одной строки без просвета. */
-  row: 15,
+  chrome: 51,
+  /** Высота одной строки без просвета: подпись в 10 пунктов и полоса под ней. */
+  row: 20,
   /** Просвет между строками, 1 мм. */
   rowGap: 4,
 } as const;
+
+/**
+ * Книжный лист — на нём идут разрезы по статьям (issue #68).
+ *
+ * Альбомный остался только у первой страницы со сводкой: там четыре плитки в
+ * ряд и два бублика, им нужна ширина. А списку статей нужна ВЫСОТА — в книжной
+ * ориентации на лист помещается заметно больше строк, и разрез реже рвётся на
+ * продолжения.
+ */
+export const SHEET_PORTRAIT: SheetGeometry = {
+  ...SHEET,
+  /** Лист A4 portrait: 210 × 297 мм. */
+  height: 1123,
+};
 
 export type SheetGeometry = { -readonly [K in keyof typeof SHEET]: number };
 
@@ -163,9 +177,66 @@ export function rowsPerPage(chartRows: number, sheet: SheetGeometry = SHEET): nu
  * парами в ряд, и разрыв внутри ряда оставил бы половину полос в отрыве от
  * подписей. Каждый лист получает свой кусок статей, а заголовок повторяется.
  */
+/**
+ * Разбить по листам, НЕ разрывая категорию и её под-категории.
+ *
+ * У ветки на листе-продолжении нет родителя над ней, и подпись приходится
+ * писать полным именем («Зачисление · Т-Банк - Нак.счет (Отпуск)») — а оно в
+ * колонку не влезает и обрезается многоточием. Поэтому режем не по строкам, а
+ * по группам: категория уходит на следующий лист целиком, вместе со своими
+ * под-категориями.
+ *
+ * `isChild` говорит, что строка — под-категория предыдущей категории. Группа
+ * больше листа (у переводов бывает под сорок счетов) всё же делится: лист
+ * фиксированной высоты, и выбор тут между переносом и обрезкой.
+ */
+export function paginateGroups<T>(
+  items: T[],
+  perPage: number,
+  isChild: (item: T) => boolean
+): T[][] {
+  if (perPage <= 0) return [items];
+  if (items.length === 0) return [[]];
+  const groups: T[][] = [];
+  for (const item of items) {
+    if (!isChild(item) || groups.length === 0) groups.push([item]);
+    else groups[groups.length - 1].push(item);
+  }
+  // Цель по строкам на лист — как в `paginate`: столько же листов, но ровнее.
+  const target = Math.ceil(items.length / Math.ceil(items.length / perPage));
+  const pages: T[][] = [];
+  let page: T[] = [];
+  for (const group of groups) {
+    if (page.length > 0 && page.length + group.length > Math.max(target, 1)) {
+      pages.push(page);
+      page = [];
+    }
+    if (group.length > perPage) {
+      // Группа не помещается ни на один лист — режем её саму, иначе нижние
+      // строки просто срежет краем.
+      if (page.length > 0) {
+        pages.push(page);
+        page = [];
+      }
+      for (let i = 0; i < group.length; i += perPage) pages.push(group.slice(i, i + perPage));
+      continue;
+    }
+    page.push(...group);
+  }
+  if (page.length > 0) pages.push(page);
+  return pages.length > 0 ? pages : [[]];
+}
+
 export function paginate<T>(items: T[], perPage: number): T[][] {
   if (perPage <= 0) return [items];
-  const pages: T[][] = [];
-  for (let i = 0; i < items.length; i += perPage) pages.push(items.slice(i, i + perPage));
-  return pages.length > 0 ? pages : [[]];
+  if (items.length === 0) return [[]];
+  // Листов столько же, сколько при делении встык, а вот строки на них лежат
+  // ПОРОВНУ: тридцать семь статей по восемнадцать — это 18 + 18 + 1, и третий
+  // лист выходил с одной строкой и пустым листом под ней. Те же три листа по
+  // 13 + 12 + 12 читаются как отчёт, а не как обрывок.
+  const pages = Math.ceil(items.length / perPage);
+  const size = Math.ceil(items.length / pages);
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }

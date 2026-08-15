@@ -32,7 +32,6 @@ import {
   type YearRow,
   type YearSection,
 } from "./budgetYear";
-import { TRANSFER_CATEGORY } from "./budgetScope";
 import { monthLabelFull } from "./format";
 import { columnLetter, injectCharts, sheetPathByName, type ChartSpec } from "./xlsxCharts";
 import {
@@ -999,12 +998,10 @@ export function buildYoySheet(
           prev: before ? sumTo(before).fact : 0,
         };
       })
-      .filter((r) => r.fact !== 0 || r.plan !== 0 || r.prev !== 0)
-      .sort(
-        (a, b) =>
-          Number(b.category === TRANSFER_CATEGORY) -
-            Number(a.category === TRANSFER_CATEGORY) || b.fact - a.fact
-      );
+      // Порядок — тот же, что в годовом своде: он задан настройкой раздела, и
+      // переводы в нём уже стоят последними. Своя сортировка здесь означала бы,
+      // что листы одной книги идут по-разному (issue #68).
+      .filter((r) => r.fact !== 0 || r.plan !== 0 || r.prev !== 0);
 
     for (const r of items) {
       rows.push([

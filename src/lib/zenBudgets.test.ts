@@ -165,17 +165,37 @@ describe("planned operations folding (unlocked budgets)", () => {
     expect(m.get(zenPlanKey("income", "Работа", null, "2026-07"))).toBe(130000);
   });
 
-  it("only 'planned' markers count — processed/deleted are ignored", () => {
+  it("исполненный план тоже в плане месяца, удалённый — нет", () => {
+    // Проверено на живом аккаунте: у «Подписок» Дзен-мани показывает план
+    // 25 045 = записанные 8 719,26 + 14 001,49 впереди + 2 325 уже
+    // исполненных. План месяца — сколько всего собирались потратить.
     const planned = plannedOpsByTagMonth(
       [
         marker({ id: "a", income: 100000, state: "planned" }),
         marker({ id: "b", income: 50000, state: "processed" }),
+        marker({ id: "c", income: 7000, state: "deleted" }),
       ],
       [rub],
       2,
       "2026-07-01"
     );
-    expect(planned.get("work|2026-07")?.income).toBe(100000);
+    expect(planned.get("work|2026-07")?.income).toBe(150000);
+  });
+
+  it("исполненный план считается и задним числом, а просроченный — нет", () => {
+    // Разница между ними — в том, случилась операция или нет: у исполненной
+    // есть факт, а просроченный план так и не сбылся.
+    const planned = plannedOpsByTagMonth(
+      [
+        marker({ id: "past-done", income: 50_000, state: "processed", date: "2026-07-05" }),
+        marker({ id: "past-stale", income: 33_000, state: "planned", date: "2026-07-05" }),
+        marker({ id: "ahead", income: 20_000, state: "planned", date: "2026-07-25" }),
+      ],
+      [rub],
+      2,
+      "2026-07-11"
+    );
+    expect(planned.get("work|2026-07")?.income).toBe(70_000);
   });
 
   it("converts a foreign-currency planned op to base currency", () => {
@@ -206,6 +226,7 @@ describe("zenPlanList", () => {
       subcategory: null,
       ym: "2026-06",
       amount: 2000,
+      locked: false,
     });
     expect(list).toContainEqual({
       kind: "expense",
@@ -213,7 +234,22 @@ describe("zenPlanList", () => {
       subcategory: "Одежда",
       ym: "2026-05",
       amount: 3000,
+      locked: false,
     });
+  });
+
+  it("замок доезжает вместе с суммой", () => {
+    // Замок меняет смысл числа у категории: залоченный план — это ВСЯ
+    // категория, под-категории уже внутри него (у «Животных» в Дзен-мани так).
+    const list = zenPlanList(
+      [
+        budget({ tag: "shop", outcome: 36_000, outcomeLock: true }),
+        budget({ tag: "clothes", outcome: 25_000, outcomeLock: false }),
+      ],
+      tags
+    );
+    expect(list.find((e) => e.subcategory === null)?.locked).toBe(true);
+    expect(list.find((e) => e.subcategory === "Одежда")?.locked).toBe(false);
   });
 });
 

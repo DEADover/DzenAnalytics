@@ -132,7 +132,7 @@ describe("buildBudgetPush", () => {
       1000
     );
     expect(budgets).toHaveLength(0);
-    expect(skipped[0].reason).toMatch(/тег не найден/);
+    expect(skipped[0].reason).toMatch(/категория не найдена/i);
   });
 
   it("budgetEditId is stable and distinguishes parent from sub", () => {

@@ -34,6 +34,11 @@ export interface ZenPlanEntry {
   subcategory: string | null;
   ym: string; // "YYYY-MM"
   amount: number;
+  /**
+   * Замок Дзен-мани: сумма задана точно. У категории это ещё и значит «вся
+   * категория целиком, вместе с под-категориями» — см. `BudgetLine.locks`.
+   */
+  locked: boolean;
 }
 
 // NUL separator — safe because tag titles never contain it, unlike ":".
@@ -65,46 +70,80 @@ function plannedKey(tagId: string, ym: string): string {
 }
 
 /**
- * Sum PLANNED reminder markers into per-(tag, month) income/outcome totals in
- * the user's base currency — the amount Zenmoney adds to an UNLOCKED budget to
- * form its effective plan. Only `state: 'planned'` markers count; each marker's
- * amount is converted from its own instrument to base (`amount * rate / base
- * rate`). A marker with several tags contributes to each (Zenmoney attributes
- * a planned op to every tag it carries).
+ * Сумма плановых операций по (тегу, месяцу) в базовой валюте — то, что
+ * Дзен-мани прибавляет к НЕЗАЛОЧЕННОМУ плану, чтобы получить план месяца.
+ *
+ * Считаются две вещи:
+ *   • `planned` с датой СЕГОДНЯ И ПОЗЖЕ — то, что ещё предстоит;
+ *   • `processed` — плановые операции, которые уже исполнились.
+ *
+ * Второе выглядит контринтуитивно («их же место занял факт»), но проверено на
+ * живом аккаунте: у «Подписок» Дзен показывает план 25 045 = записанные
+ * 8 719,26 + 14 001,49 будущих + 2 325 уже исполненных. План месяца отвечает на
+ * вопрос «сколько всего собирались потратить», а не «сколько осталось»; факт
+ * вычитается из него отдельно и даёт остаток.
+ *
+ * А вот ПРОСРОЧЕННЫЙ план (`planned` с датой в прошлом) не считается: он не
+ * исполнился, и обещать его задним числом неправильно — Дзен-мани так же.
+ *
+ * Прогнозы, достроенные Дзеном по регулярности (`isForecast`), в план не идут.
+ * Сумма каждой операции переводится из своей валюты в базовую по курсу
+ * справочника. У исполненной операции Дзен берёт курс дня исполнения, мы —
+ * текущий; на валютных подписках это даёт расхождение в доли процента.
+ *
+ * Маркер с несколькими тегами попадает в каждый (так делает и Дзен-мани).
  */
 export function plannedOpsByTagMonth(
   markers: ZenReminderMarker[] | undefined,
   instruments: ZenInstrument[] | undefined,
   baseCurrencyId: number | undefined,
   /** Сегодня, «ГГГГ-ММ-ДД». Планы этого дня и позже — впереди. */
-  todayIso = new Date().toISOString().slice(0, 10)
+  todayIso = new Date().toISOString().slice(0, 10),
+  /**
+   * Курс валюты на дату — для УЖЕ ИСПОЛНЕННЫХ операций.
+   *
+   * У исполненной операции есть факт, посчитанный по курсу своего дня; если
+   * взять для неё сегодняшний курс, план и факт разойдутся на переоценку, и
+   * остаток по статье не сойдётся с Дзен-мани. Не задан или нет курса на дату —
+   * берётся справочный.
+   */
+  histRate?: (dateIso: string, currencyCode: string) => number | null,
+  /** Код валюты по id инструмента — нужен вместе с `histRate`. */
+  codeOf?: (instrumentId: number) => string | undefined
 ): Map<string, PlannedOps> {
   const out = new Map<string, PlannedOps>();
   if (!markers || markers.length === 0) return out;
   const rateById = new Map((instruments || []).map((i) => [i.id, i.rate]));
   const baseRate =
     (baseCurrencyId != null ? rateById.get(baseCurrencyId) : undefined) || 1;
-  const toBase = (amt: number, instr: number) =>
-    (amt * (rateById.get(instr) ?? baseRate)) / baseRate;
+  const toBase = (amt: number, instr: number, dateIso?: string) => {
+    if (dateIso && histRate && codeOf) {
+      const code = codeOf(instr);
+      const r = code ? histRate(dateIso, code) : null;
+      if (r != null) return amt * r;
+    }
+    return (amt * (rateById.get(instr) ?? baseRate)) / baseRate;
+  };
   for (const m of markers) {
-    if (m.state !== "planned") continue;
+    if (m.state !== "planned" && m.state !== "processed") continue;
     // Прогноз Дзена — не план. Дзен достраивает будущие поступления по
     // регулярности и в «Ещё в плане» их НЕ показывает: там только то, что
     // человек назначил сам. Без этого условия зарплата, достроенная Дзеном,
     // прибавлялась к плану, и «Работа» показывала 465 900 вместо 305 000.
     if (m.isForecast === true) continue;
-    // Только то, что ЕЩЁ ВПЕРЕДИ. Прошедший план либо уже исполнился — и тогда
-    // его место занял факт, — либо не исполнился, и обещать его задним числом
-    // неправильно. Дзен-мани так и считает: «планы до 31 августа 305 000» — это
-    // 133 188 поступлений плюс 171 812 остатка, а не сумма всех планов месяца.
-    // Без этого условия план уже пришедшей зарплаты прибавлялся второй раз и
-    // строка «Работа» показывала 465 900 вместо 305 000.
-    if ((m.date || "") < todayIso) continue;
+    // Просроченный план — тот, что остался `planned`, хотя день прошёл, —
+    // не считается: он не исполнился, и обещать его задним числом неправильно.
+    // Исполненные (`processed`) при этом идут в план целиком, независимо от
+    // даты: план месяца — это сколько всего собирались потратить.
+    if (m.state === "planned" && (m.date || "") < todayIso) continue;
     const ym = (m.date || "").slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(ym)) continue;
     if (!m.tag || m.tag.length === 0) continue;
-    const inc = m.income > 0 ? toBase(m.income, m.incomeInstrument) : 0;
-    const outc = m.outcome > 0 ? toBase(m.outcome, m.outcomeInstrument) : 0;
+    // Исполненную считаем по курсу её дня — как считается её же факт;
+    // будущую по справочному, другого для неё и нет.
+    const on = m.state === "processed" ? m.date : undefined;
+    const inc = m.income > 0 ? toBase(m.income, m.incomeInstrument, on) : 0;
+    const outc = m.outcome > 0 ? toBase(m.outcome, m.outcomeInstrument, on) : 0;
     if (inc === 0 && outc === 0) continue;
     for (const tagId of m.tag) {
       const cur = out.get(plannedKey(tagId, ym)) || { income: 0, outcome: 0 };
@@ -174,9 +213,21 @@ function collect(
     const outAdded = !b.outcomeLock && !!p;
     const incAdded = !b.incomeLock && !!p;
     if (outFc === wantForecast && outVal > 0)
-      out.push({ kind: "expense", ...r, ym, amount: outAdded ? Math.round(outVal) : outVal });
+      out.push({
+        kind: "expense",
+        ...r,
+        ym,
+        amount: outAdded ? Math.round(outVal) : outVal,
+        locked: !!b.outcomeLock,
+      });
     if (incFc === wantForecast && incVal > 0)
-      out.push({ kind: "income", ...r, ym, amount: incAdded ? Math.round(incVal) : incVal });
+      out.push({
+        kind: "income",
+        ...r,
+        ym,
+        amount: incAdded ? Math.round(incVal) : incVal,
+        locked: !!b.incomeLock,
+      });
   }
   return out;
 }

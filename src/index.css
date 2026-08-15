@@ -295,10 +295,16 @@ h2,
 .print-root.print-export .print-page {
   width: 1123px;
   height: 794px;
-  padding: 38px;
+  /* Снизу поле меньше: подписи диаграмм упираются в него, а не в край листа. */
+  padding: 38px 38px 23px;
   box-sizing: border-box;
   overflow: hidden;
   background: #fff;
+}
+/* Книжный лист — на нём идут разрезы по статьям: списку нужна высота. */
+.print-root.print-export .print-page.print-portrait {
+  width: 794px;
+  height: 1123px;
 }
 
 /* Оформление печатной вёрстки. Живёт СНАРУЖИ `@media print`, потому что этот
@@ -322,10 +328,53 @@ h2,
     margin: 0;
   }
 .print-head p {
-    font-size: 9pt;
+    font-size: 10pt;
     color: #6b7280;
     margin: 1mm 0 0;
   }
+/* Титульная шапка: название слева, «за что отчёт» справа подписями и
+   значениями. Выравнивание по нижнему краю — чтобы строка подписей стояла на
+   той же линии, что и название, а не висела над ним. */
+.print-cover {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10mm;
+  }
+.print-cover-kind {
+    font-size: 12pt;
+    color: #4b5563;
+    margin: 1mm 0 0;
+  }
+.print-cover-meta {
+    display: flex;
+    gap: 8mm;
+    margin: 0;
+    text-align: right;
+  }
+.print-cover-meta dt {
+    font-size: 10pt;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+.print-cover-meta dd {
+    font-size: 11pt;
+    color: #111827;
+    font-weight: 600;
+    margin: 0.5mm 0 0;
+    white-space: nowrap;
+  }
+
+/* Вторая сумма плитки — «включая переводы». Та же строка, что на экране. */
+.print-kpi-extra {
+    font-size: 10pt;
+    color: #6b7280;
+    margin-top: -1mm;
+    margin-bottom: 1mm;
+    font-variant-numeric: tabular-nums;
+  }
+
 .print-head-slim {
     border-bottom-width: 0.75pt;
     padding-bottom: 2mm;
@@ -349,7 +398,7 @@ h2,
 .print-kpi-income { border-top-color: #16a34a; }
 .print-kpi-delta { border-top-color: #0891b2; }
 .print-kpi-title {
-    font-size: 8pt;
+    font-size: 10pt;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: #6b7280;
@@ -365,7 +414,7 @@ h2,
     display: flex;
     flex-direction: column;
     gap: 0.5mm;
-    font-size: 8pt;
+    font-size: 10pt;
     color: #6b7280;
   }
 .print-up { color: #16a34a; }
@@ -395,11 +444,11 @@ h2,
 .print-donut-legend {
     display: grid;
     gap: 1.5mm;
-    font-size: 9pt;
+    font-size: 11pt;
     margin: 0;
   }
 .print-donut-legend dt {
-    font-size: 7.5pt;
+    font-size: 10pt;
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -415,6 +464,13 @@ h2,
     grid-template-columns: 1fr 1fr;
     gap: 5mm;
   }
+/* Книжный лист: диаграммы разреза идут друг под другом, каждая во всю ширину. */
+  .print-column {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 5mm;
+  }
 .print-chart {
     border: 0.75pt solid #e5e7eb;
     border-radius: 1.5mm;
@@ -422,7 +478,7 @@ h2,
     break-inside: avoid;
   }
 .print-chart-title {
-    font-size: 9pt;
+    font-size: 11pt;
     font-weight: 700;
     margin-bottom: 2mm;
   }
@@ -433,12 +489,54 @@ h2,
     row-gap: 1mm;
     column-gap: 2mm;
   }
+/* На книжном листе подписям и суммам можно дать больше места: полоса всё
+   равно тянется во всю ширину страницы, а не в половину. */
+  .print-portrait .print-bars {
+    grid-template-columns: 52mm 1fr 28mm;
+  }
 .print-bar-label {
-    font-size: 7.5pt;
+    font-size: 10pt;
     color: #374151;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+/* Под-категория — веткой родителя, как на экране: имя без повтора категории,
+   отступ и уголок. Обрезку длинных имён держит внутренний `span`: самой
+   ячейке нужен `overflow: visible`, иначе уголок, выходящий вверх к строке
+   родителя, был бы срезан. */
+.print-bar-sub {
+    position: relative;
+    overflow: visible;
+    padding-left: 4mm;
+    color: #6b7280;
+  }
+.print-bar-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+.print-bar-elbow-v {
+    position: absolute;
+    left: 1.2mm;
+    top: -1.4mm;
+    bottom: 50%;
+    /* Тоньше 0.3 мм линия местами пропадала при съёмке листа в растр. */
+    width: 0.3mm;
+    background: #d1d5db;
+  }
+/* У ветки, за которой идёт сестра, линия проходит насквозь. */
+.print-bar-elbow-v.print-bar-elbow-more {
+    bottom: -1.4mm;
+  }
+.print-bar-elbow-h {
+    position: absolute;
+    left: 1.2mm;
+    top: 50%;
+    width: 1.8mm;
+    height: 0.3mm;
+    background: #d1d5db;
   }
 .print-bar-track {
     position: relative;
@@ -456,20 +554,61 @@ h2,
     bottom: 0;
     border-radius: 0.5mm;
   }
-.print-chart-note {
-    font-weight: 400;
-    color: #6b7280;
-  }
 .print-bar-value {
-    font-size: 7.5pt;
+    font-size: 10pt;
     text-align: right;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 .print-note {
-    font-size: 8pt;
+    font-size: 10pt;
     color: #6b7280;
     margin-top: 5mm;
+  }
+/* Помесячные итоги на титульном листе: нижняя половина альбомной страницы
+   пустовала, а самой очевидной таблицы — «сколько вышло в каждом месяце» — в
+   отчёте не было вовсе. Широкая помесячная таблица со всеми статьями в лист
+   не влезает (для неё есть Excel), а свод из двенадцати строк — влезает. */
+.print-months-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6mm;
+    margin-top: 5mm;
+  }
+.print-months {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+  }
+.print-months th,
+  .print-months td {
+    padding: 0.8mm 1.5mm;
+    border-bottom: 0.2mm solid #e5e7eb;
+    white-space: nowrap;
+  }
+.print-months th {
+    font-size: 9pt;
+    font-weight: 600;
+    color: #6b7280;
+    text-align: right;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+.print-months th:first-child,
+  .print-months td:first-child {
+    text-align: left;
+  }
+.print-months td {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+.print-months tbody tr:last-child td {
+    border-top: 0.4mm solid #d1d5db;
+    border-bottom: none;
+    font-weight: 600;
+  }
+.print-months .print-months-minus {
+    color: #b91c1c;
   }
 
 @media print {
@@ -480,7 +619,18 @@ h2,
   }
   @page {
       size: A4 landscape;
-      margin: 10mm;
+      /* Снизу поле меньше — им же ограничены и листы, снятые в PDF. */
+      margin: 10mm 10mm 6mm;
+    }
+  /* Разрезы по статьям печатаются книжными листами (issue #68). Именованная
+     страница — единственный способ смешать ориентации в одном документе;
+     браузер, который её не понимает, напечатает тот же лист альбомным. */
+  @page sheet-portrait {
+      size: A4 portrait;
+      margin: 10mm 10mm 6mm;
+    }
+  .print-page.print-portrait {
+      page: sheet-portrait;
     }
   html,
     body,

@@ -21,6 +21,14 @@ export interface PdfPage {
   /** Размер картинки в пикселях: PDF обязан их знать. */
   width: number;
   height: number;
+  /**
+   * Размер ЭТОГО листа в пунктах. Не задан — общий из настроек документа.
+   *
+   * Ориентация в PDF задаётся каждому листу отдельно, и это не прихоть формата:
+   * в одном отчёте сводка идёт альбомным листом (четыре плитки в ряд), а списки
+   * статей — книжными, где помещается больше строк (issue #68).
+   */
+  sheet?: { width: number; height: number };
 }
 
 export interface PdfOptions {
@@ -106,15 +114,16 @@ export function buildPdf(pages: PdfPage[], opts: PdfOptions = {}): Uint8Array {
   push(`<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>\nendobj\n`);
 
   pages.forEach((p, i) => {
+    const box = p.sheet ?? sheet;
     openObject(pageId(i));
     push(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${sheet.width} ${sheet.height}] ` +
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${box.width} ${box.height}] ` +
         `/Resources << /XObject << /Im0 ${imageId(i)} 0 R >> >> ` +
         `/Contents ${contentId(i)} 0 R >>\nendobj\n`
     );
 
     // Матрица преобразования: растянуть единичный квадрат картинки на лист.
-    const stream = `q\n${sheet.width} 0 0 ${sheet.height} 0 0 cm\n/Im0 Do\nQ\n`;
+    const stream = `q\n${box.width} 0 0 ${box.height} 0 0 cm\n/Im0 Do\nQ\n`;
     openObject(contentId(i));
     push(`<< /Length ${stream.length} >>\nstream\n${stream}endstream\nendobj\n`);
 

@@ -43,9 +43,20 @@ function toDisplay(iso: string): string {
   return p ? `${pad(p.d)}.${pad(p.m + 1)}.${p.y}` : "";
 }
 
+/**
+ * «Авг. 2026» — месяц сокращённо, чтобы кнопка не меняла ширину от «Мая» до
+ * «Сентября» и была уже.
+ *
+ * У мая точки нет: «Май» — это всё слово целиком, а не сокращение, и точка
+ * после него была бы ошибкой. Остальные одиннадцать — сокращения, и точка им
+ * положена.
+ */
 function toDisplayMonth(ym: string): string {
   const p = parseYM(ym);
-  return p ? `${MONTHS[p.m]} ${p.y}` : "";
+  if (!p) return "";
+  const short = MONTHS_SHORT[p.m];
+  const dot = short === MONTHS[p.m] ? "" : ".";
+  return `${short}${dot} ${p.y}`;
 }
 
 interface Props {
@@ -54,6 +65,16 @@ interface Props {
   className?: string;
   wrapperClassName?: string;
   placeholder?: string;
+  /**
+   * Выравнивать значение по центру кнопки, а не по левому краю.
+   *
+   * Нужно там, где поле стоит между стрелками «предыдущий/следующий» и работает
+   * как счётчик: значение прыгает по длине («Май 2026» → «Сентябрь 2026»), и
+   * прижатое влево оно ездит относительно стрелок. Значок календаря при этом
+   * остаётся справа, а слева встаёт пустышка той же ширины — иначе «центр»
+   * оказался бы смещён на значок.
+   */
+  centered?: boolean;
   /**
    * "day" (default) → value is "YYYY-MM-DD", calendar picks a day.
    * "month" → value is "YYYY-MM", the same popup opens straight to the month
@@ -69,6 +90,7 @@ export function DateField({
   className = "",
   wrapperClassName = "",
   placeholder,
+  centered = false,
   granularity = "day",
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -88,9 +110,18 @@ export function DateField({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={placeholder || "Дата"}
-        className={`${className} flex items-center justify-between gap-2 text-left`}
+        // В режиме счётчика (`centered`) просветы меньше: поле стоит между
+        // стрелками, и лишние миллиметры там видны сразу.
+        className={`${className} flex items-center justify-between ${
+          centered ? "gap-1.5" : "gap-2"
+        } text-left`}
       >
-        <span className={`truncate ${display ? "" : "text-muted"}`}>
+        {centered && <span className="w-4 shrink-0" aria-hidden />}
+        <span
+          className={`truncate ${centered ? "flex-1 text-center" : ""} ${
+            display ? "" : "text-muted"
+          }`}
+        >
           {display || ph}
         </span>
         <Calendar className="w-4 h-4 shrink-0 text-muted" />

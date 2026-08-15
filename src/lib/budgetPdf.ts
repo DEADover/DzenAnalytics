@@ -12,14 +12,21 @@
  * ради кириллицы и повторять всю раскладку вручную.
  */
 
-import { A4_LANDSCAPE, buildPdf, jpegFromDataUrl, type PdfPage } from "./pdf";
+import { A4_LANDSCAPE, A4_PORTRAIT, buildPdf, jpegFromDataUrl, type PdfPage } from "./pdf";
 
 /**
- * Размер листа в пикселях при 96 точках на дюйм — те же пропорции, что у
- * альбомного A4. Вёрстка снимается ровно в этом размере, поэтому картинка
- * ложится на лист без искажений.
+ * Размер листа в пикселях при 96 точках на дюйм — те же пропорции, что у A4.
+ * Вёрстка снимается ровно в этом размере, поэтому картинка ложится на лист без
+ * искажений.
+ *
+ * Ориентаций две: сводка идёт альбомным листом, разрезы по статьям — книжными
+ * (issue #68). Какая у страницы — говорит класс `print-portrait`, тот же, что
+ * задаёт ей размер в разметке.
  */
 const SHEET_PX = { width: 1123, height: 794 } as const;
+const SHEET_PX_PORTRAIT = { width: 794, height: 1123 } as const;
+/** Класс книжной страницы — должен совпадать с `.print-portrait` в стилях. */
+const PORTRAIT_CLASS = "print-portrait";
 
 /** Во сколько раз снимаем крупнее экрана: 2 ≈ 190 точек на дюйм на листе. */
 const SCALE = 2;
@@ -59,9 +66,11 @@ export async function downloadDashboardPdf(
   try {
     const shots: PdfPage[] = [];
     for (const page of pages) {
+      const portrait = page.classList.contains(PORTRAIT_CLASS);
+      const px = portrait ? SHEET_PX_PORTRAIT : SHEET_PX;
       const dataUrl = await toJpeg(page, {
-        width: SHEET_PX.width,
-        height: SHEET_PX.height,
+        width: px.width,
+        height: px.height,
         pixelRatio: SCALE,
         quality: 0.94,
         // Без явного фона JPEG (он не умеет прозрачность) залил бы страницу
@@ -70,8 +79,9 @@ export async function downloadDashboardPdf(
       });
       shots.push({
         jpeg: jpegFromDataUrl(dataUrl),
-        width: SHEET_PX.width * SCALE,
-        height: SHEET_PX.height * SCALE,
+        width: px.width * SCALE,
+        height: px.height * SCALE,
+        sheet: portrait ? A4_PORTRAIT : A4_LANDSCAPE,
       });
     }
     downloadBytes(buildPdf(shots, { page: A4_LANDSCAPE, title }), fileName);
