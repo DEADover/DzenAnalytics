@@ -52,3 +52,11 @@ export function accountKindLabel(type: string, savings?: boolean): string {
 export function accountTypeLabel(type: string): string {
   return accountKindLabel(type, false);
 }
+
+/**
+ * Типы счетов Дзен-мани, которые считаются долговыми.
+ *
+ * Живёт здесь, а не на странице «Счета»: тот же список нужен глобальному
+ * отбору, где долговой счёт раскрывается по контрагентам.
+ */
+export const DEBT_TYPES = new Set(["debt", "loan", "credit"]);

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { dedupeLines, nameKey } from "../lib/budgetLines";
 import {
   migrateLegacyBudgets,
   plannedFor,
@@ -12,6 +13,8 @@ import {
 /** A Zenmoney plan row, ready to seed a budget line. */
 export interface ZenPlanSeed {
   kind: BudgetKind;
+  /** Тег Дзен-мани: тождество строки, переживающее переименование статьи. */
+  tagId?: string;
   category: string;
   /** Sub-category title, or null when the plan is on the parent tag itself. */
   subcategory: string | null;
@@ -71,7 +74,13 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
   hydrate: async () => {
     const stored = await db.loadJSON<BudgetLine[]>(KEY);
     if (stored) {
-      set({ lines: stored, loaded: true });
+      // Задвоенные строки — след старой модели, где статья опознавалась только
+      // именем: после переименования категории в Дзен-мани рядом со старой
+      // строкой заводилась новая, и обе показывались на экране, а план
+      // родителя складывался из двух. Лечим при первом же чтении.
+      const { lines, merged } = dedupeLines(stored);
+      if (merged > 0) await db.saveJSON(KEY, lines);
+      set({ lines, loaded: true });
       return;
     }
     // First run on the new model → migrate the legacy flat budgets, if any.
@@ -119,8 +128,10 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
 
   applyPlans: async (items) => {
     if (items.length === 0) return;
+    // Имена нормализуются: хвостовой или неразрывный пробел в названии тега
+    // невидим на экране, а строку разводил на две (см. `budgetLines`).
     const idOf = (kind: string, category: string, sub: string | null) =>
-      [kind, category, sub ?? ""].join("\u0000");
+      nameKey(kind as BudgetKind, category, sub);
     // Одна правка на статью: если одна и та же статья пришла дважды, побеждает
     // последняя — как и при обычном редактировании.
     const wanted = new Map<string, PlanUpsert>();
@@ -160,8 +171,10 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
   importFromZen: async (plans, protectedKeys) => {
     // Identity is per TAG: (kind, category, subcategory). NUL-joined so titles
     // with «:» don't collide.
+    // Имена нормализуются: хвостовой или неразрывный пробел в названии тега
+    // невидим на экране, а строку разводил на две (см. `budgetLines`).
     const idOf = (kind: string, category: string, sub: string | null) =>
-      [kind, category, sub ?? ""].join("\u0000");
+      nameKey(kind as BudgetKind, category, sub);
     // `protectedSet` holds `budgetCellKey`s for cells the user edited locally
     // but hasn't pushed — those are shielded from Zen's value below.
     const protectedSet = protectedKeys ?? new Set<string>();
@@ -175,24 +188,28 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
     //   • existing line, cell edited local → keep local (don't clobber the user's
     //                                        own 305k with a stale 230k on sync).
     // Cells Zen doesn't mention are left untouched — we never blank an override.
-    const groups = new Map<
-      string,
-      {
-        kind: BudgetKind;
-        category: string;
-        subcategory: string | null;
-        months: Map<string, number>;
-        /** Месяцы с замком: «сумма точная, под-категории уже внутри». */
-        locks: Map<string, boolean>;
-      }
-    >();
+    interface PlanGroup {
+      kind: BudgetKind;
+      /** Тег Дзен-мани — по нему строка и опознаётся в первую очередь. */
+      tagId?: string;
+      category: string;
+      subcategory: string | null;
+      months: Map<string, number>;
+      /** Месяцы с замком: «сумма точная, под-категории уже внутри». */
+      locks: Map<string, boolean>;
+    }
+    const groups = new Map<string, PlanGroup>();
     for (const p of plans) {
       if (!(p.amount > 0)) continue;
-      const key = idOf(p.kind, p.category, p.subcategory);
+      // Группируем ПО ТЕГУ, если он известен: в Дзен-мани две разные статьи
+      // могут называться одинаково, и по именам их планы сливались в один —
+      // на экране оставалась сумма только одной из них.
+      const key = p.tagId ? `tag\u0000${p.tagId}` : idOf(p.kind, p.category, p.subcategory);
       let g = groups.get(key);
       if (!g) {
         g = {
           kind: p.kind,
+          ...(p.tagId ? { tagId: p.tagId } : {}),
           category: p.category,
           subcategory: p.subcategory,
           months: new Map(),
@@ -208,13 +225,40 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
     const seen = new Set<string>();
     let changed = false;
 
+    // Строку ищем СНАЧАЛА по тегу и только потом по именам: тег переживает
+    // переименование категории, а имена — нет. Без этого переименованная в
+    // Дзен-мани статья заводила себе вторую строку рядом со старой (задвоение
+    // на экране и удвоенный план у родителя).
+    const byTag = new Map<string, PlanGroup>();
+    // Запасной поиск по именам — для строк, заведённых вручную или до появления
+    // тегов: тождества по тегу у них ещё нет, привязать их к плану можно только
+    // по названию. При первой же синхронизации они тег получат.
+    const byName = new Map<string, PlanGroup>();
+    for (const g of groups.values()) {
+      if (g.tagId) byTag.set(g.tagId, g);
+      byName.set(idOf(g.kind, g.category, g.subcategory), g);
+    }
+
     // 1) Update EXISTING lines in place — adopt Zen's per-month value unless the
     //    cell is locally edited (protected) or already equal.
     const updated = get().lines.map((l) => {
-      const key = idOf(l.kind, l.category, l.subcategory ?? null);
-      const g = groups.get(key);
+      const byTagId = l.tagId ? byTag.get(l.tagId) : undefined;
+      const g = byTagId ?? byName.get(idOf(l.kind, l.category, l.subcategory ?? null));
       if (!g) return l;
+      const key = g.tagId ? `tag\u0000${g.tagId}` : idOf(g.kind, g.category, g.subcategory);
       seen.add(key);
+      // Тег переименовали — строка та же, имена новые. Заодно ставим тег тем
+      // строкам, что завелись до его появления.
+      const renamed =
+        l.category !== g.category || (l.subcategory ?? null) !== g.subcategory;
+      const stamp: Partial<BudgetLine> =
+        l.tagId === g.tagId && !renamed
+          ? {}
+          : {
+              ...(g.tagId ? { tagId: g.tagId } : {}),
+              category: g.category,
+              subcategory: g.subcategory,
+            };
       let next: Record<string, number> | undefined;
       let nextLocks: Record<string, boolean> | undefined;
       for (const [ym, amt] of g.months) {
@@ -236,10 +280,11 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
         if (!next) next = { ...(l.overrides ?? {}) };
         next[ym] = amt;
       }
-      if (!next && !nextLocks) return l;
+      if (!next && !nextLocks && Object.keys(stamp).length === 0) return l;
       changed = true;
       return {
         ...l,
+        ...stamp,
         ...(next ? { overrides: next } : {}),
         ...(nextLocks ? { locks: nextLocks } : {}),
       };
@@ -257,6 +302,7 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
       for (const [m, on] of g.locks) if (on) locks[m] = true;
       additions.push({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        ...(g.tagId ? { tagId: g.tagId } : {}),
         category: g.category,
         subcategory: g.subcategory,
         kind: g.kind,
@@ -271,7 +317,10 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
     }
 
     if (!changed && additions.length === 0) return;
-    const list = [...updated, ...additions];
+    // Слияние на выходе — страховка: если в хранилище уже лежали две строки
+    // одной статьи (наследство от опознания по именам), синхронизация не
+    // должна оставить их обе.
+    const { lines: list } = dedupeLines([...updated, ...additions]);
     await db.saveJSON(KEY, list);
     set({ lines: list });
   },

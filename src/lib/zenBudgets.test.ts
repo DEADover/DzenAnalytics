@@ -220,8 +220,11 @@ describe("zenPlanList", () => {
       ],
       tags
     );
+    // Тег едет вместе с планом: по нему строка бюджета и опознаётся, а имена
+    // могут смениться (категорию переименовали) — см. `budgetLines`.
     expect(list).toContainEqual({
       kind: "expense",
+      tagId: "shop",
       category: "Покупки",
       subcategory: null,
       ym: "2026-06",
@@ -230,6 +233,7 @@ describe("zenPlanList", () => {
     });
     expect(list).toContainEqual({
       kind: "expense",
+      tagId: "clothes",
       category: "Покупки",
       subcategory: "Одежда",
       ym: "2026-05",

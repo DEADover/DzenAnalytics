@@ -22,6 +22,15 @@ export interface TooltipFact {
    */
   swatch?: string;
   /**
+   * Та же метка, но цветом из палитры графика (`#22D3EE`, `var(--…)`).
+   *
+   * У полос бюджета цвет смысловой — «доход», «расход», — и он живёт классом.
+   * У слоёв стопки счетов цвет свой у каждого счёта и приходит из палитры уже
+   * значением: класса под него нет и быть не может, а связать строку подсказки
+   * с областью на графике надо ровно так же.
+   */
+  swatchColor?: string;
+  /**
    * Значок вместо цветной метки — для строк, которым на полосе не
    * соответствует ничего (план, остаток, разница). Место под значок и под
    * метку одно и то же, поэтому подписи стоят в столбик независимо от того,
@@ -69,10 +78,13 @@ export function TooltipFacts({
           {facts.map((f) => (
             <div key={f.label} className="flex items-center justify-between gap-6">
               <span className="flex items-center gap-1.5 text-muted whitespace-nowrap">
-                {(f.swatch || f.icon) && (
+                {(f.swatch || f.swatchColor || f.icon) && (
                   <span className="w-3.5 shrink-0 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
-                    {f.swatch ? (
-                      <span className={`inline-block w-2.5 h-2 rounded-full ${f.swatch}`} />
+                    {f.swatch || f.swatchColor ? (
+                      <span
+                        className={`inline-block w-2.5 h-2 rounded-full ${f.swatch ?? ""}`}
+                        style={f.swatchColor ? { background: f.swatchColor } : undefined}
+                      />
                     ) : (
                       f.icon
                     )}
@@ -102,6 +114,22 @@ export function TooltipFacts({
           {note}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Карточка подсказки графика: та же рамка, фон и отступы, что у подсказок всего
+ * интерфейса (`Tooltip`), — чтобы подсказка на графике не выглядела гостьей из
+ * другого приложения.
+ *
+ * Своя обёртка нужна потому, что Recharts со своим `content` рисует голый
+ * контейнер: фон и рамку из `contentStyle` он в этом случае не применяет.
+ */
+export function ChartTooltipCard({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border bg-panel2 px-3 py-2 text-xs leading-relaxed text-text shadow-lg">
+      {children}
     </div>
   );
 }

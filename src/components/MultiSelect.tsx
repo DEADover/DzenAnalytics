@@ -28,6 +28,8 @@ export function MultiSelect({
   selected,
   onChange,
   renderIcon,
+  labelOf,
+  nestedOf,
   unitForms,
   searchPlaceholder,
   archivedSet,
@@ -43,6 +45,22 @@ export function MultiSelect({
   onChange: (next: Set<string>) => void;
   /** Optional leading icon per option (e.g. account logo / category dot). */
   renderIcon?: (opt: string) => ReactNode;
+  /**
+   * Подпись варианта, если она не совпадает со значением.
+   *
+   * Нужна там, где значение — составной ключ: у долгового счёта варианты идут
+   * парой «счёт → контрагент», а в списке человек ждёт увидеть имя, а не ключ.
+   * По умолчанию подпись и есть значение.
+   */
+  labelOf?: (opt: string) => string;
+  /**
+   * Вариант — ветка предыдущего: рисуется с отступом и уголком.
+   *
+   * Так под долговым счётом идут его контрагенты: они не отдельная группа, а
+   * его же разбивка, и отдельный заголовок над ними разрывал бы список там,
+   * где нужна вложенность.
+   */
+  nestedOf?: (opt: string) => boolean;
   /** Russian [one, few, many] noun for the count header (e.g. счёт/счёта/счетов). */
   unitForms?: [string, string, string];
   /** Override the search placeholder. */
@@ -74,8 +92,11 @@ export function MultiSelect({
   // Search appears only for longer lists (currency etc. don't need it).
   const showSearch = options.length > 8;
   const q = query.trim().toLowerCase();
+  const text = (o: string) => labelOf?.(o) ?? o;
+  // Ищем по ПОДПИСИ: у составного ключа в значении лежит ещё и имя счёта, и
+  // поиск по «Иван» иначе находил бы всех контрагентов этого счёта.
   const filteredOptions = q
-    ? options.filter((o) => o.toLowerCase().includes(q))
+    ? options.filter((o) => text(o).toLowerCase().includes(q))
     : options;
 
   // Set semantics: empty = ALL, {FILTER_NONE} = NONE, else a subset.
@@ -96,11 +117,61 @@ export function MultiSelect({
     else onChange(eff);
   };
 
+  /**
+   * Ветки варианта — идущие сразу за ним вложенные строки.
+   *
+   * Вложенность в этом списке одноуровневая и НЕПРЕРЫВНАЯ (см. `nestedOf`),
+   * поэтому детей можно не передавать отдельно: это все вложенные строки до
+   * следующей невложенной.
+   */
+  const childrenOf = (opt: string): string[] => {
+    if (!nestedOf) return [];
+    const i = options.indexOf(opt);
+    if (i < 0 || nestedOf(opt)) return [];
+    const out: string[] = [];
+    for (let j = i + 1; j < options.length && nestedOf(options[j]); j++) out.push(options[j]);
+    return out;
+  };
+
+  /** Родитель варианта-ветки: ближайшая невложенная строка выше. */
+  const parentOf = (opt: string): string | null => {
+    if (!nestedOf?.(opt)) return null;
+    const i = options.indexOf(opt);
+    for (let j = i - 1; j >= 0; j--) if (!nestedOf(options[j])) return options[j];
+    return null;
+  };
+
+  /**
+   * Отметка варианта.
+   *
+   * Ветка — это ЧАСТЬ родителя, и состояния «родитель снят, а ветка отмечена»
+   * быть не должно: оно читается как противоречие. Поэтому родитель тянет за
+   * собой все свои ветки, а снятая ветка снимает отметку с родителя — он
+   * больше не «весь счёт целиком», но остальные его ветки остаются.
+   */
   const toggle = (opt: string) => {
     const eff = effective();
-    if (eff.has(opt)) eff.delete(opt);
-    else eff.add(opt);
+    const kids = childrenOf(opt);
+    const on = !eff.has(opt);
+    if (on) {
+      eff.add(opt);
+      for (const k of kids) eff.add(k);
+    } else {
+      eff.delete(opt);
+      for (const k of kids) eff.delete(k);
+      const parent = parentOf(opt);
+      if (parent) eff.delete(parent);
+    }
     commit(eff);
+  };
+
+  /** Родитель отмечен не целиком: часть веток снята или наоборот. */
+  const isPartial = (opt: string) => {
+    const kids = childrenOf(opt);
+    if (kids.length === 0) return false;
+    return isChecked(opt)
+      ? !kids.every((k) => isChecked(k))
+      : kids.some((k) => isChecked(k));
   };
 
   /** Отметить или снять сразу группу — по кнопке в её заголовке. */
@@ -316,17 +387,40 @@ export function MultiSelect({
                           membersOf(group, false),
                           i > 0 ? "mt-1 pt-1 border-t border-border" : undefined
                         )}
-                      <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-panel2 rounded cursor-pointer text-xs">
+                      <label
+                        className={`flex items-center gap-2 px-2 py-1.5 hover:bg-panel2 rounded cursor-pointer text-xs ${
+                          nestedOf?.(opt) ? "relative pl-7" : ""
+                        }`}
+                      >
+                        {/* Уголок к строке выше — тот же приём, что и у
+                            под-категорий на дашборде: видно, чья это ветка, и
+                            заголовок группы для неё не нужен. */}
+                        {nestedOf?.(opt) && (
+                          <>
+                            <span
+                              className={`absolute left-3 -top-1 w-px bg-border ${
+                                nestedOf(filteredOptions[i + 1] ?? "") ? "-bottom-1" : "bottom-1/2"
+                              }`}
+                            />
+                            <span className="absolute left-3 top-1/2 w-2 h-px bg-border" />
+                          </>
+                        )}
+                        {/* Родитель, у которого отмечена только часть веток,
+                            показывается «частично» — иначе на экране стоял бы
+                            снятый счёт с отмеченным контрагентом внутри. */}
                         <input
                           type="checkbox"
                           checked={isChecked(opt)}
+                          ref={(el) => {
+                            if (el) el.indeterminate = isPartial(opt);
+                          }}
                           onChange={() => toggle(opt)}
                           className="accent-accent shrink-0"
                         />
                         {renderIcon && (
                           <span className="shrink-0">{renderIcon(opt)}</span>
                         )}
-                        <span className="truncate">{opt}</span>
+                        <span className="truncate">{text(opt)}</span>
                       </label>
                     </Fragment>
                   );

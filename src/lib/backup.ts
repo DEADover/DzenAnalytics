@@ -88,6 +88,13 @@ export const BACKUP_META_KEYS = [
   "backupInterval", // как часто напоминать о бэкапе
   // un-pushed local changes
   "transactionEdits",
+  // Кто записал правку — правило или человек. Едет вместе с самими правками:
+  // без этой карты после восстановления автоприменение сочло бы ручные правки
+  // своими и переписало бы их при первой же синхронизации (issue #75).
+  "transactionEditOrigins",
+  // Когда каждое правило с расписанием отработало в прошлый раз. Без него
+  // сразу после восстановления все они запустились бы разом.
+  "ruleScheduleRuns",
   "pendingTransactions", // drafts (new operations)
   "deletedTransactions",
   "deletedPayloads",

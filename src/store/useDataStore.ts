@@ -7,8 +7,11 @@ import {
   type HistDayRates,
 } from "../lib/historicalRates";
 import { buildPayeeAliasMap } from "../lib/payeeNormalize";
-import { restoreRuleCategories, type StoredRule } from "../lib/ruleEngine";
+import { migrateRule, restoreRuleCategories, type StoredRule } from "../lib/ruleEngine";
 import { autoApplyPatches } from "../lib/ruleAutoApply";
+import { rulesView } from "../lib/rulesView";
+import { userEdits } from "../lib/editOrigins";
+import { depthFrom, isDue, withinDepth } from "../lib/ruleSchedule";
 import { makeCategoryChecker } from "../lib/zenmoneyPush";
 
 import { applyEdits } from "../lib/applyEdits";
@@ -246,6 +249,22 @@ async function pushAfterRestore(): Promise<void> {
  * автоприменение не срабатывает: «новых» там вся история, а молча переписать
  * её и отправить в Дзен-мани — не то, чего ждут от галочки.
  */
+/**
+ * Поднять слой правок, если он ещё не поднят.
+ *
+ * Запись правок сливается с тем, что лежит В ПАМЯТИ стора. Автоприменение и
+ * расписание срабатывают на открытии — раньше, чем React успевает поднять
+ * сторы, — и без этой проверки они слили бы свои правки с ПУСТОЙ картой,
+ * стерев с диска всё, что человек правил руками.
+ */
+async function ensureEditsLoaded(): Promise<void> {
+  if (!useEditsStore.getState().loaded) await useEditsStore.getState().hydrate();
+}
+
+/** Где лежат правила и когда каждое из них отработало по расписанию. */
+const RULES_KEY = "categoryRules";
+const RUNS_KEY = "ruleScheduleRuns";
+
 async function autoApplyToNew(
   raw: Transaction[],
   previousIds: Set<string>
@@ -253,7 +272,8 @@ async function autoApplyToNew(
   if (previousIds.size === 0) return;
   const fresh = raw.filter((t) => !previousIds.has(t.id));
   if (fresh.length === 0) return;
-  const rules = await db.loadJSON<StoredRule[]>("categoryRules");
+  await ensureEditsLoaded();
+  const rules = await db.loadJSON<StoredRule[]>(RULES_KEY);
   if (!rules || rules.length === 0) return;
 
   // Справочники Дзен-мани — из кэша: без них правило может записать категорию,
@@ -269,16 +289,88 @@ async function autoApplyToNew(
       })()
     : null;
 
+  const edits = await loadEditsFromStore();
+  const origins = useEditsStore.getState().origins;
   const patches = autoApplyPatches(
-    fresh,
+    // Правило смотрит на исходник плюс РУЧНЫЕ правки: поправленный человеком
+    // комментарий для него такой же повод сработать, как банковский.
+    rulesView(fresh, userEdits(edits, origins)),
     rules,
-    await loadEditsFromStore(),
+    edits,
     await loadDeletedSet(),
     categoryOk,
-    payeeOk
+    payeeOk,
+    origins
   );
   if (Object.keys(patches).length === 0) return;
-  await useEditsStore.getState().setEditEach(patches);
+  await useEditsStore.getState().setEditEach(patches, "rule");
+}
+
+/**
+ * Правила с расписанием: пройти по операциям вглубь истории (issue #75).
+ *
+ * Обычное автоприменение трогает только то, что пришло последней
+ * синхронизацией. Расписание нужно для другого случая: операция уже лежит в
+ * истории, но человек поправил у неё комментарий или получателя — и теперь она
+ * подходит под правило. «Новой» её никто не считает, и без расписания она ждёт,
+ * пока за ней придут руками.
+ *
+ * Сроки календарные, а не «раз в 24 часа»: приложение живёт в браузере, и «раз
+ * в день» здесь значит «при первом открытии или синхронизации в новый день».
+ */
+async function runScheduledRules(raw: Transaction[]): Promise<void> {
+  if (raw.length === 0) return;
+  const rules = await db.loadJSON<StoredRule[]>(RULES_KEY);
+  if (!rules || rules.length === 0) return;
+  const due = rules
+    .map((r) => migrateRule(r))
+    .filter((r) => r.enabled && r.autoApply === true && r.schedule);
+  if (due.length === 0) return;
+
+  await ensureEditsLoaded();
+  const runs = (await db.loadJSON<Record<string, string>>(RUNS_KEY)) ?? {};
+  const now = new Date();
+  const pending = due.filter((r) => isDue(r.schedule, runs[r.id], now));
+  if (pending.length === 0) return;
+
+  const cache = await loadZenCache();
+  const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
+  const payeeOk = cache?.merchants
+    ? (() => {
+        const set = new Set(
+          cache.merchants.map((m) => (m.title ?? "").trim().toLowerCase())
+        );
+        return (title: string) => set.has(title.trim().toLowerCase());
+      })()
+    : null;
+  const edits = await loadEditsFromStore();
+  const origins = useEditsStore.getState().origins;
+  const deleted = await loadDeletedSet();
+  const view = rulesView(raw, userEdits(edits, origins));
+
+  const patches: Record<string, import("./useEditsStore").TransactionEdit> = {};
+  const stamps: Record<string, string> = { ...runs };
+  for (const rule of pending) {
+    // Глубина у каждого правила своя, поэтому и выборка своя.
+    const from = depthFrom(rule.schedule!.depth, now);
+    const scope = from ? view.filter((t) => withinDepth(t.date, from)) : view;
+    const found = autoApplyPatches(
+      scope,
+      [rule],
+      edits,
+      deleted,
+      categoryOk,
+      payeeOk,
+      origins
+    );
+    for (const [id, patch] of Object.entries(found)) {
+      patches[id] = { ...patches[id], ...patch };
+    }
+    stamps[rule.id] = now.toISOString();
+  }
+  await db.saveJSON(RUNS_KEY, stamps);
+  if (Object.keys(patches).length === 0) return;
+  await useEditsStore.getState().setEditEach(patches, "rule");
 }
 
 async function loadEditsFromStore(): Promise<
@@ -380,6 +472,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     let raw = recalcBase(txs, rates, hist);
     raw = applyPayeeGrouping(raw, grouping || false, manualAliases);
     raw = restoreRuleCategories(raw);
+    // Расписание догоняет при открытии: браузерное приложение ночью не
+    // работает, и «раз в день» означает первый заход в новый день.
+    await runScheduledRules(raw);
     const final = await finalize(raw, rates);
     set({
       transactions: final,
@@ -470,6 +565,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     await db.saveTransactions(raw);
     await db.saveImportMeta(meta);
     await autoApplyToNew(raw, previousIds);
+    await runScheduledRules(raw);
     const final = await finalize(raw, rates);
     set({ transactions: final, transactionsRaw: raw, rates, importMeta: meta });
     void get().warmHistoricalRates();
@@ -488,6 +584,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
     await autoApplyToNew(raw, existingIds);
+    await runScheduledRules(raw);
     const mergedMeta: ImportMeta = {
       ...meta,
       parsed: existing.length + fresh.length,

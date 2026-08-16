@@ -9,6 +9,7 @@ import {
 } from "./budgets";
 import { ALL_ACCOUNTS, budgetHits, TRANSFER_CATEGORY, type BudgetScope } from "./budgetScope";
 import type { PlannedPlan } from "./plannedPlans";
+import { nameKey } from "./budgetLines";
 
 /**
  * Годовой свод бюджета: двенадцать месяцев плана и факта по статьям, с итогами
@@ -107,8 +108,13 @@ function emptyCells(): YearCell[] {
   return Array.from({ length: MONTHS }, () => ({ plan: 0, fact: 0 }));
 }
 
+/**
+ * Ключ строки свода. Имена нормализуются (см. `budgetLines`): невидимая
+ * разница — хвостовой или неразрывный пробел — раньше разводила одну статью на
+ * две строки, и итог категории складывался из обеих.
+ */
 function rowKey(kind: string, category: string, sub: string | null): string {
-  return [kind, category, sub ?? ""].join(" ");
+  return nameKey(kind as BudgetKind, category, sub);
 }
 
 function addInto(dst: YearCell[], src: YearCell[]): void {

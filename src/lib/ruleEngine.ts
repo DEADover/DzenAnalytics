@@ -36,6 +36,7 @@
 import type { Transaction } from "../types";
 import type { TransactionEdit } from "../store/useEditsStore";
 import type { CategoryRule as CategoryRuleV1, RuleField } from "../store/useCategoryRulesStore";
+import type { RuleSchedule } from "./ruleSchedule";
 import { safeCompileRegex, safeTest } from "./safeRegex";
 import { NO_CATEGORY } from "./zenmoneyMap";
 
@@ -164,6 +165,12 @@ export interface CategoryRuleV2 {
    * молча переписать всю историю. Для них есть кнопка.
    */
   autoApply?: boolean;
+  /**
+   * Расписание автоприменения: как часто проходить по операциям и как глубоко
+   * смотреть в прошлое. Нет поля — прежнее поведение: только то, что пришло
+   * последней синхронизацией (issue #75).
+   */
+  schedule?: RuleSchedule;
   createdAt: string;
 }
 

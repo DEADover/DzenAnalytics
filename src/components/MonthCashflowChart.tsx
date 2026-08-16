@@ -12,7 +12,7 @@ import {
 import type { Transaction } from "../types";
 import { Scale } from "lucide-react";
 import { buildMonthCashflow } from "../lib/budgets";
-import { TooltipFacts, type TooltipFact } from "./TooltipFacts";
+import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "./TooltipFacts";
 import {
   formatMoney,
   formatNum,
@@ -117,9 +117,9 @@ function CashflowTip({
     });
   }
   return (
-    <div className="rounded-lg border border-border bg-panel2 px-3 py-2 text-xs leading-relaxed text-text shadow-lg">
+    <ChartTooltipCard>
       <TooltipFacts title={dayLabelOf(ym, Number(label))} facts={facts} />
-    </div>
+    </ChartTooltipCard>
   );
 }
 

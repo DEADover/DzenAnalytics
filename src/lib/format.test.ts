@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   axisFractionDigits,
+  niceStep,
   currencySymbol,
   displayPayee,
   formatNum,
@@ -185,5 +186,32 @@ describe("axisFractionDigits", () => {
   it("тысячи считаются от своей единицы, а не от миллионов", () => {
     expect(axisFractionDigits(0, 8000)).toBe(1);
     expect(axisFractionDigits(7900, 8000)).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("niceStep — деления оси, которые мы считаем сами", () => {
+  it("шаг круглый: 1, 2 или 5 на своём порядке", () => {
+    expect(niceStep(900_000)).toBe(1_000_000);
+    expect(niceStep(1_100_000)).toBe(2_000_000);
+    expect(niceStep(3_000_000)).toBe(5_000_000);
+    expect(niceStep(120)).toBe(200);
+    expect(niceStep(1)).toBe(1);
+  });
+
+  it("на пустых и бессмысленных значениях не ломается", () => {
+    expect(niceStep(0)).toBe(1);
+    expect(niceStep(-5)).toBe(1);
+    expect(niceStep(Number.NaN)).toBe(1);
+  });
+
+  it("сетка накрывает пик и не оставляет лишнего деления", () => {
+    // Ровно то, ради чего шаг и считается: верх оси — ближайшее деление НАД
+    // пиком, а не «ещё одно сверху для красоты».
+    const peak = 3_626_504;
+    const step = niceStep(peak / 4);
+    const top = Math.ceil(peak / step) * step;
+    expect(step).toBe(1_000_000);
+    expect(top).toBe(4_000_000);
+    expect(top - step).toBeLessThan(peak);
   });
 });

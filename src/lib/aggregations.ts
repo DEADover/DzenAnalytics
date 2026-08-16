@@ -2,6 +2,7 @@ import type { Transaction, CurrencyRates } from "../types";
 import { ymKey, ymdKey } from "./format";
 import { periodKey } from "./period";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
+import { counterpartyOf, debtKey } from "./debtFilter";
 
 export interface MonthBucket {
   ym: string;
@@ -194,55 +195,21 @@ export function stackedBalanceByAccount(
    *
    * Пустой список / `null` — прежнее поведение (топ-N плюс «Прочие»).
    */
-  onlyAccounts?: readonly string[] | null
+  onlyAccounts?: readonly string[] | null,
+  /**
+   * Долговые счета, которые надо разложить по контрагентам: счёт → выбранные
+   * имена. Операции таких контрагентов уходят каждая в СВОЙ слой с ключом
+   * «счёт → контрагент», остальные остаются на слое самого счёта.
+   *
+   * Нужно потому, что в Дзен-мани долговой счёт один на всех: «сколько мне
+   * должен Иван» из общего остатка не видно, а это ровно то, что спрашивают.
+   * Якорь такому слою — его собственный итог по контрагенту (см. `debts`), и
+   * передавать его надо в `realBalances` тем же составным ключом.
+   */
+  debtSplit?: ReadonlyMap<string, ReadonlySet<string>> | null
 ): { series: StackedBalancePoint[]; accounts: string[] } {
-  const balances = balancesByAccount(allTxs);
-  // Pick the «biggest» accounts. With real balances (API mode, where the chart
-  // shows actual balances) rank by |real balance| — so the largest accounts by
-  // money get their own area and small ones fold into «Прочие». Without them
-  // (CSV) rank by turnover + net flow, since that's all we have.
-  const score = (b: { account: string; balance: number; income: number; expense: number }) =>
-    realBalances
-      ? Math.abs(realBalances[b.account] ?? 0)
-      : Math.abs(b.balance) + b.income + b.expense;
   const only =
     onlyAccounts && onlyAccounts.length > 0 ? new Set(onlyAccounts) : null;
-  // Порядок слоёв один и тот же при отборе и без него — по «весу» счёта, чтобы
-  // крупный лежал в основании стопки. Выбранный счёт без единой операции в
-  // `balances` не значится: его вес берём из реального остатка, иначе он молча
-  // выпадал бы из графика.
-  const byTitle = new Map(balances.map((b) => [b.account, b]));
-  const weight = (title: string) => {
-    const b = byTitle.get(title);
-    if (b) return score(b);
-    return realBalances ? Math.abs(realBalances[title] ?? 0) : 0;
-  };
-  const topAccounts = only
-    ? [...only].sort((a, b) => weight(b) - weight(a))
-    : balances
-        .slice()
-        .sort((a, b) => score(b) - score(a))
-        .slice(0, topN)
-        .map((b) => b.account);
-  const accountSet = new Set(topAccounts);
-
-  // «Прочие» из одного счёта ничего не обобщают — только прячут его имя под
-  // безымянным слоем. Такой счёт показываем отдельно: слоёв ровно столько же,
-  // а в легенде вместо «Прочие» стоит настоящее название.
-  if (!only) {
-    const rest = new Set<string>();
-    for (const b of balances) if (!accountSet.has(b.account)) rest.add(b.account);
-    if (realBalances) {
-      for (const [acc, bal] of Object.entries(realBalances)) {
-        if (bal != null && Math.abs(bal) > 0.005 && !accountSet.has(acc)) rest.add(acc);
-      }
-    }
-    if (rest.size === 1) {
-      const [extra] = rest;
-      topAccounts.push(extra);
-      accountSet.add(extra);
-    }
-  }
 
   const days = new Map<string, Map<string, number>>();
   // Поток «эпоховых» операций (1970 год). Он НЕ выбрасывается — иначе поедут
@@ -265,6 +232,8 @@ export function stackedBalanceByAccount(
   // `days`. Subtracted from the running total before anchoring so the cloud
   // balance reconciles against the synced flow only (issue #18).
   const unsyncedFlow = new Map<string, number>();
+  /** Все слои, встреченные в операциях: из них потом отбираются самые крупные. */
+  const seen = new Set<string>();
   for (const t of allTxs) {
     const d = ymdKey(t.date);
     if (!d) continue;
@@ -272,12 +241,22 @@ export function stackedBalanceByAccount(
     const unsynced = unsyncedIds ? unsyncedIds.has(t.id) : false;
     const apply = (acc: string, delta: number) => {
       if (!acc) return;
-      const key = accountSet.has(acc) ? acc : only ? null : "Прочие";
+      // Операция долгового счёта, у которого контрагент выделен в свой слой,
+      // уходит туда целиком. На самом счёте остаётся всё прочее — так стопка
+      // не считает одни и те же деньги дважды.
+      const split = debtSplit?.get(acc);
+      const payee = split ? counterpartyOf(t) : null;
+      const layer = payee !== null && split!.has(payee) ? debtKey(acc, payee) : acc;
+      // Слой считаем для КАЖДОГО счёта, а не только для отобранных: кто из них
+      // крупный, а кто мелочь, видно лишь после того, как посчитаны линии.
+      // Отбор пользователя — единственное, что отсекает операцию сразу.
+      const key = !only ? layer : only.has(layer) ? layer : only.has(acc) ? acc : null;
       // День остаётся на оси, даже если операция прошла по невыбранному счёту:
       // иначе при отборе пары счетов ось теряла бы почти все точки, а линии
       // рвались на длинные прямые между редкими днями.
       if (!tooOld && !days.has(d)) days.set(d, new Map());
       if (key === null) return;
+      seen.add(key);
       if (tooOld) {
         opening.set(key, (opening.get(key) || 0) + delta);
         fromEpoch.add(key);
@@ -299,15 +278,24 @@ export function stackedBalanceByAccount(
     }
   }
 
-  const accountList = [...topAccounts];
-  const hasOther =
-    !only && Array.from(days.values()).some((m) => m.has("Прочие"));
-  if (hasOther) accountList.push("Прочие");
+  /**
+   * Слои-кандидаты: всё, что встретилось в операциях, плюс счета, у которых
+   * операций нет вовсе, а деньги есть. Такой счёт (вклад, куда положили один
+   * раз и забыли) обязан попасть в кандидаты: раньше он молча уходил в
+   * «Прочие» и утаскивал туда весь свой остаток.
+   */
+  const layers = only ? [...only] : [...seen];
+  if (!only && realBalances) {
+    const known = new Set(layers);
+    for (const [acc, bal] of Object.entries(realBalances)) {
+      if (bal != null && Math.abs(bal) > 0.005 && !known.has(acc)) layers.push(acc);
+    }
+  }
 
   const sortedDates = Array.from(days.keys()).sort();
   const running: Record<string, number> = {};
   // Линия стартует не с нуля, а с потока, накопленного «эпоховыми» операциями.
-  for (const a of accountList) running[a] = opening.get(a) || 0;
+  for (const a of layers) running[a] = opening.get(a) || 0;
 
   /**
    * Счёт «уже есть» на эту дату.
@@ -323,60 +311,86 @@ export function stackedBalanceByAccount(
     return start === undefined || date >= start;
   };
 
-  const series: StackedBalancePoint[] = [];
-  for (const date of sortedDates) {
+  // Линия каждого слоя целиком — по всем кандидатам сразу. Отбор «кто крупный»
+  // идёт уже по готовым линиям (ниже): по одному только сегодняшнему остатку
+  // его делать нельзя — счёт, на котором год назад лежал миллион, а сегодня
+  // пусто, уходил в «Прочие» и делал их самым большим слоем на графике.
+  const line = new Map<string, number[]>();
+  for (const a of layers) line.set(a, new Array(sortedDates.length).fill(0));
+  for (let i = 0; i < sortedDates.length; i++) {
+    const date = sortedDates[i];
     const dayMap = days.get(date)!;
-    for (const a of accountList) {
+    for (const a of layers) {
       running[a] += dayMap.get(a) || 0;
+      line.get(a)![i] = alive(a, date) ? running[a] : 0;
     }
-    const point: StackedBalancePoint = { date, total: 0 };
-    let total = 0;
-    for (const a of accountList) {
-      const v = alive(a, date) ? running[a] : 0;
-      point[a] = Math.round(v);
-      total += v;
-    }
-    point.total = Math.round(total);
-    series.push(point);
   }
 
   // Anchor to real balances (API mode): after the loop, `running[a]` is each
   // account's cumulative flow at the last day. Shift the whole line by a
   // constant so it ends at the real balance; the day-to-day shape (real flows)
-  // is preserved. «Прочие» is anchored to the combined real balance of every
-  // account that isn't one of the shown top ones.
+  // is preserved. Счёт без известного остатка не двигаем — у него только поток.
   if (realBalances) {
-    const topSet = new Set(accountList.filter((a) => a !== "Прочие"));
-    let prochieReal = 0;
-    for (const [acc, bal] of Object.entries(realBalances)) {
-      if (bal != null && !topSet.has(acc)) prochieReal += bal;
-    }
-    // Reconcile against the SYNCED flow only: the API balance excludes unsynced
-    // drafts, so strip their flow from `running` before computing the shift.
-    // Otherwise the whole line slides by the draft amount (issue #18) — the
-    // offset becomes the true opening balance and the line ends at cloud+draft.
-    const offset: Record<string, number> = {};
-    for (const a of accountList) {
-      const synced = (running[a] || 0) - (unsyncedFlow.get(a) || 0);
-      if (a === "Прочие") {
-        offset[a] = prochieReal - synced;
-      } else {
-        const real = realBalances[a];
-        offset[a] = real == null ? 0 : real - synced;
-      }
-    }
-    for (const point of series) {
-      let total = 0;
-      for (const a of accountList) {
+    for (const a of layers) {
+      const real = realBalances[a];
+      if (real == null) continue;
+      // Reconcile against the SYNCED flow only: the API balance excludes unsynced
+      // drafts, so strip their flow from `running` before computing the shift.
+      // Otherwise the whole line slides by the draft amount (issue #18) — the
+      // offset becomes the true opening balance and the line ends at cloud+draft.
+      const offset = real - ((running[a] || 0) - (unsyncedFlow.get(a) || 0));
+      if (!offset) continue;
+      const values = line.get(a)!;
+      for (let i = 0; i < values.length; i++) {
         // Сдвиг к реальному остатку — только тем дням, когда счёт уже был:
         // иначе он же и рисовал бы ту самую полку до открытия счёта.
-        const v = alive(a, point.date) ? (point[a] as number) + offset[a] : 0;
-        point[a] = Math.round(v);
-        total += v;
+        if (alive(a, sortedDates[i])) values[i] += offset;
       }
-      point.total = Math.round(total);
     }
   }
+
+  /**
+   * «Вес» слоя — САМОЕ БОЛЬШОЕ, чем он был на графике, а не то, сколько на нём
+   * денег сегодня. Крупные счета идут своими слоями, а в «Прочие» сваливается
+   * мелочь — и теперь это правда мелочь: слой «Прочие» по определению нигде не
+   * поднимается выше любого показанного.
+   */
+  const peak = (a: string) => {
+    let top = 0;
+    for (const v of line.get(a)!) {
+      const abs = Math.abs(v);
+      if (abs > top) top = abs;
+    }
+    return top;
+  };
+  const weight = new Map(layers.map((a) => [a, peak(a)]));
+  const ordered = [...layers].sort((a, b) => weight.get(b)! - weight.get(a)!);
+  const shown = only ? ordered : ordered.slice(0, topN);
+  const rest = only ? [] : ordered.slice(topN);
+  // «Прочие» из одного счёта ничего не обобщают — только прячут его имя под
+  // безымянным слоем. Такой счёт показываем отдельно: слоёв ровно столько же,
+  // а в легенде вместо «Прочие» стоит настоящее название.
+  if (rest.length === 1) shown.push(rest.pop()!);
+  const hasOther = rest.some((a) => line.get(a)!.some((v) => Math.abs(v) >= 0.5));
+  const accountList = hasOther ? [...shown, "Прочие"] : [...shown];
+
+  const series: StackedBalancePoint[] = sortedDates.map((date, i) => {
+    const point: StackedBalancePoint = { date, total: 0 };
+    let total = 0;
+    for (const a of shown) {
+      const v = line.get(a)![i];
+      point[a] = Math.round(v);
+      total += v;
+    }
+    if (hasOther) {
+      let other = 0;
+      for (const a of rest) other += line.get(a)![i];
+      point["Прочие"] = Math.round(other);
+      total += other;
+    }
+    point.total = Math.round(total);
+    return point;
+  });
 
   return { series, accounts: accountList };
 }

@@ -3,6 +3,7 @@ import type { Transaction } from "../types";
 import { currentPeriod, periodRange, shiftPeriod } from "../lib/period";
 import { payeeSearchText } from "../lib/format";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
+import { debtSelection, matchesDebtSelection } from "../lib/debtFilter";
 
 /**
  * «year» — КАЛЕНДАРНЫЙ год, который листается стрелками, а не «последние 12
@@ -256,6 +257,9 @@ export function applyFilters(
       ? { from: state.from, to: state.to }
       : presetToRange(state.preset, maxDate, state.monthYM, monthStartDay);
   const search = state.search.trim().toLowerCase();
+  // Пары «долговой счёт → контрагент» разбираем один раз на прогон, а не на
+  // каждую операцию.
+  const debtPicks = debtSelection(state.accounts);
   return txs.filter((t) => {
     // «Без переводов» прячет только настоящие переводы между своими счетами.
     // Долговые операции тоже kind=transfer, но это не перевод — оставляем их.
@@ -274,7 +278,11 @@ export function applyFilters(
         state.accounts.has(t.account) ||
         (t.kind === "transfer" &&
           (state.accounts.has(t.outcomeAccount) ||
-            state.accounts.has(t.incomeAccount)));
+            state.accounts.has(t.incomeAccount))) ||
+        // Долговой счёт можно отобрать не целиком, а по конкретному человеку:
+        // в Дзен-мани все долги лежат на одном счёте, и «все долги сразу» —
+        // редко то, что нужно.
+        matchesDebtSelection(t, debtPicks);
       if (!onPickedAccount) return false;
     }
     // The category filter holds leaf keys equal to `categoryFull`: a bare

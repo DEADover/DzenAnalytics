@@ -155,7 +155,25 @@ export function SortableTable<T>({
     URL.revokeObjectURL(url);
   }
 
-  const visible = limit ? sorted.slice(0, limit) : sorted;
+  /**
+   * Сколько строк показано сейчас.
+   *
+   * `limit` — это первая порция, а не потолок: раньше остальные строки нельзя
+   * было увидеть вовсе, внизу просто стояло «Показано 40 из 176». На
+   * «Регулярных платежах» это выглядело как сломанная пагинация — список есть,
+   * а долистать до конца нечем.
+   */
+  const [shown, setShown] = useState(limit ?? 0);
+  // Данные сменились (другой отбор, другая вкладка) — счётчик начинает заново,
+  // иначе следующий список открывался бы уже раскрытым. Сброс идёт ПРЯМО В
+  // РЕНДЕРЕ, а не в эффекте: так новая порция считается сразу, без лишнего
+  // прохода с прежним числом строк.
+  const [seenData, setSeenData] = useState(data);
+  if (seenData !== data) {
+    setSeenData(data);
+    setShown(limit ?? 0);
+  }
+  const visible = limit ? sorted.slice(0, Math.max(shown, limit)) : sorted;
   const showExport = exportable && sorted.length > 0;
   // Раскрыто всё — считаем по ПОКАЗАННЫМ строкам: кнопка в шапке отвечает за
   // то, что видно, а не за скрытый хвост под `limit`.
@@ -298,9 +316,25 @@ export function SortableTable<T>({
           </tbody>
         </table>
       </div>
-      {limit && sorted.length > limit && (
-        <div className="text-xs text-muted text-center mt-3">
-          Показано {limit} из {sorted.length}
+      {limit && sorted.length > visible.length && (
+        <div className="flex items-center justify-center gap-3 mt-3">
+          <span className="text-xs text-muted">
+            Показано {visible.length} из {sorted.length}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShown(visible.length + limit)}
+            className="btn-ghost text-xs !py-1"
+          >
+            Показать ещё {Math.min(limit, sorted.length - visible.length)}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShown(sorted.length)}
+            className="text-xs text-accent hover:underline"
+          >
+            Показать все
+          </button>
         </div>
       )}
     </div>

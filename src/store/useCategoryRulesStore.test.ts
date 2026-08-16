@@ -206,6 +206,38 @@ describe("правила — автоприменение", () => {
     expect(useCategoryRulesStore.getState().rules[0].autoApply).toBeUndefined();
   });
 
+  it("расписание тоже доживает до диска и переживает правку соседнего поля", async () => {
+    // Та же грабля, что и с галочкой: нормализация пересобирает правило по
+    // полям, и расписание молча терялось при первой же правке (issue #75).
+    disk.clear();
+    useCategoryRulesStore.setState({ rules: [], loaded: true });
+    await useCategoryRulesStore.getState().add({
+      enabled: true,
+      conditions: [{ field: "comment", op: "contains", value: "дивиденды", caseInsensitive: true }],
+      join: "and",
+      actions: [{ kind: "setCategory", value: "Доход" }],
+    });
+    const id = useCategoryRulesStore.getState().rules[0].id;
+
+    await useCategoryRulesStore
+      .getState()
+      .update(id, { autoApply: true, schedule: { every: "day", depth: "month" } });
+    expect(useCategoryRulesStore.getState().rules[0].schedule).toEqual({
+      every: "day",
+      depth: "month",
+    });
+
+    await useCategoryRulesStore.getState().update(id, { title: "Дивиденды" });
+    expect(useCategoryRulesStore.getState().rules[0].schedule?.depth).toBe("month");
+    expect(
+      (disk.get("categoryRules") as { schedule?: { depth: string } }[])[0].schedule?.depth
+    ).toBe("month");
+
+    // Снять расписание — значит вернуть прежнее поведение «только новые».
+    await useCategoryRulesStore.getState().update(id, { schedule: undefined });
+    expect(useCategoryRulesStore.getState().rules[0].schedule).toBeUndefined();
+  });
+
   it("правило первого поколения автоприменения не получает", async () => {
     disk.set("categoryRules", [
       {

@@ -29,6 +29,8 @@ export type BudgetKind = "expense" | "income";
 /** A single Zenmoney plan, resolved to our category model, for one month. */
 export interface ZenPlanEntry {
   kind: BudgetKind;
+  /** Тег Дзен-мани — тождество строки бюджета (см. `budgetLines`). */
+  tagId: string;
   category: string;
   /** Sub-category title, or null when the plan is on the parent tag itself. */
   subcategory: string | null;
@@ -215,6 +217,7 @@ function collect(
     if (outFc === wantForecast && outVal > 0)
       out.push({
         kind: "expense",
+        tagId: b.tag,
         ...r,
         ym,
         amount: outAdded ? Math.round(outVal) : outVal,
@@ -223,6 +226,7 @@ function collect(
     if (incFc === wantForecast && incVal > 0)
       out.push({
         kind: "income",
+        tagId: b.tag,
         ...r,
         ym,
         amount: incAdded ? Math.round(incVal) : incVal,

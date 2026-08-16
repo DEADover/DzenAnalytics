@@ -6,11 +6,13 @@ import {
   Filter,
   SlidersHorizontal,
   Coins,
+  Users,
 } from "lucide-react";
 import { DateField } from "./DateField";
 import { MultiSelect } from "./MultiSelect";
 import { AccountLogo } from "./AccountLogo";
-import { accountKindLabel } from "../lib/accountType";
+import { accountKindLabel, DEBT_TYPES } from "../lib/accountType";
+import { parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
 import { CategoryFilterPicker } from "./CategoryFilterPicker";
 import { MonthPicker } from "./MonthPicker";
 import { currencySymbol } from "../lib/format";
@@ -116,6 +118,8 @@ export function GlobalFilters({
   /** Название счёта → его вид («Карта», «Депозит», …). Пусто в режиме CSV: там
    *  метаданных счетов нет, и группировать нечем. */
   const [accountKinds, setAccountKinds] = useState<Map<string, string>>(new Map());
+  /** Долговые счета: их в отборе можно раскрыть по контрагентам. */
+  const [debtAccounts, setDebtAccounts] = useState<Set<string>>(new Set());
   /** Название категории → расходная она или доходная, по справочнику Дзен-мани.
    *  Пусто в режиме CSV — тогда тип выводим из самих операций. */
   const [tagKinds, setTagKinds] = useState<Map<string, "expense" | "income" | "both">>(
@@ -157,6 +161,7 @@ export function GlobalFilters({
       setAccountKinds(
         new Map(live.map((a) => [a.title, accountKindLabel(a.type, a.savings)]))
       );
+      setDebtAccounts(new Set(live.filter((a) => DEBT_TYPES.has(a.type)).map((a) => a.title)));
       setOffBalanceAccounts(
         new Set(live.filter((a) => !a.archive && !a.inBalance).map((a) => a.title))
       );
@@ -170,22 +175,36 @@ export function GlobalFilters({
   // загруженных данных на странице «Счета» есть, и в отборе он тоже должен
   // быть (issue #67). `accountKinds` знает все счета справочника и пуст в
   // режиме CSV — там остаются одни операции.
-  const accounts = useMemo(
-    () =>
-      accountOptions(
-        transactions.map((t) => t.account),
-        accountKinds.keys(),
-        { archived: archivedAccounts, kinds: accountKinds }
-      ),
-    [transactions, archivedAccounts, accountKinds]
-  );
+  const accounts = useMemo(() => {
+    const base = accountOptions(
+      transactions.map((t) => t.account),
+      accountKinds.keys(),
+      { archived: archivedAccounts, kinds: accountKinds }
+    );
+    if (debtAccounts.size === 0) return base;
+    // Долговой счёт в Дзен-мани ОДИН на все долги, и отбор по нему отвечает
+    // «все сразу». Поэтому контрагенты идут ВЛОЖЕННЫМИ прямо под своим счётом —
+    // теми же именами, что и в разбивке на странице «Счета».
+    return withDebtCounterparties(base, debtAccounts, transactions);
+  }, [transactions, archivedAccounts, accountKinds, debtAccounts]);
 
   /** Заголовок группы для пикера счетов: архивные идут под своим разделителем,
    *  который рисует сам MultiSelect, поэтому им группу не назначаем. */
   const accountGroup = useCallback(
-    (title: string) =>
-      archivedAccounts.has(title) ? null : (accountKinds.get(title) ?? null),
+    (title: string) => {
+      // Контрагент живёт в группе своего счёта: он его ветка, а не отдельный
+      // раздел — иначе между счётом и его же разбивкой встал бы заголовок.
+      const debt = parseDebtKey(title);
+      const key = debt ? debt.account : title;
+      return archivedAccounts.has(key) ? null : (accountKinds.get(key) ?? null);
+    },
     [archivedAccounts, accountKinds]
+  );
+
+  /** Подпись варианта: у пары «счёт → контрагент» показываем человека. */
+  const accountLabel = useCallback(
+    (value: string) => parseDebtKey(value)?.payee ?? value,
+    []
   );
 
   // Parent categories each with their observed sub-categories — for the cascade
@@ -573,7 +592,15 @@ export function GlobalFilters({
           options={accounts}
           selected={f.accounts}
           onChange={(s) => f.setSet("accounts", s)}
-          renderIcon={(name) => <AccountLogo title={name} size={18} />}
+          renderIcon={(name) =>
+            parseDebtKey(name) ? (
+              <Users className="w-[18px] h-[18px] text-muted" />
+            ) : (
+              <AccountLogo title={name} size={18} />
+            )
+          }
+          labelOf={accountLabel}
+          nestedOf={(name) => parseDebtKey(name) !== null}
           unitForms={["счёт", "счёта", "счетов"]}
           searchPlaceholder="Поиск счёта"
           archivedSet={archivedAccounts}

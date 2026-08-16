@@ -472,3 +472,45 @@ describe("buildBudgetYear", () => {
     expect(r.income.fact).toBe(1500);
   });
 });
+
+describe("свод — невидимая разница в имени статьи", () => {
+  it("хвостовой пробел в названии не разводит статью на две строки", () => {
+    // Так выглядели жалобы на «задвоения»: в плане статья записана с пробелом
+    // на конце, в операциях — без него, и в своде появлялись две одинаковых с
+    // виду строки, а итог категории складывался из обеих.
+    const lines: BudgetLine[] = [
+      {
+        id: "l1",
+        category: "Банк",
+        subcategory: "Cash back ",
+        kind: "income",
+        amount: 0,
+        recurrence: "monthly",
+        startMonth: "2026-01",
+        endMonth: null,
+        overrides: { "2026-08": 4000 },
+        createdAt: "",
+      },
+    ];
+    const txs = [
+      {
+        id: "t1",
+        date: "2026-08-05",
+        amount: 1000,
+        amountBase: 1000,
+        currency: "RUB",
+        kind: "income",
+        account: "Сбер",
+        incomeAccount: "Сбер",
+        category: "Банк",
+        subcategory: "Cash back",
+        categoryFull: "Банк / Cash back",
+      },
+    ] as unknown as Transaction[];
+
+    const report = buildBudgetYear(lines, txs, 2026);
+    const bank = report.income.groups.find((g) => g.category === "Банк")!;
+    expect(bank.subs).toHaveLength(1);
+    expect(bank.subs[0].cells[7]).toEqual({ plan: 4000, fact: 1000 });
+  });
+});

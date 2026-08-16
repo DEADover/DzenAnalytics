@@ -173,3 +173,77 @@ describe("плановые операции в цифрах бюджета", () 
     expect(plannedFor(lines[0], "2026-08")).toBe(305_000);
   });
 });
+
+describe("importFromZen — задвоения статей", () => {
+  it("КЛЮЧЕВОЕ: переименованная в Дзен-мани статья не заводит вторую строку", async () => {
+    // Строка опознаётся ТЕГОМ. Раньше опознавалась именем: после
+    // переименования синк не находил строку и создавал новую, а старая
+    // оставалась — на экране две одинаковых с виду статьи с разными планами.
+    await useBudgetsStore.getState().importFromZen([
+      {
+        kind: "income",
+        tagId: "tag-cashback",
+        category: "Банк",
+        subcategory: "Cashback",
+        ym: "2026-07",
+        amount: 3413.55,
+      },
+    ]);
+    expect(useBudgetsStore.getState().lines).toHaveLength(1);
+
+    // тот же тег, новое имя и новый месяц
+    await useBudgetsStore.getState().importFromZen([
+      {
+        kind: "income",
+        tagId: "tag-cashback",
+        category: "Банк",
+        subcategory: "Cash back",
+        ym: "2026-08",
+        amount: 4209,
+      },
+    ]);
+    const lines = useBudgetsStore.getState().lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0].subcategory).toBe("Cash back");
+    expect(lines[0].overrides).toEqual({ "2026-07": 3413.55, "2026-08": 4209 });
+  });
+
+  it("две РАЗНЫЕ статьи с одинаковым названием остаются разными", async () => {
+    // В Дзен-мани так бывает; складывать их планы в одну строку — соврать.
+    await useBudgetsStore.getState().importFromZen([
+      { kind: "expense", tagId: "t1", category: "Прочее", subcategory: null, ym: "2026-08", amount: 100 },
+      { kind: "expense", tagId: "t2", category: "Прочее", subcategory: null, ym: "2026-08", amount: 200 },
+    ]);
+    const lines = useBudgetsStore.getState().lines;
+    expect(lines).toHaveLength(2);
+    expect(lines.map((l) => l.overrides?.["2026-08"]).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([
+      100, 200,
+    ]);
+  });
+
+  it("строка без тега получает его при первой же синхронизации", async () => {
+    await useBudgetsStore.getState().addLine({
+      category: "Банк",
+      subcategory: "Cash back",
+      kind: "income",
+      amount: 0,
+      recurrence: "monthly",
+      startMonth: "2026-08",
+      endMonth: null,
+      overrides: { "2026-08": 1000 },
+    });
+    await useBudgetsStore.getState().importFromZen([
+      {
+        kind: "income",
+        tagId: "tag-cashback",
+        category: "Банк",
+        subcategory: "Cash back",
+        ym: "2026-08",
+        amount: 4209,
+      },
+    ]);
+    const lines = useBudgetsStore.getState().lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0].tagId).toBe("tag-cashback");
+  });
+});

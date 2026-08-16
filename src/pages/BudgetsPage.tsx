@@ -39,6 +39,7 @@ import { BudgetFillModal, type FillItem } from "../components/BudgetFillModal";
 import { BudgetYearTable } from "../components/BudgetYearTable";
 import { BudgetSettingsPopover } from "../components/BudgetSettingsPopover";
 import { buildBudgetYear } from "../lib/budgetYear";
+import { nameKey } from "../lib/budgetLines";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
 import { BudgetDashboardPrint } from "../components/BudgetDashboardPrint";
 import { BudgetDashboardView } from "../components/BudgetDashboardView";
@@ -267,8 +268,16 @@ export function BudgetsPage() {
 
   // (kind, category, sub) already budgeted THIS month — the «Добавить» dropdowns
   // offer only what isn't budgeted yet, and the save is blocked on a duplicate.
+  /**
+   * Ключ статьи на этой странице.
+   *
+   * Имена НОРМАЛИЗУЮТСЯ (см. `budgetLines`): хвостовой пробел или неразрывный
+   * пробел в названии тега невидимы на экране, но раньше разводили одну статью
+   * на две — строку плана и «назначенную операцию» с тем же названием, и обе
+   * показывались рядом.
+   */
   const budgetKey = (kind: string, cat: string, sub: string | null) =>
-    [kind, cat, sub ?? ""].join("\u0000");
+    nameKey(kind as BudgetKind, cat, sub);
   const budgetedThisMonth = useMemo(() => {
     const s = new Set<string>();
     for (const l of lines)

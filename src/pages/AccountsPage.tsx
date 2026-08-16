@@ -40,6 +40,7 @@ import {
   LayoutGrid,
   Table as TableIcon,
   Archive,
+  Users,
 } from "lucide-react";
 import { debtsByCounterparty, NO_COUNTERPARTY } from "../lib/debts";
 import { useDataStore } from "../store/useDataStore";
@@ -79,7 +80,6 @@ import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
 import {
   formatMoney,
   formatPct,
-  chartTooltipStyle,
   formatNum,
   axisFractionDigits,
   formatDate,
@@ -88,7 +88,9 @@ import {
   chartGridStroke,
   chartAxisStroke,
   chartTotalStroke,
+  niceStep,
 } from "../lib/format";
+import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
@@ -102,13 +104,23 @@ import { AccountEditModal } from "../components/AccountEditModal";
 import { Popover } from "../components/Popover";
 import { Tooltip as AppTooltip } from "../components/Tooltip";
 import { DateField } from "../components/DateField";
-import { ACCOUNT_KINDS, accountKindLabel } from "../lib/accountType";
+import { ACCOUNT_KINDS, accountKindLabel, DEBT_TYPES } from "../lib/accountType";
+import { accountOptions } from "../lib/accountOptions";
+import { debtKey, parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
 import { pluralRu } from "../lib/plural";
 
 const STACK_COLORS = [
   "#22D3EE", "#A78BFA", "#F59E0B", "#10B981", "#EC4899",
   "#3B82F6", "#84CC16", "#F97316", "#14B8A6", "#6B7280",
 ];
+
+/** Доля высоты стопки, которая отводится минусам, если сами они мельче. */
+const NEG_ZONE = 0.1;
+
+/** Цвет линии «Совокупного баланса» — и самой линии, и метки в подсказке. */
+const NET_STROKE = "#22D3EE";
+/** Цвет линии «Изменения по отбору» — там же. */
+const FLOW_STROKE = "#A78BFA";
 
 // Типы настроек показа переехали в свой стор вместе с самими настройками:
 // страница их только читает. «Капитал» — остатки и их история, «Движение» —
@@ -132,8 +144,7 @@ const DEFAULT_DIR: Record<SortBy, SortDir> = {
 
 /** Bucket for accounts with no bank attached — cash, manual accounts, and
  *  anything imported from CSV (where the bank is simply unknown to us). */
-/** Типы счетов Дзен-мани, которые считаются долговыми. */
-const DEBT_TYPES = new Set(["debt", "loan", "credit"]);
+
 
 const NO_BANK = "Без банка";
 /** Bucket for accounts whose type the local cache doesn't know (CSV imports). */
@@ -1012,10 +1023,37 @@ export function AccountsPage() {
     [viewWindow, emptyWindow]
   );
 
-  /** Варианты отбора для графика — тот же перечень счетов, что и в списке под
-   *  ним, в том же порядке: архивные внизу, как ждёт MultiSelect. */
-  const chartAccountOptions = useMemo(
-    () => accountRows.map((r) => r.account),
+  /**
+   * Варианты отбора для графика — тот же перечень счетов, что и в списке под
+   * ним, и с теми же группами по виду счёта, что в глобальном отборе. Долговой
+   * счёт раскрыт по контрагентам: выбранный человек получает СВОЙ слой на
+   * графике — историю того, сколько он должен вам (или вы ему).
+   */
+  const chartAccountOptions = useMemo(() => {
+    // Порядок — как в глобальном отборе: по виду счёта, архивные внизу. Иначе
+    // `MultiSelect` рисует заголовок группы столько раз, сколько раз она
+    // встретилась в списке, а список счетов сортируется по своим правилам.
+    const kinds = new Map(accountRows.map((r) => [r.account, r.kind]));
+    const archived = new Set(accountRows.filter((r) => r.archive).map((r) => r.account));
+    const base = accountOptions(
+      accountRows.map((r) => r.account),
+      [],
+      { archived, kinds }
+    );
+    const debts = new Set(
+      accountRows.filter((r) => DEBT_TYPES.has(r.type)).map((r) => r.account)
+    );
+    return withDebtCounterparties(base, debts, transactions);
+  }, [accountRows, transactions]);
+  /** Вид счёта для заголовков групп — как в глобальном отборе. */
+  const chartAccountGroup = useCallback(
+    (name: string) => {
+      // Контрагент живёт в группе своего счёта — он его ветка, а не раздел.
+      const title = parseDebtKey(name)?.account ?? name;
+      const row = accountRows.find((r) => r.account === title);
+      if (!row || row.archive) return null;
+      return row.kind || null;
+    },
     [accountRows]
   );
   const chartArchived = useMemo(
@@ -1035,6 +1073,47 @@ export function AccountsPage() {
   const chartFiltered = chartOnly !== null && chartOnly.length > 0;
   const chartNothingPicked = chartOnly !== null && chartOnly.length === 0;
 
+  /**
+   * Выбранные контрагенты долговых счетов: счёт → имена.
+   *
+   * Их операции уходят каждая в свой слой, а сам счёт показывает остальное —
+   * иначе одни и те же деньги легли бы в стопку дважды.
+   */
+  const chartDebtSplit = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const key of chartOnly ?? []) {
+      const pair = parseDebtKey(key);
+      if (!pair) continue;
+      const set = m.get(pair.account) ?? new Set<string>();
+      set.add(pair.payee);
+      m.set(pair.account, set);
+    }
+    return m.size > 0 ? m : null;
+  }, [chartOnly]);
+
+  /**
+   * Якоря для слоёв: у контрагента это его собственный итог по долгу, а у
+   * самого долгового счёта — остаток за вычетом выделенных контрагентов.
+   *
+   * Итоги по контрагентам в сумме дают остаток счёта (см. `debtsByCounterparty`),
+   * поэтому «Итого» на графике от разбивки не меняется.
+   */
+  const chartRealBalances = useMemo(() => {
+    if (!hasRealBalances || !chartDebtSplit) return realBalancesByAccount;
+    const out: Record<string, number> = { ...realBalancesByAccount };
+    for (const [account, payees] of chartDebtSplit) {
+      const { rows } = debtsByCounterparty(transactions, new Set([account]));
+      let moved = 0;
+      for (const row of rows) {
+        if (!payees.has(row.payee)) continue;
+        out[debtKey(account, row.payee)] = row.amount;
+        moved += row.amount;
+      }
+      if (out[account] != null) out[account] -= moved;
+    }
+    return out;
+  }, [hasRealBalances, chartDebtSplit, realBalancesByAccount, transactions]);
+
   const stackedAll = useMemo(
     () =>
       stackedBalanceByAccount(
@@ -1042,11 +1121,12 @@ export function AccountsPage() {
         // Девять слоёв плюс «Прочие» — ровно столько цветов в палитре, так что
         // повторов не будет. Счетов меньше — слоёв меньше.
         9,
-        hasRealBalances ? realBalancesByAccount : null,
+        hasRealBalances ? chartRealBalances : null,
         unsyncedIds,
-        chartOnly
+        chartOnly,
+        chartDebtSplit
       ),
-    [transactions, hasRealBalances, realBalancesByAccount, unsyncedIds, chartOnly]
+    [transactions, hasRealBalances, chartRealBalances, unsyncedIds, chartOnly, chartDebtSplit]
   );
   const stacked = useMemo(
     () => ({ ...stackedAll, series: clip(stackedAll.series) }),
@@ -1077,47 +1157,164 @@ export function AccountsPage() {
       }
       if (neg < floor) floor = neg;
       if (pos > peak) peak = pos;
+      // Итог тоже бывает отрицательным — когда долгов больше, чем денег.
+      // Его линия обязана остаться внутри оси.
+      const total = point.total as number;
+      if (typeof total === "number" && total < floor) floor = total;
     }
-    // Копеечный минус (закрытая карта в −300 ₽ при активах в миллионы) — не
-    // повод разводить слои по знаку: ось всё равно округлит низ до целого
-    // деления и отдаст под него четверть высоты. Порог в сотую долю от пика
-    // отделяет настоящие долги от такой мелочи.
-    return Math.abs(floor) >= peak * 0.01 ? floor : 0;
+    return { floor, peak };
   }, [stacked]);
+
+  /**
+   * Ось стопки: деления и границы задаём сами, а мелкий минус РАСТЯГИВАЕМ.
+   *
+   * Отдать это автоматике нельзя: увидев низ «−14 612 ₽», она округлит его до
+   * миллиона вниз и отдаст под пустоту четверть высоты.
+   *
+   * Но и честного масштаба мало. Перерасход в полторы тысячи против шести
+   * миллионов активов — это 0,02 % высоты: полоска тоньше пикселя, и минуса на
+   * графике попросту не видно. Поэтому под минусы отводится своя зона внизу
+   * (десятая часть высоты), и они рисуются растянутыми на неё.
+   *
+   * Обман это или нет — решает подпись: у нижнего деления стоит НАСТОЯЩАЯ сумма
+   * («−14,6 тыс.»), рядом с нулём, так что разницу масштабов видно прямо на оси.
+   * Когда минусы и без растяжения занимают свою зону (долг в треть капитала),
+   * коэффициент равен единице и ось честна целиком.
+   */
+  const stackAxis = useMemo(() => {
+    const { floor, peak } = stackFloor;
+    const step = niceStep(Math.max(peak, 1) / 4);
+    const top = Math.ceil(peak / step) * step || step;
+    const ticks: number[] = [];
+    for (let v = 0; v <= top + step / 2; v += step) ticks.push(v);
+    if (floor >= 0) {
+      return { domain: [0, top] as [number, number], ticks, scale: 1, floor: 0 };
+    }
+    const zone = Math.max(-floor, top * NEG_ZONE);
+    ticks.unshift(-zone);
+    return {
+      domain: [-zone, top] as [number, number],
+      ticks,
+      // Во сколько раз растянуты минусы. Ими же множатся области под нулём.
+      scale: zone / -floor,
+      floor,
+    };
+  }, [stackFloor]);
 
   // Stacked-chart tooltip: per-account rows + a bold «Итого» — the day's net
   // worth, which the chart already carries on each datum as `total` (issue #27).
   const renderStackedTooltip = ({ active, payload, label }: TooltipContentProps) => {
     if (!active || !payload || payload.length === 0) return null;
-    const datum = payload[0]?.payload as { total?: number } | undefined;
-    // Линия итога — часть того же графика, поэтому приезжает в payload наравне
-    // со счетами. В список счетов её пускать нельзя: итог уже стоит отдельной
-    // строкой внизу, иначе он был бы там дважды.
-    const rows = payload.filter((p) => p.dataKey !== "total");
-    const total = datum?.total ?? rows.reduce((s, p) => s + toNum(p.value), 0);
+    // Числа берём из САМОЙ ТОЧКИ, а не из списка нарисованных областей: каждый
+    // счёт нарисован двумя областями (плюс и минус, см. ниже), и в списке он
+    // встретился бы дважды половинками. В точке лежит его настоящий остаток.
+    const datum = (payload[0]?.payload ?? {}) as Record<string, number | undefined>;
+    // Крупное — сверху: в стопке десяток слоёв, и порядок отрисовки в подсказке
+    // читается как случайный. Сортировка по величине НА ЭТОТ ДЕНЬ ставит первым
+    // то, из чего в этот день и состоят деньги, а нулевые слои (счёта тогда ещё
+    // не было) сами опускаются вниз, ничего при этом не пряча.
+    const rows = stacked.accounts
+      .map((acc, i) => ({
+        acc,
+        value: toNum(datum[acc]),
+        color: STACK_COLORS[i % STACK_COLORS.length],
+      }))
+      .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+    const total =
+      datum.total ?? rows.reduce((s, r) => s + r.value, 0);
+    const facts: TooltipFact[] = rows.map((r) => ({
+      label: parseDebtKey(r.acc)?.payee ?? r.acc,
+      value: formatMoney(r.value, base, { signed: true }),
+      swatchColor: r.color,
+      // Пустой слой — это «счёта тогда ещё не было»: он в списке нужен, но
+      // тянуть на себя взгляд наравне с деньгами не должен.
+      tone: r.value === 0 ? "muted" : r.value < 0 ? "expense" : undefined,
+      strong: r.value !== 0,
+    }));
+    facts.push({
+      label: "Итого",
+      value: formatMoney(total, base, { signed: true }),
+      icon: <Wallet />,
+      tone: total >= 0 ? "income" : "expense",
+      strong: true,
+    });
     return (
-      <div style={chartTooltipStyle}>
-        <div className="text-xs text-muted mb-1">{formatDate(label as string)}</div>
-        <div className="space-y-0.5">
-          {rows.map((p) => (
-            <div key={String(p.dataKey)} className="flex items-center gap-3 text-sm">
-              <span
-                className="w-2.5 h-2.5 rounded-[2px] shrink-0"
-                style={{ background: p.color as string }}
-              />
-              <span className="flex-1 min-w-0 truncate">{p.name}</span>
-              <span className="tabular-nums">
-                {formatMoney(toNum(p.value), base, { signed: true })}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 text-sm font-semibold mt-1 pt-1 border-t border-border">
-          <span className="w-2.5 shrink-0" />
-          <span className="flex-1">Итого</span>
-          <span className="tabular-nums">{formatMoney(total, base, { signed: true })}</span>
-        </div>
-      </div>
+      <ChartTooltipCard>
+        <TooltipFacts title={formatDate(label as string)} facts={facts} />
+      </ChartTooltipCard>
+    );
+  };
+
+  /**
+   * Подсказка графика с одной линией — «Совокупный баланс» и «Изменение».
+   *
+   * Своя вместо стандартной от Recharts: у той свой шрифт, свои отступы и своя
+   * подача числа, и рядом с подсказкой стопки (а тем более с «Бюджетом») она
+   * выглядела чужой. Здесь те же карточка, заголовок-дата и строка со значком.
+   */
+  const seriesTooltip =
+    (rowsOf: (dataKey: string) => { label: string; color: string } | null) =>
+    ({ active, payload, label }: TooltipContentProps) => {
+      if (!active || !payload || payload.length === 0) return null;
+      const facts: TooltipFact[] = [];
+      for (const p of payload) {
+        const meta = rowsOf(String(p.dataKey));
+        if (!meta || p.value == null) continue;
+        const v = toNum(p.value);
+        facts.push({
+          label: meta.label,
+          value: formatMoney(v, base, { signed: true }),
+          swatchColor: meta.color,
+          tone: v > 0 ? "income" : v < 0 ? "expense" : "muted",
+          strong: true,
+        });
+      }
+      if (facts.length === 0) return null;
+      return (
+        <ChartTooltipCard>
+          <TooltipFacts title={formatDate(label as string)} facts={facts} />
+        </ChartTooltipCard>
+      );
+    };
+
+  /** Линия совокупного баланса — цвет тот же, что у самой линии на графике. */
+  const renderNetTooltip = seriesTooltip((key) =>
+    key === "net" ? { label: "Баланс", color: NET_STROKE } : null
+  );
+
+  /**
+   * «Изменение по отбору»: накоплено с начала периода и сколько дал этот день.
+   *
+   * Дневная величина в данных была всегда, а показать её было негде: линия
+   * нарисована одна, и подсказка от Recharts знала только про неё. Со своей
+   * подсказкой вопрос «а что случилось именно в этот день» перестал требовать
+   * счёта в уме по соседним точкам.
+   */
+  const renderFlowTooltip = ({ active, payload, label }: TooltipContentProps) => {
+    if (!active || !payload || payload.length === 0) return null;
+    const datum = (payload[0]?.payload ?? {}) as { balance?: number; delta?: number };
+    if (datum.balance == null) return null;
+    const facts: TooltipFact[] = [
+      {
+        label: "Накоплено",
+        value: formatMoney(datum.balance, base, { signed: true }),
+        swatchColor: FLOW_STROKE,
+        tone: datum.balance > 0 ? "income" : datum.balance < 0 ? "expense" : "muted",
+        strong: true,
+      },
+    ];
+    if (datum.delta != null) {
+      facts.push({
+        label: "За день",
+        value: formatMoney(datum.delta, base, { signed: true }),
+        icon: <ArrowUpDown />,
+        tone: datum.delta > 0 ? "income" : datum.delta < 0 ? "expense" : "muted",
+      });
+    }
+    return (
+      <ChartTooltipCard>
+        <TooltipFacts title={formatDate(label as string)} facts={facts} />
+      </ChartTooltipCard>
     );
   };
 
@@ -1506,7 +1703,16 @@ export function AccountsPage() {
                 options={chartAccountOptions}
                 selected={chartAccounts}
                 onChange={setChartAccounts}
-                renderIcon={(name) => <AccountLogo title={name} size={18} />}
+                renderIcon={(name) =>
+                  parseDebtKey(name) ? (
+                    <Users className="w-[18px] h-[18px] text-muted" />
+                  ) : (
+                    <AccountLogo title={name} size={18} />
+                  )
+                }
+                labelOf={(name) => parseDebtKey(name)?.payee ?? name}
+                nestedOf={(name) => parseDebtKey(name) !== null}
+                groupOf={chartAccountGroup}
                 unitForms={["счёт", "счёта", "счетов"]}
                 searchPlaceholder="Поиск счёта"
                 archivedSet={chartArchived}
@@ -1555,12 +1761,10 @@ export function AccountsPage() {
                   при итоге −3,7 млн. */}
               <ComposedChart
                 data={stacked.series}
-                // Разводить слои по знаку нужно только когда знаки и правда
-                // разные. Если в окне все счета в плюсе, «sign» ничего не
-                // меняет по смыслу, но заставляет ось резервировать место под
-                // отрицательную половину — четверть высоты уходит в пустоту, а
-                // стопка упирается в потолок.
-                stackOffset={stackFloor < 0 ? "sign" : "none"}
+                // Знак разведён не смещением, а двумя стопками (см. области
+                // ниже): «sign» умеет только складывать, а нам нужно ещё и
+                // рисовать половинки по отдельности.
+                stackOffset="none"
               >
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
@@ -1573,25 +1777,63 @@ export function AccountsPage() {
                 <YAxis
                   stroke={chartAxisStroke}
                   fontSize={11}
-                  tickFormatter={(v) => formatNum(v, { compact: true })}
+                  // У нижнего деления подпись — НАСТОЯЩАЯ сумма минусов, даже
+                  // если зона под нулём растянута: иначе растяжение молча врало
+                  // бы про масштаб.
+                  tickFormatter={(v) =>
+                    formatNum(v === stackAxis.domain[0] ? stackAxis.floor : v, {
+                      compact: true,
+                    })
+                  }
                   // Ноль обязателен — высота слоя и есть сумма, от чего-то
-                  // другого её отмерять нельзя. Но и ниже нуля пустоту держать
-                  // незачем: если долгов в окне нет, ось начинается ровно с
-                  // нуля, а не отдаёт четверть высоты под пустое место.
-                  domain={[stackFloor, "auto"]}
+                  // другого её отмерять нельзя. Ниже нуля — зона минусов;
+                  // пустоты сверх неё ось не держит.
+                  domain={stackAxis.domain}
+                  ticks={stackAxis.ticks}
                 />
                 <Tooltip {...chartTooltipProps} content={renderStackedTooltip} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <ReferenceLine y={0} stroke={chartAxisStroke} strokeWidth={1} />
+                {/* Каждый счёт — ДВЕ области одного цвета: плюс в стопке над
+                    нулём, минус в стопке под ним. Одной областью нельзя: в день,
+                    когда счёт уходит в минус, его лента ныряет со своего места в
+                    стопке к нулю и закрашивает по дороге всё подряд — на графике
+                    это выглядело провалом на миллионы из-за перерасхода в
+                    полторы тысячи. Разведённые по знаку половинки ведут себя
+                    смирно: наверху лента просто сходит на нет, а под нулём
+                    появляется полоска ровно на величину минуса. */}
                 {stacked.accounts.map((acc, i) => (
                   <Area
                     key={acc}
                     type="monotone"
-                    dataKey={acc}
-                    stackId="1"
+                    dataKey={(d: Record<string, number>) => Math.max(toNum(d[acc]), 0)}
+                    // Слой контрагента подписан человеком, а не служебным
+                    // ключом: в легенде и подсказке нужно имя, по которому его
+                    // и выбирали.
+                    name={parseDebtKey(acc)?.payee ?? acc}
+                    stackId="plus"
                     stroke={STACK_COLORS[i % STACK_COLORS.length]}
                     fill={STACK_COLORS[i % STACK_COLORS.length]}
                     fillOpacity={0.7}
+                    isAnimationActive={false}
+                  />
+                ))}
+                {stacked.accounts.map((acc, i) => (
+                  <Area
+                    key={`${acc} minus`}
+                    type="monotone"
+                    dataKey={(d: Record<string, number>) =>
+                      Math.min(toNum(d[acc]), 0) * stackAxis.scale
+                    }
+                    // Половинка служебная: в легенде она была бы вторым таким же
+                    // названием, а в подсказке — вторым таким же числом.
+                    legendType="none"
+                    tooltipType="none"
+                    stackId="minus"
+                    stroke={STACK_COLORS[i % STACK_COLORS.length]}
+                    fill={STACK_COLORS[i % STACK_COLORS.length]}
+                    fillOpacity={0.7}
+                    isAnimationActive={false}
                   />
                 ))}
                 {/* Итог отдельной линией: в стопке со знаками его негде увидеть —
@@ -1600,7 +1842,13 @@ export function AccountsPage() {
                     совпадало ни с одним краем ленты, и это выглядело ошибкой. */}
                 <Line
                   type="monotone"
-                  dataKey="total"
+                  // Итог живёт на той же оси: если он ушёл в минус, его надо
+                  // растянуть так же, как области под нулём, иначе линия
+                  // разойдётся с лентой, из которой она и складывается.
+                  dataKey={(d: Record<string, number>) => {
+                    const v = toNum(d.total);
+                    return v < 0 ? v * stackAxis.scale : v;
+                  }}
                   name="Итого"
                   stroke={chartTotalStroke}
                   strokeWidth={2}
@@ -1615,8 +1863,8 @@ export function AccountsPage() {
               <ComposedChart data={netWorth}>
                 <defs>
                   <linearGradient id="netfill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22D3EE" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="#22D3EE" stopOpacity={0} />
+                    <stop offset="0%" stopColor={NET_STROKE} stopOpacity={0.6} />
+                    <stop offset="100%" stopColor={NET_STROKE} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
@@ -1643,18 +1891,11 @@ export function AccountsPage() {
                     })
                   }
                 />
-                <Tooltip
-                  {...chartTooltipProps}
-                  labelFormatter={(d) => formatDate(d as string)}
-                  formatter={(v: unknown) => [
-                    formatMoney(toNum(v), base, { signed: true }),
-                    "Баланс",
-                  ]}
-                />
+                <Tooltip {...chartTooltipProps} content={renderNetTooltip} />
                 <Area
                   type="monotone"
                   dataKey="net"
-                  stroke="#22D3EE"
+                  stroke={NET_STROKE}
                   strokeWidth={2}
                   fill="url(#netfill)"
                 />
@@ -1687,8 +1928,8 @@ export function AccountsPage() {
             <AreaChart data={series}>
               <defs>
                 <linearGradient id="bal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#A78BFA" stopOpacity={0.5} />
-                  <stop offset="100%" stopColor="#A78BFA" stopOpacity={0} />
+                  <stop offset="0%" stopColor={FLOW_STROKE} stopOpacity={0.5} />
+                  <stop offset="100%" stopColor={FLOW_STROKE} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
@@ -1704,21 +1945,14 @@ export function AccountsPage() {
                 fontSize={11}
                 tickFormatter={(v) => formatNum(v, { compact: true })}
               />
-              <Tooltip
-                {...chartTooltipProps}
-                labelFormatter={(d) => formatDate(d as string)}
-                // Линия идёт от нуля и копит изменение за период — это не
-                // остаток на счёте, и называть её «Балансом» нельзя: число
-                // расходилось бы с колонкой «Остаток» в списке под графиком.
-                formatter={(v: unknown, n: unknown) => [
-                  formatMoney(toNum(v), base, { signed: true }),
-                  n === "balance" ? "Накоплено" : "За день",
-                ]}
-              />
+              {/* Линия идёт от нуля и копит изменение за период — это не
+                  остаток на счёте, и называть её «Балансом» нельзя: число
+                  расходилось бы с колонкой «Остаток» в списке под графиком. */}
+              <Tooltip {...chartTooltipProps} content={renderFlowTooltip} />
               <Area
                 type="monotone"
                 dataKey="balance"
-                stroke="#A78BFA"
+                stroke={FLOW_STROKE}
                 strokeWidth={2}
                 fill="url(#bal)"
               />

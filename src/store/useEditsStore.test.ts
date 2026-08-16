@@ -3,11 +3,15 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // Хранилище в памяти вместо IndexedDB: здесь важно не что записано, а СКОЛЬКО
 // раз — цена одной записи и есть предмет проверки.
 const disk = vi.hoisted(() => new Map<string, unknown>());
-const writes = vi.hoisted(() => ({ count: 0 }));
+// Считаем записи ПО КЛЮЧУ: рядом с картой правок пишется карта их
+// происхождения (кто записал — правило или человек), и её запись не должна
+// путаться со счётом самих правок.
+const writes = vi.hoisted(() => ({ count: 0, byKey: new Map<string, number>() }));
 vi.mock("../lib/db", () => ({
   loadJSON: async (key: string) => disk.get(key) ?? null,
   saveJSON: async (key: string, value: unknown) => {
     writes.count++;
+    writes.byKey.set(key, (writes.byKey.get(key) ?? 0) + 1);
     disk.set(key, JSON.parse(JSON.stringify(value)));
   },
 }));
@@ -17,8 +21,10 @@ import { useEditsStore } from "./useEditsStore";
 beforeEach(async () => {
   disk.clear();
   writes.count = 0;
+  writes.byKey.clear();
   await useEditsStore.getState().clearAll();
   writes.count = 0;
+  writes.byKey.clear();
 });
 
 describe("useEditsStore: снятие правок пачкой", () => {
@@ -30,13 +36,14 @@ describe("useEditsStore: снятие правок пачкой", () => {
     const ids = Array.from({ length: 50 }, (_, i) => `t${i}`);
     await useEditsStore.getState().setEditMany(ids, { comment: "тег" });
     writes.count = 0;
+    writes.byKey.clear();
 
     let notifications = 0;
     const unsub = useEditsStore.subscribe(() => notifications++);
     await useEditsStore.getState().clearMany(ids);
     unsub();
 
-    expect(writes.count).toBe(1);
+    expect(writes.byKey.get("transactionEdits")).toBe(1);
     expect(notifications).toBe(1);
     expect(useEditsStore.getState().edits).toEqual({});
   });

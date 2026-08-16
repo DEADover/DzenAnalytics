@@ -2,6 +2,7 @@ import type { Transaction } from "../types";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { migrateRule, type StoredRule } from "./ruleEngine";
 import { buildRulePlan } from "./rulePlan";
+import { handEditedFields, type EditOrigins } from "./editOrigins";
 
 /**
  * Автоприменение: что правила с включённой галочкой сделают с операциями,
@@ -23,7 +24,9 @@ export function autoApplyPatches(
   edits: Record<string, TransactionEdit>,
   deletedSet: Set<string>,
   categoryOk: ((category: string, subcategory: string | null) => boolean) | null,
-  payeeOk: ((title: string) => boolean) | null = null
+  payeeOk: ((title: string) => boolean) | null = null,
+  /** Чем записано то, что уже лежит в правках, — см. `editOrigins`. */
+  origins: EditOrigins = {}
 ): Record<string, TransactionEdit> {
   if (fresh.length === 0) return {};
   const auto = rules.filter((r) => {
@@ -43,6 +46,19 @@ export function autoApplyPatches(
   );
 
   const patches: Record<string, TransactionEdit> = {};
-  for (const row of plan.pending) patches[row.tx.id] = row.patch;
+  for (const row of plan.pending) {
+    // Поле, которое человек правил РУКАМИ, автоприменение не трогает: правило
+    // может ошибаться, человек — решает. Вручную то же самое по-прежнему можно
+    // записать кнопкой: там список изменений на глазах.
+    const hand = handEditedFields(edits, origins, row.tx.id);
+    if (hand.size === 0) {
+      patches[row.tx.id] = row.patch;
+      continue;
+    }
+    const kept = Object.fromEntries(
+      Object.entries(row.patch).filter(([field]) => !hand.has(field))
+    ) as TransactionEdit;
+    if (Object.keys(kept).length > 0) patches[row.tx.id] = kept;
+  }
   return patches;
 }

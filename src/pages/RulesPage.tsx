@@ -50,6 +50,10 @@ import { Popover } from "../components/Popover";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
 import { buildRulePlan, type RuleRow } from "../lib/rulePlan";
+import { rulesView } from "../lib/rulesView";
+import { RuleSchedulePopover } from "../components/RuleSchedulePopover";
+import type { RuleSchedule } from "../lib/ruleSchedule";
+import { userEdits } from "../lib/editOrigins";
 
 /** Подпись поля, которое занимает действие, — для колонки «Что меняет». */
 const TARGET_LABELS: Record<RuleTargetField, string> = {
@@ -127,6 +131,7 @@ export function RulesPage() {
   const reapplyRules = useDataStore((s) => s.reapplyRules);
   const showDrill = useDrillStore((s) => s.show);
   const edits = useEditsStore((s) => s.edits);
+  const editOrigins = useEditsStore((s) => s.origins);
   const setEditEach = useEditsStore((s) => s.setEditEach);
   const deletedSet = useDeletedStore((s) => s.deletedSet);
   const token = useZenmoneyStore((s) => s.token);
@@ -271,6 +276,10 @@ export function RulesPage() {
       autoApply: mode === "auto",
     }).then(reapplyRules);
 
+  /** Расписание правила: пусто — прежнее поведение, только новые операции. */
+  const setSchedule = (id: string, schedule: RuleSchedule | undefined) =>
+    update(id, { schedule });
+
   const matchCounts = useMemo(() => {
     const out = new Map<string, number>();
     for (const r of rules) {
@@ -343,11 +352,24 @@ export function RulesPage() {
     return (title: string) => set.has(title.trim().toLowerCase());
   }, [brandTitles]);
 
+  /**
+   * Операции глазами правил: исходник плюс ПРАВКИ РУКАМИ.
+   *
+   * Из-за этого правило замечает то, что человек поправил сам: поменяли
+   * комментарий — операция стала подходить, и она появляется в разборе. Своих
+   * записей правило по-прежнему не видит, иначе счётчик совпадений обнулялся
+   * бы сразу после применения (issue #75).
+   */
+  const matchable = useMemo(
+    () => rulesView(transactionsRaw, userEdits(edits, editOrigins)),
+    [transactionsRaw, edits, editOrigins]
+  );
+
   /** План по ВЫБРАННЫМ правилам — то, что показывает окно и то, что запишется. */
   const plan = useMemo(
     () =>
       buildRulePlan(
-        transactionsRaw,
+        matchable,
         rules,
         selectedIds,
         edits,
@@ -355,7 +377,7 @@ export function RulesPage() {
         categoryOk,
         payeeOk
       ),
-    [transactionsRaw, rules, selectedIds, edits, deletedSet, categoryOk, payeeOk]
+    [matchable, rules, selectedIds, edits, deletedSet, categoryOk, payeeOk]
   );
 
   function openMatches(rule: StoredCategoryRule) {
@@ -397,7 +419,9 @@ export function RulesPage() {
   async function applyRows(rows: RuleRow[]) {
     const patches: Record<string, import("../store/useEditsStore").TransactionEdit> = {};
     for (const r of rows) patches[r.tx.id] = r.patch;
-    await setEditEach(patches);
+    // «rule» — чтобы автоприменение потом не спорило с человеком: поля,
+    // записанные правилом, остаются его, а правленные руками — неприкосновенны.
+    await setEditEach(patches, "rule");
     await reapplyRules();
   }
 
@@ -788,13 +812,24 @@ export function RulesPage() {
                         className="table-td text-center"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Segmented
-                          size="sm"
-                          label="Режим правила"
-                          value={ruleMode(rule)}
-                          onChange={(next) => void setMode(rule.id, next)}
-                          options={MODE_OPTIONS}
-                        />
+                        <div className="flex flex-col items-center gap-1">
+                          <Segmented
+                            size="sm"
+                            label="Режим правила"
+                            value={ruleMode(rule)}
+                            onChange={(next) => void setMode(rule.id, next)}
+                            options={MODE_OPTIONS}
+                          />
+                          {/* Расписание — только у «Авто»: у остальных режимов
+                              автоприменения нет вовсе, и спрашивать «как часто»
+                              не о чем. */}
+                          {ruleMode(rule) === "auto" && (
+                            <RuleSchedulePopover
+                              value={rule.schedule}
+                              onChange={(schedule) => void setSchedule(rule.id, schedule)}
+                            />
+                          )}
+                        </div>
                       </td>
                       <td className="table-td text-center tabular-nums">
                         {count > 0 ? (

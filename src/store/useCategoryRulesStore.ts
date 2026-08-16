@@ -144,6 +144,9 @@ function normalizeRule(r: RuleLike): StoredCategoryRule {
       // правке. Пишем только когда включено: у большинства правил
       // автоприменения нет, и лишний `false` в хранилище только шумит.
       ...(r.autoApply ? { autoApply: true } : {}),
+      // Расписание автоприменения (issue #75). Пишем только когда задано: у
+      // правила без него прежнее поведение — трогает лишь новые операции.
+      ...(r.schedule ? { schedule: r.schedule } : {}),
     };
   }
   return migrateRule({

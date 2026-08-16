@@ -24,7 +24,7 @@ import {
   scaleKPI,
 } from "./aggregations";
 import { tx } from "../test/fixtures";
-import type { CurrencyRates } from "../types";
+import type { CurrencyRates, Transaction } from "../types";
 
 describe("splitByObligation / isObligatoryTx — default obligatory, sub-aware", () => {
   const txs = [
@@ -159,11 +159,11 @@ describe("stackedBalanceByAccount — real-balance anchoring", () => {
     expect(series[0]["Старый"]).toBe(500);
   });
 
-  it("ranks top accounts by real balance (not turnover) in API mode", () => {
+  it("оборот сам по себе слоя не даёт — важен остаток, а не движение", () => {
     const t = [
-      // C: huge turnover, tiny balance — would top a turnover ranking.
+      // C: миллион пришёл и в тот же день ушёл — на счёте не задерживался.
       tx({ kind: "income", amount: 1_000_000, incomeAccount: "C", date: "2026-01-01" }),
-      tx({ kind: "expense", amount: 999_000, outcomeAccount: "C", date: "2026-01-02" }),
+      tx({ kind: "expense", amount: 999_000, outcomeAccount: "C", date: "2026-01-01" }),
       tx({ kind: "income", amount: 100, incomeAccount: "A", date: "2026-01-01" }),
       tx({ kind: "income", amount: 100, incomeAccount: "B", date: "2026-01-01" }),
       // D — второй «лишний» счёт: с одним «Прочих» не бывает, он вышел бы
@@ -178,6 +178,49 @@ describe("stackedBalanceByAccount — real-balance anchoring", () => {
     });
     expect(accounts).toEqual(expect.arrayContaining(["A", "B", "Прочие"]));
     expect(accounts).not.toContain("C"); // small balance → folded into «Прочие»
+  });
+
+  it("КЛЮЧЕВОЕ: счёт, который был крупным РАНЬШЕ, идёт своим слоем", () => {
+    // На это и жалуются: слои отбирались по СЕГОДНЯШНЕМУ остатку, поэтому
+    // счёт, где год назад лежал миллион, а сегодня пусто, уезжал в «Прочие» —
+    // и «Прочие» на графике оказывались выше всех показанных слоёв разом.
+    const t = [
+      tx({ kind: "income", amount: 5_000_000, incomeAccount: "Вклад", date: "2025-01-01" }),
+      tx({ kind: "expense", amount: 5_000_000, outcomeAccount: "Вклад", date: "2025-12-31" }),
+      tx({ kind: "income", amount: 10_000, incomeAccount: "Карта", date: "2025-01-01" }),
+      tx({ kind: "income", amount: 100, incomeAccount: "Наличные", date: "2025-01-01" }),
+      tx({ kind: "income", amount: 90, incomeAccount: "Копилка", date: "2025-01-01" }),
+    ];
+    const real = { Вклад: 0, Карта: 10_000, Наличные: 100, Копилка: 90 };
+    const { accounts, series } = stackedBalanceByAccount(t, 2, real);
+    expect(accounts).toContain("Вклад");
+    // И главное свойство: в «Прочие» осталась мелочь. Ни в один день этот слой
+    // не перерастает самый маленький из показанных.
+    const smallest = Math.min(
+      ...accounts
+        .filter((a) => a !== "Прочие")
+        .map((a) => Math.max(...series.map((p) => Math.abs(p[a] as number))))
+    );
+    const other = Math.max(...series.map((p) => Math.abs((p["Прочие"] as number) ?? 0)));
+    expect(other).toBeLessThanOrEqual(smallest);
+  });
+
+  it("счёт без операций, но с большими деньгами, тоже получает слой", () => {
+    // Вклад, куда положили один раз и забыли: в операциях его нет вовсе, а
+    // деньги есть. Раньше он молча уходил в «Прочие» вместе со всем остатком.
+    const t = [
+      tx({ kind: "income", amount: 10_000, incomeAccount: "Карта", date: "2026-01-01" }),
+      tx({ kind: "income", amount: 500, incomeAccount: "Наличные", date: "2026-01-02" }),
+      tx({ kind: "income", amount: 300, incomeAccount: "Копилка", date: "2026-01-02" }),
+    ];
+    const { accounts, series } = stackedBalanceByAccount(t, 2, {
+      Карта: 10_000,
+      Наличные: 500,
+      Копилка: 300,
+      Вклад: 3_000_000,
+    });
+    expect(accounts).toContain("Вклад");
+    expect(series[series.length - 1]["Вклад"]).toBe(3_000_000);
   });
 
   // issue #18 — an unsynced draft is in the walked history but NOT in the API
@@ -1240,5 +1283,76 @@ describe("привязка кривой к реальным остаткам", (
 
   it("пустая история не падает и не выдумывает точку", () => {
     expect(netWorthSeries([], null, { accounts: new Set(["A"]), anchorTo: 500 })).toEqual([]);
+  });
+});
+
+
+describe("stackedBalanceByAccount — долговой счёт по контрагентам", () => {
+  // В Дзен-мани все долги лежат на одном счёте, и «сколько должен Иван» из
+  // общего остатка не видно. Разбивка выделяет контрагента отдельным слоем.
+  // Сумма перевода всегда положительна, направление задают ноги: «дали в долг»
+  // — деньги ушли на счёт «Долги», «вернули» — с него.
+  const debt = (
+    id: string,
+    date: string,
+    payee: string,
+    amount: number,
+    lent: boolean
+  ) =>
+    ({
+      id,
+      date,
+      amount,
+      amountBase: amount,
+      currency: "RUB",
+      kind: "transfer",
+      payee,
+      account: lent ? "Сбер" : "Долги",
+      outcomeAccount: lent ? "Сбер" : "Долги",
+      incomeAccount: lent ? "Долги" : "Сбер",
+      category: "Долг",
+      categoryFull: "Долг",
+    }) as unknown as Transaction;
+
+  const txs = [
+    debt("d1", "2026-01-10", "Иван", 1000, true),
+    debt("d2", "2026-02-10", "Мария", 500, true),
+    debt("d3", "2026-03-10", "Иван", 400, false),
+  ];
+
+  it("выбранный контрагент идёт своим слоем, остальные остаются на счёте", () => {
+    const split = new Map([["Долги", new Set(["Иван"])]]);
+    const { accounts, series } = stackedBalanceByAccount(
+      txs,
+      9,
+      null,
+      null,
+      ["Долги", "Долги\u0000Иван", "Сбер"],
+      split
+    );
+    expect(accounts).toContain("Долги\u0000Иван");
+    const last = series[series.length - 1];
+    // Иван: дали 1000, вернул 400 → 600. Мария осталась на самом счёте: 500.
+    expect(last["Долги\u0000Иван"]).toBe(600);
+    expect(last["Долги"]).toBe(500);
+  });
+
+  it("без разбивки всё лежит на счёте — как и раньше", () => {
+    const { series } = stackedBalanceByAccount(txs, 9, null, null, ["Долги"]);
+    expect(series[series.length - 1]["Долги"]).toBe(1100);
+  });
+
+  it("итог стопки от разбивки не меняется", () => {
+    const plain = stackedBalanceByAccount(txs, 9, null, null, ["Долги", "Сбер"]);
+    const split = stackedBalanceByAccount(
+      txs,
+      9,
+      null,
+      null,
+      ["Долги", "Долги\u0000Иван", "Сбер"],
+      new Map([["Долги", new Set(["Иван"])]])
+    );
+    const totalOf = (s: { total: number }[]) => s[s.length - 1].total;
+    expect(totalOf(split.series)).toBe(totalOf(plain.series));
   });
 });

@@ -273,3 +273,18 @@ export const chartAxisStroke = "rgb(var(--c-muted))";
 /** Линия итога поверх стопки. Цвет текста, а не палитры счетов: итог — не
  *  ещё одна доля, а сумма всех, и путать его с ними нельзя. */
 export const chartTotalStroke = "rgb(var(--c-text))";
+
+/**
+ * Ближайший «круглый» шаг сетки: 1, 2 или 5 на своём порядке.
+ *
+ * Нужен там, где деления оси приходится считать самим, — например когда низ
+ * оси задан точно (сумма минусов), и отдать округление автоматике нельзя:
+ * она растянет домен до целого деления и отдаст под пустоту четверть высоты.
+ */
+export function niceStep(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) return 1;
+  const pow = 10 ** Math.floor(Math.log10(raw));
+  const rel = raw / pow;
+  const mult = rel <= 1 ? 1 : rel <= 2 ? 2 : rel <= 5 ? 5 : 10;
+  return mult * pow;
+}
