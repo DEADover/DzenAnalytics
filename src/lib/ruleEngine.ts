@@ -47,7 +47,16 @@ export const FIELD_LABELS: Record<RuleField, string> = {
   comment: "Комментарий",
   category: "Текущая категория",
   account: "Счёт",
+  amount: "Сумма",
 };
+
+/**
+ * Числовые поля: сравниваются как числа, а не как текст.
+ *
+ * У них свой список операций («больше», «меньше»), своё поле ввода и никакого
+ * «регистр не важен»: у числа регистра нет.
+ */
+export const NUMERIC_FIELDS: ReadonlySet<RuleField> = new Set<RuleField>(["amount"]);
 
 /** Условие проверки. `empty`/`not_empty` значения не требуют. */
 export type ConditionOp =
@@ -57,7 +66,11 @@ export type ConditionOp =
   | "starts_with"
   | "regex"
   | "empty"
-  | "not_empty";
+  | "not_empty"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte";
 
 export const CONDITION_OP_LABELS: Record<ConditionOp, string> = {
   contains: "содержит",
@@ -67,7 +80,30 @@ export const CONDITION_OP_LABELS: Record<ConditionOp, string> = {
   regex: "регулярное выражение",
   empty: "не заполнено",
   not_empty: "заполнено",
+  gt: "больше",
+  gte: "больше или равно",
+  lt: "меньше",
+  lte: "меньше или равно",
 };
+
+/** Операции текстовых полей — в том порядке, в котором их показывает окно. */
+export const TEXT_OPS: readonly ConditionOp[] = [
+  "contains",
+  "not_contains",
+  "equals",
+  "starts_with",
+  "regex",
+  "empty",
+  "not_empty",
+];
+
+/** Операции числовых полей. «Не заполнено» у суммы не бывает: она всегда есть. */
+export const NUMERIC_OPS: readonly ConditionOp[] = ["equals", "gt", "gte", "lt", "lte"];
+
+/** Какие операции предлагать для поля. */
+export function opsForField(field: RuleField): readonly ConditionOp[] {
+  return NUMERIC_FIELDS.has(field) ? NUMERIC_OPS : TEXT_OPS;
+}
 
 /** Операции, которым значение не нужно, — у них поле ввода прячется. */
 export const VALUELESS_OPS: ReadonlySet<ConditionOp> = new Set(["empty", "not_empty"]);
@@ -276,6 +312,20 @@ export function migrateRule(r: StoredRule): CategoryRuleV2 {
  * было в первой версии) годилась только для «содержит»: «равно Пятёрочка» на
  * строке «PYATEROCHKA 1234 Пятерочка Пятёрочка» не совпало бы никогда.
  */
+/**
+ * Сумма операции для условия — в валюте отчётов и БЕЗ ЗНАКА.
+ *
+ * Без знака потому, что расход в данных лежит положительным числом, а знак
+ * несёт вид операции; «Сумма больше 10 000» человек говорит и про трату, и про
+ * поступление. В валюте отчётов — чтобы одно и то же правило одинаково работало
+ * по счетам в разных валютах.
+ */
+export function conditionNumber(t: Transaction, field: RuleField): number | null {
+  if (field !== "amount") return null;
+  const v = Number.isFinite(t.amountBase) ? t.amountBase : t.amount;
+  return Number.isFinite(v) ? Math.abs(v) : null;
+}
+
 export function conditionValues(t: Transaction, field: RuleField): string[] {
   switch (field) {
     case "payee":
@@ -368,6 +418,32 @@ export function conditionMatches(
   c: RuleCondition,
   compiled?: RegExp | null
 ): boolean {
+  // Числовое поле сравнивается числами: «Сумма больше 1000» на строках дала бы
+  // лексикографическое «999 больше 1000».
+  if (NUMERIC_FIELDS.has(c.field)) {
+    const left = conditionNumber(t, c.field);
+    const raw = String(c.value).replace(/\s|\u00a0/g, "").replace(",", ".");
+    // Пустое значение — недописанное условие, а не «больше нуля»: иначе
+    // полуготовое правило поймало бы все операции подряд.
+    const right = raw ? Number(raw) : Number.NaN;
+    if (left === null || !Number.isFinite(right)) return false;
+    switch (c.op) {
+      case "equals":
+        // Копейки округления: 1000.004 и 1000 — одна и та же сумма.
+        return Math.abs(left - right) < 0.005;
+      case "gt":
+        return left > right;
+      case "gte":
+        return left >= right;
+      case "lt":
+        return left < right;
+      case "lte":
+        return left <= right;
+      default:
+        return false;
+    }
+  }
+
   const values = conditionValues(t, c.field);
   // Неизвестное поле не выполняется ни при какой операции — в том числе при
   // «не заполнено», где `every` по пустому списку дал бы «да».
@@ -712,6 +788,9 @@ export function describeRule(rule: CategoryRuleV2): string {
     // на его месте нужен предлог, иначе выходит «Получатель регулярное
     // выражение «^яндекс»».
     const op = c.op === "regex" ? "по выражению" : CONDITION_OP_LABELS[c.op];
+    // Число в кавычках выглядит как текст: «Сумма больше «1000»». Кавычки
+    // нужны там, где значение — строка и его край надо видеть.
+    if (NUMERIC_FIELDS.has(c.field)) return `${f} ${op} ${c.value}`;
     return `${f} ${op} «${c.value}»`;
   };
   const parts = rule.groups

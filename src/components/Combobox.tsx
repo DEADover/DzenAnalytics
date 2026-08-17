@@ -291,7 +291,9 @@ export function Combobox({
           ref={popupRef}
           className={
             portal
-              ? "fixed z-[70] bg-panel border border-border rounded-lg shadow-lg overflow-y-auto"
+              ? // Тот же слой, что у `Select`: список обязан быть выше окна,
+                // из которого его открыли (см. комментарий там).
+                "fixed z-[96] bg-panel border border-border rounded-lg shadow-lg overflow-y-auto"
               : "absolute z-10 mt-1 w-full bg-panel border border-border rounded-lg shadow-lg overflow-y-auto"
           }
           style={

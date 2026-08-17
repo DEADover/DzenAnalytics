@@ -20,6 +20,8 @@ import {
   type CategoryRuleV2,
   type RuleAction,
   type RuleCondition,
+  opsForField,
+  type ConditionOp,
 } from "./ruleEngine";
 import type { CategoryRule } from "../store/useCategoryRulesStore";
 import type { Transaction } from "../types";
@@ -742,5 +744,77 @@ describe("правила — вспомогательное", () => {
 
   it("своё название правила важнее автоописания", () => {
     expect(describeRule(rule({ title: "  Купоны  " }))).toBe("Купоны");
+  });
+});
+
+describe("условие по сумме", () => {
+  const tx = (over: Partial<Transaction> = {}): Transaction =>
+    ({
+      id: "t1",
+      date: "2026-08-16",
+      kind: "expense",
+      amount: 1000,
+      amountBase: 1000,
+      currency: "RUB",
+      account: "Карта",
+      outcomeAccount: "Карта",
+      incomeAccount: "",
+      payee: "Магнит",
+      comment: "",
+      categoryFull: "",
+      ...over,
+    }) as Transaction;
+
+  const cond = (op: ConditionOp, value: string): RuleCondition => ({
+    field: "amount",
+    op,
+    value,
+    caseInsensitive: false,
+  });
+
+  it("КЛЮЧЕВОЕ: сравнение числовое, а не строковое", () => {
+    // На строках «999» оказалось бы больше «1000» — и правило «дороже тысячи»
+    // ловило бы мелочь.
+    expect(conditionMatches(tx({ amountBase: 999 }), cond("gt", "1000"))).toBe(false);
+    expect(conditionMatches(tx({ amountBase: 1001 }), cond("gt", "1000"))).toBe(true);
+  });
+
+  it("границы включаются только у «или равно»", () => {
+    expect(conditionMatches(tx({ amountBase: 1000 }), cond("gt", "1000"))).toBe(false);
+    expect(conditionMatches(tx({ amountBase: 1000 }), cond("gte", "1000"))).toBe(true);
+    expect(conditionMatches(tx({ amountBase: 1000 }), cond("lt", "1000"))).toBe(false);
+    expect(conditionMatches(tx({ amountBase: 1000 }), cond("lte", "1000"))).toBe(true);
+  });
+
+  it("знак не важен: расход и поступление сравниваются одинаково", () => {
+    expect(conditionMatches(tx({ amountBase: -5000, kind: "income" }), cond("gt", "1000"))).toBe(
+      true
+    );
+  });
+
+  it("сумма берётся в валюте отчётов", () => {
+    // Счёт в долларах: 100 $ при курсе — это 9000 ₽, и правило «больше 5000»
+    // должно смотреть на рубли, иначе оно значит разное на разных счетах.
+    expect(conditionMatches(tx({ amount: 100, amountBase: 9000 }), cond("gt", "5000"))).toBe(true);
+  });
+
+  it("пробелы и запятая в значении не ломают сравнение", () => {
+    expect(conditionMatches(tx({ amountBase: 1500.5 }), cond("gte", "1 500,5"))).toBe(true);
+  });
+
+  it("равенство прощает копейки округления", () => {
+    expect(conditionMatches(tx({ amountBase: 1000.004 }), cond("equals", "1000"))).toBe(true);
+    expect(conditionMatches(tx({ amountBase: 1000.5 }), cond("equals", "1000"))).toBe(false);
+  });
+
+  it("нечисловое значение не совпадает ни с чем", () => {
+    expect(conditionMatches(tx(), cond("gt", "много"))).toBe(false);
+    expect(conditionMatches(tx(), cond("gt", ""))).toBe(false);
+  });
+
+  it("у суммы свой список операций — текстовых там нет", () => {
+    expect(opsForField("amount")).toEqual(["equals", "gt", "gte", "lt", "lte"]);
+    expect(opsForField("payee")).toContain("contains");
+    expect(opsForField("payee")).not.toContain("gt");
   });
 });

@@ -12,6 +12,8 @@ import clsx from "clsx";
 import {
   CONDITION_OP_LABELS,
   FIELD_LABELS,
+  NUMERIC_FIELDS,
+  opsForField,
   VALUELESS_OPS,
   actionTarget,
   compileCondition,
@@ -42,15 +44,20 @@ import {
 import { Select } from "./Select";
 import { Tooltip } from "./Tooltip";
 import { Combobox } from "./Combobox";
+import { RuleModePanel } from "./RuleModeControl";
+import { ruleModeFields, ruleModeOf } from "../lib/ruleMode";
+import type { RuleSchedule } from "../lib/ruleSchedule";
+import { useDataStore } from "../store/useDataStore";
 import type { Transaction } from "../types";
 
 const RULE_FIELDS: { value: RuleField; label: string }[] = (
   Object.keys(FIELD_LABELS) as RuleField[]
 ).map((value) => ({ value, label: FIELD_LABELS[value] }));
 
-const RULE_OPS: { value: ConditionOp; label: string }[] = (
-  Object.keys(CONDITION_OP_LABELS) as ConditionOp[]
-).map((value) => ({ value, label: CONDITION_OP_LABELS[value] }));
+/** Операции своего поля: у суммы они числовые, у остальных — текстовые. */
+function opsOf(field: RuleField): { value: ConditionOp; label: string }[] {
+  return opsForField(field).map((value) => ({ value, label: CONDITION_OP_LABELS[value] }));
+}
 
 /**
  * Что правило меняет — три цели, а не пять видов действия.
@@ -83,6 +90,10 @@ const DEFAULT_KIND: Record<RuleTargetField, RuleActionKind> = {
 /** Черновик правила — то, что редактируется в окне. */
 export interface RuleDraft {
   enabled: boolean;
+  /** Само применяется при синхронизации. Вместе с `enabled` это и есть режим. */
+  autoApply: boolean;
+  /** Расписание автоприменения; пусто — только новые операции. */
+  schedule?: RuleSchedule;
   /** Своё название. Пустое — значит правило описывается своими условиями. */
   title: string;
   /** Группы условий: внутри группы своя связка, между группами — `join`. */
@@ -141,6 +152,9 @@ const newGroup = (): RuleConditionGroup => ({
 
 const EMPTY: RuleDraft = {
   enabled: true,
+  // Новое правило — «По кнопке»: показать разбор до того, как оно само начнёт
+  // писать в операции, честнее, чем наоборот.
+  autoApply: false,
   title: "",
   groups: [newGroup()],
   join: "and",
@@ -304,10 +318,16 @@ export function RuleEditModal({
         subs: [...set].sort((x, y) => x.localeCompare(y, "ru")),
       }));
   }, [categories]);
+  /** Валюта отчётов — в ней считается условие по сумме. */
+  const base = useDataStore((s) => s.rates.base);
+  const ruleRuns = useDataStore((s) => s.ruleRuns);
+  const runRuleNow = useDataStore((s) => s.runRuleNow);
   const [draft, setDraft] = useState<RuleDraft>(() =>
     rule
       ? {
           enabled: rule.enabled,
+          autoApply: !!rule.autoApply,
+          schedule: rule.schedule,
           title: rule.title ?? "",
           // Ключи строк проставляем при открытии: в хранилище их может не быть,
           // а списку нужен стабильный key, иначе React путает строки при удалении.
@@ -385,6 +405,8 @@ export function RuleEditModal({
     () => ({
       id: rule?.id ?? "preview",
       enabled: draft.enabled,
+      autoApply: draft.autoApply,
+      schedule: draft.schedule,
       title: draft.title.trim(),
       join: draft.join,
       groups: draft.groups.map((g) => ({
@@ -484,6 +506,8 @@ export function RuleEditModal({
     if (!canSave) return;
     await onSave({
       enabled: cleaned.enabled,
+      autoApply: cleaned.autoApply ?? false,
+      schedule: cleaned.schedule,
       title: draft.title.trim(),
       join: cleaned.join,
       groups: cleaned.groups,
@@ -548,6 +572,31 @@ export function RuleEditModal({
             />
           </div>
 
+          {/* --- Режим ------------------------------------------------------
+              Раньше режим жил только в таблице: правило создавалось молча
+              включённым «по кнопке», и человек, задумавший автоправило с
+              расписанием, узнавал об этом уже после сохранения. */}
+          <div>
+            <div className="label mb-2">Режим</div>
+            <RuleModePanel
+              // Журнал и ручной запуск — только у сохранённого правила: у
+              // нового прогонять ещё нечего, оно существует лишь в этом окне.
+              run={rule ? ruleRuns[rule.id] : undefined}
+              onRunNow={rule ? () => runRuleNow(rule.id) : undefined}
+              value={{
+                mode: ruleModeOf({ enabled: draft.enabled, autoApply: draft.autoApply }),
+                schedule: draft.schedule,
+              }}
+              onChange={(next) =>
+                setDraft((d) => ({
+                  ...d,
+                  ...ruleModeFields(next.mode),
+                  schedule: next.schedule,
+                }))
+              }
+            />
+          </div>
+
           {/* --- Условия --------------------------------------------------- */}
           <div>
             <div className="label mb-2">Если</div>
@@ -602,8 +651,14 @@ export function RuleEditModal({
                         options={RULE_FIELDS}
                         onChange={(v) =>
                           // Значение осмысленно только внутри своего поля:
-                          // название счёта в поле комментария — мусор.
-                          patchCondition(c.id!, { field: v, value: "" })
+                          // название счёта в поле комментария — мусор. Операция
+                          // тоже: «Сумма содержит» — бессмыслица, поэтому при
+                          // смене вида поля берём первую операцию из его списка.
+                          patchCondition(c.id!, {
+                            field: v,
+                            value: "",
+                            op: opsForField(v).includes(c.op) ? c.op : opsForField(v)[0],
+                          })
                         }
                       />
                       <Select
@@ -611,7 +666,7 @@ export function RuleEditModal({
                         ariaLabel="Условие"
                         portal
                         value={c.op}
-                        options={RULE_OPS}
+                        options={opsOf(c.field)}
                         onChange={(v) => patchCondition(c.id!, { op: v })}
                       />
                       <button
@@ -675,8 +730,19 @@ export function RuleEditModal({
                         <input
                           value={c.value}
                           onChange={(e) => patchCondition(c.id!, { value: e.target.value })}
-                          placeholder={c.op === "regex" ? "^(яндекс|ozon)" : "магнит"}
-                          className={clsx(FIELD, c.op === "regex" && "font-mono")}
+                          placeholder={
+                            NUMERIC_FIELDS.has(c.field)
+                              ? "1000"
+                              : c.op === "regex"
+                                ? "^(яндекс|ozon)"
+                                : "магнит"
+                          }
+                          inputMode={NUMERIC_FIELDS.has(c.field) ? "decimal" : undefined}
+                          className={clsx(
+                            FIELD,
+                            c.op === "regex" && "font-mono",
+                            NUMERIC_FIELDS.has(c.field) && "tabular-nums"
+                          )}
                           aria-label="Значение условия"
                           aria-invalid={c.op === "regex" && brokenRegex.has(c.id!)}
                         />
@@ -697,6 +763,17 @@ export function RuleEditModal({
                             </button>
                           </Tooltip>
                         )}
+                        {/* У числа регистра нет — галочке рядом с суммой
+                            отвечать не на что. Вместо неё подпись о том, в чём
+                            сумма считается: правило по счёту в долларах иначе
+                            выглядит загадкой. */}
+                        {NUMERIC_FIELDS.has(c.field) ? (
+                          <Tooltip content="Сумма берётся в валюте отчётов и без знака: «больше 1000» поймает и трату, и поступление">
+                            <span className="text-xs text-muted shrink-0 whitespace-nowrap border-b border-dotted border-border cursor-help">
+                              {base}
+                            </span>
+                          </Tooltip>
+                        ) : (
                         <label
                           className="flex items-center gap-1.5 text-xs text-muted cursor-pointer shrink-0 whitespace-nowrap"
                           title="Считать «магнит» и «МАГНИТ» одним и тем же"
@@ -711,6 +788,7 @@ export function RuleEditModal({
                           />
                           Регистр не важен
                         </label>
+                        )}
                       </div>
                     )}
                   </div>

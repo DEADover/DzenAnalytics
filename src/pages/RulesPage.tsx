@@ -44,14 +44,15 @@ import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { Stat } from "../components/Stat";
-import { Segmented } from "../components/Segmented";
 import { Tooltip } from "../components/Tooltip";
 import { Popover } from "../components/Popover";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
 import { buildRulePlan, type RuleRow } from "../lib/rulePlan";
+import { AlertTriangle } from "lucide-react";
 import { rulesView } from "../lib/rulesView";
-import { RuleSchedulePopover } from "../components/RuleSchedulePopover";
+import { RuleModeChip } from "../components/RuleModeControl";
+import { ruleModeFields, ruleModeOf, type RuleMode } from "../lib/ruleMode";
 import type { RuleSchedule } from "../lib/ruleSchedule";
 import { userEdits } from "../lib/editOrigins";
 
@@ -76,33 +77,6 @@ const TARGET_LABELS: Record<RuleTargetField, string> = {
  * плана: два независимых расчёта разошлись бы, и объяснить разницу было бы нечем.
  */
 /**
- * Режим правила — одно свойство с тремя состояниями вместо двух флажков.
- *
- * `enabled` и `autoApply` независимыми переключателями выглядели как две
- * настройки, хотя автоприменение у выключенного правила не значит ничего и
- * стояло погашенным. Плюс рядом жила галочка отбора, и две одинаковые с виду
- * галочки в соседних колонках приходилось объяснять словами.
- *
- * Теперь вид контрола отвечает смыслу: сегмент — про само правило и живёт в
- * базе, галочка слева — про текущий прогон и живёт до перезагрузки.
- */
-type RuleMode = "off" | "manual" | "auto";
-
-const MODE_OPTIONS: { value: RuleMode; label: string; title: string }[] = [
-  { value: "off", label: "Выкл", title: "Правило не работает нигде" },
-  {
-    value: "manual",
-    label: "По кнопке",
-    title: "Работает только через «Проверить и применить»",
-  },
-  {
-    value: "auto",
-    label: "Авто",
-    title: "Само размечает новые операции при синхронизации, без кнопки",
-  },
-];
-
-/**
  * Что рассказывает подсказка над галочками.
  *
  * Заголовка у колонки нет намеренно: одно слово («Выбор», «Прогнать») смысла не
@@ -120,15 +94,15 @@ const PICK_HELP = (
   </span>
 );
 
-function ruleMode(rule: { enabled: boolean; autoApply?: boolean }): RuleMode {
-  if (!rule.enabled) return "off";
-  return rule.autoApply ? "auto" : "manual";
-}
+
 
 export function RulesPage() {
   const transactions = useDataStore((s) => s.transactions);
   const transactionsRaw = useDataStore((s) => s.transactionsRaw);
   const reapplyRules = useDataStore((s) => s.reapplyRules);
+  const ruleRuns = useDataStore((s) => s.ruleRuns);
+  const loadRuleRuns = useDataStore((s) => s.loadRuleRuns);
+  const runRuleNow = useDataStore((s) => s.runRuleNow);
   const showDrill = useDrillStore((s) => s.show);
   const edits = useEditsStore((s) => s.edits);
   const editOrigins = useEditsStore((s) => s.origins);
@@ -149,6 +123,12 @@ export function RulesPage() {
   useEffect(() => {
     if (!loaded) hydrate();
   }, [loaded, hydrate]);
+
+  // Журнал заходов лежит на диске: страница правил — единственное место, где он
+  // нужен, поэтому читаем его здесь, а не при загрузке всего приложения.
+  useEffect(() => {
+    void loadRuleRuns();
+  }, [loadRuleRuns]);
 
   /** null — окно закрыто, «create» — новое правило, иначе редактируем. */
   const [editing, setEditing] = useState<StoredCategoryRule | "create" | null>(null);
@@ -268,17 +248,16 @@ export function RulesPage() {
   /** Сколько операций подходит под условия каждого правила — считаем тем же
    *  движком, что и применение, по исходникам: у уже сработавшего правила счёт
    *  по текущим значениям показал бы ноль. */
-  /** Записать режим. Оба поля задаём явно: иначе у выключенного правила
-   *  осталось бы висеть `autoApply: true`, невидимое на экране. */
-  const setMode = (id: string, mode: RuleMode) =>
-    update(id, {
-      enabled: mode !== "off",
-      autoApply: mode === "auto",
-    }).then(reapplyRules);
-
-  /** Расписание правила: пусто — прежнее поведение, только новые операции. */
-  const setSchedule = (id: string, schedule: RuleSchedule | undefined) =>
-    update(id, { schedule });
+  /**
+   * Записать режим и расписание одной правкой — их и выбирают одним окном.
+   *
+   * Оба поля режима задаём явно: иначе у выключенного правила осталось бы
+   * висеть `autoApply: true`, невидимое на экране. Расписание при этом не
+   * стирается — работать оно всё равно не будет, а вернувшись в «Авто»,
+   * человек не станет настраивать его заново.
+   */
+  const setModeValue = (id: string, next: { mode: RuleMode; schedule?: RuleSchedule }) =>
+    update(id, { ...ruleModeFields(next.mode), schedule: next.schedule }).then(reapplyRules);
 
   const matchCounts = useMemo(() => {
     const out = new Map<string, number>();
@@ -392,6 +371,8 @@ export function RulesPage() {
   async function saveRule(draft: RuleDraft) {
     const patch = {
       enabled: draft.enabled,
+      autoApply: draft.autoApply,
+      schedule: draft.schedule,
       title: draft.title,
       groups: draft.groups,
       join: draft.join,
@@ -536,8 +517,9 @@ export function RulesPage() {
                     через «Проверить и применить»;
                   </li>
                   <li>
-                    <strong className="text-text">Авто</strong> — само, но лишь
-                    для операций, которых раньше не было. Прежние не трогает.
+                    <strong className="text-text">Авто</strong> — само, при
+                    синхронизации. По умолчанию трогает лишь операции, которых
+                    раньше не было; с расписанием — проходит и по истории.
                   </li>
                 </ul>
                 <p>
@@ -559,6 +541,41 @@ export function RulesPage() {
               </div>
             </Popover>
           </div>
+
+          {/* Оба замечания стоят В ШАПКЕ, а не полосой над таблицей: полоса
+              появлялась и исчезала при каждом переключении режима и двигала
+              таблицу на свою высоту — строки прыгали под курсором. Подробности
+              замечания живут в подсказке, а высота шапки не меняется. */}
+          {plan.skippedCount > 0 && (
+            <Tooltip
+              content={
+                <>
+                  Правило хочет поставить категорию, которой нет в справочнике
+                  Дзен-мани: {plan.skipped.map((x) => `«${x.category}»`).join(", ")}.
+                  Такую правку облако не примет — заведите категорию в справочнике
+                  или поправьте правило.
+                </>
+              }
+            >
+              <span className="inline-flex items-center gap-1 text-xs text-warn whitespace-nowrap">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                {formatNum(plan.skippedCount)}{" "}
+                {pluralRu(plan.skippedCount, ["операция", "операции", "операций"])} без
+                категории в Дзен-мани
+              </span>
+            </Tooltip>
+          )}
+
+          {/* «Нечего применять» стоит В ШАПКЕ, а не полосой над таблицей: полоса
+              появлялась и исчезала при каждом выключении последнего правила и
+              двигала таблицу на свою высоту — строки прыгали под курсором. */}
+          {enabledIds.length === 0 && rules.length > 0 && (
+            <Tooltip content="Включите нужные правила режимом «По кнопке» или «Авто» — тогда их будет что проверить и применить">
+              <span className="text-xs text-muted whitespace-nowrap">
+                Все правила выключены
+              </span>
+            </Tooltip>
+          )}
 
           <span className="flex-1 min-w-2" />
 
@@ -584,29 +601,6 @@ export function RulesPage() {
             Добавить
           </button>
         </div>
-
-        {/* Про пустой отбор не пишем: галочки видно в той же таблице, и
-            подсказка объясняла бы то, что человек только что сделал сам. */}
-        {enabledIds.length === 0 && rules.length > 0 && (
-          <div className="mb-3 rounded-lg border border-border bg-panel2/50 px-3 py-2 text-xs text-muted">
-            Все правила выключены — включите нужные, чтобы проверить и применить их.
-          </div>
-        )}
-
-        {plan.skippedCount > 0 && (
-          <div className="mb-3 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
-            {formatNum(plan.skippedCount)}{" "}
-            {pluralRu(plan.skippedCount, ["операция", "операции", "операций"])}{" "}
-            {pluralRu(plan.skippedCount, ["не уедет", "не уедут", "не уедут"])} в
-            Дзен-мани — там нет категории{" "}
-            {plan.skipped
-              .slice(0, 2)
-              .map((x) => `«${x.category}»`)
-              .join(", ")}
-            {plan.skipped.length > 2 ? ` и ещё ${plan.skipped.length - 2}` : ""}.
-            Заведите её в справочнике категорий.
-          </div>
-        )}
 
         {rules.length === 0 ? (
           <div className="text-center py-12">
@@ -812,23 +806,17 @@ export function RulesPage() {
                         className="table-td text-center"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex flex-col items-center gap-1">
-                          <Segmented
-                            size="sm"
-                            label="Режим правила"
-                            value={ruleMode(rule)}
-                            onChange={(next) => void setMode(rule.id, next)}
-                            options={MODE_OPTIONS}
+                        {/* Место под значок отведено ЗАРАНЕЕ и не зависит от
+                            режима: без этого «Выкл» ужимал колонку, «Авто ·
+                            Каждые 30 мин.» растягивал, и соседние столбцы
+                            разъезжались при каждом переключении. */}
+                        <div className="w-[13rem] max-w-full mx-auto flex justify-center">
+                          <RuleModeChip
+                            value={{ mode: ruleModeOf(rule), schedule: rule.schedule }}
+                            onChange={(next) => void setModeValue(rule.id, next)}
+                            run={ruleRuns[rule.id]}
+                            onRunNow={() => runRuleNow(rule.id)}
                           />
-                          {/* Расписание — только у «Авто»: у остальных режимов
-                              автоприменения нет вовсе, и спрашивать «как часто»
-                              не о чем. */}
-                          {ruleMode(rule) === "auto" && (
-                            <RuleSchedulePopover
-                              value={rule.schedule}
-                              onChange={(schedule) => void setSchedule(rule.id, schedule)}
-                            />
-                          )}
                         </div>
                       </td>
                       <td className="table-td text-center tabular-nums">

@@ -15,6 +15,7 @@ export function Select<T extends string>({
   className,
   portal = false,
   ariaLabel,
+  size = "md",
 }: {
   value: T;
   options: { value: T; label: string }[];
@@ -29,6 +30,12 @@ export function Select<T extends string>({
    */
   portal?: boolean;
   ariaLabel?: string;
+  /**
+   * `sm` — плотный вариант для строк-настроек, где поле стоит в ряд с числом и
+   * подписью: у обычного размера высота 40 px, и рядом с полем ввода на 32 px
+   * они выглядят собранными из разных наборов.
+   */
+  size?: "sm" | "md";
 }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -36,7 +43,10 @@ export function Select<T extends string>({
   const [pos, setPos] = useState<{
     left: number;
     top: number;
-    width: number;
+    /** Не уже поля — иначе список выглядит оторванным от него. */
+    minWidth: number;
+    /** Но и не шире свободного места справа: за край экрана не лезем. */
+    maxWidth: number;
     maxHeight: number;
   } | null>(null);
   const current = options.find((o) => o.value === value)?.label ?? "";
@@ -65,16 +75,31 @@ export function Select<T extends string>({
       const r = boxRef.current?.getBoundingClientRect();
       if (!r) return;
       const gap = 8;
-      const below = window.innerHeight - r.bottom - gap - 8;
-      const above = r.top - gap - 8;
+      /** Не липнуть к самому краю окна — иначе список выглядит обрезанным. */
+      const edge = 8;
+      const below = window.innerHeight - r.bottom - gap - edge;
+      const above = r.top - gap - edge;
       // Разворачиваем вверх, если снизу теснее: у поля в нижней части окна
       // список иначе уходит за край экрана.
       const dropUp = below < 160 && above > below;
-      const maxHeight = Math.max(120, Math.min(320, dropUp ? above : below));
+      // Высота — РОВНО по свободному месту, без нижней планки. Планка в 120 px
+      // и была причиной, по которой у поля у самого низа окна список вылезал
+      // за край: свободных 60 px, а высота всё равно 120. Не поместившееся
+      // прокручивается внутри списка — он и так `overflow-y-auto`.
+      const maxHeight = Math.max(0, Math.min(320, dropUp ? above : below));
+      // Верх и низ прижаты к окну с обеих сторон: даже если якорь съехал между
+      // замером и отрисовкой, список останется внутри экрана.
+      const top = dropUp
+        ? Math.max(edge, r.top - gap - maxHeight)
+        : Math.min(r.bottom + gap, window.innerHeight - edge - maxHeight);
       setPos({
         left: r.left,
-        top: dropUp ? r.top - gap - maxHeight : r.bottom + gap,
-        width: r.width,
+        top: Math.max(edge, top),
+        minWidth: r.width,
+        // Список ШИРЕ поля, если так помещается подпись. Раньше ширина была
+        // ровно по полю, и «Только новые» в семисантиметровом поле ломалось на
+        // две строки — при том, что справа было пусто.
+        maxWidth: Math.max(r.width, Math.min(360, window.innerWidth - r.left - edge)),
         maxHeight,
       });
     };
@@ -95,11 +120,21 @@ export function Select<T extends string>({
       role="listbox"
       className={clsx(
         "border border-border rounded-lg bg-panel p-1 shadow-xl overflow-y-auto",
-        portal ? "fixed z-[70]" : "absolute left-0 right-0 z-30 mt-2 min-w-max"
+        // z-96: ВЫШЕ всплывающих окон (`Popover` — 80, `InfoPopover` — 91,
+        // `SliceSwitcher` — 95) и ниже подсказок (100). Список на 70 оказывался
+        // ПОД окном, из которого его же и открыли: видно было только тот кусок,
+        // что торчал из-под края.
+        portal ? "fixed z-[96]" : "absolute left-0 right-0 z-30 mt-2 min-w-max"
       )}
       style={
         portal && pos
-          ? { left: pos.left, top: pos.top, width: pos.width, maxHeight: pos.maxHeight }
+          ? {
+              left: pos.left,
+              top: pos.top,
+              minWidth: pos.minWidth,
+              maxWidth: pos.maxWidth,
+              maxHeight: pos.maxHeight,
+            }
           : undefined
       }
     >
@@ -115,8 +150,8 @@ export function Select<T extends string>({
           }}
           className={clsx(
             "w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-sm text-left",
-            // В портале ширина списка равна ширине поля, поэтому длинную
-            // подпись переносим, а не расталкиваем ею соседей.
+            // Перенос — только когда подпись не влезла даже в расширенный
+            // список: ширина у него растёт по содержимому до `maxWidth`.
             portal ? "whitespace-normal" : "whitespace-nowrap",
             o.value === value ? "bg-accent/10 text-accent" : "text-text hover:bg-panel2"
           )}
@@ -136,12 +171,18 @@ export function Select<T extends string>({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={ariaLabel}
-        className="input h-10 flex items-center justify-between gap-2 w-full text-left"
+        className={clsx(
+          "input flex items-center justify-between gap-2 w-full text-left",
+          size === "sm" ? "h-8 !px-2 !py-1" : "h-10"
+        )}
       >
-        <span className="truncate text-sm">{current}</span>
+        <span className={clsx("truncate", size === "sm" ? "text-xs" : "text-sm")}>
+          {current}
+        </span>
         <ChevronDown
           className={clsx(
-            "w-4 h-4 text-muted shrink-0 transition-transform",
+            "text-muted shrink-0 transition-transform",
+            size === "sm" ? "w-3.5 h-3.5" : "w-4 h-4",
             open && "rotate-180"
           )}
         />

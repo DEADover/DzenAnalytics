@@ -11,7 +11,14 @@ import { migrateRule, restoreRuleCategories, type StoredRule } from "../lib/rule
 import { autoApplyPatches } from "../lib/ruleAutoApply";
 import { rulesView } from "../lib/rulesView";
 import { userEdits } from "../lib/editOrigins";
-import { depthFrom, isDue, withinDepth } from "../lib/ruleSchedule";
+import {
+  depthCount,
+  depthFrom,
+  isDue,
+  readRun,
+  withinDepth,
+  type RuleRun,
+} from "../lib/ruleSchedule";
 import { makeCategoryChecker } from "../lib/zenmoneyPush";
 
 import { applyEdits } from "../lib/applyEdits";
@@ -111,6 +118,25 @@ interface DataState {
   setBase: (newBase: string) => Promise<void>;
   setPayeeGrouping: (enabled: boolean) => Promise<void>;
   reapplyRules: () => Promise<void>;
+  /**
+   * Журнал заходов правил по расписанию: id правила → когда и сколько правок.
+   *
+   * Живёт в состоянии, а не только на диске, потому что об этом спрашивает
+   * интерфейс: «когда работало» и «сколько изменило» — единственный ответ на
+   * вопрос, работает ли «Авто» вообще.
+   */
+  ruleRuns: Record<string, RuleRun>;
+  /** Прочитать журнал с диска — при первом показе страницы правил. */
+  loadRuleRuns: () => Promise<void>;
+  /** Прогнать правило прямо сейчас; возвращает число правок. */
+  runRuleNow: (ruleId: string) => Promise<number>;
+  /**
+   * Прогнать все правила, которым подошёл срок.
+   *
+   * Зовётся по таймеру, пока вкладка открыта: расписание «каждые 15 минут»
+   * иначе оставалось бы обещанием — синхронизации может не быть часами.
+   */
+  runDueRules: () => Promise<void>;
   /** Recompute the visible list from the unchanged raw set. Cheap — used
    *  when only the overlay changed (e.g. a draft was added/removed), so we
    *  don't need to rebuild `transactionsRaw`. */
@@ -328,9 +354,9 @@ async function runScheduledRules(raw: Transaction[]): Promise<void> {
   if (due.length === 0) return;
 
   await ensureEditsLoaded();
-  const runs = (await db.loadJSON<Record<string, string>>(RUNS_KEY)) ?? {};
+  const runs = await loadRuleRuns();
   const now = new Date();
-  const pending = due.filter((r) => isDue(r.schedule, runs[r.id], now));
+  const pending = due.filter((r) => isDue(r.schedule, runs[r.id]?.at, now));
   if (pending.length === 0) return;
 
   const cache = await loadZenCache();
@@ -349,10 +375,10 @@ async function runScheduledRules(raw: Transaction[]): Promise<void> {
   const view = rulesView(raw, userEdits(edits, origins));
 
   const patches: Record<string, import("./useEditsStore").TransactionEdit> = {};
-  const stamps: Record<string, string> = { ...runs };
+  const stamps: Record<string, RuleRun> = { ...runs };
   for (const rule of pending) {
     // Глубина у каждого правила своя, поэтому и выборка своя.
-    const from = depthFrom(rule.schedule!.depth, now);
+    const from = depthFrom(rule.schedule!.depth, now, depthCount(rule.schedule));
     const scope = from ? view.filter((t) => withinDepth(t.date, from)) : view;
     const found = autoApplyPatches(
       scope,
@@ -366,11 +392,83 @@ async function runScheduledRules(raw: Transaction[]): Promise<void> {
     for (const [id, patch] of Object.entries(found)) {
       patches[id] = { ...patches[id], ...patch };
     }
-    stamps[rule.id] = now.toISOString();
+    // Число правок пишем ЗА КАЖДОЕ правило отдельно, до слияния: после него
+    // общий список уже не отвечает на вопрос «что сделало вот это правило».
+    stamps[rule.id] = { at: now.toISOString(), changed: Object.keys(found).length };
   }
   await db.saveJSON(RUNS_KEY, stamps);
+  useDataStore.setState({ ruleRuns: stamps });
   if (Object.keys(patches).length === 0) return;
   await useEditsStore.getState().setEditEach(patches, "rule");
+}
+
+/**
+ * Прогнать одно правило прямо сейчас, не дожидаясь срока (issue #75).
+ *
+ * Расписание в браузере наступает «при первом открытии в новый день», и ждать
+ * этого, только что настроив глубину, незачем: человеку нужно увидеть, что
+ * правило вообще делает. Заход считается настоящим — он же и отмечается в
+ * журнале, поэтому по расписанию правило сегодня больше не побежит.
+ */
+async function runRuleNow(ruleId: string): Promise<number> {
+  const raw = useDataStore.getState().transactionsRaw;
+  const stored = await db.loadJSON<StoredRule[]>(RULES_KEY);
+  const rule = (stored ?? []).map((r) => migrateRule(r)).find((r) => r.id === ruleId);
+  if (!rule || raw.length === 0) return 0;
+
+  await ensureEditsLoaded();
+  const cache = await loadZenCache();
+  const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
+  const payeeOk = cache?.merchants
+    ? (() => {
+        const set = new Set(
+          cache.merchants.map((m) => (m.title ?? "").trim().toLowerCase())
+        );
+        return (title: string) => set.has(title.trim().toLowerCase());
+      })()
+    : null;
+  const edits = await loadEditsFromStore();
+  const origins = useEditsStore.getState().origins;
+  const deleted = await loadDeletedSet();
+  const now = new Date();
+  const view = rulesView(raw, userEdits(edits, origins));
+  const from = rule.schedule
+    ? depthFrom(rule.schedule.depth, now, depthCount(rule.schedule))
+    : null;
+  const scope = from ? view.filter((t) => withinDepth(t.date, from)) : view;
+  const found = autoApplyPatches(
+    scope,
+    [rule],
+    edits,
+    deleted,
+    categoryOk,
+    payeeOk,
+    origins
+  );
+  const changed = Object.keys(found).length;
+
+  const runs = (await db.loadJSON<Record<string, unknown>>(RUNS_KEY)) ?? {};
+  const stamps: Record<string, RuleRun> = {};
+  for (const [id, value] of Object.entries(runs)) {
+    const parsed = readRun(value);
+    if (parsed) stamps[id] = parsed;
+  }
+  stamps[ruleId] = { at: now.toISOString(), changed };
+  await db.saveJSON(RUNS_KEY, stamps);
+  useDataStore.setState({ ruleRuns: stamps });
+  if (changed > 0) await useEditsStore.getState().setEditEach(found, "rule");
+  return changed;
+}
+
+/** Журнал заходов с диска — для подписей «работало / сколько изменило». */
+async function loadRuleRuns(): Promise<Record<string, RuleRun>> {
+  const raw = (await db.loadJSON<Record<string, unknown>>(RUNS_KEY)) ?? {};
+  const out: Record<string, RuleRun> = {};
+  for (const [id, value] of Object.entries(raw)) {
+    const parsed = readRun(value);
+    if (parsed) out[id] = parsed;
+  }
+  return out;
 }
 
 async function loadEditsFromStore(): Promise<
@@ -662,6 +760,18 @@ export const useDataStore = create<DataState>((set, get) => ({
     await db.saveTransactions(raw);
     const final = await finalize(raw, rates);
     set({ payeeGroupingEnabled: enabled, transactions: final, transactionsRaw: raw });
+  },
+
+  ruleRuns: {},
+
+  loadRuleRuns: async () => {
+    set({ ruleRuns: await loadRuleRuns() });
+  },
+
+  runRuleNow,
+
+  runDueRules: async () => {
+    await runScheduledRules(get().transactionsRaw);
   },
 
   reapplyRules: async () => {
