@@ -96,6 +96,10 @@ export const BACKUP_META_KEYS = [
   // сразу после восстановления все они запустились бы разом.
   "ruleScheduleRuns",
   "pendingTransactions", // drafts (new operations)
+  // Какие черновики родились из какого файла: без этого после восстановления
+  // «Отменить импорт» сносило бы всё подряд, а повторную загрузку того же
+  // файла нечем было бы узнать.
+  "importBatches",
   "deletedTransactions",
   "deletedPayloads",
   "tagEdits",

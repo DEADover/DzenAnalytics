@@ -66,7 +66,13 @@ export interface ParsedRow {
 }
 
 export type RowVerdict =
-  | { ok: true; zen: ZenTransaction; duplicateOf?: string }
+  | {
+      ok: true;
+      zen: ZenTransaction;
+      /** Валюта счёта строки — только чтобы показать сумму в отчёте. */
+      currency: string;
+      duplicateOf?: string;
+    }
   | { ok: false; reason: string };
 
 export interface PlanRow extends ParsedRow {
@@ -356,7 +362,7 @@ export function rowToVerdict(
   const built = buildDraftTransaction(fields, cache, stampSeconds);
   // Сузить тип по `skip` нельзя: у ветки успеха он объявлен необязательным.
   if (!built.zen) return { ok: false, reason: built.skip ?? "Не удалось собрать операцию" };
-  return { ok: true, zen: built.zen };
+  return { ok: true, zen: built.zen, currency: accountCurrency(mainAccount, cache) };
 }
 
 /**
@@ -457,7 +463,7 @@ export function buildImportPlan(
     out.push({
       ...row,
       verdict: near
-        ? { ok: true, zen, duplicateOf: "похожая операция уже есть" }
+        ? { ...verdict, ok: true, zen, duplicateOf: "похожая операция уже есть" }
         : verdict,
       picked: !near,
     });

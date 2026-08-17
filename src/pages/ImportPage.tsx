@@ -70,6 +70,7 @@ import {
   countCounterpartyPending,
 } from "../store/useCounterpartyEditsStore";
 import * as db from "../lib/db";
+import { ImportXlsxCard } from "../components/ImportXlsxCard";
 
 type Mode = "replace" | "merge";
 
@@ -1157,6 +1158,10 @@ export function ImportPage() {
             )}
           </div>
         )}
+
+        {/* Импорт из Excel — отдельной карточкой, а не внутри переключателя
+            источника: он ничего не заменяет, а добавляет новые операции. */}
+        <ImportXlsxCard />
 
         {/* ── Current data footer ─────────────────────────────────
             Shows what's already in the local IndexedDB plus the

@@ -62,6 +62,7 @@ import {
 import { useTagDeletionsStore } from "./store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "./store/usePlannedDeletionsStore";
 import { useFiltersStore } from "./store/useFiltersStore";
+import { useImportBatchesStore } from "./store/useImportBatchesStore";
 
 /**
  * All routes use the same outer layout now. Pages that need global filters
@@ -108,6 +109,7 @@ function App() {
     useDeletedStore.getState().hydrate();
     useDeletedPayloadsStore.getState().hydrate();
     useDraftsStore.getState().hydrate();
+    useImportBatchesStore.getState().hydrate();
     useTagEditsStore.getState().hydrate();
     useAccountEditsStore.getState().hydrate();
     useBudgetEditsStore.getState().hydrate();

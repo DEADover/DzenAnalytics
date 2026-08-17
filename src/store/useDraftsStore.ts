@@ -28,6 +28,14 @@ interface DraftsState {
   hydrate: () => Promise<void>;
   /** Insert a new draft (id is the transaction's own UUID). */
   add: (tx: ZenTransaction) => Promise<void>;
+  /**
+   * Добавить пачку разом — импорт из Excel создаёт сотни операций.
+   *
+   * Поштучный `add` переписывал бы всю карту черновиков в IndexedDB на каждую
+   * строку (двести записей на файл в двести строк) и столько же раз дёргал бы
+   * подписку автоотправки — то есть двести попыток пуша вместо одной.
+   */
+  addMany: (txs: ZenTransaction[]) => Promise<void>;
   /** Replace an existing draft in place (same id). */
   update: (tx: ZenTransaction) => Promise<void>;
   /** Drop one draft (user discarded it). */
@@ -48,6 +56,14 @@ export const useDraftsStore = create<DraftsState>((set, get) => ({
 
   add: async (tx) => {
     const next = { ...get().drafts, [tx.id]: tx };
+    await db.saveJSON(KEY, next);
+    set({ drafts: next });
+  },
+
+  addMany: async (txs) => {
+    if (txs.length === 0) return;
+    const next = { ...get().drafts };
+    for (const tx of txs) next[tx.id] = tx;
     await db.saveJSON(KEY, next);
     set({ drafts: next });
   },
