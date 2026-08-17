@@ -86,6 +86,50 @@ export function addListValidation(
 }
 
 /**
+ * Выпадающие списки, берущие значения ИЗ ДИАПАЗОНА другого листа.
+ *
+ * `addListValidation` держит варианты константой и упирается в 255 знаков — на
+ * список счетов этого не хватает, а на список категорий тем более. Ссылка на
+ * диапазон ограничений по длине не имеет и живёт вместе со справочником: обновил
+ * лист — обновились все выпадашки.
+ *
+ * `hard: false` — мягкая проверка: Excel подсказывает список, но чужое значение
+ * тоже принимает. Нужна там, где вписать своё законно (новый контрагент).
+ */
+export function addRangeValidations(
+  sheetXml: string,
+  items: { sqref: string; range: string; hard?: boolean }[]
+): string {
+  if (items.length === 0) return sheetXml;
+  const body = items
+    .map(({ sqref, range, hard = true }) =>
+      `<dataValidation type="list" allowBlank="1" showInputMessage="1" ` +
+      `showErrorMessage="${hard ? 1 : 0}" sqref="${sqref}">` +
+      `<formula1>${esc(range)}</formula1></dataValidation>`
+    )
+    .join("");
+  const xml = `<dataValidations count="${items.length}">${body}</dataValidations>`;
+  // Порядок узлов по схеме тот же, что у `addListValidation`: после `sheetData`
+  // и до `drawing`.
+  if (sheetXml.includes("<drawing "))
+    return sheetXml.replace(/<drawing /, `${xml}<drawing `);
+  return sheetXml.replace("</worksheet>", `${xml}</worksheet>`);
+}
+
+/**
+ * Ссылка на диапазон другого листа для формулы валидации.
+ *
+ * Имя листа с пробелом или кириллицей Excel требует в апострофах; апостроф
+ * внутри имени удваивается.
+ */
+export function sheetRange(sheet: string, from: string, to: string): string {
+  const name = /^[A-Za-zА-Яа-яЁё_][A-Za-zА-Яа-яЁё0-9_.]*$/.test(sheet)
+    ? sheet
+    : `'${sheet.replace(/'/g, "''")}'`;
+  return `${name}!${from}:${to}`;
+}
+
+/**
  * Заставить Excel пересчитать книгу при открытии.
  *
  * Наши формулы приходят с кэшем от генератора, а не от Excel; без этого флага

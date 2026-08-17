@@ -34,6 +34,7 @@ import {
 } from "./budgetYear";
 import { monthLabelFull } from "./format";
 import { columnLetter, injectCharts, sheetPathByName, type ChartSpec } from "./xlsxCharts";
+import { downloadBlob } from "./downloadBlob";
 import {
   addListValidation,
   cellRef,
@@ -1091,17 +1092,6 @@ export function buildWorkbook(
     dash,
     data,
   };
-}
-
-function downloadBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**

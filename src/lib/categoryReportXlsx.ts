@@ -10,6 +10,7 @@
  */
 
 import type { CategoryReport, ReportRow } from "./categoryReport";
+import { downloadBlob } from "./downloadBlob";
 
 /** Тип ячейки листа. Повторяет форму, которую ждёт write-excel-file, но не
  *  тянет пакет в основной бандл — сам пакет подгружается только при выгрузке. */
@@ -232,18 +233,6 @@ async function withRowOutline(blob: Blob, rowNumbers: number[]): Promise<Blob> {
   return new Blob([zipSync(zip)], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-}
-
-/** Отдать собранный файл пользователю. */
-function downloadBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
