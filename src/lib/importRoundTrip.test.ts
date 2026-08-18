@@ -140,6 +140,21 @@ describe("шаблон → файл → операции", () => {
     expect(plan.rows[2].verdict).toMatchObject({ ok: false });
   });
 
+  it("КЛЮЧЕВОЕ: незнакомый контрагент в файле — не ошибка, а новая запись", async () => {
+    // Мягкая проверка в Excel на колонке «Контрагент» именно для этого: имя
+    // можно вписать своё, а справочник мы пополним сами.
+    const plan = await planOf(
+      await fillTemplate([
+        [text("17.08.2026"), text(""), text("Расход"), text("Еда"), text("Наличные"), text(""), num(100), text(""), text("Ларёк у дома"), text("")],
+      ])
+    );
+    expect(plan.ready).toBe(1);
+    const v = plan.rows[0].verdict;
+    expect(v.ok && v.newCounterparty?.title).toBe("Ларёк у дома");
+    expect(plan.newCounterparties).toHaveLength(1);
+    expect(v.ok && v.zen.merchant).toBe(plan.newCounterparties[0].id);
+  });
+
   it("пустые строки между данными не считаются ошибкой", async () => {
     const plan = await planOf(
       await fillTemplate([

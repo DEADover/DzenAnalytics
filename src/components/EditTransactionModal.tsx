@@ -5,6 +5,7 @@ import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
+import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import {
   getBrandTitlesFromCache,
@@ -705,7 +706,11 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
     const built = buildDraftTransaction(
       currentDraftFields(newDraftId()),
       cache,
-      Math.floor(Date.now() / 1000)
+      Math.floor(Date.now() / 1000),
+      // Контрагент, заведённый локально и ещё не уехавший в облако, для
+      // человека уже существует — операция обязана связаться с ним, а не
+      // уехать свободной строкой.
+      useCounterpartyEditsStore.getState().created
     );
     if (!built.zen) {
       setError(built.skip ?? "Не удалось создать операцию");
@@ -728,7 +733,8 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
     const built = buildDraftTransaction(
       currentDraftFields(tx.id),
       cache,
-      Math.floor(Date.now() / 1000)
+      Math.floor(Date.now() / 1000),
+      useCounterpartyEditsStore.getState().created
     );
     if (!built.zen) {
       setError(built.skip ?? "Не удалось сохранить операцию");

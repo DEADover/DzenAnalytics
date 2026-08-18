@@ -1032,13 +1032,31 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         cache,
         Math.floor(Date.now() / 1000)
       );
+      // Новые контрагенты собираются ДО операций: операция может ссылаться на
+      // запись, которой в кэше ещё нет, и проверка черновиков обязана знать её
+      // id — иначе она придержала бы законную операцию.
+      const cpStamp = Math.floor(Date.now() / 1000);
+      // Номер пользователя берём откуда угодно из кэша: у пустого справочника
+      // контрагентов и тегов он всё равно есть у счетов и у самого профиля.
+      // Раньше при пустых merchants и tags запись справочника молча не
+      // собиралась, и операция уезжала со ссылкой в никуда.
+      const cpUser =
+        cache.merchants[0]?.user ??
+        cache.tags[0]?.user ??
+        cache.accounts[0]?.user ??
+        cache.user[0]?.id;
+      const cpNew =
+        cpEdits.created.length > 0 && cpUser != null
+          ? buildNewMerchantsPush(cpEdits.created, cpUser, cpStamp)
+          : [];
       // Locally-created drafts (new operations not yet in the cloud). Each
       // is a complete ZenTransaction; validate references against the fresh
       // cache and re-stamp `changed`. They ride along in the same request.
       const draftPush = validateDrafts(
         await loadDrafts(),
         cache,
-        Math.floor(Date.now() / 1000)
+        Math.floor(Date.now() / 1000),
+        cpNew.map((m) => String(m.id))
       );
       const draftTxs = draftPush.ready;
       // Draft "skips" don't keep a row in limbo: an "already in cloud" draft
@@ -1076,13 +1094,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           : [];
       // Контрагенты (merchants): renames + creates as upserts, removals as
       // generic deletions with object "merchant".
-      const cpStamp = Math.floor(Date.now() / 1000);
-      const cpUser = cache.merchants[0]?.user ?? cache.tags[0]?.user;
       const cpRename = buildMerchantRenamePush(cpEdits.renames, cache.merchants, cpStamp);
-      const cpNew =
-        cpEdits.created.length > 0 && cpUser != null
-          ? buildNewMerchantsPush(cpEdits.created, cpUser, cpStamp)
-          : [];
       const merchantUpserts = [...cpRename.merchants, ...cpNew];
       const merchantDeletions = buildMerchantDeletions(
         cpEdits.deleted,

@@ -23,7 +23,13 @@
 import type { Transaction, TxKind } from "../types";
 import type { ZenTransaction } from "./zenmoney";
 import type { ZenCache } from "./zenmoneyCache";
-import { buildDraftTransaction, newDraftId, type DraftFields } from "./zenmoneyPush";
+import {
+  buildDraftTransaction,
+  merchantKey,
+  newDraftId,
+  type DraftFields,
+  type NewCounterpartyDraft,
+} from "./zenmoneyPush";
 import { validateOperation } from "./operationValidation";
 import { splitCategoryFull } from "./ruleEngine";
 import { OPS_COLUMNS, OP_TYPES, type OpsColumn, type OpTypeLabel } from "./importTemplate";
@@ -72,6 +78,19 @@ export type RowVerdict =
       /** Валюта счёта строки — только чтобы показать сумму в отчёте. */
       currency: string;
       duplicateOf?: string;
+      /**
+       * Контрагента с таким именем в справочнике нет — заведём вместе с
+       * операцией. Не ошибка: вписать нового поставщика в свой файл человек
+       * имеет полное право, а требовать «сначала заведите в Дзен-мани» —
+       * значит гонять его между двумя приложениями из-за одной строки.
+       */
+      newCounterparty?: NewCounterpartyDraft;
+      /**
+       * Похожее имя из справочника. Только подсказка: «Пятерочка» при живой
+       * «Пятёрочке» — обычно опечатка, но бывает и вправду другая лавка,
+       * поэтому молча подменять имя нельзя.
+       */
+      payeeHint?: string;
     }
   | { ok: false; reason: string };
 
@@ -86,6 +105,8 @@ export interface ImportPlan {
   ready: number;
   failed: number;
   duplicates: number;
+  /** Контрагенты, которых придётся завести. Уникальные, только по годным строкам. */
+  newCounterparties: NewCounterpartyDraft[];
 }
 
 /* ------------------------------------------------------------------ шапка */
@@ -220,6 +241,120 @@ export function canonical(
   return { value, exact: false, suggestion: near };
 }
 
+/* ------------------------------------------------------- контрагенты */
+
+/** Что разбор решил про контрагента строки. */
+export interface CounterpartyHit {
+  id: string;
+  /** Написание, под которым запись уедет в справочник. */
+  title: string;
+  /** Такой записи ещё нет — заведём. */
+  isNew: boolean;
+}
+
+export interface CounterpartyMinter {
+  /** Найти контрагента по имени или завести нового. Пустое имя — `null`. */
+  resolve: (raw: string) => CounterpartyHit | null;
+  /** Заведённые за этот прогон — в порядке первой встречи. */
+  minted: () => NewCounterpartyDraft[];
+}
+
+/**
+ * Связыватель имён с записями справочника, заводящий недостающие.
+ *
+ * Один на прогон разбора: два раза встреченное имя обязано дать ОДИН id,
+ * иначе в справочник уедут две одинаковые записи, а операции разъедутся по
+ * ним. Написание берётся у первой встреченной строки — какое-то выбрать
+ * всё равно надо, а первое человек видит в отчёте выше остальных.
+ *
+ * Порядок поиска: облако → уже заведённые локально → заведённые в этом
+ * прогоне. Облако первым, потому что запись с таким именем там уже есть, и
+ * вторая была бы дублем.
+ */
+export function createCounterpartyMinter(
+  cached: { id: string; title: string }[],
+  pending: NewCounterpartyDraft[] = [],
+  mintId: () => string = () => crypto.randomUUID()
+): CounterpartyMinter {
+  const known = new Map<string, string>();
+  for (const m of [...cached, ...pending]) {
+    const key = merchantKey(m.title);
+    if (key && !known.has(key)) known.set(key, m.id);
+  }
+  const fresh = new Map<string, NewCounterpartyDraft>();
+  return {
+    resolve(raw) {
+      const title = normalizeText(raw);
+      const key = merchantKey(title);
+      if (!key) return null;
+      const hit = known.get(key);
+      if (hit) return { id: hit, title, isNew: false };
+      const already = fresh.get(key);
+      if (already) return { ...already, isNew: true };
+      const item = { id: mintId(), title };
+      fresh.set(key, item);
+      return { ...item, isNew: true };
+    },
+    minted: () => [...fresh.values()],
+  };
+}
+
+/** «ё» и «е» — одна буква, когда ищем ПОХОЖЕЕ имя (но не когда сверяем точно). */
+const loose = (v: string) => merchantKey(v).replace(/ё/g, "е");
+
+/**
+ * Ближайшее имя из справочника — для подсказки, а не для подмены.
+ *
+ * «Пятерочка» при живой «Пятёрочке» почти наверняка опечатка, но решать
+ * человеку: бывает и вправду вторая лавка с похожим именем.
+ */
+export function nearestPayee(raw: string, payees: string[]): string | undefined {
+  const name = loose(raw);
+  if (!name) return undefined;
+  return (
+    payees.find((p) => loose(p) === name) ??
+    payees.find((p) => loose(p).startsWith(name)) ??
+    payees.find((p) => loose(p).includes(name)) ??
+    payees.find((p) => name.includes(loose(p)))
+  );
+}
+
+/**
+ * Переклеить операции на записи, появившиеся, пока человек смотрел отчёт.
+ *
+ * Между разбором файла и нажатием «Создать» проходит время: за него того же
+ * контрагента могли завести руками в справочниках или он мог приехать из
+ * облака синхронизацией. Тогда заводить второго нельзя — надо сослаться на
+ * существующего. Сверка чистая и делается ровно в момент записи.
+ */
+export function reconcileNewCounterparties(
+  txs: ZenTransaction[],
+  minted: NewCounterpartyDraft[],
+  cached: { id: string; title: string }[],
+  pending: NewCounterpartyDraft[] = []
+): { txs: ZenTransaction[]; toCreate: NewCounterpartyDraft[] } {
+  const known = new Map<string, string>();
+  for (const m of [...cached, ...pending]) {
+    const key = merchantKey(m.title);
+    if (key && !known.has(key)) known.set(key, m.id);
+  }
+  const remap = new Map<string, string>();
+  const toCreate: NewCounterpartyDraft[] = [];
+  for (const m of minted) {
+    const hit = known.get(merchantKey(m.title));
+    if (hit) remap.set(m.id, hit);
+    else toCreate.push(m);
+  }
+  if (remap.size === 0) return { txs, toCreate };
+  return {
+    txs: txs.map((t) => {
+      const to = t.merchant ? remap.get(String(t.merchant)) : undefined;
+      return to ? { ...t, merchant: to } : t;
+    }),
+    toCreate,
+  };
+}
+
 /* ---------------------------------------------------------------- разбор */
 
 /** Прочитать строку листа как есть, без суждений о её правильности. */
@@ -325,7 +460,13 @@ export function rowToVerdict(
   dicts: ImportDicts,
   cache: ZenCache,
   stampSeconds: number,
-  makeId: () => string = newDraftId
+  makeId: () => string = newDraftId,
+  /**
+   * Общий на весь файл связыватель контрагентов. Без него делается разовый —
+   * это режим живого вердикта в редакторе строки: показать статус надо, а
+   * запоминать заведённое там незачем, коммит всё равно берёт план целиком.
+   */
+  minter: CounterpartyMinter = createCounterpartyMinter(cache.merchants)
 ): RowVerdict {
   if (!row.date) return { ok: false, reason: "Не разобрали дату. Формат: 17.08.2026" };
   if (!row.type) return { ok: false, reason: "Не заполнен тип операции" };
@@ -391,6 +532,9 @@ export function rowToVerdict(
     };
   }
 
+  // Контрагент — после счетов и категории: сначала то, что человек видит в
+  // ячейке, потом то, чего в ней не видно.
+  const payee = minter.resolve(row.payee);
   const mainAccount = kind === "expense" || kind === "transfer" ? outAcc.value : inAcc.value;
   const isDebt = isDebtAccount(mainAccount, cache) || isDebtAccount(inAcc.value, cache);
 
@@ -421,13 +565,29 @@ export function rowToVerdict(
     createdSeconds: createdSeconds(row),
     category: parts?.category,
     subcategory: parts?.subcategory ?? null,
-    payee: row.payee || undefined,
+    payee: payee?.title || undefined,
     comment: row.comment || undefined,
   };
-  const built = buildDraftTransaction(fields, cache, stampSeconds);
+  // Найденного контрагента отдаём билдеру всегда, а не только свежего: он
+  // может быть заведён локально и в кэше отсутствовать — тогда без подсказки
+  // операция ушла бы со свободной строкой вместо ссылки на запись. Если имя
+  // есть в облаке, билдер всё равно возьмёт облачный id: кэш в его карте
+  // стоит первым.
+  const built = buildDraftTransaction(
+    fields,
+    cache,
+    stampSeconds,
+    payee ? [{ id: payee.id, title: payee.title }] : []
+  );
   // Сузить тип по `skip` нельзя: у ветки успеха он объявлен необязательным.
   if (!built.zen) return { ok: false, reason: built.skip ?? "Не удалось собрать операцию" };
-  return { ok: true, zen: built.zen, currency: accountCurrency(mainAccount, cache) };
+  return {
+    ok: true,
+    zen: built.zen,
+    currency: accountCurrency(mainAccount, cache),
+    ...(payee?.isNew ? { newCounterparty: { id: payee.id, title: payee.title } } : {}),
+    ...(payee?.isNew ? { payeeHint: nearestPayee(payee.title, dicts.payees) } : {}),
+  };
 }
 
 /**
@@ -476,8 +636,16 @@ export function buildImportPlan(
   cache: ZenCache,
   existing: Transaction[],
   stampSeconds: number,
-  makeId: () => string = newDraftId
+  makeId: () => string = newDraftId,
+  /** Контрагенты, заведённые локально и ещё не уехавшие: второй раз не заводим. */
+  pendingCounterparties: NewCounterpartyDraft[] = [],
+  mintCounterpartyId: () => string = () => crypto.randomUUID()
 ): ImportPlan {
+  const minter = createCounterpartyMinter(
+    cache.merchants,
+    pendingCounterparties,
+    mintCounterpartyId
+  );
   const seen = new Map<string, string[]>();
   const remember = (sig: string, date: string) => {
     const list = seen.get(sig) ?? [];
@@ -503,7 +671,7 @@ export function buildImportPlan(
   let duplicates = 0;
 
   for (const row of rows) {
-    const verdict = rowToVerdict(row, dicts, cache, stampSeconds, makeId);
+    const verdict = rowToVerdict(row, dicts, cache, stampSeconds, makeId, minter);
     if (!verdict.ok) {
       failed++;
       out.push({ ...row, verdict, picked: false });
@@ -538,7 +706,13 @@ export function buildImportPlan(
     });
   }
 
-  return { rows: out, ready, failed, duplicates };
+  // Отбитая строка контрагента не заводит: её id просто умирает вместе с ней.
+  const wanted = new Set(
+    out.flatMap((r) => (r.verdict.ok && r.verdict.newCounterparty ? [r.verdict.newCounterparty.id] : []))
+  );
+  const newCounterparties = minter.minted().filter((m) => wanted.has(m.id));
+
+  return { rows: out, ready, failed, duplicates, newCounterparties };
 }
 
 /* -------------------------------------------------------------- мелочи */

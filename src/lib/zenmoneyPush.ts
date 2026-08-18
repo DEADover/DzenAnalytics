@@ -493,19 +493,7 @@ export function buildPushItems(
   // for tolerance). `brand` edits get resolved to a merchant id through
   // this map. New brand titles (not in the dictionary) are refused —
   // creating a merchant entity is outside Phase 1 scope.
-  const merchantsByTitle = new Map<string, string>();
-  for (const m of cache.merchants) {
-    const key = (m.title || "").trim().toLowerCase();
-    if (!key) continue;
-    // First-seen wins — Zenmoney shouldn't have duplicates, but be safe.
-    if (!merchantsByTitle.has(key)) merchantsByTitle.set(key, m.id);
-  }
-  // Локальные черновики — после кэша: если контрагент с таким названием уже
-  // есть в облаке, ссылаемся на него, а не плодим второго.
-  for (const m of newMerchants) {
-    const key = (m.title || "").trim().toLowerCase();
-    if (key && !merchantsByTitle.has(key)) merchantsByTitle.set(key, m.id);
-  }
+  const merchantsByTitle = merchantIndex(cache.merchants, newMerchants);
 
   const toPush: PushItem[] = [];
   const recreates: Resurrection[] = [];
@@ -1121,7 +1109,16 @@ export type DraftBuildResult =
 export function buildDraftTransaction(
   fields: DraftFields,
   cache: ZenCache,
-  stampSeconds: number
+  stampSeconds: number,
+  /**
+   * Контрагенты, заведённые локально и ещё не уехавшие в облако.
+   *
+   * Без них операция, созданная под свежим контрагентом, теряла бы его:
+   * в кэше имени ещё нет, и оно уходило свободной строкой. Отправка такие
+   * черновики уже учитывает (`buildPushItems`), а сборка операции — нет,
+   * и эта асимметрия и была дырой.
+   */
+  newMerchants: NewCounterpartyDraft[] = []
 ): DraftBuildResult {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.date)) {
     return { skip: "Некорректная дата" };
@@ -1143,11 +1140,7 @@ export function buildDraftTransaction(
     tagsByTitle.set(t.title, list);
   }
   const tagsById = new Map(cache.tags.map((t) => [t.id, t]));
-  const merchantsByTitle = new Map<string, string>();
-  for (const m of cache.merchants) {
-    const key = (m.title || "").trim().toLowerCase();
-    if (key && !merchantsByTitle.has(key)) merchantsByTitle.set(key, m.id);
-  }
+  const merchantsByTitle = merchantIndex(cache.merchants, newMerchants);
 
   const user = cache.user[0]?.id;
   if (user == null) return { skip: "Нет данных пользователя — синхронизируйтесь с Дзен-мани" };
@@ -1257,7 +1250,7 @@ export function buildDraftTransaction(
     return { skip: "У долга обязателен контрагент — укажите, с кем он" };
   }
   if (counterparty) {
-    const merchantId = merchantsByTitle.get(counterparty.toLowerCase());
+    const merchantId = merchantsByTitle.get(merchantKey(counterparty));
     if (isDebtDraft) {
       zen.payee = counterparty;
       if (merchantId) zen.merchant = merchantId;
@@ -1279,6 +1272,28 @@ export interface DraftPushResult {
 }
 
 /**
+ * Справочник контрагентов «имя → id»: сначала облако, потом локальные
+ * черновики. Порядок важен: если запись с таким именем уже есть в облаке,
+ * ссылаемся на неё, а не плодим вторую.
+ */
+function merchantIndex(
+  cached: { id: string; title: string }[],
+  drafts: NewCounterpartyDraft[] = []
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const m of cached) {
+    const key = merchantKey(m.title);
+    // Первый выигрывает: дубли в Дзен-мани — норма, склейка только по id.
+    if (key && !map.has(key)) map.set(key, m.id);
+  }
+  for (const m of drafts) {
+    const key = merchantKey(m.title);
+    if (key && !map.has(key)) map.set(key, m.id);
+  }
+  return map;
+}
+
+/**
  * Validate locally-created drafts against the current cache right before a
  * push. A draft is a full ZenTransaction, but the cache may have moved on
  * since it was built (an account/tag got archived elsewhere), so we re-check
@@ -1289,11 +1304,24 @@ export interface DraftPushResult {
 export function validateDrafts(
   drafts: Record<string, ZenTransaction>,
   cache: ZenCache,
-  stampSeconds: number
+  stampSeconds: number,
+  /**
+   * Id контрагентов, которые уедут этим же запросом.
+   *
+   * Операция может ссылаться на контрагента, которого в кэше ещё нет: его
+   * завели локально, и он уходит той же посылкой. Всё остальное — ссылка в
+   * никуда, и отправлять такую операцию нельзя: в Дзен-мани она приедет с
+   * пустым получателем, а починить это уже нечем.
+   */
+  pendingMerchantIds: Iterable<string> = []
 ): DraftPushResult {
   const accountIds = new Set(cache.accounts.map((a) => a.id));
   const instrumentIds = new Set(cache.instruments.map((i) => i.id));
   const tagIds = new Set(cache.tags.map((t) => t.id));
+  const merchantIds = new Set<string>([
+    ...cache.merchants.map((m) => String(m.id)),
+    ...pendingMerchantIds,
+  ]);
   const liveTxIds = new Set(
     cache.transactions.filter((t) => !t.deleted).map((t) => String(t.id))
   );
@@ -1319,6 +1347,13 @@ export function validateDrafts(
     }
     if (zt.tag && zt.tag.some((t) => !tagIds.has(t))) {
       skipped.push({ id, reason: "Категория операции не найдена в Дзен-мани" });
+      continue;
+    }
+    if (zt.merchant && !merchantIds.has(String(zt.merchant))) {
+      skipped.push({
+        id,
+        reason: "Контрагент операции ещё не заведён в Дзен-мани — синхронизируйтесь и повторите",
+      });
       continue;
     }
     ready.push({ ...zt, changed: stampSeconds });
@@ -1507,6 +1542,19 @@ export interface NewCounterpartyDraft {
 }
 
 /**
+ * Ключ, по которому контрагент считается «тем же самым».
+ *
+ * Пробелы по краям и регистр не различают записи — «пятёрочка» и «Пятёрочка»
+ * это один магазин. А вот «ё» и «е» различают: иначе завести контрагента,
+ * отличающегося одной буквой, стало бы нельзя. Один ключ на все места, где
+ * имя ищут в справочнике, — иначе связывание при отправке и при сборке
+ * черновика разъезжается, а разъехавшись, даёт вторую запись на то же имя.
+ */
+export function merchantKey(title: string | null | undefined): string {
+  return (title || "").trim().toLowerCase();
+}
+
+/**
  * Build the `ZenMerchant[]` payload for locally-created counterparties.
  * `user` is the account's numeric id (taken from any cached entity).
  * Empty-titled drafts are skipped defensively.
@@ -1517,9 +1565,16 @@ export function buildNewMerchantsPush(
   stampSeconds: number
 ): ZenMerchant[] {
   const out: ZenMerchant[] = [];
+  // Два черновика с одним именем — это одна запись справочника: иначе в
+  // Дзен-мани приедут два одинаковых контрагента, и склеить их потом можно
+  // только вручную.
+  const seen = new Set<string>();
   for (const m of items) {
-    if (!m.title.trim()) continue;
-    out.push({ id: m.id, user, title: m.title.trim(), changed: stampSeconds });
+    const title = m.title.trim();
+    const key = merchantKey(title);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: m.id, user, title, changed: stampSeconds });
   }
   return out;
 }

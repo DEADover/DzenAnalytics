@@ -15,7 +15,10 @@ import {
   rowSignature,
   rowToVerdict,
   clearForType,
+  createCounterpartyMinter,
   kindOf,
+  nearestPayee,
+  reconcileNewCounterparties,
   retype,
   type ImportDicts,
   type ParsedRow,
@@ -516,5 +519,163 @@ describe("retype — смена типа не теряет счёт", () => {
 
   it("непонятный тип только записывается — переставлять поля не подо что", () => {
     expect(retype(parsed(), "Трата")).toMatchObject({ type: "Трата", outAccount: "Т-Банк" });
+  });
+});
+
+describe("контрагент, которого ещё нет в справочнике", () => {
+  /** Разбор с предсказуемыми id контрагентов — как уже сделано с makeId. */
+  let mint = 0;
+  const nextCp = () => `cp-${++mint}`;
+  const plan = (rows: ParsedRow[], pending: { id: string; title: string }[] = []) => {
+    mint = 0;
+    return buildImportPlan(rows, dicts, cache(), [], 1_700_000_000, () => "d1", pending, nextCp);
+  };
+
+  it("КЛЮЧЕВОЕ: новое имя — не ошибка, а запись, которой пока нет", () => {
+    // Требовать «сначала заведите контрагента в Дзен-мани» — значит гонять
+    // человека между двумя приложениями из-за одной строки файла.
+    const p = plan([parsed({ payee: "Ларёк у дома" })]);
+    expect(p).toMatchObject({ ready: 1, failed: 0 });
+    const v = p.rows[0].verdict;
+    expect(v.ok && v.newCounterparty).toMatchObject({ id: "cp-1", title: "Ларёк у дома" });
+    expect(v.ok && v.zen.merchant).toBe("cp-1");
+    expect(p.newCounterparties).toEqual([{ id: "cp-1", title: "Ларёк у дома" }]);
+  });
+
+  it("КЛЮЧЕВОЕ: одно имя в разном регистре — одна запись и один id", () => {
+    // Иначе в справочник уедут два одинаковых контрагента, а операции
+    // разъедутся по ним; склеить их потом можно только вручную.
+    const p = plan([
+      parsed({ payee: "Ларёк у дома" }),
+      parsed({ excelRow: 3, amount: 500, payee: " ларёк у дома " }),
+    ]);
+    const ids = p.rows.map((r) => (r.verdict.ok ? r.verdict.zen.merchant : null));
+    expect(ids[0]).toBe("cp-1");
+    expect(ids[1]).toBe("cp-1");
+    // Написание — от первой строки.
+    expect(p.newCounterparties).toEqual([{ id: "cp-1", title: "Ларёк у дома" }]);
+  });
+
+  it("знакомое имя в другом регистре берёт запись из справочника", () => {
+    const p = plan([parsed({ payee: "пятЁрочка" })]);
+    const v = p.rows[0].verdict;
+    expect(v.ok && v.zen.merchant).toBe("m-pyat");
+    expect(v.ok && v.newCounterparty).toBeUndefined();
+    expect(p.newCounterparties).toEqual([]);
+  });
+
+  it("уже заведённый локально контрагент второй раз не заводится", () => {
+    const p = plan([parsed({ payee: "Ларёк у дома" })], [{ id: "cp-old", title: "ларёк у дома" }]);
+    const v = p.rows[0].verdict;
+    expect(v.ok && v.zen.merchant).toBe("cp-old");
+    expect(p.newCounterparties).toEqual([]);
+  });
+
+  it("опечатка получает подсказку, но имя не подменяется молча", () => {
+    // «Пятерочка» при живой «Пятёрочке» — обычно опечатка, но бывает и
+    // вправду другая лавка: решать человеку.
+    const p = plan([parsed({ payee: "Пятерочка" })]);
+    const v = p.rows[0].verdict;
+    expect(v.ok && v.payeeHint).toBe("Пятёрочка");
+    expect(v.ok && v.newCounterparty?.title).toBe("Пятерочка");
+  });
+
+  it("у долга новый контрагент проставляется и записью, и текстом", () => {
+    const p = plan([
+      parsed({ type: "Перевод", category: "", outAccount: "Т-Банк", inAccount: "Долги", payee: "Тётя Маша" }),
+    ]);
+    const v = p.rows[0].verdict;
+    expect(v.ok && v.zen.merchant).toBe("cp-1");
+    expect(v.ok && v.zen.payee).toBe("Тётя Маша");
+  });
+
+  it("долг без контрагента отбивается прежними словами", () => {
+    const p = plan([
+      parsed({ type: "Перевод", category: "", outAccount: "Т-Банк", inAccount: "Долги", payee: "" }),
+    ]);
+    expect(p.rows[0].verdict).toMatchObject({
+      ok: false,
+      reason: "Укажите плательщика (контрагента) для долговой операции.",
+    });
+  });
+
+  it("пустое имя ничего не заводит", () => {
+    const p = plan([parsed({ payee: "" })]);
+    expect(p.newCounterparties).toEqual([]);
+    expect(p.rows[0].verdict.ok && p.rows[0].verdict.zen.merchant).toBeFalsy();
+  });
+
+  it("КЛЮЧЕВОЕ: отбитая строка контрагента не заводит", () => {
+    // Её id умирает вместе с ней — иначе в справочнике появилась бы запись
+    // под операцию, которой не будет.
+    const p = plan([parsed({ payee: "Ларёк у дома", date: "" })]);
+    expect(p.rows[0].verdict.ok).toBe(false);
+    expect(p.newCounterparties).toEqual([]);
+  });
+});
+
+describe("nearestPayee — похожее имя из справочника", () => {
+  const list = ["Пятёрочка", "Ozon", "Тётя Маша"];
+
+  it("«ё» и «е» не различают имена, когда ищем похожее", () => {
+    expect(nearestPayee("Пятерочка", list)).toBe("Пятёрочка");
+    expect(nearestPayee("тетя маша", list)).toBe("Тётя Маша");
+  });
+
+  it("незнакомое имя не притягивается за уши", () => {
+    expect(nearestPayee("Ларёк у дома", list)).toBeUndefined();
+    expect(nearestPayee("", list)).toBeUndefined();
+  });
+});
+
+describe("reconcileNewCounterparties — сверка в момент записи", () => {
+  const tx = (id: string, merchant: string) =>
+    ({ id, merchant }) as unknown as import("./zenmoney").ZenTransaction;
+
+  it("КЛЮЧЕВОЕ: заведённого за это время контрагента вторым не плодим", () => {
+    // Пока человек смотрел отчёт, то же имя могли завести руками или оно
+    // приехало из облака.
+    const out = reconcileNewCounterparties(
+      [tx("t1", "cp-1")],
+      [{ id: "cp-1", title: "Ларёк у дома" }],
+      [{ id: "m-lar", title: "ларёк У ДОМА" }]
+    );
+    expect(out.toCreate).toEqual([]);
+    expect(out.txs[0].merchant).toBe("m-lar");
+  });
+
+  it("то же самое для имени, заведённого локально", () => {
+    const out = reconcileNewCounterparties(
+      [tx("t1", "cp-1")],
+      [{ id: "cp-1", title: "Ларёк" }],
+      [],
+      [{ id: "cp-old", title: "Ларёк" }]
+    );
+    expect(out.toCreate).toEqual([]);
+    expect(out.txs[0].merchant).toBe("cp-old");
+  });
+
+  it("совпадений нет — всё остаётся как было", () => {
+    const txs = [tx("t1", "cp-1")];
+    const out = reconcileNewCounterparties(txs, [{ id: "cp-1", title: "Ларёк" }], []);
+    expect(out.toCreate).toEqual([{ id: "cp-1", title: "Ларёк" }]);
+    expect(out.txs).toBe(txs);
+  });
+});
+
+describe("createCounterpartyMinter", () => {
+  it("облако важнее локального черновика с тем же именем", () => {
+    // Иначе на одно имя было бы две записи: одна в облаке, вторая наша.
+    const m = createCounterpartyMinter(
+      [{ id: "m-1", title: "Ларёк" }],
+      [{ id: "cp-1", title: "ларёк" }]
+    );
+    expect(m.resolve("ЛАРЁК")).toMatchObject({ id: "m-1", isNew: false });
+    expect(m.minted()).toEqual([]);
+  });
+
+  it("«ё» и «е» — разные записи: иначе такого контрагента не завести", () => {
+    const m = createCounterpartyMinter([{ id: "m-1", title: "Пятёрочка" }], [], () => "cp-1");
+    expect(m.resolve("Пятерочка")).toMatchObject({ id: "cp-1", isNew: true });
   });
 });

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, Check, X } from "lucide-react";
+import { AlertTriangle, BadgeCheck, BadgePlus, Check, X } from "lucide-react";
 import { Combobox } from "./Combobox";
 import { CategoryCascadePicker, type CategoryNode } from "./CategoryCascadePicker";
 import { DateField } from "./DateField";
@@ -31,6 +31,7 @@ export function ImportRowEditor({
   payees,
   categories,
   check,
+  payeeStatus,
   onSave,
   onCancel,
 }: {
@@ -43,6 +44,8 @@ export function ImportRowEditor({
   categories: CategoryNode[];
   /** Тот же разбор, что судит строки файла, — вердикт виден сразу при правке. */
   check: (row: ParsedRow) => RowVerdict;
+  /** Есть ли контрагент в справочнике: имя можно вписать своё, и это не ошибка. */
+  payeeStatus: (name: string) => "none" | "existing" | "new";
   onSave: (row: ParsedRow) => void;
   onCancel: () => void;
 }) {
@@ -172,7 +175,24 @@ export function ImportRowEditor({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Контрагент">
+        <Field
+          label="Контрагент"
+          note={
+            payeeStatus(draft.payee) === "existing" ? (
+              <span className="inline-flex items-center gap-1 text-income normal-case tracking-normal">
+                <BadgeCheck className="w-3.5 h-3.5" />
+                Есть в справочнике
+              </span>
+            ) : payeeStatus(draft.payee) === "new" ? (
+              <span className="inline-flex items-center gap-1 text-accent normal-case tracking-normal">
+                <BadgePlus className="w-3.5 h-3.5" />
+                Новый — заведём в справочнике
+              </span>
+            ) : undefined
+          }
+        >
+          {/* Свободный ввод — это и есть способ завести нового: имя, которого
+              нет в справочнике, не ошибка, а запись, которой пока нет. */}
           <Combobox
             value={draft.payee}
             options={payees}
@@ -223,10 +243,22 @@ export function ImportRowEditor({
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  note,
+  children,
+}: {
+  label: string;
+  /** Пометка справа от ярлыка — состояние поля, а не его подпись. */
+  note?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div>
-      <div className="label mb-1">{label}</div>
+      <div className="flex items-center gap-2 mb-1 min-w-0">
+        <div className="label">{label}</div>
+        {note && <div className="text-[11px] truncate">{note}</div>}
+      </div>
       {children}
     </div>
   );

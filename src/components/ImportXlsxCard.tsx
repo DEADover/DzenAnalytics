@@ -4,17 +4,20 @@ import { useDataStore } from "../store/useDataStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useImportBatchesStore, fileFingerprint } from "../store/useImportBatchesStore";
+import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { loadZenCache } from "../lib/zenmoneyCache";
 import { liveCategoryNodes } from "../lib/categoryTree";
 import { accountKindLabel } from "../lib/accountType";
 import { exportImportTemplate, SHEET_OPS, TEMPLATE_VERSION } from "../lib/importTemplate";
 import { readXlsxSheet } from "../lib/xlsxRead";
+import { merchantKey } from "../lib/zenmoneyPush";
 import {
   MAX_ROWS,
   buildImportPlan,
   isBlankRow,
   matchHeader,
   readRow,
+  reconcileNewCounterparties,
   rowToVerdict,
   type ImportDicts,
   type ImportPlan,
@@ -50,6 +53,9 @@ export function ImportXlsxCard() {
   const addMany = useDraftsStore((s) => s.addMany);
   const clearMany = useDraftsStore((s) => s.clearMany);
   const batches = useImportBatchesStore((s) => s.batches);
+  const cpCreated = useCounterpartyEditsStore((s) => s.created);
+  const addCounterparties = useCounterpartyEditsStore((s) => s.addManyNew);
+  const removeCounterparties = useCounterpartyEditsStore((s) => s.removeManyNew);
   const addBatch = useImportBatchesStore((s) => s.add);
   const removeBatch = useImportBatchesStore((s) => s.remove);
 
@@ -152,7 +158,17 @@ export function ImportXlsxCard() {
         payees: d.payees,
       };
       const stamp = Math.floor(Date.now() / 1000);
-      const plan = buildImportPlan(rows, dicts, cache, transactions, stamp);
+      // Уже заведённые локально контрагенты — чтобы то же имя во второй раз
+      // не завело вторую запись.
+      const plan = buildImportPlan(
+        rows,
+        dicts,
+        cache,
+        transactions,
+        stamp,
+        undefined,
+        useCounterpartyEditsStore.getState().created
+      );
       const fingerprint = fileFingerprint(file.name, buf);
       const seen = batches.find((b) => b.id === fingerprint);
       setPending({
@@ -179,33 +195,87 @@ export function ImportXlsxCard() {
     // Придерживаем автоотправку ДО записи: подписка срабатывает на появление
     // черновиков, и переключить режим после было бы поздно.
     if (hold && pushMode === "auto") await setPushMode("manual");
-    const zen = rows.flatMap((r) => (r.verdict.ok ? [r.verdict.zen] : []));
-    await addMany(zen);
+
+    // Контрагенты — только по ОТМЕЧЕННЫМ строкам: снятая галочка не должна
+    // заводить запись в справочнике.
+    const minted = [
+      ...new Map(
+        rows.flatMap((r) =>
+          r.verdict.ok && r.verdict.newCounterparty
+            ? [[r.verdict.newCounterparty.id, r.verdict.newCounterparty] as const]
+            : []
+        )
+      ).values(),
+    ];
+    // Пока человек смотрел отчёт, того же контрагента могли завести руками или
+    // он мог приехать синхронизацией — тогда ссылаемся на него, а не заводим
+    // второго.
+    const { txs, toCreate } = reconcileNewCounterparties(
+      rows.flatMap((r) => (r.verdict.ok ? [r.verdict.zen] : [])),
+      minted,
+      pending.cache.merchants,
+      useCounterpartyEditsStore.getState().created
+    );
+
+    // Справочник записываем ПЕРВЫМ: лишняя запись без операций безобидна, а
+    // операция со ссылкой в никуда — нет.
+    if (toCreate.length > 0) await addCounterparties(toCreate);
+    await addMany(txs);
     await addBatch({
       id: pending.fingerprint,
       fileName: pending.fileName,
       importedAt: new Date().toISOString(),
-      draftIds: zen.map((z) => z.id),
+      draftIds: txs.map((z) => z.id),
+      counterpartyIds: toCreate.map((c) => c.id),
     });
     await refresh();
     setPending(null);
-    setDone(`Создано ${formatNum(zen.length)} — операции ждут отправки в Дзен-мани`);
+    setDone(
+      `Создано ${formatNum(txs.length)} — операции ждут отправки в Дзен-мани` +
+        (toCreate.length > 0
+          ? `. Заведено контрагентов: ${formatNum(toCreate.length)}`
+          : "")
+    );
   }
 
   async function undoLast() {
     if (!lastBatch) return;
+    const cps = lastBatch.counterpartyIds ?? [];
     const ok = await confirm({
       title: "Отменить импорт?",
-      message: `Удалим ${formatNum(lastBatch.draftIds.length)} ${pluralRu(lastBatch.draftIds.length, ["операцию", "операции", "операций"])} из файла «${lastBatch.fileName}». В Дзен-мани они ещё не уехали, так что след не останется.`,
+      message:
+        `Удалим ${formatNum(lastBatch.draftIds.length)} ${pluralRu(lastBatch.draftIds.length, ["операцию", "операции", "операций"])} из файла «${lastBatch.fileName}»` +
+        (cps.length > 0
+          ? ` и ${formatNum(cps.length)} ${pluralRu(cps.length, ["заведённого контрагента", "заведённых контрагента", "заведённых контрагентов"])}`
+          : "") +
+        ". В Дзен-мани они ещё не уехали, так что след не останется.",
       confirmLabel: "Отменить импорт",
       tone: "danger",
     });
     if (!ok) return;
     await clearMany(lastBatch.draftIds);
+    if (cps.length > 0) await removeCounterparties(cps);
     await removeBatch(lastBatch.id);
     await refresh();
-    setDone("Импорт отменён — созданные операции удалены");
+    setDone(
+      cps.length > 0
+        ? "Импорт отменён — операции и заведённые контрагенты удалены"
+        : "Импорт отменён — созданные операции удалены"
+    );
   }
+
+  /**
+   * Есть ли такой контрагент в справочнике — для пометок в отчёте и редакторе.
+   *
+   * Смотрит и в облачный кэш, и в локально заведённое: контрагент, заведённый
+   * пять минут назад в «Справочниках», для человека уже существует.
+   */
+  const payeeStatus = (name: string): "none" | "existing" | "new" => {
+    const key = merchantKey(name);
+    if (!key) return "none";
+    const known = [...(pending?.cache.merchants ?? []), ...cpCreated];
+    return known.some((m) => merchantKey(m.title) === key) ? "existing" : "new";
+  };
 
   return (
     <div className="rounded-lg border border-border bg-panel2/30 p-4 space-y-3">
@@ -283,6 +353,7 @@ export function ImportXlsxCard() {
           accounts={pending.dicts.accounts}
           payees={pending.dicts.payees}
           categories={pending.nodes}
+          payeeStatus={payeeStatus}
           check={(row: ParsedRow) =>
             rowToVerdict(row, pending.dicts, pending.cache, pending.stamp)
           }

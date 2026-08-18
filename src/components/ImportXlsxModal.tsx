@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Check, Copy, FileSpreadsheet, Pencil, X } from "lucide-react";
+import { AlertTriangle, Check, Copy, FileSpreadsheet, Pencil, UserPlus, X } from "lucide-react";
 import clsx from "clsx";
 import { Segmented } from "./Segmented";
 import { Tooltip } from "./Tooltip";
@@ -43,6 +43,7 @@ export function ImportXlsxModal({
   categories,
   check,
   revise,
+  payeeStatus,
   onCreate,
   onClose,
 }: {
@@ -60,6 +61,8 @@ export function ImportXlsxModal({
   check: (row: ParsedRow) => RowVerdict;
   /** Пересобрать план целиком: правка строки меняет и картину дубликатов. */
   revise: (rows: ParsedRow[]) => ImportPlan;
+  /** Есть ли контрагент в справочнике — для пометки «Новый» в редакторе. */
+  payeeStatus: (name: string) => "none" | "existing" | "new";
   /** Создать отмеченные строки. `hold` — придержать автоотправку. */
   onCreate: (rows: PlanRow[], hold: boolean) => Promise<void>;
   onClose: () => void;
@@ -159,6 +162,20 @@ export function ImportXlsxModal({
     closeEditor();
   };
 
+  /**
+   * Контрагенты, которых заведём. Считаем по ОТМЕЧЕННЫМ строкам: снял галочку
+   * — контрагент из неё не нужен, и цифра в шапке обязана это учитывать.
+   */
+  const newPayees = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of chosen) {
+      if (r.verdict.ok && r.verdict.newCounterparty) {
+        map.set(r.verdict.newCounterparty.id, r.verdict.newCounterparty.title);
+      }
+    }
+    return [...map.values()];
+  }, [chosen]);
+
   const allShownPicked =
     shown.filter(canPick).length > 0 && shown.filter(canPick).every((r) => picked.has(r.excelRow));
 
@@ -183,6 +200,7 @@ export function ImportXlsxModal({
               <div className="text-xs text-muted truncate">
                 {fileName} · Готово: {formatNum(plan.ready)} · С ошибками:{" "}
                 {formatNum(plan.failed)} · Похоже на дубликаты: {formatNum(plan.duplicates)}
+                {newPayees.length > 0 && ` · Новых контрагентов: ${formatNum(newPayees.length)}`}
               </div>
             </div>
           </div>
@@ -331,7 +349,29 @@ export function ImportXlsxModal({
                             ? "—"
                             : formatNum(r.amount)}
                       </td>
-                      <td className="table-td truncate">{r.payee || "—"}</td>
+                      <td className="table-td">
+                        {r.payee ? (
+                          <>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="truncate">{r.payee}</span>
+                              {r.verdict.ok && r.verdict.newCounterparty && (
+                                <Tooltip content="Такого контрагента нет в справочнике — заведём запись вместе с операциями">
+                                  <span className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent">
+                                    Новый
+                                  </span>
+                                </Tooltip>
+                              )}
+                            </div>
+                            {r.verdict.ok && r.verdict.payeeHint && (
+                              <div className="text-xs text-muted truncate">
+                                Похоже на «{r.verdict.payeeHint}»
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="table-td">
                         {!r.verdict.ok ? (
                           <span className="text-expense flex items-start gap-1.5">
@@ -384,6 +424,7 @@ export function ImportXlsxModal({
                                 payees={payees}
                                 categories={categories}
                                 check={check}
+                                payeeStatus={payeeStatus}
                                 onSave={saveEdit}
                                 onCancel={closeEditor}
                               />
@@ -420,6 +461,20 @@ export function ImportXlsxModal({
                 </span>
               </span>
             </label>
+          )}
+          {newPayees.length > 0 && (
+            <div className="text-xs text-muted flex items-start gap-2">
+              <UserPlus className="w-3.5 h-3.5 shrink-0 mt-0.5 text-accent" />
+              <span>
+                {/* Единственное место, где полный список виден ДО нажатия:
+                    запись в справочнике переживёт отмену импорта труднее, чем
+                    операция, и человек вправе увидеть, что именно заведётся. */}
+                Заведём в справочнике{" "}
+                {pluralRu(newPayees.length, ["контрагента", "контрагентов", "контрагентов"])}:{" "}
+                <span className="text-text">{newPayees.slice(0, 6).join(", ")}</span>
+                {newPayees.length > 6 && ` и ещё ${formatNum(newPayees.length - 6)}`}
+              </span>
+            </div>
           )}
           <div className="flex items-center justify-between gap-3">
             <Tooltip content="Операции появятся в приложении сразу и будут ждать отправки в Дзен-мани. Отменить импорт можно одной кнопкой, пока он не отправлен">

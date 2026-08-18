@@ -16,6 +16,7 @@ import {
   resurrectionId,
   validateDrafts,
   type DraftFields,
+  merchantKey,
 } from "./zenmoneyPush";
 import { NO_CATEGORY } from "./zenmoneyMap";
 import { buildRulePlan } from "./rulePlan";
@@ -1795,5 +1796,97 @@ describe("buildPlannedDeletions", () => {
     expect(buildPlannedDeletions([{ id: "призрак", wholePlan: true }], markers, 9)).toEqual(
       []
     );
+  });
+});
+
+describe("контрагенты при отправке", () => {
+  const RUB2 = 2;
+  const cpCache = (): ZenCache =>
+    ({
+      serverTimestamp: 0,
+      instruments: [{ id: RUB2, shortTitle: "RUB", rate: 1 }],
+      accounts: [{ id: "acc", title: "Карта", instrument: RUB2, archive: false }],
+      tags: [{ id: "t-food", title: "Еда", parent: null, archive: false }],
+      merchants: [{ id: "m-pyat", title: "Пятёрочка" }],
+      transactions: [],
+      user: [{ id: 99, currency: RUB2 }],
+    }) as unknown as ZenCache;
+
+  const draft = (over: Partial<Record<string, unknown>> = {}) =>
+    ({
+      id: "d1",
+      user: 99,
+      date: "2026-08-17",
+      income: 0,
+      outcome: 100,
+      incomeAccount: "acc",
+      outcomeAccount: "acc",
+      incomeInstrument: RUB2,
+      outcomeInstrument: RUB2,
+      tag: null,
+      merchant: null,
+      deleted: false,
+      changed: 1,
+      ...over,
+    }) as unknown as import("./zenmoney").ZenTransaction;
+
+  it("merchantKey не различает регистр и пробелы, но различает «ё»", () => {
+    expect(merchantKey(" Пятёрочка ")).toBe(merchantKey("пятёрочка"));
+    expect(merchantKey("Пятерочка")).not.toBe(merchantKey("Пятёрочка"));
+    expect(merchantKey(null)).toBe("");
+  });
+
+  it("КЛЮЧЕВОЕ: операция связывается с контрагентом, заведённым локально", () => {
+    // Он ещё не в кэше — до этой правки имя уходило свободной строкой, и
+    // операция приезжала в облако без получателя.
+    const r = buildDraftTransaction(
+      { id: "n1", kind: "expense", date: "2026-08-17", amount: 100, account: "Карта", category: "Еда", payee: "Ларёк" },
+      cpCache(),
+      1000,
+      [{ id: "cp-1", title: "Ларёк" }]
+    );
+    expect(r.zen?.merchant).toBe("cp-1");
+    expect(r.zen?.payee).toBeNull();
+  });
+
+  it("облачная запись важнее одноимённого черновика", () => {
+    const r = buildDraftTransaction(
+      { id: "n1", kind: "expense", date: "2026-08-17", amount: 100, account: "Карта", category: "Еда", payee: "пятёрочка" },
+      cpCache(),
+      1000,
+      [{ id: "cp-1", title: "Пятёрочка" }]
+    );
+    expect(r.zen?.merchant).toBe("m-pyat");
+  });
+
+  it("КЛЮЧЕВОЕ: операция с висячей ссылкой на контрагента не уезжает", () => {
+    // В облаке такая операция приедет с пустым получателем, и починить это
+    // будет уже нечем — лучше придержать до следующей попытки.
+    const out = validateDrafts({ d1: draft({ merchant: "cp-ghost" }) }, cpCache(), 2000);
+    expect(out.ready).toEqual([]);
+    expect(out.skipped[0].reason).toContain("Контрагент операции ещё не заведён");
+  });
+
+  it("контрагент из этой же посылки висячим не считается", () => {
+    const out = validateDrafts({ d1: draft({ merchant: "cp-1" }) }, cpCache(), 2000, ["cp-1"]);
+    expect(out.ready).toHaveLength(1);
+    expect(out.skipped).toEqual([]);
+  });
+
+  it("операция без контрагента проверку проходит", () => {
+    expect(validateDrafts({ d1: draft() }, cpCache(), 2000).ready).toHaveLength(1);
+  });
+
+  it("два черновика с одним именем дают ОДНУ запись справочника", () => {
+    const out = buildNewMerchantsPush(
+      [
+        { id: "cp-1", title: "Ларёк у дома" },
+        { id: "cp-2", title: " ларёк у дома " },
+        { id: "cp-3", title: "   " },
+      ],
+      99,
+      1000
+    );
+    expect(out).toEqual([{ id: "cp-1", user: 99, title: "Ларёк у дома", changed: 1000 }]);
   });
 });

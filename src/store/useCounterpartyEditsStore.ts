@@ -44,6 +44,14 @@ interface State extends Persisted {
   /** Remove a counterparty: an unpushed draft is dropped outright, a cached one
    *  is queued for cloud deletion. */
   remove: (id: string) => Promise<void>;
+  /**
+   * Убрать сразу несколько НЕОТПРАВЛЕННЫХ черновиков — одной записью в базу.
+   *
+   * Для отмены импорта: партия завела контрагентов, партию откатывают. Здесь
+   * никогда не ставится ZenDeletion — удалять в облаке нечего, записи туда
+   * ещё не уезжали. Чужие id молча игнорируются.
+   */
+  removeManyNew: (ids: string[]) => Promise<void>;
   /** Undo a queued deletion — or a queued merge — of a cached counterparty. */
   restore: (id: string) => Promise<void>;
   /** Queue folding `id` into `survivorId`: the operations move over, then `id`
@@ -112,6 +120,16 @@ export const useCounterpartyEditsStore = create<State>((set, get) => {
     renameNew: async (id, title) => {
       const created = get().created.map((c) => (c.id === id ? { ...c, title } : c));
       await persist({ ...snapshot(), created });
+    },
+
+    removeManyNew: async (ids) => {
+      const drop = new Set(ids);
+      const s = snapshot();
+      const created = s.created.filter((c) => !drop.has(c.id));
+      if (created.length === s.created.length) return;
+      const renames = { ...s.renames };
+      for (const id of drop) delete renames[id];
+      await persist({ ...s, renames, created });
     },
 
     remove: async (id) => {
