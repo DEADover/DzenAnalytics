@@ -26,7 +26,7 @@ export function useLazyList<T>(
   /** Есть ли ещё не показанные записи. */
   hasMore: boolean;
   /**
-   * Повесить на элемент в конце списка.
+   * Повесить на элемент в конце списка (`ref={lazy.attachSentinel}`).
    *
    * Это функция-ссылка, а не объект: маячок появляется и исчезает вместе со
    * своим списком (у отборов «Дубли» и «Без контрагента» он и вовсе рисуется
@@ -35,7 +35,7 @@ export function useLazyList<T>(
    * счётчиков, а те не меняются, — и подгрузка молча не включалась: список
    * замирал на первой сотне.
    */
-  sentinelRef: (el: HTMLDivElement | null) => void;
+  attachSentinel: (el: HTMLDivElement | null) => void;
 } {
   const [prevItems, setPrevItems] = useState(items);
   const [count, setCount] = useState(pageSize);
@@ -71,6 +71,6 @@ export function useLazyList<T>(
     shown,
     total,
     hasMore: count < total,
-    sentinelRef: setSentinel,
+    attachSentinel: setSentinel,
   };
 }

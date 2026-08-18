@@ -183,7 +183,15 @@ export function CategoryManager() {
   // подкатегории едут вместе со своим родителем — иначе группа разорвалась бы
   // посередине. Внутренней прокрутки у списка больше нет, она давала вторую
   // полосу прокрутки поверх страничной.
-  const lazyGroups = useLazyList(groups, 60);
+  // Разбираем результат сразу: правило про ссылки считает обращением к ссылке
+  // любое чтение поля у объекта, в котором есть функция-ссылка.
+  const {
+    visible: visibleGroups,
+    shown: shownGroups,
+    total: totalGroups,
+    hasMore: hasMoreGroups,
+    attachSentinel: attachGroupsSentinel,
+  } = useLazyList(groups, 60);
 
   const pendingCount =
     Object.keys(tagEdits).length +
@@ -414,7 +422,7 @@ export function CategoryManager() {
             </div>
           ) : (
             <div className="divide-y divide-border/60">
-              {lazyGroups.visible.map(({ root, children }) => {
+              {visibleGroups.map(({ root, children }) => {
                 const hasKids = children.length > 0;
                 const rail = colorForCategory(root.title, meta);
                 const rEdit = tagEdits[root.id];
@@ -694,12 +702,12 @@ export function CategoryManager() {
                   </div>
                 );
               })}
-              {lazyGroups.hasMore && (
+              {hasMoreGroups && (
                 <div
-                  ref={lazyGroups.sentinelRef}
+                  ref={attachGroupsSentinel}
                   className="px-3 py-3 text-center text-xs text-muted"
                 >
-                  Показано {lazyGroups.shown} из {lazyGroups.total} — прокрутите
+                  Показано {shownGroups} из {totalGroups} — прокрутите
                   дальше, чтобы загрузить ещё
                 </div>
               )}
