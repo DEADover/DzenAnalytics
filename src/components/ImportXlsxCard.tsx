@@ -11,13 +11,13 @@ import { accountKindLabel } from "../lib/accountType";
 import { exportImportTemplate, SHEET_OPS, TEMPLATE_VERSION } from "../lib/importTemplate";
 import { readXlsxSheet } from "../lib/xlsxRead";
 import { merchantKey } from "../lib/zenmoneyPush";
+import { reconcileNewCounterparties } from "../lib/counterparties";
 import {
   MAX_ROWS,
   buildImportPlan,
   isBlankRow,
   matchHeader,
   readRow,
-  reconcileNewCounterparties,
   rowToVerdict,
   type ImportDicts,
   type ImportPlan,

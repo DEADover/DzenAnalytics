@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, HandCoins, BadgeCheck, BadgeX, Info } from "lucide-react";
+import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -13,12 +13,14 @@ import {
   useZenmoneyStore,
 } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
-import { loadZenCache } from "../lib/zenmoneyCache";
+import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
 import {
   buildDraftTransaction,
+  merchantKey,
   newDraftId,
   type DraftFields,
 } from "../lib/zenmoneyPush";
+import { createCounterpartyMinter } from "../lib/counterparties";
 import { Combobox, type ComboboxGroup } from "./Combobox";
 import { CategoryCascadePicker, type CategoryNode } from "./CategoryCascadePicker";
 import { Tooltip } from "./Tooltip";
@@ -335,6 +337,8 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
   //      merchant assigned. The bank's printout as-is, never touched
   //      by Zenmoney's normalization.
   const [cachedBrands, setCachedBrands] = useState<string[] | null>(null);
+  const newCounterparties = useCounterpartyEditsStore((s) => s.created);
+  const addCounterparties = useCounterpartyEditsStore((s) => s.addManyNew);
   useEffect(() => {
     let cancelled = false;
     getBrandTitlesFromCache().then((list) => {
@@ -473,11 +477,19 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
   // insensitive equality — mirrors the push lookup in zenmoneyPush.ts).
   // `null` while the dictionary is still hydrating or the value is empty:
   // we stay silent rather than show a misleading ✗.
-  const payeeBrandMatch = useMemo<boolean | null>(() => {
-    const t = payee.trim().toLowerCase();
-    if (!t || cachedBrands === null) return null;
-    return cachedBrands.some((b) => b.toLowerCase() === t);
-  }, [payee, cachedBrands]);
+  // Заводить нового контрагента вправе только СОЗДАНИЕ операции — своё и
+  // осознанное. Правка чужой операции этого не делает: там в поле часто
+  // стоит строка из выписки, и справочник быстро зарос бы мусором вроде
+  // «MAGNIT 7712 MOSCOW» (для них есть отдельный разбор в «Справочниках»).
+  const mintsCounterparty = isCreate || isDraftEdit;
+
+  const payeeStatus = useMemo<"existing" | "new" | null>(() => {
+    const key = merchantKey(payee);
+    if (!key || cachedBrands === null) return null;
+    // Заведённое локально и ещё не уехавшее для человека уже существует.
+    const known = [...cachedBrands, ...newCounterparties.map((c) => c.title)];
+    return known.some((b) => merchantKey(b) === key) ? "existing" : "new";
+  }, [payee, cachedBrands, newCounterparties]);
 
   // Tags already used across the account — fed to the comment field's «#»
   // autocomplete (see HashtagTextarea).
@@ -697,6 +709,22 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
     };
   }
 
+  /**
+   * Завести контрагента, если такого ещё нет.
+   *
+   * Возвращает справочник для сборщика — вместе со свежей записью. Пишем ДО
+   * операции: лишняя запись без операций безобидна, операция со ссылкой в
+   * никуда — нет. Уезжают они одним запросом, порядок секций там не важен.
+   */
+  async function ensureCounterparty(cache: ZenCache) {
+    const created = useCounterpartyEditsStore.getState().created;
+    const minter = createCounterpartyMinter(cache.merchants, created);
+    const hit = minter.resolve(payee);
+    if (!hit?.isNew) return created;
+    await addCounterparties([{ id: hit.id, title: hit.title }]);
+    return [...created, { id: hit.id, title: hit.title }];
+  }
+
   async function saveDraft() {
     const cache = await loadZenCache();
     if (!cache) {
@@ -710,7 +738,7 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
       // Контрагент, заведённый локально и ещё не уехавший в облако, для
       // человека уже существует — операция обязана связаться с ним, а не
       // уехать свободной строкой.
-      useCounterpartyEditsStore.getState().created
+      await ensureCounterparty(cache)
     );
     if (!built.zen) {
       setError(built.skip ?? "Не удалось создать операцию");
@@ -734,7 +762,7 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
       currentDraftFields(tx.id),
       cache,
       Math.floor(Date.now() / 1000),
-      useCounterpartyEditsStore.getState().created
+      await ensureCounterparty(cache)
     );
     if (!built.zen) {
       setError(built.skip ?? "Не удалось сохранить операцию");
@@ -1274,28 +1302,34 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
                       : "Место платежа"
                 }
                 labelAfter={
-                  // Dictionary-match status next to the label: ✓ green = the
-                  // value exists in the контрагенты dictionary, so the push
-                  // stores a LINK to that record; ✗ muted = it doesn't, so the
-                  // push stores plain text and the operation ends up with no
-                  // counterparty record. NB it is not a «brand» flag — Дзен has
-                  // no global brand catalogue, only the user's own dictionary.
-                  // Mirrors the push lookup in zenmoneyPush.ts so the icon
-                  // never lies. Hidden while the dictionary is still hydrating
-                  // or the value is empty.
-                  payeeBrandMatch === null ? undefined : (
+                  // Состояние справочника рядом с ярлыком. ✓ — запись есть, и
+                  // операция сохранится СВЯЗЬЮ с ней. Плюс — записи нет, но мы
+                  // заведём её вместе с операцией (только при СОЗДАНии: правка
+                  // чужой операции не должна плодить записи из банковских
+                  // строк вроде «MAGNIT 7712 MOSCOW» — там по-прежнему ✗ и
+                  // свободный текст). Значок повторяет ту же логику, что и
+                  // отправка, поэтому он не врёт. Молчит, пока справочник
+                  // грузится или поле пусто.
+                  payeeStatus === null ? undefined : (
                     <span
                       className="inline-flex"
                       title={
-                        payeeBrandMatch
+                        payeeStatus === "existing"
                           ? "Есть в справочнике контрагентов — сохранится связью с записью"
-                          : "Нет в справочнике контрагентов — сохранится свободным текстом"
+                          : mintsCounterparty
+                            ? "Нет в справочнике — заведём запись вместе с операцией"
+                            : "Нет в справочнике контрагентов — сохранится свободным текстом"
                       }
                     >
-                      {payeeBrandMatch ? (
+                      {payeeStatus === "existing" ? (
                         <BadgeCheck
                           className="w-3.5 h-3.5 text-income"
                           aria-label="Есть в справочнике контрагентов"
+                        />
+                      ) : mintsCounterparty ? (
+                        <BadgePlus
+                          className="w-3.5 h-3.5 text-accent"
+                          aria-label="Новый контрагент — заведём в справочнике"
                         />
                       ) : (
                         <BadgeX

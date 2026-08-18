@@ -15,15 +15,17 @@ import {
   rowSignature,
   rowToVerdict,
   clearForType,
-  createCounterpartyMinter,
   kindOf,
-  nearestPayee,
-  reconcileNewCounterparties,
   retype,
   type ImportDicts,
   type ParsedRow,
 } from "./importRows";
 import { OPS_COLUMNS } from "./importTemplate";
+import {
+  createCounterpartyMinter,
+  nearestPayee,
+  reconcileNewCounterparties,
+} from "./counterparties";
 
 const RUB = 2;
 const USD = 1;
