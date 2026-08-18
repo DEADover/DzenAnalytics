@@ -40,7 +40,7 @@ import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { PendingChangesModal } from "../components/PendingChangesModal";
 import { SlicesSettings } from "../components/SlicesSettings";
 import { SettingRow } from "../components/SettingRow";
-import { InfoTerm } from "../components/InfoPopover";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Switch } from "../components/Switch";
 import { Segmented } from "../components/Segmented";
 import { useDeletedStore } from "../store/useDeletedStore";
@@ -835,27 +835,86 @@ export function ImportPage() {
 
         {/* ── API panel ────────────────────────────────────────── */}
         {sourceTab === "api" && (
-          <div className="rounded-lg border border-border bg-panel2/30 p-4">
-            <div className="mb-3">
-              <div className="font-medium text-sm flex items-center gap-2">
+          <div className="rounded-lg border border-border bg-panel2/30 p-4 space-y-3">
+            {/* Заголовок, а справа — состояние и расписание. Описание уехало под
+                знак вопроса: читают его один раз, а место занимало всегда. */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="font-medium text-sm flex items-center gap-2 min-w-0">
                 <Cloud className="w-4 h-4 text-accent" />
                 Дзен-мани API{" "}
                 <span className="text-muted text-xs font-normal">
                   (онлайн-синхронизация)
                 </span>
+                <InfoPopover label="Что даёт синхронизация">
+                  <p>
+                    Качает данные напрямую из вашего аккаунта Дзен-мани. Кроме
+                    операций получим курсы валют, баланс счетов, регулярные
+                    платежи и иерархию категорий — без выгрузки CSV.
+                  </p>
+                  <p>
+                    <InfoTerm>Токен</InfoTerm> хранится только в этом браузере и
+                    никуда не отправляется, кроме самого Дзен-мани.{" "}
+                    <InfoTerm>Полная синхронизация</InfoTerm> сбрасывает локальный
+                    кэш и качает всё заново — нужна, если данные разошлись.
+                  </p>
+                </InfoPopover>
               </div>
-              <p className="text-xs text-muted mt-1">
-                Качает данные напрямую из вашего аккаунта Дзен-мани. Кроме
-                операций получим также курсы валют, баланс счетов, регулярные
-                платежи и иерархию категорий — без выгрузки CSV.
-              </p>
+              {zenToken && (
+                <div className="flex items-center gap-3 flex-wrap text-xs text-muted">
+                  <span className="flex items-center gap-1.5 text-text">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-income shrink-0" />
+                    Подключено
+                  </span>
+                  {/* Расписание рядом с состоянием: «Подключено · каждые 30 мин»
+                      читается одной строкой. */}
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoSyncEnabled}
+                      onChange={(e) =>
+                        setAutoSync(e.target.checked, autoSyncValue, autoSyncUnit)
+                      }
+                      className="accent-accent w-3.5 h-3.5"
+                    />
+                    <span>Авто-синхронизация каждые</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={999}
+                      value={autoSyncValue}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        if (Number.isFinite(n) && n > 0) {
+                          setAutoSync(autoSyncEnabled, n, autoSyncUnit);
+                        }
+                      }}
+                      className="input text-xs !py-1 !px-2 w-14 tabular-nums"
+                    />
+                    <select
+                      value={autoSyncUnit}
+                      onChange={(e) =>
+                        setAutoSync(
+                          autoSyncEnabled,
+                          autoSyncValue,
+                          e.target.value as typeof autoSyncUnit
+                        )
+                      }
+                      className="input text-xs !py-1 !px-2 !w-auto"
+                    >
+                      <option value="min">мин</option>
+                      <option value="hour">час</option>
+                      <option value="day">день</option>
+                    </select>
+                  </label>
+                </div>
+              )}
             </div>
 
         {!zenToken ? (
           <div className="space-y-3">
             <div className="text-xs text-muted">
               <KeyRound className="w-3.5 h-3.5 inline align-text-bottom mr-1" />
-              Личный токен — это длинная строка из букв и цифр. Получить можно в{" "}
+              Личный токен получите в{" "}
               <a
                 href="https://zerro.app/token"
                 target="_blank"
@@ -864,8 +923,7 @@ export function ImportPage() {
               >
                 zerro.app/token <ExternalLink className="w-3 h-3" />
               </a>{" "}
-              (войдите своим логином от Дзен-мани, скопируйте токен). Хранится только в этом
-              браузере — никуда не отправляется.
+              — войдите своим логином от Дзен-мани и скопируйте строку.
             </div>
             <div className="flex items-center gap-2">
               <div className="relative flex-1 min-w-0">
@@ -973,57 +1031,6 @@ export function ImportPage() {
               </button>
             </div>
 
-            {/* Row 2: status info + auto-sync schedule. */}
-            <div className="flex items-center gap-3 text-sm min-w-0 flex-wrap">
-              <div className="flex items-center gap-2 min-w-0">
-                <CheckCircle2 className="w-4 h-4 text-income shrink-0" />
-                <span className="text-text">Подключено</span>
-              </div>
-
-              {/* Schedule control. Lives in the same row as status so
-                  the user reads "Подключено · автосинк каждые 30 мин"
-                  at a glance. Lays out as: checkbox + number input +
-                  unit select, all inline. */}
-              <label className="flex items-center gap-2 text-xs text-muted cursor-pointer ml-auto">
-                <input
-                  type="checkbox"
-                  checked={autoSyncEnabled}
-                  onChange={(e) =>
-                    setAutoSync(e.target.checked, autoSyncValue, autoSyncUnit)
-                  }
-                  className="accent-accent w-3.5 h-3.5"
-                />
-                <span>Авто-синхронизация каждые</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={999}
-                  value={autoSyncValue}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
-                    if (Number.isFinite(n) && n > 0) {
-                      setAutoSync(autoSyncEnabled, n, autoSyncUnit);
-                    }
-                  }}
-                  className="input text-xs !py-1 !px-2 w-16 tabular-nums"
-                />
-                <select
-                  value={autoSyncUnit}
-                  onChange={(e) =>
-                    setAutoSync(
-                      autoSyncEnabled,
-                      autoSyncValue,
-                      e.target.value as typeof autoSyncUnit
-                    )
-                  }
-                  className="input text-xs !py-1 !px-2 !w-auto"
-                >
-                  <option value="min">мин</option>
-                  <option value="hour">час</option>
-                  <option value="day">день</option>
-                </select>
-              </label>
-            </div>
           </div>
         )}
 
@@ -1044,27 +1051,40 @@ export function ImportPage() {
 
         {/* ── CSV panel ────────────────────────────────────────── */}
         {sourceTab === "csv" && (
-          <div className="rounded-lg border border-border bg-panel2/30 p-4 space-y-4">
-            {/* Header + description, full width. */}
-            <div>
-              <div className="font-medium text-sm flex items-center gap-2">
+          <div className="rounded-lg border border-border bg-panel2/30 p-4 space-y-3">
+            {/* Заголовок, а справа — режим и сколько уже в базе. Пояснения про
+                формат и про то, чем «Дополнить» отличается от «Заменить», ушли
+                под знак вопроса и в подсказки самих кнопок. */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="font-medium text-sm flex items-center gap-2 min-w-0">
                 <Upload className="w-4 h-4 text-accent" />
                 Импорт CSV-выгрузки{" "}
                 <span className="text-muted text-xs font-normal">
                   (офлайн-синхронизация)
                 </span>
+                <InfoPopover label="Как это работает">
+                  <p>
+                    Загрузите CSV из мобильного приложения Дзен-мани. Файл
+                    обрабатывается локально в браузере — никуда не отправляется.
+                    Подойдёт любая выгрузка формата{" "}
+                    <code className="pill">date;categoryName;…</code>.
+                  </p>
+                  <p>
+                    <InfoTerm>Дополнить</InfoTerm> — добавит из файла только новые
+                    операции, дубликаты по id отбросит.{" "}
+                    <InfoTerm>Заменить</InfoTerm> — удалит всё, что сейчас в базе, и
+                    загрузит файл с нуля.
+                  </p>
+                </InfoPopover>
               </div>
-              <p className="text-xs text-muted mt-1">
-                Загрузите CSV из мобильного приложения Дзен-мани. Файл
-                обрабатывается локально в браузере — никуда не отправляется.
-              </p>
-            </div>
-
-            {/* REGIME (only when there's existing data to merge with). */}
-            {transactions.length > 0 ? (
-              <div className="space-y-2">
-                <div>
-                  <div className="label mb-1.5">Режим</div>
+              {transactions.length > 0 && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-xs text-muted">
+                    В базе:{" "}
+                    <strong className="text-text tabular-nums">
+                      {formatNum(transactions.length)}
+                    </strong>
+                  </span>
                   <div className="inline-flex bg-panel2 border border-border rounded-lg p-0.5">
                     <button
                       onClick={() => setMode("merge")}
@@ -1092,20 +1112,8 @@ export function ImportPage() {
                     </button>
                   </div>
                 </div>
-                <div className="text-xs text-muted">
-                  В базе: <strong className="text-text">{formatNum(transactions.length)}</strong>{" "}
-                  операций.{" "}
-                  {mode === "merge"
-                    ? "Новый файл добавит свежие операции, дубликаты по id будут отброшены."
-                    : "Новый файл полностью заменит текущие данные."}
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-muted">
-                Поддерживается любая CSV-выгрузка из Дзен-мани (формат:{" "}
-                <code className="pill">date;categoryName;…</code>).
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Dropzone — full-width bar styled like the API token
                 input. Click anywhere on the bar opens the file picker;
