@@ -1920,43 +1920,39 @@ export function ImportPage() {
         </div>
       </div>
 
-      {/* Scheduled backup */}
-      <div className="rounded-lg border border-border bg-panel2/30 p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Clock className="w-5 h-5 text-accent" />
-          <span className="font-medium">Бэкап по расписанию</span>
-        </div>
-        <p className="text-xs text-muted mb-3">
-          Автоматически скачивает JSON-бэкап с указанной периодичностью. Проверка
-          запускается при открытии приложения и каждые ~10 минут. Файл уходит в
-          стандартную папку загрузок браузера.
-          <br />
-          <strong>Важно:</strong> работает только пока вкладка открыта. Браузер
-          может показать уведомление о скачивании — это нормально.
-        </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-          {(["off", "hour", "day", "week"] as BackupInterval[]).map((i) => {
-            const label = {
-              off: "Выключен",
-              hour: "Каждый час",
-              day: "Каждый день",
-              week: "Каждую неделю",
-            }[i];
-            const active = backupInterval === i;
-            return (
-              <button
-                key={i}
-                onClick={() => setBackupInterval(i)}
-                className={`p-2 rounded-lg border text-xs text-left transition-colors ${
-                  active
-                    ? "bg-accent/10 border-accent text-accent"
-                    : "bg-panel2 border-border hover:border-accent/50"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
+      {/* Scheduled backup. Заголовок, периодичность и кнопка — в одну строку:
+          четыре кнопки во всю ширину занимали ряд ради выбора из четырёх слов,
+          а объяснение читают один раз и убирают под знак вопроса. */}
+      <div className="rounded-lg border border-border bg-panel2/30 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <Clock className="w-5 h-5 text-accent shrink-0" />
+            <span className="font-medium">Бэкап по расписанию</span>
+            <InfoPopover label="Как работает расписание">
+              <p>
+                Автоматически скачивает JSON-бэкап с указанной периодичностью.
+                Проверка запускается при открытии приложения и каждые ~10 минут.
+                Файл уходит в стандартную папку загрузок браузера.
+              </p>
+              <p>
+                <InfoTerm>Важно:</InfoTerm> работает, только пока вкладка открыта
+                — браузер не умеет запускать нас по будильнику. Уведомление о
+                скачивании при этом нормально, его показывает сам браузер.
+              </p>
+            </InfoPopover>
+          </div>
+          <Segmented
+            size="sm"
+            label="Как часто делать бэкап"
+            value={backupInterval}
+            onChange={(v) => setBackupInterval(v)}
+            options={[
+              { value: "off" as BackupInterval, label: "Выключен" },
+              { value: "hour" as BackupInterval, label: "Каждый час" },
+              { value: "day" as BackupInterval, label: "Каждый день" },
+              { value: "week" as BackupInterval, label: "Каждую неделю" },
+            ]}
+          />
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <button
