@@ -233,6 +233,58 @@ export function readRow(
   };
 }
 
+/** Вид операции по подписи из колонки «Тип»; `null` — подпись непонятна. */
+export function kindOf(type: string): TxKind | null {
+  const hit = OP_TYPES.find((t) => t.toLowerCase() === normalizeText(type).toLowerCase());
+  return hit ? KIND_BY_LABEL[hit] : null;
+}
+
+/**
+ * Убрать из строки колонки, которых у её типа быть не должно.
+ *
+ * Разбор считает лишнее заполненное поле ошибкой — и правильно делает: в файле
+ * это признак того, что строку поняли иначе. Но в редакторе отчёта тип меняют
+ * осознанно, и оставлять после «Расход → Доход» счёт списания, чтобы тут же
+ * отбить строку своей же подсказкой, — издевательство. Поэтому смена типа
+ * чистит поля, которые к новому типу не относятся.
+ */
+export function clearForType(row: ParsedRow): ParsedRow {
+  switch (kindOf(row.type)) {
+    case "transfer":
+      return { ...row, category: "" };
+    case "expense":
+      return { ...row, inAccount: "", incomeAmount: null };
+    case "income":
+    case "refund":
+      return { ...row, outAccount: "", incomeAmount: null };
+    default:
+      return row;
+  }
+}
+
+/**
+ * Сменить тип строки, не потеряв счёт.
+ *
+ * У расхода счёт лежит в «списании», у дохода — в «зачислении», и человек,
+ * переключивший тип, имел в виду ТУ ЖЕ операцию на том же счёте, а не пустое
+ * поле. Поэтому счёт переезжает следом за типом; у перевода он встаёт
+ * источником, а получатель остаётся пустым — иначе вышел бы перевод на самого
+ * себя, который отбивается.
+ */
+export function retype(row: ParsedRow, type: string): ParsedRow {
+  const before = kindOf(row.type);
+  const next = kindOf(type);
+  if (!next) return { ...row, type };
+  const main = row.outAccount || row.inAccount;
+  const moved: ParsedRow =
+    next === "income" || next === "refund"
+      ? { ...row, type, inAccount: main, outAccount: "" }
+      : next === "transfer"
+        ? { ...row, type, outAccount: main, inAccount: before === "transfer" ? row.inAccount : "" }
+        : { ...row, type, outAccount: main, inAccount: "" };
+  return clearForType(moved);
+}
+
 /** Пустая строка — это конец данных или дырка в середине, но не ошибка. */
 export function isBlankRow(row: ParsedRow): boolean {
   return (
@@ -445,12 +497,16 @@ export function buildImportPlan(
       continue;
     }
     const zen = verdict.zen;
-    const account =
-      row.type.toLowerCase() === "расход" || row.type.toLowerCase() === "перевод"
-        ? row.outAccount
-        : row.inAccount;
+    const kind = kindOf(row.type) ?? "expense";
+    // Счёт берём в написании справочника: строка с вердиктом «ок» точно
+    // совпала с ним, но могла быть набрана в другом регистре — а подпись
+    // сравнивается с подписями уже имеющихся операций, где название настоящее.
+    const account = canonical(
+      kind === "expense" || kind === "transfer" ? row.outAccount : row.inAccount,
+      dicts.accounts
+    ).value;
     const sig = rowSignature({
-      kind: KIND_BY_LABEL[row.type as OpTypeLabel] ?? "expense",
+      kind,
       payee: row.payee,
       amount: row.amount ?? 0,
       currency: accountCurrency(account, cache),

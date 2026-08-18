@@ -14,6 +14,9 @@ import {
   readRow,
   rowSignature,
   rowToVerdict,
+  clearForType,
+  kindOf,
+  retype,
   type ImportDicts,
   type ParsedRow,
 } from "./importRows";
@@ -395,5 +398,123 @@ describe("rowSignature — подпись для поиска дублей", () 
     expect(rowSignature(base)).not.toBe(rowSignature({ ...base, amount: 100.01 }));
     expect(rowSignature(base)).not.toBe(rowSignature({ ...base, kind: "income" }));
     expect(rowSignature(base)).not.toBe(rowSignature({ ...base, account: "Наличные" }));
+  });
+});
+
+describe("kindOf — вид операции по подписи типа", () => {
+  it("узнаёт подпись в любом регистре и с лишними пробелами", () => {
+    expect(kindOf("Расход")).toBe("expense");
+    expect(kindOf(" перевод ")).toBe("transfer");
+    expect(kindOf("ВОЗВРАТ")).toBe("refund");
+  });
+
+  it("непонятная подпись — не повод угадывать", () => {
+    expect(kindOf("Трата")).toBeNull();
+    expect(kindOf("")).toBeNull();
+  });
+});
+
+describe("clearForType — смена типа чистит чужие поля", () => {
+  it("КЛЮЧЕВОЕ: после смены типа строка не отбивается остатками прежнего", () => {
+    // Расход со счётом списания переделали в доход. Останься счёт списания —
+    // разбор ответил бы «у дохода заполняется только счёт зачисления», то есть
+    // отругал бы человека за то, что сделал сам редактор.
+    const wasExpense = parsed({ type: "Доход", inAccount: "Т-Банк", category: "Зарплата" });
+    expect(clearForType(wasExpense)).toMatchObject({ outAccount: "", inAccount: "Т-Банк" });
+  });
+
+  it("у перевода снимается категория, у расхода — счёт зачисления", () => {
+    expect(clearForType(parsed({ type: "Перевод", inAccount: "Наличные" })).category).toBe("");
+    expect(clearForType(parsed({ type: "Расход", inAccount: "Наличные" })).inAccount).toBe("");
+  });
+
+  it("сумма зачисления живёт только у перевода", () => {
+    expect(clearForType(parsed({ type: "Расход", incomeAmount: 10 })).incomeAmount).toBeNull();
+    expect(clearForType(parsed({ type: "Перевод", incomeAmount: 10 })).incomeAmount).toBe(10);
+  });
+
+  it("непонятный тип ничего не трогает: чистить нечего, пока неясно подо что", () => {
+    const row = parsed({ type: "Трата", inAccount: "Наличные" });
+    expect(clearForType(row)).toEqual(row);
+  });
+});
+
+describe("правка строки в отчёте", () => {
+  /** Пересборка плана — ровно то, что делает отчёт после сохранения правки. */
+  const replan = (rows: ParsedRow[], existing: Transaction[] = []) =>
+    buildImportPlan(rows, dicts, cache(), existing, 1_700_000_000, () => "d1");
+
+  it("КЛЮЧЕВОЕ: исправленная строка становится готовой, счётчики сходятся", () => {
+    const rows = [parsed({ category: "Небо" }), parsed({ excelRow: 3, date: "2026-08-25" })];
+    expect(replan(rows)).toMatchObject({ ready: 1, failed: 1 });
+
+    const fixed = rows.map((r) => (r.excelRow === 2 ? { ...r, category: "Еда / Кафе" } : r));
+    const after = replan(fixed);
+    expect(after).toMatchObject({ ready: 2, failed: 0, duplicates: 0 });
+    expect(after.rows[0].verdict.ok).toBe(true);
+    expect(after.rows[0].picked).toBe(true);
+  });
+
+  it("правка пересчитывает дубликаты, а не только свою строку", () => {
+    // Две разные операции; в одной поправили сумму — и она совпала со второй.
+    const rows = [parsed(), parsed({ excelRow: 3, amount: 999 })];
+    expect(replan(rows).duplicates).toBe(0);
+
+    const after = replan(rows.map((r) => (r.excelRow === 3 ? { ...r, amount: 1290.5 } : r)));
+    expect(after).toMatchObject({ ready: 1, duplicates: 1 });
+    expect(after.rows[1].picked).toBe(false);
+  });
+
+  it("правка возвращает строку из дубликатов, если её больше ничто не повторяет", () => {
+    const rows = [parsed(), parsed({ excelRow: 3 })];
+    expect(replan(rows).duplicates).toBe(1);
+
+    const after = replan(rows.map((r) => (r.excelRow === 3 ? { ...r, amount: 500 } : r)));
+    expect(after).toMatchObject({ ready: 2, duplicates: 0 });
+    expect(after.rows[1].picked).toBe(true);
+  });
+
+  it("счёт в другом регистре не мешает узнать дубликат среди своих операций", () => {
+    // Правка выбирается из списка, но строка могла прийти из файла набранной
+    // руками: «т-банк» — тот же счёт, и повтор надо увидеть.
+    const existing: Transaction[] = [
+      {
+        id: "t1",
+        date: "2026-08-17",
+        kind: "expense",
+        amount: 1290.5,
+        currency: "RUB",
+        account: "Т-Банк",
+        payee: "Пятёрочка",
+      } as unknown as Transaction,
+    ];
+    expect(replan([parsed({ outAccount: "т-банк" })], existing).duplicates).toBe(1);
+  });
+});
+
+describe("retype — смена типа не теряет счёт", () => {
+  it("КЛЮЧЕВОЕ: счёт переезжает следом за типом", () => {
+    // Человек переключил «Расход» на «Доход»: операция та же и счёт тот же,
+    // просто теперь деньги пришли, а не ушли. Обнулить поле значило бы
+    // заставить его выбирать счёт заново — за нашу же перестановку колонок.
+    const income = retype(parsed({ outAccount: "Т-Банк", inAccount: "" }), "Доход");
+    expect(income).toMatchObject({ type: "Доход", inAccount: "Т-Банк", outAccount: "" });
+    expect(retype(income, "Расход")).toMatchObject({ outAccount: "Т-Банк", inAccount: "" });
+  });
+
+  it("у перевода счёт встаёт источником, а получатель пуст", () => {
+    // Иначе получился бы перевод на тот же счёт — и строка отбилась бы сразу.
+    const t = retype(parsed({ outAccount: "Наличные" }), "Перевод");
+    expect(t).toMatchObject({ outAccount: "Наличные", inAccount: "", category: "" });
+  });
+
+  it("перевод сохраняет оба счёта, пока остаётся переводом", () => {
+    const t = parsed({ type: "Перевод", category: "", outAccount: "Т-Банк", inAccount: "Наличные" });
+    expect(retype(t, "Перевод")).toMatchObject({ outAccount: "Т-Банк", inAccount: "Наличные" });
+    expect(retype(t, "Расход")).toMatchObject({ outAccount: "Т-Банк", inAccount: "" });
+  });
+
+  it("непонятный тип только записывается — переставлять поля не подо что", () => {
+    expect(retype(parsed(), "Трата")).toMatchObject({ type: "Трата", outAccount: "Т-Банк" });
   });
 });

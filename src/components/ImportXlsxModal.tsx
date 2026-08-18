@@ -1,31 +1,45 @@
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Check, Copy, FileSpreadsheet, X } from "lucide-react";
+import { AlertTriangle, Check, Copy, FileSpreadsheet, Pencil, X } from "lucide-react";
 import clsx from "clsx";
 import { Segmented } from "./Segmented";
 import { Tooltip } from "./Tooltip";
+import { ImportRowEditor } from "./ImportRowEditor";
+import type { CategoryNode } from "./CategoryCascadePicker";
 import { formatMoney, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
-import type { ImportPlan, PlanRow } from "../lib/importRows";
+import type { ImportPlan, ParsedRow, PlanRow, RowVerdict } from "../lib/importRows";
 
 /**
  * Отчёт проверки файла — единственное место, где импорт можно остановить.
  *
  * Смысл экрана в том, что до кнопки «Создать» в базу не записано НИЧЕГО. Файл
  * разобран, каждая строка проверена тем же кодом, что собирает операцию из
- * формы, и человек видит: что создастся, что отбито и почему, что подозрительно
- * похоже на уже имеющееся. Нынешний импорт CSV применяет файл молча и через
- * полторы секунды уводит на дашборд — с настоящими операциями в облаке так
- * нельзя.
+ * формы создания, и человек видит: что создастся, что отбито и почему, что
+ * подозрительно похоже на уже имеющееся. Нынешний импорт CSV применяет файл
+ * молча и через полторы секунды уводит на дашборд — с настоящими операциями в
+ * облаке так нельзя.
+ *
+ * Отбитую строку тут же и правят: клик по строке открывает редактор, план
+ * пересобирается целиком (потому что правка меняет и дубликаты — не только свою
+ * строку), счётчики пересчитываются. Файл при этом не трогается.
  */
 
 type Filter = "all" | "ready" | "failed" | "dups";
 
+/** Списки, между которыми переключается фильтр, — без «Все». */
+type Bucket = Exclude<Filter, "all">;
+
 export function ImportXlsxModal({
   fileName,
-  plan,
+  plan: initialPlan,
   seenBefore,
   autoPush,
+  accounts,
+  payees,
+  categories,
+  check,
+  revise,
   onCreate,
   onClose,
 }: {
@@ -35,23 +49,51 @@ export function ImportXlsxModal({
   seenBefore?: { at: string; count: number };
   /** Отправка стоит на «Авто»: спрашиваем, придержать ли её. */
   autoPush: boolean;
+  /** Справочники для редактора строки — выбор только из живого. */
+  accounts: string[];
+  payees: string[];
+  categories: CategoryNode[];
+  /** Вердикт по одной строке — редактор показывает его прямо при правке. */
+  check: (row: ParsedRow) => RowVerdict;
+  /** Пересобрать план целиком: правка строки меняет и картину дубликатов. */
+  revise: (rows: ParsedRow[]) => ImportPlan;
   /** Создать отмеченные строки. `hold` — придержать автоотправку. */
   onCreate: (rows: PlanRow[], hold: boolean) => Promise<void>;
   onClose: () => void;
 }) {
+  const [plan, setPlan] = useState(initialPlan);
   const [picked, setPicked] = useState<Set<number>>(
-    () => new Set(plan.rows.filter((r) => r.picked).map((r) => r.excelRow))
+    () => new Set(initialPlan.rows.filter((r) => r.picked).map((r) => r.excelRow))
   );
   const [filter, setFilter] = useState<Filter>("all");
   const [hold, setHold] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [fixed, setFixed] = useState<Set<number>>(() => new Set());
 
-  const shown = useMemo(() => {
-    if (filter === "ready") return plan.rows.filter((r) => r.verdict.ok && !r.verdict.duplicateOf);
-    if (filter === "failed") return plan.rows.filter((r) => !r.verdict.ok);
-    if (filter === "dups") return plan.rows.filter((r) => r.verdict.ok && r.verdict.duplicateOf);
-    return plan.rows;
-  }, [plan.rows, filter]);
+  // В каком списке строка живёт — решает ПЕРВЫЙ разбор и больше ничто. Иначе
+  // строка исчезала бы из «Ошибок» ровно в момент, когда её починили, унося с
+  // собой место в списке: человек правит их подряд и должен видеть, где
+  // остановился. Счётчики на вкладках при этом честные, текущие.
+  const [home] = useState<Map<number, Bucket>>(() => classify(initialPlan));
+
+  // Esc закрывает окно — но только когда не открыт редактор: там этой же
+  // клавишей закрываются списки и календарь, и окно уезжало бы вместе с ними.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && editing === null && !busy) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, editing, onClose]);
+
+  const shown = useMemo(
+    () =>
+      filter === "all"
+        ? plan.rows
+        : plan.rows.filter((r) => home.get(r.excelRow) === filter),
+    [plan.rows, filter, home]
+  );
 
   const canPick = (r: PlanRow) => r.verdict.ok;
   const chosen = plan.rows.filter((r) => picked.has(r.excelRow) && canPick(r));
@@ -64,6 +106,34 @@ export function ImportXlsxModal({
       else next.add(row.excelRow);
       return next;
     });
+  };
+
+  /**
+   * Сохранить правку строки.
+   *
+   * План пересобирается по ВСЕМ строкам: исправленная сумма может совпасть с
+   * соседней строкой (и обе станут дубликатами) или, наоборот, развести
+   * прежнюю пару. Пересчитать одну строку значило бы показать счётчики,
+   * которым нельзя верить.
+   */
+  const saveEdit = (next: ParsedRow) => {
+    // `PlanRow` — это `ParsedRow` плюс вердикт; разбор всё равно выставляет
+    // вердикт и галочку заново, так что старые поля до плана не доезжают.
+    const nextPlan = revise(
+      plan.rows.map((r) => (r.excelRow === next.excelRow ? next : r))
+    );
+    const row = nextPlan.rows.find((r) => r.excelRow === next.excelRow);
+    setPlan(nextPlan);
+    setFixed((prev) => new Set(prev).add(next.excelRow));
+    // Починил — значит хочет создать: возвращаем галочку сами. Если строка
+    // после правки стала дубликатом или снова отбита — снимаем.
+    setPicked((prev) => {
+      const s = new Set(prev);
+      if (row?.verdict.ok && !row.verdict.duplicateOf) s.add(next.excelRow);
+      else s.delete(next.excelRow);
+      return s;
+    });
+    setEditing(null);
   };
 
   const allShownPicked =
@@ -143,6 +213,11 @@ export function ImportXlsxModal({
             Отметить показанные
           </label>
           <span className="tabular-nums">Отмечено: {formatNum(chosen.length)}</span>
+          <span className="tabular-nums">
+            {fixed.size > 0
+              ? `Исправлено: ${formatNum(fixed.size)}`
+              : "Нажмите на строку, чтобы исправить"}
+          </span>
           <span className="flex-1" />
           <Segmented
             size="sm"
@@ -170,66 +245,106 @@ export function ImportXlsxModal({
                 <th className="table-th w-32 text-right">Сумма</th>
                 <th className="table-th w-40">Контрагент</th>
                 <th className="table-th w-72">Статус</th>
+                <th className="table-th w-10" />
               </tr>
             </thead>
             <tbody>
               {shown.map((r) => {
                 const dup = r.verdict.ok ? r.verdict.duplicateOf : undefined;
+                const open = editing === r.excelRow;
                 return (
-                  <tr
-                    key={r.excelRow}
-                    className={clsx(
-                      "border-t border-border/60",
-                      !r.verdict.ok && "bg-expense/5",
-                      dup && "bg-warn/5"
-                    )}
-                  >
-                    <td className="table-td text-center">
-                      <input
-                        type="checkbox"
-                        checked={picked.has(r.excelRow)}
-                        disabled={!canPick(r)}
-                        onChange={() => toggle(r)}
-                        aria-label={`Строка ${r.excelRow}`}
-                        className="accent-accent w-4 h-4"
-                      />
-                    </td>
-                    <td className="table-td text-right tabular-nums text-muted">{r.excelRow}</td>
-                    <td className="table-td whitespace-nowrap tabular-nums">
-                      {r.date || "—"}
-                      {r.time && <span className="text-muted"> {r.time}</span>}
-                    </td>
-                    <td className="table-td whitespace-nowrap">{r.type || "—"}</td>
-                    <td className="table-td">
-                      <div className="truncate">{r.category || "—"}</div>
-                      <div className="text-xs text-muted truncate">
-                        {[r.outAccount, r.inAccount].filter(Boolean).join(" → ") || "—"}
-                      </div>
-                    </td>
-                    <td className="table-td text-right tabular-nums whitespace-nowrap">
-                      {r.verdict.ok
-                        ? formatMoney(r.amount ?? 0, currencyOf(r), { signed: false })
-                        : r.amount === null
-                          ? "—"
-                          : formatNum(r.amount)}
-                    </td>
-                    <td className="table-td truncate">{r.payee || "—"}</td>
-                    <td className="table-td">
-                      {!r.verdict.ok ? (
-                        <span className="text-expense flex items-start gap-1.5">
-                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                          <span>{r.verdict.reason}</span>
-                        </span>
-                      ) : dup ? (
-                        <span className="text-warn">Похожая операция уже есть</span>
-                      ) : (
-                        <span className="text-income flex items-center gap-1.5">
-                          <Check className="w-3.5 h-3.5 shrink-0" />
-                          Готово к созданию
-                        </span>
+                  <Fragment key={r.excelRow}>
+                    <tr
+                      onClick={() => setEditing(open ? null : r.excelRow)}
+                      className={clsx(
+                        "border-t border-border/60 cursor-pointer hover:bg-panel2/40",
+                        !r.verdict.ok && "bg-expense/5",
+                        dup && "bg-warn/5",
+                        open && "bg-panel2/60"
                       )}
-                    </td>
-                  </tr>
+                    >
+                      <td className="table-td text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={picked.has(r.excelRow)}
+                          disabled={!canPick(r)}
+                          onChange={() => toggle(r)}
+                          aria-label={`Строка ${r.excelRow}`}
+                          className="accent-accent w-4 h-4"
+                        />
+                      </td>
+                      <td className="table-td text-right tabular-nums text-muted">
+                        <span className="inline-flex items-center gap-1">
+                          {fixed.has(r.excelRow) && (
+                            <Tooltip content="Строка исправлена в отчёте — в вашем файле она осталась прежней">
+                              <Pencil className="w-3 h-3 text-accent" />
+                            </Tooltip>
+                          )}
+                          {r.excelRow}
+                        </span>
+                      </td>
+                      <td className="table-td whitespace-nowrap tabular-nums">
+                        {r.date || "—"}
+                        {r.time && <span className="text-muted"> {r.time}</span>}
+                      </td>
+                      <td className="table-td whitespace-nowrap">{r.type || "—"}</td>
+                      <td className="table-td">
+                        <div className="truncate">{r.category || "—"}</div>
+                        <div className="text-xs text-muted truncate">
+                          {[r.outAccount, r.inAccount].filter(Boolean).join(" → ") || "—"}
+                        </div>
+                      </td>
+                      <td className="table-td text-right tabular-nums whitespace-nowrap">
+                        {r.verdict.ok
+                          ? formatMoney(r.amount ?? 0, currencyOf(r), { signed: false })
+                          : r.amount === null
+                            ? "—"
+                            : formatNum(r.amount)}
+                      </td>
+                      <td className="table-td truncate">{r.payee || "—"}</td>
+                      <td className="table-td">
+                        {!r.verdict.ok ? (
+                          <span className="text-expense flex items-start gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                            <span>{r.verdict.reason}</span>
+                          </span>
+                        ) : dup ? (
+                          <span className="text-warn">Похожая операция уже есть</span>
+                        ) : (
+                          <span className="text-income flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 shrink-0" />
+                            Готово к созданию
+                          </span>
+                        )}
+                      </td>
+                      <td className="table-td text-center">
+                        <span
+                          className={clsx(
+                            "inline-flex p-1 rounded-md",
+                            open ? "bg-accent/15 text-accent" : "text-muted"
+                          )}
+                          aria-hidden
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </span>
+                      </td>
+                    </tr>
+                    {open && (
+                      <tr className="border-t border-border/60">
+                        <td colSpan={9} className="p-0">
+                          <ImportRowEditor
+                            row={r}
+                            accounts={accounts}
+                            payees={payees}
+                            categories={categories}
+                            check={check}
+                            onSave={saveEdit}
+                            onCancel={() => setEditing(null)}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -291,6 +406,18 @@ export function ImportXlsxModal({
     </div>,
     document.body
   );
+}
+
+/** Разложить строки по спискам фильтра — один раз, по первому разбору файла. */
+function classify(plan: ImportPlan): Map<number, Bucket> {
+  const map = new Map<number, Bucket>();
+  for (const r of plan.rows) {
+    map.set(
+      r.excelRow,
+      !r.verdict.ok ? "failed" : r.verdict.duplicateOf ? "dups" : "ready"
+    );
+  }
+  return map;
 }
 
 /** Валюта строки — её разрешил разбор по счёту, гадать в интерфейсе нечего. */

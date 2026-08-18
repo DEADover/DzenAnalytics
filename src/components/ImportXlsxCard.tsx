@@ -15,10 +15,15 @@ import {
   isBlankRow,
   matchHeader,
   readRow,
+  rowToVerdict,
   type ImportDicts,
   type ImportPlan,
+  type ParsedRow,
   type PlanRow,
 } from "../lib/importRows";
+import type { CategoryNode } from "./CategoryCascadePicker";
+import type { ZenCache } from "../lib/zenmoneyCache";
+import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { ImportXlsxModal } from "./ImportXlsxModal";
 import { formatDate, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
@@ -56,11 +61,18 @@ export function ImportXlsxCard() {
     fingerprint: string;
     plan: ImportPlan;
     seenBefore?: { at: string; count: number };
+    // Всё, что нужно отчёту, чтобы перепроверить исправленную строку тем же
+    // разбором: справочники, живой кэш и штамп времени. Штамп берётся один раз
+    // на файл — иначе правка строки сдвигала бы время создания операций.
+    dicts: ImportDicts;
+    nodes: CategoryNode[];
+    cache: ZenCache;
+    stamp: number;
   } | null>(null);
 
   const lastBatch = batches.find((b) => !b.pushedAt);
 
-  async function dictsFromCache(): Promise<ImportDicts & { base: string; rich: {
+  async function dictsFromCache(): Promise<ImportDicts & { base: string; nodes: CategoryNode[]; rich: {
     accounts: { title: string; currency: string; kind: string }[];
   } }> {
     const cache = await loadZenCache();
@@ -74,12 +86,16 @@ export function ImportXlsxCard() {
         kind: accountKindLabel(a.type, a.savings),
       })),
     };
-    const categories = liveCategoryNodes(cache.tags).flatMap((n) =>
+    const nodes = liveCategoryNodes(cache.tags);
+    const categories = nodes.flatMap((n) =>
       n.subs.length > 0 ? [n.name, ...n.subs.map((s) => `${n.name} / ${s}`)] : [n.name]
     );
     return {
       accounts: rich.accounts.map((a) => a.title),
       categories,
+      // Первым пунктом «Без категории» — как в форме создания: снять категорию
+      // осознанно надо уметь и здесь, а тега для этого в Дзен-мани нет.
+      nodes: [{ name: NO_CATEGORY, subs: [] }, ...nodes],
       payees: cache.merchants.map((m) => m.title.trim()).filter(Boolean).sort((a, b) => a.localeCompare(b, "ru")),
       base: useDataStore.getState().rates.base,
       rich,
@@ -130,13 +146,13 @@ export function ImportXlsxCard() {
       const cache = await loadZenCache();
       if (!cache) throw new Error("Справочники Дзен-мани ещё не загружены — синхронизируйтесь.");
       const d = await dictsFromCache();
-      const plan = buildImportPlan(
-        rows,
-        { accounts: d.accounts, categories: d.categories, payees: d.payees },
-        cache,
-        transactions,
-        Math.floor(Date.now() / 1000)
-      );
+      const dicts: ImportDicts = {
+        accounts: d.accounts,
+        categories: d.categories,
+        payees: d.payees,
+      };
+      const stamp = Math.floor(Date.now() / 1000);
+      const plan = buildImportPlan(rows, dicts, cache, transactions, stamp);
       const fingerprint = fileFingerprint(file.name, buf);
       const seen = batches.find((b) => b.id === fingerprint);
       setPending({
@@ -146,6 +162,10 @@ export function ImportXlsxCard() {
         seenBefore: seen
           ? { at: formatDate(seen.importedAt), count: seen.draftIds.length }
           : undefined,
+        dicts,
+        nodes: d.nodes,
+        cache,
+        stamp,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось прочитать файл");
@@ -261,6 +281,15 @@ export function ImportXlsxCard() {
           plan={pending.plan}
           seenBefore={pending.seenBefore}
           autoPush={pushMode === "auto"}
+          accounts={pending.dicts.accounts}
+          payees={pending.dicts.payees}
+          categories={pending.nodes}
+          check={(row: ParsedRow) =>
+            rowToVerdict(row, pending.dicts, pending.cache, pending.stamp)
+          }
+          revise={(rows: ParsedRow[]) =>
+            buildImportPlan(rows, pending.dicts, pending.cache, transactions, pending.stamp)
+          }
           onCreate={createRows}
           onClose={() => setPending(null)}
         />
