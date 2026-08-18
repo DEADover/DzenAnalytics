@@ -38,7 +38,8 @@ import { MonthCashflowChart } from "../components/MonthCashflowChart";
 import { BudgetFillModal, type FillItem } from "../components/BudgetFillModal";
 import { BudgetYearTable } from "../components/BudgetYearTable";
 import { BudgetSettingsPopover } from "../components/BudgetSettingsPopover";
-import { buildBudgetYear } from "../lib/budgetYear";
+import { buildBudgetYear, categoryPathKey } from "../lib/budgetYear";
+import { useLiveCategoryPaths } from "../hooks/useDictionaries";
 import { nameKey } from "../lib/budgetLines";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
 import { BudgetDashboardPrint } from "../components/BudgetDashboardPrint";
@@ -400,17 +401,31 @@ export function BudgetsPage() {
    */
   const monthPeriod = view !== "year";
   const rowOrder = settings.rowOrder;
+  // Живые категории — чтобы статьи с именем, которого в справочнике больше
+  // нет, и без единой траты за год не висели в отчёте (#77). В режиме CSV
+  // справочника нет, хук вернёт null, и ничего не отсеивается.
+  const livePaths = useLiveCategoryPaths();
   const yearReport = useMemo(
-    () => buildBudgetYear(lines, transactions, year, scope, rowOrder, plannedAsPlan),
-    [lines, transactions, year, scope, rowOrder, plannedAsPlan]
+    () =>
+      buildBudgetYear(
+        lines,
+        transactions,
+        year,
+        scope,
+        rowOrder,
+        plannedAsPlan,
+        livePaths ?? undefined
+      ),
+    [lines, transactions, year, scope, rowOrder, plannedAsPlan, livePaths]
   );
   /** Сдвиг года сохраняет месяц: вернувшись в месячный вид, попадаешь в тот же. */
   const shiftYear = (d: number) => setYm((m) => addMonths(m, d * 12));
 
   // ── Выгрузка годового отчёта в Excel ──
   const prevYearReport = useMemo(
-    () => buildBudgetYear(lines, transactions, year - 1, scope, rowOrder),
-    [lines, transactions, year, scope, rowOrder]
+    () =>
+      buildBudgetYear(lines, transactions, year - 1, scope, rowOrder, [], livePaths ?? undefined),
+    [lines, transactions, year, scope, rowOrder, livePaths]
   );
   /**
    * Месяц, по которому считаются показатели «за месяц» и отрезок «с начала
@@ -573,12 +588,23 @@ export function BudgetsPage() {
     // Второй проход — факты. Строка категории забирает и траты по своим
     // под-категориям, кроме тех, что показаны отдельной строкой прямо здесь.
     const ownSubs = ownSubsIndex(all);
-    const budgeted = all.map(
-      (r): Row => ({
-        ...r,
-        fact: factFor(r.line, transactions, ym, scope, ownSubsFor(ownSubs, r.line)),
-      })
-    );
+    const budgeted = all
+      .map(
+        (r): Row => ({
+          ...r,
+          fact: factFor(r.line, transactions, ym, scope, ownSubsFor(ownSubs, r.line)),
+        })
+      )
+      // Призрак переименования: имени в справочнике больше нет, трат за месяц
+      // нет и быть не может — весь факт уехал на новое имя (#77). Тот же
+      // отбор, что в годовом своде, только по факту месяца.
+      .filter(
+        (r) =>
+          !livePaths ||
+          r.fact !== 0 ||
+          r.line.category === TRANSFER_CATEGORY ||
+          livePaths.has(categoryPathKey(r.line.category, r.line.subcategory ?? null))
+      );
     // Порядок статей — общий для всего раздела: по алфавиту или по сумме
     // (issue #68). Раньше строки шли по времени создания плана — порядок,
     // который виден только нам, а на экране выглядел случайным. Категории без
@@ -599,7 +625,7 @@ export function BudgetsPage() {
       if (!as || !bs) return as ? 1 : bs ? -1 : 0;
       return compareBudgetRows({ name: as, amount: a.fact }, { name: bs, amount: b.fact }, rowOrder);
     });
-  }, [lines, ym, transactions, zenForecasts, zenLoaded, scope, rowOrder, plannedAsPlan]);
+  }, [lines, ym, transactions, zenForecasts, zenLoaded, scope, rowOrder, plannedAsPlan, livePaths]);
   const expenseRows = rows.filter((r) => r.line.kind === "expense");
   const incomeRows = rows.filter((r) => r.line.kind === "income");
 

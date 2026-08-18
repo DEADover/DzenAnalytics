@@ -247,3 +247,104 @@ describe("importFromZen — задвоения статей", () => {
     expect(lines[0].tagId).toBe("tag-cashback");
   });
 });
+
+describe("adoptTags — имена статей вслед за справочником", () => {
+  const tag = (id: string, title: string, parent: string | null = null): ZenTag =>
+    ({ id, title, parent, archive: false }) as unknown as ZenTag;
+
+  const line = (over: Partial<BudgetLine>): BudgetLine => ({
+    id: over.id ?? `l-${Math.random().toString(36).slice(2, 7)}`,
+    category: "Еда",
+    subcategory: null,
+    kind: "expense",
+    amount: 1000,
+    recurrence: "monthly",
+    startMonth: "2026-01",
+    endMonth: null,
+    createdAt: "2026-01-01T00:00:00Z",
+    ...over,
+  });
+
+  const lines = () => useBudgetsStore.getState().lines;
+
+  it("КЛЮЧЕВОЕ: переименовали РОДИТЕЛЯ — под-строка узнаёт новое имя", async () => {
+    // Ровно случай из issue #77: у под-категории свой тег цел, плана у неё в
+    // Дзен-мани нет, поэтому синхронизация планов до строки не доходит — и она
+    // остаётся с прежним именем родителя, повисая призраком с нулевым фактом.
+    useBudgetsStore.setState({
+      lines: [line({ id: "l1", tagId: "t-cafe", category: "Еда", subcategory: "Кафе" })],
+      loaded: true,
+    });
+    await useBudgetsStore.getState().adoptTags([
+      tag("t-food", "Питание"),
+      tag("t-cafe", "Кафе", "t-food"),
+    ]);
+    expect(lines()[0]).toMatchObject({ category: "Питание", subcategory: "Кафе" });
+    expect(lines()).toHaveLength(1);
+  });
+
+  it("переименованная строка сливается с уже существующим двойником", async () => {
+    // Иначе на экране две одинаковые статьи, а план родителя — их сумма.
+    useBudgetsStore.setState({
+      lines: [
+        line({ id: "old", tagId: "t-food", category: "Еда", overrides: { "2026-08": 5000 } }),
+        line({ id: "new", tagId: "t-food", category: "Питание", overrides: { "2026-09": 7000 } }),
+      ],
+      loaded: true,
+    });
+    await useBudgetsStore.getState().adoptTags([tag("t-food", "Питание")]);
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0].overrides).toMatchObject({ "2026-08": 5000, "2026-09": 7000 });
+  });
+
+  it("строке без тега проставляется тег живой категории с тем же именем", async () => {
+    // После этого следующее переименование её уже не осиротит. Хвостовой
+    // пробел совпасть не мешает — его не видно, а вторую статью он делал.
+    useBudgetsStore.setState({
+      lines: [line({ id: "l1", category: "Еда ", subcategory: null })],
+      loaded: true,
+    });
+    await useBudgetsStore.getState().adoptTags([tag("t-food", "Еда")]);
+    expect(lines()[0].tagId).toBe("t-food");
+  });
+
+  it("имя в другом регистре — другая категория, тег не проставляем", async () => {
+    // Регистр в Дзен-мани различает теги, и склейка строк бюджета считает так
+    // же: «еда» и «Еда» — две разные статьи, привязывать вслепую нельзя.
+    useBudgetsStore.setState({
+      lines: [line({ id: "l1", category: "еда" })],
+      loaded: true,
+    });
+    await useBudgetsStore.getState().adoptTags([tag("t-food", "Еда")]);
+    expect(lines()[0].tagId).toBeUndefined();
+  });
+
+  it("неоднозначное имя тегом не штампуется", async () => {
+    // Два тега с одинаковым путём: угадывать, к какому привязаться, нельзя.
+    useBudgetsStore.setState({ lines: [line({ id: "l1", category: "Еда" })], loaded: true });
+    await useBudgetsStore.getState().adoptTags([tag("t1", "Еда"), tag("t2", "Еда")]);
+    expect(lines()[0].tagId).toBeUndefined();
+  });
+
+  it("КЛЮЧЕВОЕ: строку с неизвестным тегом не трогаем и не удаляем", async () => {
+    // Тег мог уехать в архив или прийти следующей страницей синхронизации —
+    // потерять из-за этого план человека нельзя.
+    useBudgetsStore.setState({
+      lines: [line({ id: "l1", tagId: "t-gone", category: "Хобби" })],
+      loaded: true,
+    });
+    await useBudgetsStore.getState().adoptTags([tag("t-food", "Еда")]);
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toMatchObject({ tagId: "t-gone", category: "Хобби" });
+  });
+
+  it("когда менять нечего — на диск не ходим", async () => {
+    useBudgetsStore.setState({
+      lines: [line({ id: "l1", tagId: "t-food", category: "Еда" })],
+      loaded: true,
+    });
+    disk.clear();
+    await useBudgetsStore.getState().adoptTags([tag("t-food", "Еда")]);
+    expect(disk.has(KEY)).toBe(false);
+  });
+});

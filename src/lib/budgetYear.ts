@@ -9,7 +9,18 @@ import {
 } from "./budgets";
 import { ALL_ACCOUNTS, budgetHits, TRANSFER_CATEGORY, type BudgetScope } from "./budgetScope";
 import type { PlannedPlan } from "./plannedPlans";
-import { nameKey } from "./budgetLines";
+import { nameKey, normalizeTagName } from "./budgetLines";
+
+/**
+ * Ключ пути статьи для сверки с живым справочником. Нормализация та же, что у
+ * склейки строк: регистр и пробелы категорию не различают.
+ */
+export function categoryPathKey(
+  category: string,
+  subcategory: string | null | undefined
+): string {
+  return `${normalizeTagName(category)}\u0000${normalizeTagName(subcategory)}`;
+}
 
 /**
  * Годовой свод бюджета: двенадцать месяцев плана и факта по статьям, с итогами
@@ -154,7 +165,21 @@ export function buildBudgetYear(
    * прибавил к нему запланированные операции сам, и второй раз их считать
    * нельзя (см. `plannedPlans`).
    */
-  planned: PlannedPlan[] = []
+  planned: PlannedPlan[] = [],
+  /**
+   * Пути живых категорий («Еда» / «Еда\u0000Кафе») — если известны.
+   *
+   * Строка бюджета хранит категорию текстом, и категорию, переименованную в
+   * Дзен-мани, из старых строк никто не вычищает. Такая строка держит план,
+   * факта у неё нет и быть не может — весь факт уехал на новое имя, — и она
+   * висит в отчёте призраком (#77). Здесь такие и отсекаются: НУЛЕВОЙ ФАКТ ЗА
+   * ВЕСЬ ГОД плюс имени нет среди живых. Живая статья с планом и без трат
+   * остаётся: показать её и есть смысл плана. История удалённой категории с
+   * фактом тоже остаётся — из отчёта прошлое не вычёркивают.
+   *
+   * Не передали (режим CSV, где живого справочника нет) — ничего не режем.
+   */
+  knownPaths?: Set<string>
 ): BudgetYearReport {
   const months = Array.from(
     { length: MONTHS },
@@ -220,6 +245,15 @@ export function buildBudgetYear(
       if (r.kind !== kind) continue;
       // Пустая строка — ни плана, ни факта за весь год — в отчёте лишняя.
       if (r.plan === 0 && r.fact === 0) continue;
+      // Призрак переименования: плана хватило, чтобы пройти отсев выше, но
+      // факта нет и имени в справочнике больше нет.
+      if (
+        r.fact === 0 &&
+        knownPaths &&
+        r.category !== TRANSFER_CATEGORY &&
+        !knownPaths.has(categoryPathKey(r.category, r.subcategory))
+      )
+        continue;
       let g = byCat.get(r.category);
       if (!g) {
         g = { subs: [] };

@@ -12,6 +12,9 @@ import { loadZenCache } from "../lib/zenmoneyCache";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
+import { resolveTagPath } from "../lib/zenBudgets";
+import { categoryPathKey } from "../lib/budgetYear";
+import type { ZenTag } from "../lib/zenmoney";
 
 export interface DictionaryCounts {
   /** Категорий в справочнике; `null` — кэша нет (режим CSV или до синка). */
@@ -84,4 +87,47 @@ export function useCounterpartyTitles(): Set<string> {
     for (const c of created) out.add(c.title);
     return out;
   }, [titles, renames, created]);
+}
+
+/**
+ * Пути живых категорий: «Еда» и «Еда \u0000 Кафе» — для сверки с тем, что
+ * хранит текстом бюджет.
+ *
+ * `null` — справочника нет (режим CSV или до первой синхронизации): в этом
+ * случае сверять не с чем, и вызывающий не должен ничего отсеивать.
+ */
+export function useLiveCategoryPaths(): Set<string> | null {
+  const serverTimestamp = useZenmoneyStore((s) => s.serverTimestamp);
+  const newCats = useNewCategoriesStore((s) => s.items);
+  const [tags, setTags] = useState<ZenTag[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void loadZenCache().then((cache) => {
+      if (alive) setTags(cache ? cache.tags : null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [serverTimestamp]);
+
+  return useMemo(() => {
+    if (!tags) return null;
+    const byId = new Map(tags.map((t) => [t.id, t]));
+    const out = new Set<string>();
+    for (const t of tags) {
+      const path = resolveTagPath(t.id, byId);
+      if (path) out.add(categoryPathKey(path.category, path.subcategory));
+    }
+    // Категории, заведённые локально и ещё не уехавшие, для человека уже
+    // существуют — их строки бюджета призраками считать нельзя. Родителя
+    // ищем и среди облачных тегов, и среди таких же новых.
+    const newById = new Map(newCats.map((c) => [c.id, c]));
+    const titleOf = (id: string) => byId.get(id)?.title ?? newById.get(id)?.title;
+    for (const c of newCats) {
+      const parent = c.parent ? titleOf(c.parent) : undefined;
+      out.add(parent ? categoryPathKey(parent, c.title) : categoryPathKey(c.title, null));
+    }
+    return out;
+  }, [tags, newCats]);
 }

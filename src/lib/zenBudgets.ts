@@ -161,7 +161,7 @@ export function plannedOpsByTagMonth(
  * Resolve a tag id to `{category, subcategory}`: a sub-tag → its parent's title
  * + own title; a top-level tag → own title + null. `null` when tag is unknown.
  */
-function resolveTag(
+export function resolveTagPath(
   tagId: string,
   byId: Map<string, ZenTag>
 ): { category: string; subcategory: string | null } | null {
@@ -194,7 +194,7 @@ function collect(
 
   for (const b of budgets) {
     if (!b.tag || b.tag === NULL_TAG) continue;
-    const r = resolveTag(b.tag, byId);
+    const r = resolveTagPath(b.tag, byId);
     if (!r) continue;
     const ym = (b.date || "").slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(ym)) continue;

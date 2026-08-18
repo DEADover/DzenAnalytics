@@ -713,6 +713,16 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // any existing calibration since the API value is authoritative.
       await recalcBalanceCalibration();
 
+      // Имена статей бюджета — вслед за справочником. БЕЗУСЛОВНО, до и вне
+      // блока планов: переименованная категория может не иметь плана вовсе, и
+      // тогда синхронизация планов до её строки не доходит — та остаётся со
+      // старым именем и висит в отчётах призраком с нулевым фактом (#77).
+      if (nextCache.tags && nextCache.tags.length > 0) {
+        const bs = useBudgetsStore.getState();
+        if (!bs.loaded) await bs.hydrate();
+        await useBudgetsStore.getState().adoptTags(nextCache.tags);
+      }
+
       // Mirror Zenmoney «Планы»/budgets into local budget lines on EVERY sync
       // (not just full) so a plan changed in Дзен shows up here automatically —
       // the incremental diff carries changed budgets too. importFromZen does a

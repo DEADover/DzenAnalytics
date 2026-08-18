@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildBudgetYear, yearDiff } from "./budgetYear";
+import { buildBudgetYear, categoryPathKey, yearDiff } from "./budgetYear";
 import type { BudgetLine } from "./budgets";
 import type { Transaction } from "../types";
 
@@ -512,5 +512,77 @@ describe("свод — невидимая разница в имени стат�
     const bank = report.income.groups.find((g) => g.category === "Банк")!;
     expect(bank.subs).toHaveLength(1);
     expect(bank.subs[0].cells[7]).toEqual({ plan: 4000, fact: 1000 });
+  });
+});
+
+describe("статьи переименованных категорий (#77)", () => {
+  const live = (...paths: [string, string | null][]) =>
+    new Set(paths.map(([c, s]) => categoryPathKey(c, s)));
+  const names = (report: ReturnType<typeof buildBudgetYear>) =>
+    [...report.expense.groups, ...report.income.groups].map((g) => g.category);
+
+  it("КЛЮЧЕВОЕ: статья с планом, но с именем, которого больше нет, из отчёта уходит", () => {
+    // Категорию переименовали в Дзен-мани: факт уехал на новое имя, а строка
+    // со старым осталась с планом — и висела в отчёте с нулём.
+    const report = buildBudgetYear(
+      [line({ category: "Еда", overrides: { "2026-01": 10_000 } })],
+      [],
+      2026,
+      undefined,
+      undefined,
+      [],
+      live(["Питание", null])
+    );
+    expect(names(report)).not.toContain("Еда");
+  });
+
+  it("КЛЮЧЕВОЕ: живая статья с планом и без трат остаётся", () => {
+    // В этом весь смысл плана: показать, что деньги заложены, а не потрачены.
+    const report = buildBudgetYear(
+      [line({ category: "Еда", overrides: { "2026-01": 10_000 } })],
+      [],
+      2026,
+      undefined,
+      undefined,
+      [],
+      live(["Еда", null])
+    );
+    expect(names(report)).toContain("Еда");
+  });
+
+  it("история удалённой категории с тратами остаётся", () => {
+    // Из прошлого статьи не вычёркивают: деньги были потрачены.
+    const report = buildBudgetYear(
+      [],
+      [tx({ category: "Хобби", amountBase: 500 })],
+      2026,
+      undefined,
+      undefined,
+      [],
+      live(["Еда", null])
+    );
+    expect(names(report)).toContain("Хобби");
+  });
+
+  it("без справочника (режим CSV) не отсеиваем ничего", () => {
+    const report = buildBudgetYear(
+      [line({ category: "Еда", overrides: { "2026-01": 10_000 } })],
+      [],
+      2026
+    );
+    expect(names(report)).toContain("Еда");
+  });
+
+  it("под-статья переименованного родителя тоже уходит", () => {
+    const report = buildBudgetYear(
+      [line({ category: "Еда", subcategory: "Кафе", overrides: { "2026-01": 3000 } })],
+      [],
+      2026,
+      undefined,
+      undefined,
+      [],
+      live(["Питание", null], ["Питание", "Кафе"])
+    );
+    expect(names(report)).not.toContain("Еда");
   });
 });

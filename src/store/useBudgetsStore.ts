@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
-import { dedupeLines, nameKey } from "../lib/budgetLines";
+import { dedupeLines, nameKey, normalizeTagName } from "../lib/budgetLines";
+import { resolveTagPath } from "../lib/zenBudgets";
+import type { ZenTag } from "../lib/zenmoney";
 import {
   migrateLegacyBudgets,
   plannedFor,
@@ -36,6 +38,11 @@ export interface PlanUpsert {
 const KEY = "budgetsV2";
 const LEGACY_KEY = "budgets";
 
+/** Ключ пути статьи — тем же способом, что и склейка строк. */
+function pathKey(category: string, subcategory: string | null): string {
+  return `${normalizeTagName(category)}\u0000${normalizeTagName(subcategory)}`;
+}
+
 function thisMonth(now = Date.now()): string {
   const d = new Date(now);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -55,6 +62,19 @@ interface BudgetsState {
    *  список, ждёт запись в базу и кладёт свою версию обратно — из шести правок
    *  доезжала последняя. */
   applyPlans: (items: PlanUpsert[]) => Promise<void>;
+  /**
+   * Привести названия статей в соответствие с живым справочником тегов.
+   *
+   * Строка бюджета хранит категорию ТЕКСТОМ, и переименование в Дзен-мани её
+   * не трогает: синхронизация планов знает только те теги, у которых план
+   * есть. Строка без плана (или под-строка, у которой переименовали родителя)
+   * так и остаётся со старым именем — и висит в отчётах призраком с нулевым
+   * фактом, пока человек не очистит локальные данные (issue #77).
+   *
+   * Зовётся после каждой синхронизации. Ничего не удаляет: тега нет в списке —
+   * строку не трогаем, мало ли откуда она (CSV, ручная, архивный тег).
+   */
+  adoptTags: (tags: ZenTag[]) => Promise<void>;
   /** Mirror Zenmoney plans into local budget lines. THREE-WAY merge: new tags
    *  are created; a cell the user hasn't locally edited adopts Zen's value (so a
    *  plan changed in Дзен shows up here); a cell the user edited locally but not
@@ -164,6 +184,48 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
     }
 
     const list = [...updated, ...additions];
+    await db.saveJSON(KEY, list);
+    set({ lines: list });
+  },
+
+  adoptTags: async (tags) => {
+    if (tags.length === 0) return;
+    const byId = new Map(tags.map((t) => [t.id, t]));
+    // Обратный поиск: путь «Категория / Подкатегория» → id живого тега. Нужен
+    // строкам без тега — заведённым вручную или до появления тегов: имя у них
+    // единственное тождество, и проставленный тег делает их неуязвимыми к
+    // следующему переименованию. Неоднозначные пути (два тега с одинаковым
+    // путём) пропускаем: угадывать, к какому привязаться, нельзя.
+    const idByPath = new Map<string, string | null>();
+    for (const t of tags) {
+      const path = resolveTagPath(t.id, byId);
+      if (!path) continue;
+      const key = pathKey(path.category, path.subcategory);
+      idByPath.set(key, idByPath.has(key) ? null : t.id);
+    }
+
+    let changed = false;
+    const next = get().lines.map((l) => {
+      const live = l.tagId ? resolveTagPath(l.tagId, byId) : null;
+      if (live) {
+        // Тег жив: имя берём у него. Это и лечит переименование родителя —
+        // у под-строки меняется поле «категория», хотя её собственный тег
+        // остался прежним.
+        if (l.category === live.category && (l.subcategory ?? null) === live.subcategory) return l;
+        changed = true;
+        return { ...l, category: live.category, subcategory: live.subcategory };
+      }
+      if (l.tagId) return l; // тег есть, но неизвестен — не наше дело
+      const hit = idByPath.get(pathKey(l.category, l.subcategory ?? null));
+      if (!hit) return l;
+      changed = true;
+      return { ...l, tagId: hit };
+    });
+
+    if (!changed) return;
+    // Слияние на выходе: переименованная строка могла совпасть с уже
+    // существующей — планы сливаются, а не удваиваются.
+    const { lines: list } = dedupeLines(next);
     await db.saveJSON(KEY, list);
     set({ lines: list });
   },
