@@ -17,6 +17,8 @@ import {
   sheetRange,
 } from "./xlsxFormulas";
 import { sheetPathByName } from "./xlsxCharts";
+import { noteParts, type SheetNote } from "./xlsxNotes";
+import { applyColumnFormats, type ColumnFormat } from "./xlsxColumns";
 import { downloadBlob } from "./downloadBlob";
 
 /** Версия шаблона. Растёт, когда меняется состав колонок. */
@@ -52,32 +54,72 @@ export const OPS_COLUMNS = [
 export type OpsColumn = (typeof OPS_COLUMNS)[number];
 
 /**
- * Приписка к названию колонки: для каких типов операций её заполняют.
+ * Что написано в заметке на ячейке шапки.
  *
- * Договор с разбором — само название, приписка живёт только в шапке файла: при
- * чтении всё, что в скобках, отбрасывается (`headerName` в `importRows`). Без
- * неё «Счёт списания» и «Счёт зачисления» стоят рядом одинаково убедительно, и
- * половина отбитых строк — именно про это.
+ * Раньше это же стояло припиской прямо в названии колонки — и лезло за её
+ * ширину, разъезжаясь по всей шапке. Заметка — штатный способ Excel: красный
+ * уголок в углу ячейки, текст по наведению, а название остаётся названием.
  */
-export const OPS_HINTS: Partial<Record<OpsColumn, string>> = {
-  Время: "можно не заполнять",
-  Категория: "кроме перевода",
-  "Счёт списания": "расход, перевод",
-  "Счёт зачисления": "доход, возврат, перевод",
-  Сумма: "без минуса",
-  "Сумма зачисления": "только перевод в другой валюте",
-  Контрагент: "необязательно",
+export const OPS_NOTES: Record<OpsColumn, string> = {
+  Дата: "Дата операции: 30.12.2026. Колонка уже в этом формате — набранное Excel приведёт к нему сам.",
+  Время:
+    "Можно не заполнять: поставим 12:00. После отправки в Дзен-мани время операции изменить уже нельзя.",
+  Тип: "Расход, Доход, Возврат или Перевод — выбирается из списка. Тип задаёт и направление денег, и то, какие колонки нужны.",
+  Категория:
+    "Полный путь через дробь: «Еда / Кафе». Нужна расходу, доходу и возврату. У перевода категории нет — оставьте пусто.",
+  "Счёт списания": "Откуда ушли деньги. Заполняется у расхода и у перевода.",
+  "Счёт зачисления": "Куда пришли деньги. Заполняется у дохода, возврата и перевода.",
+  Сумма:
+    "Всегда положительная: направление задаёт колонка «Тип». Валюту указывать не нужно — она берётся у счёта.",
+  "Сумма зачисления":
+    "Только для перевода между счетами в разных валютах: сколько пришло на счёт зачисления.",
+  Контрагент:
+    "Магазин, работодатель, человек. Необязательно — кроме долга: долг это перевод на счёт долгов, и там контрагент обязателен.",
+  Комментарий: "Свободный текст. Хэштеги из комментария приложение подхватит.",
 };
 
-/** Название колонки так, как оно выглядит в шапке файла. */
-export function opsHeader(col: OpsColumn): string {
-  const hint = OPS_HINTS[col];
-  return hint ? `${col} (${hint})` : col;
-}
+/** Заметка на колонке проверки — она не из шаблона данных, и это стоит сказать. */
+const CHECK_NOTE =
+  "Формула проверяет строку по тем же правилам, что и приложение. «Готово» — строку примут; иначе написано, что поправить. При загрузке колонка не читается, удалять её не нужно.";
 
-/** Колонка с формулой-проверкой — за данными, через букву от них. */
+/** Колонка с формулой-проверкой — сразу за данными. */
 export const CHECK_COLUMN = "Проверка";
 const CHECK_AT = "K";
+
+/** Заметки шапки листа «Операции»: по одной на колонку, включая проверку. */
+export function opsNotes(): SheetNote[] {
+  return [
+    ...OPS_COLUMNS.map((col, i) => ({
+      ref: `${String.fromCharCode(65 + i)}1`,
+      title: col,
+      text: OPS_NOTES[col],
+    })),
+    { ref: `${CHECK_AT}1`, title: CHECK_COLUMN, text: CHECK_NOTE },
+  ];
+}
+
+/**
+ * Оформление колонок листа с операциями.
+ *
+ * Ячеек под данные ещё нет — оформление наследуется от колонки, поэтому дата,
+ * набранная в пустой строке, сразу встанет как 30.12.2026, а сумма — по
+ * правому краю с разделителем разрядов.
+ */
+export function opsColumnFormats(): ColumnFormat[] {
+  return [
+    { column: 1, align: "center", numFmt: "DD.MM.YYYY" },
+    { column: 2, align: "center", numFmt: "HH:MM" },
+    { column: 3, align: "center" },
+    { column: 4, align: "left" },
+    { column: 5, align: "left" },
+    { column: 6, align: "left" },
+    { column: 7, align: "right", numFmt: "#,##0.00" },
+    { column: 8, align: "right", numFmt: "#,##0.00" },
+    { column: 9, align: "left" },
+    { column: 10, align: "left" },
+    { column: 11, align: "left" },
+  ];
+}
 
 /**
  * Формула колонки «Проверка» для строки листа.
@@ -144,7 +186,9 @@ interface Cell {
   textColor?: string;
   wrap?: boolean;
   align?: "left" | "center" | "right";
+  alignVertical?: "top" | "center" | "bottom";
   format?: string;
+  height?: number;
   span?: number;
   columnSpan?: number;
 }
@@ -157,6 +201,11 @@ const head = (v: string): Cell => ({
   type: String,
   fontWeight: "bold",
   backgroundColor: BG_HEAD,
+  align: "center",
+  alignVertical: "center",
+  // Высота задаётся ячейкой, но применяется ко всей строке: шапка получается
+  // заметно отдельной от данных, без разделительных линий.
+  height: 24,
 });
 const text = (v: string, extra: Partial<Cell> = {}): Cell => ({
   value: v,
@@ -165,27 +214,6 @@ const text = (v: string, extra: Partial<Cell> = {}): Cell => ({
 });
 const muted = (v: string): Cell => text(v, { textColor: TEXT_MUTED, wrap: true });
 const money = (v: number): Cell => ({ value: v, type: Number, format: "#,##0.00" });
-
-/**
- * Памятка на самом листе «Операции» — справа от данных.
- *
- * Коротко и по делу: что заполняется у какого типа. Подробности остаются на
- * листе «Как заполнять», но заглянуть туда человек догадывается уже после
- * отбитой строки — а половину ошибок эти шесть строк снимают до неё.
- */
-const NOTES = [
-  "Заполняйте строки ниже. Первая строка — шапка, её не трогайте.",
-  "Сумма всегда положительная: направление задаёт колонка «Тип».",
-  "Расход — категория и счёт списания.",
-  "Доход и возврат — категория и счёт зачисления.",
-  "Перевод — оба счёта и без категории; разные валюты — ещё «Сумма зачисления».",
-  "Долг — перевод на счёт долгов, контрагент обязателен.",
-  "Категория пишется полным путём: «Еда / Кафе». Выбирайте из списка.",
-  "Валюту указывать не нужно: сумма считается в валюте своего счёта.",
-  "Время можно не заполнять — поставим 12:00.",
-  "Колонка «Проверка» показывает, что не так со строкой, ещё до загрузки.",
-  "Примеры на все типы — на листе «Примеры».",
-];
 
 /**
  * Листы книги в формате пакета записи.
@@ -204,18 +232,11 @@ export function buildTemplateSheets(
   dicts: TemplateDicts,
   today: string
 ): TemplateSheet[] {
-  // Шапка: названия с приписками, за ними колонка проверки, пустой просвет и
-  // памятка. Памятка именно тут, а не только на своём листе: за другим листом
-  // человек идёт, когда УЖЕ ошибся, а перед глазами она работает до ошибки.
-  const ops: Cell[][] = [
-    [
-      ...OPS_COLUMNS.map((c) => head(opsHeader(c))),
-      head(CHECK_COLUMN),
-      text(""),
-      head("Как заполнять"),
-    ],
-    ...NOTES.map((line) => [...Array(12).fill(text("")), muted(line)]),
-  ];
+  // Лист данных пуст: только шапка. Подсказки живут заметками на её ячейках,
+  // подробности — на листе «Как заполнять». Текстом в ячейках их писать нельзя:
+  // это лист, куда человек вставляет свои строки, и любая наша строка тут
+  // мешает — что вставке, что глазам.
+  const ops: Cell[][] = [[...OPS_COLUMNS.map((c) => head(c)), head(CHECK_COLUMN)]];
 
   const dictRows = Math.max(
     dicts.accounts.length,
@@ -243,13 +264,17 @@ export function buildTemplateSheets(
   const firstAccount = dicts.accounts[0]?.title ?? "Наличные";
   const secondAccount = dicts.accounts[1]?.title ?? firstAccount;
   const someCategory = dicts.categories[0] ?? "Без категории";
+  // Ячейки примеров оформляем так же, как колонки: у написанных пакетом ячеек
+  // своё оформление, и без этого дата на «Примерах» стояла бы иначе, чем на
+  // «Операциях» — две таблицы одной формы выглядели бы разными.
+  const mid = (v: string): Cell => text(v, { align: "center" });
   const examples: Cell[][] = [
-    OPS_COLUMNS.map((c) => head(opsHeader(c))),
-    [text("15.08.2026"), text("09:30"), text("Расход"), text(someCategory), text(firstAccount), text(""), money(1290.5), text(""), text("Пятёрочка"), text("Продукты на неделю")],
-    [text("15.08.2026"), text(""), text("Доход"), text(someCategory), text(""), text(firstAccount), money(120000), text(""), text("Работа"), text("Зарплата")],
-    [text("16.08.2026"), text(""), text("Возврат"), text(someCategory), text(""), text(firstAccount), money(890), text(""), text("Ozon"), text("Вернули за отменённый заказ")],
-    [text("16.08.2026"), text("12:00"), text("Перевод"), text(""), text(firstAccount), text(secondAccount), money(5000), text(""), text(""), text("Перекладываю на накопительный")],
-    [text("17.08.2026"), text(""), text("Перевод"), text(""), text(firstAccount), text(secondAccount), money(100), money(9500), text(""), text("Перевод между валютами: сумма зачисления обязательна")],
+    OPS_COLUMNS.map((c) => head(c)),
+    [mid("15.08.2026"), mid("09:30"), mid("Расход"), text(someCategory), text(firstAccount), text(""), money(1290.5), text(""), text("Пятёрочка"), text("Продукты на неделю")],
+    [mid("15.08.2026"), mid(""), mid("Доход"), text(someCategory), text(""), text(firstAccount), money(120000), text(""), text("Работа"), text("Зарплата")],
+    [mid("16.08.2026"), mid(""), mid("Возврат"), text(someCategory), text(""), text(firstAccount), money(890), text(""), text("Ozon"), text("Вернули за отменённый заказ")],
+    [mid("16.08.2026"), mid("12:00"), mid("Перевод"), text(""), text(firstAccount), text(secondAccount), money(5000), text(""), text(""), text("Перекладываю на накопительный")],
+    [mid("17.08.2026"), mid(""), mid("Перевод"), text(""), text(firstAccount), text(secondAccount), money(100), money(9500), text(""), text("Перевод между валютами: сумма зачисления обязательна")],
   ];
 
   const howto: Cell[][] = [
@@ -271,20 +296,24 @@ export function buildTemplateSheets(
     [text(""), muted("Если справочники в Дзен-мани изменились — скачайте шаблон заново, иначе строки со старыми названиями отобьются.")],
   ];
 
+  // Ширины — по самому длинному, что в колонке бывает: названию колонки или
+  // значению из справочника. Категории и счета берём по факту, иначе «Аренда
+  // квартиры / Коммуналка» уезжает под соседнюю колонку.
+  const widest = (values: string[], min: number, max: number) =>
+    Math.min(max, Math.max(min, ...values.map((v) => v.length + 3)));
   const opsColumns = [
     { width: 12 },
-    { width: 14 },
+    { width: 10 },
     { width: 12 },
-    { width: 28 },
-    { width: 26 },
-    { width: 30 },
+    { width: widest(dicts.categories, 18, 34) },
+    { width: widest(dicts.accounts.map((a) => a.title), 18, 26) },
+    { width: widest(dicts.accounts.map((a) => a.title), 20, 26) },
     { width: 14 },
-    { width: 26 },
-    { width: 22 },
-    { width: 40 },
+    { width: 18 },
+    { width: widest(dicts.payees, 18, 26) },
+    { width: 36 },
   ];
-  // К данным добавлены «Проверка», просвет и колонка памятки.
-  const opsWithCheck = [...opsColumns, { width: 44 }, { width: 3 }, { width: 62 }];
+  const opsWithCheck = [...opsColumns, { width: 46 }];
   return [
     { data: ops, sheet: SHEET_OPS, columns: opsWithCheck, stickyRowsCount: 1 },
     {
@@ -387,5 +416,25 @@ export async function patchTemplateBook(
   // нечего. Без этого флага Excel показал бы пустую колонку до первой правки.
   if (files["xl/workbook.xml"])
     zip["xl/workbook.xml"] = strToU8(forceRecalc(files["xl/workbook.xml"]));
+
+  // Оформление колонок — и на листе данных, и на примерах: они одной формы, и
+  // разное оформление читалось бы как разные таблицы.
+  let styles = files["xl/styles.xml"];
+  for (const sheet of [SHEET_OPS, SHEET_EXAMPLES]) {
+    const path = sheetPathByName(files, sheet);
+    const current = strFromU8(zip[path]);
+    const done = applyColumnFormats(styles, current, opsColumnFormats());
+    styles = done.styles;
+    zip[path] = strToU8(done.sheet);
+  }
+  zip["xl/styles.xml"] = strToU8(styles);
+
+  // Заметки — последними: они дописывают лист, стили и типы содержимого.
+  const withCols: Record<string, string> = { ...files };
+  for (const name of Object.keys(zip))
+    if (name.endsWith(".xml") || name.endsWith(".rels")) withCols[name] = strFromU8(zip[name]);
+  for (const [name, xml] of Object.entries(noteParts(withCols, SHEET_OPS, opsNotes())))
+    zip[name] = strToU8(xml);
+
   return zipSync(zip);
 }

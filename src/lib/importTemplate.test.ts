@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   CHECK_COLUMN,
   OPS_COLUMNS,
-  OPS_HINTS,
+  OPS_NOTES,
   OP_TYPES,
   SHEET_DICTS,
   SHEET_HOWTO,
@@ -11,7 +11,8 @@ import {
   TEMPLATE_VERSION,
   buildTemplateSheets,
   checkFormula,
-  opsHeader,
+  opsColumnFormats,
+  opsNotes,
   opsValidations,
   type TemplateDicts,
 } from "./importTemplate";
@@ -46,31 +47,14 @@ describe("buildTemplateSheets — состав книги", () => {
     ]);
   });
 
-  it("КЛЮЧЕВОЕ: в колонках данных на листе «Операции» пусто", () => {
-    // Строка-пример внутри данных — это операция, которую кто-нибудь забудет
-    // удалить и отправит в облако. Примеры живут отдельным листом, а памятка
-    // справа от данных: её колонки разбор не читает.
-    const ops = sheetOf(SHEET_OPS).data;
-    for (const row of ops.slice(1)) {
-      expect(row.slice(0, OPS_COLUMNS.length).map((c) => c.value)).toEqual(
-        OPS_COLUMNS.map(() => "")
-      );
-    }
-  });
-
-  it("шапка говорит, какая колонка для каких типов операций", () => {
-    // Половина отбитых строк — это «Счёт списания» вместо «Счёт зачисления»:
-    // рядом они одинаково убедительны, пока не сказано иначе.
+  it("КЛЮЧЕВОЕ: шапка — это только названия колонок", () => {
+    // Приписка «(расход, перевод)» в названии лезла за ширину колонки и рвала
+    // договор с разбором. Подсказки живут заметками на тех же ячейках.
     const head = sheetOf(SHEET_OPS).data[0].map((c) => String(c.value));
-    expect(head).toContain("Счёт списания (расход, перевод)");
-    expect(head).toContain("Счёт зачисления (доход, возврат, перевод)");
-    expect(head).toContain("Категория (кроме перевода)");
-    expect(head[OPS_COLUMNS.length]).toBe(CHECK_COLUMN);
+    expect(head).toEqual([...OPS_COLUMNS, CHECK_COLUMN]);
   });
 
-  it("КЛЮЧЕВОЕ: приписка в шапке не мешает разбору найти колонку", () => {
-    // Приписка — украшение файла, договор остаётся в самом названии. Иначе
-    // шаблон с подсказками не прочитался бы нашим же разбором.
+  it("КЛЮЧЕВОЕ: разбор находит все колонки в нашей же шапке", () => {
     const cells = new Map<string, XlsxCell>();
     sheetOf(SHEET_OPS).data[0].forEach((c, i) => {
       cells.set(`${String.fromCharCode(65 + i)}1`, { kind: "text", text: String(c.value ?? "") });
@@ -80,13 +64,53 @@ describe("buildTemplateSheets — состав книги", () => {
     expect(columns.get("Счёт зачисления")).toBe("F");
   });
 
-  it("памятка лежит справа от данных, на том же листе", () => {
-    const ops = sheetOf(SHEET_OPS).data;
-    const notes = ops.slice(1).map((r) => String(r[12]?.value ?? ""));
-    expect(notes.length).toBeGreaterThan(5);
-    expect(notes.join(" ")).toContain("Перевод — оба счёта");
-    expect(notes.join(" ")).toContain("Сумма всегда положительная");
+  it("на каждой ячейке шапки висит заметка — и на «Проверке» тоже", () => {
+    const notes = opsNotes();
+    expect(notes.map((n) => n.ref)).toEqual([
+      "A1", "B1", "C1", "D1", "E1", "F1", "G1", "H1", "I1", "J1", "K1",
+    ]);
+    expect(notes.map((n) => n.title)).toEqual([...OPS_COLUMNS, CHECK_COLUMN]);
+    for (const n of notes) expect(n.text.length).toBeGreaterThan(20);
   });
+
+  it("заметки говорят, для каких типов операций колонка", () => {
+    expect(OPS_NOTES["Счёт списания"]).toContain("расхода и у перевода");
+    expect(OPS_NOTES["Счёт зачисления"]).toContain("дохода, возврата и перевода");
+    expect(OPS_NOTES.Категория).toContain("У перевода категории нет");
+    expect(OPS_NOTES.Сумма).toContain("Всегда положительная");
+  });
+
+  it("колонки дат и сумм оформлены на будущее — под ввод человека", () => {
+    // Ячеек под данные ещё нет: оформление достанется им от колонки.
+    const f = opsColumnFormats();
+    expect(f[0]).toMatchObject({ column: 1, numFmt: "DD.MM.YYYY", align: "center" });
+    expect(f[6]).toMatchObject({ column: 7, numFmt: "#,##0.00", align: "right" });
+    expect(f).toHaveLength(OPS_COLUMNS.length + 1);
+  });
+
+  it("КЛЮЧЕВОЕ: название колонки помещается в её ширину", () => {
+    // Ровно та жалоба, из-за которой подсказки уехали в заметки: текст шапки
+    // не влезал и разъезжался по соседним колонкам.
+    const sheet = sheetOf(SHEET_OPS);
+    sheet.data[0].forEach((cell, i) => {
+      const name = String(cell.value ?? "");
+      expect(sheet.columns[i].width).toBeGreaterThanOrEqual(name.length + 1);
+    });
+  });
+
+  it("ширина колонки со справочником считается по самому длинному значению", () => {
+    // «Интернет-покупки / Подписки» — обычная длина реальной категории.
+    const wide = buildTemplateSheets(
+      { ...dicts, categories: ["Интернет-покупки / Подписки"] },
+      "2026-08-17"
+    ).find((s) => s.sheet === SHEET_OPS)!;
+    expect(wide.columns[3].width).toBeGreaterThan(sheetOf(SHEET_OPS).columns[3].width);
+  });
+
+  it("под шапкой на листе данных пусто — это место человека", () => {
+    expect(sheetOf(SHEET_OPS).data).toHaveLength(1);
+  });
+
 
   it("справочники — живые: счета с валютой, категории путями, контрагенты", () => {
     const rows = sheetOf(SHEET_DICTS).data;
@@ -183,14 +207,11 @@ describe("разметка валидаций в листе", () => {
   });
 });
 
-describe("opsHeader и headerName — приписки в шапке", () => {
-  it("каждая колонка с припиской читается обратно в своё название", () => {
-    for (const col of OPS_COLUMNS) expect(headerName(opsHeader(col))).toBe(col);
-  });
-
-  it("колонка без приписки остаётся как была", () => {
-    expect(OPS_HINTS.Дата).toBeUndefined();
-    expect(opsHeader("Дата")).toBe("Дата");
+describe("headerName — снисходительность к чужой шапке", () => {
+  it("своя приписка в скобках не мешает найти колонку", () => {
+    // Человек имеет право дописать себе «Сумма (руб)» — договор в названии.
+    expect(headerName("Сумма (руб)")).toBe("Сумма");
+    expect(headerName("Дата")).toBe("Дата");
   });
 });
 

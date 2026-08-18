@@ -212,11 +212,11 @@ export function ImportXlsxCard() {
       <div>
         <div className="font-medium text-sm flex items-center gap-2">
           <FileSpreadsheet className="w-4 h-4 text-accent" />
-          Импорт операций из Excel
+          Импорт дополнительных операций из Excel шаблона
         </div>
         <div className="text-xs text-muted mt-1">
-          Создаёт новые операции по вашему шаблону. Ничего не заменяет: источник данных
-          и уже загруженное остаются как были.
+          Нужно загрузить операции из других источников? — скачайте шаблон ниже,
+          заполните и загрузите в DzenAnalytics.
         </div>
       </div>
 
@@ -264,11 +264,6 @@ export function ImportXlsxCard() {
             )}
           </div>
 
-          <div className="text-xs text-muted">
-            В шаблоне ваши счета, категории и контрагенты — выбирайте из списков, так
-            строки не отобьются. Старый формат <strong>.xls</strong> не читаем:
-            пересохраните в Excel как .xlsx.
-          </div>
         </>
       )}
 
