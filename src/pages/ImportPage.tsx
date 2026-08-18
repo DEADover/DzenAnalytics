@@ -1064,23 +1064,47 @@ export function ImportPage() {
                 </span>
                 <InfoPopover label="Как это работает">
                   <p>
-                    Загрузите CSV из мобильного приложения Дзен-мани. Файл
-                    обрабатывается локально в браузере — никуда не отправляется.
-                    Подойдёт любая выгрузка формата{" "}
-                    <code className="pill">date;categoryName;…</code>.
+                    Офлайн-путь для тех, кому не нужен токен: берём CSV-выгрузку
+                    из приложения Дзен-мани. Файл разбирается прямо в браузере и
+                    никуда не отправляется — ни к нам, ни в Дзен-мани.
                   </p>
                   <p>
-                    <InfoTerm>Дополнить</InfoTerm> — добавит из файла только новые
-                    операции, дубликаты по id отбросит.{" "}
-                    <InfoTerm>Заменить</InfoTerm> — удалит всё, что сейчас в базе, и
-                    загрузит файл с нуля.
+                    <InfoTerm>Что за файл.</InfoTerm> CSV с шапкой, разделитель —
+                    точка с запятой. Колонки читаются по названиям:{" "}
+                    <code className="pill">date</code>,{" "}
+                    <code className="pill">categoryName</code>,{" "}
+                    <code className="pill">payee</code>,{" "}
+                    <code className="pill">outcome</code> /{" "}
+                    <code className="pill">income</code>,{" "}
+                    <code className="pill">outcomeAccountName</code> /{" "}
+                    <code className="pill">incomeAccountName</code> и валюты этих
+                    счетов. Строки без даты и без сумм пропускаются.
+                  </p>
+                  <p>
+                    <InfoTerm>Дополнить</InfoTerm> — возьмёт из файла только те
+                    строки, которых ещё нет. Своих номеров у операций в выгрузке
+                    нет, поэтому строка узнаётся по дате, месту в файле и
+                    получателю: повторная загрузка того же файла ничего не
+                    задвоит, а вот та же операция из ДРУГОЙ выгрузки приедет
+                    второй раз.
+                  </p>
+                  <p>
+                    <InfoTerm>Заменить</InfoTerm> — сотрёт загруженные операции и
+                    положит вместо них файл целиком. Настройки, правила и бюджеты
+                    останутся; локальные правки операций держатся за их номера,
+                    поэтому часть из них после замены может остаться без своей
+                    операции.
+                  </p>
+                  <p>
+                    Если подключена онлайн-синхронизация, класть CSV поверх неё не
+                    стоит — приложение переспросит перед загрузкой.
                   </p>
                 </InfoPopover>
               </div>
               {transactions.length > 0 && (
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-xs text-muted">
-                    В базе:{" "}
+                    Записей в базе:{" "}
                     <strong className="text-text tabular-nums">
                       {formatNum(transactions.length)}
                     </strong>
@@ -1470,7 +1494,8 @@ export function ImportPage() {
             </>
           }
           control={
-            <div className="w-32">
+            /* Код валюты — всегда три буквы: поле шире только съедает строку. */
+            <div className="w-24">
               <Combobox
                 value={rates.base}
                 options={Object.keys(rates.rates).sort()}
@@ -1521,7 +1546,9 @@ export function ImportPage() {
                 if (Number.isFinite(n)) setMonthStartDay(n);
               }}
               aria-label="День начала расчётного месяца"
-              className="input text-sm w-20 tabular-nums"
+              /* Значение — 1–28, то есть максимум два знака; по центру, чтобы
+                 однозначное число не висело у левого края. */
+              className="input text-sm w-16 tabular-nums text-center"
             />
           }
         />
