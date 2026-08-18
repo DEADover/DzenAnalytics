@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildBudgetYear, categoryPathKey, yearDiff } from "./budgetYear";
+import { buildBudgetYear, categoryPathKey, rowIsLive, yearDiff } from "./budgetYear";
 import type { BudgetLine } from "./budgets";
 import type { Transaction } from "../types";
 
@@ -584,5 +584,66 @@ describe("статьи переименованных категорий (#77)",
       live(["Питание", null], ["Питание", "Кафе"])
     );
     expect(names(report)).not.toContain("Еда");
+  });
+});
+
+describe("статья с назначенной операцией", () => {
+  const planned = (over: Record<string, unknown> = {}) => ({
+    kind: "expense" as const,
+    category: "Госуслуги",
+    subcategory: "Налог на имущество",
+    ym: "2026-10",
+    amount: 3000,
+    ahead: 3000,
+    aheadOps: [],
+    ...over,
+  });
+
+  it("КЛЮЧЕВОЕ: под-статья, у которой только назначенная оплата, видна наравне с категорией", () => {
+    // Жалоба пользователя: «статья не вывелась с суммой, но в общем итоге
+    // есть». Под-категории отбирались только по факту, а назначенная оплата
+    // фактом ещё не стала — строка исчезала, хотя её сумма входила в план
+    // категории.
+    const report = buildBudgetYear([], [], 2026, undefined, undefined, [planned()]);
+    const group = report.expense.groups.find((g) => g.category === "Госуслуги")!;
+    const sub = group.subs.find((s) => s.subcategory === "Налог на имущество")!;
+    expect(sub.plan).toBe(3000);
+    expect(sub.scheduled).toBe(true);
+    expect(rowIsLive(sub)).toBe(true);
+    // И сама категория тоже: иначе строку негде было бы раскрыть.
+    expect(rowIsLive(group.total)).toBe(true);
+  });
+
+  it("сумма назначенной операции входит в план категории", () => {
+    const report = buildBudgetYear(
+      [],
+      [],
+      2026,
+      undefined,
+      undefined,
+      [planned(), planned({ subcategory: "Налог самозанятого", amount: 2920, ahead: 2920 })]
+    );
+    const group = report.expense.groups.find((g) => g.category === "Госуслуги")!;
+    expect(group.total.plan).toBe(5920);
+    expect(group.subs.map((s) => s.subcategory).sort()).toEqual([
+      "Налог на имущество",
+      "Налог самозанятого",
+    ]);
+  });
+});
+
+describe("rowIsLive — одно правило для категорий и под-категорий", () => {
+  it("назначенная операция делает строку живой без единой траты", () => {
+    expect(rowIsLive({ fact: 0, scheduled: true })).toBe(true);
+  });
+
+  it("пустая строка живой не считается", () => {
+    expect(rowIsLive({ fact: 0 })).toBe(false);
+  });
+
+  it("копеечный хвост от пересчёта курса — это ноль", () => {
+    // На экране такая строка всё равно «0», и «движением» её считать нельзя.
+    expect(rowIsLive({ fact: 0.004 })).toBe(false);
+    expect(rowIsLive({ fact: 0.005 })).toBe(true);
   });
 });

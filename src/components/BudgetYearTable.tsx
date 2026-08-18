@@ -8,6 +8,7 @@ import {
   type YearGroup,
   type YearRow,
   type YearSection,
+  rowIsLive,
 } from "../lib/budgetYear";
 import type { BudgetKind } from "../lib/budgets";
 import { formatMoney, formatNum, monthLabel, monthLabelFull } from "../lib/format";
@@ -361,22 +362,13 @@ export function BudgetYearTable({
   );
 
   /**
-   * Было ли по строке движение за год.
-   *
-   * С допуском в половину копейки: суммы приходят в базовой валюте, после
-   * пересчёта по курсу дня в них остаются хвосты вроде 0,004 — на экране это
-   * всё равно «0», и строка из нулей считалась бы «с движением».
-   */
-  const moved = (row: YearRow) => Math.abs(row.fact) >= 0.005;
-
-  /**
    * Статьи с движением за год и статьи без него — в списке они идут порознь.
    *
    * Статья с НАЗНАЧЕННОЙ операцией считается живой: операции ещё не было по
    * определению, но дата и сумма известны — прятать её значит прятать ровно то,
    * ради чего строка и появилась.
    */
-  const shows = (g: YearGroup) => moved(g.total) || !!g.total.scheduled;
+  const shows = (g: YearGroup) => rowIsLive(g.total);
   const liveGroups = (section: YearSection) => section.groups.filter(shows);
   const emptyGroups = (section: YearSection) => section.groups.filter((g) => !shows(g));
   const visibleGroups = (section: YearSection) =>
@@ -391,9 +383,14 @@ export function BudgetYearTable({
    * Прятать только категории целиком мало: у живой категории под-категория без
    * единой операции за год — та же строка из прочерков, просто на уровень
    * ниже. Открывается тем же переключателем «Статьи без операций».
+   *
+   * Отбор ТОТ ЖЕ, что у категорий, — вместе с назначенными операциями. Раньше
+   * под-категории отбирались только по факту, и статья, у которой на месяц
+   * назначена оплата и больше ничего, пропадала со страницы, хотя её сумма
+   * входила в план категории: «статья не вывелась, а в общем итоге есть».
    */
   const subsOf = (g: YearGroup) =>
-    emptyShown(g.total.kind) ? g.subs : g.subs.filter(moved);
+    emptyShown(g.total.kind) ? g.subs : g.subs.filter(rowIsLive);
 
   /** Строка категории и, если раскрыта, её под-категории. */
   const groupRows = (g: YearGroup) => {
