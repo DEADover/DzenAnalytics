@@ -137,6 +137,17 @@ describe("buildTemplateSheets — состав книги", () => {
     expect(rows).toHaveLength(1 + Math.max(3, 3, 2, OP_TYPES.length));
   });
 
+  it("на листе-инструкции всё слева и по центру строки", () => {
+    // Строки там разной высоты: длинное правило переносится на две-три. При
+    // выравнивании по низу номер пункта оказывался под своим текстом.
+    for (const row of sheetOf(SHEET_HOWTO).data) {
+      for (const cell of row) {
+        expect(cell.align).toBe("left");
+        expect(cell.alignVertical).toBe("center");
+      }
+    }
+  });
+
   it("маркер, версия и дата выгрузки лежат в известных ячейках", () => {
     const rows = sheetOf(SHEET_HOWTO).data;
     expect(textAt(rows, 1, 0)).toBe(TEMPLATE_MARKER);
