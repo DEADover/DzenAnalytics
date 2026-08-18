@@ -21,7 +21,15 @@ interface BackupState {
   loaded: boolean;
   hydrate: () => Promise<void>;
   setInterval: (i: BackupInterval) => Promise<void>;
-  runNow: () => Promise<{ size: number; fileName: string }>;
+  /**
+   * Скачать бэкап сейчас и отметить время.
+   *
+   * `tag` попадает в имя файла: у скачанного по расписанию — «-auto», у
+   * скачанного руками ничего. Отметка ставится в обоих случаях: расписание
+   * считает срок от ПОСЛЕДНЕЙ копии, а не от последней автоматической, —
+   * иначе через час после ручного бэкапа падал бы второй, точно такой же.
+   */
+  runNow: (tag?: string) => Promise<{ size: number; fileName: string }>;
   /** Returns true if a backup was performed, false otherwise. */
   runIfDue: () => Promise<boolean>;
 }
@@ -61,8 +69,8 @@ export const useBackupStore = create<BackupState>((set, get) => ({
     set({ interval: i });
   },
 
-  runNow: async () => {
-    const res = await downloadBackup("auto");
+  runNow: async (tag) => {
+    const res = await downloadBackup(tag);
     const now = new Date().toISOString();
     await db.saveJSON(KEY_LAST_AT, now);
     set({ lastBackupAt: now });
@@ -77,7 +85,7 @@ export const useBackupStore = create<BackupState>((set, get) => ({
     const sinceLast = Date.now() - lastMs;
     if (sinceLast < dueAfter) return false;
     try {
-      await get().runNow();
+      await get().runNow("auto");
       return true;
     } catch {
       return false;

@@ -43,6 +43,7 @@ import { SettingRow } from "../components/SettingRow";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Switch } from "../components/Switch";
 import { Segmented } from "../components/Segmented";
+import { Select } from "../components/Select";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDataStore } from "../store/useDataStore";
 import { useZenmoneyStore, recalcBalanceCalibration } from "../store/useZenmoneyStore";
@@ -60,7 +61,7 @@ import { PageHeader } from "../components/PageHeader";
 import { formatNum, formatDate, formatMoney } from "../lib/format";
 import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
-import { parseAndValidateBackup, buildBackupPayload, restoreBackupPayload } from "../lib/backup";
+import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
 import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
@@ -577,15 +578,6 @@ export function ImportPage() {
   useEffect(() => {
     if (!backupLoaded) backupHydrate();
   }, [backupLoaded, backupHydrate]);
-  const [scheduledMsg, setScheduledMsg] = useState<string | null>(null);
-  async function triggerScheduledNow() {
-    try {
-      const r = await runBackupNow();
-      setScheduledMsg(`Скачано ${r.fileName} (${Math.round(r.size / 1024)} КБ)`);
-    } catch (e) {
-      setScheduledMsg(e instanceof Error ? e.message : "Ошибка");
-    }
-  }
 
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -598,23 +590,21 @@ export function ImportPage() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupMsg, setBackupMsg] = useState<string | null>(null);
 
+  /**
+   * Скачать бэкап руками.
+   *
+   * Тот же путь, что у расписания (`runNow`), — раньше рядом жили две кнопки,
+   * скачивавшие ОДИН И ТОТ ЖЕ файл, и разница между «Скачать бэкап» и
+   * «Скачать сейчас» была понятна только по коду. Теперь кнопка одна, и она
+   * же двигает отсчёт расписания: свежая копия только что скачана, повторять
+   * её через час незачем.
+   */
   async function exportBackup() {
     setBackupBusy(true);
     setBackupMsg(null);
     try {
-      // Single shared builder (lib/backup) so the manual export and the
-      // scheduled auto-backup always include the exact same sections.
-      const dump = await buildBackupPayload();
-      const json = JSON.stringify(dump, null, 2);
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `dzenanalytics-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      const txCount = Array.isArray(dump.transactions) ? dump.transactions.length : 0;
-      setBackupMsg(`Экспортировано: ${formatNum(txCount)} операций + настройки`);
+      const res = await runBackupNow();
+      setBackupMsg(`Скачано: ${res.fileName} (${Math.round(res.size / 1024)} КБ)`);
     } catch (e) {
       setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Ошибка экспорта");
     } finally {
@@ -1925,14 +1915,20 @@ export function ImportPage() {
           а объяснение читают один раз и убирают под знак вопроса. */}
       <div className="rounded-lg border border-border bg-panel2/30 p-4 space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <Clock className="w-5 h-5 text-accent shrink-0" />
             <span className="font-medium">Бэкап по расписанию</span>
             <InfoPopover label="Как работает расписание">
               <p>
-                Автоматически скачивает JSON-бэкап с указанной периодичностью.
-                Проверка запускается при открытии приложения и каждые ~10 минут.
-                Файл уходит в стандартную папку загрузок браузера.
+                Автоматически скачивает тот же JSON-бэкап с выбранной
+                периодичностью. Проверка запускается при открытии приложения и
+                каждые ~10 минут. Файл уходит в стандартную папку загрузок
+                браузера, к имени добавляется «-auto».
+              </p>
+              <p>
+                Срок считается от <InfoTerm>последней копии</InfoTerm>, включая
+                скачанную руками кнопкой «Скачать бэкап»: если копия только что
+                сделана, повторять её через час незачем.
               </p>
               <p>
                 <InfoTerm>Важно:</InfoTerm> работает, только пока вкладка открыта
@@ -1940,35 +1936,26 @@ export function ImportPage() {
                 скачивании при этом нормально, его показывает сам браузер.
               </p>
             </InfoPopover>
+            <span className="text-xs text-muted">
+              {backupLastAt
+                ? `Последняя копия: ${new Date(backupLastAt).toLocaleString("ru-RU")}`
+                : "Копий ещё не было"}
+            </span>
           </div>
-          <Segmented
-            size="sm"
-            label="Как часто делать бэкап"
-            value={backupInterval}
-            onChange={(v) => setBackupInterval(v)}
-            options={[
-              { value: "off" as BackupInterval, label: "Выключен" },
-              { value: "hour" as BackupInterval, label: "Каждый час" },
-              { value: "day" as BackupInterval, label: "Каждый день" },
-              { value: "week" as BackupInterval, label: "Каждую неделю" },
-            ]}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs">
-          <button
-            onClick={triggerScheduledNow}
-            disabled={transactions.length === 0}
-            className="btn-ghost"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Скачать сейчас
-          </button>
-          <span className="text-muted">
-            {backupLastAt
-              ? `Последний бэкап: ${new Date(backupLastAt).toLocaleString("ru-RU")}`
-              : "Бэкапов ещё не было"}
-          </span>
-          {scheduledMsg && <span className="text-income">{scheduledMsg}</span>}
+          <div className="w-44 shrink-0">
+            <Select
+              size="sm"
+              ariaLabel="Как часто делать бэкап"
+              value={backupInterval}
+              onChange={(v) => setBackupInterval(v)}
+              options={[
+                { value: "off" as BackupInterval, label: "Не делать" },
+                { value: "hour" as BackupInterval, label: "Каждый час" },
+                { value: "day" as BackupInterval, label: "Каждый день" },
+                { value: "week" as BackupInterval, label: "Каждую неделю" },
+              ]}
+            />
+          </div>
         </div>
       </div>
         </>)}
