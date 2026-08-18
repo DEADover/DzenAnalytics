@@ -54,6 +54,7 @@ import {
 } from "./usePlannedDeletionsStore";
 import { useBudgetEditsStore, loadBudgetEdits } from "./useBudgetEditsStore";
 import { useDraftsStore, loadDrafts } from "./useDraftsStore";
+import { useImportBatchesStore } from "./useImportBatchesStore";
 import {
   loadSnapshotIndex,
   takeSnapshot,
@@ -1338,6 +1339,12 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         );
         if (sentIds.length > 0) {
           await useDraftsStore.getState().clearMany(sentIds);
+          // Партия импорта, чьи операции уехали, больше не отменяется: в
+          // Дзен-мани они уже есть, а локально удалять нечего. Кнопка отмены
+          // после этого исчезает — иначе она обещала бы невозможное.
+          await useImportBatchesStore
+            .getState()
+            .markPushedByDrafts(sentIds, new Date().toISOString());
         }
       }
 

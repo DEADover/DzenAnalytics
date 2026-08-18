@@ -47,6 +47,14 @@ interface BatchesState {
   remove: (id: string) => Promise<void>;
   /** Отметить, что партия отправлена: отменять её уже нельзя, только удалять. */
   markPushed: (ids: string[], at: string) => Promise<void>;
+  /**
+   * Отметить партии, чьи операции уехали в облако.
+   *
+   * Зовётся после успешной отправки: с этого мгновения «Отменить импорт» лжёт
+   * — черновиков нет, удалять нечего, а операции уже в Дзен-мани. Кнопка
+   * должна исчезнуть, и решает это факт отправки, а не догадка интерфейса.
+   */
+  markPushedByDrafts: (draftIds: string[], at: string) => Promise<void>;
 }
 
 export const useImportBatchesStore = create<BatchesState>((set, get) => ({
@@ -71,6 +79,15 @@ export const useImportBatchesStore = create<BatchesState>((set, get) => ({
     if (next.length === get().batches.length) return;
     await db.saveJSON(KEY, next);
     set({ batches: next });
+  },
+
+  markPushedByDrafts: async (draftIds, at) => {
+    const sent = new Set(draftIds);
+    const touched = get()
+      .batches.filter((b) => !b.pushedAt && b.draftIds.some((id) => sent.has(id)))
+      .map((b) => b.id);
+    if (touched.length === 0) return;
+    await get().markPushed(touched, at);
   },
 
   markPushed: async (ids, at) => {
