@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { BACKUP_META_KEYS, BACKUP_EXCLUDED_KEYS } from "./backup";
+import { BACKUP_META_KEYS, BACKUP_EXCLUDED_KEYS, BACKUP_LOCAL_KEYS } from "./backup";
 
 /**
  * Сторож полноты бэкапа.
@@ -30,6 +30,25 @@ function tsFiles(dir: string): string[] {
     }
   }
   return out;
+}
+
+/** Ключи `localStorage` → файлы, которые их пишут. */
+function localKeys(): Map<string, string[]> {
+  const found = new Map<string, string[]>();
+  for (const file of tsFiles(SRC)) {
+    if (file.endsWith("/lib/backup.ts")) continue;
+    const src = readFileSync(file, "utf8");
+    const consts = new Map(
+      [...src.matchAll(/const\s+(\w+)\s*=\s*"([^"]+)"\s*;/g)].map((m) => [m[1], m[2]])
+    );
+    for (const m of src.matchAll(/localStorage\.setItem\(\s*([A-Za-z_]\w*|"[^"]+")/g)) {
+      const token = m[1];
+      const key = token.startsWith('"') ? token.slice(1, -1) : consts.get(token);
+      if (!key) continue;
+      found.set(key, [...(found.get(key) ?? []), file.slice(SRC.length)]);
+    }
+  }
+  return found;
 }
 
 /** Ключ → файлы, которые его пишут. */
@@ -67,6 +86,24 @@ describe("полнота бэкапа", () => {
       "Новый ключ в IndexedDB. Добавьте его в BACKUP_META_KEYS — или в " +
         "BACKUP_EXCLUDED_KEYS с объяснением, почему его не нужно восстанавливать"
     ).toEqual([]);
+  });
+
+  it("КЛЮЧЕВОЕ: то, что живёт мимо IndexedDB, тоже под присмотром", () => {
+    // Тема лежит в localStorage, и первый сторож её не видел: бэкап молча
+    // не восстанавливал светлую/тёмную, хотя обещал «оформление».
+    const covered = new Set<string>([
+      ...BACKUP_LOCAL_KEYS,
+      ...Object.keys(BACKUP_EXCLUDED_KEYS),
+    ]);
+    const orphans = [...localKeys()]
+      .filter(([key]) => !covered.has(key))
+      .map(([key, files]) => `${key} (${files.join(", ")})`);
+    expect(
+      orphans,
+      "Новый ключ в localStorage. Добавьте его в BACKUP_LOCAL_KEYS — или в " +
+        "BACKUP_EXCLUDED_KEYS с объяснением"
+    ).toEqual([]);
+    expect([...localKeys().keys()], "разбор исходников сломался").toContain("dzen.theme");
   });
 
   it("ключ не может быть одновременно в бэкапе и в исключениях", () => {

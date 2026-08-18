@@ -12,7 +12,11 @@ import * as db from "./db";
 // счетов, контрагентов и категорий, планы бюджета, разрезы данных, оформление.
 // Старые бэкапы (version 1) читаются как раньше — недостающие ключи просто
 // пропускаются при восстановлении.
-export const BACKUP_VERSION = 2;
+// Версия 3 добавила то, что живёт не в IndexedDB: тему оформления. Она лежит
+// в localStorage, и сторож полноты её не видел — бэкап молча не восстанавливал
+// светлую/тёмную. Старые бэкапы читаются по-прежнему: недостающего раздела
+// просто нет.
+export const BACKUP_VERSION = 3;
 
 /**
  * Ключи, которые в бэкап НЕ идут, и почему.
@@ -111,6 +115,15 @@ export const BACKUP_META_KEYS = [
   "plannedDeletions", // просроченные планы, снятые вручную (issue #71)
 ] as const;
 
+/**
+ * Ключи `localStorage`, которые тоже часть локального состояния.
+ *
+ * Всё остальное приложение хранит в IndexedDB, но тема выбирается до того,
+ * как база успевает открыться (иначе страница мигала бы светлым), и живёт
+ * отдельно. В бэкапе она едет своим разделом.
+ */
+export const BACKUP_LOCAL_KEYS = ["dzen.theme"] as const;
+
 export interface BackupPayload {
   version: number;
   exportedAt: string;
@@ -132,7 +145,29 @@ export async function buildBackupPayload(): Promise<BackupPayload> {
   for (const k of BACKUP_META_KEYS) {
     payload[k] = await db.loadJSON(k);
   }
+  payload.local = readLocal();
   return payload;
+}
+
+/**
+ * Снимок нужных ключей `localStorage`.
+ *
+ * Через try/catch, как и в самом хранилище темы: `localStorage` бывает не
+ * только отсутствующим, но и объявленным-но-бросающим — в приватном режиме
+ * некоторых браузеров и в Node без файла хранилища. Бэкап из-за темы падать
+ * не должен.
+ */
+function readLocal(): Record<string, string> {
+  const out: Record<string, string> = {};
+  try {
+    for (const k of BACKUP_LOCAL_KEYS) {
+      const v = localStorage.getItem(k);
+      if (v !== null) out[k] = v;
+    }
+  } catch {
+    // ignore
+  }
+  return out;
 }
 
 /** Write a (validated) backup payload back into IndexedDB, restoring every
@@ -146,6 +181,19 @@ export async function restoreBackupPayload(
   if (dump.importMeta) await db.saveImportMeta(dump.importMeta as never);
   for (const k of BACKUP_META_KEYS) {
     if (dump[k] !== undefined) await db.saveJSON(k, dump[k]);
+  }
+  // Раздела `local` нет у бэкапов версии 2 и старше — тогда просто нечего
+  // восстанавливать, тема останется текущей.
+  const local = dump.local;
+  if (local && typeof local === "object") {
+    try {
+      for (const k of BACKUP_LOCAL_KEYS) {
+        const v = (local as Record<string, unknown>)[k];
+        if (typeof v === "string") localStorage.setItem(k, v);
+      }
+    } catch {
+      // ignore
+    }
   }
 }
 
