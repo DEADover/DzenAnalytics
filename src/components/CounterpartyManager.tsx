@@ -666,6 +666,15 @@ export function CounterpartyManager() {
               </div>
             ))}
             </div>
+            {lazyDups.hasMore && (
+              <div
+                ref={lazyDups.sentinelRef}
+                className="px-3 py-3 text-center text-xs text-muted border-t border-border/60"
+              >
+                Показано {lazyDups.shown} из {lazyDups.total} — прокрутите дальше,
+                чтобы загрузить ещё
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -812,6 +821,19 @@ export function CounterpartyManager() {
                 );
               })}
             </div>
+            {/* Маячок подгрузки. Без него список останавливался ровно на первой
+                сотне: строки рисовались порциями, но догружать их было нечему —
+                и человек видел 100 получателей из тысячи, не подозревая об
+                остальных. */}
+            {lazyOrphans.hasMore && (
+              <div
+                ref={lazyOrphans.sentinelRef}
+                className="px-3 py-3 text-center text-xs text-muted border-t border-border/60"
+              >
+                Показано {lazyOrphans.shown} из {lazyOrphans.total} — прокрутите
+                дальше, чтобы загрузить ещё
+              </div>
+            )}
           </div>
         </div>
       )}

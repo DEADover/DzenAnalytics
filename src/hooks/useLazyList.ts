@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Постепенный показ длинного списка: сначала первая порция, дальше — по мере
@@ -25,8 +25,17 @@ export function useLazyList<T>(
   total: number;
   /** Есть ли ещё не показанные записи. */
   hasMore: boolean;
-  /** Повесить на элемент в конце списка. */
-  sentinelRef: React.RefObject<HTMLDivElement | null>;
+  /**
+   * Повесить на элемент в конце списка.
+   *
+   * Это функция-ссылка, а не объект: маячок появляется и исчезает вместе со
+   * своим списком (у отборов «Дубли» и «Без контрагента» он и вовсе рисуется
+   * не сразу), и наблюдателя надо переподключать в этот самый момент. С
+   * объектом-ссылкой эффект о появлении узла не узнаёт — он зависит от
+   * счётчиков, а те не меняются, — и подгрузка молча не включалась: список
+   * замирал на первой сотне.
+   */
+  sentinelRef: (el: HTMLDivElement | null) => void;
 } {
   const [prevItems, setPrevItems] = useState(items);
   const [count, setCount] = useState(pageSize);
@@ -35,13 +44,12 @@ export function useLazyList<T>(
     setCount(pageSize);
   }
 
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
   const total = items.length;
   const shown = Math.min(count, total);
 
   useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
+    if (!sentinel) return;
     if (count >= total) return;
     const observer = new IntersectionObserver(
       (entries) => {
@@ -54,15 +62,15 @@ export function useLazyList<T>(
       // Подгружаем заранее, чтобы не было пустого хвоста под курсором.
       { rootMargin: "400px 0px" }
     );
-    observer.observe(el);
+    observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [count, total, pageSize]);
+  }, [sentinel, count, total, pageSize]);
 
   return {
     visible: count >= total ? items : items.slice(0, count),
     shown,
     total,
     hasMore: count < total,
-    sentinelRef,
+    sentinelRef: setSentinel,
   };
 }
