@@ -6,7 +6,7 @@ import { Segmented } from "./Segmented";
 import { Tooltip } from "./Tooltip";
 import { ImportRowEditor } from "./ImportRowEditor";
 import type { CategoryNode } from "./CategoryCascadePicker";
-import { formatMoney, formatNum } from "../lib/format";
+import { formatDate, formatMoney, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import type { ImportPlan, ParsedRow, PlanRow, RowVerdict } from "../lib/importRows";
 
@@ -26,6 +26,9 @@ import type { ImportPlan, ParsedRow, PlanRow, RowVerdict } from "../lib/importRo
  */
 
 type Filter = "all" | "ready" | "failed" | "dups";
+
+/** Сколько колонок в таблице — на столько раскрывается строка-редактор. */
+const COLUMNS = 10;
 
 /** Списки, между которыми переключается фильтр, — без «Все». */
 type Bucket = Exclude<Filter, "all">;
@@ -69,6 +72,10 @@ export function ImportXlsxModal({
   const [hold, setHold] = useState(true);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
+  // Строка, которая СЕЙЧАС сворачивается: держим её в дереве до конца
+  // анимации, иначе закрытие было бы мгновенным рывком. Снимаем по
+  // `animationend` — обработчиком события, а не эффектом.
+  const [closing, setClosing] = useState<number | null>(null);
   const [fixed, setFixed] = useState<Set<number>>(() => new Set());
 
   // В каком списке строка живёт — решает ПЕРВЫЙ разбор и больше ничто. Иначе
@@ -97,6 +104,22 @@ export function ImportXlsxModal({
 
   const canPick = (r: PlanRow) => r.verdict.ok;
   const chosen = plan.rows.filter((r) => picked.has(r.excelRow) && canPick(r));
+
+  /** Открыть редактор строки; повторный клик по той же строке — закрыть. */
+  const openEditor = (row: number) => {
+    if (editing === row) {
+      setClosing(row);
+      setEditing(null);
+      return;
+    }
+    if (editing !== null) setClosing(editing);
+    setEditing(row);
+  };
+
+  const closeEditor = () => {
+    setClosing(editing);
+    setEditing(null);
+  };
 
   const toggle = (row: PlanRow) => {
     if (!canPick(row)) return;
@@ -133,7 +156,7 @@ export function ImportXlsxModal({
       else s.delete(next.excelRow);
       return s;
     });
-    setEditing(null);
+    closeEditor();
   };
 
   const allShownPicked =
@@ -148,7 +171,7 @@ export function ImportXlsxModal({
         role="dialog"
         aria-modal="true"
         aria-label="Проверка файла импорта"
-        className="card w-full max-w-5xl max-h-[88vh] flex flex-col"
+        className="card w-full max-w-7xl max-h-[88vh] flex flex-col"
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -187,31 +210,6 @@ export function ImportXlsxModal({
         )}
 
         <div className="flex items-center gap-3 px-5 py-2 border-b border-border shrink-0 text-xs text-muted flex-wrap">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={allShownPicked}
-              ref={(el) => {
-                if (el) {
-                  el.indeterminate =
-                    !allShownPicked && shown.some((r) => picked.has(r.excelRow));
-                }
-              }}
-              onChange={() =>
-                setPicked((prev) => {
-                  const next = new Set(prev);
-                  for (const r of shown.filter(canPick)) {
-                    if (allShownPicked) next.delete(r.excelRow);
-                    else next.add(r.excelRow);
-                  }
-                  return next;
-                })
-              }
-              aria-label="Отметить показанные строки"
-              className="accent-accent w-4 h-4"
-            />
-            Отметить показанные
-          </label>
           <span className="tabular-nums">Отмечено: {formatNum(chosen.length)}</span>
           <span className="tabular-nums">
             {fixed.size > 0
@@ -237,11 +235,38 @@ export function ImportXlsxModal({
           <table className="w-full" style={{ fontSize: "var(--tbl-font)" }}>
             <thead className="sticky top-0 bg-panel z-10">
               <tr>
-                <th className="table-th w-10" />
-                <th className="table-th w-14 text-right">Строка</th>
+                <th className="table-th w-10 text-center">
+                  {/* Отметить показанные — там же, где галочки строк: в отдельной
+                      строке тулбара эта связь читалась не сразу. */}
+                  <input
+                    type="checkbox"
+                    checked={allShownPicked}
+                    ref={(el) => {
+                      if (el) {
+                        el.indeterminate =
+                          !allShownPicked && shown.some((r) => picked.has(r.excelRow));
+                      }
+                    }}
+                    onChange={() =>
+                      setPicked((prev) => {
+                        const next = new Set(prev);
+                        for (const r of shown.filter(canPick)) {
+                          if (allShownPicked) next.delete(r.excelRow);
+                          else next.add(r.excelRow);
+                        }
+                        return next;
+                      })
+                    }
+                    aria-label="Отметить показанные строки"
+                    title="Отметить показанные строки"
+                    className="accent-accent w-4 h-4 align-middle"
+                  />
+                </th>
+                <th className="table-th w-12 text-center">#</th>
                 <th className="table-th w-32">Дата</th>
                 <th className="table-th w-24">Тип</th>
-                <th className="table-th">Категория и счёт</th>
+                <th className="table-th">Категория</th>
+                <th className="table-th w-56">Счёт</th>
                 <th className="table-th w-32 text-right">Сумма</th>
                 <th className="table-th w-40">Контрагент</th>
                 <th className="table-th w-72">Статус</th>
@@ -252,10 +277,11 @@ export function ImportXlsxModal({
               {shown.map((r) => {
                 const dup = r.verdict.ok ? r.verdict.duplicateOf : undefined;
                 const open = editing === r.excelRow;
+                const shutting = closing === r.excelRow && !open;
                 return (
                   <Fragment key={r.excelRow}>
                     <tr
-                      onClick={() => setEditing(open ? null : r.excelRow)}
+                      onClick={() => openEditor(r.excelRow)}
                       className={clsx(
                         "border-t border-border/60 cursor-pointer hover:bg-panel2/40",
                         !r.verdict.ok && "bg-expense/5",
@@ -273,8 +299,8 @@ export function ImportXlsxModal({
                           className="accent-accent w-4 h-4"
                         />
                       </td>
-                      <td className="table-td text-right tabular-nums text-muted">
-                        <span className="inline-flex items-center gap-1">
+                      <td className="table-td text-center tabular-nums text-muted">
+                        <span className="inline-flex items-center justify-center gap-1">
                           {fixed.has(r.excelRow) && (
                             <Tooltip content="Строка исправлена в отчёте — в вашем файле она осталась прежней">
                               <Pencil className="w-3 h-3 text-accent" />
@@ -284,13 +310,17 @@ export function ImportXlsxModal({
                         </span>
                       </td>
                       <td className="table-td whitespace-nowrap tabular-nums">
-                        {r.date || "—"}
+                        {r.date ? formatDate(r.date, "full") : "—"}
                         {r.time && <span className="text-muted"> {r.time}</span>}
                       </td>
                       <td className="table-td whitespace-nowrap">{r.type || "—"}</td>
                       <td className="table-td">
                         <div className="truncate">{r.category || "—"}</div>
-                        <div className="text-xs text-muted truncate">
+                      </td>
+                      <td className="table-td">
+                        {/* У перевода счетов два, и стрелка между ними — самая
+                            короткая запись «откуда куда». */}
+                        <div className="truncate">
                           {[r.outAccount, r.inAccount].filter(Boolean).join(" → ") || "—"}
                         </div>
                       </td>
@@ -329,18 +359,36 @@ export function ImportXlsxModal({
                         </span>
                       </td>
                     </tr>
-                    {open && (
+                    {(open || shutting) && (
                       <tr className="border-t border-border/60">
-                        <td colSpan={9} className="p-0">
-                          <ImportRowEditor
-                            row={r}
-                            accounts={accounts}
-                            payees={payees}
-                            categories={categories}
-                            check={check}
-                            onSave={saveEdit}
-                            onCancel={() => setEditing(null)}
-                          />
+                        <td colSpan={COLUMNS} className="p-0">
+                          {/* Раскрытие и сворачивание: растим и убираем
+                              грид-трек 0fr → 1fr, как у под-статей бюджета.
+                              Высоту содержимого знать не нужно — а она тут и
+                              неизвестна заранее, у перевода полей больше.
+                              Списки пикеров рисуются в портале и из-под
+                              `overflow-hidden` не обрезаются. */}
+                          <div
+                            className={clsx(
+                              "grid grid-rows-[1fr]",
+                              open
+                                ? "animate-row-expand"
+                                : "animate-row-collapse pointer-events-none"
+                            )}
+                            onAnimationEnd={() => shutting && setClosing(null)}
+                          >
+                            <div className="overflow-hidden">
+                              <ImportRowEditor
+                                row={r}
+                                accounts={accounts}
+                                payees={payees}
+                                categories={categories}
+                                check={check}
+                                onSave={saveEdit}
+                                onCancel={closeEditor}
+                              />
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     )}

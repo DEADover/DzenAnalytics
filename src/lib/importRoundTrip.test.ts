@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import type { ZenCache } from "./zenmoneyCache";
-import { buildTemplateSheets, SHEET_OPS, OPS_COLUMNS } from "./importTemplate";
+import {
+  buildTemplateSheets,
+  patchTemplateBook,
+  SHEET_OPS,
+  OPS_COLUMNS,
+  TEMPLATE_ROWS,
+} from "./importTemplate";
 import { readXlsxSheet } from "./xlsxRead";
 import { buildImportPlan, isBlankRow, matchHeader, readRow } from "./importRows";
 
@@ -143,5 +149,59 @@ describe("шаблон → файл → операции", () => {
       ])
     );
     expect(plan).toMatchObject({ ready: 2, failed: 0 });
+  });
+});
+
+describe("шаблон как файл", () => {
+  /** Книга ровно в том виде, в каком её скачивает человек. */
+  async function templateBytes(): Promise<Uint8Array> {
+    const sheets = buildTemplateSheets(
+      {
+        accounts: dicts.accounts.map((t) => ({ title: t, currency: "RUB", kind: "Карта" })),
+        categories: dicts.categories,
+        payees: dicts.payees,
+        base: "RUB",
+      },
+      "2026-08-18"
+    );
+    const { default: writeXlsxFile } = await import("write-excel-file/node");
+    const buffer = await writeXlsxFile(sheets as never).toBuffer();
+    return patchTemplateBook(new Uint8Array(buffer as unknown as ArrayBufferLike), {
+      accounts: dicts.accounts.map((t) => ({ title: t, currency: "RUB", kind: "Карта" })),
+      categories: dicts.categories,
+      payees: dicts.payees,
+      base: "RUB",
+    });
+  }
+
+  it("КЛЮЧЕВОЕ: скачанный шаблон читается нашим же разбором", async () => {
+    // Шапка с приписками, памятка справа, тысяча строк формул — всё это легко
+    // ломает чтение, а заметно будет только у человека.
+    const bytes = await templateBytes();
+    const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const sheet = await readXlsxSheet(buf, SHEET_OPS);
+    const { columns, missing } = matchHeader(sheet);
+    expect(missing).toEqual([]);
+    expect(columns.get("Счёт списания")).toBe("E");
+    // Ни одной строки данных: памятка стоит в колонках, которых разбор не знает.
+    for (let r = 2; r <= Math.min(sheet.lastRow, 40); r++) {
+      expect(isBlankRow(readRow(sheet, columns, r))).toBe(true);
+    }
+  });
+
+  it("формула проверки стоит на всех строках и файл не разбухает", async () => {
+    const bytes = await templateBytes();
+    const { unzipSync, strFromU8 } = await import("fflate");
+    const zip = unzipSync(bytes);
+    const xml = strFromU8(zip["xl/worksheets/sheet1.xml"]);
+    // Текст формулы написан один раз, остальные строки ссылаются на него.
+    expect(xml).toContain(`<f t="shared" ref="K2:K${TEMPLATE_ROWS + 1}" si="0">`);
+    expect(xml).toContain(`<c r="K${TEMPLATE_ROWS + 1}" t="str"><f t="shared" si="0"/></c>`);
+    // Памятка занимает первые строки — формула обязана встать и рядом с ней.
+    expect(xml).toContain('<c r="K5" t="str"><f t="shared" si="0"/></c>');
+    expect(xml).toContain("dataValidation");
+    // Шаблон качают по кнопке: развёрнутая формула на каждой из тысячи строк
+    // весила бы сотню килобайт при полезной нагрузке в семь.
+    expect(bytes.length).toBeLessThan(30_000);
   });
 });

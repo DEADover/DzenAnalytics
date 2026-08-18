@@ -3,6 +3,7 @@ import {
   addListValidation,
   cellRef,
   forceRecalc,
+  insertColumnFormulas,
   setFormulas,
 } from "./xlsxFormulas";
 
@@ -106,5 +107,57 @@ describe("forceRecalc", () => {
     const out = forceRecalc(withCalc);
     expect(out.match(/<calcPr/g)).toHaveLength(1);
     expect(out).toContain('fullCalcOnLoad="1"');
+  });
+});
+
+describe("insertColumnFormulas — столбец проверки на пустой лист", () => {
+  const sheet = (rows: string) =>
+    '<worksheet><sheetData>' + rows + "</sheetData></worksheet>";
+
+  it("КЛЮЧЕВОЕ: строк ещё нет — они создаются, чтобы формула ждала ввода", () => {
+    // Проверка нужна ЗАРАНЕЕ: человек вводит строку и сразу видит, что не так.
+    // `setFormulas` тут не подходит — он требует существующей ячейки.
+    const out = insertColumnFormulas(sheet('<row r="1"><c r="A1" t="s"><v>0</v></c></row>'), {
+      column: "K",
+      from: 2,
+      to: 4,
+      formula: (r) => `IF(A${r}="","","Готово")`,
+    });
+    expect(out).toContain('<row r="2"><c r="K2" t="str"><f>IF(A2=&quot;&quot;,&quot;&quot;,&quot;Готово&quot;)</f></c></row>');
+    expect(out.match(/<row r="\d+"/g)).toEqual(['<row r="1"', '<row r="2"', '<row r="3"', '<row r="4"']);
+  });
+
+  it("в существующей строке ячейка встаёт по порядку колонок", () => {
+    // Ячейки не по порядку Excel считает битым файлом, а на нашем листе справа
+    // от «Проверки» лежит памятка — то есть строка уже занята.
+    const out = insertColumnFormulas(
+      sheet('<row r="2"><c r="A2" t="s"><v>1</v></c><c r="M2" t="s"><v>2</v></c></row>'),
+      { column: "K", from: 2, to: 2, formula: () => "1" }
+    );
+    expect(out).toContain('<c r="A2" t="s"><v>1</v></c><c r="K2" t="str"><f>1</f></c><c r="M2"');
+  });
+
+  it("строки идут по возрастанию, даже если дописаны в середину", () => {
+    const out = insertColumnFormulas(
+      sheet('<row r="1"><c r="A1"/></row><row r="5"><c r="A5"/></row>'),
+      { column: "K", from: 2, to: 6, formula: () => "1" }
+    );
+    expect(out.match(/<row r="(\d+)"/g)).toEqual([
+      '<row r="1"', '<row r="2"', '<row r="3"', '<row r="4"', '<row r="5"', '<row r="6"',
+    ]);
+  });
+
+  it("самозакрывающаяся строка раскрывается, а не ломается", () => {
+    const out = insertColumnFormulas(sheet('<row r="2"/>'), {
+      column: "K",
+      from: 2,
+      to: 2,
+      formula: () => "1",
+    });
+    expect(out).toContain('<row r="2"><c r="K2" t="str"><f>1</f></c></row>');
+  });
+
+  it("лист без sheetData — честная ошибка, а не тихо испорченный файл", () => {
+    expect(() => insertColumnFormulas("<worksheet/>", { column: "K", from: 2, to: 2, formula: () => "1" })).toThrow();
   });
 });

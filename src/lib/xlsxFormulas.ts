@@ -144,6 +144,91 @@ export function forceRecalc(workbookXml: string): string {
   return workbookXml.replace("</workbook>", '<calcPr calcId="0" fullCalcOnLoad="1"/></workbook>');
 }
 
+/**
+ * Дописать столбец формул на диапазон строк листа.
+ *
+ * Отличается от `setFormulas` тем, что не требует существующей ячейки: строк
+ * под данные на свежем листе ещё нет, а формула-проверка нужна ЗАРАНЕЕ — она
+ * должна сработать, как только человек введёт строку. Существующие строки
+ * дополняются (ячейка встаёт по порядку колонок — иначе Excel считает файл
+ * битым), недостающие создаются.
+ *
+ * Значение не кэшируем: пока строка пуста, результат всё равно пустой, а
+ * посчитает его Excel при открытии (см. `forceRecalc`).
+ */
+export function insertColumnFormulas(
+  sheetXml: string,
+  opts: {
+    column: string;
+    from: number;
+    to: number;
+    formula: (row: number) => string;
+    /**
+     * Общая формула на весь диапазон: текст пишется один раз, остальные строки
+     * ссылаются на него (`t="shared"`). Так Excel хранит собственные протяжки.
+     *
+     * Нужно там, где строк тысяча: развёрнутая формула на каждую строку
+     * раздувала шаблон до сотни килобайт при полезной нагрузке в семь.
+     * Требование одно — формулы строк должны отличаться только номером строки.
+     */
+    shared?: boolean;
+  }
+): string {
+  const { column, from, to, formula, shared = false } = opts;
+  const open = sheetXml.indexOf("<sheetData>");
+  const close = sheetXml.indexOf("</sheetData>");
+  if (open < 0 || close < 0) throw new Error("формулы: на листе нет sheetData");
+  const body = sheetXml.slice(open + "<sheetData>".length, close);
+
+  const rows = new Map<number, string>();
+  const order: number[] = [];
+  for (const m of body.matchAll(/<row[^>]*\br="(\d+)"[^>]*(?:\/>|>[\s\S]*?<\/row>)/g)) {
+    const n = Number(m[1]);
+    rows.set(n, m[0]);
+    order.push(n);
+  }
+
+  const cell = (n: number) => {
+    if (!shared) return `<c r="${column}${n}" t="str"><f>${esc(formula(n))}</f></c>`;
+    const f =
+      n === from
+        ? `<f t="shared" ref="${column}${from}:${column}${to}" si="0">${esc(formula(n))}</f>`
+        : `<f t="shared" si="0"/>`;
+    return `<c r="${column}${n}" t="str">${f}</c>`;
+  };
+
+  for (let n = from; n <= to; n++) {
+    const existing = rows.get(n);
+    if (existing === undefined) {
+      rows.set(n, `<row r="${n}">${cell(n)}</row>`);
+      order.push(n);
+      continue;
+    }
+    if (existing.endsWith("/>") && !existing.endsWith("</row>")) {
+      // Пустая строка вида `<row r="3"/>` — раскрываем её в обычную.
+      rows.set(n, `${existing.slice(0, -2)}>${cell(n)}</row>`);
+      continue;
+    }
+    const inner = existing.slice(existing.indexOf(">") + 1, existing.lastIndexOf("</row>"));
+    const head = existing.slice(0, existing.indexOf(">") + 1);
+    const at = [...inner.matchAll(/<c r="([A-Z]+)\d+"/g)].find(
+      (c) => colIndex(c[1]) > colIndex(column)
+    );
+    const pos = at?.index ?? inner.length;
+    rows.set(n, `${head}${inner.slice(0, pos)}${cell(n)}${inner.slice(pos)}</row>`);
+  }
+
+  const merged = [...new Set(order)].sort((a, b) => a - b).map((n) => rows.get(n)).join("");
+  return sheetXml.slice(0, open) + "<sheetData>" + merged + sheetXml.slice(close);
+}
+
+/** Номер колонки по буквам: «A» → 0, «AA» → 26. */
+function colIndex(letters: string): number {
+  let n = 0;
+  for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+
 /** Адрес ячейки из нуля-индексированной колонки и единица-индексированной строки. */
 export function cellRef(column: number, row: number): string {
   let n = column;

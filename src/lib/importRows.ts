@@ -103,7 +103,7 @@ export function matchHeader(sheet: XlsxSheet): {
   const byName = new Map<string, string>();
   for (const [addr] of sheet.cells) {
     if (rowOf(addr) !== 1) continue;
-    const name = normalizeText(cellText(sheet, addr)).toLowerCase();
+    const name = headerName(cellText(sheet, addr)).toLowerCase();
     if (name && !byName.has(name)) byName.set(name, colOf(addr));
   }
   const columns = new Map<OpsColumn, string>();
@@ -114,6 +114,19 @@ export function matchHeader(sheet: XlsxSheet): {
     else missing.push(col);
   }
   return { columns, missing };
+}
+
+/**
+ * Имя колонки из текста шапки: «Счёт списания (расход, перевод)» → «Счёт
+ * списания».
+ *
+ * В шаблоне к названиям приписано, для каких типов операций колонка нужна —
+ * без этого «Счёт списания» и «Счёт зачисления» стоят рядом одинаково
+ * убедительно. Договор с разбором при этом остаётся в самом названии: приписка
+ * в скобках отбрасывается, и файл со старой шапкой читается по-прежнему.
+ */
+export function headerName(raw: string): string {
+  return normalizeText(raw.replace(/\s*\(.*$/, ""));
 }
 
 /* ------------------------------------------------------------- нормализация */

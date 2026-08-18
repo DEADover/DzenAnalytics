@@ -246,6 +246,26 @@ h2,
 .goal-edit-fields > *:nth-child(4) { animation-delay: 0.14s; }
 .goal-edit-fields > *:nth-child(5) { animation-delay: 0.18s; }
 .goal-edit-fields > *:nth-child(6) { animation-delay: 0.22s; }
+/* Строка отчёта импорта раскрывается в редактор. Растёт грид-трек 0fr → 1fr —
+   тот же приём, что у под-статей бюджета, только анимацией, а не переходом:
+   строка появляется в дереве уже открытой, и переходу не от чего стартовать. */
+@keyframes rowExpand {
+  from { grid-template-rows: 0fr; opacity: 0; }
+  to   { grid-template-rows: 1fr; opacity: 1; }
+}
+@keyframes rowCollapse {
+  from { grid-template-rows: 1fr; opacity: 1; }
+  to   { grid-template-rows: 0fr; opacity: 0; }
+}
+.animate-row-expand { animation: rowExpand 0.26s ease-out; }
+.animate-row-collapse { animation: rowCollapse 0.22s ease-in forwards; }
+@media (prefers-reduced-motion: reduce) {
+  /* Не `animation: none`: строка снимается с дерева по `animationend`, и без
+     события она осталась бы раскрытой навсегда. Оставляем мгновенную. */
+  .animate-row-expand,
+  .animate-row-collapse { animation-duration: 0.01ms; }
+}
+
 @keyframes goalEditOut { from { opacity: 1; } to { opacity: 0; } }
 .goal-edit-out { animation: goalEditOut 0.16s ease-in forwards; }
 @media (prefers-reduced-motion: reduce) {
