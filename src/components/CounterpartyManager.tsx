@@ -501,7 +501,7 @@ export function CounterpartyManager() {
               setDupOnly(false);
             }}
             aria-pressed={orphanOnly}
-            title="Получатели, которые есть в операциях, но записи в справочнике под собой не имеют"
+            title="Получатели из выписок, под которых нет записи в справочнике. Число — сколько таких получателей, а не операций"
             className={clsx(
               "text-sm flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border shrink-0",
               orphanOnly
@@ -676,14 +676,23 @@ export function CounterpartyManager() {
             {/* Объяснение прямо тут, а не только под «?»: вопрос «а что это
                 вообще такое» возникает ровно на этом экране. */}
             <div className="text-sm min-w-0">
+              {/* Обе цифры сразу и подписанные. Раньше на кнопке-отборе стояло
+                  число ПОЛУЧАТЕЛЕЙ, а здесь — число ОПЕРАЦИЙ, и рядом они
+                  читались как противоречие: «1 057» против «3 590» без единого
+                  слова о том, что это разные вещи. */}
               <div>
-                Операций без контрагента:{" "}
-                <strong className="tabular-nums">
-                  {formatNum(orphanPayees.reduce((n, o) => n + o.count, 0))}
-                </strong>
+                Получателей без контрагента:{" "}
+                <strong className="tabular-nums">{formatNum(orphanPayees.length)}</strong>
+                <span className="text-muted">
+                  {" "}· операций с ними:{" "}
+                  <strong className="tabular-nums text-text">
+                    {formatNum(orphanPayees.reduce((n, o) => n + o.count, 0))}
+                  </strong>
+                </span>
               </div>
               <div className="text-xs text-muted">
-                Получатель у них — текст от банка, а не запись справочника
+                Получатель у них — текст от банка, а не запись справочника. В
+                строке ниже — сколько операций у каждого.
               </div>
             </div>
             <button
