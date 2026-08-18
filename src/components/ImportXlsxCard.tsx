@@ -209,25 +209,23 @@ export function ImportXlsxCard() {
 
   return (
     <div className="rounded-lg border border-border bg-panel2/30 p-4 space-y-3">
-      <div>
-        <div className="font-medium text-sm flex items-center gap-2">
-          <FileSpreadsheet className="w-4 h-4 text-accent" />
-          Импорт дополнительных операций из Excel шаблона
+      {/* Заголовок с текстом слева, кнопки справа в той же строке: так они
+          встают в один столбец с кнопками соседних блоков настроек, а карточка
+          занимает две строки вместо четырёх. На узком экране ряд переносится. */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <div className="font-medium text-sm flex items-center gap-2">
+            <FileSpreadsheet className="w-4 h-4 text-accent" />
+            Импорт дополнительных операций из Excel шаблона
+          </div>
+          <div className="text-xs text-muted mt-1">
+            Нужно загрузить операции из других источников? — скачайте шаблон,
+            заполните и загрузите в DzenAnalytics.
+          </div>
         </div>
-        <div className="text-xs text-muted mt-1">
-          Нужно загрузить операции из других источников? — скачайте шаблон ниже,
-          заполните и загрузите в DzenAnalytics.
-        </div>
-      </div>
 
-      {!token ? (
-        <div className="text-xs text-muted">
-          Нужна подключённая синхронизация: импорт создаёт операции в Дзен-мани, а для
-          этого их надо привязать к вашим счетам и категориям.
-        </div>
-      ) : (
-        <>
-          <div className="flex items-center gap-2 flex-wrap">
+        {token && (
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             <button
               type="button"
               onClick={downloadTemplate}
@@ -263,8 +261,14 @@ export function ImportXlsxCard() {
               </Tooltip>
             )}
           </div>
+        )}
+      </div>
 
-        </>
+      {!token && (
+        <div className="text-xs text-muted">
+          Нужна подключённая синхронизация: импорт создаёт операции в Дзен-мани, а для
+          этого их надо привязать к вашим счетам и категориям.
+        </div>
       )}
 
       {error && <div className="text-xs text-expense">{error}</div>}
