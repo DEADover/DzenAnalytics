@@ -195,7 +195,9 @@ export function DashboardView() {
 
           <div className="flex flex-wrap items-center gap-3">
             <Link
-              to="/transactions"
+              // Как и «Месячный отчёт» рядом: лента открывается за тот месяц,
+              // о котором весь этот экран, а не за период с прошлого раза.
+              to={`/transactions?month=${m.ym}`}
               className="group inline-flex h-[52px] items-center gap-3 rounded-full pl-6 pr-2.5 bg-text text-panel text-[14px] font-medium"
             >
               Лента операций

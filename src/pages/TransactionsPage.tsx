@@ -25,6 +25,7 @@ import { useDisplayStore } from "../store/useDisplayStore";
 import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
+import { useSearchParams } from "react-router-dom";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useZenmoneyStore, getLiveAccountsFromCache } from "../store/useZenmoneyStore";
@@ -154,6 +155,28 @@ export function TransactionsPage() {
   }
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+
+  // Месяц из ссылки (`/transactions?month=2026-08`) — по ней приходят с
+  // главной, где весь экран про один месяц, и лента должна открыться за него,
+  // а не за тот период, что остался с прошлого раза.
+  //
+  // Своего периода у ленты нет, она живёт на общем отборе, — поэтому ссылка
+  // именно ПЕРЕКЛЮЧАЕТ общий период, а не заводит второй, страничный. Ставим
+  // один раз на приход по ссылке: дальше человек волен выбрать любой другой,
+  // и повторно навязывать ему августовский мы не будем.
+  const [searchParams] = useSearchParams();
+  const monthParam = useMemo(() => {
+    const q = searchParams.get("month");
+    return q && /^\d{4}-\d{2}$/.test(q) ? q : null;
+  }, [searchParams]);
+
+  const setMonth = filters.setMonth;
+  const appliedMonth = useRef<string | null>(null);
+  useEffect(() => {
+    if (!monthParam || appliedMonth.current === monthParam) return;
+    appliedMonth.current = monthParam;
+    setMonth(monthParam);
+  }, [monthParam, setMonth]);
 
   async function handleDelete(tx: Transaction) {
     const pushMode = useZenmoneyStore.getState().pushMode;
