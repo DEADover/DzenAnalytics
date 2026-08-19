@@ -95,6 +95,7 @@ import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { Segmented } from "../components/Segmented";
+import { InfoPopover } from "../components/InfoPopover";
 import { capitalShare, positiveBalanceTotal } from "../lib/accountOptions";
 import { Stat } from "../components/Stat";
 import { Sparkline } from "../components/Sparkline";
@@ -374,6 +375,16 @@ function passesFilter(selected: Set<string>, value: string): boolean {
   if (selected.has(FILTER_NONE)) return false;
   return selected.has(value);
 }
+
+/**
+ * Почему на «Капитале» половина отборов не работает.
+ *
+ * Один текст на два места: подсказка у кнопки раздела и подсказка при наведении
+ * на сами погашенные контролы. Разъезжаться им нельзя — объясняют они одно и то
+ * же правило.
+ */
+const CAPITAL_FILTERS_HINT =
+  "На «Капитале» работает только период: остаток на дату складывается из всей истории до неё. Какие счета показать на графике — в его карточке. Отборы по счетам, категориям и суммам живут на вкладке «Движение».";
 
 export function AccountsPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -1422,6 +1433,16 @@ export function AccountsPage() {
 
                 А вот выбор раздела здесь как раз на месте: он меняет страницу
                 целиком, и стоит там же, где такой же выбор на «Категориях». */}
+            {/* Значок стоит слева от переключателя, а не между ним и
+                «Калибровкой». Ряд прижат к правому краю, поэтому появление и
+                исчезновение САМОГО ЛЕВОГО элемента ничего не двигает: короче
+                становится только левый край ряда. Стоял бы он в середине — при
+                переходе на «Движение» кнопки прыгали бы вбок. */}
+            {tab === "capital" && (
+              <InfoPopover label="Что делают отборы на «Капитале»">
+                <p>{CAPITAL_FILTERS_HINT}</p>
+              </InfoPopover>
+            )}
             <Segmented
               value={tab}
               onChange={setTab}
@@ -1466,7 +1487,7 @@ export function AccountsPage() {
           (общий и свой у графика) и не понять, какой чем управляет. */}
       <GlobalFilters
         showDataFilters={tab !== "capital"}
-        dataFiltersHint="На «Капитале» работает только период: остаток на дату складывается из всей истории до неё. Какие счета показать на графике — в его карточке. Отборы по счетам, категориям и суммам живут на вкладке «Движение»."
+        dataFiltersHint={CAPITAL_FILTERS_HINT}
       />
 
       {tab === "capital" && calibOpen && !zenToken && (
