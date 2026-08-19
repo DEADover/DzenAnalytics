@@ -49,9 +49,12 @@ import type { DashboardModel } from "../../hooks/useDashboardModel";
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-[11.5px] uppercase tracking-[0.12em] text-muted font-medium">
+      {/* Настоящий заголовок раздела, а не просто мелкий текст: на старой
+          главной не было ни одного h2–h6, и с клавиатуры страница читалась
+          как одно сплошное полотно. */}
+      <h2 className="text-[11.5px] uppercase tracking-[0.12em] text-muted font-medium">
         {children}
-      </span>
+      </h2>
       <span className="flex-1 h-px bg-border" />
     </div>
   );
@@ -73,7 +76,7 @@ export function BlockTitle({
   return (
     <div className="flex items-start justify-between gap-3 mb-3">
       <div className="min-w-0">
-        <div className="font-semibold text-[16px]">{title}</div>
+        <h3 className="font-semibold text-[16px] text-balance">{title}</h3>
         {sub && <div className="text-[12.5px] text-muted mt-0.5">{sub}</div>}
       </div>
       {right}
@@ -554,7 +557,7 @@ export function AccountsList({
           key={a.title}
           type="button"
           onClick={() => onAccount?.(a.title)}
-          className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0 text-left group"
+          className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0 text-left group rounded-lg -mx-2 px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           <span className="flex items-center gap-2.5 min-w-0">
             <AccountLogo title={a.title} type={a.type} />
@@ -621,7 +624,7 @@ export function CategoriesList({
             key={c.category}
             type="button"
             onClick={() => onCategory?.(c.category)}
-            className="w-full text-left group"
+            className="w-full text-left group py-0.5 rounded-lg -mx-2 px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             <div className="flex items-center gap-2 mb-1">
               <CategoryDot category={c.category} size="w-4 h-4" />
@@ -764,6 +767,11 @@ export function ActivityHeat({
       <div
         className="grid grid-flow-col gap-[2px]"
         style={{ gridTemplateRows: `repeat(7, ${cell}px)` }}
+        role="img"
+        aria-label={`Расходы по дням за последние ${days} дней. Самый крупный день — ${formatMoney(
+          max,
+          m.base
+        )}.`}
       >
         {cells.map((c) => (
           <i

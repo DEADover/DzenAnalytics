@@ -49,7 +49,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
           без неё при прокрутке непонятно, к какому месяцу относятся числа. */}
       <div className="sticky top-[var(--app-header-h)] z-10 bg-bg border-b border-border flex items-center justify-between gap-4 py-3 mb-4">
         <div className="flex items-baseline gap-3 min-w-0">
-          <span className="text-lg font-semibold truncate">{monthLabel(m.ym)}</span>
+          <h1 className="text-lg font-semibold truncate">{monthLabel(m.ym)}</h1>
           <span className="text-xs text-muted whitespace-nowrap">
             {m.month.day} из {m.month.days} дн
           </span>

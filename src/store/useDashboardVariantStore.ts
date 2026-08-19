@@ -34,13 +34,16 @@ const KEY = "dashboardVariant";
 const KNOWN = new Set(DASHBOARD_VARIANTS.map((v) => v.value));
 
 export const useDashboardVariantStore = create<VariantState>((set) => ({
-  variant: "current",
+  // По умолчанию — «Премиум»: ради него редизайн и делался. Нынешняя главная
+  // осталась в переключателе, чтобы было с чем сравнить, но открываться должна
+  // новая, иначе изменения не видит никто.
+  variant: "premium",
   loaded: false,
   hydrate: async () => {
     const data = await db.loadJSON<DashboardVariant>(KEY);
     // Незнакомое значение может остаться от версии, где вариант убрали:
-    // молча откатываемся к нынешней главной, а не падаем на пустом экране.
-    set({ variant: data && KNOWN.has(data) ? data : "current", loaded: true });
+    // молча откатываемся к умолчанию, а не падаем на пустом экране.
+    set({ variant: data && KNOWN.has(data) ? data : "premium", loaded: true });
   },
   setVariant: async (value) => {
     await db.saveJSON(KEY, value);

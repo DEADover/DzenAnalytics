@@ -73,6 +73,7 @@ import type { DayCell } from "../lib/aggregations";
 import { useDashboardVariantStore } from "../store/useDashboardVariantStore";
 import { VariantSwitcher } from "../components/dashboard/VariantSwitcher";
 import { DashboardVariants } from "../components/dashboard/DashboardVariants";
+import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
 
 const HEATMAP_COLORS = [
   "rgb(var(--c-panel2))",
@@ -973,12 +974,20 @@ export function DashboardPage() {
   const variantLoaded = useDashboardVariantStore((s) => s.loaded);
   const variantHydrate = useDashboardVariantStore((s) => s.hydrate);
   const hasData = useDataStore((s) => s.transactions.length > 0);
+  const dataLoaded = useDataStore((s) => s.loaded);
+  const syncStatus = useZenmoneyStore((s) => s.status);
 
   useEffect(() => {
     if (!variantLoaded) void variantHydrate();
   }, [variantLoaded, variantHydrate]);
 
-  if (!hasData) return <EmptyState />;
+  // «Нет данных» — это утверждение, а не ожидание. Пока идёт первая
+  // синхронизация или ещё не поднялось локальное хранилище, показываем форму
+  // будущей страницы, а не приглашение подключить то, что уже подключено.
+  if (!hasData) {
+    const busy = !dataLoaded || syncStatus === "checking" || syncStatus === "syncing";
+    return busy ? <DashboardSkeleton /> : <EmptyState />;
+  }
 
   return (
     <div className="space-y-4">

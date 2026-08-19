@@ -31,6 +31,7 @@ export default {
       },
       boxShadow: {
         card: "var(--shadow-card)",
+        tray: "var(--shadow-tray)",
       },
     },
   },

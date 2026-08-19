@@ -30,7 +30,7 @@ import type { VariantProps } from "./types";
  */
 function Tray({ children }: { children: ReactNode }) {
   return (
-    <div className="h-full flex flex-col rounded-[22px] p-1.5 bg-panel2/70 border border-border/70 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.22)]">
+    <div className="h-full flex flex-col rounded-[22px] p-1.5 bg-panel2/70 border border-border/70 shadow-tray">
       <div className="flex-1 rounded-[16px] bg-panel p-5">{children}</div>
     </div>
   );
@@ -100,9 +100,11 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
           экрана превращалась в пустое поле. Всё, что шире, отдано данным. */}
       <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] 3xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] gap-5 3xl:gap-6">
         <div className="flex flex-col gap-5 pt-2 lg:pt-4">
-          <span className="self-start rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] bg-panel2/80 border border-border/60 text-muted">
+          {/* Пилюля — она же заголовок страницы: другого h1 на экране нет, а
+              оставлять главную вовсе без заголовка нельзя. */}
+          <h1 className="self-start rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] bg-panel2/80 border border-border/60 text-muted font-medium">
             {monthName(m.ym)} · осталось {m.month.left} {daysWord(m.month.left)}
-          </span>
+          </h1>
 
           <div
             className={`font-mono font-semibold tabular-nums text-5xl 3xl:text-6xl leading-none tracking-tight ${
