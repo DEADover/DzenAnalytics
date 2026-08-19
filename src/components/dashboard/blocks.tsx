@@ -29,7 +29,9 @@ import {
 } from "recharts";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Scale, CalendarDays, Hash, GitCompare, Repeat } from "lucide-react";
 import { CategoryDot } from "../CategoryDot";
+import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
 import { AccountLogo } from "../AccountLogo";
 import { accountKindLabel } from "../../lib/accountType";
 import {
@@ -37,7 +39,6 @@ import {
   formatNum,
   formatDate,
   monthLabel,
-  toNum,
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
@@ -45,6 +46,14 @@ import {
 import { heatStep, robustCeiling } from "../../lib/dashboardModel";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+const MONTHS_GENITIVE = ["января", "февраля", "марта", "апреля", "мая", "июня",
+  "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+
+/** «19 августа» — дата в списке читается словами. */
+function monthGenitive(monthIdx: number): string {
+  return MONTHS_GENITIVE[monthIdx] ?? "";
+}
 import type { DashboardModel } from "../../hooks/useDashboardModel";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
@@ -293,6 +302,81 @@ export function PaceRing({ m, size = 104 }: { m: DashboardModel; size?: number }
 
 /* ─────────────────────────────  графики  ───────────────────────────── */
 
+/**
+ * Подсказки графиков собраны на общем компоненте продукта
+ * (`ChartTooltipCard` + `TooltipFacts`) — том же, что у графика месячного
+ * бюджета. Своя вёрстка подсказки в каждом графике означала бы, что цвет
+ * метки, порядок строк и подача разницы у каждого свои.
+ */
+interface TipProps {
+  active?: boolean;
+  payload?: { payload?: Record<string, unknown> }[];
+}
+
+function CashflowTip({ active, payload, base }: TipProps & { base: string }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload as
+    | { ym?: string; isForecast?: boolean; incomeReal?: number; expenseReal?: number }
+    | undefined;
+  if (!row?.ym) return null;
+  const inc = row.incomeReal ?? 0;
+  const exp = row.expenseReal ?? 0;
+  const fc = !!row.isForecast;
+  const diff = inc - exp;
+  const facts: TooltipFact[] = [
+    {
+      label: fc ? "Прогноз дохода" : "Доход",
+      value: formatMoney(inc, base),
+      swatch: `bg-income${fc ? " opacity-60" : ""}`,
+      strong: !fc,
+    },
+    {
+      label: fc ? "Прогноз расхода" : "Расход",
+      value: formatMoney(exp, base),
+      swatch: `bg-expense${fc ? " opacity-60" : ""}`,
+      strong: !fc,
+    },
+    {
+      label: "Разница",
+      value: formatMoney(diff, base, { signed: true }),
+      icon: <Scale />,
+      tone: diff >= 0 ? "income" : "expense",
+      strong: true,
+    },
+  ];
+  return (
+    <ChartTooltipCard>
+      <TooltipFacts
+        title={monthLabel(row.ym)}
+        facts={facts}
+        note={fc ? "Прогноз по среднему за последние месяцы" : undefined}
+      />
+    </ChartTooltipCard>
+  );
+}
+
+function NetWorthTip({ active, payload, base }: TipProps & { base: string }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload as { date?: string; net?: number } | undefined;
+  if (!row?.date) return null;
+  return (
+    <ChartTooltipCard>
+      <TooltipFacts
+        title={formatDate(row.date)}
+        facts={[
+          {
+            label: "Баланс",
+            value: formatMoney(row.net ?? 0, base, { signed: true }),
+            swatchColor: "rgb(var(--c-accent))",
+            strong: true,
+          },
+        ]}
+      />
+    </ChartTooltipCard>
+  );
+}
+
+
 /** Прямоугольник со скруглённым верхом — рисуем сами, раз у столбца своя форма. */
 function topRoundedPath(x: number, y: number, w: number, h: number, r: number): string {
   const rr = Math.max(0, Math.min(r, w / 2, h));
@@ -447,15 +531,12 @@ export function CashflowBars({
               domain={[0, cap > 0 ? cap : "auto"]}
               tickFormatter={(v) => formatNum(v, { compact: true })}
             />
+            {/* Настоящие суммы, а не срезанные высоты столбцов, — их берёт
+                сам тултип из строки данных. */}
             <Tooltip
-              {...chartTooltipProps}
-              // Показываем настоящую сумму, а не срезанную высоту столбца.
-              formatter={(_v: unknown, name: unknown, item: unknown) => {
-                const row = (item as { payload?: Record<string, number> } | undefined)?.payload;
-                const isIncome = String(name).includes("Доход");
-                const real = row?.[isIncome ? "incomeReal" : "expenseReal"] ?? 0;
-                return [formatMoney(real, m.base), String(name)];
-              }}
+              cursor={chartTooltipProps.cursor}
+              wrapperStyle={chartTooltipProps.wrapperStyle}
+              content={<CashflowTip base={m.base} />}
             />
             <Bar
               dataKey="income"
@@ -522,9 +603,9 @@ export function NetWorthArea({ m, height = 240 }: { m: DashboardModel; height?: 
             domain={["auto", "auto"]}
           />
           <Tooltip
-            {...chartTooltipProps}
-            labelFormatter={(d) => formatDate(d as string)}
-            formatter={(v: unknown) => [formatMoney(toNum(v), m.base, { signed: true }), "Баланс"]}
+            cursor={chartTooltipProps.cursor}
+            wrapperStyle={chartTooltipProps.wrapperStyle}
+            content={<NetWorthTip base={m.base} />}
           />
           <Area
             type="monotone"
@@ -832,16 +913,24 @@ export function ActivityHeat({ m }: { m: DashboardModel }) {
   const quiet = past.filter((d) => spend(d) <= 0).length;
   const busiest = past.reduce((best, d) => (spend(d) > spend(best) ? d : best), past[0] ?? 1);
 
+  const avgDay = past.length ? past.reduce((a, d) => a + spend(d), 0) / past.length : 0;
+  const topDays = [...past]
+    .filter((d) => spend(d) > 0)
+    .sort((a, b) => spend(b) - spend(a))
+    .slice(0, 5);
+
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
-      <div className="grid grid-cols-7 gap-1.5 text-[11px] text-muted text-center max-w-[24rem] w-full mx-auto">
+      <div className="flex flex-col xl:flex-row xl:items-start gap-5 flex-1 min-h-0">
+      <div className="flex flex-col gap-2 min-w-0">
+      <div className="grid grid-cols-7 gap-1.5 text-[11px] text-muted text-center max-w-[24rem] w-full">
         {WEEKDAYS.map((w) => (
           <span key={w}>{w}</span>
         ))}
       </div>
 
       <div
-        className="grid grid-cols-7 gap-1.5 max-w-[24rem] w-full mx-auto"
+        className="grid grid-cols-7 gap-1.5 max-w-[24rem] w-full"
         role="img"
         aria-label={`Расходы по дням за ${monthLabel(m.ym)}. Самый крупный день — ${formatMoney(
           spend(busiest),
@@ -869,7 +958,7 @@ export function ActivityHeat({ m }: { m: DashboardModel }) {
         })}
       </div>
 
-      <div className="flex items-center justify-end gap-1.5 text-[11px] text-muted">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted max-w-[24rem]">
         Меньше
         {[0, 1, 2, 3, 4].map((st) => (
           <i
@@ -880,6 +969,32 @@ export function ActivityHeat({ m }: { m: DashboardModel }) {
         ))}
         {formatMoney(cap, m.base)} и больше
       </div>
+      </div>
+
+      {/* Пустое поле справа от календаря забирают самые дорогие дни: месяц —
+          это семь колонок, шире он не становится, а карточка широкая. */}
+      {topDays.length > 0 && (
+        <div className="flex-1 min-w-0 xl:border-l xl:border-border xl:pl-5">
+          <div className="label mb-2">Самые дорогие дни</div>
+          <div className="flex flex-col">
+            {topDays.map((d) => (
+              <div
+                key={d}
+                className="flex items-center justify-between gap-3 py-1.5 border-b border-border last:border-0"
+              >
+                <span className="text-[13.5px]">
+                  {d} {monthGenitive(monthIdx)}
+                  <span className="text-muted text-[12px]"> · {WEEKDAYS[(new Date(year, monthIdx, d).getDay() + 6) % 7]}</span>
+                </span>
+                <span className="font-mono tabular-nums font-semibold text-[13.5px] text-expense shrink-0">
+                  {formatMoney(spend(d), m.base)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      </div>
 
       <div className="mt-auto pt-3 border-t border-border grid grid-cols-2 gap-4 text-[12.5px]">
         <div>
@@ -889,9 +1004,9 @@ export function ActivityHeat({ m }: { m: DashboardModel }) {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-muted">Самый дорогой день</div>
-          <div className="font-mono tabular-nums font-semibold text-[15px] text-expense">
-            {formatMoney(spend(busiest), m.base)}
+          <div className="text-muted">Средний день</div>
+          <div className="font-mono tabular-nums font-semibold text-[15px]">
+            {formatMoney(avgDay, m.base)}
           </div>
         </div>
       </div>
@@ -899,54 +1014,47 @@ export function ActivityHeat({ m }: { m: DashboardModel }) {
   );
 }
 
-/**
- * Структура расходов последнего завершённого месяца.
- *
- * Считается по последнему ЗАКРЫТОМУ месяцу, а не текущему: в текущем половина
- * обязательных платежей ещё не прошла, и доля вышла бы заниженной просто
- * потому, что сегодня девятнадцатое.
- */
-export function SpendStructure({ m }: { m: DashboardModel }) {
-  const nw = m.needsWants;
-  if (!nw || nw.needs + nw.wants <= 0) {
-    return (
-      <div className="text-sm text-muted py-3">
-        Нужен хотя бы один завершённый месяц с расходами
-      </div>
-    );
-  }
-  const spend = nw.needs + nw.wants;
-  // «Свободные деньги» — доход минус ОБЯЗАТЕЛЬНЫЕ траты: столько остаётся,
-  // если не тратить ни на что необязательное.
-  const freedom = nw.income - nw.needs;
-  const cell = (label: string, value: number, dot: string, tone = "") => (
-    <div className="min-w-0">
-      <div className="label flex items-center gap-1.5">
-        <i className={`w-2 h-2 rounded-full block ${dot}`} />
-        {label}
-      </div>
-      <div className={`font-mono tabular-nums font-semibold text-[17px] mt-1 ${tone}`}>
-        {formatMoney(value, m.base, { signed: tone !== "" })}
-      </div>
-    </div>
-  );
 
+
+/**
+ * Четыре быстрых перехода внизу страницы.
+ *
+ * Дублируют пункты верхнего меню намеренно: меню отвечает на «куда я могу
+ * пойти», а эти кнопки — на «что делать дальше», и стоят там, куда взгляд
+ * приходит, дочитав страницу. Подпись у каждой говорит, что там внутри, а не
+ * повторяет название раздела.
+ */
+export function QuickLinks({ m }: { m: DashboardModel }) {
+  const items = [
+    { to: "/calendar", icon: CalendarDays, title: "Календарь", sub: "Траты по дням" },
+    { to: "/tags", icon: Hash, title: "Теги", sub: "Из комментариев" },
+    { to: "/compare", icon: GitCompare, title: "Сравнение", sub: "Периоды между собой" },
+    {
+      to: "/recurring",
+      icon: Repeat,
+      title: "Регулярные",
+      sub: `${m.recurringMonthlyCount} ежемесячных`,
+    },
+  ];
   return (
-    <div className="flex flex-col gap-3">
-      <div className="h-3 rounded-full bg-panel2 overflow-hidden flex">
-        <i className="bg-warn h-full" style={{ width: `${(nw.needs / spend) * 100}%` }} />
-        <i className="bg-accent2 h-full" style={{ width: `${(nw.wants / spend) * 100}%` }} />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {cell("Обязательные", nw.needs, "bg-warn")}
-        {cell("Необязательные", nw.wants, "bg-accent2")}
-        {cell(
-          "«Свободные деньги»",
-          freedom,
-          freedom >= 0 ? "bg-income" : "bg-expense",
-          freedom >= 0 ? "text-income" : "text-expense"
-        )}
-      </div>
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {items.map(({ to, icon: Icon, title, sub }) => (
+        <Link
+          key={to}
+          to={to}
+          className="group rounded-[18px] bg-panel border border-border px-5 py-4 flex items-center gap-3.5
+                     transition-colors duration-200 hover:border-accent/40 hover:bg-panel2/40
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <Icon className="w-5 h-5 text-accent shrink-0" aria-hidden="true" />
+          <span className="min-w-0">
+            <span className="block font-semibold text-[14.5px] group-hover:text-accent truncate">
+              {title}
+            </span>
+            <span className="block text-[12.5px] text-muted truncate">{sub}</span>
+          </span>
+        </Link>
+      ))}
     </div>
   );
 }

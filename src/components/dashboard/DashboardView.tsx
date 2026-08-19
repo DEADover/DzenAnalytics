@@ -21,7 +21,7 @@ import {
   UpcomingList,
   ObservationsList,
   ActivityHeat,
-  SpendStructure,
+  QuickLinks,
 } from "./blocks";
 import { formatMoney, monthLabel } from "../../lib/format";
 import { useDashboardModel } from "../../hooks/useDashboardModel";
@@ -143,10 +143,6 @@ export function DashboardView() {
   );
 
   const over = m.pace === null ? null : m.pace - 1;
-  // Структура считается по последнему ЗАКРЫТОМУ месяцу — подписываем каким
-  // именно, повторяя тот же отбор, что и модель.
-  const lastCompleteYM = m.months.filter((b) => b.ym < m.ym).slice(-1)[0]?.ym;
-  const lastCompleteLabel = lastCompleteYM ? monthLabel(lastCompleteYM) : null;
 
   return (
     <div className="flex flex-col gap-5 3xl:gap-6">
@@ -319,22 +315,8 @@ export function DashboardView() {
         </Tray>
       </section>
 
-      {/* ── Структура расходов: одна широкая полоса ── */}
-      <section>
-        <Tray>
-          <BlockTitle
-            title="Структура расходов"
-            sub={
-              lastCompleteLabel
-                ? `Последний завершённый месяц · ${lastCompleteLabel}`
-                : "Последний завершённый месяц"
-            }
-            to="/50-30-20"
-            linkLabel="50/30/20"
-          />
-          <SpendStructure m={m} />
-        </Tray>
-      </section>
+      {/* ── Быстрые переходы ── */}
+      <QuickLinks m={m} />
     </div>
   );
 }
