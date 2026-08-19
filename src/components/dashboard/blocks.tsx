@@ -29,7 +29,10 @@ import {
 } from "recharts";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Scale, Hash, GitCompare, Wallet, Target, Wand2, Activity } from "lucide-react";
+import {
+  Scale, Hash, GitCompare, Wallet, Target, Wand2, Activity,
+  TrendingUp, ArrowUpRight, Clock, Lightbulb,
+} from "lucide-react";
 import { CategoryDot } from "../CategoryDot";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
 import { AccountLogo } from "../AccountLogo";
@@ -826,40 +829,53 @@ export function ObservationsList({
     );
   }
 
-  const toneClass = {
-    expense: "bg-expense",
-    income: "bg-income",
-    warn: "bg-warn",
-    accent: "bg-accent",
+  // Значок наблюдения того же размера, что и кружок категории: мелкая точка
+  // рядом с крупным значком читалась как две разные породы строк.
+  const badge = {
+    plan: { icon: Target, tone: "text-expense", bg: "bg-expense/12" },
+    spike: { icon: TrendingUp, tone: "text-expense", bg: "bg-expense/12" },
+    price: { icon: ArrowUpRight, tone: "text-warn", bg: "bg-warn/15" },
+    missed: { icon: Clock, tone: "text-accent", bg: "bg-accent/12" },
+    insight: { icon: Lightbulb, tone: "text-accent", bg: "bg-accent/12" },
   } as const;
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {rows.map((r) => (
-        <div
-          key={r.id}
-          className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0"
-        >
-          <span className="flex items-start gap-2.5 min-w-0">
-            {r.category ? (
-              <span className="mt-1 shrink-0">
-                <CategoryDot category={r.category} size="w-7 h-7" />
+      <div className="flex flex-col">
+        {rows.map((r) => {
+          const b = badge[r.kind];
+          const Icon = b.icon;
+          return (
+            <div
+              key={r.id}
+              className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0"
+            >
+              <span className="flex items-start gap-3 min-w-0">
+                {r.category ? (
+                  <span className="mt-0.5 shrink-0">
+                    <CategoryDot category={r.category} size="w-7 h-7" />
+                  </span>
+                ) : (
+                  <span
+                    className={`mt-0.5 w-7 h-7 rounded-full shrink-0 grid place-items-center ${b.bg} ${b.tone}`}
+                  >
+                    <Icon className="w-4 h-4" aria-hidden="true" />
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className="block text-[14.5px] font-medium truncate">{r.title}</span>
+                  <span className="block text-[12.5px] text-muted leading-snug">{r.body}</span>
+                </span>
               </span>
-            ) : (
-              <i className={`mt-[7px] w-2 h-2 rounded-full shrink-0 block ${toneClass[r.tone]}`} />
-            )}
-            <span className="min-w-0">
-              <span className="block text-[14.5px] font-medium truncate">{r.title}</span>
-              <span className="block text-[12.5px] text-muted leading-snug">{r.body}</span>
-            </span>
-          </span>
-          {r.value !== undefined && (
-            <span className="font-mono tabular-nums font-semibold text-[14px] shrink-0 pt-0.5">
-              {formatMoney(r.value, m.base)}
-            </span>
-          )}
-        </div>
-      ))}
+              {r.value !== undefined && (
+                <span className="font-mono tabular-nums font-semibold text-[14px] shrink-0 pt-1">
+                  {formatMoney(r.value, m.base)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
       {excess > 0 && (
         <div className="mt-auto pt-3 border-t border-border flex items-center justify-between text-[12.5px] text-muted">
           <span>Сверх обычного за месяц</span>
@@ -1014,24 +1030,29 @@ export function ActivityHeat({
               </button>
             ))}
           </div>
+
+          {/* Итоги месяца стоят здесь, а не полосой во всю карточку: там они
+              добавляли карточке лишнюю высоту, а рядом со списком дней читаются
+              как его продолжение. */}
+          <div className="mt-4 pt-3 border-t border-border grid grid-cols-2 gap-4 text-[12.5px]">
+            <div>
+              <div className="text-muted">Дней без трат</div>
+              <div className="font-mono tabular-nums font-semibold text-[15px]">
+                {quiet} <span className="text-muted font-normal text-[12px]">из {past.length}</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-muted">В среднем в день</div>
+              <div className="font-mono tabular-nums font-semibold text-[15px]">
+                {formatMoney(avgDay, m.base)}
+              </div>
+            </div>
+          </div>
         </div>
       )}
       </div>
 
-      <div className="mt-auto pt-3 border-t border-border grid grid-cols-2 gap-4 text-[12.5px]">
-        <div>
-          <div className="text-muted">Дней без трат</div>
-          <div className="font-mono tabular-nums font-semibold text-[15px]">
-            {quiet} <span className="text-muted font-normal text-[12px]">из {past.length}</span>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-muted">Средний день</div>
-          <div className="font-mono tabular-nums font-semibold text-[15px]">
-            {formatMoney(avgDay, m.base)}
-          </div>
-        </div>
-      </div>
+
     </div>
   );
 }
@@ -1048,33 +1069,34 @@ export function ActivityHeat({
  */
 export function QuickLinks() {
   const items = [
-    { to: "/budgets", icon: Wallet, title: "Бюджеты", sub: "План и факт по статьям" },
-    { to: "/goals", icon: Target, title: "Цели", sub: "Копить и следить за сроком" },
-    { to: "/rules", icon: Wand2, title: "Правила", sub: "Категории по условию" },
-    { to: "/tags", icon: Hash, title: "Теги", sub: "Из комментариев" },
-    { to: "/compare", icon: GitCompare, title: "Сравнения", sub: "Периоды между собой" },
-    { to: "/dynamics", icon: Activity, title: "Динамика", sub: "Операции на оси времени" },
+    { to: "/budgets", icon: Wallet, title: "Бюджеты" },
+    { to: "/goals", icon: Target, title: "Цели" },
+    { to: "/rules", icon: Wand2, title: "Правила" },
+    { to: "/tags", icon: Hash, title: "Теги" },
+    { to: "/compare", icon: GitCompare, title: "Сравнения" },
+    { to: "/dynamics", icon: Activity, title: "Динамика" },
   ];
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      {items.map(({ to, icon: Icon, title, sub }) => (
+      {items.map(({ to, icon: Icon, title }) => (
+        // Тот же двойной кант, что у карточек: обойма с просветом и ядро
+        // внутри. Подписи под названием нет намеренно — «Бюджеты» и «Цели»
+        // не нуждаются в пояснении, а выдуманное пояснение только шумит.
         <Link
           key={to}
           to={to}
-          className="group rounded-[18px] bg-panel border border-border px-4 py-4 flex items-center gap-3
-                     transition-colors duration-200 hover:border-accent/40 hover:bg-panel2/40
+          className="group rounded-[18px] p-1.5 bg-panel2/70 border border-border/70 shadow-tray
+                     transition-colors duration-200 hover:border-accent/40
                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
-          <Icon className="w-5 h-5 text-accent shrink-0" aria-hidden="true" />
-          <span className="min-w-0">
-            <span className="block font-semibold text-[14px] group-hover:text-accent truncate">
+          <span className="rounded-[12px] bg-panel px-4 py-3.5 flex items-center gap-3">
+            <Icon className="w-5 h-5 text-accent shrink-0" aria-hidden="true" />
+            <span className="font-semibold text-[14.5px] group-hover:text-accent truncate">
               {title}
             </span>
-            <span className="block text-[12px] text-muted truncate">{sub}</span>
           </span>
         </Link>
       ))}
     </div>
   );
 }
-

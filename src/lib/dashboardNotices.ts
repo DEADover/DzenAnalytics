@@ -15,9 +15,13 @@ import type { Insight, MonthSpike, RecurringCandidate } from "./aggregations";
 import { formatMoney } from "./format";
 import type { Currency } from "../types";
 
+/** Откуда наблюдение — по нему подбирается значок в списке. */
+export type NoticeKind = "plan" | "spike" | "price" | "missed" | "insight";
+
 export interface Notice {
   /** Устойчивый ключ для списка. */
   id: string;
+  kind: NoticeKind;
   tone: "expense" | "income" | "warn" | "accent";
   /** Первая строка — о чём речь. */
   title: string;
@@ -94,6 +98,7 @@ export function buildNotices(input: NoticesInput): Notice[] {
     if (!room("plan")) continue;
     out.push({
       id: `plan-${category}`,
+      kind: "plan",
       tone: "expense",
       title: category,
       body: `План ${money(plan)} — превышен на ${pct(fact / plan - 1)}`,
@@ -111,6 +116,7 @@ export function buildNotices(input: NoticesInput): Notice[] {
     if (!room("spike")) continue;
     out.push({
       id: `spike-${s.category}`,
+      kind: "spike",
       tone: "expense",
       title: s.category,
       body: `Обычно ${money(s.baseline)} · ×${s.ratio.toFixed(1)}`,
@@ -130,6 +136,7 @@ export function buildNotices(input: NoticesInput): Notice[] {
     if (!room("price")) continue;
     out.push({
       id: `price-${r.payee}-${r.currency}`,
+      kind: "price",
       tone: "warn",
       title: r.payee,
       body: `Подорожало на ${pct(r.priceTrend.changePct)} от обычного платежа`,
@@ -147,6 +154,7 @@ export function buildNotices(input: NoticesInput): Notice[] {
     if (!room("missed")) continue;
     out.push({
       id: `missed-${r.payee}-${r.currency}`,
+      kind: "missed",
       tone: "accent",
       title: r.payee,
       body: `Ждали ${r.nextExpected.slice(8, 10)}.${r.nextExpected.slice(5, 7)} — платежа пока нет`,
@@ -165,6 +173,7 @@ export function buildNotices(input: NoticesInput): Notice[] {
     if (!room(`insight-${i.kind}`)) continue;
     out.push({
       id: `insight-${i.title}`,
+      kind: "insight",
       tone: i.positive ? "income" : i.kind === "warning" ? "warn" : "accent",
       title: i.title,
       body: i.body,
