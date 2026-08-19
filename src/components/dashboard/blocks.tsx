@@ -571,7 +571,7 @@ export function AccountsList({
     <div className="flex flex-col flex-1 min-h-0">
       {/* Список прокручивается внутри карточки: счетов бывает и двенадцать, а
           обрезать их числом значило бы врать итогом внизу. */}
-      <div className="scroll-soft flex flex-col flex-1 min-h-0 max-h-[22rem] -mx-2 px-2">
+      <div className="scroll-soft flex flex-col flex-1 min-h-0 -mx-2 px-2">
       {m.accounts.map((a) => (
         <button
           key={a.title}
@@ -634,7 +634,7 @@ export function CategoriesList({
   const total = rows.reduce((sum, c) => sum + c.expense, 0);
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      <div className="scroll-soft flex flex-col gap-3 flex-1 min-h-0 max-h-[22rem] -mx-2 px-2">
+      <div className="scroll-soft flex flex-col gap-3 flex-1 min-h-0 -mx-2 px-2">
       {rows.map((c) => {
         const frac = c.expense / top;
         return (
@@ -686,7 +686,7 @@ export function UpcomingList({ m }: { m: DashboardModel }) {
   return (
     // Все платежи, а не первые несколько: список обрезался числом, а итог в
     // шапке считался по всем — суммы на экране не сходились.
-    <div className="scroll-soft flex flex-col flex-1 min-h-0 max-h-[22rem] -mx-2 px-2">
+    <div className="scroll-soft flex flex-col flex-1 min-h-0 -mx-2 px-2">
       {m.upcoming.map((p) => (
         <div
           key={p.payee + p.currency + p.date}

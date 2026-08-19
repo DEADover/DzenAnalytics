@@ -191,7 +191,11 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
 
         {/* Справа стопка карточек; на широком экране она встаёт в два столбца,
             а не растягивается. */}
-        <div className="grid gap-4 lg:grid-cols-2">
+        {/* Высота строки задана явно: потолок на контейнере карточки не сжимал —
+            они вылезали за него и налезали на следующий раздел. Здесь высоту
+            получает сама дорожка сетки, поддоны её заполняют, а списки внутри
+            начинают прокручиваться. */}
+        <div className="grid gap-4 lg:grid-cols-2 lg:auto-rows-[34rem]">
           <Tray>
             <BlockTitle title="Где лежат деньги" to="/accounts"
             linkLabel="Счета"
@@ -208,17 +212,17 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
           </Tray>
 
           <Tray>
-            <BlockTitle
-              title="Скоро спишется"
-              right={
-                <span className="font-mono tabular-nums font-semibold text-[15px] text-expense shrink-0">
-                  {m.upcomingTotalBase > 0 ? "−" : ""}
-                  {formatMoney(m.upcomingTotalBase, m.base)}
-                </span>
-              }
-              to="/recurring"
-              linkLabel="Регулярные"
-            />
+            <BlockTitle title="Скоро спишется" to="/recurring" linkLabel="Регулярные" />
+            {/* Итог подан так же, как совокупный баланс у соседней карточки:
+                крупным числом под заголовком. Мелкой строчкой в шапке он
+                выбивался из ряда. */}
+            <div
+              className="font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none mb-3 text-expense"
+              style={{ wordSpacing: "-0.22em" }}
+            >
+              {m.upcomingTotalBase > 0 ? "−" : ""}
+              {formatMoney(m.upcomingTotalBase, m.base)}
+            </div>
             <UpcomingList m={m} />
           </Tray>
         </div>
