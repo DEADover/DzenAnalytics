@@ -3,6 +3,7 @@ import {
   Search,
   Download,
   Plus,
+  Copy,
   Pencil,
   Trash2,
   Eye,
@@ -110,9 +111,9 @@ function transferCounterparty(t: Transaction): string | null {
 // ничего не сдвигает, а глазом читается вертикальной дорожкой — сразу видно,
 // сколько нового и где оно кончается.
 const GRID_COLS_FULL =
-  "32px 10px 84px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 88px";
+  "32px 10px 84px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 112px";
 const GRID_COLS_NODATE =
-  "32px 10px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 88px";
+  "32px 10px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 112px";
 
 const PAGE_SIZE = 100;
 
@@ -223,6 +224,9 @@ export function TransactionsPage() {
   };
   const [creating, setCreating] = useState<TxKind | null>(null);
   const [creatingDebt, setCreatingDebt] = useState(false);
+  // Операция, с которой снимают копию (issue #78). Живёт отдельно от
+  // `creating`: там выбирают вид с нуля, здесь форма открывается заполненной.
+  const [copying, setCopying] = useState<Transaction | null>(null);
 
   // ── «Добавить» dropdown: pick which kind of operation to create. ─────
   // Anchored to addMenuRef; opening/closing (outside-click, Esc, scroll) is
@@ -754,6 +758,7 @@ export function TransactionsPage() {
                 edits={edits}
                 drafts={drafts}
                 onEdit={openEditor}
+                onCopy={apiConnected ? setCopying : undefined}
                 onDelete={handleDelete}
                 selected={selected}
                 onToggleSelect={toggleSelect}
@@ -775,6 +780,7 @@ export function TransactionsPage() {
                 edited={!!edits[t.id]}
                 draft={!!drafts[t.id]}
                 onEdit={() => openEditor(t)}
+                onCopy={apiConnected ? () => setCopying(t) : undefined}
                 onDelete={() => handleDelete(t)}
                 selected={selected.has(t.id)}
                 onToggleSelect={() => toggleSelect(t.id)}
@@ -818,6 +824,14 @@ export function TransactionsPage() {
             setCreating(null);
             setCreatingDebt(false);
           }}
+        />
+      )}
+
+      {copying && (
+        <EditTransactionModal
+          key={`copy-${copying.id}`}
+          template={copying}
+          onClose={() => setCopying(null)}
         />
       )}
 
@@ -958,6 +972,7 @@ function DayGroup({
   edits,
   drafts,
   onEdit,
+  onCopy,
   onDelete,
   selected,
   onToggleSelect,
@@ -969,6 +984,9 @@ function DayGroup({
   edits: Record<string, unknown>;
   drafts: Record<string, unknown>;
   onEdit: (t: Transaction) => void;
+  /** Не задан — копировать некуда: без подключённого Дзен-мани новых операций
+   *  не создать, и кнопка не рисуется. */
+  onCopy?: (t: Transaction) => void;
   onDelete: (t: Transaction) => void;
   selected: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -1045,6 +1063,7 @@ function DayGroup({
           edited={!!edits[t.id]}
           draft={!!drafts[t.id]}
           onEdit={() => onEdit(t)}
+          onCopy={onCopy && (() => onCopy(t))}
           onDelete={() => onDelete(t)}
           selected={selected.has(t.id)}
           onToggleSelect={() => onToggleSelect(t.id)}
@@ -1065,6 +1084,7 @@ function Row({
   edited,
   draft = false,
   onEdit,
+  onCopy,
   onDelete,
   selected,
   onToggleSelect,
@@ -1074,6 +1094,7 @@ function Row({
   edited: boolean;
   draft?: boolean;
   onEdit: () => void;
+  onCopy?: () => void;
   onDelete: () => void;
   selected: boolean;
   onToggleSelect: () => void;
@@ -1261,6 +1282,19 @@ function Row({
         >
           <Pencil className="w-4 h-4" />
         </button>
+        {onCopy && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopy();
+            }}
+            className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 transition-colors"
+            title="Копировать — та же операция сегодняшним днём"
+            aria-label="Копировать операцию"
+          >
+            <Copy className="w-4 h-4" />
+          </button>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation();

@@ -10,6 +10,7 @@ import {
   Sparkles,
   Tag,
   User,
+  Copy,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -79,6 +80,10 @@ export function TransactionsDrawer() {
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [editing, setEditing] = useState<Transaction | null>(null);
+  // Копия операции (issue #78) — та же кнопка, что и в ленте: список операций
+  // здесь тот же самый, только показан сбоку.
+  const [copying, setCopying] = useState<Transaction | null>(null);
+  const apiConnected = useZenmoneyStore((s) => !!s.token);
 
   // ── Bulk selection + edit ──────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -513,7 +518,7 @@ export function TransactionsDrawer() {
                         ) : null;
                       })()}
                     </td>
-                    <td className="table-td w-14 text-center whitespace-nowrap">
+                    <td className="table-td w-24 text-center whitespace-nowrap">
                       <button
                         onClick={() => setEditing(t)}
                         className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 transition-colors"
@@ -522,6 +527,16 @@ export function TransactionsDrawer() {
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
+                      {apiConnected && (
+                        <button
+                          onClick={() => setCopying(t)}
+                          className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 transition-colors"
+                          title="Копировать — та же операция сегодняшним днём"
+                          aria-label="Копировать операцию"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDelete(t)}
                         className="p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10 transition-colors"
@@ -615,6 +630,14 @@ export function TransactionsDrawer() {
             const next = sorted[i + dir];
             if (next) setEditing(next);
           }}
+        />
+      )}
+
+      {copying && (
+        <EditTransactionModal
+          key={`copy-${copying.id}`}
+          template={copying}
+          onClose={() => setCopying(null)}
         />
       )}
     </>

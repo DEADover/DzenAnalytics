@@ -2093,7 +2093,7 @@ export function buildPlannedDeletions(
     const object = it.wholePlan ? "reminder" : "reminderMarker";
     const id = it.wholePlan ? m.reminder : m.id;
     if (!id) continue;
-    const key = `${object} ${id}`;
+    const key = `${object}\u0000${id}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ id, object, user: m.user, stamp: stampSeconds });

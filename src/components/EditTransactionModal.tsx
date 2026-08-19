@@ -40,6 +40,16 @@ interface Props {
   /** Pre-selected kind for a freshly created operation (create mode only).
    *  Defaults to "expense". Ignored when editing an existing `tx`. */
   initialKind?: TxKind;
+  /**
+   * Операция-образец: форма открывается на СОЗДАНИЕ, но заполненная по ней
+   * (issue #78). Переносится всё, вплоть до комментария, кроме даты — она
+   * становится сегодняшней, ради чего копию обычно и делают: повторяющуюся
+   * трату проще скопировать, чем набирать заново.
+   *
+   * Не то же самое, что `tx`: там правится существующая операция, здесь
+   * рождается новая, и образец после сохранения остаётся нетронутым.
+   */
+  template?: Transaction | null;
   /** Open a freshly created operation as a «Долг» (create mode only). */
   initialDebt?: boolean;
   onClose: () => void;
@@ -52,12 +62,19 @@ interface Props {
 /** Zenmoney account types that make an operation a debt/loan/credit move. */
 const DEBT_ACCOUNT_TYPES = new Set(["loan", "credit", "debt"]);
 
-/** Today's date as ISO YYYY-MM-DD, for seeding a new draft. */
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * Today's date as ISO YYYY-MM-DD, for seeding a new draft.
+ *
+ * Дата берётся по МЕСТНОМУ времени, а не по UTC. `toISOString()` до трёх ночи
+ * по Москве отдаёт вчерашнее число, и новая операция — как и копия, которой
+ * дата ставится сегодняшней, — открывалась вчерашним днём.
+ */
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
 
 /** Local "HH:MM" time-of-day from an ISO timestamp (the operation's `created`).
  *  Empty string when the timestamp is missing/invalid (e.g. some CSV rows). */
@@ -87,14 +104,34 @@ function dateTimeToDate(dateIso: string, time: string): Date {
  * away and is sent to Zenmoney on the next push. API mode only (the caller
  * only offers the button when a token is present).
  */
-export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onClose, onNavigate }: Props) {
+export function EditTransactionModal({
+  tx: txProp,
+  template,
+  initialKind,
+  initialDebt,
+  onClose,
+  onNavigate,
+}: Props) {
   const isCreate = !txProp;
+  /** Создание по образцу: поля заполнены, но операция всё равно новая. */
+  const isCopy = isCreate && !!template;
   const rates = useDataStore((s) => s.rates);
   // A blank seed so every `tx.<field>` read below works uniformly in
   // create mode (no special-casing each reference).
   const tx: Transaction = useMemo(
     () =>
-      txProp ?? {
+      txProp ??
+      (template
+        ? // Дата — сегодняшняя, идентификатор пустой: всё остальное копия
+          // берёт у образца. `createdAt` пересобирается из сегодняшнего дня,
+          // иначе время операции уехало бы в прошлое вместе с ним.
+          {
+            ...template,
+            id: "",
+            date: todayIso(),
+            createdAt: `${todayIso()}T00:00:00Z`,
+          }
+        : {
         id: "",
         date: todayIso(),
         category: "",
@@ -117,8 +154,8 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
         opAmount: null,
         opCurrency: null,
         createdAt: `${todayIso()}T00:00:00Z`,
-      },
-    [txProp, rates.base, initialKind]
+      }),
+    [txProp, template, rates.base, initialKind]
   );
   const allTransactions = useDataStore((s) => s.transactions);
   const reapply = useDataStore((s) => s.reapplyRules);
@@ -173,7 +210,7 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
         c.accounts.find((a) => DEBT_ACCOUNT_TYPES.has(a.type));
       setDebtAccountTitle(d?.title ?? null);
       // Existing debt op — derive direction + real account from its legs.
-      if (!isCreate && tx.category === "Долг" && d) {
+      if ((!isCreate || isCopy) && tx.category === "Долг" && d) {
         if (tx.outcomeAccount === d.title) {
           // «Долги» → real account: money came IN.
           setDebtOutgoing(false);
@@ -500,8 +537,9 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
     return Array.from(set).sort((a, b) => a.localeCompare(b, "ru"));
   }, [allTransactions]);
   // Blank amount in create mode (don't prefill "0"); the existing value
-  // otherwise.
-  const [amount, setAmount] = useState(isCreate ? "" : String(tx.amount));
+  // otherwise. Копия — как раз «otherwise»: сумму она несёт с собой, ради
+  // этого её и делают.
+  const [amount, setAmount] = useState(isCreate && !isCopy ? "" : String(tx.amount));
   const [currency, setCurrency] = useState(tx.currency);
   const [account, setAccount] = useState(tx.account);
   // Transfer-specific: outcome / income accounts. For income/expense we
@@ -941,6 +979,14 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
       await setEdit(tx.id, patch);
       await reapply();
       onClose();
+    } catch (e) {
+      // Сборщик черновика умеет и бросить — например, на неполном кэше. Без
+      // этого разбора нажатие «Создать» просто ничего не делало: ошибка уходила
+      // в консоль, а человек оставался перед той же формой и не понимал,
+      // сохранилось у него что-нибудь или нет.
+      setError(
+        `Не удалось сохранить операцию: ${e instanceof Error ? e.message : String(e)}`
+      );
     } finally {
       setSaving(false);
     }
@@ -1002,7 +1048,7 @@ export function EditTransactionModal({ tx: txProp, initialKind, initialDebt, onC
             ) : (
               <Pencil className="w-4 h-4 text-accent2" />
             )}
-            {isCreate ? "Новая операция" : "Редактирование операции"}
+            {isCopy ? "Копия операции" : isCreate ? "Новая операция" : "Редактирование операции"}
           </div>
           <div className="flex items-center gap-3">
             {!isCreate && onNavigate && (
