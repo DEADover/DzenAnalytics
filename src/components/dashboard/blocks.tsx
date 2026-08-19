@@ -414,8 +414,12 @@ export function CashflowBars({
   });
 
   return (
-    <div className="flex flex-col gap-1">
-      <div style={{ height }}>
+    // `flex-1` работает, только когда карточка сама колонка-флекс: тогда график
+    // забирает всю оставшуюся высоту вместо того, чтобы оставлять под собой
+    // пустое поле, когда соседняя карточка в ряду выше. Там, где родитель не
+    // флекс, размер задаёт `minHeight`, и поведение не меняется.
+    <div className="flex flex-col gap-1 flex-1 min-h-0">
+      <div className="flex-1 min-h-0" style={{ minHeight: height }}>
         <ResponsiveContainer>
           <ComposedChart
             data={data}
@@ -488,7 +492,7 @@ export function CashflowBars({
 /** Как рос совокупный баланс. */
 export function NetWorthArea({ m, height = 240 }: { m: DashboardModel; height?: number }) {
   return (
-    <div style={{ height }}>
+    <div className="flex-1 min-h-0" style={{ minHeight: height }}>
       <ResponsiveContainer>
         <AreaChart data={m.netWorthSeries}>
           <defs>
@@ -551,7 +555,7 @@ export function AccountsList({
     return <div className="text-sm text-muted text-center py-6">Счетов пока нет</div>;
   }
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col flex-1 min-h-0">
       {shown.map((a) => (
         <button
           key={a.title}
@@ -581,7 +585,7 @@ export function AccountsList({
         </button>
       ))}
       {restCount > 0 && (
-        <div className="flex items-center justify-between pt-2.5 text-[12.5px] text-muted">
+        <div className="mt-auto flex items-center justify-between pt-2.5 text-[12.5px] text-muted">
           <span>Ещё {restCount}</span>
           <span className="font-mono tabular-nums">{formatMoney(restSum, m.base)}</span>
         </div>
@@ -707,8 +711,9 @@ export function SpikesList({ m, limit = 3 }: { m: DashboardModel; limit?: number
       </div>
     );
   }
+  const excess = rows.reduce((sum, r) => sum + Math.max(0, r.current - r.baseline), 0);
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
       {rows.map((s) => (
         <div key={s.category} className="flex items-center justify-between gap-3 text-[14.5px]">
           <span className="flex items-center gap-2 min-w-0">
@@ -726,6 +731,16 @@ export function SpikesList({ m, limit = 3 }: { m: DashboardModel; limit?: number
           </span>
         </div>
       ))}
+      {/* Итог прижат к низу: у короткого списка иначе остаётся дыра, а сумма
+          превышения — как раз то, ради чего на список и смотрят. */}
+      {excess > 0 && (
+        <div className="mt-auto pt-3 border-t border-border flex items-center justify-between text-[12.5px] text-muted">
+          <span>Сверх обычного за месяц</span>
+          <span className="font-mono tabular-nums font-semibold text-expense">
+            +{formatMoney(excess, m.base)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
