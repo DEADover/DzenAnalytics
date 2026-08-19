@@ -553,7 +553,7 @@ export function CategoriesPage() {
       <GlobalFilters />
 
       <div>
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           {/* Shared header for the Treemap / Bars views — mirrors the Donut's
               own header (kind badge + scope + big total) so all three read as
               one family. Donut carries its own header, so this is hidden there. */}
