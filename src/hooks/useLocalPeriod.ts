@@ -27,8 +27,22 @@ export interface PeriodController {
  * Local, page-scoped period. Same semantics as the store's period setters
  * (setRange → preset "custom", setMonth/stepPeriod → preset "month"/"year"), just held
  * in component state so it never touches the global «месяц».
+ *
+ * Второй аргумент — месяц из ссылки: им пользуется «Месячный отчёт» с главной.
  */
-export function useLocalPeriod(defaultPreset: DatePreset = "12m"): PeriodController {
+export function useLocalPeriod(
+  defaultPreset: DatePreset = "12m",
+  /**
+   * Месяц, заданный ссылкой (`/report?month=2026-08`).
+   *
+   * Главнее и умолчания страницы, и глобального периода: раз в ссылке прямо
+   * сказано, за какой месяц открыть, ни своя широкая «Всё», ни чужой
+   * сохранённый диапазон «от/до» перебить это не должны. Ставится начальным
+   * значением, а не эффектом после отрисовки, — иначе первый кадр страница
+   * рисует не тем периодом, а потом перерисовывается.
+   */
+  initialMonthYM?: string | null
+): PeriodController {
   const gPreset = useFiltersStore((s) => s.preset);
   const gFrom = useFiltersStore((s) => s.from);
   const gTo = useFiltersStore((s) => s.to);
@@ -37,14 +51,19 @@ export function useLocalPeriod(defaultPreset: DatePreset = "12m"): PeriodControl
   // Adopt an explicit date RANGE that's already active on mount (a saved filter
   // «от/до» applied on another page), but not the plain default month — the
   // page should still open on its own wide span.
+  const pinned = initialMonthYM || null;
   const [preset, setPreset] = useState<DatePreset>(
-    gPreset === "custom" ? "custom" : defaultPreset
+    pinned ? "month" : gPreset === "custom" ? "custom" : defaultPreset
   );
   const [monthYM, setMonthYM] = useState<string | null>(
-    gPreset === "custom" ? gMonthYM : currentPeriod(1)
+    pinned ?? (gPreset === "custom" ? gMonthYM : currentPeriod(1))
   );
-  const [from, setFrom] = useState<string | null>(gPreset === "custom" ? gFrom : null);
-  const [to, setTo] = useState<string | null>(gPreset === "custom" ? gTo : null);
+  const [from, setFrom] = useState<string | null>(
+    pinned ? null : gPreset === "custom" ? gFrom : null
+  );
+  const [to, setTo] = useState<string | null>(
+    pinned ? null : gPreset === "custom" ? gTo : null
+  );
 
   // Follow the GLOBAL period whenever it actually CHANGES — that's a saved
   // filter being applied (it carries «от»/«до» dates), or the period changed

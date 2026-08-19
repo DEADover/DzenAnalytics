@@ -158,8 +158,11 @@ export function DashboardView() {
       <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] 3xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] gap-5 3xl:gap-6">
         <div className="flex flex-col gap-5 pt-2 lg:pt-4">
           {/* Пилюля — она же заголовок страницы: другого h1 на экране нет, а
-              оставлять главную вовсе без заголовка нельзя. */}
-          <h1 className="self-start rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] bg-panel2/80 border border-border/60 text-muted font-medium">
+              оставлять главную вовсе без заголовка нельзя. Потому и набрана в
+              полную силу — приглушённой десяткой она читалась как подпись к
+              чему-то, а не как заголовок экрана. Разрядка при этом меньше
+              прежней: чем крупнее буквы, тем меньше её нужно. */}
+          <h1 className="self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold">
             {monthName(m.ym)} · осталось {m.month.left} {daysWord(m.month.left)}
           </h1>
 
@@ -201,12 +204,20 @@ export function DashboardView() {
               </span>
             </Link>
             <Link
-              to="/report"
+              // Отчёт открываем сразу за тот месяц, о котором весь этот экран:
+              // иначе с разбора августа человек попадал на всю историю и сужал
+              // период руками.
+              to={`/report?month=${m.ym}`}
               // Та же высота, что у соседа: у главной кнопки её задаёт вложенный
-              // кружок, и «Отчёт» рядом выглядел приплюснутым.
-              className="inline-flex h-[52px] items-center rounded-full px-6 border border-border/70 text-muted text-[14px] transition-colors hover:border-accent/50 hover:text-text"
+              // кружок, и «Месячный отчёт» рядом выглядел бы приплюснутым.
+              //
+              // Заливка и полный контраст текста — чтобы кнопка читалась как
+              // кнопка: обведённая контуром и приглушённым текстом, она
+              // сливалась с белым фоном. Второстепенной её оставляет заливка
+              // подложкой, а не чёрным, как у соседней.
+              className="inline-flex h-[52px] items-center rounded-full px-6 bg-panel2 border border-border text-text text-[14px] font-medium transition-colors duration-200 hover:border-accent/50 hover:bg-panel2/70"
             >
-              Отчёт
+              Месячный отчёт
             </Link>
           </div>
 
