@@ -706,25 +706,32 @@ export function CategoriesList({
             key={c.category}
             type="button"
             onClick={() => onCategory?.(c.category)}
-            className="w-full text-left group py-0.5 rounded-lg px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            // Значок стоит ПЕРЕД полосой, а не над ней: полоса живёт в той же
+            // колонке, что и название, и начинается от одного с ним края —
+            // так же, как в представлении «Bars» на «Категориях». Раньше она
+            // шла во всю ширину строки, подныривая под значок, и левый край у
+            // полос и названий не совпадал.
+            className="w-full shrink-0 text-left group flex items-center gap-2 py-0.5 rounded-lg px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
-            <div className="flex items-center gap-2 mb-1">
-              <CategoryDot category={c.category} size="w-7 h-7" />
-              <span className="truncate text-[15px] flex-1 group-hover:text-accent">
-                {c.category}
-              </span>
-              <span className="font-mono tabular-nums text-[12px] text-muted">
-                {Math.round(frac * 100)} %
-              </span>
-              <span className="font-mono tabular-nums text-[14px] font-medium shrink-0">
-                {formatMoney(c.expense, m.base)}
-              </span>
-            </div>
-            <div className="h-2 rounded-full bg-panel2 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-expense"
-                style={{ width: `${frac * 100}%`, opacity: 0.35 + 0.65 * frac }}
-              />
+            <CategoryDot category={c.category} size="w-7 h-7" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-[15px] flex-1 group-hover:text-accent">
+                  {c.category}
+                </span>
+                <span className="font-mono tabular-nums text-[12px] text-muted">
+                  {Math.round(frac * 100)} %
+                </span>
+                <span className="font-mono tabular-nums text-[14px] font-medium shrink-0">
+                  {formatMoney(c.expense, m.base)}
+                </span>
+              </div>
+              <div className="h-2 mt-1 rounded-full bg-panel2 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-expense"
+                  style={{ width: `${frac * 100}%`, opacity: 0.35 + 0.65 * frac }}
+                />
+              </div>
             </div>
           </button>
         );

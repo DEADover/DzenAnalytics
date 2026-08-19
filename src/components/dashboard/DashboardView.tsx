@@ -259,7 +259,7 @@ export function DashboardView() {
             начинают прокручиваться. */}
         <div className="grid gap-4 lg:grid-cols-2 lg:auto-rows-[30rem]">
           <Tray>
-            <BlockTitle title="Где лежат деньги" to="/accounts"
+            <BlockTitle title="Балансы счетов" to="/accounts"
             linkLabel="Счета"
           />
             <div
@@ -289,6 +289,13 @@ export function DashboardView() {
           </Tray>
         </div>
       </section>
+
+      {/* ── Быстрые переходы ── */}
+      {/* Стоят сразу за первым экраном, а не в самом низу страницы: внизу их
+          находил только тот, кто до него доскроллил. Здесь они делят страницу
+          на «что с деньгами сейчас» и «как это разглядывать» — и заодно
+          отбивают первый экран от второго. */}
+      <QuickLinks />
 
       {/* ── Второй экран: график и статьи ── */}
       {/* Высота ряда задана явно — иначе длинный список статей растягивал его
@@ -371,8 +378,6 @@ export function DashboardView() {
         </Tray>
       </section>
 
-      {/* ── Быстрые переходы ── */}
-      <QuickLinks />
     </div>
   );
 }
