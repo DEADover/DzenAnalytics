@@ -76,7 +76,12 @@ function PlainLayout() {
   const { pathname } = useLocation();
   return (
     <ErrorBoundary key={pathname}>
-      <Outlet />
+      {/* Обёртка нужна только ради появления: ключ по адресу заставляет её
+          пересоздаваться на каждом переходе, а с новым узлом заново
+          проигрывается и анимация. */}
+      <div key={pathname} className="page-enter">
+        <Outlet />
+      </div>
     </ErrorBoundary>
   );
 }
@@ -400,10 +405,15 @@ function App() {
             <Route path="/whatif" element={<WhatIfPage />} />
             <Route path="/year-review" element={<YearReviewPage />} />
             <Route path="/digest" element={<DigestPage />} />
-          </Route>
             {/* Filtered pages: GlobalFilters is rendered INSIDE each page right
                 after PageHeader (see TransactionsPage, CashflowPage, etc.) so
-                the title sits above the filter bar. */}
+                the title sits above the filter bar.
+
+                Раньше они стояли ВНЕ общего слоя — привычка тех времён, когда
+                у них была своя обёртка с панелью отборов. Отборы давно
+                переехали внутрь самих страниц, а страницы так и остались
+                снаружи, мимо перезапуска обработчика ошибок и появления при
+                переходе. */}
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/cashflow" element={<CashflowPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
@@ -417,6 +427,7 @@ function App() {
             <Route path="/sankey" element={<SankeyPage />} />
             <Route path="/wordcloud" element={<WordcloudPage />} />
             <Route path="/50-30-20" element={<Budget503020Page />} />
+          </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
