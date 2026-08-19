@@ -284,7 +284,6 @@ export function DashboardView() {
               className="font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none pb-3 mb-1 border-b border-border text-expense"
               style={{ wordSpacing: "-0.22em" }}
             >
-              {m.upcomingTotalBase > 0 ? "−" : ""}
               {formatMoney(m.upcomingTotalBase, m.base)}
             </div>
             <UpcomingList m={m} />

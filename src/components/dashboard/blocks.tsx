@@ -777,8 +777,10 @@ export function UpcomingList({ m }: { m: DashboardModel }) {
             </span>
           </span>
           <span className="text-right shrink-0">
+            {/* Без минуса: тратами здесь всё и так, знак повторял бы то, что уже
+                сказано красным и самим названием карточки. */}
             <span className="block font-mono tabular-nums font-semibold text-[15px] text-expense">
-              −{formatMoney(p.amount, p.currency)}
+              {formatMoney(p.amount, p.currency)}
             </span>
             {p.currency !== m.base && (
               <span className="block font-mono tabular-nums text-[12px] text-muted">
