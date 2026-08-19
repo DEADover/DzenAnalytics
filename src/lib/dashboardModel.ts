@@ -85,6 +85,8 @@ export interface UpcomingPayment {
   currency: Currency;
   /** Та же сумма в базовой валюте — только её можно складывать. */
   amountBase: number;
+  /** Комментарий последнего такого платежа, если он был. */
+  comment?: string;
 }
 
 /**
@@ -98,7 +100,9 @@ export function upcomingPayments(
   candidates: RecurringCandidate[],
   rates: CurrencyRates,
   from: string,
-  until: string
+  until: string,
+  /** Комментарий последнего платежа группы — по нему часто и понятно, что это. */
+  commentFor?: (c: RecurringCandidate) => string | undefined
 ): UpcomingPayment[] {
   const fromMs = Date.parse(from);
   return candidates
@@ -111,6 +115,7 @@ export function upcomingPayments(
       amount: c.avgAmount,
       currency: c.currency,
       amountBase: toBase(c.avgAmount, c.currency, rates),
+      comment: commentFor?.(c) || undefined,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }

@@ -204,7 +204,7 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
             >
               {formatMoney(m.netWorth, m.base)}
             </div>
-            <AccountsList m={m} limit={6} onAccount={onAccount} />
+            <AccountsList m={m} onAccount={onAccount} />
           </Tray>
 
           <Tray>
@@ -219,7 +219,7 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
               to="/recurring"
               linkLabel="Регулярные"
             />
-            <UpcomingList m={m} limit={5} />
+            <UpcomingList m={m} />
           </Tray>
         </div>
       </section>
@@ -244,7 +244,7 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
             to="/categories"
             linkLabel="Категории"
           />
-          <CategoriesList m={m} limit={7} onCategory={onCategory} />
+          <CategoriesList m={m} onCategory={onCategory} />
         </Tray>
       </section>
 
@@ -253,7 +253,10 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
           широком экране они становятся крупнее. Список всплесков наоборот:
           три строки на 1600 px превращаются в название слева и число где-то
           у другого края. Поэтому ширину забирает карта, а не список. */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 3xl:grid-cols-3 gap-5 3xl:gap-6">
+      {/* `items-start` — карточки этого ряда живут своей высотой. Тепловая
+          карта заканчивается сразу после итогов, и растягивать её под соседний
+          список наблюдений значило бы оставить внутри дыру в треть карточки. */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 3xl:grid-cols-3 gap-5 3xl:gap-6 items-start">
         <div className="3xl:col-span-2">
           <Tray>
             <BlockTitle title="Активность по дням" to="/calendar"

@@ -543,23 +543,21 @@ export function NetWorthArea({ m, height = 240 }: { m: DashboardModel; height?: 
 
 export function AccountsList({
   m,
-  limit = 6,
   onAccount,
 }: {
   m: DashboardModel;
-  limit?: number;
   onAccount?: (title: string) => void;
 }) {
-  const shown = m.accounts.slice(0, limit);
-  const restCount = m.accounts.length - shown.length;
-  const restSum = m.accounts.slice(limit).reduce((s, a) => s + a.balanceBase, 0);
-
   if (m.accounts.length === 0) {
     return <div className="text-sm text-muted text-center py-6">Счетов пока нет</div>;
   }
+  const total = m.accounts.reduce((s, a) => s + a.balanceBase, 0);
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {shown.map((a) => (
+      {/* Список прокручивается внутри карточки: счетов бывает и двенадцать, а
+          обрезать их числом значило бы врать итогом внизу. */}
+      <div className="scroll-soft flex-1 min-h-0 max-h-[22rem] -mx-1 px-1">
+      {m.accounts.map((a) => (
         <button
           key={a.title}
           type="button"
@@ -587,12 +585,11 @@ export function AccountsList({
           </span>
         </button>
       ))}
-      {restCount > 0 && (
-        <div className="mt-auto flex items-center justify-between pt-2.5 text-[12.5px] text-muted">
-          <span>Ещё {restCount}</span>
-          <span className="font-mono tabular-nums">{formatMoney(restSum, m.base)}</span>
-        </div>
-      )}
+      </div>
+      <div className="mt-auto flex items-center justify-between pt-2.5 border-t border-border text-[12.5px] text-muted">
+        <span>Всего {m.accounts.length}</span>
+        <span className="font-mono tabular-nums">{formatMoney(total, m.base)}</span>
+      </div>
     </div>
   );
 }
@@ -606,14 +603,12 @@ export function AccountsList({
  */
 export function CategoriesList({
   m,
-  limit = 8,
   onCategory,
 }: {
   m: DashboardModel;
-  limit?: number;
   onCategory?: (name: string) => void;
 }) {
-  const rows = m.categories.slice(0, limit);
+  const rows = m.categories;
   if (rows.length === 0) {
     return (
       <div className="text-sm text-muted text-center py-6">
@@ -622,8 +617,10 @@ export function CategoriesList({
     );
   }
   const top = rows[0].expense || 1;
+  const total = rows.reduce((sum, c) => sum + c.expense, 0);
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="scroll-soft flex flex-col gap-3 flex-1 min-h-0 max-h-[22rem] -mx-1 px-1">
       {rows.map((c) => {
         const frac = c.expense / top;
         return (
@@ -654,12 +651,17 @@ export function CategoriesList({
           </button>
         );
       })}
+      </div>
+      <div className="mt-auto flex items-center justify-between pt-2.5 border-t border-border text-[12.5px] text-muted">
+        <span>Всего {rows.length}</span>
+        <span className="font-mono tabular-nums">{formatMoney(total, m.base)}</span>
+      </div>
     </div>
   );
 }
 
 /** Что ещё спишется до конца месяца. Итог — в базовой валюте. */
-export function UpcomingList({ m, limit = 6 }: { m: DashboardModel; limit?: number }) {
+export function UpcomingList({ m }: { m: DashboardModel }) {
   if (m.upcoming.length === 0) {
     return (
       <div className="text-sm text-muted text-center py-6">
@@ -668,8 +670,10 @@ export function UpcomingList({ m, limit = 6 }: { m: DashboardModel; limit?: numb
     );
   }
   return (
-    <div className="flex flex-col">
-      {m.upcoming.slice(0, limit).map((p) => (
+    // Все платежи, а не первые несколько: список обрезался числом, а итог в
+    // шапке считался по всем — суммы на экране не сходились.
+    <div className="scroll-soft flex flex-col flex-1 min-h-0 max-h-[22rem] -mx-1 px-1">
+      {m.upcoming.map((p) => (
         <div
           key={p.payee + p.currency + p.date}
           className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0"
@@ -686,6 +690,9 @@ export function UpcomingList({ m, limit = 6 }: { m: DashboardModel; limit?: numb
                 {formatDate(p.date, "short")} ·{" "}
                 {p.inDays === 0 ? "сегодня" : p.inDays === 1 ? "завтра" : `через ${p.inDays} дн`}
               </span>
+              {p.comment && (
+                <span className="block text-[12px] text-muted truncate">{p.comment}</span>
+              )}
             </span>
           </span>
           <span className="text-right shrink-0">

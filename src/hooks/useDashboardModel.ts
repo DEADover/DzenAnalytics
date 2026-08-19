@@ -304,9 +304,17 @@ export function useDashboardModel(): DashboardModel {
   const projIncome = factIncome;
 
   const today = new Date().toISOString().slice(0, 10);
+  // Комментарий берём у последней операции группы: `txIds` идут по возрастанию
+  // даты, и именно свежий комментарий объясняет, что это за платёж.
+  const commentFor = useMemo(() => {
+    const byId = new Map(transactions.map((t) => [t.id, t]));
+    return (c: { txIds: string[] }) =>
+      byId.get(c.txIds[c.txIds.length - 1])?.comment?.trim() || undefined;
+  }, [transactions]);
+
   const upcoming = useMemo(
-    () => upcomingPayments(recurring, rates, today, monthEnd(ym)),
-    [recurring, rates, today, ym]
+    () => upcomingPayments(recurring, rates, today, monthEnd(ym), commentFor),
+    [recurring, rates, today, ym, commentFor]
   );
   const upcomingTotalBase = useMemo(() => upcomingTotal(upcoming), [upcoming]);
 

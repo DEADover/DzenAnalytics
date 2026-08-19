@@ -151,6 +151,23 @@ h2,
        their tabular width. */
     word-spacing: -0.22em;
   }
+  /**
+   * Прокрутка без единого видимого следа: ни полосы, ни стрелок.
+   *
+   * Нужна спискам на главной — счета и статьи там длиннее карточки, но
+   * добавлять ради этого полосу прокрутки в плитку значит ломать её вид.
+   * Колесо, тач и клавиатура работают как обычно.
+   */
+  .scroll-soft {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scroll-soft::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
   .pill {
     @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium
            bg-panel2 border border-border text-text;

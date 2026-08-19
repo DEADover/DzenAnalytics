@@ -142,7 +142,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
           <BlockTitle title="Где лежат деньги" to="/accounts"
             linkLabel="Счета"
           />
-          <AccountsList m={m} limit={5} onAccount={onAccount} />
+          <AccountsList m={m} onAccount={onAccount} />
         </section>
 
         {/* ── Предстоящие списания ── */}
@@ -157,7 +157,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
             to="/recurring"
             linkLabel="Регулярные"
           />
-          <UpcomingList m={m} limit={5} />
+          <UpcomingList m={m} />
         </section>
 
         {/* ── Категории ── */}
@@ -165,7 +165,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
           <BlockTitle title="На что уходит" sub={monthLabel(m.ym)} to="/categories"
             linkLabel="Категории"
           />
-          <CategoriesList m={m} limit={8} onCategory={onCategory} />
+          <CategoriesList m={m} onCategory={onCategory} />
         </section>
 
         {/* ── Активность + третичный блок «Что разогналось» ── */}
