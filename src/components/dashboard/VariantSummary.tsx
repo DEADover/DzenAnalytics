@@ -198,7 +198,7 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
             </div>
           </div>
           <div className="min-w-0 hidden 3xl:block">
-            <BlockTitle title="Активность за 90 дней" to="/calendar"
+            <BlockTitle title="Активность по дням" to="/calendar"
             linkLabel="Календарь"
           />
             <div className="min-h-[200px]">

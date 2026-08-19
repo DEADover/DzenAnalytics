@@ -170,7 +170,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
 
         {/* ── Активность + третичный блок «Что разогналось» ── */}
         <section className="col-span-12 lg:col-span-5 3xl:col-span-3 4xl:col-span-4 card card-pad flex flex-col">
-          <BlockTitle title="Активность за 90 дней" to="/calendar"
+          <BlockTitle title="Активность по дням" to="/calendar"
             linkLabel="Календарь"
           />
           <div className="overflow-x-auto">

@@ -256,10 +256,10 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
       <section className="grid grid-cols-1 lg:grid-cols-2 3xl:grid-cols-3 gap-5 3xl:gap-6">
         <div className="3xl:col-span-2">
           <Tray>
-            <BlockTitle title="Активность за 90 дней" to="/calendar"
+            <BlockTitle title="Активность по дням" to="/calendar"
             linkLabel="Календарь"
           />
-            <ActivityHeat m={m} cell={14} />
+            <ActivityHeat m={m} />
           </Tray>
         </div>
 

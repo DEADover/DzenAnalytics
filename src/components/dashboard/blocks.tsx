@@ -42,6 +42,9 @@ import {
   chartAxisStroke,
 } from "../../lib/format";
 import { heatStep, robustCeiling } from "../../lib/dashboardModel";
+
+const MONTH_TICKS = ["янв", "фев", "мар", "апр", "май", "июн",
+  "июл", "авг", "сен", "окт", "ноя", "дек"];
 import type { DashboardModel } from "../../hooks/useDashboardModel";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
@@ -754,51 +757,87 @@ export function SpikesList({ m, limit = 3 }: { m: DashboardModel; limit?: number
  */
 export function ActivityHeat({
   m,
-  days = 91,
-  cell = 11,
+  weeks = 53,
 }: {
   m: DashboardModel;
-  days?: number;
-  cell?: number;
+  /** Сколько недель показываем. Год (53) заполняет широкую карточку целиком. */
+  weeks?: number;
 }) {
   const today = new Date();
-  const cells: { date: string; expense: number }[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+  // Сетка выравнивается по понедельникам: без этого столбец — не неделя, а
+  // просто семь подряд идущих дней, и сравнивать столбцы между собой нельзя.
+  const shiftToMonday = (new Date(today).getDay() + 6) % 7;
+  const lastMonday = new Date(today);
+  lastMonday.setDate(lastMonday.getDate() - shiftToMonday);
+  const first = new Date(lastMonday);
+  first.setDate(first.getDate() - (weeks - 1) * 7);
+
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
       d.getDate()
     ).padStart(2, "0")}`;
-    cells.push({ date: key, expense: m.dayMap.get(key)?.expense ?? 0 });
+
+  const cells: { key: string; date: Date | null; expense: number }[] = [];
+  const monthTicks: { col: number; label: string }[] = [];
+  for (let w = 0; w < weeks; w++) {
+    for (let dow = 0; dow < 7; dow++) {
+      const d = new Date(first);
+      d.setDate(d.getDate() + w * 7 + dow);
+      // Дни после сегодняшнего рисуем пустыми: их ещё не было.
+      const future = d > today;
+      const key = ymd(d);
+      cells.push({ key, date: future ? null : d, expense: future ? 0 : m.dayMap.get(key)?.expense ?? 0 });
+      if (dow === 0 && d.getDate() <= 7) {
+        monthTicks.push({ col: w, label: MONTH_TICKS[d.getMonth()] });
+      }
+    }
   }
+
   const max = Math.max(...cells.map((c) => c.expense), 0);
   const shade = (step: number) =>
     step === 0
       ? "rgb(var(--c-panel2))"
       : `color-mix(in srgb, rgb(var(--c-expense)) ${[0, 22, 44, 68, 100][step]}%, rgb(var(--c-panel2)))`;
 
+  const cols = `repeat(${weeks}, minmax(0, 1fr))`;
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5 flex-1 min-h-0">
+      {/* Подписи месяцев: без них год клеток — просто узор. */}
+      <div className="grid gap-[2px] text-[10px] text-muted" style={{ gridTemplateColumns: cols }}>
+        {Array.from({ length: weeks }, (_, w) => {
+          const tick = monthTicks.find((t) => t.col === w);
+          return (
+            <span key={w} className="leading-none whitespace-nowrap">
+              {tick ? tick.label : ""}
+            </span>
+          );
+        })}
+      </div>
+
       <div
         className="grid grid-flow-col gap-[2px]"
-        style={{ gridTemplateRows: `repeat(7, ${cell}px)` }}
+        style={{ gridTemplateColumns: cols, gridTemplateRows: "repeat(7, auto)" }}
         role="img"
-        aria-label={`Расходы по дням за последние ${days} дней. Самый крупный день — ${formatMoney(
+        aria-label={`Расходы по дням за ${weeks} недель. Самый крупный день — ${formatMoney(
           max,
           m.base
         )}.`}
       >
         {cells.map((c) => (
           <i
-            key={c.date}
-            className="block rounded-[2px]"
-            style={{ width: cell, height: cell, background: shade(heatStep(c.expense, max)) }}
+            key={c.key}
+            className="block w-full aspect-square rounded-[2px]"
+            style={{
+              background: c.date ? shade(heatStep(c.expense, max)) : "transparent",
+            }}
           />
         ))}
       </div>
-      <div className="flex items-center justify-between text-[11px] text-muted">
-        <span>Пустой день — трат не было</span>
-        <span className="flex items-center gap-1.5">
+
+      <div className="mt-auto flex items-center justify-between gap-3 pt-1 text-[11px] text-muted">
+        <span>Пустая клетка — трат не было</span>
+        <span className="flex items-center gap-1.5 shrink-0">
           0
           {[0, 1, 2, 3, 4].map((s) => (
             <i

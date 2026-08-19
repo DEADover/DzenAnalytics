@@ -155,7 +155,7 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
             <UpcomingList m={m} />
           </div>
           <div className="card card-pad min-w-0">
-            <BlockTitle title="Активность за 90 дней" to="/calendar"
+            <BlockTitle title="Активность по дням" to="/calendar"
             linkLabel="Календарь"
           />
             <ActivityHeat m={m} />
