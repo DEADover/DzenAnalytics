@@ -2040,6 +2040,13 @@ export interface Insight {
   positive?: boolean;
 }
 
+/** «19 апреля» — дата в тексте наблюдения читается словами, а не кодом. */
+function humanDay(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+}
+
 export function buildInsights(txs: Transaction[]): Insight[] {
   const insights: Insight[] = [];
   const expenses = txs.filter((t) => t.kind === "expense");
@@ -2049,7 +2056,7 @@ export function buildInsights(txs: Transaction[]): Insight[] {
   insights.push({
     kind: "highlight",
     title: "Самая крупная трата",
-    body: `${top.payee || top.categoryFull} — ${top.comment || top.categoryFull} (${top.date})`,
+    body: `${top.payee || top.categoryFull} — ${top.comment || top.categoryFull}, ${humanDay(top.date)}`,
     value: top.amountBase,
   });
 
@@ -2099,7 +2106,7 @@ export function buildInsights(txs: Transaction[]): Insight[] {
     if (Math.abs(pct) > 0.1) {
       insights.push({
         kind: pct > 0 ? "warning" : "trend",
-        title: "Расходы MoM",
+        title: "Расходы к прошлому месяцу",
         body:
           pct > 0
             ? `В этом месяце расходы выше прошлого на ${(pct * 100).toFixed(0)}%`
@@ -2129,7 +2136,7 @@ export function buildInsights(txs: Transaction[]): Insight[] {
         insights.push({
           kind: bestDelta > 0 ? "warning" : "trend",
           title: bestDelta > 0 ? "Категория растёт" : "Категория падает",
-          body: `«${bestCat}»: ${bestDelta > 0 ? "+" : ""}${Math.round(bestDelta).toLocaleString("ru-RU")} к прошлому месяцу`,
+          body: `«${bestCat}»: ${bestDelta > 0 ? "+" : "−"}${Math.round(Math.abs(bestDelta)).toLocaleString("ru-RU")} к прошлому месяцу`,
           value: bestDelta,
           positive: bestDelta < 0,
         });
