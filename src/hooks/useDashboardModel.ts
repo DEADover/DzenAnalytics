@@ -92,6 +92,18 @@ export interface DashboardModel {
   pace: number | null;
   /** Средний расход за прошлые полные месяцы. */
   avgExpense: number;
+  /** Сколько операций текущего периода дошло до расчёта. */
+  currentCount: number;
+  /**
+   * В текущем периоде есть хоть одна учтённая операция.
+   *
+   * `false` при живой истории означает, что период вычистил отбор — разрез
+   * данных или скрытые внебалансовые счета. Варианты обязаны сказать об этом
+   * прямо, а не показывать нули как факт.
+   */
+  hasCurrentData: boolean;
+  /** Прогноз дохода взят по среднему, а не по факту периода. */
+  incomeIsEstimate: boolean;
 
   upcoming: UpcomingPayment[];
   upcomingTotalBase: number;
@@ -235,6 +247,12 @@ export function useDashboardModel(): DashboardModel {
   const current = months.find((m) => m.ym === ym);
   const factIncome = current?.income ?? 0;
   const factExpense = current?.expense ?? 0;
+  // Сколько операций текущего периода реально дошло до расчёта. Ноль при живой
+  // истории — это не «месяц без трат», а отбор: разрез данных или скрытые
+  // внебалансовые счета. Показывать в таком случае бодрое «свободно 534 135 ₽»
+  // нельзя, поэтому варианты обязаны проверить этот признак.
+  const currentCount = current?.count ?? 0;
+  const hasCurrentData = currentCount > 0;
 
   // «Обычный» месяц — среднее по последним завершённым, без текущего:
   // он неполный и занизил бы планку, с которой сравниваем темп.
@@ -250,13 +268,23 @@ export function useDashboardModel(): DashboardModel {
     return complete.reduce((s, m) => s + m.income, 0) / complete.length;
   }, [months, ym]);
 
-  const pace = paceRatio(factExpense, month.progress, avgExpense);
+  // Темп считаем только когда в периоде вообще что-то потрачено. При нулевом
+  // факте формула даёт ровно −100 %, и «темп на 100 % ниже обычного» звучит
+  // как достижение, хотя означает всего лишь отсутствие данных.
+  const pace = factExpense > 0 ? paceRatio(factExpense, month.progress, avgExpense) : null;
   const projExpense = month.running
     ? Math.max(factExpense, projectExpense(factExpense, month.progress))
     : factExpense;
   // Доход не экстраполируем по темпу: зарплата приходит одним днём, и до неё
-  // линейный прогноз дал бы почти ноль. Берём большее из факта и среднего.
-  const projIncome = month.running ? Math.max(factIncome, avgIncome) : factIncome;
+  // линейный прогноз дал бы почти ноль. Берём большее из факта и среднего —
+  // но только если факт вообще есть. Иначе среднее встало бы на место факта и
+  // выдало пустой период за обычный.
+  const incomeIsEstimate = month.running && hasCurrentData && factIncome < avgIncome;
+  const projIncome = !hasCurrentData
+    ? 0
+    : month.running
+      ? Math.max(factIncome, avgIncome)
+      : factIncome;
 
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = useMemo(
@@ -292,6 +320,9 @@ export function useDashboardModel(): DashboardModel {
     projExpense,
     pace,
     avgExpense,
+    currentCount,
+    hasCurrentData,
+    incomeIsEstimate,
     upcoming,
     upcomingTotalBase,
     free,

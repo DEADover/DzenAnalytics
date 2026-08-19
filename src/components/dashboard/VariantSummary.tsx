@@ -137,7 +137,7 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
               sub="Регулярные до конца месяца"
               right={
                 m.upcomingTotalBase > 0 ? (
-                  <span className="font-mono tabular-nums font-semibold text-[13.5px] text-expense shrink-0">
+                  <span className="font-mono tabular-nums font-semibold text-[15px] text-expense shrink-0">
                     −{formatMoney(m.upcomingTotalBase, m.base)}
                   </span>
                 ) : undefined

@@ -31,7 +31,7 @@ import type { VariantProps } from "./types";
 function Tray({ children }: { children: ReactNode }) {
   return (
     <div className="h-full flex flex-col rounded-[22px] p-1.5 bg-panel2/70 border border-border/70 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.22)]">
-      <div className="flex-1 rounded-[16px] bg-panel p-4">{children}</div>
+      <div className="flex-1 rounded-[16px] bg-panel p-5">{children}</div>
     </div>
   );
 }
@@ -60,7 +60,13 @@ function daysWord(n: number): string {
   }
 }
 
-function Stat({
+/**
+ * Строка «ярлык — число» в колонке героя.
+ *
+ * Именно строкой, а не плиткой в три колонки: колонка узкая, и в трёх колонках
+ * «Расход прогноз» переносился на две строки, а число рядом обрезалось.
+ */
+function StatRow({
   label,
   value,
   tone,
@@ -70,15 +76,15 @@ function Stat({
   tone?: "income" | "expense";
 }) {
   return (
-    <div className="min-w-0">
-      <div className="text-[10.5px] uppercase tracking-[0.12em] text-muted">{label}</div>
-      <div
-        className={`font-mono tabular-nums font-semibold text-[15px] mt-1 truncate ${
+    <div className="flex items-baseline justify-between gap-3 py-2 border-b border-border/60 last:border-0">
+      <span className="text-[12px] uppercase tracking-[0.1em] text-muted">{label}</span>
+      <span
+        className={`font-mono tabular-nums font-semibold text-[18px] shrink-0 ${
           tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""
         }`}
       >
         {value}
-      </div>
+      </span>
     </div>
   );
 }
@@ -89,14 +95,17 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
   return (
     <div className="flex flex-col gap-5 3xl:gap-6">
       {/* ── Первый экран: разворот ── */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 3xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] gap-5 3xl:gap-6">
-        <div className="flex flex-col gap-5 pt-2 lg:pt-6">
+      {/* Колонка героя намеренно узкая и с фиксированной шириной: её содержимое
+          — короткий текст и одно число, и на широком экране растянутая половина
+          экрана превращалась в пустое поле. Всё, что шире, отдано данным. */}
+      <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] 3xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] gap-5 3xl:gap-6">
+        <div className="flex flex-col gap-5 pt-2 lg:pt-4">
           <span className="self-start rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] bg-panel2/80 border border-border/60 text-muted">
             {monthName(m.ym)} · осталось {m.month.left} {daysWord(m.month.left)}
           </span>
 
           <div
-            className={`font-mono font-semibold tabular-nums text-6xl 3xl:text-7xl leading-none tracking-tight ${
+            className={`font-mono font-semibold tabular-nums text-5xl 3xl:text-6xl leading-none tracking-tight ${
               m.free.value < 0 ? "text-expense" : ""
             }`}
             style={{ wordSpacing: "-0.22em" }}
@@ -104,7 +113,7 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
             {formatMoney(m.free.value, m.base)}
           </div>
 
-          <p className="text-[17px] leading-relaxed text-muted max-w-[34ch]">
+          <p className="text-[16px] leading-relaxed text-muted max-w-[30ch]">
             Столько останется свободными, если дальше тратить как сейчас.
             {over !== null && (
               <>
@@ -138,18 +147,18 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
             </Link>
           </div>
 
-          <div className="border-t border-border pt-4 grid grid-cols-3 gap-4">
-            <Stat
+          <div className="mt-auto border-t border-border pt-2">
+            <StatRow
               label="Доход прогноз"
               value={formatMoney(m.projIncome, m.base, { compact: true })}
               tone="income"
             />
-            <Stat
+            <StatRow
               label="Расход прогноз"
               value={formatMoney(m.projExpense, m.base, { compact: true })}
               tone="expense"
             />
-            <Stat
+            <StatRow
               label="Впереди"
               value={formatMoney(m.upcomingTotalBase, m.base, { compact: true })}
             />
@@ -158,7 +167,7 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
 
         {/* Справа стопка карточек; на широком экране она встаёт в два столбца,
             а не растягивается. */}
-        <div className="grid gap-4 3xl:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Tray>
             <BlockTitle title="Где лежат деньги" to="/accounts" />
             <div
@@ -169,20 +178,20 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
             >
               {formatMoney(m.netWorth, m.base)}
             </div>
-            <AccountsList m={m} limit={4} onAccount={onAccount} />
+            <AccountsList m={m} limit={6} onAccount={onAccount} />
           </Tray>
 
           <Tray>
             <BlockTitle
               title="Скоро спишется"
               right={
-                <span className="font-mono tabular-nums font-semibold text-[13.5px] text-expense shrink-0">
+                <span className="font-mono tabular-nums font-semibold text-[15px] text-expense shrink-0">
                   {m.upcomingTotalBase > 0 ? "−" : ""}
                   {formatMoney(m.upcomingTotalBase, m.base)}
                 </span>
               }
             />
-            <UpcomingList m={m} limit={3} />
+            <UpcomingList m={m} limit={5} />
           </Tray>
         </div>
       </section>
@@ -209,18 +218,22 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
       </section>
 
       {/* ── Третий ряд ── */}
+      {/* Тепловая карта выигрывает от ширины — в ней 13 недель клеток, и на
+          широком экране они становятся крупнее. Список всплесков наоборот:
+          три строки на 1600 px превращаются в название слева и число где-то
+          у другого края. Поэтому ширину забирает карта, а не список. */}
       <section className="grid grid-cols-1 lg:grid-cols-2 3xl:grid-cols-3 gap-5 3xl:gap-6">
-        <Tray>
-          <BlockTitle title="Активность за 90 дней" to="/calendar" />
-          <ActivityHeat m={m} />
-        </Tray>
-
         <div className="3xl:col-span-2">
           <Tray>
-            <BlockTitle title="Что разогналось" sub="Против обычного" />
-            <SpikesList m={m} />
+            <BlockTitle title="Активность за 90 дней" to="/calendar" />
+            <ActivityHeat m={m} cell={14} />
           </Tray>
         </div>
+
+        <Tray>
+          <BlockTitle title="Что разогналось" sub="Против обычного" />
+          <SpikesList m={m} />
+        </Tray>
       </section>
     </div>
   );

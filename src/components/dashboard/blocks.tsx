@@ -49,7 +49,7 @@ import type { DashboardModel } from "../../hooks/useDashboardModel";
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-[11px] uppercase tracking-[0.12em] text-muted font-medium">
+      <span className="text-[11.5px] uppercase tracking-[0.12em] text-muted font-medium">
         {children}
       </span>
       <span className="flex-1 h-px bg-border" />
@@ -73,8 +73,8 @@ export function BlockTitle({
   return (
     <div className="flex items-start justify-between gap-3 mb-3">
       <div className="min-w-0">
-        <div className="font-semibold text-[14.5px]">{title}</div>
-        {sub && <div className="text-xs text-muted mt-0.5">{sub}</div>}
+        <div className="font-semibold text-[16px]">{title}</div>
+        {sub && <div className="text-[12.5px] text-muted mt-0.5">{sub}</div>}
       </div>
       {right}
       {to && (
@@ -130,6 +130,23 @@ export function FreeMoneyHero({
   const aheadPct =
     m.projIncome > 0 ? Math.min(100 - spentPct, (m.upcomingTotalBase / m.projIncome) * 100) : 0;
 
+  // Период пуст, а история есть — значит операции вычистил отбор. Показать
+  // здесь бодрое число нельзя: оно будет посчитано из среднего и выдано за
+  // факт. Честнее назвать причину и подсказать, где её снять.
+  if (!m.hasCurrentData) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="label">Свободно до конца месяца</div>
+        <div className="text-2xl font-semibold tracking-tight">Пока нечего считать</div>
+        <div className="text-[14px] text-muted leading-relaxed max-w-[52ch]">
+          За {monthLabel(m.ym)} в аналитику не попало ни одной операции. Обычно это отбор:
+          активный разрез данных или выключённые внебалансовые счета — они убирают операции
+          везде, кроме списка счетов.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="label">Свободно до конца месяца</div>
@@ -141,7 +158,7 @@ export function FreeMoneyHero({
       >
         {formatMoney(m.free.value, m.base, { signed: m.free.value < 0 })}
       </div>
-      <div className="text-[13px] text-muted leading-relaxed max-w-[54ch]">
+      <div className="text-[14px] text-muted leading-relaxed max-w-[54ch]">
         Ожидаемый доход{" "}
         <span className="font-mono tabular-nums text-text">
           {formatMoney(m.free.income, m.base)}
@@ -171,7 +188,7 @@ export function FreeMoneyHero({
             style={{ left: `${spentPct}%`, width: `${Math.max(0, aheadPct)}%` }}
           />
         </div>
-        <div className="flex items-center justify-between pt-1.5 text-[11px] text-muted">
+        <div className="flex items-center justify-between pt-2 text-[12px] text-muted">
           <span>
             Прожито {m.month.day} из {m.month.days} дн
             {m.free.ahead > 0 && " · жёлтым то, что ещё спишется"}
@@ -394,23 +411,23 @@ export function AccountsList({
           key={a.title}
           type="button"
           onClick={() => onAccount?.(a.title)}
-          className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-0 text-left group"
+          className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0 text-left group"
         >
           <span className="flex items-center gap-2.5 min-w-0">
             <AccountLogo title={a.title} type={a.type} />
-            <span className="truncate text-[13.5px] group-hover:text-accent">{a.title}</span>
+            <span className="truncate text-[15px] group-hover:text-accent">{a.title}</span>
             {a.savings && <span className="text-[10px] text-muted shrink-0">· Накопительный</span>}
           </span>
           <span className="text-right shrink-0">
             <span
-              className={`block font-mono tabular-nums font-semibold text-[13.5px] ${
+              className={`block font-mono tabular-nums font-semibold text-[15px] ${
                 a.balanceBase < 0 ? "text-expense" : ""
               }`}
             >
               {formatMoney(a.balanceBase, m.base)}
             </span>
             {a.nativeCurrency !== m.base && (
-              <span className="block font-mono tabular-nums text-[11px] text-muted">
+              <span className="block font-mono tabular-nums text-[12px] text-muted">
                 {formatMoney(a.nativeBalance, a.nativeCurrency)}
               </span>
             )}
@@ -418,7 +435,7 @@ export function AccountsList({
         </button>
       ))}
       {restCount > 0 && (
-        <div className="flex items-center justify-between pt-2 text-[11.5px] text-muted">
+        <div className="flex items-center justify-between pt-2.5 text-[12.5px] text-muted">
           <span>Ещё {restCount}</span>
           <span className="font-mono tabular-nums">{formatMoney(restSum, m.base)}</span>
         </div>
@@ -453,7 +470,7 @@ export function CategoriesList({
   }
   const top = rows[0].expense || 1;
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-3">
       {rows.map((c) => {
         const frac = c.expense / top;
         return (
@@ -465,17 +482,17 @@ export function CategoriesList({
           >
             <div className="flex items-center gap-2 mb-1">
               <CategoryDot category={c.category} size="w-4 h-4" />
-              <span className="truncate text-[13.5px] flex-1 group-hover:text-accent">
+              <span className="truncate text-[15px] flex-1 group-hover:text-accent">
                 {c.category}
               </span>
-              <span className="font-mono tabular-nums text-[11px] text-muted">
+              <span className="font-mono tabular-nums text-[12px] text-muted">
                 {Math.round(frac * 100)} %
               </span>
-              <span className="font-mono tabular-nums text-[12.5px] shrink-0">
+              <span className="font-mono tabular-nums text-[14px] font-medium shrink-0">
                 {formatMoney(c.expense, m.base)}
               </span>
             </div>
-            <div className="h-1.5 rounded-full bg-panel2 overflow-hidden">
+            <div className="h-2 rounded-full bg-panel2 overflow-hidden">
               <div
                 className="h-full rounded-full bg-expense"
                 style={{ width: `${frac * 100}%`, opacity: 0.35 + 0.65 * frac }}
@@ -502,7 +519,7 @@ export function UpcomingList({ m, limit = 6 }: { m: DashboardModel; limit?: numb
       {m.upcoming.slice(0, limit).map((p) => (
         <div
           key={p.payee + p.currency + p.date}
-          className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-0"
+          className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0"
         >
           <span className="flex items-center gap-2.5 min-w-0">
             <i
@@ -511,19 +528,19 @@ export function UpcomingList({ m, limit = 6 }: { m: DashboardModel; limit?: numb
               }`}
             />
             <span className="min-w-0">
-              <span className="block text-[13px] font-medium truncate">{p.payee}</span>
-              <span className="block text-[11px] text-muted">
+              <span className="block text-[14.5px] font-medium truncate">{p.payee}</span>
+              <span className="block text-[12px] text-muted">
                 {formatDate(p.date, "short")} ·{" "}
                 {p.inDays === 0 ? "сегодня" : p.inDays === 1 ? "завтра" : `через ${p.inDays} дн`}
               </span>
             </span>
           </span>
           <span className="text-right shrink-0">
-            <span className="block font-mono tabular-nums font-semibold text-[13px] text-expense">
+            <span className="block font-mono tabular-nums font-semibold text-[15px] text-expense">
               −{formatMoney(p.amount, p.currency)}
             </span>
             {p.currency !== m.base && (
-              <span className="block font-mono tabular-nums text-[11px] text-muted">
+              <span className="block font-mono tabular-nums text-[12px] text-muted">
                 {formatMoney(p.amountBase, m.base)}
               </span>
             )}
@@ -547,7 +564,7 @@ export function SpikesList({ m, limit = 3 }: { m: DashboardModel; limit?: number
   return (
     <div className="flex flex-col gap-2">
       {rows.map((s) => (
-        <div key={s.category} className="flex items-center justify-between gap-3 text-[13px]">
+        <div key={s.category} className="flex items-center justify-between gap-3 text-[14.5px]">
           <span className="flex items-center gap-2 min-w-0">
             <CategoryDot category={s.category} size="w-3.5 h-3.5" />
             <span className="truncate">{s.category}</span>
@@ -556,7 +573,7 @@ export function SpikesList({ m, limit = 3 }: { m: DashboardModel; limit?: number
             <span className="font-mono tabular-nums font-semibold">
               {formatMoney(s.current, m.base)}
             </span>
-            <span className="text-muted text-[11.5px]">
+            <span className="text-muted text-[12.5px]">
               {" "}
               обычно {formatMoney(s.baseline, m.base)} · ×{s.ratio.toFixed(1)}
             </span>
