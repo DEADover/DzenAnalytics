@@ -23,7 +23,7 @@ import {
   AccountsList,
   CategoriesList,
   UpcomingList,
-  SpikesList,
+  ObservationsList,
   ActivityHeat,
 } from "./blocks";
 import { formatMoney, monthLabel } from "../../lib/format";
@@ -213,12 +213,12 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
         <SectionLabel>Что заметно</SectionLabel>
         <div className="max-w-[92ch]">
           <BlockTitle
-            title="Что разогналось"
+            title="Что заметно"
             sub="Против обычного за последние месяцы"
             to="/anomalies"
             linkLabel="Аномалии"
           />
-          <SpikesList m={m} />
+          <ObservationsList m={m} />
         </div>
       </section>
     </div>

@@ -21,7 +21,7 @@ import {
   UpcomingList,
   CategoriesList,
   ActivityHeat,
-  SpikesList,
+  ObservationsList,
 } from "./blocks";
 import { formatMoney, monthLabel } from "../../lib/format";
 import { Link } from "react-router-dom";
@@ -179,7 +179,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
           <div className="mt-4 pt-4 border-t border-border">
             <div className="bg-panel2 rounded-xl p-4">
               <div className="flex items-start justify-between gap-3 mb-2.5">
-                <div className="label">Что разогналось</div>
+                <div className="label">Что заметно</div>
                 <Link
                   to="/anomalies"
                   className="text-xs text-accent hover:underline flex items-center gap-1 shrink-0"
@@ -187,7 +187,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
                   Аномалии <ArrowRight className="w-3 h-3" />
                 </Link>
               </div>
-              <SpikesList m={m} limit={3} />
+              <ObservationsList m={m} />
             </div>
           </div>
         </section>

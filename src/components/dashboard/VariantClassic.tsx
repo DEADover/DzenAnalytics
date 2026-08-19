@@ -22,7 +22,7 @@ import {
   AccountsList,
   CategoriesList,
   UpcomingList,
-  SpikesList,
+  ObservationsList,
   ActivityHeat,
 } from "./blocks";
 import type { VariantProps } from "./types";
@@ -168,11 +168,11 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
         <SectionLabel>Что заметно</SectionLabel>
         <div className={`grid gap-4 ${nw ? "lg:grid-cols-2 3xl:grid-cols-3" : ""}`}>
           <div className="bg-panel2 rounded-xl p-4 min-w-0">
-            <BlockTitle title="Что разогналось"
+            <BlockTitle title="Что заметно"
             to="/anomalies"
             linkLabel="Аномалии"
           />
-            <SpikesList m={m} />
+            <ObservationsList m={m} />
           </div>
           {nw && (
             <div className="bg-panel2 rounded-xl p-4 min-w-0">

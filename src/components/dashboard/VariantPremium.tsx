@@ -15,7 +15,7 @@ import {
   AccountsList,
   CategoriesList,
   UpcomingList,
-  SpikesList,
+  ObservationsList,
   ActivityHeat,
 } from "./blocks";
 import { formatMoney } from "../../lib/format";
@@ -264,11 +264,11 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
         </div>
 
         <Tray>
-          <BlockTitle title="Что разогналось" sub="Против обычного"
+          <BlockTitle title="Что заметно" sub="Всплески статей и авто-наблюдения"
             to="/anomalies"
             linkLabel="Аномалии"
           />
-          <SpikesList m={m} limit={5} />
+          <ObservationsList m={m} />
         </Tray>
       </section>
     </div>
