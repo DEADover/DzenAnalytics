@@ -8,6 +8,7 @@ import {
   freeMoney,
   monthEnd,
   heatStep,
+  robustCeiling,
 } from "./dashboardModel";
 import type { RecurringCandidate } from "./aggregations";
 import type { CurrencyRates } from "../types";
@@ -195,5 +196,38 @@ describe("heatStep — ступень тепловой шкалы", () => {
     expect(heatStep(2_500, 10_000)).toBe(1);
     expect(heatStep(5_000, 10_000)).toBe(2);
     expect(heatStep(7_500, 10_000)).toBe(3);
+  });
+});
+
+describe("robustCeiling — шкала, устойчивая к выбросам", () => {
+  it("КЛЮЧЕВОЕ: один рекордный месяц не задирает шкалу", () => {
+    // Обычные месяцы 200–600 тыс. и одна покупка на 2,4 млн: без среза
+    // типичный столбец занимал бы пятую часть высоты.
+    const vals = [230, 250, 270, 280, 330, 330, 380, 430, 560, 800, 1250, 2400];
+    const { cap, clipped } = robustCeiling(vals);
+    expect(clipped).toBe(true);
+    expect(cap).toBeLessThan(2400);
+    expect(cap).toBeGreaterThan(600);
+  });
+
+  it("ровный ряд не режется вовсе", () => {
+    const vals = [200, 210, 220, 230, 240, 250];
+    const { cap, clipped } = robustCeiling(vals);
+    expect(clipped).toBe(false);
+    expect(cap).toBe(250);
+  });
+
+  it("превышение на несколько процентов не повод резать шкалу", () => {
+    const vals = [100, 100, 100, 100, 100, 104];
+    expect(robustCeiling(vals).clipped).toBe(false);
+  });
+
+  it("на коротком ряду не режем: три точки — это не распределение", () => {
+    expect(robustCeiling([100, 200, 5000])).toEqual({ cap: 5000, clipped: false });
+  });
+
+  it("нули и мусор игнорируются, пустой ряд даёт ноль", () => {
+    expect(robustCeiling([])).toEqual({ cap: 0, clipped: false });
+    expect(robustCeiling([0, 0, Number.NaN])).toEqual({ cap: 0, clipped: false });
   });
 });

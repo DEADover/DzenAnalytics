@@ -41,7 +41,7 @@ import {
   chartGridStroke,
   chartAxisStroke,
 } from "../../lib/format";
-import { heatStep } from "../../lib/dashboardModel";
+import { heatStep, robustCeiling } from "../../lib/dashboardModel";
 import type { DashboardModel } from "../../hooks/useDashboardModel";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
@@ -254,12 +254,93 @@ export function PaceRing({ m, size = 104 }: { m: DashboardModel; size?: number }
 
 /* ─────────────────────────────  графики  ───────────────────────────── */
 
+/** Прямоугольник со скруглённым верхом — рисуем сами, раз у столбца своя форма. */
+function topRoundedPath(x: number, y: number, w: number, h: number, r: number): string {
+  const rr = Math.max(0, Math.min(r, w / 2, h));
+  return (
+    `M${x},${y + h} L${x},${y + rr} Q${x},${y} ${x + rr},${y} ` +
+    `L${x + w - rr},${y} Q${x + w},${y} ${x + w},${y + rr} L${x + w},${y + h} Z`
+  );
+}
+
+interface CashBarProps {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  fill?: string;
+  payload?: Record<string, unknown>;
+  /** Имя поля-признака «столбец срезан» в строке данных. */
+  clipFlag: string;
+  /** Имя поля с настоящей суммой — её печатаем над срезанным столбцом. */
+  realKey: string;
+}
+
+/**
+ * Столбец, который умеет показать, что он срезан, и что он прогнозный.
+ *
+ * Прогноз рисуется здесь же, а не отдельной серией: каждая серия резервирует
+ * свой слот в КАЖДОМ месяце, даже когда её значение пустое, — четыре серии
+ * давали столбцы по шесть пикселей. Двух серий хватает, а факт от прогноза
+ * отличает заливка.
+ *
+ * У срезанного столбца верхняя кромка зубчатая — общепринятый знак разрыва
+ * шкалы, — а над ним стоит настоящая сумма. Без этого срез был бы враньём:
+ * столбец выглядел бы обычным, просто высоким.
+ */
+function CashBar(props: CashBarProps) {
+  const { x = 0, y = 0, width = 0, height = 0, fill } = props;
+  if (height <= 0 || width <= 0) return null;
+  const row = props.payload ?? {};
+  const clipped = !!row[props.clipFlag];
+  const forecast = !!row.isForecast;
+  const real = Number(row[props.realKey] ?? 0);
+  const step = width / 4;
+  return (
+    <g>
+      <path
+        d={topRoundedPath(x, y, width, height, 3)}
+        fill={fill}
+        fillOpacity={forecast ? 0.28 : 1}
+        stroke={forecast ? fill : undefined}
+        strokeDasharray={forecast ? "3 3" : undefined}
+      />
+      {clipped && (
+        <>
+          <path
+            d={`M${x},${y} l${step},-3.5 l${step},7 l${step},-7 l${step},3.5`}
+            fill="none"
+            stroke={fill}
+            strokeWidth={2}
+            strokeLinejoin="round"
+          />
+          <text
+            x={x + width / 2}
+            y={y - 9}
+            textAnchor="middle"
+            fill={fill}
+            fontSize={10}
+            fontWeight={600}
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {formatNum(real, { compact: true })}
+          </text>
+        </>
+      )}
+    </g>
+  );
+}
+
 /**
  * Доходы и расходы по месяцам.
  *
  * Показываем последние `window` месяцев, а не всю историю: на сорока месяцах
- * столбцы выходили по два пикселя. Прогнозные месяцы — теми же столбцами, но
- * приглушённые и с пунктирной обводкой.
+ * столбцы выходили по два пикселя.
+ *
+ * Шкала строится по устойчивому максимуму (`robustCeiling`): один месяц с
+ * крупной покупкой прижимал остальные четырнадцать ко дну, и график переставал
+ * показывать обычный ритм. Всё, что выше среза, рисуется с зубчатой кромкой и
+ * настоящим числом над столбцом.
  */
 export function CashflowBars({
   m,
@@ -273,68 +354,97 @@ export function CashflowBars({
   onMonth?: (ym: string) => void;
 }) {
   const tail = m.forecast.slice(-(window + 3));
-  const data = tail.map((p) => ({
-    ym: p.ym,
-    month: monthLabel(p.ym),
-    income: p.isForecast ? null : Math.round(p.income),
-    expense: p.isForecast ? null : Math.round(p.expense),
-    incomeF: p.isForecast ? Math.round(p.income) : null,
-    expenseF: p.isForecast ? Math.round(p.expense) : null,
-  }));
+  const { cap, clipped } = robustCeiling(
+    tail.flatMap((p) => [p.income, p.expense]).map((v) => Math.round(v))
+  );
+  // Срезанный столбец не дотягивается до верха: над ним нужно место под число.
+  const limit = cap * 0.9;
+  const draw = (v: number) => (clipped ? Math.min(v, limit) : v);
+
+  const data = tail.map((p) => {
+    const inc = Math.round(p.income);
+    const exp = Math.round(p.expense);
+    return {
+      ym: p.ym,
+      month: monthLabel(p.ym),
+      isForecast: !!p.isForecast,
+      income: draw(inc),
+      expense: draw(exp),
+      incomeReal: inc,
+      expenseReal: exp,
+      incomeClipped: clipped && inc > limit,
+      expenseClipped: clipped && exp > limit,
+    };
+  });
 
   return (
-    <div style={{ height }}>
-      <ResponsiveContainer>
-        <ComposedChart
-          data={data}
-          onClick={(e: unknown) => {
-            const ev = e as { activePayload?: { payload?: { ym?: string } }[] } | undefined;
-            const ym = ev?.activePayload?.[0]?.payload?.ym;
-            const isF = tail.find((p) => p.ym === ym)?.isForecast;
-            if (ym && !isF && onMonth) onMonth(ym);
-          }}
-          style={{ cursor: onMonth ? "pointer" : undefined }}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
-          <XAxis dataKey="month" stroke={chartAxisStroke} fontSize={11} tickLine={false} />
-          <YAxis
-            stroke={chartAxisStroke}
-            fontSize={11}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v) => formatNum(v, { compact: true })}
-          />
-          <Tooltip
-            {...chartTooltipProps}
-            formatter={(v: unknown, name: unknown) => [
-              formatMoney(toNum(v), m.base),
-              String(name),
-            ]}
-          />
-          <Bar dataKey="income" name="Доход +" fill="rgb(var(--c-income))" radius={[3, 3, 0, 0]} activeBar={false} />
-          <Bar dataKey="expense" name="Расход −" fill="rgb(var(--c-expense))" radius={[3, 3, 0, 0]} activeBar={false} />
-          <Bar
-            dataKey="incomeF"
-            name="Прогноз дохода +"
-            fill="rgb(var(--c-income))"
-            fillOpacity={0.3}
-            stroke="rgb(var(--c-income))"
-            strokeDasharray="3 3"
-            radius={[3, 3, 0, 0]}
-            activeBar={false}
-          />
-          <Bar
-            dataKey="expenseF"
-            name="Прогноз расхода −"
-            fill="rgb(var(--c-expense))"
-            fillOpacity={0.3}
-            stroke="rgb(var(--c-expense))"
-            strokeDasharray="3 3"
-            radius={[3, 3, 0, 0]}
-            activeBar={false}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+    <div className="flex flex-col gap-1">
+      <div style={{ height }}>
+        <ResponsiveContainer>
+          <ComposedChart
+            data={data}
+            margin={{ top: 18, right: 4, bottom: 0, left: 0 }}
+            barCategoryGap="14%"
+            barGap={3}
+            onClick={(e: unknown) => {
+              const ev = e as { activePayload?: { payload?: { ym?: string } }[] } | undefined;
+              const ym = ev?.activePayload?.[0]?.payload?.ym;
+              const isF = tail.find((p) => p.ym === ym)?.isForecast;
+              if (ym && !isF && onMonth) onMonth(ym);
+            }}
+            style={{ cursor: onMonth ? "pointer" : undefined }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
+            <XAxis dataKey="month" stroke={chartAxisStroke} fontSize={11} tickLine={false} />
+            <YAxis
+              stroke={chartAxisStroke}
+              fontSize={11}
+              tickLine={false}
+              axisLine={false}
+              domain={[0, cap > 0 ? cap : "auto"]}
+              tickFormatter={(v) => formatNum(v, { compact: true })}
+            />
+            <Tooltip
+              {...chartTooltipProps}
+              // Показываем настоящую сумму, а не срезанную высоту столбца.
+              formatter={(_v: unknown, name: unknown, item: unknown) => {
+                const row = (item as { payload?: Record<string, number> } | undefined)?.payload;
+                const isIncome = String(name).includes("Доход");
+                const real = row?.[isIncome ? "incomeReal" : "expenseReal"] ?? 0;
+                return [formatMoney(real, m.base), String(name)];
+              }}
+            />
+            <Bar
+              dataKey="income"
+              name="Доход +"
+              fill="rgb(var(--c-income))"
+              maxBarSize={30}
+              activeBar={false}
+              isAnimationActive={false}
+              shape={(props: object) => (
+                <CashBar {...(props as CashBarProps)} clipFlag="incomeClipped" realKey="incomeReal" />
+              )}
+            />
+            <Bar
+              dataKey="expense"
+              name="Расход −"
+              fill="rgb(var(--c-expense))"
+              maxBarSize={30}
+              activeBar={false}
+              isAnimationActive={false}
+              shape={(props: object) => (
+                <CashBar {...(props as CashBarProps)} clipFlag="expenseClipped" realKey="expenseReal" />
+              )}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      {clipped && (
+        <div className="text-[11.5px] text-muted">
+          Шкала срезана по обычному размаху — рекордные месяцы подписаны числом,
+          иначе остальные прижимались бы ко дну.
+        </div>
+      )}
     </div>
   );
 }

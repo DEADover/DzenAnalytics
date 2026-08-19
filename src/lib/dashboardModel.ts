@@ -153,6 +153,35 @@ export function freeMoney(opts: {
   };
 }
 
+/**
+ * Верх шкалы, устойчивый к выбросам.
+ *
+ * Один месяц с покупкой машины прижимает остальные четырнадцать ко дну: при
+ * максимуме 2,4 млн обычный месяц в 560 тысяч занимает пятую часть высоты, и
+ * график перестаёт отвечать на вопрос «а какой у меня обычный ритм». Поэтому
+ * шкала строится по девятому дециля с небольшим запасом, а всё, что выше,
+ * рисуется срезанным — с числом рядом, чтобы величину не потерять.
+ *
+ * Если выброса нет, ничего не режем: `clipped` вернётся `false`, а `cap`
+ * совпадёт с настоящим максимумом.
+ */
+export function robustCeiling(
+  values: number[],
+  quantile = 0.9,
+  headroom = 1.15
+): { cap: number; clipped: boolean } {
+  const pos = values.filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+  if (pos.length === 0) return { cap: 0, clipped: false };
+  const max = pos[pos.length - 1];
+  if (pos.length < 4) return { cap: max, clipped: false };
+  const q = pos[Math.min(pos.length - 1, Math.floor(quantile * (pos.length - 1)))];
+  const cap = q * headroom;
+  // Небольшое превышение резать незачем — только испортим шкалу ради пары
+  // процентов. Режем, когда максимум выбивается заметно.
+  if (max <= cap * 1.05) return { cap: max, clipped: false };
+  return { cap, clipped: true };
+}
+
 /** Последний день месяца `ym` в виде YYYY-MM-DD. */
 export function monthEnd(ym: string): string {
   const year = Number(ym.slice(0, 4));
