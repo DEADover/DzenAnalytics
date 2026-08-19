@@ -3,9 +3,11 @@ import { createPortal } from "react-dom";
 import { HelpCircle } from "lucide-react";
 import clsx from "clsx";
 
-/** Ширина панели. Подобрана по высоте: на 20rem длинное объяснение вытягивалось
- *  почти во весь экран, а шире 40rem строка становится слишком длинной для
- *  12px. */
+/** ПРЕДЕЛ ширины панели, а не сама ширина: короткое пояснение в одну строку
+ *  растягивалось на все 40rem и выглядело нелепо рядом со своим значком.
+ *  Панель считается по содержимому и упирается в этот предел — шире строка
+ *  становится слишком длинной для 12px, уже 20rem длинный текст вытягивается
+ *  почти во весь экран. */
 const WIDTH = 640; // 40rem
 const MARGIN = 8;
 
@@ -42,10 +44,13 @@ export function InfoPopover({
     const place = () => {
       const a = btnRef.current?.getBoundingClientRect();
       if (!a) return;
-      const h = panelRef.current?.getBoundingClientRect().height ?? 0;
+      const box = panelRef.current?.getBoundingClientRect();
+      const h = box?.height ?? 0;
       const vw = window.innerWidth || WIDTH + MARGIN * 2;
       const vh = window.innerHeight || 0;
-      const width = Math.min(WIDTH, vw - MARGIN * 2);
+      // Ширину берём измеренную: панель теперь по содержимому, и правый край
+      // выравнивается по кнопке только если считать по факту, а не по пределу.
+      const width = Math.min(box?.width || WIDTH, vw - MARGIN * 2);
       // По умолчанию — правым краем к кнопке; если не влезает, прижимаем к краю.
       const left = Math.min(Math.max(a.right - width, MARGIN), vw - width - MARGIN);
       // Ниже кнопки, а если снизу не хватает места — выше неё.
@@ -103,7 +108,7 @@ export function InfoPopover({
               ref={panelRef}
               role="dialog"
               aria-label={label}
-              className="fixed z-[91] w-[40rem] max-w-[calc(100vw-1rem)] border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2.5 text-xs text-muted leading-relaxed"
+              className="fixed z-[91] w-max max-w-[min(40rem,calc(100vw-1rem))] border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2.5 text-xs text-muted leading-relaxed"
               style={{
                 left: pos?.left ?? -9999,
                 top: pos?.top ?? -9999,
