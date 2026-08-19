@@ -1,11 +1,15 @@
 /**
- * Раскладка «Премиум».
+ * Главная страница.
  *
- * Тот же ответ, что даёт «Сводка», но другим голосом: первый экран — разворот,
- * слева крупная типографика и одно действие, справа стопка карточек с данными.
+ * Первый экран — разворот: слева крупная типографика и одно действие, справа
+ * карточки с данными. Дальше графики, активность и наблюдения.
+ *
+ * Модель считается здесь один раз и раздаётся блокам; переходы (открыть
+ * операции месяца, категории, счёта) тоже живут здесь — сами блоки не должны
+ * знать ни про хранилища, ни про то, как открывается drawer.
  */
 
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import {
@@ -20,7 +24,12 @@ import {
   SpendStructure,
 } from "./blocks";
 import { formatMoney, monthLabel } from "../../lib/format";
-import type { VariantProps } from "./types";
+import { useDashboardModel } from "../../hooks/useDashboardModel";
+import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
+import { useDrillStore } from "../../store/useDrillStore";
+import { useReportPeriodStore } from "../../store/useReportPeriodStore";
+import { periodKey } from "../../lib/period";
+import { affectsExpense } from "../../lib/txKindStyle";
 
 /**
  * Поддон с двойным кантом.
@@ -100,7 +109,39 @@ function StatRow({
   );
 }
 
-export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantProps) {
+export function DashboardView() {
+  const m = useDashboardModel();
+  const transactions = useAnalyticsTransactions();
+  const showDrill = useDrillStore((s) => s.show);
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+
+  const { onMonth, onCategory, onAccount } = useMemo(
+    () => ({
+      onMonth: (ym: string) =>
+        showDrill(
+          monthLabel(ym),
+          transactions.filter((t) => periodKey(t.date, monthStartDay) === ym),
+          "Месяц"
+        ),
+      // Возвраты тоже берём: именно они уменьшили ту сумму, по которой кликнули.
+      onCategory: (name: string) =>
+        showDrill(
+          name,
+          transactions.filter((t) => affectsExpense(t.kind) && t.category === name),
+          "Расходы по категории"
+        ),
+      onAccount: (title: string) =>
+        showDrill(
+          title,
+          transactions.filter(
+            (t) => t.account === title || t.outcomeAccount === title || t.incomeAccount === title
+          ),
+          "Операции по счёту"
+        ),
+    }),
+    [transactions, showDrill, monthStartDay]
+  );
+
   const over = m.pace === null ? null : m.pace - 1;
   // Структура считается по последнему ЗАКРЫТОМУ месяцу — подписываем каким
   // именно, повторяя тот же отбор, что и модель.
