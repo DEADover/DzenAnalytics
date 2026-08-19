@@ -934,6 +934,15 @@ export function ActivityHeat({
   const busiest = past.reduce((best, d) => (spend(d) > spend(best) ? d : best), past[0] ?? 1);
 
   const avgDay = past.length ? past.reduce((a, d) => a + spend(d), 0) / past.length : 0;
+  const opsCount = past.reduce((a, d) => a + (m.dayMap.get(ymd(d))?.count ?? 0), 0);
+  // «Обычный день» — медиана по дням, где траты были. Среднее задирает один
+  // крупный день, и «в среднем 10 437 ₽» перестаёт описывать обычный день.
+  const spentDays = past.map(spend).filter((v) => v > 0).sort((a, b) => a - b);
+  const medianDay = spentDays.length
+    ? spentDays.length % 2 === 0
+      ? (spentDays[spentDays.length / 2 - 1] + spentDays[spentDays.length / 2]) / 2
+      : spentDays[(spentDays.length - 1) / 2]
+    : 0;
   const topDays = [...past]
     .filter((d) => spend(d) > 0)
     .sort((a, b) => spend(b) - spend(a))
@@ -1023,20 +1032,33 @@ export function ActivityHeat({
 
           {/* Итоги месяца стоят здесь, а не полосой во всю карточку: там они
               добавляли карточке лишнюю высоту, а рядом со списком дней читаются
-              как его продолжение. */}
-          <div className="mt-4 pt-3 border-t border-border grid grid-cols-2 gap-4 text-[12.5px]">
-            <div>
-              <div className="text-muted">Дней без трат</div>
-              <div className="font-mono tabular-nums font-semibold text-[15px]">
-                {quiet} <span className="text-muted font-normal text-[12px]">из {past.length}</span>
+              как его продолжение. Строкой на каждый показатель — в две колонки
+              подписи переносились. */}
+          <div className="mt-4 pt-3 border-t border-border flex flex-col text-[12.5px]">
+            {[
+              {
+                label: "Дней без трат",
+                value: (
+                  <>
+                    {quiet}{" "}
+                    <span className="text-muted font-normal text-[12px]">из {past.length}</span>
+                  </>
+                ),
+              },
+              { label: "Операций за месяц", value: opsCount },
+              { label: "В среднем в день", value: formatMoney(avgDay, m.base) },
+              { label: "Обычный день", value: formatMoney(medianDay, m.base) },
+            ].map((row) => (
+              <div
+                key={row.label}
+                className="flex items-baseline justify-between gap-3 py-1.5 border-b border-border/60 last:border-0"
+              >
+                <span className="text-muted">{row.label}</span>
+                <span className="font-mono tabular-nums font-semibold text-[15px] shrink-0">
+                  {row.value}
+                </span>
               </div>
-            </div>
-            <div className="text-right">
-              <div className="text-muted">В среднем в день</div>
-              <div className="font-mono tabular-nums font-semibold text-[15px]">
-                {formatMoney(avgDay, m.base)}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       )}
