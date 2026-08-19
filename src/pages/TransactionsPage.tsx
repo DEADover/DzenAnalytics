@@ -1165,7 +1165,9 @@ function Row({
           {tx.date.slice(8, 10)}.{tx.date.slice(5, 7)}.{tx.date.slice(0, 4)}
         </div>
       )}
-      <div className="flex items-center gap-2 min-w-0" title={tx.categoryFull}>
+      {/* Без `title`: подсказка повторяла название, которое тут же и написано,
+          и всплывала при каждом проходе мышью над лентой. */}
+      <div className="flex items-center gap-2 min-w-0">
         <span className="relative inline-flex shrink-0">
           {/* Sub-category operations show the SUB-tag's own icon (resolved by the
               «Parent / Sub» path), not the parent's. */}
@@ -1192,7 +1194,7 @@ function Row({
             )}
           </div>
           {tx.subcategory && (
-            <div className="text-[0.85em] text-muted truncate" title={tx.subcategory}>
+            <div className="text-[0.85em] text-muted truncate">
               {tx.subcategory}
             </div>
           )}

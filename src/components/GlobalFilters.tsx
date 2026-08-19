@@ -332,7 +332,7 @@ export function GlobalFilters({
     <div className="mb-4 md:mb-6">
       <div
         className={clsx(
-          "card p-3 md:card-pad md:p-4",
+          "card-tray p-3 md:card-pad md:p-4",
           // `inert` снимает и клики, и обход с клавиатуры, и внимание читалок —
           // одним атрибутом, без перебора всех контролов внутри.
           dimmed && "opacity-45 grayscale select-none"

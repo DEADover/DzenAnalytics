@@ -1115,7 +1115,7 @@ export function BudgetsPage() {
                 <h2 className="font-semibold text-lg">Без бюджета</h2>
                 <span className="text-sm text-muted">Траты есть, плана нет</span>
               </div>
-              <div className="card divide-y divide-border">
+              <div className="card-tray divide-y divide-border">
                 {unbudgeted.map((u) => (
                   <div
                     key={`${u.kind}/${u.category}/${u.subcategory ?? ""}`}
@@ -1685,7 +1685,7 @@ function TransferList({
 }) {
   const total = rows.reduce((s, r) => s + r.sum, 0);
   return (
-    <div className="card">
+    <div className="card-tray">
       <div className="flex items-baseline justify-between gap-3 px-3 py-2 border-b border-border">
         <span className="label">{title}</span>
         <span className="text-sm font-medium tabular-nums">{formatMoney(total, base)}</span>

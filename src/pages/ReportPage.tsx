@@ -440,7 +440,7 @@ export function ReportPage() {
       )}
 
       {empty ? (
-        <div className="card card-pad text-sm text-muted text-center py-10">
+        <div className="card-tray card-pad text-sm text-muted text-center py-10">
           За выбранный период нет доходов и расходов — измените отбор выше.
         </div>
       ) : (

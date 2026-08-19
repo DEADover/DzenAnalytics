@@ -262,8 +262,10 @@ export function DashboardView() {
             <BlockTitle title="Балансы счетов" to="/accounts"
             linkLabel="Счета"
           />
+            {/* Черта под итогом — та же, что делит строки списка: без неё
+                крупное число и первая строка счёта читались как одно целое. */}
             <div
-              className={`font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none mb-3 ${
+              className={`font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none pb-3 mb-1 border-b border-border ${
                 m.netWorth < 0 ? "text-expense" : ""
               }`}
               style={{ wordSpacing: "-0.22em" }}
@@ -279,7 +281,7 @@ export function DashboardView() {
                 крупным числом под заголовком. Мелкой строчкой в шапке он
                 выбивался из ряда. */}
             <div
-              className="font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none mb-3 text-expense"
+              className="font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none pb-3 mb-1 border-b border-border text-expense"
               style={{ wordSpacing: "-0.22em" }}
             >
               {m.upcomingTotalBase > 0 ? "−" : ""}

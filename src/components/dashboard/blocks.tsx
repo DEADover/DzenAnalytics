@@ -976,6 +976,21 @@ export function ActivityHeat({
           if (c.day === null) return <span key={c.key} />;
           const future = ymd(c.day) > todayKey;
           const value = future ? 0 : spend(c.day);
+          const step = future ? 0 : heatStep(value, cap);
+          // Цвет числа — по ступени, иначе оно тонет в собственной клетке.
+          // Приглушённый серый годится только на пустой: на верхних ступенях он
+          // давал полтора к одному по тёмной теме, на средних — два с небольшим
+          // по светлой. Теперь на закрашенных клетках число полноцветное, а на
+          // двух верхних, где клетка почти сплошь красная, — белое: на красном
+          // оно читается в обеих темах (4,8:1 по светлой, 6,1:1 по тёмной).
+          const hot = step >= 4;
+          const dayTone = future
+            ? "text-muted/50"
+            : hot
+              ? "text-white font-medium"
+              : step > 0
+                ? "text-text"
+                : "text-muted";
           return (
             <button
               key={c.key}
@@ -985,14 +1000,14 @@ export function ActivityHeat({
               className={`aspect-square rounded-md flex items-center justify-center text-[13px] tabular-nums
                           transition-shadow duration-150
                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50
-                          ${future ? "text-muted/50" : "text-muted"}
+                          ${dayTone}
                           ${
                             !future && value > 0
                               ? "cursor-pointer hover:ring-2 hover:ring-accent/40"
                               : "cursor-default"
                           }`}
               style={{
-                background: future ? "transparent" : shade(heatStep(value, cap)),
+                background: future ? "transparent" : shade(step),
                 border: future ? "1px dashed rgb(var(--c-border))" : undefined,
               }}
             >

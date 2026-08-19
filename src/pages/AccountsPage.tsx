@@ -1642,7 +1642,7 @@ export function AccountsPage() {
         />
       </div>
 
-      <div className={tab === "capital" ? "card card-pad" : "hidden"}>
+      <div className={tab === "capital" ? "card-tray card-pad" : "hidden"}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="font-semibold">
@@ -1905,7 +1905,7 @@ export function AccountsPage() {
         </div>
       </div>
 
-      <div className={tab === "flow" ? "card card-pad" : "hidden"}>
+      <div className={tab === "flow" ? "card-tray card-pad" : "hidden"}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="font-semibold">
@@ -1965,7 +1965,7 @@ export function AccountsPage() {
           его за вкладкой — значит отвечать на вопрос «сколько у меня есть» без
           перечня счетов. Вкладка меняет не наличие списка, а его столбцы:
           остаток и доля против оборотов за период. */}
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="flex items-center gap-2 flex-wrap mb-3">
           {/* Два показателя строки набраны одинаково: жирная подпись — значение
               обычным. Так строка читается парами «что : сколько», а не гонкой
