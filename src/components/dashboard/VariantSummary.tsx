@@ -170,7 +170,7 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
               занимает пару строк, и без опоры соседний блок повисал бы один. */}
           <div className="min-w-0">
             <BlockTitle
-              title="На что уходит"
+              title="Расходы по категориям"
               sub="Доля от самой крупной статьи"
               to="/categories"
             linkLabel="Категории"
@@ -198,7 +198,7 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
             </div>
           </div>
           <div className="min-w-0 hidden 3xl:block">
-            <BlockTitle title="Активность по дням" to="/calendar"
+            <BlockTitle title="Активность в этом месяце" to="/calendar"
             linkLabel="Календарь"
           />
             <div className="min-h-[200px]">
@@ -213,7 +213,7 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
         <SectionLabel>Что заметно</SectionLabel>
         <div className="max-w-[92ch]">
           <BlockTitle
-            title="Что заметно"
+            title="Авто-наблюдения"
             sub="Против обычного за последние месяцы"
             to="/anomalies"
             linkLabel="Аномалии"

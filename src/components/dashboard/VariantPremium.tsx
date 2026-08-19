@@ -17,8 +17,9 @@ import {
   UpcomingList,
   ObservationsList,
   ActivityHeat,
+  SpendStructure,
 } from "./blocks";
-import { formatMoney } from "../../lib/format";
+import { formatMoney, monthLabel } from "../../lib/format";
 import type { VariantProps } from "./types";
 
 /**
@@ -101,6 +102,10 @@ function StatRow({
 
 export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantProps) {
   const over = m.pace === null ? null : m.pace - 1;
+  // Структура считается по последнему ЗАКРЫТОМУ месяцу — подписываем каким
+  // именно, повторяя тот же отбор, что и модель.
+  const lastCompleteYM = m.months.filter((b) => b.ym < m.ym).slice(-1)[0]?.ym;
+  const lastCompleteLabel = lastCompleteYM ? monthLabel(lastCompleteYM) : null;
 
   return (
     <div className="flex flex-col gap-5 3xl:gap-6">
@@ -212,7 +217,7 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
           </Tray>
 
           <Tray>
-            <BlockTitle title="Скоро спишется" to="/recurring" linkLabel="Регулярные" />
+            <BlockTitle title="Запланированные платежи" to="/recurring" linkLabel="Регулярные" />
             {/* Итог подан так же, как совокупный баланс у соседней карточки:
                 крупным числом под заголовком. Мелкой строчкой в шапке он
                 выбивался из ряда. */}
@@ -246,7 +251,7 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
 
         <Tray>
           <BlockTitle
-            title="На что уходит"
+            title="Расходы по категориям"
             sub="Доля от самой крупной статьи"
             to="/categories"
             linkLabel="Категории"
@@ -255,30 +260,38 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
         </Tray>
       </section>
 
-      {/* ── Третий ряд ── */}
-      {/* Тепловая карта выигрывает от ширины — в ней 13 недель клеток, и на
-          широком экране они становятся крупнее. Список всплесков наоборот:
-          три строки на 1600 px превращаются в название слева и число где-то
-          у другого края. Поэтому ширину забирает карта, а не список. */}
-      {/* `items-start` — карточки этого ряда живут своей высотой. Тепловая
-          карта заканчивается сразу после итогов, и растягивать её под соседний
-          список наблюдений значило бы оставить внутри дыру в треть карточки. */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 3xl:grid-cols-3 gap-5 3xl:gap-6 items-start">
-        <div className="3xl:col-span-2">
-          <Tray>
-            <BlockTitle title="Активность по дням" to="/calendar"
-            linkLabel="Календарь"
-          />
-            <ActivityHeat m={m} />
-          </Tray>
-        </div>
+      {/* ── Третий ряд: активность и наблюдения, поровну ── */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-5 3xl:gap-6">
+        <Tray>
+          <BlockTitle title="Активность в этом месяце" to="/calendar" linkLabel="Календарь" />
+          <ActivityHeat m={m} />
+        </Tray>
 
         <Tray>
-          <BlockTitle title="Что заметно" sub="Всплески статей и авто-наблюдения"
+          <BlockTitle
+            title="Авто-наблюдения"
+            sub="Всплески статей и отклонения от обычного"
             to="/anomalies"
             linkLabel="Аномалии"
           />
           <ObservationsList m={m} />
+        </Tray>
+      </section>
+
+      {/* ── Структура расходов: одна широкая полоса ── */}
+      <section>
+        <Tray>
+          <BlockTitle
+            title="Структура расходов"
+            sub={
+              lastCompleteLabel
+                ? `Последний завершённый месяц · ${lastCompleteLabel}`
+                : "Последний завершённый месяц"
+            }
+            to="/50-30-20"
+            linkLabel="50/30/20"
+          />
+          <SpendStructure m={m} />
         </Tray>
       </section>
     </div>

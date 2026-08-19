@@ -44,8 +44,7 @@ import {
 } from "../../lib/format";
 import { heatStep, robustCeiling } from "../../lib/dashboardModel";
 
-const MONTH_TICKS = ["янв", "фев", "мар", "апр", "май", "июн",
-  "июл", "авг", "сен", "окт", "ноя", "дек"];
+const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 import type { DashboardModel } from "../../hooks/useDashboardModel";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
@@ -574,7 +573,7 @@ export function AccountsList({
           className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0 text-left group rounded-lg px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           <span className="flex items-center gap-2.5 min-w-0">
-            <AccountLogo title={a.title} type={a.type} />
+            <AccountLogo title={a.title} type={a.type} size={28} />
             <span className="min-w-0">
               <span className="block truncate text-[15px] group-hover:text-accent">{a.title}</span>
               {/* Тип известен только из кэша Дзен-мани. В режиме CSV его нет, и
@@ -632,7 +631,6 @@ export function CategoriesList({
     );
   }
   const top = rows[0].expense || 1;
-  const total = rows.reduce((sum, c) => sum + c.expense, 0);
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="scroll-soft flex flex-col gap-3 flex-1 min-h-0 -mx-2 px-2">
@@ -646,7 +644,7 @@ export function CategoriesList({
             className="w-full text-left group py-0.5 rounded-lg px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             <div className="flex items-center gap-2 mb-1">
-              <CategoryDot category={c.category} size="w-4 h-4" />
+              <CategoryDot category={c.category} size="w-7 h-7" />
               <span className="truncate text-[15px] flex-1 group-hover:text-accent">
                 {c.category}
               </span>
@@ -666,10 +664,6 @@ export function CategoriesList({
           </button>
         );
       })}
-      </div>
-      <div className="mt-auto flex items-center justify-between pt-2.5 border-t border-border text-[12.5px] text-muted">
-        <span>Всего {rows.length}</span>
-        <span className="font-mono tabular-nums">{formatMoney(total, m.base)}</span>
       </div>
     </div>
   );
@@ -772,7 +766,7 @@ export function ObservationsList({
           <span className="flex items-start gap-2.5 min-w-0">
             {r.category ? (
               <span className="mt-1 shrink-0">
-                <CategoryDot category={r.category} size="w-3.5 h-3.5" />
+                <CategoryDot category={r.category} size="w-7 h-7" />
               </span>
             ) : (
               <i className={`mt-[7px] w-2 h-2 rounded-full shrink-0 block ${toneClass[r.tone]}`} />
@@ -808,104 +802,80 @@ export function ObservationsList({
  * «а сколько это». Ступени строятся из токена расхода через `color-mix`,
  * поэтому тёмная тема работает по устройству, а не по совпадению.
  */
-export function ActivityHeat({
-  m,
-  weeks = 53,
-}: {
-  m: DashboardModel;
-  /** Сколько недель показываем. Год (53) заполняет широкую карточку целиком. */
-  weeks?: number;
-}) {
-  const today = new Date();
-  // Сетка выравнивается по понедельникам: без этого столбец — не неделя, а
-  // просто семь подряд идущих дней, и сравнивать столбцы между собой нельзя.
-  const shiftToMonday = (new Date(today).getDay() + 6) % 7;
-  const lastMonday = new Date(today);
-  lastMonday.setDate(lastMonday.getDate() - shiftToMonday);
-  const first = new Date(lastMonday);
-  first.setDate(first.getDate() - (weeks - 1) * 7);
+export function ActivityHeat({ m }: { m: DashboardModel }) {
+  const year = Number(m.ym.slice(0, 4));
+  const monthIdx = Number(m.ym.slice(5, 7)) - 1;
+  const days = new Date(year, monthIdx + 1, 0).getDate();
+  const todayKey = new Date().toISOString().slice(0, 10);
 
-  const ymd = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-      d.getDate()
-    ).padStart(2, "0")}`;
+  const ymd = (d: number) =>
+    `${m.ym}-${String(d).padStart(2, "0")}`;
 
-  const cells: { key: string; date: Date | null; expense: number }[] = [];
-  const monthTicks: { col: number; label: string }[] = [];
-  for (let w = 0; w < weeks; w++) {
-    for (let dow = 0; dow < 7; dow++) {
-      const d = new Date(first);
-      d.setDate(d.getDate() + w * 7 + dow);
-      // Дни после сегодняшнего рисуем пустыми: их ещё не было.
-      const future = d > today;
-      const key = ymd(d);
-      cells.push({ key, date: future ? null : d, expense: future ? 0 : m.dayMap.get(key)?.expense ?? 0 });
-      if (dow === 0 && d.getDate() <= 7) {
-        monthTicks.push({ col: w, label: MONTH_TICKS[d.getMonth()] });
-      }
-    }
-  }
+  // Календарная сетка: столбец — день недели, строка — неделя месяца. Ведущие
+  // пустые клетки нужны, чтобы первое число встало под свой день недели.
+  const lead = (new Date(year, monthIdx, 1).getDay() + 6) % 7;
+  const cells: { key: string; day: number | null }[] = [];
+  for (let i = 0; i < lead; i++) cells.push({ key: `lead-${i}`, day: null });
+  for (let d = 1; d <= days; d++) cells.push({ key: ymd(d), day: d });
 
-  // Шкала цвета строится по устойчивому максимуму, а не по рекордному дню:
-  // одна покупка на 2,4 млн загоняла все остальные дни в самую бледную
-  // ступень, и год превращался в ровное поле с одной красной клеткой.
-  const { cap } = robustCeiling(cells.map((c) => c.expense));
-  const realMax = Math.max(...cells.map((c) => c.expense), 0);
+  const spend = (d: number) => m.dayMap.get(ymd(d))?.expense ?? 0;
+  const values = Array.from({ length: days }, (_, i) => spend(i + 1));
+  // Шкала — по устойчивому максимуму: один крупный день иначе загонял все
+  // остальные в самую бледную ступень.
+  const { cap } = robustCeiling(values);
   const shade = (step: number) =>
     step === 0
       ? "rgb(var(--c-panel2))"
       : `color-mix(in srgb, rgb(var(--c-expense)) ${[0, 22, 44, 68, 100][step]}%, rgb(var(--c-panel2)))`;
 
-  const past = cells.filter((c) => c.date);
-  const quiet = past.filter((c) => c.expense <= 0).length;
-  const busiest = past.reduce(
-    (best, c) => (c.expense > (best?.expense ?? 0) ? c : best),
-    null as (typeof past)[number] | null
-  );
-
-  const cols = `repeat(${weeks}, minmax(0, 1fr))`;
+  const past = Array.from({ length: days }, (_, i) => i + 1).filter((d) => ymd(d) <= todayKey);
+  const quiet = past.filter((d) => spend(d) <= 0).length;
+  const busiest = past.reduce((best, d) => (spend(d) > spend(best) ? d : best), past[0] ?? 1);
 
   return (
-    <div className="flex flex-col gap-1.5 flex-1 min-h-0">
-      {/* Подписи месяцев: без них год клеток — просто узор. */}
-      <div className="grid gap-[2px] text-[10px] text-muted" style={{ gridTemplateColumns: cols }}>
-        {Array.from({ length: weeks }, (_, w) => {
-          const tick = monthTicks.find((t) => t.col === w);
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
+      <div className="grid grid-cols-7 gap-1.5 text-[11px] text-muted text-center max-w-[24rem] w-full mx-auto">
+        {WEEKDAYS.map((w) => (
+          <span key={w}>{w}</span>
+        ))}
+      </div>
+
+      <div
+        className="grid grid-cols-7 gap-1.5 max-w-[24rem] w-full mx-auto"
+        role="img"
+        aria-label={`Расходы по дням за ${monthLabel(m.ym)}. Самый крупный день — ${formatMoney(
+          spend(busiest),
+          m.base
+        )}.`}
+      >
+        {cells.map((c) => {
+          if (c.day === null) return <span key={c.key} />;
+          const future = ymd(c.day) > todayKey;
+          const value = future ? 0 : spend(c.day);
           return (
-            <span key={w} className="leading-none whitespace-nowrap">
-              {tick ? tick.label : ""}
+            <span
+              key={c.key}
+              className={`aspect-square rounded-md flex items-start justify-end p-1 text-[11px] tabular-nums ${
+                future ? "text-muted/50" : "text-muted"
+              }`}
+              style={{
+                background: future ? "transparent" : shade(heatStep(value, cap)),
+                border: future ? "1px dashed rgb(var(--c-border))" : undefined,
+              }}
+            >
+              {c.day}
             </span>
           );
         })}
       </div>
 
-      <div
-        className="grid grid-flow-col gap-[2px]"
-        style={{ gridTemplateColumns: cols, gridTemplateRows: "repeat(7, auto)" }}
-        role="img"
-        aria-label={`Расходы по дням за ${weeks} недель. Самый крупный день — ${formatMoney(
-          realMax,
-          m.base
-        )}.`}
-      >
-        {cells.map((c) => (
-          <i
-            key={c.key}
-            className="block w-full aspect-square rounded-[2px]"
-            style={{
-              background: c.date ? shade(heatStep(c.expense, cap)) : "transparent",
-            }}
-          />
-        ))}
-      </div>
-
-      <div className="flex items-center justify-end gap-1.5 pt-1 text-[11px] text-muted">
+      <div className="flex items-center justify-end gap-1.5 text-[11px] text-muted">
         Меньше
-        {[0, 1, 2, 3, 4].map((s) => (
+        {[0, 1, 2, 3, 4].map((st) => (
           <i
-            key={s}
+            key={st}
             className="block rounded-[2px]"
-            style={{ width: 9, height: 9, background: shade(s) }}
+            style={{ width: 9, height: 9, background: shade(st) }}
           />
         ))}
         {formatMoney(cap, m.base)} и больше
@@ -918,13 +888,63 @@ export function ActivityHeat({
             {quiet} <span className="text-muted font-normal text-[12px]">из {past.length}</span>
           </div>
         </div>
-        {busiest && busiest.expense > 0 && (
-          <div className="text-right">
-            <div className="text-muted">Самый дорогой день</div>
-            <div className="font-mono tabular-nums font-semibold text-[15px] text-expense">
-              {formatMoney(busiest.expense, m.base)}
-            </div>
+        <div className="text-right">
+          <div className="text-muted">Самый дорогой день</div>
+          <div className="font-mono tabular-nums font-semibold text-[15px] text-expense">
+            {formatMoney(spend(busiest), m.base)}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Структура расходов последнего завершённого месяца.
+ *
+ * Считается по последнему ЗАКРЫТОМУ месяцу, а не текущему: в текущем половина
+ * обязательных платежей ещё не прошла, и доля вышла бы заниженной просто
+ * потому, что сегодня девятнадцатое.
+ */
+export function SpendStructure({ m }: { m: DashboardModel }) {
+  const nw = m.needsWants;
+  if (!nw || nw.needs + nw.wants <= 0) {
+    return (
+      <div className="text-sm text-muted py-3">
+        Нужен хотя бы один завершённый месяц с расходами
+      </div>
+    );
+  }
+  const spend = nw.needs + nw.wants;
+  // «Свободные деньги» — доход минус ОБЯЗАТЕЛЬНЫЕ траты: столько остаётся,
+  // если не тратить ни на что необязательное.
+  const freedom = nw.income - nw.needs;
+  const cell = (label: string, value: number, dot: string, tone = "") => (
+    <div className="min-w-0">
+      <div className="label flex items-center gap-1.5">
+        <i className={`w-2 h-2 rounded-full block ${dot}`} />
+        {label}
+      </div>
+      <div className={`font-mono tabular-nums font-semibold text-[17px] mt-1 ${tone}`}>
+        {formatMoney(value, m.base, { signed: tone !== "" })}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="h-3 rounded-full bg-panel2 overflow-hidden flex">
+        <i className="bg-warn h-full" style={{ width: `${(nw.needs / spend) * 100}%` }} />
+        <i className="bg-accent2 h-full" style={{ width: `${(nw.wants / spend) * 100}%` }} />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {cell("Обязательные", nw.needs, "bg-warn")}
+        {cell("Необязательные", nw.wants, "bg-accent2")}
+        {cell(
+          "«Свободные деньги»",
+          freedom,
+          freedom >= 0 ? "bg-income" : "bg-expense",
+          freedom >= 0 ? "text-income" : "text-expense"
         )}
       </div>
     </div>

@@ -148,7 +148,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
         {/* ── Предстоящие списания ── */}
         <section className="col-span-12 lg:col-span-4 3xl:col-span-3 4xl:col-span-3 card card-pad flex flex-col">
           <BlockTitle
-            title="Скоро спишется"
+            title="Запланированные платежи"
             right={
               <span className="font-mono tabular-nums text-[13px] font-semibold text-expense shrink-0">
                 −{formatMoney(m.upcomingTotalBase, m.base)}
@@ -162,7 +162,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
 
         {/* ── Категории ── */}
         <section className="col-span-12 lg:col-span-7 3xl:col-span-3 4xl:col-span-5 card card-pad flex flex-col">
-          <BlockTitle title="На что уходит" sub={monthLabel(m.ym)} to="/categories"
+          <BlockTitle title="Расходы по категориям" sub={monthLabel(m.ym)} to="/categories"
             linkLabel="Категории"
           />
           <CategoriesList m={m} onCategory={onCategory} />
@@ -170,7 +170,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
 
         {/* ── Активность + третичный блок «Что разогналось» ── */}
         <section className="col-span-12 lg:col-span-5 3xl:col-span-3 4xl:col-span-4 card card-pad flex flex-col">
-          <BlockTitle title="Активность по дням" to="/calendar"
+          <BlockTitle title="Активность в этом месяце" to="/calendar"
             linkLabel="Календарь"
           />
           <div className="overflow-x-auto">
@@ -179,7 +179,7 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
           <div className="mt-4 pt-4 border-t border-border">
             <div className="bg-panel2 rounded-xl p-4">
               <div className="flex items-start justify-between gap-3 mb-2.5">
-                <div className="label">Что заметно</div>
+                <div className="label">Авто-наблюдения</div>
                 <Link
                   to="/anomalies"
                   className="text-xs text-accent hover:underline flex items-center gap-1 shrink-0"

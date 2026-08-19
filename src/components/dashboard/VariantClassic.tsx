@@ -134,7 +134,7 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
           </div>
           <div className="card card-pad min-w-0">
             <BlockTitle
-              title="На что уходит"
+              title="Расходы по категориям"
               sub="Доля от самой крупной статьи"
               to="/categories"
             linkLabel="Категории"
@@ -143,7 +143,7 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
           </div>
           <div className="card card-pad min-w-0">
             <BlockTitle
-              title="Скоро спишется"
+              title="Запланированные платежи"
               right={
                 <span className="font-mono tabular-nums text-[13px] font-semibold text-expense shrink-0">
                   −{formatMoney(m.upcomingTotalBase, m.base)}
@@ -155,7 +155,7 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
             <UpcomingList m={m} />
           </div>
           <div className="card card-pad min-w-0">
-            <BlockTitle title="Активность по дням" to="/calendar"
+            <BlockTitle title="Активность в этом месяце" to="/calendar"
             linkLabel="Календарь"
           />
             <ActivityHeat m={m} />
@@ -168,7 +168,7 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
         <SectionLabel>Что заметно</SectionLabel>
         <div className={`grid gap-4 ${nw ? "lg:grid-cols-2 3xl:grid-cols-3" : ""}`}>
           <div className="bg-panel2 rounded-xl p-4 min-w-0">
-            <BlockTitle title="Что заметно"
+            <BlockTitle title="Авто-наблюдения"
             to="/anomalies"
             linkLabel="Аномалии"
           />
