@@ -31,6 +31,7 @@ import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CategoryDot } from "../CategoryDot";
 import { AccountLogo } from "../AccountLogo";
+import { accountKindLabel } from "../../lib/accountType";
 import {
   formatMoney,
   formatNum,
@@ -541,22 +542,6 @@ export function NetWorthArea({ m, height = 240 }: { m: DashboardModel; height?: 
 
 /* ─────────────────────────────  списки  ───────────────────────────── */
 
-/** «1 счёт · 2 счёта · 5 счетов». */
-function accountsWord(n: number): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return "счетов";
-  switch (n % 10) {
-    case 1:
-      return "счёт";
-    case 2:
-    case 3:
-    case 4:
-      return "счёта";
-    default:
-      return "счетов";
-  }
-}
-
 export function AccountsList({
   m,
   onAccount,
@@ -572,7 +557,16 @@ export function AccountsList({
       {/* Список прокручивается внутри карточки: счетов бывает и двенадцать, а
           обрезать их числом значило бы врать итогом внизу. */}
       <div className="scroll-soft flex flex-col flex-1 min-h-0 -mx-2 px-2">
-      {m.accounts.map((a) => (
+      {m.accounts.map((a) => {
+        // Тип известен только из кэша Дзен-мани; в режиме CSV его нет.
+        // И не повторяем его, когда он слово в слово совпал с названием счёта
+        // («Наличные — Наличные»).
+        const label = a.type ? accountKindLabel(a.type, a.savings) : "";
+        const kind =
+          label && label !== "—" && label.toLowerCase() !== a.title.trim().toLowerCase()
+            ? label
+            : "";
+        return (
         <button
           key={a.title}
           type="button"
@@ -581,8 +575,17 @@ export function AccountsList({
         >
           <span className="flex items-center gap-2.5 min-w-0">
             <AccountLogo title={a.title} type={a.type} />
-            <span className="truncate text-[15px] group-hover:text-accent">{a.title}</span>
-            {a.savings && <span className="text-[10px] text-muted shrink-0">· Накопительный</span>}
+            <span className="min-w-0">
+              <span className="block truncate text-[15px] group-hover:text-accent">{a.title}</span>
+              {/* Тип известен только из кэша Дзен-мани. В режиме CSV его нет, и
+                  строка-прочерк была бы шумом — тогда её просто не рисуем. */}
+              {kind && (
+                <span className="block text-[12px] text-muted truncate">
+                  {kind}
+                  {a.offBalance && " · Вне баланса"}
+                </span>
+              )}
+            </span>
           </span>
           <span className="text-right shrink-0">
             <span
@@ -599,10 +602,8 @@ export function AccountsList({
             )}
           </span>
         </button>
-      ))}
-      </div>
-      <div className="mt-auto pt-2.5 border-t border-border text-[12.5px] text-muted">
-        Всего {m.accounts.length} {accountsWord(m.accounts.length)}
+        );
+      })}
       </div>
     </div>
   );

@@ -229,7 +229,10 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
       </section>
 
       {/* ── Второй экран: график и статьи ── */}
-      <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-5 3xl:gap-6">
+      {/* Высота ряда задана явно — иначе длинный список статей растягивал его
+          вместе с графиком: у кого пятнадцать категорий, у того карточка
+          вырастала вдвое. Теперь список прокручивается внутри. */}
+      <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-5 3xl:gap-6 lg:auto-rows-[30rem]">
         <Tray>
           <BlockTitle
             title="Доходы и расходы"
