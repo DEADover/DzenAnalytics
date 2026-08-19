@@ -43,6 +43,7 @@ import {
 } from "../lib/aggregations";
 import { buildNeedsWants, type NeedsWantsSplit } from "../lib/needsWants";
 import { useBudgetsStore } from "../store/useBudgetsStore";
+import { buildNotices, type Notice } from "../lib/dashboardNotices";
 import { plannedFor } from "../lib/budgets";
 import { currentPeriod, periodKey } from "../lib/period";
 import {
@@ -131,6 +132,14 @@ export interface DashboardModel {
   insights: Insight[];
   /** Ближайшие регулярные, включая уже прошедшие в этом месяце — для счётчика. */
   recurringMonthlyCount: number;
+  /**
+   * Отобранные и упорядоченные наблюдения для блока «Что заметно».
+   *
+   * Собираются в чистой функции `buildNotices`, а не в вёрстке: иначе каждая
+   * раскладка решала бы сама, что показать, и четыре варианта разъехались бы
+   * по содержанию, а не по виду.
+   */
+  notices: Notice[];
 }
 
 /** Сколько месяцев истории берём для «обычного» расхода. */
@@ -320,6 +329,39 @@ export function useDashboardModel(): DashboardModel {
     return { planIncome: inc, planExpense: exp };
   }, [budgetLines, ym]);
 
+  // Факт по статьям за месяц — в том же виде, в каком его ждёт отбор наблюдений.
+  const factByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of categories) map.set(c.category, c.expense);
+    return map;
+  }, [categories]);
+
+  const planByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const line of budgetLines) {
+      if (line.kind === "income") continue;
+      const p = plannedFor(line, ym);
+      if (p <= 0) continue;
+      map.set(line.category, (map.get(line.category) ?? 0) + p);
+    }
+    return map;
+  }, [budgetLines, ym]);
+
+  const notices = useMemo(
+    () =>
+      buildNotices({
+        ym,
+        base,
+        today,
+        spikes,
+        recurring,
+        planByCategory,
+        factByCategory,
+        insights,
+      }),
+    [ym, base, today, spikes, recurring, planByCategory, factByCategory, insights]
+  );
+
   const recurringMonthlyCount = useMemo(
     () => recurring.filter((r) => !r.stale && r.cadence === "monthly").length,
     [recurring]
@@ -356,5 +398,6 @@ export function useDashboardModel(): DashboardModel {
     dayMap,
     insights,
     recurringMonthlyCount,
+    notices,
   };
 }

@@ -705,19 +705,13 @@ export function UpcomingList({ m, limit = 6 }: { m: DashboardModel; limit?: numb
 }
 
 /**
- * Что заметно: всплески статей и авто-наблюдения одним списком.
+ * Что заметно: наблюдения одним списком.
  *
  * Раньше это были два разных блока — узкая карточка «Что разогналось» на две
  * строки и панель из шести плиток-наблюдений. Первая пустовала, во второй
- * половина плиток была шумом: «В воскресенье средний чек выше всего» и
- * «Расходы по дням недели примерно ровные» не меняют ни одного решения.
+ * половина плиток была шумом.
  *
- * Правила отбора:
- *   • наблюдения с `kind: "fact"` не показываем — это ровно те «наблюдения»,
- *     которые срабатывают всегда и ни о чём не говорят;
- *   • статью, уже попавшую во всплески, вторым разом как «категория растёт»
- *     не повторяем;
- *   • всплески идут первыми: у них есть число и кратность, они конкретнее.
+ * Отбор и порядок задаёт `buildNotices`; здесь только подача.
  */
 export function ObservationsList({
   m,
@@ -726,46 +720,10 @@ export function ObservationsList({
   m: DashboardModel;
   limit?: number;
 }) {
-  const spikes = m.spikes.filter((s) => s.ym === m.ym).slice(0, 3);
-  const spikeCats = new Set(spikes.map((s) => s.category));
-
-  const rows: {
-    key: string;
-    tone: "expense" | "income" | "warn" | "accent";
-    title: string;
-    body: string;
-    value?: string;
-    dot?: string;
-  }[] = spikes.map((s) => ({
-    key: `spike-${s.category}`,
-    tone: "expense",
-    title: s.category,
-    body: `Обычно ${formatMoney(s.baseline, m.base)} · ×${s.ratio.toFixed(1)}`,
-    value: formatMoney(s.current, m.base),
-    dot: s.category,
-  }));
-
-  for (const i of m.insights) {
-    if (rows.length >= limit) break;
-    if (i.kind === "fact") continue;
-    if (i.title.startsWith("Категория") && [...spikeCats].some((c) => i.body.includes(c))) continue;
-    rows.push({
-      key: `insight-${i.title}-${i.body.slice(0, 12)}`,
-      tone: i.positive ? "income" : i.kind === "warning" ? "warn" : "accent",
-      title: i.title,
-      body: i.body,
-      // `value` у наблюдений означает разное: где сумму, где долю, где
-      // кратность. Деньгами печатаем только «самую крупную трату» — у
-      // остальных число уже стоит в тексте, и повторять его было бы враньём
-      // («расходы ниже на 41 %» превращалось в «−0 ₽»).
-      value:
-        i.kind === "highlight" && i.value !== undefined
-          ? formatMoney(i.value, m.base)
-          : undefined,
-    });
-  }
-
-  const excess = spikes.reduce((sum, r) => sum + Math.max(0, r.current - r.baseline), 0);
+  const rows = m.notices.slice(0, limit);
+  const excess = m.spikes
+    .filter((s) => s.ym === m.ym)
+    .reduce((sum, r) => sum + Math.max(0, r.current - r.baseline), 0);
 
   if (rows.length === 0) {
     return (
@@ -784,15 +742,15 @@ export function ObservationsList({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {rows.slice(0, limit).map((r) => (
+      {rows.map((r) => (
         <div
-          key={r.key}
+          key={r.id}
           className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0"
         >
           <span className="flex items-start gap-2.5 min-w-0">
-            {r.dot ? (
+            {r.category ? (
               <span className="mt-1 shrink-0">
-                <CategoryDot category={r.dot} size="w-3.5 h-3.5" />
+                <CategoryDot category={r.category} size="w-3.5 h-3.5" />
               </span>
             ) : (
               <i className={`mt-[7px] w-2 h-2 rounded-full shrink-0 block ${toneClass[r.tone]}`} />
@@ -802,9 +760,9 @@ export function ObservationsList({
               <span className="block text-[12.5px] text-muted leading-snug">{r.body}</span>
             </span>
           </span>
-          {r.value && (
+          {r.value !== undefined && (
             <span className="font-mono tabular-nums font-semibold text-[14px] shrink-0 pt-0.5">
-              {r.value}
+              {formatMoney(r.value, m.base)}
             </span>
           )}
         </div>
