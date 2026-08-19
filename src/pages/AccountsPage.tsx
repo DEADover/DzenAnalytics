@@ -94,7 +94,7 @@ import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
-import { PageTabs } from "../components/PageTabs";
+import { Segmented } from "../components/Segmented";
 import { capitalShare, positiveBalanceTotal } from "../lib/accountOptions";
 import { Stat } from "../components/Stat";
 import { Sparkline } from "../components/Sparkline";
@@ -1413,12 +1413,36 @@ export function AccountsPage() {
         title="Счета"
         hint="Остатки на счетах, их история и обороты за период."
         right={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Переключатели «Вся история / По фильтрам» и «По счетам /
                 Совокупно» жили здесь, в шапке страницы, и по ним нельзя было
                 понять, на что каждый влияет. Теперь каждый стоит там, где
                 действует: первый — над блоком показателей и графиков, которые
-                он пересчитывает, второй — в карточке своего графика. */}
+                он пересчитывает, второй — в карточке своего графика.
+
+                А вот выбор раздела здесь как раз на месте: он меняет страницу
+                целиком, и стоит там же, где такой же выбор на «Категориях». */}
+            <Segmented
+              value={tab}
+              onChange={setTab}
+              label="Разделы страницы «Счета»"
+              options={[
+                {
+                  value: "capital",
+                  label: "Капитал",
+                  icon: Landmark,
+                  // Не «отбору не подчиняется»: период на этой вкладке работает —
+                  // просто выбирает показанный отрезок, а не пересчитывает суммы.
+                  title: "Сколько денег на счетах и как менялось",
+                },
+                {
+                  value: "flow",
+                  label: "Движение",
+                  icon: ArrowLeftRight,
+                  title: "Поступления и списания за выбранный период",
+                },
+              ]}
+            />
             {zenLoaded && !zenToken && (
               <button
                 onClick={() => setCalibOpen((o) => !o)}
@@ -1432,34 +1456,6 @@ export function AccountsPage() {
           </div>
         }
       />
-      {/* Вкладки, а не один длинный список блоков: на странице живут два разных
-          сюжета — «сколько у меня всего» и «что происходило по отбору». Раньше
-          они шли вперемешку, и понять, на что действует панель фильтров, было
-          нельзя: соседние карточки «Чистая дельта (фильтр)» и «Чистая дельта
-          (вся история)» стояли вплотную. */}
-      <PageTabs
-        value={tab}
-        onChange={setTab}
-        label="Разделы страницы «Счета»"
-        className="-mt-2"
-        tabs={[
-          {
-            id: "capital",
-            label: "Капитал",
-            icon: Landmark,
-            // Не «отбору не подчиняется»: период на этой вкладке работает —
-            // просто выбирает показанный отрезок, а не пересчитывает суммы.
-            title: "Сколько денег на счетах и как менялось",
-          },
-          {
-            id: "flow",
-            label: "Движение",
-            icon: ArrowLeftRight,
-            title: "Поступления и списания за выбранный период",
-          },
-        ]}
-      />
-
       {/* Панель больше не гаснет: отбор в деле на обеих вкладках. На «Капитале»
           окно показа задаёт ПЕРИОД (в нём есть «Всё» — это и есть вся история),
           на «Движении» работает весь отбор целиком. Отдельный переключатель

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info } from "lucide-react";
+import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -53,6 +53,13 @@ interface Props {
   /** Open a freshly created operation as a «Долг» (create mode only). */
   initialDebt?: boolean;
   onClose: () => void;
+  /**
+   * Снять копию с открытой операции (issue #78). Задан — в подвале появляется
+   * кнопка: карточка закрывается, а вместо неё открывается форма создания,
+   * заполненная по этой операции. Не задан — копировать некуда (без
+   * подключённого Дзен-мани новых операций не создать).
+   */
+  onCopy?: () => void;
   /** Edit mode only. Step to the previous (-1) / next (+1) operation in the
    *  caller's current order. Wired to ←/→ keys; the caller swaps which `tx`
    *  is being edited. Omit to disable arrow navigation. */
@@ -110,6 +117,7 @@ export function EditTransactionModal({
   initialKind,
   initialDebt,
   onClose,
+  onCopy,
   onNavigate,
 }: Props) {
   const isCreate = !txProp;
@@ -1441,16 +1449,30 @@ export function EditTransactionModal({
           {isCreate ? (
             <span />
           ) : (
-            <Tooltip content="Удалить операцию">
-              <button
-                onClick={handleDelete}
-                disabled={saving}
-                className="btn-danger text-sm"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Удалить
-              </button>
-            </Tooltip>
+            <div className="flex items-center gap-2">
+              <Tooltip content="Удалить операцию">
+                <button
+                  onClick={handleDelete}
+                  disabled={saving}
+                  className="btn-danger text-sm"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Удалить
+                </button>
+              </Tooltip>
+              {onCopy && (
+                <Tooltip content="Создать такую же операцию сегодняшним днём">
+                  <button
+                    onClick={onCopy}
+                    disabled={saving}
+                    className="btn-ghost text-sm"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Копировать
+                  </button>
+                </Tooltip>
+              )}
+            </div>
           )}
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="btn-ghost text-sm">

@@ -625,6 +625,14 @@ export function TransactionsDrawer() {
           key={editing.id}
           tx={editing}
           onClose={() => setEditing(null)}
+          onCopy={
+            apiConnected
+              ? () => {
+                  setEditing(null);
+                  setCopying(editing);
+                }
+              : undefined
+          }
           onNavigate={(dir) => {
             const i = sorted.findIndex((t) => t.id === editing.id);
             const next = sorted[i + dir];

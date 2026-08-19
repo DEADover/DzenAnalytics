@@ -23,6 +23,7 @@ import { accountOptions } from "../lib/accountOptions";
 import { useFiltersStore, type DatePreset } from "../store/useFiltersStore";
 import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
+import { InfoPopover } from "./InfoPopover";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { currencyFlagEmoji } from "../lib/currencyFlag";
 
@@ -658,11 +659,16 @@ export function GlobalFilters({
         </div>
       </div>
       </div>
-      {/* Строка-объяснение под панелью. Погашенная панель без слов читается как
-          поломка, поэтому причина всегда рядом. */}
+      {/* Объяснение, почему часть отборов погашена. Абзацем оно занимало три
+          строки под панелью и читалось на каждой загрузке страницы, хотя нужно
+          один раз — поэтому уехало под значок. Совсем убирать нельзя: гашёная
+          панель без причины читается как поломка, но теперь причина рядом, а не
+          поперёк дороги. */}
       {(dimmed && dimmedHint) || (!showDataFilters && dataFiltersHint) ? (
-        <div className="text-xs text-muted mt-1.5 px-1">
-          {dimmed ? dimmedHint : dataFiltersHint}
+        <div className="flex justify-end mt-1.5 px-1">
+          <InfoPopover label="Почему часть отборов недоступна">
+            <p>{dimmed ? dimmedHint : dataFiltersHint}</p>
+          </InfoPopover>
         </div>
       ) : null}
     </div>

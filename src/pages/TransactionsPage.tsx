@@ -808,6 +808,17 @@ export function TransactionsPage() {
           key={editing.id}
           tx={editing}
           onClose={() => setEditing(null)}
+          onCopy={
+            apiConnected
+              ? () => {
+                  // Карточку правки закрываем: копия — отдельная операция, и
+                  // держать обе формы открытыми значило бы предлагать править
+                  // образец и копию разом.
+                  setEditing(null);
+                  setCopying(editing);
+                }
+              : undefined
+          }
           onNavigate={(dir) => {
             const i = sorted.findIndex((t) => t.id === editing.id);
             const next = sorted[i + dir];

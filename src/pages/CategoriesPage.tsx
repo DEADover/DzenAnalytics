@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
-import { ChevronRight, ChevronDown, Maximize2, X } from "lucide-react";
+import { ChevronRight, ChevronDown, Maximize2, X, BarChart3, LayoutGrid } from "lucide-react";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useDataStore } from "../store/useDataStore";
@@ -15,6 +15,7 @@ import { useDrillStore } from "../store/useDrillStore";
 import { affectsExpense } from "../lib/txKindStyle";
 import { colorForCategory, subcategoryColor } from "../lib/categoryColor";
 import { formatMoney, formatPct, currencySymbol } from "../lib/format";
+import { Segmented } from "../components/Segmented";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
@@ -527,26 +528,16 @@ export function CategoriesPage() {
         hint="Данные и аналитика с разбивкой по категориям и подкатегориям. Клик по элементу — список операций."
         right={
           <div className="flex flex-wrap gap-2">
-            <div className="flex bg-panel2 rounded-lg p-1 border border-border">
-              <button
-                onClick={() => setView("rings")}
-                className={`px-3 py-1 text-xs rounded-md ${view === "rings" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                Donut
-              </button>
-              <button
-                onClick={() => setView("bars")}
-                className={`px-3 py-1 text-xs rounded-md ${view === "bars" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                Bars
-              </button>
-              <button
-                onClick={() => setView("treemap")}
-                className={`px-3 py-1 text-xs rounded-md ${view === "treemap" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                Treemap
-              </button>
-            </div>
+            <Segmented
+              value={view}
+              onChange={setView}
+              label="Как показать категории"
+              options={[
+                { value: "rings", label: "Donut", title: "Кольцо: доли категорий друг относительно друга", icon: PieChartIcon },
+                { value: "bars", label: "Bars", title: "Полосы: категории списком, со сравнением со средним", icon: BarChart3 },
+                { value: "treemap", label: "Treemap", title: "Плитки: площадь плитки — доля категории", icon: LayoutGrid },
+              ]}
+            />
           </div>
         }
       />
