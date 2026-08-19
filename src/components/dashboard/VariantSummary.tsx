@@ -27,6 +27,8 @@ import {
   ActivityHeat,
 } from "./blocks";
 import { formatMoney, monthLabel } from "../../lib/format";
+import { Link } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import type { VariantProps } from "./types";
 
 /** Русская форма слова по числу: «1 счёт», «2 счёта», «5 счетов». */
@@ -63,31 +65,69 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
         </div>
       </div>
 
-      {/* ── Три опорных числа месяца: без карточек, отбиты линиями ── */}
+      {/* ── Три опорных числа месяца: без карточек, отбиты линиями ──
+          Каждое — ссылка в раздел, где то же число можно разобрать. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 border-t border-b border-border">
-        <div className="py-4 sm:pr-6">
-          <div className="label">Совокупный баланс</div>
+        <Link
+          to="/accounts"
+          className="group py-4 sm:pr-6 transition-colors hover:bg-panel2/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-lg"
+        >
+          <div className="flex items-center justify-between gap-2 pr-1">
+            <span className="label">Совокупный баланс</span>
+            <ArrowRight className="w-3.5 h-3.5 text-muted group-hover:text-accent shrink-0" />
+          </div>
           <div className="stat-num mt-1.5">{formatMoney(m.netWorth, m.base)}</div>
           <div className="text-[11.5px] text-muted mt-1">
             {m.accounts.length} {plural(m.accounts.length, ["счёт", "счёта", "счетов"])}
           </div>
-        </div>
-        <div className="py-4 border-t border-border sm:border-t-0 sm:border-l sm:px-6">
-          <div className="label">Доход · {label}</div>
+        </Link>
+
+        <Link
+          to="/cashflow"
+          className="group py-4 border-t border-border sm:border-t-0 sm:border-l sm:px-6 transition-colors hover:bg-panel2/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="label">Доход</span>
+            <ArrowRight className="w-3.5 h-3.5 text-muted group-hover:text-accent shrink-0" />
+          </div>
           <div className="stat-num mt-1.5 text-income">{formatMoney(m.factIncome, m.base)}</div>
           <div className="text-[11.5px] text-muted mt-1">
-            Прогноз месяца{" "}
-            <span className="font-mono tabular-nums">{formatMoney(m.projIncome, m.base)}</span>
+            {m.planIncome !== null ? (
+              <>
+                План{" "}
+                <span className="font-mono tabular-nums">{formatMoney(m.planIncome, m.base)}</span>
+              </>
+            ) : (
+              "Факт с начала месяца"
+            )}
           </div>
-        </div>
-        <div className="py-4 border-t border-border sm:border-t-0 sm:border-l sm:px-6">
-          <div className="label">Расход · {label}</div>
+        </Link>
+
+        <Link
+          to="/cashflow"
+          className="group py-4 border-t border-border sm:border-t-0 sm:border-l sm:px-6 transition-colors hover:bg-panel2/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="label">Расход</span>
+            <ArrowRight className="w-3.5 h-3.5 text-muted group-hover:text-accent shrink-0" />
+          </div>
           <div className="stat-num mt-1.5 text-expense">{formatMoney(m.factExpense, m.base)}</div>
           <div className="text-[11.5px] text-muted mt-1">
-            Прогноз месяца{" "}
-            <span className="font-mono tabular-nums">{formatMoney(m.projExpense, m.base)}</span>
+            {m.planExpense !== null ? (
+              <>
+                План{" "}
+                <span className="font-mono tabular-nums">{formatMoney(m.planExpense, m.base)}</span>
+              </>
+            ) : m.month.running ? (
+              <>
+                К концу месяца{" "}
+                <span className="font-mono tabular-nums">{formatMoney(m.projExpense, m.base)}</span>
+              </>
+            ) : (
+              "Месяц закрыт"
+            )}
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* ── Деньги: откуда приходят, где лежат, как копятся ── */}
@@ -99,17 +139,24 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
               title="Доходы и расходы по месяцам"
               sub="12 месяцев · дальше прогноз по среднему"
               right={<IncomeExpenseLegend />}
+              to="/cashflow"
+              linkLabel="Cash-flow"
             />
             <CashflowBars m={m} onMonth={onMonth} />
           </div>
           <div className="min-w-0">
-            <BlockTitle title="Где лежат деньги" to="/accounts" />
+            <BlockTitle title="Где лежат деньги" to="/accounts"
+            linkLabel="Счета"
+          />
             <AccountsList m={m} onAccount={onAccount} />
           </div>
           {/* Третья колонка появляется только там, где под неё есть ширина:
               ужатый до 300 px график баланса не читается вовсе. */}
           <div className="min-w-0 hidden 3xl:block">
-            <BlockTitle title="Как рос баланс" />
+            <BlockTitle title="Как рос баланс"
+            to="/accounts"
+            linkLabel="Счета"
+          />
             <NetWorthArea m={m} />
           </div>
         </div>
@@ -126,7 +173,8 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
               title="На что уходит"
               sub="Доля от самой крупной статьи"
               to="/categories"
-            />
+            linkLabel="Категории"
+          />
             <div className="min-h-[200px]">
               <CategoriesList m={m} onCategory={onCategory} />
             </div>
@@ -142,13 +190,17 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
                   </span>
                 ) : undefined
               }
+              to="/recurring"
+              linkLabel="Регулярные"
             />
             <div className="min-h-[200px]">
               <UpcomingList m={m} />
             </div>
           </div>
           <div className="min-w-0 hidden 3xl:block">
-            <BlockTitle title="Активность за 90 дней" to="/calendar" />
+            <BlockTitle title="Активность за 90 дней" to="/calendar"
+            linkLabel="Календарь"
+          />
             <div className="min-h-[200px]">
               <ActivityHeat m={m} />
             </div>
@@ -163,6 +215,8 @@ export function VariantSummary({ m, onMonth, onCategory, onAccount }: VariantPro
           <BlockTitle
             title="Что разогналось"
             sub="Против обычного за последние месяцы"
+            to="/anomalies"
+            linkLabel="Аномалии"
           />
           <SpikesList m={m} />
         </div>

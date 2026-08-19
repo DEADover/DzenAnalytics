@@ -24,6 +24,8 @@ import {
   SpikesList,
 } from "./blocks";
 import { formatMoney, monthLabel } from "../../lib/format";
+import { Link } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import type { VariantProps } from "./types";
 
 /** Русское склонение: 1 счёт, 2 счёта, 5 счетов. */
@@ -68,16 +70,26 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
           <FreeMoneyHero m={m} size="lg" />
           <div className="mt-auto pt-4 border-t border-border grid grid-cols-3 gap-3">
             <div className="min-w-0">
-              <div className="label">Доход прогноз</div>
+              <div className="label">Доход</div>
               <div className="mt-1 font-mono tabular-nums font-semibold text-[15px] text-income">
-                {formatMoney(m.projIncome, m.base, { compact: true })}
+                {formatMoney(m.factIncome, m.base, { compact: true })}
               </div>
+              {m.planIncome !== null && (
+                <div className="text-[11.5px] text-muted font-mono tabular-nums">
+                  план {formatMoney(m.planIncome, m.base, { compact: true })}
+                </div>
+              )}
             </div>
             <div className="min-w-0">
-              <div className="label">Расход прогноз</div>
+              <div className="label">Расход</div>
               <div className="mt-1 font-mono tabular-nums font-semibold text-[15px] text-expense">
-                {formatMoney(m.projExpense, m.base, { compact: true })}
+                {formatMoney(m.factExpense, m.base, { compact: true })}
               </div>
+              {m.planExpense !== null && (
+                <div className="text-[11.5px] text-muted font-mono tabular-nums">
+                  план {formatMoney(m.planExpense, m.base, { compact: true })}
+                </div>
+              )}
             </div>
             <div className="min-w-0">
               <div className="label">Темп</div>
@@ -94,6 +106,8 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
             title="Доходы и расходы"
             sub="12 месяцев + прогноз"
             right={<IncomeExpenseLegend />}
+            to="/cashflow"
+            linkLabel="Cash-flow"
           />
           <div className="flex-1 min-h-0">
             <CashflowBars m={m} height={228} onMonth={onMonth} />
@@ -102,7 +116,15 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
 
         {/* ── Совокупный баланс ── */}
         <section className="col-span-12 lg:col-span-4 3xl:col-span-3 4xl:col-span-2 card card-pad flex flex-col">
-          <div className="label">Совокупный баланс</div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="label">Совокупный баланс</div>
+            <Link
+              to="/accounts"
+              className="text-xs text-accent hover:underline flex items-center gap-1 shrink-0"
+            >
+              Счета <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
           <div className="stat-num mt-1.5 3xl:text-3xl">{formatMoney(m.netWorth, m.base)}</div>
           <div className="mt-2 -mx-1">
             <NetWorthArea m={m} height={120} />
@@ -117,7 +139,9 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
 
         {/* ── Счета ── */}
         <section className="col-span-12 lg:col-span-4 3xl:col-span-3 4xl:col-span-3 card card-pad flex flex-col">
-          <BlockTitle title="Где лежат деньги" to="/accounts" />
+          <BlockTitle title="Где лежат деньги" to="/accounts"
+            linkLabel="Счета"
+          />
           <AccountsList m={m} limit={5} onAccount={onAccount} />
         </section>
 
@@ -130,25 +154,39 @@ export function VariantBento({ m, onMonth, onCategory, onAccount }: VariantProps
                 −{formatMoney(m.upcomingTotalBase, m.base)}
               </span>
             }
+            to="/recurring"
+            linkLabel="Регулярные"
           />
           <UpcomingList m={m} limit={5} />
         </section>
 
         {/* ── Категории ── */}
         <section className="col-span-12 lg:col-span-7 3xl:col-span-3 4xl:col-span-5 card card-pad flex flex-col">
-          <BlockTitle title="На что уходит" sub={monthLabel(m.ym)} to="/categories" />
+          <BlockTitle title="На что уходит" sub={monthLabel(m.ym)} to="/categories"
+            linkLabel="Категории"
+          />
           <CategoriesList m={m} limit={8} onCategory={onCategory} />
         </section>
 
         {/* ── Активность + третичный блок «Что разогналось» ── */}
         <section className="col-span-12 lg:col-span-5 3xl:col-span-3 4xl:col-span-4 card card-pad flex flex-col">
-          <BlockTitle title="Активность за 90 дней" to="/calendar" />
+          <BlockTitle title="Активность за 90 дней" to="/calendar"
+            linkLabel="Календарь"
+          />
           <div className="overflow-x-auto">
             <ActivityHeat m={m} />
           </div>
           <div className="mt-4 pt-4 border-t border-border">
             <div className="bg-panel2 rounded-xl p-4">
-              <div className="label mb-2.5">Что разогналось</div>
+              <div className="flex items-start justify-between gap-3 mb-2.5">
+                <div className="label">Что разогналось</div>
+                <Link
+                  to="/anomalies"
+                  className="text-xs text-accent hover:underline flex items-center gap-1 shrink-0"
+                >
+                  Аномалии <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
               <SpikesList m={m} limit={3} />
             </div>
           </div>

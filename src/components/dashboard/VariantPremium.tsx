@@ -18,7 +18,7 @@ import {
   SpikesList,
   ActivityHeat,
 } from "./blocks";
-import { formatMoney, monthLabel } from "../../lib/format";
+import { formatMoney } from "../../lib/format";
 import type { VariantProps } from "./types";
 
 /**
@@ -69,21 +69,31 @@ function daysWord(n: number): string {
 function StatRow({
   label,
   value,
+  plan,
   tone,
 }: {
   label: string;
   value: string;
+  /** Плановая сумма месяца из «Бюджета». Стоит под фактом и не смешивается с ним. */
+  plan?: string;
   tone?: "income" | "expense";
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-2 border-b border-border/60 last:border-0">
       <span className="text-[12px] uppercase tracking-[0.1em] text-muted">{label}</span>
-      <span
-        className={`font-mono tabular-nums font-semibold text-[18px] shrink-0 ${
-          tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""
-        }`}
-      >
-        {value}
+      <span className="shrink-0 text-right">
+        <span
+          className={`block font-mono tabular-nums font-semibold text-[18px] ${
+            tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""
+          }`}
+        >
+          {value}
+        </span>
+        {plan && (
+          <span className="block text-[11.5px] text-muted font-mono tabular-nums">
+            план {plan}
+          </span>
+        )}
       </span>
     </div>
   );
@@ -153,13 +163,23 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
 
           <div className="mt-auto border-t border-border pt-2">
             <StatRow
-              label={`Доход · ${monthLabel(m.ym)}`}
+              label="Доход"
               value={formatMoney(m.factIncome, m.base, { compact: true })}
+              plan={
+                m.planIncome !== null
+                  ? formatMoney(m.planIncome, m.base, { compact: true })
+                  : undefined
+              }
               tone="income"
             />
             <StatRow
-              label={`Расход · ${monthLabel(m.ym)}`}
+              label="Расход"
               value={formatMoney(m.factExpense, m.base, { compact: true })}
+              plan={
+                m.planExpense !== null
+                  ? formatMoney(m.planExpense, m.base, { compact: true })
+                  : undefined
+              }
               tone="expense"
             />
             <StatRow
@@ -173,7 +193,9 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
             а не растягивается. */}
         <div className="grid gap-4 lg:grid-cols-2">
           <Tray>
-            <BlockTitle title="Где лежат деньги" to="/accounts" />
+            <BlockTitle title="Где лежат деньги" to="/accounts"
+            linkLabel="Счета"
+          />
             <div
               className={`font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none mb-3 ${
                 m.netWorth < 0 ? "text-expense" : ""
@@ -194,6 +216,8 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
                   {formatMoney(m.upcomingTotalBase, m.base)}
                 </span>
               }
+              to="/recurring"
+              linkLabel="Регулярные"
             />
             <UpcomingList m={m} limit={5} />
           </Tray>
@@ -207,6 +231,8 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
             title="Доходы и расходы"
             sub="12 месяцев · дальше прогноз"
             right={<IncomeExpenseLegend />}
+            to="/cashflow"
+            linkLabel="Cash-flow"
           />
           <CashflowBars m={m} onMonth={onMonth} height={260} />
         </Tray>
@@ -216,6 +242,7 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
             title="На что уходит"
             sub="Доля от самой крупной статьи"
             to="/categories"
+            linkLabel="Категории"
           />
           <CategoriesList m={m} limit={7} onCategory={onCategory} />
         </Tray>
@@ -229,13 +256,18 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
       <section className="grid grid-cols-1 lg:grid-cols-2 3xl:grid-cols-3 gap-5 3xl:gap-6">
         <div className="3xl:col-span-2">
           <Tray>
-            <BlockTitle title="Активность за 90 дней" to="/calendar" />
+            <BlockTitle title="Активность за 90 дней" to="/calendar"
+            linkLabel="Календарь"
+          />
             <ActivityHeat m={m} cell={14} />
           </Tray>
         </div>
 
         <Tray>
-          <BlockTitle title="Что разогналось" sub="Против обычного" />
+          <BlockTitle title="Что разогналось" sub="Против обычного"
+            to="/anomalies"
+            linkLabel="Аномалии"
+          />
           <SpikesList m={m} limit={5} />
         </Tray>
       </section>

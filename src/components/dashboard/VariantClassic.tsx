@@ -68,16 +68,24 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
             hint={`${m.accounts.length} ${accountsWord(m.accounts.length)}`}
           />
           <Stat
-            label={`Доход · ${ml}`}
+            label="Доход"
             value={formatMoney(m.factIncome, m.base)}
             tone="income"
-            hint={`Прогноз месяца ${formatMoney(m.projIncome, m.base)}`}
+            hint={
+              m.planIncome !== null
+                ? `План месяца ${formatMoney(m.planIncome, m.base)}`
+                : "Факт с начала месяца"
+            }
           />
           <Stat
-            label={`Расход · ${ml}`}
+            label="Расход"
             value={formatMoney(m.factExpense, m.base)}
             tone="expense"
-            hint={`Прогноз месяца ${formatMoney(m.projExpense, m.base)}`}
+            hint={
+              m.planExpense !== null
+                ? `План месяца ${formatMoney(m.planExpense, m.base)}`
+                : `К концу месяца ${formatMoney(m.projExpense, m.base)}`
+            }
           />
           <Stat
             label="Свободно до конца месяца"
@@ -97,11 +105,15 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
               title="Доходы и расходы по месяцам"
               sub="12 месяцев · дальше прогноз по среднему"
               right={<IncomeExpenseLegend />}
+              to="/cashflow"
+              linkLabel="Cash-flow"
             />
             <CashflowBars m={m} onMonth={onMonth} />
           </div>
           <div className="card card-pad min-w-0">
-            <BlockTitle title="Как рос баланс" sub="Все счета" to="/accounts" />
+            <BlockTitle title="Как рос баланс" sub="Все счета" to="/accounts"
+            linkLabel="Счета"
+          />
             <NetWorthArea m={m} />
           </div>
         </div>
@@ -115,7 +127,9 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
             список «слева название, справа сумма» на 1200 px нечитаем. */}
         <div className="grid gap-4 lg:grid-cols-2 3xl:grid-cols-4">
           <div className="card card-pad min-w-0">
-            <BlockTitle title="Где лежат деньги" to="/accounts" />
+            <BlockTitle title="Где лежат деньги" to="/accounts"
+            linkLabel="Счета"
+          />
             <AccountsList m={m} onAccount={onAccount} />
           </div>
           <div className="card card-pad min-w-0">
@@ -123,7 +137,8 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
               title="На что уходит"
               sub="Доля от самой крупной статьи"
               to="/categories"
-            />
+            linkLabel="Категории"
+          />
             <CategoriesList m={m} onCategory={onCategory} />
           </div>
           <div className="card card-pad min-w-0">
@@ -134,11 +149,15 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
                   −{formatMoney(m.upcomingTotalBase, m.base)}
                 </span>
               }
+              to="/recurring"
+              linkLabel="Регулярные"
             />
             <UpcomingList m={m} />
           </div>
           <div className="card card-pad min-w-0">
-            <BlockTitle title="Активность за 90 дней" to="/calendar" />
+            <BlockTitle title="Активность за 90 дней" to="/calendar"
+            linkLabel="Календарь"
+          />
             <ActivityHeat m={m} />
           </div>
         </div>
@@ -149,7 +168,10 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
         <SectionLabel>Что заметно</SectionLabel>
         <div className={`grid gap-4 ${nw ? "lg:grid-cols-2 3xl:grid-cols-3" : ""}`}>
           <div className="bg-panel2 rounded-xl p-4 min-w-0">
-            <BlockTitle title="Что разогналось" />
+            <BlockTitle title="Что разогналось"
+            to="/anomalies"
+            linkLabel="Аномалии"
+          />
             <SpikesList m={m} />
           </div>
           {nw && (
@@ -161,7 +183,9 @@ export function VariantClassic({ m, onMonth, onCategory, onAccount }: VariantPro
                     ? `За ${monthLabel(lastCompleteYM)} — последний завершённый месяц`
                     : "За последний завершённый месяц"
                 }
-              />
+            to="/50-30-20"
+            linkLabel="50/30/20"
+          />
               <div className="h-2.5 rounded-full bg-panel relative overflow-hidden">
                 <i
                   className="absolute inset-y-0 left-0 bg-warn rounded-l-full"
