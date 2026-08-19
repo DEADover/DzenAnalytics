@@ -121,33 +121,38 @@ export function upcomingTotal(payments: UpcomingPayment[]): number {
 }
 
 export interface FreeMoney {
-  /** Сколько останется свободными к концу периода. */
+  /** Сколько остаётся к концу периода. Отрицательное — не хватает. */
   value: number;
-  /** Ожидаемый доход, из которого считали. */
+  /** Фактический доход периода. */
   income: number;
-  /** Уже потрачено с начала периода. */
+  /** Фактически потрачено с начала периода. */
   spent: number;
   /** Обязательные платежи, которые ещё впереди. */
   ahead: number;
 }
 
 /**
- * Свободные деньги до конца месяца.
+ * Сколько денег остаётся до конца месяца.
  *
- * Ожидаемый доход минус уже потраченное минус то, что точно спишется. Доход
- * берётся прогнозный, а не фактический: зарплата приходит одним днём, и до неё
- * фактический доход месяца близок к нулю — «свободно −143 000 ₽» было бы
- * честным по арифметике и бессмысленным по существу.
+ * Все три слагаемых — ФАКТ, ничего не экстраполируется. Прогнозировать доход
+ * по темпу нельзя: зарплата приходит одним днём, и линейная экстраполяция даёт
+ * то тридцатикратное завышение, то ноль (этот же разбор есть в
+ * `buildMonthCashflow`). Подставлять вместо факта среднее за прошлые месяцы
+ * тоже нельзя: на экране появлялся «прогноз дохода 543 800 ₽» там, где месяц
+ * принёс 158 994 ₽, и цифры на главной расходились с «Бюджетом».
+ *
+ * Плановые суммы, если они у пользователя заведены, показываются отдельной
+ * строкой и не смешиваются с фактом.
  */
 export function freeMoney(opts: {
-  projIncome: number;
+  factIncome: number;
   factExpense: number;
   aheadObligatory: number;
 }): FreeMoney {
-  const { projIncome, factExpense, aheadObligatory } = opts;
+  const { factIncome, factExpense, aheadObligatory } = opts;
   return {
-    value: projIncome - factExpense - aheadObligatory,
-    income: projIncome,
+    value: factIncome - factExpense - aheadObligatory,
+    income: factIncome,
     spent: factExpense,
     ahead: aheadObligatory,
   };

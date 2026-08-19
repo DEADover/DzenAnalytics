@@ -18,7 +18,7 @@ import {
   SpikesList,
   ActivityHeat,
 } from "./blocks";
-import { formatMoney } from "../../lib/format";
+import { formatMoney, monthLabel } from "../../lib/format";
 import type { VariantProps } from "./types";
 
 /**
@@ -110,11 +110,13 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
             }`}
             style={{ wordSpacing: "-0.22em" }}
           >
-            {formatMoney(m.free.value, m.base)}
+            {formatMoney(Math.abs(m.free.value), m.base)}
           </div>
 
           <p className="text-[16px] leading-relaxed text-muted max-w-[30ch]">
-            Столько останется свободными, если дальше тратить как сейчас.
+            {m.free.value < 0
+              ? "Столько не хватает: расход месяца уже обогнал доход."
+              : "Столько остаётся после уже потраченного и того, что ещё спишется."}
             {over !== null && (
               <>
                 {" "}
@@ -149,17 +151,17 @@ export function VariantPremium({ m, onMonth, onCategory, onAccount }: VariantPro
 
           <div className="mt-auto border-t border-border pt-2">
             <StatRow
-              label="Доход прогноз"
-              value={formatMoney(m.projIncome, m.base, { compact: true })}
+              label={`Доход · ${monthLabel(m.ym)}`}
+              value={formatMoney(m.factIncome, m.base, { compact: true })}
               tone="income"
             />
             <StatRow
-              label="Расход прогноз"
-              value={formatMoney(m.projExpense, m.base, { compact: true })}
+              label={`Расход · ${monthLabel(m.ym)}`}
+              value={formatMoney(m.factExpense, m.base, { compact: true })}
               tone="expense"
             />
             <StatRow
-              label="Впереди"
+              label="Впереди спишется"
               value={formatMoney(m.upcomingTotalBase, m.base, { compact: true })}
             />
           </div>

@@ -42,6 +42,8 @@ import {
   type Insight,
 } from "../lib/aggregations";
 import { buildNeedsWants, type NeedsWantsSplit } from "../lib/needsWants";
+import { useBudgetsStore } from "../store/useBudgetsStore";
+import { plannedFor } from "../lib/budgets";
 import { currentPeriod, periodKey } from "../lib/period";
 import {
   monthProgress,
@@ -102,8 +104,16 @@ export interface DashboardModel {
    * прямо, а не показывать нули как факт.
    */
   hasCurrentData: boolean;
-  /** Прогноз дохода взят по среднему, а не по факту периода. */
-  incomeIsEstimate: boolean;
+  /**
+   * План месяца из раздела «Бюджет», если он у пользователя заведён.
+   *
+   * Показывается ОТДЕЛЬНО от факта и никогда с ним не смешивается: раньше
+   * прогноз дохода подменялся средним за прошлые месяцы, и на главной стояло
+   * «543,8 тыс», когда месяц принёс 159 тыс, — числа расходились с «Бюджетом»
+   * без всякого объяснения. `null` — планов нет.
+   */
+  planIncome: number | null;
+  planExpense: number | null;
 
   upcoming: UpcomingPayment[];
   upcomingTotalBase: number;
@@ -140,6 +150,13 @@ export function useDashboardModel(): DashboardModel {
   }, [metaLoaded, metaHydrate]);
 
   const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
+
+  const budgetLines = useBudgetsStore((s) => s.lines);
+  const budgetsHydrate = useBudgetsStore((s) => s.hydrate);
+  const budgetsLoaded = useBudgetsStore((s) => s.loaded);
+  useEffect(() => {
+    if (!budgetsLoaded) void budgetsHydrate();
+  }, [budgetsLoaded, budgetsHydrate]);
 
   // Счета из кэша Дзен-мани: там есть начальные остатки и признаки
   // «накопительный» / «вне баланса», которых по одним операциям не восстановить.
@@ -262,11 +279,6 @@ export function useDashboardModel(): DashboardModel {
     return complete.reduce((s, m) => s + m.expense, 0) / complete.length;
   }, [months, ym]);
 
-  const avgIncome = useMemo(() => {
-    const complete = months.filter((m) => m.ym < ym).slice(-AVG_WINDOW);
-    if (complete.length === 0) return 0;
-    return complete.reduce((s, m) => s + m.income, 0) / complete.length;
-  }, [months, ym]);
 
   // Темп считаем только когда в периоде вообще что-то потрачено. При нулевом
   // факте формула даёт ровно −100 %, и «темп на 100 % ниже обычного» звучит
@@ -275,16 +287,12 @@ export function useDashboardModel(): DashboardModel {
   const projExpense = month.running
     ? Math.max(factExpense, projectExpense(factExpense, month.progress))
     : factExpense;
-  // Доход не экстраполируем по темпу: зарплата приходит одним днём, и до неё
-  // линейный прогноз дал бы почти ноль. Берём большее из факта и среднего —
-  // но только если факт вообще есть. Иначе среднее встало бы на место факта и
-  // выдало пустой период за обычный.
-  const incomeIsEstimate = month.running && hasCurrentData && factIncome < avgIncome;
-  const projIncome = !hasCurrentData
-    ? 0
-    : month.running
-      ? Math.max(factIncome, avgIncome)
-      : factIncome;
+  // Доход НЕ прогнозируем вовсе. По темпу нельзя — зарплата приходит одним
+  // днём; средним за прошлые месяцы нельзя тем более — это уже не прогноз, а
+  // подмена факта, из-за которой главная и «Бюджет» показывали разные числа.
+  // Ожидаемый доход, если он вообще известен, — это план месяца, и он живёт
+  // отдельным полем.
+  const projIncome = factIncome;
 
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = useMemo(
@@ -294,10 +302,23 @@ export function useDashboardModel(): DashboardModel {
   const upcomingTotalBase = useMemo(() => upcomingTotal(upcoming), [upcoming]);
 
   const free = freeMoney({
-    projIncome,
+    factIncome,
     factExpense,
     aheadObligatory: upcomingTotalBase,
   });
+
+  // План месяца берём из тех же строк бюджета, что и раздел «Бюджет».
+  const { planIncome, planExpense } = useMemo(() => {
+    if (!budgetLines.length) return { planIncome: null, planExpense: null };
+    let inc = 0;
+    let exp = 0;
+    for (const line of budgetLines) {
+      const p = plannedFor(line, ym);
+      if (line.kind === "income") inc += p;
+      else exp += p;
+    }
+    return { planIncome: inc, planExpense: exp };
+  }, [budgetLines, ym]);
 
   const recurringMonthlyCount = useMemo(
     () => recurring.filter((r) => !r.stale && r.cadence === "monthly").length,
@@ -322,7 +343,8 @@ export function useDashboardModel(): DashboardModel {
     avgExpense,
     currentCount,
     hasCurrentData,
-    incomeIsEstimate,
+    planIncome,
+    planExpense,
     upcoming,
     upcomingTotalBase,
     free,

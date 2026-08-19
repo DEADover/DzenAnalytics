@@ -127,8 +127,12 @@ export function FreeMoneyHero({
         ? "text-4xl 3xl:text-5xl"
         : "text-3xl";
   const spentPct = Math.min(100, m.month.progress * 100);
+  // База для доли «впереди» — план месяца, если он есть, иначе ожидаемый расход
+  // по темпу. Раньше базой был выдуманный прогноз дохода, и полоса врала вместе
+  // с ним.
+  const aheadBase = m.planExpense ?? m.projExpense;
   const aheadPct =
-    m.projIncome > 0 ? Math.min(100 - spentPct, (m.upcomingTotalBase / m.projIncome) * 100) : 0;
+    aheadBase > 0 ? Math.min(100 - spentPct, (m.upcomingTotalBase / aheadBase) * 100) : 0;
 
   // Период пуст, а история есть — значит операции вычистил отбор. Показать
   // здесь бодрое число нельзя: оно будет посчитано из среднего и выдано за
@@ -147,36 +151,65 @@ export function FreeMoneyHero({
     );
   }
 
+  const short = m.free.value < 0;
   return (
     <div className="flex flex-col gap-3">
-      <div className="label">Свободно до конца месяца</div>
+      <div className="label">
+        {short ? "Не хватает до конца месяца" : "Свободно до конца месяца"}
+      </div>
       <div
         className={`font-mono font-semibold tabular-nums tracking-tight leading-none ${numClass} ${
-          m.free.value >= 0 ? "" : "text-expense"
+          short ? "text-expense" : ""
         }`}
         style={{ wordSpacing: "-0.22em" }}
       >
-        {formatMoney(m.free.value, m.base, { signed: m.free.value < 0 })}
+        {formatMoney(Math.abs(m.free.value), m.base)}
       </div>
+      {/* Формула целиком: по ней видно, из чего сложился итог, и её можно
+          сверить с разделом «Бюджет» — там ровно эти же доход и расход. */}
       <div className="text-[14px] text-muted leading-relaxed max-w-[54ch]">
-        Ожидаемый доход{" "}
-        <span className="font-mono tabular-nums text-text">
+        Доход {monthLabel(m.ym)}{" "}
+        <span className="font-mono tabular-nums text-income">
           {formatMoney(m.free.income, m.base)}
         </span>{" "}
         − потрачено{" "}
-        <span className="font-mono tabular-nums text-text">
+        <span className="font-mono tabular-nums text-expense">
           {formatMoney(m.free.spent, m.base)}
         </span>
         {m.free.ahead > 0 && (
           <>
             {" "}
             − впереди{" "}
-            <span className="font-mono tabular-nums text-text">
+            <span className="font-mono tabular-nums text-expense">
               {formatMoney(m.free.ahead, m.base)}
             </span>
           </>
         )}
       </div>
+      {(m.planIncome !== null || m.month.running) && (
+        <div className="text-[12.5px] text-muted">
+          {m.planIncome !== null && m.planExpense !== null ? (
+            <>
+              План месяца:{" "}
+              <span className="font-mono tabular-nums">
+                {formatMoney(m.planIncome, m.base)}
+              </span>{" "}
+              дохода и{" "}
+              <span className="font-mono tabular-nums">
+                {formatMoney(m.planExpense, m.base)}
+              </span>{" "}
+              расхода
+            </>
+          ) : (
+            <>
+              Если темп не изменится, расход месяца составит{" "}
+              <span className="font-mono tabular-nums">
+                {formatMoney(m.projExpense, m.base)}
+              </span>
+            </>
+          )}
+        </div>
+      )}
       <div className="mt-1">
         <div className="h-2 rounded-full bg-panel2 relative overflow-hidden">
           <i
