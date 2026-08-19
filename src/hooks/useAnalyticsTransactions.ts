@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useDataStore } from "../store/useDataStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
-import {
-  getLiveAccountsFromCache,
-  type LiveAccount,
-} from "../store/useZenmoneyStore";
+import { useLiveAccounts } from "./useLiveAccounts";
 import { stripFromAnalytics } from "../lib/aggregations";
 import type { Transaction } from "../types";
 
@@ -31,21 +28,12 @@ export function useAnalyticsTransactions(): Transaction[] {
   const hydrateExcl = useSlicesStore((s) => s.hydrate);
   const slice = activeSlice({ slices, activeId });
   const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
-  const [liveAccounts, setLiveAccounts] = useState<LiveAccount[] | null>(null);
+  const liveAccounts = useLiveAccounts();
 
   useEffect(() => {
     if (!exclLoaded) hydrateExcl();
   }, [exclLoaded, hydrateExcl]);
 
-  useEffect(() => {
-    let cancelled = false;
-    getLiveAccountsFromCache().then((d) => {
-      if (!cancelled) setLiveAccounts(d);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions]);
 
   // Off-balance titles matter only while «включить внебалансовые» is OFF (the
   // default) — otherwise those accounts count everywhere and we keep their flows.

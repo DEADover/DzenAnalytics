@@ -15,17 +15,14 @@
  *     месяцем — отсюда честный «темп» вместо «↓ 58 %» восемнадцатого числа.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useAnalyticsTransactions } from "./useAnalyticsTransactions";
 import { useDataStore } from "../store/useDataStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import { useNetWorthSeries } from "./useNetWorthSeries";
-import {
-  getLiveAccountsFromCache,
-  type LiveAccount,
-} from "../store/useZenmoneyStore";
+import { useLiveAccounts } from "./useLiveAccounts";
 import {
   groupByMonth,
   groupByCategory,
@@ -170,16 +167,7 @@ export function useDashboardModel(): DashboardModel {
 
   // Счета из кэша Дзен-мани: там есть начальные остатки и признаки
   // «накопительный» / «вне баланса», которых по одним операциям не восстановить.
-  const [liveAccounts, setLiveAccounts] = useState<LiveAccount[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    getLiveAccountsFromCache().then((data) => {
-      if (!cancelled) setLiveAccounts(data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions]);
+  const liveAccounts = useLiveAccounts();
 
   const ym = useMemo(() => currentPeriod(monthStartDay), [monthStartDay]);
   const month = useMemo(() => monthProgress(ym), [ym]);

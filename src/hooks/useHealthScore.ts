@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useDataStore } from "../store/useDataStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
-import {
-  getLiveAccountsFromCache,
-  type LiveAccount,
-} from "../store/useZenmoneyStore";
+import { useLiveAccounts } from "./useLiveAccounts";
 import { computeHealthScore, type HealthScore } from "../lib/health";
 import { stripFromAnalytics } from "../lib/aggregations";
 
@@ -36,7 +33,7 @@ export function useHealthScore(): HealthScore | null {
   const exclLoaded = useSlicesStore((s) => s.loaded);
   const hydrateExcl = useSlicesStore((s) => s.hydrate);
   const slice = activeSlice({ slices, activeId });
-  const [liveAccounts, setLiveAccounts] = useState<LiveAccount[] | null>(null);
+  const liveAccounts = useLiveAccounts();
 
   useEffect(() => {
     if (!calibLoaded) hydrateCalibration();
@@ -44,15 +41,6 @@ export function useHealthScore(): HealthScore | null {
     if (!exclLoaded) hydrateExcl();
   }, [calibLoaded, hydrateCalibration, metaLoaded, hydrateMeta, exclLoaded, hydrateExcl]);
 
-  useEffect(() => {
-    let cancelled = false;
-    getLiveAccountsFromCache().then((d) => {
-      if (!cancelled) setLiveAccounts(d);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions]);
 
   return useMemo(() => {
     if (transactions.length === 0) return null;

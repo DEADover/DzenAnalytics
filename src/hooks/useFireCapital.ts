@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
+import { useLiveAccounts } from "./useLiveAccounts";
 import { useDataStore } from "../store/useDataStore";
 import { useFireStore } from "../store/useFireStore";
 import { toBase } from "../lib/csv";
 import {
-  getLiveAccountsFromCache,
   type LiveAccount,
 } from "../store/useZenmoneyStore";
 
@@ -22,26 +22,15 @@ export function useFireCapital(): {
   capital: number;
   capitalAccounts: FireCapitalAccount[];
 } {
-  const transactions = useDataStore((s) => s.transactions);
   const rates = useDataStore((s) => s.rates);
   const excluded = useFireStore((s) => s.excluded);
   const fireHydrate = useFireStore((s) => s.hydrate);
   const fireLoaded = useFireStore((s) => s.loaded);
-  const [accounts, setAccounts] = useState<LiveAccount[] | null>(null);
+  const accounts = useLiveAccounts();
 
   useEffect(() => {
     if (!fireLoaded) fireHydrate();
   }, [fireLoaded, fireHydrate]);
-
-  useEffect(() => {
-    let alive = true;
-    getLiveAccountsFromCache().then((a) => {
-      if (alive) setAccounts(a);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [transactions]);
 
   const capitalAccounts = useMemo(() => {
     if (!accounts) return [];

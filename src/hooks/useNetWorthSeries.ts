@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { Transaction } from "../types";
 import { netWorthSeries, netWorthBasis } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
-import {
-  getLiveAccountsFromCache,
-  type LiveAccount,
-} from "../store/useZenmoneyStore";
+import { useLiveAccounts } from "./useLiveAccounts";
 
 /**
  * Net-worth series corrected for account opening balances (issue #3).
@@ -24,17 +21,8 @@ export function useNetWorthSeries(
   const rates = useDataStore((s) => s.rates);
   const calibration = useCalibrationStore((s) => s.calibration);
   const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
-  const [liveAccounts, setLiveAccounts] = useState<LiveAccount[] | null>(null);
+  const liveAccounts = useLiveAccounts();
 
-  useEffect(() => {
-    let cancelled = false;
-    getLiveAccountsFromCache().then((data) => {
-      if (!cancelled) setLiveAccounts(data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return useMemo(() => {
     if (liveAccounts && liveAccounts.length > 0) {

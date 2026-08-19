@@ -247,8 +247,17 @@ export interface LiveAccount {
 
 /**
  * Returns the live per-account snapshot from the local Zenmoney cache, or null
- * if the cache is empty / user is in CSV mode. Reading from cache happens
- * lazily — call this from a hook or `useEffect`.
+ * if the cache is empty / user is in CSV mode.
+ *
+ * Разбор считается ОДИН раз и потом раздаётся из памяти. Чтение IndexedDB
+ * асинхронное, а на счетах держится половина аналитики: остатки, стартовые
+ * суммы, признак «вне баланса». Пока ответ ехал, страница успевала отрисоваться
+ * без него — по одним операциям, — и через миг перерисовывалась уже с ним:
+ * на главной пересчитывался совокупный баланс и перетасовывался список счетов
+ * при каждом заходе. Один и тот же кэш даёт один и тот же разбор, поэтому
+ * держим его в памяти и отдаём синхронно через `peekLiveAccounts`.
+ *
+ * Сбрасывает разбор `invalidateLiveAccounts` — её зовём там же, где пишем кэш.
  */
 /** Поля, без которых Дзен-мани не принимает вклад или кредит. */
 const TERM_FIELDS = [
@@ -260,7 +269,61 @@ const TERM_FIELDS = [
   "payoffStep",
 ];
 
-export async function getLiveAccountsFromCache(): Promise<LiveAccount[] | null> {
+/** Последний разбор. `undefined` — кэш ещё ни разу не читали. */
+let liveAccountsMemo: LiveAccount[] | null | undefined;
+/** Кэш переписали, разбор устарел — но показывать его можно, пока едет новый. */
+let liveAccountsStale = false;
+/** Чтение уже идёт — вторая копия не нужна, все ждут одну. */
+let liveAccountsInFlight: Promise<LiveAccount[] | null> | null = null;
+const liveAccountsListeners = new Set<() => void>();
+
+/** Готовый разбор без ожидания. `undefined` — ещё не читали, зовите `getLiveAccountsFromCache`. */
+export function peekLiveAccounts(): LiveAccount[] | null | undefined {
+  return liveAccountsMemo;
+}
+
+/** Подписка на смену разбора — под `useSyncExternalStore`. */
+export function subscribeLiveAccounts(listener: () => void): () => void {
+  liveAccountsListeners.add(listener);
+  return () => liveAccountsListeners.delete(listener);
+}
+
+/**
+ * Кэш изменился — разбор устарел. Зовём после каждой записи кэша.
+ *
+ * Прежний разбор при этом НЕ выбрасываем, а перечитываем и подменяем готовым.
+ * Обнулять было бы тем же мерцанием, только после синхронизации: экран на
+ * пару кадров остался бы без остатков. Тем, кто ждёт ответа
+ * (`getLiveAccountsFromCache`), устаревший не достаётся — они получают новое
+ * чтение; синхронно из памяти его отдаём только экрану.
+ */
+export function invalidateLiveAccounts(): void {
+  liveAccountsStale = true;
+  liveAccountsInFlight = null;
+  if (liveAccountsMemo !== undefined) void getLiveAccountsFromCache();
+}
+
+export function getLiveAccountsFromCache(): Promise<LiveAccount[] | null> {
+  if (liveAccountsMemo !== undefined && !liveAccountsStale) {
+    return Promise.resolve(liveAccountsMemo);
+  }
+  liveAccountsInFlight ??= readLiveAccounts().then(
+    (data) => {
+      liveAccountsMemo = data;
+      liveAccountsStale = false;
+      liveAccountsInFlight = null;
+      for (const listener of liveAccountsListeners) listener();
+      return data;
+    },
+    (err) => {
+      liveAccountsInFlight = null;
+      throw err;
+    }
+  );
+  return liveAccountsInFlight;
+}
+
+async function readLiveAccounts(): Promise<LiveAccount[] | null> {
   const cache = await loadZenCache();
   if (!cache) return null;
   const instrumentsById = new Map(cache.instruments.map((i) => [i.id, i]));
@@ -582,6 +645,12 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       autoSyncUnit: autoSyncUnit || AUTO_SYNC_UNIT_DEFAULT,
       loaded: true,
     });
+
+    // Счета разбираем сразу, а не когда их впервые спросят с экрана. Читаются
+    // они из того же хранилища, что и операции, и запуск здесь означает, что к
+    // первой отрисовке ответ обычно уже есть — страница рисуется с остатками
+    // сразу, без второго кадра «сначала по операциям, потом по кэшу».
+    void getLiveAccountsFromCache().catch(() => {});
   },
 
   saveToken: async (token) => {
@@ -678,6 +747,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         replaceMarkers: backfill.includes("reminderMarker"),
       });
       await saveZenCache(nextCache);
+      invalidateLiveAccounts();
       const mapped = mapZenmoneyDiff(cacheToDiffResponse(nextCache));
       const isFull = fromTs === 0;
 
@@ -971,6 +1041,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         conflicts = detectConflicts(Object.keys(edits), cache, fresh.transaction);
         cache = applyDiff(cache, fresh); // adopt fresh cloud truth
         await saveZenCache(cache);
+        invalidateLiveAccounts();
         set({ serverTimestamp: fresh.serverTimestamp });
         await db.saveJSON(TIMESTAMP_KEY, fresh.serverTimestamp);
       } catch {
@@ -1287,6 +1358,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         ],
       });
       await saveZenCache(nextCache);
+      invalidateLiveAccounts();
 
       // Prune snapshots that are no longer needed:
       //   • the resurrected `oldId`s — re-created under a new id, so the
