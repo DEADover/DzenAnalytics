@@ -866,11 +866,22 @@ export function ActivityHeat({
     }
   }
 
-  const max = Math.max(...cells.map((c) => c.expense), 0);
+  // Шкала цвета строится по устойчивому максимуму, а не по рекордному дню:
+  // одна покупка на 2,4 млн загоняла все остальные дни в самую бледную
+  // ступень, и год превращался в ровное поле с одной красной клеткой.
+  const { cap } = robustCeiling(cells.map((c) => c.expense));
+  const realMax = Math.max(...cells.map((c) => c.expense), 0);
   const shade = (step: number) =>
     step === 0
       ? "rgb(var(--c-panel2))"
       : `color-mix(in srgb, rgb(var(--c-expense)) ${[0, 22, 44, 68, 100][step]}%, rgb(var(--c-panel2)))`;
+
+  const past = cells.filter((c) => c.date);
+  const quiet = past.filter((c) => c.expense <= 0).length;
+  const busiest = past.reduce(
+    (best, c) => (c.expense > (best?.expense ?? 0) ? c : best),
+    null as (typeof past)[number] | null
+  );
 
   const cols = `repeat(${weeks}, minmax(0, 1fr))`;
 
@@ -893,7 +904,7 @@ export function ActivityHeat({
         style={{ gridTemplateColumns: cols, gridTemplateRows: "repeat(7, auto)" }}
         role="img"
         aria-label={`Расходы по дням за ${weeks} недель. Самый крупный день — ${formatMoney(
-          max,
+          realMax,
           m.base
         )}.`}
       >
@@ -902,25 +913,39 @@ export function ActivityHeat({
             key={c.key}
             className="block w-full aspect-square rounded-[2px]"
             style={{
-              background: c.date ? shade(heatStep(c.expense, max)) : "transparent",
+              background: c.date ? shade(heatStep(c.expense, cap)) : "transparent",
             }}
           />
         ))}
       </div>
 
-      <div className="mt-auto flex items-center justify-between gap-3 pt-1 text-[11px] text-muted">
-        <span>Пустая клетка — трат не было</span>
-        <span className="flex items-center gap-1.5 shrink-0">
-          0
-          {[0, 1, 2, 3, 4].map((s) => (
-            <i
-              key={s}
-              className="block rounded-[2px]"
-              style={{ width: 9, height: 9, background: shade(s) }}
-            />
-          ))}
-          {formatMoney(max, m.base)}
-        </span>
+      <div className="flex items-center justify-end gap-1.5 pt-1 text-[11px] text-muted">
+        Меньше
+        {[0, 1, 2, 3, 4].map((s) => (
+          <i
+            key={s}
+            className="block rounded-[2px]"
+            style={{ width: 9, height: 9, background: shade(s) }}
+          />
+        ))}
+        {formatMoney(cap, m.base)} и больше
+      </div>
+
+      <div className="mt-auto pt-3 border-t border-border grid grid-cols-2 gap-4 text-[12.5px]">
+        <div>
+          <div className="text-muted">Дней без трат</div>
+          <div className="font-mono tabular-nums font-semibold text-[15px]">
+            {quiet} <span className="text-muted font-normal text-[12px]">из {past.length}</span>
+          </div>
+        </div>
+        {busiest && busiest.expense > 0 && (
+          <div className="text-right">
+            <div className="text-muted">Самый дорогой день</div>
+            <div className="font-mono tabular-nums font-semibold text-[15px] text-expense">
+              {formatMoney(busiest.expense, m.base)}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
