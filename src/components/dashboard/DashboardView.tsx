@@ -14,7 +14,6 @@ import { Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import {
   BlockTitle,
-  IncomeExpenseLegend,
   CashflowBars,
   AccountsList,
   CategoriesList,
@@ -231,7 +230,7 @@ export function DashboardView() {
               tone="expense"
             />
             <StatRow
-              label="Впереди спишется"
+              label="Запланированные платежи"
               value={formatMoney(m.upcomingTotalBase, m.base, { compact: true })}
             />
           </div>
@@ -243,7 +242,7 @@ export function DashboardView() {
             они вылезали за него и налезали на следующий раздел. Здесь высоту
             получает сама дорожка сетки, поддоны её заполняют, а списки внутри
             начинают прокручиваться. */}
-        <div className="grid gap-4 lg:grid-cols-2 lg:auto-rows-[34rem]">
+        <div className="grid gap-4 lg:grid-cols-2 lg:auto-rows-[30rem]">
           <Tray>
             <BlockTitle title="Где лежат деньги" to="/accounts"
             linkLabel="Счета"
@@ -284,8 +283,20 @@ export function DashboardView() {
         <Tray>
           <BlockTitle
             title="Доходы и расходы"
-            sub="12 месяцев · дальше прогноз"
-            right={<IncomeExpenseLegend />}
+            info={
+              <>
+                <p>
+                  Последние 12 месяцев, дальше — прогноз по среднему. Зелёный столбец
+                  слева в паре — доход, красный справа — расход; прогнозные месяцы
+                  бледнее и обведены пунктиром.
+                </p>
+                <p>
+                  Шкала срезана по обычному размаху: один месяц с крупной покупкой
+                  прижимал бы остальные ко дну. Срезанный столбец несёт зубчатую
+                  кромку и подписан настоящей суммой.
+                </p>
+              </>
+            }
             to="/cashflow"
             linkLabel="Cash-flow"
           />
@@ -295,7 +306,7 @@ export function DashboardView() {
         <Tray>
           <BlockTitle
             title="Расходы по категориям"
-            sub="Доля от самой крупной статьи"
+            info={<p>Полоса показывает долю статьи от самой крупной за месяц.</p>}
             to="/categories"
             linkLabel="Категории"
           />
@@ -306,14 +317,31 @@ export function DashboardView() {
       {/* ── Третий ряд: активность и наблюдения, поровну ── */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-5 3xl:gap-6">
         <Tray>
-          <BlockTitle title="Активность в этом месяце" to="/calendar" linkLabel="Календарь" />
+          <BlockTitle
+            title="Активность в этом месяце"
+            info={
+              <p>
+                Чем темнее клетка, тем больше потрачено в этот день. Шкала строится по
+                обычному размаху, а не по рекордному дню — иначе одна крупная покупка
+                делала бы весь месяц бледным. Клик по дню открывает его операции.
+              </p>
+            }
+            to="/calendar"
+            linkLabel="Календарь"
+          />
           <ActivityHeat m={m} onDay={onDay} />
         </Tray>
 
         <Tray>
           <BlockTitle
             title="Авто-наблюдения"
-            sub="Всплески статей и отклонения от обычного"
+            info={
+              <p>
+                Статьи, пробившие план или разогнавшиеся против обычного, подорожавшие
+                подписки и пропущенные регулярные платежи. Не больше двух наблюдений
+                одного вида, чтобы список оставался разным.
+              </p>
+            }
             to="/anomalies"
             linkLabel="Аномалии"
           />

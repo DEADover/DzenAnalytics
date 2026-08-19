@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { CategoryDot } from "../CategoryDot";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
+import { InfoPopover } from "../InfoPopover";
 import { AccountLogo } from "../AccountLogo";
 import { accountKindLabel } from "../../lib/accountType";
 import {
@@ -73,22 +74,27 @@ export function SectionLabel({ children }: { children: ReactNode }) {
 
 export function BlockTitle({
   title,
-  sub,
+  info,
   to,
   linkLabel = "Все",
   right,
 }: {
   title: ReactNode;
-  sub?: ReactNode;
+  /**
+   * Пояснение к виджету. Живёт под значком рядом с заголовком, а не строкой
+   * под ним: подпись у каждой карточки съедала место и делала шапки разной
+   * высоты, а нужна она раз в жизни.
+   */
+  info?: ReactNode;
   to?: string;
   linkLabel?: string;
   right?: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 mb-3">
-      <div className="min-w-0">
-        <h3 className="font-semibold text-[16px] text-balance">{title}</h3>
-        {sub && <div className="text-[12.5px] text-muted mt-0.5">{sub}</div>}
+    <div className="flex items-center justify-between gap-3 mb-3">
+      <div className="flex items-center gap-1.5 min-w-0">
+        <h3 className="font-semibold text-[16px] truncate">{title}</h3>
+        {info && <InfoPopover label="Что это за график">{info}</InfoPopover>}
       </div>
       {right}
       {to && (
@@ -99,22 +105,6 @@ export function BlockTitle({
           {linkLabel} <ArrowRight className="w-3 h-3" />
         </Link>
       )}
-    </div>
-  );
-}
-
-/** Легенда «Доход + / Расход −»: знак делает серии различимыми без цвета. */
-export function IncomeExpenseLegend() {
-  return (
-    <div className="flex items-center gap-3 text-[11.5px] text-muted">
-      <span className="flex items-center gap-1.5">
-        <i className="w-2.5 h-2.5 rounded-sm bg-income block" />
-        Доход&nbsp;+
-      </span>
-      <span className="flex items-center gap-1.5">
-        <i className="w-2.5 h-2.5 rounded-sm bg-expense block" />
-        Расход&nbsp;−
-      </span>
     </div>
   );
 }
@@ -562,12 +552,6 @@ export function CashflowBars({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      {clipped && (
-        <div className="text-[11.5px] text-muted">
-          Шкала срезана по обычному размаху — рекордные месяцы подписаны числом,
-          иначе остальные прижимались бы ко дну.
-        </div>
-      )}
     </div>
   );
 }
@@ -1001,17 +985,6 @@ export function ActivityHeat({
         })}
       </div>
 
-      <div className="flex items-center gap-1.5 text-[11px] text-muted max-w-[26rem]">
-        Меньше
-        {[0, 1, 2, 3, 4].map((st) => (
-          <i
-            key={st}
-            className="block rounded-[2px]"
-            style={{ width: 9, height: 9, background: shade(st) }}
-          />
-        ))}
-        {formatMoney(cap, m.base)} и больше
-      </div>
       </div>
 
       {/* Пустое поле справа от календаря забирают самые дорогие дни: месяц —
