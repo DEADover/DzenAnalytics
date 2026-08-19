@@ -213,27 +213,27 @@ export function DashboardView() {
           <div className="mt-auto border-t border-border pt-2">
             <StatRow
               label="Доход"
-              value={formatMoney(m.factIncome, m.base, { compact: true })}
+              value={formatMoney(m.factIncome, m.base)}
               plan={
                 m.planIncome !== null
-                  ? formatMoney(m.planIncome, m.base, { compact: true })
+                  ? formatMoney(m.planIncome, m.base)
                   : undefined
               }
               tone="income"
             />
             <StatRow
               label="Расход"
-              value={formatMoney(m.factExpense, m.base, { compact: true })}
+              value={formatMoney(m.factExpense, m.base)}
               plan={
                 m.planExpense !== null
-                  ? formatMoney(m.planExpense, m.base, { compact: true })
+                  ? formatMoney(m.planExpense, m.base)
                   : undefined
               }
               tone="expense"
             />
             <StatRow
               label="Запланированные платежи"
-              value={formatMoney(m.upcomingTotalBase, m.base, { compact: true })}
+              value={formatMoney(m.upcomingTotalBase, m.base)}
             />
           </div>
         </div>
