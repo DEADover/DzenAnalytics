@@ -1820,7 +1820,7 @@ export function AccountsPage() {
                 ))}
                 {stacked.accounts.map((acc, i) => (
                   <Area
-                    key={`${acc} minus`}
+                    key={`${acc}\u0000minus`}
                     type="monotone"
                     dataKey={(d: Record<string, number>) =>
                       Math.min(toNum(d[acc]), 0) * stackAxis.scale

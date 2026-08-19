@@ -160,7 +160,8 @@ export function MonthCashflowChart({
   const hasForecast = cf.todayDay > 0 && cf.todayDay < cf.days;
 
   return (
-    <div className="card card-pad">
+    <div className="tray">
+    <div className="tray-core card-pad">
       {/* Заголовок и легенда: без них на карточке просто две кривые и пунктир —
           что именно нарисовано и почему линия обрывается на «Сегодня», читатель
           угадывал. Легенда своя, а не рехартовская: та встаёт отдельной
@@ -242,6 +243,7 @@ export function MonthCashflowChart({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+    </div>
     </div>
   );
 }

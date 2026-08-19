@@ -1226,7 +1226,8 @@ function PlanFactCard({
   withTransfers?: number;
 }) {
   return (
-    <div className="card card-pad">
+    <div className="tray">
+    <div className="tray-core card-pad">
       <div className="label mb-1.5">{title}</div>
       <div className={`stat-num ${factClass} mb-3`}>
         {formatMoney(fact, base, { signed })}
@@ -1274,6 +1275,7 @@ function PlanFactCard({
           )
         )}
       </div>
+    </div>
     </div>
   );
 }
