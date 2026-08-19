@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   PieChart,
@@ -30,6 +30,7 @@ import {
   Percent,
   Settings,
   Menu,
+  Trash2,
   X,
 } from "lucide-react";
 import clsx from "clsx";
@@ -48,45 +49,50 @@ const PRIMARY = [
   { to: "/categories", label: "Категории", icon: PieChart },
 ];
 
-// «Ещё» разбито на смысловые разделы с заголовками-разделителями:
+// «Ещё» разбито на смысловые разделы с заголовками-разделителями. У каждого
+// пункта своя строчка-пояснение: в списке из двадцати трёх названий «Динамика»,
+// «Тренды» и «Cash-flow» на слух не различаются, а панель во всю ширину как раз
+// даёт место объяснить разницу. Тексты сжаты из подзаголовков самих страниц,
+// чтобы меню и страница говорили одно и то же.
 // Аналитика (смотреть/понять), Планы (цели и бюджеты), Инструменты
 // (порядок в данных). «Финансовое здоровье» — первым пунктом.
 const SECONDARY_GROUPS = [
   {
     title: "Аналитика",
     items: [
-      { to: "/health", label: "Финансовое здоровье", icon: HeartPulse },
-      { to: "/report", label: "Доходы и расходы", icon: Table },
-      { to: "/dynamics", label: "Динамика", icon: Activity },
-      { to: "/trends", label: "Тренды", icon: Activity },
-      { to: "/cashflow", label: "Cash-flow", icon: LineChart },
-      { to: "/compare", label: "Сравнение", icon: GitCompare },
-      { to: "/top", label: "Топ", icon: TrendingUp },
-      { to: "/calendar", label: "Календарь", icon: CalendarDays },
-      { to: "/sankey", label: "Потоки", icon: GitFork },
-      { to: "/year-review", label: "Год в цифрах", icon: Sparkles },
-      { to: "/digest", label: "Дайджест", icon: Newspaper },
+      { to: "/health", label: "Финансовое здоровье", icon: HeartPulse, hint: "Насколько устойчивы финансы сейчас" },
+      { to: "/report", label: "Доходы и расходы", icon: Table, hint: "Все категории по периодам, таблицей" },
+      { to: "/dynamics", label: "Динамика", icon: Activity, hint: "Операции на временной оси" },
+      { to: "/trends", label: "Тренды", icon: Activity, hint: "Помесячно и по дням недели" },
+      { to: "/cashflow", label: "Cash-flow", icon: LineChart, hint: "Доходы, расходы и чистый поток" },
+      { to: "/compare", label: "Сравнение", icon: GitCompare, hint: "Два периода рядом" },
+      { to: "/top", label: "Топ", icon: TrendingUp, hint: "Крупнейшие категории и получатели" },
+      { to: "/calendar", label: "Календарь", icon: CalendarDays, hint: "Тепловая карта по дням" },
+      { to: "/sankey", label: "Потоки", icon: GitFork, hint: "Откуда пришло и куда ушло" },
+      { to: "/year-review", label: "Год в цифрах", icon: Sparkles, hint: "Итоги года одной страницей" },
+      { to: "/digest", label: "Дайджест", icon: Newspaper, hint: "Сводка по неделям и месяцам" },
     ],
   },
   {
     title: "Планы",
     items: [
-      { to: "/goals", label: "Цели", icon: Target },
-      { to: "/budgets", label: "Бюджеты", icon: Target },
-      { to: "/50-30-20", label: "50/30/20", icon: Percent },
-      { to: "/whatif", label: "Что-если", icon: FlaskConical },
+      { to: "/goals", label: "Цели", icon: Target, hint: "Накопить к сроку" },
+      { to: "/budgets", label: "Бюджеты", icon: Target, hint: "План и факт по статьям" },
+      { to: "/50-30-20", label: "50/30/20", icon: Percent, hint: "Нужды, желания, сбережения" },
+      { to: "/whatif", label: "Что-если", icon: FlaskConical, hint: "Прикинуть, как изменится картина" },
     ],
   },
   {
     title: "Инструменты",
     items: [
-      { to: "/uncategorized", label: "Без категории", icon: Tag },
-      { to: "/duplicates", label: "Дубликаты", icon: Copy },
-      { to: "/anomalies", label: "Аномалии", icon: Zap },
-      { to: "/recurring", label: "Регулярные", icon: Repeat },
-      { to: "/rules", label: "Правила", icon: Wand2 },
-      { to: "/tags", label: "Теги", icon: Hash },
-      { to: "/wordcloud", label: "Облако слов", icon: Cloud },
+      { to: "/uncategorized", label: "Без категории", icon: Tag, hint: "Разнести операции без статьи" },
+      { to: "/duplicates", label: "Дубликаты", icon: Copy, hint: "Найти задвоенные операции" },
+      { to: "/anomalies", label: "Аномалии", icon: Zap, hint: "Необычные траты месяца" },
+      { to: "/recurring", label: "Регулярные", icon: Repeat, hint: "Подписки и планы из Дзен-мани" },
+      { to: "/rules", label: "Правила", icon: Wand2, hint: "Категории и получатели по условию" },
+      { to: "/tags", label: "Теги", icon: Hash, hint: "Метки #проект в комментариях" },
+      { to: "/wordcloud", label: "Облако слов", icon: Cloud, hint: "Частые слова в комментариях" },
+      { to: "/trash", label: "Корзина", icon: Trash2, hint: "Удалённые операции" },
     ],
   },
 ];
@@ -103,6 +109,17 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const theme = useThemeStore((s) => s.resolved);
 
   const inSecondary = SECONDARY.some((s) => loc.pathname === s.to);
+
+  // Панель закрывается по Escape — она большая, накрывает пол-экрана, и уводить
+  // руку к мыши ради «передумал» незачем.
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMoreOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moreOpen]);
 
   // Высота шапки уезжает в CSS-переменную: под неё паркуются липкие шапки
   // таблиц. Числом её не задать — она зависит от размера корневого шрифта
@@ -128,17 +145,28 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   return (
     <header
       ref={headerRef}
-      className="border-b border-border bg-panel/80 backdrop-blur sticky top-0 z-30"
+      className="relative border-b border-border bg-panel/80 backdrop-blur sticky top-0 z-30"
     >
       <div className="w-full px-4 md:px-6 py-3 flex items-center gap-3 md:gap-6">
-        <img
-          src={theme === "dark" ? logoHorizontalDark : logoHorizontal}
-          alt="DzenAnalytics"
-          className="h-12 w-auto shrink-0"
-        />
+        {/* Меню стоит посередине СВОБОДНОГО МЕСТА — между знаком и кнопками, —
+            а не посередине шапки. Разница видна сразу: знак занимает 275
+            пикселей, кнопки справа под 450, и меню, выставленное по центру
+            шапки, честно стоит по центру, но читается сдвинутым вправо — слева
+            от него пустоты вдвое больше. Глаз меряет просветы, а не координаты,
+            поэтому равняем именно их. */}
+        <div className="flex items-center shrink-0">
+          <img
+            src={theme === "dark" ? logoHorizontalDark : logoHorizontal}
+            alt="DzenAnalytics"
+            className="h-12 w-auto shrink-0"
+          />
+        </div>
 
+        {/* Обёртка держит свободное место и на узком экране, где само меню
+            спрятано: без неё кнопки справа сползались бы к знаку. */}
+        <div className="flex-1 flex justify-center min-w-0">
         {/* Desktop nav */}
-        <nav className="hidden lg:flex items-center gap-1 ml-2 flex-1">
+        <nav className="hidden lg:flex items-center gap-1 shrink-0">
           {PRIMARY.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -158,12 +186,14 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             </NavLink>
           ))}
 
-          <div className="relative">
+          <div>
             <button
               onClick={() => setMoreOpen((o) => !o)}
+              aria-expanded={moreOpen}
+              aria-haspopup="true"
               className={clsx(
                 "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-                inSecondary
+                moreOpen || inSecondary
                   ? "bg-accent/10 text-accent"
                   : "text-muted hover:text-text hover:bg-panel2"
               )}
@@ -171,50 +201,14 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
               <MoreHorizontal className="w-4 h-4" />
               Ещё
             </button>
-            {moreOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
-                <div className="absolute z-20 mt-1 w-56 card p-1.5 left-0 max-h-[70vh] overflow-y-auto">
-                  {SECONDARY_GROUPS.map((group, gi) => (
-                    <div
-                      key={group.title}
-                      className={gi > 0 ? "mt-1 pt-1 border-t border-border" : ""}
-                    >
-                      <div className="text-[10px] uppercase tracking-wider text-muted px-3 pt-1 pb-0.5">
-                        {group.title}
-                      </div>
-                      {group.items.map(({ to, label, icon: Icon }) => (
-                        <NavLink
-                          key={to}
-                          to={to}
-                          onClick={() => setMoreOpen(false)}
-                          className={({ isActive }) =>
-                            clsx(
-                              "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
-                              isActive
-                                ? "bg-accent/10 text-accent"
-                                : "text-muted hover:text-text hover:bg-panel2"
-                            )
-                          }
-                        >
-                          <Icon className="w-4 h-4" />
-                          {label}
-                        </NavLink>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
         </nav>
+        </div>
 
-        {/* Spacer on mobile pushes right group to the end */}
-        <div className="flex-1 lg:hidden" />
-
-        {/* Зона данных: то, что меняет картину на экране — поиск, разрез и
-            обмен с облаком. Отделена от системных кнопок справа не рамкой ради
-            рамки, а смыслом: слева работа с данными, справа настройки вида. */}
+        {/* Правая зона. Тот же вес, что и у левой, — этим и держится середина.
+            Внутри: сперва данные (поиск, разрез, обмен с облаком), затем
+            системные кнопки. Разделены не рамкой ради рамки, а смыслом. */}
+        <div className="flex items-center gap-3 md:gap-6 shrink-0">
         <div className="inline-flex items-stretch shrink-0 rounded-lg border border-border bg-panel2 overflow-hidden">
           <button
             onClick={onOpenPalette}
@@ -235,9 +229,8 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         <HeaderSyncActions />
 
         {/* Системная зона — приглушена и отодвинута к краю: сюда заходят
-            изредка. Отступ делаем `ml-auto`, а не распоркой: лишний элемент в
-            строке добавил бы к ширине ещё два зазора. */}
-        <div className="lg:ml-auto flex items-center gap-1.5 shrink-0">
+            изредка. */}
+        <div className="flex items-center gap-1.5 shrink-0">
         <ThemeSwitcher />
 
         {/* Settings — gear icon. Active style matches PRIMARY nav (bg-accent/10
@@ -284,7 +277,68 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         >
           <Menu className="w-4 h-4" />
         </button>
+        </div>
       </div>
+
+      {/* ── «Ещё»: панель во всю ширину шапки ──
+          Прежде это был столбец в 224 пикселя с прокруткой на семидесяти
+          процентах высоты экрана: двадцать три пункта из двадцати семи жили в
+          нём, и чтобы дойти до нижних, приходилось скроллить меню. Экран
+          широкий — раскладываем их в три колонки и показываем разом.
+
+          Панель считается от ШАПКИ, а не от кнопки: кнопка стоит по центру, и
+          привязанная к ней панель уехала бы вбок. */}
+      {moreOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setMoreOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="hidden lg:block absolute left-0 right-0 top-full z-20 px-4 md:px-6 pt-1">
+            <div className="card-tray p-5 3xl:p-6">
+              {/* Колонки прижаты к середине, под меню, а не растянуты по всей
+                  ширине: на мониторе в 1800 пикселей колонка выходила по 539, а
+                  текста в ней на 250 — строки повисали в пустоте и переставали
+                  читаться как список. */}
+              <div className="grid grid-cols-3 gap-x-10 gap-y-1 max-w-[64rem] mx-auto">
+                {SECONDARY_GROUPS.map((group) => (
+                  <div key={group.title}>
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-muted font-medium px-2.5 pb-2">
+                      {group.title}
+                    </div>
+                    {group.items.map(({ to, label, hint, icon: Icon }) => (
+                      <NavLink
+                        key={to}
+                        to={to}
+                        onClick={() => setMoreOpen(false)}
+                        className={({ isActive }) =>
+                          clsx(
+                            "flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[14px] transition-colors duration-200",
+                            isActive
+                              ? "bg-accent/10 text-accent"
+                              : "text-muted hover:text-text hover:bg-panel2"
+                          )
+                        }
+                      >
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block truncate leading-tight">{label}</span>
+                          {hint && (
+                            <span className="block truncate text-[12px] text-muted/80 leading-tight mt-0.5">
+                              {hint}
+                            </span>
+                          )}
+                        </span>
+                      </NavLink>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Mobile drawer */}
       {mobileOpen && (
