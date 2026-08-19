@@ -31,7 +31,7 @@ import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Scale, Hash, GitCompare, Wallet, Target, Wand2, Activity,
-  TrendingUp, ArrowUpRight, Clock, Lightbulb,
+  TrendingUp, ArrowUpRight, Clock, Lightbulb, Sigma,
 } from "lucide-react";
 import { CategoryDot } from "../CategoryDot";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
@@ -875,15 +875,28 @@ export function ObservationsList({
             </div>
           );
         })}
+
+        {excess > 0 && (
+          <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border last:border-0">
+            <span className="flex items-start gap-3 min-w-0">
+              <span className="mt-0.5 w-7 h-7 rounded-full shrink-0 grid place-items-center bg-expense/12 text-expense">
+                <Sigma className="w-4 h-4" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[14.5px] font-medium truncate">
+                  Сверх обычного за месяц
+                </span>
+                <span className="block text-[12.5px] text-muted leading-snug">
+                  Суммарно по разогнавшимся статьям
+                </span>
+              </span>
+            </span>
+            <span className="font-mono tabular-nums font-semibold text-[14px] shrink-0 pt-1 text-expense">
+              +{formatMoney(excess, m.base)}
+            </span>
+          </div>
+        )}
       </div>
-      {excess > 0 && (
-        <div className="mt-auto pt-3 border-t border-border flex items-center justify-between text-[12.5px] text-muted">
-          <span>Сверх обычного за месяц</span>
-          <span className="font-mono tabular-nums font-semibold text-expense">
-            +{formatMoney(excess, m.base)}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
