@@ -9,6 +9,7 @@ import {
   monthEnd,
   heatStep,
   robustCeiling,
+  forecastMonths,
 } from "./dashboardModel";
 import type { RecurringCandidate } from "./aggregations";
 import type { CurrencyRates } from "../types";
@@ -236,5 +237,85 @@ describe("robustCeiling — шкала, устойчивая к выбросам
   it("нули и мусор игнорируются, пустой ряд даёт ноль", () => {
     expect(robustCeiling([])).toEqual({ cap: 0, clipped: false });
     expect(robustCeiling([0, 0, Number.NaN])).toEqual({ cap: 0, clipped: false });
+  });
+});
+
+describe("forecastMonths — прогноз на несколько месяцев", () => {
+  const flat = Array.from({ length: 6 }, (_, i) => ({
+    ym: `2026-0${i + 1}`,
+    income: 300_000,
+    expense: 200_000,
+  }));
+
+  it("КЛЮЧЕВОЕ: текущий неполный месяц в среднее не попадает", () => {
+    // Вызывающая сторона передаёт только ЗАВЕРШЁННЫЕ месяцы — иначе месяц,
+    // прожитый на две трети, занижал прогноз на все месяцы вперёд.
+    const f = forecastMonths(flat, 3, 6);
+    expect(f).toHaveLength(3);
+    expect(f[0].income).toBe(300_000);
+    expect(f.every((x) => x.isForecast)).toBe(true);
+  });
+
+  it("месяцы идут подряд за последним завершённым", () => {
+    expect(forecastMonths(flat, 3, 6).map((x) => x.ym)).toEqual([
+      "2026-07",
+      "2026-08",
+      "2026-09",
+    ]);
+  });
+
+  it("без сезонности все три месяца одинаковы — и это честно", () => {
+    const f = forecastMonths(flat, 3, 6);
+    expect(new Set(f.map((x) => Math.round(x.expense))).size).toBe(1);
+  });
+
+  it("КЛЮЧЕВОЕ: при достаточной истории месяцы расходятся по сезонности", () => {
+    // Два декабря дороже обычного — декабрьский прогноз обязан это учесть.
+    const hist = [
+      { ym: "2024-11", income: 300_000, expense: 100_000 },
+      { ym: "2024-12", income: 300_000, expense: 200_000 },
+      { ym: "2025-11", income: 300_000, expense: 100_000 },
+      { ym: "2025-12", income: 300_000, expense: 200_000 },
+      { ym: "2026-09", income: 300_000, expense: 100_000 },
+      { ym: "2026-10", income: 300_000, expense: 100_000 },
+    ];
+    const f = forecastMonths(hist, 2, 6);
+    expect(f.map((x) => x.ym)).toEqual(["2026-11", "2026-12"]);
+    expect(f[1].expense).toBeGreaterThan(f[0].expense);
+  });
+
+  it("один такой месяц в истории сезонностью не считается", () => {
+    const hist = [
+      { ym: "2026-05", income: 300_000, expense: 100_000 },
+      { ym: "2026-06", income: 300_000, expense: 100_000 },
+      { ym: "2026-07", income: 300_000, expense: 900_000 },
+      { ym: "2026-08", income: 300_000, expense: 100_000 },
+    ];
+    // Июль был один и дорогой, но судить по одному июлю о будущих июлях нельзя.
+    const f = forecastMonths(hist, 12, 6);
+    const july = f.find((x) => x.ym.endsWith("-07"));
+    const august = f.find((x) => x.ym.endsWith("-08"));
+    expect(july!.expense).toBeCloseTo(august!.expense, 5);
+  });
+
+  it("КЛЮЧЕВОЕ: разовый выброс не делает свой месяц вечно дорогим", () => {
+    // Три сентября: два обычных и один с крупной покупкой. Медиана берёт
+    // обычный, среднее задрало бы прогноз втрое.
+    const hist = [
+      { ym: "2023-09", income: 300_000, expense: 100_000 },
+      { ym: "2024-09", income: 300_000, expense: 100_000 },
+      { ym: "2025-09", income: 300_000, expense: 2_400_000 },
+      { ym: "2026-06", income: 300_000, expense: 100_000 },
+      { ym: "2026-07", income: 300_000, expense: 100_000 },
+      { ym: "2026-08", income: 300_000, expense: 100_000 },
+    ];
+    const f = forecastMonths(hist, 1, 6);
+    expect(f[0].ym).toBe("2026-09");
+    // Обычный месяц в окне — 100 000. Сентябрь не должен уехать выше зажима.
+    expect(f[0].expense).toBeLessThanOrEqual(100_000 * 1.4 + 1);
+  });
+
+  it("пустая история — пустой прогноз, а не выдуманные нули", () => {
+    expect(forecastMonths([], 3, 6)).toEqual([]);
   });
 });

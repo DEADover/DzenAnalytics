@@ -100,9 +100,13 @@ export function BlockTitle({
       {to && (
         <Link
           to={to}
-          className="text-xs text-accent hover:underline flex items-center gap-1 shrink-0"
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-border
+                     bg-panel2/60 px-3 py-1.5 text-[12.5px] font-medium text-accent
+                     transition-colors duration-200 hover:border-accent/50 hover:bg-panel2
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
-          {linkLabel} <ArrowRight className="w-3 h-3" />
+          {linkLabel}
+          <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
         </Link>
       )}
     </div>
@@ -634,7 +638,7 @@ export function AccountsList({
           key={a.title}
           type="button"
           onClick={() => onAccount?.(a.title)}
-          className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0 text-left group rounded-lg px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="flex h-[56px] shrink-0 items-center justify-between gap-3 border-b border-border last:border-0 text-left group rounded-lg px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           <span className="flex items-center gap-2.5 min-w-0">
             <AccountLogo title={a.title} type={a.type} size={28} />
@@ -749,7 +753,7 @@ export function UpcomingList({ m }: { m: DashboardModel }) {
       {m.upcoming.map((p) => (
         <div
           key={p.payee + p.currency + p.date}
-          className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0"
+          className="flex h-[56px] shrink-0 items-center justify-between gap-3 border-b border-border last:border-0"
         >
           <span className="flex items-center gap-2.5 min-w-0">
             <i
@@ -759,13 +763,13 @@ export function UpcomingList({ m }: { m: DashboardModel }) {
             />
             <span className="min-w-0">
               <span className="block text-[14.5px] font-medium truncate">{p.payee}</span>
-              <span className="block text-[12px] text-muted">
+              {/* Дата и комментарий одной строкой: с двумя строка платежа была
+                  выше строки счёта, и списки в соседних карточках не сходились. */}
+              <span className="block text-[12px] text-muted truncate">
                 {formatDate(p.date, "short")} ·{" "}
                 {p.inDays === 0 ? "сегодня" : p.inDays === 1 ? "завтра" : `через ${p.inDays} дн`}
+                {p.comment ? ` · ${p.comment}` : ""}
               </span>
-              {p.comment && (
-                <span className="block text-[12px] text-muted truncate">{p.comment}</span>
-              )}
             </span>
           </span>
           <span className="text-right shrink-0">

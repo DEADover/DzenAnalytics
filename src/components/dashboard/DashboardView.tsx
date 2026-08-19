@@ -193,16 +193,18 @@ export function DashboardView() {
           <div className="flex flex-wrap items-center gap-3">
             <Link
               to="/transactions"
-              className="group inline-flex items-center gap-3 rounded-full pl-6 pr-2.5 py-2.5 bg-text text-panel text-[14px] font-medium"
+              className="group inline-flex h-[52px] items-center gap-3 rounded-full pl-6 pr-2.5 bg-text text-panel text-[14px] font-medium"
             >
-              Разобрать месяц
+              Лента операций
               <span className="w-8 h-8 rounded-full bg-panel/20 grid place-items-center transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none">
                 <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
               </span>
             </Link>
             <Link
               to="/report"
-              className="rounded-full px-5 py-2.5 border border-border/70 text-muted text-[14px]"
+              // Та же высота, что у соседа: у главной кнопки её задаёт вложенный
+              // кружок, и «Отчёт» рядом выглядел приплюснутым.
+              className="inline-flex h-[52px] items-center rounded-full px-6 border border-border/70 text-muted text-[14px] transition-colors hover:border-accent/50 hover:text-text"
             >
               Отчёт
             </Link>
@@ -286,9 +288,16 @@ export function DashboardView() {
             info={
               <>
                 <p>
-                  Последние 12 месяцев, дальше — прогноз по среднему. Зелёный столбец
-                  слева в паре — доход, красный справа — расход; прогнозные месяцы
-                  бледнее и обведены пунктиром.
+                  Последние 12 месяцев, дальше — прогноз. Зелёный столбец слева в паре —
+                  доход, красный справа — расход; прогнозные месяцы бледнее и обведены
+                  пунктиром.
+                </p>
+                <p>
+                  Прогноз считается по типичному месяцу за последние полгода — по
+                  медиане, а не по среднему, чтобы одна крупная покупка не поднимала
+                  всю линию. Текущий, неполный месяц в расчёт не берётся. Если история
+                  позволяет, к каждому месяцу применяется поправка на сезон: декабрь
+                  обычно дороже июля, и три прогнозных столбца тогда различаются.
                 </p>
                 <p>
                   Шкала срезана по обычному размаху: один месяц с крупной покупкой

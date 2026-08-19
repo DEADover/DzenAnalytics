@@ -31,7 +31,6 @@ import {
   groupByCategory,
   dailyExpenseMap,
   detectRecurring,
-  buildForecast,
   balancesByAccount,
   buildInsights,
   detectMonthSpikes,
@@ -54,6 +53,7 @@ import {
   upcomingTotal,
   freeMoney,
   monthEnd,
+  forecastMonths,
   type MonthProgress,
   type UpcomingPayment,
   type FreeMoney,
@@ -122,7 +122,8 @@ export interface DashboardModel {
 
   /** Помесячная история и прогноз для графика. */
   months: MonthBucket[];
-  forecast: ReturnType<typeof buildForecast>;
+  /** История месяцев и прогноз следом за ней. */
+  forecast: { ym: string; income: number; expense: number; isForecast: boolean }[];
   /** Категории текущего периода, по убыванию расхода. */
   categories: CategoryBucket[];
   /** Категории, которые в этом месяце заметно разогнались. */
@@ -187,10 +188,19 @@ export function useDashboardModel(): DashboardModel {
     () => groupByMonth(transactions, { monthStartDay }),
     [transactions, monthStartDay]
   );
-  const forecast = useMemo(
-    () => buildForecast(transactions, 3, 6, { monthStartDay }),
-    [transactions, monthStartDay]
-  );
+  // Прогноз строится по ЗАВЕРШЁННЫМ месяцам: текущий неполный, и в среднем он
+  // занижал бы все месяцы вперёд. Сезонность добавляет различие между ними —
+  // раньше на все три ставилось одно и то же число.
+  const forecast = useMemo(() => {
+    const history = months.map((b) => ({
+      ym: b.ym,
+      income: b.income,
+      expense: b.expense,
+      isForecast: false,
+    }));
+    const complete = months.filter((b) => b.ym < ym);
+    return [...history, ...forecastMonths(complete, 3, 6)];
+  }, [months, ym]);
   const netWorthSeries = useNetWorthSeries(transactions);
   const dayMap = useMemo(() => dailyExpenseMap(transactions), [transactions]);
   const recurring = useMemo(() => detectRecurring(transactions), [transactions]);

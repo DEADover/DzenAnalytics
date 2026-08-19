@@ -211,3 +211,87 @@ export function heatStep(v: number, max: number, steps = 4): number {
   const step = Math.ceil((v / max) * steps);
   return Math.min(steps, Math.max(1, step));
 }
+
+
+/** Медиана — типичное значение ряда, устойчивое к одиночным выбросам. */
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+export interface ForecastMonth {
+  ym: string;
+  income: number;
+  expense: number;
+  isForecast: boolean;
+}
+
+/**
+ * Прогноз на несколько месяцев вперёд.
+ *
+ * Две вещи, которых не делал прежний расчёт:
+ *
+ *   • **текущий месяц не участвует в среднем.** Он неполный — девятнадцатого
+ *     числа в нём две трети трат, — и попадая в окно, занижал прогноз на все
+ *     месяцы вперёд;
+ *   • **месяцы различаются.** Раньше на все три ставилось одно и то же
+ *     среднее, и три одинаковых столбца выглядели как ошибка. Теперь среднее
+ *     умножается на сезонный коэффициент своего календарного месяца — если
+ *     истории хватает, чтобы его посчитать.
+ *
+ * Коэффициент считается только по ЗАВЕРШЁННЫМ месяцам и только когда этот
+ * календарный месяц встречался в истории не меньше двух раз: по одному
+ * декабрю судить о декабрях нельзя. Он зажат в пределах ±40 %, иначе один
+ * ремонт в мае объявил бы май вечно дорогим.
+ */
+export function forecastMonths(
+  complete: { ym: string; income: number; expense: number }[],
+  monthsAhead = 3,
+  lookback = 6
+): ForecastMonth[] {
+  if (complete.length === 0) return [];
+
+  // Везде медиана, а не среднее. «Обычный месяц» — это типичный месяц, и одна
+  // покупка машины не должна поднимать прогноз на все месяцы вперёд: ровно та
+  // же беда, из-за которой на графике пришлось срезать шкалу.
+  const window = complete.slice(-lookback);
+  const avgIncome = median(window.map((m) => m.income));
+  const avgExpense = median(window.map((m) => m.expense));
+
+  // Сезонный множитель календарного месяца: во сколько раз он обычно
+  // отличается от типичного месяца за всю историю.
+  const overall = median(complete.map((m) => m.expense));
+  const byCalendarMonth = new Map<number, number[]>();
+  for (const m of complete) {
+    const idx = Number(m.ym.slice(5, 7)) - 1;
+    const arr = byCalendarMonth.get(idx) ?? [];
+    arr.push(m.expense);
+    byCalendarMonth.set(idx, arr);
+  }
+  const factorFor = (monthIdx: number): number => {
+    const arr = byCalendarMonth.get(monthIdx);
+    if (!arr || arr.length < 2 || overall <= 0) return 1;
+    // На двух точках медиана совпадает со средним — от перекоса спасает зажим.
+    return Math.max(0.6, Math.min(1.4, median(arr) / overall));
+  };
+
+  const last = complete[complete.length - 1].ym;
+  const ly = Number(last.slice(0, 4));
+  const lm = Number(last.slice(5, 7));
+
+  const out: ForecastMonth[] = [];
+  for (let i = 1; i <= monthsAhead; i++) {
+    const d = new Date(ly, lm - 1 + i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const k = factorFor(d.getMonth());
+    out.push({
+      ym,
+      income: avgIncome,
+      expense: avgExpense * k,
+      isForecast: true,
+    });
+  }
+  return out;
+}
