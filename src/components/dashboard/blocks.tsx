@@ -29,7 +29,7 @@ import {
 } from "recharts";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Scale, CalendarDays, Hash, GitCompare, Repeat } from "lucide-react";
+import { Scale, Hash, GitCompare, Wallet, Target, Wand2, Activity } from "lucide-react";
 import { CategoryDot } from "../CategoryDot";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
 import { AccountLogo } from "../AccountLogo";
@@ -47,13 +47,9 @@ import { heatStep, robustCeiling } from "../../lib/dashboardModel";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
-const MONTHS_GENITIVE = ["января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-
-/** «19 августа» — дата в списке читается словами. */
-function monthGenitive(monthIdx: number): string {
-  return MONTHS_GENITIVE[monthIdx] ?? "";
-}
+/** «19 авг» — в узкой колонке полное название месяца переносит строку. */
+const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн",
+  "июл", "авг", "сен", "окт", "ноя", "дек"];
 import type { DashboardModel } from "../../hooks/useDashboardModel";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
@@ -883,7 +879,14 @@ export function ObservationsList({
  * «а сколько это». Ступени строятся из токена расхода через `color-mix`,
  * поэтому тёмная тема работает по устройству, а не по совпадению.
  */
-export function ActivityHeat({ m }: { m: DashboardModel }) {
+export function ActivityHeat({
+  m,
+  onDay,
+}: {
+  m: DashboardModel;
+  /** Открыть операции конкретного дня. */
+  onDay?: (date: string) => void;
+}) {
   const year = Number(m.ym.slice(0, 4));
   const monthIdx = Number(m.ym.slice(5, 7)) - 1;
   const days = new Date(year, monthIdx + 1, 0).getDate();
@@ -922,15 +925,17 @@ export function ActivityHeat({ m }: { m: DashboardModel }) {
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
       <div className="flex flex-col xl:flex-row xl:items-start gap-5 flex-1 min-h-0">
-      <div className="flex flex-col gap-2 min-w-0">
-      <div className="grid grid-cols-7 gap-1.5 text-[11px] text-muted text-center max-w-[24rem] w-full">
+      {/* Колонке календаря нужна своя ширина: без неё она ужималась под
+          соседний список и клетка выходила по 25 px. */}
+      <div className="flex flex-col gap-2 w-full xl:w-[26rem] xl:shrink-0">
+      <div className="grid grid-cols-7 gap-2 text-[11.5px] text-muted text-center max-w-[26rem] w-full">
         {WEEKDAYS.map((w) => (
           <span key={w}>{w}</span>
         ))}
       </div>
 
       <div
-        className="grid grid-cols-7 gap-1.5 max-w-[24rem] w-full"
+        className="grid grid-cols-7 gap-2 max-w-[26rem] w-full"
         role="img"
         aria-label={`Расходы по дням за ${monthLabel(m.ym)}. Самый крупный день — ${formatMoney(
           spend(busiest),
@@ -942,23 +947,32 @@ export function ActivityHeat({ m }: { m: DashboardModel }) {
           const future = ymd(c.day) > todayKey;
           const value = future ? 0 : spend(c.day);
           return (
-            <span
+            <button
               key={c.key}
-              className={`aspect-square rounded-md flex items-start justify-end p-1 text-[11px] tabular-nums ${
-                future ? "text-muted/50" : "text-muted"
-              }`}
+              type="button"
+              disabled={future || value <= 0}
+              onClick={() => onDay?.(ymd(c.day as number))}
+              className={`aspect-square rounded-md flex items-center justify-center text-[13px] tabular-nums
+                          transition-shadow duration-150
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50
+                          ${future ? "text-muted/50" : "text-muted"}
+                          ${
+                            !future && value > 0
+                              ? "cursor-pointer hover:ring-2 hover:ring-accent/40"
+                              : "cursor-default"
+                          }`}
               style={{
                 background: future ? "transparent" : shade(heatStep(value, cap)),
                 border: future ? "1px dashed rgb(var(--c-border))" : undefined,
               }}
             >
               {c.day}
-            </span>
+            </button>
           );
         })}
       </div>
 
-      <div className="flex items-center gap-1.5 text-[11px] text-muted max-w-[24rem]">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted max-w-[26rem]">
         Меньше
         {[0, 1, 2, 3, 4].map((st) => (
           <i
@@ -978,18 +992,26 @@ export function ActivityHeat({ m }: { m: DashboardModel }) {
           <div className="label mb-2">Самые дорогие дни</div>
           <div className="flex flex-col">
             {topDays.map((d) => (
-              <div
+              <button
                 key={d}
-                className="flex items-center justify-between gap-3 py-1.5 border-b border-border last:border-0"
+                type="button"
+                onClick={() => onDay?.(ymd(d))}
+                className="flex items-center justify-between gap-3 py-1.5 border-b border-border last:border-0
+                           text-left rounded-lg px-2 -mx-2 transition-colors duration-200
+                           hover:bg-panel2/70 focus-visible:outline-none focus-visible:ring-2
+                           focus-visible:ring-accent/40 group"
               >
-                <span className="text-[13.5px]">
-                  {d} {monthGenitive(monthIdx)}
-                  <span className="text-muted text-[12px]"> · {WEEKDAYS[(new Date(year, monthIdx, d).getDay() + 6) % 7]}</span>
+                <span className="text-[13.5px] whitespace-nowrap">
+                  {d} {MONTHS_SHORT[monthIdx]}
+                  <span className="text-muted text-[12px]">
+                    {" · "}
+                    {WEEKDAYS[(new Date(year, monthIdx, d).getDay() + 6) % 7]}
+                  </span>
                 </span>
                 <span className="font-mono tabular-nums font-semibold text-[13.5px] text-expense shrink-0">
                   {formatMoney(spend(d), m.base)}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -1024,37 +1046,35 @@ export function ActivityHeat({ m }: { m: DashboardModel }) {
  * приходит, дочитав страницу. Подпись у каждой говорит, что там внутри, а не
  * повторяет название раздела.
  */
-export function QuickLinks({ m }: { m: DashboardModel }) {
+export function QuickLinks() {
   const items = [
-    { to: "/calendar", icon: CalendarDays, title: "Календарь", sub: "Траты по дням" },
+    { to: "/budgets", icon: Wallet, title: "Бюджеты", sub: "План и факт по статьям" },
+    { to: "/goals", icon: Target, title: "Цели", sub: "Копить и следить за сроком" },
+    { to: "/rules", icon: Wand2, title: "Правила", sub: "Категории по условию" },
     { to: "/tags", icon: Hash, title: "Теги", sub: "Из комментариев" },
-    { to: "/compare", icon: GitCompare, title: "Сравнение", sub: "Периоды между собой" },
-    {
-      to: "/recurring",
-      icon: Repeat,
-      title: "Регулярные",
-      sub: `${m.recurringMonthlyCount} ежемесячных`,
-    },
+    { to: "/compare", icon: GitCompare, title: "Сравнения", sub: "Периоды между собой" },
+    { to: "/dynamics", icon: Activity, title: "Динамика", sub: "Операции на оси времени" },
   ];
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {items.map(({ to, icon: Icon, title, sub }) => (
         <Link
           key={to}
           to={to}
-          className="group rounded-[18px] bg-panel border border-border px-5 py-4 flex items-center gap-3.5
+          className="group rounded-[18px] bg-panel border border-border px-4 py-4 flex items-center gap-3
                      transition-colors duration-200 hover:border-accent/40 hover:bg-panel2/40
                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           <Icon className="w-5 h-5 text-accent shrink-0" aria-hidden="true" />
           <span className="min-w-0">
-            <span className="block font-semibold text-[14.5px] group-hover:text-accent truncate">
+            <span className="block font-semibold text-[14px] group-hover:text-accent truncate">
               {title}
             </span>
-            <span className="block text-[12.5px] text-muted truncate">{sub}</span>
+            <span className="block text-[12px] text-muted truncate">{sub}</span>
           </span>
         </Link>
       ))}
     </div>
   );
 }
+

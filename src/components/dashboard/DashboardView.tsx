@@ -23,7 +23,7 @@ import {
   ActivityHeat,
   QuickLinks,
 } from "./blocks";
-import { formatMoney, monthLabel } from "../../lib/format";
+import { formatMoney, monthLabel, formatDate } from "../../lib/format";
 import { useDashboardModel } from "../../hooks/useDashboardModel";
 import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../../store/useDrillStore";
@@ -115,7 +115,7 @@ export function DashboardView() {
   const showDrill = useDrillStore((s) => s.show);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
-  const { onMonth, onCategory, onAccount } = useMemo(
+  const { onMonth, onCategory, onAccount, onDay } = useMemo(
     () => ({
       onMonth: (ym: string) =>
         showDrill(
@@ -129,6 +129,12 @@ export function DashboardView() {
           name,
           transactions.filter((t) => affectsExpense(t.kind) && t.category === name),
           "Расходы по категории"
+        ),
+      onDay: (date: string) =>
+        showDrill(
+          formatDate(date),
+          transactions.filter((t) => t.date.slice(0, 10) === date),
+          "Операции за день"
         ),
       onAccount: (title: string) =>
         showDrill(
@@ -301,7 +307,7 @@ export function DashboardView() {
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-5 3xl:gap-6">
         <Tray>
           <BlockTitle title="Активность в этом месяце" to="/calendar" linkLabel="Календарь" />
-          <ActivityHeat m={m} />
+          <ActivityHeat m={m} onDay={onDay} />
         </Tray>
 
         <Tray>
@@ -316,7 +322,7 @@ export function DashboardView() {
       </section>
 
       {/* ── Быстрые переходы ── */}
-      <QuickLinks m={m} />
+      <QuickLinks />
     </div>
   );
 }
