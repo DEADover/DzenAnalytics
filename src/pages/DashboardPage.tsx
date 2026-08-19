@@ -70,6 +70,9 @@ import { PageHeader } from "../components/PageHeader";
 import { InsightsPanel } from "../components/InsightsPanel";
 import { QuickCalibration } from "../components/QuickCalibration";
 import type { DayCell } from "../lib/aggregations";
+import { useDashboardVariantStore } from "../store/useDashboardVariantStore";
+import { VariantSwitcher } from "../components/dashboard/VariantSwitcher";
+import { DashboardVariants } from "../components/dashboard/DashboardVariants";
 
 const HEATMAP_COLORS = [
   "rgb(var(--c-panel2))",
@@ -229,7 +232,12 @@ function MiniHeatmap({
   );
 }
 
-export function DashboardPage() {
+/**
+ * Нынешняя главная — оставлена как один из вариантов на время выбора
+ * оформления. Без неё не с чем сравнивать новые раскладки: «стало лучше»
+ * проверяется только переключением туда-обратно на своих данных.
+ */
+function LegacyDashboard() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
   const showDrill = useDrillStore((s) => s.show);
@@ -949,6 +957,33 @@ export function DashboardPage() {
           </div>
         </Link>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Главная страница: переключатель вариантов и выбранная раскладка.
+ *
+ * Пока идёт выбор оформления, страница показывает один из нескольких вариантов
+ * на настоящих данных — сравнивать раскладки по картинкам бесполезно, решает
+ * то, как они выглядят на своих счетах и своей истории.
+ */
+export function DashboardPage() {
+  const variant = useDashboardVariantStore((s) => s.variant);
+  const variantLoaded = useDashboardVariantStore((s) => s.loaded);
+  const variantHydrate = useDashboardVariantStore((s) => s.hydrate);
+  const hasData = useDataStore((s) => s.transactions.length > 0);
+
+  useEffect(() => {
+    if (!variantLoaded) void variantHydrate();
+  }, [variantLoaded, variantHydrate]);
+
+  if (!hasData) return <EmptyState />;
+
+  return (
+    <div className="space-y-4">
+      <VariantSwitcher />
+      {variant === "current" ? <LegacyDashboard /> : <DashboardVariants variant={variant} />}
     </div>
   );
 }
