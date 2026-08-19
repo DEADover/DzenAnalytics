@@ -529,7 +529,9 @@ export function TransactionsPage() {
         />
       </div>
 
-      <div className="card overflow-hidden">
+      {/* Двойной кант вокруг таблицы — как у карточек главной. */}
+      <div className="tray">
+      <div className="tray-core overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-3 flex-wrap">
           <div
             className="relative flex-1 min-w-[220px]"
@@ -769,6 +771,7 @@ export function TransactionsPage() {
             Показано {visibleCount} из {sorted.length} — прокрутите дальше, чтобы загрузить ещё
           </div>
         )}
+      </div>
       </div>
 
       {editing && (

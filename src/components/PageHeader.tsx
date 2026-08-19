@@ -58,7 +58,7 @@ export function PageHeader({
   return (
     <div className="flex items-end justify-between flex-wrap gap-3">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
+        <h1 className="text-[26px] font-semibold tracking-tight flex items-center gap-2.5">
           {Icon && <Icon className={`w-6 h-6 shrink-0 ${iconTone}`} />}
           <span className="truncate">{title}</span>
         </h1>
@@ -69,7 +69,7 @@ export function PageHeader({
           // to a second line, so the layout below never jumps around. Pages
           // should keep hints short enough that truncation is rare in practice.
           <p
-            className={`text-muted text-sm mt-1 ${hintWrap ? "" : "truncate"}`}
+            className={`text-muted text-[13.5px] mt-1.5 ${hintWrap ? "" : "truncate"}`}
             title={typeof hint === "string" ? hint : undefined}
           >
             {hint}

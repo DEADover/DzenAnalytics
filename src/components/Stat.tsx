@@ -27,7 +27,11 @@ export function Stat({ label, value, hint, tooltip, tone = "default", icon, dens
     accent2: "text-accent2",
   }[tone];
   const card = (
-    <div className={clsx("card", dense ? "p-3" : "card-pad", tooltip && "cursor-help")}>
+    // Двойной кант: обойма с просветом и ядро внутри — тот же приём, что на
+    // главной. Плитка показателя стоит на сорока экранах, и вид у неё должен
+    // быть один.
+    <div className={clsx("tray", tooltip && "cursor-help")}>
+    <div className={clsx("tray-core", dense ? "p-3" : "card-pad")}>
       <div className={clsx("flex items-center justify-between", dense ? "mb-0.5" : "mb-2")}>
         <div className="label">{label}</div>
         {icon && <div className="text-muted">{icon}</div>}
@@ -43,6 +47,7 @@ export function Stat({ label, value, hint, tooltip, tone = "default", icon, dens
         {value}
       </div>
       {hint && <div className="text-xs text-muted mt-1">{hint}</div>}
+    </div>
     </div>
   );
   return tooltip ? <Tooltip content={tooltip}>{card}</Tooltip> : card;
