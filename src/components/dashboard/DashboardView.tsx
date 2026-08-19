@@ -39,8 +39,8 @@ import { affectsExpense } from "../../lib/txKindStyle";
  */
 function Tray({ children }: { children: ReactNode }) {
   return (
-    <div className="h-full flex flex-col rounded-[22px] p-1.5 bg-panel2/70 border border-border/70 shadow-tray">
-      <div className="flex-1 min-h-0 flex flex-col rounded-[16px] bg-panel p-5">{children}</div>
+    <div className="tray h-full flex flex-col">
+      <div className="tray-core flex-1 min-h-0 flex flex-col p-5">{children}</div>
     </div>
   );
 }

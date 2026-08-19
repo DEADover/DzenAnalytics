@@ -103,16 +103,45 @@ h2,
 }
 
 @layer components {
+  /**
+   * Карточка. Мягче и глубже прежней: радиус 18 вместо 12, рассеянная тень
+   * вместо плотной, граница чуть тише. Один класс — и вид меняется на всех
+   * страницах сразу, их у нас сорок восемь.
+   */
   .card {
-    @apply bg-panel border border-border rounded-xl shadow-card;
+    @apply bg-panel border border-border/70 rounded-[18px] shadow-tray;
   }
   .card-pad {
     @apply p-5;
   }
+  /**
+   * Двойной кант: обойма с просветом и ядро внутри. Радиус ядра меньше ровно
+   * на просвет (18 − 6 = 12), иначе дуги расходятся и кант выглядит кривым.
+   *
+   * Отдельно от `.card`, потому что требует двух элементов: снаружи `.tray`,
+   * внутри `.tray-core`. Там, где переверстать нельзя, `.card` даёт тот же
+   * силуэт одним элементом.
+   */
+  .tray {
+    @apply rounded-[18px] p-1.5 bg-panel2/70 border border-border/70 shadow-tray;
+  }
+  .tray-core {
+    @apply rounded-[12px] bg-panel;
+  }
+  /**
+   * Ссылка-пилюля из шапки виджета: «Счета →», «Регулярные →». Голый текст
+   * рядом с крупными числами читался как случайная сноска.
+   */
+  .pill-link {
+    @apply inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border
+           bg-panel2/60 px-3 py-1.5 text-[12.5px] font-medium text-accent
+           transition-colors duration-200 hover:border-accent/50 hover:bg-panel2
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
+  }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full
            text-sm font-medium
-           transition-[color,background-color,box-shadow,transform,opacity] duration-150
+           transition-[color,background-color,box-shadow,transform,opacity] duration-200
            active:scale-[0.97]
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg
            disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
@@ -131,7 +160,7 @@ h2,
     @apply btn bg-warn text-white hover:opacity-90;
   }
   .input {
-    @apply w-full bg-panel2 text-text placeholder:text-muted px-3 py-2 rounded-lg
+    @apply w-full bg-panel2 text-text placeholder:text-muted px-3 py-2 rounded-xl
            border border-border transition-colors
            focus:outline-none focus:border-accent
            focus-visible:ring-2 focus-visible:ring-accent/25;

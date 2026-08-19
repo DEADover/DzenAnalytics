@@ -100,10 +100,7 @@ export function BlockTitle({
       {to && (
         <Link
           to={to}
-          className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-border
-                     bg-panel2/60 px-3 py-1.5 text-[12.5px] font-medium text-accent
-                     transition-colors duration-200 hover:border-accent/50 hover:bg-panel2
-                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="pill-link"
         >
           {linkLabel}
           <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
