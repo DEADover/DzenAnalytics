@@ -41,8 +41,8 @@ interface Props {
  *
  * Replaces the ad-hoc `<div><h1><p></div>` block that every page used to
  * inline. Guarantees three things across the product:
- *   1. Same typographic scale (`text-2xl font-bold`) and rhythm
- *      (`text-muted text-sm mt-1` for the hint).
+ *   1. Same typographic scale и один ряд: значок в плашке, заголовок,
+ *      волосок, подпись.
  *   2. Every page can show an identity icon — so navigation feels
  *      consistent regardless of which page you land on.
  *   3. A single, predictable slot for page-level actions on the right.
@@ -56,24 +56,42 @@ export function PageHeader({
   hintWrap,
 }: Props) {
   return (
-    <div className="flex items-end justify-between flex-wrap gap-3">
-      <div className="min-w-0">
-        <h1 className="text-[26px] font-semibold tracking-tight flex items-center gap-2.5">
-          {Icon && <Icon className={`w-6 h-6 shrink-0 ${iconTone}`} />}
+    <div className="flex items-center justify-between flex-wrap gap-3">
+      {/* Заголовок и подпись стоят в ОДНУ строку, разделённые волоском.
+          Двумя строками шапка занимала около шестидесяти пикселей на каждой из
+          двадцати шести страниц — и это до того, как начиналась сама страница.
+          Подпись при этом никуда не убрана: на редких разделах вроде «50/30/20»
+          или «Что-если» она объясняет, что страница вообще делает.
+
+          Если строка не помещается, подпись переносится вниз — то есть в худшем
+          случае получается ровно прежняя раскладка, а не обрезанный текст. */}
+      <div className="min-w-0 flex items-center gap-3 flex-wrap">
+        <h1 className="text-[26px] font-semibold tracking-tight flex items-center gap-3 min-w-0">
+          {/* Значок в плашке, а не голым глифом: во всём остальном продукте —
+              в меню, в быстрых переходах, в переключателях — иконки сидят в
+              залитых плашках, и только заголовок висел особняком. Плашка
+              нейтральная, чтобы работать с любым тоном значка: у страниц
+              внимания («Аномалии», «Дубликаты») он не акцентный. */}
+          {Icon && (
+            <span className="shrink-0 w-9 h-9 rounded-xl bg-panel2 border border-border grid place-items-center">
+              <Icon className={`w-[18px] h-[18px] ${iconTone}`} />
+            </span>
+          )}
           <span className="truncate">{title}</span>
         </h1>
         {hint && (
-          // Single-line hint by design: keeps every page header's vertical
-          // footprint identical (title row + exactly one hint row). On narrow
-          // viewports the text truncates with an ellipsis instead of wrapping
-          // to a second line, so the layout below never jumps around. Pages
-          // should keep hints short enough that truncation is rare in practice.
-          <p
-            className={`text-muted text-[13.5px] mt-1.5 ${hintWrap ? "" : "truncate"}`}
-            title={typeof hint === "string" ? hint : undefined}
-          >
-            {hint}
-          </p>
+          <>
+            <span
+              aria-hidden
+              className="hidden md:block w-px h-5 bg-border shrink-0"
+            />
+            <p
+              className={`text-muted text-[13.5px] min-w-0 ${hintWrap ? "" : "truncate"}`}
+              title={typeof hint === "string" ? hint : undefined}
+            >
+              {hint}
+            </p>
+          </>
         )}
       </div>
       {right && <div className="shrink-0">{right}</div>}
