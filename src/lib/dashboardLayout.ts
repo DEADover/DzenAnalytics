@@ -69,6 +69,11 @@ export interface WidgetMeta {
   bare?: boolean;
   /** Варианты оформления, между которыми человек выбирает в настройке. */
   views?: readonly WidgetView[];
+  /**
+   * Стандартно снят: место в раскладке за виджетом закреплено, но открывается
+   * главная без него — он ждёт на полке, пока его не вернут.
+   */
+  offByDefault?: boolean;
   /** Высота по содержимому, а не общая высота ряда. */
   autoHeight?: boolean;
   /** Таких виджетов на главной может стоять несколько. */
@@ -144,14 +149,14 @@ export const WIDGETS: readonly WidgetMeta[] = [
     span: 1,
     views: [
       {
-        id: "own",
-        title: "Свои",
-        hint: "Регулярные платежи, вычисленные по вашей истории операций",
-      },
-      {
         id: "zen",
         title: "Из Дзен-мани",
         hint: "Расходные планы и прогнозы, заведённые в самом Дзен-мани",
+      },
+      {
+        id: "own",
+        title: "Свои",
+        hint: "Регулярные платежи, вычисленные по вашей истории операций",
       },
     ],
   },
@@ -196,12 +201,14 @@ export const WIDGETS: readonly WidgetMeta[] = [
     title: "Кольцо расходов",
     hint: "Доли статей друг относительно друга, как на «Категориях»",
     span: 1,
+    offByDefault: true,
   },
   {
     kind: "donutIncome",
     title: "Кольцо доходов",
     hint: "Откуда приходят деньги, теми же кольцами",
     span: 1,
+    offByDefault: true,
   },
 ];
 
@@ -239,11 +246,12 @@ export interface WidgetPlacement {
   links?: LinkSlots;
 }
 
-export const DEFAULT_LAYOUT: readonly WidgetPlacement[] = WIDGETS.map((w) =>
-  w.kind === "links"
-    ? { key: "links", kind: "links" as const, links: DEFAULT_LINKS.slice() }
-    : { key: w.kind, kind: w.kind }
-);
+export const DEFAULT_LAYOUT: readonly WidgetPlacement[] = WIDGETS.map((w) => {
+  const placement: WidgetPlacement = { key: w.kind, kind: w.kind };
+  if (w.kind === "links") placement.links = DEFAULT_LINKS.slice();
+  if (w.offByDefault) placement.hidden = true;
+  return placement;
+});
 
 /** Свежая копия стандартной раскладки: списки кнопок в ней свои, не общие. */
 export function defaultLayout(): WidgetPlacement[] {
@@ -335,7 +343,11 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
         break;
       }
     }
-    out.splice(at, 0, { key: meta.kind, kind: meta.kind });
+    const fresh: WidgetPlacement = { key: meta.kind, kind: meta.kind };
+    // Стандартно снятый и в чужую раскладку приходит снятым: незнакомый виджет,
+    // сам собой вставший посреди собранной главной, читается как сбой.
+    if (meta.offByDefault) fresh.hidden = true;
+    out.splice(at, 0, fresh);
     keys.add(meta.kind);
     kinds.add(meta.kind);
   });
@@ -607,7 +619,9 @@ export function isDefaultLayout(layout: readonly WidgetPlacement[]): boolean {
   if (layout.length !== DEFAULT_LAYOUT.length) return false;
   return layout.every((p, i) => {
     const d = DEFAULT_LAYOUT[i];
-    if (p.key !== d.key || p.kind !== d.kind || p.hidden || p.view) return false;
+    if (p.key !== d.key || p.kind !== d.kind || p.view) return false;
+    // Снятость сверяем со стандартной: часть виджетов стандартно на полке.
+    if (Boolean(p.hidden) !== Boolean(d.hidden)) return false;
     return String(p.links ?? []) === String(d.links ?? []);
   });
 }

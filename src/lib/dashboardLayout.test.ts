@@ -149,7 +149,21 @@ describe("normalizeLayout", () => {
   it("помнит убранные виджеты", () => {
     const out = normalizeLayout([{ key: "observations", kind: "observations", hidden: true }]);
     expect(row(out, "observations").hidden).toBe(true);
-    expect(out.filter((p) => p.hidden)).toHaveLength(1);
+    // Кроме него сняты только те, что и в стандартной раскладке лежат на полке.
+    expect([...out.filter((p) => p.hidden).map((p) => p.kind)].sort()).toEqual([
+      "donutExpense",
+      "donutIncome",
+      "observations",
+    ]);
+  });
+
+  it("стандартно снятый виджет приходит в чужую раскладку снятым", () => {
+    // Кольца заводились уже после полоски: в сохранённой раскладке их нет, и
+    // сами собой посреди собранной главной они вставать не должны.
+    const saved = DEFAULT_LAYOUT.filter((p) => !p.kind.startsWith("donut"));
+    const out = normalizeLayout(saved);
+    expect(row(out, "donutExpense").hidden).toBe(true);
+    expect(row(out, "donutIncome").hidden).toBe(true);
   });
 
   it("новый виджет встаёт к своим соседям, а не в конец", () => {
@@ -231,12 +245,11 @@ describe("packLayout", () => {
   const cell = (kind: string, key = kind): WidgetPlacement => ({ key, kind: kind as never });
 
   it("в стандартной раскладке дырок внутри нет", () => {
-    // Хвостовой остаток допустим: ширины виджетов в сумме не всегда кратны
-    // трём. А вот дырка ПЕРЕД виджетом означает, что ряд собран криво.
-    const holes = packLayout(DEFAULT_LAYOUT).filter(
-      (c) => c.type === "gap" && c.before !== null
-    );
-    expect(holes).toEqual([]);
+    // Раскладывается только видимое — как на самой главной.
+    const visible = DEFAULT_LAYOUT.filter((p) => !p.hidden);
+    // Стандартная главная собрана в ровные ряды: ни дырки перед виджетом,
+    // которая означала бы криво собранный ряд, ни хвостового остатка.
+    expect(packLayout(visible).filter((c) => c.type === "gap")).toEqual([]);
   });
 
   it("называет дырку перед тем, кто в ряд не влез", () => {
