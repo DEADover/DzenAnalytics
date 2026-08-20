@@ -170,7 +170,7 @@ export function TrendsPage() {
       <PageHeader
         icon={Activity}
         title="Тренды"
-        hint="Помесячная динамика и паттерны по дням недели."
+        hint="Помесячная динамика и паттерны по дням недели"
         right={
           <div className="flex flex-wrap gap-2">
             <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">

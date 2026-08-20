@@ -3357,7 +3357,7 @@ export function HelpPage() {
       <PageHeader
         icon={HelpCircle}
         title="Справка"
-        hint="Что делает каждый раздел и как устроены расчёты."
+        hint="Что делает каждый раздел и как устроены расчёты"
       />
 
       {groups.map((g) => {

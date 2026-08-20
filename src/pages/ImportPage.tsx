@@ -720,7 +720,7 @@ export function ImportPage() {
       <PageHeader
         icon={Settings}
         title="Настройки"
-        hint="Данные, расчёты, оформление и бэкапы."
+        hint="Данные, расчёты, оформление и бэкапы"
       />
 
       {/* Horizontal tab bar — top-level grouping for the long

@@ -236,7 +236,7 @@ export function GoalsPage() {
       <PageHeader
         title="Цели"
         icon={Target}
-        hint="Копите на конкретные цели и следите за прогрессом и расчётным сроком достижения."
+        hint="Копите на конкретные цели и следите за прогрессом и расчётным сроком достижения"
         right={
           // Hidden while the add form is open — the form has its own «Отмена»,
           // so a second one in the header would just be redundant.

@@ -131,7 +131,7 @@ export function TrashPage() {
         <PageHeader
           icon={Trash2}
           title="Удалённые"
-          hint="Удалённые операции скрыты из всех расчётов, но хранятся локально — здесь их можно вернуть."
+          hint="Удалённые операции скрыты из всех расчётов, но хранятся локально — здесь их можно вернуть"
         />
         <div className="card-tray card-pad text-center py-16">
           <Trash2 className="w-10 h-10 text-muted mx-auto mb-3" />
@@ -150,7 +150,7 @@ export function TrashPage() {
       <PageHeader
         icon={Trash2}
         title="Удалённые"
-        hint="Удалённые операции скрыты из всех расчётов, но хранятся локально — здесь их можно вернуть."
+        hint="Удалённые операции скрыты из всех расчётов, но хранятся локально — здесь их можно вернуть"
         right={
           <div className="flex items-center gap-2">
             <button

@@ -64,7 +64,7 @@ export function WordcloudPage() {
       <PageHeader
         icon={Cloud}
         title="Облако слов"
-        hint="Самые частые слова в комментариях."
+        hint="Самые частые слова в комментариях"
         right={
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 text-xs text-muted">

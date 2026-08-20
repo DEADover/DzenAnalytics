@@ -85,8 +85,13 @@ export function PageHeader({
               aria-hidden
               className="hidden md:block w-px h-5 bg-border shrink-0"
             />
+            {/* 14.5px, а не прежние 13.5: рядом с заголовком в 26px подпись
+                читалась как служебная сноска, хотя на половине разделов именно
+                она объясняет, что страница делает. Ступень взята из той же
+                шкалы, что и строки в карточках дашборда, — крупнее подпись уже
+                начала бы спорить с заголовком. */}
             <p
-              className={`text-muted text-[13.5px] min-w-0 ${hintWrap ? "" : "truncate"}`}
+              className={`text-muted text-[14.5px] min-w-0 ${hintWrap ? "" : "truncate"}`}
               title={typeof hint === "string" ? hint : undefined}
             >
               {hint}

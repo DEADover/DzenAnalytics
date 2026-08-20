@@ -69,7 +69,7 @@ export function TopPage() {
       <PageHeader
         icon={TrendingUp}
         title="Топ"
-        hint="Категории, получатели и крупнейшие операции."
+        hint="Категории, получатели и крупнейшие операции"
         right={
           <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
             <button

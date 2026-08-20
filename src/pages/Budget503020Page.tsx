@@ -111,7 +111,7 @@ export function Budget503020Page() {
       <PageHeader
         icon={PieIcon}
         title="50/30/20"
-        hint="Нужды / желания / сбережения против бюджетного ориентира 50/30/20."
+        hint="Нужды / желания / сбережения против бюджетного ориентира 50/30/20"
         right={<PeriodPills value={period} onChange={setPeriod} />}
       />
       <GlobalFilters showDateRange={false} dateRangeHint="Правило 50/30/20 считается за месяц, выбранный ниже" />

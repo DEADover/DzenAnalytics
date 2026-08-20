@@ -215,7 +215,7 @@ export function CashflowPage() {
       <PageHeader
         icon={LineChartIcon}
         title="Cash-flow"
-        hint="Доходы, расходы и чистый поток по месяцам."
+        hint="Доходы, расходы и чистый поток по месяцам"
       />
       <GlobalFilters period={lp} />
 

@@ -84,7 +84,7 @@ export function AnomaliesPage() {
         icon={Zap}
         iconTone="text-warn"
         title="Аномалии"
-        hint="Необычные траты и резкие всплески по категориям."
+        hint="Необычные траты и резкие всплески по категориям"
         hintWrap
         right={
           <div className="flex items-center gap-2">

@@ -525,7 +525,7 @@ export function CategoriesPage() {
       <PageHeader
         icon={PieChartIcon}
         title="Категории"
-        hint="Данные и аналитика с разбивкой по категориям и подкатегориям."
+        hint="Данные и аналитика с разбивкой по категориям и подкатегориям"
         right={
           <div className="flex flex-wrap gap-2">
             <Segmented

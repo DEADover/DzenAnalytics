@@ -84,7 +84,7 @@ export function YearReviewPage() {
       <PageHeader
         icon={Sparkles}
         title={`Год в цифрах: ${year}`}
-        hint="Итоги, рекорды и забавная статистика за выбранный год."
+        hint="Итоги, рекорды и забавная статистика за выбранный год"
         right={
           <div className="flex items-center gap-2">
             <YearSwitcher year={year} years={years} onChange={setYear} />
