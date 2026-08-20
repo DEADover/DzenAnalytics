@@ -313,7 +313,7 @@ export function TransactionsDrawer() {
         onClick={close}
         aria-hidden
       />
-      <aside className="relative w-[92vw] max-w-[1600px] h-[88vh] card overflow-hidden flex flex-col animate-fade">
+      <aside className="relative w-[96vw] max-w-[1800px] h-[94vh] card overflow-hidden flex flex-col animate-fade">
       <div className="px-5 md:px-6 py-4 border-b border-border flex items-center justify-between gap-4 bg-panel">
         <div className="min-w-0 flex items-center gap-3">
           {/* Значок в плашке — как в заголовке страницы: один приём на весь
@@ -415,7 +415,11 @@ export function TransactionsDrawer() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        {/* Таблица лежит в поддоне — так же, как на «Операциях» и в «Отчёте».
+            Здесь она была голой: заголовки и строки прямо на подложке окна, без
+            канта, хотя это ровно такая же таблица операций. */}
+        <div className="flex-1 min-h-0 px-5 md:px-6 pt-3 pb-5">
+        <div className="card-tray h-full overflow-y-auto">
           {sorted.length === 0 ? (
             <div className="text-center text-muted text-sm py-12">
               {transactions.length === 0
@@ -588,6 +592,7 @@ export function TransactionsDrawer() {
               </tbody>
             </table>
           )}
+        </div>
         </div>
         </aside>
     </div>
