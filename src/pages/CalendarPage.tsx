@@ -188,7 +188,7 @@ export function CalendarPage() {
       <PageHeader
         icon={CalendarDays}
         title="Календарь"
-        hint="Тепловая карта по дням года. Клик по дню — операции."
+        hint="Тепловая карта по дням года."
         right={
           <div className="flex flex-wrap gap-2 items-center">
             <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">

@@ -104,7 +104,7 @@ export function WhatIfPage() {
       <PageHeader
         icon={FlaskConical}
         title="Что-если — сценарии"
-        hint="Покрутите слайдеры — увидите, как изменится норма сбережений, срок до FIRE и капитал через 1/5/10 лет."
+        hint="Норма сбережений, срок до FIRE и капитал через 1/5/10 лет при разных вводных."
         hintWrap
         right={
           <div className="flex items-center gap-2">
