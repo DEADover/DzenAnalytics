@@ -101,22 +101,27 @@ function StatCol({
       <div
         className={clsx(
           "uppercase tracking-[0.1em] text-muted",
-          dense ? "text-[11px]" : "text-[12px]"
+          dense ? "text-[11px]" : "text-[12.5px]"
         )}
       >
         {label}
       </div>
       <div
         className={clsx(
-          "font-mono tabular-nums font-semibold mt-1 truncate",
-          dense ? "text-[19px]" : "text-[22px]",
+          "font-mono tabular-nums font-semibold mt-1.5 truncate",
+          dense ? "text-[19px]" : "text-[30px]",
           tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""
         )}
       >
         {value}
       </div>
       {plan && (
-        <div className="text-[11.5px] text-muted font-mono tabular-nums mt-0.5 truncate">
+        <div
+          className={clsx(
+            "text-muted font-mono tabular-nums mt-1 truncate",
+            dense ? "text-[11.5px]" : "text-[12.5px]"
+          )}
+        >
           План {plan}
         </div>
       )}
@@ -180,7 +185,10 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
     // прижимать не к чему — итоги упирались в её кант. Там всё набрано на
     // ступень мельче, свободное место делится между блоками поровну, а снизу
     // карточка оставляет запас больше верхнего (см. `WidgetShell`).
-    <div className={clsx("flex flex-col h-full gap-5", sunken && "justify-between")}>
+    // Свободное место делится между блоками поровну в обоих видах. Прежде в
+    // открытом оно всё уходило в один просвет над итогами: те прижимались к
+    // низу колонки, а над ними зияла дыра под сотню пикселей.
+    <div className="flex flex-col h-full gap-5 justify-between">
       {/* Пилюля — она же заголовок страницы: другого h1 на экране нет, а
           оставлять главную вовсе без заголовка нельзя. Потому и набрана в
           полную силу — приглушённой десяткой она читалась как подпись к
@@ -199,7 +207,7 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
       <div
         className={clsx(
           "font-mono font-semibold tabular-nums leading-none tracking-tight",
-          sunken ? "text-[40px]" : "text-5xl 3xl:text-6xl",
+          sunken ? "text-[40px]" : "text-[56px] 3xl:text-6xl",
           m.free.value < 0 && "text-expense"
         )}
         style={{ wordSpacing: "-0.22em" }}
@@ -210,7 +218,7 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
       <p
         className={clsx(
           "leading-relaxed text-muted max-w-[30ch]",
-          sunken ? "text-[14.5px]" : "text-[16px]"
+          sunken ? "text-[14.5px]" : "text-[17px]"
         )}
       >
         {/* Причину нехватки называем ту, что есть на самом деле. «Расход
@@ -288,7 +296,7 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
           Запланированные платежи отсюда ушли (у них свой виджет), и в столбик
           осталось бы две сиротливые строки; рядом же они читаются тем, чем и
           являются, — парой, которую сравнивают между собой. */}
-      <div className={clsx("border-t border-border pt-3", !sunken && "mt-auto")}>
+      <div className="border-t border-border pt-3">
         <div className="grid grid-cols-2">
           <StatCol
             label="Доход"
