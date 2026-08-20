@@ -3206,7 +3206,18 @@ const SECTIONS: Section[] = [
             </tr>
             <tr className="border-b border-border">
               <td className="py-2"><kbd className="kbd">Esc</kbd></td>
-              <td className="py-2 text-muted">Закрыть drawer / палитру</td>
+              <td className="py-2 text-muted">
+                Снять выделение · закрыть список операций / палитру
+              </td>
+            </tr>
+            <tr className="border-b border-border">
+              <td className="py-2">
+                <kbd className="kbd">←</kbd> <kbd className="kbd">→</kbd>
+              </td>
+              <td className="py-2 text-muted">
+                Соседний основной раздел: Главная · Операции · Счета · Категории.
+                Не работают, когда курсор в поле или открыто окно.
+              </td>
             </tr>
             <tr className="border-b border-border">
               <td className="py-2"><kbd className="kbd">g</kbd> <kbd className="kbd">d</kbd></td>

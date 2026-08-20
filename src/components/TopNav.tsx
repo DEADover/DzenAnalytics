@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   PieChart,
   Wallet,
@@ -118,6 +118,44 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const theme = useThemeStore((s) => s.resolved);
 
   const inSecondary = SECONDARY.some((s) => loc.pathname === s.to);
+
+  // ←/→ листают основные разделы: Главная → Операции → Счета → Категории.
+  //
+  // Стрелки — клавиши занятые, поэтому обработчик молчит, когда они нужны
+  // кому-то другому: при фокусе в поле (там они двигают курсор), при открытом
+  // окне или боковом списке (в карточке операции те же стрелки листают
+  // операции), при раскрытой панели «Ещё» и с любым модификатором.
+  //
+  // Работает только на самих четырёх разделах: с «Отчёта» или «Календаря»
+  // прыжок в «Операции» был бы неожиданностью. Кольца нет — на «Главной» левая
+  // стрелка ничего не делает, иначе с края экрана улетаешь на другой край.
+  const navigate = useNavigate();
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (moreOpen || mobileOpen) return;
+      const ae = document.activeElement as HTMLElement | null;
+      if (
+        ae &&
+        (ae.tagName === "INPUT" ||
+          ae.tagName === "TEXTAREA" ||
+          ae.tagName === "SELECT" ||
+          ae.isContentEditable)
+      ) {
+        return;
+      }
+      if (document.querySelector('[role="dialog"], aside')) return;
+      const i = PRIMARY.findIndex((p) => p.to === loc.pathname);
+      if (i === -1) return;
+      const next = i + (e.key === "ArrowRight" ? 1 : -1);
+      if (next < 0 || next >= PRIMARY.length) return;
+      e.preventDefault();
+      navigate(PRIMARY[next].to);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moreOpen, mobileOpen, loc.pathname, navigate]);
 
   // Панель закрывается по Escape — она большая, накрывает пол-экрана, и уводить
   // руку к мыши ради «передумал» незачем.
