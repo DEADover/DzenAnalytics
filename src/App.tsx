@@ -61,6 +61,7 @@ import {
 } from "./store/useCounterpartyEditsStore";
 import { useTagDeletionsStore } from "./store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "./store/usePlannedDeletionsStore";
+import { useDashboardLayoutStore } from "./store/useDashboardLayoutStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 import { useImportBatchesStore } from "./store/useImportBatchesStore";
 
@@ -125,6 +126,7 @@ function App() {
     useCounterpartyEditsStore.getState().hydrate();
     useTagDeletionsStore.getState().hydrate();
     usePlannedDeletionsStore.getState().hydrate();
+    useDashboardLayoutStore.getState().hydrate();
     hydrate();
     backupHydrate();
     reportPeriodHydrate();

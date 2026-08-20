@@ -1,17 +1,23 @@
 /**
  * Главная страница.
  *
- * Первый экран — разворот: слева крупная типографика и одно действие, справа
- * карточки с данными. Дальше графики, активность и наблюдения.
+ * Экран собран из виджетов, и собирает его сам человек: порядок, ширина и
+ * состав хранятся в `useDashboardLayoutStore`, а страница их только
+ * раскладывает. Отсюда и устройство файла — сначала содержимое каждого виджета,
+ * потом одна сетка, которая проходит по сохранённой раскладке.
+ *
+ * Сетка одна на всю страницу, в три колонки; виджет занимает треть, две трети
+ * или всю ширину. Других размеров нет намеренно: при любых трёх размерах
+ * перестановка складывается в ровные ряды, а при произвольных пропорциях
+ * остаются дыры.
  *
  * Модель считается здесь один раз и раздаётся блокам; переходы (открыть
  * операции месяца, категории, счёта) тоже живут здесь — сами блоки не должны
  * знать ни про хранилища, ни про то, как открывается drawer.
  */
 
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import clsx from "clsx";
 import { ArrowUpRight } from "lucide-react";
 import {
   BlockTitle,
@@ -23,41 +29,23 @@ import {
   ActivityHeat,
   QuickLinks,
 } from "./blocks";
+import {
+  EmptyDashboard,
+  HiddenWidgets,
+  LayoutToolbar,
+  WidgetShell,
+} from "./WidgetLayout";
+import { useWidgetDrag } from "../../hooks/useWidgetDrag";
+import { widgetMeta, type WidgetId } from "../../lib/dashboardLayout";
+import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
 import { formatMoney, monthLabel, formatDate } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
-import { useDashboardModel } from "../../hooks/useDashboardModel";
+import { useDashboardModel, type DashboardModel } from "../../hooks/useDashboardModel";
 import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../../store/useDrillStore";
 import { useReportPeriodStore } from "../../store/useReportPeriodStore";
 import { periodKey } from "../../lib/period";
 import { affectsExpense } from "../../lib/txKindStyle";
-
-/**
- * Поддон с двойным кантом.
- *
- * Радиус ядра — 16, а не 22: у вложенных скруглений центры дуг должны
- * совпадать, иначе на просвете в 6 px внешняя и внутренняя кривые расходятся и
- * кант выглядит кривым. 22 − 6 = 16.
- */
-/**
- * Поддон виджета. `span` — сколько колонок сетки он занимает: треть, две трети
- * или всю ширину. Других размеров на главной нет, и это намеренно: по такой
- * сетке потом можно двигать виджеты руками, а по произвольным пропорциям —
- * нет.
- */
-function Tray({ children, span = 1 }: { children: ReactNode; span?: 1 | 2 | 3 }) {
-  return (
-    <div
-      className={clsx(
-        "tray h-full flex flex-col",
-        span === 2 && "lg:col-span-2",
-        span === 3 && "lg:col-span-3"
-      )}
-    >
-      <div className="tray-core flex-1 min-h-0 flex flex-col p-5">{children}</div>
-    </div>
-  );
-}
 
 /** Название месяца отдельно от года: в пилюле год только шумит. */
 function monthName(ym: string): string {
@@ -67,7 +55,6 @@ function monthName(ym: string): string {
   });
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-
 
 /**
  * Строка «ярлык — число» в колонке героя.
@@ -108,11 +95,152 @@ function StatRow({
   );
 }
 
+/* ─────────────────────────────  итоги месяца  ───────────────────────────── */
+
+/**
+ * Виджет без поддона: крупная типографика на голом фоне страницы. В обойме с
+ * двойным кантом он читался бы как ещё одна карточка с числом, а это заголовок
+ * всего экрана.
+ */
+function MonthHero({ m }: { m: DashboardModel }) {
+  const over = m.pace === null ? null : m.pace - 1;
+  return (
+    <div className="flex flex-col gap-5 h-full">
+      {/* Пилюля — она же заголовок страницы: другого h1 на экране нет, а
+          оставлять главную вовсе без заголовка нельзя. Потому и набрана в
+          полную силу — приглушённой десяткой она читалась как подпись к
+          чему-то, а не как заголовок экрана. Разрядка при этом меньше
+          прежней: чем крупнее буквы, тем меньше её нужно. */}
+      <h1 className="self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold">
+        {monthName(m.ym)}
+        {m.month.left === 0
+          ? " · последний день"
+          : ` · осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`}
+      </h1>
+
+      <div
+        className={`font-mono font-semibold tabular-nums text-5xl 3xl:text-6xl leading-none tracking-tight ${
+          m.free.value < 0 ? "text-expense" : ""
+        }`}
+        style={{ wordSpacing: "-0.22em" }}
+      >
+        {formatMoney(Math.abs(m.free.value), m.base)}
+      </div>
+
+      <p className="text-[16px] leading-relaxed text-muted max-w-[30ch]">
+        {/* Причину нехватки называем ту, что есть на самом деле. «Расход
+            обогнал доход» — утверждение о фактах месяца, и когда доход
+            больше расхода, а в минус уводят ещё не списанные платежи, оно
+            просто неверно. */}
+        {m.free.value < 0
+          ? m.factExpense > m.factIncome
+            ? "Столько не хватает: расход месяца уже обогнал доход"
+            : "Столько не хватает: запланированные платежи не укладываются в остаток"
+          : "Столько остаётся после уже потраченного и того, что ещё спишется"}
+        {/* Две фразы подряд сравнивают РАЗНОЕ: первая — расход с доходом
+            внутри этого месяца, вторая — темп трат с прошлыми месяцами.
+            Стоя рядом без связки, они читались противоречием: «расход
+            обогнал доход. Темп на 27% ниже обычного» — как это, обогнал, но
+            ниже? Противоречия нет: тратить можно медленнее обычного и всё
+            равно больше, чем заработал.
+
+            Поэтому связка ставится по смыслу: когда факты тянут в разные
+            стороны — «хотя», когда в одну — «и». Тогда вторая половина
+            читается как уточнение к первой, а не как спор с ней. */}
+        {over === null && "."}
+        {over !== null && Math.abs(over) < 0.005 && ", и тратите примерно как обычно."}
+        {over !== null && Math.abs(over) >= 0.005 && (
+          <>
+            {(m.free.value < 0) !== (over >= 0) ? ", хотя тратите на " : ", и тратите на "}
+            <span className={`font-mono tabular-nums ${over >= 0 ? "text-warn" : "text-income"}`}>
+              {Math.abs(over * 100).toFixed(0)}%
+            </span>
+            {over >= 0 ? " быстрее обычного." : " медленнее обычного."}
+          </>
+        )}
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          // Как и «Месячный отчёт» рядом: лента открывается за тот месяц,
+          // о котором весь этот экран, а не за период с прошлого раза.
+          to={`/transactions?month=${m.ym}`}
+          className="group inline-flex h-[52px] items-center gap-3 rounded-full pl-6 pr-2.5 bg-text text-panel text-[14px] font-medium"
+        >
+          Лента операций
+          <span className="w-8 h-8 rounded-full bg-panel/20 grid place-items-center transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none">
+            <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
+          </span>
+        </Link>
+        <Link
+          // Отчёт открываем сразу за тот месяц, о котором весь этот экран:
+          // иначе с разбора августа человек попадал на всю историю и сужал
+          // период руками.
+          to={`/report?month=${m.ym}`}
+          // Та же высота, что у соседа: у главной кнопки её задаёт вложенный
+          // кружок, и «Месячный отчёт» рядом выглядел бы приплюснутым.
+          //
+          // Заливка и полный контраст текста — чтобы кнопка читалась как
+          // кнопка: обведённая контуром и приглушённым текстом, она
+          // сливалась с белым фоном. Второстепенной её оставляет заливка
+          // подложкой, а не чёрным, как у соседней.
+          className="inline-flex h-[52px] items-center rounded-full px-6 bg-panel2 border border-border text-text text-[14px] font-medium transition-colors duration-200 hover:border-accent/50 hover:bg-panel2/70"
+        >
+          Месячный отчёт
+        </Link>
+      </div>
+
+      <div className="mt-auto border-t border-border pt-2">
+        <StatRow
+          label="Доход"
+          value={formatMoney(m.factIncome, m.base)}
+          plan={m.planIncome !== null ? formatMoney(m.planIncome, m.base) : undefined}
+          tone="income"
+        />
+        <StatRow
+          label="Расход"
+          value={formatMoney(m.factExpense, m.base)}
+          plan={m.planExpense !== null ? formatMoney(m.planExpense, m.base) : undefined}
+          tone="expense"
+        />
+        <StatRow
+          label="Запланированные платежи"
+          value={formatMoney(m.upcomingTotalBase, m.base)}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function DashboardView() {
   const m = useDashboardModel();
   const transactions = useAnalyticsTransactions();
   const showDrill = useDrillStore((s) => s.show);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+
+  const layout = useDashboardLayoutStore((s) => s.layout);
+  const editing = useDashboardLayoutStore((s) => s.editing);
+  const setEditing = useDashboardLayoutStore((s) => s.setEditing);
+  const move = useDashboardLayoutStore((s) => s.move);
+  const shift = useDashboardLayoutStore((s) => s.shift);
+
+  const drag = useWidgetDrag((dragId, overId) => void move(dragId, overId));
+
+  // Режим настройки не переживает уход со страницы: вернувшись на главную,
+  // человек ждёт готовый экран, а не разложенные ручки.
+  useEffect(() => () => setEditing(false), [setEditing]);
+
+  // Escape — выход из режима, как из любого другого временного состояния.
+  useEffect(() => {
+    if (!editing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector('[role="dialog"]')) return;
+      setEditing(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing, setEditing]);
 
   const { onMonth, onCategory, onAccount, onDay } = useMemo(
     () => ({
@@ -147,147 +275,16 @@ export function DashboardView() {
     [transactions, showDrill, monthStartDay]
   );
 
-  const over = m.pace === null ? null : m.pace - 1;
+  /** Содержимое виджета. Обойму, ширину и ручки надевает `WidgetShell`. */
+  function widgetBody(id: WidgetId): ReactNode {
+    switch (id) {
+      case "month":
+        return <MonthHero m={m} />;
 
-  return (
-    <div className="flex flex-col gap-5 3xl:gap-6">
-      {/* ── Первый экран ──
-
-          Вся главная живёт на сетке из трёх колонок, и блок занимает треть,
-          две трети или всю ширину — других размеров нет. Это не только про
-          порядок на экране: под такую сетку потом ложится перестановка виджетов
-          руками, а под произвольные пропорции — нет.
-
-          Здесь три трети: герой, балансы, платежи. Прежде колонка героя была
-          фиксированной (26rem), а две карточки делили остаток — пропорция
-          получалась случайной и от ширины экрана плыла. */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6 lg:auto-rows-[30rem]">
-        {/* Без верхнего отступа: колонка героя начинается на той же линии, что и
-            карточки справа. Прежние шестнадцать пикселей опускали пилюлю месяца
-            ниже соседнего блока, и первый экран читался съехавшим. */}
-        <div className="flex flex-col gap-5">
-          {/* Пилюля — она же заголовок страницы: другого h1 на экране нет, а
-              оставлять главную вовсе без заголовка нельзя. Потому и набрана в
-              полную силу — приглушённой десяткой она читалась как подпись к
-              чему-то, а не как заголовок экрана. Разрядка при этом меньше
-              прежней: чем крупнее буквы, тем меньше её нужно. */}
-          <h1 className="self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold">
-            {monthName(m.ym)}
-            {m.month.left === 0
-              ? " · последний день"
-              : ` · осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`}
-          </h1>
-
-          <div
-            className={`font-mono font-semibold tabular-nums text-5xl 3xl:text-6xl leading-none tracking-tight ${
-              m.free.value < 0 ? "text-expense" : ""
-            }`}
-            style={{ wordSpacing: "-0.22em" }}
-          >
-            {formatMoney(Math.abs(m.free.value), m.base)}
-          </div>
-
-          <p className="text-[16px] leading-relaxed text-muted max-w-[30ch]">
-            {/* Причину нехватки называем ту, что есть на самом деле. «Расход
-                обогнал доход» — утверждение о фактах месяца, и когда доход
-                больше расхода, а в минус уводят ещё не списанные платежи, оно
-                просто неверно. */}
-            {m.free.value < 0
-              ? m.factExpense > m.factIncome
-                ? "Столько не хватает: расход месяца уже обогнал доход"
-                : "Столько не хватает: запланированные платежи не укладываются в остаток"
-              : "Столько остаётся после уже потраченного и того, что ещё спишется"}
-            {/* Две фразы подряд сравнивают РАЗНОЕ: первая — расход с доходом
-                внутри этого месяца, вторая — темп трат с прошлыми месяцами.
-                Стоя рядом без связки, они читались противоречием: «расход
-                обогнал доход. Темп на 27% ниже обычного» — как это, обогнал, но
-                ниже? Противоречия нет: тратить можно медленнее обычного и всё
-                равно больше, чем заработал.
-
-                Поэтому связка ставится по смыслу: когда факты тянут в разные
-                стороны — «хотя», когда в одну — «и». Тогда вторая половина
-                читается как уточнение к первой, а не как спор с ней. */}
-            {over === null && "."}
-            {over !== null && Math.abs(over) < 0.005 && ", и тратите примерно как обычно."}
-            {over !== null && Math.abs(over) >= 0.005 && (
-              <>
-                {(m.free.value < 0) !== (over >= 0) ? ", хотя тратите на " : ", и тратите на "}
-                <span
-                  className={`font-mono tabular-nums ${over >= 0 ? "text-warn" : "text-income"}`}
-                >
-                  {Math.abs(over * 100).toFixed(0)}%
-                </span>
-                {over >= 0 ? " быстрее обычного." : " медленнее обычного."}
-              </>
-            )}
-          </p>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              // Как и «Месячный отчёт» рядом: лента открывается за тот месяц,
-              // о котором весь этот экран, а не за период с прошлого раза.
-              to={`/transactions?month=${m.ym}`}
-              className="group inline-flex h-[52px] items-center gap-3 rounded-full pl-6 pr-2.5 bg-text text-panel text-[14px] font-medium"
-            >
-              Лента операций
-              <span className="w-8 h-8 rounded-full bg-panel/20 grid place-items-center transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none">
-                <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
-              </span>
-            </Link>
-            <Link
-              // Отчёт открываем сразу за тот месяц, о котором весь этот экран:
-              // иначе с разбора августа человек попадал на всю историю и сужал
-              // период руками.
-              to={`/report?month=${m.ym}`}
-              // Та же высота, что у соседа: у главной кнопки её задаёт вложенный
-              // кружок, и «Месячный отчёт» рядом выглядел бы приплюснутым.
-              //
-              // Заливка и полный контраст текста — чтобы кнопка читалась как
-              // кнопка: обведённая контуром и приглушённым текстом, она
-              // сливалась с белым фоном. Второстепенной её оставляет заливка
-              // подложкой, а не чёрным, как у соседней.
-              className="inline-flex h-[52px] items-center rounded-full px-6 bg-panel2 border border-border text-text text-[14px] font-medium transition-colors duration-200 hover:border-accent/50 hover:bg-panel2/70"
-            >
-              Месячный отчёт
-            </Link>
-          </div>
-
-          <div className="mt-auto border-t border-border pt-2">
-            <StatRow
-              label="Доход"
-              value={formatMoney(m.factIncome, m.base)}
-              plan={
-                m.planIncome !== null
-                  ? formatMoney(m.planIncome, m.base)
-                  : undefined
-              }
-              tone="income"
-            />
-            <StatRow
-              label="Расход"
-              value={formatMoney(m.factExpense, m.base)}
-              plan={
-                m.planExpense !== null
-                  ? formatMoney(m.planExpense, m.base)
-                  : undefined
-              }
-              tone="expense"
-            />
-            <StatRow
-              label="Запланированные платежи"
-              value={formatMoney(m.upcomingTotalBase, m.base)}
-            />
-          </div>
-        </div>
-
-        {/* Высота дорожки задана явно: потолок на самой карточке не сжимал —
-            содержимое вылезало за него и налезало на следующий раздел. Здесь
-            высоту получает дорожка сетки, поддоны её заполняют, а списки внутри
-            начинают прокручиваться. */}
-          <Tray>
-            <BlockTitle title="Балансы счетов" to="/accounts"
-            linkLabel="Счета"
-          />
+      case "accounts":
+        return (
+          <>
+            <BlockTitle title="Балансы счетов" to="/accounts" linkLabel="Счета" />
             {/* Черта под итогом — та же, что делит строки списка: без неё
                 крупное число и первая строка счёта читались как одно целое. */}
             <div
@@ -299,9 +296,12 @@ export function DashboardView() {
               {formatMoney(m.netWorth, m.base)}
             </div>
             <AccountsList m={m} onAccount={onAccount} />
-          </Tray>
+          </>
+        );
 
-          <Tray>
+      case "upcoming":
+        return (
+          <>
             <BlockTitle title="Запланированные платежи" to="/recurring" linkLabel="Регулярные" />
             {/* Итог подан так же, как совокупный баланс у соседней карточки:
                 крупным числом под заголовком. Мелкой строчкой в шапке он
@@ -313,108 +313,142 @@ export function DashboardView() {
               {formatMoney(m.upcomingTotalBase, m.base)}
             </div>
             <UpcomingList m={m} />
-          </Tray>
-      </section>
+          </>
+        );
 
-      {/* ── Быстрые переходы ── */}
-      {/* Стоят сразу за первым экраном, а не в самом низу страницы: внизу их
-          находил только тот, кто до него доскроллил. Здесь они делят страницу
-          на «что с деньгами сейчас» и «как это разглядывать» — и заодно
-          отбивают первый экран от второго. */}
-      <QuickLinks />
+      // Дублируют пункты верхнего меню намеренно: меню отвечает на «куда я могу
+      // пойти», а эти кнопки — на «что делать дальше».
+      case "quicklinks":
+        return <QuickLinks />;
 
-      {/* ── Второй экран: график и статьи ── */}
-      {/* Высота ряда задана явно — иначе длинный список статей растягивал его
-          вместе с графиком: у кого пятнадцать категорий, у того карточка
-          вырастала вдвое. Теперь список прокручивается внутри. */}
-      {/* Две трети под график, треть под список статей: раньше здесь стояла
-          пропорция 1.5 к 1, то есть 60 на 40 — почти те же две трети, но «почти»
-          и ломало сетку. */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6 lg:auto-rows-[30rem]">
-        <Tray span={2}>
-          <BlockTitle
-            title="Доходы и расходы"
-            info={
-              <>
+      case "cashflow":
+        return (
+          <>
+            <BlockTitle
+              title="Доходы и расходы"
+              info={
+                <>
+                  <p>
+                    Последние 12 месяцев, дальше — прогноз. Зелёный столбец слева в паре —
+                    доход, красный справа — расход; прогнозные месяцы бледнее и обведены
+                    пунктиром.
+                  </p>
+                  <p>
+                    Прогноз считается по типичному месяцу за последние полгода — по
+                    медиане, а не по среднему, чтобы одна крупная покупка не поднимала
+                    всю линию. Текущий, неполный месяц в расчёт не берётся. Если история
+                    позволяет, к каждому месяцу применяется поправка на сезон: декабрь
+                    обычно дороже июля, и три прогнозных столбца тогда различаются.
+                  </p>
+                  <p>
+                    Шкала срезана по обычному размаху: один месяц с крупной покупкой
+                    прижимал бы остальные ко дну. Срезанный столбец несёт зубчатую
+                    кромку и подписан настоящей суммой.
+                  </p>
+                </>
+              }
+              to="/cashflow"
+              linkLabel="Cash-flow"
+            />
+            <CashflowBars m={m} onMonth={onMonth} height={260} />
+          </>
+        );
+
+      case "categories":
+        return (
+          <>
+            <BlockTitle
+              title="Расходы по категориям"
+              info={
                 <p>
-                  Последние 12 месяцев, дальше — прогноз. Зелёный столбец слева в паре —
-                  доход, красный справа — расход; прогнозные месяцы бледнее и обведены
-                  пунктиром.
+                  Процент — доля статьи во всех расходах месяца, как на
+                  «Категориях». Полоса меряется от самой крупной статьи: так видно
+                  соотношение между ними.
                 </p>
+              }
+              to="/categories"
+              linkLabel="Категории"
+            />
+            <CategoriesList m={m} onCategory={onCategory} />
+          </>
+        );
+
+      case "activity":
+        return (
+          <>
+            <BlockTitle
+              title="Активность в этом месяце"
+              info={
                 <p>
-                  Прогноз считается по типичному месяцу за последние полгода — по
-                  медиане, а не по среднему, чтобы одна крупная покупка не поднимала
-                  всю линию. Текущий, неполный месяц в расчёт не берётся. Если история
-                  позволяет, к каждому месяцу применяется поправка на сезон: декабрь
-                  обычно дороже июля, и три прогнозных столбца тогда различаются.
+                  Чем темнее клетка, тем больше потрачено в этот день. Шкала строится по
+                  обычному размаху, а не по рекордному дню — иначе одна крупная покупка
+                  делала бы весь месяц бледным. Клик по дню открывает его операции.
                 </p>
+              }
+              to="/calendar"
+              linkLabel="Календарь"
+            />
+            <ActivityHeat m={m} onDay={onDay} />
+          </>
+        );
+
+      case "observations":
+        return (
+          <>
+            <BlockTitle
+              title="Авто-наблюдения"
+              info={
                 <p>
-                  Шкала срезана по обычному размаху: один месяц с крупной покупкой
-                  прижимал бы остальные ко дну. Срезанный столбец несёт зубчатую
-                  кромку и подписан настоящей суммой.
+                  Статьи, пробившие план или разогнавшиеся против обычного, подорожавшие
+                  подписки и пропущенные регулярные платежи. Не больше двух наблюдений
+                  одного вида, чтобы список оставался разным.
                 </p>
-              </>
-            }
-            to="/cashflow"
-            linkLabel="Cash-flow"
-          />
-          <CashflowBars m={m} onMonth={onMonth} height={260} />
-        </Tray>
+              }
+              to="/anomalies"
+              linkLabel="Аномалии"
+            />
+            <ObservationsList m={m} />
+          </>
+        );
+    }
+  }
 
-        <Tray>
-          <BlockTitle
-            title="Расходы по категориям"
-            info={
-              <p>
-                Процент — доля статьи во всех расходах месяца, как на
-                «Категориях». Полоса меряется от самой крупной статьи: так видно
-                соотношение между ними.
-              </p>
-            }
-            to="/categories"
-            linkLabel="Категории"
-          />
-          <CategoriesList m={m} onCategory={onCategory} />
-        </Tray>
-      </section>
+  const visible = layout.filter((p) => !p.hidden);
 
-      {/* ── Третий ряд: активность и наблюдения, поровну ── */}
-      {/* Календарю нужна ширина — месяц это семь колонок клеток, — наблюдениям
-          хватает трети: это список коротких строк. */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6">
-        <Tray span={2}>
-          <BlockTitle
-            title="Активность в этом месяце"
-            info={
-              <p>
-                Чем темнее клетка, тем больше потрачено в этот день. Шкала строится по
-                обычному размаху, а не по рекордному дню — иначе одна крупная покупка
-                делала бы весь месяц бледным. Клик по дню открывает его операции.
-              </p>
-            }
-            to="/calendar"
-            linkLabel="Календарь"
-          />
-          <ActivityHeat m={m} onDay={onDay} />
-        </Tray>
+  return (
+    <div className="flex flex-col gap-5 3xl:gap-6">
+      <LayoutToolbar layout={layout} />
 
-        <Tray>
-          <BlockTitle
-            title="Авто-наблюдения"
-            info={
-              <p>
-                Статьи, пробившие план или разогнавшиеся против обычного, подорожавшие
-                подписки и пропущенные регулярные платежи. Не больше двух наблюдений
-                одного вида, чтобы список оставался разным.
-              </p>
-            }
-            to="/anomalies"
-            linkLabel="Аномалии"
-          />
-          <ObservationsList m={m} />
-        </Tray>
-      </section>
+      {visible.length === 0 ? (
+        <EmptyDashboard />
+      ) : (
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6">
+          {visible.map((p, i) => {
+            const meta = widgetMeta(p.id);
+            return (
+              <WidgetShell
+                key={p.id}
+                meta={meta}
+                span={p.span}
+                editing={editing}
+                dragging={drag.dragId === p.id}
+                dropTarget={drag.overId === p.id && drag.dragId !== null && drag.dragId !== p.id}
+                onDragStart={() => drag.start(p.id)}
+                onDragEnter={() => drag.enter(p.id)}
+                onDragEnd={drag.end}
+                onDrop={(sourceId) => drag.drop(sourceId, p.id)}
+                onShift={(dir) => void shift(p.id, dir)}
+                canBack={i > 0}
+                canForward={i < visible.length - 1}
+              >
+                {widgetBody(p.id)}
+              </WidgetShell>
+            );
+          })}
+        </section>
+      )}
 
+      {editing && <HiddenWidgets layout={layout} />}
     </div>
   );
 }

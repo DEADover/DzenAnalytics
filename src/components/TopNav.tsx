@@ -31,6 +31,7 @@ import {
   Newspaper,
   Percent,
   Settings,
+  LayoutTemplate,
   Menu,
   Trash2,
   X,
@@ -41,6 +42,7 @@ import { ThemeSwitcher } from "./ThemeSwitcher";
 import { HeaderSyncActions } from "./HeaderSyncActions";
 import { SliceSwitcher } from "./SliceSwitcher";
 import { useSlicesStore } from "../store/useSlicesStore";
+import { useDashboardLayoutStore } from "../store/useDashboardLayoutStore";
 import logoHorizontal from "../assets/logo-horizontal.svg";
 import logoHorizontalDark from "../assets/logo-horizontal-dark.svg";
 
@@ -112,6 +114,9 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const loc = useLocation();
+  const editingLayout = useDashboardLayoutStore((s) => s.editing);
+  const setEditingLayout = useDashboardLayoutStore((s) => s.setEditing);
+  const onDashboard = loc.pathname === "/";
   // Переключатель разреза появляется только со второго разреза — от этого
   // зависит, нужен ли разделитель внутри панели.
   const hasSlices = useSlicesStore((s) => s.slices.length) > 1;
@@ -301,6 +306,39 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             className="w-4 h-4 transition-transform duration-500 ease-out group-hover:rotate-90"
           />
         </NavLink>
+
+        {/* Настройка главной. Стоит здесь, а не на самой странице: это действие
+            над экраном, как тема и настройки, а не ещё один его блок. Работает
+            только на главной — переставлять там нечего, если ты не там, — и
+            потому на других страницах гаснет, а не исчезает: пропадающая
+            кнопка заставляла бы гадать, куда она делась.
+
+            Значок — «раскладка страницы», а не решётка: решётка стоит рядом у
+            «Главной» в меню, и два одинаковых значка в одной шапке читались бы
+            как одно и то же действие. */}
+        <button
+          onClick={() => onDashboard && setEditingLayout(!editingLayout)}
+          // Именно `aria-disabled`, а не `disabled`: выключенная кнопка в
+          // браузере не получает событий мыши, и подсказка о том, почему она
+          // погасла, не показалась бы как раз тогда, когда она нужнее всего.
+          aria-disabled={!onDashboard}
+          title={
+            onDashboard
+              ? "Настроить главную\nПорядок, ширина и состав виджетов"
+              : "Настроить главную\nДоступно на главной странице"
+          }
+          aria-label="Настроить главную"
+          aria-pressed={editingLayout}
+          className={clsx(
+            "group relative p-1.5 rounded-full transition-colors duration-200",
+            !onDashboard && "text-muted/40 cursor-not-allowed",
+            onDashboard && editingLayout
+              ? "bg-accent text-accent-fg"
+              : onDashboard && "text-muted hover:text-accent hover:bg-panel/70"
+          )}
+        >
+          <LayoutTemplate className="w-4 h-4" />
+        </button>
 
         {/* Help — question icon. Same active treatment as Settings. */}
         <NavLink

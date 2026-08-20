@@ -87,6 +87,7 @@ export const BACKUP_META_KEYS = [
   "dataSlices", // разрезы данных
   "displaySettings", // оформление: размер текста в таблицах, копейки и т.п.
   "accountsView", // как настроена страница «Счета»: вкладка, отборы, порядок
+  "dashboardLayout", // как разложены виджеты на главной
   "analyticsExcludedCategories", // категории, убранные из аналитики
   "categoryMeta", // иконки и цвета категорий
   "backupInterval", // как часто напоминать о бэкапе

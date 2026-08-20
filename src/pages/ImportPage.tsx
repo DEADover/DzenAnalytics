@@ -1272,6 +1272,7 @@ export function ImportPage() {
                     "zenmoneyAutoSyncValue",
                     "zenmoneyAutoSyncUnit",
                     "displaySettings",
+                    "dashboardLayout",
                     "reportPeriod",
                     "includeOffBalance",
                     "payeeGrouping",
