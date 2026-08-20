@@ -100,7 +100,7 @@ function StatRow({
         </span>
         {plan && (
           <span className="block text-[11.5px] text-muted font-mono tabular-nums">
-            план {plan}
+            План {plan}
           </span>
         )}
       </span>
