@@ -103,10 +103,13 @@ export function FireChart({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [expMenuOpen]);
 
+  // Пилюли, как все переключатели продукта: прежде это были прямоугольники со
+  // скруглением в шесть пикселей — последний такой ряд на «Финансовом
+  // здоровье».
   const pillCls = (active: boolean) =>
-    `text-xs px-2.5 py-1 rounded-md border transition-colors ${
+    `text-xs px-2.5 py-1 rounded-full border transition-colors duration-200 ${
       active
-        ? "bg-accent/10 border-accent/40 text-accent"
+        ? "bg-accent text-accent-fg border-accent"
         : "bg-panel2 border-border text-muted hover:text-text"
     }`;
 
@@ -305,7 +308,7 @@ export function FireChart({
           </button>
           <div
             role="menu"
-            className={`absolute left-0 top-full mt-1 z-20 min-w-[160px] rounded-md border border-border bg-panel shadow-lg overflow-hidden origin-top transition duration-150 ${
+            className={`absolute left-0 top-full mt-1 z-20 min-w-[160px] rounded-xl border border-border bg-panel shadow-lg overflow-hidden origin-top transition duration-150 ${
               mode === "expense" && expMenuOpen
                 ? "opacity-100 scale-100"
                 : "opacity-0 scale-95 pointer-events-none"

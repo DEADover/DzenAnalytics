@@ -307,7 +307,7 @@ export function CalendarPage() {
           {palette.map((c, i) => (
             <span
               key={i}
-              className="w-3 h-3 rounded-sm border border-border/30"
+              className="w-3 h-3 rounded-md border border-border/30"
               style={{ background: c }}
             />
           ))}
@@ -448,7 +448,7 @@ function MonthGrid({
               onClick={() => c.cell && onClick(c.date)}
               disabled={!c.cell}
               className={clsx(
-                "aspect-square rounded-sm text-[10px] flex items-center justify-center transition-transform hover:scale-110 hover:border-accent disabled:hover:scale-100 disabled:cursor-default",
+                "aspect-square rounded-md text-[10px] flex items-center justify-center transition-transform hover:scale-110 hover:border-accent disabled:hover:scale-100 disabled:cursor-default",
                 otherKindOnly
                   ? "border border-dashed border-accent/50"
                   : "border border-border/40 disabled:hover:border-border/40"

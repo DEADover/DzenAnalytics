@@ -100,7 +100,7 @@ export function DigestPage() {
                 <button
                   key={e.id}
                   onClick={() => setSelected(e.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded text-sm text-left transition-colors ${
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-left transition-colors ${
                     isActive
                       ? "bg-accent/10 text-accent"
                       : "hover:bg-panel2/60 text-muted"
@@ -276,7 +276,7 @@ function DigestDetail({
               <button
                 key={t.id}
                 onClick={() => onOpenTx([t], t.payee || t.categoryFull || "Операция")}
-                className="w-full flex items-center gap-3 text-sm hover:bg-panel2/40 p-2 -mx-2 rounded text-left"
+                className="w-full flex items-center gap-3 text-sm hover:bg-panel2/40 p-2 -mx-2 rounded-lg text-left"
               >
                 <Calendar className="w-3.5 h-3.5 text-muted shrink-0" />
                 <div className="flex-1 min-w-0">

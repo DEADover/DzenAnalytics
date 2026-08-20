@@ -222,7 +222,7 @@ export function YearReviewPage() {
                 <button
                   key={t.id}
                   onClick={() => showDrill(`Операция #${i + 1}`, [t], "Topowiec")}
-                  className="w-full flex items-center gap-3 text-sm hover:bg-panel2/40 p-2 -mx-2 rounded text-left"
+                  className="w-full flex items-center gap-3 text-sm hover:bg-panel2/40 p-2 -mx-2 rounded-lg text-left"
                 >
                   <div className="text-2xl font-bold text-muted tabular-nums w-8">
                     {i + 1}
