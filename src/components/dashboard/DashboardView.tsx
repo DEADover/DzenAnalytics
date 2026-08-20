@@ -33,10 +33,11 @@ import {
   EmptyDashboard,
   HiddenWidgets,
   LayoutToolbar,
+  WidgetGap,
   WidgetShell,
 } from "./WidgetLayout";
 import { useWidgetDrag } from "../../hooks/useWidgetDrag";
-import { widgetMeta, type WidgetPlacement } from "../../lib/dashboardLayout";
+import { packLayout, widgetMeta, type WidgetPlacement } from "../../lib/dashboardLayout";
 import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
 import { formatMoney, monthLabel, formatDate } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
@@ -224,8 +225,12 @@ export function DashboardView() {
   const move = useDashboardLayoutStore((s) => s.move);
   const shift = useDashboardLayoutStore((s) => s.shift);
   const setLinks = useDashboardLayoutStore((s) => s.setLinks);
+  const moveBefore = useDashboardLayoutStore((s) => s.moveBefore);
 
-  const drag = useWidgetDrag((dragKey, overKey) => void move(dragKey, overKey));
+  const drag = useWidgetDrag(
+    (dragKey, overKey) => void move(dragKey, overKey),
+    (dragKey, beforeKey) => void moveBefore(dragKey, beforeKey)
+  );
 
   // Режим настройки не переживает уход со страницы: вернувшись на главную,
   // человек ждёт готовый экран, а не разложенные ручки.
@@ -419,6 +424,12 @@ export function DashboardView() {
   }
 
   const visible = layout.filter((p) => !p.hidden);
+  // Дырки в рядах считаем сами: сетка их оставляет, но в разметке их нет, а
+  // значит и уронить в них виджет нельзя. В обычном виде они не нужны — там
+  // ряды складывает сама сетка, и результат тот же.
+  const cells = editing
+    ? packLayout(visible)
+    : visible.map((placement) => ({ type: "widget" as const, placement }));
 
   return (
     <div className="flex flex-col gap-5 3xl:gap-6">
@@ -428,7 +439,23 @@ export function DashboardView() {
         <EmptyDashboard />
       ) : (
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6">
-          {visible.map((p, i) => (
+          {cells.map((cell) => {
+            if (cell.type === "gap") {
+              const gapKey = `gap:${cell.before ?? "end"}`;
+              return (
+                <WidgetGap
+                  key={gapKey}
+                  span={cell.span}
+                  dragging={drag.dragKey !== null}
+                  highlight={drag.overKey === gapKey}
+                  onEnter={() => drag.enter(gapKey)}
+                  onDrop={(sourceKey) => drag.dropBefore(sourceKey, cell.before)}
+                />
+              );
+            }
+            const p = cell.placement;
+            const i = visible.indexOf(p);
+            return (
             <WidgetShell
               key={p.key}
               placement={p}
@@ -448,7 +475,8 @@ export function DashboardView() {
             >
               {widgetBody(p)}
             </WidgetShell>
-          ))}
+            );
+          })}
         </section>
       )}
 

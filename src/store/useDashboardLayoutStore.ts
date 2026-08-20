@@ -16,6 +16,7 @@ import {
   defaultLayout,
   layoutFromStored,
   moveWidget,
+  moveWidgetBefore,
   removeWidget,
   setRowLinks,
   setWidgetHidden,
@@ -33,6 +34,8 @@ interface State {
   hydrate: () => Promise<void>;
   setEditing: (on: boolean) => void;
   move: (dragKey: string, overKey: string) => Promise<void>;
+  /** Поставить виджет перед другим; `null` — в конец. Так работает бросок в дырку. */
+  moveBefore: (dragKey: string, beforeKey: string | null) => Promise<void>;
   shift: (key: string, dir: -1 | 1) => Promise<void>;
   setHidden: (key: string, hidden: boolean) => Promise<void>;
   /** Завести новую дорожку кнопок. */
@@ -40,7 +43,7 @@ interface State {
   /** Убрать из раскладки насовсем — только то, что человек сам завёл. */
   remove: (key: string) => Promise<void>;
   /** Задать набор кнопок дорожки. */
-  setLinks: (key: string, links: readonly string[]) => Promise<void>;
+  setLinks: (key: string, links: readonly (string | null)[]) => Promise<void>;
   reset: () => Promise<void>;
 }
 
@@ -63,6 +66,8 @@ export const useDashboardLayoutStore = create<State>((set, get) => {
     setEditing: (on) => set({ editing: on }),
 
     move: (dragKey, overKey) => apply(moveWidget(get().layout, dragKey, overKey)),
+    moveBefore: (dragKey, beforeKey) =>
+      apply(moveWidgetBefore(get().layout, dragKey, beforeKey)),
     shift: (key, dir) => apply(shiftWidget(get().layout, key, dir)),
     setHidden: (key, hidden) => apply(setWidgetHidden(get().layout, key, hidden)),
     addLinks: () => apply(addLinksRow(get().layout)),

@@ -58,14 +58,18 @@ export interface WidgetMeta {
   live?: boolean;
 }
 
-/** Сколько кнопок помещается в одну дорожку. Больше — заводите вторую. */
-export const MAX_LINKS = 6;
+/**
+ * Сколько мест в дорожке. Ровно шесть, и место может пустовать: ряд из шести
+ * плиток ещё читается с одного взгляда, а где в нём стоят кнопки и где дырки —
+ * дело человека. Нужно больше кнопок — заводится вторая дорожка.
+ */
+export const LINK_SLOTS = 6;
 
-/** Дорожка из нуля кнопок — это отсутствие дорожки. */
-export const MIN_LINKS = 1;
+/** Места дорожки: путь раздела или пустое место. Длина всегда `LINK_SLOTS`. */
+export type LinkSlots = (string | null)[];
 
 /** Кнопки первой дорожки: то, чем «Быстрые переходы» были до всякой настройки. */
-export const DEFAULT_LINKS = [
+export const DEFAULT_LINKS: LinkSlots = [
   "/budgets",
   "/goals",
   "/rules",
@@ -151,8 +155,8 @@ export interface WidgetPlacement {
   key: string;
   kind: WidgetKind;
   hidden?: boolean;
-  /** Только у дорожки: пути разделов, стоящих на ней кнопками. */
-  links?: string[];
+  /** Только у дорожки: что стоит на каждом из шести мест. */
+  links?: LinkSlots;
 }
 
 export const DEFAULT_LAYOUT: readonly WidgetPlacement[] = WIDGETS.map((w) =>
@@ -169,20 +173,25 @@ export function defaultLayout(): WidgetPlacement[] {
 /* ─────────────────────────────  разбор  ───────────────────────────── */
 
 /**
- * Оставить только существующие разделы, без повторов и не больше шести.
+ * Привести места дорожки к шести: существующие разделы, без повторов.
  *
- * Пустой список означает, что дорожки нет: `null` — сигнал выбросить её из
- * раскладки.
+ * Место, на котором стояло неизвестно что, становится пустым, а не съезжает
+ * влево: положение кнопок в ряду человек выбирал сам. Дорожка, где не осталось
+ * ни одной кнопки, — это отсутствие дорожки: `null` говорит выбросить её.
  */
-function cleanLinks(raw: unknown): string[] | null {
+function cleanLinks(raw: unknown): LinkSlots | null {
   if (!Array.isArray(raw)) return null;
-  const out: string[] = [];
-  for (const item of raw) {
-    if (typeof item !== "string" || !navSection(item) || out.includes(item)) continue;
-    out.push(item);
-    if (out.length === MAX_LINKS) break;
+  const out: LinkSlots = new Array(LINK_SLOTS).fill(null);
+  const seen = new Set<string>();
+  let filled = 0;
+  for (let i = 0; i < Math.min(raw.length, LINK_SLOTS); i++) {
+    const item = raw[i];
+    if (typeof item !== "string" || !navSection(item) || seen.has(item)) continue;
+    seen.add(item);
+    out[i] = item;
+    filled++;
   }
-  return out.length >= MIN_LINKS ? out : null;
+  return filled > 0 ? out : null;
 }
 
 /**
@@ -285,6 +294,76 @@ export function moveWidget(
 }
 
 /**
+ * Перенести виджет на место перед другим; `null` — в самый конец.
+ *
+ * Так работает бросок в пустое место ряда: пустого места в раскладке нет, есть
+ * виджет, который в этот ряд не поместился и уехал ниже. Встать «в дырку» —
+ * значит встать прямо перед ним.
+ */
+export function moveWidgetBefore(
+  layout: readonly WidgetPlacement[],
+  dragKey: string,
+  beforeKey: string | null
+): WidgetPlacement[] {
+  if (dragKey === beforeKey) return layout.slice();
+  const from = layout.findIndex((p) => p.key === dragKey);
+  if (from === -1) return layout.slice();
+  const next = layout.slice();
+  const [item] = next.splice(from, 1);
+  if (beforeKey === null) {
+    next.push(item);
+    return next;
+  }
+  const to = next.findIndex((p) => p.key === beforeKey);
+  if (to === -1) return layout.slice();
+  next.splice(to, 0, item);
+  return next;
+}
+
+/* ─────────────────────────────  раскладка по рядам  ───────────────────────────── */
+
+/** Ячейка сетки: виджет или пустое место, оставшееся до конца ряда. */
+export type LayoutCell =
+  | { type: "widget"; placement: WidgetPlacement }
+  | {
+      type: "gap";
+      /** Сколько колонок пустует. */
+      span: number;
+      /** Перед каким виджетом стоит дырка; `null` — она в самом конце. */
+      before: string | null;
+    };
+
+/**
+ * Разложить виджеты по рядам и назвать пустые места.
+ *
+ * Сетка сама переносит на новую строку то, что не влезло, и оставляет позади
+ * дырку — но дырки этой в разметке нет, а значит и уронить в неё виджет нельзя.
+ * Поэтому ряды считаем сами: где сетка перенесёт, там и выпускаем ячейку-дырку,
+ * в которую уже можно целиться.
+ *
+ * Хвостовая дырка (ряд закончился, а место осталось) тоже выпускается: бросок
+ * туда ставит виджет в конец.
+ */
+export function packLayout(
+  visible: readonly WidgetPlacement[],
+  columns = 3
+): LayoutCell[] {
+  const cells: LayoutCell[] = [];
+  let col = 0;
+  for (const placement of visible) {
+    const span = Math.min(widgetMeta(placement.kind).span, columns);
+    if (col > 0 && col + span > columns) {
+      cells.push({ type: "gap", span: columns - col, before: placement.key });
+      col = 0;
+    }
+    cells.push({ type: "widget", placement });
+    col = (col + span) % columns;
+  }
+  if (col > 0) cells.push({ type: "gap", span: columns - col, before: null });
+  return cells;
+}
+
+/**
  * Сдвинуть виджет на шаг вперёд или назад — это делают стрелки.
  *
  * Убранные виджеты пропускаем: их на экране нет, и шаг «через невидимое»
@@ -361,7 +440,7 @@ function nextLinksKey(layout: readonly WidgetPlacement[]): string {
  * на главной собраны уже все разделы, берём первый по порядку «Ещё».
  */
 function firstUnusedLink(layout: readonly WidgetPlacement[]): string {
-  const used = new Set(layout.flatMap((p) => p.links ?? []));
+  const used = new Set(layout.flatMap((p) => p.links ?? []).filter(Boolean));
   return (SECONDARY.find((s) => !used.has(s.to)) ?? SECONDARY[0]).to;
 }
 
@@ -372,13 +451,13 @@ export function addLinksRow(layout: readonly WidgetPlacement[]): WidgetPlacement
     {
       key: nextLinksKey(layout),
       kind: "links",
-      links: [firstUnusedLink(layout)],
+      links: [firstUnusedLink(layout), null, null, null, null, null],
     },
   ];
 }
 
 /**
- * Задать набор кнопок дорожки.
+ * Задать места дорожки.
  *
  * Последнюю кнопку убрать нельзя: дорожка без кнопок — пустая полоса, которую
  * человеку пришлось бы искать глазами, чтобы снять. Убирают саму дорожку.
@@ -386,7 +465,7 @@ export function addLinksRow(layout: readonly WidgetPlacement[]): WidgetPlacement
 export function setRowLinks(
   layout: readonly WidgetPlacement[],
   key: string,
-  links: readonly string[]
+  links: readonly (string | null)[]
 ): WidgetPlacement[] {
   const clean = cleanLinks(links);
   if (!clean) return layout.slice();
@@ -399,6 +478,6 @@ export function isDefaultLayout(layout: readonly WidgetPlacement[]): boolean {
   return layout.every((p, i) => {
     const d = DEFAULT_LAYOUT[i];
     if (p.key !== d.key || p.kind !== d.kind || p.hidden) return false;
-    return (p.links ?? []).join() === (d.links ?? []).join();
+    return String(p.links ?? []) === String(d.links ?? []);
   });
 }

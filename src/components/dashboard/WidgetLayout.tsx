@@ -28,7 +28,7 @@ import {
   X,
 } from "lucide-react";
 import {
-  MAX_LINKS,
+  LINK_SLOTS,
   WIDGETS,
   isDefaultLayout,
   widgetMeta,
@@ -129,12 +129,9 @@ export function WidgetShell({
       >
         <GripVertical className="w-4 h-4" aria-hidden="true" />
       </span>
-      {/* Название — только у виджетов без поддона: у остальных оно и так
-          написано в шапке карточки прямо над дорожкой, а на трети экрана
-          обрезалось до «Балансы с…». */}
-      {meta.bare && (
-        <span className="text-[13px] font-semibold truncate min-w-0">{meta.title}</span>
-      )}
+      {/* Название есть у каждой плитки: без него дорожка ручек посреди чужого
+          графика не говорит, чем именно ты сейчас двигаешь. */}
+      <span className="text-[13px] font-semibold truncate min-w-0">{meta.title}</span>
       {/* Шаг влево-вправо кнопками: перетаскивание на сенсорном экране не
           работает вовсе, а с клавиатуры до него не добраться. */}
       <span className="flex items-center shrink-0">
@@ -224,6 +221,56 @@ export function WidgetShell({
   );
 }
 
+/* ─────────────────────────────  пустое место  ───────────────────────────── */
+
+/**
+ * Дырка в ряду: место, оставшееся оттого, что следующий виджет в этот ряд не
+ * влез и уехал ниже.
+ *
+ * В обычном виде её нет вовсе — пустая рамка посреди главной ничего не значит.
+ * В режиме настройки она нужна: без неё в дырку некуда целиться, и виджет туда
+ * не поставить.
+ */
+export function WidgetGap({
+  span,
+  dragging,
+  highlight,
+  onEnter,
+  onDrop,
+}: {
+  span: number;
+  /** Виджет сейчас везут — дырке пора звать. */
+  dragging: boolean;
+  highlight: boolean;
+  onEnter: () => void;
+  onDrop: (sourceKey: string) => void;
+}) {
+  return (
+    <div
+      onDragEnter={onEnter}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop(e.dataTransfer.getData("text/plain"));
+      }}
+      className={clsx(
+        // Ниже большого экрана колонок нет вовсе: всё стоит в одну, и дырок не
+        // бывает.
+        "hidden lg:grid place-items-center rounded-[18px] border border-dashed",
+        span === 2 && "lg:col-span-2",
+        highlight
+          ? "border-accent bg-accent/10 text-accent"
+          : "border-border/70 text-muted"
+      )}
+    >
+      {dragging && <span className="text-[13px] font-medium">Перенести сюда</span>}
+    </div>
+  );
+}
+
 /* ─────────────────────────────  панель режима  ───────────────────────────── */
 
 /**
@@ -281,7 +328,11 @@ function shelfLabel(p: WidgetPlacement): { text: string; title: string } {
     const meta = widgetMeta(p.kind);
     return { text: meta.title, title: meta.hint };
   }
-  const labels = (p.links ?? []).map((to) => navSection(to)?.label ?? to);
+  // Пустые места дорожки в подписи не считаем: на полке важно, что на ней
+  // стоит, а не сколько дырок между кнопками.
+  const labels = (p.links ?? [])
+    .filter((to): to is string => Boolean(to))
+    .map((to) => navSection(to)?.label ?? to);
   return {
     text: `Дорожка: ${labels.slice(0, 2).join(", ")}${labels.length > 2 ? "…" : ""}`,
     title: `Дорожка кнопок\n${labels.join(" · ")}`,
@@ -365,7 +416,7 @@ export function HiddenWidgets({ layout }: { layout: readonly WidgetPlacement[] }
       <ShelfRow label="Новый виджет">
         <button
           type="button"
-          title={`Дорожка кнопок\nБыстрые переходы в разделы, до ${MAX_LINKS} кнопок в ряд`}
+          title={`Дорожка кнопок\nБыстрые переходы в разделы, до ${LINK_SLOTS} кнопок в ряд`}
           onClick={() => void addLinks()}
           className={CHIP}
         >

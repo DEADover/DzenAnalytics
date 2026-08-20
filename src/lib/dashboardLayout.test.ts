@@ -2,13 +2,15 @@ import { describe, it, expect } from "vitest";
 import {
   DEFAULT_LAYOUT,
   DEFAULT_LINKS,
-  MAX_LINKS,
+  LINK_SLOTS,
   WIDGETS,
   addLinksRow,
   isDefaultLayout,
   layoutFromStored,
   moveWidget,
+  moveWidgetBefore,
   normalizeLayout,
+  packLayout,
   removeWidget,
   setRowLinks,
   setWidgetHidden,
@@ -84,7 +86,7 @@ describe("normalizeLayout", () => {
       { key: "links", kind: "links", links: ["/rules"] },
     ]);
     expect(keys(out).filter((k) => k === "links")).toHaveLength(1);
-    expect(row(out, "links").links).toEqual(["/goals"]);
+    expect(row(out, "links").links).toEqual(["/goals", null, null, null, null, null]);
   });
 
   it("дорожек кнопок разрешает сколько угодно", () => {
@@ -96,33 +98,35 @@ describe("normalizeLayout", () => {
     expect(out.filter((p) => p.kind === "links")).toHaveLength(3);
   });
 
-  it("чистит состав дорожки: неизвестное, повторы и лишнее сверх шести", () => {
+  it("чистит места дорожки, не сдвигая уцелевшие кнопки", () => {
     const out = normalizeLayout([
       {
         key: "links",
         kind: "links",
         links: [
           "/goals",
-          "/goals", // повтор
-          "/раздел-которого-нет",
+          "/goals", // повтор — место останется пустым
+          "/раздела-нет",
           42,
           "/rules",
-          "/tags",
-          "/compare",
-          "/dynamics",
-          "/trends",
-          "/top", // седьмая — уже не влезает
+          null,
+          "/trends", // седьмое место — его уже нет
         ],
       },
     ]);
     const links = row(out, "links").links!;
-    expect(links).toHaveLength(MAX_LINKS);
-    expect(links).toEqual(["/goals", "/rules", "/tags", "/compare", "/dynamics", "/trends"]);
+    expect(links).toHaveLength(LINK_SLOTS);
+    expect(links).toEqual(["/goals", null, null, null, "/rules", null]);
+  });
+
+  it("короткий список дополняет пустыми местами", () => {
+    const out = normalizeLayout([{ key: "links", kind: "links", links: ["/goals", "/rules"] }]);
+    expect(row(out, "links").links).toEqual(["/goals", "/rules", null, null, null, null]);
   });
 
   it("дорожку без единой живой кнопки выбрасывает", () => {
     const out = normalizeLayout([
-      { key: "links", kind: "links", links: ["/раздела-больше-нет"] },
+      { key: "links", kind: "links", links: ["/раздела-больше-нет", null] },
       { key: "accounts", kind: "accounts" },
     ]);
     expect(kinds(out)).not.toContain("links");
@@ -193,6 +197,62 @@ describe("moveWidget", () => {
   });
 });
 
+describe("moveWidgetBefore", () => {
+  it("ставит перед названным виджетом", () => {
+    const out = moveWidgetBefore(DEFAULT_LAYOUT, "observations", "accounts");
+    expect(keys(out).slice(0, 3)).toEqual(["month", "observations", "accounts"]);
+  });
+
+  it("с `null` — в самый конец", () => {
+    const out = moveWidgetBefore(DEFAULT_LAYOUT, "month", null);
+    expect(keys(out)[keys(out).length - 1]).toBe("month");
+    expect(out).toHaveLength(DEFAULT_LAYOUT.length);
+  });
+
+  it("по чужому ключу ничего не меняет", () => {
+    expect(keys(moveWidgetBefore(DEFAULT_LAYOUT, "чужой", "month"))).toEqual(
+      keys(DEFAULT_LAYOUT)
+    );
+    expect(keys(moveWidgetBefore(DEFAULT_LAYOUT, "month", "чужой"))).toEqual(
+      keys(DEFAULT_LAYOUT)
+    );
+  });
+});
+
+describe("packLayout", () => {
+  const cell = (kind: string, key = kind): WidgetPlacement => ({ key, kind: kind as never });
+
+  it("в стандартной раскладке дырок нет", () => {
+    expect(packLayout(DEFAULT_LAYOUT).filter((c) => c.type === "gap")).toHaveLength(0);
+  });
+
+  it("называет дырку перед тем, кто в ряд не влез", () => {
+    // Две трети и ещё две трети: вторая уезжает ниже, за первой остаётся треть.
+    const out = packLayout([cell("cashflow"), cell("activity")]);
+    expect(out).toEqual([
+      { type: "widget", placement: cell("cashflow") },
+      { type: "gap", span: 1, before: "activity" },
+      { type: "widget", placement: cell("activity") },
+      { type: "gap", span: 1, before: null },
+    ]);
+  });
+
+  it("хвостовую дырку отдаёт с `null`", () => {
+    const out = packLayout([cell("month"), cell("accounts")]);
+    expect(out[out.length - 1]).toEqual({ type: "gap", span: 1, before: null });
+  });
+
+  it("полный ряд хвостовой дырки не оставляет", () => {
+    const out = packLayout([cell("month"), cell("accounts"), cell("upcoming")]);
+    expect(out.filter((c) => c.type === "gap")).toHaveLength(0);
+  });
+
+  it("виджет во всю строку встаёт на новый ряд, а за прошлым остаётся дырка", () => {
+    const out = packLayout([cell("month"), cell("links")]);
+    expect(out[1]).toEqual({ type: "gap", span: 2, before: "links" });
+  });
+});
+
 describe("shiftWidget", () => {
   it("меняет местами с соседом", () => {
     const out = shiftWidget(DEFAULT_LAYOUT, "accounts", -1);
@@ -236,11 +296,12 @@ describe("дорожки кнопок", () => {
     expect(keys(two)).toContain("links-3");
   });
 
-  it("новая дорожка встаёт в конец с одной кнопкой", () => {
+  it("новая дорожка встаёт в конец с одной кнопкой на первом месте", () => {
     const out = addLinksRow(DEFAULT_LAYOUT);
     const added = out[out.length - 1];
     expect(added.kind).toBe("links");
-    expect(added.links).toHaveLength(1);
+    expect(added.links).toHaveLength(LINK_SLOTS);
+    expect(added.links!.filter(Boolean)).toHaveLength(1);
     // Первый раздел «Ещё», которого ещё нет ни на одной дорожке.
     expect(DEFAULT_LINKS).not.toContain(added.links![0]);
   });
@@ -248,30 +309,26 @@ describe("дорожки кнопок", () => {
   it("на пустой главной дорожка всё равно заводится", () => {
     const out = addLinksRow([]);
     expect(out).toHaveLength(1);
-    expect(out[0].links).toHaveLength(1);
+    expect(out[0].links!.filter(Boolean)).toHaveLength(1);
   });
 
-  it("состав дорожки чистится и обрезается", () => {
+  it("кнопки можно расставить по местам как угодно", () => {
     const out = setRowLinks(DEFAULT_LAYOUT, "links", [
       "/goals",
-      "/goals",
-      "/чепуха",
+      null,
+      null,
       "/rules",
-      "/tags",
-      "/compare",
-      "/dynamics",
-      "/trends",
-      "/top",
+      null,
+      "/trash",
     ]);
-    expect(row(out, "links").links).toHaveLength(MAX_LINKS);
+    expect(row(out, "links").links).toEqual(["/goals", null, null, "/rules", null, "/trash"]);
   });
 
-  it("последнюю кнопку убрать нельзя", () => {
+  it("дорожку без единой кнопки не принимает", () => {
     const one = setRowLinks(DEFAULT_LAYOUT, "links", ["/goals"]);
-    expect(row(one, "links").links).toEqual(["/goals"]);
-    // Пустой список — не изменение, а попытка оставить полосу без кнопок.
-    const still = setRowLinks(one, "links", []);
-    expect(row(still, "links").links).toEqual(["/goals"]);
+    expect(row(one, "links").links).toEqual(["/goals", null, null, null, null, null]);
+    const still = setRowLinks(one, "links", [null, null, null, null, null, null]);
+    expect(row(still, "links").links).toEqual(["/goals", null, null, null, null, null]);
   });
 
   it("дорожку можно стереть насовсем", () => {
@@ -289,7 +346,14 @@ describe("дорожки кнопок", () => {
     const two = addLinksRow(DEFAULT_LAYOUT);
     const out = setRowLinks(two, "links-2", ["/trash", "/duplicates"]);
     expect(row(out, "links").links).toEqual(DEFAULT_LINKS);
-    expect(row(out, "links-2").links).toEqual(["/trash", "/duplicates"]);
+    expect(row(out, "links-2").links).toEqual([
+      "/trash",
+      "/duplicates",
+      null,
+      null,
+      null,
+      null,
+    ]);
   });
 });
 
@@ -305,6 +369,9 @@ describe("isDefaultLayout", () => {
     expect(isDefaultLayout(moveWidget(DEFAULT_LAYOUT, "month", "accounts"))).toBe(false);
     expect(isDefaultLayout(addLinksRow(DEFAULT_LAYOUT))).toBe(false);
     expect(isDefaultLayout(setRowLinks(DEFAULT_LAYOUT, "links", ["/goals"]))).toBe(false);
+    expect(
+      isDefaultLayout(setRowLinks(DEFAULT_LAYOUT, "links", [null, ...DEFAULT_LINKS.slice(1)]))
+    ).toBe(false);
     expect(isDefaultLayout(DEFAULT_LAYOUT.slice(1))).toBe(false);
   });
 });
@@ -322,8 +389,9 @@ describe("реестр виджетов", () => {
     expect(new Set(WIDGETS.map((w) => w.kind)).size).toBe(WIDGETS.length);
   });
 
-  it("кнопки по умолчанию — настоящие разделы, и их ровно шесть", () => {
-    expect(DEFAULT_LINKS).toHaveLength(MAX_LINKS);
+  it("кнопки по умолчанию занимают все шесть мест", () => {
+    expect(DEFAULT_LINKS).toHaveLength(LINK_SLOTS);
+    expect(DEFAULT_LINKS.every(Boolean)).toBe(true);
     expect(row(DEFAULT_LAYOUT, "links").links).toEqual(DEFAULT_LINKS);
   });
 });
