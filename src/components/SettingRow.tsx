@@ -36,7 +36,13 @@ export function SettingRow({
 }) {
   return (
     <div className={`${dense ? "py-1.5" : "py-3"} border-b border-border/60 last:border-b-0`}>
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      {/* Ширина строки ограничена. Настройки лежат в карточке во всю ширину
+          экрана, и `justify-between` разносил подпись к левому краю, а контрол
+          к правому: на мониторе в 1600 между «Базовая валюта» и её списком
+          оказывалась почти тысяча пикселей пустоты, и связать одно с другим
+          глазом было нечем. Предел в 56rem держит их на расстоянии, которое
+          читается как пара. */}
+      <div className="flex items-center justify-between gap-6 flex-wrap max-w-[56rem]">
         <div className="min-w-0 flex-1">
           <SettingLabel title={title} help={help} />
           {status && <div className="text-xs text-muted mt-0.5">{status}</div>}

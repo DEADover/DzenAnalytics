@@ -84,7 +84,7 @@ export function AnomaliesPage() {
         icon={Zap}
         iconTone="text-warn"
         title="Аномалии"
-        hint="Авто-детект необычных операций и резких всплесков по категориям. Учитывает фильтры по счетам, валютам, категориям и датам. Всплески считают базу по всей истории (с учётом фильтров, кроме дат)."
+        hint="Необычные траты и резкие всплески по категориям."
         hintWrap
         right={
           <div className="flex items-center gap-2">
@@ -106,6 +106,12 @@ export function AnomaliesPage() {
               </div>
             )}
             <InfoPopover>
+              <p>
+                Страница слушается общих отборов по счетам, валютам, категориям и
+                датам. Всплески при этом считают «обычное» по всей истории — с
+                учётом отборов, но без ограничения по датам: иначе сравнивать
+                месяц было бы не с чем.
+              </p>
               <p>
                 <InfoTerm>Операции-выбросы</InfoTerm> — те, что сильно выбиваются
                 из привычных сумм. Для каждой категории и для каждого получателя
@@ -140,19 +146,26 @@ export function AnomaliesPage() {
 
       <GlobalFilters />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      {/* Плотный вариант плиток: три коротких числа в полный рост занимали
+          треть первого экрана. И подпись есть у каждой — без неё средняя плитка
+          выходила ниже соседних, и ряд читался сломанным. */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 items-stretch">
         <Stat
+          dense
           label="Аномальных операций"
           value={anomalies.length}
           tone="warn"
-          hint={<>σ &gt; {threshold}</>}
+          hint={<>Порог: σ &gt; {threshold}</>}
         />
         <Stat
+          dense
           label="Их сумма"
           value={formatMoney(totalAnomalyAmount, base)}
           tone="expense"
+          hint={<>Сверх обычного для своей категории</>}
         />
         <Stat
+          dense
           label="Всплески по категориям"
           value={spikes.length}
           tone="warn"
@@ -160,7 +173,7 @@ export function AnomaliesPage() {
         />
       </div>
 
-      <div className="flex gap-2 border-b border-border">
+      <div className="inline-flex items-center gap-0.5 self-start rounded-full p-1 bg-panel2 border border-border shadow-tray">
         {(
           [
             ["transactions", "Операции-выбросы", anomalies.length],
@@ -170,11 +183,13 @@ export function AnomaliesPage() {
           <button
             key={k}
             onClick={() => setTab(k)}
-            className={`px-4 py-2 text-sm border-b-2 -mb-px transition-colors ${
-              tab === k ? "border-accent text-accent" : "border-transparent text-muted hover:text-text"
+            className={`px-3.5 py-1.5 rounded-full text-[13.5px] font-medium whitespace-nowrap transition-colors duration-200 ${
+              tab === k
+                ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
+                : "text-muted hover:text-text hover:bg-panel/70"
             }`}
           >
-            {l} <span className="text-muted">({n})</span>
+            {l} <span className={tab === k ? "opacity-80" : "text-muted"}>({n})</span>
           </button>
         ))}
       </div>

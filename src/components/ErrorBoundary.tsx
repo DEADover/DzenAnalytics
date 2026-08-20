@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!error) return this.props.children;
 
     return (
-      <div className="card card-pad max-w-2xl mx-auto mt-8 space-y-4">
+      <div className="card-tray card-pad max-w-2xl mx-auto mt-8 space-y-4">
         <div className="flex items-center gap-2 font-semibold text-expense">
           <AlertTriangle className="w-5 h-5 shrink-0" />
           Не удалось отобразить эту страницу

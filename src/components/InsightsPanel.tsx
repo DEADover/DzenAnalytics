@@ -20,7 +20,7 @@ export function InsightsPanel({ insights, base }: { insights: Insight[]; base: s
   if (insights.length === 0) return null;
 
   return (
-    <div className="card card-pad">
+    <div className="card-tray card-pad">
       <div className="font-semibold mb-3 flex items-center gap-2">
         <Lightbulb className="w-4 h-4 text-warn" />
         Авто-наблюдения

@@ -9,7 +9,7 @@ import { Cloud, Upload } from "lucide-react";
  */
 export function EmptyState() {
   return (
-    <div className="card card-pad flex flex-col items-center justify-center text-center py-14 gap-6">
+    <div className="card-tray card-pad flex flex-col items-center justify-center text-center py-14 gap-6">
       <div>
         <div className="text-lg font-semibold mb-1">Нет данных</div>
         <div className="text-sm text-muted">

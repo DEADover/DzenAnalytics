@@ -34,7 +34,7 @@ export function OperationsSettings() {
     ];
 
   return (
-    <div className="card card-pad">
+    <div className="card-tray card-pad">
       <SettingsSectionHeader
         icon={ArrowLeftRight}
         title="Справочники операций"
@@ -46,10 +46,12 @@ export function OperationsSettings() {
         облако.
       </p>
 
+      {/* Дорожка-пилюля, как остальные переключатели: подчёркивание было
+          последним следом прежнего набора внутри «Настроек». */}
       <div
         role="tablist"
         aria-label="Разделы справочников"
-        className="flex items-center gap-1 border-b border-border mb-4"
+        className="inline-flex items-center gap-0.5 self-start rounded-full p-1 bg-panel2 border border-border shadow-tray mb-4"
       >
         {tabs.map((t) => {
           const active = sub === t.id;
@@ -60,10 +62,11 @@ export function OperationsSettings() {
               aria-selected={active}
               onClick={() => setSub(t.id)}
               className={clsx(
-                "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[13.5px] font-medium transition-colors duration-200",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
                 active
-                  ? "border-accent text-text"
-                  : "border-transparent text-muted hover:text-text"
+                  ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
+                  : "text-muted hover:text-text hover:bg-panel/70"
               )}
             >
               <t.icon className="w-4 h-4" />
@@ -74,7 +77,7 @@ export function OperationsSettings() {
               {t.count !== null && (
                 <span
                   className={clsx(
-                    "text-xs tabular-nums rounded px-1.5 py-0.5",
+                    "text-xs tabular-nums rounded-full px-1.5 py-0.5",
                     active ? "bg-accent/10 text-accent" : "bg-panel2 text-muted"
                   )}
                 >

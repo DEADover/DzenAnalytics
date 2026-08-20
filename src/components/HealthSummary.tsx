@@ -204,7 +204,7 @@ export function HealthSummary({
   const { overall, grade, components, baseCurrency } = score;
 
   return (
-    <div className="card card-pad">
+    <div className="card-tray card-pad">
       {!hideHeading && (
         <div className="flex items-center justify-between mb-4">
           <div className="font-semibold flex items-center gap-2">

@@ -242,11 +242,12 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-3 text-xs text-muted">
-              <span>
-                Страница {safePage} из {totalPages}
-              </span>
-              <div className="flex items-center gap-1">
+            // Стрелки и счётчик — одной группой по центру. Прежде счётчик стоял
+            // у левого края, а кнопки у правого: на широкой карточке между ними
+            // была тысяча пикселей, и связать «Страница 2 из 7» с кнопками,
+            // которые её меняют, было нечем.
+            <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={safePage === 1}
@@ -255,6 +256,9 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
+                <span className="tabular-nums whitespace-nowrap">
+                  Страница {safePage} из {totalPages}
+                </span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={safePage === totalPages}

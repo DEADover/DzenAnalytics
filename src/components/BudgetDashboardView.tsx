@@ -75,7 +75,7 @@ function Kpi({
   // подряд зелёным на плюсе значило бы хвалить за выросшие траты.
   const goodGrowth = g !== null && (tone === "expense" ? g < 0 : g >= 0);
   return (
-    <div className="card card-pad">
+    <div className="card-tray card-pad">
       <div className="label mb-1.5">{title}</div>
       <div className={`stat-num whitespace-nowrap ${factClass} mb-2`}>
         {formatMoney(fact, base, { signed: tone === "delta" })}
@@ -142,7 +142,7 @@ function Donut({
   // ложатся в `stroke-dasharray` процентами, без пересчёта.
   const R = 100 / (2 * Math.PI);
   return (
-    <div className="card card-pad">
+    <div className="card-tray card-pad">
       <div className="label mb-3">{title}</div>
       <div className="flex items-center gap-5">
         <svg viewBox="0 0 40 40" className="w-24 h-24 shrink-0" role="img" aria-label={title}>
@@ -222,7 +222,7 @@ function BarChart({
 }) {
   const centered = hasNegative(bars);
   return (
-    <div className="card card-pad min-w-0">
+    <div className="card-tray card-pad min-w-0">
       <div className="label mb-3">{title}</div>
       {/* Колонка подписей шире полутора десятков символов: статьи с длинными
           именами обрезались на каждой диаграмме, а место под них есть. */}
