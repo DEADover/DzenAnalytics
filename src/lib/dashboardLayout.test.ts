@@ -362,6 +362,13 @@ describe("дорожки кнопок", () => {
 });
 
 describe("варианты оформления", () => {
+  it("серая подложка — свойство варианта, а не виджета", () => {
+    const month = widgetMeta("month");
+    expect(widgetView(month, "framed")?.grey).toBe(true);
+    expect(widgetView(month, "open")?.grey).toBeUndefined();
+    expect(widgetView(month, "split")?.grey).toBeUndefined();
+  });
+
   it("выбирает известный вариант", () => {
     const out = setWidgetView(DEFAULT_LAYOUT, "month", "split");
     expect(row(out, "month").view).toBe("split");
@@ -402,6 +409,7 @@ describe("варианты оформления", () => {
     expect(widgetView(month, undefined)?.id).toBe("open");
     expect(widgetView(month, "карусель")?.id).toBe("open");
     expect(widgetView(month, "split")?.id).toBe("split");
+    expect(widgetView(month, "framed")?.id).toBe("framed");
     // У виджета без вариантов их и нет.
     expect(widgetView(widgetMeta("accounts"), "open")).toBeUndefined();
   });
@@ -410,6 +418,7 @@ describe("варианты оформления", () => {
     const month = widgetMeta("month");
     expect(isBareWidget(month, "open")).toBe(true);
     expect(isBareWidget(month, "split")).toBe(false);
+    expect(isBareWidget(month, "framed")).toBe(false);
     expect(isBareWidget(month, undefined)).toBe(true);
     // Дорожка кнопок рисует себя сама всегда — вариантов у неё нет.
     expect(isBareWidget(widgetMeta("links"))).toBe(true);

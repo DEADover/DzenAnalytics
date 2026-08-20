@@ -43,6 +43,8 @@ export interface WidgetView {
   hint: string;
   /** Этот вариант рисует себя сам, без поддона с двойным кантом. */
   bare?: boolean;
+  /** Ядро поддона серое, а не белое: карточка выделяется из ряда соседей. */
+  grey?: boolean;
 }
 
 export interface WidgetMeta {
@@ -114,6 +116,12 @@ export const WIDGETS: readonly WidgetMeta[] = [
         id: "split",
         title: "Разворот",
         hint: "В поддоне: типографика слева, числа рейкой справа",
+      },
+      {
+        id: "framed",
+        title: "В рамке",
+        hint: "То же, что «Открытый», но в поддоне и на серой подложке",
+        grey: true,
       },
     ],
   },

@@ -119,7 +119,7 @@ function monthPill(m: DashboardModel): string {
  * В обойме с двойным кантом он читался бы как ещё одна карточка с числом, а это
  * заголовок всего экрана.
  */
-function HeroOpen({ m }: { m: DashboardModel }) {
+function HeroOpen({ m, grey }: { m: DashboardModel; grey?: boolean }) {
   const over = m.pace === null ? null : m.pace - 1;
   return (
     <div className="flex flex-col gap-5 h-full">
@@ -128,7 +128,13 @@ function HeroOpen({ m }: { m: DashboardModel }) {
           полную силу — приглушённой десяткой она читалась как подпись к
           чему-то, а не как заголовок экрана. Разрядка при этом меньше
           прежней: чем крупнее буквы, тем меньше её нужно. */}
-      <h1 className="self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold">
+      {/* На серой подложке пилюля и вторая кнопка залиты белым: их обычная
+          заливка — та же самая серая, и на ней они пропадали. */}
+      <h1
+        className={`self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] border border-border text-text font-semibold ${
+          grey ? "bg-panel" : "bg-panel2"
+        }`}
+      >
         {monthPill(m)}
       </h1>
 
@@ -198,7 +204,9 @@ function HeroOpen({ m }: { m: DashboardModel }) {
           // кнопка: обведённая контуром и приглушённым текстом, она
           // сливалась с белым фоном. Второстепенной её оставляет заливка
           // подложкой, а не чёрным, как у соседней.
-          className="inline-flex h-[52px] items-center rounded-full px-6 bg-panel2 border border-border text-text text-[14px] font-medium transition-colors duration-200 hover:border-accent/50 hover:bg-panel2/70"
+          className={`inline-flex h-[52px] items-center rounded-full px-6 border border-border text-text text-[14px] font-medium transition-colors duration-200 hover:border-accent/50 ${
+            grey ? "bg-panel hover:bg-panel/70" : "bg-panel2 hover:bg-panel2/70"
+          }`}
         >
           Месячный отчёт
         </Link>
@@ -426,12 +434,13 @@ export function DashboardView() {
   /** Содержимое виджета. Обойму, ширину и ручки надевает `WidgetShell`. */
   function widgetBody(p: WidgetPlacement): ReactNode {
     switch (p.kind) {
-      case "month":
-        return widgetView(widgetMeta("month"), p.view)?.id === "split" ? (
-          <HeroSplit m={m} />
-        ) : (
-          <HeroOpen m={m} />
-        );
+      case "month": {
+        // «В рамке» — тот же «Открытый», только в поддоне и на серой
+        // подложке: содержание одно, разная подача.
+        const view = widgetView(widgetMeta("month"), p.view)?.id;
+        if (view === "split") return <HeroSplit m={m} />;
+        return <HeroOpen m={m} grey={view === "framed"} />;
+      }
 
       case "accounts":
         return (
@@ -607,6 +616,7 @@ export function DashboardView() {
               placement={p}
               meta={widgetMeta(p.kind)}
               bare={isBareWidget(widgetMeta(p.kind), p.view)}
+              grey={widgetView(widgetMeta(p.kind), p.view)?.grey === true}
               editing={editing}
               dragging={drag.dragKey === p.key}
               dropTarget={

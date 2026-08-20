@@ -46,6 +46,7 @@ export function WidgetShell({
   placement,
   meta,
   bare,
+  grey,
   editing,
   dragging,
   dropTarget,
@@ -62,6 +63,8 @@ export function WidgetShell({
   meta: WidgetMeta;
   /** Этот вариант виджета рисует себя сам, без поддона. */
   bare: boolean;
+  /** Ядро поддона серое, а не белое. */
+  grey: boolean;
   editing: boolean;
   /** Эту плитку сейчас везут. */
   dragging: boolean;
@@ -163,33 +166,6 @@ export function WidgetShell({
           <ChevronRight className="w-4 h-4" aria-hidden="true" />
         </button>
       </span>
-      {/* Варианты оформления: одно и то же место на главной, разный ответ.
-          Дорожкой, а не списком, — их два, и оба видно сразу. */}
-      {meta.views && meta.views.length > 1 && (
-        <span className="flex items-center gap-0.5 rounded-full bg-panel2 border border-border p-0.5 shrink-0">
-          {meta.views.map((v) => {
-            const on = v.id === (widgetView(meta, placement.view)?.id ?? v.id);
-            return (
-              <button
-                key={v.id}
-                type="button"
-                title={`${v.title}\n${v.hint}`}
-                onClick={() => void setView(placement.key, v.id)}
-                className={clsx(
-                  "px-2.5 h-6 rounded-full text-[12px] font-semibold leading-none",
-                  "transition-colors duration-200",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-                  on
-                    ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
-                    : "text-muted hover:text-text"
-                )}
-              >
-                {v.title}
-              </button>
-            );
-          })}
-        </span>
-      )}
       <button
         type="button"
         className="btn-icon-danger shrink-0"
@@ -206,6 +182,42 @@ export function WidgetShell({
   // НАД содержимым, а не поверх: посреди собственных кнопок она закрывала бы
   // ровно то, что человек пришёл менять.
   const inlineBar = editing && meta.live;
+
+  /**
+   * Варианты оформления — своей дорожкой в углу плитки, а не в общей.
+   *
+   * Цифрами, потому что названия («Открытый», «Разворот», «В рамке») занимали
+   * половину дорожки ручек и вытесняли из неё название самого виджета. Что
+   * значит цифра, говорит подсказка — а разницу всё равно видно на самой
+   * плитке, стоит нажать.
+   */
+  const views = meta.views;
+  const viewTrack = editing && views && views.length > 1 && (
+    <span className="absolute top-2 right-2 z-20 flex items-center gap-0.5 rounded-full bg-panel border border-border shadow-tray p-1">
+      {views.map((v, i) => {
+        const on = v.id === (widgetView(meta, placement.view)?.id ?? v.id);
+        return (
+          <button
+            key={v.id}
+            type="button"
+            title={`Вид ${i + 1} · ${v.title}\n${v.hint}`}
+            aria-label={`Вид ${i + 1}: ${v.title}`}
+            onClick={() => void setView(placement.key, v.id)}
+            className={clsx(
+              "w-6 h-6 rounded-full text-[12px] font-semibold leading-none tabular-nums",
+              "transition-colors duration-200",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+              on
+                ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
+                : "text-muted hover:text-text"
+            )}
+          >
+            {i + 1}
+          </button>
+        );
+      })}
+    </span>
+  );
 
   return (
     <div
@@ -227,6 +239,7 @@ export function WidgetShell({
         dropTarget && "ring-4 !ring-accent"
       )}
     >
+      {viewTrack}
       {inlineBar && <div className="flex">{bar}</div>}
 
       <div
@@ -238,8 +251,18 @@ export function WidgetShell({
         {bare ? (
           children
         ) : (
-          <div className="tray h-full flex flex-col">
-            <div className="tray-core flex-1 min-h-0 flex flex-col p-5">{children}</div>
+          // Серый вариант выворачивает поддон наизнанку: обойма белая, ядро
+          // серое. Иначе двойного канта не видно вовсе — обойма и так залита
+          // тем же серым, и «в рамке» ничем не отличалось бы от «без рамки».
+          <div className={clsx("tray h-full flex flex-col", grey && "!bg-panel")}>
+            <div
+              className={clsx(
+                "tray-core flex-1 min-h-0 flex flex-col p-5",
+                grey && "!bg-panel2"
+              )}
+            >
+              {children}
+            </div>
           </div>
         )}
       </div>
