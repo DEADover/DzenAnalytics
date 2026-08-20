@@ -99,6 +99,13 @@ const SECONDARY_GROUPS = [
 
 const SECONDARY = SECONDARY_GROUPS.flatMap((g) => g.items);
 
+/** Пункт меню в дорожке: те же размеры и та же пилюля, что у `Segmented`. */
+const NAV_ITEM =
+  "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[14px] font-medium whitespace-nowrap transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+const NAV_ITEM_ACTIVE =
+  "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]";
+const NAV_ITEM_IDLE = "text-muted hover:text-text hover:bg-panel/70";
+
 export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -165,8 +172,16 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         {/* Обёртка держит свободное место и на узком экране, где само меню
             спрятано: без неё кнопки справа сползались бы к знаку. */}
         <div className="flex-1 flex justify-center min-w-0">
-        {/* Desktop nav */}
-        <nav className="hidden lg:flex items-center gap-1 shrink-0">
+        {/* Desktop nav.
+
+            Меню собрано в одну дорожку — подложка, кант, мягкая тень, — а не
+            рассыпано отдельными надписями. Ровно так же набраны переключатели
+            разделов на «Счетах» и «Категориях», и это не совпадение: и там, и
+            здесь выбирают один вариант из нескольких, значит и выглядеть должно
+            одинаково. Выбранный пункт залит целиком, а не десятью процентами
+            цвета, — прежнюю бледную заливку на светлой теме приходилось искать
+            глазами. */}
+        <nav className="hidden lg:inline-flex items-center gap-0.5 shrink-0 rounded-full p-1 bg-panel2 border border-border shadow-tray">
           {PRIMARY.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -174,10 +189,8 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
               end={to === "/"}
               className={({ isActive }) =>
                 clsx(
-                  "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-                  isActive
-                    ? "bg-accent/10 text-accent"
-                    : "text-muted hover:text-text hover:bg-panel2"
+                  NAV_ITEM,
+                  isActive ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE
                 )
               }
             >
@@ -192,10 +205,8 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
               aria-expanded={moreOpen}
               aria-haspopup="true"
               className={clsx(
-                "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-                moreOpen || inSecondary
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:text-text hover:bg-panel2"
+                NAV_ITEM,
+                moreOpen || inSecondary ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE
               )}
             >
               <MoreHorizontal className="w-4 h-4" />
