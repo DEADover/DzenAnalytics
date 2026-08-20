@@ -13,6 +13,7 @@ import {
   Copy,
   Pencil,
   Trash2,
+  XSquare,
 } from "lucide-react";
 import { useDrillStore } from "../store/useDrillStore";
 import { useDataStore } from "../store/useDataStore";
@@ -543,7 +544,7 @@ export function TransactionsDrawer() {
                     <td className="table-td w-24 text-center whitespace-nowrap">
                       <button
                         onClick={() => setEditing(t)}
-                        className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 transition-colors"
+                        className="btn-icon"
                         title="Редактировать"
                         aria-label="Редактировать операцию"
                       >
@@ -552,7 +553,7 @@ export function TransactionsDrawer() {
                       {apiConnected && (
                         <button
                           onClick={() => setCopying(t)}
-                          className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 transition-colors"
+                          className="btn-icon"
                           title="Копировать — та же операция сегодняшним днём"
                           aria-label="Копировать операцию"
                         >
@@ -561,7 +562,7 @@ export function TransactionsDrawer() {
                       )}
                       <button
                         onClick={() => handleDelete(t)}
-                        className="p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10 transition-colors"
+                        className="btn-icon-danger"
                         title="Удалить"
                         aria-label="Удалить операцию"
                       >
@@ -627,6 +628,7 @@ export function TransactionsDrawer() {
               onClick={() => setSelected(new Set())}
               className="btn-ghost text-sm text-muted"
             >
+              <XSquare className="w-3.5 h-3.5" />
               Снять выделение
             </button>
           </div>

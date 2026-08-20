@@ -784,7 +784,7 @@ export function ImportPage() {
             <button
               type="button"
               onClick={() => setSourceTab("api")}
-              className={`px-3 py-1.5 text-sm rounded-md inline-flex items-center gap-1.5 transition-colors ${
+              className={`px-3 py-1.5 text-sm rounded-full inline-flex items-center gap-1.5 transition-colors ${
                 sourceTab === "api"
                   ? "bg-accent/10 text-accent"
                   : "text-muted hover:text-text"
@@ -803,7 +803,7 @@ export function ImportPage() {
             <button
               type="button"
               onClick={() => setSourceTab("csv")}
-              className={`px-3 py-1.5 text-sm rounded-md inline-flex items-center gap-1.5 transition-colors ${
+              className={`px-3 py-1.5 text-sm rounded-full inline-flex items-center gap-1.5 transition-colors ${
                 sourceTab === "csv"
                   ? "bg-accent/10 text-accent"
                   : "text-muted hover:text-text"
@@ -1102,7 +1102,7 @@ export function ImportPage() {
                   <div className="inline-flex bg-panel2 border border-border rounded-lg p-0.5">
                     <button
                       onClick={() => setMode("merge")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
                         mode === "merge"
                           ? "bg-accent text-accent-fg"
                           : "text-muted hover:text-text"
@@ -1114,7 +1114,7 @@ export function ImportPage() {
                     </button>
                     <button
                       onClick={() => setMode("replace")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
                         mode === "replace"
                           ? "bg-accent text-accent-fg"
                           : "text-muted hover:text-text"
@@ -1835,7 +1835,7 @@ export function ImportPage() {
             <button
               type="button"
               onClick={() => setBackupTab("local")}
-              className={`px-3 py-1.5 text-sm rounded-md inline-flex items-center gap-1.5 transition-colors ${
+              className={`px-3 py-1.5 text-sm rounded-full inline-flex items-center gap-1.5 transition-colors ${
                 backupTab === "local"
                   ? "bg-accent/10 text-accent"
                   : "text-muted hover:text-text"
@@ -1848,7 +1848,7 @@ export function ImportPage() {
             <button
               type="button"
               onClick={() => setBackupTab("cloud")}
-              className={`px-3 py-1.5 text-sm rounded-md inline-flex items-center gap-1.5 transition-colors ${
+              className={`px-3 py-1.5 text-sm rounded-full inline-flex items-center gap-1.5 transition-colors ${
                 backupTab === "cloud"
                   ? "bg-accent/10 text-accent"
                   : "text-muted hover:text-text"
@@ -2325,7 +2325,7 @@ export function ImportPage() {
                     aria-expanded={syncInfoOpen}
                     aria-label="Как это работает"
                     title="Как это работает"
-                    className={`p-1.5 rounded-md ${
+                    className={`p-1.5 rounded-full ${
                       syncInfoOpen
                         ? "text-accent bg-accent/10"
                         : "text-muted hover:text-accent hover:bg-panel2"
@@ -2409,7 +2409,7 @@ export function ImportPage() {
                         <button
                           key={value}
                           onClick={() => setPushMode(value)}
-                          className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                          className={`px-3 py-1 text-xs rounded-full transition-colors ${
                             active
                               ? "bg-accent text-accent-fg"
                               : "text-muted hover:text-text"
@@ -2491,7 +2491,7 @@ export function ImportPage() {
                         <button
                           key={value}
                           onClick={() => setSnapshotPolicy(value)}
-                          className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                          className={`px-3 py-1 text-xs rounded-full transition-colors ${
                             active
                               ? "bg-accent text-accent-fg"
                               : "text-muted hover:text-text"

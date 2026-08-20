@@ -386,7 +386,7 @@ export function GlobalFilters({
                         key={t.value}
                         onClick={() => f.toggleType(t.value)}
                         className={clsx(
-                          "flex-1 px-2 py-1 text-xs rounded-md border transition-colors",
+                          "flex-1 px-2 py-1 text-xs rounded-full border transition-colors duration-200",
                           f.types.has(t.value)
                             ? "bg-accent text-accent-fg border-accent"
                             : "border-border text-muted hover:text-text"
@@ -488,18 +488,24 @@ export function GlobalFilters({
               className={clsx("contents", !showDateRange && "pointer-events-none")}
               inert={!showDateRange}
             >
-            <div className="flex bg-panel2 rounded-lg p-0.5 border border-border shrink-0">
+            {/* Дорожка та же, что у всех переключателей продукта. Прежде здесь
+                стояло скругление в шесть пикселей — и в одной строке с
+                соседними пилюлями («Без фильтрации», «Счета», «Валюта») это
+                читалось как чужая деталь. */}
+            <div className="inline-flex rounded-full p-1 bg-panel2 border border-border shadow-tray shrink-0">
               {PRESETS.map((p) => (
                 <button
                   key={p.value}
                   onClick={() => periodCtl.setPreset(p.value)}
                   title={p.title}
+                  aria-pressed={periodCtl.preset === p.value}
                   className={clsx(
                     // No weight change on active — keeps the control width stable.
-                    "px-2 py-1 text-xs rounded-md transition-colors",
+                    "px-2 py-1 text-xs rounded-full whitespace-nowrap transition-colors duration-200",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
                     periodCtl.preset === p.value
-                      ? "bg-accent text-accent-fg"
-                      : "text-muted hover:text-text"
+                      ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
+                      : "text-muted hover:text-text hover:bg-panel/70"
                   )}
                 >
                   {p.label}

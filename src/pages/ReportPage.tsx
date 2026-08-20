@@ -360,12 +360,12 @@ export function ReportPage() {
 
       <div className="flex items-center gap-2 flex-wrap">
         <span className="label">Разбивка</span>
-        <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+        <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
           {SCALES.map((s) => (
             <button
               key={s}
               onClick={() => setScale(s)}
-              className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
                 scale === s ? "bg-accent text-accent-fg" : "text-muted hover:text-text"
               }`}
             >

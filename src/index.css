@@ -213,6 +213,30 @@ h2,
     @apply btn bg-expense/10 text-expense hover:bg-expense/20 border border-expense/30;
   }
   /* Solid warning action (e.g. the confirm button of a «warning»-tone dialog). */
+  /**
+   * Кнопка-значок в строке таблицы: правка, копия, удаление, «показать».
+   *
+   * Заведена отдельно, потому что таблицы разошлись: в ленте операций такие
+   * кнопки были самодельными, со скруглением в шесть пикселей и без заливки, а
+   * на «Счетах» брали общий `.btn-ghost` — и после перехода кнопок на пилюли
+   * превратились в залитые кружки. В одном продукте два разных вида у одного и
+   * того же действия.
+   *
+   * Выбран тихий вариант: в покое — только значок, подложка появляется под
+   * курсором. В ленте таких кнопок полторы сотни на экран, и постоянные кружки
+   * превращают столбец в рябь; на «Счетах» строк меньше, но правило одно.
+   */
+  .btn-icon {
+    @apply inline-flex items-center justify-center p-1.5 rounded-full text-muted
+           transition-colors duration-200
+           hover:text-accent hover:bg-panel2
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
+  }
+  /** То же, но действие разрушительное: подсветка красная. */
+  .btn-icon-danger {
+    @apply btn-icon hover:text-expense hover:bg-expense/10;
+  }
+
   .btn-warn {
     @apply btn bg-warn text-white hover:opacity-90;
   }

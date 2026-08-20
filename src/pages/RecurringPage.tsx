@@ -557,12 +557,12 @@ export function RecurringPage() {
       />
 
       {/* Page-level tabs: Zen plans vs our own detection (#3). */}
-      <div className="flex gap-1 bg-panel2 rounded-lg p-1 border border-border w-fit">
+      <div className="flex gap-1 bg-panel2 rounded-full p-1 border border-border shadow-tray w-fit">
         {PAGE_TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setPageTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
               pageTab === t.id ? "bg-accent text-accent-fg" : "text-muted hover:text-text"
             }`}
           >
@@ -604,7 +604,7 @@ export function RecurringPage() {
                       onClick={() => setPlannedTab(t.id)}
                       disabled={empty}
                       title={empty ? "Нет таких операций в выбранном периоде" : undefined}
-                      className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                      className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
                         effectiveTab === t.id
                           ? "bg-accent text-accent-fg"
                           : empty
@@ -672,7 +672,7 @@ export function RecurringPage() {
                         {queued ? (
                           <button
                             type="button"
-                            className="shrink-0 p-1.5 rounded-md text-muted hover:text-fg hover:bg-panel"
+                            className="btn-icon shrink-0"
                             aria-label="Вернуть операцию"
                             title="Удаление ждёт отправки — вернуть"
                             onClick={() =>
@@ -684,7 +684,7 @@ export function RecurringPage() {
                         ) : (
                           <button
                             type="button"
-                            className="shrink-0 p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10"
+                            className="btn-icon-danger shrink-0"
                             aria-label="Удалить операцию"
                             title={
                               p.repeating === false

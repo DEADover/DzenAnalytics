@@ -92,7 +92,7 @@ export function InfoPopover({
         aria-label={label}
         title={label}
         className={clsx(
-          "p-1.5 rounded-md shrink-0",
+          "p-1.5 rounded-full shrink-0",
           open
             ? "text-accent bg-accent/10"
             : "text-muted hover:text-accent hover:bg-panel2"

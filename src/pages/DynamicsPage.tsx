@@ -228,13 +228,13 @@ export function DynamicsPage() {
 
       <div className="card card-pad space-y-4">
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+          <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
             {METRICS.map((m) => (
               <button
                 key={m}
                 onClick={() => setMetric(m)}
                 className={clsx(
-                  "px-2.5 py-1 text-xs rounded-md transition-colors",
+                  "px-2.5 py-1 text-xs rounded-full transition-colors",
                   metric === m ? "bg-accent text-accent-fg" : "text-muted hover:text-text"
                 )}
               >
@@ -243,13 +243,13 @@ export function DynamicsPage() {
             ))}
           </div>
 
-          <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+          <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
             {GRANULARITIES.map((g) => (
               <button
                 key={g}
                 onClick={() => setGranularity(g)}
                 className={clsx(
-                  "px-2.5 py-1 text-xs rounded-md transition-colors",
+                  "px-2.5 py-1 text-xs rounded-full transition-colors",
                   granularity === g
                     ? "bg-accent text-accent-fg"
                     : "text-muted hover:text-text"

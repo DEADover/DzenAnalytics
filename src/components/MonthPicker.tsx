@@ -100,7 +100,7 @@ export function MonthPicker({
   return (
     <div
       className={clsx(
-        "flex items-center bg-panel2 rounded-lg p-0.5 border",
+        "flex items-center bg-panel2 rounded-full p-1 border shadow-tray",
         active ? "border-accent" : "border-border"
       )}
       title={isYear ? "Перейти к одному году" : "Перейти к одному месяцу"}
@@ -108,7 +108,7 @@ export function MonthPicker({
       <button
         onClick={() => onStep(-1)}
         disabled={!canPrev}
-        className="p-1 rounded hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed"
+        className="p-1 rounded-full hover:text-accent hover:bg-panel/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         title={isYear ? "Предыдущий год" : "Предыдущий месяц"}
       >
         <ChevronLeft className="w-4 h-4" />
@@ -120,7 +120,7 @@ export function MonthPicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         className={clsx(
-          "px-2 py-1 text-xs rounded-md flex items-center gap-1.5 transition-colors min-w-[118px] justify-center",
+          "px-2.5 py-1 text-xs rounded-full flex items-center gap-1.5 transition-colors duration-200 min-w-[118px] justify-center",
           active ? "bg-accent text-accent-fg font-medium" : "text-muted hover:text-text"
         )}
       >
@@ -132,7 +132,7 @@ export function MonthPicker({
       <button
         onClick={() => onStep(1)}
         disabled={!canNext}
-        className="p-1 rounded hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed"
+        className="p-1 rounded-full hover:text-accent hover:bg-panel/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         title={isYear ? "Следующий год" : "Следующий месяц"}
       >
         <ChevronRight className="w-4 h-4" />
@@ -174,7 +174,7 @@ export function MonthPicker({
                 <button
                   onClick={() => setViewYear((y) => y - 1)}
                   disabled={viewYear <= minY}
-                  className="p-1 rounded hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="p-1 rounded-full hover:text-accent hover:bg-panel/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   title="Предыдущий год"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -183,7 +183,7 @@ export function MonthPicker({
                 <button
                   onClick={() => setViewYear((y) => y + 1)}
                   disabled={viewYear >= maxY}
-                  className="p-1 rounded hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="p-1 rounded-full hover:text-accent hover:bg-panel/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   title="Следующий год"
                 >
                   <ChevronRight className="w-4 h-4" />

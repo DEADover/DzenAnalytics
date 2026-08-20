@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, Calendar, Coins, Tag, X, ArrowUpDown, Pencil, Trash2 } from "lucide-react";
+import { Search, Calendar, Coins, Tag, X, ArrowUpDown, Pencil, Trash2, XSquare } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -444,6 +444,7 @@ export function SearchPage() {
             onClick={() => setSelected(new Set())}
             className="btn-ghost text-sm text-muted"
           >
+            <XSquare className="w-3.5 h-3.5" />
             Снять выделение
           </button>
         </div>

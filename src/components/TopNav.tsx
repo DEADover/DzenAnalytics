@@ -220,7 +220,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             Внутри: сперва данные (поиск, разрез, обмен с облаком), затем
             системные кнопки. Разделены не рамкой ради рамки, а смыслом. */}
         <div className="flex items-center gap-3 md:gap-6 shrink-0">
-        <div className="inline-flex items-stretch shrink-0 rounded-lg border border-border bg-panel2 overflow-hidden">
+        <div className="inline-flex items-stretch shrink-0 rounded-full border border-border bg-panel2 overflow-hidden">
           <button
             onClick={onOpenPalette}
             className="p-1.5 text-muted hover:text-accent hover:bg-accent/10 transition-colors"
@@ -251,7 +251,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
           title="Настройки"
           className={({ isActive }) =>
             clsx(
-              "group relative p-1.5 rounded-lg transition-colors",
+              "group relative p-1.5 rounded-full transition-colors duration-200",
               isActive
                 ? "bg-accent/10 text-accent"
                 : "text-muted hover:text-accent hover:bg-accent/10"
@@ -269,7 +269,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
           title="Справка"
           className={({ isActive }) =>
             clsx(
-              "group relative p-1.5 rounded-lg transition-colors",
+              "group relative p-1.5 rounded-full transition-colors duration-200",
               isActive
                 ? "bg-accent/10 text-accent"
                 : "text-muted hover:text-accent hover:bg-accent/10"
@@ -283,7 +283,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         {/* Mobile burger */}
         <button
           onClick={() => setMobileOpen(true)}
-          className="lg:hidden p-1.5 rounded-lg border border-border bg-panel2 text-muted"
+          className="lg:hidden p-1.5 rounded-full border border-border bg-panel2 text-muted"
           title="Меню"
         >
           <Menu className="w-4 h-4" />

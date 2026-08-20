@@ -648,7 +648,7 @@ export function CategoriesPage() {
                         onClick={() => (allExpanded ? collapseAll() : expandAll())}
                         title={allExpanded ? "Свернуть все" : "Развернуть все"}
                         aria-label={allExpanded ? "Свернуть все" : "Развернуть все"}
-                        className="-m-1 p-1 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                        className="-m-1 p-1 rounded-full text-muted transition-colors hover:text-accent hover:bg-panel2"
                       >
                         <ChevronDown
                           className={`w-4 h-4 transition-transform duration-300 ${
@@ -727,7 +727,7 @@ export function CategoriesPage() {
                                 e.stopPropagation();
                                 toggleExpand(node.name);
                               }}
-                              className="p-1 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                              className="p-1 rounded-full text-muted transition-colors hover:text-accent hover:bg-panel2"
                               title={isOpen ? "Свернуть" : "Подкатегории"}
                             >
                               {isOpen ? (

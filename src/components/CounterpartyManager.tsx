@@ -15,6 +15,7 @@ import {
   X,
   Combine,
   UserPlus,
+  XSquare,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -596,6 +597,7 @@ export function CounterpartyManager() {
               onClick={() => setSelected(new Set())}
               className="btn-ghost text-sm text-muted"
             >
+              <XSquare className="w-3.5 h-3.5" />
               Снять выделение
             </button>
           </div>

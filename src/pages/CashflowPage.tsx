@@ -270,17 +270,17 @@ export function CashflowPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+            <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
               <button
                 onClick={() => setVizMode("bars")}
-                className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${vizMode === "bars" ? "bg-accent text-accent-fg" : "text-muted"}`}
+                className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 ${vizMode === "bars" ? "bg-accent text-accent-fg" : "text-muted"}`}
               >
                 <BarChart3 className="w-3 h-3" />
                 Бары
               </button>
               <button
                 onClick={() => setVizMode("stream")}
-                className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${vizMode === "stream" ? "bg-accent text-accent-fg" : "text-muted"}`}
+                className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 ${vizMode === "stream" ? "bg-accent text-accent-fg" : "text-muted"}`}
               >
                 <Layers className="w-3 h-3" />
                 Поток
@@ -523,21 +523,21 @@ export function CashflowPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+              <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
                 <button
                   onClick={() => setYoyKind("expense")}
-                  className={`px-3 py-1 text-xs rounded-md ${yoyKind === "expense" ? "bg-expense text-white" : "text-muted"}`}
+                  className={`px-3 py-1 text-xs rounded-full ${yoyKind === "expense" ? "bg-expense text-white" : "text-muted"}`}
                 >
                   Расходы
                 </button>
                 <button
                   onClick={() => setYoyKind("income")}
-                  className={`px-3 py-1 text-xs rounded-md ${yoyKind === "income" ? "bg-income text-white" : "text-muted"}`}
+                  className={`px-3 py-1 text-xs rounded-full ${yoyKind === "income" ? "bg-income text-white" : "text-muted"}`}
                 >
                   Доходы
                 </button>
               </div>
-              <div className="flex items-center gap-1 bg-panel2 rounded-lg p-1 border border-border">
+              <div className="flex items-center gap-1 bg-panel2 rounded-full p-1 border border-border shadow-tray">
                 <button
                   onClick={() =>
                     setYoyYear((y) => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, AlertCircle, Pencil, Trash2, ShieldOff } from "lucide-react";
+import { Copy, AlertCircle, Pencil, Trash2, ShieldOff, XSquare } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -308,6 +308,7 @@ export function DuplicatesPage() {
             onClick={() => setSelected(new Set())}
             className="btn-ghost text-sm text-muted"
           >
+            <XSquare className="w-3.5 h-3.5" />
             Снять выделение
           </button>
         </div>

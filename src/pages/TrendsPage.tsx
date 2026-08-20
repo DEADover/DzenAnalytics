@@ -173,32 +173,32 @@ export function TrendsPage() {
         hint="Помесячная динамика и паттерны по дням недели."
         right={
           <div className="flex flex-wrap gap-2">
-            <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+            <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
               <button
                 onClick={() => setKind("expense")}
-                className={`px-3 py-1 text-xs rounded-md ${kind === "expense" ? "bg-expense text-white" : "text-muted"}`}
+                className={`px-3 py-1 text-xs rounded-full ${kind === "expense" ? "bg-expense text-white" : "text-muted"}`}
               >
                 Расходы
               </button>
               <button
                 onClick={() => setKind("income")}
-                className={`px-3 py-1 text-xs rounded-md ${kind === "income" ? "bg-income text-white" : "text-muted"}`}
+                className={`px-3 py-1 text-xs rounded-full ${kind === "income" ? "bg-income text-white" : "text-muted"}`}
               >
                 Доходы
               </button>
             </div>
-            <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+            <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
               <button
                 onClick={() => setLevel("top")}
                 title="Группировать по верхнеуровневым категориям"
-                className={`px-3 py-1 text-xs rounded-md ${level === "top" ? "bg-accent text-accent-fg" : "text-muted"}`}
+                className={`px-3 py-1 text-xs rounded-full ${level === "top" ? "bg-accent text-accent-fg" : "text-muted"}`}
               >
                 Крупно
               </button>
               <button
                 onClick={() => setLevel("full")}
                 title="Разбивать по подкатегориям"
-                className={`px-3 py-1 text-xs rounded-md ${level === "full" ? "bg-accent text-accent-fg" : "text-muted"}`}
+                className={`px-3 py-1 text-xs rounded-full ${level === "full" ? "bg-accent text-accent-fg" : "text-muted"}`}
               >
                 Детально
               </button>

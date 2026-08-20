@@ -213,7 +213,7 @@ function DropdownMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         style={minWidth ? { minWidth } : undefined}
-        className={`px-3 py-1.5 text-xs rounded-lg border flex items-center gap-1.5 whitespace-nowrap ${
+        className={`px-3 py-1.5 text-xs rounded-full border flex items-center gap-1.5 whitespace-nowrap transition-colors duration-200 ${
           active
             ? "bg-accent/10 border-accent/40 text-accent"
             : "bg-panel2 border-border text-muted hover:text-text"
@@ -1736,10 +1736,10 @@ export function AccountsPage() {
                 compactSummary
               />
             )}
-            <div className="flex bg-panel2 rounded-lg p-1 border border-border shrink-0">
+            <div className="flex gap-0.5 bg-panel2 rounded-full p-1 border border-border shadow-tray shrink-0">
             <button
               onClick={() => setView("stacked")}
-              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${view === "stacked" ? "bg-accent text-accent-fg" : "text-muted"}`}
+              className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 transition-colors duration-200 ${view === "stacked" ? "bg-accent text-accent-fg" : "text-muted"}`}
               title="Разложить по счетам"
             >
               <Layers className="w-3 h-3" />
@@ -1747,7 +1747,7 @@ export function AccountsPage() {
             </button>
             <button
               onClick={() => setView("single")}
-              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${view === "single" ? "bg-accent text-accent-fg" : "text-muted"}`}
+              className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 transition-colors duration-200 ${view === "single" ? "bg-accent text-accent-fg" : "text-muted"}`}
               title="Одной линией: активы минус долги"
             >
               <LineChartIcon className="w-3 h-3" />
@@ -2140,7 +2140,7 @@ export function AccountsPage() {
           <div
             role="group"
             aria-label="Вид списка счетов"
-            className="ml-auto flex bg-panel2 rounded-lg p-1 border border-border"
+            className="ml-auto flex gap-0.5 bg-panel2 rounded-full p-1 border border-border shadow-tray"
           >
             <button
               onClick={() =>
@@ -2154,7 +2154,7 @@ export function AccountsPage() {
                 })
               }
               aria-pressed={accountsView === "table"}
-              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${
+              className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 transition-colors duration-200 ${
                 accountsView === "table" ? "bg-accent text-accent-fg" : "text-muted"
               }`}
             >
@@ -2175,7 +2175,7 @@ export function AccountsPage() {
                 })
               }
               aria-pressed={accountsView === "cards"}
-              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 ${
+              className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 transition-colors duration-200 ${
                 accountsView === "cards" ? "bg-accent text-accent-fg" : "text-muted"
               }`}
             >
@@ -2185,7 +2185,7 @@ export function AccountsPage() {
           </div>
           <AppTooltip content={listHint} placement="bottom">
             <button
-              className="btn-ghost !p-1.5 text-muted hover:text-accent shrink-0"
+              className="btn-icon shrink-0"
               aria-label="Как читать список счетов"
             >
               <HelpCircle className="w-4 h-4" />
@@ -2636,7 +2636,7 @@ export function AccountsPage() {
                               e.stopPropagation();
                               openAccount(a.account);
                             }}
-                            className="btn-ghost !p-1.5 text-muted hover:text-accent"
+                            className="btn-icon"
                             title="Список операций"
                             aria-label="Список операций"
                           >
@@ -2652,10 +2652,9 @@ export function AccountsPage() {
                             }}
                             aria-pressed={sliceExcludedAccounts.has(a.account)}
                             className={clsx(
-                              "btn-ghost !p-1.5",
-                              sliceExcludedAccounts.has(a.account)
-                                ? "text-warn bg-warn/10"
-                                : "text-muted hover:text-accent"
+                              "btn-icon",
+                              sliceExcludedAccounts.has(a.account) &&
+                                "text-warn bg-warn/10 hover:text-warn"
                             )}
                             title={
                               sliceExcludedAccounts.has(a.account)
@@ -2683,7 +2682,7 @@ export function AccountsPage() {
                                 e.stopPropagation();
                                 openAccountEditor(a.id);
                               }}
-                              className="btn-ghost !p-1.5 text-muted hover:text-accent"
+                              className="btn-icon"
                               title="Изменить счёт"
                               aria-label="Изменить счёт"
                             >

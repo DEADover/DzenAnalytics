@@ -71,16 +71,16 @@ export function TopPage() {
         title="Топ"
         hint="Категории, получатели и крупнейшие операции."
         right={
-          <div className="flex bg-panel2 rounded-lg p-1 border border-border">
+          <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
             <button
               onClick={() => setKind("expense")}
-              className={`px-3 py-1 text-xs rounded-md ${kind === "expense" ? "bg-expense text-white" : "text-muted"}`}
+              className={`px-3 py-1 text-xs rounded-full ${kind === "expense" ? "bg-expense text-white" : "text-muted"}`}
             >
               Расходы
             </button>
             <button
               onClick={() => setKind("income")}
-              className={`px-3 py-1 text-xs rounded-md ${kind === "income" ? "bg-income text-white" : "text-muted"}`}
+              className={`px-3 py-1 text-xs rounded-full ${kind === "income" ? "bg-income text-white" : "text-muted"}`}
             >
               Доходы
             </button>

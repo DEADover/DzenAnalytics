@@ -19,6 +19,7 @@ import {
   Coins,
   ChevronDown,
   PiggyBank,
+  XSquare,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDataStore } from "../store/useDataStore";
@@ -926,6 +927,7 @@ export function TransactionsPage() {
               onClick={() => setSelected(new Set())}
               className="btn-ghost text-sm text-muted"
             >
+              <XSquare className="w-3.5 h-3.5" />
               Снять выделение
             </button>
           </div>
@@ -1311,7 +1313,7 @@ function Row({
             e.stopPropagation();
             onEdit();
           }}
-          className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 transition-colors"
+          className="btn-icon"
           title="Редактировать"
           aria-label="Редактировать операцию"
         >
@@ -1323,7 +1325,7 @@ function Row({
               e.stopPropagation();
               onCopy();
             }}
-            className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 transition-colors"
+            className="btn-icon"
             title="Копировать — та же операция сегодняшним днём"
             aria-label="Копировать операцию"
           >
@@ -1335,7 +1337,7 @@ function Row({
             e.stopPropagation();
             onDelete();
           }}
-          className="p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10 transition-colors"
+          className="btn-icon-danger"
           title="Удалить"
           aria-label="Удалить операцию"
         >
