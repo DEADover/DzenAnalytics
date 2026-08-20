@@ -32,6 +32,7 @@ import {
   WIDGETS,
   isDefaultLayout,
   widgetMeta,
+  widgetView,
   type WidgetMeta,
   type WidgetPlacement,
 } from "../../lib/dashboardLayout";
@@ -44,6 +45,7 @@ import { pluralRu } from "../../lib/plural";
 export function WidgetShell({
   placement,
   meta,
+  bare,
   editing,
   dragging,
   dropTarget,
@@ -58,6 +60,8 @@ export function WidgetShell({
 }: {
   placement: WidgetPlacement;
   meta: WidgetMeta;
+  /** Этот вариант виджета рисует себя сам, без поддона. */
+  bare: boolean;
   editing: boolean;
   /** Эту плитку сейчас везут. */
   dragging: boolean;
@@ -75,6 +79,7 @@ export function WidgetShell({
   children: ReactNode;
 }) {
   const setHidden = useDashboardLayoutStore((s) => s.setHidden);
+  const setView = useDashboardLayoutStore((s) => s.setView);
 
   const drag = editing
     ? {
@@ -158,6 +163,33 @@ export function WidgetShell({
           <ChevronRight className="w-4 h-4" aria-hidden="true" />
         </button>
       </span>
+      {/* Варианты оформления: одно и то же место на главной, разный ответ.
+          Дорожкой, а не списком, — их два, и оба видно сразу. */}
+      {meta.views && meta.views.length > 1 && (
+        <span className="flex items-center gap-0.5 rounded-full bg-panel2 border border-border p-0.5 shrink-0">
+          {meta.views.map((v) => {
+            const on = v.id === (widgetView(meta, placement.view)?.id ?? v.id);
+            return (
+              <button
+                key={v.id}
+                type="button"
+                title={`${v.title}\n${v.hint}`}
+                onClick={() => void setView(placement.key, v.id)}
+                className={clsx(
+                  "px-2.5 h-6 rounded-full text-[12px] font-semibold leading-none",
+                  "transition-colors duration-200",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+                  on
+                    ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
+                    : "text-muted hover:text-text"
+                )}
+              >
+                {v.title}
+              </button>
+            );
+          })}
+        </span>
+      )}
       <button
         type="button"
         className="btn-icon-danger shrink-0"
@@ -203,7 +235,7 @@ export function WidgetShell({
           editing && !meta.live && "opacity-50 pointer-events-none select-none"
         )}
       >
-        {meta.bare ? (
+        {bare ? (
           children
         ) : (
           <div className="tray h-full flex flex-col">

@@ -20,6 +20,7 @@ import {
   removeWidget,
   setRowLinks,
   setWidgetHidden,
+  setWidgetView,
   shiftWidget,
   type WidgetPlacement,
 } from "../lib/dashboardLayout";
@@ -42,6 +43,8 @@ interface State {
   addLinks: () => Promise<void>;
   /** Убрать из раскладки насовсем — только то, что человек сам завёл. */
   remove: (key: string) => Promise<void>;
+  /** Выбрать вариант оформления виджета. */
+  setView: (key: string, view: string) => Promise<void>;
   /** Задать набор кнопок дорожки. */
   setLinks: (key: string, links: readonly (string | null)[]) => Promise<void>;
   reset: () => Promise<void>;
@@ -72,6 +75,7 @@ export const useDashboardLayoutStore = create<State>((set, get) => {
     setHidden: (key, hidden) => apply(setWidgetHidden(get().layout, key, hidden)),
     addLinks: () => apply(addLinksRow(get().layout)),
     remove: (key) => apply(removeWidget(get().layout, key)),
+    setView: (key, view) => apply(setWidgetView(get().layout, key, view)),
     setLinks: (key, links) => apply(setRowLinks(get().layout, key, links)),
     reset: () => apply(defaultLayout()),
   };

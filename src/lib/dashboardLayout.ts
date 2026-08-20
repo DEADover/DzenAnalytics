@@ -33,6 +33,18 @@ export const WIDGET_KINDS = [
 
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
 
+/**
+ * Вариант оформления виджета: одно и то же место на главной, разный ответ.
+ * Первый в списке — тот, что стоит по умолчанию.
+ */
+export interface WidgetView {
+  id: string;
+  title: string;
+  hint: string;
+  /** Этот вариант рисует себя сам, без поддона с двойным кантом. */
+  bare?: boolean;
+}
+
 export interface WidgetMeta {
   kind: WidgetKind;
   /** Как виджет называется в настройке раскладки. */
@@ -47,6 +59,8 @@ export interface WidgetMeta {
   span: WidgetSpan;
   /** Рисует себя сам, без поддона с двойным кантом. */
   bare?: boolean;
+  /** Варианты оформления, между которыми человек выбирает в настройке. */
+  views?: readonly WidgetView[];
   /** Высота по содержимому, а не общая высота ряда. */
   autoHeight?: boolean;
   /** Таких виджетов на главной может стоять несколько. */
@@ -89,7 +103,19 @@ export const WIDGETS: readonly WidgetMeta[] = [
     title: "Итоги месяца",
     hint: "Свободные деньги, темп трат, доход и расход",
     span: 1,
-    bare: true,
+    views: [
+      {
+        id: "open",
+        title: "Открытый",
+        hint: "Крупное число прямо на фоне страницы, без поддона",
+        bare: true,
+      },
+      {
+        id: "split",
+        title: "Разворот",
+        hint: "В поддоне: типографика слева, числа рейкой справа",
+      },
+    ],
   },
   {
     kind: "accounts",
@@ -149,12 +175,28 @@ export function widgetMeta(kind: WidgetKind): WidgetMeta {
   return meta;
 }
 
+/**
+ * Выбранный вариант оформления. Неизвестный или отсутствующий — первый в
+ * списке: у виджета без вариантов вариантов и нет.
+ */
+export function widgetView(meta: WidgetMeta, id?: string): WidgetView | undefined {
+  if (!meta.views || meta.views.length === 0) return undefined;
+  return meta.views.find((v) => v.id === id) ?? meta.views[0];
+}
+
+/** Рисует ли виджет себя сам — зависит от варианта, а не только от вида. */
+export function isBareWidget(meta: WidgetMeta, id?: string): boolean {
+  return widgetView(meta, id)?.bare ?? meta.bare ?? false;
+}
+
 /** Место виджета на главной. Убранный остаётся в списке — чтобы вернуться туда же. */
 export interface WidgetPlacement {
   /** Уникален в раскладке. У одиночных виджетов совпадает с видом. */
   key: string;
   kind: WidgetKind;
   hidden?: boolean;
+  /** Выбранный вариант оформления. Пусто — тот, что первым в списке видов. */
+  view?: string;
   /** Только у дорожки: что стоит на каждом из шести мест. */
   links?: LinkSlots;
 }
@@ -212,7 +254,13 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
 
   for (const item of arr) {
     if (!item || typeof item !== "object") continue;
-    const rec = item as { key?: unknown; kind?: unknown; hidden?: unknown; links?: unknown };
+    const rec = item as {
+      key?: unknown;
+      kind?: unknown;
+      hidden?: unknown;
+      view?: unknown;
+      links?: unknown;
+    };
     const kind = typeof rec.kind === "string" ? BY_KIND.get(rec.kind) : undefined;
     if (!kind) continue;
     // У одиночного виджета вид и есть ключ: второй такой же — уже повтор.
@@ -221,6 +269,11 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
     if (keys.has(key)) continue;
 
     const placement: WidgetPlacement = { key, kind: kind.kind };
+    // Вариант оформления берём только известный: сохранённый мог прийти из
+    // версии, где вариантов было больше.
+    if (typeof rec.view === "string" && kind.views?.some((v) => v.id === rec.view)) {
+      placement.view = rec.view;
+    }
     if (kind.kind === "links") {
       const links = cleanLinks(rec.links);
       if (!links) continue;
@@ -400,6 +453,7 @@ export function setWidgetHidden(
   return layout.map((p) => {
     if (p.key !== key) return p;
     const next: WidgetPlacement = { key: p.key, kind: p.kind };
+    if (p.view) next.view = p.view;
     if (p.links) next.links = p.links;
     if (hidden) next.hidden = true;
     return next;
@@ -472,12 +526,33 @@ export function setRowLinks(
   return layout.map((p) => (p.key === key ? { ...p, links: clean } : p));
 }
 
+/** Выбрать вариант оформления виджета. */
+export function setWidgetView(
+  layout: readonly WidgetPlacement[],
+  key: string,
+  view: string
+): WidgetPlacement[] {
+  return layout.map((p) => {
+    if (p.key !== key) return p;
+    const meta = widgetMeta(p.kind);
+    if (!meta.views?.some((v) => v.id === view)) return p;
+    // Вариант по умолчанию не храним: раскладка тогда остаётся стандартной.
+    if (view === meta.views[0].id) {
+      const next: WidgetPlacement = { key: p.key, kind: p.kind };
+      if (p.links) next.links = p.links;
+      if (p.hidden) next.hidden = true;
+      return next;
+    }
+    return { ...p, view };
+  });
+}
+
 /** Совпадает ли раскладка со стандартной — по ней гаснет кнопка «Сбросить». */
 export function isDefaultLayout(layout: readonly WidgetPlacement[]): boolean {
   if (layout.length !== DEFAULT_LAYOUT.length) return false;
   return layout.every((p, i) => {
     const d = DEFAULT_LAYOUT[i];
-    if (p.key !== d.key || p.kind !== d.kind || p.hidden) return false;
+    if (p.key !== d.key || p.kind !== d.kind || p.hidden || p.view) return false;
     return String(p.links ?? []) === String(d.links ?? []);
   });
 }

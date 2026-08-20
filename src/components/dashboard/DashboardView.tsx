@@ -37,7 +37,13 @@ import {
   WidgetShell,
 } from "./WidgetLayout";
 import { useWidgetDrag } from "../../hooks/useWidgetDrag";
-import { packLayout, widgetMeta, type WidgetPlacement } from "../../lib/dashboardLayout";
+import {
+  isBareWidget,
+  packLayout,
+  widgetMeta,
+  widgetView,
+  type WidgetPlacement,
+} from "../../lib/dashboardLayout";
 import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
 import { formatMoney, monthLabel, formatDate } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
@@ -98,12 +104,22 @@ function StatRow({
 
 /* ─────────────────────────────  итоги месяца  ───────────────────────────── */
 
+/** Подпись пилюли месяца: название и сколько дней осталось. */
+function monthPill(m: DashboardModel): string {
+  return (
+    monthName(m.ym) +
+    (m.month.left === 0
+      ? " · последний день"
+      : ` · осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`)
+  );
+}
+
 /**
- * Виджет без поддона: крупная типографика на голом фоне страницы. В обойме с
- * двойным кантом он читался бы как ещё одна карточка с числом, а это заголовок
- * всего экрана.
+ * Вариант «Открытый»: без поддона, крупная типографика на голом фоне страницы.
+ * В обойме с двойным кантом он читался бы как ещё одна карточка с числом, а это
+ * заголовок всего экрана.
  */
-function MonthHero({ m }: { m: DashboardModel }) {
+function HeroOpen({ m }: { m: DashboardModel }) {
   const over = m.pace === null ? null : m.pace - 1;
   return (
     <div className="flex flex-col gap-5 h-full">
@@ -113,10 +129,7 @@ function MonthHero({ m }: { m: DashboardModel }) {
           чему-то, а не как заголовок экрана. Разрядка при этом меньше
           прежней: чем крупнее буквы, тем меньше её нужно. */}
       <h1 className="self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold">
-        {monthName(m.ym)}
-        {m.month.left === 0
-          ? " · последний день"
-          : ` · осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`}
+        {monthPill(m)}
       </h1>
 
       <div
@@ -213,6 +226,135 @@ function MonthHero({ m }: { m: DashboardModel }) {
   );
 }
 
+/** Строка рейки: подпись сверху, число под ней, всё по правому краю. */
+function RailRow({ label, value, tone }: { label: string; value: string; tone?: "income" | "expense" }) {
+  return (
+    <div className="text-right">
+      <span className="text-[11px] uppercase tracking-[0.1em] text-muted">{label}</span>
+      <b
+        className={`block font-mono tabular-nums font-semibold text-[15.5px] mt-0.5 whitespace-nowrap ${
+          tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""
+        }`}
+      >
+        {value}
+      </b>
+    </div>
+  );
+}
+
+/**
+ * Вариант «Разворот»: то же число, но в поддоне и с рейкой чисел справа.
+ *
+ * Волосок делит карточку надвое: слева типографика и два действия, справа
+ * четыре числа, растянутые на всю высоту. Внизу слева — сколько месяца
+ * пройдено: без неё низ колонки пустовал, а вопрос «много ли ещё впереди»
+ * ровно тот, что задают, глядя на остаток.
+ */
+function HeroSplit({ m }: { m: DashboardModel }) {
+  const over = m.pace === null ? null : m.pace - 1;
+  const short = m.free.value < 0;
+  return (
+    <>
+      <h1 className="self-start rounded-full px-3.5 py-1 text-[11px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold">
+        {monthPill(m)}
+      </h1>
+
+      {/* Разворот раскрывается только там, где колонка достаточно широка. На
+          экранах до 1280 треть сетки — около 320 пикселей, и рядом с рейкой
+          крупному числу не остаётся места: тогда рейка уходит вниз, а волосок
+          из вертикального становится горизонтальным. */}
+      <div className="flex-1 min-h-0 mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1px_auto]">
+        <div className="flex flex-col min-w-0">
+          <span className="text-[11px] uppercase tracking-[0.1em] text-muted">
+            {short ? "Не хватает к концу месяца" : "Свободно к концу месяца"}
+          </span>
+          <div
+            className={`font-mono font-semibold tabular-nums text-[36px] 3xl:text-[40px] leading-none tracking-tight mt-2.5 ${
+              short ? "text-expense" : ""
+            }`}
+            style={{ wordSpacing: "-0.22em" }}
+          >
+            {formatMoney(Math.abs(m.free.value), m.base)}
+          </div>
+
+          <p className="text-[13.5px] leading-relaxed text-muted mt-3">
+            {/* Причину нехватки называем ту, что есть на самом деле: доход может
+                быть больше расхода, а в минус уводить ещё не списанные платежи. */}
+            {short
+              ? m.factExpense > m.factIncome
+                ? "Расход месяца уже обогнал доход."
+                : "Запланированные платежи не укладываются в остаток."
+              : "После потраченного и того, что ещё спишется."}
+            {over !== null && Math.abs(over) < 0.005 && " Тратите примерно как обычно."}
+            {over !== null && Math.abs(over) >= 0.005 && (
+              <>
+                {" Темп трат на "}
+                <span className={`font-mono tabular-nums ${over >= 0 ? "text-warn" : "text-income"}`}>
+                  {Math.abs(over * 100).toFixed(0)}%
+                </span>
+                {over >= 0 ? " выше обычного." : " ниже обычного."}
+              </>
+            )}
+          </p>
+
+          {/* Оба действия столбиком: в колонку шириной в треть карточки они
+              рядом не встают, а главное из них должно остаться заметным. */}
+          <div className="flex flex-col items-start gap-2.5 mt-4">
+            <Link
+              to={`/transactions?month=${m.ym}`}
+              className="group inline-flex h-[42px] items-center gap-3 rounded-full pl-5 pr-1.5 bg-text text-panel text-[13.5px] font-medium"
+            >
+              Лента операций
+              <span className="w-[30px] h-[30px] rounded-full bg-panel/20 grid place-items-center transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none">
+                <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </span>
+            </Link>
+            <Link
+              to={`/report?month=${m.ym}`}
+              className="inline-flex h-[42px] items-center rounded-full px-5 bg-panel2 border border-border text-text text-[13.5px] font-medium transition-colors duration-200 hover:border-accent/50 hover:bg-panel2/70"
+            >
+              Месячный отчёт
+            </Link>
+          </div>
+
+          {/* Полоса «месяц пройден» — украшение подвала колонки, и живёт она
+              только в развороте. На узком экране рейка съезжает вниз и место
+              подвала занимает сама, а полоса выталкивала бы карточку за
+              отведённые ей 480 пикселей. */}
+          <div className="hidden xl:block mt-auto pt-4">
+            <div className="flex items-baseline justify-between gap-3 mb-1.5">
+              <span className="text-[11px] uppercase tracking-[0.1em] text-muted whitespace-nowrap">
+                Месяц пройден
+              </span>
+              <span className="font-mono tabular-nums text-[12.5px] font-semibold whitespace-nowrap">
+                {m.month.day} из {m.month.days} {pluralRu(m.month.days, ["дня", "дней", "дней"])}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-panel2 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-accent"
+                style={{ width: `${Math.round(m.month.progress * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-border" />
+
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 content-start xl:flex xl:flex-col xl:justify-between">
+          <RailRow label="Доход" value={formatMoney(m.factIncome, m.base)} tone="income" />
+          <div className="hidden xl:block h-px bg-border" />
+          <RailRow label="Расход" value={formatMoney(m.factExpense, m.base)} tone="expense" />
+          <div className="hidden xl:block h-px bg-border" />
+          <RailRow label="Ещё спишется" value={formatMoney(m.upcomingTotalBase, m.base)} />
+          <div className="hidden xl:block h-px bg-border" />
+          <RailRow label="На счетах" value={formatMoney(m.netWorth, m.base)} />
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function DashboardView() {
   const m = useDashboardModel();
   const transactions = useAnalyticsTransactions();
@@ -285,7 +427,11 @@ export function DashboardView() {
   function widgetBody(p: WidgetPlacement): ReactNode {
     switch (p.kind) {
       case "month":
-        return <MonthHero m={m} />;
+        return widgetView(widgetMeta("month"), p.view)?.id === "split" ? (
+          <HeroSplit m={m} />
+        ) : (
+          <HeroOpen m={m} />
+        );
 
       case "accounts":
         return (
@@ -460,6 +606,7 @@ export function DashboardView() {
               key={p.key}
               placement={p}
               meta={widgetMeta(p.kind)}
+              bare={isBareWidget(widgetMeta(p.kind), p.view)}
               editing={editing}
               dragging={drag.dragKey === p.key}
               dropTarget={

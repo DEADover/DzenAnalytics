@@ -12,9 +12,13 @@ import {
   normalizeLayout,
   packLayout,
   removeWidget,
+  isBareWidget,
   setRowLinks,
   setWidgetHidden,
+  setWidgetView,
   shiftWidget,
+  widgetMeta,
+  widgetView,
   type WidgetPlacement,
 } from "./dashboardLayout";
 
@@ -357,6 +361,62 @@ describe("дорожки кнопок", () => {
   });
 });
 
+describe("варианты оформления", () => {
+  it("выбирает известный вариант", () => {
+    const out = setWidgetView(DEFAULT_LAYOUT, "month", "split");
+    expect(row(out, "month").view).toBe("split");
+  });
+
+  it("неизвестный вариант не берёт", () => {
+    const out = setWidgetView(DEFAULT_LAYOUT, "month", "карусель");
+    expect(row(out, "month").view).toBeUndefined();
+  });
+
+  it("виджету без вариантов вариант не ставит", () => {
+    const out = setWidgetView(DEFAULT_LAYOUT, "accounts", "split");
+    expect(row(out, "accounts").view).toBeUndefined();
+  });
+
+  it("возврат к варианту по умолчанию стирает запись", () => {
+    const split = setWidgetView(DEFAULT_LAYOUT, "month", "split");
+    const back = setWidgetView(split, "month", "open");
+    expect(row(back, "month").view).toBeUndefined();
+    // И раскладка снова считается стандартной.
+    expect(isDefaultLayout(back)).toBe(true);
+  });
+
+  it("сохранённый вариант переживает разбор, выдуманный — нет", () => {
+    const ok = normalizeLayout([{ key: "month", kind: "month", view: "split" }]);
+    expect(row(ok, "month").view).toBe("split");
+    const junk = normalizeLayout([{ key: "month", kind: "month", view: "карусель" }]);
+    expect(row(junk, "month").view).toBeUndefined();
+  });
+
+  it("убранный виджет не теряет своего варианта", () => {
+    const split = setWidgetView(DEFAULT_LAYOUT, "month", "split");
+    expect(row(setWidgetHidden(split, "month", true), "month").view).toBe("split");
+  });
+
+  it("неизвестный или пустой вариант читается как первый", () => {
+    const month = widgetMeta("month");
+    expect(widgetView(month, undefined)?.id).toBe("open");
+    expect(widgetView(month, "карусель")?.id).toBe("open");
+    expect(widgetView(month, "split")?.id).toBe("split");
+    // У виджета без вариантов их и нет.
+    expect(widgetView(widgetMeta("accounts"), "open")).toBeUndefined();
+  });
+
+  it("поддон надевается по варианту, а не только по виду", () => {
+    const month = widgetMeta("month");
+    expect(isBareWidget(month, "open")).toBe(true);
+    expect(isBareWidget(month, "split")).toBe(false);
+    expect(isBareWidget(month, undefined)).toBe(true);
+    // Дорожка кнопок рисует себя сама всегда — вариантов у неё нет.
+    expect(isBareWidget(widgetMeta("links"))).toBe(true);
+    expect(isBareWidget(widgetMeta("accounts"))).toBe(false);
+  });
+});
+
 describe("isDefaultLayout", () => {
   it("узнаёт стандартную раскладку", () => {
     expect(isDefaultLayout(DEFAULT_LAYOUT)).toBe(true);
@@ -368,6 +428,7 @@ describe("isDefaultLayout", () => {
     expect(isDefaultLayout(setWidgetHidden(DEFAULT_LAYOUT, "categories", true))).toBe(false);
     expect(isDefaultLayout(moveWidget(DEFAULT_LAYOUT, "month", "accounts"))).toBe(false);
     expect(isDefaultLayout(addLinksRow(DEFAULT_LAYOUT))).toBe(false);
+    expect(isDefaultLayout(setWidgetView(DEFAULT_LAYOUT, "month", "split"))).toBe(false);
     expect(isDefaultLayout(setRowLinks(DEFAULT_LAYOUT, "links", ["/goals"]))).toBe(false);
     expect(
       isDefaultLayout(setRowLinks(DEFAULT_LAYOUT, "links", [null, ...DEFAULT_LINKS.slice(1)]))
@@ -382,6 +443,18 @@ describe("реестр виджетов", () => {
       expect([1, 2, 3]).toContain(w.span);
       expect(w.title.length).toBeGreaterThan(0);
       expect(w.hint.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("у вариантов оформления имена не повторяются и все подписаны", () => {
+    for (const w of WIDGETS) {
+      if (!w.views) continue;
+      expect(w.views.length).toBeGreaterThan(1);
+      expect(new Set(w.views.map((v) => v.id)).size).toBe(w.views.length);
+      for (const v of w.views) {
+        expect(v.title.length).toBeGreaterThan(0);
+        expect(v.hint.length).toBeGreaterThan(0);
+      }
     }
   });
 
