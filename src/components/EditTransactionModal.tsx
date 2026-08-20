@@ -1192,12 +1192,16 @@ export function EditTransactionModal({
           {isDebt && (
             <>
               <Field label="Операция с долгом">
-                <div className="grid grid-cols-2 gap-1 bg-panel2 border border-border rounded-lg p-0.5 w-full">
+                {/* Та же дорожка, что у «Типа операции» строкой выше: два
+                    переключателя подряд обязаны выглядеть одинаково, иначе
+                    карточка читается собранной из разных мест. */}
+                <div className="grid grid-cols-2 gap-0.5 w-full rounded-full p-1 bg-panel2 border border-border shadow-tray">
                   <Tooltip content="Я дал в долг | Я вернул долг">
                     <button
                       type="button"
                       onClick={() => setDebtOutgoing(true)}
-                      className={`text-xs py-1.5 px-2 rounded-md whitespace-nowrap ${debtOutgoing ? "bg-warn text-white" : "text-muted"}`}
+                      aria-pressed={debtOutgoing}
+                      className={`w-full text-[12.5px] font-medium py-1.5 px-2 rounded-full whitespace-nowrap transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${debtOutgoing ? "bg-warn text-white shadow-[0_6px_16px_-8px_currentColor]" : "text-muted hover:text-text hover:bg-panel/70"}`}
                     >
                       Я дал / вернул
                     </button>
@@ -1206,7 +1210,8 @@ export function EditTransactionModal({
                     <button
                       type="button"
                       onClick={() => setDebtOutgoing(false)}
-                      className={`text-xs py-1.5 px-2 rounded-md whitespace-nowrap ${!debtOutgoing ? "bg-warn text-white" : "text-muted"}`}
+                      aria-pressed={!debtOutgoing}
+                      className={`w-full text-[12.5px] font-medium py-1.5 px-2 rounded-full whitespace-nowrap transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${!debtOutgoing ? "bg-warn text-white shadow-[0_6px_16px_-8px_currentColor]" : "text-muted hover:text-text hover:bg-panel/70"}`}
                     >
                       Мне дали / вернули
                     </button>
