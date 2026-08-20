@@ -81,6 +81,7 @@ import {
 } from "../lib/zenBudgets";
 import { formatNum } from "../lib/format";
 import { budgetCellKey } from "../lib/budgets";
+import { invalidateZenCache } from "../lib/zenCacheMemo";
 import type { ImportMeta } from "../types";
 
 const TOKEN_KEY = "zenmoneyToken";
@@ -748,6 +749,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       });
       await saveZenCache(nextCache);
       invalidateLiveAccounts();
+      invalidateZenCache();
       const mapped = mapZenmoneyDiff(cacheToDiffResponse(nextCache));
       const isFull = fromTs === 0;
 
@@ -1041,6 +1043,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         conflicts = detectConflicts(Object.keys(edits), cache, fresh.transaction);
         cache = applyDiff(cache, fresh); // adopt fresh cloud truth
         await saveZenCache(cache);
+        invalidateZenCache();
         invalidateLiveAccounts();
         set({ serverTimestamp: fresh.serverTimestamp });
         await db.saveJSON(TIMESTAMP_KEY, fresh.serverTimestamp);
@@ -1359,6 +1362,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       });
       await saveZenCache(nextCache);
       invalidateLiveAccounts();
+      invalidateZenCache();
 
       // Prune snapshots that are no longer needed:
       //   • the resurrected `oldId`s — re-created under a new id, so the

@@ -56,6 +56,7 @@ const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн",
   "июл", "авг", "сен", "окт", "ноя", "дек"];
 import type { DashboardModel } from "../../hooks/useDashboardModel";
+import type { PlannedOp } from "../../lib/plannedOps";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
 
@@ -812,6 +813,76 @@ export function UpcomingList({ m }: { m: DashboardModel }) {
  *
  * Отбор и порядок задаёт `buildNotices`; здесь только подача.
  */
+/**
+ * Планы Дзен-мани до конца месяца — второй вид «Запланированных платежей».
+ *
+ * Показываем только расходные: виджет отвечает на «сколько ещё спишется», и
+ * доходные планы с переводами в этот ответ не входят. Иначе итог над списком
+ * не сходился бы с суммой его строк.
+ *
+ * Прогноз Дзен-мани от плана, поставленного руками, отличаем подписью: первое —
+ * догадка по регулярному платежу, второе — намерение человека.
+ */
+export function ZenPlannedList({
+  rows,
+  base,
+  today,
+}: {
+  rows: PlannedOp[] | null;
+  base: string;
+  today: string;
+}) {
+  if (rows === null) {
+    return (
+      <div className="text-sm text-muted text-center py-6">
+        Планы приезжают из Дзен-мани — подключите синхронизацию
+      </div>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <div className="text-sm text-muted text-center py-6">
+        До конца месяца планов в Дзен-мани нет
+      </div>
+    );
+  }
+  return (
+    <div className="scroll-soft flex flex-col flex-1 min-h-0 -mx-2 px-2">
+      {rows.map((p) => {
+        const inDays = Math.max(0, Math.round((Date.parse(p.date) - Date.parse(today)) / 86400000));
+        return (
+          <div
+            key={p.id}
+            className="flex h-[56px] shrink-0 items-center justify-between gap-3 border-b border-border last:border-0"
+          >
+            <span className="flex items-center gap-2.5 min-w-0">
+              <i
+                className={`w-[3px] h-6 rounded-sm shrink-0 block ${
+                  inDays <= 1 ? "bg-warn" : "bg-border"
+                }`}
+              />
+              <span className="min-w-0">
+                <span className="block text-[14.5px] font-medium truncate">
+                  {p.payee || p.category || "Без названия"}
+                </span>
+                <span className="block text-[12px] text-muted truncate">
+                  {formatDate(p.date, "short")} ·{" "}
+                  {inDays === 0 ? "сегодня" : inDays === 1 ? "завтра" : `через ${inDays} дн`}
+                  {p.forecast ? " · прогноз" : ""}
+                  {p.comment ? ` · ${p.comment}` : ""}
+                </span>
+              </span>
+            </span>
+            <span className="block font-mono tabular-nums font-semibold text-[15px] text-expense shrink-0">
+              {formatMoney(p.amountBase, base)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ObservationsList({
   m,
   limit = 5,

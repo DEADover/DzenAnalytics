@@ -28,6 +28,7 @@ import {
   UpcomingList,
   ObservationsList,
   ActivityHeat,
+  ZenPlannedList,
 } from "./blocks";
 import { LinksRow } from "./LinksRow";
 import {
@@ -50,9 +51,11 @@ import { formatMoney, monthLabel, formatDate } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
 import { useDashboardModel, type DashboardModel } from "../../hooks/useDashboardModel";
 import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
+import { useZenPlanned } from "../../hooks/useZenPlanned";
 import { useDrillStore } from "../../store/useDrillStore";
 import { useReportPeriodStore } from "../../store/useReportPeriodStore";
 import { periodKey } from "../../lib/period";
+import { monthEnd } from "../../lib/dashboardModel";
 import { affectsExpense } from "../../lib/txKindStyle";
 
 /** Название месяца отдельно от года: в пилюле год только шумит. */
@@ -417,6 +420,15 @@ export function DashboardView() {
   const setLinks = useDashboardLayoutStore((s) => s.setLinks);
   const moveBefore = useDashboardLayoutStore((s) => s.moveBefore);
 
+  // Планы Дзен-мани — второй вид «Запланированных платежей». Отрезок тот же,
+  // что у своих регулярных: от сегодня до конца отчётного месяца.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const zenPlanned = useZenPlanned(todayIso, monthEnd(m.ym));
+  const zenPlannedTotal = useMemo(
+    () => (zenPlanned ?? []).reduce((sum, p) => sum + p.amountBase, 0),
+    [zenPlanned]
+  );
+
   const drag = useWidgetDrag(
     (dragKey, overKey) => void move(dragKey, overKey),
     (dragKey, beforeKey) => void moveBefore(dragKey, beforeKey)
@@ -500,7 +512,11 @@ export function DashboardView() {
           </>
         );
 
-      case "upcoming":
+      case "upcoming": {
+        // Два ответа на один вопрос: наш расчёт по истории и планы, заведённые
+        // в самом Дзен-мани. Итог считается по тем же строкам, что показаны,
+        // иначе сумма над списком не сошлась бы с ним.
+        const zen = widgetView(widgetMeta("upcoming"), p.view)?.id === "zen";
         return (
           <>
             <BlockTitle title="Запланированные платежи" to="/recurring" linkLabel="Регулярные" />
@@ -511,11 +527,16 @@ export function DashboardView() {
               className="font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none pb-3 mb-1 border-b border-border text-expense"
               style={{ wordSpacing: "-0.22em" }}
             >
-              {formatMoney(m.upcomingTotalBase, m.base)}
+              {formatMoney(zen ? zenPlannedTotal : m.upcomingTotalBase, m.base)}
             </div>
-            <UpcomingList m={m} />
+            {zen ? (
+              <ZenPlannedList rows={zenPlanned} base={m.base} today={todayIso} />
+            ) : (
+              <UpcomingList m={m} />
+            )}
           </>
         );
+      }
 
       case "links":
         return (
