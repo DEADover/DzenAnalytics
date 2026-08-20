@@ -11,6 +11,7 @@
 
 import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import clsx from "clsx";
 import { ArrowUpRight } from "lucide-react";
 import {
   BlockTitle,
@@ -38,9 +39,21 @@ import { affectsExpense } from "../../lib/txKindStyle";
  * совпадать, иначе на просвете в 6 px внешняя и внутренняя кривые расходятся и
  * кант выглядит кривым. 22 − 6 = 16.
  */
-function Tray({ children }: { children: ReactNode }) {
+/**
+ * Поддон виджета. `span` — сколько колонок сетки он занимает: треть, две трети
+ * или всю ширину. Других размеров на главной нет, и это намеренно: по такой
+ * сетке потом можно двигать виджеты руками, а по произвольным пропорциям —
+ * нет.
+ */
+function Tray({ children, span = 1 }: { children: ReactNode; span?: 1 | 2 | 3 }) {
   return (
-    <div className="tray h-full flex flex-col">
+    <div
+      className={clsx(
+        "tray h-full flex flex-col",
+        span === 2 && "lg:col-span-2",
+        span === 3 && "lg:col-span-3"
+      )}
+    >
       <div className="tray-core flex-1 min-h-0 flex flex-col p-5">{children}</div>
     </div>
   );
@@ -138,11 +151,17 @@ export function DashboardView() {
 
   return (
     <div className="flex flex-col gap-5 3xl:gap-6">
-      {/* ── Первый экран: разворот ── */}
-      {/* Колонка героя намеренно узкая и с фиксированной шириной: её содержимое
-          — короткий текст и одно число, и на широком экране растянутая половина
-          экрана превращалась в пустое поле. Всё, что шире, отдано данным. */}
-      <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] 3xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] gap-5 3xl:gap-6">
+      {/* ── Первый экран ──
+
+          Вся главная живёт на сетке из трёх колонок, и блок занимает треть,
+          две трети или всю ширину — других размеров нет. Это не только про
+          порядок на экране: под такую сетку потом ложится перестановка виджетов
+          руками, а под произвольные пропорции — нет.
+
+          Здесь три трети: герой, балансы, платежи. Прежде колонка героя была
+          фиксированной (26rem), а две карточки делили остаток — пропорция
+          получалась случайной и от ширины экрана плыла. */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6 lg:auto-rows-[30rem]">
         {/* Без верхнего отступа: колонка героя начинается на той же линии, что и
             карточки справа. Прежние шестнадцать пикселей опускали пилюлю месяца
             ниже соседнего блока, и первый экран читался съехавшим. */}
@@ -261,13 +280,10 @@ export function DashboardView() {
           </div>
         </div>
 
-        {/* Справа стопка карточек; на широком экране она встаёт в два столбца,
-            а не растягивается. */}
-        {/* Высота строки задана явно: потолок на контейнере карточки не сжимал —
-            они вылезали за него и налезали на следующий раздел. Здесь высоту
-            получает сама дорожка сетки, поддоны её заполняют, а списки внутри
+        {/* Высота дорожки задана явно: потолок на самой карточке не сжимал —
+            содержимое вылезало за него и налезало на следующий раздел. Здесь
+            высоту получает дорожка сетки, поддоны её заполняют, а списки внутри
             начинают прокручиваться. */}
-        <div className="grid gap-4 lg:grid-cols-2 lg:auto-rows-[30rem]">
           <Tray>
             <BlockTitle title="Балансы счетов" to="/accounts"
             linkLabel="Счета"
@@ -298,7 +314,6 @@ export function DashboardView() {
             </div>
             <UpcomingList m={m} />
           </Tray>
-        </div>
       </section>
 
       {/* ── Быстрые переходы ── */}
@@ -312,8 +327,11 @@ export function DashboardView() {
       {/* Высота ряда задана явно — иначе длинный список статей растягивал его
           вместе с графиком: у кого пятнадцать категорий, у того карточка
           вырастала вдвое. Теперь список прокручивается внутри. */}
-      <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-5 3xl:gap-6 lg:auto-rows-[30rem]">
-        <Tray>
+      {/* Две трети под график, треть под список статей: раньше здесь стояла
+          пропорция 1.5 к 1, то есть 60 на 40 — почти те же две трети, но «почти»
+          и ломало сетку. */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6 lg:auto-rows-[30rem]">
+        <Tray span={2}>
           <BlockTitle
             title="Доходы и расходы"
             info={
@@ -361,8 +379,10 @@ export function DashboardView() {
       </section>
 
       {/* ── Третий ряд: активность и наблюдения, поровну ── */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-5 3xl:gap-6">
-        <Tray>
+      {/* Календарю нужна ширина — месяц это семь колонок клеток, — наблюдениям
+          хватает трети: это список коротких строк. */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6">
+        <Tray span={2}>
           <BlockTitle
             title="Активность в этом месяце"
             info={
