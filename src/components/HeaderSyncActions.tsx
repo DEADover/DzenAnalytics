@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { RefreshCw, CloudDownload, Check, AlertTriangle, UploadCloud, ListChecks } from "lucide-react";
 import clsx from "clsx";
 import { useZenmoneyStore, type SyncResult } from "../store/useZenmoneyStore";
@@ -31,7 +31,7 @@ import { PendingChangesModal } from "./PendingChangesModal";
  * the chip pushing the search box off-screen. Auto-dismisses after
  * five seconds (animated fade-out the last ~180ms).
  */
-export function HeaderSyncActions() {
+export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
   const token = useZenmoneyStore((s) => s.token);
   const status = useZenmoneyStore((s) => s.status);
   const error = useZenmoneyStore((s) => s.error);
@@ -135,7 +135,7 @@ export function HeaderSyncActions() {
   // a hover/focus background tint and the error-state colour when the
   // store is in `error` and we don't have a flash up at the moment.
   const innerBtn =
-    "group p-1.5 transition-colors text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:bg-accent/10";
+    "group p-1.5 rounded-full transition-colors duration-200 text-muted hover:text-accent hover:bg-panel/70 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
   // Which push controls the header shows, per the mode:
   //   • «Выключено» — nothing: edits never leave the device.
@@ -197,7 +197,10 @@ export function HeaderSyncActions() {
           в спокойном состоянии панель не тянет на себя внимание. */}
       <div
         className={clsx(
-          "inline-flex items-stretch rounded-lg border overflow-hidden",
+          // Дорожка-пилюля, как у меню и переключателей разделов. Прежде это
+          // была обойма со скруглением в восемь пикселей — в ряду, где всё
+          // остальное уже пилюли, она читалась деталью из другого набора.
+          "inline-flex items-center gap-0.5 rounded-full p-1 border shadow-tray",
           error && !busy && !flash
             ? "border-expense/40 bg-panel2"
             : hasPending
@@ -205,6 +208,11 @@ export function HeaderSyncActions() {
               : "border-border bg-panel2"
         )}
       >
+        {/* Слот в начале дорожки — сюда шапка кладёт переключатель разреза:
+            он про те же данные, и держать его отдельной обоймой значило бы
+            плодить в ряду ещё один предмет. */}
+        {leading}
+        {leading && <div className="w-px h-5 bg-border mx-0.5 self-center" />}
         {(canReview || canPush) && (
           <>
             {canReview && (
@@ -219,7 +227,7 @@ export function HeaderSyncActions() {
                 }
                 className={clsx(
                   innerBtn,
-                  "rounded-l-lg inline-flex items-center gap-1.5 text-accent"
+                  "rounded-full inline-flex items-center gap-1.5 text-accent"
                 )}
               >
                 <ListChecks className="w-4 h-4" />
@@ -230,7 +238,6 @@ export function HeaderSyncActions() {
                 </span>
               </button>
             )}
-            {canReview && canPush && <div className="w-px bg-accent/30 self-stretch" />}
             {canPush && (
               <button
                 type="button"
@@ -241,12 +248,12 @@ export function HeaderSyncActions() {
                     ? "Нет изменений для отправки"
                     : "Отправить изменения в Дзен-мани"
                 }
-                className={clsx(innerBtn, "text-accent")}
+                className={clsx(innerBtn, "rounded-full text-accent")}
               >
                 <UploadCloud className={clsx("w-4 h-4", pushing && "animate-pulse")} />
               </button>
             )}
-            <div className="w-px bg-border self-stretch" />
+            <div className="w-px h-5 bg-border mx-0.5 self-center" />
           </>
         )}
         <button
@@ -254,22 +261,19 @@ export function HeaderSyncActions() {
           onClick={runIncremental}
           disabled={busy}
           title={`Синхронизация с Дзен-мани (только изменения)\n${lastSyncHuman}`}
-          className={clsx(innerBtn, "rounded-l-lg")}
+          className={clsx(innerBtn, "rounded-full")}
         >
           <RefreshCw
             className={clsx("w-4 h-4", busy && "animate-spin")}
           />
         </button>
-        {/* 1-pixel divider between the two buttons — matches the
-            container's border colour so it reads as one segmented
-            control rather than two adjacent controls. */}
-        <div className="w-px bg-border self-stretch" />
+
         <button
           type="button"
           onClick={runFull}
           disabled={busy}
           title="Полная синхронизация (сбросить кэш и заново скачать всё)"
-          className={clsx(innerBtn, "rounded-r-lg")}
+          className={clsx(innerBtn, "rounded-full")}
         >
           <CloudDownload className="w-4 h-4" />
         </button>

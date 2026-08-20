@@ -219,31 +219,25 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         </div>
 
         {/* Правая зона. Тот же вес, что и у левой, — этим и держится середина.
-            Внутри: сперва данные (поиск, разрез, обмен с облаком), затем
-            системные кнопки. Разделены не рамкой ради рамки, а смыслом. */}
-        <div className="flex items-center gap-3 md:gap-6 shrink-0">
-        <div className="inline-flex items-stretch shrink-0 rounded-full border border-border bg-panel2 overflow-hidden">
-          <button
-            onClick={onOpenPalette}
-            className="p-1.5 text-muted hover:text-accent hover:bg-accent/10 transition-colors"
-            title="Команды и поиск (⌘K / Ctrl+K)"
-            aria-label="Команды и поиск"
-          >
-            <Search className="w-4 h-4" />
-          </button>
-          {hasSlices && (
-            <>
-              <div className="w-px bg-border self-stretch" />
-              <SliceSwitcher inline />
-            </>
-          )}
-        </div>
+            Внутри ровно две дорожки, набранные как меню: слева данные (разрез
+            и обмен с облаком), справа система (поиск, тема, настройки,
+            справка). Прежде их было четыре предмета в четырёх видах — обойма
+            со скруглением 8, обойма-пилюля, пилюля темы и два голых значка, —
+            и правый край читался собранным из разных наборов. */}
+        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+        <HeaderSyncActions leading={hasSlices ? <SliceSwitcher inline /> : undefined} />
 
-        <HeaderSyncActions />
-
-        {/* Системная зона — приглушена и отодвинута к краю: сюда заходят
-            изредка. */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Системная дорожка. Поиск живёт здесь же: он открывает палитру
+            команд, то есть тоже про приложение, а не про данные на экране. */}
+        <div className="inline-flex items-center gap-0.5 shrink-0 rounded-full p-1 bg-panel2 border border-border shadow-tray">
+        <button
+          onClick={onOpenPalette}
+          className="p-1.5 rounded-full text-muted hover:text-accent hover:bg-panel/70 transition-colors duration-200"
+          title="Команды и поиск (⌘K / Ctrl+K)"
+          aria-label="Команды и поиск"
+        >
+          <Search className="w-4 h-4" />
+        </button>
         <ThemeSwitcher />
 
         {/* Settings — gear icon. Active style matches PRIMARY nav (bg-accent/10
@@ -255,8 +249,8 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             clsx(
               "group relative p-1.5 rounded-full transition-colors duration-200",
               isActive
-                ? "bg-accent/10 text-accent"
-                : "text-muted hover:text-accent hover:bg-accent/10"
+                ? "bg-accent text-accent-fg"
+                : "text-muted hover:text-accent hover:bg-panel/70"
             )
           }
         >
@@ -273,8 +267,8 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             clsx(
               "group relative p-1.5 rounded-full transition-colors duration-200",
               isActive
-                ? "bg-accent/10 text-accent"
-                : "text-muted hover:text-accent hover:bg-accent/10"
+                ? "bg-accent text-accent-fg"
+                : "text-muted hover:text-accent hover:bg-panel/70"
             )
           }
         >
