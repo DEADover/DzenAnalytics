@@ -291,7 +291,7 @@ function BarChart({
                           strong: true,
                         },
                       ]}
-                      note={<span className="italic">Полоса упёрлась в край шкалы: ±100 %</span>}
+                      note={<span className="italic">Полоса упёрлась в край шкалы: ±100%</span>}
                     />
                   ) : null
                 }

@@ -51,7 +51,7 @@ const PRICE_UP_MIN = 0.1;
 const PER_KIND_LIMIT = 2;
 
 function pct(v: number): string {
-  return `${Math.round(Math.abs(v) * 100)} %`;
+  return `${Math.round(Math.abs(v) * 100)}%`;
 }
 
 
@@ -119,7 +119,7 @@ export function buildNotices(input: NoticesInput): Notice[] {
       kind: "spike",
       tone: "expense",
       title: s.category,
-      body: `Обычно ${money(s.baseline)} · ×${s.ratio.toFixed(1)}`,
+      body: `Обычно ${money(s.baseline)} · ×${s.ratio.toFixed(1).replace(".", ",")}`,
       value: s.current,
       category: s.category,
       weight: 90,
@@ -139,7 +139,7 @@ export function buildNotices(input: NoticesInput): Notice[] {
       kind: "price",
       tone: "warn",
       title: r.payee,
-      body: `Подорожало на ${pct(r.priceTrend.changePct)} от обычного платежа`,
+      body: `Подорожало на ${pct(r.priceTrend.changePct)} против обычного платежа`,
       value: r.avgAmount,
       weight: 80,
     });

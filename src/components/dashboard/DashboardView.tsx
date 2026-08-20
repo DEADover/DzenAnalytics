@@ -23,6 +23,7 @@ import {
   QuickLinks,
 } from "./blocks";
 import { formatMoney, monthLabel, formatDate } from "../../lib/format";
+import { pluralRu } from "../../lib/plural";
 import { useDashboardModel } from "../../hooks/useDashboardModel";
 import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../../store/useDrillStore";
@@ -54,20 +55,6 @@ function monthName(ym: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function daysWord(n: number): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return "дней";
-  switch (n % 10) {
-    case 1:
-      return "день";
-    case 2:
-    case 3:
-    case 4:
-      return "дня";
-    default:
-      return "дней";
-  }
-}
 
 /**
  * Строка «ярлык — число» в колонке героя.
@@ -166,7 +153,10 @@ export function DashboardView() {
               чему-то, а не как заголовок экрана. Разрядка при этом меньше
               прежней: чем крупнее буквы, тем меньше её нужно. */}
           <h1 className="self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold">
-            {monthName(m.ym)} · осталось {m.month.left} {daysWord(m.month.left)}
+            {monthName(m.ym)}
+            {m.month.left === 0
+              ? " · последний день"
+              : ` · осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`}
           </h1>
 
           <div
@@ -179,17 +169,26 @@ export function DashboardView() {
           </div>
 
           <p className="text-[16px] leading-relaxed text-muted max-w-[30ch]">
+            {/* Причину нехватки называем ту, что есть на самом деле. «Расход
+                обогнал доход» — утверждение о фактах месяца, и когда доход
+                больше расхода, а в минус уводят ещё не списанные платежи, оно
+                просто неверно. */}
             {m.free.value < 0
-              ? "Столько не хватает: расход месяца уже обогнал доход."
+              ? m.factExpense > m.factIncome
+                ? "Столько не хватает: расход месяца уже обогнал доход."
+                : "Столько не хватает: запланированные платежи не укладываются в остаток."
               : "Столько остаётся после уже потраченного и того, что ещё спишется."}
-            {over !== null && (
+            {/* Округлённый до целых ноль — это «как обычно», а не «на 0% выше»:
+                прежняя фраза сообщала отличие, которого нет. */}
+            {over !== null && Math.abs(over) < 0.005 && " Темп такой же, как обычно."}
+            {over !== null && Math.abs(over) >= 0.005 && (
               <>
                 {" "}
                 Темп на{" "}
                 <span
                   className={`font-mono tabular-nums ${over >= 0 ? "text-warn" : "text-income"}`}
                 >
-                  {Math.abs(over * 100).toFixed(0)} %
+                  {Math.abs(over * 100).toFixed(0)}%
                 </span>{" "}
                 {over >= 0 ? "выше" : "ниже"} обычного.
               </>

@@ -372,8 +372,8 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
       if (patch.percent !== undefined)
         diff.push({
           label: "Ставка",
-          from: was?.percent != null ? `${was.percent} %` : "не указана",
-          to: patch.percent != null ? `${patch.percent} %` : "не указана",
+          from: was?.percent != null ? `${was.percent}%` : "не указана",
+          to: patch.percent != null ? `${patch.percent}%` : "не указана",
         });
       if (patch.capitalization !== undefined)
         diff.push({

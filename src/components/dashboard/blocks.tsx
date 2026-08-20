@@ -34,6 +34,7 @@ import {
   TrendingUp, ArrowUpRight, Clock, Lightbulb, Sigma,
 } from "lucide-react";
 import { CategoryDot } from "../CategoryDot";
+import { pluralRu } from "../../lib/plural";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
 import { InfoPopover } from "../InfoPopover";
 import { AccountLogo } from "../AccountLogo";
@@ -279,12 +280,14 @@ export function PaceRing({ m, size = 104 }: { m: DashboardModel; size?: number }
         }`}
       >
         {over >= 0 ? "+" : "−"}
-        {Math.abs(over * 100).toFixed(0)} %
+        {Math.abs(over * 100).toFixed(0)}%
       </div>
       <div className="text-[11.5px] text-muted leading-snug">
         к обычному темпу
         <br />
-        за первые {m.month.day} дн
+        {m.month.day === 1
+          ? "за первый день"
+          : `за первые ${m.month.day} ${pluralRu(m.month.day, ["день", "дня", "дней"])}`}
       </div>
     </div>
   );
@@ -720,7 +723,7 @@ export function CategoriesList({
                   {c.category}
                 </span>
                 <span className="font-mono tabular-nums text-[12px] text-muted">
-                  {Math.round(frac * 100)} %
+                  {Math.round(frac * 100)}%
                 </span>
                 <span className="font-mono tabular-nums text-[14px] font-medium shrink-0">
                   {formatMoney(c.expense, m.base)}
