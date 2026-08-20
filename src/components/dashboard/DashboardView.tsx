@@ -119,7 +119,7 @@ function monthPill(m: DashboardModel): string {
  * В обойме с двойным кантом он читался бы как ещё одна карточка с числом, а это
  * заголовок всего экрана.
  */
-function HeroOpen({ m, grey }: { m: DashboardModel; grey?: boolean }) {
+function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
   const over = m.pace === null ? null : m.pace - 1;
   return (
     <div className="flex flex-col gap-5 h-full">
@@ -128,11 +128,11 @@ function HeroOpen({ m, grey }: { m: DashboardModel; grey?: boolean }) {
           полную силу — приглушённой десяткой она читалась как подпись к
           чему-то, а не как заголовок экрана. Разрядка при этом меньше
           прежней: чем крупнее буквы, тем меньше её нужно. */}
-      {/* На серой подложке пилюля и вторая кнопка залиты белым: их обычная
-          заливка — та же самая серая, и на ней они пропадали. */}
+      {/* На утопленной подложке пилюля и вторая кнопка залиты белым: их
+          обычная заливка светлее подложки едва-едва, и на ней они пропадали. */}
       <h1
         className={`self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] border border-border text-text font-semibold ${
-          grey ? "bg-panel" : "bg-panel2"
+          sunken ? "bg-panel" : "bg-panel2"
         }`}
       >
         {monthPill(m)}
@@ -205,7 +205,7 @@ function HeroOpen({ m, grey }: { m: DashboardModel; grey?: boolean }) {
           // сливалась с белым фоном. Второстепенной её оставляет заливка
           // подложкой, а не чёрным, как у соседней.
           className={`inline-flex h-[52px] items-center rounded-full px-6 border border-border text-text text-[14px] font-medium transition-colors duration-200 hover:border-accent/50 ${
-            grey ? "bg-panel hover:bg-panel/70" : "bg-panel2 hover:bg-panel2/70"
+            sunken ? "bg-panel hover:bg-panel/70" : "bg-panel2 hover:bg-panel2/70"
           }`}
         >
           Месячный отчёт
@@ -439,7 +439,7 @@ export function DashboardView() {
         // подложке: содержание одно, разная подача.
         const view = widgetView(widgetMeta("month"), p.view)?.id;
         if (view === "split") return <HeroSplit m={m} />;
-        return <HeroOpen m={m} grey={view === "framed"} />;
+        return <HeroOpen m={m} sunken={view === "framed"} />;
       }
 
       case "accounts":
@@ -616,7 +616,7 @@ export function DashboardView() {
               placement={p}
               meta={widgetMeta(p.kind)}
               bare={isBareWidget(widgetMeta(p.kind), p.view)}
-              grey={widgetView(widgetMeta(p.kind), p.view)?.grey === true}
+              sunken={widgetView(widgetMeta(p.kind), p.view)?.sunken === true}
               editing={editing}
               dragging={drag.dragKey === p.key}
               dropTarget={

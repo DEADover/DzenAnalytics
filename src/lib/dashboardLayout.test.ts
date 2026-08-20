@@ -362,11 +362,19 @@ describe("дорожки кнопок", () => {
 });
 
 describe("варианты оформления", () => {
-  it("серая подложка — свойство варианта, а не виджета", () => {
+  it("утопленная подложка — свойство варианта, а не виджета", () => {
     const month = widgetMeta("month");
-    expect(widgetView(month, "framed")?.grey).toBe(true);
-    expect(widgetView(month, "open")?.grey).toBeUndefined();
-    expect(widgetView(month, "split")?.grey).toBeUndefined();
+    expect(widgetView(month, "framed")?.sunken).toBe(true);
+    expect(widgetView(month, "open")?.sunken).toBeUndefined();
+    expect(widgetView(month, "split")?.sunken).toBeUndefined();
+  });
+
+  it("порядок видов: открытый, в рамке, разворот", () => {
+    expect(widgetMeta("month").views?.map((v) => v.id)).toEqual([
+      "open",
+      "framed",
+      "split",
+    ]);
   });
 
   it("выбирает известный вариант", () => {

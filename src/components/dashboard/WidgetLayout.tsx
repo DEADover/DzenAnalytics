@@ -46,7 +46,7 @@ export function WidgetShell({
   placement,
   meta,
   bare,
-  grey,
+  sunken,
   editing,
   dragging,
   dropTarget,
@@ -63,8 +63,8 @@ export function WidgetShell({
   meta: WidgetMeta;
   /** Этот вариант виджета рисует себя сам, без поддона. */
   bare: boolean;
-  /** Ядро поддона серое, а не белое. */
-  grey: boolean;
+  /** Утопленная плоскость вместо поддона: одна коробка с тенью, без канта. */
+  sunken: boolean;
   editing: boolean;
   /** Эту плитку сейчас везут. */
   dragging: boolean;
@@ -250,19 +250,15 @@ export function WidgetShell({
       >
         {bare ? (
           children
+        ) : sunken ? (
+          // Одна коробка вместо поддона: кант тут нечем нарисовать, обойма
+          // залита тем же серым, что и подложка. Поля меньше, чем у поддона
+          // (16 против 6 + 20): содержимое рассчитано на всю высоту плитки, и
+          // на широких полях нижняя строка итогов не помещалась.
+          <div className="card-sunken h-full flex flex-col p-4">{children}</div>
         ) : (
-          // Серый вариант выворачивает поддон наизнанку: обойма белая, ядро
-          // серое. Иначе двойного канта не видно вовсе — обойма и так залита
-          // тем же серым, и «в рамке» ничем не отличалось бы от «без рамки».
-          <div className={clsx("tray h-full flex flex-col", grey && "!bg-panel")}>
-            <div
-              className={clsx(
-                "tray-core flex-1 min-h-0 flex flex-col p-5",
-                grey && "!bg-panel2"
-              )}
-            >
-              {children}
-            </div>
+          <div className="tray h-full flex flex-col">
+            <div className="tray-core flex-1 min-h-0 flex flex-col p-5">{children}</div>
           </div>
         )}
       </div>
