@@ -728,10 +728,14 @@ export function ImportPage() {
           sections; sub-headings inside each tab keep their own
           structure (e.g. "Резервные копии" → "Облачный снимок" +
           "Push в облако"). */}
+      {/* Дорожка-пилюля, как все переключатели разделов в продукте. Прежде это
+          был ряд с подчёркиванием — приём, который после переезда «Счетов» на
+          пилюли остался в приложении в единственном экземпляре, на этой самой
+          странице. */}
       <div
         role="tablist"
         aria-label="Разделы настроек"
-        className="border-b border-border flex items-center gap-1 -mt-2 overflow-x-auto overflow-y-hidden"
+        className="inline-flex items-center gap-0.5 self-start -mt-1 rounded-full p-1 bg-panel2 border border-border shadow-tray overflow-x-auto"
       >
         {([
           { id: "source", label: "Данные", icon: Database },
@@ -749,11 +753,12 @@ export function ImportPage() {
               aria-selected={active}
               onClick={() => setSettingsTab(t.id)}
               className={[
-                "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium",
-                "border-b-2 -mb-px transition-colors whitespace-nowrap",
+                "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full",
+                "text-[13.5px] font-medium whitespace-nowrap transition-colors duration-200",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
                 active
-                  ? "border-accent text-text"
-                  : "border-transparent text-muted hover:text-text",
+                  ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
+                  : "text-muted hover:text-text hover:bg-panel/70",
               ].join(" ")}
             >
               <Icon className="w-4 h-4" />
@@ -770,7 +775,7 @@ export function ImportPage() {
           from and what state is it in?". Now: source tabs at the
           top, panel for the active source, current-data footer at
           the bottom. */}
-      <section className="card card-pad space-y-5">
+      <section className="card-tray card-pad space-y-5">
         {/* Source tabs. A small green dot on the tab whose source
             is actually populated lets the user tell at a glance
             which mode they're in even if the active tab is the
@@ -780,7 +785,7 @@ export function ImportPage() {
           icon={Database}
           title="Источник данных"
           right={
-          <div className="inline-flex bg-panel2 border border-border rounded-lg p-0.5">
+          <div className="inline-flex gap-0.5 bg-panel2 border border-border rounded-full p-1 shadow-tray">
             <button
               type="button"
               onClick={() => setSourceTab("api")}
@@ -825,7 +830,7 @@ export function ImportPage() {
 
         {/* ── API panel ────────────────────────────────────────── */}
         {sourceTab === "api" && (
-          <div className="rounded-lg border border-border bg-panel2/30 p-4 space-y-3">
+          <div className="rounded-xl border border-border bg-panel2/30 p-4 space-y-3">
             {/* Заголовок, а справа — состояние и расписание. Описание уехало под
                 знак вопроса: читают его один раз, а место занимало всегда. */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1041,7 +1046,7 @@ export function ImportPage() {
 
         {/* ── CSV panel ────────────────────────────────────────── */}
         {sourceTab === "csv" && (
-          <div className="rounded-lg border border-border bg-panel2/30 p-4 space-y-3">
+          <div className="rounded-xl border border-border bg-panel2/30 p-4 space-y-3">
             {/* Заголовок, а справа — режим и сколько уже в базе. Пояснения про
                 формат и про то, чем «Дополнить» отличается от «Заменить», ушли
                 под знак вопроса и в подсказки самих кнопок. */}
@@ -1099,7 +1104,7 @@ export function ImportPage() {
                       {formatNum(transactions.length)}
                     </strong>
                   </span>
-                  <div className="inline-flex bg-panel2 border border-border rounded-lg p-0.5">
+                  <div className="inline-flex gap-0.5 bg-panel2 border border-border rounded-full p-1 shadow-tray">
                     <button
                       onClick={() => setMode("merge")}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
@@ -1299,7 +1304,7 @@ export function ImportPage() {
 
       {/* Одна карточка вместо трёх отдельных: настройки вида короткие, а
           каждая со своим абзацем пояснений занимала пол-экрана. */}
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <SettingsSectionHeader icon={Palette} title="Внешний вид" className="mb-1" />
         <p className="text-xs text-muted mb-3">
           Как сервис выглядит и в каком виде показывает суммы.
@@ -1456,7 +1461,7 @@ export function ImportPage() {
       {/* Одна карточка на всю вкладку: раньше это были три отдельных блока,
           каждый с абзацем пояснений над контролом, и вкладка читалась как
           стена текста. Здесь строки, а подробности — за знаками вопроса. */}
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <SettingsSectionHeader
           icon={Calculator}
           title="Как считать"
@@ -1671,7 +1676,7 @@ export function ImportPage() {
           объединены, потому что обе работают с одним и тем же
           концептом (один и тот же payee, несколько написаний). *\/}
       {transactions.length > 0 && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <SettingsSectionHeader
             icon={Users}
             title="Группировка получателей"
@@ -1824,14 +1829,14 @@ export function ImportPage() {
       </>)}
 
       {settingsTab === "backups" && (
-      <section className="card card-pad space-y-5">
+      <section className="card-tray card-pad space-y-5">
         {/* Header + Локальные/Облачные tab selector. Mirrors the
             Источник данных card structure. */}
         <SettingsSectionHeader
           icon={History}
           title="Резервные копии"
           right={
-          <div className="inline-flex bg-panel2 border border-border rounded-lg p-0.5">
+          <div className="inline-flex gap-0.5 bg-panel2 border border-border rounded-full p-1 shadow-tray">
             <button
               type="button"
               onClick={() => setBackupTab("local")}
@@ -1863,7 +1868,7 @@ export function ImportPage() {
         />
 
         {backupTab === "local" && (<>
-        <div className="rounded-lg border border-border bg-panel2/30 p-4">
+        <div className="rounded-xl border border-border bg-panel2/30 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Database className="w-5 h-5 text-accent" />
             <span className="font-medium">Бэкап всех данных</span>
@@ -1915,7 +1920,7 @@ export function ImportPage() {
       {/* Scheduled backup. Заголовок, периодичность и кнопка — в одну строку:
           четыре кнопки во всю ширину занимали ряд ради выбора из четырёх слов,
           а объяснение читают один раз и убирают под знак вопроса. */}
-      <div className="rounded-lg border border-border bg-panel2/30 p-4 space-y-3">
+      <div className="rounded-xl border border-border bg-panel2/30 p-4 space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <Clock className="w-5 h-5 text-accent shrink-0" />
@@ -1968,7 +1973,7 @@ export function ImportPage() {
             can fall back to a known-good cloud state if a future push
             operation goes wrong. */}
         {backupTab === "cloud" && (zenToken ? (
-          <div className="rounded-lg border border-border bg-panel2/30 p-4">
+          <div className="rounded-xl border border-border bg-panel2/30 p-4">
             <div className="flex items-center gap-2 mb-3">
               <History className="w-5 h-5 text-accent2" />
               <span className="font-medium">Снимки данных из Дзен-мани</span>
@@ -2300,7 +2305,7 @@ export function ImportPage() {
             )}
           </div>
         ) : (
-          <div className="rounded-lg border border-border bg-panel2/30 p-4 text-sm text-muted">
+          <div className="rounded-xl border border-border bg-panel2/30 p-4 text-sm text-muted">
             Облачные снимки доступны только при подключённом Дзен-мани API.
             Подключите токен на вкладке «Данные».
           </div>
@@ -2312,7 +2317,7 @@ export function ImportPage() {
           Only visible when an API token is connected; the safety-net
           snapshot (in the Бэкапы tab) is the prerequisite. */}
       {settingsTab === "source" && zenToken && sourceTab === "api" && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
             <SettingsSectionHeader
               icon={CloudUpload}
               title="Двусторонняя синхронизация с Дзен-мани"
@@ -2389,13 +2394,13 @@ export function ImportPage() {
             {/* Both settings live in one inset panel with the active choice
                 explained right under it — three loose label/control lines read
                 as unrelated scraps, and the modes' meaning was hover-only. */}
-            <div className="rounded-lg border border-border bg-panel2/30 p-4 mb-3 space-y-3">
+            <div className="rounded-xl border border-border bg-panel2/30 p-4 mb-3 space-y-3">
               <div>
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-sm font-medium w-44 shrink-0">
                     Отправка правок в облако
                   </span>
-                  <div className="inline-flex bg-panel border border-border rounded-lg p-0.5">
+                  <div className="inline-flex gap-0.5 bg-panel border border-border rounded-full p-1 shadow-tray">
                     {(
                       [
                         ["off", "Выключена"],
@@ -2478,7 +2483,7 @@ export function ImportPage() {
                   <span className="text-sm font-medium w-44 shrink-0">
                     Копия облака перед отправкой
                   </span>
-                  <div className="inline-flex bg-panel border border-border rounded-lg p-0.5">
+                  <div className="inline-flex gap-0.5 bg-panel border border-border rounded-full p-1 shadow-tray">
                     {(
                       [
                         ["always", "Каждый раз"],
@@ -2561,7 +2566,7 @@ export function ImportPage() {
                 (the same nested-block treatment the Бэкапы tab uses) so the
                 table reads as its own thing instead of blending into the
                 settings rows above. */}
-            <div className="rounded-lg border border-border bg-panel2/30 p-4 mt-4">
+            <div className="rounded-xl border border-border bg-panel2/30 p-4 mt-4">
               <SyncLog
                 embedded
                 status={

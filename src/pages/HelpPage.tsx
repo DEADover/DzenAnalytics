@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageHeader } from "../components/PageHeader";
 import {
   HelpCircle,
   Table as TableIcon,
@@ -75,41 +76,44 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <p>
-          Обзорный дашборд — всё важное на одном экране, без фильтров. Открывается по
-          умолчанию при входе.
+          Обзор текущего месяца на одном экране, без отборов. Открывается при входе.
         </p>
         <ul className="list-disc list-inside space-y-1 mt-2">
           <li>
-            <strong>4 hero-KPI</strong>: совокупный баланс (с учётом калибровки), доход и
-            расход за последний месяц с дельтой к предыдущему, норма сбережений.
+            <strong>Крупное число слева</strong> — сколько остаётся к концу месяца:
+            фактический доход минус потраченное и минус то, что ещё спишется. Ничего
+            не экстраполируется, только факт. Под ним доход и расход месяца с планом,
+            если он заведён в «Бюджете».
           </li>
           <li>
-            <strong>Cash-flow с прогнозом</strong> — бары income/expense + линия net и
-            прогноз на 6 месяцев вперёд с учётом сезонности и постоянных трат.
+            <strong>Балансы счетов</strong> — совокупный баланс и остатки по счетам;
+            клик по строке открывает её операции.
           </li>
           <li>
-            <strong>Совокупный баланс</strong> — area-чарт нарастающего net worth.
+            <strong>Запланированные платежи</strong> — регулярные списания до конца
+            месяца с датой и комментарием.
           </li>
           <li>
-            <strong>Авто-инсайты</strong> — топ-6 наблюдений: самая крупная трата месяца,
-            заметные MoM-сдвиги, рост категорий и т.п.
+            <strong>Доходы и расходы</strong> — двенадцать месяцев и прогноз на три
+            вперёд по типичному месяцу с поправкой на сезон.
           </li>
           <li>
-            <strong>Топ-7 категорий</strong> с прогресс-барами, <strong>топ-5 самых
-            крупных операций</strong>, <strong>ближайшие регулярные</strong> платежи
-            (учитываются только активные подписки; на главной — активные ежемесячные).
+            <strong>Расходы по категориям</strong> — доля каждой статьи во всех
+            расходах месяца, та же, что на «Категориях».
           </li>
           <li>
-            <strong>Mini-heatmap</strong> активности за 90 дней (GitHub-style).
+            <strong>Активность в этом месяце</strong> — тепловой календарь, самые
+            дорогие дни и дни без трат. Клик по дню открывает его операции.
           </li>
           <li>
-            <strong>Структура расходов</strong> — обязательные/необязательные +
-            KPI «свободные деньги».
+            <strong>Авто-наблюдения</strong> — статьи, пробившие план или
+            разогнавшиеся против обычного, подорожавшие подписки и пропущенные
+            регулярные платежи.
           </li>
         </ul>
         <p className="mt-2 text-muted text-xs">
-          Если на Главной баннер «Калибровка» — рекомендуем сразу её сделать, иначе
-          совокупный баланс будет от нуля (см. раздел «Калибровка» ниже).
+          Если на «Счетах» предложена «Калибровка» — сделайте её сразу, иначе
+          совокупный баланс будет считаться от нуля (см. раздел «Калибровка» ниже).
         </p>
       </>
     ),
@@ -2754,8 +2758,8 @@ const SECTIONS: Section[] = [
         </p>
         <ul className="list-disc list-inside space-y-1 mt-2">
           <li>
-            На Главной — блок «Структура расходов» и KPI{" "}
-            <strong>«Свободные деньги»</strong> = доход − обязательные расходы.
+            На «Главной» — в «Авто-наблюдениях»: обязательные платежи, которые ещё
+            впереди, учитываются в том, сколько остаётся к концу месяца.
           </li>
           <li>
             В «Здоровье» — <strong>«Доля обязательных в доходе»</strong>.
@@ -3326,17 +3330,15 @@ export function HelpPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <HelpCircle className="w-6 h-6 text-accent" />
-          Справка
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Полный путеводитель по DzenAnalytics: каждый пункт меню — что это, для чего
-          и как работает; ниже — сквозные концепции (онлайн-синхронизация с Дзен-мани
-          API, калибровка, FIRE, σ, правила и т.п.). Кликайте по разделам, чтобы раскрыть.
-        </p>
-      </div>
+      {/* Общий заголовок страницы: своя вёрстка тут осталась с тех времён,
+          когда его ещё не было. Подпись заодно укорочена — прежняя занимала три
+          строки и перечисляла внутри себя содержание, которое и так ниже
+          списком. */}
+      <PageHeader
+        icon={HelpCircle}
+        title="Справка"
+        hint="Что делает каждый раздел и как устроены расчёты."
+      />
 
       {groups.map((g) => {
         const items = SECTIONS.filter((s) => s.group === g);
@@ -3346,7 +3348,7 @@ export function HelpPage() {
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted px-1">
               {GROUP_LABEL[g]}
             </h2>
-            <div className="card card-pad space-y-1">
+            <div className="card-tray card-pad space-y-1">
               {items.map((s) => {
                 const isOpen = open.has(s.id);
                 const Icon = s.icon;
@@ -3354,7 +3356,7 @@ export function HelpPage() {
                   <div key={s.id} className="border-b border-border last:border-b-0">
                     <button
                       onClick={() => toggle(s.id)}
-                      className="w-full flex items-center gap-3 py-3 text-left hover:bg-panel2/40 px-2 -mx-2 rounded transition-colors"
+                      className="w-full flex items-center gap-3 py-3 text-left hover:bg-panel2/40 px-2 -mx-2 rounded-lg transition-colors duration-200"
                     >
                       {isOpen ? (
                         <ChevronDown className="w-4 h-4 text-muted shrink-0" />
