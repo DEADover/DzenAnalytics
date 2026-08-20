@@ -75,21 +75,38 @@ function StatRow({
   value,
   plan,
   tone,
+  dense,
 }: {
   label: string;
   value: string;
   /** Плановая сумма месяца из «Бюджета». Стоит под фактом и не смешивается с ним. */
   plan?: string;
   tone?: "income" | "expense";
+  /** В карточке строки набраны теснее: там высота считанная, а не вся страница. */
+  dense?: boolean;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 py-2 border-b border-border/60 last:border-0">
-      <span className="text-[12px] uppercase tracking-[0.1em] text-muted">{label}</span>
+    <div
+      className={clsx(
+        "flex items-baseline justify-between gap-3 border-b border-border/60 last:border-0",
+        dense ? "py-1.5" : "py-2"
+      )}
+    >
+      <span
+        className={clsx(
+          "uppercase tracking-[0.1em] text-muted",
+          dense ? "text-[11.5px]" : "text-[12px]"
+        )}
+      >
+        {label}
+      </span>
       <span className="shrink-0 text-right">
         <span
-          className={`block font-mono tabular-nums font-semibold text-[18px] ${
+          className={clsx(
+            "block font-mono tabular-nums font-semibold",
+            dense ? "text-[16.5px]" : "text-[18px]",
             tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""
-          }`}
+          )}
         >
           {value}
         </span>
@@ -125,11 +142,10 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
   return (
     // На голом фоне итоги прижаты к низу колонки: страница под ними
     // продолжается, и это читается нижней границей первого экрана. В карточке
-    // так нельзя — итоги упирались в её край, а выше зияла дыра в шестьдесят
-    // пикселей. Там свободное место делится поровну между всеми блоками:
-    // просвет над итогами становится таким же, как между остальными, и низ
-    // перестаёт выглядеть провалившимся.
-    <div className={clsx("flex flex-col gap-5 h-full", sunken && "justify-between")}>
+    // прижимать не к чему — итоги упирались в её кант. Там всё набрано на
+    // ступень мельче, свободное место делится между блоками поровну, а снизу
+    // карточка оставляет запас больше верхнего (см. `WidgetShell`).
+    <div className={clsx("flex flex-col h-full gap-5", sunken && "justify-between")}>
       {/* Пилюля — она же заголовок страницы: другого h1 на экране нет, а
           оставлять главную вовсе без заголовка нельзя. Потому и набрана в
           полную силу — приглушённой десяткой она читалась как подпись к
@@ -146,15 +162,22 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
       </h1>
 
       <div
-        className={`font-mono font-semibold tabular-nums text-5xl 3xl:text-6xl leading-none tracking-tight ${
-          m.free.value < 0 ? "text-expense" : ""
-        }`}
+        className={clsx(
+          "font-mono font-semibold tabular-nums leading-none tracking-tight",
+          sunken ? "text-[40px]" : "text-5xl 3xl:text-6xl",
+          m.free.value < 0 && "text-expense"
+        )}
         style={{ wordSpacing: "-0.22em" }}
       >
         {formatMoney(Math.abs(m.free.value), m.base)}
       </div>
 
-      <p className="text-[16px] leading-relaxed text-muted max-w-[30ch]">
+      <p
+        className={clsx(
+          "leading-relaxed text-muted max-w-[30ch]",
+          sunken ? "text-[14.5px]" : "text-[16px]"
+        )}
+      >
         {/* Причину нехватки называем ту, что есть на самом деле. «Расход
             обогнал доход» — утверждение о фактах месяца, и когда доход
             больше расхода, а в минус уводят ещё не списанные платежи, оно
@@ -192,11 +215,16 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
           // Как и «Месячный отчёт» рядом: лента открывается за тот месяц,
           // о котором весь этот экран, а не за период с прошлого раза.
           to={`/transactions?month=${m.ym}`}
-          className="group inline-flex h-[52px] items-center gap-3 rounded-full pl-6 pr-2.5 bg-text text-panel text-[14px] font-medium"
+          className={clsx(
+            "group inline-flex items-center gap-3 rounded-full bg-text text-panel font-medium",
+            sunken ? "h-[44px] pl-5 pr-2 text-[13.5px]" : "h-[52px] pl-6 pr-2.5 text-[14px]"
+          )}
         >
           Лента операций
-          <span className="w-8 h-8 rounded-full bg-panel/20 grid place-items-center transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none">
-            <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
+          <span className={clsx(
+            sunken ? "w-7 h-7" : "w-8 h-8",
+            "rounded-full bg-panel/20 grid place-items-center transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none")}>
+            <ArrowUpRight className={sunken ? "w-3.5 h-3.5" : "w-4 h-4"} aria-hidden="true" />
           </span>
         </Link>
         <Link
@@ -211,28 +239,33 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
           // кнопка: обведённая контуром и приглушённым текстом, она
           // сливалась с белым фоном. Второстепенной её оставляет заливка
           // подложкой, а не чёрным, как у соседней.
-          className={`inline-flex h-[52px] items-center rounded-full px-6 border border-border text-text text-[14px] font-medium transition-colors duration-200 hover:border-accent/50 ${
+          className={clsx(
+            "inline-flex items-center rounded-full border border-border text-text font-medium transition-colors duration-200 hover:border-accent/50",
+            sunken ? "h-[44px] px-5 text-[13.5px]" : "h-[52px] px-6 text-[14px]",
             sunken ? "bg-panel hover:bg-panel/70" : "bg-panel2 hover:bg-panel2/70"
-          }`}
+          )}
         >
           Месячный отчёт
         </Link>
       </div>
 
-      <div className={clsx("border-t border-border pt-2", !sunken && "mt-auto")}>
+      <div className={clsx("border-t border-border pt-1", !sunken && "mt-auto pt-2")}>
         <StatRow
+          dense={sunken}
           label="Доход"
           value={formatMoney(m.factIncome, m.base)}
           plan={m.planIncome !== null ? formatMoney(m.planIncome, m.base) : undefined}
           tone="income"
         />
         <StatRow
+          dense={sunken}
           label="Расход"
           value={formatMoney(m.factExpense, m.base)}
           plan={m.planExpense !== null ? formatMoney(m.planExpense, m.base) : undefined}
           tone="expense"
         />
         <StatRow
+          dense={sunken}
           label="Запланированные платежи"
           value={formatMoney(m.upcomingTotalBase, m.base)}
         />
