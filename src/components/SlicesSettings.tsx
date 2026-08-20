@@ -40,10 +40,7 @@ export function SlicesSettings() {
   }
 
   return (
-    // Ширина как у соседней карточки на той же вкладке: список разрезов —
-    // это несколько коротких строк, и во всю ширину монитора он превращался в
-    // полосу пустоты.
-    <div className="card-tray card-pad max-w-[60rem]">
+    <div className="card-tray card-pad">
       <div className="flex items-start justify-between gap-3 mb-3">
         <SettingsSectionHeader icon={Layers} title="Разрезы данных" />
         <InfoPopover>

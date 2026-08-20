@@ -36,14 +36,14 @@ export function SettingRow({
 }) {
   return (
     <div className={`${dense ? "py-1.5" : "py-3"} border-b border-border/60 last:border-b-0`}>
-      {/* Ширина строки ограничена. Настройки лежат в карточке во всю ширину
-          экрана, и `justify-between` разносил подпись к левому краю, а контрол
-          к правому: на мониторе в 1600 между «Базовая валюта» и её списком
-          оказывалась почти тысяча пикселей пустоты, и связать одно с другим
-          глазом было нечем. Предел в 56rem держит их на расстоянии, которое
-          читается как пара. */}
-      <div className="flex items-center justify-between gap-6 flex-wrap max-w-[56rem]">
-        <div className="min-w-0 flex-1">
+      {/* Две колонки, а не «подпись слева, контрол справа». Карточка идёт во всю
+          ширину экрана, и `justify-between` разносил их по краям: на мониторе в
+          1600 между «Базовая валюта» и её списком оказывалась почти тысяча
+          пикселей пустоты, и связать одно с другим глазом было нечем. Теперь
+          подпись занимает свою колонку, а контрол начинается сразу за ней — на
+          одной и той же отметке во всех строках. */}
+      <div className="flex items-center gap-6 flex-wrap">
+        <div className="min-w-0 w-full sm:w-[26rem] sm:shrink-0">
           <SettingLabel title={title} help={help} />
           {status && <div className="text-xs text-muted mt-0.5">{status}</div>}
         </div>
