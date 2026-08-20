@@ -472,8 +472,12 @@ export function CategorySunburst({
       </div>
 
       {/* Vertical divider between the table and the donut — full-height via
-          self-stretch, desktop only (hidden when the columns stack). */}
-      <div className="hidden md:block md:self-stretch w-px bg-border" aria-hidden />
+          self-stretch, desktop only (hidden when the columns stack). В плитке
+          разделять нечего: таблицы там нет, и волосок висел бы у правого канта
+          сам по себе. */}
+      {!compact && (
+        <div className="hidden md:block md:self-stretch w-px bg-border" aria-hidden />
+      )}
 
       {/* ── Legend ────────────────────────────────────────────────────── */}
       {/* Fixed, capped width pinned to the left — it does NOT grow, so all the

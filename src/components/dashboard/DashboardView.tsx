@@ -126,6 +126,35 @@ function StatRow({
   );
 }
 
+/**
+ * Итог «Запланированных операций»: расход и приход одной строкой.
+ *
+ * Два числа рядом, а не одно: складывать их значило бы придумать «чистый
+ * остаток», а каждое здесь отвечает за свои строки списка. Знак и цвет
+ * повторяют строки, поэтому разбираться, что есть что, не нужно.
+ *
+ * Разделитель ставится только между двумя числами. Если ожидается что-то одно,
+ * точка посреди пустоты читалась бы как потерянное второе слагаемое.
+ */
+function PlannedTotals({ out, income, base }: { out: number; income: number; base: string }) {
+  const hasOut = out > 0;
+  const hasIn = income > 0;
+  const big = "font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none";
+  return (
+    <div
+      className="flex items-baseline gap-2 flex-wrap pb-3 mb-1 border-b border-border"
+      style={{ wordSpacing: "-0.22em" }}
+    >
+      {/* Ничего не ожидается — показываем ноль без знака: подписывать плюсом
+          или минусом нечего. */}
+      {!hasOut && !hasIn && <span className={`${big} text-muted`}>{formatMoney(0, base)}</span>}
+      {hasOut && <span className={`${big} text-expense`}>−{formatMoney(out, base)}</span>}
+      {hasOut && hasIn && <span className="text-muted text-xl leading-none">·</span>}
+      {hasIn && <span className={`${big} text-income`}>+{formatMoney(income, base)}</span>}
+    </div>
+  );
+}
+
 /* ─────────────────────────────  итоги месяца  ───────────────────────────── */
 
 /** Подпись пилюли месяца: название и сколько дней осталось. */
@@ -566,21 +595,11 @@ export function DashboardView() {
             {/* Итог подан так же, как совокупный баланс у соседней карточки:
                 крупным числом под заголовком. Мелкой строчкой в шапке он
                 выбивался из ряда. */}
-            <div className="pb-3 mb-1 border-b border-border">
-              <div
-                className="font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none text-expense"
-                style={{ wordSpacing: "-0.22em" }}
-              >
-                {formatMoney(zen ? zenPlannedOut : m.upcomingTotalBase, m.base)}
-              </div>
-              {/* Ожидаемый приход — строкой под расходом, а не в общей сумме:
-                  каждое число здесь отвечает за свои строки списка. */}
-              {zen && zenPlannedIn > 0 && (
-                <div className="font-mono tabular-nums text-[13px] text-income mt-1">
-                  +{formatMoney(zenPlannedIn, m.base)} придёт
-                </div>
-              )}
-            </div>
+            <PlannedTotals
+              out={zen ? zenPlannedOut : m.upcomingTotalBase}
+              income={zen ? zenPlannedIn : 0}
+              base={m.base}
+            />
             {zen ? (
               <ZenPlannedList rows={zenPlanned} base={m.base} today={todayIso} />
             ) : (
