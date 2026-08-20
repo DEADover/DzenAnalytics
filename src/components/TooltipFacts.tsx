@@ -119,6 +119,66 @@ export function TooltipFacts({
 }
 
 /**
+ * Готовая подсказка «строка = серия» для графиков recharts.
+ *
+ * Заведена потому, что почти все подсказки устроены одинаково: заголовок —
+ * подпись точки, ниже пары «серия → сумма» с квадратиком в цвет своей полосы.
+ * Писать это по разу на каждый график означало десять чуть-чуть разных
+ * подсказок; так они одинаковые по построению.
+ *
+ * Не подходит там, где подсказка объясняет что-то сверх сумм (разница, прогноз,
+ * отклонение от среднего) — тем графикам по-прежнему пишут свой `content` на
+ * `TooltipFacts`.
+ */
+export function SeriesTooltip({
+  active,
+  payload,
+  label,
+  formatValue,
+  formatLabel,
+  skipKeys,
+  note,
+}: {
+  active?: boolean;
+  payload?: {
+    name?: string;
+    value?: unknown;
+    color?: string;
+    dataKey?: string | number;
+    payload?: Record<string, unknown>;
+  }[];
+  label?: unknown;
+  /** Как показать число серии. */
+  formatValue: (value: number) => string;
+  /** Как показать заголовок; по умолчанию — сам `label`. Вторым аргументом
+   *  приходят точки: у части графиков подпись лежит в самих данных, а не в
+   *  `label` (например, полное название дня недели). */
+  formatLabel?: (label: unknown, rows: { payload?: Record<string, unknown> }[]) => string;
+  /** Служебные серии, которых в подсказке быть не должно (подложки, границы). */
+  skipKeys?: string[];
+  note?: ReactNode;
+}) {
+  if (!active || !payload?.length) return null;
+  const rows = payload.filter(
+    (p) => !skipKeys?.includes(String(p.dataKey)) && Number.isFinite(Number(p.value))
+  );
+  if (rows.length === 0) return null;
+  return (
+    <ChartTooltipCard>
+      <TooltipFacts
+        title={formatLabel ? formatLabel(label, rows) : String(label ?? "")}
+        facts={rows.map((p) => ({
+          label: String(p.name ?? p.dataKey ?? ""),
+          value: formatValue(Number(p.value)),
+          swatchColor: p.color,
+        }))}
+        note={note}
+      />
+    </ChartTooltipCard>
+  );
+}
+
+/**
  * Карточка подсказки графика: та же рамка, фон и отступы, что у подсказок всего
  * интерфейса (`Tooltip`), — чтобы подсказка на графике не выглядела гостьей из
  * другого приложения.

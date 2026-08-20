@@ -33,7 +33,6 @@ import {
   formatMoney,
   formatNum,
   monthLabel,
-  toNum,
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
@@ -43,6 +42,7 @@ import type { Transaction } from "../types";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { SeriesTooltip } from "../components/TooltipFacts";
 import { Stat } from "../components/Stat";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
@@ -269,7 +269,7 @@ export function TrendsPage() {
               />
               <Tooltip
                 {...chartTooltipProps}
-                formatter={(v: unknown) => formatMoney(toNum(v), base)}
+                content={<SeriesTooltip formatValue={(v) => formatMoney(v, base)} />}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {activeCategories.map((cat) => (
@@ -315,14 +315,16 @@ export function TrendsPage() {
                 <YAxis stroke={chartAxisStroke} fontSize={11} tickFormatter={(v) => formatNum(v, { compact: true })} />
                 <Tooltip
                   {...chartTooltipProps}
-                  // Bars coloured per-point via <Cell> (no Bar fill), so pin the
-                  // tooltip value to the theme text colour for dark-theme readability.
-                  itemStyle={{ color: "rgb(var(--c-text))" }}
-                  labelFormatter={(_, p) => (p?.[0]?.payload as { fullName?: string })?.fullName ?? ""}
-                  formatter={(v: unknown, n: unknown) => [
-                    formatMoney(toNum(v), base),
-                    n === "avg" ? "Средний за день" : "Всего",
-                  ]}
+                  content={
+                    <SeriesTooltip
+                      formatValue={(v) => formatMoney(v, base)}
+                      // Полное название дня лежит в самой точке: по оси стоит
+                      // сокращение («Пн»), а в подсказке уместно целиком.
+                      formatLabel={(_, rows) =>
+                        String((rows[0]?.payload as { fullName?: string })?.fullName ?? "")
+                      }
+                    />
+                  }
                 />
                 <Bar dataKey="avg" radius={[4, 4, 0, 0]} activeBar={false}>
                   {dowChart.map((d, i) => (
@@ -368,7 +370,7 @@ export function TrendsPage() {
                 />
                 <Tooltip
                   {...chartTooltipProps}
-                  formatter={(v: unknown) => formatMoney(toNum(v), base)}
+                  content={<SeriesTooltip formatValue={(v) => formatMoney(v, base)} />}
                 />
               </RadarChart>
             </ResponsiveContainer>
@@ -586,15 +588,14 @@ function HourOfDayBars({
             />
             <Tooltip
               {...chartTooltipProps}
-              // The <Bar> colours its <Cell>s individually, so Recharts can't
-              // resolve a series colour for the tooltip item and falls back to
-              // black — invisible in dark theme. Pin it to the theme text colour.
-              itemStyle={{ color: "rgb(var(--c-text))" }}
-              labelFormatter={(h) => `${String(h).padStart(2, "0")}:00–${String(h).padStart(2, "0")}:59`}
-              formatter={(v: unknown) => [
-                formatMoney(toNum(v), base),
-                kind === "expense" ? "Расход" : "Доход",
-              ]}
+              content={
+                <SeriesTooltip
+                  formatValue={(v) => formatMoney(v, base)}
+                  formatLabel={(h) =>
+                    `${String(h).padStart(2, "0")}:00–${String(h).padStart(2, "0")}:59`
+                  }
+                />
+              }
             />
             <Bar dataKey="total" radius={[3, 3, 0, 0]}>
               {data.map((d) => (

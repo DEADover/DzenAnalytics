@@ -151,6 +151,11 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
       const next = i + (e.key === "ArrowRight" ? 1 : -1);
       if (next < 0 || next >= PRIMARY.length) return;
       e.preventDefault();
+      // Снимаем фокус с пункта, по которому кликали раньше: иначе на нём
+      // остаётся кольцо подсветки, и рядом с залитым текущим разделом это
+      // выглядит как два выбранных пункта сразу. Обработчик висит на окне и
+      // фокуса не требует — листать это не мешает.
+      if (ae && ae.closest("nav")) ae.blur();
       navigate(PRIMARY[next].to);
     };
     window.addEventListener("keydown", onKey);

@@ -23,6 +23,7 @@ import { buildNeedsWants, savingsRateSeries } from "../lib/needsWants";
 import { PeriodPills } from "../components/PeriodPills";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { SeriesTooltip } from "../components/TooltipFacts";
 import { Stat } from "../components/Stat";
 import { EmptyState } from "../components/EmptyState";
 import {
@@ -278,7 +279,9 @@ export function Budget503020Page() {
               />
               <Tooltip
                 {...chartTooltipProps}
-                formatter={(v: unknown) => [`${v}%`, "Норма сбережений"]}
+                content={
+                  <SeriesTooltip formatValue={(v) => `${Math.round(v)}%`} />
+                }
               />
               <ReferenceLine
                 y={20}
