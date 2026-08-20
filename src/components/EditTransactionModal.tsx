@@ -1449,15 +1449,21 @@ export function EditTransactionModal({
           {isCreate ? (
             <span />
           ) : (
+            // Четыре подписи в ряд перестали помещаться в карточку шириной
+            // 512 пикселей, и кнопки поехали к самым краям. Удаление осталось
+            // одним значком: подпись ему не нужна (корзину читают без слов), а
+            // разрушительное действие и не должно быть самым широким предметом
+            // в подвале. Освободившееся место ушло «Копировать», которое без
+            // подписи как раз непонятно.
             <div className="flex items-center gap-2">
               <Tooltip content="Удалить операцию">
                 <button
                   onClick={handleDelete}
                   disabled={saving}
-                  className="btn-danger text-sm"
+                  aria-label="Удалить операцию"
+                  className="btn-danger text-sm px-3"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Удалить
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </Tooltip>
               {onCopy && (
@@ -1476,6 +1482,7 @@ export function EditTransactionModal({
           )}
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="btn-ghost text-sm">
+              <X className="w-3.5 h-3.5" />
               Отмена
             </button>
             <button

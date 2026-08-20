@@ -124,12 +124,35 @@ export function TransactionsDrawer() {
     if (!editsLoaded) hydrateEdits();
   }, [editsLoaded, hydrateEdits]);
 
+  // Escape отрабатывает по одной ступени за нажатие: сперва снимает выделение,
+  // и только следующим нажатием закрывает сам список. Закрывать всё разом
+  // нельзя — человек выделил десяток строк, промахнулся мимо кнопки и одним
+  // Escape потерял бы и выделение, и список.
+  //
+  // Пока сверху открыто окно правки или массовой правки, обработчик вообще не
+  // ставим: Escape всегда принадлежит самому верхнему окну, а их обработчики
+  // висят на том же `window`, где `stopPropagation` соседей не глушит.
+  //
+  // Живёт это отдельным эффектом от блокировки прокрутки ниже: у него свои
+  // поводы перезапускаться (выделение меняется на каждый клик), а перезапускать
+  // из-за них блокировку прокрутки незачем.
+  const escOnTop = Boolean(editing) || Boolean(copying) || bulkOpen;
   useEffect(() => {
-    if (!open) return;
+    if (!open || escOnTop) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key !== "Escape") return;
+      if (selected.size > 0) {
+        setSelected(new Set());
+        return;
+      }
+      close();
     };
     window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, escOnTop, selected, close]);
+
+  useEffect(() => {
+    if (!open) return;
     // The page scrolls on <html> (it has `overflow-y: scroll`), so locking
     // only <body> left the html scrollbar visible beside the drawer — it
     // moved the hidden page behind the overlay and looked broken. Lock the
@@ -146,12 +169,11 @@ export function TransactionsDrawer() {
     if (scrollbarW > 0) html.style.paddingRight = `${scrollbarW}px`;
     document.body.style.overflow = "hidden";
     return () => {
-      window.removeEventListener("keydown", onKey);
       html.style.overflow = prev.htmlOverflow;
       html.style.paddingRight = prev.htmlPad;
       document.body.style.overflow = prev.bodyOverflow;
     };
-  }, [open, close]);
+  }, [open]);
 
   // Reset search every time the drawer re-opens — implemented via the
   // "adjust state on prior props" pattern (no setState-in-effect).

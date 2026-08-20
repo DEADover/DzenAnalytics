@@ -30,7 +30,7 @@ import { useSearchParams } from "react-router-dom";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useZenmoneyStore, getLiveAccountsFromCache } from "../store/useZenmoneyStore";
-import { confirm } from "../store/useConfirmStore";
+import { confirm, useConfirmStore } from "../store/useConfirmStore";
 import { pluralRu } from "../lib/plural";
 import { EditTransactionModal } from "../components/EditTransactionModal";
 import { Tooltip } from "../components/Tooltip";
@@ -248,6 +248,30 @@ export function TransactionsPage() {
   // ── Bulk selection + edit ──────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+
+  // Escape снимает выделение. Ставим обработчик, только когда выделение есть и
+  // сверху ничего не открыто: Escape всегда закрывает САМОЕ верхнее — окно,
+  // диалог, меню, — и перехватывать его у них нельзя. Оба обработчика висят на
+  // `window`, где `stopPropagation` соседей не глушит, поэтому разводим их не
+  // порядком подписки, а условием.
+  const confirmOpen = useConfirmStore((s) => s.isOpen);
+  const anythingOnTop =
+    Boolean(editing) ||
+    Boolean(creating) ||
+    Boolean(copying) ||
+    bulkOpen ||
+    trashOpen ||
+    addMenuOpen ||
+    sortOpen ||
+    confirmOpen;
+  useEffect(() => {
+    if (selected.size === 0 || anythingOnTop) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected.size, anythingOnTop]);
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
