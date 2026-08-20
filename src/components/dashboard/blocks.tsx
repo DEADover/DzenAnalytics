@@ -42,6 +42,7 @@ import { accountKindLabel } from "../../lib/accountType";
 import {
   formatMoney,
   formatNum,
+  formatPct,
   formatDate,
   monthLabel,
   chartTooltipProps,
@@ -698,7 +699,13 @@ export function CategoriesList({
       </div>
     );
   }
+  // Полоса меряется от САМОЙ КРУПНОЙ статьи — так видно соотношение между
+  // ними, — а процент считается от ВСЕХ расходов месяца, как на «Категориях».
+  // Раньше процент тоже шёл от крупнейшей, и у верхней строки всегда стояло
+  // «100%»: число, которое ничего не сообщало и расходилось с тем же разрезом
+  // на своей странице.
   const top = rows[0].expense || 1;
+  const total = rows.reduce((sum, c) => sum + c.expense, 0) || 1;
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="scroll-soft flex flex-col gap-3 flex-1 min-h-0 -mx-2 px-2">
@@ -723,7 +730,7 @@ export function CategoriesList({
                   {c.category}
                 </span>
                 <span className="font-mono tabular-nums text-[12px] text-muted">
-                  {Math.round(frac * 100)}%
+                  {formatPct(c.expense / total, 1)}
                 </span>
                 <span className="font-mono tabular-nums text-[14px] font-medium shrink-0">
                   {formatMoney(c.expense, m.base)}
