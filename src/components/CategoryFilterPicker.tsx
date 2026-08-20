@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { SURFACE_ATTR } from "./Popover";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 
 // Narrow by default (just the categories + the one-line header); widens by
@@ -258,6 +259,7 @@ export function CategoryFilterPicker({
             <div className="fixed inset-0 z-[70]" onClick={() => setOpen(false)} />
             <div
               ref={menuRef}
+              {...{ [SURFACE_ATTR]: "" }}
               className="fixed z-[80] card p-0 overflow-hidden flex flex-col transition-[width,left] duration-200 ease-out"
               style={{ left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight }}
             >

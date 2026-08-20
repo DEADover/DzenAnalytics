@@ -9,6 +9,16 @@ import {
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 
+/**
+ * Метка всплывающей поверхности.
+ *
+ * Всплывающие списки живут в портале на `body`, то есть в дереве они не внутри
+ * окна, которое их открыло, — и отличить «прокрутили список внутри окна» от
+ * «прокрутили страницу под окном» по `contains` нельзя. Метка это и решает:
+ * любая поверхность, помеченная ею, считается своей.
+ */
+export const SURFACE_ATTR = "data-popover-surface";
+
 interface Props {
   open: boolean;
   /** Trigger element to position against. Put it on the trigger's WRAPPER, not
@@ -68,16 +78,29 @@ export function Popover({
 
   useEffect(() => {
     if (!open) return;
-    const close = () => onClose();
+    const close = (e?: Event) => {
+      // Окно приклеено к якорю на момент открытия: уехал якорь — уехало и оно,
+      // поэтому прокрутка страницы его закрывает. Но прокрутка ВНУТРИ него
+      // самого или внутри списка, который оно открыло, якоря не двигает.
+      // Обработчик висит в фазе перехвата и ловит любую прокрутку в документе,
+      // из-за чего листание списка счетов в настройках бюджета захлопывало сами
+      // настройки.
+      const target = e?.target;
+      if (target instanceof Element && target.closest(`[${SURFACE_ATTR}]`)) return;
+      onClose();
+    };
+    // Изменился размер окна — якорь наверняка переехал, тут закрываем без
+    // разбора, кто источник.
+    const onResize = () => onClose();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
+    window.addEventListener("resize", onResize);
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
+      window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);
@@ -88,6 +111,7 @@ export function Popover({
       <div className="fixed inset-0 z-[70]" onClick={onClose} />
       <div
         ref={menuRef}
+        {...{ [SURFACE_ATTR]: "" }}
         className={clsx("fixed z-[80]", className)}
         style={
           pos

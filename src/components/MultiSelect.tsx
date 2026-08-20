@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { SURFACE_ATTR } from "./Popover";
 import { ChevronDown, Search } from "lucide-react";
 import clsx from "clsx";
 import { FILTER_NONE } from "../store/useFiltersStore";
@@ -264,13 +265,32 @@ export function MultiSelect({
     );
   };
 
+  /**
+   * Сколько вариантов считать своими в подписи и в шапке меню.
+   *
+   * Вложенные строки — не отдельные варианты, а разбивка одного: у долгового
+   * счёта это его контрагенты. Считая их наравне, кнопка сообщала «Счета: Все
+   * (318)» там, где счетов восемнадцать, — число говорило о чём угодно, кроме
+   * счетов.
+   */
+  const totalCount = useMemo(
+    () => (nestedOf ? options.filter((o) => !nestedOf(o)).length : options.length),
+    [options, nestedOf]
+  );
+  const selectedCount = useMemo(() => {
+    if (!nestedOf) return selected.size;
+    let n = 0;
+    for (const key of selected) if (!nestedOf(key)) n++;
+    return n;
+  }, [selected, nestedOf]);
+
   const summary = isNone
     ? "Ничего"
     : isAll
       ? compactSummary
         ? "Все"
-        : `Все (${options.length})`
-      : `${selected.size} из ${options.length}`;
+        : `Все (${totalCount})`
+      : `${selectedCount} из ${totalCount}`;
 
   // The menu renders in a portal (position: fixed) so it floats above the
   // table below — `absolute` left it under a later stacking context. Its
@@ -299,15 +319,20 @@ export function MultiSelect({
       const below = window.innerHeight - r.bottom - 8;
       const above = r.top - 8;
       const flipUp = above > below && above >= Math.min(estH, 48);
+      // Меню шире кнопки, и по левому краю кнопки оно уезжало за правый край
+      // экрана — например у кнопки счетов в настройках бюджета: то окно само
+      // прижато к правому краю. Прижимаем меню в видимую область, оставляя
+      // восемь пикселей поля, как это делает `Popover`.
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
       next = flipUp
         ? {
-            left: r.left,
+            left,
             width,
             bottom: window.innerHeight - r.top + 4,
             maxHeight: Math.min(estH, above),
           }
         : {
-            left: r.left,
+            left,
             width,
             top: r.bottom + 4,
             maxHeight: Math.min(estH, below),
@@ -370,6 +395,7 @@ export function MultiSelect({
             <div className="fixed inset-0 z-[70]" onClick={() => setOpen(false)} />
             <div
               ref={menuRef}
+              {...{ [SURFACE_ATTR]: "" }}
               className="fixed z-[80] overflow-auto card p-2"
               style={{
                 left: pos.left,
@@ -381,11 +407,8 @@ export function MultiSelect({
             >
               <div className="flex items-center justify-between gap-2 px-2 py-1 mb-1 border-b border-border/60">
                 <span className="text-xs text-muted">
-                  {options.length}{" "}
-                  {pluralRu(
-                    options.length,
-                    unitForms ?? ["вариант", "варианта", "вариантов"]
-                  )}
+                  {totalCount}{" "}
+                  {pluralRu(totalCount, unitForms ?? ["вариант", "варианта", "вариантов"])}
                 </span>
                 <button
                   onClick={() => onChange(isAll ? new Set([FILTER_NONE]) : new Set())}
