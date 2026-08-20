@@ -318,11 +318,7 @@ export function useDashboardModel(): DashboardModel {
   );
   const upcomingTotalBase = useMemo(() => upcomingTotal(upcoming), [upcoming]);
 
-  const free = freeMoney({
-    factIncome,
-    factExpense,
-    aheadObligatory: upcomingTotalBase,
-  });
+  const free = freeMoney({ factIncome, factExpense });
 
   // План месяца берём из тех же строк бюджета, что и раздел «Бюджет».
   const { planIncome, planExpense } = useMemo(() => {

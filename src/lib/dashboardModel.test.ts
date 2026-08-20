@@ -162,23 +162,28 @@ describe("upcomingPayments — что спишется до конца меся�
   });
 });
 
-describe("freeMoney — сколько остаётся до конца месяца", () => {
+describe("freeMoney — сальдо месяца", () => {
   it("КЛЮЧЕВОЕ: считает по факту и ничего не подставляет вместо него", () => {
     // Раньше сюда приходил «прогноз дохода» — среднее за прошлые месяцы, — и
     // на главной стояло 543 800 там, где месяц принёс 158 994.
-    const f = freeMoney({ factIncome: 158_994, factExpense: 198_297, aheadObligatory: 7_400 });
-    expect(f.value).toBe(158_994 - 198_297 - 7_400);
-    expect(f).toMatchObject({ income: 158_994, spent: 198_297, ahead: 7_400 });
+    const f = freeMoney({ factIncome: 158_994, factExpense: 198_297 });
+    expect(f.value).toBe(158_994 - 198_297);
+    expect(f).toMatchObject({ income: 158_994, spent: 198_297 });
   });
 
   it("нехватка показывается отрицательной, а не нулём", () => {
-    expect(freeMoney({ factIncome: 100_000, factExpense: 130_000, aheadObligatory: 5_000 }).value)
-      .toBe(-35_000);
+    expect(freeMoney({ factIncome: 100_000, factExpense: 130_000 }).value).toBe(-30_000);
   });
 
   it("слагаемые возвращаются как есть — по ним можно сверить итог", () => {
-    const f = freeMoney({ factIncome: 300_000, factExpense: 120_000, aheadObligatory: 20_000 });
-    expect(f.income - f.spent - f.ahead).toBe(f.value);
+    const f = freeMoney({ factIncome: 300_000, factExpense: 120_000 });
+    expect(f.income - f.spent).toBe(f.value);
+  });
+
+  it("будущие списания в сальдо не входят", () => {
+    // Их вычитали раньше, и итог переставал сходиться с доходом и расходом на
+    // экране. Запланированные операции живут своим виджетом.
+    expect(freeMoney({ factIncome: 158_994, factExpense: 205_236 }).value).toBe(-46_242);
   });
 });
 
