@@ -6,9 +6,12 @@
  * ширину. Других размеров нет намеренно: по такой сетке любая перестановка
  * складывается в ровные ряды, а по произвольным пропорциям — не складывается.
  *
+ * Ширина у каждого виджета своя и пока не настраивается: она часть самого
+ * виджета, а не раскладки. Человек задаёт порядок и состав.
+ *
  * Здесь только модель и чистые преобразования над ней: что за виджеты бывают,
  * какая раскладка считается стандартной и что происходит с раскладкой при
- * переносе, смене ширины и возврате виджета. Как это рисуется — дело
+ * переносе, убирании и возврате виджета. Как это рисуется — дело
  * `DashboardView`, где раскладка живёт — дело `useDashboardLayoutStore`.
  */
 
@@ -33,9 +36,12 @@ export interface WidgetMeta {
   title: string;
   /** Одна строка о том, что внутри: список скрытых иначе читается загадкой. */
   hint: string;
-  /** Ширины, на которых виджет остаётся читаемым. */
-  spans: WidgetSpan[];
-  defaultSpan: WidgetSpan;
+  /**
+   * Ширина в колонках сетки. Задаётся виджетом и пока не настраивается: у
+   * каждого блока есть ширина, на которой он читается, и разъезжаться ей
+   * незачем — календарю нужны семь колонок клеток, списку статей хватает трети.
+   */
+  span: WidgetSpan;
   /** Рисует себя сам, без поддона с двойным кантом. */
   bare?: boolean;
   /** Высота по содержимому, а не общая высота ряда. */
@@ -52,32 +58,27 @@ export const WIDGETS: readonly WidgetMeta[] = [
     id: "month",
     title: "Итоги месяца",
     hint: "Свободные деньги, темп трат, доход и расход",
-    spans: [1, 2, 3],
-    defaultSpan: 1,
+    span: 1,
     bare: true,
   },
   {
     id: "accounts",
     title: "Балансы счетов",
     hint: "Совокупный баланс и остаток на каждом счёте",
-    spans: [1, 2, 3],
-    defaultSpan: 1,
+    span: 1,
   },
   {
     id: "upcoming",
     title: "Запланированные платежи",
     hint: "Что спишется до конца месяца",
-    spans: [1, 2, 3],
-    defaultSpan: 1,
+    span: 1,
   },
   {
     id: "quicklinks",
     title: "Быстрые переходы",
     hint: "Кнопки в бюджеты, цели, правила, теги, сравнения и динамику",
-    // Только во всю ширину: это дорожка из шести кнопок, на трети от неё
-    // остаются одни значки.
-    spans: [3],
-    defaultSpan: 3,
+    // Дорожка из шести кнопок: на трети от неё остаются одни значки.
+    span: 3,
     bare: true,
     autoHeight: true,
   },
@@ -85,29 +86,25 @@ export const WIDGETS: readonly WidgetMeta[] = [
     id: "cashflow",
     title: "Доходы и расходы",
     hint: "Столбцы за последние двенадцать месяцев и прогноз",
-    spans: [1, 2, 3],
-    defaultSpan: 2,
+    span: 2,
   },
   {
     id: "categories",
     title: "Расходы по категориям",
     hint: "На что ушли деньги в этом месяце",
-    spans: [1, 2, 3],
-    defaultSpan: 1,
+    span: 1,
   },
   {
     id: "activity",
     title: "Активность в этом месяце",
     hint: "Календарь трат по дням",
-    spans: [1, 2, 3],
-    defaultSpan: 2,
+    span: 2,
   },
   {
     id: "observations",
     title: "Авто-наблюдения",
     hint: "Что выбилось из обычного: перерасход, подписки, пропуски",
-    spans: [1, 2, 3],
-    defaultSpan: 1,
+    span: 1,
   },
 ];
 
@@ -127,35 +124,18 @@ export function widgetMeta(id: WidgetId): WidgetMeta {
 /** Место виджета на главной. Убранный остаётся в списке — чтобы вернуться туда же. */
 export interface WidgetPlacement {
   id: WidgetId;
-  span: WidgetSpan;
   hidden?: boolean;
 }
 
-export const DEFAULT_LAYOUT: readonly WidgetPlacement[] = WIDGETS.map((w) => ({
-  id: w.id,
-  span: w.defaultSpan,
-}));
-
-/** Ближайшая разрешённая ширина: сохранённая может прийти из другой версии. */
-function clampSpan(meta: WidgetMeta, raw: unknown): WidgetSpan {
-  const n = Number(raw);
-  if (meta.spans.includes(n as WidgetSpan)) return n as WidgetSpan;
-  if (!Number.isFinite(n)) return meta.defaultSpan;
-  let best = meta.defaultSpan;
-  for (const s of meta.spans) {
-    if (Math.abs(s - n) < Math.abs(best - n)) best = s;
-  }
-  return best;
-}
+export const DEFAULT_LAYOUT: readonly WidgetPlacement[] = WIDGETS.map((w) => ({ id: w.id }));
 
 /**
  * Привести сохранённую раскладку к рабочему виду.
  *
- * Мусор и виджеты, которых больше нет, выкидываем; повторы схлопываем; ширину
- * зажимаем разрешённой. Виджет, появившийся в новой версии, в сохранённой
- * раскладке отсутствует — его ставим на место по стандартному порядку: сразу
- * за тем соседом, который в раскладке уже есть. Иначе всё новое копилось бы
- * в подвале страницы.
+ * Мусор и виджеты, которых больше нет, выкидываем; повторы схлопываем. Виджет,
+ * появившийся в новой версии, в сохранённой раскладке отсутствует — его ставим
+ * на место по стандартному порядку: сразу за тем соседом, который в раскладке
+ * уже есть. Иначе всё новое копилось бы в подвале страницы.
  */
 export function normalizeLayout(raw: unknown): WidgetPlacement[] {
   const arr = Array.isArray(raw) ? raw : [];
@@ -169,10 +149,7 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
     const meta = BY_ID.get(id);
     if (!meta || seen.has(meta.id)) continue;
     seen.add(meta.id);
-    const placement: WidgetPlacement = {
-      id: meta.id,
-      span: clampSpan(meta, (item as { span?: unknown }).span),
-    };
+    const placement: WidgetPlacement = { id: meta.id };
     if ((item as { hidden?: unknown }).hidden === true) placement.hidden = true;
     out.push(placement);
   }
@@ -188,7 +165,7 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
         break;
       }
     }
-    out.splice(at, 0, { id: meta.id, span: meta.defaultSpan });
+    out.splice(at, 0, { id: meta.id });
     seen.add(meta.id);
   });
 
@@ -237,17 +214,6 @@ export function shiftWidget(
   return next;
 }
 
-/** Сменить ширину. Неразрешённую для этого виджета не берём. */
-export function setWidgetSpan(
-  layout: readonly WidgetPlacement[],
-  id: WidgetId,
-  span: WidgetSpan
-): WidgetPlacement[] {
-  return layout.map((p) =>
-    p.id === id ? { ...p, span: clampSpan(widgetMeta(id), span) } : p
-  );
-}
-
 /** Убрать виджет с главной или вернуть его на прежнее место. */
 export function setWidgetHidden(
   layout: readonly WidgetPlacement[],
@@ -256,7 +222,7 @@ export function setWidgetHidden(
 ): WidgetPlacement[] {
   return layout.map((p) => {
     if (p.id !== id) return p;
-    const next: WidgetPlacement = { id: p.id, span: p.span };
+    const next: WidgetPlacement = { id: p.id };
     if (hidden) next.hidden = true;
     return next;
   });
@@ -265,8 +231,5 @@ export function setWidgetHidden(
 /** Совпадает ли раскладка со стандартной — по ней гаснет кнопка «Сбросить». */
 export function isDefaultLayout(layout: readonly WidgetPlacement[]): boolean {
   if (layout.length !== DEFAULT_LAYOUT.length) return false;
-  return layout.every((p, i) => {
-    const d = DEFAULT_LAYOUT[i];
-    return p.id === d.id && p.span === d.span && !p.hidden;
-  });
+  return layout.every((p, i) => p.id === DEFAULT_LAYOUT[i].id && !p.hidden);
 }

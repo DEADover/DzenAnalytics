@@ -429,7 +429,6 @@ export function DashboardView() {
               <WidgetShell
                 key={p.id}
                 meta={meta}
-                span={p.span}
                 editing={editing}
                 dragging={drag.dragId === p.id}
                 dropTarget={drag.overId === p.id && drag.dragId !== null && drag.dragId !== p.id}

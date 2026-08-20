@@ -7,9 +7,7 @@ import {
   moveWidget,
   normalizeLayout,
   setWidgetHidden,
-  setWidgetSpan,
   shiftWidget,
-  widgetMeta,
   type WidgetPlacement,
 } from "./dashboardLayout";
 
@@ -25,11 +23,11 @@ describe("normalizeLayout", () => {
 
   it("выбрасывает мусор и виджеты, которых больше нет", () => {
     const out = normalizeLayout([
-      { id: "accounts", span: 1 },
-      { id: "виджет-из-будущего", span: 2 },
+      { id: "accounts" },
+      { id: "виджет-из-будущего" },
       null,
       42,
-      { span: 3 },
+      { hidden: true },
     ]);
     expect(out).toHaveLength(WIDGETS.length);
     expect(ids(out)).toContain("accounts");
@@ -37,26 +35,18 @@ describe("normalizeLayout", () => {
   });
 
   it("схлопывает повторы", () => {
-    const out = normalizeLayout([
-      { id: "accounts", span: 2 },
-      { id: "accounts", span: 1 },
-    ]);
+    const out = normalizeLayout([{ id: "accounts" }, { id: "accounts" }]);
     expect(ids(out).filter((id) => id === "accounts")).toHaveLength(1);
-    // Побеждает первая запись, а не последняя.
-    expect(out.find((p) => p.id === "accounts")!.span).toBe(2);
+    expect(out).toHaveLength(WIDGETS.length);
   });
 
-  it("зажимает ширину разрешённой", () => {
-    // «Быстрые переходы» живут только во всю строку.
+  it("выбрасывает ширину из старых раскладок: теперь она у виджета своя", () => {
     const out = normalizeLayout([{ id: "quicklinks", span: 1 }]);
-    expect(out.find((p) => p.id === "quicklinks")!.span).toBe(3);
-    // Ерунда вместо числа — ширина по умолчанию.
-    const junk = normalizeLayout([{ id: "cashflow", span: "широкий" }]);
-    expect(junk.find((p) => p.id === "cashflow")!.span).toBe(widgetMeta("cashflow").defaultSpan);
+    expect(out.find((p) => p.id === "quicklinks")!).toEqual({ id: "quicklinks" });
   });
 
   it("помнит убранные виджеты", () => {
-    const out = normalizeLayout([{ id: "observations", span: 1, hidden: true }]);
+    const out = normalizeLayout([{ id: "observations", hidden: true }]);
     expect(out.find((p) => p.id === "observations")!.hidden).toBe(true);
     // Остальные — на месте и видимые.
     expect(out.filter((p) => p.hidden)).toHaveLength(1);
@@ -71,10 +61,7 @@ describe("normalizeLayout", () => {
   });
 
   it("держится порядка человека, дополняя его по стандартному", () => {
-    const out = normalizeLayout([
-      { id: "observations", span: 1 },
-      { id: "month", span: 1 },
-    ]);
+    const out = normalizeLayout([{ id: "observations" }, { id: "month" }]);
     expect(ids(out)).toEqual([
       "observations",
       "month",
@@ -134,17 +121,7 @@ describe("shiftWidget", () => {
   });
 });
 
-describe("ширина и видимость", () => {
-  it("ставит разрешённую ширину", () => {
-    const out = setWidgetSpan(DEFAULT_LAYOUT, "categories", 2);
-    expect(out.find((p) => p.id === "categories")!.span).toBe(2);
-  });
-
-  it("не даёт сузить виджет, который живёт только во всю строку", () => {
-    const out = setWidgetSpan(DEFAULT_LAYOUT, "quicklinks", 1);
-    expect(out.find((p) => p.id === "quicklinks")!.span).toBe(3);
-  });
-
+describe("видимость", () => {
   it("убирает и возвращает на то же место", () => {
     const hidden = setWidgetHidden(DEFAULT_LAYOUT, "cashflow", true);
     expect(hidden.find((p) => p.id === "cashflow")!.hidden).toBe(true);
@@ -163,7 +140,6 @@ describe("isDefaultLayout", () => {
   });
 
   it("видит любое отличие", () => {
-    expect(isDefaultLayout(setWidgetSpan(DEFAULT_LAYOUT, "categories", 2))).toBe(false);
     expect(isDefaultLayout(setWidgetHidden(DEFAULT_LAYOUT, "categories", true))).toBe(false);
     expect(isDefaultLayout(moveWidget(DEFAULT_LAYOUT, "month", "accounts"))).toBe(false);
     expect(isDefaultLayout(DEFAULT_LAYOUT.slice(1))).toBe(false);
@@ -180,10 +156,9 @@ describe("isWidgetId", () => {
 });
 
 describe("реестр виджетов", () => {
-  it("у каждого виджета ширина по умолчанию — из разрешённых", () => {
+  it("у каждого виджета есть ширина, название и пояснение", () => {
     for (const w of WIDGETS) {
-      expect(w.spans.length).toBeGreaterThan(0);
-      expect(w.spans).toContain(w.defaultSpan);
+      expect([1, 2, 3]).toContain(w.span);
       expect(w.title.length).toBeGreaterThan(0);
       expect(w.hint.length).toBeGreaterThan(0);
     }

@@ -5,8 +5,8 @@
  * В обычном состоянии обойма не рисует ничего своего — только поддон с двойным
  * кантом и нужную ширину. Ручки появляются, когда включён режим настройки:
  * тогда содержимое приглушается и перестаёт ловить нажатия (иначе перетаскивание
- * то и дело проваливалось бы в график), а поверх встаёт дорожка: шаг влево-вправо,
- * ширина и «убрать».
+ * то и дело проваливалось бы в график), а поверх встаёт дорожка: шаг влево-вправо
+ * и «убрать». Ширина виджету не настраивается — она часть его самого.
  *
  * Перетаскивание — на штатных событиях браузера, без сторонней библиотеки:
  * виджетов восемь, и целиться приходится в крупные плитки, а не в строки списка.
@@ -32,24 +32,14 @@ import {
   widgetMeta,
   type WidgetMeta,
   type WidgetPlacement,
-  type WidgetSpan,
 } from "../../lib/dashboardLayout";
 import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
 import { pluralRu } from "../../lib/plural";
-
-/** Подписи ширины. Дроби, а не «1/3», — рядом со значками они короче и ровнее. */
-const SPAN_LABEL: Record<WidgetSpan, string> = { 1: "⅓", 2: "⅔", 3: "1" };
-const SPAN_TITLE: Record<WidgetSpan, string> = {
-  1: "Треть ширины",
-  2: "Две трети ширины",
-  3: "Вся ширина",
-};
 
 /* ─────────────────────────────  обойма виджета  ───────────────────────────── */
 
 export function WidgetShell({
   meta,
-  span,
   editing,
   dragging,
   dropTarget,
@@ -63,7 +53,6 @@ export function WidgetShell({
   children,
 }: {
   meta: WidgetMeta;
-  span: WidgetSpan;
   editing: boolean;
   /** Эту плитку сейчас везут. */
   dragging: boolean;
@@ -80,7 +69,6 @@ export function WidgetShell({
   canForward: boolean;
   children: ReactNode;
 }) {
-  const setSpan = useDashboardLayoutStore((s) => s.setSpan);
   const setHidden = useDashboardLayoutStore((s) => s.setHidden);
 
   const drag = editing
@@ -131,8 +119,8 @@ export function WidgetShell({
       {...drag}
       className={clsx(
         "min-w-0 relative",
-        span === 2 && "lg:col-span-2",
-        span === 3 && "lg:col-span-3",
+        meta.span === 2 && "lg:col-span-2",
+        meta.span === 3 && "lg:col-span-3",
         // Высоту ряда задаёт сам виджет, а не сетка: дорожка быстрых переходов
         // ростом в одну кнопку не должна вытягиваться до полутора экранов.
         meta.autoHeight ? "self-start" : "lg:h-[30rem]",
@@ -203,27 +191,6 @@ export function WidgetShell({
                 <ChevronRight className="w-4 h-4" aria-hidden="true" />
               </button>
             </span>
-            {meta.spans.length > 1 && (
-              <span className="flex items-center gap-0.5 rounded-full bg-panel2 border border-border p-0.5 shrink-0">
-                {meta.spans.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    title={SPAN_TITLE[s]}
-                    onClick={() => void setSpan(meta.id, s)}
-                    className={clsx(
-                      "w-7 h-6 rounded-full text-[12.5px] font-semibold leading-none transition-colors duration-200",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-                      s === span
-                        ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
-                        : "text-muted hover:text-text"
-                    )}
-                  >
-                    {SPAN_LABEL[s]}
-                  </button>
-                ))}
-              </span>
-            )}
             <button
               type="button"
               className="btn-icon-danger shrink-0"
@@ -256,8 +223,8 @@ export function LayoutToolbar({ layout }: { layout: readonly WidgetPlacement[] }
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-accent/40 bg-panel2 px-4 py-2.5">
       <p className="text-[13px] text-muted">
-        Перетащите виджет на место другого или сдвиньте стрелками, задайте
-        ширину — ⅓, ⅔ или во всю строку. Убранные ждут внизу страницы.
+        Перетащите виджет на место другого или сдвиньте стрелками. Убранные ждут
+        внизу страницы.
       </p>
       <div className="flex items-center gap-2">
         <button
