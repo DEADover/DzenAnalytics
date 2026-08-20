@@ -24,21 +24,25 @@ import {
   LayoutTemplate,
   Plus,
   RotateCcw,
+  Trash2,
   X,
 } from "lucide-react";
 import {
+  MAX_LINKS,
   WIDGETS,
   isDefaultLayout,
   widgetMeta,
   type WidgetMeta,
   type WidgetPlacement,
 } from "../../lib/dashboardLayout";
+import { navSection } from "../../lib/navSections";
 import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
 import { pluralRu } from "../../lib/plural";
 
 /* ─────────────────────────────  обойма виджета  ───────────────────────────── */
 
 export function WidgetShell({
+  placement,
   meta,
   editing,
   dragging,
@@ -52,6 +56,7 @@ export function WidgetShell({
   canForward,
   children,
 }: {
+  placement: WidgetPlacement;
   meta: WidgetMeta;
   editing: boolean;
   /** Эту плитку сейчас везут. */
@@ -79,7 +84,7 @@ export function WidgetShell({
           // идентификатор мы держим в состоянии страницы: dataTransfer читается
           // только на drop, а подсветка нужна раньше.
           e.dataTransfer.effectAllowed = "move";
-          e.dataTransfer.setData("text/plain", meta.id);
+          e.dataTransfer.setData("text/plain", placement.key);
           onDragStart();
         },
         onDragEnter: onDragEnter,
@@ -114,6 +119,65 @@ export function WidgetShell({
     "disabled:opacity-30 disabled:hover:text-muted disabled:hover:bg-transparent " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
+  const bar = (
+    <div className="pointer-events-auto flex items-center gap-1 max-w-full rounded-full bg-panel border border-border shadow-tray px-1.5 py-1.5">
+      {/* Ручка — только знак того, что плитку можно взять: тащится вся плитка
+          целиком, и отдельная кнопка для этого не нужна. */}
+      <span
+        className="px-0.5 text-muted shrink-0"
+        title={`${meta.title}\nПеретащите плитку на место другой`}
+      >
+        <GripVertical className="w-4 h-4" aria-hidden="true" />
+      </span>
+      {/* Название — только у виджетов без поддона: у остальных оно и так
+          написано в шапке карточки прямо над дорожкой, а на трети экрана
+          обрезалось до «Балансы с…». */}
+      {meta.bare && (
+        <span className="text-[13px] font-semibold truncate min-w-0">{meta.title}</span>
+      )}
+      {/* Шаг влево-вправо кнопками: перетаскивание на сенсорном экране не
+          работает вовсе, а с клавиатуры до него не добраться. */}
+      <span className="flex items-center shrink-0">
+        <button
+          type="button"
+          className={arrow}
+          title="Сдвинуть назад"
+          aria-label="Сдвинуть назад"
+          disabled={!canBack}
+          onKeyDown={onArrowKey}
+          onClick={() => onShift(-1)}
+        >
+          <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={arrow}
+          title="Сдвинуть вперёд"
+          aria-label="Сдвинуть вперёд"
+          disabled={!canForward}
+          onKeyDown={onArrowKey}
+          onClick={() => onShift(1)}
+        >
+          <ChevronRight className="w-4 h-4" aria-hidden="true" />
+        </button>
+      </span>
+      <button
+        type="button"
+        className="btn-icon-danger shrink-0"
+        title="Убрать с главной"
+        onClick={() => void setHidden(placement.key, true)}
+      >
+        <X className="w-4 h-4" aria-hidden="true" />
+      </button>
+    </div>
+  );
+
+  // Виджет, который настраивается изнутри, в режиме остаётся живым: приглушать
+  // и глушить нажатия у него нечего — там и настраивают. Поэтому дорожка встаёт
+  // НАД содержимым, а не поверх: посреди собственных кнопок она закрывала бы
+  // ровно то, что человек пришёл менять.
+  const inlineBar = editing && meta.live;
+
   return (
     <div
       {...drag}
@@ -121,9 +185,10 @@ export function WidgetShell({
         "min-w-0 relative",
         meta.span === 2 && "lg:col-span-2",
         meta.span === 3 && "lg:col-span-3",
-        // Высоту ряда задаёт сам виджет, а не сетка: дорожка быстрых переходов
-        // ростом в одну кнопку не должна вытягиваться до полутора экранов.
+        // Высоту ряда задаёт сам виджет, а не сетка: дорожка кнопок ростом в
+        // одну кнопку не должна вытягиваться до полутора экранов.
         meta.autoHeight ? "self-start" : "lg:h-[30rem]",
+        inlineBar && "flex flex-col gap-3",
         // Кант в акценте — знак режима: пока он есть, плитку можно взять и
         // унести. Отодвинут от края, чтобы не сливаться с собственным кантом
         // поддона и не съедать просветы сетки.
@@ -133,10 +198,12 @@ export function WidgetShell({
         dropTarget && "ring-4 !ring-accent"
       )}
     >
+      {inlineBar && <div className="flex">{bar}</div>}
+
       <div
         className={clsx(
-          "h-full",
-          editing && "opacity-50 pointer-events-none select-none"
+          inlineBar ? "flex-1 min-h-0" : "h-full",
+          editing && !meta.live && "opacity-50 pointer-events-none select-none"
         )}
       >
         {meta.bare ? (
@@ -148,58 +215,9 @@ export function WidgetShell({
         )}
       </div>
 
-      {editing && (
+      {editing && !meta.live && (
         <div className="absolute inset-0 z-10 flex items-center justify-center p-2 pointer-events-none">
-          <div className="pointer-events-auto flex items-center gap-1 max-w-full rounded-full bg-panel border border-border shadow-tray px-1.5 py-1.5">
-            {/* Ручка — только знак того, что плитку можно взять: тащится вся
-                плитка целиком, и отдельная кнопка для этого не нужна. */}
-            <span
-              className="px-0.5 text-muted shrink-0"
-              title={`${meta.title}\nПеретащите плитку на место другой`}
-            >
-              <GripVertical className="w-4 h-4" aria-hidden="true" />
-            </span>
-            {/* Название — только у виджетов без поддона: у остальных оно и так
-                написано в шапке карточки прямо над дорожкой, а на трети экрана
-                обрезалось до «Балансы с…». */}
-            {meta.bare && (
-              <span className="text-[13px] font-semibold truncate min-w-0">{meta.title}</span>
-            )}
-            {/* Шаг влево-вправо кнопками: перетаскивание на сенсорном экране не
-                работает вовсе, а с клавиатуры до него не добраться. */}
-            <span className="flex items-center shrink-0">
-              <button
-                type="button"
-                className={arrow}
-                title="Сдвинуть назад"
-                aria-label="Сдвинуть назад"
-                disabled={!canBack}
-                onKeyDown={onArrowKey}
-                onClick={() => onShift(-1)}
-              >
-                <ChevronLeft className="w-4 h-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className={arrow}
-                title="Сдвинуть вперёд"
-                aria-label="Сдвинуть вперёд"
-                disabled={!canForward}
-                onKeyDown={onArrowKey}
-                onClick={() => onShift(1)}
-              >
-                <ChevronRight className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </span>
-            <button
-              type="button"
-              className="btn-icon-danger shrink-0"
-              title="Убрать с главной"
-              onClick={() => void setHidden(meta.id, true)}
-            >
-              <X className="w-4 h-4" aria-hidden="true" />
-            </button>
-          </div>
+          {bar}
         </div>
       )}
     </div>
@@ -249,47 +267,112 @@ export function LayoutToolbar({ layout }: { layout: readonly WidgetPlacement[] }
   );
 }
 
-/* ─────────────────────────────  полка убранных  ───────────────────────────── */
+/* ─────────────────────────────  полка  ───────────────────────────── */
+
+const CHIP =
+  "inline-flex items-center gap-1.5 rounded-full border border-border bg-panel " +
+  "px-3 py-1.5 text-[13px] font-medium " +
+  "transition-colors duration-200 hover:border-accent/50 hover:text-accent " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+
+/** Чем подписать плитку на полке: дорожки различаются кнопками, а не видом. */
+function shelfLabel(p: WidgetPlacement): { text: string; title: string } {
+  if (p.kind !== "links") {
+    const meta = widgetMeta(p.kind);
+    return { text: meta.title, title: meta.hint };
+  }
+  const labels = (p.links ?? []).map((to) => navSection(to)?.label ?? to);
+  return {
+    text: `Дорожка: ${labels.slice(0, 2).join(", ")}${labels.length > 2 ? "…" : ""}`,
+    title: `Дорожка кнопок\n${labels.join(" · ")}`,
+  };
+}
+
+function ShelfRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span className="text-[11.5px] uppercase tracking-[0.12em] text-muted font-medium w-full sm:w-[9.5rem] sm:shrink-0">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
 
 /**
- * Что снято с главной. Видна только в режиме настройки: в обычном она
- * рассказывала бы про отсутствующее — ровно то, от чего человек и избавился.
+ * Что можно поставить на главную: снятые виджеты и новая дорожка кнопок.
+ *
+ * Видна только в режиме настройки: в обычном она рассказывала бы про
+ * отсутствующее — ровно то, от чего человек и избавился.
  */
 export function HiddenWidgets({ layout }: { layout: readonly WidgetPlacement[] }) {
   const setHidden = useDashboardLayoutStore((s) => s.setHidden);
+  const addLinks = useDashboardLayoutStore((s) => s.addLinks);
+  const remove = useDashboardLayoutStore((s) => s.remove);
   const hidden = layout.filter((p) => p.hidden);
 
   return (
-    <div className="rounded-[18px] border border-dashed border-border bg-panel2/50 px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="text-[11.5px] uppercase tracking-[0.12em] text-muted font-medium">
-          Убранные виджеты
-        </span>
+    <div className="rounded-[18px] border border-dashed border-border bg-panel2/50 px-4 py-3 flex flex-col gap-2.5">
+      <ShelfRow label="Убранные">
         {hidden.length === 0 ? (
           <span className="text-[13px] text-muted">
             Ни одного — на главной сейчас всё, что есть.
           </span>
         ) : (
           hidden.map((p) => {
-            const meta = widgetMeta(p.id);
-            return (
+            const { text, title } = shelfLabel(p);
+            const restore = (
               <button
-                key={p.id}
                 type="button"
-                title={meta.hint}
-                onClick={() => void setHidden(p.id, false)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-panel
-                           px-3 py-1.5 text-[13px] font-medium
-                           transition-colors duration-200 hover:border-accent/50 hover:text-accent
-                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                title={title}
+                onClick={() => void setHidden(p.key, false)}
+                className={clsx(
+                  CHIP,
+                  // У составной пилюли рамку и подложку рисует обойма.
+                  widgetMeta(p.kind).multi && "border-0 bg-transparent px-0 py-0"
+                )}
               >
                 <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                {meta.title}
+                {text}
               </button>
+            );
+            // Виджет, заведённый руками, с полки можно и стереть: иначе снятая
+            // дорожка осталась бы на ней навсегда.
+            if (!widgetMeta(p.kind).multi) return <span key={p.key}>{restore}</span>;
+            return (
+              <span
+                key={p.key}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-panel pl-3 pr-1 py-1"
+              >
+                {restore}
+                <button
+                  type="button"
+                  className="btn-icon-danger p-1"
+                  title="Удалить дорожку насовсем"
+                  aria-label="Удалить дорожку насовсем"
+                  onClick={() => void remove(p.key)}
+                >
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              </span>
             );
           })
         )}
-      </div>
+      </ShelfRow>
+
+      {/* Дорожек можно поставить сколько угодно: в одну помещается шесть
+          кнопок, а кому нужно больше — заводит вторую. */}
+      <ShelfRow label="Новый виджет">
+        <button
+          type="button"
+          title={`Дорожка кнопок\nБыстрые переходы в разделы, до ${MAX_LINKS} кнопок в ряд`}
+          onClick={() => void addLinks()}
+          className={CHIP}
+        >
+          <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+          Дорожка кнопок
+        </button>
+      </ShelfRow>
     </div>
   );
 }

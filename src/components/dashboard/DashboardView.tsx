@@ -27,8 +27,8 @@ import {
   UpcomingList,
   ObservationsList,
   ActivityHeat,
-  QuickLinks,
 } from "./blocks";
+import { LinksRow } from "./LinksRow";
 import {
   EmptyDashboard,
   HiddenWidgets,
@@ -36,7 +36,7 @@ import {
   WidgetShell,
 } from "./WidgetLayout";
 import { useWidgetDrag } from "../../hooks/useWidgetDrag";
-import { widgetMeta, type WidgetId } from "../../lib/dashboardLayout";
+import { widgetMeta, type WidgetPlacement } from "../../lib/dashboardLayout";
 import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
 import { formatMoney, monthLabel, formatDate } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
@@ -223,8 +223,9 @@ export function DashboardView() {
   const setEditing = useDashboardLayoutStore((s) => s.setEditing);
   const move = useDashboardLayoutStore((s) => s.move);
   const shift = useDashboardLayoutStore((s) => s.shift);
+  const setLinks = useDashboardLayoutStore((s) => s.setLinks);
 
-  const drag = useWidgetDrag((dragId, overId) => void move(dragId, overId));
+  const drag = useWidgetDrag((dragKey, overKey) => void move(dragKey, overKey));
 
   // Режим настройки не переживает уход со страницы: вернувшись на главную,
   // человек ждёт готовый экран, а не разложенные ручки.
@@ -276,8 +277,8 @@ export function DashboardView() {
   );
 
   /** Содержимое виджета. Обойму, ширину и ручки надевает `WidgetShell`. */
-  function widgetBody(id: WidgetId): ReactNode {
-    switch (id) {
+  function widgetBody(p: WidgetPlacement): ReactNode {
+    switch (p.kind) {
       case "month":
         return <MonthHero m={m} />;
 
@@ -316,10 +317,14 @@ export function DashboardView() {
           </>
         );
 
-      // Дублируют пункты верхнего меню намеренно: меню отвечает на «куда я могу
-      // пойти», а эти кнопки — на «что делать дальше».
-      case "quicklinks":
-        return <QuickLinks />;
+      case "links":
+        return (
+          <LinksRow
+            links={p.links ?? []}
+            editing={editing}
+            onChange={(links) => void setLinks(p.key, links)}
+          />
+        );
 
       case "cashflow":
         return (
@@ -423,27 +428,27 @@ export function DashboardView() {
         <EmptyDashboard />
       ) : (
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6">
-          {visible.map((p, i) => {
-            const meta = widgetMeta(p.id);
-            return (
-              <WidgetShell
-                key={p.id}
-                meta={meta}
-                editing={editing}
-                dragging={drag.dragId === p.id}
-                dropTarget={drag.overId === p.id && drag.dragId !== null && drag.dragId !== p.id}
-                onDragStart={() => drag.start(p.id)}
-                onDragEnter={() => drag.enter(p.id)}
-                onDragEnd={drag.end}
-                onDrop={(sourceId) => drag.drop(sourceId, p.id)}
-                onShift={(dir) => void shift(p.id, dir)}
-                canBack={i > 0}
-                canForward={i < visible.length - 1}
-              >
-                {widgetBody(p.id)}
-              </WidgetShell>
-            );
-          })}
+          {visible.map((p, i) => (
+            <WidgetShell
+              key={p.key}
+              placement={p}
+              meta={widgetMeta(p.kind)}
+              editing={editing}
+              dragging={drag.dragKey === p.key}
+              dropTarget={
+                drag.overKey === p.key && drag.dragKey !== null && drag.dragKey !== p.key
+              }
+              onDragStart={() => drag.start(p.key)}
+              onDragEnter={() => drag.enter(p.key)}
+              onDragEnd={drag.end}
+              onDrop={(sourceKey) => drag.drop(sourceKey, p.key)}
+              onShift={(dir) => void shift(p.key, dir)}
+              canBack={i > 0}
+              canForward={i < visible.length - 1}
+            >
+              {widgetBody(p)}
+            </WidgetShell>
+          ))}
         </section>
       )}
 

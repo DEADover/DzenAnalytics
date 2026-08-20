@@ -1,5 +1,6 @@
 /**
- * Раскладка главной страницы: порядок виджетов и то, какие из них убраны.
+ * Раскладка главной страницы: порядок виджетов, какие из них убраны и что стоит
+ * на дорожках кнопок.
  *
  * Хранится своим блобом в IDB и в Дзен-мани не уезжает — это оформление
  * рабочего места, а не данные. Сама модель и все преобразования над ней живут
@@ -11,12 +12,14 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
 import {
-  DEFAULT_LAYOUT,
+  addLinksRow,
+  defaultLayout,
+  layoutFromStored,
   moveWidget,
-  normalizeLayout,
+  removeWidget,
+  setRowLinks,
   setWidgetHidden,
   shiftWidget,
-  type WidgetId,
   type WidgetPlacement,
 } from "../lib/dashboardLayout";
 
@@ -29,9 +32,15 @@ interface State {
   editing: boolean;
   hydrate: () => Promise<void>;
   setEditing: (on: boolean) => void;
-  move: (dragId: WidgetId, overId: WidgetId) => Promise<void>;
-  shift: (id: WidgetId, dir: -1 | 1) => Promise<void>;
-  setHidden: (id: WidgetId, hidden: boolean) => Promise<void>;
+  move: (dragKey: string, overKey: string) => Promise<void>;
+  shift: (key: string, dir: -1 | 1) => Promise<void>;
+  setHidden: (key: string, hidden: boolean) => Promise<void>;
+  /** Завести новую дорожку кнопок. */
+  addLinks: () => Promise<void>;
+  /** Убрать из раскладки насовсем — только то, что человек сам завёл. */
+  remove: (key: string) => Promise<void>;
+  /** Задать набор кнопок дорожки. */
+  setLinks: (key: string, links: readonly string[]) => Promise<void>;
   reset: () => Promise<void>;
 }
 
@@ -42,20 +51,23 @@ export const useDashboardLayoutStore = create<State>((set, get) => {
   };
 
   return {
-    layout: DEFAULT_LAYOUT.slice(),
+    layout: defaultLayout(),
     loaded: false,
     editing: false,
 
     hydrate: async () => {
       const stored = await db.loadJSON<{ layout?: unknown }>(KEY);
-      set({ layout: normalizeLayout(stored?.layout), loaded: true });
+      set({ layout: layoutFromStored(stored?.layout), loaded: true });
     },
 
     setEditing: (on) => set({ editing: on }),
 
-    move: (dragId, overId) => apply(moveWidget(get().layout, dragId, overId)),
-    shift: (id, dir) => apply(shiftWidget(get().layout, id, dir)),
-    setHidden: (id, hidden) => apply(setWidgetHidden(get().layout, id, hidden)),
-    reset: () => apply(DEFAULT_LAYOUT.slice()),
+    move: (dragKey, overKey) => apply(moveWidget(get().layout, dragKey, overKey)),
+    shift: (key, dir) => apply(shiftWidget(get().layout, key, dir)),
+    setHidden: (key, hidden) => apply(setWidgetHidden(get().layout, key, hidden)),
+    addLinks: () => apply(addLinksRow(get().layout)),
+    remove: (key) => apply(removeWidget(get().layout, key)),
+    setLinks: (key, links) => apply(setRowLinks(get().layout, key, links)),
+    reset: () => apply(defaultLayout()),
   };
 });

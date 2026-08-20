@@ -7,31 +7,31 @@
  */
 
 import { useState } from "react";
-import { isWidgetId, type WidgetId } from "../lib/dashboardLayout";
 
-export function useWidgetDrag(onMove: (dragId: WidgetId, overId: WidgetId) => void) {
-  const [dragId, setDragId] = useState<WidgetId | null>(null);
-  const [overId, setOverId] = useState<WidgetId | null>(null);
+export function useWidgetDrag(onMove: (dragKey: string, overKey: string) => void) {
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
 
   return {
-    dragId,
-    overId,
-    start: (id: WidgetId) => {
-      setDragId(id);
-      setOverId(null);
+    dragKey,
+    overKey,
+    start: (key: string) => {
+      setDragKey(key);
+      setOverKey(null);
     },
-    enter: (id: WidgetId) => setOverId(id),
+    enter: (key: string) => setOverKey(key),
     end: () => {
-      setDragId(null);
-      setOverId(null);
+      setDragKey(null);
+      setOverKey(null);
     },
-    drop: (sourceId: string, targetId: WidgetId) => {
-      setDragId(null);
-      setOverId(null);
+    drop: (sourceKey: string, targetKey: string) => {
+      setDragKey(null);
+      setOverKey(null);
       // На главную можно уронить что угодно — файл, ссылку, кусок текста.
-      // Двигаем только то, что и правда является нашим виджетом.
-      if (!isWidgetId(sourceId) || sourceId === targetId) return;
-      onMove(sourceId, targetId);
+      // Что это не наша плитка, разберётся тот, кто двигает: неизвестный ключ
+      // раскладку не меняет.
+      if (sourceKey === targetKey) return;
+      onMove(sourceKey, targetKey);
     },
   };
 }

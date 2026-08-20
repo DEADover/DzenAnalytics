@@ -30,8 +30,7 @@ import {
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
-  Scale, Hash, GitCompare, Wallet, Target, Wand2, Activity,
-  TrendingUp, ArrowUpRight, Clock, Lightbulb, Sigma,
+  Scale, Target, TrendingUp, ArrowUpRight, Clock, Lightbulb, Sigma,
 } from "lucide-react";
 import { CategoryDot } from "../CategoryDot";
 import { pluralRu } from "../../lib/plural";
@@ -1102,44 +1101,3 @@ export function ActivityHeat({
 
 
 
-/**
- * Четыре быстрых перехода внизу страницы.
- *
- * Дублируют пункты верхнего меню намеренно: меню отвечает на «куда я могу
- * пойти», а эти кнопки — на «что делать дальше», и стоят там, куда взгляд
- * приходит, дочитав страницу. Подпись у каждой говорит, что там внутри, а не
- * повторяет название раздела.
- */
-export function QuickLinks() {
-  const items = [
-    { to: "/budgets", icon: Wallet, title: "Бюджеты" },
-    { to: "/goals", icon: Target, title: "Цели" },
-    { to: "/rules", icon: Wand2, title: "Правила" },
-    { to: "/tags", icon: Hash, title: "Теги" },
-    { to: "/compare", icon: GitCompare, title: "Сравнения" },
-    { to: "/dynamics", icon: Activity, title: "Динамика" },
-  ];
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      {items.map(({ to, icon: Icon, title }) => (
-        // Тот же двойной кант, что у карточек: обойма с просветом и ядро
-        // внутри. Подписи под названием нет намеренно — «Бюджеты» и «Цели»
-        // не нуждаются в пояснении, а выдуманное пояснение только шумит.
-        <Link
-          key={to}
-          to={to}
-          className="group rounded-[18px] p-1.5 bg-panel2/70 border border-border/70 shadow-tray
-                     transition-colors duration-200 hover:border-accent/40
-                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-        >
-          <span className="rounded-[12px] bg-panel px-4 py-3.5 flex items-center gap-3">
-            <Icon className="w-5 h-5 text-accent shrink-0" aria-hidden="true" />
-            <span className="font-semibold text-[14.5px] group-hover:text-accent truncate">
-              {title}
-            </span>
-          </span>
-        </Link>
-      ))}
-    </div>
-  );
-}
