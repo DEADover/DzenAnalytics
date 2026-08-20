@@ -522,7 +522,7 @@ export function CounterpartyManager() {
               setDupOnly(false);
             }}
             aria-pressed={orphanOnly}
-            title="Получатели из выписок, под которых нет записи в справочнике. Число — сколько таких получателей, а не операций"
+            title={"Получатели без записи в справочнике\nПришли из выписок. Число — сколько таких получателей, а не операций."}
             className={clsx(
               "text-sm flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border shrink-0",
               orphanOnly

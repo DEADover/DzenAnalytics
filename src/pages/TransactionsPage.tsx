@@ -591,7 +591,7 @@ export function TransactionsPage() {
         <div className="px-4 py-3 border-b border-border flex items-center gap-3 flex-wrap">
           <div
             className="relative flex-1 min-w-[220px]"
-            title="Быстрый поиск только по этой таблице (получатель, комментарий, категория, счёт) — не сохраняется и не влияет на другие страницы"
+            title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту. Не сохраняется и на другие страницы не влияет."}
           >
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input

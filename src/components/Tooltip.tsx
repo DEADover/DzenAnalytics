@@ -39,6 +39,28 @@ interface Props {
  * whole box to stay within the viewport — so near a screen edge it slides
  * sideways instead of squishing into a tall one-word-per-line column.
  */
+/**
+ * Многострочная подсказка получает структуру: первая строка — заголовком,
+ * остальное — пояснением поменьше и потише.
+ *
+ * Пояснения в подсказках бывают на два-три предложения, и сплошным абзацем они
+ * не читаются: глазу не за что зацепиться, а в подсказке на это есть доли
+ * секунды. Разделитель — обычный перенос строки в тексте: писать подсказку
+ * по-прежнему можно строкой, размечать ничего не нужно.
+ */
+function renderContent(content: ReactNode): ReactNode {
+  if (typeof content !== "string" || !content.includes("\n")) return content;
+  const [head, ...rest] = content.split("\n");
+  const tail = rest.join("\n").trim();
+  if (!tail) return head;
+  return (
+    <>
+      <div className="font-medium">{head}</div>
+      <div className="text-muted mt-1">{tail}</div>
+    </>
+  );
+}
+
 export function Tooltip({ content, children, placement = "top", delay = 120 }: Props) {
   const [shown, setShown] = useState(false);
   // The anchor DOM node is kept in STATE (not a ref) — a callback ref into
@@ -138,7 +160,7 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
             }}
             className="pointer-events-none z-[100] w-max max-w-md rounded-lg border border-border bg-panel2 px-3 py-2 text-xs leading-relaxed text-text shadow-lg whitespace-pre-line transition-opacity duration-100"
           >
-            {content}
+            {renderContent(content)}
           </div>,
           document.body
         )}

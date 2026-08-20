@@ -75,10 +75,42 @@ function place(el: HTMLElement): void {
   b.style.opacity = "1";
 }
 
+/**
+ * Многострочная подсказка получает структуру: первая строка — заголовком,
+ * остальное — пояснением поменьше и потише. Ровно то же самое делает компонент
+ * `Tooltip`; здесь повтор нужен потому, что мост строит свой пузырь руками, без
+ * React, — а выглядеть подсказки обязаны одинаково независимо от того, откуда
+ * взялись.
+ *
+ * Пояснения на два-три предложения сплошным абзацем не читаются: глазу не за
+ * что зацепиться, а на подсказку у человека доли секунды.
+ */
+function fill(b: HTMLDivElement, text: string): void {
+  const nl = text.indexOf("\n");
+  if (nl < 0) {
+    b.textContent = text;
+    return;
+  }
+  const head = text.slice(0, nl);
+  const tail = text.slice(nl + 1).trim();
+  if (!tail) {
+    b.textContent = head;
+    return;
+  }
+  b.textContent = "";
+  const h = document.createElement("div");
+  h.className = "font-medium";
+  h.textContent = head;
+  const t = document.createElement("div");
+  t.className = "text-muted mt-1";
+  t.textContent = tail;
+  b.append(h, t);
+}
+
 function show(el: HTMLElement, text: string): void {
   anchor = el;
   const b = ensureBubble();
-  b.textContent = text;
+  fill(b, text);
   b.style.opacity = "0";
   // Measure first, then position — the bubble must be laid out to know its size.
   place(el);

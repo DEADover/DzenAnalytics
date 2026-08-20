@@ -837,7 +837,7 @@ export function RecurringPage() {
             role="switch"
             aria-checked={onlyActive}
             onClick={() => setOnlyActive((v) => !v)}
-            title="Показывать только активные. Неактивные — те, по которым пропущено больше ~2 ожидаемых платежей (с учётом периодичности)"
+            title={"Только активные\nНеактивные — те, по которым пропущено больше двух ожидаемых платежей подряд."}
             className={`ml-auto flex items-center gap-2 transition-colors ${
               onlyActive ? "text-text" : "text-muted hover:text-text"
             }`}
