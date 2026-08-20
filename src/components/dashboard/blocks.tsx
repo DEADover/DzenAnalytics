@@ -33,7 +33,6 @@ import {
   Scale, Target, TrendingUp, ArrowUpRight, Clock, Lightbulb, Sigma,
 } from "lucide-react";
 import { CategoryDot } from "../CategoryDot";
-import { pluralRu } from "../../lib/plural";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
 import { InfoPopover } from "../InfoPopover";
 import { AccountLogo } from "../AccountLogo";
@@ -108,62 +107,6 @@ export function BlockTitle({
           <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
         </Link>
       )}
-    </div>
-  );
-}
-
-/* ─────────────────────────────  герой месяца  ───────────────────────────── */
-
-/** Кольцо темпа: во сколько раз тратим быстрее обычного. */
-export function PaceRing({ m, size = 104 }: { m: DashboardModel; size?: number }) {
-  if (m.pace === null) {
-    return (
-      <div className="flex flex-col items-center text-center gap-2">
-        <div className="label">Темп трат</div>
-        <div className="text-sm text-muted py-6">Пока не с чем сравнить</div>
-      </div>
-    );
-  }
-  const over = m.pace - 1;
-  const tone = over > 0.08 ? "warn" : over < -0.08 ? "income" : "accent";
-  const stroke =
-    tone === "warn" ? "rgb(var(--c-warn))" : tone === "income" ? "rgb(var(--c-income))" : "rgb(var(--c-accent))";
-  // Длина окружности при r=40 — 251.2. Заполняем долю от обычного темпа,
-  // но не больше полного круга: при трёхкратном перерасходе кольцо просто полное.
-  const frac = Math.max(0, Math.min(1, m.pace));
-  return (
-    <div className="flex flex-col items-center text-center gap-2">
-      <div className="label">Темп трат</div>
-      <svg viewBox="0 0 100 100" width={size} height={size} aria-hidden="true">
-        <circle cx="50" cy="50" r="40" fill="none" stroke="rgb(var(--c-panel2))" strokeWidth="10" />
-        <circle
-          cx="50"
-          cy="50"
-          r="40"
-          fill="none"
-          stroke={stroke}
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray="251.2"
-          strokeDashoffset={251.2 * (1 - frac)}
-          transform="rotate(-90 50 50)"
-        />
-      </svg>
-      <div
-        className={`font-mono tabular-nums font-semibold text-xl ${
-          tone === "warn" ? "text-warn" : tone === "income" ? "text-income" : "text-accent"
-        }`}
-      >
-        {over >= 0 ? "+" : "−"}
-        {Math.abs(over * 100).toFixed(0)}%
-      </div>
-      <div className="text-[11.5px] text-muted leading-snug">
-        к обычному темпу
-        <br />
-        {m.month.day === 1
-          ? "за первый день"
-          : `за первые ${m.month.day} ${pluralRu(m.month.day, ["день", "дня", "дней"])}`}
-      </div>
     </div>
   );
 }
