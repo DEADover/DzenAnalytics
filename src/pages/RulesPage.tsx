@@ -479,7 +479,7 @@ export function RulesPage() {
               aria-label="Как это работает"
               title="Как это работает"
               className={clsx(
-                "p-1.5 rounded-md",
+                "p-1.5 rounded-full",
                 infoOpen
                   ? "text-accent bg-accent/10"
                   : "text-muted hover:text-accent hover:bg-panel2"

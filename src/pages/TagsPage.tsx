@@ -145,16 +145,16 @@ export function TagsPage() {
               {totalExpense > 0 && ` · по тегам ${formatMoney(totalExpense, base)}`}
             </span>
           </div>
-          <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
+          <div className="inline-flex gap-0.5 rounded-full p-1 bg-panel2 border border-border shadow-tray text-xs">
             <button
               onClick={() => setCloudAlpha(false)}
-              className={`px-2.5 py-1 ${!cloudAlpha ? "bg-accent text-accent-fg" : "text-muted hover:text-text"}`}
+              className={`px-2.5 py-1 rounded-full transition-colors duration-200 ${!cloudAlpha ? "bg-accent text-accent-fg" : "text-muted hover:text-text hover:bg-panel/70"}`}
             >
               По сумме
             </button>
             <button
               onClick={() => setCloudAlpha(true)}
-              className={`px-2.5 py-1 ${cloudAlpha ? "bg-accent text-accent-fg" : "text-muted hover:text-text"}`}
+              className={`px-2.5 py-1 rounded-full transition-colors duration-200 ${cloudAlpha ? "bg-accent text-accent-fg" : "text-muted hover:text-text hover:bg-panel/70"}`}
             >
               А–Я
             </button>

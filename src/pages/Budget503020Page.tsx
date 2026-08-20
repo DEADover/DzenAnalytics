@@ -204,7 +204,7 @@ export function Budget503020Page() {
           Доли от дохода. Пунктир — границы правила 50/30/20.
         </div>
         <div className="relative">
-          <div className="flex h-8 rounded-md overflow-hidden">
+          <div className="flex h-8 rounded-full overflow-hidden">
             {split.needs > 0 && (
               <div
                 style={{ width: `${w(split.needs)}%`, backgroundColor: NEEDS_COLOR }}

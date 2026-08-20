@@ -595,7 +595,7 @@ export function RecurringPage() {
                 <CalendarClock className="w-4 h-4 text-accent" />
                 Планируемые операции
               </div>
-              <div className="flex bg-panel2 rounded-lg p-0.5 border border-border shrink-0">
+              <div className="flex gap-0.5 bg-panel2 rounded-full p-1 border border-border shadow-tray shrink-0">
                 {plannedTabs.map((t) => {
                   const empty = plannedCounts[t.id] === 0;
                   return (
@@ -883,7 +883,7 @@ export function RecurringPage() {
                 <button
                   key={c.payee + c.currency}
                   onClick={() => openCandidate(c)}
-                  className="text-left p-3 rounded-lg bg-panel2 border border-border hover:border-accent transition-colors"
+                  className="text-left p-3 rounded-xl bg-panel2 border border-border hover:border-accent transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="font-medium text-sm truncate">{c.payee}</div>

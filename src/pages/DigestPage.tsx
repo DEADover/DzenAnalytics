@@ -145,8 +145,8 @@ function TabBtn({
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-        active ? "bg-accent/10 text-accent" : "text-muted hover:text-text hover:bg-panel2"
+      className={`px-3 py-1.5 rounded-full text-sm transition-colors duration-200 ${
+        active ? "bg-accent text-accent-fg" : "text-muted hover:text-text hover:bg-panel2"
       }`}
     >
       {children}

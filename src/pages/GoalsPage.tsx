@@ -642,7 +642,7 @@ function GoalCard({
             <Tooltip content="Редактировать цель">
               <button
                 onClick={() => (editing && !closing ? closeEdit() : openEdit())}
-                className={`p-1.5 rounded-md transition-colors ${
+                className={`p-1.5 rounded-full transition-colors duration-200 ${
                   editing && !closing
                     ? "text-accent bg-accent/10"
                     : "text-muted hover:text-text hover:bg-panel2"
@@ -663,7 +663,7 @@ function GoalCard({
                   });
                   if (ok) onRemove(g.id);
                 }}
-                className="p-1.5 rounded-md text-muted hover:text-expense hover:bg-panel2 transition-colors"
+                className="btn-icon-danger"
                 aria-label="Удалить цель"
               >
                 <Trash2 className="w-4 h-4" />

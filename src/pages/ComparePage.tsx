@@ -355,7 +355,7 @@ function CompareBarRow({
             title={expanded ? "Свернуть" : "Развернуть"}
             aria-label={expanded ? "Свернуть" : "Развернуть"}
             aria-expanded={expanded}
-            className="-m-1 p-1 rounded-md text-muted hover:text-accent hover:bg-panel2"
+            className="-m-1 p-1 rounded-full text-muted transition-colors hover:text-accent hover:bg-panel2"
           >
             <ChevronDown
               className={`w-4 h-4 transition-transform duration-300 ${
@@ -990,7 +990,7 @@ export function ComparePage() {
                     }
                     title={expanded.size > 0 ? "Свернуть все" : "Развернуть все"}
                     aria-label={expanded.size > 0 ? "Свернуть все" : "Развернуть все"}
-                    className="-m-1 p-1 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                    className="-m-1 p-1 rounded-full text-muted transition-colors hover:text-accent hover:bg-panel2"
                   >
                     <ChevronDown
                       className={`w-4 h-4 transition-transform duration-300 ${
