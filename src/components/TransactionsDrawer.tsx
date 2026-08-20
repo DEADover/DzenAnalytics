@@ -11,6 +11,7 @@ import {
   Tag,
   User,
   Copy,
+  ListChecks,
   Pencil,
   Trash2,
   XSquare,
@@ -26,6 +27,7 @@ import { confirm } from "../store/useConfirmStore";
 import { CategoryDot } from "./CategoryDot";
 import { Tooltip } from "./Tooltip";
 import { EditTransactionModal } from "./EditTransactionModal";
+import { Stat } from "./Stat";
 import { BulkEditModal } from "./BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { formatMoney, formatDate, formatNum, displayPayee, secondaryPayee, crossCurrencyReceived, payeeSearchText } from "../lib/format";
@@ -298,12 +300,34 @@ export function TransactionsDrawer() {
 
   return (
     <>
-    <aside className="fixed inset-0 bg-bg z-50 flex flex-col animate-fade">
-      <div className="px-6 py-4 border-b border-border flex items-start justify-between gap-4 sticky top-0 bg-panel/95 backdrop-blur z-10">
-        <div className="min-w-0">
-          <div className="text-sm text-muted">{subtitle || "Операции"}</div>
-          <div className="text-xl font-semibold truncate" title={title}>
-            {title}
+    {/* Не полотно во весь экран, а большая карточка над затемнением.
+        Разница не в красоте: это не страница, а взгляд вглубь — открыли с
+        виджета, посмотрели операции за числом и вернулись. Полноэкранное
+        полотно прятало, откуда пришли, и возвращение ощущалось переходом
+        куда-то, а не закрытием. Затемнение сохраняет контекст, а карточка
+        наконец говорит на том же языке, что и остальной продукт: скругление,
+        кант, мягкая тень. */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6">
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade"
+        onClick={close}
+        aria-hidden
+      />
+      <aside className="relative w-[92vw] max-w-[1600px] h-[88vh] card overflow-hidden flex flex-col animate-fade">
+      <div className="px-5 md:px-6 py-4 border-b border-border flex items-center justify-between gap-4 bg-panel">
+        <div className="min-w-0 flex items-center gap-3">
+          {/* Значок в плашке — как в заголовке страницы: один приём на весь
+              продукт. */}
+          <span className="shrink-0 w-9 h-9 rounded-xl bg-panel2 border border-border grid place-items-center">
+            <ListChecks className="w-[18px] h-[18px] text-accent" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[12px] uppercase tracking-[0.14em] text-muted font-medium">
+              {subtitle || "Операции"}
+            </div>
+            <div className="text-[19px] font-semibold tracking-tight truncate" title={title}>
+              {title}
+            </div>
           </div>
         </div>
         <Tooltip content="Закрыть (Esc)">
@@ -358,32 +382,21 @@ export function TransactionsDrawer() {
           </div>
         )}
 
-        <div className="px-5 py-3 border-b border-border grid grid-cols-3 gap-3 text-sm">
-          <div>
-            <div className="label">Доходы</div>
-            <div className="text-income font-semibold tabular-nums">
-              {formatMoney(totals.inc, base)}
-            </div>
-          </div>
-          <div>
-            <div className="label">Расходы</div>
-            <div className="text-expense font-semibold tabular-nums">
-              {formatMoney(totals.exp, base)}
-            </div>
-          </div>
-          <div>
-            <div className="label">Чистый</div>
-            <div
-              className={`font-semibold tabular-nums ${
-                totals.net >= 0 ? "text-income" : "text-expense"
-              }`}
-            >
-              {formatMoney(totals.net, base, { signed: true })}
-            </div>
-          </div>
+        {/* Те же плитки, что на страницах: три числа тут стояли голым текстом
+            на плоской полосе — единственное место в продукте, где показатели
+            выглядели так. */}
+        <div className="px-5 md:px-6 py-3 border-b border-border grid grid-cols-3 gap-3">
+          <Stat dense label="Доходы" tone="income" value={formatMoney(totals.inc, base)} />
+          <Stat dense label="Расходы" tone="expense" value={formatMoney(totals.exp, base)} />
+          <Stat
+            dense
+            label="Чистый"
+            tone={totals.net >= 0 ? "income" : "expense"}
+            value={formatMoney(totals.net, base, { signed: true })}
+          />
         </div>
 
-        <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+        <div className="px-5 md:px-6 py-3 border-b border-border flex items-center gap-3">
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input
@@ -576,7 +589,8 @@ export function TransactionsDrawer() {
             </table>
           )}
         </div>
-      </aside>
+        </aside>
+    </div>
 
       {/* Floating bulk-action bar — appears when ≥1 row is selected. Sits
           above the drawer (z-50) but below the edit modal (portaled, z-60). */}
