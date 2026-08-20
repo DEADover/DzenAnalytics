@@ -163,8 +163,12 @@ describe("normalizeLayout", () => {
       { key: "observations", kind: "observations" },
       { key: "month", kind: "month" },
     ]);
+    // Кольца стоят сразу за «наблюдениями» — там их место по стандартному
+    // порядку, а «наблюдения» в сохранённой раскладке первые.
     expect(kinds(out)).toEqual([
       "observations",
+      "donutExpense",
+      "donutIncome",
       "month",
       "accounts",
       "upcoming",
@@ -226,8 +230,13 @@ describe("moveWidgetBefore", () => {
 describe("packLayout", () => {
   const cell = (kind: string, key = kind): WidgetPlacement => ({ key, kind: kind as never });
 
-  it("в стандартной раскладке дырок нет", () => {
-    expect(packLayout(DEFAULT_LAYOUT).filter((c) => c.type === "gap")).toHaveLength(0);
+  it("в стандартной раскладке дырок внутри нет", () => {
+    // Хвостовой остаток допустим: ширины виджетов в сумме не всегда кратны
+    // трём. А вот дырка ПЕРЕД виджетом означает, что ряд собран криво.
+    const holes = packLayout(DEFAULT_LAYOUT).filter(
+      (c) => c.type === "gap" && c.before !== null
+    );
+    expect(holes).toEqual([]);
   });
 
   it("называет дырку перед тем, кто в ряд не влез", () => {
@@ -265,7 +274,8 @@ describe("shiftWidget", () => {
 
   it("на краю стоит на месте", () => {
     expect(keys(shiftWidget(DEFAULT_LAYOUT, "month", -1))).toEqual(keys(DEFAULT_LAYOUT));
-    expect(keys(shiftWidget(DEFAULT_LAYOUT, "observations", 1))).toEqual(keys(DEFAULT_LAYOUT));
+    const last = DEFAULT_LAYOUT[DEFAULT_LAYOUT.length - 1].key;
+    expect(keys(shiftWidget(DEFAULT_LAYOUT, last, 1))).toEqual(keys(DEFAULT_LAYOUT));
   });
 
   it("перешагивает убранные: шаг не должен уходить в пустоту", () => {

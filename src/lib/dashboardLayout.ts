@@ -29,6 +29,8 @@ export const WIDGET_KINDS = [
   "categories",
   "activity",
   "observations",
+  "donutExpense",
+  "donutIncome",
 ] as const;
 
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
@@ -137,8 +139,8 @@ export const WIDGETS: readonly WidgetMeta[] = [
   },
   {
     kind: "upcoming",
-    title: "Запланированные платежи",
-    hint: "Что спишется до конца месяца",
+    title: "Запланированные операции",
+    hint: "Что спишется и что придёт до конца месяца",
     span: 1,
     views: [
       {
@@ -187,6 +189,18 @@ export const WIDGETS: readonly WidgetMeta[] = [
     kind: "observations",
     title: "Авто-наблюдения",
     hint: "Что выбилось из обычного: перерасход, подписки, пропуски",
+    span: 1,
+  },
+  {
+    kind: "donutExpense",
+    title: "Кольцо расходов",
+    hint: "Доли статей друг относительно друга, как на «Категориях»",
+    span: 1,
+  },
+  {
+    kind: "donutIncome",
+    title: "Кольцо доходов",
+    hint: "Откуда приходят деньги, теми же кольцами",
     span: 1,
   },
 ];

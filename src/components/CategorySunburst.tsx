@@ -39,8 +39,19 @@ interface Props {
   meta: Meta;
   base: string;
   kind: "expense" | "income";
-  /** Toggle expense/income — drives the in-header «Расходы/Доходы» slider. */
-  onKindChange: (k: "expense" | "income") => void;
+  /** Toggle expense/income — drives the in-header «Расходы/Доходы» slider.
+   *  Не нужен в `compact`: там вид задан самим виджетом и не переключается. */
+  onKindChange?: (k: "expense" | "income") => void;
+  /**
+   * Кольцо в плитке главной: одно кольцо во всю плитку, без списка статей.
+   *
+   * Таблица рядом с кольцом — это разворот страницы: там она даёт числа, ради
+   * которых на страницу и заходят. В трети экрана она отняла бы у кольца
+   * половину высоты и всё равно показала бы три строки из двадцати. Числа
+   * остаются в дырке кольца и меняются при наведении, а за полным списком есть
+   * ссылка в шапке виджета.
+   */
+  compact?: boolean;
   /** Open the transactions list for a whole category. */
   onOpenCategory: (name: string) => void;
   /** Open the transactions list for a subcategory (full «Parent / Sub» path). */
@@ -83,7 +94,12 @@ export function CategorySunburst({
   onKindChange,
   onOpenCategory,
   onOpenSubcategory,
+  compact,
 }: Props) {
+  // В плитке вид задан самим виджетом: переключателя нет, и рисовать его
+  // некуда — заголовок карточки уже говорит, расходы это или доходы.
+  const kindSwitcher =
+    compact || !onKindChange ? null : <KindSwitcher kind={kind} onChange={onKindChange} />;
   const [drill, setDrill] = useState<string | null>(null);
   // Which direction the ring last moved — drives the zoom-in / zoom-out
   // animation (replayed by re-keying the <svg> on every level change).
@@ -305,8 +321,12 @@ export function CategorySunburst({
       <div>
         {/* Keep the slider reachable with no data, so the user can switch back
             to the kind that DOES have operations. */}
-        <KindSwitcher kind={kind} onChange={onKindChange} />
-        <div className="flex flex-col items-center justify-center text-center gap-3 py-16 text-muted">
+        {kindSwitcher}
+        <div
+          className={`flex flex-col items-center justify-center text-center gap-3 text-muted ${
+            compact ? "py-8" : "py-16"
+          }`}
+        >
           <span className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-panel2">
             <ChartPie className="w-8 h-8 opacity-50" />
           </span>
@@ -329,24 +349,34 @@ export function CategorySunburst({
     expandableCats.length > 0 && expandableCats.every((c) => expanded.has(c.name));
 
   return (
-    <div className="flex flex-col md:flex-row-reverse gap-8 items-start">
+    <div
+      className={
+        compact
+          ? "flex-1 min-h-0 flex items-center justify-center"
+          : "flex flex-col md:flex-row-reverse gap-8 items-start"
+      }
+    >
       {/* ── Donut (right on desktop, on top when stacked) ──────────────── */}
       {/* Grows to fill the space freed by the narrow table; the ring itself is
           capped and centred so it stays a sensible size on very wide screens.
           On desktop it's STICKY and vertically centred in the viewport, so it
           stays on screen while the (now un-scrolled, full) legend scrolls past
           — issue #34. `top`/height leave room for the sticky top nav. */}
-      <div className="w-full md:flex-1 md:min-w-0 md:self-stretch">
+      <div className={compact ? "w-full" : "w-full md:flex-1 md:min-w-0 md:self-stretch"}>
         {/* Donut is STICKY just under the top nav (73px + gap), so it stays on
             screen while the full (un-scrolled) legend scrolls past — issue #34.
             The column stretches to the legend's height, which is what gives the
             sticky element its scroll range; kept at the donut's natural height
             (not viewport-tall) so it adds no empty space and the range isn't
             eaten up. It engages once the category list is taller than the donut. */}
-        <div className="flex justify-center md:mt-2 md:sticky md:top-[88px]">
+        <div
+          className={
+            compact ? "flex justify-center" : "flex justify-center md:mt-2 md:sticky md:top-[88px]"
+          }
+        >
           <div
             className="relative w-full mx-auto"
-            style={{ maxWidth: 620 }}
+            style={{ maxWidth: compact ? 420 : 620 }}
           >
         <svg
           key={effectiveDrill ?? "__top"}
@@ -410,8 +440,12 @@ export function CategorySunburst({
         {/* Centre hole label (non-interactive — the clickable hit area is the
             transparent circle inside the SVG above). Always shows the
             name / sum / count. */}
+        {/* Подпись в дырке кольца — обычная вёрстка поверх svg, поэтому её
+            размеры не масштабируются вместе с ним. В плитке кольцо втрое
+            меньше, и текст страницы там просто не помещался: имя налезало на
+            сумму, а строка со счётом операций выходила за круг. */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="text-center px-14">
+          <div className={`text-center ${compact ? "px-7" : "px-14"}`}>
             <div className="text-xs text-muted leading-tight line-clamp-2">{centre.name}</div>
             <div className="font-semibold tabular-nums text-lg mt-0.5">
               {formatMoney(centre.value, base)}
@@ -445,16 +479,18 @@ export function CategorySunburst({
       {/* Fixed, capped width pinned to the left — it does NOT grow, so all the
           freed horizontal space goes to the donut rather than to empty
           margins. */}
+      {/* Список статей — только на странице: в плитке всё место отдано кольцу. */}
+      {!compact && (
       <div className="w-full md:w-[576px] md:shrink-0 min-w-0 flex flex-col">
         {/* Just the «Расходы/Доходы» slider — no scope label. The donut centre
             already shows «Все расходы» / the drilled category name + total, so a
             breadcrumb here only repeats it. */}
-        <div className="mb-4">
-          <KindSwitcher kind={kind} onChange={onKindChange} />
-        </div>
-        <div className="mb-3">
+        {kindSwitcher && <div className="mb-4">{kindSwitcher}</div>}
+        <div className={compact ? "mb-2" : "mb-3"}>
           <span
-            className={`inline-flex px-4 py-1 rounded-full text-3xl font-bold tabular-nums ${
+            className={`inline-flex rounded-full font-bold tabular-nums ${
+              compact ? "px-3 py-0.5 text-xl" : "px-4 py-1 text-3xl"
+            } ${
               kind === "expense" ? "bg-expense/15 text-expense" : "bg-income/15 text-income"
             }`}
           >
@@ -466,7 +502,7 @@ export function CategorySunburst({
             instead (issue #34). The donut on the other side is sticky-centred,
             so it stays in view while this long list scrolls. */}
         <div
-          className="pr-1 flex flex-col"
+          className={compact ? "scroll-soft pr-1 flex flex-col flex-1 min-h-0" : "pr-1 flex flex-col"}
           // Obeys the «Размер текста в таблицах» slider (rows inherit; sub-text
           // is em-relative), matching the Bars view and operation tables.
           style={{ fontSize: "var(--tbl-font)" }}
@@ -632,6 +668,7 @@ export function CategorySunburst({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

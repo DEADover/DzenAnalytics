@@ -53,6 +53,9 @@ import { useDashboardModel, type DashboardModel } from "../../hooks/useDashboard
 import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
 import { useZenPlanned } from "../../hooks/useZenPlanned";
 import { useDrillStore } from "../../store/useDrillStore";
+import { useCategoryMetaStore } from "../../store/useCategoryMetaStore";
+import { CategorySunburst } from "../CategorySunburst";
+import { buildHierarchy } from "../../lib/aggregations";
 import { useReportPeriodStore } from "../../store/useReportPeriodStore";
 import { periodKey } from "../../lib/period";
 import { monthEnd } from "../../lib/dashboardModel";
@@ -411,6 +414,7 @@ export function DashboardView() {
   const transactions = useAnalyticsTransactions();
   const showDrill = useDrillStore((s) => s.show);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  const categoryMeta = useCategoryMetaStore((s) => s.meta);
 
   const layout = useDashboardLayoutStore((s) => s.layout);
   const editing = useDashboardLayoutStore((s) => s.editing);
@@ -423,11 +427,50 @@ export function DashboardView() {
   // Планы Дзен-мани — второй вид «Запланированных платежей». Отрезок тот же,
   // что у своих регулярных: от сегодня до конца отчётного месяца.
   const todayIso = new Date().toISOString().slice(0, 10);
-  const zenPlanned = useZenPlanned(todayIso, monthEnd(m.ym));
-  const zenPlannedTotal = useMemo(
-    () => (zenPlanned ?? []).reduce((sum, p) => sum + p.amountBase, 0),
+  const zenPlannedAll = useZenPlanned(todayIso, monthEnd(m.ym));
+  // Переводы не показываем: перекладывание между своими счетами ни спишется, ни
+  // придёт. Расход и доход считаем врозь — складывать их в одно число значило
+  // бы придумать «чистый остаток», которого в этом виджете никто не просил.
+  const zenPlanned = useMemo(
+    () => zenPlannedAll?.filter((p) => p.kind !== "transfer") ?? null,
+    [zenPlannedAll]
+  );
+  const zenPlannedOut = useMemo(
+    () =>
+      (zenPlanned ?? [])
+        .filter((p) => p.kind === "expense")
+        .reduce((sum, p) => sum + p.amountBase, 0),
     [zenPlanned]
   );
+  const zenPlannedIn = useMemo(
+    () =>
+      (zenPlanned ?? [])
+        .filter((p) => p.kind === "income")
+        .reduce((sum, p) => sum + p.amountBase, 0),
+    [zenPlanned]
+  );
+
+  // Кольца статей: те же деревья, что на «Категориях», только за текущий месяц.
+  const monthTx = useMemo(
+    () => transactions.filter((t) => periodKey(t.date, monthStartDay) === m.ym),
+    [transactions, monthStartDay, m.ym]
+  );
+  const donutExpense = useMemo(() => buildHierarchy(monthTx, "expense"), [monthTx]);
+  const donutIncome = useMemo(() => buildHierarchy(monthTx, "income"), [monthTx]);
+
+  /** Открыть список операций статьи или подстатьи — своим видом для колец. */
+  const drillCategory = useMemo(() => {
+    const match = (kind: "expense" | "income", t: (typeof transactions)[number]) =>
+      kind === "expense" ? affectsExpense(t.kind) : t.kind === "income";
+    return (kind: "expense" | "income", name: string, full = false) =>
+      showDrill(
+        name,
+        transactions.filter(
+          (t) => match(kind, t) && (full ? t.categoryFull === name : t.category === name)
+        ),
+        kind === "expense" ? "Расходы по статье" : "Доходы по статье"
+      );
+  }, [transactions, showDrill]);
 
   const drag = useWidgetDrag(
     (dragKey, overKey) => void move(dragKey, overKey),
@@ -519,15 +562,24 @@ export function DashboardView() {
         const zen = widgetView(widgetMeta("upcoming"), p.view)?.id === "zen";
         return (
           <>
-            <BlockTitle title="Запланированные платежи" to="/recurring" linkLabel="Регулярные" />
+            <BlockTitle title="Запланированные операции" to="/recurring" linkLabel="Регулярные" />
             {/* Итог подан так же, как совокупный баланс у соседней карточки:
                 крупным числом под заголовком. Мелкой строчкой в шапке он
                 выбивался из ряда. */}
-            <div
-              className="font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none pb-3 mb-1 border-b border-border text-expense"
-              style={{ wordSpacing: "-0.22em" }}
-            >
-              {formatMoney(zen ? zenPlannedTotal : m.upcomingTotalBase, m.base)}
+            <div className="pb-3 mb-1 border-b border-border">
+              <div
+                className="font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none text-expense"
+                style={{ wordSpacing: "-0.22em" }}
+              >
+                {formatMoney(zen ? zenPlannedOut : m.upcomingTotalBase, m.base)}
+              </div>
+              {/* Ожидаемый приход — строкой под расходом, а не в общей сумме:
+                  каждое число здесь отвечает за свои строки списка. */}
+              {zen && zenPlannedIn > 0 && (
+                <div className="font-mono tabular-nums text-[13px] text-income mt-1">
+                  +{formatMoney(zenPlannedIn, m.base)} придёт
+                </div>
+              )}
             </div>
             {zen ? (
               <ZenPlannedList rows={zenPlanned} base={m.base} today={todayIso} />
@@ -596,6 +648,38 @@ export function DashboardView() {
               linkLabel="Категории"
             />
             <CategoriesList m={m} onCategory={onCategory} />
+          </>
+        );
+
+      case "donutExpense":
+        return (
+          <>
+            <BlockTitle title="Кольцо расходов" to="/categories" linkLabel="Категории" />
+            <CategorySunburst
+              compact
+              data={donutExpense}
+              meta={categoryMeta}
+              base={m.base}
+              kind="expense"
+              onOpenCategory={(name) => drillCategory("expense", name)}
+              onOpenSubcategory={(full) => drillCategory("expense", full, true)}
+            />
+          </>
+        );
+
+      case "donutIncome":
+        return (
+          <>
+            <BlockTitle title="Кольцо доходов" to="/categories" linkLabel="Категории" />
+            <CategorySunburst
+              compact
+              data={donutIncome}
+              meta={categoryMeta}
+              base={m.base}
+              kind="income"
+              onOpenCategory={(name) => drillCategory("income", name)}
+              onOpenSubcategory={(full) => drillCategory("income", full, true)}
+            />
           </>
         );
 
