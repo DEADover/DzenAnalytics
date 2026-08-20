@@ -610,6 +610,47 @@ describe("hashtagCategoryTrees: повтор тега в комментарии 
   });
 });
 
+describe("detectDuplicates: одна строка в разных полях", () => {
+  // Яндекс-банк присылал «Выплата процентов» у одних операций комментарием, у
+  // других — получателем. Три одинаковых зачисления за день расходились по
+  // разным группам, и третье в дубли не попадало.
+  const same = { date: "2026-07-22", amount: 199.99, account: "Яндекс Бессрочный" } as const;
+
+  it("получателя, записанного в комментарий, узнаём как того же", () => {
+    const groups = detectDuplicates([
+      tx({ id: "a", ...same, payee: "", comment: "Выплата процентов" }),
+      tx({ id: "b", ...same, payee: "", comment: "Выплата процентов" }),
+      tx({ id: "c", ...same, payee: "Выплата процентов", comment: "" }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].txs.map((t) => t.id).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("разные получатели по-прежнему не дубли", () => {
+    const groups = detectDuplicates([
+      tx({ id: "a", ...same, payee: "Пятёрочка" }),
+      tx({ id: "b", ...same, payee: "Магнит" }),
+    ]);
+    expect(groups).toEqual([]);
+  });
+
+  it("пустой получатель и пустой комментарий у обеих — всё ещё группа", () => {
+    const groups = detectDuplicates([
+      tx({ id: "a", ...same, payee: "", comment: "" }),
+      tx({ id: "b", ...same, payee: "", comment: "" }),
+    ]);
+    expect(groups).toHaveLength(1);
+  });
+
+  it("разные комментарии при одном получателе остаются разными покупками", () => {
+    const groups = detectDuplicates([
+      tx({ id: "a", ...same, payee: "Пятёрочка", comment: "Кешью" }),
+      tx({ id: "b", ...same, payee: "Пятёрочка", comment: "Томаты" }),
+    ]);
+    expect(groups).toEqual([]);
+  });
+});
+
 describe("detectDuplicates: приметы дубля (issue #66)", () => {
   it("по умолчанию — только один и тот же день", () => {
     // Ежедневная одинаковая покупка дублем не является.

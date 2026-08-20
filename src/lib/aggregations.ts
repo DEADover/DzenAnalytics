@@ -836,10 +836,36 @@ function contradicts(a: Transaction, b: Transaction): boolean {
     const r = (y || "").trim().toLowerCase();
     return l !== "" && r !== "" && (r.startsWith(l + " / ") || l.startsWith(r + " / "));
   };
+  // Комментарий одной операции против получателя другой не сравниваем: у
+  // операций, попавших в одну группу через `duplicateIdent`, это одна и та же
+  // строка, просто записанная банком в разные поля.
+  const sameText = (x?: string | null, y?: string | null) =>
+    (x || "").trim().toLowerCase() === (y || "").trim().toLowerCase();
+  const commentIsPayeeOfOther =
+    sameText(a.comment, b.payee) || sameText(b.comment, a.payee);
   return (
-    differ(a.comment, b.comment) ||
+    (!commentIsPayeeOfOther && differ(a.comment, b.comment)) ||
     (differ(a.categoryFull, b.categoryFull) && !refines(a.categoryFull, b.categoryFull))
   );
+}
+
+/**
+ * Чем операция «представляется» при поиске копий.
+ *
+ * Обычно это получатель. Но банковская синхронизация кладёт одну и ту же
+ * строку то в получателя, то в комментарий: у Яндекс-банка «Выплата процентов»
+ * приезжала у одних операций комментарием, у других — местом. Пока получатель
+ * входил в примету как есть, такие копии расходились по разным группам —
+ * у одной он был пуст, у другой заполнен, — и третья одинаковая операция в
+ * дубли не попадала.
+ *
+ * Поэтому пустого получателя подменяем комментарием: это то же самое «что за
+ * операция», просто банк записал его в другое поле. Разных получателей это
+ * по-прежнему разводит — две покупки в разных магазинах на одну сумму копией
+ * друг друга не станут.
+ */
+function duplicateIdent(t: Transaction): string {
+  return (t.payee || "").trim() || (t.comment || "").trim() || "?";
 }
 
 export function detectDuplicates(
@@ -858,7 +884,7 @@ export function detectDuplicates(
     // рубля: комиссии 0,22 ₽ и 0,01 ₽ обе давали ноль и попадали в одну группу.
     // Округляем всё равно — иначе дробная арифметика развела бы одинаковые
     // суммы, — но на два знака, а не на ноль.
-    const sig = `${t.kind}|${t.payee || "?"}|${Math.round(t.amount * 100)}|${t.currency}|${
+    const sig = `${t.kind}|${duplicateIdent(t)}|${Math.round(t.amount * 100)}|${t.currency}|${
       t.account || "?"
     }`;
     if (!groups.has(sig)) groups.set(sig, []);
