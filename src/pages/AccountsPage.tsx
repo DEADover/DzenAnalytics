@@ -1729,6 +1729,7 @@ export function AccountsPage() {
                 }
                 labelOf={(name) => parseDebtKey(name)?.payee ?? name}
                 nestedOf={(name) => parseDebtKey(name) !== null}
+                nestedUnitForms={["контрагент", "контрагента", "контрагентов"]}
                 groupOf={chartAccountGroup}
                 unitForms={["счёт", "счёта", "счетов"]}
                 searchPlaceholder="Поиск счёта"

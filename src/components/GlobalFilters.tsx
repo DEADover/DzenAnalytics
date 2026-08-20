@@ -604,6 +604,7 @@ export function GlobalFilters({
           }
           labelOf={accountLabel}
           nestedOf={(name) => parseDebtKey(name) !== null}
+          nestedUnitForms={["контрагент", "контрагента", "контрагентов"]}
           unitForms={["счёт", "счёта", "счетов"]}
           searchPlaceholder="Поиск счёта"
           archivedSet={archivedAccounts}
