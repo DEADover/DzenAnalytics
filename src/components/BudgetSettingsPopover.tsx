@@ -48,7 +48,9 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
       <Tooltip content="Настройки бюджета">
         <button
           onClick={() => setOpen((o) => !o)}
-          className="btn-ghost !p-2"
+          // Ростом с соседями по строке шапки: переключателем вида, выбором
+          // месяца и «Заполнить по среднему».
+          className="btn-ghost !p-2.5"
           aria-label="Настройки бюджета"
         >
           <Settings2 className="w-4 h-4" />

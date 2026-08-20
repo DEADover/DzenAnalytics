@@ -857,7 +857,7 @@ export function BudgetsPage() {
       <PageHeader
         icon={Wallet}
         title="Бюджет"
-        hint="План и факт по статьям за год и по месяцам; планы синхронизируются с Дзен-мани, отчёт выгружается в Excel и PDF"
+        hint="План и факт по статьям — за месяц и за год"
       />
 
       {/* Панель: вид и период (слева), действия (справа). */}
@@ -884,7 +884,10 @@ export function BudgetsPage() {
           <Tooltip content={monthPeriod ? "Предыдущий месяц" : "Предыдущий год"}>
             <button
               onClick={() => (monthPeriod ? setYm((m) => addMonths(m, -1)) : shiftYear(-1))}
-              className="btn-ghost !p-2"
+              // Поле в 10 пикселей, а не 8: в одной строке шапки стоят
+              // переключатель вида, выбор месяца и «Заполнить по среднему» —
+              // все ростом 38, и кнопка в 34 читалась осевшей.
+              className="btn-ghost !p-2.5"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -904,19 +907,23 @@ export function BudgetsPage() {
               // справа, — и вместе с запасом ширины давало заметную пустоту
               // перед названием месяца. Подпись выровнена по левому краю, как
               // в любом другом поле продукта, ширина посчитана по факту:
-              // 76 (самое длинное «Нояб. 2026») + 16 (значок) + 8 (просвет) +
-              // 16 (поля) = 116.
-              className="input text-sm font-medium w-[116px] !px-2"
+              // 79 (самое длинное «Февр. 2026», замерено) + 16 (значок) +
+              // 8 (просвет) + 24 (поля) + 2 (кант) = 129, берём 132. Поля стали
+              // по 12: у пилюли восьмипиксельные прижимали подпись к канту.
+              // Пилюля, а не скруглённое поле: вокруг одни пилюли, и
+              // двенадцатипиксельный радиус посреди них был единственным на всю
+              // строку.
+              className="input text-sm font-medium w-[132px] !px-3 !rounded-full"
             />
           ) : (
-            <span className="text-sm font-medium tabular-nums px-3 py-1.5 rounded-lg bg-panel2 border border-border">
+            <span className="text-sm font-medium tabular-nums px-4 py-2 rounded-full bg-panel2 border border-border">
               {year}
             </span>
           )}
           <Tooltip content={monthPeriod ? "Следующий месяц" : "Следующий год"}>
             <button
               onClick={() => (monthPeriod ? setYm((m) => addMonths(m, 1)) : shiftYear(1))}
-              className="btn-ghost !p-2"
+              className="btn-ghost !p-2.5"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
