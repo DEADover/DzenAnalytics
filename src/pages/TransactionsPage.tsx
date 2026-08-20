@@ -111,10 +111,14 @@ function transferCounterparty(t: Transaction): string | null {
 // Колонка есть у ВСЕХ строк, просто у просмотренных она пустая: так пометка
 // ничего не сдвигает, а глазом читается вертикальной дорожкой — сразу видно,
 // сколько нового и где оно кончается.
+// Первая колонка — ровно под чекбокс (16 пикселей плюс по два по бокам). Была
+// 32, и за ней стояла ещё одна, 10-пиксельная, под точку «новая операция» — со
+// своими зазорами это давало 66 пикселей от края до категории при 16 пикселях
+// видимого содержимого. Точка переехала на значок категории, полоса убрана.
 const GRID_COLS_FULL =
-  "32px 10px 84px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 112px";
+  "20px 84px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 112px";
 const GRID_COLS_NODATE =
-  "32px 10px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 112px";
+  "20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 112px";
 
 const PAGE_SIZE = 100;
 
@@ -987,9 +991,6 @@ function HeaderRow({
         title="Выбрать всё (под фильтрами)"
         aria-label="Выбрать все операции"
       />
-      {/* Пустая ячейка под дорожку с точками «новая» — колонка есть у всех
-          строк, включая шапку, иначе они разъедутся. */}
-      <div aria-hidden />
       {!grouped && <div>Дата</div>}
       <div>Категория</div>
       <div>Счёт</div>
@@ -1204,20 +1205,6 @@ function Row({
         onChange={onToggleSelect}
         aria-label="Выбрать операцию"
       />
-      {/* «Новая» — операция приехала из банка, и в Дзен-мани её ещё не
-          открывали (`viewed: false`). Черновики не помечаем: у них своя
-          красная точка «не синхронизирована», это про другое. */}
-      <span className="flex items-center justify-center" aria-hidden={!tx.unseen}>
-        {tx.unseen && !draft && (
-          <Tooltip content="Новая — вы ещё не открывали её в Дзен-мани">
-            <span
-              className="w-1.5 h-1.5 rounded-full bg-accent"
-              role="img"
-              aria-label="Новая операция"
-            />
-          </Tooltip>
-        )}
-      </span>
       {!hideDate && (
         <div className="text-muted tabular-nums whitespace-nowrap">
           {tx.date.slice(8, 10)}.{tx.date.slice(5, 7)}.{tx.date.slice(0, 4)}
@@ -1239,6 +1226,21 @@ function Row({
               className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-expense border-2 border-panel"
               aria-label="Новая операция — не синхронизирована"
             />
+          )}
+          {/* «Новая» — операция приехала из банка, и в Дзен-мани её ещё не
+              открывали (`viewed: false`). Стоит тем же значком на иконке
+              категории, а не отдельной колонкой: колонка занимала место в
+              каждой строке ради метки, которая бывает у единиц. Столкнуться с
+              красной точкой черновика она не может — черновики этой пометки не
+              получают, у них своя. */}
+          {tx.unseen && !draft && (
+            <Tooltip content="Новая — вы ещё не открывали её в Дзен-мани">
+              <span
+                className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-panel"
+                role="img"
+                aria-label="Новая операция"
+              />
+            </Tooltip>
           )}
         </span>
         <div className="min-w-0">
