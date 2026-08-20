@@ -2512,7 +2512,17 @@ export function AccountsPage() {
                       : "text-income";
                   // Долговой счёт раскрывается по контрагентам; если долговых
                   // операций нет вовсе, раскрывать нечего — шеврона тоже нет.
-                  const debtRows = debtsByAccount.get(a.account)?.rows ?? [];
+                  //
+                  // На «Капитале» рассчитавшихся не показываем: там разбивка
+                  // отвечает на вопрос «кто кому должен СЕЙЧАС», а закрытый
+                  // долг вносит ноль и только топит живые строки — так же, как
+                  // это устроено в самом Дзен-мани (issue #80). На «Движении»
+                  // окно своё, и нулевой итог за период — тоже ответ: там
+                  // видно, что с человеком за месяц рассчитались.
+                  const allDebtRows = debtsByAccount.get(a.account)?.rows ?? [];
+                  const debtRows = capitalView
+                    ? allDebtRows.filter((d) => !d.settled)
+                    : allDebtRows;
                   const debt = debtRows.length > 0;
                   const debtsOpen = debt && openDebts.has(a.account);
                   return (
@@ -2744,7 +2754,15 @@ export function AccountsPage() {
                           >
                             {formatMoney(Math.abs(d.amount), base)}
                           </td>
-                          <td className="table-td !py-1.5" colSpan={capitalView ? 2 : 3} />
+                          {/* Хвост до конца строки — ровно две колонки на обеих
+                              вкладках: «Доля» и «Действия» на «Капитале»,
+                              «Операции» и «Действия» на «Движении». Раньше здесь
+                              стояло три, и раскрытый долговой счёт добавлял
+                              таблице ВОСЬМОЙ столбец: `table-fixed` делил
+                              свободную ширину между ним и колонкой «Счёт», та
+                              ужималась вдвое, и таблица на глазах съезжала
+                              влево, оставляя пустое поле справа (issue #80). */}
+                          <td className="table-td !py-1.5" colSpan={2} />
                         </tr>
                       ))}
                     </Fragment>
