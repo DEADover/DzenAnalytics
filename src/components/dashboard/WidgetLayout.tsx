@@ -252,10 +252,10 @@ export function WidgetShell({
           children
         ) : sunken ? (
           // Одна коробка вместо поддона: кант тут нечем нарисовать, обойма
-          // залита тем же серым, что и подложка. Поля меньше, чем у поддона
-          // (16 против 6 + 20): содержимое рассчитано на всю высоту плитки, и
-          // на широких полях нижняя строка итогов не помещалась.
-          <div className="card-sunken h-full flex flex-col p-4">{children}</div>
+          // залита тем же серым, что и подложка. Поля по 20 — меньше, чем
+          // отъедал поддон (6 + 20), но достаточно, чтобы нижняя строка не
+          // лежала на самом канте.
+          <div className="card-sunken h-full flex flex-col p-5">{children}</div>
         ) : (
           <div className="tray h-full flex flex-col">
             <div className="tray-core flex-1 min-h-0 flex flex-col p-5">{children}</div>

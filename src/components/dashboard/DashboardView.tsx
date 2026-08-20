@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import clsx from "clsx";
 import { ArrowUpRight } from "lucide-react";
 import {
   BlockTitle,
@@ -122,7 +123,13 @@ function monthPill(m: DashboardModel): string {
 function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
   const over = m.pace === null ? null : m.pace - 1;
   return (
-    <div className="flex flex-col gap-5 h-full">
+    // На голом фоне итоги прижаты к низу колонки: страница под ними
+    // продолжается, и это читается нижней границей первого экрана. В карточке
+    // так нельзя — итоги упирались в её край, а выше зияла дыра в шестьдесят
+    // пикселей. Там свободное место делится поровну между всеми блоками:
+    // просвет над итогами становится таким же, как между остальными, и низ
+    // перестаёт выглядеть провалившимся.
+    <div className={clsx("flex flex-col gap-5 h-full", sunken && "justify-between")}>
       {/* Пилюля — она же заголовок страницы: другого h1 на экране нет, а
           оставлять главную вовсе без заголовка нельзя. Потому и набрана в
           полную силу — приглушённой десяткой она читалась как подпись к
@@ -212,7 +219,7 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
         </Link>
       </div>
 
-      <div className="mt-auto border-t border-border pt-2">
+      <div className={clsx("border-t border-border pt-2", !sunken && "mt-auto")}>
         <StatRow
           label="Доход"
           value={formatMoney(m.factIncome, m.base)}
