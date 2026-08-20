@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
 import { ChevronRight, ChevronDown, Maximize2, X, BarChart3, LayoutGrid } from "lucide-react";
 import { useEffect } from "react";
@@ -293,7 +294,14 @@ export function CategoriesPage() {
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
   const [view, setView] = useState<View>("rings");
-  const [kind, setKind] = useState<"expense" | "income">("expense");
+  // С главной сюда приходят по ссылке из виджета-кольца, и она говорит, какой
+  // вид открыть: кольцо расходов ведёт к расходам, кольцо доходов — к доходам.
+  // Без этого раздел всегда открывался расходами, и с кольца доходов человек
+  // попадал не туда, куда нажимал.
+  const [searchParams] = useSearchParams();
+  const [kind, setKind] = useState<"expense" | "income">(
+    searchParams.get("kind") === "income" ? "income" : "expense"
+  );
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Bars view: how many previous periods feed the «среднее» baseline (Zenmoney
   // «Среднее за N месяцев»). Default 3.

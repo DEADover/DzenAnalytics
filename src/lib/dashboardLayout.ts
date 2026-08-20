@@ -482,20 +482,36 @@ export function shiftWidget(
 
 /* ─────────────────────────────  состав  ───────────────────────────── */
 
-/** Убрать виджет с главной или вернуть его на прежнее место. */
+/**
+ * Убрать виджет с главной или вернуть его обратно.
+ *
+ * Возвращается он В КОНЕЦ, а не на прежнее место. Прежнее место к этому времени
+ * уже занято — соседи сомкнулись, — и виджет, всплывающий посреди собранной
+ * раскладки, читается сбоем: человек нажал «вернуть», а поменялось что-то в
+ * середине экрана. В конце его видно сразу, и оттуда он переносится куда нужно.
+ */
 export function setWidgetHidden(
   layout: readonly WidgetPlacement[],
   key: string,
   hidden: boolean
 ): WidgetPlacement[] {
-  return layout.map((p) => {
-    if (p.key !== key) return p;
-    const next: WidgetPlacement = { key: p.key, kind: p.kind };
-    if (p.view) next.view = p.view;
-    if (p.links) next.links = p.links;
-    if (hidden) next.hidden = true;
-    return next;
-  });
+  const at = layout.findIndex((p) => p.key === key);
+  if (at === -1) return layout.slice();
+  const p = layout[at];
+  const next: WidgetPlacement = { key: p.key, kind: p.kind };
+  if (p.view) next.view = p.view;
+  if (p.links) next.links = p.links;
+  if (hidden) next.hidden = true;
+
+  const rest = layout.filter((x) => x.key !== key);
+  // Убираем — оставляем на месте: пока виджет на полке, его порядок никому не
+  // мешает, зато сравнивать раскладку со стандартной становится нечестно.
+  if (hidden) {
+    const out = rest.slice();
+    out.splice(at, 0, next);
+    return out;
+  }
+  return [...rest, next];
 }
 
 /**

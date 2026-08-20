@@ -71,57 +71,55 @@ function monthName(ym: string): string {
 }
 
 /**
- * Строка «ярлык — число» в колонке героя.
+ * Колонка «ярлык — число» в подвале героя.
  *
- * Именно строкой, а не плиткой в три колонки: колонка узкая, и в трёх колонках
- * «Расход прогноз» переносился на две строки, а число рядом обрезалось.
+ * Прежде это была строка «ярлык слева, число справа»: их было три, и списком
+ * они читались нормально. Осталось две, и список из двух строк выглядит
+ * обрубком — а рядом друг с другом доход и расход образуют пару, которую и
+ * хочется сравнить.
  */
-function StatRow({
+function StatCol({
   label,
   value,
   plan,
   tone,
   dense,
+  divided,
 }: {
   label: string;
   value: string;
   /** Плановая сумма месяца из «Бюджета». Стоит под фактом и не смешивается с ним. */
   plan?: string;
   tone?: "income" | "expense";
-  /** В карточке строки набраны теснее: там высота считанная, а не вся страница. */
+  /** В карточке набрано теснее: там высота считанная, а не вся страница. */
   dense?: boolean;
+  /** Волосок слева — граница между колонками. */
+  divided?: boolean;
 }) {
   return (
-    <div
-      className={clsx(
-        "flex items-baseline justify-between gap-3 border-b border-border/60 last:border-0",
-        dense ? "py-1.5" : "py-2"
-      )}
-    >
-      <span
+    <div className={clsx("min-w-0", divided && "border-l border-border pl-4", !divided && "pr-4")}>
+      <div
         className={clsx(
           "uppercase tracking-[0.1em] text-muted",
-          dense ? "text-[11.5px]" : "text-[12px]"
+          dense ? "text-[11px]" : "text-[12px]"
         )}
       >
         {label}
-      </span>
-      <span className="shrink-0 text-right">
-        <span
-          className={clsx(
-            "block font-mono tabular-nums font-semibold",
-            dense ? "text-[16.5px]" : "text-[18px]",
-            tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""
-          )}
-        >
-          {value}
-        </span>
-        {plan && (
-          <span className="block text-[11.5px] text-muted font-mono tabular-nums">
-            План {plan}
-          </span>
+      </div>
+      <div
+        className={clsx(
+          "font-mono tabular-nums font-semibold mt-1 truncate",
+          dense ? "text-[19px]" : "text-[22px]",
+          tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""
         )}
-      </span>
+      >
+        {value}
+      </div>
+      {plan && (
+        <div className="text-[11.5px] text-muted font-mono tabular-nums mt-0.5 truncate">
+          План {plan}
+        </div>
+      )}
     </div>
   );
 }
@@ -149,7 +147,9 @@ function PlannedTotals({ out, income, base }: { out: number; income: number; bas
           или минусом нечего. */}
       {!hasOut && !hasIn && <span className={`${big} text-muted`}>{formatMoney(0, base)}</span>}
       {hasOut && <span className={`${big} text-expense`}>−{formatMoney(out, base)}</span>}
-      {hasOut && hasIn && <span className="text-muted text-xl leading-none">·</span>}
+      {hasOut && hasIn && (
+        <span className="w-px h-5 bg-border shrink-0 self-center" aria-hidden="true" />
+      )}
       {hasIn && <span className={`${big} text-income`}>+{formatMoney(income, base)}</span>}
     </div>
   );
@@ -284,26 +284,28 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
         </Link>
       </div>
 
-      <div className={clsx("border-t border-border pt-1", !sunken && "mt-auto pt-2")}>
-        <StatRow
-          dense={sunken}
-          label="Доход"
-          value={formatMoney(m.factIncome, m.base)}
-          plan={m.planIncome !== null ? formatMoney(m.planIncome, m.base) : undefined}
-          tone="income"
-        />
-        <StatRow
-          dense={sunken}
-          label="Расход"
-          value={formatMoney(m.factExpense, m.base)}
-          plan={m.planExpense !== null ? formatMoney(m.planExpense, m.base) : undefined}
-          tone="expense"
-        />
-        <StatRow
-          dense={sunken}
-          label="Запланированные платежи"
-          value={formatMoney(m.upcomingTotalBase, m.base)}
-        />
+      {/* Доход и расход — двумя колонками, а не строками списка.
+          Запланированные платежи отсюда ушли (у них свой виджет), и в столбик
+          осталось бы две сиротливые строки; рядом же они читаются тем, чем и
+          являются, — парой, которую сравнивают между собой. */}
+      <div className={clsx("border-t border-border pt-3", !sunken && "mt-auto")}>
+        <div className="grid grid-cols-2">
+          <StatCol
+            label="Доход"
+            value={formatMoney(m.factIncome, m.base)}
+            plan={m.planIncome !== null ? formatMoney(m.planIncome, m.base) : undefined}
+            tone="income"
+            dense={sunken}
+          />
+          <StatCol
+            label="Расход"
+            value={formatMoney(m.factExpense, m.base)}
+            plan={m.planExpense !== null ? formatMoney(m.planExpense, m.base) : undefined}
+            tone="expense"
+            dense={sunken}
+            divided
+          />
+        </div>
       </div>
     </div>
   );
@@ -329,7 +331,7 @@ function RailRow({ label, value, tone }: { label: string; value: string; tone?: 
  * Вариант «Разворот»: то же число, но в поддоне и с рейкой чисел справа.
  *
  * Волосок делит карточку надвое: слева типографика и два действия, справа
- * четыре числа, растянутые на всю высоту. Внизу слева — сколько месяца
+ * три числа, растянутые на всю высоту. Внизу слева — сколько месяца
  * пройдено: без неё низ колонки пустовал, а вопрос «много ли ещё впереди»
  * ровно тот, что задают, глядя на остаток.
  */
@@ -429,8 +431,6 @@ function HeroSplit({ m }: { m: DashboardModel }) {
           <div className="hidden xl:block h-px bg-border" />
           <RailRow label="Расход" value={formatMoney(m.factExpense, m.base)} tone="expense" />
           <div className="hidden xl:block h-px bg-border" />
-          <RailRow label="Ещё спишется" value={formatMoney(m.upcomingTotalBase, m.base)} />
-          <div className="hidden xl:block h-px bg-border" />
           <RailRow label="На счетах" value={formatMoney(m.netWorth, m.base)} />
         </div>
       </div>
@@ -487,19 +487,25 @@ export function DashboardView() {
   const donutExpense = useMemo(() => buildHierarchy(monthTx, "expense"), [monthTx]);
   const donutIncome = useMemo(() => buildHierarchy(monthTx, "income"), [monthTx]);
 
-  /** Открыть список операций статьи или подстатьи — своим видом для колец. */
+  /**
+   * Открыть список операций статьи или подстатьи — за ТЕКУЩИЙ месяц.
+   *
+   * Виджеты главной все про этот месяц: и доли в кольце, и суммы в списке
+   * статей посчитаны по нему. Открывать по ним сквозную историю значило бы
+   * показать другие числа, чем те, по которым щёлкнули.
+   */
   const drillCategory = useMemo(() => {
     const match = (kind: "expense" | "income", t: (typeof transactions)[number]) =>
       kind === "expense" ? affectsExpense(t.kind) : t.kind === "income";
     return (kind: "expense" | "income", name: string, full = false) =>
       showDrill(
-        name,
-        transactions.filter(
+        `${name} · ${monthLabel(m.ym)}`,
+        monthTx.filter(
           (t) => match(kind, t) && (full ? t.categoryFull === name : t.category === name)
         ),
         kind === "expense" ? "Расходы по статье" : "Доходы по статье"
       );
-  }, [transactions, showDrill]);
+  }, [monthTx, showDrill, m.ym]);
 
   const drag = useWidgetDrag(
     (dragKey, overKey) => void move(dragKey, overKey),
@@ -531,10 +537,11 @@ export function DashboardView() {
           "Месяц"
         ),
       // Возвраты тоже берём: именно они уменьшили ту сумму, по которой кликнули.
+      // Тоже за текущий месяц: проценты в виджете считаны по нему.
       onCategory: (name: string) =>
         showDrill(
-          name,
-          transactions.filter((t) => affectsExpense(t.kind) && t.category === name),
+          `${name} · ${monthLabel(m.ym)}`,
+          monthTx.filter((t) => affectsExpense(t.kind) && t.category === name),
           "Расходы по категории"
         ),
       onDay: (date: string) =>
@@ -552,7 +559,7 @@ export function DashboardView() {
           "Операции по счёту"
         ),
     }),
-    [transactions, showDrill, monthStartDay]
+    [transactions, monthTx, showDrill, monthStartDay, m.ym]
   );
 
   /** Содержимое виджета. Обойму, ширину и ручки надевает `WidgetShell`. */
@@ -673,7 +680,7 @@ export function DashboardView() {
       case "donutExpense":
         return (
           <>
-            <BlockTitle title="Кольцо расходов" to="/categories" linkLabel="Категории" />
+            <BlockTitle title="Кольцо расходов" to="/categories?kind=expense" linkLabel="Категории" />
             <CategorySunburst
               compact
               data={donutExpense}
@@ -689,7 +696,7 @@ export function DashboardView() {
       case "donutIncome":
         return (
           <>
-            <BlockTitle title="Кольцо доходов" to="/categories" linkLabel="Категории" />
+            <BlockTitle title="Кольцо доходов" to="/categories?kind=income" linkLabel="Категории" />
             <CategorySunburst
               compact
               data={donutIncome}

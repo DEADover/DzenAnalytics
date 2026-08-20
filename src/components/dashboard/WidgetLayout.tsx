@@ -429,7 +429,7 @@ export function HiddenWidgets({ layout }: { layout: readonly WidgetPlacement[] }
             const restore = (
               <button
                 type="button"
-                title={title}
+                title={`${title}\nВернётся в конец раскладки`}
                 onClick={() => void setHidden(p.key, false)}
                 className={clsx(
                   CHIP,

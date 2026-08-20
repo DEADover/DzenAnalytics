@@ -249,7 +249,18 @@ export interface ForecastMonth {
 export function forecastMonths(
   complete: { ym: string; income: number; expense: number }[],
   monthsAhead = 3,
-  lookback = 6
+  lookback = 6,
+  /**
+   * С какого месяца отсчитывать прогноз — первый прогнозный будет следующим за
+   * ним. По умолчанию это последний завершённый месяц из `complete`.
+   *
+   * Разделено намеренно: считать «обычный месяц» надо по завершённым, иначе
+   * половина текущего занизила бы медиану, — а РИСОВАТЬ прогноз надо после
+   * последнего показанного месяца. Пока это было одно и то же значение, текущий
+   * месяц попадал на график дважды: столбцом факта и столбцом прогноза, и на
+   * оси стояли две одинаковые подписи подряд.
+   */
+  startAfter?: string
 ): ForecastMonth[] {
   if (complete.length === 0) return [];
 
@@ -277,7 +288,7 @@ export function forecastMonths(
     return Math.max(0.6, Math.min(1.4, median(arr) / overall));
   };
 
-  const last = complete[complete.length - 1].ym;
+  const last = startAfter || complete[complete.length - 1].ym;
   const ly = Number(last.slice(0, 4));
   const lm = Number(last.slice(5, 7));
 

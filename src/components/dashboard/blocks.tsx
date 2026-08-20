@@ -516,7 +516,18 @@ export function CashflowBars({
             style={{ cursor: onMonth ? "pointer" : undefined }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
-            <XAxis dataKey="month" stroke={chartAxisStroke} fontSize={11} tickLine={false} />
+            {/* Подписи через одну и без « г.»: пятнадцать полных «Окт. 25 г.»
+                в ряд не помещаются, и Recharts выбрасывал их сам — вразнобой,
+                отчего ось выглядела сбитой. Через одну шаг ровный, а год
+                остаётся при месяце и без служебного хвоста. */}
+            <XAxis
+              dataKey="month"
+              stroke={chartAxisStroke}
+              fontSize={11}
+              tickLine={false}
+              interval={1}
+              tickFormatter={(v: string) => String(v).replace(/\s*г\.$/, "")}
+            />
             <YAxis
               stroke={chartAxisStroke}
               fontSize={11}

@@ -286,14 +286,20 @@ describe("shiftWidget", () => {
 });
 
 describe("видимость", () => {
-  it("убирает и возвращает на то же место", () => {
+  it("убирает, не сдвигая соседей", () => {
     const hidden = setWidgetHidden(DEFAULT_LAYOUT, "cashflow", true);
     expect(row(hidden, "cashflow").hidden).toBe(true);
     expect(keys(hidden)).toEqual(keys(DEFAULT_LAYOUT));
+  });
 
+  it("возвращает в конец, а не на прежнее место", () => {
+    // Прежнее место к этому времени занято: соседи сомкнулись, и виджет,
+    // всплывающий посреди раскладки, читался бы сбоем.
+    const hidden = setWidgetHidden(DEFAULT_LAYOUT, "cashflow", true);
     const back = setWidgetHidden(hidden, "cashflow", false);
     expect(row(back, "cashflow").hidden).toBeUndefined();
-    expect(back).toEqual(DEFAULT_LAYOUT);
+    expect(keys(back)[keys(back).length - 1]).toBe("cashflow");
+    expect(back).toHaveLength(DEFAULT_LAYOUT.length);
   });
 
   it("убранная полоска не теряет своих кнопок", () => {

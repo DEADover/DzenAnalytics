@@ -187,7 +187,9 @@ export function useDashboardModel(): DashboardModel {
       isForecast: false,
     }));
     const complete = months.filter((b) => b.ym < ym);
-    return [...history, ...forecastMonths(complete, 3, 6)];
+    // Прогноз начинается со следующего месяца после текущего: сам текущий уже
+    // нарисован фактом, пусть и неполным.
+    return [...history, ...forecastMonths(complete, 3, 6, ym)];
   }, [months, ym]);
   const netWorthSeries = useNetWorthSeries(transactions);
   const dayMap = useMemo(() => dailyExpenseMap(transactions), [transactions]);
