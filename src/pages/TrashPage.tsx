@@ -133,7 +133,7 @@ export function TrashPage() {
           title="Удалённые"
           hint="Удалённые операции скрыты из всех расчётов, но хранятся локально — здесь их можно вернуть."
         />
-        <div className="card card-pad text-center py-16">
+        <div className="card-tray card-pad text-center py-16">
           <Trash2 className="w-10 h-10 text-muted mx-auto mb-3" />
           <div className="font-medium mb-1">Корзина пуста</div>
           <div className="text-sm text-muted">
@@ -184,7 +184,7 @@ export function TrashPage() {
         </div>
       )}
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold flex items-center gap-2">
             <Trash2 className="w-4 h-4" />

@@ -331,7 +331,7 @@ export function GoalsPage() {
 
       {goals.length === 0 ? (
         !adding && (
-          <div className="card card-pad text-center py-14">
+          <div className="card-tray card-pad text-center py-14">
             <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
               <Target className="w-7 h-7 text-accent" />
             </div>
@@ -613,7 +613,7 @@ function GoalCard({
   }
 
   return (
-    <div className="card card-pad flex flex-col gap-4">
+    <div className="card-tray card-pad flex flex-col gap-4">
       {/* Header: name + saved/target, then % and actions (never shift) */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

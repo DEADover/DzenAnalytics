@@ -226,7 +226,7 @@ export function DynamicsPage() {
 
       <GlobalFilters period={lp} />
 
-      <div className="card card-pad space-y-4">
+      <div className="card-tray card-pad space-y-4">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
             {METRICS.map((m) => (

@@ -110,7 +110,7 @@ export function TopPage() {
       </div>
 
       {tab === "categories" && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="font-semibold mb-3">
             Топ категорий по {kind === "expense" ? "расходам" : "доходам"}
           </div>
@@ -189,7 +189,7 @@ export function TopPage() {
       )}
 
       {tab === "payees" && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="font-semibold mb-3">
             Топ получателей по {kind === "expense" ? "расходам" : "доходам"}
           </div>
@@ -261,7 +261,7 @@ export function TopPage() {
       )}
 
       {tab === "transactions" && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="font-semibold mb-3">
             Крупнейшие {kind === "expense" ? "расходы" : "поступления"}
           </div>

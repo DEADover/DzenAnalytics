@@ -228,7 +228,7 @@ export function CalendarPage() {
       <GlobalFilters showDateRange={false} dateRangeHint="Период задаётся календарём ниже" />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="label mb-1">Расходы за {year}</div>
           <YearValue tone="text-expense">
             {formatMoney(yearStats.total, base)}
@@ -239,7 +239,7 @@ export function CalendarPage() {
             base={base}
           />
         </div>
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="label mb-1">Доходы за {year}</div>
           <YearValue tone="text-income">
             {formatMoney(yearStats.totalInc, base)}
@@ -251,7 +251,7 @@ export function CalendarPage() {
           />
         </div>
         {/* «Накопления» за год (issue #48) — сумма из правила #42. */}
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="label mb-1">Накопления за {year}</div>
           <YearValue
             tone={savingsYear > 0 ? "text-income" : savingsYear < 0 ? "text-expense" : ""}
@@ -273,11 +273,11 @@ export function CalendarPage() {
             {formatMoney(savingsYear, base, { signed: true })}
           </YearValue>
         </div>
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="label mb-1">Операций</div>
           <div className="stat-num">{formatNum(yearStats.count)}</div>
         </div>
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="label mb-1">Активных дней</div>
           <div className="stat-num">
             {yearStats.activeDays}
@@ -286,7 +286,7 @@ export function CalendarPage() {
         </div>
       </div>
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 12 }, (_, m) => (
             <MonthGrid

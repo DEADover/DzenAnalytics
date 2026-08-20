@@ -46,7 +46,7 @@ export function SankeyPage() {
           hint="Слева — источники доходов (и привлечённые со счетов средства, если трат больше дохода); справа — категории расходов и сбережения."
         />
         <GlobalFilters />
-        <div className="card card-pad text-center py-12 text-muted">
+        <div className="card-tray card-pad text-center py-12 text-muted">
           Нет данных для построения потоков в текущем фильтре.
         </div>
       </div>
@@ -62,7 +62,7 @@ export function SankeyPage() {
       />
       <GlobalFilters />
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="h-[600px]">
           <ResponsiveContainer>
             <Sankey

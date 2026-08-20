@@ -71,7 +71,7 @@ export function HealthPage() {
       />
 
       {/* Independence snapshot + rolling chart merged into one card */}
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <FireIndependence avgObligatoryMonthly={avgObligatoryMonthly} bare />
         <div className="my-6 border-t border-border" />
         <FireChart data={fire} base={base} bare />

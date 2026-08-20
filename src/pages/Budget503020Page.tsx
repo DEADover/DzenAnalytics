@@ -115,7 +115,7 @@ export function Budget503020Page() {
       />
       <GlobalFilters showDateRange={false} dateRangeHint="Правило 50/30/20 считается за месяц, выбранный ниже" />
 
-      <details className="card card-pad text-sm group">
+      <details className="card-tray card-pad text-sm group">
         <summary className="cursor-pointer flex items-center gap-2 font-medium list-none">
           <Info className="w-4 h-4 text-accent shrink-0" />
           Что это за правило и как настроить деление
@@ -198,7 +198,7 @@ export function Budget503020Page() {
         </div>
       )}
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="font-semibold mb-1">Факт против цели</div>
         <div className="text-xs text-muted mb-4">
           Доли от дохода. Пунктир — границы правила 50/30/20.
@@ -261,7 +261,7 @@ export function Budget503020Page() {
         )}
       </div>
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="font-semibold mb-1">Норма сбережений за 12 месяцев</div>
         <div className="text-xs text-muted mb-4">
           (доход − расход) / доход по месяцам. Пунктир — цель 20%.

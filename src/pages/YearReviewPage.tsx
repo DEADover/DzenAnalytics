@@ -17,6 +17,7 @@ import {
 } from "../lib/yearReview";
 import { formatMoney, formatNum, formatPct, monthLabel } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 
 function deltaPill(value: number, invertColor = false): {
@@ -58,11 +59,8 @@ export function YearReviewPage() {
   if (!review.hasData) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Sparkles className="w-6 h-6 text-accent" />
-          Год в цифрах
-        </h1>
-        <div className="card card-pad text-center text-muted py-12">
+        <PageHeader icon={Sparkles} title="Год в цифрах" />
+        <div className="card-tray card-pad text-center text-muted py-12">
           В данных нет операций за {year} год.
         </div>
         {years.length > 0 && (
@@ -78,19 +76,19 @@ export function YearReviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3" data-export-skip="1">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-accent" />
-            Год в цифрах: {year}
-          </h1>
-          <p className="text-muted text-sm mt-1">
-            Итоги, рекорды и забавная статистика за выбранный год.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <YearSwitcher year={year} years={years} onChange={setYear} />
-          <InfoPopover>
+      {/* Заголовок общий для всех страниц: своя вёрстка тут осталась с тех
+          времён, когда `PageHeader` ещё не было, и страница единственная в
+          продукте писала заголовок по-своему — крупнее, в две строки и без
+          плашки у значка. */}
+      <div data-export-skip="1">
+      <PageHeader
+        icon={Sparkles}
+        title={`Год в цифрах: ${year}`}
+        hint="Итоги, рекорды и забавная статистика за выбранный год."
+        right={
+          <div className="flex items-center gap-2">
+            <YearSwitcher year={year} years={years} onChange={setYear} />
+            <InfoPopover>
             <p>
               Всё на странице считается за <InfoTerm>календарный год</InfoTerm> —
               с 1 января по 31 декабря, независимо от того, с какого числа у вас
@@ -108,8 +106,10 @@ export function YearReviewPage() {
               Текущий год показывается как есть, по накопленным на сегодня
               данным: в январе итоги будут скромные, это не ошибка.
             </p>
-          </InfoPopover>
-        </div>
+            </InfoPopover>
+          </div>
+        }
+      />
       </div>
 
       <div className="space-y-6">
@@ -212,7 +212,7 @@ export function YearReviewPage() {
 
         {/* Biggest single transactions */}
         {review.topTransactions.length > 0 && (
-          <div className="card card-pad">
+          <div className="card-tray card-pad">
             <div className="font-semibold mb-3 flex items-center gap-2">
               <TrendingDown className="w-4 h-4 text-expense" />
               Самые дорогие покупки
@@ -243,7 +243,7 @@ export function YearReviewPage() {
         )}
 
         {/* Fun facts */}
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="font-semibold mb-3 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-accent2" />
             Любопытные факты
@@ -382,7 +382,7 @@ function Record({
   color: string;
 }) {
   return (
-    <div className="card card-pad">
+    <div className="card-tray card-pad">
       <div className="flex items-center gap-2 mb-1">
         <Calendar className={`w-4 h-4 ${color}`} />
         <div className="label">{label}</div>
@@ -407,7 +407,7 @@ function TopList({
   total: number;
 }) {
   return (
-    <div className="card card-pad">
+    <div className="card-tray card-pad">
       <div className="font-semibold mb-3 flex items-center gap-2">
         {icon}
         {title}

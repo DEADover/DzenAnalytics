@@ -257,7 +257,7 @@ export function CashflowPage() {
 
       <InsightsPanel insights={insights} base={base} />
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div>
             <div className="font-semibold">
@@ -514,7 +514,7 @@ export function CashflowPage() {
       </div>
 
       {allYears.length >= 2 && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
             <div>
               <div className="font-semibold">Год к году</div>
@@ -603,7 +603,7 @@ export function CashflowPage() {
 
       {/* Seasonality */}
       {seasonality.some((s) => s.yearsSampled >= 2) && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div>
               <div className="font-semibold flex items-center gap-2">
@@ -690,7 +690,7 @@ export function CashflowPage() {
         </div>
       )}
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <SortableTable<MonthBucket>
           title="Помесячная сводка"
           data={months}

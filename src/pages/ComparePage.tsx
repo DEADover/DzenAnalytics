@@ -770,7 +770,7 @@ export function ComparePage() {
           Здесь карточка всегда одна и та же: строка режима, три слота, строка
           дат под каждым. Где выбирать нечего — стоит слово, а не погашенный
           контрол: нажимаемая на вид, но мёртвая кнопка читается как поломка. */}
-      <div className="card card-pad space-y-3">
+      <div className="card-tray card-pad space-y-3">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="label shrink-0">Сравниваем</span>
           <Segmented
@@ -934,7 +934,7 @@ export function ComparePage() {
 
       </div>
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="font-semibold">
             {chartKind === "expense" ? "Расходы" : "Доходы"} по категориям:{" "}

@@ -102,15 +102,15 @@ export function WordcloudPage() {
       <GlobalFilters />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="label mb-1">Уникальных слов</div>
           <div className="stat-num">{formatNum(words.length)}</div>
         </div>
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="label mb-1">Операций с комментариями</div>
           <div className="stat-num">{formatNum(totalCommentTxs)}</div>
         </div>
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="label mb-1">Самое частое</div>
           <div className="stat-num text-accent text-xl truncate" title={words[0]?.text}>
             {words[0]?.text || "—"}
@@ -122,11 +122,11 @@ export function WordcloudPage() {
       </div>
 
       {words.length === 0 ? (
-        <div className="card card-pad text-center py-12 text-muted">
+        <div className="card-tray card-pad text-center py-12 text-muted">
           В текущем фильтре нет комментариев или все они слишком короткие
         </div>
       ) : (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="flex flex-wrap gap-2 justify-center items-center py-6">
             {words.map((w, i) => (
               <button
@@ -149,7 +149,7 @@ export function WordcloudPage() {
       )}
 
       {words.length > 0 && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="font-semibold mb-3">Топ-30 слов</div>
           <table className="w-full text-sm">
             <thead>

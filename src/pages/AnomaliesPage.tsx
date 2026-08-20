@@ -181,7 +181,7 @@ export function AnomaliesPage() {
 
       {tab === "transactions" &&
         (anomalies.length === 0 ? (
-          <div className="card card-pad text-center py-12">
+          <div className="card-tray card-pad text-center py-12">
             <AlertTriangle className="w-10 h-10 text-muted mx-auto mb-3" />
             <div className="font-medium mb-1">Аномалий не обнаружено</div>
             <div className="text-sm text-muted">
@@ -189,7 +189,7 @@ export function AnomaliesPage() {
             </div>
           </div>
         ) : (
-          <div className="card card-pad">
+          <div className="card-tray card-pad">
             <SortableTable<Anomaly>
               data={anomalies}
               rowKey={(a) => a.tx.id}
@@ -280,7 +280,7 @@ export function AnomaliesPage() {
 
       {tab === "spikes" &&
         (spikes.length === 0 ? (
-          <div className="card card-pad text-center py-12">
+          <div className="card-tray card-pad text-center py-12">
             <TrendingUp className="w-10 h-10 text-muted mx-auto mb-3" />
             <div className="font-medium mb-1">Всплесков по категориям не найдено</div>
             <div className="text-sm text-muted">
@@ -288,7 +288,7 @@ export function AnomaliesPage() {
             </div>
           </div>
         ) : (
-          <div className="card card-pad">
+          <div className="card-tray card-pad">
             <SortableTable<MonthSpike>
               data={spikes}
               rowKey={(s, i) => `${s.ym}-${s.category}-${i}`}

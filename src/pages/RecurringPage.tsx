@@ -580,7 +580,7 @@ export function RecurringPage() {
             по регулярности (прогноз).
           </p>
           {plannedUpcoming.length === 0 && plannedOverdue.length === 0 ? (
-            <div className="card card-pad text-center py-12">
+            <div className="card-tray card-pad text-center py-12">
               <CalendarClock className="w-10 h-10 text-muted mx-auto mb-3" />
               <div className="font-medium mb-1">Нет запланированных операций из Дзен-мани</div>
               <div className="text-sm text-muted max-w-md mx-auto">
@@ -589,7 +589,7 @@ export function RecurringPage() {
               </div>
             </div>
           ) : (
-          <div className="card card-pad space-y-4">
+          <div className="card-tray card-pad space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="font-semibold flex items-center gap-2">
                 <CalendarClock className="w-4 h-4 text-accent" />
@@ -859,7 +859,7 @@ export function RecurringPage() {
       )}
 
       {candidates.length === 0 && (
-        <div className="card card-pad text-center py-12">
+        <div className="card-tray card-pad text-center py-12">
           <AlertCircle className="w-10 h-10 text-muted mx-auto mb-3" />
           <div className="font-medium mb-1">Регулярных платежей не найдено</div>
           <div className="text-sm text-muted">
@@ -869,7 +869,7 @@ export function RecurringPage() {
       )}
 
       {upcoming.length > 0 && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="font-semibold mb-3 flex items-center gap-2">
             <Calendar className="w-4 h-4 text-accent" />
             Ближайшие ожидаемые
@@ -905,7 +905,7 @@ export function RecurringPage() {
       )}
 
       {candidates.length > 0 && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <SortableTable<RecurringCandidate>
             title={
               <span className="flex items-center gap-2">

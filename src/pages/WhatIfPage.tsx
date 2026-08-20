@@ -144,7 +144,7 @@ export function WhatIfPage() {
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* Inputs */}
-        <div className="card card-pad space-y-5">
+        <div className="card-tray card-pad space-y-5">
           <div>
             <div className="font-semibold mb-3 flex items-center gap-2">
               <Coins className="w-4 h-4 text-accent" />
@@ -244,7 +244,7 @@ export function WhatIfPage() {
         {/* Outputs */}
         <div className="space-y-4">
           {/* Compare scenarios */}
-          <div className="card card-pad">
+          <div className="card-tray card-pad">
             <div className="font-semibold mb-3">Сравнение</div>
             <table className="w-full text-base">
               <thead>
@@ -298,7 +298,7 @@ export function WhatIfPage() {
           </div>
 
           {/* FIRE */}
-          <div className="card card-pad">
+          <div className="card-tray card-pad">
             <div className="flex items-center gap-2 font-semibold mb-3">
               <Flame className="w-4 h-4 text-warn" />
               FIRE
@@ -334,7 +334,7 @@ export function WhatIfPage() {
           </div>
 
           {/* Projected capital */}
-          <div className="card card-pad">
+          <div className="card-tray card-pad">
             <div className="flex items-center gap-2 font-semibold mb-3">
               <PiggyBank className="w-4 h-4 text-accent2" />
               Прогноз капитала

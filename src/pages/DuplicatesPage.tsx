@@ -151,7 +151,7 @@ export function DuplicatesPage() {
 
 
       {groups.length === 0 ? (
-        <div className="card card-pad text-center py-12">
+        <div className="card-tray card-pad text-center py-12">
           <AlertCircle className="w-10 h-10 text-muted mx-auto mb-3" />
           <div className="font-medium mb-1">Дубликатов не найдено</div>
           <div className="text-sm text-muted">
@@ -172,7 +172,7 @@ export function DuplicatesPage() {
                 return next;
               });
             return (
-              <div key={i} className="card card-pad">
+              <div key={i} className="card-tray card-pad">
                 <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
                   <div className="min-w-0">
                     <div className="font-medium">

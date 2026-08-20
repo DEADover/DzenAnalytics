@@ -208,7 +208,7 @@ export function TrendsPage() {
       />
       <GlobalFilters period={lp} />
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="flex items-start justify-between mb-3 flex-wrap gap-3">
           <div>
             <div className="font-semibold">Категории по месяцам</div>
@@ -288,7 +288,7 @@ export function TrendsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="card card-pad lg:col-span-2">
+        <div className="card-tray card-pad lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
             <div>
               <div className="font-semibold flex items-center gap-2">
@@ -337,7 +337,7 @@ export function TrendsPage() {
           </div>
         </div>
 
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="mb-3">
             <div className="font-semibold flex items-center gap-2">
               <Calendar className="w-4 h-4 text-accent" />
@@ -465,7 +465,7 @@ function HourOfWeekHeatmap({
   const dowNames = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
   return (
-    <div className="card card-pad flex flex-col">
+    <div className="card-tray card-pad flex flex-col">
       <div className="font-semibold mb-1">
         Когда вы {kind === "expense" ? "тратите" : "получаете"}
       </div>
@@ -561,7 +561,7 @@ function HourOfDayBars({
   const color = kind === "expense" ? "#EF4444" : "#10B981";
 
   return (
-    <div className="card card-pad flex flex-col">
+    <div className="card-tray card-pad flex flex-col">
       <div className="font-semibold mb-1">По часам суток</div>
       <div className="text-xs text-muted mb-3">
         Сумма {kind === "expense" ? "расходов" : "доходов"} по каждому часу дня

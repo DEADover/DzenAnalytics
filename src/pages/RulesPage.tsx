@@ -460,7 +460,7 @@ export function RulesPage() {
         />
       </div>
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         {/* Панель действий — как в справочниках: заголовок со счётчиком,
             пояснение под «?», действия справа. */}
         <div className="flex items-center gap-2 flex-wrap mb-3">

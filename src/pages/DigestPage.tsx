@@ -82,7 +82,7 @@ export function DigestPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="card card-pad text-center text-muted py-12">
+        <div className="card-tray card-pad text-center text-muted py-12">
           Нет завершённых периодов для дайджеста.
         </div>
       ) : (
@@ -184,7 +184,7 @@ function DigestDetail({
 
   return (
     <div className="space-y-4">
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="text-xs uppercase tracking-wider text-muted">
           {entry.label} · {entry.txCount} операций
         </div>
@@ -220,7 +220,7 @@ function DigestDetail({
       </div>
 
       {entry.movers.length > 0 && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="font-semibold mb-3 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-accent" />
             Категории, где &laquo;выстрелило&raquo;
@@ -266,7 +266,7 @@ function DigestDetail({
       )}
 
       {entry.topTransactions.length > 0 && (
-        <div className="card card-pad">
+        <div className="card-tray card-pad">
           <div className="font-semibold mb-3 flex items-center gap-2">
             <TrendingDown className="w-4 h-4 text-expense" />
             Самое дорогое за период

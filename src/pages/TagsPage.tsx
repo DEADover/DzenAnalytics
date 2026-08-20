@@ -134,7 +134,7 @@ export function TagsPage() {
       />
       <GlobalFilters />
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="font-semibold flex items-baseline gap-2 flex-wrap min-w-0">
             <span>Облако тегов</span>
@@ -182,7 +182,7 @@ export function TagsPage() {
         </div>
       </div>
 
-      <div className="card card-pad">
+      <div className="card-tray card-pad">
         <SortableTable<TagBucket>
           title={
             <span className="flex items-baseline gap-2 flex-wrap min-w-0">
