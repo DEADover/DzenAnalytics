@@ -226,7 +226,7 @@ export function WidgetShell({
         "min-w-0 relative",
         meta.span === 2 && "lg:col-span-2",
         meta.span === 3 && "lg:col-span-3",
-        // Высоту ряда задаёт сам виджет, а не сетка: дорожка кнопок ростом в
+        // Высоту ряда задаёт сам виджет, а не сетка: полоска с кнопками ростом в
         // одну кнопку не должна вытягиваться до полутора экранов.
         meta.autoHeight ? "self-start" : "lg:h-[30rem]",
         inlineBar && "flex flex-col gap-3",
@@ -376,20 +376,20 @@ const CHIP =
   "transition-colors duration-200 hover:border-accent/50 hover:text-accent " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
-/** Чем подписать плитку на полке: дорожки различаются кнопками, а не видом. */
+/** Чем подписать плитку на полке: полоски различаются кнопками, а не видом. */
 function shelfLabel(p: WidgetPlacement): { text: string; title: string } {
   if (p.kind !== "links") {
     const meta = widgetMeta(p.kind);
     return { text: meta.title, title: meta.hint };
   }
-  // Пустые места дорожки в подписи не считаем: на полке важно, что на ней
+  // Пустые места полоски в подписи не считаем: на полке важно, что на ней
   // стоит, а не сколько дырок между кнопками.
   const labels = (p.links ?? [])
     .filter((to): to is string => Boolean(to))
     .map((to) => navSection(to)?.label ?? to);
   return {
-    text: `Дорожка: ${labels.slice(0, 2).join(", ")}${labels.length > 2 ? "…" : ""}`,
-    title: `Дорожка кнопок\n${labels.join(" · ")}`,
+    text: `Полоска: ${labels.slice(0, 2).join(", ")}${labels.length > 2 ? "…" : ""}`,
+    title: `Полоска с кнопками\n${labels.join(" · ")}`,
   };
 }
 
@@ -405,7 +405,7 @@ function ShelfRow({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * Что можно поставить на главную: снятые виджеты и новая дорожка кнопок.
+ * Что можно поставить на главную: снятые виджеты и новая полоска с кнопками.
  *
  * Видна только в режиме настройки: в обычном она рассказывала бы про
  * отсутствующее — ровно то, от чего человек и избавился.
@@ -442,7 +442,7 @@ export function HiddenWidgets({ layout }: { layout: readonly WidgetPlacement[] }
               </button>
             );
             // Виджет, заведённый руками, с полки можно и стереть: иначе снятая
-            // дорожка осталась бы на ней навсегда.
+            // полоска осталась бы на ней навсегда.
             if (!widgetMeta(p.kind).multi) return <span key={p.key}>{restore}</span>;
             return (
               <span
@@ -453,8 +453,8 @@ export function HiddenWidgets({ layout }: { layout: readonly WidgetPlacement[] }
                 <button
                   type="button"
                   className="btn-icon-danger p-1"
-                  title="Удалить дорожку насовсем"
-                  aria-label="Удалить дорожку насовсем"
+                  title="Удалить полоску насовсем"
+                  aria-label="Удалить полоску насовсем"
                   onClick={() => void remove(p.key)}
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
@@ -465,17 +465,17 @@ export function HiddenWidgets({ layout }: { layout: readonly WidgetPlacement[] }
         )}
       </ShelfRow>
 
-      {/* Дорожек можно поставить сколько угодно: в одну помещается шесть
+      {/* Полосок можно поставить сколько угодно: в одну помещается шесть
           кнопок, а кому нужно больше — заводит вторую. */}
       <ShelfRow label="Новый виджет">
         <button
           type="button"
-          title={`Дорожка кнопок\nБыстрые переходы в разделы, до ${LINK_SLOTS} кнопок в ряд`}
+          title={`Полоска с кнопками\nБыстрые переходы в разделы, до ${LINK_SLOTS} кнопок в ряд`}
           onClick={() => void addLinks()}
           className={CHIP}
         >
           <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-          Дорожка кнопок
+          Полоска с кнопками
         </button>
       </ShelfRow>
     </div>

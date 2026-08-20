@@ -50,7 +50,7 @@ describe("layoutFromStored", () => {
   });
 
   it("сохранённую раскладку разбирает как есть", () => {
-    // Дорожку сняли руками — обратно она не возвращается.
+    // Полоску сняли руками — обратно она не возвращается.
     const saved = DEFAULT_LAYOUT.filter((p) => p.kind !== "links");
     expect(kinds(layoutFromStored(saved))).not.toContain("links");
   });
@@ -58,7 +58,7 @@ describe("layoutFromStored", () => {
 
 describe("normalizeLayout", () => {
   it("из пустого списка собирает все одиночные виджеты", () => {
-    // Дорожки среди них нет: её заводят руками.
+    // Полоски среди них нет: её заводят руками.
     expect(kinds(normalizeLayout([]))).toEqual(
       WIDGETS.filter((w) => !w.multi).map((w) => w.kind)
     );
@@ -93,7 +93,7 @@ describe("normalizeLayout", () => {
     expect(row(out, "links").links).toEqual(["/goals", null, null, null, null, null]);
   });
 
-  it("дорожек кнопок разрешает сколько угодно", () => {
+  it("полосок кнопок разрешает сколько угодно", () => {
     const out = normalizeLayout([
       { key: "links", kind: "links", links: ["/goals"] },
       { key: "links-2", kind: "links", links: ["/rules", "/tags"] },
@@ -102,7 +102,7 @@ describe("normalizeLayout", () => {
     expect(out.filter((p) => p.kind === "links")).toHaveLength(3);
   });
 
-  it("чистит места дорожки, не сдвигая уцелевшие кнопки", () => {
+  it("чистит места полоски, не сдвигая уцелевшие кнопки", () => {
     const out = normalizeLayout([
       {
         key: "links",
@@ -128,7 +128,7 @@ describe("normalizeLayout", () => {
     expect(row(out, "links").links).toEqual(["/goals", "/rules", null, null, null, null]);
   });
 
-  it("дорожку без единой живой кнопки выбрасывает", () => {
+  it("полоску без единой живой кнопки выбрасывает", () => {
     const out = normalizeLayout([
       { key: "links", kind: "links", links: ["/раздела-больше-нет", null] },
       { key: "accounts", kind: "accounts" },
@@ -136,9 +136,9 @@ describe("normalizeLayout", () => {
     expect(kinds(out)).not.toContain("links");
   });
 
-  it("снятую дорожку обратно не подсовывает", () => {
+  it("снятую полоску обратно не подсовывает", () => {
     // Одиночные виджеты, которых в раскладке нет, возвращаются — они
-    // «появились в новой версии». Дорожки заводят руками, и вернуть снятую
+    // «появились в новой версии». Полоски заводят руками, и вернуть снятую
     // против воли человека нельзя.
     const saved = DEFAULT_LAYOUT.filter((p) => p.kind !== "links");
     const out = normalizeLayout(saved);
@@ -187,7 +187,7 @@ describe("moveWidget", () => {
     expect(out).toHaveLength(DEFAULT_LAYOUT.length);
   });
 
-  it("различает две дорожки по ключу", () => {
+  it("различает две полоски по ключу", () => {
     const two = addLinksRow(DEFAULT_LAYOUT);
     const out = moveWidget(two, "links-2", "links");
     expect(keys(out).filter((k) => k.startsWith("links"))).toEqual(["links-2", "links"]);
@@ -286,31 +286,31 @@ describe("видимость", () => {
     expect(back).toEqual(DEFAULT_LAYOUT);
   });
 
-  it("убранная дорожка не теряет своих кнопок", () => {
+  it("убранная полоска не теряет своих кнопок", () => {
     const hidden = setWidgetHidden(DEFAULT_LAYOUT, "links", true);
     expect(row(hidden, "links").links).toEqual(DEFAULT_LINKS);
   });
 });
 
-describe("дорожки кнопок", () => {
-  it("новая дорожка получает свободный ключ", () => {
+describe("полоски с кнопками", () => {
+  it("новая полоска получает свободный ключ", () => {
     const one = addLinksRow(DEFAULT_LAYOUT);
     expect(keys(one)).toContain("links-2");
     const two = addLinksRow(one);
     expect(keys(two)).toContain("links-3");
   });
 
-  it("новая дорожка встаёт в конец с одной кнопкой на первом месте", () => {
+  it("новая полоска встаёт в конец с одной кнопкой на первом месте", () => {
     const out = addLinksRow(DEFAULT_LAYOUT);
     const added = out[out.length - 1];
     expect(added.kind).toBe("links");
     expect(added.links).toHaveLength(LINK_SLOTS);
     expect(added.links!.filter(Boolean)).toHaveLength(1);
-    // Первый раздел «Ещё», которого ещё нет ни на одной дорожке.
+    // Первый раздел «Ещё», которого ещё нет ни на одной полоске.
     expect(DEFAULT_LINKS).not.toContain(added.links![0]);
   });
 
-  it("на пустой главной дорожка всё равно заводится", () => {
+  it("на пустой главной полоска всё равно заводится", () => {
     const out = addLinksRow([]);
     expect(out).toHaveLength(1);
     expect(out[0].links!.filter(Boolean)).toHaveLength(1);
@@ -328,14 +328,14 @@ describe("дорожки кнопок", () => {
     expect(row(out, "links").links).toEqual(["/goals", null, null, "/rules", null, "/trash"]);
   });
 
-  it("дорожку без единой кнопки не принимает", () => {
+  it("полоску без единой кнопки не принимает", () => {
     const one = setRowLinks(DEFAULT_LAYOUT, "links", ["/goals"]);
     expect(row(one, "links").links).toEqual(["/goals", null, null, null, null, null]);
     const still = setRowLinks(one, "links", [null, null, null, null, null, null]);
     expect(row(still, "links").links).toEqual(["/goals", null, null, null, null, null]);
   });
 
-  it("дорожку можно стереть насовсем", () => {
+  it("полоску можно стереть насовсем", () => {
     const two = addLinksRow(DEFAULT_LAYOUT);
     const out = removeWidget(two, "links-2");
     expect(keys(out)).toEqual(keys(DEFAULT_LAYOUT));
@@ -346,7 +346,7 @@ describe("дорожки кнопок", () => {
     expect(keys(removeWidget(DEFAULT_LAYOUT, "чужой-ключ"))).toEqual(keys(DEFAULT_LAYOUT));
   });
 
-  it("трогает только свою дорожку", () => {
+  it("трогает только свою полоску", () => {
     const two = addLinksRow(DEFAULT_LAYOUT);
     const out = setRowLinks(two, "links-2", ["/trash", "/duplicates"]);
     expect(row(out, "links").links).toEqual(DEFAULT_LINKS);
@@ -428,7 +428,7 @@ describe("варианты оформления", () => {
     expect(isBareWidget(month, "split")).toBe(false);
     expect(isBareWidget(month, "framed")).toBe(false);
     expect(isBareWidget(month, undefined)).toBe(true);
-    // Дорожка кнопок рисует себя сама всегда — вариантов у неё нет.
+    // Полоска с кнопками рисует себя сама всегда — вариантов у неё нет.
     expect(isBareWidget(widgetMeta("links"))).toBe(true);
     expect(isBareWidget(widgetMeta("accounts"))).toBe(false);
   });
