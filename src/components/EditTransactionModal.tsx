@@ -1092,7 +1092,12 @@ export function EditTransactionModal({
               flow on an expense category; it inflows the account but
               shrinks the category's spend rather than adding to income. */}
           <Field label="Тип операции">
-            <div className="inline-flex bg-panel2 border border-border rounded-lg p-0.5 w-full">
+            {/* Дорожка набрана как все переключатели в продукте: пилюля с
+                подложкой, кантом и мягкой тенью. Прежние восемь пикселей
+                скругления и отступ в полпикселя остались от старого плоского
+                стиля, а это самый верхний контрол карточки — он задаёт тон
+                всему, что ниже. */}
+            <div className="inline-flex gap-0.5 w-full rounded-full p-1 bg-panel2 border border-border shadow-tray">
               <KindButton
                 active={kind === "expense" && !isDebt}
                 onClick={() => {
@@ -1456,14 +1461,18 @@ export function EditTransactionModal({
             // в подвале. Освободившееся место ушло «Копировать», которое без
             // подписи как раз непонятно.
             <div className="flex items-center gap-2">
+              {/* Значок без подписи — только когда рядом стоит «Копировать» и
+                  места на две подписи не хватает. Один он смотрелся сиротой у
+                  левого края, а места в этом случае вдоволь. */}
               <Tooltip content="Удалить операцию">
                 <button
                   onClick={handleDelete}
                   disabled={saving}
                   aria-label="Удалить операцию"
-                  className="btn-danger text-sm px-3"
+                  className={onCopy ? "btn-danger text-sm px-3" : "btn-danger text-sm"}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className={onCopy ? "w-4 h-4" : "w-3.5 h-3.5"} />
+                  {!onCopy && "Удалить"}
                 </button>
               </Tooltip>
               {onCopy && (
@@ -1558,11 +1567,12 @@ function KindButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-        active ? activeBg : "text-muted hover:text-text"
+      aria-pressed={active}
+      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-full text-[12.5px] font-medium whitespace-nowrap transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+        active ? `${activeBg} shadow-[0_6px_16px_-8px_currentColor]` : "text-muted hover:text-text hover:bg-panel/70"
       }`}
     >
-      <Icon className="w-3.5 h-3.5" />
+      <Icon className="w-3.5 h-3.5 shrink-0" />
       {label}
     </button>
   );
