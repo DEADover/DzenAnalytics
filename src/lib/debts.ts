@@ -19,8 +19,12 @@ import type { Transaction } from "../types";
 /** Свод по одному контрагенту. Суммы — в базовой валюте. */
 export interface DebtCounterparty {
   /** Имя контрагента; пусто — операция без него (в Дзен-мани так не бывает,
-   *  но данные приезжают и из CSV). */
+   *  но данные приезжают и из CSV). Написание — самое частое из встреченных. */
   payee: string;
+  /** По чему собран: имя без регистра и лишних пробелов. По нему же потом
+   *  отбираются операции контрагента — иначе клик по строке нашёл бы лишь
+   *  одно написание из нескольких. */
+  key: string;
   /** Итог: больше нуля — должны вам, меньше — должны вы. */
   amount: number;
   /** Сколько всего ушло в долг (или на погашение своего долга). */
@@ -51,6 +55,23 @@ const EPS = 0.005;
 export const NO_COUNTERPARTY = "Без контрагента";
 
 /**
+ * Ключ контрагента: имя без регистра и без лишних пробелов.
+ *
+ * «OZON» и «Ozon» — один и тот же магазин, а у нас они расходились по двум
+ * строкам: одному «должны вы» 874 ₽, другому «должны вам» те же 874 ₽. В
+ * Дзен-мани такая пара схлопывается в ноль и из списка уходит, а у нас висела
+ * выдуманным долгом в обе стороны (issue #80).
+ *
+ * Складываем только то, что различается ОДНИМ регистром и пробелами: это
+ * заведомо одно имя. Похожие, но разные написания («Ozon» и «Озон») здесь не
+ * трогаем — для них есть общая группировка контрагентов, и решать за человека,
+ * что это один и тот же, страница счетов не должна.
+ */
+export function debtPayeeKey(payee: string): string {
+  return payee.trim().replace(/\s+/g, " ").toLocaleLowerCase("ru");
+}
+
+/**
  * Разложить долговые операции по контрагентам.
  *
  * `debtAccounts` — названия счетов типа «Долги»: в Дзен-мани он один, но
@@ -62,6 +83,8 @@ export function debtsByCounterparty(
   debtAccounts: Set<string>
 ): DebtBreakdown {
   const acc = new Map<string, DebtCounterparty>();
+  /** Написания имени внутри одного ключа и сколько раз каждое встретилось. */
+  const spellings = new Map<string, Map<string, number>>();
 
   for (const t of transactions) {
     const into = !!t.incomeAccount && debtAccounts.has(t.incomeAccount);
@@ -71,12 +94,20 @@ export function debtsByCounterparty(
     if (into === from) continue;
     const amount = into ? t.amountBase : -t.amountBase;
     const payee = (t.payee || "").trim() || NO_COUNTERPARTY;
+    const key = debtPayeeKey(payee);
 
-    let row = acc.get(payee);
+    let row = acc.get(key);
     if (!row) {
-      row = { payee, amount: 0, out: 0, back: 0, count: 0, last: "", settled: true };
-      acc.set(payee, row);
+      row = { payee, key, amount: 0, out: 0, back: 0, count: 0, last: "", settled: true };
+      acc.set(key, row);
     }
+    // Показываем то написание, которое встречается чаще: в «OZON» против
+    // «Ozon» побеждает то, что человек видит в выписке чаще всего.
+    const seen = (spellings.get(key) ?? new Map<string, number>()).set(
+      payee,
+      (spellings.get(key)?.get(payee) ?? 0) + 1
+    );
+    spellings.set(key, seen);
     row.amount += amount;
     if (into) row.out += t.amountBase;
     else row.back += t.amountBase;
@@ -88,6 +119,14 @@ export function debtsByCounterparty(
   let owedToYou = 0;
   let owedByYou = 0;
   for (const row of acc.values()) {
+    const variants = spellings.get(row.key);
+    if (variants && variants.size > 1) {
+      // При равной частоте — то, что раньше по алфавиту: любой выбор годится,
+      // лишь бы он не прыгал от порядка операций.
+      row.payee = [...variants.entries()].sort(
+        (a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ru")
+      )[0][0];
+    }
     row.settled = Math.abs(row.amount) < EPS;
     total += row.amount;
     if (row.amount >= EPS) owedToYou += row.amount;

@@ -1768,6 +1768,31 @@ export interface TagBucket {
   txIds: string[];
 }
 
+/**
+ * Итог по тегу и его доходность.
+ *
+ * Тегом часто помечают затею целиком: сколько в неё вложили и сколько она
+ * вернула. Разница отвечает «сколько вышло», доходность — «сколько это в долях
+ * от вложенного» (issue #84).
+ *
+ * Без расхода доходности не существует: делить не на что. Там `null`, а не
+ * ноль, — ноль означал бы «вышли ровно в ноль», а это совсем другой ответ.
+ * Отрицательный расход (возвратов больше, чем трат) тоже не годится в
+ * знаменатель: доходность вышла бы с перевёрнутым знаком.
+ */
+export function tagReturn(bucket: { expense: number; income: number }): {
+  /** Доход минус расход. */
+  net: number;
+  /** Доля от вложенного: 0,1132 — это 11,3 %. Пусто — считать не от чего. */
+  rate: number | null;
+} {
+  const { expense, income } = bucket;
+  return {
+    net: income - expense,
+    rate: expense > 0 ? income / expense - 1 : null,
+  };
+}
+
 export function groupByHashtag(txs: Transaction[]): TagBucket[] {
   const map = new Map<string, TagBucket>();
   for (const t of txs) {

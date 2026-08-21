@@ -9,6 +9,7 @@ import {
   extractHashtags,
   hashtagCategoryTrees,
   computeKPI,
+  tagReturn,
   type TagBucket,
 } from "../lib/aggregations";
 import { formatMoney, formatNum, formatPct } from "../lib/format";
@@ -19,6 +20,31 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { SortableTable, type Column } from "../components/SortableTable";
 import { HashtagRenameModal } from "../components/HashtagRenameModal";
+
+/**
+ * Итог по тегу: доход минус расход. Знак несёт цвет, поэтому «+» рисуем сами —
+ * без него плюс и минус различались бы только оттенком.
+ */
+function NetCell({ value, base }: { value: number; base: string }) {
+  if (Math.abs(value) < 0.005) return <span className="tabular-nums text-muted">—</span>;
+  return (
+    <span className={`tabular-nums ${value > 0 ? "text-income" : "text-expense"}`}>
+      {value > 0 ? "+" : "−"}
+      {formatMoney(Math.abs(value), base)}
+    </span>
+  );
+}
+
+/** Доходность тега. Пусто — расхода не было, и делить не на что. */
+function RateCell({ rate }: { rate: number | null }) {
+  if (rate === null) return <span className="tabular-nums text-muted">—</span>;
+  return (
+    <span className={`tabular-nums ${rate >= 0 ? "text-income" : "text-expense"}`}>
+      {rate > 0 ? "+" : ""}
+      {formatPct(rate, 1)}
+    </span>
+  );
+}
 
 export function TagsPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -237,6 +263,25 @@ export function TagsPage() {
                 ),
               },
               {
+                key: "net",
+                label: "Доход − расход",
+                align: "center",
+                sortValue: (t) => tagReturn(t).net,
+                render: (t) => <NetCell value={tagReturn(t).net} base={base} />,
+              },
+              {
+                key: "rate",
+                label: "Доходность",
+                align: "center",
+                // Тег без расхода в сортировке уходит вниз, а не притворяется
+                // нулевой доходностью.
+                sortValue: (t) => tagReturn(t).rate ?? Number.NEGATIVE_INFINITY,
+                // В выгрузку идёт пусто, а не «-Infinity», которым тег без
+                // расхода уходит вниз списка.
+                exportValue: (t) => tagReturn(t).rate ?? "",
+                render: (t) => <RateCell rate={tagReturn(t).rate} />,
+              },
+              {
                 key: "count",
                 label: "Операций",
                 align: "center",
@@ -314,7 +359,7 @@ export function TagsPage() {
               return (
                 <tr className="bg-panel2/20">
                   <td className="table-td" />
-                  <td className="table-td text-xs text-muted" colSpan={7}>
+                  <td className="table-td text-xs text-muted" colSpan={9}>
                     Нет операций по категориям
                   </td>
                 </tr>
@@ -334,6 +379,12 @@ export function TagsPage() {
                 </td>
                 <td className="table-td text-center tabular-nums text-income">
                   {n.income > 0 ? formatMoney(n.income, base) : "—"}
+                </td>
+                <td className="table-td text-center">
+                  <NetCell value={tagReturn(n).net} base={base} />
+                </td>
+                <td className="table-td text-center">
+                  <RateCell rate={tagReturn(n).rate} />
                 </td>
                 <td className="table-td text-center">
                   {countButton(
@@ -376,6 +427,12 @@ export function TagsPage() {
                   </td>
                   <td className="table-td text-center tabular-nums">
                     {s.income > 0 ? formatMoney(s.income, base) : "—"}
+                  </td>
+                  <td className="table-td text-center">
+                    <NetCell value={tagReturn(s).net} base={base} />
+                  </td>
+                  <td className="table-td text-center">
+                    <RateCell rate={tagReturn(s).rate} />
                   </td>
                   <td className="table-td text-center">
                     {countButton(

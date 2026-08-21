@@ -42,7 +42,12 @@ import {
   Archive,
   Users,
 } from "lucide-react";
-import { debtsByCounterparty, NO_COUNTERPARTY } from "../lib/debts";
+import {
+  debtPayeeKey,
+  debtsByCounterparty,
+  NO_COUNTERPARTY,
+  type DebtCounterparty,
+} from "../lib/debts";
 import { useDataStore } from "../store/useDataStore";
 import {
   useFiltersStore,
@@ -1372,13 +1377,15 @@ export function AccountsPage() {
    * увидеть разбивку. Считаем по тому же набору операций, что и сама строка:
    * на «Капитале» — по всей истории, на «Движении» — за отбор.
    */
-  function openDebtCounterparty(account: string, payee: string) {
+  function openDebtCounterparty(account: string, row: DebtCounterparty) {
+    // Отбираем по ключу, а не по показанному имени: под одной строкой могут
+    // лежать несколько написаний одного контрагента («OZON» и «Ozon»).
     const txs = debtSource.filter(
       (t) =>
         (t.outcomeAccount === account || t.incomeAccount === account) &&
-        ((t.payee || "").trim() || NO_COUNTERPARTY) === payee
+        debtPayeeKey((t.payee || "").trim() || NO_COUNTERPARTY) === row.key
     );
-    showDrill(`${account} · ${payee}`, txs, "Долги");
+    showDrill(`${account} · ${row.payee}`, txs, "Долги");
   }
 
   if (transactions.length === 0) return <EmptyState />;
@@ -2710,7 +2717,7 @@ export function AccountsPage() {
                       debtRows.map((d) => (
                         <tr
                           key={`${a.account} ${d.payee}`}
-                          onClick={() => openDebtCounterparty(a.account, d.payee)}
+                          onClick={() => openDebtCounterparty(a.account, d)}
                           title={`Операции: ${d.payee}`}
                           className="cursor-pointer bg-panel2/30 hover:bg-panel2/70"
                         >

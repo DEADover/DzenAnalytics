@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { debtsByCounterparty, NO_COUNTERPARTY } from "./debts";
+import { debtPayeeKey, debtsByCounterparty, NO_COUNTERPARTY } from "./debts";
 import type { Transaction } from "../types";
 
 const DEBT = new Set(["Долги"]);
@@ -119,5 +119,53 @@ describe("debtsByCounterparty", () => {
       DEBT
     );
     expect(r.rows[0].settled).toBe(true);
+  });
+  it("одно имя в разном регистре — один контрагент", () => {
+    // «OZON» и «Ozon» расходились по двум строкам, и выходило, что вы должны
+    // магазину 874 ₽ и ровно столько же должен он вам. В Дзен-мани эта пара
+    // схлопывается в ноль и из списка уходит (issue #80).
+    const r = debtsByCounterparty(
+      [
+        debt({ amount: 874, payee: "OZON", dir: "back" }),
+        debt({ amount: 874, payee: "Ozon", dir: "lend" }),
+      ],
+      DEBT
+    );
+    expect(r.rows).toHaveLength(1);
+    expect(r.rows[0].count).toBe(2);
+    expect(r.rows[0].settled).toBe(true);
+    expect(r.owedToYou).toBe(0);
+    expect(r.owedByYou).toBe(0);
+  });
+
+  it("показывает самое частое написание имени", () => {
+    const r = debtsByCounterparty(
+      [
+        debt({ amount: 100, payee: "OZON", dir: "lend" }),
+        debt({ amount: 100, payee: "OZON", dir: "lend" }),
+        debt({ amount: 50, payee: "Ozon", dir: "back" }),
+      ],
+      DEBT
+    );
+    expect(r.rows[0].payee).toBe("OZON");
+    expect(r.rows[0].key).toBe("ozon");
+  });
+
+  it("разные имена не склеивает", () => {
+    // Похожие, но не совпадающие написания — разные люди, пока человек сам не
+    // скажет обратного в общей группировке контрагентов.
+    const r = debtsByCounterparty(
+      [
+        debt({ amount: 100, payee: "Ozon", dir: "lend" }),
+        debt({ amount: 100, payee: "Озон", dir: "back" }),
+      ],
+      DEBT
+    );
+    expect(r.rows).toHaveLength(2);
+  });
+
+  it("ключ не зависит от регистра и лишних пробелов", () => {
+    expect(debtPayeeKey("  OZON  ")).toBe("ozon");
+    expect(debtPayeeKey("Иван  Петров")).toBe("иван петров");
   });
 });

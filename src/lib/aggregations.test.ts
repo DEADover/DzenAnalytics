@@ -5,6 +5,7 @@ import {
   cumulativeNetAt,
   extractHashtags,
   groupByHashtag,
+  tagReturn,
   detectDuplicates,
   hashtagCategoryTrees,
   detectRecurring,
@@ -1395,5 +1396,31 @@ describe("stackedBalanceByAccount — долговой счёт по контр�
     );
     const totalOf = (s: { total: number }[]) => s[s.length - 1].total;
     expect(totalOf(split.series)).toBe(totalOf(plain.series));
+  });
+});
+
+describe("tagReturn: сколько затея вернула (issue #84)", () => {
+  it("считает разницу и доходность", () => {
+    // Пример из задачи: вложено 10 312,19 ₽, получено 11 479,50 ₽.
+    const r = tagReturn({ expense: 10312.19, income: 11479.5 });
+    expect(r.net).toBeCloseTo(1167.31, 2);
+    expect(r.rate! * 100).toBeCloseTo(11.32, 2);
+  });
+
+  it("убыток даёт минус в обоих числах", () => {
+    const r = tagReturn({ expense: 1000, income: 800 });
+    expect(r.net).toBe(-200);
+    expect(r.rate).toBeCloseTo(-0.2, 10);
+  });
+
+  it("без расхода доходности нет — делить не на что", () => {
+    // Именно `null`, а не ноль: ноль означал бы «вышли ровно в ноль».
+    expect(tagReturn({ expense: 0, income: 5000 }).rate).toBeNull();
+    expect(tagReturn({ expense: 0, income: 5000 }).net).toBe(5000);
+  });
+
+  it("отрицательный расход в знаменатель не берём", () => {
+    // Возвратов больше, чем трат: доходность вышла бы с перевёрнутым знаком.
+    expect(tagReturn({ expense: -100, income: 50 }).rate).toBeNull();
   });
 });
