@@ -282,14 +282,6 @@ export function TagsPage() {
                 render: (t) => <RateCell rate={tagReturn(t).rate} />,
               },
               {
-                key: "count",
-                label: "Операций",
-                align: "center",
-                sortValue: (t) => t.count,
-                render: (t) =>
-                  countButton(t.count, () => openTag(t.tag), `Показать операции с тегом #${t.tag}`),
-              },
-              {
                 key: "total",
                 label: "Доля от расходов",
                 align: "center",
@@ -314,6 +306,14 @@ export function TagsPage() {
                       : "—"}
                   </span>
                 ),
+              },
+              {
+                key: "count",
+                label: "Операций",
+                align: "center",
+                sortValue: (t) => t.count,
+                render: (t) =>
+                  countButton(t.count, () => openTag(t.tag), `Показать операции с тегом #${t.tag}`),
               },
               {
                 key: "actions",
@@ -386,13 +386,6 @@ export function TagsPage() {
                 <td className="table-td text-center">
                   <RateCell rate={tagReturn(n).rate} />
                 </td>
-                <td className="table-td text-center">
-                  {countButton(
-                    n.count,
-                    () => openTagCategory(t.tag, n.category),
-                    `Показать операции с тегом #${t.tag} в категории «${n.category}»`
-                  )}
-                </td>
                 <td className="table-td text-center tabular-nums text-muted">
                   {periodExpense > 0 && n.expense > 0
                     ? formatPct(n.expense / periodExpense, 1)
@@ -402,6 +395,13 @@ export function TagsPage() {
                   {periodIncome > 0 && n.income > 0
                     ? formatPct(n.income / periodIncome, 1)
                     : "—"}
+                </td>
+                <td className="table-td text-center">
+                  {countButton(
+                    n.count,
+                    () => openTagCategory(t.tag, n.category),
+                    `Показать операции с тегом #${t.tag} в категории «${n.category}»`
+                  )}
                 </td>
                 {/* Под колонку действий — переименовывать можно только тег целиком. */}
                 <td className="table-td" />
@@ -434,13 +434,6 @@ export function TagsPage() {
                   <td className="table-td text-center">
                     <RateCell rate={tagReturn(s).rate} />
                   </td>
-                  <td className="table-td text-center">
-                    {countButton(
-                      s.count,
-                      () => openTagCategory(t.tag, n.category, s.name),
-                      `Показать операции с тегом #${t.tag} в подкатегории «${s.name}»`
-                    )}
-                  </td>
                   <td className="table-td text-center tabular-nums">
                     {periodExpense > 0 && s.expense > 0
                       ? formatPct(s.expense / periodExpense, 1)
@@ -450,6 +443,13 @@ export function TagsPage() {
                     {periodIncome > 0 && s.income > 0
                       ? formatPct(s.income / periodIncome, 1)
                       : "—"}
+                  </td>
+                  <td className="table-td text-center">
+                    {countButton(
+                      s.count,
+                      () => openTagCategory(t.tag, n.category, s.name),
+                      `Показать операции с тегом #${t.tag} в подкатегории «${s.name}»`
+                    )}
                   </td>
                   <td className="table-td" />
                 </tr>
