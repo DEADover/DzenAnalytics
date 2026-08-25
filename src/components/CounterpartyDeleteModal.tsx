@@ -1,4 +1,4 @@
-// «Удалить контрагента» — with the choice Дзен-мани itself doesn't give you.
+// «Удалить контрагента» и «Перенести операции» — одно окно на две задачи.
 //
 // A bare deletion is destructive in a way that isn't obvious: the server
 // cascades it onto every referencing operation and nulls BOTH `merchant` and
@@ -9,10 +9,15 @@
 // «Перенести» is the same machinery as duplicate merging (buildMerchantMergePush)
 // pointed at an arbitrary target rather than a same-named twin — which is also
 // what «замена контрагента» means (issue #46).
+//
+// Тот же перенос нужен и сам по себе, без удаления: «эти операции на самом деле
+// вот этого контрагента». Раньше до него добирались только через корзину, и
+// догадаться об этом было нельзя. Режим `transfer` — то же окно с убранным
+// вариантом «не переносить»: цель обязательна, и кнопка говорит «Перенести».
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Check, ChevronDown, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Combine, X } from "lucide-react";
 import clsx from "clsx";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { formatNum } from "../lib/format";
@@ -26,6 +31,11 @@ export interface TransferTarget {
 }
 
 interface Props {
+  /**
+   * `delete` — удаление с необязательным переносом; `transfer` — только перенос,
+   * запись при этом складывается в выбранную, как при объединении дублей.
+   */
+  mode?: "delete" | "transfer";
   /** Rows being deleted — one from the trash button, many from the bulk bar. */
   targets: { id: string; title: string; count: number; isNew: boolean }[];
   /** Where the operations may go. Must already exclude the doomed rows. */
@@ -33,10 +43,16 @@ interface Props {
   onClose: () => void;
 }
 
-export function CounterpartyDeleteModal({ targets, options, onClose }: Props) {
+export function CounterpartyDeleteModal({
+  mode = "delete",
+  targets,
+  options,
+  onClose,
+}: Props) {
   const [transferTo, setTransferTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const moving = mode === "transfer";
   const affected = targets.reduce((n, t) => n + t.count, 0);
   const many = targets.length > 1;
 
@@ -55,6 +71,9 @@ export function CounterpartyDeleteModal({ targets, options, onClose }: Props) {
 
   async function apply() {
     if (busy) return;
+    // В режиме переноса цель обязательна: без неё это было бы удаление, а его
+    // человек здесь не просил.
+    if (moving && !transferTo) return;
     setBusy(true);
     const store = useCounterpartyEditsStore.getState();
     // An unpushed draft has no cloud row and no operations — it's just dropped,
@@ -85,14 +104,21 @@ export function CounterpartyDeleteModal({ targets, options, onClose }: Props) {
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border rounded-t-2xl">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="p-1.5 rounded-lg bg-expense/10 text-expense shrink-0">
-              <AlertTriangle className="w-4 h-4" />
+            <span
+              className={clsx(
+                "p-1.5 rounded-lg shrink-0",
+                moving ? "bg-accent/10 text-accent" : "bg-expense/10 text-expense"
+              )}
+            >
+              {moving ? <Combine className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
             </span>
             <div className="min-w-0">
               <div id="cp-del-title" className="font-semibold truncate">
-                {many
-                  ? `Удалить ${formatNum(targets.length)} ${pluralRu(targets.length, ["контрагента", "контрагента", "контрагентов"])}?`
-                  : "Удалить контрагента?"}
+                {moving
+                  ? "Перенести операции?"
+                  : many
+                    ? `Удалить ${formatNum(targets.length)} ${pluralRu(targets.length, ["контрагента", "контрагента", "контрагентов"])}?`
+                    : "Удалить контрагента?"}
               </div>
               <div className="text-xs text-muted truncate">
                 {many
@@ -119,6 +145,8 @@ export function CounterpartyDeleteModal({ targets, options, onClose }: Props) {
                   Куда перенести {formatNum(affected)}{" "}
                   {pluralRu(affected, ["операцию", "операции", "операций"])}
                 </>
+              ) : moving ? (
+                "Куда перенести"
               ) : (
                 "Куда переносить операции"
               )}
@@ -126,9 +154,18 @@ export function CounterpartyDeleteModal({ targets, options, onClose }: Props) {
             <TransferSelect
               value={transferTo}
               options={options}
+              allowNone={!moving}
               onChange={setTransferTo}
             />
-            {affected === 0 ? (
+            {moving ? (
+              <p className="text-xs text-muted mt-1">
+                {affected === 0
+                  ? "Операций у контрагента нет — переедет одна запись справочника. "
+                  : `Получатель сменится у ${formatNum(affected)} ${pluralRu(affected, ["операции", "операций", "операций"])}. `}
+                Запись «{targets[0]?.title}» после переноса исчезнет из справочника: в
+                Дзен-мани перенос — это объединение двух записей в одну.
+              </p>
+            ) : affected === 0 ? (
               <p className="text-xs text-muted mt-1">
                 {many ? "У выбранных контрагентов нет операций" : "Операций у контрагента нет"}
                 {" "}— переносить нечего.
@@ -161,10 +198,14 @@ export function CounterpartyDeleteModal({ targets, options, onClose }: Props) {
           <button
             type="button"
             onClick={apply}
-            disabled={busy}
-            className={transferTo ? "btn-primary text-sm" : "btn-danger text-sm"}
+            disabled={busy || (moving && !transferTo)}
+            className={clsx(
+              "text-sm",
+              transferTo || moving ? "btn-primary" : "btn-danger",
+              moving && !transferTo && "opacity-40 cursor-not-allowed"
+            )}
           >
-            {transferTo ? "Перенести и удалить" : "Удалить"}
+            {moving ? "Перенести" : transferTo ? "Перенести и удалить" : "Удалить"}
           </button>
         </div>
       </div>
@@ -178,10 +219,13 @@ export function CounterpartyDeleteModal({ targets, options, onClose }: Props) {
 function TransferSelect({
   value,
   options,
+  allowNone,
   onChange,
 }: {
   value: string | null;
   options: TransferTarget[];
+  /** Есть ли вариант «не переносить». При чистом переносе цель обязательна. */
+  allowNone: boolean;
   onChange: (id: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -217,7 +261,11 @@ function TransferSelect({
         className="input h-10 flex items-center justify-between gap-2 w-full text-left"
       >
         <span className={clsx("truncate text-sm", !current && "text-muted")}>
-          {current ? current.title : "— не переносить, очистить получателя —"}
+          {current
+            ? current.title
+            : allowNone
+              ? "— не переносить, очистить получателя —"
+              : "— выберите контрагента —"}
         </span>
         <ChevronDown
           className={clsx(
@@ -237,20 +285,22 @@ function TransferSelect({
             className="input w-full text-sm mb-1"
           />
           <div className="max-h-56 overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => {
-                onChange(null);
-                setOpen(false);
-              }}
-              className={clsx(
-                "w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-sm text-left",
-                value === null ? "bg-accent/10 text-accent" : "text-muted hover:bg-panel2"
-              )}
-            >
-              <span className="truncate">— не переносить, очистить получателя —</span>
-              {value === null && <Check className="w-3.5 h-3.5 shrink-0" />}
-            </button>
+            {allowNone && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+                className={clsx(
+                  "w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-sm text-left",
+                  value === null ? "bg-accent/10 text-accent" : "text-muted hover:bg-panel2"
+                )}
+              >
+                <span className="truncate">— не переносить, очистить получателя —</span>
+                {value === null && <Check className="w-3.5 h-3.5 shrink-0" />}
+              </button>
+            )}
             {shown.map((o) => (
               <button
                 key={o.id}
