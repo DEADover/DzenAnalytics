@@ -6,6 +6,12 @@
 // back only the reference — the text is gone for good. So the dialog leads with
 // the safe option: move the operations to another counterparty first.
 //
+// Словарь окна — «контрагент», а не «получатель». Разница в приложении есть:
+// «Получатель» — текст, который прислал банк, «Контрагент» — запись справочника.
+// Но здесь речь именно о записи справочника и её связи с операцией, и мешать
+// два слова в одном окне про контрагента нельзя. Свободный текст банка при
+// удалении гибнет вместе со ссылкой — об этом сказано отдельной фразой.
+//
 // «Перенести» is the same machinery as duplicate merging (buildMerchantMergePush)
 // pointed at an arbitrary target rather than a same-named twin — which is also
 // what «замена контрагента» means (issue #46).
@@ -161,7 +167,7 @@ export function CounterpartyDeleteModal({
               <p className="text-xs text-muted mt-1">
                 {affected === 0
                   ? "Операций у контрагента нет — переедет одна запись справочника. "
-                  : `Получатель сменится у ${formatNum(affected)} ${pluralRu(affected, ["операции", "операций", "операций"])}. `}
+                  : `Контрагент сменится у ${formatNum(affected)} ${pluralRu(affected, ["операции", "операций", "операций"])}. `}
                 Запись «{targets[0]?.title}» после переноса исчезнет из справочника: в
                 Дзен-мани перенос — это объединение двух записей в одну.
               </p>
@@ -174,7 +180,7 @@ export function CounterpartyDeleteModal({
               <p className="text-xs text-warn mt-1">
                 У {formatNum(affected)}{" "}
                 {pluralRu(affected, ["операции", "операций", "операций"])} очистится
-                получатель — вместе с текстом, который прислал банк. После отправки
+                контрагент — вместе с текстом, который прислал банк. После отправки
                 в облако это не отменить.
               </p>
             ) : (
@@ -264,7 +270,7 @@ function TransferSelect({
           {current
             ? current.title
             : allowNone
-              ? "— не переносить, очистить получателя —"
+              ? "— не переносить, очистить контрагента —"
               : "— выберите контрагента —"}
         </span>
         <ChevronDown
@@ -297,7 +303,7 @@ function TransferSelect({
                   value === null ? "bg-accent/10 text-accent" : "text-muted hover:bg-panel2"
                 )}
               >
-                <span className="truncate">— не переносить, очистить получателя —</span>
+                <span className="truncate">— не переносить, очистить контрагента —</span>
                 {value === null && <Check className="w-3.5 h-3.5 shrink-0" />}
               </button>
             )}
