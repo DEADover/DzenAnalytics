@@ -52,6 +52,7 @@ import { pluralRu } from "../../lib/plural";
 import { useDashboardModel, type DashboardModel } from "../../hooks/useDashboardModel";
 import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
 import { useZenPlanned } from "../../hooks/useZenPlanned";
+import { usePlannedDeletionsStore } from "../../store/usePlannedDeletionsStore";
 import { useDrillStore } from "../../store/useDrillStore";
 import { useCategoryMetaStore } from "../../store/useCategoryMetaStore";
 import { CategorySunburst } from "../CategorySunburst";
@@ -481,13 +482,22 @@ export function DashboardView() {
   // Планы Дзен-мани — второй вид «Запланированных платежей». Отрезок тот же,
   // что у своих регулярных: от сегодня до конца отчётного месяца.
   const todayIso = new Date().toISOString().slice(0, 10);
-  const zenPlannedAll = useZenPlanned(todayIso, monthEnd(m.ym));
+  // С просроченными: платёж, который прошляпили, — главное, что виджет обязан
+  // показать (issue #87).
+  const zenPlannedAll = useZenPlanned(todayIso, monthEnd(m.ym), true);
+  // Просроченные, снятые вручную и ещё не уехавшие в облако, на главной не
+  // показываем вовсе: на «Регулярных» они висят зачёркнутыми, чтобы правку
+  // можно было откатить, а здесь это был бы шум.
+  const plannedDeletions = usePlannedDeletionsStore((st) => st.deletions);
   // Переводы не показываем: перекладывание между своими счетами ни спишется, ни
   // придёт. Расход и доход считаем врозь — складывать их в одно число значило
   // бы придумать «чистый остаток», которого в этом виджете никто не просил.
   const zenPlanned = useMemo(
-    () => zenPlannedAll?.filter((p) => p.kind !== "transfer") ?? null,
-    [zenPlannedAll]
+    () =>
+      zenPlannedAll?.filter(
+        (p) => p.kind !== "transfer" && plannedDeletions[p.id] === undefined
+      ) ?? null,
+    [zenPlannedAll, plannedDeletions]
   );
   const zenPlannedOut = useMemo(
     () =>

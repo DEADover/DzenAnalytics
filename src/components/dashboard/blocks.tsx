@@ -16,6 +16,7 @@
  */
 
 import type { ReactNode } from "react";
+import { pluralRu } from "../../lib/plural";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -670,14 +671,19 @@ export function ZenPlannedList({
   if (rows.length === 0) {
     return (
       <div className="text-sm text-muted text-center py-6">
-        До конца месяца планов в Дзен-мани нет
+        Планов в Дзен-мани нет — ни впереди, ни просроченных
       </div>
     );
   }
   return (
     <div className="scroll-soft flex flex-col flex-1 min-h-0 -mx-2 px-2">
       {rows.map((p) => {
-        const inDays = Math.max(0, Math.round((Date.parse(p.date) - Date.parse(today)) / 86400000));
+        const days = Math.round((Date.parse(p.date) - Date.parse(today)) / 86400000);
+        // Просроченный план — тот, что человек поставил сам и никто не
+        // исполнил. Он не «через −5 дней», он ждёт действия, и полоска у него
+        // красная, а не жёлтая (issue #87).
+        const overdue = days < 0;
+        const inDays = Math.max(0, days);
         return (
           <div
             key={p.id}
@@ -686,7 +692,7 @@ export function ZenPlannedList({
             <span className="flex items-center gap-2.5 min-w-0">
               <i
                 className={`w-[3px] h-6 rounded-sm shrink-0 block ${
-                  inDays <= 1 ? "bg-warn" : "bg-border"
+                  overdue ? "bg-expense" : inDays <= 1 ? "bg-warn" : "bg-border"
                 }`}
               />
               <span className="min-w-0">
@@ -695,7 +701,17 @@ export function ZenPlannedList({
                 </span>
                 <span className="block text-[12px] text-muted truncate">
                   {formatDate(p.date, "short")} ·{" "}
-                  {inDays === 0 ? "сегодня" : inDays === 1 ? "завтра" : `через ${inDays} дн`}
+                  {overdue ? (
+                    <span className="text-expense font-medium">
+                      просрочен на {-days} {pluralRu(-days, ["день", "дня", "дней"])}
+                    </span>
+                  ) : inDays === 0 ? (
+                    "сегодня"
+                  ) : inDays === 1 ? (
+                    "завтра"
+                  ) : (
+                    `через ${inDays} дн`
+                  )}
                   {p.forecast ? " · прогноз" : ""}
                   {p.comment ? ` · ${p.comment}` : ""}
                 </span>

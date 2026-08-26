@@ -21,7 +21,21 @@ import { useDataStore } from "../store/useDataStore";
  *
  * `null` — кэша нет вовсе: человек работает на CSV или ещё не синхронизировался.
  */
-export function useZenPlanned(fromIso: string, toIso: string): PlannedOp[] | null {
+export function useZenPlanned(
+  fromIso: string,
+  toIso: string,
+  /**
+   * Прибавить ПРОСРОЧЕННЫЕ планы — те, что стоят раньше `fromIso` и никем не
+   * исполнены (issue #87).
+   *
+   * Без них главная молчала о просроченном платеже и вдобавок писала «до конца
+   * месяца планов нет», хотя планы были — просто в срок не уложились. Прогнозы
+   * Дзена сюда не идут: устаревшая догадка — не то, с чем надо что-то делать,
+   * и звать её просроченной было бы враньём. Тем же правилом живёт список
+   * просроченных на «Регулярных».
+   */
+  withOverdue = false
+): PlannedOp[] | null {
   const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
   const rates = useDataStore((s) => s.rates);
 
@@ -32,7 +46,12 @@ export function useZenPlanned(fromIso: string, toIso: string): PlannedOp[] | nul
   return useMemo(() => {
     if (!cache) return cache === undefined ? [] : null;
     return plannedOps(cache, rates)
-      .filter((p) => p.date >= fromIso && p.date <= toIso)
+      .filter(
+        (p) =>
+          p.date <= toIso && (p.date >= fromIso || (withOverdue && !p.forecast))
+      )
+      // По дате: просроченные старше всех, поэтому они и встают первыми — там,
+      // где на них смотрят.
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [cache, rates, fromIso, toIso]);
+  }, [cache, rates, fromIso, toIso, withOverdue]);
 }
