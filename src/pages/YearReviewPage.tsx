@@ -433,36 +433,40 @@ export function YearReviewPage() {
             </p>
           }
         >
-          {/* Ровно по высоте карточки: разделители держат строй, а свободная
-              высота расходится между строками, а не сваливается в дыру. */}
-          <div className="flex-1 flex flex-col justify-between divide-y divide-border/70">
+          {/* `auto-rows-fr` — ключевое: лишняя высота карточки уходит В плитки,
+              а не в зазоры между ними. Без него две строки сетки разъезжались
+              по краям и посередине зияла дыра. */}
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-2">
+            {/* Подпись — короткое имя показателя, а не фраза: шесть разных по
+                длине предложений («В среднем в день», «Средний расход на
+                операцию», «Первая пятёрка статей») читались как случайный
+                набор, а не как один ряд. Уточнение под числом отвечает «от
+                чего» и нигде не повторяет саму подпись. */}
             <Fact
-              label="В среднем в день"
+              label="Расход в день"
               value={formatMoney(review.avgPerDay, baseCurrency)}
-              sub="расхода"
+              sub="в среднем"
             />
             <Fact
-              label="Средний расход на операцию"
-              // Число операций уже стоит в итогах года — здесь достаточно того,
-              // по скольким из них считался именно расход.
+              label="Расход на операцию"
               value={formatMoney(review.avgCheck, baseCurrency)}
-              sub={`по ${formatNum(review.expenseCount)} ${pluralRu(review.expenseCount, ["операции", "операциям", "операциям"])}`}
+              sub={`в среднем по ${formatNum(review.expenseCount)}`}
             />
             <Fact
-              label="Дней с тратами"
+              label="Дни с тратами"
               value={`${formatNum(review.daysWithExpense)} из ${formatNum(review.window.days)}`}
               sub={
                 review.window.days > 0
-                  ? formatPct(review.daysWithExpense / review.window.days, 0)
+                  ? `${formatPct(review.daysWithExpense / review.window.days, 0)} дней с данными`
                   : undefined
               }
             />
             <Fact
-              label="Самый долгий перерыв"
+              label="Перерыв без трат"
               value={
                 review.longestStreak.days > 0
                   ? `${formatNum(review.longestStreak.days)} ${pluralRu(review.longestStreak.days, ["день", "дня", "дней"])}`
-                  : "ни одного дня"
+                  : "не было"
               }
               sub={
                 review.longestStreak.days > 0
@@ -473,14 +477,14 @@ export function YearReviewPage() {
               }
             />
             <Fact
-              label="Контрагентов за год"
+              label="Контрагенты"
               value={formatNum(review.uniqueMerchants)}
-              sub="разных мест и людей"
+              sub="мест и людей за год"
             />
             <Fact
-              label="Первая пятёрка статей"
-              value={formatPct(review.topFiveShare, 0)}
-              sub={`из ${formatNum(review.uniqueCategories)} статей в ходу`}
+              label="Статьи в ходу"
+              value={formatNum(review.uniqueCategories)}
+              sub={`первая пятёрка — ${formatPct(review.topFiveShare, 0)} расхода`}
             />
           </div>
         </SectionCard>
@@ -1106,19 +1110,17 @@ function TopList({
  * то, что в подпись не влезло.
  */
 /**
- * Факт: строка «что меряем — сколько».
+ * Факт: плитка «что меряем — сколько — уточнение».
  *
- * Прошли два неверных подхода. Утопленные плашки со значком держали столько
- * внутреннего отступа, что половина блока была пустотой, а шесть одинаковых
- * значков ничего не различали. Сетка без плашек оказалась хуже: карточка
- * тянется по высоте соседней, и две её строки разъехались по краям, оставив
- * дыру в середине.
+ * Плитки уже пробовали, и они выглядели пустыми: значок и три строчки болтались
+ * в коробке с большим внутренним отступом. Пустоту давали не плитки, а две
+ * вещи. Первая — значок: шесть одинаковых лиловых ромбиков ничего не различали
+ * и отъедали треть ширины. Вторая — сетка: карточка тянется по высоте соседней,
+ * и лишняя высота уходила В ЗАЗОРЫ между плитками, а не в них самих.
  *
- * Верный ответ был на самой же странице. Статьи, контрагенты и дни недели уже
- * отвечают строкой «подпись слева, число справа»; факт — ровно такая же
- * названная величина. Шесть строк с волосяными разделителями заполняют высоту
- * ровно и читаются как продолжение соседнего списка покупок, а не как третий
- * язык вёрстки на одном экране.
+ * Теперь плитки растут сами (`auto-rows-fr`), а содержимое стоит по центру —
+ * свободная высота расходится сверху и снизу поровну и читается как воздух
+ * плитки, а не как дыра между ними.
  */
 function Fact({
   label,
@@ -1130,16 +1132,16 @@ function Fact({
   sub?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-1.5 first:pt-0 last:pb-0">
-      <div className="min-w-0">
-        <div className="text-sm leading-tight truncate">{label}</div>
-        {sub && (
-          <div className="text-[11px] text-muted leading-tight truncate">{sub}</div>
-        )}
+    <div className="card-sunken px-3.5 py-2.5 flex flex-col justify-center min-w-0">
+      <div className="text-[11px] uppercase tracking-wide text-muted leading-tight truncate">
+        {label}
       </div>
-      <div className="stat-num text-lg font-bold tabular-nums whitespace-nowrap shrink-0">
+      <div className="stat-num text-xl font-bold tabular-nums leading-tight mt-1">
         {value}
       </div>
+      {sub && (
+        <div className="text-[11px] text-muted leading-tight truncate mt-0.5">{sub}</div>
+      )}
     </div>
   );
 }
