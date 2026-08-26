@@ -433,7 +433,9 @@ export function YearReviewPage() {
             </p>
           }
         >
-          <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-4 content-between">
+          {/* Ровно по высоте карточки: разделители держат строй, а свободная
+              высота расходится между строками, а не сваливается в дыру. */}
+          <div className="flex-1 flex flex-col justify-between divide-y divide-border/70">
             <Fact
               label="В среднем в день"
               value={formatMoney(review.avgPerDay, baseCurrency)}
@@ -441,6 +443,8 @@ export function YearReviewPage() {
             />
             <Fact
               label="Средний расход на операцию"
+              // Число операций уже стоит в итогах года — здесь достаточно того,
+              // по скольким из них считался именно расход.
               value={formatMoney(review.avgCheck, baseCurrency)}
               sub={`по ${formatNum(review.expenseCount)} ${pluralRu(review.expenseCount, ["операции", "операциям", "операциям"])}`}
             />
@@ -449,7 +453,7 @@ export function YearReviewPage() {
               value={`${formatNum(review.daysWithExpense)} из ${formatNum(review.window.days)}`}
               sub={
                 review.window.days > 0
-                  ? `это ${formatPct(review.daysWithExpense / review.window.days, 0)} дней`
+                  ? formatPct(review.daysWithExpense / review.window.days, 0)
                   : undefined
               }
             />
@@ -1102,12 +1106,19 @@ function TopList({
  * то, что в подпись не влезло.
  */
 /**
- * Факт: подпись, число, уточнение — тем же строем, что и итоги года наверху.
+ * Факт: строка «что меряем — сколько».
  *
- * Коробок больше нет. Шесть утопленных плашек со значком и тремя строчками
- * держали столько внутреннего отступа, что половина блока была пустотой, а
- * значки не различали факты, а просто повторяли лиловый ромбик шесть раз.
- * Читается это всё равно как таблица чисел — ею и стало.
+ * Прошли два неверных подхода. Утопленные плашки со значком держали столько
+ * внутреннего отступа, что половина блока была пустотой, а шесть одинаковых
+ * значков ничего не различали. Сетка без плашек оказалась хуже: карточка
+ * тянется по высоте соседней, и две её строки разъехались по краям, оставив
+ * дыру в середине.
+ *
+ * Верный ответ был на самой же странице. Статьи, контрагенты и дни недели уже
+ * отвечают строкой «подпись слева, число справа»; факт — ровно такая же
+ * названная величина. Шесть строк с волосяными разделителями заполняют высоту
+ * ровно и читаются как продолжение соседнего списка покупок, а не как третий
+ * язык вёрстки на одном экране.
  */
 function Fact({
   label,
@@ -1119,12 +1130,16 @@ function Fact({
   sub?: string;
 }) {
   return (
-    <div className="min-w-0">
-      <div className="text-[11px] text-muted leading-tight truncate">{label}</div>
-      <div className="stat-num text-xl font-bold tabular-nums leading-tight mt-0.5">
+    <div className="flex items-center justify-between gap-4 py-1.5 first:pt-0 last:pb-0">
+      <div className="min-w-0">
+        <div className="text-sm leading-tight truncate">{label}</div>
+        {sub && (
+          <div className="text-[11px] text-muted leading-tight truncate">{sub}</div>
+        )}
+      </div>
+      <div className="stat-num text-lg font-bold tabular-nums whitespace-nowrap shrink-0">
         {value}
       </div>
-      {sub && <div className="text-[11px] text-muted leading-tight truncate">{sub}</div>}
     </div>
   );
 }
