@@ -286,6 +286,16 @@ export const chartTooltipProps = {
   // The tooltip wrapper otherwise sits under later-DOM siblings (legend, the
   // next card) and gets clipped/covered. A high z-index floats it on top.
   wrapperStyle: { zIndex: 50 },
+  /**
+   * Без анимации перелёта.
+   *
+   * Recharts анимирует `transform` обёртки между позициями, а первая позиция —
+   * левый верхний угол области графика. На осевых графиках подсказка появляется
+   * рядом с курсором и пролёт незаметен, а на «Потоках денег», где наводятся на
+   * ленту в середине картины, она с разгона прилетала из угла. Подсказка обязана
+   * стоять там, где курсор, в тот же кадр.
+   */
+  isAnimationActive: false,
 };
 
 export const chartGridStroke = "var(--grid)";

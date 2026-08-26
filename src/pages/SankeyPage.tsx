@@ -13,7 +13,7 @@ import { affectsExpense, expenseDelta } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
-import { SeriesTooltip } from "../components/TooltipFacts";
+import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { StatCell } from "../components/SectionCard";
 
@@ -243,7 +243,13 @@ export function SankeyPage() {
             >
               <Tooltip
                 {...chartTooltipProps}
-                content={<SeriesTooltip formatValue={(v) => formatMoney(v, base)} />}
+                content={(props) => (
+                  <FlowTooltip
+                    {...(props as unknown as { active?: boolean; payload?: readonly unknown[] })}
+                    base={base}
+                    total={totals.income}
+                  />
+                )}
               />
             </Sankey>
           </ResponsiveContainer>
@@ -288,5 +294,86 @@ function LegendChip({
       />
       {label}
     </span>
+  );
+}
+
+/**
+ * Подсказка потоков: у ленты — откуда и куда, у узла — что это за узел.
+ *
+ * Общая `SeriesTooltip` сюда не годилась: она берёт заголовок из `label`, а у
+ * Sankey его нет — карточка выходила с пустой строкой сверху и одинокой суммой,
+ * без единого слова о том, к чему эта сумма относится.
+ *
+ * Ленту от узла отличаем по `source`/`target`: у Recharts они приходят номерами
+ * узлов, а не объектами, поэтому имена достаём из самого списка узлов. Своё имя
+ * ленты («Бюджет - Транспорт») он собирает через дефис — для потока правильнее
+ * стрелка, она показывает сторону движения денег.
+ */
+function FlowTooltip({
+  active,
+  payload,
+  base,
+  total,
+}: {
+  active?: boolean;
+  payload?: readonly unknown[];
+  base: string;
+  /** Доход отбора — от него считается доля потока. */
+  total: number;
+}) {
+  if (!active || !payload?.length) return null;
+  const entry = payload[0] as {
+    name?: string;
+    value?: number;
+    payload?: {
+      name?: string;
+      kind?: string;
+      value?: number;
+      source?: number | { name?: string };
+      target?: number | { name?: string };
+    };
+  };
+  const inner = entry.payload ?? {};
+  const value = Number(entry.value ?? inner.value ?? 0);
+  if (!Number.isFinite(value)) return null;
+
+  // Узел от ленты отличает `kind`: он есть только у узлов, мы сами его туда и
+  // кладём. У ленты Recharts не отдаёт ни `source`, ни `target` — только своё
+  // собранное имя «Бюджет - Транспорт», из него и берём стороны. Стрелка вместо
+  // дефиса: у потока есть направление, и подсказка обязана его показывать.
+  const isNode = typeof inner.kind === "string";
+  const rawName = inner.name || entry.name || "Поток";
+  const sides = isNode ? null : rawName.split(" - ");
+  const isLink = !!sides && sides.length === 2;
+  const nodeName = rawName;
+  const title = isLink ? `${sides![0]} → ${sides![1]}` : nodeName;
+
+  const facts: TooltipFact[] = [
+    {
+      label: isLink ? "Прошло по ленте" : "Всего",
+      value: formatMoney(value, base),
+      strong: true,
+    },
+  ];
+  if (total > 0) {
+    facts.push({
+      label: "Доля от дохода",
+      value: formatPct(value / total, 1),
+      tone: "muted",
+    });
+  }
+  // Подсказка про клик — только там, где он есть: у ленты и у «Прочих» его нет.
+  const clickable =
+    isNode &&
+    (inner.kind === "category" || inner.kind === "income") &&
+    !nodeName.startsWith("Прочие");
+  return (
+    <ChartTooltipCard>
+      <TooltipFacts
+        title={title}
+        facts={facts}
+        note={clickable ? "Нажмите — откроются операции" : undefined}
+      />
+    </ChartTooltipCard>
   );
 }
