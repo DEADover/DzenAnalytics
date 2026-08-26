@@ -1236,27 +1236,35 @@ export function buildSankey(txs: Transaction[]): SankeyData {
   const links: { source: number; target: number; value: number }[] = [];
   const POOL_NAME = "Бюджет";
 
-  finalIncome.forEach(([name]) => nodes.push({ name: name as string, kind: "income" }));
-  // Deficit funding sits on the LEFT as an extra source feeding the budget.
+  // Deficit funding sits on the LEFT as an extra source feeding the budget —
+  // и первым в своей колонке, как «Сбережения» справа. Обе строки отвечают на
+  // один вопрос — хватило дохода или нет, — и стоят на одном месте, а не
+  // теряются среди источников и статей.
   let fundingIdx = -1;
   if (net < 0) {
     fundingIdx = nodes.length;
     nodes.push({ name: "Из накоплений", kind: "funding" });
   }
+  const incomeStart = nodes.length;
+  finalIncome.forEach(([name]) => nodes.push({ name: name as string, kind: "income" }));
   const poolIdx = nodes.length;
   nodes.push({ name: POOL_NAME, kind: "account" });
-  const expenseStart = nodes.length;
-  finalExpense.forEach(([name]) => nodes.push({ name: name as string, kind: "category" }));
-  // Surplus sits on the RIGHT as an extra target drawn from the budget.
+  // Surplus sits on the RIGHT as an extra target drawn from the budget — и
+  // ПЕРВЫМ в своей колонке. Раньше он добавлялся последним, а место ему
+  // выбирала раскладка, и «Сбережения» всплывали то сверху, то посреди списка
+  // статей. Это не статья расхода, а ответ на вопрос «сколько осталось», и
+  // искать его каждый раз в новом месте незачем.
   let savingsIdx = -1;
   if (net > 0) {
     savingsIdx = nodes.length;
     nodes.push({ name: "Сбережения", kind: "savings" });
   }
+  const expenseStart = nodes.length;
+  finalExpense.forEach(([name]) => nodes.push({ name: name as string, kind: "category" }));
 
   finalIncome.forEach((entry, i) => {
     const v = Math.round(entry[1] as number);
-    if (v > 0) links.push({ source: i, target: poolIdx, value: v });
+    if (v > 0) links.push({ source: incomeStart + i, target: poolIdx, value: v });
   });
   if (fundingIdx >= 0) links.push({ source: fundingIdx, target: poolIdx, value: -net });
   finalExpense.forEach((entry, i) => {

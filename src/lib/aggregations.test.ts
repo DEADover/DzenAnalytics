@@ -1424,3 +1424,60 @@ describe("tagReturn: сколько затея вернула (issue #84)", () =
     expect(tagReturn({ expense: -100, income: 50 }).rate).toBeNull();
   });
 });
+
+describe("buildSankey: место «Сбережений» и «Из накоплений»", () => {
+  let n = 0;
+  const tx = (kind: "income" | "expense", cat: string, amt: number): Transaction =>
+    ({
+      id: `s${++n}`,
+      date: "2026-08-10",
+      category: cat,
+      subcategory: null,
+      categoryFull: cat,
+      payee: "",
+      comment: "",
+      account: "Карта",
+      kind,
+      amount: amt,
+      amountBase: amt,
+      currency: "RUB",
+    }) as Transaction;
+
+  it("«Сбережения» стоят ПЕРВЫМИ в правой колонке", () => {
+    // Раньше узел добавлялся последним, и место ему выбирала раскладка: он
+    // всплывал то сверху, то посреди статей.
+    const d = buildSankey([
+      tx("income", "Зарплата", 100000),
+      tx("expense", "Еда", 30000),
+      tx("expense", "Дом", 20000),
+    ]);
+    const right = d.nodes.filter((x) => x.kind === "savings" || x.kind === "category");
+    expect(right[0].name).toBe("Сбережения");
+    expect(right.slice(1).map((x) => x.name)).toEqual(["Еда", "Дом"]);
+  });
+
+  it("«Из накоплений» стоит ПЕРВЫМ в левой колонке", () => {
+    const d = buildSankey([
+      tx("income", "Зарплата", 10000),
+      tx("expense", "Еда", 30000),
+    ]);
+    const left = d.nodes.filter((x) => x.kind === "funding" || x.kind === "income");
+    expect(left[0].name).toBe("Из накоплений");
+    expect(left[1].name).toBe("Зарплата");
+  });
+
+  it("после перестановки ленты по-прежнему ведут в свои узлы", () => {
+    const d = buildSankey([
+      tx("income", "Зарплата", 10000),
+      tx("expense", "Еда", 30000),
+    ]);
+    const pool = d.nodes.findIndex((x) => x.kind === "account");
+    const funding = d.nodes.findIndex((x) => x.kind === "funding");
+    const salary = d.nodes.findIndex((x) => x.name === "Зарплата");
+    // Обе левые ленты приходят в «Бюджет», и суммы у них свои.
+    expect(d.links.find((l) => l.source === salary)?.target).toBe(pool);
+    expect(d.links.find((l) => l.source === salary)?.value).toBe(10000);
+    expect(d.links.find((l) => l.source === funding)?.target).toBe(pool);
+    expect(d.links.find((l) => l.source === funding)?.value).toBe(20000);
+  });
+});
