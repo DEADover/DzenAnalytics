@@ -50,6 +50,8 @@ import { PageHeader } from "../components/PageHeader";
 import { MonthPicker } from "../components/MonthPicker";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
+import { SectionCard, StatCell } from "../components/SectionCard";
+import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 
 const INCOME = "#10B981";
 const EXPENSE = "#EF4444";
@@ -220,42 +222,41 @@ export function YearReviewPage() {
               служебной строчкой над ними, хотя это такой же итог года, как
               доход и расход, — просто не в рублях. */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-4 gap-y-4 divide-border lg:divide-x">
-            <Hero
+            <StatCell
               label="Доход"
               value={formatMoney(review.totalIncome, baseCurrency)}
-              delta={review.prev.available ? incomeDelta.text : undefined}
-              deltaCls={review.prev.available ? incomeDelta.cls : undefined}
+              note={review.prev.available ? incomeDelta.text : undefined}
+              noteCls={review.prev.available ? incomeDelta.cls : undefined}
               icon={<TrendingUp className="w-4 h-4 text-income" />}
             />
-            <Hero
+            <StatCell
               label="Расход"
               value={formatMoney(review.totalExpense, baseCurrency)}
-              delta={review.prev.available ? expenseDelta.text : undefined}
-              deltaCls={review.prev.available ? expenseDelta.cls : undefined}
+              note={review.prev.available ? expenseDelta.text : undefined}
+              noteCls={review.prev.available ? expenseDelta.cls : undefined}
               icon={<TrendingDown className="w-4 h-4 text-expense" />}
               pad
             />
-            <Hero
+            <StatCell
               label="Чистый поток"
               value={formatMoney(review.netFlow, baseCurrency, { signed: true })}
-              delta={review.prev.available ? netDelta.text : undefined}
-              deltaCls={review.prev.available ? netDelta.cls : undefined}
+              note={review.prev.available ? netDelta.text : undefined}
+              noteCls={review.prev.available ? netDelta.cls : undefined}
               icon={<Trophy className="w-4 h-4 text-accent" />}
               pad
             />
-            <Hero
+            <StatCell
               label="Норма сбережений"
               value={review.totalIncome > 0 ? formatPct(review.savingsRate, 0) : "—"}
               // «−290 800 ₽ остаётся» — не по-русски и не по смыслу: при
               // отрицательном потоке ничего не остаётся, его не хватило.
-              delta={
+              note={
                 review.totalIncome > 0
                   ? review.netFlow >= 0
                     ? `${formatMoney(review.netFlow, baseCurrency)} осталось`
                     : `${formatMoney(-review.netFlow, baseCurrency)} не хватило`
                   : undefined
               }
-              deltaCls="text-muted"
               icon={
                 <PiggyBank
                   className={`w-4 h-4 ${review.netFlow >= 0 ? "text-income" : "text-expense"}`}
@@ -263,13 +264,12 @@ export function YearReviewPage() {
               }
               pad
             />
-            <Hero
+            <StatCell
               label="Операций"
               value={formatNum(review.txCount)}
               // Честная граница данных: иначе «за 2026 год» читается как «за
               // весь 2026», а год ещё идёт и итоги неизбежно скромнее.
-              delta={partial ? `данные по ${dayLabel(review.window.to)}` : "год целиком"}
-              deltaCls="text-muted"
+              note={partial ? `данные по ${dayLabel(review.window.to)}` : "год целиком"}
               icon={<Receipt className="w-4 h-4 text-accent2" />}
               pad
             />
@@ -637,152 +637,7 @@ function YearBars({
 
 /* ─────────────────────  Общие примитивы страницы  ───────────────────── */
 
-/**
- * Карточка раздела: значок, заголовок, поясняющая строка и содержимое.
- *
- * Семь блоков страницы верстали одну и ту же шапку каждый по-своему — где-то
- * `mb-2`, где-то `mb-3`, где-то пояснение было, где-то нет. Один компонент
- * держит их в строю и делает добавление восьмого блока вопросом одной строки.
- */
-function SectionCard({
-  icon,
-  title,
-  info,
-  children,
-  className,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  /**
-   * Как это считается — под знаком вопроса рядом с заголовком.
-   *
-   * Раньше каждый блок нёс поясняющую строку под названием, и половина высоты
-   * страницы уходила на текст, который читают один раз: «статьи по сумме
-   * расхода за год», «имена из справочника, а не строки из выписки». Знак
-   * вопроса — общий приём продукта, он же стоит в шапках других разделов.
-   */
-  info?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`card-tray px-4 py-3 flex flex-col ${className ?? ""}`}>
-      <div className="flex items-center gap-1.5 mb-2.5">
-        {icon}
-        <span className="font-semibold truncate">{title}</span>
-        {info && <InfoPopover>{info}</InfoPopover>}
-      </div>
-      {children}
-    </div>
-  );
-}
 
-/** Колонка чисел в строке-мере: своя ширина, свой цвет. */
-interface MeterCell {
-  text: string;
-  /** Класс ширины — общий у ячейки и у её заголовка, иначе колонки разъедутся. */
-  width: string;
-  muted?: boolean;
-}
-
-/**
- * Строка-мера: подпись, доля полосой и числа колонками.
- *
- * Полоса лежит ПОД строкой заливкой, а не отдельной линией под ней. Так пункт
- * занимает одну строку вместо трёх, а пустота между коротким именем и суммой —
- * та самая, что зияла во всю ширину монитора, — превращается в саму меру.
- *
- * Числа стоят колонками фиксированной ширины и подписаны шапкой — как в списке
- * статей на «Категориях». Слепленные в одну строчку «18% · 38» читались как
- * одно непонятное значение и не давали сравнить соседние пункты: чтобы понять,
- * где больше операций, приходилось выискивать второе число в каждой строке.
- *
- * Один и тот же примитив у статей, контрагентов и дней недели: это один и тот
- * же вопрос «какая доля у кого», и отвечать на него тремя разными способами на
- * одной странице незачем.
- */
-function MeterRow({
-  rank,
-  label,
-  share,
-  cells,
-  barCls,
-  strong,
-  onClick,
-  title,
-}: {
-  /** Номер в списке. Пусто — там, где порядок не про рейтинг (дни недели). */
-  rank?: number;
-  label: string;
-  /** Доля от 0 до 1 — ширина полосы. */
-  share: number;
-  cells: MeterCell[];
-  barCls: string;
-  /** Выделить как лидера: полоса плотнее, подпись контрастнее. */
-  strong?: boolean;
-  onClick?: () => void;
-  title?: string;
-}) {
-  const inner = (
-    <>
-      <span
-        aria-hidden
-        className={`absolute inset-y-0 left-0 rounded-md ${barCls} ${
-          strong ? "opacity-30" : "opacity-[0.16]"
-        }`}
-        style={{ width: `${Math.max(1.5, Math.min(100, share * 100))}%` }}
-      />
-      {rank !== undefined && (
-        <span className="relative text-[11px] text-muted tabular-nums w-4 shrink-0">
-          {rank}
-        </span>
-      )}
-      <span
-        className={`relative truncate flex-1 min-w-0 ${strong ? "font-medium" : ""}`}
-      >
-        {label}
-      </span>
-      {cells.map((c, i) => (
-        <span
-          key={i}
-          className={`relative tabular-nums whitespace-nowrap shrink-0 text-right ${c.width} ${
-            c.muted ? "text-[11px] text-muted" : "font-medium"
-          }`}
-        >
-          {c.text}
-        </span>
-      ))}
-    </>
-  );
-  const cls =
-    "relative w-full flex items-center gap-2 text-sm text-left rounded-md px-2 py-1.5 overflow-hidden";
-  if (!onClick) return <div className={cls}>{inner}</div>;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className={`${cls} hover:ring-1 hover:ring-border`}
-    >
-      {inner}
-    </button>
-  );
-}
-
-/** Шапка колонок строки-меры. Ширины обязаны совпадать с ячейками. */
-function MeterHead({ columns }: { columns: MeterCell[] }) {
-  return (
-    <div className="flex items-center gap-2 px-2 pb-1 text-[10px] uppercase tracking-wide text-muted">
-      <span className="w-4 shrink-0" />
-      <span className="flex-1 min-w-0" />
-      {columns.map((c, i) => (
-        <span key={i} className={`shrink-0 text-right ${c.width}`}>
-          {c.text}
-        </span>
-      ))}
-    </div>
-  );
-}
 
 /**
  * Профиль недели: во что расход укладывается по дням.
@@ -1025,35 +880,6 @@ function YearSwitcher({
   );
 }
 
-function Hero({
-  label,
-  value,
-  delta,
-  deltaCls,
-  icon,
-  /** Отступ слева от вертикальной черты — у всех ячеек, кроме первой. */
-  pad,
-}: {
-  label: string;
-  value: string;
-  delta?: string;
-  deltaCls?: string;
-  icon: React.ReactNode;
-  pad?: boolean;
-}) {
-  return (
-    <div className={pad ? "lg:pl-4" : undefined}>
-      <div className="flex items-center gap-2 mb-0.5">
-        {icon}
-        <div className="label">{label}</div>
-      </div>
-      <div className="stat-num text-2xl xl:text-[28px] font-bold tabular-nums leading-tight">
-        {value}
-      </div>
-      {delta && <div className={`text-xs mt-0.5 ${deltaCls || ""}`}>{delta}</div>}
-    </div>
-  );
-}
 
 /** Месяц-рекордсмен: подпись, месяц и одна поясняющая строка. */
 function Record({

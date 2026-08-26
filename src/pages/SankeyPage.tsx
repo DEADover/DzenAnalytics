@@ -1,17 +1,21 @@
 import { useEffect, useMemo } from "react";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
-import { GitFork } from "lucide-react";
+import { GitFork, TrendingUp, TrendingDown, Trophy, PiggyBank } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
+import { useDrillStore } from "../store/useDrillStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { buildSankey } from "../lib/aggregations";
-import { formatMoney, chartTooltipProps } from "../lib/format";
+import { formatMoney, formatPct, chartTooltipProps } from "../lib/format";
+import { affectsExpense, expenseDelta } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { SeriesTooltip } from "../components/TooltipFacts";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
+import { StatCell } from "../components/SectionCard";
 
 const COLORS = {
   income: "#10B981",
@@ -32,20 +36,73 @@ export function SankeyPage() {
   }, [metaLoaded, hydrateMeta]);
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  const showDrill = useDrillStore((s) => s.show);
 
   const filtered = useMemo(() => applyFilters(transactions, filters, monthStartDay), [transactions, filters, monthStartDay]);
   const data = useMemo(() => buildSankey(filtered), [filtered]);
+
+  /** Итоги того же отбора: диаграмма отвечает «куда», а не «сколько». */
+  const totals = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    for (const t of filtered) {
+      if (t.kind === "income") income += t.amountBase;
+      else if (affectsExpense(t.kind)) expense += expenseDelta(t);
+    }
+    return { income, expense, net: income - expense, count: filtered.length };
+  }, [filtered]);
+
+  /** Операции одной статьи или одного источника — по клику на узел. */
+  function openNode(name: string, kind: string) {
+    const rows = filtered.filter((t) =>
+      kind === "income"
+        ? t.kind === "income" && (t.category || "Прочие доходы") === name
+        : affectsExpense(t.kind) && (t.category || "Прочие") === name
+    );
+    if (rows.length === 0) return;
+    showDrill(name, rows, kind === "income" ? "Источник дохода" : "Статья расхода");
+  }
+
+  const header = (
+    <PageHeader
+      icon={GitFork}
+      title="Потоки денег"
+      hint="Откуда пришли деньги и куда ушли — одной картиной"
+      right={
+        <InfoPopover>
+          <p>
+            Слева — <InfoTerm>источники доходов</InfoTerm>, справа —{" "}
+            <InfoTerm>категории расходов</InfoTerm>, между ними бюджет периода.
+            Толщина ленты и есть сумма: широкая лента — много денег, узкая — мало.
+          </p>
+          <p>
+            Если доход больше трат, разница уходит вправо отдельной лентой
+            «Сбережения». Если трат больше дохода, слева появляется лента
+            «Привлечено со счетов» — это та часть расходов, которую покрыли не
+            доходом периода, а тем, что уже лежало на счетах.
+          </p>
+          <p>
+            Переводы между своими счетами в потоки не идут. Возврат не рисуется
+            отдельным доходом, а уменьшает ленту своей же статьи. Мелкие статьи
+            собраны в «Прочие»: восемь источников и двенадцать статей расхода
+            рисуются по отдельности, остальные складываются.
+          </p>
+          <p>
+            Нажатие на статью или источник открывает его операции. «Прочие»
+            открыть нельзя — за ними стоит не одна статья, а всё, что не попало
+            в перечисленные.
+          </p>
+        </InfoPopover>
+      }
+    />
+  );
 
   if (transactions.length === 0) return <EmptyState />;
 
   if (data.links.length === 0) {
     return (
-      <div className="space-y-6">
-        <PageHeader
-          icon={GitFork}
-          title="Потоки денег"
-          hint="Слева — источники доходов (и привлечённые со счетов средства, если трат больше дохода); справа — категории расходов и сбережения"
-        />
+      <div className="space-y-3">
+        {header}
         <GlobalFilters />
         <div className="card-tray card-pad text-center py-12 text-muted">
           Нет данных для построения потоков в текущем фильтре.
@@ -55,19 +112,64 @@ export function SankeyPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={GitFork}
-        title="Потоки денег"
-        hint="Слева — источники доходов (и привлечённые со счетов средства, если трат больше дохода); справа — категории расходов и сбережения"
-      />
+    <div className="space-y-3">
+      {header}
       <GlobalFilters />
 
-      <div className="card-tray card-pad">
+      {/* Итоги отбора. Диаграмма показывает пропорции и ничего не говорит о
+          суммах: чтобы узнать, сколько всего пришло, приходилось уходить на
+          другую страницу. */}
+      <div className="tray">
+        <div className="tray-core px-5 py-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4 divide-border lg:divide-x">
+            <StatCell
+              label="Доход"
+              value={formatMoney(totals.income, base)}
+              icon={<TrendingUp className="w-4 h-4 text-income" />}
+              note={`${totals.count} ${totals.count % 10 === 1 && totals.count % 100 !== 11 ? "операция" : "операций"} в отборе`}
+            />
+            <StatCell
+              label="Расход"
+              value={formatMoney(totals.expense, base)}
+              icon={<TrendingDown className="w-4 h-4 text-expense" />}
+              note={
+                totals.income > 0
+                  ? `${formatPct(totals.expense / totals.income, 0)} от дохода`
+                  : undefined
+              }
+              pad
+            />
+            <StatCell
+              label="Чистый поток"
+              value={formatMoney(totals.net, base, { signed: true })}
+              icon={<Trophy className="w-4 h-4 text-accent" />}
+              note={totals.net >= 0 ? "ушло в сбережения" : "покрыто со счетов"}
+              pad
+            />
+            <StatCell
+              label="Норма сбережений"
+              value={totals.income > 0 ? formatPct(totals.net / totals.income, 0) : "—"}
+              icon={
+                <PiggyBank
+                  className={`w-4 h-4 ${totals.net >= 0 ? "text-income" : "text-expense"}`}
+                />
+              }
+              note="доля дохода, которая осталась"
+              pad
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="card-tray px-4 py-3">
         <div className="h-[600px]">
           <ResponsiveContainer>
             <Sankey
               data={data}
+              // Поля под подписи: узлы стоят вплотную к краям области, а имя
+              // рисуется СНАРУЖИ прямоугольника — без полей текст обрезался
+              // границей svg, и диаграмма стояла безымянными полосами.
+              margin={{ top: 8, right: 170, bottom: 8, left: 170 }}
               nodePadding={20}
               nodeWidth={14}
               linkCurvature={0.5}
@@ -94,19 +196,47 @@ export function SankeyPage() {
                     ? colorForCategory(payload.name, categoryMeta)
                     : COLORS[kind];
                 const isLeft = xv < 200;
+                const name = payload?.name ?? "";
+                // «Прочие» — не статья, а всё, что не попало в перечисленные:
+                // открывать по ним нечего, и вид у них обычный, без курсора.
+                const clickable =
+                  (kind === "category" || kind === "income") && !name.startsWith("Прочие");
                 return (
-                  <g key={`node-${index}`}>
-                    <rect x={xv} y={yv} width={w} height={h} fill={fill} fillOpacity={0.8} />
+                  <g
+                    key={`node-${index}`}
+                    onClick={clickable ? () => openNode(name, kind) : undefined}
+                    style={clickable ? { cursor: "pointer" } : undefined}
+                  >
+                    <title>
+                      {name}: {formatMoney(payload?.value ?? 0, base)}
+                      {clickable ? " — нажмите, чтобы открыть операции" : ""}
+                    </title>
+                    <rect x={xv} y={yv} width={w} height={h} fill={fill} fillOpacity={0.85} />
+                    {/* Сумма рядом с названием: раньше её показывала только
+                        подсказка при наведении, и прочесть диаграмму, не водя
+                        мышью по каждой ленте, было нельзя. */}
                     <text
                       x={isLeft ? xv - 6 : xv + w + 6}
-                      y={yv + h / 2}
+                      y={yv + h / 2 - (h > 26 ? 6 : 0)}
                       textAnchor={isLeft ? "end" : "start"}
                       dominantBaseline="middle"
                       fontSize={11}
                       fill="rgb(var(--c-text))"
                     >
-                      {payload?.name}
+                      {name}
                     </text>
+                    {h > 26 && (
+                      <text
+                        x={isLeft ? xv - 6 : xv + w + 6}
+                        y={yv + h / 2 + 7}
+                        textAnchor={isLeft ? "end" : "start"}
+                        dominantBaseline="middle"
+                        fontSize={10}
+                        fill="rgb(var(--c-muted))"
+                      >
+                        {formatMoney(payload?.value ?? 0, base, { compact: true })}
+                      </text>
+                    )}
                   </g>
                 );
               }}
@@ -118,42 +248,45 @@ export function SankeyPage() {
             </Sankey>
           </ResponsiveContainer>
         </div>
-        <div className="flex items-center gap-4 mt-3 text-xs text-muted justify-center">
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded" style={{ background: COLORS.income }} />
-            Источники доходов
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded" style={{ background: COLORS.account }} />
-            Бюджет
-          </span>
-          <span className="flex items-center gap-1">
-            {/* Category nodes are each coloured individually (Zenmoney tag /
-                deterministic), so the legend chip is multi-colour, not a single
-                red. */}
-            <span
-              className="w-3 h-3 rounded"
-              style={{
-                background:
-                  "conic-gradient(#22D3EE 0 90deg, #A78BFA 90deg 180deg, #F59E0B 180deg 270deg, #10B981 270deg 360deg)",
-              }}
-            />
-            Категории расходов
-          </span>
+        {/* Легенда одной строкой под диаграммой: пять чипов вразброс по центру
+            занимали высоту наравне с содержимым. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-muted">
+          <LegendChip color={COLORS.income} label="Источники доходов" />
+          <LegendChip color={COLORS.account} label="Бюджет" />
+          <LegendChip
+            label="Категории расходов"
+            gradient="conic-gradient(#22D3EE 0 90deg, #A78BFA 90deg 180deg, #F59E0B 180deg 270deg, #10B981 270deg 360deg)"
+          />
           {data.nodes.some((n) => n.kind === "savings") && (
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded" style={{ background: COLORS.savings }} />
-              Сбережения (доход больше трат)
-            </span>
+            <LegendChip color={COLORS.savings} label="Сбережения" />
           )}
           {data.nodes.some((n) => n.kind === "funding") && (
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded" style={{ background: COLORS.funding }} />
-              Привлечено со счетов (траты больше дохода)
-            </span>
+            <LegendChip color={COLORS.funding} label="Привлечено со счетов" />
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+/** Чип легенды: квадрат цвета и подпись. */
+function LegendChip({
+  color,
+  gradient,
+  label,
+}: {
+  color?: string;
+  /** Многоцветный чип — у категорий цвет свой у каждой. */
+  gradient?: string;
+  label: string;
+}) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span
+        className="w-2.5 h-2.5 rounded-sm shrink-0"
+        style={{ background: gradient ?? color }}
+      />
+      {label}
+    </span>
   );
 }

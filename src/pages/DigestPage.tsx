@@ -5,17 +5,24 @@ import {
   TrendingDown,
   ArrowUp,
   ArrowDown,
-  Calendar,
+  Trophy,
+  Coins,
   ChevronRight,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../store/useDrillStore";
 import { buildDigestHistory, type DigestEntry } from "../lib/digest";
-import { formatMoney, formatPct, formatDate } from "../lib/format";
+import { counterpartyOf } from "../lib/yearReview";
+import { formatMoney, formatNum, formatPct, formatDate, truncateWords } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
+import { Segmented } from "../components/Segmented";
+import { SectionCard, StatCell } from "../components/SectionCard";
+import { MeterRow } from "../components/MeterRow";
+import type { Transaction } from "../types";
+
 
 type Tab = "week" | "month";
 
@@ -41,12 +48,11 @@ export function DigestPage() {
   if (transactions.length === 0) return <EmptyState />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
         icon={Newspaper}
         title="Дайджест"
-        hint="Авто-сгенерированные итоги по неделям и месяцам со сравнением с предыдущим периодом и категориями, где «выстрелило»"
-        hintWrap
+        hint="Итоги завершённых недель и месяцев со сравнением с предыдущим"
         right={
           <InfoPopover>
             <p>
@@ -70,15 +76,22 @@ export function DigestPage() {
         }
       />
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2">
-        <TabBtn active={tab === "month"} onClick={() => setTab("month")}>
-          По месяцам
-        </TabBtn>
-        <TabBtn active={tab === "week"} onClick={() => setTab("week")}>
-          По неделям
-        </TabBtn>
-        <div className="text-xs text-muted ml-2">{filtered.length} периодов</div>
+      {/* Переключатель — общий контрол продукта, а не свои пилюли: те же две
+          кнопки на других страницах выглядели иначе. */}
+      <div className="flex items-center gap-3">
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          label="Период дайджеста"
+          options={[
+            { value: "month" as Tab, label: "По месяцам" },
+            { value: "week" as Tab, label: "По неделям" },
+          ]}
+        />
+        <span className="text-xs text-muted">
+          {formatNum(filtered.length)}{" "}
+          {filtered.length % 10 === 1 && filtered.length % 100 !== 11 ? "период" : "периодов"}
+        </span>
       </div>
 
       {filtered.length === 0 ? (
@@ -125,6 +138,16 @@ export function DigestPage() {
               entry={current}
               baseCurrency={baseCurrency}
               onOpenTx={(txs, title) => showDrill(title, txs, "Дайджест")}
+              onOpenCategory={(category) =>
+                showDrill(
+                  category,
+                  transactions.filter(
+                    (t) =>
+                      t.date >= current.start && t.date <= current.end && t.category === category
+                  ),
+                  current.label
+                )
+              }
             />
           )}
         </div>
@@ -133,35 +156,18 @@ export function DigestPage() {
   );
 }
 
-function TabBtn({
-  children,
-  active,
-  onClick,
-}: {
-  children: React.ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-sm transition-colors duration-200 ${
-        active ? "bg-accent text-accent-fg" : "text-muted hover:text-text hover:bg-panel2"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
 
 function DigestDetail({
   entry,
   baseCurrency,
   onOpenTx,
+  onOpenCategory,
 }: {
   entry: DigestEntry;
   baseCurrency: string;
-  onOpenTx: (txs: ReturnType<typeof Array.prototype.filter>, title: string) => void;
+  onOpenTx: (txs: Transaction[], title: string) => void;
+  /** Операции одной статьи за этот период. */
+  onOpenCategory: (category: string) => void;
 }) {
   const expCls =
     entry.expenseDelta > 0.05
@@ -182,157 +188,159 @@ function DigestDetail({
         ? "text-expense"
         : "text-muted";
 
+  const maxMove = Math.max(
+    ...entry.movers.map((m) => Math.abs(m.current - m.previous)),
+    1
+  );
+
   return (
-    <div className="space-y-4">
-      <div className="card-tray card-pad">
-        <div className="text-xs uppercase tracking-wider text-muted">
-          {entry.label} · {entry.txCount} операций
-        </div>
-        <div className="grid grid-cols-3 gap-4 mt-3">
-          <Hero
-            label="Доход"
-            value={formatMoney(entry.income, baseCurrency)}
-            delta={entry.incomeDelta}
-            cls={incCls}
-            arrowUp
-          />
-          <Hero
-            label="Расход"
-            value={formatMoney(entry.expense, baseCurrency)}
-            delta={entry.expenseDelta}
-            cls={expCls}
-            arrowUp={false}
-          />
-          <Hero
-            label="Чистый поток"
-            value={formatMoney(entry.net, baseCurrency, {
-              signed: true,
-            })}
-            delta={
-              Math.abs(entry.prevNet) > 0.01
-                ? (entry.net - entry.prevNet) / Math.abs(entry.prevNet)
-                : 0
-            }
-            cls={netCls}
-            arrowUp
-          />
+    <div className="space-y-3">
+      <div className="tray">
+        <div className="tray-core px-5 py-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4 divide-border lg:divide-x">
+            <StatCell
+              label="Доход"
+              value={formatMoney(entry.income, baseCurrency)}
+              icon={<TrendingUp className="w-4 h-4 text-income" />}
+              note={deltaNote(entry.incomeDelta)}
+              noteCls={incCls}
+            />
+            <StatCell
+              label="Расход"
+              value={formatMoney(entry.expense, baseCurrency)}
+              icon={<TrendingDown className="w-4 h-4 text-expense" />}
+              note={deltaNote(entry.expenseDelta)}
+              noteCls={expCls}
+              pad
+            />
+            <StatCell
+              label="Чистый поток"
+              value={formatMoney(entry.net, baseCurrency, { signed: true })}
+              icon={<Trophy className="w-4 h-4 text-accent" />}
+              note={deltaNote(
+                Math.abs(entry.prevNet) > 0.01
+                  ? (entry.net - entry.prevNet) / Math.abs(entry.prevNet)
+                  : 0
+              )}
+              noteCls={netCls}
+              pad
+            />
+            {/* Число операций было мелкой служебной строчкой над числами —
+                такой же итог периода, просто не в рублях. */}
+            <StatCell
+              label="Операций"
+              value={formatNum(entry.txCount)}
+              icon={<Coins className="w-4 h-4 text-accent2" />}
+              note={entry.label}
+              pad
+            />
+          </div>
         </div>
       </div>
 
       {entry.movers.length > 0 && (
-        <div className="card-tray card-pad">
-          <div className="font-semibold mb-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-accent" />
-            Категории, где &laquo;выстрелило&raquo;
-          </div>
-          <div className="space-y-2">
+        <SectionCard
+          icon={<TrendingUp className="w-4 h-4 text-accent" />}
+          title="Категории, где «выстрелило»"
+          info={
+            <p>
+              Статьи с самым большим изменением суммы против прошлого такого же
+              периода — в рублях, а не в процентах: рост на 200 % у статьи в
+              триста рублей не так важен, как рост на 20 % у статьи в сто тысяч.
+              Полоса показывает величину изменения, стрелка — сторону. Нажатие
+              открывает операции статьи за этот период.
+            </p>
+          }
+        >
+          <div className="space-y-0.5">
             {entry.movers.map((m) => {
               const up = m.current > m.previous;
               const diff = Math.abs(m.current - m.previous);
               return (
-                <div key={m.category} className="flex items-center gap-3 text-sm">
-                  {up ? (
-                    <ArrowUp className="w-3.5 h-3.5 text-expense shrink-0" />
-                  ) : (
-                    <ArrowDown className="w-3.5 h-3.5 text-income shrink-0" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <div className="truncate font-medium">{m.category}</div>
-                      <div
-                        className={`tabular-nums whitespace-nowrap text-xs ml-3 ${up ? "text-expense" : "text-income"}`}
-                      >
-                        {up ? "+" : "−"}
-                        {formatMoney(diff, baseCurrency)}
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted">
-                      сейчас {formatMoney(m.current, baseCurrency)} ·
-                      раньше {formatMoney(m.previous, baseCurrency)}
-                      {m.previous > 0 && (
-                        <>
-                          {" "}
-                          ({m.delta > 0 ? "+" : ""}
-                          {formatPct(m.delta, 0)})
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <MeterRow
+                  key={m.category}
+                  icon={
+                    up ? (
+                      <ArrowUp className="w-3.5 h-3.5 text-expense" />
+                    ) : (
+                      <ArrowDown className="w-3.5 h-3.5 text-income" />
+                    )
+                  }
+                  label={m.category}
+                  share={diff / maxMove}
+                  barCls={up ? "bg-expense" : "bg-income"}
+                  cells={[
+                    {
+                      text:
+                        m.previous > 0
+                          ? `${m.delta > 0 ? "+" : ""}${formatPct(m.delta, 0)}`
+                          : "—",
+                      width: "w-12",
+                      muted: true,
+                    },
+                    {
+                      text: `${formatMoney(m.previous, baseCurrency, { compact: true })} → ${formatMoney(m.current, baseCurrency, { compact: true })}`,
+                      width: "w-32",
+                      muted: true,
+                    },
+                    {
+                      text: `${up ? "+" : "−"}${formatMoney(diff, baseCurrency)}`,
+                      width: "w-24",
+                    },
+                  ]}
+                  onClick={() => onOpenCategory(m.category)}
+                  title="Показать операции статьи за период"
+                />
               );
             })}
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {entry.topTransactions.length > 0 && (
-        <div className="card-tray card-pad">
-          <div className="font-semibold mb-3 flex items-center gap-2">
-            <TrendingDown className="w-4 h-4 text-expense" />
-            Самое дорогое за период
-          </div>
-          <div className="space-y-2">
-            {entry.topTransactions.map((t) => (
+        <SectionCard
+          icon={<Coins className="w-4 h-4 text-expense" />}
+          title="Самое дорогое за период"
+          info={<p>Пять самых крупных расходов периода с комментарием к операции.</p>}
+        >
+          <div className="space-y-0.5">
+            {entry.topTransactions.map((t, i) => (
               <button
                 key={t.id}
-                onClick={() => onOpenTx([t], t.payee || t.categoryFull || "Операция")}
-                className="w-full flex items-center gap-3 text-sm hover:bg-panel2/40 p-2 -mx-2 rounded-lg text-left"
+                onClick={() =>
+                  onOpenTx([t], counterpartyOf(t) || t.categoryFull || "Операция")
+                }
+                title="Показать операцию"
+                className="w-full flex items-start gap-2 text-sm rounded-md px-2 py-1.5 text-left hover:bg-panel2/50"
               >
-                <Calendar className="w-3.5 h-3.5 text-muted shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="truncate font-medium">{t.payee || "—"}</div>
-                  <div className="text-xs text-muted truncate">
+                <span className="text-[11px] text-muted tabular-nums w-4 shrink-0 leading-5">
+                  {i + 1}
+                </span>
+                {/* Имя и комментарий одной колонкой, сумма соседней: комментарий
+                    не заезжает под сумму и обрывается там же, где она начинается. */}
+                <span className="flex-1 min-w-0">
+                  <span className="block font-medium truncate">
+                    {counterpartyOf(t) || t.categoryFull || "—"}
+                  </span>
+                  <span className="block text-xs text-muted truncate">
                     {t.categoryFull} · {formatDate(t.date, "full")}
-                  </div>
-                </div>
-                <div className="text-expense font-semibold tabular-nums">
+                    {truncateWords(t.comment, 140) ? ` · ${truncateWords(t.comment, 140)}` : ""}
+                  </span>
+                </span>
+                <span className="text-expense font-semibold tabular-nums shrink-0 leading-5">
                   {formatMoney(t.amountBase, baseCurrency)}
-                </div>
+                </span>
               </button>
             ))}
           </div>
-        </div>
+        </SectionCard>
       )}
     </div>
   );
 }
 
-function Hero({
-  label,
-  value,
-  delta,
-  cls,
-  arrowUp,
-}: {
-  label: string;
-  value: string;
-  delta: number;
-  cls: string;
-  arrowUp: boolean;
-}) {
-  const showDelta = Math.abs(delta) > 0.01;
-  // For expense, growth is bad → use arrowUp=false meaning "up arrow = bad"
-  return (
-    <div>
-      <div className="label">{label}</div>
-      <div className="text-xl font-semibold tabular-nums font-mono tracking-tight [word-spacing:-0.22em]">
-        {value}
-      </div>
-      {showDelta && (
-        <div className={`text-xs flex items-center gap-1 mt-1 ${cls}`}>
-          {delta > 0 ? (
-            arrowUp ? (
-              <TrendingUp className="w-3 h-3" />
-            ) : (
-              <TrendingUp className="w-3 h-3" />
-            )
-          ) : (
-            <TrendingDown className="w-3 h-3" />
-          )}
-          {delta > 0 ? "+" : ""}
-          {formatPct(delta, 0)}
-        </div>
-      )}
-    </div>
-  );
+/** «+12% к прошлому периоду» — или пусто, если изменение в пределах процента. */
+function deltaNote(delta: number): string | undefined {
+  if (Math.abs(delta) <= 0.01) return "≈ как в прошлый раз";
+  return `${delta > 0 ? "+" : ""}${formatPct(delta, 0)} к прошлому периоду`;
 }
