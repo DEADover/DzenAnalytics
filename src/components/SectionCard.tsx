@@ -39,13 +39,29 @@ export function SectionCard({
   );
 }
 
+/** Смысловой цвет числа — тот же набор, что у плитки `Stat`. */
+export type StatTone = "default" | "income" | "expense" | "warn" | "accent" | "accent2";
+
+const STAT_TONE: Record<StatTone, string> = {
+  default: "text-text",
+  income: "text-income",
+  expense: "text-expense",
+  warn: "text-warn",
+  accent: "text-accent",
+  accent2: "text-accent2",
+};
+
 /**
  * Ячейка сводки: подпись, крупное число, уточнение.
  *
- * Одинаковые ряды чисел стояли на страницах разным кеглем и даже разным
- * шрифтом — на «Дайджесте» они были моноширинными с подтянутыми пробелами, а
- * на «Годе в цифрах» обычными. Одно и то же число в двух местах продукта
- * выглядело как два разных показателя.
+ * Вид один в один с плиткой `Stat` со страницы «Операции»: подпись слева,
+ * значок СЕРЫЙ и справа, цвет несёт само число. Значок цветом дублировал то,
+ * что и так сказано числом, и при этом перетягивал взгляд на себя — в ряду из
+ * пяти ячеек первым читался хоровод разноцветных иконок, а не суммы.
+ *
+ * Отдельно от `Stat`, потому что та рисует себе карточку с двойным кантом, а
+ * ряд итогов держит несколько ячеек в ОДНОЙ карточке, разделяя их волосяными
+ * чертами. Начинка при этом обязана совпадать.
  */
 export function StatCell({
   label,
@@ -53,6 +69,7 @@ export function StatCell({
   note,
   noteCls,
   icon,
+  tone = "default",
   /** Отступ слева от вертикальной черты — у всех ячеек ряда, кроме первой. */
   pad,
 }: {
@@ -61,15 +78,18 @@ export function StatCell({
   note?: string;
   noteCls?: string;
   icon?: ReactNode;
+  tone?: StatTone;
   pad?: boolean;
 }) {
   return (
     <div className={pad ? "lg:pl-4" : undefined}>
-      <div className="flex items-center gap-2 mb-0.5">
-        {icon}
+      <div className="flex items-center justify-between gap-2 mb-0.5">
         <div className="label">{label}</div>
+        {icon && <div className="text-muted shrink-0">{icon}</div>}
       </div>
-      <div className="stat-num text-2xl xl:text-[28px] font-bold tabular-nums leading-tight">
+      <div
+        className={`stat-num text-2xl xl:text-[28px] font-bold tabular-nums leading-tight ${STAT_TONE[tone]}`}
+      >
         {value}
       </div>
       {note && <div className={`text-xs mt-0.5 ${noteCls || "text-muted"}`}>{note}</div>}

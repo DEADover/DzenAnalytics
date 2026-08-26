@@ -258,38 +258,37 @@ export function CalendarPage() {
             <StatCell
               label={`Расходы за ${year}`}
               value={formatMoney(yearStats.total, base)}
-              icon={<TrendingDown className="w-4 h-4 text-expense" />}
+              icon={<TrendingDown className="w-4 h-4" />}
+              tone="expense"
               note={plannedNote(plannedYear.planExpense, plannedYear.fcExpense, base)}
             />
             <StatCell
               label={`Доходы за ${year}`}
               value={formatMoney(yearStats.totalInc, base)}
-              icon={<TrendingUp className="w-4 h-4 text-income" />}
+              icon={<TrendingUp className="w-4 h-4" />}
+              tone="income"
               note={plannedNote(plannedYear.planIncome, plannedYear.fcIncome, base)}
               pad
             />
             <StatCell
               label={`Накопления за ${year}`}
               value={formatMoney(savingsYear, base, { signed: true })}
-              icon={
-                <PiggyBank
-                  className={`w-4 h-4 ${savingsYear >= 0 ? "text-income" : "text-expense"}`}
-                />
-              }
+              icon={<PiggyBank className="w-4 h-4" />}
+              tone={savingsYear > 0 ? "income" : savingsYear < 0 ? "expense" : "default"}
               note="переводы на копилки минус с них"
               pad
             />
             <StatCell
               label="Операций"
               value={formatNum(yearStats.count)}
-              icon={<Receipt className="w-4 h-4 text-accent2" />}
+              icon={<Receipt className="w-4 h-4" />}
               note={`${formatNum(daysInYear(year))} дней в году`}
               pad
             />
             <StatCell
               label="Активных дней"
               value={`${formatNum(yearStats.activeDays)} из ${formatNum(daysInYear(year))}`}
-              icon={<CalendarCheck className="w-4 h-4 text-accent" />}
+              icon={<CalendarCheck className="w-4 h-4" />}
               note={
                 daysInYear(year) > 0
                   ? `${Math.round((yearStats.activeDays / daysInYear(year)) * 100)}% дней с операциями`

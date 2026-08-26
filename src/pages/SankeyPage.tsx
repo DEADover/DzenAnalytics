@@ -125,13 +125,15 @@ export function SankeyPage() {
             <StatCell
               label="Доход"
               value={formatMoney(totals.income, base)}
-              icon={<TrendingUp className="w-4 h-4 text-income" />}
+              icon={<TrendingUp className="w-4 h-4" />}
+              tone="income"
               note={`${totals.count} ${totals.count % 10 === 1 && totals.count % 100 !== 11 ? "операция" : "операций"} в отборе`}
             />
             <StatCell
               label="Расход"
               value={formatMoney(totals.expense, base)}
-              icon={<TrendingDown className="w-4 h-4 text-expense" />}
+              icon={<TrendingDown className="w-4 h-4" />}
+              tone="expense"
               note={
                 totals.income > 0
                   ? `${formatPct(totals.expense / totals.income, 0)} от дохода`
@@ -142,18 +144,16 @@ export function SankeyPage() {
             <StatCell
               label="Чистый поток"
               value={formatMoney(totals.net, base, { signed: true })}
-              icon={<Trophy className="w-4 h-4 text-accent" />}
+              icon={<Trophy className="w-4 h-4" />}
+              tone={totals.net >= 0 ? "income" : "expense"}
               note={totals.net >= 0 ? "ушло в сбережения" : "покрыто со счетов"}
               pad
             />
             <StatCell
               label="Норма сбережений"
               value={totals.income > 0 ? formatPct(totals.net / totals.income, 0) : "—"}
-              icon={
-                <PiggyBank
-                  className={`w-4 h-4 ${totals.net >= 0 ? "text-income" : "text-expense"}`}
-                />
-              }
+              icon={<PiggyBank className="w-4 h-4" />}
+              tone={totals.net >= 0 ? "income" : "expense"}
               note="доля дохода, которая осталась"
               pad
             />

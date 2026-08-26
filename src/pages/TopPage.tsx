@@ -162,11 +162,12 @@ export function TopPage() {
               value={formatMoney(total, base)}
               icon={
                 kind === "expense" ? (
-                  <TrendingDown className="w-4 h-4 text-expense" />
+                  <TrendingDown className="w-4 h-4" />
                 ) : (
-                  <TrendingUp className="w-4 h-4 text-income" />
+                  <TrendingUp className="w-4 h-4" />
                 )
               }
+              tone={kind === "expense" ? "expense" : "income"}
               note={
                 periodTotal > 0
                   ? `${formatPct(total / periodTotal, 0)} от всего за период`
@@ -176,21 +177,21 @@ export function TopPage() {
             <StatCell
               label="Строк"
               value={formatNum(rowCount)}
-              icon={<Tags className="w-4 h-4 text-accent" />}
+              icon={<Tags className="w-4 h-4" />}
               note={TAB_NOTE[tab]}
               pad
             />
             <StatCell
               label="Операций"
               value={formatNum(opCount)}
-              icon={<Receipt className="w-4 h-4 text-accent2" />}
+              icon={<Receipt className="w-4 h-4" />}
               note="в этих строках"
               pad
             />
             <StatCell
               label="В среднем"
               value={opCount > 0 ? formatMoney(total / opCount, base) : "—"}
-              icon={<Coins className="w-4 h-4 text-muted" />}
+              icon={<Coins className="w-4 h-4" />}
               note="на одну операцию"
               pad
             />

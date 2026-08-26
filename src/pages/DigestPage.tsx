@@ -213,14 +213,16 @@ function DigestDetail({
             <StatCell
               label="Доход"
               value={formatMoney(entry.income, baseCurrency)}
-              icon={<TrendingUp className="w-4 h-4 text-income" />}
+              icon={<TrendingUp className="w-4 h-4" />}
+              tone="income"
               note={deltaNote(entry.incomeDelta)}
               noteCls={incCls}
             />
             <StatCell
               label="Расход"
               value={formatMoney(entry.expense, baseCurrency)}
-              icon={<TrendingDown className="w-4 h-4 text-expense" />}
+              icon={<TrendingDown className="w-4 h-4" />}
+              tone="expense"
               note={deltaNote(entry.expenseDelta)}
               noteCls={expCls}
               pad
@@ -228,7 +230,8 @@ function DigestDetail({
             <StatCell
               label="Чистый поток"
               value={formatMoney(entry.net, baseCurrency, { signed: true })}
-              icon={<Trophy className="w-4 h-4 text-accent" />}
+              icon={<Trophy className="w-4 h-4" />}
+              tone={entry.net >= 0 ? "income" : "expense"}
               note={deltaNote(
                 Math.abs(entry.prevNet) > 0.01
                   ? (entry.net - entry.prevNet) / Math.abs(entry.prevNet)
@@ -242,7 +245,7 @@ function DigestDetail({
             <StatCell
               label="Операций"
               value={formatNum(entry.txCount)}
-              icon={<Coins className="w-4 h-4 text-accent2" />}
+              icon={<Coins className="w-4 h-4" />}
               note={entry.label}
               pad
             />

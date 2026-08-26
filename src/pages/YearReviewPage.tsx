@@ -227,14 +227,16 @@ export function YearReviewPage() {
               value={formatMoney(review.totalIncome, baseCurrency)}
               note={review.prev.available ? incomeDelta.text : undefined}
               noteCls={review.prev.available ? incomeDelta.cls : undefined}
-              icon={<TrendingUp className="w-4 h-4 text-income" />}
+              icon={<TrendingUp className="w-4 h-4" />}
+              tone="income"
             />
             <StatCell
               label="Расход"
               value={formatMoney(review.totalExpense, baseCurrency)}
               note={review.prev.available ? expenseDelta.text : undefined}
               noteCls={review.prev.available ? expenseDelta.cls : undefined}
-              icon={<TrendingDown className="w-4 h-4 text-expense" />}
+              icon={<TrendingDown className="w-4 h-4" />}
+              tone="expense"
               pad
             />
             <StatCell
@@ -242,7 +244,8 @@ export function YearReviewPage() {
               value={formatMoney(review.netFlow, baseCurrency, { signed: true })}
               note={review.prev.available ? netDelta.text : undefined}
               noteCls={review.prev.available ? netDelta.cls : undefined}
-              icon={<Trophy className="w-4 h-4 text-accent" />}
+              icon={<Trophy className="w-4 h-4" />}
+              tone={review.netFlow >= 0 ? "income" : "expense"}
               pad
             />
             <StatCell
@@ -257,11 +260,8 @@ export function YearReviewPage() {
                     : `${formatMoney(-review.netFlow, baseCurrency)} не хватило`
                   : undefined
               }
-              icon={
-                <PiggyBank
-                  className={`w-4 h-4 ${review.netFlow >= 0 ? "text-income" : "text-expense"}`}
-                />
-              }
+              icon={<PiggyBank className="w-4 h-4" />}
+              tone={review.netFlow >= 0 ? "income" : "expense"}
               pad
             />
             <StatCell
@@ -270,7 +270,7 @@ export function YearReviewPage() {
               // Честная граница данных: иначе «за 2026 год» читается как «за
               // весь 2026», а год ещё идёт и итоги неизбежно скромнее.
               note={partial ? `данные по ${dayLabel(review.window.to)}` : "год целиком"}
-              icon={<Receipt className="w-4 h-4 text-accent2" />}
+              icon={<Receipt className="w-4 h-4" />}
               pad
             />
           </div>
