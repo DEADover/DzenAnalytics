@@ -72,3 +72,64 @@ export function positiveBalanceTotal(
   for (const b of balances) if (b != null && b > 0) sum += b;
   return sum;
 }
+
+/** Что нужно от живого счёта, чтобы свести одноимённые в одну строку. */
+export interface TitledBalance {
+  title: string;
+  balance: number;
+  currency: string;
+}
+
+/** Свод одноимённых счетов: представитель, общий остаток и одна ли валюта. */
+export interface MergedTitle<T> {
+  /** Счёт, от которого берутся вид, банк, архивность и правки: самый крупный
+   *  по модулю остатка — он и есть «этот счёт» в глазах человека. */
+  lead: T;
+  /** Сумма остатков всех одноимённых, в базовой валюте. */
+  base: number;
+  /** Сколько счетов слилось в эту строку. */
+  count: number;
+  /** Родная сумма и валюта — только когда счёт ровно один: у слитых из разных
+   *  валют «родной» суммы не существует. */
+  native: { balance: number; currency: string } | null;
+}
+
+/**
+ * Свести живые счета по НАЗВАНИЮ, складывая остатки.
+ *
+ * Дзен-мани держит по одному долговому счёту НА ВАЛЮТУ, и называются они все
+ * одинаково — «Долги». Обычная карта `title → счёт` оставляла из них
+ * последний, и в списке вместо суммы долгов стоял остаток случайной валюты,
+ * чаще всего нулевой (issue #89). Операции ссылаются на счёт по названию, так
+ * что строка в списке одна на название — значит и остаток у неё должен быть
+ * общий, а не одного из счетов.
+ */
+export function mergeLiveByTitle<T extends TitledBalance>(
+  accounts: readonly T[],
+  toBase: (amount: number, currency: string) => number
+): Map<string, MergedTitle<T>> {
+  const out = new Map<string, MergedTitle<T>>();
+  for (const a of accounts) {
+    const prev = out.get(a.title);
+    if (!prev) {
+      out.set(a.title, {
+        lead: a,
+        base: toBase(a.balance, a.currency),
+        count: 1,
+        native: { balance: a.balance, currency: a.currency },
+      });
+      continue;
+    }
+    prev.base += toBase(a.balance, a.currency);
+    prev.count++;
+    if (Math.abs(a.balance) > Math.abs(prev.lead.balance)) prev.lead = a;
+    // Валюты разошлись — родной суммы у строки больше нет. Совпали (два счёта
+    // в одной валюте) — складываем, она по-прежнему осмысленна.
+    if (prev.native && prev.native.currency === a.currency) {
+      prev.native = { balance: prev.native.balance + a.balance, currency: a.currency };
+    } else {
+      prev.native = null;
+    }
+  }
+  return out;
+}

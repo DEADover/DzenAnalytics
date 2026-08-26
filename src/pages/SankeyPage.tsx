@@ -174,7 +174,42 @@ export function SankeyPage() {
               nodeWidth={14}
               linkCurvature={0.5}
               iterations={64}
-              link={{ stroke: "rgb(var(--c-muted))", strokeOpacity: 0.15 }}
+              // Ленты «Сбережения» и «Привлечено со счетов» красим в цвет их
+              // узла: это не рядовые статьи, а ответ на вопрос «хватило дохода
+              // или нет», и в сером частоколе они терялись (issue #91).
+              link={(props: unknown) => {
+                const p = props as {
+                  sourceX?: number; targetX?: number;
+                  sourceY?: number; targetY?: number;
+                  sourceControlX?: number; targetControlX?: number;
+                  linkWidth?: number; index?: number;
+                  payload?: {
+                    target?: number | { name?: string; kind?: string };
+                    source?: number | { name?: string; kind?: string };
+                  };
+                };
+                // Recharts отдаёт концы ленты то номером узла, то самим узлом —
+                // зависит от того, до или после раскладки. Разбираем оба вида.
+                const nodeOf = (
+                  ref: number | { name?: string; kind?: string } | undefined
+                ): { name?: string; kind?: string } | undefined =>
+                  typeof ref === "number" ? data.nodes[ref] : ref;
+                const target = nodeOf(p.payload?.target);
+                const source = nodeOf(p.payload?.source);
+                const kind = target?.kind === "savings" ? "savings"
+                  : source?.kind === "funding" ? "funding" : null;
+                const stroke = kind ? COLORS[kind] : "rgb(var(--c-muted))";
+                return (
+                  <path
+                    key={`link-${p.index}`}
+                    d={`M${p.sourceX},${p.sourceY}C${p.sourceControlX},${p.sourceY} ${p.targetControlX},${p.targetY} ${p.targetX},${p.targetY}`}
+                    fill="none"
+                    stroke={stroke}
+                    strokeWidth={p.linkWidth}
+                    strokeOpacity={kind ? 0.3 : 0.15}
+                  />
+                );
+              }}
               node={({ x, y, width, height, index, payload }: {
                 x?: number; y?: number; width?: number; height?: number; index?: number;
                 payload?: {

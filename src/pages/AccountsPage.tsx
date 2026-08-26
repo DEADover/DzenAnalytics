@@ -101,7 +101,7 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { Segmented } from "../components/Segmented";
 import { InfoPopover } from "../components/InfoPopover";
-import { capitalShare, positiveBalanceTotal } from "../lib/accountOptions";
+import { capitalShare, mergeLiveByTitle, positiveBalanceTotal } from "../lib/accountOptions";
 import { Stat } from "../components/Stat";
 import { Sparkline } from "../components/Sparkline";
 import { AccountLogo } from "../components/AccountLogo";
@@ -615,7 +615,11 @@ export function AccountsPage() {
   }, [debtAccountTitles, debtSource]);
 
   const accountRowsResult = useMemo(() => {
-    const liveByTitle = new Map(liveList.map((a) => [a.title, a]));
+    // Одноимённые счета сводятся в одну строку со СЛОЖЕННЫМ остатком: у
+    // Дзен-мани долговых счетов столько, сколько валют, и называются они все
+    // «Долги». Карта по названию оставляла последний, и в списке стоял остаток
+    // случайной валюты вместо суммы долгов (issue #89).
+    const merged = mergeLiveByTitle(liveList, toBase);
     // На «Капитале» список строится по ВСЕЙ истории: остаток на счёте не
     // зависит от того, какие операции сейчас отобраны, и счёт не должен
     // пропадать из перечня только потому, что в выбранном периоде по нему не
@@ -635,8 +639,8 @@ export function AccountsPage() {
     // одной операции в окне фильтра. Нужно, чтобы подпись под итогом честно
     // говорила, что показано не всё.
     let dormant = 0;
-    for (const a of liveList) {
-      const hasOps = txByTitle.has(a.title);
+    for (const [title, m] of merged) {
+      const hasOps = txByTitle.has(title);
       // На «Движении» список отвечает на вопрос «что происходило», и счёт без
       // единой операции в периоде там лишний, даже если на нём лежат деньги:
       // строка из одних нулей ничего не рассказывает. На «Капитале» ровно
@@ -648,15 +652,18 @@ export function AccountsPage() {
       // Archived (closed) accounts are kept but grouped below active ones
       // (see the sort), so the user can still review them without clutter up top.
       // Skip dormant zero-balance accounts with no activity — they'd be noise.
-      if (Math.abs(a.balance) <= 0.005 && !hasOps) {
-        dormant++;
+      // Спящим считается СВОДНЫЙ остаток: два счёта с плюсом и минусом,
+      // гасящие друг друга, — это не спящая пара, а одна живая строка с нулём.
+      if (Math.abs(m.base) <= 0.005 && !hasOps) {
+        dormant += m.count;
         continue;
       }
-      titles.add(a.title);
+      titles.add(title);
     }
 
     const rows = [...titles].map((title) => {
-      const live = liveByTitle.get(title);
+      const m = merged.get(title);
+      const live = m?.lead;
       const tx = txByTitle.get(title);
       return {
         account: title,
@@ -664,9 +671,11 @@ export function AccountsPage() {
         income: tx?.income ?? 0,
         expense: tx?.expense ?? 0,
         count: tx?.count ?? 0,
-        balanceBase: live ? toBase(live.balance, live.currency) : null,
-        nativeBalance: live ? live.balance : null,
-        nativeCurrency: live ? live.currency : null,
+        balanceBase: m ? m.base : null,
+        // Родная сумма только у строки из одной валюты: у сведённых из разных
+        // «родной» суммы не существует, и скобка с ней была бы враньём.
+        nativeBalance: m?.native ? m.native.balance : null,
+        nativeCurrency: m?.native ? m.native.currency : null,
         type: live?.type ?? "",
         archive: live?.archive ?? false,
         // Only treat as off-balance when the cache actually knows the account;
@@ -919,7 +928,22 @@ export function AccountsPage() {
    *  Плоским он сделан намеренно — так и сетка карточек, и таблица остаются
    *  одним `map`, а заголовок просто занимает всю ширину ряда. */
   type ListItem =
-    | { kind: "header"; key: string; label: string; count: number; sum: number }
+    | {
+        kind: "header";
+        key: string;
+        label: string;
+        count: number;
+        sum: number;
+        /**
+         * Сумма ПОЛОЖИТЕЛЬНЫХ остатков группы — числитель доли (issue #90).
+         *
+         * Не сам `sum`: знаменатель доли на «Капитале» — сумма положительных
+         * остатков, и если брать в числителе итог группы с вычтенными долгами,
+         * доли перестанут складываться в сто процентов. У группы, где живут
+         * одни долги, доли нет — ровно как у отдельного долгового счёта.
+         */
+        positive: number;
+      }
     | { kind: "row"; key: string; row: AccountRow };
 
   const listItems = useMemo<ListItem[]>(() => {
@@ -942,6 +966,7 @@ export function AccountsPage() {
         label,
         rows,
         sum: rows.reduce((s, r) => s + rowHeadline(r), 0),
+        positive: positiveBalanceTotal(rows.map((r) => r.balanceBase ?? r.delta)),
         // Группа целиком из архивных счетов уходит вниз — иначе закрытый вклад
         // с крупным остатком вставал выше рабочих счетов, хотя внутри списка
         // архивные мы как раз опускаем.
@@ -959,11 +984,12 @@ export function AccountsPage() {
         label: g.label,
         count: g.rows.length,
         sum: g.sum,
+        positive: g.positive,
       });
       for (const r of g.rows) out.push({ kind: "row", key: r.account, row: r });
     }
     return out;
-  }, [visibleRows, groupBy]);
+  }, [visibleRows, groupBy, rowHeadline]);
   // Real current balance per account (base currency) — only in API mode. Lets
   // the stacked chart show actual balances instead of cumulative-flow-from-zero.
   const realBalancesByAccount = useMemo(() => {
@@ -2244,6 +2270,19 @@ export function AccountsPage() {
                     >
                       {formatMoney(item.sum, base)}
                     </span>
+                    {capitalView &&
+                      (() => {
+                        const share = capitalShare(item.positive, positiveTotal);
+                        if (share == null) return null;
+                        return (
+                          <span
+                            className="text-xs text-muted tabular-nums whitespace-nowrap"
+                            title="Доля от суммы положительных остатков"
+                          >
+                            · {formatPct(share)}
+                          </span>
+                        );
+                      })()}
                   </div>
                 );
               }
@@ -2503,7 +2542,24 @@ export function AccountsPage() {
                         >
                           {formatMoney(item.sum, base)}
                         </td>
-                        <td className="table-td" colSpan={capitalView ? 2 : 4} />
+                        {/* Доля группы встаёт ровно под колонкой «Доля» —
+                            иначе процент повис бы над чужим столбцом. */}
+                        {capitalView ? (
+                          <>
+                            <td
+                              className="table-td text-right tabular-nums text-muted whitespace-nowrap"
+                              title="Доля от суммы положительных остатков"
+                            >
+                              {(() => {
+                                const share = capitalShare(item.positive, positiveTotal);
+                                return share == null ? "" : formatPct(share);
+                              })()}
+                            </td>
+                            <td className="table-td" />
+                          </>
+                        ) : (
+                          <td className="table-td" colSpan={4} />
+                        )}
                       </tr>
                     );
                   }

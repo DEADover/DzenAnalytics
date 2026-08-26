@@ -78,6 +78,7 @@ import {
   zenPlanList,
   zenForecastsFromBudgets,
   plannedOpsByTagMonth,
+  fulfilledMarkerIds,
 } from "../lib/zenBudgets";
 import { formatNum } from "../lib/format";
 import { budgetCellKey } from "../lib/budgets";
@@ -812,7 +813,12 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           // тем же, каким посчитан их факт. Иначе валютная подписка даёт в
           // плане переоценку, и остаток по статье не сходится с Дзен-мани.
           (dateIso, code) => useDataStore.getState().histDayRates[dateIso]?.[code] ?? null,
-          (id) => nextCache.instruments.find((i) => i.id === id)?.shortTitle
+          (id) => nextCache.instruments.find((i) => i.id === id)?.shortTitle,
+          // Маркеры, за которыми стоит настоящая операция: в Дзен-мани план
+          // можно связать с уже существующей операцией, и такой маркер
+          // перестаёт быть `planned` — план месяца от этого проваливался
+          // (issue #86).
+          fulfilledMarkerIds(nextCache.transactions)
         );
         const seeds = zenPlanList(nextCache.budgets, nextCache.tags, planned);
         if (seeds.length > 0) {

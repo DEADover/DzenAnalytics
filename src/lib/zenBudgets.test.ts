@@ -5,6 +5,7 @@ import {
   zenForecastsFromBudgets,
   zenPlanKey,
   plannedOpsByTagMonth,
+  fulfilledMarkerIds,
 } from "./zenBudgets";
 import type {
   ZenBudget,
@@ -320,5 +321,73 @@ describe("прогноз Дзена не прибавляется к плану"
       "2026-08-11"
     );
     expect(planned.get("work|2026-08")?.income).toBe(160000);
+  });
+});
+
+describe("связанные плановые операции (issue #86)", () => {
+  const rub = { id: 2, shortTitle: "RUB", title: "Рубль", symbol: "₽", rate: 1 };
+  const mk = (over: Partial<ZenReminderMarker>): ZenReminderMarker => ({
+    id: "m1",
+    user: 1,
+    changed: 0,
+    date: "2026-08-10",
+    income: 0,
+    incomeInstrument: 2,
+    outcome: 0,
+    outcomeInstrument: 2,
+    tag: ["food"],
+    reminder: "r1",
+    state: "planned",
+    ...over,
+  });
+
+  it("маркер, связанный с фактической операцией, остаётся в плане", () => {
+    // Дзен снимает со связанного маркера состояние `planned`; план месяца от
+    // этого проваливался — в августе, где связали два плана из трёх, он
+    // показывал треть сентябрьского.
+    const markers = [
+      mk({ id: "a", outcome: 1000, state: "deleted" }),
+      mk({ id: "b", outcome: 2000, state: "deleted" }),
+      mk({ id: "c", outcome: 3000, date: "2026-08-28" }),
+    ];
+    const fulfilled = fulfilledMarkerIds([
+      { reminderMarker: "a" },
+      { reminderMarker: "b" },
+      { reminderMarker: null },
+    ]);
+    const planned = plannedOpsByTagMonth(
+      markers, [rub], 2, "2026-08-20", undefined, undefined, fulfilled
+    );
+    expect(planned.get("food|2026-08")?.outcome).toBe(6000);
+  });
+
+  it("отменённый вручную план в сумму не идёт", () => {
+    // Тот же снятый маркер, но операции за ним нет: человек убрал вхождение,
+    // а не исполнил его.
+    const planned = plannedOpsByTagMonth(
+      [mk({ id: "a", outcome: 1000, state: "deleted" })],
+      [rub], 2, "2026-08-20", undefined, undefined, fulfilledMarkerIds([])
+    );
+    expect(planned.get("food|2026-08")).toBeUndefined();
+  });
+
+  it("просроченный план засчитывается, если он связан", () => {
+    // Дата прошла, но за маркером стоит настоящая операция — значит он не
+    // «повис», а исполнен.
+    const planned = plannedOpsByTagMonth(
+      [mk({ id: "a", outcome: 1000, date: "2026-08-01" })],
+      [rub], 2, "2026-08-20", undefined, undefined,
+      fulfilledMarkerIds([{ reminderMarker: "a" }])
+    );
+    expect(planned.get("food|2026-08")?.outcome).toBe(1000);
+  });
+
+  it("fulfilledMarkerIds: удалённая операция связь не подтверждает", () => {
+    const ids = fulfilledMarkerIds([
+      { reminderMarker: "a" },
+      { reminderMarker: "b", deleted: true },
+      { reminderMarker: null },
+    ]);
+    expect([...ids]).toEqual(["a"]);
   });
 });

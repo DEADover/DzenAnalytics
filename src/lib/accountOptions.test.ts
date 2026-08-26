@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { accountOptions, capitalShare, positiveBalanceTotal } from "./accountOptions";
+import {
+  accountOptions,
+  capitalShare,
+  mergeLiveByTitle,
+  positiveBalanceTotal,
+} from "./accountOptions";
 
 const meta = (
   archived: string[] = [],
@@ -95,5 +100,45 @@ describe("capitalShare", () => {
     expect(capitalShare(100, 0)).toBeNull();
     expect(positiveBalanceTotal([])).toBe(0);
     expect(positiveBalanceTotal([-5, null])).toBe(0);
+  });
+});
+
+describe("mergeLiveByTitle: одноимённые счета (issue #89)", () => {
+  // Курсы: рубль к евро примерно сотня.
+  const toBase = (amt: number, cur: string) => (cur === "EUR" ? amt : amt / 100);
+  const acc = (title: string, balance: number, currency = "EUR") => ({
+    title,
+    balance,
+    currency,
+  });
+
+  it("складывает остатки долговых счетов разных валют", () => {
+    // У Дзен-мани долговой счёт свой на каждую валюту, и все зовутся «Долги».
+    // Карта по названию оставляла последний — в списке стоял ноль вместо 690.
+    const m = mergeLiveByTitle(
+      [acc("Долги", 690), acc("Долги", 0, "RUB"), acc("Долги", 0, "USD")],
+      toBase
+    );
+    expect(m.size).toBe(1);
+    expect(m.get("Долги")!.base).toBeCloseTo(690, 6);
+    expect(m.get("Долги")!.count).toBe(3);
+  });
+
+  it("представителем берёт самый крупный по модулю", () => {
+    const m = mergeLiveByTitle([acc("Долги", 5), acc("Долги", -900)], toBase);
+    expect(m.get("Долги")!.lead.balance).toBe(-900);
+  });
+
+  it("родной суммы у разных валют нет, у одинаковых — есть", () => {
+    const mixed = mergeLiveByTitle([acc("Долги", 690), acc("Долги", 100, "RUB")], toBase);
+    expect(mixed.get("Долги")!.native).toBeNull();
+    const same = mergeLiveByTitle([acc("Долги", 690), acc("Долги", 10)], toBase);
+    expect(same.get("Долги")!.native).toEqual({ balance: 700, currency: "EUR" });
+  });
+
+  it("разные названия не смешивает", () => {
+    const m = mergeLiveByTitle([acc("Карта", 10), acc("Долги", 690)], toBase);
+    expect(m.size).toBe(2);
+    expect(m.get("Карта")!.count).toBe(1);
   });
 });

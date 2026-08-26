@@ -60,6 +60,24 @@ export function zenPlanKey(
 // UUID. Both must be skipped.
 const NULL_TAG = "00000000-0000-0000-0000-000000000000";
 
+/**
+ * Маркеры, за которыми стоит настоящая операция.
+ *
+ * Связь живёт на стороне операции: у неё есть `reminderMarker` с id планового
+ * вхождения. Удалённые операции связь не подтверждают — иначе снесённый факт
+ * продолжал бы держать план исполненным.
+ */
+export function fulfilledMarkerIds(
+  transactions: { reminderMarker: string | null; deleted?: boolean }[] | undefined
+): Set<string> {
+  const out = new Set<string>();
+  for (const t of transactions || []) {
+    if (t.deleted) continue;
+    if (t.reminderMarker) out.add(t.reminderMarker);
+  }
+  return out;
+}
+
 /** Planned income/outcome for one (tag, month), in base currency. */
 export interface PlannedOps {
   income: number;
@@ -111,7 +129,21 @@ export function plannedOpsByTagMonth(
    */
   histRate?: (dateIso: string, currencyCode: string) => number | null,
   /** Код валюты по id инструмента — нужен вместе с `histRate`. */
-  codeOf?: (instrumentId: number) => string | undefined
+  codeOf?: (instrumentId: number) => string | undefined,
+  /**
+   * Маркеры, на которые ссылается настоящая операция (issue #86).
+   *
+   * В Дзен-мани плановую операцию можно СВЯЗАТЬ с уже существующей фактической.
+   * Занятый этим маркер перестаёт быть `planned`, и план месяца проваливался:
+   * в августе, где две операции из трёх связали, план показывал треть, а в
+   * сентябре, где ещё ничего не связывали, — всё целиком. План месяца отвечает
+   * на вопрос «сколько собирались», и исполнение его не отменяет.
+   *
+   * Поэтому смотрим не на состояние маркера, а на факт: есть операция, которая
+   * на него ссылается, — значит план был и он исполнен. Отменённый вручную
+   * маркер ссылок на себя не имеет и в план по-прежнему не идёт.
+   */
+  fulfilled?: ReadonlySet<string>
 ): Map<string, PlannedOps> {
   const out = new Map<string, PlannedOps>();
   if (!markers || markers.length === 0) return out;
@@ -127,7 +159,10 @@ export function plannedOpsByTagMonth(
     return (amt * (rateById.get(instr) ?? baseRate)) / baseRate;
   };
   for (const m of markers) {
-    if (m.state !== "planned" && m.state !== "processed") continue;
+    // Связанный с фактической операцией маркер считается исполненным, каким бы
+    // состоянием его ни пометил Дзен.
+    const linked = fulfilled?.has(m.id) === true;
+    if (m.state !== "planned" && m.state !== "processed" && !linked) continue;
     // Прогноз Дзена — не план. Дзен достраивает будущие поступления по
     // регулярности и в «Ещё в плане» их НЕ показывает: там только то, что
     // человек назначил сам. Без этого условия зарплата, достроенная Дзеном,
@@ -137,7 +172,7 @@ export function plannedOpsByTagMonth(
     // не считается: он не исполнился, и обещать его задним числом неправильно.
     // Исполненные (`processed`) при этом идут в план целиком, независимо от
     // даты: план месяца — это сколько всего собирались потратить.
-    if (m.state === "planned" && (m.date || "") < todayIso) continue;
+    if (m.state === "planned" && !linked && (m.date || "") < todayIso) continue;
     const ym = (m.date || "").slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(ym)) continue;
     if (!m.tag || m.tag.length === 0) continue;
