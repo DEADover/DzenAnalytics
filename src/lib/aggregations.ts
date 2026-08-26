@@ -1691,14 +1691,28 @@ export interface PayeeBucket {
  *  exactly those empty-payee operations instead of an empty drawer. */
 export const NO_PAYEE_LABEL = "Без получателя";
 
-export function topPayees(txs: Transaction[], kind: "expense" | "income" = "expense", limit = 20): PayeeBucket[] {
+export function topPayees(
+  txs: Transaction[],
+  kind: "expense" | "income" = "expense",
+  limit = 20,
+  /**
+   * Считать по контрагентам из справочника, а не по строкам банка.
+   *
+   * `payee` — это то, что напечатал банк: «DOSTAVKA PYATEROCHKA» и «DOSTAVKA IZ
+   * PYATEROCHK» две разные строки и одна «Пятёрочка». В топе они делят сумму
+   * пополам и обе проваливаются вниз списка. Параметром, а не насовсем: у
+   * командной палитры поиск идёт как раз по строкам банка.
+   */
+  byCounterparty = false
+): PayeeBucket[] {
   const map = new Map<string, PayeeBucket>();
   for (const t of txs) {
     // For the expense view, a refund to the same payee should reduce
     // that payee's net spend ("I bought X then returned it" → net 0).
     const include = kind === "expense" ? affectsExpense(t.kind) : t.kind === kind;
     if (!include) continue;
-    const key = t.payee || NO_PAYEE_LABEL;
+    const key =
+      (byCounterparty ? t.brand?.trim() || t.payee?.trim() : t.payee) || NO_PAYEE_LABEL;
     let b = map.get(key);
     if (!b) {
       b = { payee: key, total: 0, count: 0 };

@@ -11,9 +11,21 @@ import { affectsExpense } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
-import { TrendingUp } from "lucide-react";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
+import { Segmented } from "../components/Segmented";
+import { SectionCard, StatCell } from "../components/SectionCard";
+import { counterpartyOf } from "../lib/yearReview";
+import { formatNum } from "../lib/format";
+import { TrendingUp, TrendingDown, Tags, Users, Receipt, Coins } from "lucide-react";
 
 type Tab = "categories" | "payees" | "transactions";
+
+/** Что за строки в топе — подпись под их числом. */
+const TAB_NOTE: Record<Tab, string> = {
+  categories: "статей с суммой",
+  payees: "контрагентов",
+  transactions: "крупнейших операций",
+};
 
 export function TopPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -29,7 +41,10 @@ export function TopPage() {
   const filtered = useMemo(() => applyFilters(transactions, filters, monthStartDay), [transactions, filters, monthStartDay]);
 
   const cats = useMemo(() => groupByCategory(filtered, "full"), [filtered]);
-  const payees = useMemo(() => topPayees(filtered, kind, 30), [filtered, kind]);
+  // По контрагентам справочника, а не по строкам банка: иначе одна «Пятёрочка»
+  // делится на «DOSTAVKA PYATEROCHKA» и «DOSTAVKA IZ PYATEROCHK», обе строки
+  // получают половину суммы и обе проваливаются вниз списка.
+  const payees = useMemo(() => topPayees(filtered, kind, 30, true), [filtered, kind]);
   const txs = useMemo(() => topTransactions(filtered, kind, 50), [filtered, kind]);
 
   // Expense-side drill-downs include refunds for the same
@@ -42,80 +57,162 @@ export function TopPage() {
     showDrill(name, list, kind === "expense" ? "Расходы по категории" : "Доходы по категории");
   }
   function openPayee(name: string) {
-    // Mirror topPayees' bucketing so the «Без получателя» row opens its
-    // empty-payee operations instead of an empty drawer.
+    // Mirror topPayees' bucketing so the «Без контрагента» row opens its
+    // unattached operations instead of an empty drawer.
     const list = filtered.filter(
-      (t) => matchesKind(t.kind) && (t.payee || NO_PAYEE_LABEL) === name
+      (t) => matchesKind(t.kind) && (counterpartyOf(t) || NO_PAYEE_LABEL) === name
     );
-    showDrill(name, list, kind === "expense" ? "Расходы получателю" : "Поступления от");
+    showDrill(name, list, kind === "expense" ? "Расходы контрагенту" : "Поступления от");
   }
   function openSingle(id: string) {
     const tx = filtered.find((t) => t.id === id);
     if (!tx) return;
-    showDrill(tx.payee || tx.categoryFull, [tx], "Одиночная операция");
+    showDrill(counterpartyOf(tx) || tx.categoryFull, [tx], "Одиночная операция");
   }
 
   if (transactions.length === 0) return <EmptyState />;
 
+  const shownCats = cats.filter((c) => (kind === "expense" ? c.expense : c.income) > 0);
   const total =
     tab === "categories"
-      ? cats.reduce((s, c) => s + (kind === "expense" ? c.expense : c.income), 0)
+      ? shownCats.reduce((s, c) => s + (kind === "expense" ? c.expense : c.income), 0)
       : tab === "payees"
         ? payees.reduce((s, p) => s + p.total, 0)
         : txs.reduce((s, t) => s + t.amountBase, 0);
+  const rowCount =
+    tab === "categories" ? shownCats.length : tab === "payees" ? payees.length : txs.length;
+  const opCount =
+    tab === "categories"
+      ? shownCats.reduce((s, c) => s + c.count, 0)
+      : tab === "payees"
+        ? payees.reduce((s, p) => s + p.count, 0)
+        : txs.length;
+  /** Весь расход (или доход) отбора — от него считается доля топа. */
+  const periodTotal = cats.reduce(
+    (s, c) => s + (kind === "expense" ? c.expense : c.income),
+    0
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
         icon={TrendingUp}
         title="Топ"
-        hint="Категории, получатели и крупнейшие операции"
+        hint="Статьи, контрагенты и крупнейшие операции за отбор"
         right={
-          <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
-            <button
-              onClick={() => setKind("expense")}
-              className={`px-3 py-1 text-xs rounded-full ${kind === "expense" ? "bg-expense text-white" : "text-muted"}`}
-            >
-              Расходы
-            </button>
-            <button
-              onClick={() => setKind("income")}
-              className={`px-3 py-1 text-xs rounded-full ${kind === "income" ? "bg-income text-white" : "text-muted"}`}
-            >
-              Доходы
-            </button>
+          <div className="flex items-center gap-2">
+            <Segmented
+              value={kind}
+              onChange={setKind}
+              label="Что показывать"
+              size="sm"
+              options={[
+                { value: "expense" as const, label: "Расходы", icon: TrendingDown },
+                { value: "income" as const, label: "Доходы", icon: TrendingUp },
+              ]}
+            />
+            <InfoPopover>
+              <p>
+                Списки считаются по операциям, попавшим в{" "}
+                <InfoTerm>общий отбор</InfoTerm> сверху: период, счета, статьи,
+                поиск. Нажатие на строку открывает её операции.
+              </p>
+              <p>
+                На стороне расходов <InfoTerm>возвраты вычитаются</InfoTerm> из
+                суммы своей же статьи и своего контрагента: «заказал и вернул» —
+                это ноль, а не расход и доход по отдельности. Статья или
+                контрагент, у которых после возвратов не осталось расхода, из
+                топа выпадают.
+              </p>
+              <p>
+                Имя контрагента берётся из справочника, а не из банковской
+                строки: «DOSTAVKA PYATEROCHKA» и «DOSTAVKA IZ PYATEROCHK» — это
+                одна «Пятёрочка». Строка банка остаётся там, где контрагент к
+                операции не привязан.
+              </p>
+            </InfoPopover>
           </div>
         }
       />
       <GlobalFilters />
 
-      <div className="flex gap-2 border-b border-border">
-        {(
-          [
-            ["categories", "Категории"],
-            ["payees", "Получатели"],
-            ["transactions", "Операции"],
-          ] as const
-        ).map(([k, l]) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`px-4 py-2 text-sm border-b-2 -mb-px transition-colors ${
-              tab === k ? "border-accent text-accent" : "border-transparent text-muted hover:text-text"
-            }`}
-          >
-            {l}
-          </button>
-        ))}
+      {/* Вкладки — общим контролом: своя полоска с подчёркиванием была третьим
+          видом вкладок в продукте, при том что рядом на странице уже стоит
+          сегментированный переключатель. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          label="Что показывать в топе"
+          options={[
+            { value: "categories" as Tab, label: "Статьи", icon: Tags },
+            { value: "payees" as Tab, label: "Контрагенты", icon: Users },
+            { value: "transactions" as Tab, label: "Операции", icon: Receipt },
+          ]}
+        />
+      </div>
+
+      {/* Итоги отбора: страница показывала таблицу и ни одного числа сверху —
+          сколько всего в этом топе, было видно только сложением глазами. */}
+      <div className="tray">
+        <div className="tray-core px-5 py-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4 divide-border lg:divide-x">
+            <StatCell
+              label={kind === "expense" ? "Расход в топе" : "Доход в топе"}
+              value={formatMoney(total, base)}
+              icon={
+                kind === "expense" ? (
+                  <TrendingDown className="w-4 h-4 text-expense" />
+                ) : (
+                  <TrendingUp className="w-4 h-4 text-income" />
+                )
+              }
+              note={
+                periodTotal > 0
+                  ? `${formatPct(total / periodTotal, 0)} от всего за период`
+                  : undefined
+              }
+            />
+            <StatCell
+              label="Строк"
+              value={formatNum(rowCount)}
+              icon={<Tags className="w-4 h-4 text-accent" />}
+              note={TAB_NOTE[tab]}
+              pad
+            />
+            <StatCell
+              label="Операций"
+              value={formatNum(opCount)}
+              icon={<Receipt className="w-4 h-4 text-accent2" />}
+              note="в этих строках"
+              pad
+            />
+            <StatCell
+              label="В среднем"
+              value={opCount > 0 ? formatMoney(total / opCount, base) : "—"}
+              icon={<Coins className="w-4 h-4 text-muted" />}
+              note="на одну операцию"
+              pad
+            />
+          </div>
+        </div>
       </div>
 
       {tab === "categories" && (
-        <div className="card-tray card-pad">
-          <div className="font-semibold mb-3">
-            Топ категорий по {kind === "expense" ? "расходам" : "доходам"}
-          </div>
+        <SectionCard
+          icon={<Tags className="w-4 h-4 text-accent" />}
+          title={`Статьи по ${kind === "expense" ? "расходам" : "доходам"}`}
+          info={
+            <p>
+              Полные названия статей вместе с подкатегориями: «Еда / Продукты» и
+              «Еда / Кафе» стоят отдельными строками. Доля считается от всего
+              {kind === "expense" ? " расхода" : " дохода"} отбора, «Средняя» — от
+              суммы строки на её число операций.
+            </p>
+          }
+        >
           <SortableTable<CategoryBucket>
-            data={cats.filter((c) => (kind === "expense" ? c.expense : c.income) > 0)}
+            data={shownCats}
             rowKey={(c) => c.category}
             defaultSortKey="value"
             defaultSortDir="desc"
@@ -185,14 +282,22 @@ export function TopPage() {
               ] as Column<CategoryBucket>[]
             }
           />
-        </div>
+        </SectionCard>
       )}
 
       {tab === "payees" && (
-        <div className="card-tray card-pad">
-          <div className="font-semibold mb-3">
-            Топ получателей по {kind === "expense" ? "расходам" : "доходам"}
-          </div>
+        <SectionCard
+          icon={<Users className="w-4 h-4 text-accent2" />}
+          title={`Контрагенты по ${kind === "expense" ? "расходам" : "доходам"}`}
+          info={
+            <p>
+              Имя берётся из справочника контрагентов, а не из банковской строки.
+              Операции без привязанного контрагента собраны в одну строку
+              «{NO_PAYEE_LABEL}» — разобрать их можно в «Настройки → Справочники
+              → Контрагенты».
+            </p>
+          }
+        >
           <SortableTable<PayeeBucket>
             data={payees}
             rowKey={(p) => p.payee}
@@ -204,7 +309,7 @@ export function TopPage() {
               [
                 {
                   key: "payee",
-                  label: "Получатель",
+                  label: "Контрагент",
                   sortValue: (p) => p.payee,
                   render: (p) => (
                     <span className="truncate max-w-[300px] inline-block" title={p.payee}>
@@ -257,14 +362,22 @@ export function TopPage() {
               ] as Column<PayeeBucket>[]
             }
           />
-        </div>
+        </SectionCard>
       )}
 
       {tab === "transactions" && (
-        <div className="card-tray card-pad">
-          <div className="font-semibold mb-3">
-            Крупнейшие {kind === "expense" ? "расходы" : "поступления"}
-          </div>
+        <SectionCard
+          icon={<Receipt className="w-4 h-4 text-expense" />}
+          title={`Крупнейшие ${kind === "expense" ? "расходы" : "поступления"}`}
+          info={
+            <p>
+              Пятьдесят самых крупных операций отбора, по одной строке на
+              операцию. Сумма показана в валюте операции, а сортируется список по
+              сумме в базовой валюте — иначе покупка в лирах встала бы выше
+              квартиры.
+            </p>
+          }
+        >
           <SortableTable<Transaction>
             data={txs}
             rowKey={(t) => t.id}
@@ -296,11 +409,14 @@ export function TopPage() {
                 },
                 {
                   key: "payee",
-                  label: "Получатель",
-                  sortValue: (t) => t.payee || "",
+                  label: "Контрагент",
+                  sortValue: (t) => counterpartyOf(t),
                   render: (t) => (
-                    <span className="truncate max-w-[180px] inline-block" title={t.payee}>
-                      {t.payee || "—"}
+                    <span
+                      className="truncate max-w-[180px] inline-block"
+                      title={counterpartyOf(t)}
+                    >
+                      {counterpartyOf(t) || "—"}
                     </span>
                   ),
                 },
@@ -335,7 +451,7 @@ export function TopPage() {
               ] as Column<Transaction>[]
             }
           />
-        </div>
+        </SectionCard>
       )}
     </div>
   );

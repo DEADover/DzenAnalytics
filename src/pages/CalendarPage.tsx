@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  CalendarDays,
+  CalendarCheck,
+  PiggyBank,
+  Receipt,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -15,6 +22,10 @@ import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { Tooltip } from "../components/Tooltip";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
+import { Segmented } from "../components/Segmented";
+import { MonthPicker } from "../components/MonthPicker";
+import { StatCell } from "../components/SectionCard";
 
 const WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
 const MONTHS = [
@@ -191,97 +202,101 @@ export function CalendarPage() {
         hint="Тепловая карта по дням года"
         right={
           <div className="flex flex-wrap gap-2 items-center">
-            <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
-              <button
-                onClick={() => setKind("expense")}
-                className={`px-3 py-1 text-xs rounded-full ${kind === "expense" ? "bg-expense text-white" : "text-muted"}`}
-              >
-                Расходы
-              </button>
-              <button
-                onClick={() => setKind("income")}
-                className={`px-3 py-1 text-xs rounded-full ${kind === "income" ? "bg-income text-white" : "text-muted"}`}
-              >
-                Доходы
-              </button>
-            </div>
-            <div className="flex items-center gap-1 bg-panel2 rounded-full p-1 border border-border shadow-tray">
-              <button
-                onClick={() => setYear((y) => Math.max(yearMin, y - 1))}
-                disabled={year <= yearMin}
-                className="p-1 hover:text-accent disabled:opacity-30"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="px-3 text-sm font-medium tabular-nums">{year}</span>
-              <button
-                onClick={() => setYear((y) => Math.min(yearMax, y + 1))}
-                disabled={year >= yearMax}
-                className="p-1 hover:text-accent disabled:opacity-30"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+            {/* Общие контролы вместо двух самодельных: свои пилюли и своя
+                перелистывалка года повторяли то, что в продукте уже есть, и
+                расходились с ними в мелочах. */}
+            <Segmented
+              value={kind}
+              onChange={setKind}
+              label="Что показывать на карте"
+              size="sm"
+              options={[
+                { value: "expense" as const, label: "Расходы", icon: TrendingDown },
+                { value: "income" as const, label: "Доходы", icon: TrendingUp },
+              ]}
+            />
+            <MonthPicker
+              value={`${year}-01`}
+              minYM={`${yearMin}-01`}
+              maxYM={`${yearMax}-12`}
+              active
+              mode="year"
+              onSelect={(ym) => setYear(Number(ym.slice(0, 4)))}
+              onSelectYear={setYear}
+              onStep={(dir) => setYear((y) => Math.min(yearMax, Math.max(yearMin, y + dir)))}
+            />
+            <InfoPopover>
+              <p>
+                Каждая клетка — день года, её цвет — сколько в этот день{" "}
+                {kind === "expense" ? "потрачено" : "получено"}. Пороги оттенков
+                считаются по <InfoTerm>вашим же дням</InfoTerm> этого года, а не
+                по круглым суммам: самый насыщенный цвет — не «сто тысяч», а
+                «ваш самый дорогой день». Поэтому карта одинаково читается и при
+                тратах в тысячу рублей в день, и при тратах в сто тысяч.
+              </p>
+              <p>
+                Пустая клетка — день без операций. Нажатие на день открывает его
+                операции.
+              </p>
+              <p>
+                Период в общем отборе на этой странице не показан: его задаёт сам
+                календарь — выбранный год. Остальные отборы (счета, статьи,
+                поиск) применяются.
+              </p>
+            </InfoPopover>
           </div>
         }
       />
       <GlobalFilters showDateRange={false} dateRangeHint="Период задаётся календарём ниже" />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="card-tray card-pad">
-          <div className="label mb-1">Расходы за {year}</div>
-          <YearValue tone="text-expense">
-            {formatMoney(yearStats.total, base)}
-          </YearValue>
-          <PlannedNote
-            plan={plannedYear.planExpense}
-            forecast={plannedYear.fcExpense}
-            base={base}
-          />
-        </div>
-        <div className="card-tray card-pad">
-          <div className="label mb-1">Доходы за {year}</div>
-          <YearValue tone="text-income">
-            {formatMoney(yearStats.totalInc, base)}
-          </YearValue>
-          <PlannedNote
-            plan={plannedYear.planIncome}
-            forecast={plannedYear.fcIncome}
-            base={base}
-          />
-        </div>
-        {/* «Накопления» за год (issue #48) — сумма из правила #42. */}
-        <div className="card-tray card-pad">
-          <div className="label mb-1">Накопления за {year}</div>
-          <YearValue
-            tone={savingsYear > 0 ? "text-income" : savingsYear < 0 ? "text-expense" : ""}
-            tip={
-              <div className="space-y-1">
-                <div className="font-medium">Как считается</div>
-                <div className="text-muted">
-                  Переводы НА накопительные счета минус переводы С них за год.
-                </div>
-                <div className="text-muted">
-                  Перевод между двумя накопительными даёт ноль.
-                </div>
-                <div className="text-muted">
-                  Начальные остатки не учитываются — только переводы.
-                </div>
-              </div>
-            }
-          >
-            {formatMoney(savingsYear, base, { signed: true })}
-          </YearValue>
-        </div>
-        <div className="card-tray card-pad">
-          <div className="label mb-1">Операций</div>
-          <div className="stat-num">{formatNum(yearStats.count)}</div>
-        </div>
-        <div className="card-tray card-pad">
-          <div className="label mb-1">Активных дней</div>
-          <div className="stat-num">
-            {yearStats.activeDays}
-            <span className="text-muted text-sm ml-1">/ {daysInYear(year)}</span>
+      {/* Пять чисел одним рядом с волосяными чертами — как итоги на других
+          страницах. Пятью отдельными карточками они несли столько же рамок и
+          отступов, сколько содержимого. */}
+      <div className="tray">
+        <div className="tray-core px-5 py-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-4 gap-y-4 divide-border lg:divide-x">
+            <StatCell
+              label={`Расходы за ${year}`}
+              value={formatMoney(yearStats.total, base)}
+              icon={<TrendingDown className="w-4 h-4 text-expense" />}
+              note={plannedNote(plannedYear.planExpense, plannedYear.fcExpense, base)}
+            />
+            <StatCell
+              label={`Доходы за ${year}`}
+              value={formatMoney(yearStats.totalInc, base)}
+              icon={<TrendingUp className="w-4 h-4 text-income" />}
+              note={plannedNote(plannedYear.planIncome, plannedYear.fcIncome, base)}
+              pad
+            />
+            <StatCell
+              label={`Накопления за ${year}`}
+              value={formatMoney(savingsYear, base, { signed: true })}
+              icon={
+                <PiggyBank
+                  className={`w-4 h-4 ${savingsYear >= 0 ? "text-income" : "text-expense"}`}
+                />
+              }
+              note="переводы на копилки минус с них"
+              pad
+            />
+            <StatCell
+              label="Операций"
+              value={formatNum(yearStats.count)}
+              icon={<Receipt className="w-4 h-4 text-accent2" />}
+              note={`${formatNum(daysInYear(year))} дней в году`}
+              pad
+            />
+            <StatCell
+              label="Активных дней"
+              value={`${formatNum(yearStats.activeDays)} из ${formatNum(daysInYear(year))}`}
+              icon={<CalendarCheck className="w-4 h-4 text-accent" />}
+              note={
+                daysInYear(year) > 0
+                  ? `${Math.round((yearStats.activeDays / daysInYear(year)) * 100)}% дней с операциями`
+                  : undefined
+              }
+              pad
+            />
           </div>
         </div>
       </div>
@@ -319,65 +334,19 @@ export function CalendarPage() {
 }
 
 /**
- * «Справочно» line under a year total: what Дзен-мани still has scheduled for
- * this year (issue #48). Lives on the tile face rather than in a tooltip —
- * a hover-only number is a number nobody finds.
+ * «Ещё не наступило» — строчкой под годовым числом.
  *
- * Renders nothing at all when there's nothing scheduled, so accounts that don't
- * use планы/прогнозы don't carry a row of zeroes.
+ * Дзен-мани знает, что в этом году ещё запланировано и что он сам предсказал по
+ * регулярным платежам. Раньше это жило отдельным компонентом с подсказкой при
+ * наведении; в ряду ячеек для него есть готовое место — подпись под числом, а
+ * наведение прятало число от того, кто про него не знает.
+ *
+ * Пусто, когда планировать нечего: счёт без планов не должен нести строку нулей.
  */
-function PlannedNote({
-  plan,
-  forecast,
-  base,
-}: {
-  plan: number;
-  forecast: number;
-  base: string;
-}) {
+function plannedNote(plan: number, forecast: number, base: string): string | undefined {
   const parts = plannedBreakdown(plan, forecast);
-  if (parts.length === 0) return null;
-  return (
-    <Tooltip
-      content={
-        <div className="space-y-1">
-          <div className="font-medium">Ещё не наступившие операции</div>
-          <div>
-            <span className="text-text">План</span>
-            <span className="text-muted"> — вы запланировали их сами</span>
-          </div>
-          <div>
-            <span className="text-text">Прогноз</span>
-            <span className="text-muted"> — Дзен предсказал по регулярным платежам</span>
-          </div>
-        </div>
-      }
-    >
-      <div className="text-xs text-muted mt-1 tabular-nums cursor-help w-max">
-        {parts.map((p, i) => (
-          <span key={p.label}>
-            {i > 0 && " · "}
-            {p.label} {formatMoney(p.amount, base)}
-          </span>
-        ))}
-      </div>
-    </Tooltip>
-  );
-}
-
-/** Yearly headline number; when `tip` is set the value gets a hover tooltip
- *  (and a help cursor) instead of a caption line under it. */
-function YearValue({
-  tone,
-  tip,
-  children,
-}: {
-  tone?: string;
-  tip?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  const num = <div className={`stat-num ${tone ?? ""} ${tip ? "cursor-help" : ""}`}>{children}</div>;
-  return tip ? <Tooltip content={tip}>{num}</Tooltip> : num;
+  if (parts.length === 0) return undefined;
+  return `Ещё ${parts.map((p) => `${p.label.toLowerCase()} ${formatMoney(p.amount, base)}`).join(" · ")}`;
 }
 
 function MonthGrid({
