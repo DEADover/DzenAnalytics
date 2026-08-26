@@ -74,10 +74,17 @@ export function MonthPicker({
     const estH = 240;
     const below = window.innerHeight - r.bottom - 8;
     const flipUp = below < estH && r.top - 8 > below;
+    // Прижимаем к экрану: панель шириной 16rem рисуется от ЛЕВОГО края кнопки,
+    // и у пикера, стоящего в правом углу шапки, она уезжала за границу окна —
+    // половина годов оказывалась за кадром.
+    const PANEL = 256; // w-64
+    const MARGIN = 8;
+    const vw = window.innerWidth || PANEL + MARGIN * 2;
+    const left = Math.min(Math.max(r.left, MARGIN), Math.max(MARGIN, vw - PANEL - MARGIN));
     setPos(
       flipUp
-        ? { left: r.left, bottom: window.innerHeight - r.top + 4 }
-        : { left: r.left, top: r.bottom + 4 }
+        ? { left, bottom: window.innerHeight - r.top + 4 }
+        : { left, top: r.bottom + 4 }
     );
   }, [open]);
 

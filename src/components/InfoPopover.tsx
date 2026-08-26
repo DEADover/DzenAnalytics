@@ -4,11 +4,14 @@ import { HelpCircle } from "lucide-react";
 import clsx from "clsx";
 
 /** ПРЕДЕЛ ширины панели, а не сама ширина: короткое пояснение в одну строку
- *  растягивалось на все 40rem и выглядело нелепо рядом со своим значком.
- *  Панель считается по содержимому и упирается в этот предел — шире строка
- *  становится слишком длинной для 12px, уже 20rem длинный текст вытягивается
- *  почти во весь экран. */
-const WIDTH = 640; // 40rem
+ *  растягивалось на весь предел и выглядело нелепо рядом со своим значком.
+ *  Панель считается по содержимому и упирается в этот предел.
+ *
+ *  Было 40rem — и на таком пределе строка при 12px набирала под сто двадцать
+ *  знаков. Это вдвое больше удобной длины: глаз, дойдя до конца строки, не
+ *  находит начало следующей, и абзац читается через силу. 26rem дают около
+ *  семидесяти знаков — та самая длина, на которой набирают книги. */
+const WIDTH = 416; // 26rem
 const MARGIN = 8;
 
 /**
@@ -108,7 +111,7 @@ export function InfoPopover({
               ref={panelRef}
               role="dialog"
               aria-label={label}
-              className="fixed z-[91] w-max max-w-[min(40rem,calc(100vw-1rem))] border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2.5 text-xs text-muted leading-relaxed"
+              className="fixed z-[91] w-max max-w-[min(26rem,calc(100vw-1rem))] border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2.5 text-xs text-muted leading-relaxed"
               style={{
                 left: pos?.left ?? -9999,
                 top: pos?.top ?? -9999,
