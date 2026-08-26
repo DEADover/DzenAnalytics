@@ -365,12 +365,11 @@ export function YearReviewPage() {
       </div>
 
       {/* Покупки и факты — пара в одном ряду */}
-      {/* `items-start`: каждая карточка ровно своей высоты. Общая высота ряда
-          достижима только набивкой — а набивка в блоке из шести плиток и есть
-          та самая пустота, из-за которой блок трижды переделывался. Разница в
-          полсотни пикселей на краю ряда читается спокойнее, чем дыра внутри
-          карточки. */}
-      <div className="grid lg:grid-cols-2 gap-3 items-start">
+      {/* Карточки ряда одной высоты. Плитки при этом НЕ растягиваются: лишняя
+          высота уходит в промежутки между рядами плиток, а их три — прибавка
+          расходится по двум зазорам и не превращается в дыру, как это было у
+          сетки из двух рядов с `content-between`. */}
+      <div className="grid lg:grid-cols-2 gap-3">
         <SectionCard
           icon={<Coins className="w-4 h-4 text-expense" />}
           title="Самые дорогие покупки"
@@ -392,32 +391,33 @@ export function YearReviewPage() {
                     showDrill(counterpartyOf(t) || t.categoryFull, [t], `${year} год`)
                   }
                   title="Показать операцию"
-                  className="w-full text-sm rounded-md px-2 py-1.5 text-left hover:bg-panel2/50"
+                  className="w-full flex items-start gap-2 text-sm rounded-md px-2 py-1.5 text-left hover:bg-panel2/50"
                 >
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[11px] text-muted tabular-nums w-4 shrink-0">
-                      {i + 1}
-                    </span>
-                    <span className="font-medium truncate flex-1 min-w-0">
+                  <span className="text-[11px] text-muted tabular-nums w-4 shrink-0 leading-5">
+                    {i + 1}
+                  </span>
+                  {/* Имя и комментарий — одной колонкой, сумма соседней: раньше
+                      комментарий шёл отдельной строкой во всю ширину и заезжал
+                      под сумму, обрываясь у самого края карточки. Теперь обе
+                      строки кончаются там же, где начинается сумма. */}
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-medium truncate">
                       {counterpartyOf(t) || t.categoryFull}
                     </span>
-                    <span className="text-expense font-semibold tabular-nums shrink-0">
-                      {formatMoney(t.amountBase, baseCurrency)}
+                    {/* Часто именно в комментарии написано, ЧТО это было, —
+                        «Отпуск · 3 января» само по себе не отвечает. Предел в
+                        140 знаков остаётся сторожем на комментарий в три
+                        абзаца, обрезает же ширина колонки. */}
+                    <span className="block text-xs text-muted truncate">
+                      {t.categoryFull} · {dayLabel(t.date)}
+                      {truncateWords(t.comment, 140)
+                        ? ` · ${truncateWords(t.comment, 140)}`
+                        : ""}
                     </span>
-                  </div>
-                  {/* Комментарий к операции: часто именно в нём написано, ЧТО
-                      это было, — «Отпуск · 3 января» само по себе не отвечает.
-                      Обрезает ШИРИНА строки, а не счёт знаков: предел в 64 знака
-                      резал комментарий там, где до края карточки оставалось ещё
-                      полстроки, и соседние покупки обрывались в разных местах —
-                      у одной хвост до края, у другой пусто. Предел в 140 знаков
-                      остаётся сторожем на случай комментария в три абзаца. */}
-                  <div className="pl-6 text-xs text-muted truncate">
-                    {t.categoryFull} · {dayLabel(t.date)}
-                    {truncateWords(t.comment, 140)
-                      ? ` · ${truncateWords(t.comment, 140)}`
-                      : ""}
-                  </div>
+                  </span>
+                  <span className="text-expense font-semibold tabular-nums shrink-0 leading-5">
+                    {formatMoney(t.amountBase, baseCurrency)}
+                  </span>
                 </button>
               ))}
             </div>
@@ -440,7 +440,7 @@ export function YearReviewPage() {
             </p>
           }
         >
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div className="flex-1 grid grid-cols-2 sm:grid-cols-2 auto-rows-min content-between gap-2">
             {/* Подпись — короткое имя показателя, а не фраза: шесть разных по
                 длине предложений («В среднем в день», «Средний расход на
                 операцию», «Первая пятёрка статей») читались как случайный
@@ -677,12 +677,25 @@ function SectionCard({
   );
 }
 
+/** Колонка чисел в строке-мере: своя ширина, свой цвет. */
+interface MeterCell {
+  text: string;
+  /** Класс ширины — общий у ячейки и у её заголовка, иначе колонки разъедутся. */
+  width: string;
+  muted?: boolean;
+}
+
 /**
- * Строка-мера: подпись, доля полосой и число справа.
+ * Строка-мера: подпись, доля полосой и числа колонками.
  *
  * Полоса лежит ПОД строкой заливкой, а не отдельной линией под ней. Так пункт
  * занимает одну строку вместо трёх, а пустота между коротким именем и суммой —
  * та самая, что зияла во всю ширину монитора, — превращается в саму меру.
+ *
+ * Числа стоят колонками фиксированной ширины и подписаны шапкой — как в списке
+ * статей на «Категориях». Слепленные в одну строчку «18% · 38» читались как
+ * одно непонятное значение и не давали сравнить соседние пункты: чтобы понять,
+ * где больше операций, приходилось выискивать второе число в каждой строке.
  *
  * Один и тот же примитив у статей, контрагентов и дней недели: это один и тот
  * же вопрос «какая доля у кого», и отвечать на него тремя разными способами на
@@ -692,8 +705,7 @@ function MeterRow({
   rank,
   label,
   share,
-  value,
-  note,
+  cells,
   barCls,
   strong,
   onClick,
@@ -704,9 +716,7 @@ function MeterRow({
   label: string;
   /** Доля от 0 до 1 — ширина полосы. */
   share: number;
-  value: string;
-  /** Мелким серым перед суммой: проценты, число операций. */
-  note?: string;
+  cells: MeterCell[];
   barCls: string;
   /** Выделить как лидера: полоса плотнее, подпись контрастнее. */
   strong?: boolean;
@@ -732,14 +742,16 @@ function MeterRow({
       >
         {label}
       </span>
-      {note && (
-        <span className="relative text-[11px] text-muted tabular-nums whitespace-nowrap shrink-0">
-          {note}
+      {cells.map((c, i) => (
+        <span
+          key={i}
+          className={`relative tabular-nums whitespace-nowrap shrink-0 text-right ${c.width} ${
+            c.muted ? "text-[11px] text-muted" : "font-medium"
+          }`}
+        >
+          {c.text}
         </span>
-      )}
-      <span className="relative tabular-nums whitespace-nowrap shrink-0 font-medium text-right">
-        {value}
-      </span>
+      ))}
     </>
   );
   const cls =
@@ -757,6 +769,21 @@ function MeterRow({
   );
 }
 
+/** Шапка колонок строки-меры. Ширины обязаны совпадать с ячейками. */
+function MeterHead({ columns }: { columns: MeterCell[] }) {
+  return (
+    <div className="flex items-center gap-2 px-2 pb-1 text-[10px] uppercase tracking-wide text-muted">
+      <span className="w-4 shrink-0" />
+      <span className="flex-1 min-w-0" />
+      {columns.map((c, i) => (
+        <span key={i} className={`shrink-0 text-right ${c.width}`}>
+          {c.text}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Профиль недели: во что расход укладывается по дням.
  *
@@ -770,6 +797,12 @@ function MeterRow({
  * строки от этого свободны, читаются с суммами и совпадают с тем, как на этой
  * же странице устроены статьи и контрагенты.
  */
+/** Колонки профиля недели: у дня нет числа операций, только доля и сумма. */
+const WEEK_COLUMNS: MeterCell[] = [
+  { text: "Доля", width: "w-11" },
+  { text: "Расход", width: "w-24" },
+];
+
 function WeekProfile({
   review,
   base,
@@ -794,6 +827,7 @@ function WeekProfile({
         </p>
       }
     >
+      <MeterHead columns={WEEK_COLUMNS} />
       <div className="flex-1 flex flex-col justify-between gap-0.5">
         {review.weekdays.map((d, i) => (
           <MeterRow
@@ -801,8 +835,10 @@ function WeekProfile({
             label={d.name}
             share={d.total / max}
             strong={d.total > 0 && d.total === max}
-            note={sum > 0 ? formatPct(d.total / sum, 0) : undefined}
-            value={formatMoney(d.total, base, { compact: true })}
+            cells={[
+              { text: sum > 0 ? formatPct(d.total / sum, 0) : "—", width: "w-11", muted: true },
+              { text: formatMoney(d.total, base, { compact: true }), width: "w-24" },
+            ]}
             barCls="bg-accent"
             onClick={d.total > 0 ? () => onDay(i, d.dative) : undefined}
             title="Показать траты этого дня недели"
@@ -1060,6 +1096,13 @@ function Record({
   );
 }
 
+/** Колонки топов: доля, операции, сумма — ширины общие у шапки и строк. */
+const TOP_COLUMNS: MeterCell[] = [
+  { text: "Доля", width: "w-11" },
+  { text: "Опер.", width: "w-10" },
+  { text: "Сумма", width: "w-24" },
+];
+
 function TopList({
   title,
   info,
@@ -1084,22 +1127,34 @@ function TopList({
       {items.length === 0 ? (
         <div className="text-sm text-muted py-6 text-center">Расходов за год нет.</div>
       ) : (
-        <div className="space-y-0.5">
-          {items.map((item, i) => (
-            <MeterRow
-              key={item.name}
-              rank={i + 1}
-              label={item.name}
-              share={total > 0 ? item.amount / total : 0}
-              strong={i === 0}
-              note={`${formatPct(total > 0 ? item.amount / total : 0, 0)} · ${formatNum(item.count)}`}
-              value={formatMoney(item.amount, baseCurrency)}
-              barCls={barCls}
-              onClick={() => onOpen(item.name)}
-              title="Показать операции"
-            />
-          ))}
-        </div>
+        <>
+          <MeterHead columns={TOP_COLUMNS} />
+          <div className="space-y-0.5">
+            {items.map((item, i) => {
+              const share = total > 0 ? item.amount / total : 0;
+              return (
+                <MeterRow
+                  key={item.name}
+                  rank={i + 1}
+                  label={item.name}
+                  share={share}
+                  strong={i === 0}
+                  cells={[
+                    { text: formatPct(share, 1), width: TOP_COLUMNS[0].width, muted: true },
+                    { text: formatNum(item.count), width: TOP_COLUMNS[1].width, muted: true },
+                    {
+                      text: formatMoney(item.amount, baseCurrency),
+                      width: TOP_COLUMNS[2].width,
+                    },
+                  ]}
+                  barCls={barCls}
+                  onClick={() => onOpen(item.name)}
+                  title="Показать операции"
+                />
+              );
+            })}
+          </div>
+        </>
       )}
     </SectionCard>
   );

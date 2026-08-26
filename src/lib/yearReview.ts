@@ -121,6 +121,9 @@ export function counterpartyOf(t: Transaction): string {
   return (t.brand?.trim() || t.payee?.trim() || "");
 }
 
+/** Сколько строк в топах статей и контрагентов. */
+const TOP_SIZE = 10;
+
 const WEEKDAY_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 /** Дательный падеж множественного числа: «тратили по субботам». */
@@ -298,7 +301,7 @@ export function buildYearReview(
   const cats = groupByCategory(thisYear);
   const topCategories: YearTopItem[] = cats
     .filter((c) => c.expense > 0)
-    .slice(0, 8)
+    .slice(0, TOP_SIZE)
     .map((c) => ({ name: c.category, amount: c.expense, count: c.count }));
 
   const payeeMap = new Map<string, { amount: number; count: number }>();
@@ -316,7 +319,7 @@ export function buildYearReview(
     .map(([name, v]) => ({ name, amount: v.amount, count: v.count }))
     .filter((p) => p.amount > 0) // fully refunded payees drop out
     .sort((a, b) => b.amount - a.amount)
-    .slice(0, 8);
+    .slice(0, TOP_SIZE);
 
   // Кварталы — из тех же помесячных сумм: сезонность видно без чтения
   // двенадцати столбцов подряд.
