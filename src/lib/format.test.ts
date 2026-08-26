@@ -8,6 +8,7 @@ import {
   formatPct,
   payeeSearchText,
   secondaryPayee,
+  truncateWords,
 } from "./format";
 
 describe("payeeSearchText", () => {
@@ -213,5 +214,38 @@ describe("niceStep — деления оси, которые мы считаем
     expect(step).toBe(1_000_000);
     expect(top).toBe(4_000_000);
     expect(top - step).toBeLessThan(peak);
+  });
+});
+
+describe("truncateWords", () => {
+  it("короткий текст не трогает", () => {
+    expect(truncateWords("Билеты Пхукет", 64)).toBe("Билеты Пхукет");
+  });
+
+  it("режет по слову и ставит многоточие", () => {
+    const long =
+      "Телевизор HiSense 65U8NQ плюс тестирование на битые пиксели и доставка до квартиры";
+    const out = truncateWords(long, 40);
+    expect(out.length).toBeLessThanOrEqual(41);
+    expect(out.endsWith("…")).toBe(true);
+    // Слово посередине не разорвано.
+    expect(long.startsWith(out.slice(0, -1))).toBe(true);
+    expect(out.slice(0, -1).endsWith(" ")).toBe(false);
+  });
+
+  it("одно длинное слово режет как есть — иначе остался бы огрызок", () => {
+    const out = truncateWords("A" + "б".repeat(80), 20);
+    expect(out).toHaveLength(21);
+    expect(out.endsWith("…")).toBe(true);
+  });
+
+  it("схлопывает переводы строк и пробелы", () => {
+    expect(truncateWords("  два\n\nслова  ", 64)).toBe("два слова");
+  });
+
+  it("пустое и отсутствующее — пустая строка", () => {
+    expect(truncateWords("", 10)).toBe("");
+    expect(truncateWords(null, 10)).toBe("");
+    expect(truncateWords(undefined, 10)).toBe("");
   });
 });

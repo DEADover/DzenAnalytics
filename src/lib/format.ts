@@ -218,6 +218,26 @@ export function formatPct(value: number, digits = 1): string {
   return `${signed ? "−" : ""}${body}%`;
 }
 
+/**
+ * Укоротить текст до `limit` знаков, не разрывая слово.
+ *
+ * Нужен там, где длинный пользовательский текст стоит в строке списка:
+ * обрезка по краю контейнера рвёт слово посередине и зависит от ширины экрана —
+ * на мониторе помещается половина, на ноутбуке четверть. Предел по знакам
+ * делает строку одинаковой везде; `truncate` в вёрстке остаётся страховкой.
+ *
+ * Режем по последнему пробелу, но только если он не в самом начале: у текста
+ * из одного длинного слова обрезка по пробелу оставила бы огрызок.
+ */
+export function truncateWords(raw: string | null | undefined, limit: number): string {
+  const text = (raw ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit);
+  const lastSpace = cut.lastIndexOf(" ");
+  const body = lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return `${body.trimEnd()}…`;
+}
+
 export function ymKey(iso: string): string {
   return iso.slice(0, 7);
 }

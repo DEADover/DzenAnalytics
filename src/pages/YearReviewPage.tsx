@@ -39,6 +39,7 @@ import {
   formatPct,
   monthLabel,
   monthLabelFull,
+  truncateWords,
   toNum,
   chartTooltipProps,
   chartGridStroke,
@@ -107,7 +108,40 @@ export function YearReviewPage() {
   }
 
   function drillCategory(name: string) {
-    showDrill(name, yearTx.filter((t) => t.category === name), `${year} год`);
+    // Только расходные: в списке «Куда уходили деньги» у статьи стоит сумма
+    // расхода, и открывшийся список обязан складываться в неё же.
+    showDrill(
+      name,
+      yearTx.filter((t) => affectsExpense(t.kind) && t.category === name),
+      `Расходы за ${year} год`
+    );
+  }
+
+  /** Квартал целиком — три месяца, а не первый из них. */
+  function drillQuarter(q: number) {
+    const from = `${year}-${String((q - 1) * 3 + 1).padStart(2, "0")}`;
+    const to = `${year}-${String(q * 3).padStart(2, "0")}`;
+    showDrill(
+      `${q} квартал ${year}`,
+      yearTx.filter((t) => {
+        const ym = t.date.slice(0, 7);
+        return ym >= from && ym <= to;
+      }),
+      "Год в цифрах"
+    );
+  }
+
+  /** Все траты одного дня недели за год. */
+  function drillWeekday(index: number, dative: string) {
+    showDrill(
+      `Расходы по ${dative}`,
+      yearTx.filter((t) => {
+        if (!affectsExpense(t.kind)) return false;
+        const d = new Date(t.date);
+        return !Number.isNaN(d.getTime()) && (d.getDay() + 6) % 7 === index;
+      }),
+      `${year} год`
+    );
   }
 
   function drillCounterparty(name: string) {
@@ -183,21 +217,10 @@ export function YearReviewPage() {
       {/* Итоги года */}
       <div className="tray">
         <div className="tray-core px-5 py-4">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted mb-3">
-            <span className="uppercase tracking-wider">
-              {formatNum(review.txCount)}{" "}
-              {pluralRu(review.txCount, ["операция", "операции", "операций"])}
-            </span>
-            <span aria-hidden>·</span>
-            {/* Честная граница данных: иначе «за 2026 год» читается как «за весь
-                2026», а год ещё идёт и итоги неизбежно скромнее. */}
-            <span>
-              {partial ? `данные по ${dayLabel(review.window.to)}` : "год целиком"}
-            </span>
-          </div>
-          {/* Четыре числа в ряд с разделителями: три на всю ширину монитора
-              разъезжались так, что между ними оставались ладони пустоты. */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4 divide-border lg:divide-x">
+          {/* Пять чисел в ряд с разделителями. Число операций стояло мелкой
+              служебной строчкой над ними, хотя это такой же итог года, как
+              доход и расход, — просто не в рублях. */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-4 gap-y-4 divide-border lg:divide-x">
             <Hero
               label="Доход"
               value={formatMoney(review.totalIncome, baseCurrency)}
@@ -241,6 +264,16 @@ export function YearReviewPage() {
               }
               pad
             />
+            <Hero
+              label="Операций"
+              value={formatNum(review.txCount)}
+              // Честная граница данных: иначе «за 2026 год» читается как «за
+              // весь 2026», а год ещё идёт и итоги неизбежно скромнее.
+              delta={partial ? `данные по ${dayLabel(review.window.to)}` : "год целиком"}
+              deltaCls="text-muted"
+              icon={<Receipt className="w-4 h-4 text-accent2" />}
+              pad
+            />
           </div>
         </div>
       </div>
@@ -249,11 +282,11 @@ export function YearReviewPage() {
           мониторе двенадцать столбцов растягивались в пустое поле. */}
       <div className="grid lg:grid-cols-2 gap-3">
         <YearBars review={review} base={baseCurrency} onMonth={drillMonth} />
-        <WeekProfile review={review} base={baseCurrency} />
+        <WeekProfile review={review} base={baseCurrency} onDay={drillWeekday} />
       </div>
 
       {/* Кварталы */}
-      <Quarters review={review} base={baseCurrency} onMonth={drillMonth} />
+      <Quarters review={review} base={baseCurrency} onQuarter={drillQuarter} />
 
       {/* Рекорды месяцев */}
       <div className="grid sm:grid-cols-3 gap-3">
@@ -320,7 +353,9 @@ export function YearReviewPage() {
       </div>
 
       {/* Покупки и факты — пара в одном ряду */}
-      <div className="grid lg:grid-cols-2 gap-3 items-start">
+      {/* Без `items-start`: карточки тянутся до общей высоты ряда, а внутри
+          содержимое распределяется — иначе одна была заметно ниже другой. */}
+      <div className="grid lg:grid-cols-2 gap-3">
         <SectionCard
           icon={<Coins className="w-4 h-4 text-expense" />}
           title="Самые дорогие покупки"
@@ -329,7 +364,7 @@ export function YearReviewPage() {
           {review.topTransactions.length === 0 ? (
             <div className="text-sm text-muted py-6 text-center">Покупок за год нет.</div>
           ) : (
-            <div className="space-y-0.5">
+            <div className="flex-1 flex flex-col justify-between gap-0.5">
               {review.topTransactions.map((t, i) => (
                 <button
                   key={t.id}
@@ -351,10 +386,13 @@ export function YearReviewPage() {
                     </span>
                   </div>
                   {/* Комментарий к операции: часто именно в нём написано, ЧТО
-                      это было, — «Отпуск · 3 января» само по себе не отвечает. */}
+                      это было, — «Отпуск · 3 января» само по себе не отвечает.
+                      Режем по словам: комментарии бывают на три строки, и без
+                      предела строка обрывалась в произвольном месте по краю
+                      карточки. */}
                   <div className="pl-6 text-xs text-muted truncate">
                     {t.categoryFull} · {dayLabel(t.date)}
-                    {t.comment?.trim() ? ` · ${t.comment.trim()}` : ""}
+                    {truncateWords(t.comment, 64) ? ` · ${truncateWords(t.comment, 64)}` : ""}
                   </div>
                 </button>
               ))}
@@ -373,7 +411,7 @@ export function YearReviewPage() {
             "дней",
           ])}`}
         >
-          <div className="grid sm:grid-cols-2 gap-2">
+          <div className="flex-1 grid sm:grid-cols-2 auto-rows-fr gap-2">
             <Fact
               icon={<Coins className="w-4 h-4" />}
               label="В среднем в день"
@@ -461,12 +499,15 @@ function YearBars({
   if (data.length === 0) return null;
 
   return (
-    <div className="card-tray px-4 py-3">
-      <div className="font-semibold mb-2 flex items-center gap-2">
-        <TrendingUp className="w-4 h-4 text-accent" />
-        Год по месяцам
-      </div>
-      <div className="h-56">
+    <SectionCard
+      icon={<TrendingUp className="w-4 h-4 text-accent" />}
+      title="Год по месяцам"
+      hint="Доход и расход по месяцам, нажатие открывает месяц"
+    >
+      {/* Тянется во всю оставшуюся высоту карточки: при фиксированных 14rem
+          под графиком оставалась полоса пустоты, когда соседняя карточка в
+          ряду выходила выше. */}
+      <div className="flex-1 min-h-[13rem]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
@@ -557,7 +598,7 @@ function YearBars({
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -696,7 +737,15 @@ function MeterRow({
  * строки от этого свободны, читаются с суммами и совпадают с тем, как на этой
  * же странице устроены статьи и контрагенты.
  */
-function WeekProfile({ review, base }: { review: YearReview; base: string }) {
+function WeekProfile({
+  review,
+  base,
+  onDay,
+}: {
+  review: YearReview;
+  base: string;
+  onDay: (index: number, dative: string) => void;
+}) {
   const max = Math.max(...review.weekdays.map((d) => d.total), 1);
   const sum = review.weekdays.reduce((n, d) => n + d.total, 0);
   return (
@@ -709,8 +758,8 @@ function WeekProfile({ review, base }: { review: YearReview; base: string }) {
           : "Расходов за год нет"
       }
     >
-      <div className="space-y-0.5">
-        {review.weekdays.map((d) => (
+      <div className="flex-1 flex flex-col justify-between gap-0.5">
+        {review.weekdays.map((d, i) => (
           <MeterRow
             key={d.name}
             label={d.name}
@@ -719,6 +768,8 @@ function WeekProfile({ review, base }: { review: YearReview; base: string }) {
             note={sum > 0 ? formatPct(d.total / sum, 0) : undefined}
             value={formatMoney(d.total, base, { compact: true })}
             barCls="bg-accent"
+            onClick={d.total > 0 ? () => onDay(i, d.dative) : undefined}
+            title="Показать траты этого дня недели"
           />
         ))}
       </div>
@@ -740,11 +791,11 @@ function WeekProfile({ review, base }: { review: YearReview; base: string }) {
 function Quarters({
   review,
   base,
-  onMonth,
+  onQuarter,
 }: {
   review: YearReview;
   base: string;
-  onMonth: (ym: string) => void;
+  onQuarter: (q: number) => void;
 }) {
   const scale = Math.max(
     ...review.quarters.map((q) => Math.max(q.income, q.expense)),
@@ -771,16 +822,13 @@ function Quarters({
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
         {review.quarters.map((q) => {
           const empty = q.income === 0 && q.expense === 0;
-          const firstMonth = `${review.year}-${String((q.q - 1) * 3 + 1).padStart(2, "0")}`;
           return (
             <button
               key={q.q}
               type="button"
               disabled={empty}
-              onClick={() => onMonth(firstMonth)}
-              title={
-                empty ? "В этом квартале операций нет" : "Показать операции первого месяца"
-              }
+              onClick={() => onQuarter(q.q)}
+              title={empty ? "В этом квартале операций нет" : "Показать операции квартала"}
               className="card-sunken px-3 py-2.5 text-left disabled:opacity-45 enabled:hover:ring-1 enabled:hover:ring-border"
             >
               <div className="flex items-baseline justify-between gap-2">
