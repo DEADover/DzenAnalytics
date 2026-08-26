@@ -13,10 +13,9 @@ import {
   TrendingUp,
   TrendingDown,
   Trophy,
+  CalendarClock,
   CalendarDays,
   CalendarRange,
-  CalendarCheck,
-  CalendarOff,
   Users,
   Tags,
   PiggyBank,
@@ -48,7 +47,7 @@ import {
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
-import { Select } from "../components/Select";
+import { MonthPicker } from "../components/MonthPicker";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 
@@ -332,7 +331,13 @@ export function YearReviewPage() {
       <div className="grid lg:grid-cols-2 gap-3">
         <TopList
           title="Куда уходили деньги"
-          hint="Статьи по сумме расхода за год"
+          info={
+            <p>
+              Восемь статей с наибольшим расходом за год. Процент — доля во всех
+              расходах, рядом число операций. Нажмите на статью — откроются её
+              расходные операции за год.
+            </p>
+          }
           icon={<Tags className="w-4 h-4 text-accent" />}
           items={review.topCategories}
           baseCurrency={baseCurrency}
@@ -342,7 +347,14 @@ export function YearReviewPage() {
         />
         <TopList
           title="Любимые контрагенты"
-          hint="Имена из справочника, а не строки из выписки"
+          info={
+            <p>
+              Имя берётся из справочника контрагентов, а не из банковской строки:
+              «DOSTAVKA PYATEROCHKA» и «DOSTAVKA IZ PYATEROCHK» — это одна
+              «Пятёрочка», и стоит она одной строкой с общей суммой. Строка банка
+              остаётся там, где контрагент к операции не привязан.
+            </p>
+          }
           icon={<Users className="w-4 h-4 text-accent2" />}
           items={review.topPayees}
           baseCurrency={baseCurrency}
@@ -359,7 +371,12 @@ export function YearReviewPage() {
         <SectionCard
           icon={<Coins className="w-4 h-4 text-expense" />}
           title="Самые дорогие покупки"
-          hint="Пять крупнейших операций года"
+          info={
+            <p>
+              Пять самых крупных расходных операций года. Второй строчкой —
+              статья, дата и комментарий к операции, если он есть.
+            </p>
+          }
         >
           {review.topTransactions.length === 0 ? (
             <div className="text-sm text-muted py-6 text-center">Покупок за год нет.</div>
@@ -403,29 +420,31 @@ export function YearReviewPage() {
         <SectionCard
           icon={<Sparkles className="w-4 h-4 text-accent2" />}
           title="Любопытные факты"
-          hint={`Считаем по дням с данными: ${dayLabel(review.window.from)} — ${dayLabel(
-            review.window.to
-          )}, это ${formatNum(review.window.days)} ${pluralRu(review.window.days, [
-            "день",
-            "дня",
-            "дней",
-          ])}`}
+          info={
+            <p>
+              Всё «подневное» считается по отрезку с данными:{" "}
+              <InfoTerm>
+                {dayLabel(review.window.from)} — {dayLabel(review.window.to)}
+              </InfoTerm>
+              , это {formatNum(review.window.days)}{" "}
+              {pluralRu(review.window.days, ["день", "дня", "дней"])}. Слева от
+              первой операции в вашей истории учёта ещё не было, справа у идущего
+              года — будущее, и ни то ни другое не перерыв в тратах.
+            </p>
+          }
         >
-          <div className="flex-1 grid sm:grid-cols-2 auto-rows-fr gap-2">
+          <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-4 content-between">
             <Fact
-              icon={<Coins className="w-4 h-4" />}
               label="В среднем в день"
               value={formatMoney(review.avgPerDay, baseCurrency)}
               sub="расхода"
             />
             <Fact
-              icon={<Receipt className="w-4 h-4" />}
               label="Средний расход на операцию"
               value={formatMoney(review.avgCheck, baseCurrency)}
               sub={`по ${formatNum(review.expenseCount)} ${pluralRu(review.expenseCount, ["операции", "операциям", "операциям"])}`}
             />
             <Fact
-              icon={<CalendarCheck className="w-4 h-4" />}
               label="Дней с тратами"
               value={`${formatNum(review.daysWithExpense)} из ${formatNum(review.window.days)}`}
               sub={
@@ -435,7 +454,6 @@ export function YearReviewPage() {
               }
             />
             <Fact
-              icon={<CalendarOff className="w-4 h-4" />}
               label="Самый долгий перерыв"
               value={
                 review.longestStreak.days > 0
@@ -451,13 +469,11 @@ export function YearReviewPage() {
               }
             />
             <Fact
-              icon={<Users className="w-4 h-4" />}
               label="Контрагентов за год"
               value={formatNum(review.uniqueMerchants)}
               sub="разных мест и людей"
             />
             <Fact
-              icon={<Trophy className="w-4 h-4" />}
               label="Первая пятёрка статей"
               value={formatPct(review.topFiveShare, 0)}
               sub={`из ${formatNum(review.uniqueCategories)} статей в ходу`}
@@ -502,7 +518,12 @@ function YearBars({
     <SectionCard
       icon={<TrendingUp className="w-4 h-4 text-accent" />}
       title="Год по месяцам"
-      hint="Доход и расход по месяцам, нажатие открывает месяц"
+      info={
+        <p>
+          Доход и расход по каждому месяцу года. Нажмите на месяц — откроются
+          его операции.
+        </p>
+      }
     >
       {/* Тянется во всю оставшуюся высоту карточки: при фиксированных 14rem
           под графиком оставалась полоса пустоты, когда соседняя карточка в
@@ -614,30 +635,30 @@ function YearBars({
 function SectionCard({
   icon,
   title,
-  hint,
-  right,
+  info,
   children,
   className,
 }: {
   icon: React.ReactNode;
   title: string;
-  hint?: string;
-  /** Правый угол шапки: подпись-легенда или счётчик. */
-  right?: React.ReactNode;
+  /**
+   * Как это считается — под знаком вопроса рядом с заголовком.
+   *
+   * Раньше каждый блок нёс поясняющую строку под названием, и половина высоты
+   * страницы уходила на текст, который читают один раз: «статьи по сумме
+   * расхода за год», «имена из справочника, а не строки из выписки». Знак
+   * вопроса — общий приём продукта, он же стоит в шапках других разделов.
+   */
+  info?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div className={`card-tray px-4 py-3 flex flex-col ${className ?? ""}`}>
-      <div className="flex items-start justify-between gap-3 mb-2.5">
-        <div className="min-w-0">
-          <div className="font-semibold flex items-center gap-2">
-            {icon}
-            <span className="truncate">{title}</span>
-          </div>
-          {hint && <div className="text-xs text-muted mt-0.5">{hint}</div>}
-        </div>
-        {right && <div className="shrink-0 text-[11px] text-muted">{right}</div>}
+      <div className="flex items-center gap-1.5 mb-2.5">
+        {icon}
+        <span className="font-semibold truncate">{title}</span>
+        {info && <InfoPopover>{info}</InfoPopover>}
       </div>
       {children}
     </div>
@@ -752,10 +773,13 @@ function WeekProfile({
     <SectionCard
       icon={<CalendarDays className="w-4 h-4 text-accent" />}
       title="Расходы по дням недели"
-      hint={
-        sum > 0
-          ? `Больше всего тратили по ${review.favoriteWeekday.dative}`
-          : "Расходов за год нет"
+      info={
+        <p>
+          Сумма расходов за год по каждому дню недели: сразу видно, ровные у вас
+          будни или всё уходит в выходные.{" "}
+          {sum > 0 && <>Больше всего тратили по {review.favoriteWeekday.dative}.</>}{" "}
+          Нажмите на день — откроются все траты этого дня недели за год.
+        </p>
       }
     >
       <div className="flex-1 flex flex-col justify-between gap-0.5">
@@ -807,16 +831,13 @@ function Quarters({
     <SectionCard
       icon={<CalendarRange className="w-4 h-4 text-accent2" />}
       title="По кварталам"
-      hint="Доход, расход и что осталось"
-      right={
-        <span className="flex items-center gap-2.5">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-income" /> доход
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-expense" /> расход
-          </span>
-        </span>
+      info={
+        <p>
+          Крупное число — чистый поток квартала, доход минус расход. Под ним две
+          полосы: зелёная — доход, красная — расход, обе в общем на все четыре
+          квартала масштабе, поэтому кварталы сравниваются взглядом. Нажмите на
+          квартал — откроются его операции.
+        </p>
       }
     >
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
@@ -829,9 +850,9 @@ function Quarters({
               disabled={empty}
               onClick={() => onQuarter(q.q)}
               title={empty ? "В этом квартале операций нет" : "Показать операции квартала"}
-              className="card-sunken px-3 py-2.5 text-left disabled:opacity-45 enabled:hover:ring-1 enabled:hover:ring-border"
+              className="card-sunken px-3 py-2.5 text-left flex flex-col enabled:hover:ring-1 enabled:hover:ring-border"
             >
-              <div className="flex items-baseline justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 h-5">
                 <span className="text-xs text-muted">
                   <span className="font-semibold text-text">{ROMAN[q.q - 1]}</span> квартал
                 </span>
@@ -841,30 +862,42 @@ function Quarters({
                   </span>
                 )}
               </div>
-              {/* Квартал, который ещё не наступил, — это не «ноль рублей».
-                  Три нуля в столбик читались как настоящий результат. */}
+              {/* Квартал, который ещё не наступил, — это не «ноль рублей». Три
+                  нуля в столбик читались как настоящий результат, а голая
+                  строчка «ещё не было» рядом с соседями смотрелась обрывом. */}
               {empty ? (
-                <div className="text-sm text-muted mt-2">ещё не было</div>
+                <div className="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-muted">
+                  <CalendarClock className="w-5 h-5 opacity-60" />
+                  <span className="text-xs">Ещё не наступил</span>
+                </div>
               ) : (
                 <>
                   <div
-                    className={`stat-num text-xl font-bold tabular-nums leading-tight mt-0.5 ${
+                    className={`stat-num text-xl font-bold tabular-nums leading-tight mt-1 ${
                       q.net >= 0 ? "text-income" : "text-expense"
                     }`}
                   >
                     {formatMoney(q.net, base, { compact: true, signed: true })}
                   </div>
-                  <div className="mt-2 space-y-1">
-                    <QuarterBar value={q.income} scale={scale} cls="bg-income" />
-                    <QuarterBar value={q.expense} scale={scale} cls="bg-expense" />
-                  </div>
-                  <div className="mt-1.5 flex items-baseline justify-between gap-2 text-[11px] tabular-nums">
-                    <span className="text-income">
-                      {formatMoney(q.income, base, { compact: true })}
-                    </span>
-                    <span className="text-expense">
-                      {formatMoney(q.expense, base, { compact: true })}
-                    </span>
+                  {/* Легенды сверху больше нет: у каждой полосы своя сумма тем
+                      же цветом, и что зелёное, а что красное, объяснять не
+                      надо. Суммы в своей колонке — цифры стоят друг под другом
+                      у всех четырёх кварталов. */}
+                  <div className="mt-2 space-y-1.5">
+                    <QuarterBar
+                      value={q.income}
+                      scale={scale}
+                      cls="bg-income"
+                      label={formatMoney(q.income, base, { compact: true })}
+                      tone="text-income"
+                    />
+                    <QuarterBar
+                      value={q.expense}
+                      scale={scale}
+                      cls="bg-expense"
+                      label={formatMoney(q.expense, base, { compact: true })}
+                      tone="text-expense"
+                    />
                   </div>
                 </>
               )}
@@ -876,20 +909,45 @@ function Quarters({
   );
 }
 
-/** Одна полоса квартала. Масштаб общий на все четыре — иначе не сравнить. */
-function QuarterBar({ value, scale, cls }: { value: number; scale: number; cls: string }) {
+/** Одна полоса квартала с суммой. Масштаб общий на все четыре — иначе не сравнить. */
+function QuarterBar({
+  value,
+  scale,
+  cls,
+  label,
+  tone,
+}: {
+  value: number;
+  scale: number;
+  cls: string;
+  label: string;
+  tone: string;
+}) {
   return (
-    <div className="h-1.5 rounded-full bg-panel2 overflow-hidden">
-      <div
-        className={`h-full rounded-full ${cls}`}
-        style={{ width: `${Math.max(1.5, Math.min(100, (value / scale) * 100))}%` }}
-      />
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 flex-1 rounded-full bg-panel2 overflow-hidden">
+        <div
+          className={`h-full rounded-full ${cls}`}
+          style={{ width: `${Math.max(1.5, Math.min(100, (value / scale) * 100))}%` }}
+        />
+      </div>
+      <span className={`text-[11px] tabular-nums whitespace-nowrap w-16 text-right ${tone}`}>
+        {label}
+      </span>
     </div>
   );
 }
 
 /* ─────────────────────────────  Мелочи  ───────────────────────────────── */
 
+/**
+ * Выбор года — тем же контролом, что и выбор месяца во всём остальном продукте.
+ *
+ * Был `Select`: год прижат влево, шеврон справа, и цифра в поле стояла не по
+ * центру. У `MonthPicker` в режиме года ровно то, что нужно, — стрелки
+ * перелистывания по бокам и год посередине, — и он уже знаком по другим
+ * разделам. Своего контрола заводить незачем.
+ */
 function YearSwitcher({
   year,
   years,
@@ -899,14 +957,22 @@ function YearSwitcher({
   years: number[];
   onChange: (y: number) => void;
 }) {
+  // `years` отсортированы по убыванию: первый — самый свежий.
+  const maxY = years[0] ?? year;
+  const minY = years[years.length - 1] ?? year;
   return (
-    <Select
-      value={String(year)}
-      options={years.map((y) => ({ value: String(y), label: String(y) }))}
-      onChange={(v) => onChange(Number(v))}
-      ariaLabel="Год"
-      size="sm"
-      className="w-24"
+    <MonthPicker
+      value={`${year}-01`}
+      minYM={`${minY}-01`}
+      maxYM={`${maxY}-12`}
+      active
+      mode="year"
+      onSelect={(ym) => onChange(Number(ym.slice(0, 4)))}
+      onSelectYear={onChange}
+      onStep={(dir) => {
+        const next = year + dir;
+        if (next >= minY && next <= maxY) onChange(next);
+      }}
     />
   );
 }
@@ -984,7 +1050,7 @@ function Record({
 
 function TopList({
   title,
-  hint,
+  info,
   icon,
   items,
   baseCurrency,
@@ -993,7 +1059,7 @@ function TopList({
   onOpen,
 }: {
   title: string;
-  hint: string;
+  info: React.ReactNode;
   icon: React.ReactNode;
   items: { name: string; amount: number; count: number }[];
   baseCurrency: string;
@@ -1002,7 +1068,7 @@ function TopList({
   onOpen: (name: string) => void;
 }) {
   return (
-    <SectionCard icon={icon} title={title} hint={hint}>
+    <SectionCard icon={icon} title={title} info={info}>
       {items.length === 0 ? (
         <div className="text-sm text-muted py-6 text-center">Расходов за год нет.</div>
       ) : (
@@ -1035,25 +1101,30 @@ function TopList({
  * «что меряем», число стоит отдельно и крупно, а вторая строчка договаривает
  * то, что в подпись не влезло.
  */
+/**
+ * Факт: подпись, число, уточнение — тем же строем, что и итоги года наверху.
+ *
+ * Коробок больше нет. Шесть утопленных плашек со значком и тремя строчками
+ * держали столько внутреннего отступа, что половина блока была пустотой, а
+ * значки не различали факты, а просто повторяли лиловый ромбик шесть раз.
+ * Читается это всё равно как таблица чисел — ею и стало.
+ */
 function Fact({
-  icon,
   label,
   value,
   sub,
 }: {
-  icon: React.ReactNode;
   label: string;
   value: string;
   sub?: string;
 }) {
   return (
-    <div className="card-sunken px-3 py-2 flex items-start gap-2.5">
-      <span className="text-accent2 shrink-0 mt-0.5">{icon}</span>
-      <div className="min-w-0">
-        <div className="text-[11px] text-muted leading-tight">{label}</div>
-        <div className="font-semibold tabular-nums leading-tight">{value}</div>
-        {sub && <div className="text-[11px] text-muted leading-tight truncate">{sub}</div>}
+    <div className="min-w-0">
+      <div className="text-[11px] text-muted leading-tight truncate">{label}</div>
+      <div className="stat-num text-xl font-bold tabular-nums leading-tight mt-0.5">
+        {value}
       </div>
+      {sub && <div className="text-[11px] text-muted leading-tight truncate">{sub}</div>}
     </div>
   );
 }
