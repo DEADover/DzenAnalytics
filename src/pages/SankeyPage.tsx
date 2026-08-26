@@ -297,7 +297,7 @@ export function SankeyPage() {
         </div>
         {/* Легенда одной строкой под диаграммой: пять чипов вразброс по центру
             занимали высоту наравне с содержимым. */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-muted">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 mt-2 text-[11px] text-muted">
           <LegendChip color={COLORS.income} label="Источники доходов" />
           <LegendChip color={COLORS.account} label="Бюджет" />
           <LegendChip

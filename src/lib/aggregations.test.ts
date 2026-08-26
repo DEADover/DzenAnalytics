@@ -1481,3 +1481,46 @@ describe("buildSankey: место «Сбережений» и «Из накоп�
     expect(d.links.find((l) => l.source === funding)?.value).toBe(20000);
   });
 });
+
+describe("buildSankey: узлы без ленты", () => {
+  let n = 0;
+  const tx = (kind: "income" | "expense", cat: string, amt: number): Transaction =>
+    ({
+      id: `w${++n}`,
+      date: "2026-08-10",
+      category: cat,
+      subcategory: null,
+      categoryFull: cat,
+      payee: "",
+      comment: "",
+      account: "Карта",
+      kind,
+      amount: amt,
+      amountBase: amt,
+      currency: "RUB",
+    }) as Transaction;
+
+  it("копеечный источник не становится узлом", () => {
+    // Ленты рисуются по округлённым суммам: источник на сорок копеек ленты не
+    // получал, а узел получал — и раскладка сваливала его в ПОСЛЕДНИЙ столбец,
+    // где он вставал среди статей расхода без суммы и ел высоту.
+    const d = buildSankey([
+      tx("income", "Зарплата", 100000),
+      tx("income", "Кэшбэк", 0.4),
+      tx("expense", "Еда", 30000),
+    ]);
+    expect(d.nodes.map((x) => x.name)).not.toContain("Кэшбэк");
+    // У каждого узла есть хотя бы одна лента.
+    const touched = new Set(d.links.flatMap((l) => [l.source, l.target]));
+    expect(d.nodes.every((_, i) => touched.has(i))).toBe(true);
+  });
+
+  it("копеечная статья расхода тоже отпадает", () => {
+    const d = buildSankey([
+      tx("income", "Зарплата", 100000),
+      tx("expense", "Еда", 30000),
+      tx("expense", "Мелочь", 0.3),
+    ]);
+    expect(d.nodes.map((x) => x.name)).not.toContain("Мелочь");
+  });
+});

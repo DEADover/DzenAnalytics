@@ -1236,6 +1236,14 @@ export function buildSankey(txs: Transaction[]): SankeyData {
   const links: { source: number; target: number; value: number }[] = [];
   const POOL_NAME = "Бюджет";
 
+  // Узел без ленты раскладке некуда деть, и она сваливает его в ПОСЛЕДНИЙ
+  // столбец: «Прочие доходы» на копейку оказывались справа, среди статей
+  // расхода, без суммы и с пустой строкой в списке. Ленты рисуются по
+  // округлённым суммам, поэтому и отбор идёт по ним же — иначе бакет на
+  // сорок копеек породил бы узел, к которому не придёт ни одной ленты.
+  const shownIncome = finalIncome.filter(([, v]) => Math.round(v as number) > 0);
+  const shownExpense = finalExpense.filter(([, v]) => Math.round(v as number) > 0);
+
   // Deficit funding sits on the LEFT as an extra source feeding the budget —
   // и первым в своей колонке, как «Сбережения» справа. Обе строки отвечают на
   // один вопрос — хватило дохода или нет, — и стоят на одном месте, а не
@@ -1246,7 +1254,7 @@ export function buildSankey(txs: Transaction[]): SankeyData {
     nodes.push({ name: "Из накоплений", kind: "funding" });
   }
   const incomeStart = nodes.length;
-  finalIncome.forEach(([name]) => nodes.push({ name: name as string, kind: "income" }));
+  shownIncome.forEach(([name]) => nodes.push({ name: name as string, kind: "income" }));
   const poolIdx = nodes.length;
   nodes.push({ name: POOL_NAME, kind: "account" });
   // Surplus sits on the RIGHT as an extra target drawn from the budget — и
@@ -1260,16 +1268,14 @@ export function buildSankey(txs: Transaction[]): SankeyData {
     nodes.push({ name: "Сбережения", kind: "savings" });
   }
   const expenseStart = nodes.length;
-  finalExpense.forEach(([name]) => nodes.push({ name: name as string, kind: "category" }));
+  shownExpense.forEach(([name]) => nodes.push({ name: name as string, kind: "category" }));
 
-  finalIncome.forEach((entry, i) => {
-    const v = Math.round(entry[1] as number);
-    if (v > 0) links.push({ source: incomeStart + i, target: poolIdx, value: v });
+  shownIncome.forEach((entry, i) => {
+    links.push({ source: incomeStart + i, target: poolIdx, value: Math.round(entry[1] as number) });
   });
   if (fundingIdx >= 0) links.push({ source: fundingIdx, target: poolIdx, value: -net });
-  finalExpense.forEach((entry, i) => {
-    const v = Math.round(entry[1] as number);
-    if (v > 0) links.push({ source: poolIdx, target: expenseStart + i, value: v });
+  shownExpense.forEach((entry, i) => {
+    links.push({ source: poolIdx, target: expenseStart + i, value: Math.round(entry[1] as number) });
   });
   if (savingsIdx >= 0) links.push({ source: poolIdx, target: savingsIdx, value: net });
 
