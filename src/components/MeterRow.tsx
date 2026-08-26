@@ -101,28 +101,35 @@ export function MeterRow({
       </>
     ) : (
       <>
-        <span
-          aria-hidden
-          className={`absolute inset-y-0 left-0 rounded-md ${barCls} ${
-            strong ? "opacity-30" : "opacity-[0.16]"
-          }`}
-          style={{ width }}
-        />
-        {rank !== undefined && (
-          <span className="relative text-[11px] text-muted tabular-nums w-4 shrink-0">
-            {rank}
+        {/* Дорожка полосы кончается там, где начинаются колонки чисел: полная
+            полоса раньше уходила ПОД суммы, и число читалось на цветной
+            заливке, а сама мера будто продолжалась за край. Растянута на всю
+            высоту строки отрицательными полями — чтобы заливка по-прежнему
+            смотрелась подложкой строки, а не полоской внутри неё. */}
+        <span className="relative flex-1 min-w-0 flex items-center gap-2 self-stretch -my-1.5 py-1.5 rounded-md overflow-hidden">
+          <span
+            aria-hidden
+            className={`absolute inset-y-0 left-0 rounded-md ${barCls} ${
+              strong ? "opacity-30" : "opacity-[0.16]"
+            }`}
+            style={{ width }}
+          />
+          {rank !== undefined && (
+            <span className="relative text-[11px] text-muted tabular-nums w-4 shrink-0">
+              {rank}
+            </span>
+          )}
+          {icon && <span className="relative shrink-0 flex items-center">{icon}</span>}
+          <span className={`relative truncate min-w-0 ${strong ? "font-medium" : ""}`}>
+            {label}
           </span>
-        )}
-        {icon && <span className="relative shrink-0 flex items-center">{icon}</span>}
-        <span className={`relative truncate flex-1 min-w-0 ${strong ? "font-medium" : ""}`}>
-          {label}
         </span>
         {numbers}
       </>
     );
   const cls = [
     "relative w-full flex items-center text-sm text-left rounded-md px-2 py-1.5",
-    bar === "track" ? METER_GAP.track : `${METER_GAP.underlay} overflow-hidden`,
+    bar === "track" ? METER_GAP.track : METER_GAP.underlay,
   ].join(" ");
   if (!onClick) return <div className={cls}>{inner}</div>;
   return (

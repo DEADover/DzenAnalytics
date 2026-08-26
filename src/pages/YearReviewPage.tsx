@@ -655,7 +655,9 @@ function YearBars({
 /** Колонки профиля недели: у дня нет числа операций, только доля и сумма. */
 const WEEK_COLUMNS: MeterCell[] = [
   { text: "Доля", width: "w-11" },
-  { text: "Расход", width: "w-24" },
+  // Полной суммой, а не «490,3 тыс. ₽»: сокращение экономило десяток пикселей
+  // и отнимало у числа точность там, где место под него есть.
+  { text: "Расход", width: "w-28" },
 ];
 
 function WeekProfile({
@@ -692,7 +694,7 @@ function WeekProfile({
             strong={d.total > 0 && d.total === max}
             cells={[
               { text: sum > 0 ? formatPct(d.total / sum, 0) : "—", width: "w-11", muted: true },
-              { text: formatMoney(d.total, base, { compact: true }), width: "w-24" },
+              { text: formatMoney(d.total, base), width: "w-28" },
             ]}
             barCls="bg-accent"
             onClick={d.total > 0 ? () => onDay(i, d.dative) : undefined}
