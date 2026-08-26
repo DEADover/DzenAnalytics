@@ -20,7 +20,7 @@ import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Segmented } from "../components/Segmented";
 import { SectionCard, StatCell } from "../components/SectionCard";
-import { MeterRow } from "../components/MeterRow";
+import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 import type { Transaction } from "../types";
 
 
@@ -157,6 +157,18 @@ export function DigestPage() {
 }
 
 
+/**
+ * Колонки движителей. Полоса тут не доля от целого, а величина изменения
+ * против самой крупной в списке, поэтому она идёт отдельной дорожкой под
+ * именем: заливка во всю высоту строки в таком списке читалась как подсветка
+ * выделенной строки, а её правый край обрывался посреди пустоты.
+ */
+const MOVER_COLUMNS: MeterCell[] = [
+  { text: "Доля", width: "w-14" },
+  { text: "Было → стало", width: "w-36" },
+  { text: "Изменение", width: "w-24" },
+];
+
 function DigestDetail({
   entry,
   baseCurrency,
@@ -252,6 +264,7 @@ function DigestDetail({
             </p>
           }
         >
+          <MeterHead columns={MOVER_COLUMNS} lead="" bar="track" />
           <div className="space-y-0.5">
             {entry.movers.map((m) => {
               const up = m.current > m.previous;
@@ -259,6 +272,7 @@ function DigestDetail({
               return (
                 <MeterRow
                   key={m.category}
+                  bar="track"
                   icon={
                     up ? (
                       <ArrowUp className="w-3.5 h-3.5 text-expense" />
@@ -275,17 +289,17 @@ function DigestDetail({
                         m.previous > 0
                           ? `${m.delta > 0 ? "+" : ""}${formatPct(m.delta, 0)}`
                           : "—",
-                      width: "w-12",
+                      width: MOVER_COLUMNS[0].width,
                       muted: true,
                     },
                     {
                       text: `${formatMoney(m.previous, baseCurrency, { compact: true })} → ${formatMoney(m.current, baseCurrency, { compact: true })}`,
-                      width: "w-32",
+                      width: MOVER_COLUMNS[1].width,
                       muted: true,
                     },
                     {
                       text: `${up ? "+" : "−"}${formatMoney(diff, baseCurrency)}`,
-                      width: "w-24",
+                      width: MOVER_COLUMNS[2].width,
                     },
                   ]}
                   onClick={() => onOpenCategory(m.category)}
