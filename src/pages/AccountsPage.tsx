@@ -2071,14 +2071,14 @@ export function AccountsPage() {
               вклад с длинным названием сдвигал бы столбцы с деньгами у всех
               остальных. Резиновым остаётся только название. */}
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full text-sm table-fixed min-w-[48rem]">
+            <table className="w-full text-sm table-fixed min-w-[50rem]">
               <colgroup>
                 <col />
                 <col style={{ width: 84 }} />
                 <col style={{ width: 124 }} />
                 <col style={{ width: 124 }} />
                 <col style={{ width: 124 }} />
-                <col style={{ width: 132 }} />
+                <col style={{ width: 152 }} />
               </colgroup>
               <thead>
                 <tr>
@@ -2095,10 +2095,10 @@ export function AccountsPage() {
                     Сумма
                   </th>
                   <th scope="col" className="table-th text-right">
-                    Набежит
+                    Проценты
                   </th>
                   <th scope="col" className="table-th text-right">
-                    На конец
+                    На конец срока
                   </th>
                 </tr>
               </thead>
