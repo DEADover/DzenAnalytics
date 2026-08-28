@@ -46,6 +46,7 @@ import {
   debtPayeeKey,
   debtsByCounterparty,
   NO_COUNTERPARTY,
+  unallocatedDebt,
   type DebtCounterparty,
 } from "../lib/debts";
 import { useDataStore } from "../store/useDataStore";
@@ -2770,11 +2771,22 @@ export function AccountsPage() {
                   // это устроено в самом Дзен-мани (issue #80). На «Движении»
                   // окно своё, и нулевой итог за период — тоже ответ: там
                   // видно, что с человеком за месяц рассчитались.
-                  const allDebtRows = debtsByAccount.get(a.account)?.rows ?? [];
+                  const breakdown = debtsByAccount.get(a.account);
+                  const allDebtRows = breakdown?.rows ?? [];
                   const debtRows = capitalView
                     ? allDebtRows.filter((d) => !d.settled)
                     : allDebtRows;
-                  const debt = debtRows.length > 0;
+                  // Сколько остатка не легло ни на кого. Сверяем только на
+                  // «Капитале»: там опорное число — остаток счёта из Дзен-мани.
+                  // На «Движении» опоры нет, разбивка и обороты считаются по
+                  // одному и тому же отбору и сходятся по построению.
+                  const unallocated = capitalView
+                    ? unallocatedDebt(a.balanceBase, breakdown)
+                    : 0;
+                  // Раскрывать есть что и тогда, когда живых долгов не осталось,
+                  // а остаток на счёте есть: молча спрятать расхождение — это
+                  // ровно то, на что жаловались в issue #80.
+                  const debt = debtRows.length > 0 || unallocated !== 0;
                   const debtsOpen = debt && openDebts.has(a.account);
                   return (
                     <Fragment key={a.account}>
@@ -3016,6 +3028,42 @@ export function AccountsPage() {
                           <td className="table-td !py-1.5" colSpan={2} />
                         </tr>
                       ))}
+                    {/* Строка сверки: остаток счёта минус сумма по людям.
+                        Разбивка складывается из операций, а остаток приходит
+                        целым числом — и сойтись они обязаны не всегда. Раньше
+                        разницу никто не показывал, и выглядело это так, будто
+                        сумма долгов у нас просто неверная (issue #80). */}
+                    {debtsOpen && unallocated !== 0 && (
+                      <tr
+                        className="bg-panel2/30"
+                        title={
+                          "Остаток счёта из Дзен-мани минус сумма по контрагентам. " +
+                          "Разница — это начальный остаток счёта, операции старше " +
+                          "загруженной истории или курсовая разница у валютного долга: " +
+                          "операция пересчитана по курсу своего дня, а остаток счёта — " +
+                          "по сегодняшнему."
+                        }
+                      >
+                        <td className="table-td !py-1.5">
+                          <div className="pl-6 ml-2 border-l-2 border-border min-w-0">
+                            <div className="text-sm text-muted">
+                              Не разложено по контрагентам
+                            </div>
+                            <div className="text-[11px] text-muted truncate">
+                              Начальный остаток, операции вне истории или курсовая
+                              разница
+                            </div>
+                          </div>
+                        </td>
+                        <td className="table-td !py-1.5 text-xs text-muted whitespace-nowrap align-middle">
+                          {unallocated > 0 ? "Должны вам" : "Должны вы"}
+                        </td>
+                        <td className="table-td !py-1.5 text-right tabular-nums whitespace-nowrap align-middle text-muted">
+                          {formatMoney(Math.abs(unallocated), base)}
+                        </td>
+                        <td className="table-td !py-1.5" colSpan={2} />
+                      </tr>
+                    )}
                     </Fragment>
                   );
                 })}

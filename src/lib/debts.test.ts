@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { debtPayeeKey, debtsByCounterparty, NO_COUNTERPARTY } from "./debts";
+import {
+  debtPayeeKey,
+  debtsByCounterparty,
+  NO_COUNTERPARTY,
+  unallocatedDebt,
+} from "./debts";
 import type { Transaction } from "../types";
 
 const DEBT = new Set(["Долги"]);
@@ -167,5 +172,48 @@ describe("debtsByCounterparty", () => {
   it("ключ не зависит от регистра и лишних пробелов", () => {
     expect(debtPayeeKey("  OZON  ")).toBe("ozon");
     expect(debtPayeeKey("Иван  Петров")).toBe("иван петров");
+  });
+});
+
+describe("unallocatedDebt", () => {
+  const breakdown = (...txs: Transaction[]) => debtsByCounterparty(txs, DEBT);
+
+  it("разбивка сошлась с остатком — расхождения нет", () => {
+    const b = breakdown(debt({ amount: 5000, dir: "lend", payee: "Иван" }));
+    expect(unallocatedDebt(5000, b)).toBe(0);
+  });
+
+  it("начальный остаток счёта виден как неразложенный", () => {
+    // По операциям должны вам 5 000, а счёт показывает 12 000: разница —
+    // долг, существовавший до начала загруженной истории.
+    const b = breakdown(debt({ amount: 5000, dir: "lend", payee: "Иван" }));
+    expect(unallocatedDebt(12_000, b)).toBe(7000);
+  });
+
+  it("знак говорит, в какую сторону не хватает", () => {
+    const b = breakdown(debt({ amount: 5000, dir: "lend", payee: "Иван" }));
+    expect(unallocatedDebt(-3000, b)).toBe(-8000);
+  });
+
+  it("копеечные хвосты пересчёта по курсу — не расхождение", () => {
+    const b = breakdown(debt({ amount: 5000, dir: "lend", payee: "Иван" }));
+    expect(unallocatedDebt(5000.4, b)).toBe(0);
+    expect(unallocatedDebt(4999.6, b)).toBe(0);
+    // А вот целый рубль уже показываем.
+    expect(unallocatedDebt(5001, b)).toBe(1);
+  });
+
+  it("сверять не с чем — молчим", () => {
+    const b = breakdown(debt({ amount: 5000, dir: "lend", payee: "Иван" }));
+    // Остатка из Дзен-мани нет (только CSV) — сверка невозможна.
+    expect(unallocatedDebt(null, b)).toBe(0);
+    expect(unallocatedDebt(undefined, b)).toBe(0);
+    expect(unallocatedDebt(5000, null)).toBe(0);
+  });
+
+  it("операций нет вовсе — весь остаток неразложен", () => {
+    // Ровно тот случай, когда шеврон раньше не появлялся и расхождение
+    // оставалось невидимым.
+    expect(unallocatedDebt(874, breakdown())).toBe(874);
   });
 });
