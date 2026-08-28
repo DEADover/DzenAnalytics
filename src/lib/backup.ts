@@ -31,21 +31,14 @@ export const BACKUP_EXCLUDED_KEYS: Record<string, string> = {
   // Секреты — не должны покидать устройство в открытом JSON.
   zenmoneyToken: "токен доступа",
   zenmoneyCache: "сырой кэш сущностей Дзен-мани, тянет за собой весь объём",
-  // Привязка к подключению. Без токена бесполезны, а восстановленный режим
-  // «Авто» ещё и начал бы пушить в облако, когда токен появится.
-  zenmoneyPushMode: "режим отправки — восстанавливать опасно",
-  zenmoneyPushEnabled: "настройка подключения",
-  zenmoneyAutoSyncEnabled: "настройка подключения",
-  zenmoneyAutoSyncUnit: "настройка подключения",
-  zenmoneyAutoSyncValue: "настройка подключения",
-  zenmoneySnapshotPolicy: "настройка подключения",
+  // Метки времени и точки синхронизации: привязаны к токену и к конкретной
+  // машине, восстанавливать в них нечего.
   zenmoneyLastSyncAt: "метка времени, восстанавливать нечего",
   zenmoneyLastPushAt: "метка времени, восстанавливать нечего",
   zenmoneyServerTimestamp: "точка синхронизации, привязана к токену",
   // Производное: восстановится само.
   cloudSnapshotIndex: "снимки облака, их объём в бэкапе неуместен",
   syncLog: "журнал синхронизаций",
-  backupLastAt: "метка времени последнего бэкапа",
 };
 
 /**
@@ -91,6 +84,22 @@ export const BACKUP_META_KEYS = [
   "analyticsExcludedCategories", // категории, убранные из аналитики
   "categoryMeta", // иконки и цвета категорий
   "backupInterval", // как часто напоминать о бэкапе
+  // Когда сделали бэкап в прошлый раз. Едет вместе с остальным: восстановились
+  // из файла — значит бэкап у вас есть, и напоминать о нём сию секунду незачем.
+  "backupLastAt",
+  // Отбор, если человек включил его запоминание (issue #79). Период внутрь
+  // снимка не входит — см. `useFilterMemoryStore`.
+  "filterMemory",
+  // ── Настройки подключения к Дзен-мани ──────────────────────────────────
+  // Едут в бэкап, но восстанавливаются НЕ как есть: `safePushModeOnRestore`
+  // снимает автоматику. Токена в бэкапе нет, так что сами по себе они ничего
+  // не делают, — опасен именно момент, когда токен появится снова.
+  "zenmoneyPushMode",
+  "zenmoneyPushEnabled",
+  "zenmoneySnapshotPolicy",
+  "zenmoneyAutoSyncEnabled",
+  "zenmoneyAutoSyncValue",
+  "zenmoneyAutoSyncUnit",
   // un-pushed local changes
   "transactionEdits",
   // Кто записал правку — правило или человек. Едет вместе с самими правками:
@@ -171,6 +180,23 @@ function readLocal(): Record<string, string> {
   return out;
 }
 
+/**
+ * Режим отправки, с которым безопасно восстановиться.
+ *
+ * «Авто» и «При синхронизации» отправляют изменения в облако САМИ. После
+ * восстановления это опаснее всего: локальные правки из файла — не обязательно
+ * то, что должно уехать в Дзен-мани. Восстановились не из того файла или на
+ * чужой машине — и облако молча переписано.
+ *
+ * Поэтому автоматику снимаем, а сам факт «отправка включена» сохраняем:
+ * «Авто» и «При синхронизации» становятся «Ручным», а «Выключено» остаётся
+ * выключенным. Человек видит режим, понимает, что его понизили, и включает
+ * обратно сам — уже посмотрев, что восстановилось.
+ */
+export function safePushModeOnRestore(mode: unknown): "off" | "manual" {
+  return mode === "off" || mode == null ? "off" : "manual";
+}
+
 /** Write a (validated) backup payload back into IndexedDB, restoring every
  *  section. Stores still need re-hydrating afterwards (caller's job) so the
  *  in-memory state matches the freshly-written disk state. */
@@ -182,6 +208,12 @@ export async function restoreBackupPayload(
   if (dump.importMeta) await db.saveImportMeta(dump.importMeta as never);
   for (const k of BACKUP_META_KEYS) {
     if (dump[k] !== undefined) await db.saveJSON(k, dump[k]);
+  }
+  // Отправку в Дзен-мани восстанавливаем ПОНИЖЕННОЙ — см. `safePushModeOnRestore`.
+  if (dump.zenmoneyPushMode !== undefined) {
+    const mode = safePushModeOnRestore(dump.zenmoneyPushMode);
+    await db.saveJSON("zenmoneyPushMode", mode);
+    await db.saveJSON("zenmoneyPushEnabled", mode !== "off");
   }
   // Раздела `local` нет у бэкапов версии 2 и старше — тогда просто нечего
   // восстанавливать, тема останется текущей.

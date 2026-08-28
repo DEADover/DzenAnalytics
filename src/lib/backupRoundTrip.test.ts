@@ -200,6 +200,14 @@ describe("бэкап — правила категоризации", () => {
   });
 });
 
+/** Ключи, которые восстанавливаются НАМЕРЕННО не как есть, — у каждого свой
+ *  тест ниже. Здесь их пропускаем, иначе «ничего не теряется» ловил бы не
+ *  потерю, а осознанное решение. */
+const RESHAPED_ON_RESTORE = new Set<string>([
+  "zenmoneyPushMode",
+  "zenmoneyPushEnabled",
+]);
+
 describe("бэкап — круг целиком", () => {
   it("ни один ключ из списка не теряется по дороге", async () => {
     // Значения нарочно разной формы: массив, объект, число, строка, булево.
@@ -213,11 +221,31 @@ describe("бэкап — круг целиком", () => {
 
     await roundTrip();
     const lost = BACKUP_META_KEYS.filter(
-      (k) => JSON.stringify(meta.get(k)) !== JSON.stringify(sample[k])
+      (k) => !RESHAPED_ON_RESTORE.has(k) &&
+        JSON.stringify(meta.get(k)) !== JSON.stringify(sample[k])
     );
     expect(lost).toEqual([]);
     expect(transactions).toHaveLength(1);
     expect(rates).toEqual({ base: "RUB", rates: { USD: 90 } });
+  });
+
+  it("отправка в Дзен-мани восстанавливается ручной, а не автоматической", async () => {
+    // «Авто» после восстановления отправило бы в облако правки из файла — не
+    // обязательно те, что там должны быть. Факт «отправка включена» сохраняем,
+    // автоматику снимаем.
+    meta.set("zenmoneyPushMode", "auto");
+    meta.set("zenmoneyPushEnabled", true);
+    await roundTrip();
+    expect(meta.get("zenmoneyPushMode")).toBe("manual");
+    expect(meta.get("zenmoneyPushEnabled")).toBe(true);
+  });
+
+  it("выключенная отправка так и остаётся выключенной", async () => {
+    meta.set("zenmoneyPushMode", "off");
+    meta.set("zenmoneyPushEnabled", false);
+    await roundTrip();
+    expect(meta.get("zenmoneyPushMode")).toBe("off");
+    expect(meta.get("zenmoneyPushEnabled")).toBe(false);
   });
 
   it("ключ со значением null восстанавливается как null, а не пропадает", async () => {

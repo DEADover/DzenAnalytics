@@ -59,6 +59,7 @@ import { usePayeeAliasStore } from "../store/usePayeeAliasStore";
 import { Combobox } from "../components/Combobox";
 import { PageHeader } from "../components/PageHeader";
 import { formatNum, formatDate, formatMoney } from "../lib/format";
+import { useFilterMemoryStore } from "../store/useFilterMemoryStore";
 import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
@@ -185,6 +186,8 @@ export function ImportPage() {
   const setThemeMode = useThemeStore((s) => s.setMode);
   const fractionDigits = useDisplayStore((s) => s.fractionDigits);
   const statementLine = useDisplayStore((s) => s.statementLine);
+  const rememberFilters = useFilterMemoryStore((s) => s.enabled);
+  const setRememberFilters = useFilterMemoryStore((s) => s.setEnabled);
   const setStatementLine = useDisplayStore((s) => s.setStatementLine);
   const setFractionDigits = useDisplayStore((s) => s.setFractionDigits);
   const tableFontLevel = useDisplayStore((s) => s.tableFontLevel);
@@ -1451,6 +1454,45 @@ export function ImportPage() {
             </span>
           </div>
         </SettingRow>
+
+        <SettingRow
+          title="Запоминать отбор"
+          status={
+            rememberFilters
+              ? "Отбор сохраняется между сессиями"
+              : "Отбор сбрасывается при перезагрузке"
+          }
+          help={
+            <>
+              <p>
+                Обычно отбор живёт до перезагрузки вкладки: закрыли — открыли
+                чистым. Включите, и выбранные счета, статьи, валюты, поиск и
+                всё из <InfoTerm>«Дополнительно»</InfoTerm> вернутся такими же,
+                какими вы их оставили. Тогда же они начнут ездить в бэкапе.
+              </p>
+              <p>
+                <strong>Период не запоминается</strong> — ни при включённой
+                памяти, ни при выключенной. Приложение всегда открывается на
+                текущем месяце: увидеть при запуске позапрошлый август и
+                гадать, куда делись деньги, — не то, ради чего его открывают.
+                Период, который нужно возвращать, стоит сохранить{" "}
+                <InfoTerm>видом</InfoTerm> — там он хранится по желанию.
+              </p>
+              <p>
+                Отбор виден всегда: в панели сверху написано, сколько счетов и
+                статей выбрано, а кнопка слева показывает название применённого
+                вида или «Без фильтрации».
+              </p>
+            </>
+          }
+          control={
+            <Switch
+              checked={rememberFilters}
+              label="Запоминать отбор между сессиями"
+              onChange={(next) => setRememberFilters(next)}
+            />
+          }
+        />
       </div>
 
       </>)}
@@ -1880,11 +1922,16 @@ export function ImportPage() {
           Экспортирует JSON со всем, что живёт только здесь: операции, бюджеты и их
           настройки, цели, калибровка, виды, разрезы данных, оформление и тема,
           правила категоризации, иконки и цвета категорий, курсы валют по датам,
-          настройки страниц — и <strong>несинхронизированные изменения</strong>:
-          правки операций, счетов, контрагентов, категорий и планов, созданные
-          операции, заведённые контрагенты и категории, удаления. Токен Дзен-мани
-          и кэш облака в файл не попадают. Восстановление возвращает всё одним
-          файлом и обновляет страницу.
+          настройки страниц и синхронизации — и{" "}
+          <strong>несинхронизированные изменения</strong>: правки операций,
+          счетов, контрагентов, категорий и планов, созданные операции,
+          заведённые контрагенты и категории, удаления. Отбор попадает в файл,
+          если включено его запоминание. <strong>Токен Дзен-мани</strong> и кэш
+          облака не попадают никогда. Восстановление возвращает всё одним файлом
+          и обновляет страницу; отправка изменений при этом становится{" "}
+          <strong>ручной</strong>, даже если была автоматической, — чтобы
+          восстановленные правки не уехали в облако сами, прежде чем вы их
+          проверите.
         </p>
         <div className="flex flex-wrap gap-2">
           <button

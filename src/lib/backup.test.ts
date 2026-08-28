@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAndValidateBackup } from "./backup";
+import { parseAndValidateBackup, safePushModeOnRestore } from "./backup";
 
 describe("parseAndValidateBackup", () => {
   it("accepts a well-formed backup", () => {
@@ -37,5 +37,32 @@ describe("parseAndValidateBackup", () => {
     expect(Object.prototype.hasOwnProperty.call(out.rates, "__proto__")).toBe(false);
     // ...and global Object.prototype must remain unpolluted.
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});
+
+describe("safePushModeOnRestore", () => {
+  it("автоматические режимы понижаются до ручного", () => {
+    // Именно они отправляют в облако сами, без нажатия.
+    expect(safePushModeOnRestore("auto")).toBe("manual");
+    expect(safePushModeOnRestore("on-sync")).toBe("manual");
+  });
+
+  it("ручной остаётся ручным, а выключенный — выключенным", () => {
+    expect(safePushModeOnRestore("manual")).toBe("manual");
+    expect(safePushModeOnRestore("off")).toBe("off");
+  });
+
+  it("режима в файле нет — отправка выключена", () => {
+    // Бэкап старого формата или испорченный файл: включать отправку по
+    // умолчанию нельзя, это как раз тот случай, когда молчание безопаснее.
+    expect(safePushModeOnRestore(null)).toBe("off");
+    expect(safePushModeOnRestore(undefined)).toBe("off");
+  });
+
+  it("мусор вместо режима отправку не включает автоматически", () => {
+    // Чужой json могли править руками. Что угодно непонятное — это «не off»,
+    // и мы отдаём самый слабый из включённых режимов, а не самый сильный.
+    expect(safePushModeOnRestore("АВТО")).toBe("manual");
+    expect(safePushModeOnRestore(42)).toBe("manual");
   });
 });

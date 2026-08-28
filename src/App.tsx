@@ -61,6 +61,7 @@ import {
 } from "./store/useCounterpartyEditsStore";
 import { useTagDeletionsStore } from "./store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "./store/usePlannedDeletionsStore";
+import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
 import { useDashboardLayoutStore } from "./store/useDashboardLayoutStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 import { useImportBatchesStore } from "./store/useImportBatchesStore";
@@ -127,11 +128,17 @@ function App() {
     useTagDeletionsStore.getState().hydrate();
     usePlannedDeletionsStore.getState().hydrate();
     useDashboardLayoutStore.getState().hydrate();
+    useFilterMemoryStore.getState().hydrate();
     hydrate();
     backupHydrate();
     reportPeriodHydrate();
     return initTheme();
   }, [hydrate, backupHydrate, reportPeriodHydrate, initTheme]);
+
+  // Складываем отбор на диск, пока включена его память. Подписка стоит всегда:
+  // сам стор проверяет флажок, и включение настройки начинает работать сразу,
+  // без перезагрузки страницы.
+  useEffect(() => useFilterMemoryStore.getState().watch(), []);
 
   // Ask the browser to keep our IndexedDB as PERSISTENT storage, so it isn't
   // silently evicted on a browser update / "clear site data under pressure"
