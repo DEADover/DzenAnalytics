@@ -104,7 +104,6 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { capitalShare, mergeLiveByTitle, positiveBalanceTotal } from "../lib/accountOptions";
 import { depositTotals, projectDeposit, type DepositRow } from "../lib/deposits";
 import { SectionCard } from "../components/SectionCard";
-import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 import { toIsoDate } from "../lib/period";
 import { Stat } from "../components/Stat";
 import { Sparkline } from "../components/Sparkline";
@@ -396,13 +395,6 @@ const CAPITAL_FILTERS_HINT =
   "На «Капитале» работает только период: остаток на дату складывается из всей истории до неё. Какие счета показать на графике — в его карточке. Отборы по счетам, категориям и суммам живут на вкладке «Движение».";
 
 /** Колонки свода вкладов: ставка, остаток срока, сумма, что ещё набежит. */
-const DEPOSIT_COLUMNS: MeterCell[] = [
-  { text: "Ставка", width: "w-14" },
-  { text: "Осталось", width: "w-24" },
-  { text: "Сумма", width: "w-28" },
-  { text: "Набежит", width: "w-28" },
-];
-
 export function AccountsPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
@@ -730,9 +722,13 @@ export function AccountsPage() {
     const out: DepositRow<(typeof liveList)[number]>[] = [];
     for (const a of liveList) {
       if (a.type !== "deposit" || a.archive) continue;
-      const projection = projectDeposit(a.balance, a, today);
+      // Считаем СРАЗУ в базовой валюте: проценты пропорциональны остатку, а
+      // прогноз от нативной суммы складывался бы с базовым остатком строки —
+      // у валютного вклада доллары попадали бы в рублёвый итог.
+      const balance = toBase(a.balance, a.currency);
+      const projection = projectDeposit(balance, a, today);
       if (!projection) continue;
-      out.push({ account: a, balance: toBase(a.balance, a.currency), projection });
+      out.push({ account: a, balance, projection });
     }
     // Ближайшие к закрытию — первыми: по ним и решать раньше всего.
     return out.sort((x, y) => x.projection.daysLeft - y.projection.daysLeft);
@@ -2066,54 +2062,140 @@ export function AccountsPage() {
           }
           right={
             <span className="text-[11px] text-muted tabular-nums">
-              {formatMoney(depositSum.balance, base)} · {formatPct(depositSum.avgPercent / 100, 1)} годовых
+              {formatNum(depositRows.length)}{" "}
+              {pluralRu(depositRows.length, ["вклад", "вклада", "вкладов"])}
             </span>
           }
         >
-          <MeterHead columns={DEPOSIT_COLUMNS} />
-          <div className="space-y-0.5">
-            {depositRows.map((r) => (
-              <MeterRow
-                key={r.account.id}
-                label={r.account.title}
-                // Полоса — сколько срока уже прошло: у вклада, который завтра
-                // закрывается, она полная.
-                share={
-                  r.projection.daysTotal > 0
-                    ? 1 - r.projection.daysLeft / r.projection.daysTotal
-                    : 1
-                }
-                barCls="bg-income"
-                strong={r.projection.daysLeft === 0}
-                cells={[
-                  { text: formatPct(r.projection.percent / 100, 1), width: DEPOSIT_COLUMNS[0].width, muted: true },
-                  {
-                    text:
-                      r.projection.daysLeft === 0
-                        ? "срок вышел"
-                        : `${formatNum(r.projection.daysLeft)} ${pluralRu(r.projection.daysLeft, ["день", "дня", "дней"])}`,
-                    width: DEPOSIT_COLUMNS[1].width,
-                    muted: true,
-                  },
-                  { text: formatMoney(r.balance, base), width: DEPOSIT_COLUMNS[2].width, muted: true },
-                  { text: `+${formatMoney(r.projection.interestLeft, base)}`, width: DEPOSIT_COLUMNS[3].width },
-                ]}
-                onClick={() => setSelectedAccount(r.account.title)}
-                title={`Открыт ${formatDate(r.account.startDate || "", "short")}, до ${formatDate(r.projection.endDate, "short")}${r.projection.compounded ? ", с капитализацией" : ""}`}
-              />
-            ))}
-          </div>
-          <div className="flex items-baseline justify-between gap-3 mt-2 pt-2 border-t border-border text-sm">
-            <span className="text-muted">
-              Ещё набежит до конца сроков · на конец останется
-            </span>
-            <span className="tabular-nums">
-              <span className="text-income font-semibold">
-                +{formatMoney(depositSum.interestLeft, base)}
-              </span>
-              <span className="text-muted"> · </span>
-              <span className="font-semibold">{formatMoney(depositSum.atMaturity, base)}</span>
-            </span>
+          {/* Ширины колонок ЗАДАНЫ, а не подобраны по содержимому: иначе один
+              вклад с длинным названием сдвигал бы столбцы с деньгами у всех
+              остальных. Резиновым остаётся только название. */}
+          <div className="overflow-x-auto -mx-1 px-1">
+            <table className="w-full text-sm table-fixed min-w-[48rem]">
+              <colgroup>
+                <col />
+                <col style={{ width: 84 }} />
+                <col style={{ width: 124 }} />
+                <col style={{ width: 124 }} />
+                <col style={{ width: 124 }} />
+                <col style={{ width: 132 }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th scope="col" className="table-th">
+                    Вклад
+                  </th>
+                  <th scope="col" className="table-th text-right">
+                    Ставка
+                  </th>
+                  <th scope="col" className="table-th text-right">
+                    До закрытия
+                  </th>
+                  <th scope="col" className="table-th text-right">
+                    Сумма
+                  </th>
+                  <th scope="col" className="table-th text-right">
+                    Набежит
+                  </th>
+                  <th scope="col" className="table-th text-right">
+                    На конец
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {depositRows.map((r) => {
+                  const p = r.projection;
+                  const done = p.daysLeft === 0;
+                  const isSel = selectedAccount === r.account.title;
+                  return (
+                    <tr
+                      key={r.account.id}
+                      onClick={() =>
+                        setSelectedAccount(isSel ? null : r.account.title)
+                      }
+                      className={`align-middle cursor-pointer group ${
+                        isSel ? "bg-accent/10" : "hover:bg-panel2/50"
+                      }`}
+                    >
+                      <td className="table-td">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="shrink-0">
+                            <AccountLogo
+                              title={r.account.title}
+                              type={r.account.type}
+                            />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block font-medium truncate group-hover:text-accent">
+                              {r.account.title}
+                            </span>
+                            {/* Условия договора второй строкой: они объясняют
+                                все остальные числа этой строки. */}
+                            <span className="block text-[11px] text-muted truncate">
+                              {formatDate(r.account.startDate ?? "", "short")} —{" "}
+                              {formatDate(p.endDate, "short")}
+                              {p.compounded ? " · С капитализацией" : ""}
+                            </span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="table-td text-right tabular-nums whitespace-nowrap">
+                        {formatPct(p.percent / 100, 1)}
+                      </td>
+                      <td
+                        className={`table-td text-right tabular-nums whitespace-nowrap ${
+                          done ? "text-warn" : ""
+                        }`}
+                      >
+                        {done
+                          ? "Срок вышел"
+                          : `${formatNum(p.daysLeft)} ${pluralRu(p.daysLeft, [
+                              "день",
+                              "дня",
+                              "дней",
+                            ])}`}
+                      </td>
+                      <td className="table-td text-right tabular-nums whitespace-nowrap">
+                        {formatMoney(r.balance, base)}
+                      </td>
+                      <td
+                        className={`table-td text-right tabular-nums whitespace-nowrap ${
+                          done ? "text-muted" : "text-income"
+                        }`}
+                      >
+                        {done ? "—" : `+${formatMoney(p.interestLeft, base)}`}
+                      </td>
+                      <td className="table-td text-right tabular-nums whitespace-nowrap font-medium">
+                        {formatMoney(p.atMaturity, base)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {/* Итог строкой таблицы, а не подписью под ней: каждое число
+                  стоит под своим столбцом и читается как сумма колонки. */}
+              <tfoot>
+                <tr className="bg-panel2/60 font-semibold">
+                  <td className="table-td">Итого</td>
+                  <td
+                    className="table-td text-right tabular-nums font-normal text-muted whitespace-nowrap"
+                    title="Средняя ставка, взвешенная остатком вклада"
+                  >
+                    {formatPct(depositSum.avgPercent / 100, 1)}
+                  </td>
+                  <td className="table-td" />
+                  <td className="table-td text-right tabular-nums whitespace-nowrap">
+                    {formatMoney(depositSum.balance, base)}
+                  </td>
+                  <td className="table-td text-right tabular-nums whitespace-nowrap text-income">
+                    +{formatMoney(depositSum.interestLeft, base)}
+                  </td>
+                  <td className="table-td text-right tabular-nums whitespace-nowrap">
+                    {formatMoney(depositSum.atMaturity, base)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </SectionCard>
       )}
