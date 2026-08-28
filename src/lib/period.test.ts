@@ -10,6 +10,7 @@ import {
   shiftDays,
   spanDays,
   toIsoDate,
+  yearRange,
 } from "./period";
 
 describe("spanDays", () => {
@@ -295,5 +296,47 @@ describe("isRunningPeriod", () => {
   it("без данных или без периода — нет и ответа", () => {
     expect(isRunningPeriod(march, "")).toBe(false);
     expect(isRunningPeriod(null, "2027-03-30")).toBe(false);
+  });
+});
+
+describe("yearRange", () => {
+  it("обычный год — с 1 января по 31 декабря", () => {
+    expect(yearRange(2026)).toEqual({ from: "2026-01-01", to: "2026-12-31" });
+  });
+
+  it("високосный год не теряет 29 февраля", () => {
+    const y = yearRange(2028);
+    expect(spanDays(y.from, y.to)).toBe(366);
+  });
+
+  it("своё начало месяца сдвигает и год", () => {
+    // Отчётный январь начинается 11-го, значит и год — с 11 января по 10-е
+    // января следующего. Иначе «год» на «Сравнении» разошёлся бы с «месяцем»
+    // на остальных страницах.
+    expect(yearRange(2026, 11)).toEqual({ from: "2026-01-11", to: "2027-01-10" });
+  });
+
+  it("сдвинутый год всё равно длиной в год", () => {
+    const y = yearRange(2026, 11);
+    expect(spanDays(y.from, y.to)).toBe(365);
+  });
+
+  it("год стыкуется со следующим без дыр и нахлёста", () => {
+    const a = yearRange(2026, 11);
+    const b = yearRange(2027, 11);
+    expect(shiftDays(a.to, 1)).toBe(b.from);
+  });
+
+  it("два законченных года сравниваются целиком, идущий — по равному куску", () => {
+    const a = yearRange(2026);
+    const b = yearRange(2025);
+    // 2026-й ещё идёт: данные кончаются 15 марта.
+    const cut = comparableRanges(a, b, "2026-03-15", true);
+    expect(cut.a).toEqual({ from: "2026-01-01", to: "2026-03-15" });
+    expect(cut.b).toEqual({ from: "2025-01-01", to: "2025-03-15" });
+    // Оба закончены — режем только по данным, длины не трогаем.
+    const whole = comparableRanges(b, yearRange(2024), "2026-03-15", true);
+    expect(whole.a).toEqual(b);
+    expect(whole.b).toEqual(yearRange(2024));
   });
 });

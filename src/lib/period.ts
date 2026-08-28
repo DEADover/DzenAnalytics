@@ -65,6 +65,25 @@ export function periodRange(
 }
 
 /**
+ * Отчётный ГОД целиком — от начала его января до конца его декабря.
+ *
+ * Не всегда 1 января — 31 декабря: при своём начале месяца год пользователя
+ * тоже сдвинут. Считаем его через сам `periodRange`, а не календарём, иначе
+ * «год» на этой странице расходился бы с «месяцем» на соседней ровно на
+ * `startDay - 1` дней в обе стороны.
+ *
+ * @example
+ *   yearRange(2026)     // { from: "2026-01-01", to: "2026-12-31" }
+ *   yearRange(2026, 11) // { from: "2026-01-11", to: "2027-01-10" }
+ */
+export function yearRange(year: number, startDay: number = 1): DayRange {
+  return {
+    from: periodRange(`${year}-01`, startDay).from,
+    to: periodRange(`${year}-12`, startDay).to,
+  };
+}
+
+/**
  * The billing period that today's date falls into.
  *
  * Accepts an optional `today` for tests / deterministic snapshots.

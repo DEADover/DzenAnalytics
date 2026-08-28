@@ -38,6 +38,7 @@ import {
   shiftPeriod,
   spanDays,
   toIsoDate,
+  yearRange,
   type DayRange,
 } from "../lib/period";
 import { DateField } from "../components/DateField";
@@ -71,6 +72,7 @@ function monthTitle(ym: string): string {
 
 type Preset =
   | "months"
+  | "years"
   | "avg"
   | "ytd_vs_prev_ytd"
   | "last_30_vs_prev_30"
@@ -103,7 +105,9 @@ function rangeOf(
   maxDate: string,
   monthStartDay: number = 1,
   /** Отчётные месяцы для пресета «Месяцы» — их выбирает пользователь. */
-  months: { a: string; b: string } = { a: "", b: "" }
+  months: { a: string; b: string } = { a: "", b: "" },
+  /** Отчётные годы для пресета «Годы» — тоже выбирает пользователь. */
+  years: { a: number; b: number } = { a: 0, b: 0 }
 ): { a: Range; b: Range } {
   // Разбор и сборка дат — обе локальные. Раньше здесь смешивались локальный
   // конструктор и `toISOString()`, и «с начала года» уезжало на сутки: в поясе
@@ -121,6 +125,19 @@ function rangeOf(
     return {
       a: { ...aRange, label: monthTitle(months.a) },
       b: { ...bRange, label: monthTitle(months.b) },
+    };
+  }
+  if (preset === "years") {
+    // Год — тоже отчётный: при своём начале месяца он сдвинут вместе с ним.
+    // Обрезка идущего года по последней операции и выравнивание длин — снаружи,
+    // в `comparableRanges`, ровно как у «Месяцев».
+    const aRange = yearRange(years.a, monthStartDay);
+    const bRange = yearRange(years.b, monthStartDay);
+    // Подпись — голый год, без слова «год»: она подставляется в фразы вида
+    // «2026 против 2025», где «2026 год против 2025 год» звучало бы криво.
+    return {
+      a: { ...aRange, label: `${years.a}` },
+      b: { ...bRange, label: `${years.b}` },
     };
   }
   if (preset === "ytd_vs_prev_ytd") {
@@ -173,6 +190,7 @@ function inRange(t: Transaction, r: Range): boolean {
  */
 const MODE_OPTIONS: { value: Preset; label: string; title: string }[] = [
   { value: "months", label: "Месяцы", title: "Два любых отчётных месяца рядом" },
+  { value: "years", label: "Годы", title: "Два любых года рядом — год к году" },
   {
     value: "avg",
     label: "Среднее",
@@ -434,6 +452,10 @@ export function ComparePage() {
   // зависят от самих данных, которых на момент useState ещё нет.
   const [monthA, setMonthA] = useState<string | null>(null);
   const [monthB, setMonthB] = useState<string | null>(null);
+  // Годы пресета «Годы» — по тем же правилам, что и месяцы: `null` значит
+  // «не выбирали», и тогда А — последний год с данными, а Б идёт следом за ним.
+  const [yearA, setYearA] = useState<number | null>(null);
+  const [yearB, setYearB] = useState<number | null>(null);
   // Сравнивать равные отрезки: неполный месяц против такого же куска другого.
   const [aligned, setAligned] = useState(true);
   // Сколько предыдущих месяцев усредняем в режиме «Среднее».
@@ -484,6 +506,19 @@ export function ComparePage() {
   const minYM = minDate ? periodKey(minDate, monthStartDay) : months.a;
   const maxYM = maxDate ? periodKey(maxDate, monthStartDay) : months.a;
 
+  /**
+   * Какие годы сейчас сравниваются. По умолчанию — последний год с данными и
+   * предыдущий; пока Б не выбран руками, он следует за А, как и у месяцев.
+   *
+   * Год берём из отчётного месяца, а не из даты: при своём начале месяца
+   * январская операция может относиться ещё к прошлому отчётному году.
+   */
+  const years = useMemo(() => {
+    const fallback = Number(maxYM.slice(0, 4)) || new Date().getFullYear();
+    const a = yearA ?? fallback;
+    return { a, b: yearB ?? a - 1 };
+  }, [yearA, yearB, maxYM]);
+
   const ranges = useMemo<Comparison>(() => {
     const one = (r: Range): DayRange[] => (r.from && r.to ? [{ from: r.from, to: r.to }] : []);
 
@@ -520,16 +555,18 @@ export function ComparePage() {
       preset,
       maxDate || new Date().toISOString().slice(0, 10),
       monthStartDay,
-      months
+      months,
+      years
     );
     // Остальные пресеты строят одинаковые по длине окна сами, а «свои даты»
     // пользователь задал руками — там подрезать нечего.
-    if (preset !== "months") return { ...raw, windowsB: one(raw.b) };
+    if (preset !== "months" && preset !== "years")
+      return { ...raw, windowsB: one(raw.b) };
     const fit = comparableRanges(raw.a, raw.b, maxDate, aligned);
     const a = { ...fit.a, label: raw.a.label };
     const b = { ...fit.b, label: raw.b.label };
     return { a, b, windowsB: one(b) };
-  }, [preset, customA, customB, maxDate, monthStartDay, months, aligned, avgMonths]);
+  }, [preset, customA, customB, maxDate, monthStartDay, months, years, aligned, avgMonths]);
 
   /** На сколько периодов делить суммы Б. В «Среднем» их несколько, иначе один. */
   const divisorB = preset === "avg" ? Math.max(1, ranges.windowsB.length) : 1;
@@ -642,6 +679,18 @@ export function ComparePage() {
       onStep={(dir) => setMonthA(shiftPeriod(months.a, dir))}
     />
   );
+  const yearPicker = (value: number, set: (y: number) => void) => (
+    <MonthPicker
+      value={`${value}-01`}
+      minYM={minYM}
+      maxYM={maxYM}
+      active
+      mode="year"
+      onSelect={(ym) => set(Number(ym.slice(0, 4)))}
+      onSelectYear={set}
+      onStep={(dir) => set(value + dir)}
+    />
+  );
   const dateFields = (
     r: Range,
     set: (next: Range) => void
@@ -666,6 +715,8 @@ export function ComparePage() {
   const slotA =
     preset === "months" || preset === "avg" ? (
       monthPickerA
+    ) : preset === "years" ? (
+      yearPicker(years.a, setYearA)
     ) : preset === "custom" ? (
       dateFields(customA, setCustomA)
     ) : (
@@ -682,6 +733,8 @@ export function ComparePage() {
         onSelect={setMonthB}
         onStep={(dir) => setMonthB(shiftPeriod(months.b, dir))}
       />
+    ) : preset === "years" ? (
+      yearPicker(years.b, setYearB)
     ) : preset === "avg" ? (
       <>
         <span className="text-sm shrink-0">Среднее за</span>
@@ -708,18 +761,42 @@ export function ComparePage() {
   // ── Статус «равных отрезков» ────────────────────────────────────────────
   // Настройка применима только там, где периоды могут разойтись по длине.
   // Вместо погашенного переключателя — фраза, объясняющая, почему её тут нет.
-  const alignApplicable = preset === "months" || preset === "avg";
-  const fullA = alignApplicable ? periodRange(months.a, monthStartDay) : null;
+  const alignApplicable =
+    preset === "months" || preset === "avg" || preset === "years";
+  const fullA = !alignApplicable
+    ? null
+    : preset === "years"
+      ? yearRange(years.a, monthStartDay)
+      : periodRange(months.a, monthStartDay);
   // В «Среднем» идущим может быть только А: период Б там собирается из прошлых
   // месяцев. А вот в «Месяцах» текущий месяц можно поставить в любой слот —
   // поэтому смотрим оба. Иначе панель заявляет «Оба периода целиком» ровно
   // тогда, когда идущий месяц выбран вторым.
-  const fullB = preset === "months" ? periodRange(months.b, monthStartDay) : null;
+  const fullB =
+    preset === "months"
+      ? periodRange(months.b, monthStartDay)
+      : preset === "years"
+        ? yearRange(years.b, monthStartDay)
+        : null;
   // «Ещё идёт» — про календарь, а не про подрезку: см. `isRunningPeriod`.
+  const runningTitle = (slot: "a" | "b") =>
+    preset === "years"
+      ? `${slot === "a" ? years.a : years.b} год`
+      : monthTitle(slot === "a" ? months.a : months.b);
   const running = isRunningPeriod(fullA, maxDate)
-    ? { slot: "А", other: "Б", ym: months.a, days: spanDays(ranges.a.from, ranges.a.to) }
+    ? {
+        slot: "А",
+        other: "Б",
+        title: runningTitle("a"),
+        days: spanDays(ranges.a.from, ranges.a.to),
+      }
     : isRunningPeriod(fullB, maxDate)
-      ? { slot: "Б", other: "А", ym: months.b, days: spanDays(ranges.b.from, ranges.b.to) }
+      ? {
+          slot: "Б",
+          other: "А",
+          title: runningTitle("b"),
+          days: spanDays(ranges.b.from, ranges.b.to),
+        }
       : null;
   // Короткая строка и полная фраза к ней. Пояснение обязано укладываться в ОДНУ
   // строку: иначе панель в одних режимах на 16px выше, чем в других, и данные
@@ -736,11 +813,11 @@ export function ComparePage() {
       : aligned
         ? [
             `По ${formatNum(running.days)} дн. с начала каждого`,
-            `${monthTitle(running.ym)} ещё идёт, поэтому от обоих периодов взято по ${formatNum(running.days)} ${pluralRu(running.days, ["дню", "дня", "дней"])} с начала`,
+            `${running.title} ещё идёт, поэтому от обоих периодов взято по ${formatNum(running.days)} ${pluralRu(running.days, ["дню", "дня", "дней"])} с начала`,
           ]
         : [
             `${running.slot} ещё идёт, ${running.other} целиком`,
-            `${monthTitle(running.ym)} ещё не закончился, а период ${running.other} взят целиком — суммы несопоставимы`,
+            `${running.title} ещё не закончился, а период ${running.other} взят целиком — суммы несопоставимы`,
           ];
 
   if (transactions.length === 0) return <EmptyState />;
