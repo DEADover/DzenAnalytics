@@ -100,8 +100,12 @@ import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { Segmented } from "../components/Segmented";
-import { InfoPopover } from "../components/InfoPopover";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { capitalShare, mergeLiveByTitle, positiveBalanceTotal } from "../lib/accountOptions";
+import { depositTotals, projectDeposit, type DepositRow } from "../lib/deposits";
+import { SectionCard } from "../components/SectionCard";
+import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
+import { toIsoDate } from "../lib/period";
 import { Stat } from "../components/Stat";
 import { Sparkline } from "../components/Sparkline";
 import { AccountLogo } from "../components/AccountLogo";
@@ -390,6 +394,14 @@ function passesFilter(selected: Set<string>, value: string): boolean {
  */
 const CAPITAL_FILTERS_HINT =
   "На «Капитале» работает только период: остаток на дату складывается из всей истории до неё. Какие счета показать на графике — в его карточке. Отборы по счетам, категориям и суммам живут на вкладке «Движение».";
+
+/** Колонки свода вкладов: ставка, остаток срока, сумма, что ещё набежит. */
+const DEPOSIT_COLUMNS: MeterCell[] = [
+  { text: "Ставка", width: "w-14" },
+  { text: "Осталось", width: "w-24" },
+  { text: "Сумма", width: "w-28" },
+  { text: "Набежит", width: "w-28" },
+];
 
 export function AccountsPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -704,6 +716,28 @@ export function AccountsPage() {
     });
     return { rows, dormant };
   }, [accounts, accountsAll, capitalView, liveList, accountEdits, toBase]);
+
+  /**
+   * Вклады с посчитанной доходностью (issue #81).
+   *
+   * Параметры вклада — ставка, срок, периодичность, капитализация — приезжают
+   * из Дзен-мани вместе с остатками и правятся в карточке счёта, но до сих пор
+   * нигде не считались. Счёт без ставки или срока в свод не попадает: мы про
+   * него ничего не знаем, а ноль означал бы «ничего не принесёт».
+   */
+  const depositRows = useMemo(() => {
+    const today = toIsoDate(new Date());
+    const out: DepositRow<(typeof liveList)[number]>[] = [];
+    for (const a of liveList) {
+      if (a.type !== "deposit" || a.archive) continue;
+      const projection = projectDeposit(a.balance, a, today);
+      if (!projection) continue;
+      out.push({ account: a, balance: toBase(a.balance, a.currency), projection });
+    }
+    // Ближайшие к закрытию — первыми: по ним и решать раньше всего.
+    return out.sort((x, y) => x.projection.daysLeft - y.projection.daysLeft);
+  }, [liveList, toBase]);
+  const depositSum = useMemo(() => depositTotals(depositRows), [depositRows]);
 
   /** Спящие счета, не попавшие в список вовсе (нулевой остаток и без операций). */
   const dormantCount = accountRowsResult.dormant;
@@ -2011,6 +2045,78 @@ export function AccountsPage() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Доходность вкладов. Только на «Капитале»: на «Движении» речь про обороты
+          за период, а вклад отвечает на другой вопрос — сколько он принесёт. */}
+      {capitalView && depositRows.length > 0 && (
+        <SectionCard
+          icon={<PiggyBank className="w-4 h-4 text-income" />}
+          title="Вклады"
+          info={
+            <p>
+              Проценты считаются от <InfoTerm>текущего остатка</InfoTerm> по
+              ставке, сроку и капитализации, которые заданы у счёта в Дзен-мани.
+              Это прогноз «сколько набежит, если ничего не трогать», а не выписка
+              банка: будущие пополнения и снятия не учитываются — их никто не
+              обещал. Налог с процентов тоже не считаем: он зависит от ключевой
+              ставки и от всех ваших вкладов сразу, включая те, которых в
+              Дзен-мани нет. Вклад без ставки или без срока в список не попадает
+              — про него нечего сказать.
+            </p>
+          }
+          right={
+            <span className="text-[11px] text-muted tabular-nums">
+              {formatMoney(depositSum.balance, base)} · {formatPct(depositSum.avgPercent / 100, 1)} годовых
+            </span>
+          }
+        >
+          <MeterHead columns={DEPOSIT_COLUMNS} />
+          <div className="space-y-0.5">
+            {depositRows.map((r) => (
+              <MeterRow
+                key={r.account.id}
+                label={r.account.title}
+                // Полоса — сколько срока уже прошло: у вклада, который завтра
+                // закрывается, она полная.
+                share={
+                  r.projection.daysTotal > 0
+                    ? 1 - r.projection.daysLeft / r.projection.daysTotal
+                    : 1
+                }
+                barCls="bg-income"
+                strong={r.projection.daysLeft === 0}
+                cells={[
+                  { text: formatPct(r.projection.percent / 100, 1), width: DEPOSIT_COLUMNS[0].width, muted: true },
+                  {
+                    text:
+                      r.projection.daysLeft === 0
+                        ? "срок вышел"
+                        : `${formatNum(r.projection.daysLeft)} ${pluralRu(r.projection.daysLeft, ["день", "дня", "дней"])}`,
+                    width: DEPOSIT_COLUMNS[1].width,
+                    muted: true,
+                  },
+                  { text: formatMoney(r.balance, base), width: DEPOSIT_COLUMNS[2].width, muted: true },
+                  { text: `+${formatMoney(r.projection.interestLeft, base)}`, width: DEPOSIT_COLUMNS[3].width },
+                ]}
+                onClick={() => setSelectedAccount(r.account.title)}
+                title={`Открыт ${formatDate(r.account.startDate || "", "short")}, до ${formatDate(r.projection.endDate, "short")}${r.projection.compounded ? ", с капитализацией" : ""}`}
+              />
+            ))}
+          </div>
+          <div className="flex items-baseline justify-between gap-3 mt-2 pt-2 border-t border-border text-sm">
+            <span className="text-muted">
+              Ещё набежит до конца сроков · на конец останется
+            </span>
+            <span className="tabular-nums">
+              <span className="text-income font-semibold">
+                +{formatMoney(depositSum.interestLeft, base)}
+              </span>
+              <span className="text-muted"> · </span>
+              <span className="font-semibold">{formatMoney(depositSum.atMaturity, base)}</span>
+            </span>
+          </div>
+        </SectionCard>
+      )}
 
       {/* Список счетов виден на ОБЕИХ вкладках: это опора страницы, и прятать
           его за вкладкой — значит отвечать на вопрос «сколько у меня есть» без
