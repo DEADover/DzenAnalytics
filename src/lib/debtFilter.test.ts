@@ -45,7 +45,7 @@ describe("ключ «счёт → контрагент»", () => {
   });
 });
 
-describe("отбор по контрагенту долгового счёта", () => {
+describe("фильтр по контрагенту долгового счёта", () => {
   const picks = debtSelection([debtKey("Долги", "Иван"), "Сбер"]);
 
   it("обычные счета в разбор не попадают", () => {
@@ -72,7 +72,7 @@ describe("отбор по контрагенту долгового счёта",
     expect(matchesDebtSelection(tx({ payee: "" }), picks)).toBe(false);
   });
 
-  it("пустой отбор не ловит ничего", () => {
+  it("пустой фильтр не ловит ничего", () => {
     expect(matchesDebtSelection(tx(), debtSelection([]))).toBe(false);
   });
 

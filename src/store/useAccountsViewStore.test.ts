@@ -45,7 +45,7 @@ describe("настройки страницы «Счета» — чтение и
     expect(normalize(raw)).toEqual(ACCOUNTS_VIEW_DEFAULTS);
   });
 
-  it("в массивах отборов остаются только строки", () => {
+  it("в массивах фильтров остаются только строки", () => {
     const raw = {
       typeFilter: ["Карта", 7, null, "Вклад"],
       bankFilter: "не массив",

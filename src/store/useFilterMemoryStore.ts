@@ -1,7 +1,7 @@
 /**
- * Память отбора между сессиями (issue #79).
+ * Память фильтра между сессиями (issue #79).
  *
- * Текущее состояние отбора жило только до перезагрузки вкладки: сторонний
+ * Текущее состояние фильтра жило только до перезагрузки вкладки: сторонний
  * стор без диска, и в бэкап класть было нечего. Здесь появляется снимок,
  * который переживает перезагрузку и едет вместе с остальными настройками.
  *
@@ -12,7 +12,7 @@
  * по этой же причине сохранённые виды помнят период отдельным флажком
  * `includePeriod`, а не всегда.
  *
- * По умолчанию память ВЫКЛЮЧЕНА: привычка «перезагрузил — отбор чист» у людей
+ * По умолчанию память ВЫКЛЮЧЕНА: привычка «перезагрузил — фильтр чист» у людей
  * уже есть, и менять её молча нельзя.
  */
 
@@ -22,7 +22,7 @@ import { useFiltersStore } from "./useFiltersStore";
 
 const KEY = "filterMemory";
 
-/** Снимок отбора — всё, что человек выбрал, кроме периода. */
+/** Снимок фильтра — всё, что человек выбрал, кроме периода. */
 export interface FilterSnapshot {
   accounts: string[];
   categories: string[];
@@ -45,7 +45,7 @@ export interface FilterMemory {
   snapshot: FilterSnapshot | null;
 }
 
-/** Поля отбора, которые снимаем. Структурно, а не через `FiltersState`:
+/** Поля фильтра, которые снимаем. Структурно, а не через `FiltersState`:
  *  так функцию можно позвать из теста, не поднимая весь стор. */
 export interface FilterValues {
   accounts: Set<string>;
@@ -63,7 +63,7 @@ export interface FilterValues {
   excludeOffBalance: boolean;
 }
 
-/** Снять отбор в вид, который переживёт JSON. Множества — массивами. */
+/** Снять фильтр в вид, который переживёт JSON. Множества — массивами. */
 export function snapshotFilters(s: FilterValues): FilterSnapshot {
   return {
     accounts: [...s.accounts],
@@ -82,7 +82,7 @@ export function snapshotFilters(s: FilterValues): FilterSnapshot {
   };
 }
 
-/** Пустой отбор — ничего не выбрано. Такой снимок хранить незачем. */
+/** Пустой фильтр — ничего не выбрано. Такой снимок хранить незачем. */
 export function isEmptySnapshot(s: FilterSnapshot): boolean {
   return (
     s.accounts.length === 0 &&
@@ -108,7 +108,7 @@ const numOrNull = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
 
 /**
- * Разобрать снимок из базы или бэкапа обратно в значения отбора.
+ * Разобрать снимок из базы или бэкапа обратно в значения фильтра.
  *
  * Читаем ЧУЖОЙ json — файл бэкапа человек мог править руками, да и сам формат
  * со временем меняется. Поэтому каждое поле приводим к своему типу, а не
@@ -135,7 +135,7 @@ export function restoreFilters(raw: unknown): FilterValues | null {
   };
 }
 
-/** Пауза перед записью: отбор меняется на каждую букву в поиске. */
+/** Пауза перед записью: фильтр меняется на каждую букву в поиске. */
 const SAVE_DELAY = 500;
 
 interface FilterMemoryState {
@@ -143,7 +143,7 @@ interface FilterMemoryState {
   loaded: boolean;
   hydrate: () => Promise<void>;
   setEnabled: (on: boolean) => Promise<void>;
-  /** Следить за отбором и складывать его на диск. Возвращает отписку. */
+  /** Следить за фильтром и складывать его на диск. Возвращает отписку. */
   watch: () => () => void;
 }
 

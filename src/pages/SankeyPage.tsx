@@ -41,7 +41,7 @@ export function SankeyPage() {
   const filtered = useMemo(() => applyFilters(transactions, filters, monthStartDay), [transactions, filters, monthStartDay]);
   const data = useMemo(() => buildSankey(filtered), [filtered]);
 
-  /** Итоги того же отбора: диаграмма отвечает «куда», а не «сколько». */
+  /** Итоги того же фильтра: диаграмма отвечает «куда», а не «сколько». */
   const totals = useMemo(() => {
     let income = 0;
     let expense = 0;
@@ -116,7 +116,7 @@ export function SankeyPage() {
       {header}
       <GlobalFilters />
 
-      {/* Итоги отбора. Диаграмма показывает пропорции и ничего не говорит о
+      {/* Итоги фильтра. Диаграмма показывает пропорции и ничего не говорит о
           суммах: чтобы узнать, сколько всего пришло, приходилось уходить на
           другую страницу. */}
       <div className="tray">
@@ -127,7 +127,7 @@ export function SankeyPage() {
               value={formatMoney(totals.income, base)}
               icon={<TrendingUp className="w-4 h-4" />}
               tone="income"
-              note={`${totals.count} ${totals.count % 10 === 1 && totals.count % 100 !== 11 ? "операция" : "операций"} в отборе`}
+              note={`${totals.count} ${totals.count % 10 === 1 && totals.count % 100 !== 11 ? "операция" : "операций"} в фильтре`}
             />
             <StatCell
               label="Расход"
@@ -359,7 +359,7 @@ function FlowTooltip({
   active?: boolean;
   payload?: readonly unknown[];
   base: string;
-  /** Доход отбора — от него считается доля потока. */
+  /** Доход фильтра — от него считается доля потока. */
   total: number;
 }) {
   if (!active || !payload?.length) return null;

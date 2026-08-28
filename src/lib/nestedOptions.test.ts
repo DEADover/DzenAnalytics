@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { nestedBranches, visibleOptions } from "./nestedOptions";
 import { debtKey, parseDebtKey } from "./debtFilter";
 
-/** Признак ветки — тот же, что в отборе счетов: пара «счёт → контрагент». */
+/** Признак ветки — тот же, что в фильтре счетов: пара «счёт → контрагент». */
 const isNested = (opt: string) => parseDebtKey(opt) !== null;
 
 const ИВАН = debtKey("Долги", "Иван");

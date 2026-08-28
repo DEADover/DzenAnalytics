@@ -125,7 +125,7 @@ describe("stackedBalanceByAccount — real-balance anchoring", () => {
     expect(last.total).toBe(573_100);
   });
 
-  it("отбор одного счёта: до открытия — ноль, а не остаток", () => {
+  it("фильтр одного счёта: до открытия — ноль, а не остаток", () => {
     const t = [
       tx({ kind: "income", amount: 1000, incomeAccount: "Старый", date: "2016-04-17" }),
       tx({ kind: "expense", amount: 100, outcomeAccount: "Старый", date: "2020-01-01" }),
@@ -1108,7 +1108,7 @@ describe("stackedBalanceByAccount — issue #59", () => {
   });
 });
 
-describe("stackedBalanceByAccount — отбор счетов для графика", () => {
+describe("stackedBalanceByAccount — фильтр счетов для графика", () => {
   const last = (r: { series: StackedBalancePoint[] }) => r.series[r.series.length - 1];
   const real = { Карта: 7000, Наличные: 3000, Вклад: 50_000, Копилка: 1000 };
   const txs = [
@@ -1118,18 +1118,18 @@ describe("stackedBalanceByAccount — отбор счетов для графи�
     tx({ date: "2026-03-11", kind: "income", incomeAccount: "Копилка", amount: 500 }),
   ];
 
-  it("без отбора — прежнее поведение: топ-N и «Прочие»", () => {
+  it("без фильтра — прежнее поведение: топ-N и «Прочие»", () => {
     const r = stackedBalanceByAccount(txs, 2, real);
     expect(r.accounts).toEqual(["Вклад", "Карта", "Прочие"]);
     expect(last(r).total).toBe(61_000);
   });
 
-  it("пустой список считается как «без отбора»", () => {
+  it("пустой список считается как «без фильтра»", () => {
     const r = stackedBalanceByAccount(txs, 2, real, null, []);
     expect(r.accounts).toEqual(["Вклад", "Карта", "Прочие"]);
   });
 
-  it("с отбором — ровно выбранные счета, без «Прочих»", () => {
+  it("с фильтром — ровно выбранные счета, без «Прочих»", () => {
     const r = stackedBalanceByAccount(txs, 8, real, null, ["Карта", "Наличные"]);
     expect(r.accounts).toEqual(["Карта", "Наличные"]);
     expect(r.accounts).not.toContain("Прочие");

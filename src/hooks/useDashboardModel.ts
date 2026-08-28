@@ -97,7 +97,7 @@ export interface DashboardModel {
   /**
    * В текущем периоде есть хоть одна учтённая операция.
    *
-   * `false` при живой истории означает, что период вычистил отбор — разрез
+   * `false` при живой истории означает, что период вычистил фильтр — разрез
    * данных или скрытые внебалансовые счета. Варианты обязаны сказать об этом
    * прямо, а не показывать нули как факт.
    */
@@ -274,7 +274,7 @@ export function useDashboardModel(): DashboardModel {
   const factIncome = current?.income ?? 0;
   const factExpense = current?.expense ?? 0;
   // Сколько операций текущего периода реально дошло до расчёта. Ноль при живой
-  // истории — это не «месяц без трат», а отбор: разрез данных или скрытые
+  // истории — это не «месяц без трат», а фильтр: разрез данных или скрытые
   // внебалансовые счета. Показывать в таком случае бодрое «свободно 534 135 ₽»
   // нельзя, поэтому варианты обязаны проверить этот признак.
   const currentCount = current?.count ?? 0;
@@ -333,7 +333,7 @@ export function useDashboardModel(): DashboardModel {
     return { planIncome: inc, planExpense: exp };
   }, [budgetLines, ym]);
 
-  // Факт по статьям за месяц — в том же виде, в каком его ждёт отбор наблюдений.
+  // Факт по статьям за месяц — в том же виде, в каком его ждёт фильтр наблюдений.
   const factByCategory = useMemo(() => {
     const map = new Map<string, number>();
     for (const c of categories) map.set(c.category, c.expense);

@@ -24,7 +24,7 @@ const values = (over: Partial<FilterValues> = {}): FilterValues => ({
 });
 
 describe("snapshotFilters / restoreFilters", () => {
-  it("отбор переживает круг через JSON без потерь", () => {
+  it("фильтр переживает круг через JSON без потерь", () => {
     const before = values({
       accounts: new Set(["Карта", "Наличные"]),
       categories: new Set(["Еда / Кафе"]),
@@ -42,7 +42,7 @@ describe("snapshotFilters / restoreFilters", () => {
   });
 
   it("множества превращаются в массивы, а не в пустые объекты", () => {
-    // `JSON.stringify(new Set())` даёт `{}` — без этого шага отбор по счетам
+    // `JSON.stringify(new Set())` даёт `{}` — без этого шага фильтр по счетам
     // молча терялся бы при первой же записи на диск.
     const snap = snapshotFilters(values({ accounts: new Set(["Карта"]) }));
     expect(snap.accounts).toEqual(["Карта"]);
@@ -51,7 +51,7 @@ describe("snapshotFilters / restoreFilters", () => {
 
   it("период в снимок не попадает", () => {
     // Приложение сбрасывает период к текущему месяцу при каждом запуске, и
-    // память отбора не должна с этим спорить.
+    // память фильтра не должна с этим спорить.
     const snap = snapshotFilters(values({ accounts: new Set(["Карта"]) }));
     for (const k of ["preset", "from", "to", "monthYM"]) {
       expect(snap).not.toHaveProperty(k);
@@ -70,10 +70,10 @@ describe("restoreFilters — чужой файл", () => {
   it("снимка нет — ничего не применяем", () => {
     expect(restoreFilters(null)).toBeNull();
     expect(restoreFilters(undefined)).toBeNull();
-    expect(restoreFilters("отбор")).toBeNull();
+    expect(restoreFilters("фильтр")).toBeNull();
   });
 
-  it("мусор в полях не ломает отбор", () => {
+  it("мусор в полях не ломает фильтр", () => {
     // Файл бэкапа человек мог править руками: строка в `minAmount` сломала бы
     // сравнение сумм, а число в множестве счетов — спрятало бы все операции.
     const out = restoreFilters({
@@ -90,19 +90,19 @@ describe("restoreFilters — чужой файл", () => {
     expect(out.minAmount).toBeNull();
     expect(out.maxAmount).toBeNull();
     expect([...out.types]).toEqual(["expense"]);
-    // Строка «да» — не булево: включать по ней отбор нельзя.
+    // Строка «да» — не булево: включать по ней фильтр нельзя.
     expect(out.hideZero).toBe(false);
     expect(out.onlyNew).toBe(true);
   });
 
-  it("пустой объект даёт пустой отбор, а не поломанный", () => {
+  it("пустой объект даёт пустой фильтр, а не поломанный", () => {
     const out = restoreFilters({})!;
     expect(isEmptySnapshot(snapshotFilters(out))).toBe(true);
   });
 });
 
 describe("isEmptySnapshot", () => {
-  it("нетронутый отбор — пустой", () => {
+  it("нетронутый фильтр — пустой", () => {
     expect(isEmptySnapshot(snapshotFilters(values()))).toBe(true);
   });
 
@@ -127,7 +127,7 @@ describe("isEmptySnapshot", () => {
     }
   });
 
-  it("поиск из одних пробелов — это не отбор", () => {
+  it("поиск из одних пробелов — это не фильтр", () => {
     expect(isEmptySnapshot(snapshotFilters(values({ search: "   " })))).toBe(true);
   });
 });
