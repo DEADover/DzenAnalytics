@@ -50,6 +50,8 @@ import {
   transactionsForCell,
   TRANSFER_CATEGORY,
 } from "../lib/budgetScope";
+import { NO_CATEGORY } from "../lib/zenmoneyMap";
+import { affectsExpense, expenseDelta } from "../lib/txKindStyle";
 import { useBudgetSettingsStore, type BudgetView } from "../store/useBudgetSettingsStore";
 import { Segmented } from "../components/Segmented";
 import { Tooltip } from "../components/Tooltip";
@@ -99,6 +101,21 @@ interface Row {
   locked?: boolean;
   /** План взят из назначенной операции Дзен-мани, своего плана у статьи нет. */
   scheduled?: boolean;
+  /**
+   * Плана у статьи нет вовсе — строка собрана из одних фактов (issue #82).
+   *
+   * Такие статьи жили отдельным блоком «Без бюджета», и сводка их не считала:
+   * итог месяца показывал только то, что кто-то заранее запланировал, и не
+   * сходился с лентой операций за тот же месяц. План у строки ноль, а не
+   * «нет»: ноль — это честный ответ «столько собирались потратить».
+   */
+  unplanned?: boolean;
+  /**
+   * Плану тут взяться неоткуда: «Без категории» — не статья, планировать
+   * неразобранное нечего. В сумму месяца эти деньги при этом входят: они
+   * потрачены.
+   */
+  plannable?: boolean;
 }
 
 export function BudgetsPage() {
@@ -315,12 +332,6 @@ export function BudgetsPage() {
   }
   /** Start a draft pre-filled with a tag (from the «Без бюджета» list) — the
    *  optional sub-category lets a sub-tag suggestion fill straight in. */
-  function startAdd(kind: BudgetKind, category: string, subcategory = "") {
-    setDraftKind(kind);
-    setFCat(category);
-    setFSub(subcategory);
-    setFAmount("");
-  }
   function submitLine() {
     const amt = Number(fAmount);
     if (!fCat || !amt || amt <= 0 || dupLine) return;
@@ -626,14 +637,20 @@ export function BudgetsPage() {
       return compareBudgetRows({ name: as, amount: a.fact }, { name: bs, amount: b.fact }, rowOrder);
     });
   }, [lines, ym, transactions, zenForecasts, zenLoaded, scope, rowOrder, plannedAsPlan, livePaths]);
-  const expenseRows = rows.filter((r) => r.line.kind === "expense");
-  const incomeRows = rows.filter((r) => r.line.kind === "income");
-
-  // Tags with spending THIS month but no plan — surfaced so they can be
-  // budgeted. Aggregated at the TAG level (parent-direct AND each sub-tag), so a
-  // sub-category overspending under a budgeted parent still shows, and its
-  // «+ План» pre-fills that exact sub-tag.
-  const unbudgeted = useMemo(() => {
+  /**
+   * Статьи, по которым в этом месяце были деньги, но плана нет.
+   *
+   * Раньше они жили отдельным блоком «Без бюджета» и в сводку месяца не
+   * входили: итог показывал только запланированное и не сходился с лентой
+   * операций за тот же месяц — «где деньги?» (issue #82). Теперь это обычные
+   * строки с планом 0, в общем списке доходов и расходов; карандаш у них
+   * работает так же, как у всех, и первая же заданная сумма превращает строку
+   * в настоящий план.
+   *
+   * Считается ПОСЛЕ `rows`: статья попадает сюда, только если её ещё нет
+   * наверху — ни своей строкой, ни внутри плана родительской категории.
+   */
+  const unplannedRows = useMemo<Row[]>(() => {
     const agg = new Map<
       string,
       { kind: BudgetKind; category: string; subcategory: string | null; fact: number }
@@ -649,52 +666,86 @@ export function BudgetsPage() {
       if (cur) cur.fact += amount;
       else agg.set(key, { kind, category, subcategory, fact: amount });
     };
+    const inScope = (account: string | undefined) =>
+      scope.accounts.size === 0 || (!!account && scope.accounts.has(account));
     for (const t of transactions) {
       if (!(t.date || "").startsWith(ym)) continue;
-      // Тем же правилом, что и суммы: периметр счетов, переводы через границу и
-      // отсев «Без категории» — всё внутри `budgetHit`.
-      // Попаданий может быть два: у перевода списание идёт в расходы, а
-      // зачисление — в доходы.
+      // «Без категории» `budgetHits` отсеивает — планировать неразобранное
+      // нечего. Но деньги-то потрачены, и без них итог месяца не сойдётся с
+      // операциями. Собираем их отдельной строкой, которую нельзя планировать.
+      if (t.kind !== "transfer" && (!t.category || t.category === NO_CATEGORY)) {
+        if (!inScope(t.account)) continue;
+        if (t.kind === "income") add("income", NO_CATEGORY, null, t.amountBase);
+        else if (affectsExpense(t.kind)) add("expense", NO_CATEGORY, null, expenseDelta(t));
+        continue;
+      }
       for (const hit of budgetHits(t, scope))
         add(hit.kind, hit.category, hit.subcategory, hit.amount);
     }
-    // A tag belongs in «Без бюджета» only if it isn't ALREADY shown in the
-    // budget section above. That includes income tags shown via a history
-    // forecast (no manual plan, but clearly represented with a «≈» and a
-    // click-to-plan) — keying off `budgetedThisMonth` (manual plans only) listed
-    // such forecast-only tags BOTH above and here. Key off what's actually shown.
     const shown = new Set(
       rows.map((r) => budgetKey(r.line.kind, r.line.category, r.line.subcategory ?? null))
     );
-    // Под-категория не «без бюджета», если план есть у её КАТЕГОРИИ: эти траты
-    // уже проедают родительский план и показаны в нём (#70). Иначе одни и те же
-    // деньги стояли бы на экране дважды — в строке «Медицина» и здесь же
-    // отдельной строкой «Медицина / Лекарства».
-    const parentBudgeted = (u: { kind: BudgetKind; category: string; subcategory: string | null }) =>
+    // Под-категория не «без плана», если план есть у её КАТЕГОРИИ: эти траты
+    // уже проедают родительский план и показаны в нём (#70).
+    const parentShown = (u: { kind: BudgetKind; category: string; subcategory: string | null }) =>
       u.subcategory !== null && shown.has(budgetKey(u.kind, u.category, null));
     return [...agg.values()]
       .filter(
         (u) =>
-          u.fact > 0 &&
-          // Переводы планировать нельзя и не нужно. «Переводы» — наша
-          // собственная статья, в справочнике Дзен-мани такого тега нет:
-          // заведённый по ней план навсегда завис бы неотправленным. Да и по
-          // сути перевод между своими счетами не доход и не расход — его
-          // показывают, чтобы видеть обороты, а не чтобы на него планировать.
+          u.fact !== 0 &&
+          // Переводы — не статья бюджета: плана по ним не бывает, а в сводке
+          // они идут своей строкой «оборот по счетам».
           u.category !== TRANSFER_CATEGORY &&
           !shown.has(budgetKey(u.kind, u.category, u.subcategory)) &&
-          !parentBudgeted(u)
+          !parentShown(u)
       )
-      // Тем же порядком, что и статьи с планом: список на одной странице,
-      // который местами по алфавиту, а местами по сумме, читается как сбой.
-      .sort((a, b) =>
-        compareBudgetRows(
-          { name: a.subcategory ? `${a.category} ${a.subcategory}` : a.category, amount: a.fact },
-          { name: b.subcategory ? `${b.category} ${b.subcategory}` : b.category, amount: b.fact },
-          rowOrder
-        )
+      .map(
+        (u): Row => ({
+          line: {
+            id: `unplanned:${budgetKey(u.kind, u.category, u.subcategory)}`,
+            kind: u.kind,
+            category: u.category,
+            subcategory: u.subcategory,
+            amount: 0,
+            recurrence: "monthly",
+            startMonth: ym,
+            endMonth: null,
+            createdAt: "",
+          },
+          planned: 0,
+          fact: u.fact,
+          forecast: false,
+          unplanned: true,
+          plannable: u.category !== NO_CATEGORY,
+        })
       );
-  }, [transactions, ym, rows, scope, rowOrder]);
+  }, [transactions, ym, rows, scope]);
+
+  /** Всё вместе — и запланированное, и нет. Сводка считается по этому списку,
+   *  поэтому итог месяца сходится с лентой операций за тот же месяц. */
+  const allRows = useMemo(() => {
+    const merged = [...rows, ...unplannedRows];
+    const catFact = new Map<string, number>();
+    const catKey = (r: Row) => `${r.line.kind}\u0000${r.line.category}`;
+    for (const r of merged) catFact.set(catKey(r), (catFact.get(catKey(r)) ?? 0) + r.fact);
+    return merged.sort((a, b) => {
+      if (a.line.category !== b.line.category)
+        return compareBudgetRows(
+          { name: a.line.category, amount: catFact.get(catKey(a)) ?? 0 },
+          { name: b.line.category, amount: catFact.get(catKey(b)) ?? 0 },
+          rowOrder
+        );
+      const as = a.line.subcategory ?? "";
+      const bs = b.line.subcategory ?? "";
+      if (!as || !bs) return as ? 1 : bs ? -1 : 0;
+      return compareBudgetRows({ name: as, amount: a.fact }, { name: bs, amount: b.fact }, rowOrder);
+    });
+  }, [rows, unplannedRows, rowOrder]);
+
+  const expenseRows = allRows.filter((r) => r.line.kind === "expense");
+  const incomeRows = allRows.filter((r) => r.line.kind === "income");
+
+
 
   /**
    * Переводы за месяц по счетам — то же, что статья «Переводы» в годовом своде
@@ -1123,61 +1174,9 @@ export function BudgetsPage() {
           headerAction={addButton("income")}
           prepend={draftKind === "income" ? draftRow : undefined}
         />
-        {unbudgeted.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-baseline gap-2">
-                <h2 className="font-semibold text-lg">Без бюджета</h2>
-                <span className="text-sm text-muted">Траты есть, плана нет</span>
-              </div>
-              <div className="card-tray divide-y divide-border">
-                {unbudgeted.map((u) => (
-                  <div
-                    key={`${u.kind}/${u.category}/${u.subcategory ?? ""}`}
-                    className="flex items-center gap-2.5 px-3 py-2.5"
-                  >
-                    {u.subcategory ? (
-                      <CategoryDot category={u.subcategory} parent={u.category} size="w-7 h-7" />
-                    ) : (
-                      <CategoryDot category={u.category} size="w-7 h-7" />
-                    )}
-                    <button
-                      onClick={() => openCategory(u.category, u.subcategory)}
-                      className="text-sm font-medium truncate flex-1 min-w-0 text-left hover:text-accent"
-                      title={u.subcategory ? `${u.category} / ${u.subcategory}` : u.category}
-                    >
-                      {u.subcategory ? (
-                        <>
-                          <span className="text-muted">{u.category} / </span>
-                          {u.subcategory}
-                        </>
-                      ) : (
-                        u.category
-                      )}
-                    </button>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-                        u.kind === "income" ? "text-income bg-income/10" : "text-muted bg-panel2"
-                      }`}
-                    >
-                      {u.kind === "income" ? "Доход" : "Расход"}
-                    </span>
-                    <span className="text-sm tabular-nums shrink-0 w-32 text-right">
-                      {formatMoney(u.fact, base)}
-                    </span>
-                    <Tooltip content="Задать план на этот месяц">
-                      <button
-                        onClick={() => startAdd(u.kind, u.category, u.subcategory ?? "")}
-                        className="btn-ghost text-sm shrink-0"
-                      >
-                        <Plus className="w-4 h-4" />
-                        План
-                      </button>
-                    </Tooltip>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* Отдельного блока «Без бюджета» больше нет: статьи без плана стоят в
+            общем списке доходов и расходов с планом 0. Раньше их приходилось
+            искать внизу страницы, а в сводке месяца их не было вовсе. */}
         {settings.perimeterTransfers && (transfers.out.length > 0 || transfers.in.length > 0) && (
           <div className="space-y-3">
             <div className="flex items-baseline gap-2 flex-wrap">
@@ -2003,16 +2002,23 @@ function BudgetRow({
         ) : (
           <Tooltip
             content={
-              row.scheduled
-                ? "Сумма назначенной операции Дзен-мани — своего плана у статьи нет. Нажмите, чтобы задать"
-                : row.forecast
-                  ? "Прогноз по истории (медиана 6 мес.). Нажмите, чтобы задать свой план"
-                  : "Изменить план — нажмите и введите сумму"
+              row.plannable === false
+                ? "«Без категории» планировать нечего — статьи у этих операций нет. В сумму месяца они входят: деньги потрачены"
+                : row.unplanned
+                  ? "Плана на этот месяц нет. Нажмите, чтобы задать"
+                  : row.scheduled
+                    ? "Сумма назначенной операции Дзен-мани — своего плана у статьи нет. Нажмите, чтобы задать"
+                    : row.forecast
+                      ? "Прогноз по истории (медиана 6 мес.). Нажмите, чтобы задать свой план"
+                      : "Изменить план — нажмите и введите сумму"
             }
           >
             <button
-              onClick={startEdit}
-              className={`hover:text-accent ${row.forecast ? "text-muted italic" : "text-muted"}`}
+              onClick={row.plannable === false ? undefined : startEdit}
+              disabled={row.plannable === false}
+              className={`hover:text-accent disabled:hover:text-muted disabled:cursor-default ${
+                row.forecast ? "text-muted italic" : "text-muted"
+              }`}
             >
               {/* Часы у назначенной операции и «≈» у прогноза: в обоих случаях
                   план не свой, но причины разные — одну назначили на дату,
