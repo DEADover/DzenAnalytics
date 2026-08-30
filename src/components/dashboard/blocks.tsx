@@ -1166,15 +1166,16 @@ function MomTile({
       </span>
       <span className="text-[12px] text-muted tabular-nums">
         Было {show(metric.prev)}
-        {/* У доли изменение меряется ПУНКТАМИ: 75,2 % → 79,7 % это +4,5 п.п.,
-            а «+6 %» (процент от процента) сказал бы совсем другое. */}
+        {/* У доли показываем РАЗНИЦУ двух процентов, а не процент от процента:
+            14,6 % → −9,6 % это «−24,2 %», а не «−166 %». Строго это пункты, но
+            «Было 14,6 %» стоит рядом, и из пары читается, что это разность. */}
         {up !== null && (percent || metric.ratio !== null) && (
           <>
             {" · "}
             <span className={`font-medium ${up ? "text-income" : "text-expense"}`}>
               {metric.delta > 0 ? "+" : "−"}
               {percent
-                ? `${formatNum(Math.abs(metric.delta) * 100, { fractionDigits: 1 })} п.п.`
+                ? `${formatNum(Math.abs(metric.delta) * 100, { fractionDigits: 1 })}%`
                 : `${Math.round(Math.abs(metric.ratio ?? 0) * 100)}%`}
             </span>
           </>
