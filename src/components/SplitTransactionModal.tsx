@@ -160,7 +160,7 @@ export function SplitTransactionModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="card w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="card w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-border">
           <div className="flex items-center gap-2 font-semibold min-w-0">
             <Scissors className="w-4 h-4 text-accent2 shrink-0" />
@@ -261,7 +261,7 @@ export function SplitTransactionModal({
               >
                 {i + 1}
               </span>
-              <div className="flex-[3] min-w-[190px]">
+              <div className="flex-[4] min-w-[280px]">
                 <CategoryCascadePicker
                   category={p.category}
                   subcategory={p.subcategory ?? ""}
@@ -276,7 +276,7 @@ export function SplitTransactionModal({
                   разные покупки, и через полгода по одной статье их уже не
                   различить. */}
               <input
-                className="input flex-[2] min-w-[130px]"
+                className="input flex-[2] min-w-[150px]"
                 aria-label={`Комментарий части ${i + 1}`}
                 placeholder="Комментарий"
                 value={p.comment ?? ""}
@@ -329,10 +329,14 @@ export function SplitTransactionModal({
             </button>
             {/* Про калькулятор надо сказать словами: поле выглядит обычным, и
                 сам никто складывать в нём не попробует. */}
-            <span className="text-[11px] text-muted inline-flex items-center gap-1.5">
+            <span className="text-[11px] text-muted inline-flex items-center gap-1.5 flex-wrap justify-end">
               <Calculator className="w-3.5 h-3.5 shrink-0" />
-              В поле суммы считаются выражения: <code className="kbd">1200+300</code>
+              В поле суммы считаются выражения:
+              <code className="kbd">1200+300</code>
+              <code className="kbd">1500-150</code>
+              <code className="kbd">199*3</code>
               <code className="kbd">2400/2</code>
+              <code className="kbd">(900+600)/2</code>
             </span>
           </div>
         </div>

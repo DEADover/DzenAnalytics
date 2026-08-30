@@ -898,6 +898,17 @@ export function TransactionsPage() {
                 }
               : undefined
           }
+          // Разделение открывается ВМЕСТО карточки: держать обе формы
+          // открытыми значило бы предлагать править операцию и делить её
+          // одновременно.
+          onSplit={
+            apiConnected && !splitOf(splitParts, editing)
+              ? () => {
+                  setEditing(null);
+                  setSplitting(editing);
+                }
+              : undefined
+          }
           onNavigate={(dir) => {
             const i = sorted.findIndex((t) => t.id === editing.id);
             const next = sorted[i + dir];

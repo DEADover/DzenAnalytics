@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info } from "lucide-react";
+import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -60,6 +60,8 @@ interface Props {
    * подключённого Дзен-мани новых операций не создать).
    */
   onCopy?: () => void;
+  /** Открыть разделение этой операции. Нет — делить нечем или уже разделена. */
+  onSplit?: () => void;
   /** Edit mode only. Step to the previous (-1) / next (+1) operation in the
    *  caller's current order. Wired to ←/→ keys; the caller swaps which `tx`
    *  is being edited. Omit to disable arrow navigation. */
@@ -118,6 +120,7 @@ export function EditTransactionModal({
   initialDebt,
   onClose,
   onCopy,
+  onSplit,
   onNavigate,
 }: Props) {
   const isCreate = !txProp;
@@ -1420,15 +1423,31 @@ export function EditTransactionModal({
                   {!onCopy && "Удалить"}
                 </button>
               </Tooltip>
+              {/* Копирование и разделение — значками без подписей. Обе
+                  подписи рядом с «Удалить» забивали подвал текстом, а
+                  действия эти опознаются по значку: ножницы и две страницы
+                  трактовать иначе трудно. */}
               {onCopy && (
-                <Tooltip content="Создать такую же операцию сегодняшним днём">
+                <Tooltip content="Копировать — такая же операция сегодняшним днём">
                   <button
                     onClick={onCopy}
                     disabled={saving}
-                    className="btn-ghost text-sm"
+                    aria-label="Копировать операцию"
+                    className="btn-ghost text-sm px-3"
                   >
-                    <Copy className="w-3.5 h-3.5" />
-                    Копировать
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </Tooltip>
+              )}
+              {onSplit && (
+                <Tooltip content="Разделить — расписать операцию по нескольким статьям">
+                  <button
+                    onClick={onSplit}
+                    disabled={saving}
+                    aria-label="Разделить операцию"
+                    className="btn-ghost text-sm px-3"
+                  >
+                    <Scissors className="w-4 h-4" />
                   </button>
                 </Tooltip>
               )}
