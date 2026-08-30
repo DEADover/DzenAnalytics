@@ -17,7 +17,7 @@ const part = (over: Partial<SplitDraftPart> = {}): SplitDraftPart => ({
 });
 
 describe("splitRemainder", () => {
-  it("считает, сколько ещё не разнесено", () => {
+  it("считает, сколько ещё не хватает", () => {
     const parts = [part({ key: "a", amount: 700 }), part({ key: "b", amount: 300 })];
     expect(splitRemainder(1000, parts)).toBe(0);
     expect(splitRemainder(1200, parts)).toBe(200);
@@ -120,9 +120,9 @@ describe("splitProblem", () => {
   it("не сошлось — говорим, сколько именно", () => {
     const parts = ok();
     parts[1].amount = 200;
-    expect(splitProblem(1000, parts)).toBe("Не разнесено 100");
+    expect(splitProblem(1000, parts)).toBe("Не хватает 100");
     parts[1].amount = 500;
-    expect(splitProblem(1000, parts)).toBe("Разнесено больше суммы операции на 200");
+    expect(splitProblem(1000, parts)).toBe("Больше суммы операции на 200");
   });
 
   it("две части с одной статьёй — это не разбивка", () => {

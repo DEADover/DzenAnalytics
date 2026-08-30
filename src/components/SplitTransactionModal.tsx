@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import type { Transaction } from "../types";
 import { CategoryCascadePicker } from "./CategoryCascadePicker";
-import { Select } from "./Select";
+import { Combobox } from "./Combobox";
 import { useCategoryNodes } from "../hooks/useCategoryNodes";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
 import { formatMoney } from "../lib/format";
@@ -25,7 +25,6 @@ import {
   evalAmount,
   round2,
   splitProblem,
-  splitRemainder,
   spreadRemainder,
   type SplitDraftPart,
 } from "../lib/splitTransaction";
@@ -103,9 +102,7 @@ export function SplitTransactionModal({
         if (a) seen.add(a);
       }
     }
-    return [...seen]
-      .sort((a, b) => a.localeCompare(b, "ru"))
-      .map((title) => ({ value: title, label: title }));
+    return [...seen].sort((a, b) => a.localeCompare(b, "ru"));
   }, [allTransactions, liveAccounts]);
 
   const [parts, setParts] = useState<SplitDraftPart[]>(() =>
@@ -132,7 +129,6 @@ export function SplitTransactionModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const remainder = splitRemainder(total, parts);
   const problem = useMemo(() => splitProblem(total, parts), [total, parts]);
   const nextKey = () => `p${Date.now().toString(36)}${parts.length}`;
 
@@ -145,6 +141,29 @@ export function SplitTransactionModal({
     );
   }
 
+  /**
+   * Закрепить часть с введённой суммой, оставив ровно ОДНУ свободную.
+   *
+   * Свободная часть принимает остаток, поэтому она нужна всегда: без неё
+   * ввод суммы в новую часть не вычитался бы из основной, а выдавал ошибку
+   * «больше суммы операции». Если закрепили последнюю свободную — роль
+   * остатка переходит к другой части, самой нижней из оставшихся.
+   */
+  function pinAmount(key: string, amount: number) {
+    setParts((prev) => {
+      let next = prev.map((p) => (p.key === key ? { ...p, amount, pinned: true } : p));
+      if (next.every((p) => p.pinned)) {
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].key !== key) {
+            next = next.map((p, j) => (j === i ? { ...p, pinned: false } : p));
+            break;
+          }
+        }
+      }
+      return spreadRemainder(total, next);
+    });
+  }
+
   /** Сумма, набранная в поле: считаем выражение и закрепляем строку. */
   function commitAmount(key: string, raw: string) {
     const value = evalAmount(raw);
@@ -153,14 +172,19 @@ export function SplitTransactionModal({
       delete next[key];
       return next;
     });
-    // Пустое поле — часть обнуляется, но остаётся закреплённой: иначе она
-    // начала бы делить остаток с первой, и обе показывали бы половину.
+    const current = parts.find((p) => p.key === key);
+    // Пустое поле — часть обнуляется и уступает роль остатка другой.
     if (raw.trim() === "") {
-      patch(key, { amount: 0, pinned: true });
+      if (current?.amount !== 0) pinAmount(key, 0);
       return;
     }
     if (value === null) return; // Не выражение — оставляем как было.
-    patch(key, { amount: round2(Math.abs(value)), pinned: true });
+    const next = round2(Math.abs(value));
+    // Ушли из поля, ничего не изменив, — НЕ закрепляем. Иначе часть-остаток
+    // теряла эту роль от одного касания, и следующий же ввод в соседнюю
+    // часть выдавал ошибку вместо вычитания.
+    if (current && current.amount === next) return;
+    pinAmount(key, next);
   }
 
   function addPart() {
@@ -174,17 +198,6 @@ export function SplitTransactionModal({
 
   function removePart(key: string) {
     setParts((prev) => spreadRemainder(total, prev.filter((p) => p.key !== key)));
-  }
-
-  /** Дослать остаток в строку — когда все заполнены руками и не сходится. */
-  function pushRemainder(key: string) {
-    setParts((prev) =>
-      prev.map((p) =>
-        p.key === key
-          ? { ...p, amount: round2(p.amount + splitRemainder(total, prev)), pinned: true }
-          : p
-      )
-    );
   }
 
   async function apply() {
@@ -243,42 +256,49 @@ export function SplitTransactionModal({
             остальное, и они должны читаться первыми. */}
         <div className="px-5 pt-4">
           <div className="card-sunken px-4 py-3 space-y-3">
+            {/* Дата и сумма — отдельным блоком справа, с чертой: их не правят,
+                а слева стоят поля. Раньше подпись с датой висела над суммой и
+                читалась как ярлык к ней, хотя это разные вещи. */}
             <div className="flex items-end gap-4 flex-wrap">
-              <label className="min-w-[200px] flex-[2] block">
+              <div className="min-w-[200px] flex-[2]">
                 <span className="label block mb-1">Контрагент — у всех частей</span>
-                <input
-                  className="input w-full text-sm"
+                {/* Combobox, а не поле со списком браузера: по сервису все
+                    подобные поля выглядят одинаково, и родной `datalist`
+                    выбивался из ряда. */}
+                <Combobox
                   value={payee}
+                  options={payeeOptions}
+                  onChange={setPayee}
                   placeholder="Кому платили"
-                  onChange={(e) => setPayee(e.target.value)}
-                  list="split-payees"
-                />
-                <datalist id="split-payees">
-                  {payeeOptions.map((name) => (
-                    <option key={name} value={name} />
-                  ))}
-                </datalist>
-              </label>
-              <div className="min-w-[180px] flex-1">
-                <span className="label block mb-1">Счёт — у всех частей</span>
-                <Select
-                  value={account}
-                  options={accountOptions}
-                  onChange={setAccount}
-                  ariaLabel="Счёт всех частей"
+                  searchable
                   portal
                 />
               </div>
-              {/* Дата — словами и с днём недели: «20 августа, четверг» сразу
-                  ставит покупку в память, а «20.08.2026» надо расшифровывать.
-                  Править её здесь нельзя, поэтому не поле, а подпись. */}
-              <div className="text-right shrink-0 ml-auto">
-                <div className="inline-flex items-center gap-1.5 text-[11px] text-muted mb-1">
-                  <CalendarDays className="w-3.5 h-3.5 shrink-0" />
-                  {dayWithWeekday(tx.date)}
+              <div className="min-w-[180px] flex-1">
+                <span className="label block mb-1">Счёт — у всех частей</span>
+                <Combobox
+                  value={account}
+                  options={accountOptions}
+                  onChange={setAccount}
+                  placeholder="Счёт"
+                  allowCustom={false}
+                  searchable
+                  portal
+                />
+              </div>
+              <div className="shrink-0 ml-auto flex items-stretch gap-4 pl-4 border-l border-border">
+                <div>
+                  <span className="label block mb-1">Дата</span>
+                  <div className="inline-flex items-center gap-1.5 text-sm whitespace-nowrap h-9">
+                    <CalendarDays className="w-4 h-4 shrink-0 text-muted" />
+                    {dayWithWeekday(tx.date)}
+                  </div>
                 </div>
-                <div className="text-2xl font-bold tabular-nums whitespace-nowrap leading-7">
-                  {formatMoney(total, tx.currency)}
+                <div className="text-right">
+                  <span className="label block mb-1">Сумма</span>
+                  <div className="text-2xl font-bold tabular-nums whitespace-nowrap h-9 leading-9">
+                    {formatMoney(total, tx.currency)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -424,10 +444,10 @@ export function SplitTransactionModal({
         </div>
 
         <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-4 flex-wrap">
-          {/* ОДНА строка состояния, а не две. Раньше «Разнесено полностью»
-              зелёным и «У каждой части должна быть статья» красным стояли
-              рядом и противоречили друг другу: сумма-то сошлась, а сохранить
-              всё равно нельзя. Показываем то, что мешает; мешать нечему —
+          {/* ОДНА строка состояния, а не две. Раньше рядом стояли зелёная
+              «суммы сошлись» и красная «у каждой части должна быть статья» —
+              и противоречили друг другу: сумма-то сошлась, а сохранить всё
+              равно нельзя. Показываем то, что мешает; мешать нечему —
               говорим, что готово. */}
           <div
             className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs min-w-0 ${
@@ -450,16 +470,7 @@ export function SplitTransactionModal({
                   "частей",
                 ])} на ${formatMoney(total, tx.currency)}`}
             </span>
-            {/* Все части заполнены руками, а сумма не сошлась — деть остаток
-                некуда, и он повис бы без выхода. */}
-            {remainder !== 0 && parts.every((p) => p.pinned) && (
-              <button
-                onClick={() => pushRemainder(parts[parts.length - 1].key)}
-                className="shrink-0 underline underline-offset-2 hover:no-underline"
-              >
-                дослать в последнюю
-              </button>
-            )}
+
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="btn-ghost text-sm">
