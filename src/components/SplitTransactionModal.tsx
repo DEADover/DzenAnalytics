@@ -5,7 +5,9 @@ import type { Transaction } from "../types";
 import { CategoryCascadePicker } from "./CategoryCascadePicker";
 import { useCategoryNodes } from "../hooks/useCategoryNodes";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
-import { formatMoney } from "../lib/format";
+import { formatDate, formatMoney } from "../lib/format";
+import { colorForCategory } from "../lib/categoryColor";
+import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import {
   evalAmount,
   round2,
@@ -41,11 +43,16 @@ export function SplitTransactionModal({
 }) {
   const total = round2(Math.abs(tx.amount));
   const nodes = useCategoryNodes(tx.kind);
+  const categoryMeta = useCategoryMetaStore((s) => s.meta);
 
   const [parts, setParts] = useState<SplitDraftPart[]>(() =>
-    // Две строки на старте: первая с исходной статьёй, вторая пустая. Обе
-    // «свободные», поэтому сумма сразу делится пополам — дальше человек
-    // правит одну, и вторая подстраивается.
+    // На старте вся сумма лежит в ПЕРВОЙ части, а вторая пустая. Делить
+    // пополам за человека нельзя: «разделить» не значит «поровну», и
+    // придуманные числа пришлось бы стирать перед вводом своих.
+    //
+    // Первая часть «свободная» — она и есть остаток: вводишь сумму во вторую,
+    // из первой ровно столько же вычитается. Новые части добавляются
+    // закреплёнными на нуле, чтобы не растащить остаток между собой.
     spreadRemainder(total, [
       {
         key: "p1",
@@ -54,7 +61,7 @@ export function SplitTransactionModal({
         amount: 0,
         pinned: false,
       },
-      { key: "p2", category: "", subcategory: null, amount: 0, pinned: false },
+      { key: "p2", category: "", subcategory: null, amount: 0, pinned: true },
     ])
   );
   // Что человек НАБРАЛ в поле суммы — до того, как выражение посчиталось.
@@ -84,9 +91,10 @@ export function SplitTransactionModal({
       delete next[key];
       return next;
     });
-    // Пустое поле — строка снова свободна и участвует в дележе остатка.
+    // Пустое поле — часть обнуляется, но остаётся закреплённой: иначе она
+    // начала бы делить остаток с первой, и обе показывали бы половину.
     if (raw.trim() === "") {
-      patch(key, { amount: 0, pinned: false });
+      patch(key, { amount: 0, pinned: true });
       return;
     }
     if (value === null) return; // Не выражение — оставляем как было.
@@ -97,7 +105,7 @@ export function SplitTransactionModal({
     setParts((prev) =>
       spreadRemainder(total, [
         ...prev,
-        { key: nextKey(), category: "", subcategory: null, amount: 0, pinned: false },
+        { key: nextKey(), category: "", subcategory: null, amount: 0, pinned: true },
       ])
     );
   }
@@ -169,19 +177,58 @@ export function SplitTransactionModal({
           </button>
         </div>
 
-        <div className="px-5 py-3 border-b border-border flex items-baseline justify-between gap-3 flex-wrap">
-          <span className="text-sm text-muted truncate min-w-0">
-            {tx.payee || tx.categoryFull} · {tx.account}
-          </span>
-          <span className="text-lg font-bold tabular-nums whitespace-nowrap">
-            {formatMoney(total, tx.currency)}
-          </span>
+        <div className="px-5 pt-4">
+          <div className="card-sunken px-4 py-3 space-y-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium truncate">
+                  {tx.payee || tx.categoryFull}
+                </div>
+                <div className="text-[11px] text-muted truncate">
+                  {formatDate(tx.date)} · {tx.account}
+                </div>
+              </div>
+              <span className="text-xl font-bold tabular-nums whitespace-nowrap">
+                {formatMoney(total, tx.currency)}
+              </span>
+            </div>
+            {/* Полоса пропорций: разбивка — это про доли, и одним взглядом
+                видно, что во что превратилось. Незанятый хвост показывает
+                неразнесённое, поэтому полоса всегда во всю ширину. */}
+            <div className="flex h-2 rounded-full overflow-hidden bg-border/60">
+              {parts.map((p, i) => (
+                <div
+                  key={p.key}
+                  className="h-full first:rounded-l-full transition-all"
+                  style={{
+                    width: `${total > 0 ? (Math.max(0, p.amount) / total) * 100 : 0}%`,
+                    background: p.category
+                      ? colorForCategory(p.category, categoryMeta)
+                      : "rgb(var(--c-muted))",
+                    // Волосяная щель между сегментами: соседние части могут
+                    // получить близкие цвета из палитры и слиться в один
+                    // кусок — тогда полоса врёт о числе частей.
+                    boxShadow:
+                      i < parts.length - 1
+                        ? "inset -1.5px 0 0 rgb(var(--c-panel))"
+                        : undefined,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-2" style={{ scrollbarGutter: "stable" }}>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2" style={{ scrollbarGutter: "stable" }}>
           {parts.map((p, i) => (
-            <div key={p.key} className="flex items-start gap-2">
-              <span className="w-5 shrink-0 pt-2 text-xs text-muted tabular-nums">
+            <div
+              key={p.key}
+              className="flex items-center gap-2 rounded-xl border border-border bg-panel2/30 p-2"
+            >
+              <span
+                className="w-6 h-6 shrink-0 grid place-items-center rounded-full bg-panel2 border border-border text-[11px] text-muted tabular-nums"
+                aria-hidden
+              >
                 {i + 1}
               </span>
               <div className="flex-1 min-w-0">
@@ -195,12 +242,20 @@ export function SplitTransactionModal({
                   }
                 />
               </div>
+              {/* Доля части — рядом с суммой: «сколько это от покупки» тут
+                  спрашивают чаще, чем точное число. */}
+              <span className="w-11 shrink-0 text-right text-[11px] text-muted tabular-nums">
+                {total > 0 && p.amount > 0
+                  ? `${Math.round((p.amount / total) * 100)}%`
+                  : ""}
+              </span>
               <input
-                className="input w-32 shrink-0 text-right tabular-nums"
+                className="input w-28 shrink-0 text-right tabular-nums"
                 inputMode="decimal"
                 aria-label={`Сумма части ${i + 1}`}
                 // Пока в поле печатают, показываем набранное; как только
                 // ушли из поля — посчитанное число.
+                placeholder={p.pinned ? "0" : "остаток"}
                 value={typed[p.key] ?? (p.amount ? String(p.amount) : "")}
                 onChange={(e) => setTyped((t) => ({ ...t, [p.key]: e.target.value }))}
                 onBlur={(e) => commitAmount(p.key, e.target.value)}
