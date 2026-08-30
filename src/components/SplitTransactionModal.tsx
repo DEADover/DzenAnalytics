@@ -373,8 +373,10 @@ export function SplitTransactionModal({
           style={{ scrollbarGutter: "stable" }}
         >
           {parts.map((p, i) => {
-            const share =
-              total > 0 && p.amount > 0 ? Math.round((p.amount / total) * 100) : null;
+            // Доля есть ВСЕГДА, даже нулевая: пустое место на её месте
+            // заставляло строки прыгать по мере заполнения, а «0%» честно
+            // говорит, что часть ещё ничего не забрала.
+            const share = total > 0 ? Math.round((p.amount / total) * 100) : 0;
             const tint = p.category
               ? colorForCategory(p.category, categoryMeta)
               : null;
@@ -432,14 +434,16 @@ export function SplitTransactionModal({
                   <span
                     // `self-stretch`, а не своя высота: поля в строке чуть выше номинальных
                     // 36px из-за канта, и жёсткое число разошлось бы с ними на пиксели.
-                    className="w-14 self-stretch shrink-0 grid place-items-center text-[11px] font-medium tabular-nums rounded-lg border"
+                    className="w-14 self-stretch shrink-0 grid place-items-center text-[11px] font-medium tabular-nums rounded-lg border border-border text-muted"
+                    // Цвет — от статьи; пока её не выбрали, плашка серая, как
+                    // и сегмент полосы наверху.
                     style={
-                      share != null && tint
+                      tint && share > 0
                         ? { color: tint, borderColor: tint }
-                        : { borderColor: "transparent" }
+                        : undefined
                     }
                   >
-                    {share != null ? `${share}%` : ""}
+                    {share}%
                   </span>
                   <button
                     onClick={() => removePart(p.key)}
