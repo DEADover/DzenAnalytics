@@ -13,6 +13,8 @@ import {
 import type { Transaction } from "../types";
 import { CategoryCascadePicker } from "./CategoryCascadePicker";
 import { Combobox } from "./Combobox";
+import { HashtagTextarea } from "./HashtagTextarea";
+import { extractHashtags } from "../lib/aggregations";
 import { useCategoryNodes } from "../hooks/useCategoryNodes";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
 import { formatMoney } from "../lib/format";
@@ -104,6 +106,16 @@ export function SplitTransactionModal({
     }
     return [...seen].sort((a, b) => a.localeCompare(b, "ru"));
   }, [allTransactions, liveAccounts]);
+
+  // Метки для автодополнения — из комментариев всех операций: тот же список,
+  // что предлагает карточка операции, иначе в разбивке завёлся бы свой набор.
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of allTransactions) {
+      for (const h of extractHashtags(t.comment)) set.add(h);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [allTransactions]);
 
   const [parts, setParts] = useState<SplitDraftPart[]>(() =>
     // Вся сумма в первой части, вторая пустая. Первая при этом «свободная» —
@@ -224,25 +236,34 @@ export function SplitTransactionModal({
             Разделить операцию
             <InfoPopover label="Как работает разделение">
               <p>
-                Операция расписывается по статьям и превращается в{" "}
-                <InfoTerm>несколько настоящих операций</InfoTerm>: исходная
-                ужимается до первой части, остальные создаются рядом — та же
-                дата, тот же счёт, тот же контрагент.
+                Одна покупка часто состоит из разного: в чеке из супермаркета и
+                еда, и бытовая химия, и корм коту. Здесь такая операция
+                расписывается по категориям — у каждой части своя категория,
+                своя сумма и свой комментарий.
               </p>
               <p>
-                Так сделано не от хорошей жизни: у операции в Дзен-мани ровно
-                одна сумма, и хранить суммы по статьям там негде. Зато разбивка
-                видна везде — и здесь, и в мобильном приложении, и в любом
-                другом клиенте.
+                Части становятся{" "}
+                <InfoTerm>настоящими операциями</InfoTerm>: исходная ужимается
+                до первой, остальные создаются рядом. Поэтому разбивка видна
+                везде, где вы смотрите свои деньги, — и здесь, и в мобильном
+                приложении Дзен-мани.
               </p>
               <p>
-                <InfoTerm>Контрагент и счёт — общие</InfoTerm> для всех частей:
-                это одна покупка. Комментарий, наоборот, у каждой части свой.
-                Сумму можно не считать в уме — поле понимает выражения.
+                <InfoTerm>Контрагент, счёт и дата</InfoTerm> у всех частей
+                общие: это одна покупка, разносить её по разным магазинам и
+                счетам незачем. Контрагента и счёт можно поменять прямо здесь —
+                поменяются сразу у всех частей.
               </p>
               <p>
-                Разбивку видно у каждой части и всегда можно отменить — вернём
-                исходную сумму и удалим созданные операции.
+                Сумму не нужно считать в уме: в поле работают{" "}
+                <InfoTerm>сложение, вычитание, умножение, деление и скобки</InfoTerm>.
+                Та часть, в которой вы ещё не вводили сумму, забирает остаток —
+                вписали сумму в одну, из неё вычлось в другой.
+              </p>
+              <p>
+                Разбивку видно у каждой части значком «ножницы» с номером, и
+                отменить её можно в любой момент: исходная операция вернётся к
+                своей сумме, а созданные части удалятся.
               </p>
             </InfoPopover>
           </div>
@@ -263,8 +284,8 @@ export function SplitTransactionModal({
                 НИЗУ подписи разъезжались по вертикали — у поля и у крупной
                 суммы разная высота, и «КОНТРАГЕНТ» стоял ниже «СУММЫ». */}
             <div className="flex items-start gap-4 flex-wrap">
-              <div className="min-w-[200px] flex-[2]">
-                <span className="label block mb-1">Контрагент — у всех частей</span>
+              <div className="min-w-[180px] flex-[3]">
+                <span className="label block mb-1">Контрагент</span>
                 {/* Combobox, а не поле со списком браузера: по сервису все
                     подобные поля выглядят одинаково, и родной `datalist`
                     выбивался из ряда. */}
@@ -277,8 +298,8 @@ export function SplitTransactionModal({
                   portal
                 />
               </div>
-              <div className="min-w-[180px] flex-1">
-                <span className="label block mb-1">Счёт — у всех частей</span>
+              <div className="min-w-[180px] flex-[2]">
+                <span className="label block mb-1">Счёт</span>
                 <Combobox
                   value={account}
                   options={accountOptions}
@@ -292,19 +313,19 @@ export function SplitTransactionModal({
               {/* Дата — плашкой, сумма — крупным числом: их не правят, и они
                   разной природы. Раньше они стояли впритык одинаковым текстом
                   и читались одной строкой «30 августа 1 122 ₽». */}
-              <div className="shrink-0 ml-auto flex items-start gap-6 pl-5 border-l border-border">
-                <div>
-                  <span className="label block mb-1">Дата</span>
-                  <div className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-lg bg-panel2 border border-border text-sm whitespace-nowrap">
-                    <CalendarDays className="w-4 h-4 shrink-0 text-muted" />
-                    {dayWithWeekday(tx.date)}
-                  </div>
+              {/* Черта стоит ПОСЛЕ даты: слева от неё всё, что описывает
+                  операцию, справа — её сумма, к которой сходятся части. */}
+              <div className="shrink-0">
+                <span className="label block mb-1">Дата</span>
+                <div className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-lg bg-panel2 border border-border text-sm whitespace-nowrap">
+                  <CalendarDays className="w-4 h-4 shrink-0 text-muted" />
+                  {dayWithWeekday(tx.date)}
                 </div>
-                <div className="text-right">
-                  <span className="label block mb-1">Сумма</span>
-                  <div className="text-2xl font-bold tabular-nums whitespace-nowrap h-9 leading-9">
-                    {formatMoney(total, tx.currency)}
-                  </div>
+              </div>
+              <div className="shrink-0 text-right pl-5 border-l border-border">
+                <span className="label block mb-1">Сумма</span>
+                <div className="text-2xl font-bold tabular-nums whitespace-nowrap h-9 leading-9">
+                  {formatMoney(total, tx.currency)}
                 </div>
               </div>
             </div>
@@ -315,6 +336,18 @@ export function SplitTransactionModal({
               {parts.map((p, i) => (
                 <div
                   key={p.key}
+                  // Полоса без подписей молчит о том, ЧЕЙ это кусок: цвет
+                  // угадывается только по строке ниже, а при трёх частях уже
+                  // не угадывается.
+                  title={
+                    p.category
+                      ? `${p.subcategory ? `${p.category} / ${p.subcategory}` : p.category} — ${formatMoney(p.amount, tx.currency)}${
+                          total > 0 && p.amount > 0
+                            ? ` · ${Math.round((p.amount / total) * 100)}%`
+                            : ""
+                        }`
+                      : "Категория не выбрана"
+                  }
                   className="h-full first:rounded-l-full transition-all"
                   style={{
                     width: `${total > 0 ? (Math.max(0, p.amount) / total) * 100 : 0}%`,
@@ -389,7 +422,9 @@ export function SplitTransactionModal({
                       «сколько это от покупки» и глазом связывается с тем же
                       сегментом полосы наверху. */}
                   <span
-                    className="w-12 shrink-0 text-center text-[11px] font-medium tabular-nums rounded-md py-1 border"
+                    // `self-stretch`, а не своя высота: поля в строке чуть выше номинальных
+                    // 36px из-за канта, и жёсткое число разошлось бы с ними на пиксели.
+                    className="w-14 self-stretch shrink-0 grid place-items-center text-[11px] font-medium tabular-nums rounded-lg border"
                     style={
                       share != null && tint
                         ? { color: tint, borderColor: tint }
@@ -416,14 +451,16 @@ export function SplitTransactionModal({
                     а не задаёт её, и в одном ряду со статьёй спорил с ней за
                     внимание. Отступ слева равен ширине кружка с номером, так
                     что поле начинается там же, где статья. */}
-                <input
-                  className="input w-full text-xs pl-3"
-                  style={{ width: "calc(100% - 2rem)", marginLeft: "2rem" }}
-                  aria-label={`Комментарий части ${i + 1}`}
-                  placeholder="Комментарий к части — необязательно"
-                  value={p.comment ?? ""}
-                  onChange={(e) => patch(p.key, { comment: e.target.value })}
-                />
+                <div style={{ width: "calc(100% - 2rem)", marginLeft: "2rem" }}>
+                  <HashtagTextarea
+                    value={p.comment ?? ""}
+                    onChange={(next) => patch(p.key, { comment: next })}
+                    tags={allTags}
+                    rows={1}
+                    placeholder="Комментарий к части — необязательно"
+                    className="input w-full text-xs resize-none"
+                  />
+                </div>
               </div>
             );
           })}
