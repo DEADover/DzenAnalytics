@@ -62,6 +62,7 @@ import {
 import { useTagDeletionsStore } from "./store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "./store/usePlannedDeletionsStore";
 import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
+import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
 import { useDashboardLayoutStore } from "./store/useDashboardLayoutStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 import { useImportBatchesStore } from "./store/useImportBatchesStore";
@@ -129,6 +130,7 @@ function App() {
     usePlannedDeletionsStore.getState().hydrate();
     useDashboardLayoutStore.getState().hydrate();
     useFilterMemoryStore.getState().hydrate();
+    useSplitGroupsStore.getState().hydrate();
     hydrate();
     backupHydrate();
     reportPeriodHydrate();
