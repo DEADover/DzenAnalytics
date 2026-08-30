@@ -878,7 +878,7 @@ export function TransactionsPage() {
         <SplitTransactionModal
           tx={splitting}
           onClose={() => setSplitting(null)}
-          onSplit={(parts) => applySplit(splitting, parts)}
+          onSplit={(parts, payee) => applySplit(splitting, parts, payee)}
         />
       )}
 

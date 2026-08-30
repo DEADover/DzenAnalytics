@@ -41,7 +41,12 @@ export function useSplitTransaction() {
 
   /** Разделить операцию. Текст ошибки или `null` при успехе. */
   const applySplit = useCallback(
-    async (tx: Transaction, parts: SplitDraftPart[]): Promise<string | null> => {
+    async (
+      tx: Transaction,
+      parts: SplitDraftPart[],
+      /** Контрагент, общий для всех частей. Пусто — оставляем как был. */
+      payee?: string
+    ): Promise<string | null> => {
       const cache = await loadZenCache();
       // Черновику нужны настоящие id счёта, статьи и контрагента — в режиме
       // CSV их взять негде, и разделить операцию нечем.
@@ -66,8 +71,8 @@ export function useSplitTransaction() {
             createdSeconds: Number.isFinite(created) ? created : undefined,
             category: part.category,
             subcategory: part.subcategory,
-            payee: tx.brand || tx.payee || undefined,
-            comment: tx.comment || undefined,
+            payee: payee || tx.brand || tx.payee || undefined,
+            comment: part.comment?.trim() || tx.comment || undefined,
           },
           cache,
           stamp,
@@ -81,6 +86,7 @@ export function useSplitTransaction() {
 
       // Первая часть — сама исходная операция: ужимаем её сумму и меняем
       // статью. Обычная правка, уезжает в облако тем же путём, что и ручная.
+      const firstComment = first.comment?.trim();
       await setEdit(tx.id, {
         amount: round2(first.amount),
         category: first.category,
@@ -88,6 +94,10 @@ export function useSplitTransaction() {
         categoryFull: first.subcategory
           ? `${first.category} / ${first.subcategory}`
           : first.category,
+        // Контрагента и комментарий правим ТОЛЬКО когда их задали: пустое
+        // поле значит «оставить как было», а не «стереть».
+        ...(payee && payee !== (tx.brand || tx.payee) ? { payee } : {}),
+        ...(firstComment ? { comment: firstComment } : {}),
       });
       await addMany(built);
 
@@ -95,7 +105,7 @@ export function useSplitTransaction() {
         sourceId: tx.id,
         createdAt: new Date().toISOString(),
         date: tx.date,
-        payee: tx.brand || tx.payee || "",
+        payee: payee || tx.brand || tx.payee || "",
         originalAmount: round2(Math.abs(tx.amount)),
         originalCategory: tx.category,
         originalSubcategory: tx.subcategory,

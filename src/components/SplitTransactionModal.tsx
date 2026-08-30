@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Scissors, Trash2, X } from "lucide-react";
+import { AlertTriangle, Calculator, Check, Plus, Scissors, Trash2, X } from "lucide-react";
 import type { Transaction } from "../types";
 import { CategoryCascadePicker } from "./CategoryCascadePicker";
 import { useCategoryNodes } from "../hooks/useCategoryNodes";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
 import { formatDate, formatMoney } from "../lib/format";
+import { pluralRu } from "../lib/plural";
 import { colorForCategory } from "../lib/categoryColor";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
+import { useDataStore } from "../store/useDataStore";
 import {
   evalAmount,
   round2,
@@ -39,11 +41,23 @@ export function SplitTransactionModal({
   tx: Transaction;
   onClose: () => void;
   /** Применить разбивку. Возвращает текст ошибки или `null` при успехе. */
-  onSplit: (parts: SplitDraftPart[]) => Promise<string | null>;
+  onSplit: (parts: SplitDraftPart[], payee: string) => Promise<string | null>;
 }) {
   const total = round2(Math.abs(tx.amount));
   const nodes = useCategoryNodes(tx.kind);
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
+  // Подсказки контрагентов — из тех, что уже встречались в операциях. Полный
+  // справочник Дзен-мани тянуть сюда не за чем: разбивают обычно операцию с
+  // уже знакомым получателем.
+  const allTransactions = useDataStore((s) => s.transactions);
+  const payeeOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const t of allTransactions) {
+      const name = t.brand || t.payee;
+      if (name) seen.add(name);
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b, "ru")).slice(0, 500);
+  }, [allTransactions]);
 
   const [parts, setParts] = useState<SplitDraftPart[]>(() =>
     // На старте вся сумма лежит в ПЕРВОЙ части, а вторая пустая. Делить
@@ -67,6 +81,10 @@ export function SplitTransactionModal({
   // Что человек НАБРАЛ в поле суммы — до того, как выражение посчиталось.
   // Отдельно от чисел: пока строка «1200+» дописывается, числа у неё нет.
   const [typed, setTyped] = useState<Record<string, string>>({});
+  // Контрагент один на все части: это одна покупка, и разносить её по разным
+  // магазинам бессмысленно. Правится здесь же — часто разбивают как раз ту
+  // операцию, у которой заодно и получатель кривой.
+  const [payee, setPayee] = useState(tx.brand || tx.payee || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,7 +147,7 @@ export function SplitTransactionModal({
     if (problem) return;
     setSaving(true);
     setError(null);
-    const failed = await onSplit(parts);
+    const failed = await onSplit(parts, payee.trim());
     setSaving(false);
     if (failed) setError(failed);
     else onClose();
@@ -142,7 +160,7 @@ export function SplitTransactionModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="card w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="card w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-border">
           <div className="flex items-center gap-2 font-semibold min-w-0">
             <Scissors className="w-4 h-4 text-accent2 shrink-0" />
@@ -179,18 +197,30 @@ export function SplitTransactionModal({
 
         <div className="px-5 pt-4">
           <div className="card-sunken px-4 py-3 space-y-2.5">
-            <div className="flex items-baseline justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-medium truncate">
-                  {tx.payee || tx.categoryFull}
-                </div>
-                <div className="text-[11px] text-muted truncate">
+            <div className="flex items-end justify-between gap-4">
+              <label className="min-w-0 flex-1 block">
+                <span className="label block mb-1">Контрагент — у всех частей</span>
+                <input
+                  className="input w-full"
+                  value={payee}
+                  placeholder="Кому платили"
+                  onChange={(e) => setPayee(e.target.value)}
+                  list="split-payees"
+                />
+                <datalist id="split-payees">
+                  {payeeOptions.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              </label>
+              <div className="text-right shrink-0">
+                <div className="text-[11px] text-muted whitespace-nowrap">
                   {formatDate(tx.date)} · {tx.account}
                 </div>
+                <div className="text-xl font-bold tabular-nums whitespace-nowrap">
+                  {formatMoney(total, tx.currency)}
+                </div>
               </div>
-              <span className="text-xl font-bold tabular-nums whitespace-nowrap">
-                {formatMoney(total, tx.currency)}
-              </span>
             </div>
             {/* Полоса пропорций: разбивка — это про доли, и одним взглядом
                 видно, что во что превратилось. Незанятый хвост показывает
@@ -231,7 +261,7 @@ export function SplitTransactionModal({
               >
                 {i + 1}
               </span>
-              <div className="flex-1 min-w-0">
+              <div className="flex-[3] min-w-[190px]">
                 <CategoryCascadePicker
                   category={p.category}
                   subcategory={p.subcategory ?? ""}
@@ -242,6 +272,16 @@ export function SplitTransactionModal({
                   }
                 />
               </div>
+              {/* Комментарий свой у каждой части: «корм коту» и «шампунь» —
+                  разные покупки, и через полгода по одной статье их уже не
+                  различить. */}
+              <input
+                className="input flex-[2] min-w-[130px]"
+                aria-label={`Комментарий части ${i + 1}`}
+                placeholder="Комментарий"
+                value={p.comment ?? ""}
+                onChange={(e) => patch(p.key, { comment: e.target.value })}
+              />
               {/* Доля части — рядом с суммой: «сколько это от покупки» тут
                   спрашивают чаще, чем точное число. */}
               <span className="w-11 shrink-0 text-right text-[11px] text-muted tabular-nums">
@@ -282,42 +322,60 @@ export function SplitTransactionModal({
             </div>
           ))}
 
-          <button onClick={addPart} className="btn-ghost text-sm">
-            <Plus className="w-3.5 h-3.5" />
-            Добавить часть
-          </button>
-        </div>
-
-        <div className="px-5 py-3 border-t border-border space-y-2">
-          <div className="flex items-baseline justify-between gap-3 text-sm">
-            <span className={remainder === 0 ? "text-income" : "text-muted"}>
-              {remainder === 0 ? "Разнесено полностью" : "Осталось разнести"}
-            </span>
-            <span className="flex items-center gap-2">
-              {/* Ноль остатка не показываем числом: «Разнесено полностью 0 ₽»
-                  заставляет искать, что это за ноль. Слов достаточно. */}
-              {remainder !== 0 && (
-                <span className="tabular-nums font-semibold text-warn">
-                  {formatMoney(remainder, tx.currency)}
-                </span>
-              )}
-              {/* Все строки заполнены руками, а сумма не сошлась — деть
-                  остаток некуда, и он повис бы без выхода. Кнопка дописывает
-                  его в последнюю строку. */}
-              {remainder !== 0 && parts.every((p) => p.pinned) && (
-                <button
-                  onClick={() => pushRemainder(parts[parts.length - 1].key)}
-                  className="btn-ghost !py-1 text-xs"
-                >
-                  В последнюю
-                </button>
-              )}
+          <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+            <button onClick={addPart} className="btn-ghost text-sm">
+              <Plus className="w-3.5 h-3.5" />
+              Добавить часть
+            </button>
+            {/* Про калькулятор надо сказать словами: поле выглядит обычным, и
+                сам никто складывать в нём не попробует. */}
+            <span className="text-[11px] text-muted inline-flex items-center gap-1.5">
+              <Calculator className="w-3.5 h-3.5 shrink-0" />
+              В поле суммы считаются выражения: <code className="kbd">1200+300</code>
+              <code className="kbd">2400/2</code>
             </span>
           </div>
-          {(problem || error) && (
-            <div className="text-xs text-expense">{error ?? problem}</div>
-          )}
-          <div className="flex items-center justify-end gap-2">
+        </div>
+
+        <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-4 flex-wrap">
+          {/* ОДНА строка состояния, а не две. Раньше «Разнесено полностью»
+              зелёным и «У каждой части должна быть статья» красным стояли
+              рядом и противоречили друг другу: сумма-то сошлась, а сохранить
+              всё равно нельзя. Показываем то, что мешает; мешать нечему —
+              говорим, что готово. */}
+          <div
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs min-w-0 ${
+              error || problem
+                ? "bg-warn/10 text-warn border border-warn/30"
+                : "bg-income/10 text-income border border-income/30"
+            }`}
+          >
+            {error || problem ? (
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <Check className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span className="truncate">
+              {error ??
+                problem ??
+                `Готово: ${parts.length} ${pluralRu(parts.length, [
+                  "часть",
+                  "части",
+                  "частей",
+                ])} на ${formatMoney(total, tx.currency)}`}
+            </span>
+            {/* Все части заполнены руками, а сумма не сошлась — деть остаток
+                некуда, и он повис бы без выхода. */}
+            {remainder !== 0 && parts.every((p) => p.pinned) && (
+              <button
+                onClick={() => pushRemainder(parts[parts.length - 1].key)}
+                className="shrink-0 underline underline-offset-2 hover:no-underline"
+              >
+                дослать в последнюю
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
             <button onClick={onClose} className="btn-ghost text-sm">
               <X className="w-3.5 h-3.5" />
               Отмена
