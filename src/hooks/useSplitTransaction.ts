@@ -45,7 +45,9 @@ export function useSplitTransaction() {
       tx: Transaction,
       parts: SplitDraftPart[],
       /** Контрагент, общий для всех частей. Пусто — оставляем как был. */
-      payee?: string
+      payee?: string,
+      /** Счёт, общий для всех частей. Пусто — оставляем как был. */
+      account?: string
     ): Promise<string | null> => {
       const cache = await loadZenCache();
       // Черновику нужны настоящие id счёта, статьи и контрагента — в режиме
@@ -67,7 +69,7 @@ export function useSplitTransaction() {
             kind: tx.kind,
             date: tx.date,
             amount: round2(part.amount),
-            account: tx.account,
+            account: account || tx.account,
             createdSeconds: Number.isFinite(created) ? created : undefined,
             category: part.category,
             subcategory: part.subcategory,
@@ -98,6 +100,14 @@ export function useSplitTransaction() {
         // поле значит «оставить как было», а не «стереть».
         ...(payee && payee !== (tx.brand || tx.payee) ? { payee } : {}),
         ...(firstComment ? { comment: firstComment } : {}),
+        // Смена счёта у одноногой операции — это ещё и его нога: при доходе и
+        // возврате деньги пришли НА счёт, при расходе ушли С него. Поправить
+        // только `account` мало, ноги остались бы от старого счёта.
+        ...(account && account !== tx.account
+          ? tx.kind === "income" || tx.kind === "refund"
+            ? { account, incomeAccount: account, outcomeAccount: "" }
+            : { account, outcomeAccount: account, incomeAccount: "" }
+          : {}),
       });
       await addMany(built);
 
