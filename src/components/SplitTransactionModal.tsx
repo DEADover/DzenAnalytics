@@ -259,7 +259,10 @@ export function SplitTransactionModal({
             {/* Дата и сумма — отдельным блоком справа, с чертой: их не правят,
                 а слева стоят поля. Раньше подпись с датой висела над суммой и
                 читалась как ярлык к ней, хотя это разные вещи. */}
-            <div className="flex items-end gap-4 flex-wrap">
+            {/* items-start и одинаковая высота значений: при выравнивании по
+                НИЗУ подписи разъезжались по вертикали — у поля и у крупной
+                суммы разная высота, и «КОНТРАГЕНТ» стоял ниже «СУММЫ». */}
+            <div className="flex items-start gap-4 flex-wrap">
               <div className="min-w-[200px] flex-[2]">
                 <span className="label block mb-1">Контрагент — у всех частей</span>
                 {/* Combobox, а не поле со списком браузера: по сервису все
@@ -286,10 +289,13 @@ export function SplitTransactionModal({
                   portal
                 />
               </div>
-              <div className="shrink-0 ml-auto flex items-stretch gap-4 pl-4 border-l border-border">
+              {/* Дата — плашкой, сумма — крупным числом: их не правят, и они
+                  разной природы. Раньше они стояли впритык одинаковым текстом
+                  и читались одной строкой «30 августа 1 122 ₽». */}
+              <div className="shrink-0 ml-auto flex items-start gap-6 pl-5 border-l border-border">
                 <div>
                   <span className="label block mb-1">Дата</span>
-                  <div className="inline-flex items-center gap-1.5 text-sm whitespace-nowrap h-9">
+                  <div className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-lg bg-panel2 border border-border text-sm whitespace-nowrap">
                     <CalendarDays className="w-4 h-4 shrink-0 text-muted" />
                     {dayWithWeekday(tx.date)}
                   </div>

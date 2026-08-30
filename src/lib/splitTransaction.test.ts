@@ -103,10 +103,10 @@ describe("splitProblem", () => {
     );
   });
 
-  it("часть без статьи не пропускаем", () => {
+  it("часть без категории не пропускаем", () => {
     const parts = ok();
     parts[1].category = "";
-    expect(splitProblem(1000, parts)).toBe("У каждой части должна быть статья");
+    expect(splitProblem(1000, parts)).toBe("У каждой части должна быть своя категория");
   });
 
   it("нулевая часть не пропускается", () => {
@@ -114,7 +114,7 @@ describe("splitProblem", () => {
       part({ key: "a", category: "Еда", amount: 1000 }),
       part({ key: "b", category: "Дом", amount: 0 }),
     ];
-    expect(splitProblem(1000, parts)).toBe("Сумма каждой части больше нуля");
+    expect(splitProblem(1000, parts)).toBe("У каждой части должна быть сумма больше нуля");
   });
 
   it("не сошлось — говорим, сколько именно", () => {
@@ -125,16 +125,16 @@ describe("splitProblem", () => {
     expect(splitProblem(1000, parts)).toBe("Больше суммы операции на 200");
   });
 
-  it("две части с одной статьёй — это не разбивка", () => {
+  it("две части с одной категорией — это не разбивка", () => {
     // В аналитике они сложились бы обратно, и смысла в такой разбивке нет.
     const parts = [
       part({ key: "a", category: "Еда", amount: 700 }),
       part({ key: "b", category: "Еда", amount: 300 }),
     ];
-    expect(splitProblem(1000, parts)).toBe("Статьи частей должны различаться");
+    expect(splitProblem(1000, parts)).toBe("Категории частей должны различаться");
   });
 
-  it("одна статья, но разные подстатьи — разбивка законная", () => {
+  it("одна категория, но разные подкатегории — разбивка законная", () => {
     const parts = [
       part({ key: "a", category: "Еда", subcategory: "Кафе", amount: 700 }),
       part({ key: "b", category: "Еда", subcategory: "Продукты", amount: 300 }),
