@@ -5,6 +5,7 @@ import {
   Calculator,
   CalendarDays,
   Check,
+  Info,
   Plus,
   Scissors,
   Trash2,
@@ -18,7 +19,6 @@ import { extractHashtags } from "../lib/aggregations";
 import { useCategoryNodes } from "../hooks/useCategoryNodes";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
 import { currencySymbol, formatMoney } from "../lib/format";
-import { pluralRu } from "../lib/plural";
 import { colorForCategory } from "../lib/categoryColor";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useDataStore } from "../store/useDataStore";
@@ -495,34 +495,28 @@ export function SplitTransactionModal({
         </div>
 
         <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-4 flex-wrap">
-          {/* ОДНА строка состояния, а не две. Раньше рядом стояли зелёная
-              «суммы сошлись» и красная «у каждой части должна быть статья» —
-              и противоречили друг другу: сумма-то сошлась, а сохранить всё
-              равно нельзя. Показываем то, что мешает; мешать нечему —
-              говорим, что готово. */}
-          <div
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs min-w-0 ${
-              error || problem
-                ? "bg-warn/10 text-warn border border-warn/30"
-                : "bg-income/10 text-income border border-income/30"
-            }`}
-          >
-            {error || problem ? (
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            ) : (
-              <Check className="w-3.5 h-3.5 shrink-0" />
-            )}
-            <span className="truncate">
-              {error ??
-                problem ??
-                `Готово: ${parts.length} ${pluralRu(parts.length, [
-                  "часть",
-                  "части",
-                  "частей",
-                ])} на ${formatMoney(total, tx.currency)}`}
+          {/* ТРИ разных состояния, а не два цвета на все случаи.
+              «Ещё не заполнено» — не ошибка, а подсказка, что осталось
+              сделать; сорвавшаяся отправка — настоящая ошибка, и краснеть
+              должна только она. Готовность вообще не кричит: кнопка справа
+              и так ожила, а зелёная плашка «Готово: 2 части на 1 122 ₽»
+              лишь повторяла заголовок и надпись на кнопке. */}
+          {error ? (
+            <div className="inline-flex items-start gap-2 max-w-md rounded-lg px-3 py-2 text-xs bg-expense/10 text-expense border border-expense/30">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+              <span>{error}</span>
+            </div>
+          ) : problem ? (
+            <div className="inline-flex items-start gap-2 max-w-md rounded-lg px-3 py-2 text-xs bg-warn/10 text-warn border border-warn/30">
+              <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
+              <span>{problem}</span>
+            </div>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+              <Check className="w-3.5 h-3.5 shrink-0 text-income" />
+              Суммы сходятся
             </span>
-
-          </div>
+          )}
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="btn-ghost text-sm">
               <X className="w-3.5 h-3.5" />
