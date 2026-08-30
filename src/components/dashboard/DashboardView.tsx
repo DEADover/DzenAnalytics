@@ -29,6 +29,7 @@ import {
   ObservationsList,
   ActivityHeat,
   ZenPlannedList,
+  MonthOverMonthBlock,
 } from "./blocks";
 import { LinksRow } from "./LinksRow";
 import {
@@ -58,7 +59,8 @@ import { useCategoryMetaStore } from "../../store/useCategoryMetaStore";
 import { CategorySunburst } from "../CategorySunburst";
 import { buildHierarchy } from "../../lib/aggregations";
 import { useReportPeriodStore } from "../../store/useReportPeriodStore";
-import { periodKey } from "../../lib/period";
+import { periodKey, shiftPeriod } from "../../lib/period";
+import { monthOverMonth } from "../../lib/monthOverMonth";
 import { monthEnd } from "../../lib/dashboardModel";
 import { affectsExpense } from "../../lib/txKindStyle";
 
@@ -464,12 +466,39 @@ function HeroSplit({ m }: { m: DashboardModel }) {
   );
 }
 
+/** Месяцы в предложном падеже: «в январе», «в марте», «в августе». */
+const MONTHS_IN = [
+  "январе", "феврале", "марте", "апреле", "мае", "июне",
+  "июле", "августе", "сентябре", "октябре", "ноябре", "декабре",
+] as const;
+
 export function DashboardView() {
   const m = useDashboardModel();
   const transactions = useAnalyticsTransactions();
   const showDrill = useDrillStore((s) => s.show);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
+
+  // «Сегодня» — последняя дата С ДАННЫМИ, а не системная: по обрезанной
+  // истории часы дали бы пустой хвост окна и заниженное сравнение.
+  const lastDate = useMemo(
+    () => transactions.reduce((mx, t) => (t.date > mx ? t.date : mx), ""),
+    [transactions]
+  );
+  const mom = useMemo(
+    () => monthOverMonth(transactions, m.ym, monthStartDay, lastDate || monthEnd(m.ym)),
+    [transactions, m.ym, monthStartDay, lastDate]
+  );
+  /**
+   * «в июле» — название прошлого месяца в ПРЕДЛОЖНОМ падеже.
+   *
+   * Своим списком, а не через `toLocaleDateString`: тот отдаёт именительный
+   * («июль»), и подпись читалась «В июль за те же 28 дней».
+   */
+  const prevMonthLabel = useMemo(() => {
+    const mo = Number(shiftPeriod(m.ym, -1).slice(5, 7));
+    return MONTHS_IN[mo - 1] ?? "";
+  }, [m.ym]);
 
   const layout = useDashboardLayoutStore((s) => s.layout);
   const editing = useDashboardLayoutStore((s) => s.editing);
@@ -695,6 +724,26 @@ export function DashboardView() {
               linkLabel="Cash-flow"
             />
             <CashflowBars m={m} onMonth={onMonth} height={260} />
+          </>
+        );
+
+      case "monthOverMonth":
+        return (
+          <>
+            <BlockTitle
+              title="Месяц к месяцу"
+              info={
+                <p>
+                  Пока месяц идёт, от прошлого берётся <b>столько же дней</b>:
+                  третьего числа любой месяц выглядел бы провалом рядом с целым
+                  прошлым. Сколько дней взято, написано в шапке и под числом.
+                  Норма сбережений — доля дохода, которая осталась.
+                </p>
+              }
+              to="/compare"
+              linkLabel="Сравнение"
+            />
+            <MonthOverMonthBlock mom={mom} base={m.base} prevLabel={prevMonthLabel} />
           </>
         );
 

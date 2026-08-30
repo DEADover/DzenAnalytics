@@ -26,6 +26,7 @@ export const WIDGET_KINDS = [
   "upcoming",
   "links",
   "cashflow",
+  "monthOverMonth",
   "categories",
   "activity",
   "observations",
@@ -177,6 +178,15 @@ export const WIDGETS: readonly WidgetMeta[] = [
     title: "Доходы и расходы",
     hint: "Столбцы за последние двенадцать месяцев и прогноз",
     span: 2,
+  },
+  {
+    kind: "monthOverMonth",
+    title: "Месяц к месяцу",
+    hint: "Доходы, расходы и чистый поток рядом с прошлым месяцем",
+    span: 1,
+    // Стандартная главная собрана в ровные ряды по три, и лишний виджет
+    // оставил бы в них дырку у ВСЕХ. Кто захочет — включит его на полке.
+    offByDefault: true,
   },
   {
     kind: "categories",

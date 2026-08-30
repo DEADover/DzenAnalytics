@@ -153,6 +153,7 @@ describe("normalizeLayout", () => {
     expect([...out.filter((p) => p.hidden).map((p) => p.kind)].sort()).toEqual([
       "donutExpense",
       "donutIncome",
+      "monthOverMonth",
       "observations",
     ]);
   });
@@ -187,6 +188,7 @@ describe("normalizeLayout", () => {
       "accounts",
       "upcoming",
       "cashflow",
+      "monthOverMonth",
       "categories",
       "activity",
     ]);
