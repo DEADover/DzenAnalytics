@@ -17,7 +17,7 @@ import { HashtagTextarea } from "./HashtagTextarea";
 import { extractHashtags } from "../lib/aggregations";
 import { useCategoryNodes } from "../hooks/useCategoryNodes";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
-import { formatMoney } from "../lib/format";
+import { currencySymbol, formatMoney } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { colorForCategory } from "../lib/categoryColor";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
@@ -401,8 +401,15 @@ export function SplitTransactionModal({
                       }
                     />
                   </div>
+                  {/* Знак валюты у поля: сумма набирается голым числом, и
+                      в чём она — видно только по крупной сумме в шапке. У
+                      валютной операции это лишний повод ошибиться. */}
+                  <div className="relative shrink-0">
+                    <span className="absolute left-2.5 inset-y-0 grid place-items-center text-sm text-muted pointer-events-none">
+                      {currencySymbol(tx.currency)}
+                    </span>
                   <input
-                    className="input w-32 shrink-0 text-right text-sm tabular-nums"
+                    className="input w-32 pl-7 text-right text-sm tabular-nums"
                     inputMode="decimal"
                     aria-label={`Сумма части ${i + 1}`}
                     placeholder={p.pinned ? "0" : "остаток"}
@@ -418,6 +425,7 @@ export function SplitTransactionModal({
                       }
                     }}
                   />
+                  </div>
                   {/* Доля — плашкой в цвет своей статьи: она отвечает на
                       «сколько это от покупки» и глазом связывается с тем же
                       сегментом полосы наверху. */}
