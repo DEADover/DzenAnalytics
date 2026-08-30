@@ -652,14 +652,25 @@ export function UpcomingList({ m }: { m: DashboardModel }) {
  * Прогноз Дзен-мани от плана, поставленного руками, отличаем подписью: первое —
  * догадка по регулярному платежу, второе — намерение человека.
  */
+/** «31 августа» — день с месяцем, без года: год и так текущий. */
+function dayAndMonth(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+}
+
 export function ZenPlannedList({
   rows,
   base,
   today,
+  until,
 }: {
   rows: PlannedOp[] | null;
   base: string;
   today: string;
+  /** Последний день окна, ISO. Нужен пустому состоянию: без него «планов
+   *  нет» звучит как «нет вообще», хотя вперёд мы смотрим только до этой даты. */
+  until: string;
 }) {
   if (rows === null) {
     return (
@@ -671,7 +682,11 @@ export function ZenPlannedList({
   if (rows.length === 0) {
     return (
       <div className="text-sm text-muted text-center py-6">
-        Планов в Дзен-мани нет — ни впереди, ни просроченных
+        {/* Называем последний день окна, а не «конец месяца»: виджет смотрит
+            вперёд ровно до этой даты, и точное число не оставляет вопроса,
+            что именно проверили. Прежнее «ни впереди, ни просроченных»
+            читалось как «планов нет вообще». */}
+        Планов по {dayAndMonth(until)} нет — и ничего просроченного
       </div>
     );
   }

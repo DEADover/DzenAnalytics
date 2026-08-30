@@ -643,7 +643,12 @@ export function DashboardView() {
               base={m.base}
             />
             {zen ? (
-              <ZenPlannedList rows={zenPlanned} base={m.base} today={todayIso} />
+              <ZenPlannedList
+                rows={zenPlanned}
+                base={m.base}
+                today={todayIso}
+                until={monthEnd(m.ym)}
+              />
             ) : (
               <UpcomingList m={m} />
             )}
