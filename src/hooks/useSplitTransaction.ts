@@ -20,21 +20,15 @@ import { loadZenCache } from "../lib/zenmoneyCache";
 import { round2, type SplitDraftPart } from "../lib/splitTransaction";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { useEditsStore } from "../store/useEditsStore";
-import { useDeletedStore } from "../store/useDeletedStore";
 import { useSplitGroupsStore, type SplitGroup } from "../store/useSplitGroupsStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { useDataStore } from "../store/useDataStore";
 
 export function useSplitTransaction() {
   const setEdit = useEditsStore((s) => s.setEdit);
-  const clearEdit = useEditsStore((s) => s.clearEdit);
   const addMany = useDraftsStore((s) => s.addMany);
-  const removeDraft = useDraftsStore((s) => s.remove);
-  const drafts = useDraftsStore((s) => s.drafts);
-  const removeMany = useDeletedStore((s) => s.removeMany);
   const newMerchants = useCounterpartyEditsStore((s) => s.created);
   const addGroup = useSplitGroupsStore((s) => s.add);
-  const dropGroup = useSplitGroupsStore((s) => s.remove);
   // Пересборка ленты: правка исходной и новые части иначе не появятся на
   // экране до следующей синхронизации.
   const refresh = useDataStore((s) => s.refresh);
@@ -112,6 +106,7 @@ export function useSplitTransaction() {
       await addMany(built);
 
       const group: SplitGroup = {
+        id: newDraftId(),
         sourceId: tx.id,
         createdAt: new Date().toISOString(),
         date: tx.date,
@@ -141,29 +136,6 @@ export function useSplitTransaction() {
     [setEdit, addMany, addGroup, newMerchants, refresh]
   );
 
-  /**
-   * Отменить разбивку: вернуть исходную операцию как была и убрать части.
-   *
-   * Часть, ещё не уехавшую в облако, просто выбрасываем из черновиков. Та,
-   * что уже уехала, удаляется обычным удалением операции — то же, что человек
-   * сделал бы руками, и так же уезжает в Дзен-мани.
-   */
-  const undoSplit = useCallback(
-    async (group: SplitGroup): Promise<string | null> => {
-      const partIds = group.parts.slice(1).map((p) => p.id);
-      const asDrafts = partIds.filter((id) => drafts[id]);
-      const pushed = partIds.filter((id) => !drafts[id]);
-      for (const id of asDrafts) await removeDraft(id);
-      if (pushed.length) await removeMany(pushed);
-      // Правку исходной снимаем целиком: она вся была разбивкой, и сумма со
-      // статьёй возвращаются к тому, что пришло из Дзен-мани.
-      await clearEdit(group.sourceId);
-      await dropGroup(group.sourceId);
-      await refresh();
-      return null;
-    },
-    [drafts, removeDraft, removeMany, clearEdit, dropGroup, refresh]
-  );
 
-  return { applySplit, undoSplit };
+  return { applySplit };
 }

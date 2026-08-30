@@ -7,12 +7,16 @@
  *
  * Но сам Дзен-мани хранить связь между ними негде — для него это просто
  * несколько покупок в один день. Поэтому связь держим здесь: какая часть из
- * какой операции выросла и чем операция была до разбивки. Отсюда же берётся
- * возможность откатить разбивку и показать, из чего операция состоит.
+ * какой операции выросла и чем операция была до разбивки.
  *
  * Связь переживает синхронизацию: id частей мы генерируем САМИ (`newDraftId`),
  * и после отправки в облаке оказываются те же самые. Ничего сопоставлять по
  * дате и сумме — как это пришлось бы делать при серверных id — не нужно.
+ *
+ * Сейчас записи НИКТО не читает: пометки «часть 1 из 3» в ленте и отмена
+ * разбивки сняты как преждевременные. Запись оставлена намеренно — это след
+ * того, что из чего получилось, и без него у разбивок, сделанных за это
+ * время, восстановить связь будет уже неоткуда.
  */
 
 import { create } from "zustand";
@@ -29,16 +33,24 @@ export interface SplitPart {
   amount: number;
 }
 
-/** Разбивка одной операции. Ключ — id исходной операции. */
+/** Разбивка одной операции. */
 export interface SplitGroup {
+  /**
+   * Ключ записи — свой, а не id исходной операции.
+   *
+   * Часть можно разделить ещё раз, и тогда исходной становится она сама.
+   * По ключу-`sourceId` вторая разбивка затирала бы первую, и след «что из
+   * чего получилось» терялся бы ровно там, где он интереснее всего.
+   */
+  id: string;
   sourceId: string;
   /** Когда разделили, ISO. */
   createdAt: string;
-  /** Дата и контрагент исходной — чтобы показать группу, даже когда часть
-   *  операций уже не загружена (обрезанная история). */
+  /** Дата и контрагент исходной — чтобы группа читалась сама по себе, даже
+   *  когда часть операций уже не загружена (обрезанная история). */
   date: string;
   payee: string;
-  /** Чем операция была до разбивки: нужно, чтобы откатить. */
+  /** Чем операция была до разбивки — чтобы знать, из чего она получилась. */
   originalAmount: number;
   originalCategory: string;
   originalSubcategory: string | null;
@@ -47,12 +59,12 @@ export interface SplitGroup {
 }
 
 interface SplitGroupsState {
-  /** sourceId → разбивка. */
+  /** id записи → разбивка. */
   groups: Record<string, SplitGroup>;
   loaded: boolean;
   hydrate: () => Promise<void>;
   add: (group: SplitGroup) => Promise<void>;
-  remove: (sourceId: string) => Promise<void>;
+  remove: (id: string) => Promise<void>;
 }
 
 export const useSplitGroupsStore = create<SplitGroupsState>((set, get) => ({
@@ -65,38 +77,16 @@ export const useSplitGroupsStore = create<SplitGroupsState>((set, get) => ({
   },
 
   add: async (group) => {
-    const next = { ...get().groups, [group.sourceId]: group };
+    const next = { ...get().groups, [group.id]: group };
     await db.saveJSON(KEY, next);
     set({ groups: next });
   },
 
-  remove: async (sourceId) => {
+  remove: async (id) => {
     const next = { ...get().groups };
-    delete next[sourceId];
+    delete next[id];
     await db.saveJSON(KEY, next);
     set({ groups: next });
   },
 }));
 
-/**
- * Обратный поиск: по id ЛЮБОЙ части найти её разбивку.
- *
- * Лента показывает части обычными строками, и каждой нужна пометка «часть
- * операции такой-то». Искать перебором групп на каждую строку — это N×M на
- * каждый рендер списка в тысячи строк; карта строится один раз на изменение
- * состава групп.
- */
-export function indexPartsByGroup(
-  groups: Record<string, SplitGroup>
-): Map<string, SplitGroup> {
-  const out = new Map<string, SplitGroup>();
-  for (const group of Object.values(groups)) {
-    for (const part of group.parts) out.set(part.id, group);
-  }
-  return out;
-}
-
-/** Номер части внутри своей разбивки, считая с единицы. 0 — не часть. */
-export function partNumber(group: SplitGroup, id: string): number {
-  return group.parts.findIndex((p) => p.id === id) + 1;
-}

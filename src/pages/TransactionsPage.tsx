@@ -37,12 +37,6 @@ import { pluralRu } from "../lib/plural";
 import { EditTransactionModal } from "../components/EditTransactionModal";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
-import {
-  indexPartsByGroup,
-  partNumber,
-  useSplitGroupsStore,
-  type SplitGroup,
-} from "../store/useSplitGroupsStore";
 import { Tooltip } from "../components/Tooltip";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
@@ -242,25 +236,8 @@ export function TransactionsPage() {
   // `creating`: там выбирают вид с нуля, здесь форма открывается заполненной.
   const [copying, setCopying] = useState<Transaction | null>(null);
   const [splitting, setSplitting] = useState<Transaction | null>(null);
-  const splitGroups = useSplitGroupsStore((s) => s.groups);
-  const splitParts = useMemo(() => indexPartsByGroup(splitGroups), [splitGroups]);
-  const { applySplit, undoSplit } = useSplitTransaction();
+  const { applySplit } = useSplitTransaction();
 
-  /** Отменить разбивку: вернуть исходную операцию и убрать созданные части. */
-  async function handleUnsplit(group: SplitGroup) {
-    const extra = group.parts.length - 1;
-    const ok = await confirm({
-      title: "Отменить разделение?",
-      message: `Операция вернётся к сумме ${formatMoney(
-        group.originalAmount,
-        base
-      )} и статье «${group.originalCategory}», а созданные части (${extra}) будут удалены.`,
-      confirmLabel: "Отменить разделение",
-      tone: "danger",
-    });
-    if (!ok) return;
-    await undoSplit(group);
-  }
 
   // ── «Добавить» dropdown: pick which kind of operation to create. ─────
   // Anchored to addMenuRef; opening/closing (outside-click, Esc, scroll) is
@@ -819,8 +796,6 @@ export function TransactionsPage() {
                 onCopy={apiConnected ? setCopying : undefined}
                 onDelete={handleDelete}
                 onSplit={apiConnected ? setSplitting : undefined}
-                onUnsplit={handleUnsplit}
-                splitParts={splitParts}
                 selected={selected}
                 onToggleSelect={toggleSelect}
               />
@@ -843,16 +818,7 @@ export function TransactionsPage() {
                 onEdit={() => openEditor(t)}
                 onCopy={apiConnected ? () => setCopying(t) : undefined}
                 onDelete={() => handleDelete(t)}
-                onSplit={
-                  splitOf(splitParts, t) || !apiConnected
-                    ? undefined
-                    : () => setSplitting(t)
-                }
-                splitOf={splitOf(splitParts, t)}
-                onUnsplit={(() => {
-                  const found = splitOf(splitParts, t);
-                  return found ? () => handleUnsplit(found.group) : undefined;
-                })()}
+                onSplit={apiConnected ? () => setSplitting(t) : undefined}
                 selected={selected.has(t.id)}
                 onToggleSelect={() => toggleSelect(t.id)}
               />
@@ -904,7 +870,7 @@ export function TransactionsPage() {
           // открытыми значило бы предлагать править операцию и делить её
           // одновременно.
           onSplit={
-            apiConnected && !splitOf(splitParts, editing)
+            apiConnected
               ? () => {
                   setEditing(null);
                   setSplitting(editing);
@@ -1065,15 +1031,6 @@ function HeaderRow({
   );
 }
 
-/** Разбивка операции и её номер в ней — или `undefined`, если это не часть. */
-function splitOf(
-  parts: Map<string, SplitGroup>,
-  tx: Transaction
-): { group: SplitGroup; no: number } | undefined {
-  const group = parts.get(tx.id);
-  return group ? { group, no: partNumber(group, tx.id) } : undefined;
-}
-
 function DayGroup({
   ymd,
   txs,
@@ -1085,8 +1042,6 @@ function DayGroup({
   onCopy,
   onDelete,
   onSplit,
-  onUnsplit,
-  splitParts,
   selected,
   onToggleSelect,
 }: {
@@ -1103,10 +1058,6 @@ function DayGroup({
   onDelete: (t: Transaction) => void;
   /** Не задан — делить нечем: без подключённого Дзен-мани частей не создать. */
   onSplit?: (t: Transaction) => void;
-  /** Отменить разбивку у операции-части. */
-  onUnsplit?: (g: SplitGroup) => void;
-  /** Карта «id операции → её разбивка», одна на весь список. */
-  splitParts: Map<string, SplitGroup>;
   selected: Set<string>;
   onToggleSelect: (id: string) => void;
 }) {
@@ -1184,12 +1135,7 @@ function DayGroup({
           onEdit={() => onEdit(t)}
           onCopy={onCopy && (() => onCopy(t))}
           onDelete={() => onDelete(t)}
-          onSplit={splitOf(splitParts, t) ? undefined : onSplit && (() => onSplit(t))}
-          splitOf={splitOf(splitParts, t)}
-          onUnsplit={(() => {
-            const found = splitOf(splitParts, t);
-            return found && onUnsplit ? () => onUnsplit(found.group) : undefined;
-          })()}
+          onSplit={onSplit && (() => onSplit(t))}
           selected={selected.has(t.id)}
           onToggleSelect={() => onToggleSelect(t.id)}
           hideDate
@@ -1212,8 +1158,6 @@ function Row({
   onCopy,
   onDelete,
   onSplit,
-  splitOf,
-  onUnsplit,
   selected,
   onToggleSelect,
   hideDate = false,
@@ -1226,10 +1170,6 @@ function Row({
   onDelete: () => void;
   /** Разделить операцию на части. Нет — делить нечего или незачем. */
   onSplit?: () => void;
-  /** Операция сама является частью разбивки: её группа и номер в ней. */
-  splitOf?: { group: SplitGroup; no: number };
-  /** Отменить разбивку — вернуть исходную операцию и убрать части. */
-  onUnsplit?: () => void;
   selected: boolean;
   onToggleSelect: () => void;
   hideDate?: boolean;
@@ -1342,48 +1282,11 @@ function Row({
         <div className="min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <span className="truncate">{tx.category}</span>
-            {edited && !draft && !splitOf && (
+            {edited && !draft && (
               <Pencil
                 className="w-3 h-3 text-accent2 shrink-0"
                 aria-label="Отредактировано"
               />
-            )}
-            {/* Часть разбивки. Карандаш «отредактировано» у первой части
-                прячем: её и правда правили, но правка эта — сама разбивка,
-                и два значка об одном событии только путают. */}
-            {splitOf && (
-              <Tooltip
-                content={
-                  <span className="block text-left">
-                    Часть {splitOf.no} из {splitOf.group.parts.length}. Операция
-                    на {formatMoney(splitOf.group.originalAmount, tx.currency)}{" "}
-                    разделена по статьям:
-                    {splitOf.group.parts.map((part) => (
-                      <span key={part.id} className="block">
-                        {part.subcategory
-                          ? `${part.category} / ${part.subcategory}`
-                          : part.category}{" "}
-                        — {formatMoney(part.amount, tx.currency)}
-                      </span>
-                    ))}
-                    <span className="block mt-1 text-muted">
-                      Нажмите, чтобы отменить разделение
-                    </span>
-                  </span>
-                }
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUnsplit?.();
-                  }}
-                  aria-label={`Часть ${splitOf.no} из ${splitOf.group.parts.length} — отменить разделение`}
-                  className="shrink-0 inline-flex items-center gap-1 text-[11px] text-accent2 border border-accent2/40 bg-accent2/10 hover:bg-accent2/20 rounded-full px-1.5 leading-5"
-                >
-                  <Scissors className="w-2.5 h-2.5" />
-                  {splitOf.no}/{splitOf.group.parts.length}
-                </button>
-              </Tooltip>
             )}
           </div>
           {tx.subcategory && (
