@@ -122,7 +122,7 @@ describe("historicalRates — weekend skip & de-dup", () => {
     expect(new Set(fetchCalls).size).toBeLessThanOrEqual(businessDays.length + 2);
     expect(fetchCalls.length).toBeLessThan(dates.length);
 
-    // eslint-disable-next-line no-console
+     
     console.log(
       `[bench] ${dates.length} dates (${weekendDates} weekend) → ` +
         `${fetchCalls.length} requests, ${new Set(fetchCalls).size} unique, ${ms}ms`

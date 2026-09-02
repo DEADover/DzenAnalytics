@@ -21,7 +21,7 @@ import {
   type PrintBar,
 } from "../lib/budgetPrint";
 import { formatMoney, formatPct, monthLabelFull } from "../lib/format";
-import { MONTHS } from "./BudgetExportModal";
+import { MONTHS } from "../lib/months";
 
 /**
  * Печатный дашборд бюджета — то, что уходит в PDF.

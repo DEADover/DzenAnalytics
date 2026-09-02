@@ -123,8 +123,8 @@ describe("currencySymbol — подписи без суммы (#57)", () => {
 describe("formatNum — округление по модулю", () => {
   it("копейки отбрасываются одинаково у плюса и у минуса", () => {
     // Сравнение самого значения давало «20 010» и «−20 010,09» в одной колонке.
-    expect(formatNum(20010.09).replace(/ /g, " ")).toBe("20 010");
-    expect(formatNum(-20010.09).replace(/ /g, " ")).toBe("-20 010");
+    expect(formatNum(20010.09).replace(/\u00A0/g, " ")).toBe("20 010");
+    expect(formatNum(-20010.09).replace(/\u00A0/g, " ")).toBe("-20 010");
   });
 
   it("мелкие суммы копейки сохраняют — тоже с обеих сторон нуля", () => {
@@ -135,8 +135,8 @@ describe("formatNum — округление по модулю", () => {
   it("граница ровно в тысяче", () => {
     expect(formatNum(999.99)).toBe("999,99");
     expect(formatNum(-999.99)).toBe("-999,99");
-    expect(formatNum(1000.5).replace(/ /g, " ")).toBe("1 001");
-    expect(formatNum(-1000.5).replace(/ /g, " ")).toBe("-1 001");
+    expect(formatNum(1000.5).replace(/\u00A0/g, " ")).toBe("1 001");
+    expect(formatNum(-1000.5).replace(/\u00A0/g, " ")).toBe("-1 001");
   });
 });
 

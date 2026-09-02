@@ -13,7 +13,7 @@ import {
 } from "../lib/budgetDashboard";
 import { donutSlices, hasNegative, printBars, type PrintBar } from "../lib/budgetPrint";
 import { formatMoney, formatPct } from "../lib/format";
-import { MONTHS } from "./BudgetExportModal";
+import { MONTHS } from "../lib/months";
 import { Segmented } from "./Segmented";
 import { Tooltip } from "./Tooltip";
 import { TooltipFacts } from "./TooltipFacts";

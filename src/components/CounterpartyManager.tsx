@@ -111,7 +111,7 @@ export function CounterpartyManager() {
   // «Дубли» view — the flat list is replaced by the duplicate groups.
   const [dupOnly, setDupOnly] = useState(false);
   // «Без контрагента» view — получатели из операций, которых нет в справочнике.
-  const [orphanOnly, setOrphanOnly] = useState(false);
+  const [orphanOnlyRaw, setOrphanOnly] = useState(false);
   const [orphanSel, setOrphanSel] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -247,10 +247,10 @@ export function CounterpartyManager() {
   }, [transactions, allRows]);
 
   // Разобрали всех — возвращаемся к справочнику: кнопка фильтра исчезает вместе
-  // с последней строкой, и вид остался бы пустым без выхода.
-  useEffect(() => {
-    if (orphanPayees.length === 0) setOrphanOnly(false);
-  }, [orphanPayees.length]);
+  // с последней строкой, и вид остался бы пустым без выхода. Считаем это при
+  // отрисовке, а не эффектом: эффект чинил состояние уже ПОСЛЕ того, как
+  // пустой вид один раз показали.
+  const orphanOnly = orphanOnlyRaw && orphanPayees.length > 0;
 
   // Selection is scoped to what's visible; drop ids that vanished (filtered
   // out, pushed away) so the bulk bar never acts on stale rows.

@@ -26,10 +26,11 @@ export function SliceSwitcher({ inline = false }: { inline?: boolean }) {
   // (он же делает скруглённые края у сегментов), и выпадающий список просто
   // обрезался — кнопка нажималась, но выбирать было нечего.
   useLayoutEffect(() => {
-    if (!open) {
-      setPos(null);
-      return;
-    }
+    // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
+    // следующем открытии `useLayoutEffect` пересчитает координаты ДО того,
+    // как браузер нарисует кадр, — старое значение показать некому. Лишний
+    // сброс стоил перерисовки на каждом закрытии.
+    if (!open) return;
     const place = () => {
       const a = btnRef.current?.getBoundingClientRect();
       if (!a) return;

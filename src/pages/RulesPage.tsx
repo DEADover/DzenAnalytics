@@ -134,7 +134,12 @@ export function RulesPage() {
   const [editing, setEditing] = useState<StoredCategoryRule | "create" | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
-  const [zenTags, setZenTags] = useState<ZenTag[] | null>(null);
+  const [loadedZenTags, setZenTags] = useState<ZenTag[] | null>(null);
+  // Отключились от Дзен-мани — справочника нет, и это видно прямо здесь.
+  // Раньше состояние обнулял эффект: он срабатывал уже после отрисовки, и
+  // один кадр список категорий показывался по справочнику, которого больше
+  // нет.
+  const zenTags = token ? loadedZenTags : null;
   /** Окно «Что изменят правила» — разбор и запись за один заход. */
   const [preview, setPreview] = useState(false);
 
@@ -273,10 +278,7 @@ export function RulesPage() {
   // Справочник тегов Дзен-мани — чтобы заранее отсеять категории, под которые
   // в облаке нет тега. Без подключения проверять нечем.
   useEffect(() => {
-    if (!token) {
-      setZenTags(null);
-      return;
-    }
+    if (!token) return;
     let cancelled = false;
     void loadZenCache().then((cache) => {
       if (!cancelled) setZenTags(cache?.tags ?? []);

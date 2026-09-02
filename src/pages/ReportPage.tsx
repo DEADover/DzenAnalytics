@@ -85,6 +85,21 @@ export function ReportPage() {
   const [tableWidth, setTableWidth] = useState(0);
   const [cloneHeight, setCloneHeight] = useState(0);
 
+  // Горизонтальная прокрутка: двойник повторяет её за настоящей таблицей.
+  // Обёртка двойника — тоже контейнер прокрутки (`overflow-x: hidden`), и
+  // благодаря этому закреплённый первый столбец внутри неё работает сам,
+  // без ручных сдвигов.
+  //
+  // Синхронизация двусторонняя, но эха не будет: присваивание `scrollLeft` само
+  // поднимает `scroll` у получателя, а сравнение ДО записи обрывает цепочку —
+  // встречный обработчик увидит равные значения и ничего не сделает.
+  const copyScroll = (from: HTMLElement | null, to: HTMLElement | null) => {
+    if (from && to && to.scrollLeft !== from.scrollLeft) to.scrollLeft = from.scrollLeft;
+  };
+  const syncScroll = () => copyScroll(scrollerRef.current, cloneClipRef.current);
+  const syncBack = () => copyScroll(cloneClipRef.current, scrollerRef.current);
+  useLayoutEffect(syncScroll, [colWidths, tableWidth]);
+
   // Ширины столбцов и общая ширина таблицы. Меняются от всего: свернули
   // категорию, переключили разбивку, потянули окно, подгрузились данные —
   // поэтому следим за элементами, а не перечисляем поводы вручную.
@@ -163,66 +178,7 @@ export function ReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Горизонтальная прокрутка: двойник повторяет её за настоящей таблицей.
-  // Обёртка двойника — тоже контейнер прокрутки (`overflow-x: hidden`), и
-  // благодаря этому закреплённый первый столбец внутри неё работает сам,
-  // без ручных сдвигов.
-  //
-  // Синхронизация двусторонняя, но эха не будет: присваивание `scrollLeft` само
-  // поднимает `scroll` у получателя, а сравнение ДО записи обрывает цепочку —
-  // встречный обработчик увидит равные значения и ничего не сделает.
-  const copyScroll = (from: HTMLElement | null, to: HTMLElement | null) => {
-    if (from && to && to.scrollLeft !== from.scrollLeft) to.scrollLeft = from.scrollLeft;
-  };
-  const syncScroll = () => copyScroll(scrollerRef.current, cloneClipRef.current);
-  const syncBack = () => copyScroll(cloneClipRef.current, scrollerRef.current);
-  useLayoutEffect(syncScroll, [colWidths, tableWidth]);
 
-  /**
-   * Ячейки строки заголовков. Рисуются и в таблице, и в двойнике — из одного
-   * места, иначе они однажды разъедутся.
-   *
-   * У двойника кнопка «Свернуть все» кликается мышью, но убрана из обхода с
-   * клавиатуры и от читалок (`aria-hidden` на всей обёртке): для них есть
-   * настоящая шапка, а два одинаковых заголовка подряд только запутали бы.
-   */
-  const headerCells = (forClone: boolean) => (
-    <>
-      <Th first>
-        {/* Свернуть/развернуть всё живёт в шапке своей колонки — там же, где
-            стоят шевроны отдельных категорий, и не занимает отдельную строку
-            над таблицей. */}
-        {hasSubcategories ? (
-          <button
-            onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(allParents))}
-            className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-text"
-            title={allCollapsed ? "Развернуть все" : "Свернуть все"}
-            aria-label={allCollapsed ? "Развернуть все" : "Свернуть все"}
-            aria-expanded={!allCollapsed}
-            tabIndex={forClone ? -1 : undefined}
-            // Мышь фокусирует кнопку даже с `tabIndex={-1}`, а фокус внутри
-            // `aria-hidden`-поддерева — это то, чего быть не должно.
-            onMouseDown={forClone ? (e) => e.preventDefault() : undefined}
-          >
-            {allCollapsed ? (
-              <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden />
-            ) : (
-              <ChevronDown className="w-3.5 h-3.5 shrink-0" aria-hidden />
-            )}
-            Категория
-          </button>
-        ) : (
-          "Категория"
-        )}
-      </Th>
-      {report.columns.map((c) => (
-        <Th key={c.key} align="right">
-          {c.label}
-        </Th>
-      ))}
-      {showTotal && <Th align="right">Итого</Th>}
-    </>
-  );
 
   // Отчёт — про всю историю ведения бюджета, поэтому у страницы свой период
   // (по умолчанию «Всё»), а не глобальный «текущий месяц»: иначе при первом
@@ -345,6 +301,57 @@ export function ReportPage() {
   const empty = report.columns.length === 0;
   // При одном столбце «Итого» дублирует его же — прячем.
   const showTotal = report.columns.length > 1;
+
+  // Объявлено ЗДЕСЬ, а не выше по файлу: функция читает `report`,
+  // `hasSubcategories`, `allParents` и `showTotal`. Пока она стояла над ними,
+  // это работало только потому, что вызывают её при отрисовке, — но
+  // компилятор React из-за такого порядка отказывался оптимизировать всю
+  // страницу целиком.
+  /**
+   * Ячейки строки заголовков. Рисуются и в таблице, и в двойнике — из одного
+   * места, иначе они однажды разъедутся.
+   *
+   * У двойника кнопка «Свернуть все» кликается мышью, но убрана из обхода с
+   * клавиатуры и от читалок (`aria-hidden` на всей обёртке): для них есть
+   * настоящая шапка, а два одинаковых заголовка подряд только запутали бы.
+   */
+  const headerCells = (forClone: boolean) => (
+    <>
+      <Th first>
+        {/* Свернуть/развернуть всё живёт в шапке своей колонки — там же, где
+            стоят шевроны отдельных категорий, и не занимает отдельную строку
+            над таблицей. */}
+        {hasSubcategories ? (
+          <button
+            onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(allParents))}
+            className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-text"
+            title={allCollapsed ? "Развернуть все" : "Свернуть все"}
+            aria-label={allCollapsed ? "Развернуть все" : "Свернуть все"}
+            aria-expanded={!allCollapsed}
+            tabIndex={forClone ? -1 : undefined}
+            // Мышь фокусирует кнопку даже с `tabIndex={-1}`, а фокус внутри
+            // `aria-hidden`-поддерева — это то, чего быть не должно.
+            onMouseDown={forClone ? (e) => e.preventDefault() : undefined}
+          >
+            {allCollapsed ? (
+              <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5 shrink-0" aria-hidden />
+            )}
+            Категория
+          </button>
+        ) : (
+          "Категория"
+        )}
+      </Th>
+      {report.columns.map((c) => (
+        <Th key={c.key} align="right">
+          {c.label}
+        </Th>
+      ))}
+      {showTotal && <Th align="right">Итого</Th>}
+    </>
+  );
 
   if (all.length === 0) return <EmptyState />;
 

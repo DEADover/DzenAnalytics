@@ -67,10 +67,11 @@ export function Select<T extends string>({
   }, [open]);
 
   useLayoutEffect(() => {
-    if (!open || !portal) {
-      setPos(null);
-      return;
-    }
+    // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
+    // следующем открытии `useLayoutEffect` пересчитает координаты ДО того,
+    // как браузер нарисует кадр, — старое значение показать некому. Лишний
+    // сброс стоил перерисовки на каждом закрытии.
+    if (!open || !portal) return;
     const place = () => {
       const r = boxRef.current?.getBoundingClientRect();
       if (!r) return;

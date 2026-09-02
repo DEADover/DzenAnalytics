@@ -460,6 +460,10 @@ export function AccountsPage() {
   // клику по строке — как в справочниках.
   const accountEdits = useAccountEditsStore((s) => s.edits);
   const [editingAccount, setEditingAccount] = useState<LiveAccount | null>(null);
+  // Real per-account balances (API mode only). CSV mode → null, we fall back
+  // to the flow-derived delta and label it honestly.
+  const [liveAccounts, setLiveAccounts] = useState<LiveAccount[] | null>(null);
+
   const openAccountEditor = (id: string | null) => {
     // По id, а не по названию: одноимённых счетов в Дзен-мани сколько угодно,
     // и поиск по названию открывал редактор чужого счёта — правка ложилась на
@@ -469,9 +473,6 @@ export function AccountsPage() {
     if (live) setEditingAccount(live);
   };
 
-  // Real per-account balances (API mode only). CSV mode → null, we fall back
-  // to the flow-derived delta and label it honestly.
-  const [liveAccounts, setLiveAccounts] = useState<LiveAccount[] | null>(null);
   useEffect(() => {
     let cancelled = false;
     getLiveAccountsFromCache().then((data) => {
@@ -851,7 +852,7 @@ export function AccountsPage() {
     return [...rows].sort((x, y) => {
       const arch = byArchive(x, y);
       if (arch !== 0) return arch;
-      let cmp = 0;
+      let cmp: number;
       // Столбца может не быть на этой вкладке — тогда сортировка по нему
       // читалась бы как случайный порядок. Откатываемся на сумму.
       const flowKeys = ["income", "expense", "delta", "count"];

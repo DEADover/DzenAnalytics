@@ -11,7 +11,7 @@ import {
   colorIntToHex,
   fallbackColorForName,
 } from "../lib/categoryColor";
-import { zenIconToLucide, FALLBACK_CATEGORY_ICON } from "../lib/zenIconLucide";
+import { ZenIcon } from "./ZenIcon";
 import { IconPicker } from "./IconPicker";
 import { ColorPicker } from "./ColorPicker";
 import { CategoryDot } from "./CategoryDot";
@@ -118,7 +118,6 @@ export function CategoryEditModal({
   );
 
   const previewColor = colorHex || fallbackColorForName(title || "?");
-  const PreviewGlyph = zenIconToLucide(icon) || FALLBACK_CATEGORY_ICON;
 
   const nameValid = title.trim().length > 0;
   const typeValid = showIncome || showOutcome;
@@ -222,7 +221,7 @@ export function CategoryEditModal({
             className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
             style={{ background: previewColor }}
           >
-            <PreviewGlyph className="w-5 h-5 text-white" />
+            <ZenIcon id={icon} className="w-5 h-5 text-white" />
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-[11px] uppercase tracking-wider text-muted" id="cat-edit-title">

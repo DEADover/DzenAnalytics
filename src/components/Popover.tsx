@@ -55,10 +55,11 @@ export function Popover({
   const [pos, setPos] = useState<{ left: number; top: number; width?: number } | null>(null);
 
   useLayoutEffect(() => {
-    if (!open) {
-      setPos(null);
-      return;
-    }
+    // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
+    // следующем открытии `useLayoutEffect` пересчитает координаты ДО того,
+    // как браузер нарисует кадр, — старое значение показать некому. Лишний
+    // сброс стоил перерисовки на каждом закрытии.
+    if (!open) return;
     const anchor = anchorRef.current;
     const menu = menuRef.current;
     if (!anchor || !menu) return;

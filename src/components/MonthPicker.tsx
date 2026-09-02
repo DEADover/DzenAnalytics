@@ -2,12 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, ChevronDown, CalendarRange } from "lucide-react";
 import clsx from "clsx";
+import { MONTHS_SHORT } from "../lib/months";
 import { monthLabel } from "../lib/format";
 
-const MONTHS = [
-  "Янв", "Фев", "Мар", "Апр", "Май", "Июн",
-  "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек",
-];
 
 /**
  * Month filter control: ‹ prev › step arrows around a label button that opens
@@ -59,17 +56,13 @@ export function MonthPicker({
   const years: number[] = [];
   for (let y = maxY; y >= minY; y--) years.push(y);
 
-  // Sync the visible year to the selected month whenever the picker opens.
-  useEffect(() => {
-    if (open) setViewYear(Number(value?.slice(0, 4)) || new Date().getFullYear());
-  }, [open, value]);
-
   useLayoutEffect(() => {
     const el = btnRef.current;
-    if (!open || !el) {
-      setPos(null);
-      return;
-    }
+    // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
+    // следующем открытии `useLayoutEffect` пересчитает координаты ДО того,
+    // как браузер нарисует кадр, — старое значение показать некому. Лишний
+    // сброс стоил перерисовки на каждом закрытии.
+    if (!open || !el) return;
     const r = el.getBoundingClientRect();
     const estH = 240;
     const below = window.innerHeight - r.bottom - 8;
@@ -123,7 +116,13 @@ export function MonthPicker({
 
       <button
         ref={btnRef}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          // Открываем — показываем год выбранного месяца. Это следствие
+          // нажатия, а не состояния: эффектом оно правилось уже ПОСЛЕ
+          // отрисовки, лишним проходом, и год успевал мигнуть прошлым.
+          if (!open) setViewYear(Number(value?.slice(0, 4)) || new Date().getFullYear());
+          setOpen((o) => !o);
+        }}
         aria-haspopup="dialog"
         aria-expanded={open}
         className={clsx(
@@ -198,7 +197,7 @@ export function MonthPicker({
               </div>
 
               <div className="grid grid-cols-3 gap-1">
-                {MONTHS.map((m, i) => {
+                {MONTHS_SHORT.map((m, i) => {
                   const ym = `${viewYear}-${String(i + 1).padStart(2, "0")}`;
                   const disabled = (!!minYM && ym < minYM) || (!!maxYM && ym > maxYM);
                   const isSel = ym === value;

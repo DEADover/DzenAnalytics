@@ -11,6 +11,7 @@
 
 import { periodKey, periodRange } from "./period";
 import { monthLabel } from "./format";
+import { MONTHS } from "./months";
 import { expenseDelta, cashDelta } from "./txKindStyle";
 import type { Transaction } from "../types";
 
@@ -207,10 +208,6 @@ const MONTHS_GENITIVE = [
   "июля", "августа", "сентября", "октября", "ноября", "декабря",
 ];
 
-const MONTHS_NOMINATIVE = [
-  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
-];
 
 function bucketLabels(
   key: string,
@@ -220,7 +217,7 @@ function bucketLabels(
   const [y, m, d] = key.split("-");
   const mi = Number(m) - 1;
   if (granularity === "month") {
-    return { label: monthLabel(`${y}-${m}`), fullLabel: `${MONTHS_NOMINATIVE[mi]} ${y}` };
+    return { label: monthLabel(`${y}-${m}`), fullLabel: `${MONTHS[mi]} ${y}` };
   }
   const short = `${Number(d)} ${MONTHS_SHORT[mi]} ${y.slice(2)}`;
   const full = `${Number(d)} ${MONTHS_GENITIVE[mi]} ${y}`;

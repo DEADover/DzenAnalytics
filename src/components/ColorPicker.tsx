@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import clsx from "clsx";
 import { CATEGORY_EDIT_PALETTE } from "../lib/categoryColor";
@@ -48,9 +48,10 @@ function hsvToRgb(h: number, s: number, v: number): { r: number; g: number; b: n
   const c = v * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = v - c;
-  let r = 0,
-    g = 0,
-    b = 0;
+  // Без начальных значений: цепочка ниже заканчивается `else`, поэтому
+  // каждая ветка присваивает все три, а нули читались бы как значение по
+  // умолчанию, которого на самом деле нет.
+  let r: number, g: number, b: number;
   if (h < 60) [r, g, b] = [c, x, 0];
   else if (h < 120) [r, g, b] = [x, c, 0];
   else if (h < 180) [r, g, b] = [0, c, x];
@@ -82,16 +83,23 @@ export function ColorPicker({ value, onChange }: Props) {
     return rgbToHex(r, g, b);
   })();
 
-  // Re-sync HSV from an externally-set value (palette/hex/reopen) — but not from
-  // our own emits (those already match hsvHex).
-  useEffect(() => {
-    if (!current) return;
-    if (current === hsvHex) return;
-    const rgb = hexToRgb(current);
-    if (rgb) setHsv(rgbToHsv(rgb.r, rgb.g, rgb.b));
-    setHexText(current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current]);
+  // Цвет пришёл СНАРУЖИ (палитра, поле HEX, повторное открытие) — подтягиваем
+  // под него HSV. Свои же выпуски пропускаем: они уже совпадают с `hsvHex`.
+  //
+  // Правим ПРИ ОТРИСОВКЕ, а не эффектом. Эффект срабатывал после того, как
+  // кадр уже нарисован, и на один кадр квадрат с ползунком оттенка оставались
+  // на прежнем цвете — заметно как раз при выборе из палитры. React такую
+  // подстройку под изменившийся вход разрешает: перерисовка идёт сразу, до
+  // показа, и промежуточное состояние наружу не попадает.
+  const [syncedFrom, setSyncedFrom] = useState(current);
+  if (current !== syncedFrom) {
+    setSyncedFrom(current);
+    if (current && current !== hsvHex) {
+      const rgb = hexToRgb(current);
+      if (rgb) setHsv(rgbToHsv(rgb.r, rgb.g, rgb.b));
+      setHexText(current);
+    }
+  }
 
   function emit(next: { h: number; s: number; v: number }) {
     setHsv(next);

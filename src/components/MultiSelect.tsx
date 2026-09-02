@@ -339,7 +339,7 @@ export function MultiSelect({
           };
     }
     setPos(next);
-  }, [open, visible.length, showSearch]);
+  }, [open, visible.length, showSearch, MENU_W]);
 
   useEffect(() => {
     if (!open) return;

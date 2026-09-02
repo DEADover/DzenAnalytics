@@ -10,24 +10,13 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Download, FileSpreadsheet, FileText, Loader2, X } from "lucide-react";
 import clsx from "clsx";
+import { MONTHS } from "../lib/months";
+import {
+  budgetExportFileName,
+  type BudgetExportFormat,
+} from "../lib/budgetExportName";
 
-export type BudgetExportFormat = "xlsx" | "pdf";
-
-/** Месяцы по-русски. Полными словами: в окне для них есть место. */
-export const MONTHS = [
-  "Январь",
-  "Февраль",
-  "Март",
-  "Апрель",
-  "Май",
-  "Июнь",
-  "Июль",
-  "Август",
-  "Сентябрь",
-  "Октябрь",
-  "Ноябрь",
-  "Декабрь",
-];
+export type { BudgetExportFormat };
 
 interface Props {
   year: number;
@@ -39,20 +28,6 @@ interface Props {
   /** Скачать. Окно само держит ожидание и закрывается по успеху. */
   onExport: (format: BudgetExportFormat) => Promise<void>;
   onClose: () => void;
-}
-
-/** Имя файла, который получит пользователь. */
-export function budgetExportFileName(
-  year: number,
-  month: number,
-  format: BudgetExportFormat
-): string {
-  // У PDF месяц в имени: лист нарисован по одному месяцу, и без него два отчёта
-  // за разные месяцы одного года различались бы только цифрами внутри. В Excel
-  // лежат все двенадцать, там месяц в имени соврал бы.
-  return format === "xlsx"
-    ? `Бюджет-${year}.xlsx`
-    : `Бюджет-${year}-${MONTHS[month].toLowerCase()}.pdf`;
 }
 
 const FORMATS: {

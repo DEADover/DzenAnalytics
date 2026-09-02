@@ -51,7 +51,7 @@ function ascii(s: string): Uint8Array {
  * документа превращается в мусор.
  */
 function pdfText(s: string): Uint8Array {
-  // eslint-disable-next-line no-control-regex
+   
   if (/^[\x20-\x7e]*$/.test(s)) {
     return ascii(`(${s.replace(/([\\()])/g, "\\$1")})`);
   }

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -147,15 +147,20 @@ export function MonthCashflowChart({
   plannedIncomeByDay?: number[];
   plannedExpenseByDay?: number[];
 }) {
+  // «Сегодня» снимаем один раз при монтировании, а не читаем часы прямо в
+  // рендере. Час в зависимостях `useMemo` не значился, поэтому вертикаль
+  // «Сегодня» сдвигалась не в полночь, а когда случайно пересчитывался memo, —
+  // то есть в момент, никак не связанный с временем.
+  const [now] = useState(() => Date.now());
   const cf = useMemo(
     () =>
-      buildMonthCashflow(transactions, ym, Date.now(), {
+      buildMonthCashflow(transactions, ym, now, {
         plannedIncome,
         plannedExpense,
         plannedIncomeByDay,
         plannedExpenseByDay,
       }),
-    [transactions, ym, plannedIncome, plannedExpense, plannedIncomeByDay, plannedExpenseByDay]
+    [transactions, ym, now, plannedIncome, plannedExpense, plannedIncomeByDay, plannedExpenseByDay]
   );
   const hasForecast = cf.todayDay > 0 && cf.todayDay < cf.days;
 

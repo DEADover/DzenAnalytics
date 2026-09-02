@@ -74,11 +74,11 @@ import { formatMoney } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { DateField } from "../components/DateField";
+import { BudgetExportModal } from "../components/BudgetExportModal";
 import {
-  BudgetExportModal,
   budgetExportFileName,
   type BudgetExportFormat,
-} from "../components/BudgetExportModal";
+} from "../lib/budgetExportName";
 
 function currentMonth(): string {
   const d = new Date();
@@ -548,7 +548,7 @@ export function BudgetsPage() {
         // doesn't forecast get no phantom «≈»); in CSV mode fall back to a local
         // median. Never pushed to Дзен.
         if (planned === 0 && line.kind === "income") {
-          let fc = 0;
+          let fc: number;
           if (!zenLoaded) fc = 0; // still reading cache — avoid a median flash
           else if (zenForecasts)
             fc = zenForecasts.get(

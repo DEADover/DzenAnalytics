@@ -1,6 +1,7 @@
 import type { Transaction, CurrencyRates } from "../types";
 import { ymKey, ymdKey } from "./format";
 import { periodKey } from "./period";
+import { MONTHS } from "./months";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
 import { counterpartyOf, debtKey } from "./debtFilter";
 
@@ -573,10 +574,6 @@ export interface SeasonalityPoint {
   expenseDeviationPct: number;
 }
 
-const SEASON_MONTH_NAMES = [
-  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
-];
 
 export function detectSeasonality(txs: Transaction[]): SeasonalityPoint[] {
   const monthly = new Map<string, { income: number; expense: number }>();
@@ -625,7 +622,7 @@ export function detectSeasonality(txs: Transaction[]): SeasonalityPoint[] {
         : 0;
     return {
       monthIdx: i,
-      monthName: SEASON_MONTH_NAMES[i],
+      monthName: MONTHS[i],
       avgExpense,
       avgIncome,
       yearsSampled: b.expense.length,

@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, Search, X } from "lucide-react";
 import clsx from "clsx";
-import { ZEN_ICON_IDS, zenIconToLucide, FALLBACK_CATEGORY_ICON } from "../lib/zenIconLucide";
+import { ZEN_ICON_IDS } from "../lib/zenIconLucide";
+import { ZenIcon } from "./ZenIcon";
 
 interface Props {
   /** Current Zenmoney icon id, or null. */
@@ -22,7 +23,6 @@ export function IconPicker({ value, color, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const Current = zenIconToLucide(value) || FALLBACK_CATEGORY_ICON;
 
   const ids = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -43,7 +43,7 @@ export function IconPicker({ value, color, onChange }: Props) {
         className="input h-10 flex items-center justify-between gap-2 w-full text-left"
       >
         <span className="flex items-center gap-2 min-w-0">
-          <Current className="w-5 h-5 shrink-0" style={color ? { color } : undefined} />
+          <ZenIcon id={value} className="w-5 h-5 shrink-0" style={color ? { color } : undefined} />
           {/* Name the CHOSEN icon — a permanent «Выбрать иконку» reads as an
               empty field even after picking, since only the glyph changes. */}
           <span
@@ -83,7 +83,6 @@ export function IconPicker({ value, color, onChange }: Props) {
           </div>
           <div className="grid grid-cols-6 gap-1 max-h-56 overflow-y-auto">
             {ids.map((id) => {
-              const Glyph = zenIconToLucide(id) || FALLBACK_CATEGORY_ICON;
               const active = id === value;
               return (
                 <button
@@ -103,7 +102,8 @@ export function IconPicker({ value, color, onChange }: Props) {
                       : "hover:bg-panel2 text-text"
                   )}
                 >
-                  <Glyph
+                  <ZenIcon
+                    id={id}
                     className="w-5 h-5"
                     style={active && color ? { color } : undefined}
                   />
