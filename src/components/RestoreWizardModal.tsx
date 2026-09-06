@@ -165,6 +165,7 @@ export function RestoreWizardModal({
               snapshot={chosen}
               progress={w.restoreProgress}
               notes={w.preflight?.notes ?? []}
+              deleted={w.preflight?.deletedInSnapshot ?? 0}
             />
           )}
 
@@ -474,11 +475,14 @@ function ReadyStep({
   snapshot,
   progress,
   notes,
+  deleted,
 }: {
   snapshot: CloudSnapshotSummary;
   progress: import("../lib/cloudSnapshots").RestoreProgress | null;
-  /** То, что заливке не мешает, но знать полезно — например, лишние счета. */
+  /** То, что переносу не мешает, но знать полезно — например, лишние счета. */
   notes: string[];
+  /** Удалённые записи снимка: их тоже переносим, и счётчик их учитывает. */
+  deleted: number;
 }) {
   const c = snapshot.counts;
   return (
@@ -496,6 +500,22 @@ function ReadyStep({
         <Cell label="Категории" value={c.tags} />
         <Cell label="Контрагенты" value={c.merchants} />
       </div>
+      {/* Число удалённых записей называем ДО переноса. Иначе счётчик по ходу
+          уходит выше обещанных операций, и это выглядит ошибкой. */}
+      {deleted > 0 && (
+        <p className="text-xs text-muted">
+          Кроме них перенесутся {formatNum(deleted)}{" "}
+          {pluralRu(deleted, [
+            "удалённая запись",
+            "удалённые записи",
+            "удалённых записей",
+          ])}
+          : снимок — полная копия, и историю удалений он сохраняет. В счётчике
+          ниже они учтены, поэтому всего будет{" "}
+          {formatNum(snapshot.counts.transactions + deleted)}.
+        </p>
+      )}
+
       {/* Замечания сверки. Раньше они вычислялись и не показывались нигде:
           совет про лишние счета человек не видел никогда. */}
       {!progress &&

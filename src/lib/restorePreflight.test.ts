@@ -119,6 +119,17 @@ describe("restorePreflight", () => {
     expect(many.blockers[0].text).toContain("11 категорий");
   });
 
+  it("считает удалённые записи снимка отдельно", () => {
+    // Их тоже переносят, и по ходу счётчик уходит выше числа операций.
+    // Поэтому число называют заранее — иначе это выглядит ошибкой.
+    const p = restorePreflight(
+      snap({ transaction: [tx("a"), tx("b", true), tx("c", true)] }),
+      empty
+    );
+    expect(p.transactions.inSnapshot).toBe(1);
+    expect(p.deletedInSnapshot).toBe(2);
+  });
+
   it("пустой снимок и пустой аккаунт не роняют расчёт", () => {
     const p = restorePreflight(snap({}), empty);
     expect(p.ready).toBe(true);

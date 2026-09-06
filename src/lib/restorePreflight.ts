@@ -53,6 +53,15 @@ export interface PreflightBlocker {
 
 export interface RestorePreflight {
   transactions: EntityDelta;
+  /**
+   * Сколько удалённых записей лежит в снимке.
+   *
+   * Их тоже отправляют: снимок — полная копия, а история удалений это данные.
+   * Но по ходу переноса счётчик из-за них уходит выше обещанного числа
+   * операций, поэтому число нужно назвать заранее — иначе человек видит, как
+   * «7 660 операций» превращаются в 9 577, и не понимает почему.
+   */
+  deletedInSnapshot: number;
   accounts: EntityDelta;
   tags: EntityDelta;
   merchants: EntityDelta;
@@ -107,6 +116,7 @@ export function restorePreflight(
   }
 ): RestorePreflight {
   const transactions = countLive(snapshot.transaction || [], account.transactions);
+  const deletedInSnapshot = (snapshot.transaction || []).filter((t) => t.deleted).length;
   const accounts = countLive(snapshot.account || [], account.accounts);
   const tags = countLive(snapshot.tag || [], account.tags);
   const merchants = countLive(snapshot.merchant || [], account.merchants);
@@ -162,6 +172,7 @@ export function restorePreflight(
 
   return {
     transactions,
+    deletedInSnapshot,
     accounts,
     tags,
     merchants,
