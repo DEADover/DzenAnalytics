@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Upload,
@@ -24,7 +24,6 @@ import {
   History,
   CloudDownload,
   CloudUpload,
-  Info,
   ChevronDown,
   Calculator,
   HardDrive,
@@ -64,8 +63,8 @@ import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
 import { snapshotSummary } from "../lib/snapshotLabel";
-import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
 import { RestoreWizardModal } from "../components/RestoreWizardModal";
+import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
 import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
@@ -310,16 +309,9 @@ export function ImportPage() {
   const deleteCloudSnapshot = useCloudSnapshotStore((s) => s.deleteSnapshot);
   const downloadCloudSnapshot = useCloudSnapshotStore((s) => s.download);
   const importCloudSnapshot = useCloudSnapshotStore((s) => s.importFromFile);
-  const restoreCloudSnapshot = useCloudSnapshotStore((s) => s.restore);
-  const lastRestoreResult = useCloudSnapshotStore((s) => s.lastRestoreResult);
-  const snapshotPreflight = useCloudSnapshotStore((s) => s.preflight);
   const cloudSnapshotsOp = useCloudSnapshotStore((s) => s.busyOp);
-  const cleanupProgress = useCloudSnapshotStore((s) => s.cleanupProgress);
-  const lastCleanupResult = useCloudSnapshotStore((s) => s.lastCleanupResult);
-  const cleanupDicts = useCloudSnapshotStore((s) => s.cleanup);
-  const checkSnapshotReadiness = useCloudSnapshotStore((s) => s.checkReadiness);
+  const openRestoreWizard = useRestoreWizardStore((s) => s.open);
   const pruneForeignSnapshots = useCloudSnapshotStore((s) => s.pruneForeign);
-  const restoreProgress = useCloudSnapshotStore((s) => s.restoreProgress);
   const [restoreWizardOpen, setRestoreWizardOpen] = useState(false);
   // Current Zenmoney user id — read from the local cache. Lets us
   // filter the snapshot list to "snapshots for the currently
@@ -632,39 +624,6 @@ export function ImportPage() {
     } finally {
       setBackupBusy(false);
     }
-  }
-
-  /**
-   * Залить снимок обратно в Дзен-мани.
-   *
-   * Живёт функцией, а не обработчиком у кнопки: то же самое делает мастер
-   * отката, и два одинаковых предупреждения в двух местах однажды разошлись бы.
-   */
-  async function runRestore(s: CloudSnapshotSummary) {
-
-
-    // Коротко и по делу: мастер уже провёл по шагам, объяснил механику и взял
-    // согласие галочкой. Прежнее подтверждение пересказывало всё это заново —
-    // выходила простыня, которую не читают именно потому, что она повторяет
-    // только что прочитанное.
-    const confirmed = await confirm({
-      title: `Восстановить из снимка от ${new Date(s.createdAt).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}?`,
-      message:
-        `В Дзен-мани уйдут ${formatNum(s.counts.transactions)} ` +
-        `${pluralRu(s.counts.transactions, ["операция", "операции", "операций"])}, ` +
-        `${s.counts.accounts} ${pluralRu(s.counts.accounts, ["счёт", "счёта", "счетов"])}, ` +
-        `${s.counts.tags} ${pluralRu(s.counts.tags, ["категория", "категории", "категорий"])}, ` +
-        `${s.counts.merchants} ${pluralRu(s.counts.merchants, ["контрагент", "контрагента", "контрагентов"])}.\n\n` +
-        `Отменить будет нельзя.`,
-      confirmLabel: "Восстановить",
-      tone: "warning",
-    });
-    if (!confirmed) return;
-        try {
-          await restoreCloudSnapshot(s.id);
-        } catch {
-          /* error already in store */
-        }
   }
 
   async function importBackup(file: File) {
@@ -2147,7 +2106,10 @@ export function ImportPage() {
                   подготовка и заливка идут шагами внутри окна. На экране они
                   занимали половину страницы и читались все сразу. */}
               <button
-                onClick={() => setRestoreWizardOpen(true)}
+                onClick={() => {
+                  openRestoreWizard(visibleSnapshots[0]?.id ?? null);
+                  setRestoreWizardOpen(true);
+                }}
                 disabled={cloudSnapshotsBusy}
                 className="btn-ghost text-sm inline-flex items-center gap-2"
               >
@@ -2221,185 +2183,13 @@ export function ImportPage() {
             {restoreWizardOpen && (
               <RestoreWizardModal
                 snapshots={visibleSnapshots}
-                preflight={snapshotPreflight?.result ?? null}
-                preflightId={snapshotPreflight?.id ?? null}
-                restored={!!lastRestoreResult}
-                busyOp={cloudSnapshotsOp}
-                cleanupProgress={cleanupProgress}
-                cleanupResult={lastCleanupResult}
-                restoreProgress={restoreProgress}
-                error={cloudSnapshotsError}
-                onClose={() => setRestoreWizardOpen(false)}
-                onCheck={(id) => {
-                  checkSnapshotReadiness(id).catch(() => {
-                    /* сообщение уже в сторе */
-                  });
-                }}
                 onImportFile={(f) => importCloudSnapshot(f)}
-                onDownload={(id) => downloadCloudSnapshot(id)}
-                onCleanup={() => {
-                  // Сразу после уборки пересверяем: кэш уже вычеркнул удалённое,
-                  // и мастер должен сам перейти к заливке, а не ждать, пока
-                  // человек догадается нажать «Проверить» ещё раз.
-                  const id = snapshotPreflight?.id;
-                  cleanupDicts({ tags: true, merchants: true })
-                    .then(() => {
-                      if (id) return checkSnapshotReadiness(id);
-                    })
-                    .catch(() => {
-                      /* сообщение уже в сторе */
-                    });
-                }}
-                onRestore={(s) => void runRestore(s)}
+                onTakeSnapshot={() => takeCloudSnapshot()}
+                takingSnapshot={cloudSnapshotsOp === "snapshot"}
+                onClose={() => setRestoreWizardOpen(false)}
               />
             )}
 
-            {/* Restore result — shown after a successful restore call.
-                Counts of accepted entities + cross-user warning if the
-                snapshot was for a different account than the current
-                token. */}
-            {lastRestoreResult && (
-              <div className="text-xs mt-3 space-y-2">
-                <div
-                  className={`flex items-start gap-2 ${
-                    lastRestoreResult.crossUser ? "text-warn" : "text-income"
-                  }`}
-                >
-                  {lastRestoreResult.crossUser ? (
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  ) : (
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  )}
-                  <span>
-                    {lastRestoreResult.crossUser ? (
-                      <>
-                        Отправлено в <strong>другой</strong> Дзен-аккаунт.
-                        Сущностям сгенерированы новые ID, ссылки на системные
-                        банки и валюты сброшены. Ушло:
-                      </>
-                    ) : (
-                      <>Запрос прошёл без ошибок. Отправлено:</>
-                    )}{" "}
-                    <strong>
-                      {lastRestoreResult.accepted.transactions.visible +
-                        lastRestoreResult.accepted.transactions.hidden}
-                    </strong>{" "}
-                    транзакций (
-                    {lastRestoreResult.accepted.transactions.visible} видимых в
-                    приложении
-                    {lastRestoreResult.accepted.transactions.hidden > 0 && (
-                      <>
-                        {" + "}
-                        {lastRestoreResult.accepted.transactions.hidden}{" "}
-                        удалённых / без суммы
-                      </>
-                    )}
-                    ) ·{" "}
-                    <strong>
-                      {lastRestoreResult.accepted.accounts.active +
-                        lastRestoreResult.accepted.accounts.archived}
-                    </strong>{" "}
-                    счетов (
-                    {lastRestoreResult.accepted.accounts.active} активных
-                    {lastRestoreResult.accepted.accounts.archived > 0 && (
-                      <>
-                        {" + "}
-                        {lastRestoreResult.accepted.accounts.archived}{" "}
-                        архивных
-                      </>
-                    )}
-                    ) ·{" "}
-                    <strong>
-                      {lastRestoreResult.accepted.tags.active +
-                        lastRestoreResult.accepted.tags.archived}
-                    </strong>{" "}
-                    тегов (
-                    {lastRestoreResult.accepted.tags.active} активных
-                    {lastRestoreResult.accepted.tags.archived > 0 && (
-                      <>
-                        {" + "}
-                        {lastRestoreResult.accepted.tags.archived}{" "}
-                        архивных
-                      </>
-                    )}
-                    ) ·{" "}
-                    <strong>{lastRestoreResult.accepted.merchants}</strong>{" "}
-                    контрагентов.
-                  </span>
-                </div>
-
-                {/* Per-category "что не зашло" — only render when we
-                    actually skipped something, otherwise the result
-                    looks needlessly busy. */}
-                {(lastRestoreResult.skipped.transactions > 0 ||
-                  lastRestoreResult.skipped.debtAccount > 0) && (
-                  <div className="flex items-start gap-2 text-muted">
-                    <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <span>
-                      Пропущено:{" "}
-                      {(() => {
-                        const parts: ReactNode[] = [];
-                        if (lastRestoreResult.skipped.transactions > 0) {
-                          parts.push(
-                            <>
-                              <strong>{lastRestoreResult.skipped.transactions}</strong>{" "}
-                              операций с битыми ссылками на счёт, категорию
-                              или контрагента
-                            </>
-                          );
-                        }
-                        if (lastRestoreResult.skipped.debtAccount > 0) {
-                          parts.push(
-                            <>
-                              <strong>1</strong> системный счёт «Долг» сведён с
-                              локальным
-                            </>
-                          );
-                        }
-                        return parts.map((p, i) => (
-                          <span key={i}>
-                            {i > 0 && " · "}
-                            {p}
-                          </span>
-                        ));
-                      })()}
-                      .
-                    </span>
-                  </div>
-                )}
-
-                {lastRestoreResult.droppedTxReasons.length > 0 && (
-                  <details className="text-muted">
-                    <summary className="cursor-pointer hover:text-text">
-                      Примеры пропущенных транзакций (
-                      {lastRestoreResult.droppedTxReasons.length})
-                    </summary>
-                    <div className="mt-1 max-h-32 overflow-y-auto space-y-0.5 -mx-1 px-1">
-                      {lastRestoreResult.droppedTxReasons.map((r) => (
-                        <div key={r.id} className="py-0.5">
-                          <span className="font-mono text-[10px]">{r.id}</span>
-                          {" · "}
-                          {r.reason}
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                )}
-
-                {/* Числа выше — про ОТПРАВЛЕННОЕ, а не про долетевшее: их
-                    считает сам запрос, до ответа сервера о судьбе каждой
-                    строки. Поэтому здесь зовём сверить результат, а не
-                    поздравляем с успехом. */}
-                <div className="text-muted">
-                  Это то, что <strong>ушло</strong> в Дзен-мани, а не то, что он
-                  оставил у себя: по каждой строке побеждает версия со свежим
-                  «changed», и часть отправленного могла не примениться. Чтобы
-                  увидеть, что вышло на самом деле, сделайте полную
-                  синхронизацию (⤓ в шапке) и нажмите «Сверить» у этого снимка —
-                  готовый аккаунт означает, что снимок лёг целиком.
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-panel2/30 p-4 text-sm text-muted">

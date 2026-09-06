@@ -1,13 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
-  Loader2,
   Check,
-  Download,
   CheckCircle2,
+  CloudDownload,
   History,
-  Info,
   Upload,
   X,
 } from "lucide-react";
@@ -15,111 +13,69 @@ import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { snapshotSummary } from "../lib/snapshotLabel";
 import { InfoPopover } from "./InfoPopover";
+import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
 import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
-import type { CleanupProgress, CleanupResult } from "../lib/accountCleanup";
-import type { RestoreProgress } from "../lib/cloudSnapshots";
-import type { RestorePreflight } from "../lib/restorePreflight";
 
 /**
- * Восстановление из снимка — мастером в отдельном окне (issue #93).
+ * Мастер восстановления из снимка (#93).
  *
- * На экране настроек это была простыня: список снимков, свод сверки, пять
- * пунктов порядка действий со всеми пояснениями сразу. Человек, пришедший
- * вернуть свои данные, читал заодно и то, что ему сейчас не нужно.
- *
- * Здесь за раз показывается один шаг и один вопрос. Объяснения «почему так»
- * убраны под знаки вопроса: они нужны один раз и не всем, а место занимали
- * всегда.
- *
- * Шаг определяется СОСТОЯНИЕМ аккаунта, а не нажатиями «далее»: пока в нём
- * есть операции, показывается очистка; остались справочники — уборка; чисто —
- * заливка. Кнопки «назад» нет: вернуться значит сверить заново.
+ * Окно — чистое отображение: шаг, кнопки и тексты берутся из фазы в сторе
+ * (`useRestoreWizardStore`). Своего состояния здесь нет намеренно: раньше
+ * выбор, согласие и время сверки жили локально и пропадали вместе с окном,
+ * а работа продолжала идти в фоне.
  */
 
-type Step = "pick" | "prepare" | "confirm" | "done";
-
-const STEPS: { id: Step; title: string }[] = [
+const STEPS = [
   { id: "pick", title: "Снимок" },
-  { id: "prepare", title: "Подготовка" },
-  { id: "confirm", title: "Заливка" },
+  { id: "clear", title: "Очистка" },
+  { id: "dictionaries", title: "Справочники" },
+  { id: "ready", title: "Заливка" },
   { id: "done", title: "Готово" },
-];
+] as const;
+
+/** Какой сегмент полосы считать текущим для данной фазы. */
+const SEGMENT: Record<string, number> = {
+  pick: 0,
+  clear: 1,
+  dictionaries: 2,
+  ready: 3,
+  restoring: 3,
+  partial: 3,
+  done: 4,
+};
 
 export function RestoreWizardModal({
   snapshots,
-  preflight,
-  preflightId,
-  restored,
-  busyOp,
-  cleanupProgress,
-  cleanupResult,
-  restoreProgress,
-  error,
-  onCheck,
-  onCleanup,
-  onRestore,
   onImportFile,
-  onDownload,
+  onTakeSnapshot,
+  takingSnapshot,
   onClose,
 }: {
   snapshots: CloudSnapshotSummary[];
-  preflight: RestorePreflight | null;
-  /** Снимок, к которому относится сверка. */
-  preflightId: string | null;
-  restored: boolean;
-  busyOp: "snapshot" | "import" | "check" | "restore" | "cleanup" | null;
-  cleanupProgress: CleanupProgress | null;
-  cleanupResult: CleanupResult | null;
-  restoreProgress: RestoreProgress | null;
-  error: string | null;
-  onCheck: (id: string) => void;
-  onCleanup: () => void;
-  onRestore: (s: CloudSnapshotSummary) => void;
   onImportFile: (file: File) => void;
-  onDownload: (id: string) => void;
+  onTakeSnapshot: () => void;
+  takingSnapshot: boolean;
   onClose: () => void;
 }) {
-  // Выбор — не состояние, а предпочтение поверх списка: пока человек ничего не
-  // трогал (или загрузил файл), берём самый свежий снимок. Так подгруженный
-  // файл выбирается сам, без эффекта, который правил бы состояние после
-  // отрисовки.
-  const [pickedId, setPickedId] = useState<string | null>(null);
-  // Ушли ли дальше выбора снимка. Раньше шаг выводился только из сверки, и
-  // «Далее» сразу её запускало: человек попадал на «Подготовку» уже с
-  // результатом, не успев прочитать, что вообще надо сделать.
-  const [entered, setEntered] = useState(false);
-  const [accepted, setAccepted] = useState(false);
-  // Когда в последний раз нажимали «Проверить»: между нажатиями проходят
-  // минуты (очистка доходит до облака не мгновенно), и без отметки времени
-  // непонятно, свежий ли перед тобой ответ.
-  const [checkedTs, setCheckedTs] = useState<number | null>(null);
+  const w = useRestoreWizardStore();
   const fileRef = useRef<HTMLInputElement>(null);
-  const busy = busyOp !== null;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const busy = w.running !== null || takingSnapshot;
 
-  const chosen = snapshots.find((s) => s.id === pickedId) ?? snapshots[0] ?? null;
-  const chosenId = chosen?.id ?? null;
-  const fresh = preflight && preflightId === chosenId ? preflight : null;
-  // На «Подготовке» два разных положения: аккаунт ещё не очищен — или очищен, и
-  // остались только справочники. Вопросы разные, и текст тоже.
-  const dictionariesOnly =
-    !!fresh && !fresh.ready && !fresh.blockers.some((b) => b.kind === "notEmpty");
-  const checkedAt = checkedTs
-    ? new Date(checkedTs).toLocaleTimeString("ru-RU", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      })
-    : null;
+  // Esc закрывает, фокус приходит в окно. Раньше не было ни того, ни другого:
+  // мастер закрывался только случайным кликом по фону — тем самым, которого
+  // человек не хотел.
+  useEffect(() => {
+    dialogRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
 
-  const step: Step = restored
-    ? "done"
-    : !entered
-      ? "pick"
-      : fresh?.ready
-        ? "confirm"
-        : "prepare";
-
-  const activeIndex = STEPS.findIndex((s) => s.id === step);
+  const chosen = snapshots.find((s) => s.id === w.snapshotId) ?? null;
+  const active = SEGMENT[w.phase] ?? 0;
 
   return createPortal(
     <div
@@ -127,10 +83,12 @@ export function RestoreWizardModal({
       onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="restore-wizard-title"
-        className="w-full max-w-lg rounded-2xl border border-border bg-panel shadow-2xl outline-none"
+        tabIndex={-1}
+        className="w-full max-w-2xl rounded-2xl border border-border bg-panel shadow-2xl outline-none"
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2 min-w-0">
@@ -153,23 +111,15 @@ export function RestoreWizardModal({
 
         <ol className="flex items-start gap-1.5 px-5 pt-4">
           {STEPS.map((s, i) => {
-            // На «Готово» зелёная вся полоса, включая последний сегмент:
-            // он оставался синим, и законченный откат выглядел незаконченным.
-            const done = step === "done" || i < activeIndex;
-            const current = i === activeIndex && step !== "done";
+            const passed = w.phase === "done" || i < active;
+            const current = i === active && w.phase !== "done";
             return (
               <li key={s.id} className="flex-1 min-w-0">
                 <div
-                  className={`h-1 rounded-full ${
-                    done ? "bg-income" : current ? "bg-accent" : "bg-border"
-                  }`}
+                  className={`h-1 rounded-full ${passed ? "bg-income" : current ? "bg-accent" : "bg-border"}`}
                 />
                 <div
-                  className={`text-[11px] mt-1 truncate ${
-                    current || (done && s.id === "done")
-                      ? "text-text font-medium"
-                      : "text-muted"
-                  }`}
+                  className={`text-[11px] mt-1 truncate ${current || (passed && i === 4) ? "text-text font-medium" : "text-muted"}`}
                 >
                   {s.title}
                 </div>
@@ -178,383 +128,455 @@ export function RestoreWizardModal({
           })}
         </ol>
 
-        <div className="px-5 py-4 text-sm space-y-3 max-h-[60vh] overflow-y-auto">
-          {step === "pick" && (
-            <>
-              <div className="flex items-center gap-1.5">
-                <span className="font-medium">Что восстанавливаем</span>
-                <InfoPopover label="Как это работает">
-                  <p>
-                    Снимок заливается обратно в Дзен-мани <strong>под новыми
-                    номерами</strong>: под прежними сервис не пускает обратно
-                    удалённые строки — принимает запрос и молча ничего не меняет.
-                  </p>
-                  <p>
-                    Отсюда всё остальное. Снимок ничего не перезаписывает, а
-                    ложится рядом, поэтому аккаунт должен быть пуст — иначе
-                    данные задвоятся. И поэтому же теряется привязка операций к
-                    банковским выпискам: строки заводятся заново.
-                  </p>
-                </InfoPopover>
-              </div>
+        {/* Ошибка — вверху: внизу прокручиваемой области она уходила под сгиб. */}
+        {w.error && (
+          <div className="mx-5 mt-4 flex items-start gap-2 rounded-xl border border-expense/40 bg-expense/5 p-3 text-xs">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-expense" />
+            <span>{w.error}</span>
+          </div>
+        )}
 
-              {snapshots.length === 0 ? (
-                <p className="text-muted">
-                  Снимков нет. Загрузите файл, который скачивали раньше.
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  {snapshots.map((s) => (
-                    <label
-                      key={s.id}
-                      className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer ${
-                        chosenId === s.id
-                          ? "border-accent bg-accent/5"
-                          : "border-border hover:bg-panel2/60"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="snapshot"
-                        checked={chosenId === s.id}
-                        onChange={() => setPickedId(s.id)}
-                        className="mt-1 shrink-0"
-                      />
-                      <span className="min-w-0">
-                        <span className="block font-medium">
-                          {new Date(s.createdAt).toLocaleString("ru-RU", {
-                            day: "numeric",
-                            month: "long",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                        <span className="block text-xs text-muted tabular-nums">
-                          {snapshotSummary(s.counts, s.approxBytes)}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              <button
-                onClick={() => fileRef.current?.click()}
-                disabled={busy}
-                className="btn-ghost text-xs inline-flex items-center gap-2"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                {busyOp === "import" ? "Загружаю…" : "Загрузить файл"}
-              </button>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  // Сбрасываем выбор: загруженный файл встаёт первым и
-                  // становится выбранным сам.
-                  if (f) {
-                    setPickedId(null);
-                    onImportFile(f);
-                  }
-                  e.target.value = "";
-                }}
-              />
-
-              {/* Предупреждение — здесь, а не перед самой заливкой: решение
-                  «делаю это» принимается ДО того, как человек прошёл три шага
-                  и настроился заканчивать. Здесь же под рукой то, что делает
-                  предупреждение выполнимым, — сохранение снимка файлом. */}
-              {chosen && (
-                <div className="rounded-xl border border-warn/40 bg-warn/5 p-3 space-y-2">
-                  <p className="text-xs">
-                    Восстановление необратимо: вернуть аккаунт к нынешнему виду
-                    будет нечем. Сохраните снимок файлом — это единственный
-                    способ отыграть назад.
-                  </p>
-                  <button
-                    onClick={() => onDownload(chosen.id)}
-                    className="btn-ghost text-xs inline-flex items-center gap-2"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Сохранить файлом
-                  </button>
-                  <label className="flex items-start gap-2.5 cursor-pointer pt-1">
-                    <input
-                      type="checkbox"
-                      checked={accepted}
-                      onChange={(e) => setAccepted(e.target.checked)}
-                      className="mt-0.5 shrink-0"
-                    />
-                    <span className="text-xs">
-                      Действую на свой страх и риск. За данные в Дзен-мани
-                      отвечаю я: DzenAnalytics такой ответственности не несёт.
-                    </span>
-                  </label>
-                </div>
-              )}
-
-            </>
+        <div className="px-5 py-4 text-sm space-y-3 max-h-[55vh] overflow-y-auto">
+          {w.phase === "pick" && (
+            <PickStep
+              snapshots={snapshots}
+              chosen={chosen}
+              onPick={w.pick}
+              accepted={w.accepted}
+              onAccept={w.accept}
+              onUpload={() => fileRef.current?.click()}
+              onTakeSnapshot={onTakeSnapshot}
+              takingSnapshot={takingSnapshot}
+            />
           )}
 
-          {step === "prepare" && (
-            <>
-              {/* Пока сверка не нажата, показываем ЧТО НАДО СДЕЛАТЬ. Раньше
-                  «Далее» само запускало проверку, и человек первым делом читал
-                  её вывод про свои 7 660 операций, ещё не поняв, зачем он тут. */}
-              {!dictionariesOnly && (
-                <>
-                  <p>
-                    Перед восстановлением аккаунт в Дзен-мани нужно полностью
-                    очистить — иначе снимок не заменит нынешние данные, а
-                    добавится к ним, и всё задвоится.
-                  </p>
-                  <p>
-                    Откройте Дзен-мани и выберите{" "}
-                    <strong>Ещё → Настройки аккаунта → Начать всё сначала</strong>.
-                    На сайте то же самое в настройках профиля.
-                  </p>
-                  <div className="flex items-start gap-2 p-3 rounded-xl border border-accent/30 bg-accent/5">
-                    <Info className="w-4 h-4 shrink-0 mt-0.5 text-accent" />
-                    <span className="text-xs">
-                      Очистка доходит до облака не сразу — это может занять до
-                      пяти минут. Счёт «Долги» после неё остаётся: он у вас один
-                      и удалить его нельзя, снимок с ним сойдётся.
-                    </span>
-                  </div>
-                  {fresh && (
-                    <div className="flex items-start gap-2 text-warn">
-                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span className="text-text">
-                        {fresh.blockers.find((b) => b.kind === "notEmpty")?.text ??
-                          "Аккаунт ещё не пуст."}
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
+          {w.phase === "clear" && <ClearStep preflight={w.preflight} checkedAt={w.checkedAt} />}
 
-              {dictionariesOnly && fresh && (
-                <>
-                  <p>
-                    Аккаунт очищен, но категории и контрагенты в Дзен-мани
-                    остались: команда «Начать всё сначала» их не удаляет.
-                  </p>
-                  <p className="text-xs text-muted">
-                    Если их не удалить, после восстановления рядом с категориями
-                    из снимка окажутся нынешние — одинаковые по названию, но
-                    разные для Дзен-мани.
-                  </p>
-                  <ul className="space-y-1">
-                    {fresh.blockers.map((b) => (
-                      <li key={b.kind} className="flex items-start gap-2 text-warn">
-                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                        <span className="text-text">{b.text}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {cleanupProgress && cleanupProgress.phase !== "done" ? (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted tabular-nums">
-                        {cleanupProgress.phase === "tags"
-                          ? "Удаляю категории"
-                          : "Удаляю контрагентов"}
-                        : {formatNum(cleanupProgress.current)} из{" "}
-                        {formatNum(cleanupProgress.total)}
-                      </p>
-                      <div className="h-1 rounded-full bg-border overflow-hidden">
-                        <div
-                          className="h-full bg-accent transition-all"
-                          style={{
-                            width: `${cleanupProgress.total > 0 ? Math.round((cleanupProgress.current / cleanupProgress.total) * 100) : 0}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted">
-                      Удаление идёт небыстро: Дзен-мани проверяет каждую
-                      категорию по всем операциям. На несколько десятков уйдёт
-                      несколько минут — окно можно не закрывать.
-                    </p>
-                  )}
-                  {cleanupResult && cleanupResult.failures.length > 0 && (
-                    <p className="text-xs text-warn">
-                      Часть удалить не удалось. Нажмите ещё раз — остаток
-                      удалится, уже удалённое не пострадает.
-                    </p>
-                  )}
-                </>
-              )}
-
-              {checkedAt && (
-                <p className="text-xs text-muted">Проверено в {checkedAt}</p>
-              )}
-            </>
+          {w.phase === "dictionaries" && (
+            <DictionariesStep
+              preflight={w.preflight}
+              progress={w.cleanupProgress}
+              rejected={w.cleanupResult?.rejected.length ?? 0}
+            />
           )}
 
-          {step === "confirm" && chosen && (
-            <>
-              {/* Ход заливки — ЗДЕСЬ, а не на странице за окном. Раньше полоса
-                  рисовалась под модалкой: впереди застывшее «можно заливать» и
-                  неактивные кнопки, а всё живое — позади и недоступно. */}
-              {restoreProgress ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-medium">
-                    <Loader2 className="w-4 h-4 animate-spin text-accent2 shrink-0" />
-                    {restoreProgress.phase === "accounts"
-                      ? "Переношу счета"
-                      : restoreProgress.phase === "tags"
-                        ? "Переношу категории"
-                        : restoreProgress.phase === "merchants"
-                          ? "Переношу контрагентов"
-                          : restoreProgress.phase === "transactions"
-                            ? "Переношу операции"
-                            : "Заканчиваю"}
-                    {restoreProgress.total > 0 && (
-                      <span className="text-muted tabular-nums text-xs">
-                        {formatNum(restoreProgress.current)} из{" "}
-                        {formatNum(restoreProgress.total)}
-                      </span>
-                    )}
-                  </div>
-                  {restoreProgress.total > 0 && (
-                    <div className="h-1 rounded-full bg-border overflow-hidden">
-                      <div
-                        className="h-full bg-accent2 transition-all"
-                        style={{
-                          width: `${Math.min(100, Math.round((restoreProgress.current / restoreProgress.total) * 100))}%`,
-                        }}
-                      />
-                    </div>
-                  )}
-                  <p className="text-xs text-muted">
-                    Окно можно не закрывать — это займёт минуту-другую.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex items-start gap-2 text-income">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span className="text-text">Аккаунт пуст — можно заливать.</span>
-                </div>
-              )}
-              {!restoreProgress && (
-              <p className="text-xs text-muted">
-                В Дзен-мани уйдёт {formatNum(chosen.counts.transactions)}{" "}
-                {pluralRu(chosen.counts.transactions, [
-                  "операция",
-                  "операции",
-                  "операций",
-                ])}
-                , {chosen.counts.accounts}{" "}
-                {pluralRu(chosen.counts.accounts, ["счёт", "счёта", "счетов"])},{" "}
-                {chosen.counts.tags}{" "}
-                {pluralRu(chosen.counts.tags, ["категория", "категории", "категорий"])}
-                , {chosen.counts.merchants}{" "}
-                {pluralRu(chosen.counts.merchants, [
-                  "контрагент",
-                  "контрагента",
-                  "контрагентов",
-                ])}
-                .
-              </p>
-              )}
-
-            </>
+          {(w.phase === "ready" || w.phase === "restoring") && chosen && (
+            <ReadyStep snapshot={chosen} progress={w.restoreProgress} />
           )}
 
-          {step === "done" && (
-            <>
-              <div className="flex items-start gap-2 text-income">
-                <Check className="w-4 h-4 shrink-0 mt-0.5" />
-                <span className="text-text">Снимок отправлен в Дзен-мани.</span>
-              </div>
-              <p className="text-xs text-muted">
-                Сделайте полную синхронизацию (⤓ в шапке) и сверьте числа: операций
-                должно стать столько же, сколько в снимке.
-              </p>
-            </>
-          )}
+          {w.phase === "partial" && <PartialStep />}
 
-          {error && (
-            <div className="flex items-start gap-2 text-expense text-xs">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
+          {w.phase === "done" && <DoneStep result={w.restoreResult} />}
         </div>
 
         <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border">
-          {/* Назад — чтобы можно было вернуться и выбрать другой снимок. */}
           <div>
-            {step === "prepare" && (
-              <button
-                onClick={() => setEntered(false)}
-                disabled={busy}
-                className="btn-ghost text-sm"
-              >
+            {(w.phase === "clear" || w.phase === "dictionaries") && (
+              <button onClick={w.back} disabled={busy} className="btn-ghost text-sm">
                 Назад
               </button>
             )}
           </div>
-
           <div className="flex items-center gap-2">
             <button onClick={onClose} disabled={busy} className="btn-ghost text-sm">
-              {step === "done" ? "Закрыть" : "Отмена"}
+              {w.phase === "done" || w.phase === "partial" ? "Закрыть" : "Отмена"}
             </button>
-
-            {step === "pick" && (
-              <button
-                onClick={() => setEntered(true)}
-                disabled={busy || !chosen || !accepted}
-                className="btn-primary text-sm"
-              >
-                Далее
-              </button>
-            )}
-
-            {step === "prepare" && (
-              <button
-                onClick={() => {
-                  if (!chosen) return;
-                  if (dictionariesOnly) {
-                    onCleanup();
-                  } else {
-                    setCheckedTs(Date.now());
-                    onCheck(chosen.id);
-                  }
-                }}
-                disabled={busy}
-                className="btn-primary text-sm"
-              >
-                {/* Ширина кнопки не пляшет: подпись меняется целиком, а
-                    крутилку не подставляем сбоку — от неё кнопки раздвигались
-                    на долю секунды и дёргали весь ряд. */}
-                {busyOp === "cleanup"
-                  ? "Удаление данных…"
-                  : busyOp === "check"
-                    ? "Проверяю…"
-                    : dictionariesOnly
-                      ? "Удалить данные"
-                      : "Проверить"}
-              </button>
-            )}
-
-            {step === "confirm" && chosen && (
-              <button
-                onClick={() => onRestore(chosen)}
-                disabled={busy}
-                className="btn-primary text-sm !bg-warn hover:!bg-warn/90"
-              >
-                {busyOp === "restore" ? "Восстанавливаю…" : "Восстановить"}
-              </button>
-            )}
+            <PrimaryButton chosen={chosen} busy={busy} />
           </div>
         </div>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onImportFile(f);
+            e.target.value = "";
+          }}
+        />
       </div>
     </div>,
     document.body
+  );
+}
+
+/** Главная кнопка шага. Подпись меняется целиком — от крутилки сбоку ряд дёргался. */
+function PrimaryButton({
+  chosen,
+  busy,
+}: {
+  chosen: CloudSnapshotSummary | null;
+  busy: boolean;
+}) {
+  const w = useRestoreWizardStore();
+  if (w.phase === "done" || w.phase === "partial") return null;
+
+  if (w.phase === "pick") {
+    return (
+      <button
+        onClick={w.begin}
+        disabled={busy || !chosen || !w.accepted}
+        title={!w.accepted ? "Отметьте согласие выше" : undefined}
+        className="btn-primary text-sm"
+      >
+        Далее
+      </button>
+    );
+  }
+  if (w.phase === "clear") {
+    return (
+      <button onClick={() => void w.check()} disabled={busy} className="btn-primary text-sm">
+        {w.running === "check" ? "Проверяю…" : "Проверить"}
+      </button>
+    );
+  }
+  if (w.phase === "dictionaries") {
+    return (
+      <button onClick={() => void w.cleanup()} disabled={busy} className="btn-primary text-sm">
+        {w.running === "cleanup"
+          ? "Удаляю…"
+          : w.running === "check"
+            ? "Проверяю…"
+            : "Удалить"}
+      </button>
+    );
+  }
+  return (
+    <button
+      onClick={() => void w.restore()}
+      disabled={busy}
+      className="btn-primary text-sm !bg-warn hover:!bg-warn/90"
+    >
+      {w.running === "restore" ? "Восстанавливаю…" : "Восстановить"}
+    </button>
+  );
+}
+
+function PickStep({
+  snapshots,
+  chosen,
+  onPick,
+  accepted,
+  onAccept,
+  onUpload,
+  onTakeSnapshot,
+  takingSnapshot,
+}: {
+  snapshots: CloudSnapshotSummary[];
+  chosen: CloudSnapshotSummary | null;
+  onPick: (id: string) => void;
+  accepted: boolean;
+  onAccept: (v: boolean) => void;
+  onUpload: () => void;
+  onTakeSnapshot: () => void;
+  takingSnapshot: boolean;
+}) {
+  return (
+    <>
+      <div className="flex items-center gap-1.5">
+        <span className="font-medium">К какому состоянию вернуть аккаунт</span>
+        <InfoPopover label="Как это работает">
+          <p>
+            Снимок заводится в Дзен-мани заново, под новыми номерами: вернуть
+            удалённые записи под прежними сервис не даёт — принимает запрос и
+            молча ничего не меняет.
+          </p>
+          <p>
+            Поэтому снимок не заменяет содержимое аккаунта, а добавляется к нему.
+            Аккаунт должен быть пуст, иначе данные задвоятся. По той же причине
+            теряется связь операций с банковскими выписками.
+          </p>
+        </InfoPopover>
+      </div>
+
+      {snapshots.length === 0 ? (
+        <p className="text-muted">Снимков нет. Загрузите файл, сохранённый раньше.</p>
+      ) : (
+        <div className="space-y-1">
+          {snapshots.map((s) => (
+            <label
+              key={s.id}
+              className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer ${
+                chosen?.id === s.id
+                  ? "border-accent bg-accent/5"
+                  : "border-border hover:bg-panel2/60"
+              }`}
+            >
+              <input
+                type="radio"
+                name="snapshot"
+                checked={chosen?.id === s.id}
+                onChange={() => onPick(s.id)}
+                className="mt-1 shrink-0"
+              />
+              <span className="min-w-0">
+                <span className="block font-medium">
+                  {new Date(s.createdAt).toLocaleString("ru-RU", {
+                    day: "numeric",
+                    month: "long",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <span className="block text-xs text-muted tabular-nums">
+                  {snapshotSummary(s.counts, s.approxBytes)}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      <button onClick={onUpload} className="btn-ghost text-xs inline-flex items-center gap-2">
+        <Upload className="w-3.5 h-3.5" />
+        Загрузить файл
+      </button>
+
+      {/* Страховка — это снимок ТЕКУЩЕГО состояния, а не тот, который сейчас
+          зальют. Раньше здесь предлагалось «сохранить снимок файлом», и
+          сохранялся ровно тот, к которому возвращаются: отыграть назад им
+          нельзя было в принципе. */}
+      <div className="rounded-xl border border-warn/40 bg-warn/5 p-3 space-y-2">
+        <p className="text-xs">
+          Аккаунт вернётся к выбранному состоянию. Всё, что появилось после,
+          пропадёт, и отменить это будет нечем.
+        </p>
+        <button
+          onClick={onTakeSnapshot}
+          disabled={takingSnapshot}
+          className="btn-ghost text-xs inline-flex items-center gap-2"
+        >
+          <CloudDownload className="w-3.5 h-3.5" />
+          {takingSnapshot ? "Снимаю…" : "Снять снимок нынешнего состояния"}
+        </button>
+        <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+          <input
+            type="checkbox"
+            checked={accepted}
+            onChange={(e) => onAccept(e.target.checked)}
+            className="mt-0.5 shrink-0"
+          />
+          <span className="text-xs">
+            Действую на свой страх и риск. За данные в Дзен-мани отвечаю я:
+            DzenAnalytics такой ответственности не несёт.
+          </span>
+        </label>
+      </div>
+    </>
+  );
+}
+
+function ClearStep({
+  preflight,
+  checkedAt,
+}: {
+  preflight: import("../lib/restorePreflight").RestorePreflight | null;
+  checkedAt: number | null;
+}) {
+  const left = preflight?.blockers.find((b) => b.kind === "notEmpty")?.count ?? null;
+  return (
+    <>
+      <p>
+        Очистите аккаунт в Дзен-мани: <strong>Ещё → Настройки аккаунта → Начать
+        всё сначала</strong>. На сайте — то же в настройках профиля.
+      </p>
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
+        <span className="text-xs text-muted">Операций в аккаунте</span>
+        <span className="tabular-nums font-medium">
+          {left === null ? "—" : formatNum(left)}
+        </span>
+      </div>
+      <p className="text-xs text-muted">
+        Дзен-мани обновляет облако до пяти минут, поэтому сразу после очистки
+        число может не измениться. Нажмите «Проверить» ещё раз через минуту.
+      </p>
+      {checkedAt && (
+        <p className="text-xs text-muted">
+          Проверено в{" "}
+          {new Date(checkedAt).toLocaleTimeString("ru-RU", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </p>
+      )}
+    </>
+  );
+}
+
+function DictionariesStep({
+  preflight,
+  progress,
+  rejected,
+}: {
+  preflight: import("../lib/restorePreflight").RestorePreflight | null;
+  progress: import("../lib/accountCleanup").CleanupProgress | null;
+  rejected: number;
+}) {
+  const tags = preflight?.blockers.find((b) => b.kind === "leftoverTags")?.count ?? 0;
+  const merchants =
+    preflight?.blockers.find((b) => b.kind === "leftoverMerchants")?.count ?? 0;
+  return (
+    <>
+      <p>
+        Операции и счета удалены, но категории и контрагенты остались: команда
+        «Начать всё сначала» их не затрагивает. Удалим их, иначе рядом с теми,
+        что приедут из снимка, останутся нынешние.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-border p-3">
+          <div className="text-xs text-muted">Категории</div>
+          <div className="tabular-nums font-medium">{formatNum(tags)}</div>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <div className="text-xs text-muted">Контрагенты</div>
+          <div className="tabular-nums font-medium">{formatNum(merchants)}</div>
+        </div>
+      </div>
+      {progress && progress.phase !== "done" && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted tabular-nums">
+            {progress.phase === "tags" ? "Удаляю категории" : "Удаляю контрагентов"}:{" "}
+            {formatNum(progress.sent)} из {formatNum(progress.total)}
+          </p>
+          <div className="h-1 rounded-full bg-border overflow-hidden">
+            <div
+              className="h-full bg-accent transition-all"
+              style={{
+                width: `${progress.total > 0 ? Math.round((progress.sent / progress.total) * 100) : 0}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+      <p className="text-xs text-muted">
+        Категории удаляются по одной, Дзен-мани сверяет каждую со всеми
+        операциями. На несколько десятков уйдёт пара минут — окно можно не
+        закрывать.
+      </p>
+      {rejected > 0 && (
+        <p className="text-xs text-warn">
+          {formatNum(rejected)}{" "}
+          {pluralRu(rejected, ["запись", "записи", "записей"])} Дзен-мани удалить
+          отказался. Их придётся удалить вручную в самом Дзен-мани.
+        </p>
+      )}
+    </>
+  );
+}
+
+function ReadyStep({
+  snapshot,
+  progress,
+}: {
+  snapshot: CloudSnapshotSummary;
+  progress: import("../lib/cloudSnapshots").RestoreProgress | null;
+}) {
+  const c = snapshot.counts;
+  return (
+    <>
+      {!progress && (
+        <div className="flex items-start gap-2 text-income">
+          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+          <span className="text-text">Аккаунт пуст, можно восстанавливать.</span>
+        </div>
+      )}
+      {/* Счётчики видны и во время заливки: именно тогда по ним и сверяют. */}
+      <div className="grid grid-cols-4 gap-3">
+        <Cell label="Операции" value={c.transactions} />
+        <Cell label="Счета" value={c.accounts} />
+        <Cell label="Категории" value={c.tags} />
+        <Cell label="Контрагенты" value={c.merchants} />
+      </div>
+      {progress && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted tabular-nums">
+            {progress.phase === "accounts"
+              ? "Переношу счета"
+              : progress.phase === "tags"
+                ? "Переношу категории"
+                : progress.phase === "merchants"
+                  ? "Переношу контрагентов"
+                  : progress.phase === "transactions"
+                    ? "Переношу операции"
+                    : "Заканчиваю"}
+            {progress.total > 0 && (
+              <>
+                : {formatNum(progress.current)} из {formatNum(progress.total)}
+              </>
+            )}
+          </p>
+          <div className="h-1 rounded-full bg-border overflow-hidden">
+            <div
+              className="h-full bg-accent2 transition-all"
+              style={{
+                width: `${progress.total > 0 ? Math.min(100, Math.round((progress.current / progress.total) * 100)) : 0}%`,
+              }}
+            />
+          </div>
+          <p className="text-xs text-muted">Займёт минуту-другую. Окно можно не закрывать.</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Cell({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-border p-3">
+      <div className="text-[11px] text-muted">{label}</div>
+      <div className="tabular-nums font-medium">{formatNum(value)}</div>
+    </div>
+  );
+}
+
+/**
+ * Заливка прервалась. Повторять нельзя: часть данных уже в облаке, и вторая
+ * попытка добавила бы их ещё раз — под новыми номерами, то есть задвоила.
+ */
+function PartialStep() {
+  return (
+    <>
+      <div className="flex items-start gap-2 text-warn">
+        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+        <span className="text-text">Восстановление прервалось на середине.</span>
+      </div>
+      <p className="text-xs text-muted">
+        Часть данных уже в Дзен-мани. Повторять сейчас нельзя: снимок зальётся
+        заново и то, что успело пройти, задвоится.
+      </p>
+      <p className="text-xs text-muted">
+        Очистите аккаунт в Дзен-мани ещё раз («Ещё → Настройки аккаунта → Начать
+        всё сначала») и начните восстановление сначала — снимок остался на месте.
+      </p>
+    </>
+  );
+}
+
+function DoneStep({
+  result,
+}: {
+  result: import("../lib/cloudSnapshots").RestoreResult | null;
+}) {
+  const dropped = result?.skipped.transactions ?? 0;
+  return (
+    <>
+      <div className="flex items-start gap-2 text-income">
+        <Check className="w-4 h-4 shrink-0 mt-0.5" />
+        <span className="text-text">Данные отправлены в Дзен-мани.</span>
+      </div>
+      {dropped > 0 && (
+        <p className="text-xs text-warn">
+          {formatNum(dropped)}{" "}
+          {pluralRu(dropped, ["операция", "операции", "операций"])} перенести не
+          удалось: в снимке они ссылались на счёт или категорию, которых там нет.
+        </p>
+      )}
+      <p className="text-xs text-muted">
+        Проверьте результат в Дзен-мани: число операций должно совпасть со
+        снимком. Здесь данные появятся после синхронизации.
+      </p>
+    </>
   );
 }
