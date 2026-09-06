@@ -1,151 +1,102 @@
 import { describe, it, expect } from "vitest";
-import { CLOCK_SKEW_SEC, compareEntities, restorePreflight } from "./restorePreflight";
+import { countLive, restorePreflight } from "./restorePreflight";
 import type { ZenDiffResponse, ZenMerchant, ZenTag, ZenTransaction } from "./zenmoney";
 
 /**
  * Сущность с тем минимумом полей, который читает сверка: остальные ей не
  * нужны, и заполнять их значило бы делать вид, что они на что-то влияют.
  */
-const ent = <T,>(id: string, changed: number, deleted = false): T =>
-  ({ id, changed, deleted }) as unknown as T;
+const ent = <T,>(id: string, deleted = false): T =>
+  ({ id, deleted }) as unknown as T;
 
-const tx = (id: string, changed: number, deleted = false) =>
-  ent<ZenTransaction>(id, changed, deleted);
-const tag = (id: string, changed: number) => ent<ZenTag>(id, changed);
-const merch = (id: string, changed: number) => ent<ZenMerchant>(id, changed);
+const tx = (id: string, deleted = false) => ent<ZenTransaction>(id, deleted);
+const tag = (id: string) => ent<ZenTag>(id);
+const merch = (id: string) => ent<ZenMerchant>(id);
 
 const snap = (over: Partial<ZenDiffResponse>): ZenDiffResponse =>
   ({ transaction: [], account: [], tag: [], merchant: [], ...over }) as ZenDiffResponse;
 
 const empty = { transactions: [], accounts: [], tags: [], merchants: [] };
 
-describe("compareEntities", () => {
-  it("пустой аккаунт — снимок ляжет целиком", () => {
-    const d = compareEntities([tx("a", 100), tx("b", 100)], []);
-    expect(d).toEqual({
-      inAccount: 0,
+describe("countLive", () => {
+  it("считает живых с обеих сторон", () => {
+    expect(countLive([tx("a"), tx("b")], [tx("c")])).toEqual({
+      inAccount: 1,
       inSnapshot: 2,
-      tombstoned: 0,
-      newerInCloud: 0,
-      extra: 0,
     });
   });
 
-  it("удалённое в облаке считается отдельно — оно не вернётся", () => {
-    // Тумбстоуны в Дзен-мани липкие: повторная отправка того же id отвергается.
-    const d = compareEntities([tx("a", 100)], [tx("a", 200, true)]);
-    expect(d.tombstoned).toBe(1);
-    // Дату у похороненного не сравниваем — вопрос уже решён.
-    expect(d.newerInCloud).toBe(0);
+  it("удалённых не считает ни там, ни там", () => {
+    // В аккаунте тумбстоун заливке не мешает, а из снимка мы его не воскрешаем.
+    expect(countLive([tx("a"), tx("b", true)], [tx("c", true)])).toEqual({
+      inAccount: 0,
+      inSnapshot: 1,
+    });
   });
 
-  it("свежая версия в облаке победит снимок", () => {
-    // Час разницы — это правка, а не дрейф часов.
-    const d = compareEntities([tx("a", 1_000_000)], [tx("a", 1_003_600)]);
-    expect(d.newerInCloud).toBe(1);
-  });
-
-  it("дрейф в пару секунд правкой не считается", () => {
-    // Дзен-мани отдаёт `changed` в часах клиента на момент запроса, поэтому
-    // одна и та же нетронутая строка в двух ответах различается на секунды.
-    // На живом аккаунте без этого допуска «изменёнными» объявлялись ВСЕ 7660
-    // операций через минуту после снимка.
-    expect(compareEntities([tx("a", 1_000_000)], [tx("a", 1_000_001)]).newerInCloud).toBe(0);
-    expect(compareEntities([tx("a", 1_000_000)], [tx("a", 1_000_000 + CLOCK_SKEW_SEC)]).newerInCloud).toBe(0);
-    // А на секунду дальше допуска — уже правка.
-    expect(
-      compareEntities([tx("a", 1_000_000)], [tx("a", 1_000_001 + CLOCK_SKEW_SEC)]).newerInCloud
-    ).toBe(1);
-  });
-
-  it("равные даты не считаются проигрышем", () => {
-    // Строка не менялась с момента снимка — возвращать нечего, но и терять тоже.
-    const d = compareEntities([tx("a", 100)], [tx("a", 100)]);
-    expect(d.newerInCloud).toBe(0);
-  });
-
-  it("снимок новее облака — тоже не препятствие", () => {
-    const d = compareEntities([tx("a", 300)], [tx("a", 100)]);
-    expect(d.newerInCloud).toBe(0);
-  });
-
-  it("лишнее в облаке — то, чего в снимке нет", () => {
-    const d = compareEntities([tx("a", 100)], [tx("a", 100), tx("b", 100)]);
-    expect(d.extra).toBe(1);
-    expect(d.inAccount).toBe(2);
-  });
-
-  it("удалённое в снимке не возвращают и не считают", () => {
-    const d = compareEntities([tx("a", 100), tx("b", 100, true)], []);
-    expect(d.inSnapshot).toBe(1);
-  });
-
-  it("тумбстоун в облаке не идёт в «лишние»", () => {
-    // Иначе одна и та же строка попала бы в два разных счётчика.
-    const d = compareEntities([], [tx("z", 100, true)]);
-    expect(d.extra).toBe(0);
-    expect(d.inAccount).toBe(0);
+  it("пусто с обеих сторон", () => {
+    expect(countLive([], [])).toEqual({ inAccount: 0, inSnapshot: 0 });
   });
 });
 
 describe("restorePreflight", () => {
   it("пустой аккаунт готов принять снимок", () => {
-    const p = restorePreflight(snap({ transaction: [tx("a", 100)] }), empty);
+    const p = restorePreflight(snap({ transaction: [tx("a")] }), empty);
     expect(p.ready).toBe(true);
     expect(p.blockers).toEqual([]);
+    expect(p.transactions).toEqual({ inAccount: 0, inSnapshot: 1 });
   });
 
-  it("удалённые операции — препятствие с указанием на «Начать всё сначала»", () => {
-    const p = restorePreflight(snap({ transaction: [tx("a", 100)] }), {
+  it("живые операции — препятствие: снимок ляжет рядом", () => {
+    // Главное отличие от прежней логики: новые id ничего не перезаписывают,
+    // поэтому опасность не «не применится», а «удвоится».
+    const p = restorePreflight(snap({ transaction: [tx("a")] }), {
       ...empty,
-      transactions: [tx("a", 200, true)],
+      transactions: [tx("b")],
     });
     expect(p.ready).toBe(false);
-    const b = p.blockers.find((x) => x.kind === "tombstones");
-    expect(b?.count).toBe(1);
+    const b = p.blockers.find((x) => x.kind === "notEmpty");
+    expect(b?.text).toContain("ляжет РЯДОМ");
     expect(b?.fix).toMatch(/Начать всё сначала/);
   });
 
-  it("считает препятствия по каждому виду отдельно", () => {
-    const p = restorePreflight(
-      snap({ transaction: [tx("a", 100)], tag: [tag("t1", 100)] }),
-      {
-        transactions: [tx("a", 3600)],
-        accounts: [],
-        tags: [tag("t1", 100), tag("t2", 100)],
-        merchants: [merch("m1", 100)],
-      }
-    );
+  it("тумбстоуны в аккаунте препятствием не считаются", () => {
+    // После «Начать всё сначала» строки могут остаться помеченными
+    // удалёнными — заливке новыми id это не мешает.
+    const p = restorePreflight(snap({ transaction: [tx("a")] }), {
+      ...empty,
+      transactions: [tx("b", true), tx("c", true)],
+    });
+    expect(p.ready).toBe(true);
+  });
+
+  it("оставшиеся справочники — отдельные препятствия", () => {
+    const p = restorePreflight(snap({}), {
+      ...empty,
+      tags: [tag("t1"), tag("t2")],
+      merchants: [merch("m1")],
+    });
     expect(p.blockers.map((b) => b.kind).sort()).toEqual([
-      "extraMerchants",
-      "extraTags",
-      "newerInCloud",
+      "leftoverMerchants",
+      "leftoverTags",
     ]);
+    expect(p.blockers.find((b) => b.kind === "leftoverTags")?.text).toContain(
+      "2 категории"
+    );
+    expect(p.blockers.find((b) => b.kind === "leftoverMerchants")?.text).toContain(
+      "1 контрагент "
+    );
   });
 
   it("склоняет числа по-русски", () => {
-    const one = restorePreflight(snap({ transaction: [tx("a", 1)] }), {
+    const one = restorePreflight(snap({}), { ...empty, tags: [tag("t")] });
+    expect(one.blockers[0].text).toContain("1 категория");
+
+    const many = restorePreflight(snap({}), {
       ...empty,
-      transactions: [tx("a", 9, true)],
+      tags: Array.from({ length: 11 }, (_, i) => tag(`t${i}`)),
     });
-    expect(one.blockers[0].text).toContain("1 операция из снимка удалена");
-    expect(one.blockers[0].text).toContain("она не вернётся");
-
-    const few = restorePreflight(
-      snap({ transaction: [tx("a", 1), tx("b", 1), tx("c", 1)] }),
-      { ...empty, transactions: [tx("a", 9, true), tx("b", 9, true), tx("c", 9, true)] }
-    );
-    expect(few.blockers[0].text).toContain("3 операции из снимка удалены");
-    expect(few.blockers[0].text).toContain("они не вернутся");
-
-    const many = restorePreflight(
-      snap({ transaction: Array.from({ length: 11 }, (_, i) => tx(`x${i}`, 1)) }),
-      {
-        ...empty,
-        transactions: Array.from({ length: 11 }, (_, i) => tx(`x${i}`, 9, true)),
-      }
-    );
-    expect(many.blockers[0].text).toContain("11 операций из снимка удалены");
+    expect(many.blockers[0].text).toContain("11 категорий");
   });
 
   it("пустой снимок и пустой аккаунт не роняют расчёт", () => {

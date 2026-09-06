@@ -241,10 +241,15 @@ export const useCloudSnapshotStore = create<State>((set) => ({
 
     set({ busy: true, error: null, restoreProgress: null });
     try {
+      // freshIds: откат заливается НОВЫМИ номерами. Под прежними Дзен-мани
+      // не пускает обратно удалённые строки — молча, с ответом 200 и без
+      // ошибки (проверено на живом API). Ценой становится потеря привязки к
+      // банковским выпискам, зато откат перестаёт зависеть от того, стирает
+      // «Начать всё сначала» записи или помечает их удалёнными.
       const result = await restoreSnapshotImpl(
         id,
         token,
-        { userId: currentUserId, currentAccounts },
+        { userId: currentUserId, currentAccounts, freshIds: true },
         (progress) => set({ restoreProgress: progress })
       );
       set({ busy: false, lastRestoreResult: result, restoreProgress: null });

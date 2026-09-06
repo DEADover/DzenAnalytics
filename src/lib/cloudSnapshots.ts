@@ -247,6 +247,14 @@ export interface RestoreContext {
    *  auto-creates) so we can merge instead of trying to create a
    *  duplicate. */
   currentAccounts: ZenAccount[];
+  /**
+   * Заливать снимок ПОД НОВЫМИ id (см. `freshIds` в теле восстановления).
+   *
+   * Нужно для отката в свой же аккаунт: удалённую строку под её прежним id
+   * Дзен-мани обратно не пускает — молча, без ошибки. Ценой становится потеря
+   * привязки к банковским выпискам, поэтому решает вызывающий, а не мы.
+   */
+  freshIds?: boolean;
 }
 
 /**
@@ -305,6 +313,25 @@ export async function restoreSnapshotToCloud(
     snapshotUserId != null &&
     ctx.userId !== snapshotUserId;
 
+  /**
+   * Раздавать сущностям НОВЫЕ id вместо исходных.
+   *
+   * Для переноса в другой аккаунт это обязательно: Дзен-мани привязывает
+   * UUID к создателю, и чужой id возвращает 500. Но то же самое нужно и при
+   * откате в СВОЙ аккаунт, и по другой причине.
+   *
+   * Проверено на живом API: если строку удалили, повторная отправка её же id
+   * — хоть со свежей меткой `changed`, хоть со старой — возвращает 200 без
+   * ошибки и НЕ возвращает строку. Сервер молча оставляет её удалённой.
+   * Именно поэтому восстановление «проходило», ничего не меняя, а отчёт
+   * рапортовал успех: отказа не было. Копия под новым id при этом заводится
+   * нормально — так же, как это делает `buildResurrections` в обычном пуше.
+   *
+   * Поэтому откат заливаем новыми id: он тогда не зависит от того, стирает
+   * ли «Начать всё сначала» записи или помечает их удалёнными.
+   */
+  const freshIds = crossUser || ctx.freshIds === true;
+
   // For cross-account restores, every outgoing entity must carry the
   // *current* account's user id — Zen rejects the request otherwise.
   // For same-account restores the snapshot already has the right user
@@ -342,7 +369,7 @@ export async function restoreSnapshotToCloud(
   const accountIdMap = new Map<string, string>();
   const tagIdMap = new Map<string, string>();
   const merchantIdMap = new Map<string, string>();
-  if (crossUser) {
+  if (freshIds) {
     for (const a of accountsOut) accountIdMap.set(a.id, crypto.randomUUID());
     // Snapshot's debt account folded into current user's debt id —
     // tx references will resolve via this mapping table.
@@ -353,7 +380,7 @@ export async function restoreSnapshotToCloud(
   }
 
   const remapId = (oldId: string, map: Map<string, string>): string =>
-    crossUser ? map.get(oldId) || oldId : oldId;
+    freshIds ? map.get(oldId) || oldId : oldId;
 
   // Transaction remapping + reference validation. For cross-user
   // restores, transactions can reference entities that we DON'T have
@@ -371,7 +398,7 @@ export async function restoreSnapshotToCloud(
   //   • merchant — null if we can't resolve. Same reasoning.
   const brokenRefSkipped: { id: string; reason: string }[] = [];
   const isMapped = (id: string, map: Map<string, string>) =>
-    crossUser ? map.has(id) : true;
+    freshIds ? map.has(id) : true;
 
   const transactionsOut: ZenTransaction[] = [];
   // Restore is a "full backup → full restore" operation: even
@@ -379,7 +406,7 @@ export async function restoreSnapshotToCloud(
   // mirrors the source byte-for-byte (tombstones included). The UI
   // reports the active / deleted split so the user sees the mix.
   for (const t of raw.transaction || []) {
-    if (!crossUser && !debtIdRemap) {
+    if (!freshIds && !debtIdRemap) {
       transactionsOut.push(t);
       continue;
     }
@@ -390,10 +417,10 @@ export async function restoreSnapshotToCloud(
     const outOk =
       isMapped(t.outcomeAccount, accountIdMap) ||
       outIsDebt ||
-      // Same-user case doesn't need the map at all.
-      !crossUser;
+      // Без перенумерации карта не нужна вовсе.
+      !freshIds;
     const inOk =
-      isMapped(t.incomeAccount, accountIdMap) || inIsDebt || !crossUser;
+      isMapped(t.incomeAccount, accountIdMap) || inIsDebt || !freshIds;
     if (!outOk || !inOk) {
       brokenRefSkipped.push({
         id: t.id,
@@ -406,27 +433,27 @@ export async function restoreSnapshotToCloud(
     // Filter tag refs to mapped ones; drop unresolvable ones.
     const cleanedTag = (() => {
       if (!t.tag) return t.tag;
-      if (!crossUser) return t.tag;
+      if (!freshIds) return t.tag;
       const filtered = t.tag.filter((id) => tagIdMap.has(id));
       return filtered.length > 0 ? filtered.map((id) => remapId(id, tagIdMap)) : null;
     })();
     // Merchant — null if unresolvable.
-    const cleanedMerchant = crossUser
+    const cleanedMerchant = freshIds
       ? t.merchant && merchantIdMap.has(t.merchant)
         ? remapId(t.merchant, merchantIdMap)
         : null
       : t.merchant;
     transactionsOut.push({
       ...t,
-      id: crossUser ? crypto.randomUUID() : t.id,
-      outcomeAccount: crossUser
+      id: freshIds ? crypto.randomUUID() : t.id,
+      outcomeAccount: freshIds
         ? outIsDebt
           ? debtIdRemap!.to
           : remapId(t.outcomeAccount, accountIdMap)
         : outIsDebt
           ? debtIdRemap!.to
           : t.outcomeAccount,
-      incomeAccount: crossUser
+      incomeAccount: freshIds
         ? inIsDebt
           ? debtIdRemap!.to
           : remapId(t.incomeAccount, accountIdMap)
@@ -435,8 +462,10 @@ export async function restoreSnapshotToCloud(
           : t.incomeAccount,
       tag: cleanedTag,
       merchant: cleanedMerchant,
-      outcomeBankID: crossUser ? null : t.outcomeBankID,
-      incomeBankID: crossUser ? null : t.incomeBankID,
+      // Привязку к банковской выписке новому id не отдаём: строка уже не
+      // та, и банковская синхронизация приняла бы её за свою.
+      outcomeBankID: freshIds ? null : t.outcomeBankID,
+      incomeBankID: freshIds ? null : t.incomeBankID,
     });
   }
   if (brokenRefSkipped.length > 0) {

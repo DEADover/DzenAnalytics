@@ -1,6 +1,5 @@
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { formatNum } from "../lib/format";
-import { pluralRu } from "../lib/plural";
 import type { EntityDelta, RestorePreflight } from "../lib/restorePreflight";
 
 /**
@@ -26,7 +25,7 @@ export function RestorePreflightCard({ result }: { result: RestorePreflight }) {
         <span>
           {result.ready
             ? "Аккаунт готов — снимок ляжет целиком."
-            : "Снимок доедет не полностью."}
+            : "Заливать рано: снимок ляжет рядом со старым."}
         </span>
       </div>
 
@@ -50,15 +49,14 @@ export function RestorePreflightCard({ result }: { result: RestorePreflight }) {
 
       {result.ready && (
         <div className="text-muted">
-          Ни одна строка снимка не удалена в облаке и не правилась после него —
-          заливать можно.
+          Аккаунт пуст — снимку не с чем сталкиваться, заливать можно.
         </div>
       )}
     </div>
   );
 }
 
-/** Одна колонка свода: сколько сейчас в аккаунте против того, что в снимке. */
+/** Одна колонка свода: сколько живого сейчас в аккаунте против снимка. */
 function Row({ label, d }: { label: string; d: EntityDelta }) {
   return (
     <div>
@@ -68,22 +66,6 @@ function Row({ label, d }: { label: string; d: EntityDelta }) {
         <span className="text-muted"> → </span>
         {formatNum(d.inSnapshot)}
       </div>
-      {(d.tombstoned > 0 || d.newerInCloud > 0 || d.extra > 0) && (
-        <div className="text-[11px] text-muted tabular-nums mt-0.5 space-y-px">
-          {d.tombstoned > 0 && (
-            <div>
-              {formatNum(d.tombstoned)}{" "}
-              {pluralRu(d.tombstoned, ["не вернётся", "не вернутся", "не вернутся"])}
-            </div>
-          )}
-          {d.newerInCloud > 0 && <div>{formatNum(d.newerInCloud)} новее в облаке</div>}
-          {d.extra > 0 && (
-            <div>
-              {formatNum(d.extra)} {pluralRu(d.extra, ["лишний", "лишних", "лишних"])}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

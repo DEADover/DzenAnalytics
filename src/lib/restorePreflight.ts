@@ -1,44 +1,24 @@
 /**
  * Предполётная сверка перед восстановлением из облачного снимка (issue #93).
  *
- * ЗАЧЕМ ОНА ВООБЩЕ НУЖНА. Восстановление — это не откат, а upsert: снимок
- * отправляется обратно в Дзен-мани, и по каждой сущности сервер оставляет ту
- * версию, у которой свежее `changed`. Отсюда две вещи, которые человек никак
- * не мог увидеть заранее и которые делали кнопку «якобы сработавшей»:
+ * ПОЧЕМУ ОТКАТ ЗАЛИВАЕТСЯ НОВЫМИ id. Проверено на живом API: если строку
+ * удалили, повторная отправка её же id — хоть со свежей меткой `changed`, хоть
+ * со старой — возвращает 200 без ошибки и НЕ возвращает строку. Сервер молча
+ * оставляет её удалённой. Отсюда и родилась задача: восстановление «проходило»,
+ * отчёт рапортовал успех, а в Дзен-мани не менялось ничего. Копия под новым id
+ * заводится нормально — этим же приёмом пользуется обычный пуш
+ * (`buildResurrections`), и на нём построен откат.
  *
- *   • То, что правилось в облаке ПОСЛЕ снимка, побеждает снимок. Заливка
- *     проходит, отчёт говорит «восстановлено N», а в облаке ничего не меняется.
- *   • Удалённое не воскресает: тумбстоуны в Дзен-мани липкие — повторная
- *     отправка удалённого id отвергается, даже с `deleted: false` (это
- *     проверено на API и записано в `buildResurrections`). Вернуть строку
- *     можно только копией под новым id.
+ * ЧТО ИЗ ЭТОГО СЛЕДУЕТ ДЛЯ СВЕРКИ. Новые id ни с чем не сталкиваются: снимок
+ * не перезаписывает аккаунт, а ЛОЖИТСЯ РЯДОМ. Значит вопрос «чья версия
+ * победит» отпадает, а вместо него встаёт единственный настоящий:
+ * ПУСТ ЛИ АККАУНТ. Заливка в непустой удвоит всё, что в нём есть.
  *
- * Поэтому восстановление работает по-настоящему только в ПОДГОТОВЛЕННЫЙ
- * аккаунт: «Ещё → Настройки аккаунта → Начать всё сначала» в приложении (или
- * то же в профиле на сайте), плюс отдельно снести оставшихся контрагентов и
- * теги — их «Начать сначала» не уносит.
- *
- * Эта сверка считает всё то же самое ЗАРАНЕЕ и молча, ничего не отправляя:
- * сколько сущностей встретится, сколько из них проиграет по дате, сколько
- * лежит тумбстоунами и что останется лишним. Пустой список препятствий значит,
- * что заливка ляжет начисто.
- *
- * ПРО `changed` — важное и неочевидное. Дзен-мани отдаёт эту метку НЕ такой,
- * какой хранит: он пересчитывает её в часы клиента на момент запроса, по
- * формуле `отданное = хранимое + (currentClientTimestamp − часы сервера)`.
- * Проверено запросами: тот же самый diff, отправленный с
- * `currentClientTimestamp` на час вперёд, вернул `changed` ровно на 3599
- * секунд больше; два обычных запроса подряд разошлись на пару секунд — ровно
- * на столько, на сколько сдвинулись часы между ними.
- *
- * Отсюда правило: сравнивать сырые `changed` из РАЗНЫХ ответов нельзя. На
- * живом аккаунте наивное сравнение объявило «изменёнными после снимка» все
- * 7660 операций — при том, что снимок был снят минуту назад и не изменилось
- * ничего. Поэтому ниже стоит допуск: расхождение меньше него — это дрейф
- * часов между двумя запросами, а не правка.
+ * Поэтому здесь не осталось счётчиков про «кто новее» и «что не вернётся» —
+ * при новых id они не значат ничего, а показывать число, которое ни на что не
+ * влияет, хуже, чем не показывать.
  */
 
-import { pluralRu } from "./plural";
 import type {
   ZenAccount,
   ZenDiffResponse,
@@ -46,32 +26,18 @@ import type {
   ZenTag,
   ZenTransaction,
 } from "./zenmoney";
+import { pluralRu } from "./plural";
 
-/** Расхождение по одному виду сущностей. */
+/** Сколько живых сущностей одного вида сейчас в аккаунте и сколько в снимке. */
 export interface EntityDelta {
-  /** Живых сейчас в облаке. */
   inAccount: number;
-  /** Живых в снимке — столько мы собираемся вернуть. */
   inSnapshot: number;
-  /**
-   * Есть в снимке живой, а в облаке та же строка удалена. Такие НЕ вернутся:
-   * тумбстоун сильнее любой повторной отправки под тем же id.
-   */
-  tombstoned: number;
-  /**
-   * Есть и там, и там, но в облаке версия свежее. Снимок проиграет ей по
-   * `changed`, и строка останется в нынешнем виде.
-   */
-  newerInCloud: number;
-  /** Есть в облаке, но нет в снимке. Заливка их не тронет — останутся лишними. */
-  extra: number;
 }
 
-export type BlockerKind = "tombstones" | "newerInCloud" | "extraTags" | "extraMerchants";
+export type BlockerKind = "notEmpty" | "leftoverTags" | "leftoverMerchants";
 
 export interface PreflightBlocker {
   kind: BlockerKind;
-  /** Сколько строк задето. */
   count: number;
   /** Что это значит для человека — одной фразой. */
   text: string;
@@ -84,69 +50,30 @@ export interface RestorePreflight {
   accounts: EntityDelta;
   tags: EntityDelta;
   merchants: EntityDelta;
-  /**
-   * Аккаунт готов: в нём нет ничего, что помешает снимку лечь целиком.
-   * Ровно `blockers.length === 0` — отдельное поле, чтобы вызывающему коду
-   * не приходилось это выводить.
-   */
+  /** Аккаунт пуст: снимок ляжет начисто, без задвоения. */
   ready: boolean;
   blockers: PreflightBlocker[];
 }
 
-/** Минимум, который нужен от сущности, чтобы её сверить. */
-interface Comparable {
+/** Минимум, который нужен от сущности, чтобы её сосчитать. */
+interface Countable {
   id: string;
-  changed: number;
   deleted?: boolean;
 }
 
 /**
- * Насколько разойтись меткам позволено, прежде чем считать это правкой.
+ * Сосчитать живых с обеих сторон.
  *
- * Дзен-мани переводит `changed` в часы клиента на момент запроса, поэтому
- * между двумя ответами одна и та же нетронутая строка гуляет на столько
- * секунд, сколько прошло между запросами (см. шапку модуля). Две минуты с
- * запасом покрывают этот дрейф и заведомо меньше любого промежутка, за
- * который человек успевает что-то поправить.
+ * Удалённые не в счёт ни там, ни там: в аккаунте они заливке не мешают, а из
+ * снимка мы их всё равно не воскрешаем.
  */
-export const CLOCK_SKEW_SEC = 120;
-
-/**
- * Сверить один вид сущностей.
- *
- * `deleted` есть только у операций; у счетов, тегов и контрагентов удаление
- * приезжает отдельным списком `deletion`, и в кэше их просто нет. Поэтому
- * `tombstoned` для них всегда ноль — и это не упущение, а форма данных.
- */
-export function compareEntities<T extends Comparable>(
+export function countLive<T extends Countable>(
   snapshot: T[],
   account: T[]
 ): EntityDelta {
-  const liveSnap = snapshot.filter((e) => !e.deleted);
-  const cloudById = new Map(account.map((e) => [String(e.id), e]));
-  const liveCloud = account.filter((e) => !e.deleted);
-
-  let tombstoned = 0;
-  let newerInCloud = 0;
-  for (const s of liveSnap) {
-    const c = cloudById.get(String(s.id));
-    if (!c) continue; // в облаке такой строки нет — ляжет как новая
-    if (c.deleted) {
-      tombstoned += 1;
-      continue; // удалённое не воскресает, дату сравнивать уже незачем
-    }
-    if (c.changed > s.changed + CLOCK_SKEW_SEC) newerInCloud += 1;
-  }
-
-  const snapIds = new Set(liveSnap.map((e) => String(e.id)));
-  const extra = liveCloud.filter((e) => !snapIds.has(String(e.id))).length;
-
   return {
-    inAccount: liveCloud.length,
-    inSnapshot: liveSnap.length,
-    tombstoned,
-    newerInCloud,
-    extra,
+    inAccount: account.filter((e) => !e.deleted).length,
+    inSnapshot: snapshot.filter((e) => !e.deleted).length,
   };
 }
 
@@ -166,60 +93,52 @@ export function restorePreflight(
     merchants: ZenMerchant[];
   }
 ): RestorePreflight {
-  const transactions = compareEntities(snapshot.transaction || [], account.transactions);
-  const accounts = compareEntities(snapshot.account || [], account.accounts);
-  const tags = compareEntities(snapshot.tag || [], account.tags);
-  const merchants = compareEntities(snapshot.merchant || [], account.merchants);
+  const transactions = countLive(snapshot.transaction || [], account.transactions);
+  const accounts = countLive(snapshot.account || [], account.accounts);
+  const tags = countLive(snapshot.tag || [], account.tags);
+  const merchants = countLive(snapshot.merchant || [], account.merchants);
 
   const blockers: PreflightBlocker[] = [];
 
-  if (transactions.tombstoned > 0) {
-    const n = transactions.tombstoned;
+  // Операции и счета — то, что уносит «Начать всё сначала». Пока они на месте,
+  // заливать нельзя: снимок не заменит их, а добавится сверху.
+  const live = transactions.inAccount + accounts.inAccount;
+  if (live > 0) {
     blockers.push({
-      kind: "tombstones",
-      count: n,
+      kind: "notEmpty",
+      count: live,
       text:
-        `${n} ${pluralRu(n, ["операция", "операции", "операций"])} из снимка ` +
-        `${pluralRu(n, ["удалена", "удалены", "удалены"])} в Дзен-мани — ` +
-        `${pluralRu(n, ["она не вернётся", "они не вернутся", "они не вернутся"])}.`,
+        `В аккаунте ещё ${transactions.inAccount} ` +
+        `${pluralRu(transactions.inAccount, ["операция", "операции", "операций"])} и ` +
+        `${accounts.inAccount} ` +
+        `${pluralRu(accounts.inAccount, ["счёт", "счёта", "счетов"])} — снимок ляжет РЯДОМ, а не вместо.`,
       fix:
-        "Удалённое нельзя вернуть под тем же номером: Дзен-мани помнит удаление " +
-        "и отвергает повторную отправку. Помогает только «Начать всё сначала» " +
-        "(в приложении — «Ещё → Настройки аккаунта», на сайте — в профиле): " +
-        "после неё аккаунт пуст, и снимок ляжет целиком.",
+        "Откат заливается новыми номерами (иначе Дзен-мани молча не пустит " +
+        "удалённые строки обратно), поэтому старое не перезаписывается, а " +
+        "остаётся. Сначала «Начать всё сначала» в Дзен-мани: в приложении — " +
+        "«Ещё → Настройки аккаунта», на сайте — в профиле.",
     });
   }
 
-  if (transactions.newerInCloud > 0) {
-    const n = transactions.newerInCloud;
+  // Справочники «Начать всё сначала» не уносит — их сносят отдельно.
+  if (tags.inAccount > 0) {
     blockers.push({
-      kind: "newerInCloud",
-      count: n,
+      kind: "leftoverTags",
+      count: tags.inAccount,
       text:
-        `${n} ${pluralRu(n, ["операция", "операции", "операций"])} ` +
-        `${pluralRu(n, ["правилась", "правились", "правились"])} после снимка — ` +
-        `${pluralRu(n, ["останется", "останутся", "останутся"])} в нынешнем виде.`,
-      fix:
-        "Дзен-мани оставляет ту версию, что изменена позже. Если нужен именно " +
-        "снимок, аккаунт надо сначала очистить.",
+        `${tags.inAccount} ` +
+        `${pluralRu(tags.inAccount, ["категория", "категории", "категорий"])} останется в аккаунте.`,
+      fix: "«Начать всё сначала» категории не удаляет. Уберите их шагом «Убрать категории и контрагентов» — снимок приведёт свои.",
     });
   }
-
-  if (tags.extra > 0) {
+  if (merchants.inAccount > 0) {
     blockers.push({
-      kind: "extraTags",
-      count: tags.extra,
-      text: `${tags.extra} ${pluralRu(tags.extra, ["категория", "категории", "категорий"])} есть в аккаунте, но нет в снимке.`,
-      fix: "«Начать всё сначала» категории не удаляет — их нужно снести отдельно, иначе после восстановления они останутся лишними.",
-    });
-  }
-
-  if (merchants.extra > 0) {
-    blockers.push({
-      kind: "extraMerchants",
-      count: merchants.extra,
-      text: `${merchants.extra} ${pluralRu(merchants.extra, ["контрагент", "контрагента", "контрагентов"])} есть в аккаунте, но нет в снимке.`,
-      fix: "Контрагентов «Начать всё сначала» тоже не трогает — удалите их отдельно.",
+      kind: "leftoverMerchants",
+      count: merchants.inAccount,
+      text:
+        `${merchants.inAccount} ` +
+        `${pluralRu(merchants.inAccount, ["контрагент", "контрагента", "контрагентов"])} останется в аккаунте.`,
+      fix: "Контрагентов «Начать всё сначала» тоже не трогает — уберите их тем же шагом.",
     });
   }
 
