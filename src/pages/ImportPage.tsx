@@ -23,7 +23,6 @@ import {
   Settings,
   History,
   CloudDownload,
-  ClipboardCheck,
   CloudUpload,
   Info,
   ChevronDown,
@@ -64,10 +63,9 @@ import { useFilterMemoryStore } from "../store/useFilterMemoryStore";
 import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
-import { RestorePreflightCard } from "../components/RestorePreflightCard";
 import { snapshotSummary } from "../lib/snapshotLabel";
 import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
-import { RestoreWizard } from "../components/RestoreWizard";
+import { RestoreWizardModal } from "../components/RestoreWizardModal";
 import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
@@ -322,7 +320,7 @@ export function ImportPage() {
   const checkSnapshotReadiness = useCloudSnapshotStore((s) => s.checkReadiness);
   const pruneForeignSnapshots = useCloudSnapshotStore((s) => s.pruneForeign);
   const restoreProgress = useCloudSnapshotStore((s) => s.restoreProgress);
-  const snapshotImportRef = useRef<HTMLInputElement>(null);
+  const [restoreWizardOpen, setRestoreWizardOpen] = useState(false);
   // Current Zenmoney user id — read from the local cache. Lets us
   // filter the snapshot list to "snapshots for the currently
   // connected account only", so switching accounts doesn't surface
@@ -362,15 +360,6 @@ export function ImportPage() {
     );
     if (foreign) void pruneForeignSnapshots(currentUserId);
   }, [cloudSnapshots, cloudSnapshotsLoaded, currentUserId, pruneForeignSnapshots]);
-  // Снимок, с которым работает мастер отката: тот, который сверяли последним,
-  // иначе самый свежий. Списком выбирают снимок, мастер лишь ведёт по шагам.
-  const wizardSnapshot = useMemo(
-    () =>
-      visibleSnapshots.find((s) => s.id === snapshotPreflight?.id) ??
-      visibleSnapshots[0] ??
-      null,
-    [visibleSnapshots, snapshotPreflight]
-  );
   useEffect(() => {
     if (!cloudSnapshotsLoaded) hydrateCloudSnapshots();
   }, [cloudSnapshotsLoaded, hydrateCloudSnapshots]);
@@ -2168,29 +2157,17 @@ export function ImportPage() {
                 )}
                 {cloudSnapshotsOp === "snapshot" ? "Делаю снимок…" : "Сделать снимок"}
               </button>
-              {/* Import snapshot from a JSON file — file you previously
-                  downloaded via the per-row Download button, or copied
-                  from another machine. Goes into the same rolling
-                  5-slot index as fresh snapshots. */}
+              {/* Одна кнопка на всё восстановление: выбор снимка, проверка,
+                  подготовка и заливка идут шагами внутри окна. На экране они
+                  занимали половину страницы и читались все сразу. */}
               <button
-                onClick={() => snapshotImportRef.current?.click()}
+                onClick={() => setRestoreWizardOpen(true)}
                 disabled={cloudSnapshotsBusy}
                 className="btn-ghost text-sm inline-flex items-center gap-2"
               >
-                <Upload className="w-3.5 h-3.5" />
-                Загрузить из файла
+                <RefreshCw className="w-3.5 h-3.5" />
+                Восстановить
               </button>
-              <input
-                ref={snapshotImportRef}
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) importCloudSnapshot(f);
-                  e.target.value = "";
-                }}
-              />
               <span className="text-xs text-muted">
                 {cloudSnapshots.length === 0
                   ? "Снимков ещё не было"
@@ -2244,8 +2221,10 @@ export function ImportPage() {
             {visibleSnapshots.length > 0 && (
               <div className="text-xs space-y-1 -mx-1 px-1 max-h-72 overflow-y-auto">
                 {visibleSnapshots.map((s) => (
-                  <div key={s.id} className="border-b border-border/40 last:border-b-0">
-                  <div className="flex items-center gap-3 py-2">
+                  <div
+                    key={s.id}
+                    className="flex items-center gap-3 py-2 border-b border-border/40 last:border-b-0"
+                  >
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium">
                         {new Date(s.createdAt).toLocaleString("ru-RU", {
@@ -2259,26 +2238,6 @@ export function ImportPage() {
                         {snapshotSummary(s.counts, s.approxBytes)}
                       </div>
                     </div>
-                    {/* Сверка. Стоит ПЕРЕД восстановлением и левее его: сначала
-                        узнать, что доедет, потом решать. Ничего не отправляет. */}
-                    <button
-                      onClick={() => {
-                        checkSnapshotReadiness(s.id).catch(() => {
-                          /* сообщение уже в сторе */
-                        });
-                      }}
-                      className="btn-ghost !px-2.5 !py-1 text-xs inline-flex items-center gap-1.5 shrink-0"
-                      title="Посчитать, что из снимка доедет до аккаунта. Ничего не отправляет"
-                      disabled={cloudSnapshotsBusy || !zenToken}
-                    >
-                      {cloudSnapshotsOp === "check" &&
-                      snapshotPreflight?.id !== s.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <ClipboardCheck className="w-3.5 h-3.5" />
-                      )}
-                      Сверить
-                    </button>
                     <button
                       onClick={() => downloadCloudSnapshot(s.id)}
                       className="btn-ghost !px-2 !py-1 text-xs shrink-0"
@@ -2287,28 +2246,11 @@ export function ImportPage() {
                     >
                       <Download className="w-3.5 h-3.5" />
                     </button>
-                    {/* Restore — pushes the snapshot's contents back
-                        into Zenmoney via /v8/diff/. Destructive
-                        (overwrites cloud state by `changed` timestamp),
-                        gated behind a clear confirm dialog. */}
-                    <button
-                      onClick={() => void runRestore(s)}
-                      className="btn-ghost !px-2.5 !py-1 text-xs inline-flex items-center gap-1.5 shrink-0 !text-warn hover:!bg-warn/10"
-                      title="Залить содержимое снимка обратно в Дзен-мани"
-                      disabled={cloudSnapshotsBusy || !zenToken}
-                    >
-                      {cloudSnapshotsOp === "restore" ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <CloudUpload className="w-3.5 h-3.5" />
-                      )}
-                      Восстановить
-                    </button>
                     <button
                       onClick={async () => {
                         const ok = await confirm({
                           title: "Удалить снимок?",
-                          message: `Снимок от ${new Date(s.createdAt).toLocaleString("ru-RU")} будет удалён из локальной базы.`,
+                          message: `Снимок от ${new Date(s.createdAt).toLocaleString("ru-RU")} будет удалён с этого компьютера.`,
                           confirmLabel: "Удалить",
                           tone: "danger",
                         });
@@ -2322,71 +2264,35 @@ export function ImportPage() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  {/* Итог сверки — под своей же строкой: снимков до пяти, и
-                      показать его под чужой было бы хуже, чем не показать. */}
-                  {snapshotPreflight?.id === s.id && (
-                    <div className="pb-3">
-                      <RestorePreflightCard result={snapshotPreflight.result} />
-                    </div>
-                  )}
-                  </div>
                 ))}
               </div>
             )}
 
-            {/* Порядок действий для настоящего отката. Стоит под списком:
-                сначала снимки, потом что с ними делать. */}
-            <div className="mt-4">
-              <RestoreWizard
-                preflight={
-                  wizardSnapshot && snapshotPreflight?.id === wizardSnapshot.id
-                    ? snapshotPreflight.result
-                    : null
-                }
-                snapshotDate={
-                  wizardSnapshot
-                    ? new Date(wizardSnapshot.createdAt).toLocaleString("ru-RU", {
-                        day: "numeric",
-                        month: "long",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : null
-                }
+            {restoreWizardOpen && (
+              <RestoreWizardModal
+                snapshots={visibleSnapshots}
+                preflight={snapshotPreflight?.result ?? null}
+                preflightId={snapshotPreflight?.id ?? null}
                 restored={!!lastRestoreResult}
                 busyOp={cloudSnapshotsOp}
                 cleanupProgress={cleanupProgress}
                 cleanupResult={lastCleanupResult}
-                disabled={!zenToken || !wizardSnapshot}
-                onCheck={() => {
-                  if (wizardSnapshot) {
-                    checkSnapshotReadiness(wizardSnapshot.id).catch(() => {
-                      /* сообщение уже в сторе */
-                    });
-                  }
-                }}
-                onRestore={() => {
-                  if (wizardSnapshot) void runRestore(wizardSnapshot);
-                }}
-                onCleanup={async () => {
-                  const ok = await confirm({
-                    title: "Убрать все категории и контрагентов?",
-                    message:
-                      "Из Дзен-мани (на текущий токен) будут удалены ВСЕ категории и ВСЕ контрагенты. " +
-                      "Это шаг подготовки к заливке снимка: он приведёт свои.\n\n" +
-                      "Делайте это ПОСЛЕ «Начать всё сначала» в Дзен-мани. Если в аккаунте ещё есть операции, " +
-                      "они останутся без категорий.\n\n" +
-                      "Отменить нельзя.",
-                    confirmLabel: "Убрать",
-                    tone: "danger",
+                error={cloudSnapshotsError}
+                onClose={() => setRestoreWizardOpen(false)}
+                onCheck={(id) => {
+                  checkSnapshotReadiness(id).catch(() => {
+                    /* сообщение уже в сторе */
                   });
-                  if (!ok) return;
+                }}
+                onImportFile={(f) => importCloudSnapshot(f)}
+                onCleanup={() => {
                   cleanupDicts({ tags: true, merchants: true }).catch(() => {
                     /* сообщение уже в сторе */
                   });
                 }}
+                onRestore={(s) => void runRestore(s)}
               />
-            </div>
+            )}
 
             {/* Restore result — shown after a successful restore call.
                 Counts of accepted entities + cross-user warning if the
