@@ -2286,9 +2286,17 @@ export function ImportPage() {
                 }}
                 onImportFile={(f) => importCloudSnapshot(f)}
                 onCleanup={() => {
-                  cleanupDicts({ tags: true, merchants: true }).catch(() => {
-                    /* сообщение уже в сторе */
-                  });
+                  // Сразу после уборки пересверяем: кэш уже вычеркнул удалённое,
+                  // и мастер должен сам перейти к заливке, а не ждать, пока
+                  // человек догадается нажать «Проверить» ещё раз.
+                  const id = snapshotPreflight?.id;
+                  cleanupDicts({ tags: true, merchants: true })
+                    .then(() => {
+                      if (id) return checkSnapshotReadiness(id);
+                    })
+                    .catch(() => {
+                      /* сообщение уже в сторе */
+                    });
                 }}
                 onRestore={(s) => void runRestore(s)}
               />

@@ -23,7 +23,7 @@
  */
 
 import { pushDiff, type ZenDeletion } from "./zenmoney";
-import { loadZenCache } from "./zenmoneyCache";
+import { loadZenCache, saveZenCache } from "./zenmoneyCache";
 import { buildMerchantDeletions } from "./zenmoneyPush";
 import { devLog } from "./devLog";
 
@@ -86,6 +86,9 @@ export async function cleanupDictionaries(
   const stamp = Math.floor(Date.now() / 1000);
   const result: CleanupResult = { tags: 0, merchants: 0, failures: [] };
   let serverTs = cache.serverTimestamp || 0;
+  // Что реально удалилось — чтобы вычеркнуть это из локального кэша.
+  const goneTags = new Set<string>();
+  const goneMerchants = new Set<string>();
 
   const send = async (
     phase: "tags" | "merchants",
@@ -120,7 +123,10 @@ export async function cleanupDictionaries(
     let done = 0;
     for (const batch of batches) {
       onProgress?.({ phase: "tags", current: done, total: deletions.length });
-      if (await send("tags", batch)) result.tags += batch.length;
+      if (await send("tags", batch)) {
+        result.tags += batch.length;
+        for (const d of batch) goneTags.add(d.id);
+      }
       done += batch.length;
     }
     onProgress?.({ phase: "tags", current: done, total: deletions.length });
@@ -133,10 +139,29 @@ export async function cleanupDictionaries(
     let done = 0;
     for (const batch of batches) {
       onProgress?.({ phase: "merchants", current: done, total: deletions.length });
-      if (await send("merchants", batch)) result.merchants += batch.length;
+      if (await send("merchants", batch)) {
+        result.merchants += batch.length;
+        for (const d of batch) goneMerchants.add(d.id);
+      }
       done += batch.length;
     }
     onProgress?.({ phase: "merchants", current: done, total: deletions.length });
+  }
+
+  // Вычёркиваем удалённое из локального кэша.
+  //
+  // Без этого следующая проверка готовности видела снесённые категории и
+  // контрагентов как живых, показывала то же препятствие — и дальше пройти
+  // было нельзя, хотя в облаке уже чисто. Полная синхронизация это чинила, но
+  // требовать её после каждой уборки значит перекладывать на человека работу,
+  // которую мы и так знаем как сделать: что удалено, известно точно.
+  if (goneTags.size > 0 || goneMerchants.size > 0) {
+    await saveZenCache({
+      ...cache,
+      tags: cache.tags.filter((t) => !goneTags.has(t.id)),
+      merchants: cache.merchants.filter((m) => !goneMerchants.has(m.id)),
+      serverTimestamp: serverTs,
+    });
   }
 
   onProgress?.({ phase: "done", current: 0, total: 0 });

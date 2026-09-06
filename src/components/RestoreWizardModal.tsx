@@ -5,7 +5,7 @@ import {
   Check,
   CheckCircle2,
   History,
-  Loader2,
+  Info,
   Upload,
   X,
 } from "lucide-react";
@@ -77,19 +77,38 @@ export function RestoreWizardModal({
   // файл выбирается сам, без эффекта, который правил бы состояние после
   // отрисовки.
   const [pickedId, setPickedId] = useState<string | null>(null);
+  // Ушли ли дальше выбора снимка. Раньше шаг выводился только из сверки, и
+  // «Далее» сразу её запускало: человек попадал на «Подготовку» уже с
+  // результатом, не успев прочитать, что вообще надо сделать.
+  const [entered, setEntered] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  // Когда в последний раз нажимали «Проверить»: между нажатиями проходят
+  // минуты (очистка доходит до облака не мгновенно), и без отметки времени
+  // непонятно, свежий ли перед тобой ответ.
+  const [checkedTs, setCheckedTs] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const busy = busyOp !== null;
 
   const chosen = snapshots.find((s) => s.id === pickedId) ?? snapshots[0] ?? null;
   const chosenId = chosen?.id ?? null;
   const fresh = preflight && preflightId === chosenId ? preflight : null;
+  // На «Подготовке» два разных положения: аккаунт ещё не очищен — или очищен, и
+  // остались только справочники. Вопросы разные, и текст тоже.
+  const dictionariesOnly =
+    !!fresh && !fresh.ready && !fresh.blockers.some((b) => b.kind === "notEmpty");
+  const checkedAt = checkedTs
+    ? new Date(checkedTs).toLocaleTimeString("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : null;
 
   const step: Step = restored
     ? "done"
-    : !fresh
+    : !entered
       ? "pick"
-      : fresh.ready
+      : fresh?.ready
         ? "confirm"
         : "prepare";
 
@@ -209,12 +228,8 @@ export function RestoreWizardModal({
                 disabled={busy}
                 className="btn-ghost text-xs inline-flex items-center gap-2"
               >
-                {busyOp === "import" ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Upload className="w-3.5 h-3.5" />
-                )}
-                Загрузить файл
+                <Upload className="w-3.5 h-3.5" />
+                {busyOp === "import" ? "Загружаю…" : "Загрузить файл"}
               </button>
               <input
                 ref={fileRef}
@@ -235,50 +250,98 @@ export function RestoreWizardModal({
             </>
           )}
 
-          {step === "prepare" && fresh && (
+          {step === "prepare" && (
             <>
-              {/* Показываем только то препятствие, которым заняты СЕЙЧАС.
-                  Пока в аккаунте операции, справочники не к спеху, а три
-                  предупреждения разом читаются как «всё плохо». */}
-              {(fresh.blockers.some((b) => b.kind === "notEmpty")
-                ? fresh.blockers.filter((b) => b.kind === "notEmpty")
-                : fresh.blockers
-              ).map((b) => (
-                <div key={b.kind} className="flex items-start gap-2 text-warn">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span className="text-text">{b.text}</span>
-                </div>
-              ))}
-
-              {fresh.blockers.some((b) => b.kind === "notEmpty") ? (
-                <div className="space-y-2">
+              {/* Пока сверка не нажата, показываем ЧТО НАДО СДЕЛАТЬ. Раньше
+                  «Далее» само запускало проверку, и человек первым делом читал
+                  её вывод про свои 7 660 операций, ещё не поняв, зачем он тут. */}
+              {!dictionariesOnly && (
+                <>
                   <p>
-                    Очистите аккаунт в Дзен-мани:{" "}
+                    Перед восстановлением аккаунт в Дзен-мани нужно полностью
+                    очистить — иначе снимок не заменит нынешние данные, а
+                    добавится к ним, и всё задвоится.
+                  </p>
+                  <p>
+                    Откройте Дзен-мани и выберите{" "}
                     <strong>Ещё → Настройки аккаунта → Начать всё сначала</strong>.
+                    На сайте то же самое в настройках профиля.
+                  </p>
+                  <div className="flex items-start gap-2 p-3 rounded-xl border border-accent/30 bg-accent/5">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5 text-accent" />
+                    <span className="text-xs">
+                      Очистка доходит до облака не сразу — это может занять до
+                      пяти минут. Счёт «Долги» после неё остаётся: он у вас один
+                      и удалить его нельзя, снимок с ним сойдётся.
+                    </span>
+                  </div>
+                  {fresh && (
+                    <div className="flex items-start gap-2 text-warn">
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span className="text-text">
+                        {fresh.blockers.find((b) => b.kind === "notEmpty")?.text ??
+                          "Аккаунт ещё не пуст."}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {dictionariesOnly && fresh && (
+                <>
+                  <p>
+                    Аккаунт очищен, но категории и контрагенты в Дзен-мани
+                    остались: команда «Начать всё сначала» их не удаляет.
                   </p>
                   <p className="text-xs text-muted">
-                    До облака доходит за пару минут. Счёт «Долги» остаётся — так и надо.
+                    Если их не удалить, после восстановления рядом с категориями
+                    из снимка окажутся нынешние — одинаковые по названию, но
+                    разные для Дзен-мани.
                   </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted">
-                    «Начать всё сначала» их не уносит. Удаление категорий идёт
-                    медленно — несколько минут на полсотни.
-                  </p>
-                  {cleanupProgress && cleanupProgress.phase !== "done" && (
-                    <p className="text-xs text-muted tabular-nums">
-                      {cleanupProgress.phase === "tags" ? "Категории" : "Контрагенты"}:{" "}
-                      {formatNum(cleanupProgress.current)} из{" "}
-                      {formatNum(cleanupProgress.total)}
+                  <ul className="space-y-1">
+                    {fresh.blockers.map((b) => (
+                      <li key={b.kind} className="flex items-start gap-2 text-warn">
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span className="text-text">{b.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {cleanupProgress && cleanupProgress.phase !== "done" ? (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted tabular-nums">
+                        {cleanupProgress.phase === "tags"
+                          ? "Удаляю категории"
+                          : "Удаляю контрагентов"}
+                        : {formatNum(cleanupProgress.current)} из{" "}
+                        {formatNum(cleanupProgress.total)}
+                      </p>
+                      <div className="h-1 rounded-full bg-border overflow-hidden">
+                        <div
+                          className="h-full bg-accent transition-all"
+                          style={{
+                            width: `${cleanupProgress.total > 0 ? Math.round((cleanupProgress.current / cleanupProgress.total) * 100) : 0}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted">
+                      Удаление идёт небыстро: Дзен-мани проверяет каждую
+                      категорию по всем операциям. На несколько десятков уйдёт
+                      несколько минут — окно можно не закрывать.
                     </p>
                   )}
                   {cleanupResult && cleanupResult.failures.length > 0 && (
-                    <p className="text-xs text-muted">
-                      Часть партий не прошла — нажмите ещё раз, остаток доснесётся.
+                    <p className="text-xs text-warn">
+                      Часть удалить не удалось. Нажмите ещё раз — остаток
+                      удалится, уже удалённое не пострадает.
                     </p>
                   )}
-                </div>
+                </>
+              )}
+
+              {checkedAt && (
+                <p className="text-xs text-muted">Проверено в {checkedAt}</p>
               )}
             </>
           )}
@@ -349,49 +412,72 @@ export function RestoreWizardModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
-          <button onClick={onClose} disabled={busy} className="btn-ghost text-sm">
-            {step === "done" ? "Закрыть" : "Отмена"}
-          </button>
+        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border">
+          {/* Назад — чтобы можно было вернуться и выбрать другой снимок. */}
+          <div>
+            {step === "prepare" && (
+              <button
+                onClick={() => setEntered(false)}
+                disabled={busy}
+                className="btn-ghost text-sm"
+              >
+                Назад
+              </button>
+            )}
+          </div>
 
-          {step === "pick" && (
-            <button
-              onClick={() => chosen && onCheck(chosen.id)}
-              disabled={busy || !chosen}
-              className="btn-primary text-sm inline-flex items-center gap-2"
-            >
-              {busyOp === "check" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Далее
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} disabled={busy} className="btn-ghost text-sm">
+              {step === "done" ? "Закрыть" : "Отмена"}
             </button>
-          )}
 
-          {step === "prepare" && fresh && (
-            <button
-              onClick={() =>
-                fresh.blockers.some((b) => b.kind === "notEmpty")
-                  ? chosen && onCheck(chosen.id)
-                  : onCleanup()
-              }
-              disabled={busy}
-              className="btn-primary text-sm inline-flex items-center gap-2"
-            >
-              {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {fresh.blockers.some((b) => b.kind === "notEmpty")
-                ? "Проверить"
-                : "Убрать и продолжить"}
-            </button>
-          )}
+            {step === "pick" && (
+              <button
+                onClick={() => setEntered(true)}
+                disabled={busy || !chosen}
+                className="btn-primary text-sm"
+              >
+                Далее
+              </button>
+            )}
 
-          {step === "confirm" && chosen && (
-            <button
-              onClick={() => onRestore(chosen)}
-              disabled={busy || !accepted}
-              className="btn-primary text-sm inline-flex items-center gap-2 !bg-warn hover:!bg-warn/90"
-            >
-              {busyOp === "restore" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Восстановить
-            </button>
-          )}
+            {step === "prepare" && (
+              <button
+                onClick={() => {
+                  if (!chosen) return;
+                  if (dictionariesOnly) {
+                    onCleanup();
+                  } else {
+                    setCheckedTs(Date.now());
+                    onCheck(chosen.id);
+                  }
+                }}
+                disabled={busy}
+                className="btn-primary text-sm"
+              >
+                {/* Ширина кнопки не пляшет: подпись меняется целиком, а
+                    крутилку не подставляем сбоку — от неё кнопки раздвигались
+                    на долю секунды и дёргали весь ряд. */}
+                {busyOp === "cleanup"
+                  ? "Удаление данных…"
+                  : busyOp === "check"
+                    ? "Проверяю…"
+                    : dictionariesOnly
+                      ? "Удалить данные"
+                      : "Проверить"}
+              </button>
+            )}
+
+            {step === "confirm" && chosen && (
+              <button
+                onClick={() => onRestore(chosen)}
+                disabled={busy || !accepted}
+                className="btn-primary text-sm !bg-warn hover:!bg-warn/90"
+              >
+                {busyOp === "restore" ? "Восстанавливаю…" : "Восстановить"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>,

@@ -40,10 +40,15 @@ export type BlockerKind = "notEmpty" | "leftoverTags" | "leftoverMerchants";
 export interface PreflightBlocker {
   kind: BlockerKind;
   count: number;
-  /** Что это значит для человека — одной фразой. */
+  /**
+   * Что нашли — одной фразой и без объяснений.
+   *
+   * Раньше здесь же лежало и «почему так» (поле `fix`), но мастер объясняет
+   * это до проверки, своими словами и один раз. Дублировать объяснение в
+   * каждой строке результата значило повторять человеку то, что он только что
+   * прочитал.
+   */
   text: string;
-  /** Что с этим делать. */
-  fix: string;
 }
 
 export interface RestorePreflight {
@@ -115,14 +120,8 @@ export function restorePreflight(
       kind: "notEmpty",
       count: transactions.inAccount,
       text:
-        `В аккаунте ещё ${formatNum(transactions.inAccount)} ` +
-        `${pluralRu(transactions.inAccount, ["операция", "операции", "операций"])} — ` +
-        `снимок ляжет РЯДОМ, а не вместо, и они задвоятся.`,
-      fix:
-        "Откат заливается новыми номерами (иначе Дзен-мани молча не пустит " +
-        "удалённые строки обратно), поэтому старое не перезаписывается, а " +
-        "остаётся. Сначала «Начать всё сначала» в Дзен-мани: в приложении — " +
-        "«Ещё → Настройки аккаунта», на сайте — в профиле.",
+        `В аккаунте пока ${formatNum(transactions.inAccount)} ` +
+        `${pluralRu(transactions.inAccount, ["операция", "операции", "операций"])}.`,
     });
   }
 
@@ -133,8 +132,7 @@ export function restorePreflight(
       count: tags.inAccount,
       text:
         `${formatNum(tags.inAccount)} ` +
-        `${pluralRu(tags.inAccount, ["категория", "категории", "категорий"])} останется в аккаунте.`,
-      fix: "«Начать всё сначала» категории не удаляет. Уберите их шагом «Убрать категории и контрагентов» — снимок приведёт свои.",
+        `${pluralRu(tags.inAccount, ["категория", "категории", "категорий"])}.`,
     });
   }
   if (merchants.inAccount > 0) {
@@ -143,8 +141,7 @@ export function restorePreflight(
       count: merchants.inAccount,
       text:
         `${formatNum(merchants.inAccount)} ` +
-        `${pluralRu(merchants.inAccount, ["контрагент", "контрагента", "контрагентов"])} останется в аккаунте.`,
-      fix: "Контрагентов «Начать всё сначала» тоже не трогает — уберите их тем же шагом.",
+        `${pluralRu(merchants.inAccount, ["контрагент", "контрагента", "контрагентов"])}.`,
     });
   }
 
@@ -158,9 +155,9 @@ export function restorePreflight(
   if (accounts.inAccount > 0) {
     notes.push(
       `В аккаунте ${formatNum(accounts.inAccount)} ` +
-        `${pluralRu(accounts.inAccount, ["счёт", "счёта", "счетов"])}; после заливки ` +
-        `к ним добавятся ${formatNum(accounts.inSnapshot)} из снимка. Служебные счета, которые ` +
-        `Дзен-мани заводит сама, удалить нельзя — лишние можно убрать в архив.`
+        `${pluralRu(accounts.inAccount, ["счёт", "счёта", "счетов"])}; после ` +
+        `восстановления к ним добавятся ${formatNum(accounts.inSnapshot)} из снимка. ` +
+        `Лишние можно убрать в архив.`
     );
   }
 

@@ -54,17 +54,17 @@ describe("restorePreflight", () => {
     expect(p.transactions).toEqual({ inAccount: 0, inSnapshot: 1 });
   });
 
-  it("живые операции — препятствие: снимок ляжет рядом", () => {
-    // Главное отличие от прежней логики: новые id ничего не перезаписывают,
-    // поэтому опасность не «не применится», а «удвоится».
+  it("живые операции — препятствие", () => {
+    // Новые номера ничего не перезаписывают, поэтому опасность не «не
+    // применится», а «удвоится». Само объяснение живёт в мастере: здесь
+    // только факт, иначе человек читал бы его дважды подряд.
     const p = restorePreflight(snap({ transaction: [tx("a")] }), {
       ...empty,
       transactions: [tx("b")],
     });
     expect(p.ready).toBe(false);
     const b = p.blockers.find((x) => x.kind === "notEmpty");
-    expect(b?.text).toContain("ляжет РЯДОМ");
-    expect(b?.fix).toMatch(/Начать всё сначала/);
+    expect(b?.text).toBe("В аккаунте пока 1 операция.");
   });
 
   it("оставшиеся счета заливке не мешают — это замечание, а не запрет", () => {
@@ -100,11 +100,11 @@ describe("restorePreflight", () => {
       "leftoverMerchants",
       "leftoverTags",
     ]);
-    expect(p.blockers.find((b) => b.kind === "leftoverTags")?.text).toContain(
-      "2 категории"
+    expect(p.blockers.find((b) => b.kind === "leftoverTags")?.text).toBe(
+      "2 категории."
     );
-    expect(p.blockers.find((b) => b.kind === "leftoverMerchants")?.text).toContain(
-      "1 контрагент "
+    expect(p.blockers.find((b) => b.kind === "leftoverMerchants")?.text).toBe(
+      "1 контрагент."
     );
   });
 
