@@ -47,9 +47,18 @@ export function RestorePreflightCard({ result }: { result: RestorePreflight }) {
         </ul>
       )}
 
+      {result.notes.length > 0 && (
+        <ul className="space-y-1 text-muted">
+          {result.notes.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+      )}
+
       {result.ready && (
         <div className="text-muted">
-          Аккаунт пуст — снимку не с чем сталкиваться, заливать можно.
+          Операций и справочников в аккаунте нет — снимку не с чем сталкиваться,
+          заливать можно.
         </div>
       )}
     </div>

@@ -350,8 +350,19 @@ export async function restoreSnapshotToCloud(
     (raw.account || []).find((a) => a.type === "debt") || null;
   const currentDebt =
     ctx.currentAccounts.find((a) => a.type === "debt") || null;
+  // Долговой счёт у пользователя ровно ОДИН, второй Дзен-мани завести не даёт.
+  // Поэтому свой из снимка мы не шлём никогда, а операции переводим на уже
+  // существующий.
+  //
+  // Раньше здесь стояло `snapshotDebt.id !== currentDebt.id`: при совпадении
+  // id счёт уезжал как есть, и это был безобидный upsert самого себя. С новыми
+  // номерами то же самое стало СОЗДАНИЕМ второго долгового счёта, и сервер
+  // отвечал «It is not allowed to create several user debt accounts». Поймано
+  // живым прогоном: «Начать всё сначала» долговой счёт не уносит, так что
+  // после очистки id как раз совпадают — то есть ломалось в самом обычном
+  // случае. Совпадающие id дают тождественное отображение, и это правильно.
   const debtIdRemap =
-    snapshotDebt && currentDebt && snapshotDebt.id !== currentDebt.id
+    snapshotDebt && currentDebt
       ? { from: snapshotDebt.id, to: currentDebt.id }
       : null;
 

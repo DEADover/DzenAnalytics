@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { chunk, CLEANUP_BATCH } from "./accountCleanup";
+import { chunk, MERCHANT_BATCH, TAG_BATCH } from "./accountCleanup";
 
 describe("chunk", () => {
   it("режет ровно по размеру партии", () => {
@@ -21,8 +21,15 @@ describe("chunk", () => {
 
   it("сумма партий равна исходному списку", () => {
     const src = Array.from({ length: 326 }, (_, i) => i);
-    const batches = chunk(src, CLEANUP_BATCH);
+    const batches = chunk(src, MERCHANT_BATCH);
     expect(batches.flat()).toEqual(src);
-    expect(batches.every((b) => b.length <= CLEANUP_BATCH)).toBe(true);
+    expect(batches.every((b) => b.length <= MERCHANT_BATCH)).toBe(true);
+  });
+
+  it("теги режутся мельче контрагентов", () => {
+    // Замерено на живом аккаунте: партия из 25 тегов не завершилась и за пять
+    // минут. Удаление тега дорогое — сервер обходит ссылающиеся операции.
+    expect(TAG_BATCH).toBeLessThan(MERCHANT_BATCH);
+    expect(chunk(Array.from({ length: 48 }, (_, i) => i), TAG_BATCH).length).toBe(10);
   });
 });

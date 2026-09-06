@@ -27,8 +27,19 @@ import { loadZenCache } from "./zenmoneyCache";
 import { buildMerchantDeletions } from "./zenmoneyPush";
 import { devLog } from "./devLog";
 
-/** Сколько сущностей уносим одним запросом. */
-export const CLEANUP_BATCH = 25;
+/**
+ * Размер партии — РАЗНЫЙ для тегов и контрагентов, и это не вкусовщина.
+ *
+ * Удаление тега на стороне Дзен-мани дорогое: сервер обходит операции, которые
+ * на него ссылаются. Замерено на живом аккаунте (48 тегов): партия из 25 висела
+ * больше пяти минут и не завершилась — ни один тег за это время не удалился.
+ * Сторонний сервис для восстановления по той же причине предлагает по 5.
+ *
+ * Контрагент такой обвязки не тянет, его удаление дешёвое, и дробить по пять
+ * значило бы растянуть три сотни строк на шесть десятков запросов.
+ */
+export const TAG_BATCH = 5;
+export const MERCHANT_BATCH = 50;
 
 export interface CleanupProgress {
   phase: "tags" | "merchants" | "done";
@@ -105,7 +116,7 @@ export async function cleanupDictionaries(
       user: t.user,
       stamp,
     }));
-    const batches = chunk(deletions, CLEANUP_BATCH);
+    const batches = chunk(deletions, TAG_BATCH);
     let done = 0;
     for (const batch of batches) {
       onProgress?.({ phase: "tags", current: done, total: deletions.length });
@@ -118,7 +129,7 @@ export async function cleanupDictionaries(
   if (opts.merchants) {
     const ids = cache.merchants.map((m) => m.id);
     const deletions = buildMerchantDeletions(ids, cache.merchants, stamp);
-    const batches = chunk(deletions, CLEANUP_BATCH);
+    const batches = chunk(deletions, MERCHANT_BATCH);
     let done = 0;
     for (const batch of batches) {
       onProgress?.({ phase: "merchants", current: done, total: deletions.length });

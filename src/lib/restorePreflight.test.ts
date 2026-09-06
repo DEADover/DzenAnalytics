@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { countLive, restorePreflight } from "./restorePreflight";
-import type { ZenDiffResponse, ZenMerchant, ZenTag, ZenTransaction } from "./zenmoney";
+import type {
+  ZenAccount,
+  ZenDiffResponse,
+  ZenMerchant,
+  ZenTag,
+  ZenTransaction,
+} from "./zenmoney";
 
 /**
  * Сущность с тем минимумом полей, который читает сверка: остальные ей не
@@ -12,6 +18,7 @@ const ent = <T,>(id: string, deleted = false): T =>
 const tx = (id: string, deleted = false) => ent<ZenTransaction>(id, deleted);
 const tag = (id: string) => ent<ZenTag>(id);
 const merch = (id: string) => ent<ZenMerchant>(id);
+const acct = (id: string) => ent<ZenAccount>(id);
 
 const snap = (over: Partial<ZenDiffResponse>): ZenDiffResponse =>
   ({ transaction: [], account: [], tag: [], merchant: [], ...over }) as ZenDiffResponse;
@@ -58,6 +65,19 @@ describe("restorePreflight", () => {
     const b = p.blockers.find((x) => x.kind === "notEmpty");
     expect(b?.text).toContain("ляжет РЯДОМ");
     expect(b?.fix).toMatch(/Начать всё сначала/);
+  });
+
+  it("оставшиеся счета заливке не мешают — это замечание, а не запрет", () => {
+    // После честной очистки Дзен-мани сама заводит «Долги» и «Наличные».
+    // Убрать их нельзя, и считай мы их помехой — аккаунт навсегда остался бы
+    // «неготовым», а совет предлагал бы уже сделанное. Поймано живым прогоном.
+    const p = restorePreflight(snap({ account: [acct("a1")] }), {
+      ...empty,
+      accounts: [acct("sys1"), acct("sys2")],
+    });
+    expect(p.ready).toBe(true);
+    expect(p.blockers).toEqual([]);
+    expect(p.notes.join(" ")).toContain("2 счёта");
   });
 
   it("тумбстоуны в аккаунте препятствием не считаются", () => {

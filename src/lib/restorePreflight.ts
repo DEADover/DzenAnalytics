@@ -53,6 +53,13 @@ export interface RestorePreflight {
   /** Аккаунт пуст: снимок ляжет начисто, без задвоения. */
   ready: boolean;
   blockers: PreflightBlocker[];
+  /**
+   * То, что стоит знать, но что заливке не мешает.
+   *
+   * Отдельно от `blockers` намеренно: попав в препятствия, оставшиеся счета
+   * навсегда делали бы аккаунт «неготовым» — а убрать их нельзя (см. ниже).
+   */
+  notes: string[];
 }
 
 /** Минимум, который нужен от сущности, чтобы её сосчитать. */
@@ -100,18 +107,16 @@ export function restorePreflight(
 
   const blockers: PreflightBlocker[] = [];
 
-  // Операции и счета — то, что уносит «Начать всё сначала». Пока они на месте,
-  // заливать нельзя: снимок не заменит их, а добавится сверху.
-  const live = transactions.inAccount + accounts.inAccount;
-  if (live > 0) {
+  // Препятствие — ОПЕРАЦИИ. Снимок заливается новыми номерами и потому ничего
+  // не перезаписывает: на живые операции он ляжет сверху, и они удвоятся.
+  if (transactions.inAccount > 0) {
     blockers.push({
       kind: "notEmpty",
-      count: live,
+      count: transactions.inAccount,
       text:
         `В аккаунте ещё ${transactions.inAccount} ` +
-        `${pluralRu(transactions.inAccount, ["операция", "операции", "операций"])} и ` +
-        `${accounts.inAccount} ` +
-        `${pluralRu(accounts.inAccount, ["счёт", "счёта", "счетов"])} — снимок ляжет РЯДОМ, а не вместо.`,
+        `${pluralRu(transactions.inAccount, ["операция", "операции", "операций"])} — ` +
+        `снимок ляжет РЯДОМ, а не вместо, и они задвоятся.`,
       fix:
         "Откат заливается новыми номерами (иначе Дзен-мани молча не пустит " +
         "удалённые строки обратно), поэтому старое не перезаписывается, а " +
@@ -142,5 +147,29 @@ export function restorePreflight(
     });
   }
 
-  return { transactions, accounts, tags, merchants, ready: blockers.length === 0, blockers };
+  // Счета в препятствия НЕ идут. После «Начать всё сначала» Дзен-мани сама
+  // заводит пару служебных — «Долги» (он у пользователя ровно один) и
+  // «Наличные» взамен унесённых. Убрать их нельзя, и считай мы их помехой,
+  // аккаунт после честной очистки навсегда оставался бы «неготовым», а совет
+  // предлагал бы сделать то, что уже сделано. Пустой счёт заливке не мешает:
+  // задваиваются операции, а не строки в списке счетов.
+  const notes: string[] = [];
+  if (accounts.inAccount > 0) {
+    notes.push(
+      `В аккаунте ${accounts.inAccount} ` +
+        `${pluralRu(accounts.inAccount, ["счёт", "счёта", "счетов"])}; после заливки ` +
+        `к ним добавятся ${accounts.inSnapshot} из снимка. Служебные счета, которые ` +
+        `Дзен-мани заводит сама, удалить нельзя — лишние можно убрать в архив.`
+    );
+  }
+
+  return {
+    transactions,
+    accounts,
+    tags,
+    merchants,
+    ready: blockers.length === 0,
+    blockers,
+    notes,
+  };
 }
