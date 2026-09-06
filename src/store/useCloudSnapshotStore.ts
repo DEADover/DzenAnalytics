@@ -12,6 +12,12 @@ import {
   type RestoreProgress,
 } from "../lib/cloudSnapshots";
 import { loadSnapshot } from "../lib/cloudSnapshots";
+import {
+  cleanupDictionaries,
+  type CleanupOptions,
+  type CleanupProgress,
+  type CleanupResult,
+} from "../lib/accountCleanup";
 import { restorePreflight, type RestorePreflight } from "../lib/restorePreflight";
 import { loadZenCache } from "../lib/zenmoneyCache";
 import { useZenmoneyStore } from "./useZenmoneyStore";
@@ -46,6 +52,10 @@ interface State {
    * вовсе.
    */
   preflight: { id: string; result: RestorePreflight } | null;
+  /** Ход уборки справочников; null — не идёт. */
+  cleanupProgress: CleanupProgress | null;
+  /** Чем кончилась последняя уборка — в том числе неудачные партии. */
+  lastCleanupResult: CleanupResult | null;
 
   hydrate: () => Promise<void>;
   takeSnapshot: () => Promise<void>;
@@ -67,6 +77,12 @@ interface State {
   checkReadiness: (id: string) => Promise<RestorePreflight>;
   /** Убрать итог сверки (снимок удалили, кэш обновился). */
   clearPreflight: () => void;
+  /**
+   * Снести из аккаунта категории и/или контрагентов — то, что «Начать всё
+   * сначала» в Дзен-мани не уносит. ПИШЕТ В ОБЛАКО: вызывающий обязан
+   * спросить подтверждение.
+   */
+  cleanup: (opts: CleanupOptions) => Promise<CleanupResult>;
 }
 
 export const useCloudSnapshotStore = create<State>((set) => ({
@@ -77,6 +93,8 @@ export const useCloudSnapshotStore = create<State>((set) => ({
   lastRestoreResult: null,
   restoreProgress: null,
   preflight: null,
+  cleanupProgress: null,
+  lastCleanupResult: null,
 
   hydrate: async () => {
     const list = await loadSnapshotIndex();
@@ -181,6 +199,30 @@ export const useCloudSnapshotStore = create<State>((set) => ({
   },
 
   clearPreflight: () => set({ preflight: null }),
+
+  cleanup: async (opts) => {
+    const token = useZenmoneyStore.getState().token;
+    if (!token) {
+      const msg = "Сначала подключите токен Дзен-мани API";
+      set({ error: msg });
+      throw new Error(msg);
+    }
+    set({ busy: true, error: null, cleanupProgress: null, lastCleanupResult: null });
+    try {
+      const result = await cleanupDictionaries(token, opts, (p) =>
+        set({ cleanupProgress: p })
+      );
+      set({ busy: false, cleanupProgress: null, lastCleanupResult: result });
+      return result;
+    } catch (e) {
+      set({
+        busy: false,
+        cleanupProgress: null,
+        error: e instanceof Error ? e.message : "Не удалось убрать справочники",
+      });
+      throw e;
+    }
+  },
 
   restore: async (id) => {
     const token = useZenmoneyStore.getState().token;

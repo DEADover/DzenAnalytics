@@ -65,6 +65,7 @@ import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
 import { RestorePreflightCard } from "../components/RestorePreflightCard";
+import { RestoreWizard } from "../components/RestoreWizard";
 import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
@@ -312,6 +313,9 @@ export function ImportPage() {
   const restoreCloudSnapshot = useCloudSnapshotStore((s) => s.restore);
   const lastRestoreResult = useCloudSnapshotStore((s) => s.lastRestoreResult);
   const snapshotPreflight = useCloudSnapshotStore((s) => s.preflight);
+  const cleanupProgress = useCloudSnapshotStore((s) => s.cleanupProgress);
+  const lastCleanupResult = useCloudSnapshotStore((s) => s.lastCleanupResult);
+  const cleanupDicts = useCloudSnapshotStore((s) => s.cleanup);
   const checkSnapshotReadiness = useCloudSnapshotStore((s) => s.checkReadiness);
   const restoreProgress = useCloudSnapshotStore((s) => s.restoreProgress);
   const snapshotImportRef = useRef<HTMLInputElement>(null);
@@ -2284,6 +2288,34 @@ export function ImportPage() {
                 ))}
               </div>
             )}
+
+            {/* Порядок действий для настоящего отката. Стоит под списком:
+                сначала снимки, потом что с ними делать. */}
+            <div className="mt-4">
+              <RestoreWizard
+                busy={cloudSnapshotsBusy}
+                disabled={!zenToken}
+                progress={cleanupProgress}
+                result={lastCleanupResult}
+                onCleanup={async () => {
+                  const ok = await confirm({
+                    title: "Убрать все категории и контрагентов?",
+                    message:
+                      "Из Дзен-мани (на текущий токен) будут удалены ВСЕ категории и ВСЕ контрагенты. " +
+                      "Это шаг подготовки к заливке снимка: он приведёт свои.\n\n" +
+                      "Делайте это ПОСЛЕ «Начать всё сначала» в Дзен-мани. Если в аккаунте ещё есть операции, " +
+                      "они останутся без категорий.\n\n" +
+                      "Отменить нельзя.",
+                    confirmLabel: "Убрать",
+                    tone: "danger",
+                  });
+                  if (!ok) return;
+                  cleanupDicts({ tags: true, merchants: true }).catch(() => {
+                    /* сообщение уже в сторе */
+                  });
+                }}
+              />
+            </div>
 
             {/* Restore result — shown after a successful restore call.
                 Counts of accepted entities + cross-user warning if the
