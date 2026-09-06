@@ -285,6 +285,24 @@ export function parseAndValidateBackup(text: string): BackupPayload {
   }
   const obj = parsed as Record<string, unknown>;
   if (!obj.version) {
+    // Похоже на облачный снимок? Их легко перепутать: оба файла — JSON, оба
+    // лежат во вкладке «Бэкапы» и оба скачиваются кнопкой, только на соседних
+    // подвкладках. Скажем, куда нести, вместо «не похоже на бэкап
+    // DzenAnalytics» — про файл, внутри которого написано ровно обратное
+    // (issue #93).
+    //
+    // Проверяем ТОЛЬКО когда `version` нет: `diff` — обычное слово, и бэкап,
+    // у которого такое поле просто есть, обязан пройти.
+    const meta = obj._meta as Record<string, unknown> | null | undefined;
+    const looksLikeSnapshot =
+      (!!meta && typeof meta === "object" && meta.schema === "cloud-snapshot/v1") ||
+      (obj.diff != null && typeof obj.diff === "object" && !Array.isArray(obj.diff));
+    if (looksLikeSnapshot) {
+      throw new Error(
+        "Это облачный снимок, а не бэкап. Его место — «Бэкапы → Облачные», " +
+          "кнопка «Загрузить из файла»."
+      );
+    }
     throw new Error("Не похоже на бэкап DzenAnalytics (нет поля version)");
   }
   // transactions, if present, must be an array of bounded length.

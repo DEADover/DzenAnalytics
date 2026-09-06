@@ -2,6 +2,30 @@ import { describe, it, expect } from "vitest";
 import { parseAndValidateBackup, safePushModeOnRestore } from "./backup";
 
 describe("parseAndValidateBackup", () => {
+  // issue #93: облачный снимок приносили в «Восстановить из бэкапа» и получали
+  // «не похоже на бэкап DzenAnalytics» — про файл, который сам же и создал.
+  it("узнаёт облачный снимок и говорит, куда его нести", () => {
+    const snapshot = JSON.stringify({
+      _meta: { app: "DzenAnalytics", schema: "cloud-snapshot/v1" },
+      diff: { transaction: [], account: [] },
+    });
+    expect(() => parseAndValidateBackup(snapshot)).toThrow(/облачный снимок/i);
+    expect(() => parseAndValidateBackup(snapshot)).toThrow(/Загрузить из файла/);
+  });
+
+  it("узнаёт снимок и без пометки — по одному полю diff", () => {
+    // Файл могли переименовать, обрезать или собрать руками; опознаётся форма.
+    const bare = JSON.stringify({ diff: { transaction: [] } });
+    expect(() => parseAndValidateBackup(bare)).toThrow(/облачный снимок/i);
+  });
+
+  it("не принимает за снимок бэкап с полем diff", () => {
+    // `diff` — не зарезервированное слово: у настоящего бэкапа есть version,
+    // и он должен проходить, что бы ещё в нём ни лежало.
+    const backup = JSON.stringify({ version: 1, diff: { что: "нибудь" }, transactions: [] });
+    expect(() => parseAndValidateBackup(backup)).not.toThrow();
+  });
+
   it("accepts a well-formed backup", () => {
     const out = parseAndValidateBackup(
       JSON.stringify({ version: 1, transactions: [{ id: "a" }], rates: { base: "RUB", rates: {} } })

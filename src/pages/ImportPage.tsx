@@ -616,20 +616,31 @@ export function ImportPage() {
   }
 
   async function importBackup(file: File) {
-    const ok = await confirm({
-      title: "Восстановить из бэкапа?",
-      message: "Текущие данные будут заменены.",
-      confirmLabel: "Восстановить",
-      tone: "warning",
-    });
-    if (!ok) return;
-    setBackupBusy(true);
+    // Разбираем файл ДО вопроса о замене. Раньше сначала спрашивали
+    // «текущие данные будут заменены?», человек соглашался — и только потом
+    // узнавал, что файл вообще не тот. Страшный вопрос ради ничего.
+    let dump: Record<string, unknown>;
     setBackupMsg(null);
     try {
       const text = await file.text();
       // Validate + sanitize (type checks, prototype-pollution stripping,
       // size/depth bounds) before anything touches IndexedDB.
-      const dump = parseAndValidateBackup(text) as unknown as Record<string, unknown>;
+      dump = parseAndValidateBackup(text) as unknown as Record<string, unknown>;
+    } catch (e) {
+      setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Ошибка импорта backup'а");
+      return;
+    }
+
+    const count = Array.isArray(dump.transactions) ? dump.transactions.length : 0;
+    const ok = await confirm({
+      title: "Восстановить из бэкапа?",
+      message: `Текущие данные будут заменены. В файле ${formatNum(count)} операций.`,
+      confirmLabel: "Восстановить",
+      tone: "warning",
+    });
+    if (!ok) return;
+    setBackupBusy(true);
+    try {
       // Write every section back to IndexedDB (shared key list with the
       // builder — incl. local edits/drafts/deletions/rules so un-pushed work
       // survives a restore).
