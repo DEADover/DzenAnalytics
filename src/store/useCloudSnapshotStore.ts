@@ -11,6 +11,8 @@ import {
   type RestoreResult,
   type RestoreProgress,
 } from "../lib/cloudSnapshots";
+import { loadSnapshot } from "../lib/cloudSnapshots";
+import { restorePreflight, type RestorePreflight } from "../lib/restorePreflight";
 import { loadZenCache } from "../lib/zenmoneyCache";
 import { useZenmoneyStore } from "./useZenmoneyStore";
 
@@ -36,6 +38,14 @@ interface State {
    *  it to render a status bar like "Восстановление: Счета 5 / 31".
    *  Reset to null when restore finishes (success or failure). */
   restoreProgress: RestoreProgress | null;
+  /**
+   * Итог предполётной сверки — по какому снимку она считана и что вышло.
+   *
+   * Живёт рядом с id снимка, а не сам по себе: снимков до пяти, и показать
+   * итог сверки под чужой строкой — худший вид вранья, чем не показать его
+   * вовсе.
+   */
+  preflight: { id: string; result: RestorePreflight } | null;
 
   hydrate: () => Promise<void>;
   takeSnapshot: () => Promise<void>;
@@ -50,6 +60,13 @@ interface State {
    *  to surface a confirmation dialog before invoking — restore is
    *  potentially destructive (overwrites cloud state). */
   restore: (id: string) => Promise<RestoreResult>;
+  /**
+   * Сверить снимок с тем, что сейчас в облаке. Ничего не отправляет —
+   * только считает по локальному кэшу последней синхронизации.
+   */
+  checkReadiness: (id: string) => Promise<RestorePreflight>;
+  /** Убрать итог сверки (снимок удалили, кэш обновился). */
+  clearPreflight: () => void;
 }
 
 export const useCloudSnapshotStore = create<State>((set) => ({
@@ -59,6 +76,7 @@ export const useCloudSnapshotStore = create<State>((set) => ({
   error: null,
   lastRestoreResult: null,
   restoreProgress: null,
+  preflight: null,
 
   hydrate: async () => {
     const list = await loadSnapshotIndex();
@@ -132,6 +150,37 @@ export const useCloudSnapshotStore = create<State>((set) => ({
       });
     }
   },
+
+  /**
+   * Ничего не отправляет: берёт снимок из локальной базы и сверяет его с
+   * кэшем последней синхронизации. Кэш обновляем сами — иначе сверка
+   * рассказала бы про облако недельной давности.
+   */
+  checkReadiness: async (id) => {
+    set({ busy: true, error: null });
+    try {
+      const snap = await loadSnapshot(id);
+      if (!snap) throw new Error("Снимок не найден в локальной базе");
+      const cache = await loadZenCache();
+      if (!cache) throw new Error("Нет кэша Дзен-мани — сначала синхронизируйтесь");
+      const result = restorePreflight(snap.raw, {
+        transactions: cache.transactions,
+        accounts: cache.accounts,
+        tags: cache.tags,
+        merchants: cache.merchants,
+      });
+      set({ busy: false, preflight: { id, result } });
+      return result;
+    } catch (e) {
+      set({
+        busy: false,
+        error: e instanceof Error ? e.message : "Не удалось сверить снимок",
+      });
+      throw e;
+    }
+  },
+
+  clearPreflight: () => set({ preflight: null }),
 
   restore: async (id) => {
     const token = useZenmoneyStore.getState().token;

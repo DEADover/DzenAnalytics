@@ -23,6 +23,7 @@ import {
   Settings,
   History,
   CloudDownload,
+  ClipboardCheck,
   CloudUpload,
   Info,
   ChevronDown,
@@ -63,6 +64,7 @@ import { useFilterMemoryStore } from "../store/useFilterMemoryStore";
 import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
+import { RestorePreflightCard } from "../components/RestorePreflightCard";
 import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
@@ -309,6 +311,8 @@ export function ImportPage() {
   const importCloudSnapshot = useCloudSnapshotStore((s) => s.importFromFile);
   const restoreCloudSnapshot = useCloudSnapshotStore((s) => s.restore);
   const lastRestoreResult = useCloudSnapshotStore((s) => s.lastRestoreResult);
+  const snapshotPreflight = useCloudSnapshotStore((s) => s.preflight);
+  const checkSnapshotReadiness = useCloudSnapshotStore((s) => s.checkReadiness);
   const restoreProgress = useCloudSnapshotStore((s) => s.restoreProgress);
   const snapshotImportRef = useRef<HTMLInputElement>(null);
   // Current Zenmoney user id — read from the local cache. Lets us
@@ -2170,10 +2174,8 @@ export function ImportPage() {
             {visibleSnapshots.length > 0 && (
               <div className="text-xs space-y-1 -mx-1 px-1 max-h-72 overflow-y-auto">
                 {visibleSnapshots.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center gap-3 py-2 border-b border-border/40 last:border-b-0"
-                  >
+                  <div key={s.id} className="border-b border-border/40 last:border-b-0">
+                  <div className="flex items-center gap-3 py-2">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium">
                         {new Date(s.createdAt).toLocaleString("ru-RU")}
@@ -2185,6 +2187,20 @@ export function ImportPage() {
                         {Math.round(s.approxBytes / 1024)} КБ
                       </div>
                     </div>
+                    {/* Сверка. Стоит ПЕРЕД восстановлением и левее его: сначала
+                        узнать, что доедет, потом решать. Ничего не отправляет. */}
+                    <button
+                      onClick={() => {
+                        checkSnapshotReadiness(s.id).catch(() => {
+                          /* сообщение уже в сторе */
+                        });
+                      }}
+                      className="btn-ghost !px-2 !py-1 text-xs"
+                      title="Сверить снимок с аккаунтом — что доедет, а что нет"
+                      disabled={cloudSnapshotsBusy || !zenToken}
+                    >
+                      <ClipboardCheck className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       onClick={() => downloadCloudSnapshot(s.id)}
                       className="btn-ghost !px-2 !py-1 text-xs"
@@ -2198,15 +2214,31 @@ export function ImportPage() {
                         gated behind a clear confirm dialog. */}
                     <button
                       onClick={async () => {
+                        // Считаем сверку ПЕРЕД вопросом: предупреждение из общих
+                        // слов («победит свежая версия») человек прочитать не
+                        // может — ему нужны числа про его аккаунт. Если сверка
+                        // не удалась, спрашиваем по-старому, но не молчим.
+                        let warn: string;
+                        try {
+                          const pre = await checkSnapshotReadiness(s.id);
+                          warn = pre.ready
+                            ? "Сверка: аккаунт готов, снимок ляжет целиком.\n\n"
+                            : "Сверка показала:\n" +
+                              pre.blockers.map((b) => `• ${b.text}`).join("\n") +
+                              "\n\n";
+                        } catch {
+                          warn = "Сверить снимок с аккаунтом не удалось — что именно доедет, заранее неизвестно.\n\n";
+                        }
                         const confirmed = await confirm({
                           title: `Восстановить облако из снимка от ${new Date(s.createdAt).toLocaleString("ru-RU")}?`,
                           message:
+                            warn +
                             `В Дзен-мани (на текущий токен) уйдут:\n` +
                             `• ${formatNum(s.counts.transactions)} транзакций\n` +
                             `• ${s.counts.accounts} счетов\n` +
                             `• ${s.counts.tags} тегов\n` +
                             `• ${s.counts.merchants} контрагентов\n\n` +
-                            `Каждая сущность будет «обновлена» в облаке: победит та версия, у которой свежее поле changed. Операции, созданные в облаке ПОСЛЕ снимка, останутся на месте (это не полный откат, а upsert).\n\n` +
+                            `Это не откат, а upsert: по каждой строке победит та версия, у которой свежее «changed». Удалённое в облаке не воскреснет — Дзен-мани помнит удаление и отвергает повторную отправку под тем же номером. Полный откат даёт только «Начать всё сначала» в Дзен-мани (в приложении — «Ещё → Настройки аккаунта») с последующей заливкой в пустой аккаунт.\n\n` +
                             `⚠️ Если снимок сделан с другого аккаунта — операция может провалиться или привести к смешению данных. Перед действием убедитесь, что подключён нужный токен.`,
                           confirmLabel: "Восстановить",
                           tone: "warning",
@@ -2241,6 +2273,14 @@ export function ImportPage() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                  {/* Итог сверки — под своей же строкой: снимков до пяти, и
+                      показать его под чужой было бы хуже, чем не показать. */}
+                  {snapshotPreflight?.id === s.id && (
+                    <div className="pb-3">
+                      <RestorePreflightCard result={snapshotPreflight.result} />
+                    </div>
+                  )}
+                  </div>
                 ))}
               </div>
             )}
@@ -2264,13 +2304,12 @@ export function ImportPage() {
                   <span>
                     {lastRestoreResult.crossUser ? (
                       <>
-                        Восстановление выполнено в <strong>другой</strong>{" "}
-                        Дзен-аккаунт. Сущностям сгенерированы новые ID,
-                        ссылки на системные банки и валюты сброшены.
-                        Облако приняло:
+                        Отправлено в <strong>другой</strong> Дзен-аккаунт.
+                        Сущностям сгенерированы новые ID, ссылки на системные
+                        банки и валюты сброшены. Ушло:
                       </>
                     ) : (
-                      <>Восстановление прошло. Облако приняло:</>
+                      <>Запрос прошёл без ошибок. Отправлено:</>
                     )}{" "}
                     <strong>
                       {lastRestoreResult.accepted.transactions.visible +
@@ -2378,9 +2417,17 @@ export function ImportPage() {
                   </details>
                 )}
 
+                {/* Числа выше — про ОТПРАВЛЕННОЕ, а не про долетевшее: их
+                    считает сам запрос, до ответа сервера о судьбе каждой
+                    строки. Поэтому здесь зовём сверить результат, а не
+                    поздравляем с успехом. */}
                 <div className="text-muted">
-                  После восстановления сделайте полную синхронизацию (⤓ в
-                  шапке), чтобы локальный кэш подтянул свежие `changed`-метки.
+                  Это то, что <strong>ушло</strong> в Дзен-мани, а не то, что он
+                  оставил у себя: по каждой строке побеждает версия со свежим
+                  «changed», и часть отправленного могла не примениться. Чтобы
+                  увидеть, что вышло на самом деле, сделайте полную
+                  синхронизацию (⤓ в шапке) и нажмите «Сверить» у этого снимка —
+                  готовый аккаунт означает, что снимок лёг целиком.
                 </div>
               </div>
             )}
