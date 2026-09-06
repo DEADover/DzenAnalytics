@@ -446,11 +446,18 @@ export async function restoreSnapshotToCloud(
     freshIds ? map.has(id) : true;
 
   const transactionsOut: ZenTransaction[] = [];
-  // Restore is a "full backup → full restore" operation: even
-  // `deleted: true` transactions go to Zen, so the target account
-  // mirrors the source byte-for-byte (tombstones included). The UI
-  // reports the active / deleted split so the user sees the mix.
-  for (const t of raw.transaction || []) {
+  // Удалённые записи из снимка НЕ отправляем, когда идём под новыми номерами.
+  //
+  // Под прежними номерами их отправка имела смысл: аккаунт получал побайтовую
+  // копию источника, вместе с пометками об удалении. С новыми номерами это
+  // теряет смысл начисто — каждая такая запись заводится в аккаунте ЗАНОВО и
+  // сразу помеченной удалённой, то есть мы создаём мусор. На живом аккаунте
+  // это была пятая часть отправки: 1 917 записей из 9 577, и ровно они делали
+  // счётчик в мастере больше обещанного числа операций.
+  const sourceTransactions = (raw.transaction || []).filter(
+    (t) => !(freshIds && t.deleted)
+  );
+  for (const t of sourceTransactions) {
     if (!freshIds && !debtIdRemap) {
       transactionsOut.push(t);
       continue;

@@ -28,7 +28,7 @@ import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
 const STEPS = [
   { id: "pick", title: "Снимок" },
   { id: "clear", title: "Очистка" },
-  { id: "dictionaries", title: "Категории" },
+  { id: "dictionaries", title: "Справочники" },
   { id: "ready", title: "Перенос" },
   { id: "done", title: "Готово" },
 ] as const;
@@ -455,9 +455,10 @@ function DictionariesStep({
         </div>
       )}
       <p className="text-xs text-muted">
-        Категории удаляются по одной: Дзен-мани сверяет каждую со всеми
-        операциями. На несколько десятков категорий уйдёт пара минут — окно
-        можно не закрывать.
+        Дзен-мани удаляет категории примерно по пять секунд каждую, и ускорить
+        это нечем: одновременные запросы он всё равно выполняет по очереди. На
+        полсотни категорий уйдёт около пяти минут — окно можно не закрывать,
+        контрагенты удалятся быстро.
       </p>
       {rejected > 0 && (
         <p className="text-xs text-warn">
