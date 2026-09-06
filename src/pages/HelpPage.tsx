@@ -3378,9 +3378,12 @@ const SECTIONS: Section[] = [
         </p>
         <p className="mt-2 text-muted text-xs">
           Кнопка <strong>«Дополнительно»</strong> рядом открывает доп. фильтры: тип
-          операции (доходы/расходы/переводы/возвраты), диапазон сумм, «только без
-          категории», «скрыть нулевые», «только с комментарием» и «без
-          переводов». Число активных доп. фильтров показывает бейдж на кнопке.
+          операции (доходы/расходы/переводы/возвраты), диапазон сумм, «без
+          переводов между счетами», «только без категории», «скрыть нулевые»,
+          «только с комментарием» и «только новые». Если есть внебалансовые счета
+          (накопительные, брокерские), добавляется «без внебалансовых счетов» — без
+          таких счетов пункта нет, ему нечего было бы отбирать. Число активных
+          доп. фильтров показывает бейдж на кнопке.
         </p>
       </>
     ),
@@ -3398,8 +3401,11 @@ const SECTIONS: Section[] = [
           исключает совпадения. Опциональный regex (регистронезависимый).
         </p>
         <p className="mt-2 text-muted text-xs">
-          Дополнительно: фильтры по диапазону сумм и дат, тип (расход/доход).
-          Результаты можно открыть пакетно в drawer'е через «Открыть всё».
+          Дополнительно: фильтры по диапазону сумм и дат и тип операции — «Все»,
+          «Расходы», «Доходы», «Возвраты». «Расходы» здесь, как и везде, включают
+          возвраты: иначе покупка и её возврат в одной выборке давали бы полную
+          трату вместо нуля. Результаты можно открыть пакетно в drawer'е через
+          «Открыть всё».
         </p>
       </>
     ),
@@ -3468,8 +3474,28 @@ const SECTIONS: Section[] = [
               <td className="py-2 text-muted">Бюджеты</td>
             </tr>
             <tr className="border-b border-border">
+              <td className="py-2"><kbd className="kbd">g</kbd> <kbd className="kbd">o</kbd></td>
+              <td className="py-2 text-muted">Операции</td>
+            </tr>
+            <tr className="border-b border-border">
+              <td className="py-2"><kbd className="kbd">g</kbd> <kbd className="kbd">g</kbd></td>
+              <td className="py-2 text-muted">Цели</td>
+            </tr>
+            <tr className="border-b border-border">
+              <td className="py-2"><kbd className="kbd">g</kbd> <kbd className="kbd">l</kbd></td>
+              <td className="py-2 text-muted">Календарь</td>
+            </tr>
+            <tr className="border-b border-border">
+              <td className="py-2"><kbd className="kbd">g</kbd> <kbd className="kbd">r</kbd></td>
+              <td className="py-2 text-muted">Регулярные платежи</td>
+            </tr>
+            <tr className="border-b border-border">
               <td className="py-2"><kbd className="kbd">g</kbd> <kbd className="kbd">s</kbd></td>
               <td className="py-2 text-muted">Поиск</td>
+            </tr>
+            <tr className="border-b border-border">
+              <td className="py-2"><kbd className="kbd">g</kbd> <kbd className="kbd">i</kbd></td>
+              <td className="py-2 text-muted">Настройки</td>
             </tr>
             <tr>
               <td className="py-2"><kbd className="kbd">g</kbd> <kbd className="kbd">h</kbd></td>

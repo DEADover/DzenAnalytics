@@ -16,6 +16,10 @@ import type { Transaction } from "../types";
 
 type SortKey = "date" | "amount" | "category" | "payee";
 
+/** Значения отбора по типу. «Возвраты» — выбор поуже, чем «Расходы»: те
+ *  показывают траты вместе с возвратами. */
+type KindFilter = "all" | "expense" | "income" | "refund";
+
 export function SearchPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
@@ -31,7 +35,7 @@ export function SearchPage() {
   const [to, setTo] = useState("");
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
-  const [kind, setKind] = useState<"all" | "expense" | "income">("all");
+  const [kind, setKind] = useState<KindFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDesc, setSortDesc] = useState(true);
 
@@ -90,7 +94,14 @@ export function SearchPage() {
     const maxA = maxAmount ? Number(maxAmount) : Infinity;
 
     return transactions.filter((t) => {
-      if (kind !== "all" && t.kind !== kind) return false;
+      if (kind !== "all") {
+        // «Расходы» — вместе с возвратами, как везде в сервисе. Иначе итог
+        // ниже противоречил бы сам себе: он вычитает возврат из расхода, но
+        // при выбранном типе возврат до него не доезжал, и «покупка плюс её
+        // возврат» показывала полную трату вместо нуля.
+        const ok = t.kind === kind || (t.kind === "refund" && kind === "expense");
+        if (!ok) return false;
+      }
       if (from && t.date < from) return false;
       if (to && t.date > to) return false;
       if (t.amount < minA || t.amount > maxA) return false;
@@ -284,12 +295,13 @@ export function SearchPage() {
             <label className="label block mb-1.5">Тип</label>
             <select
               value={kind}
-              onChange={(e) => setKind(e.target.value as "all" | "expense" | "income")}
+              onChange={(e) => setKind(e.target.value as KindFilter)}
               className="input text-xs"
             >
               <option value="all">Все</option>
               <option value="expense">Расходы</option>
               <option value="income">Доходы</option>
+              <option value="refund">Возвраты</option>
             </select>
           </div>
         </div>
