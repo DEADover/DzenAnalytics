@@ -65,6 +65,8 @@ import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
 import { RestorePreflightCard } from "../components/RestorePreflightCard";
+import { snapshotSummary } from "../lib/snapshotLabel";
+import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
 import { RestoreWizard } from "../components/RestoreWizard";
 import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
@@ -313,10 +315,12 @@ export function ImportPage() {
   const restoreCloudSnapshot = useCloudSnapshotStore((s) => s.restore);
   const lastRestoreResult = useCloudSnapshotStore((s) => s.lastRestoreResult);
   const snapshotPreflight = useCloudSnapshotStore((s) => s.preflight);
+  const cloudSnapshotsOp = useCloudSnapshotStore((s) => s.busyOp);
   const cleanupProgress = useCloudSnapshotStore((s) => s.cleanupProgress);
   const lastCleanupResult = useCloudSnapshotStore((s) => s.lastCleanupResult);
   const cleanupDicts = useCloudSnapshotStore((s) => s.cleanup);
   const checkSnapshotReadiness = useCloudSnapshotStore((s) => s.checkReadiness);
+  const pruneForeignSnapshots = useCloudSnapshotStore((s) => s.pruneForeign);
   const restoreProgress = useCloudSnapshotStore((s) => s.restoreProgress);
   const snapshotImportRef = useRef<HTMLInputElement>(null);
   // Current Zenmoney user id — read from the local cache. Lets us
@@ -347,8 +351,26 @@ export function ImportPage() {
       (s) => s.userId == null || s.userId === currentUserId
     );
   }, [cloudSnapshots, currentUserId]);
-  const otherAccountSnapshotCount =
-    cloudSnapshots.length - visibleSnapshots.length;
+  // Подключили другой аккаунт — снимки прежнего выбрасываем. Слотов пять, и
+  // занимать их копиями чужой базы незачем: восстановить в текущий аккаунт из
+  // них всё равно нельзя без переноса, а место под свою страховку они съедают.
+  // Копии без привязки к аккаунту (старые) не трогаем — они могут быть своими.
+  useEffect(() => {
+    if (currentUserId == null || !cloudSnapshotsLoaded) return;
+    const foreign = cloudSnapshots.some(
+      (s) => s.userId != null && s.userId !== currentUserId
+    );
+    if (foreign) void pruneForeignSnapshots(currentUserId);
+  }, [cloudSnapshots, cloudSnapshotsLoaded, currentUserId, pruneForeignSnapshots]);
+  // Снимок, с которым работает мастер отката: тот, который сверяли последним,
+  // иначе самый свежий. Списком выбирают снимок, мастер лишь ведёт по шагам.
+  const wizardSnapshot = useMemo(
+    () =>
+      visibleSnapshots.find((s) => s.id === snapshotPreflight?.id) ??
+      visibleSnapshots[0] ??
+      null,
+    [visibleSnapshots, snapshotPreflight]
+  );
   useEffect(() => {
     if (!cloudSnapshotsLoaded) hydrateCloudSnapshots();
   }, [cloudSnapshotsLoaded, hydrateCloudSnapshots]);
@@ -621,6 +643,53 @@ export function ImportPage() {
     } finally {
       setBackupBusy(false);
     }
+  }
+
+  /**
+   * Залить снимок обратно в Дзен-мани.
+   *
+   * Живёт функцией, а не обработчиком у кнопки: то же самое делает мастер
+   * отката, и два одинаковых предупреждения в двух местах однажды разошлись бы.
+   */
+  async function runRestore(s: CloudSnapshotSummary) {
+
+        // Считаем сверку ПЕРЕД вопросом: предупреждение из общих
+        // слов («победит свежая версия») человек прочитать не
+        // может — ему нужны числа про его аккаунт. Если сверка
+        // не удалась, спрашиваем по-старому, но не молчим.
+        let warn: string;
+        try {
+          const pre = await checkSnapshotReadiness(s.id);
+          warn = pre.ready
+            ? "Сверка: аккаунт готов, снимок ляжет целиком.\n\n"
+            : "Сверка показала:\n" +
+              pre.blockers.map((b) => `• ${b.text}`).join("\n") +
+              "\n\n";
+        } catch {
+          warn = "Сверить снимок с аккаунтом не удалось — что именно доедет, заранее неизвестно.\n\n";
+        }
+        const confirmed = await confirm({
+          title: `Восстановить Дзен-мани из снимка от ${new Date(s.createdAt).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}?`,
+          message:
+            warn +
+            `В Дзен-мани (на текущий токен) уйдут:\n` +
+            `• ${formatNum(s.counts.transactions)} ${pluralRu(s.counts.transactions, ["операция", "операции", "операций"])}\n` +
+            `• ${s.counts.accounts} ${pluralRu(s.counts.accounts, ["счёт", "счёта", "счетов"])}\n` +
+            `• ${s.counts.tags} ${pluralRu(s.counts.tags, ["категория", "категории", "категорий"])}\n` +
+            `• ${s.counts.merchants} ${pluralRu(s.counts.merchants, ["контрагент", "контрагента", "контрагентов"])}\n\n` +
+            `Снимок заливается ПОД НОВЫМИ НОМЕРАМИ: под прежними Дзен-мани не пускает обратно удалённые строки — молча, без ошибки. Из этого следует главное: старое НЕ ЗАМЕНЯЕТСЯ, снимок ложится рядом. Если в аккаунте что-то есть, вы получите и то, и другое.\n\n` +
+            `Поэтому заливать нужно в пустой аккаунт: сначала «Начать всё сначала» в Дзен-мани (в приложении — «Ещё → Настройки аккаунта»), затем шаг «Убрать категории и контрагентов», и только потом сюда.\n\n` +
+            `Привязка операций к банковским выпискам при этом теряется — номера у строк новые.\n\n` +
+            `⚠️ Если снимок сделан с другого аккаунта — операция может провалиться или привести к смешению данных. Перед действием убедитесь, что подключён нужный токен.`,
+          confirmLabel: "Восстановить",
+          tone: "warning",
+        });
+        if (!confirmed) return;
+        try {
+          await restoreCloudSnapshot(s.id);
+        } catch {
+          /* error already in store */
+        }
   }
 
   async function importBackup(file: File) {
@@ -2063,11 +2132,12 @@ export function ImportPage() {
               <span className="font-medium">Снимки данных из Дзен-мани</span>
               <InfoPopover label="Зачем нужны снимки">
                 <p>
-                  Полный слепок того, что сейчас лежит в облаке Дзен-мани.
-                  Хранится локально в браузере, и его можно скачать файлом.
+                  Полная копия того, что сейчас лежит в Дзен-мани: операции,
+                  счета, категории и контрагенты. Хранится на этом компьютере,
+                  в облако ничего не уходит. Копию можно скачать файлом.
                 </p>
                 <p>
-                  Это страховка для{" "}
+                  Это страховка перед{" "}
                   <button
                     type="button"
                     onClick={() => setSettingsTab("source")}
@@ -2075,9 +2145,9 @@ export function ImportPage() {
                   >
                     двусторонней синхронизации
                   </button>
-                  : если отправка что-то испортит, состояние облака
-                  восстанавливается из снимка. Каждая отправка и сама создаёт
-                  снимок — по политике, выбранной на вкладке «Данные».
+                  : если отправка правок что-то испортит, из снимка можно
+                  вернуть прежнее состояние. Каждая отправка и сама делает
+                  снимок — как часто, задаётся на вкладке «Данные».
                 </p>
                 <p>
                   Хранятся последние <InfoTerm>пять</InfoTerm> снимков, старые
@@ -2091,12 +2161,12 @@ export function ImportPage() {
                 disabled={cloudSnapshotsBusy}
                 className="btn-primary text-sm inline-flex items-center gap-2"
               >
-                {cloudSnapshotsBusy ? (
+                {cloudSnapshotsOp === "snapshot" ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <CloudDownload className="w-3.5 h-3.5" />
                 )}
-                {cloudSnapshotsBusy ? "Делаю снимок…" : "Сделать снимок сейчас"}
+                {cloudSnapshotsOp === "snapshot" ? "Делаю снимок…" : "Сделать снимок"}
               </button>
               {/* Import snapshot from a JSON file — file you previously
                   downloaded via the per-row Download button, or copied
@@ -2124,11 +2194,7 @@ export function ImportPage() {
               <span className="text-xs text-muted">
                 {cloudSnapshots.length === 0
                   ? "Снимков ещё не было"
-                  : `${visibleSnapshots.length}${
-                      otherAccountSnapshotCount > 0
-                        ? ` (+${otherAccountSnapshotCount} с других аккаунтов)`
-                        : ""
-                    } из 5 слотов занято`}
+                  : `Занято ${visibleSnapshots.length} ${pluralRu(visibleSnapshots.length, ["слот", "слота", "слотов"])} из 5`}
               </span>
             </div>
 
@@ -2182,13 +2248,15 @@ export function ImportPage() {
                   <div className="flex items-center gap-3 py-2">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium">
-                        {new Date(s.createdAt).toLocaleString("ru-RU")}
+                        {new Date(s.createdAt).toLocaleString("ru-RU", {
+                          day: "numeric",
+                          month: "long",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </div>
-                      <div className="text-[11px] text-muted tabular-nums truncate">
-                        {formatNum(s.counts.transactions)} оп. ·{" "}
-                        {s.counts.accounts} счёт. · {s.counts.tags} тег. ·{" "}
-                        {s.counts.instruments} вал. ·{" "}
-                        {Math.round(s.approxBytes / 1024)} КБ
+                      <div className="text-xs text-muted tabular-nums">
+                        {snapshotSummary(s.counts, s.approxBytes)}
                       </div>
                     </div>
                     {/* Сверка. Стоит ПЕРЕД восстановлением и левее его: сначала
@@ -2199,16 +2267,23 @@ export function ImportPage() {
                           /* сообщение уже в сторе */
                         });
                       }}
-                      className="btn-ghost !px-2 !py-1 text-xs"
-                      title="Сверить снимок с аккаунтом — что доедет, а что нет"
+                      className="btn-ghost !px-2.5 !py-1 text-xs inline-flex items-center gap-1.5 shrink-0"
+                      title="Посчитать, что из снимка доедет до аккаунта. Ничего не отправляет"
                       disabled={cloudSnapshotsBusy || !zenToken}
                     >
-                      <ClipboardCheck className="w-3.5 h-3.5" />
+                      {cloudSnapshotsOp === "check" &&
+                      snapshotPreflight?.id !== s.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <ClipboardCheck className="w-3.5 h-3.5" />
+                      )}
+                      Сверить
                     </button>
                     <button
                       onClick={() => downloadCloudSnapshot(s.id)}
-                      className="btn-ghost !px-2 !py-1 text-xs"
-                      title="Скачать как JSON-файл"
+                      className="btn-ghost !px-2 !py-1 text-xs shrink-0"
+                      title="Сохранить снимок файлом на этот компьютер"
+                      aria-label="Скачать снимок файлом"
                     >
                       <Download className="w-3.5 h-3.5" />
                     </button>
@@ -2217,50 +2292,17 @@ export function ImportPage() {
                         (overwrites cloud state by `changed` timestamp),
                         gated behind a clear confirm dialog. */}
                     <button
-                      onClick={async () => {
-                        // Считаем сверку ПЕРЕД вопросом: предупреждение из общих
-                        // слов («победит свежая версия») человек прочитать не
-                        // может — ему нужны числа про его аккаунт. Если сверка
-                        // не удалась, спрашиваем по-старому, но не молчим.
-                        let warn: string;
-                        try {
-                          const pre = await checkSnapshotReadiness(s.id);
-                          warn = pre.ready
-                            ? "Сверка: аккаунт готов, снимок ляжет целиком.\n\n"
-                            : "Сверка показала:\n" +
-                              pre.blockers.map((b) => `• ${b.text}`).join("\n") +
-                              "\n\n";
-                        } catch {
-                          warn = "Сверить снимок с аккаунтом не удалось — что именно доедет, заранее неизвестно.\n\n";
-                        }
-                        const confirmed = await confirm({
-                          title: `Восстановить облако из снимка от ${new Date(s.createdAt).toLocaleString("ru-RU")}?`,
-                          message:
-                            warn +
-                            `В Дзен-мани (на текущий токен) уйдут:\n` +
-                            `• ${formatNum(s.counts.transactions)} транзакций\n` +
-                            `• ${s.counts.accounts} счетов\n` +
-                            `• ${s.counts.tags} тегов\n` +
-                            `• ${s.counts.merchants} контрагентов\n\n` +
-                            `Снимок заливается ПОД НОВЫМИ НОМЕРАМИ: под прежними Дзен-мани не пускает обратно удалённые строки — молча, без ошибки. Из этого следует главное: старое НЕ ЗАМЕНЯЕТСЯ, снимок ложится рядом. Если в аккаунте что-то есть, вы получите и то, и другое.\n\n` +
-                            `Поэтому заливать нужно в пустой аккаунт: сначала «Начать всё сначала» в Дзен-мани (в приложении — «Ещё → Настройки аккаунта»), затем шаг «Убрать категории и контрагентов», и только потом сюда.\n\n` +
-                            `Привязка операций к банковским выпискам при этом теряется — номера у строк новые.\n\n` +
-                            `⚠️ Если снимок сделан с другого аккаунта — операция может провалиться или привести к смешению данных. Перед действием убедитесь, что подключён нужный токен.`,
-                          confirmLabel: "Восстановить",
-                          tone: "warning",
-                        });
-                        if (!confirmed) return;
-                        try {
-                          await restoreCloudSnapshot(s.id);
-                        } catch {
-                          /* error already in store */
-                        }
-                      }}
-                      className="text-muted hover:text-warn p-1"
-                      title="Восстановить в облако (загрузить содержимое снимка обратно в Дзен-мани)"
+                      onClick={() => void runRestore(s)}
+                      className="btn-ghost !px-2.5 !py-1 text-xs inline-flex items-center gap-1.5 shrink-0 !text-warn hover:!bg-warn/10"
+                      title="Залить содержимое снимка обратно в Дзен-мани"
                       disabled={cloudSnapshotsBusy || !zenToken}
                     >
-                      <CloudUpload className="w-3.5 h-3.5" />
+                      {cloudSnapshotsOp === "restore" ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CloudUpload className="w-3.5 h-3.5" />
+                      )}
+                      Восстановить
                     </button>
                     <button
                       onClick={async () => {
@@ -2272,8 +2314,9 @@ export function ImportPage() {
                         });
                         if (ok) deleteCloudSnapshot(s.id);
                       }}
-                      className="text-muted hover:text-expense p-1"
-                      title="Удалить снимок"
+                      className="text-muted hover:text-expense p-1 shrink-0"
+                      title="Удалить снимок с этого компьютера"
+                      aria-label="Удалить снимок"
                       disabled={cloudSnapshotsBusy}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -2295,10 +2338,36 @@ export function ImportPage() {
                 сначала снимки, потом что с ними делать. */}
             <div className="mt-4">
               <RestoreWizard
-                busy={cloudSnapshotsBusy}
-                disabled={!zenToken}
-                progress={cleanupProgress}
-                result={lastCleanupResult}
+                preflight={
+                  wizardSnapshot && snapshotPreflight?.id === wizardSnapshot.id
+                    ? snapshotPreflight.result
+                    : null
+                }
+                snapshotDate={
+                  wizardSnapshot
+                    ? new Date(wizardSnapshot.createdAt).toLocaleString("ru-RU", {
+                        day: "numeric",
+                        month: "long",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : null
+                }
+                restored={!!lastRestoreResult}
+                busyOp={cloudSnapshotsOp}
+                cleanupProgress={cleanupProgress}
+                cleanupResult={lastCleanupResult}
+                disabled={!zenToken || !wizardSnapshot}
+                onCheck={() => {
+                  if (wizardSnapshot) {
+                    checkSnapshotReadiness(wizardSnapshot.id).catch(() => {
+                      /* сообщение уже в сторе */
+                    });
+                  }
+                }}
+                onRestore={() => {
+                  if (wizardSnapshot) void runRestore(wizardSnapshot);
+                }}
                 onCleanup={async () => {
                   const ok = await confirm({
                     title: "Убрать все категории и контрагентов?",

@@ -26,6 +26,7 @@ import type {
   ZenTag,
   ZenTransaction,
 } from "./zenmoney";
+import { formatNum } from "./format";
 import { pluralRu } from "./plural";
 
 /** Сколько живых сущностей одного вида сейчас в аккаунте и сколько в снимке. */
@@ -114,7 +115,7 @@ export function restorePreflight(
       kind: "notEmpty",
       count: transactions.inAccount,
       text:
-        `В аккаунте ещё ${transactions.inAccount} ` +
+        `В аккаунте ещё ${formatNum(transactions.inAccount)} ` +
         `${pluralRu(transactions.inAccount, ["операция", "операции", "операций"])} — ` +
         `снимок ляжет РЯДОМ, а не вместо, и они задвоятся.`,
       fix:
@@ -131,7 +132,7 @@ export function restorePreflight(
       kind: "leftoverTags",
       count: tags.inAccount,
       text:
-        `${tags.inAccount} ` +
+        `${formatNum(tags.inAccount)} ` +
         `${pluralRu(tags.inAccount, ["категория", "категории", "категорий"])} останется в аккаунте.`,
       fix: "«Начать всё сначала» категории не удаляет. Уберите их шагом «Убрать категории и контрагентов» — снимок приведёт свои.",
     });
@@ -141,7 +142,7 @@ export function restorePreflight(
       kind: "leftoverMerchants",
       count: merchants.inAccount,
       text:
-        `${merchants.inAccount} ` +
+        `${formatNum(merchants.inAccount)} ` +
         `${pluralRu(merchants.inAccount, ["контрагент", "контрагента", "контрагентов"])} останется в аккаунте.`,
       fix: "Контрагентов «Начать всё сначала» тоже не трогает — уберите их тем же шагом.",
     });
@@ -156,9 +157,9 @@ export function restorePreflight(
   const notes: string[] = [];
   if (accounts.inAccount > 0) {
     notes.push(
-      `В аккаунте ${accounts.inAccount} ` +
+      `В аккаунте ${formatNum(accounts.inAccount)} ` +
         `${pluralRu(accounts.inAccount, ["счёт", "счёта", "счетов"])}; после заливки ` +
-        `к ним добавятся ${accounts.inSnapshot} из снимка. Служебные счета, которые ` +
+        `к ним добавятся ${formatNum(accounts.inSnapshot)} из снимка. Служебные счета, которые ` +
         `Дзен-мани заводит сама, удалить нельзя — лишние можно убрать в архив.`
     );
   }

@@ -4,6 +4,7 @@ import {
   takeSnapshot as takeSnapshotImpl,
   deleteSnapshot as deleteSnapshotImpl,
   clearAllSnapshots as clearAllImpl,
+  pruneForeignSnapshots,
   downloadSnapshot as downloadSnapshotImpl,
   importSnapshotFromJson as importSnapshotImpl,
   restoreSnapshotToCloud as restoreSnapshotImpl,
@@ -36,6 +37,11 @@ interface State {
   loaded: boolean;
   /** Set while a network/IO operation is in flight — UI greys out the buttons. */
   busy: boolean;
+  /**
+   * КАКАЯ именно работа идёт. Один флаг `busy` на всё врал в подписях: пока шла
+   * уборка справочников, кнопка снимка бодро сообщала «Делаю снимок…».
+   */
+  busyOp: "snapshot" | "import" | "check" | "restore" | "cleanup" | null;
   /** Last error message from `takeSnapshot` for inline display. Cleared on next call. */
   error: string | null;
   /** Last successful restore result (counts of accepted entities). */
@@ -78,6 +84,12 @@ interface State {
   /** Убрать итог сверки (снимок удалили, кэш обновился). */
   clearPreflight: () => void;
   /**
+   * Выбросить снимки чужого аккаунта. Зовётся, когда становится известен
+   * пользователь текущего токена: слотов пять, и занимать их копиями от
+   * прежнего аккаунта незачем.
+   */
+  pruneForeign: (currentUserId: number) => Promise<number>;
+  /**
    * Снести из аккаунта категории и/или контрагентов — то, что «Начать всё
    * сначала» в Дзен-мани не уносит. ПИШЕТ В ОБЛАКО: вызывающий обязан
    * спросить подтверждение.
@@ -89,6 +101,7 @@ export const useCloudSnapshotStore = create<State>((set) => ({
   snapshots: [],
   loaded: false,
   busy: false,
+  busyOp: null,
   error: null,
   lastRestoreResult: null,
   restoreProgress: null,
@@ -110,14 +123,14 @@ export const useCloudSnapshotStore = create<State>((set) => ({
       set({ error: "Сначала подключите токен Дзен-мани API" });
       return;
     }
-    set({ busy: true, error: null });
+    set({ busy: true, busyOp: "snapshot", error: null });
     try {
       await takeSnapshotImpl(token);
       const list = await loadSnapshotIndex();
-      set({ snapshots: list, busy: false });
+      set({ snapshots: list, busy: false, busyOp: null });
     } catch (e) {
       set({
-        busy: false,
+        busy: false, busyOp: null,
         error:
           e instanceof Error
             ? e.message
@@ -127,23 +140,23 @@ export const useCloudSnapshotStore = create<State>((set) => ({
   },
 
   deleteSnapshot: async (id) => {
-    set({ busy: true });
+    set({ busy: true, busyOp: null });
     try {
       await deleteSnapshotImpl(id);
       const list = await loadSnapshotIndex();
-      set({ snapshots: list, busy: false });
+      set({ snapshots: list, busy: false, busyOp: null });
     } catch {
-      set({ busy: false });
+      set({ busy: false, busyOp: null });
     }
   },
 
   clearAll: async () => {
-    set({ busy: true });
+    set({ busy: true, busyOp: null });
     try {
       await clearAllImpl();
-      set({ snapshots: [], busy: false });
+      set({ snapshots: [], busy: false, busyOp: null });
     } catch {
-      set({ busy: false });
+      set({ busy: false, busyOp: null });
     }
   },
 
@@ -152,15 +165,15 @@ export const useCloudSnapshotStore = create<State>((set) => ({
   },
 
   importFromFile: async (file) => {
-    set({ busy: true, error: null });
+    set({ busy: true, busyOp: "import", error: null });
     try {
       const text = await file.text();
       await importSnapshotImpl(text);
       const list = await loadSnapshotIndex();
-      set({ snapshots: list, busy: false });
+      set({ snapshots: list, busy: false, busyOp: null });
     } catch (e) {
       set({
-        busy: false,
+        busy: false, busyOp: null,
         error:
           e instanceof Error
             ? e.message
@@ -175,7 +188,7 @@ export const useCloudSnapshotStore = create<State>((set) => ({
    * рассказала бы про облако недельной давности.
    */
   checkReadiness: async (id) => {
-    set({ busy: true, error: null });
+    set({ busy: true, busyOp: "check", error: null });
     try {
       const snap = await loadSnapshot(id);
       if (!snap) throw new Error("Снимок не найден в локальной базе");
@@ -187,11 +200,11 @@ export const useCloudSnapshotStore = create<State>((set) => ({
         tags: cache.tags,
         merchants: cache.merchants,
       });
-      set({ busy: false, preflight: { id, result } });
+      set({ busy: false, busyOp: null, preflight: { id, result } });
       return result;
     } catch (e) {
       set({
-        busy: false,
+        busy: false, busyOp: null,
         error: e instanceof Error ? e.message : "Не удалось сверить снимок",
       });
       throw e;
@@ -200,6 +213,12 @@ export const useCloudSnapshotStore = create<State>((set) => ({
 
   clearPreflight: () => set({ preflight: null }),
 
+  pruneForeign: async (currentUserId) => {
+    const removed = await pruneForeignSnapshots(currentUserId);
+    if (removed > 0) set({ snapshots: await loadSnapshotIndex() });
+    return removed;
+  },
+
   cleanup: async (opts) => {
     const token = useZenmoneyStore.getState().token;
     if (!token) {
@@ -207,16 +226,16 @@ export const useCloudSnapshotStore = create<State>((set) => ({
       set({ error: msg });
       throw new Error(msg);
     }
-    set({ busy: true, error: null, cleanupProgress: null, lastCleanupResult: null });
+    set({ busy: true, busyOp: "cleanup", error: null, cleanupProgress: null, lastCleanupResult: null });
     try {
       const result = await cleanupDictionaries(token, opts, (p) =>
         set({ cleanupProgress: p })
       );
-      set({ busy: false, cleanupProgress: null, lastCleanupResult: result });
+      set({ busy: false, busyOp: null, cleanupProgress: null, lastCleanupResult: result });
       return result;
     } catch (e) {
       set({
-        busy: false,
+        busy: false, busyOp: null,
         cleanupProgress: null,
         error: e instanceof Error ? e.message : "Не удалось убрать справочники",
       });
@@ -239,7 +258,7 @@ export const useCloudSnapshotStore = create<State>((set) => ({
     const currentUserId = cache?.user?.[0]?.id ?? null;
     const currentAccounts = cache?.accounts ?? [];
 
-    set({ busy: true, error: null, restoreProgress: null });
+    set({ busy: true, busyOp: "restore", error: null, restoreProgress: null });
     try {
       // freshIds: откат заливается НОВЫМИ номерами. Под прежними Дзен-мани
       // не пускает обратно удалённые строки — молча, с ответом 200 и без
@@ -252,11 +271,11 @@ export const useCloudSnapshotStore = create<State>((set) => ({
         { userId: currentUserId, currentAccounts, freshIds: true },
         (progress) => set({ restoreProgress: progress })
       );
-      set({ busy: false, lastRestoreResult: result, restoreProgress: null });
+      set({ busy: false, busyOp: null, lastRestoreResult: result, restoreProgress: null });
       return result;
     } catch (e) {
       set({
-        busy: false,
+        busy: false, busyOp: null,
         restoreProgress: null,
         error:
           e instanceof Error

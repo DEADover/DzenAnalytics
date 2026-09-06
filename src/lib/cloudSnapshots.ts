@@ -143,6 +143,40 @@ export async function takeSnapshot(token: string): Promise<CloudSnapshot> {
   return full;
 }
 
+/**
+ * Выбросить снимки, снятые с ДРУГОГО аккаунта Дзен-мани.
+ *
+ * Слотов всего пять, и снимки прежнего аккаунта занимали их наравне со своими:
+ * подключил другой токен — и место под страховку съедено чужими копиями, а на
+ * экране «1 (+4 с других аккаунтов) из 5 слотов занято».
+ *
+ * Снимки БЕЗ привязки к аккаунту (`userId: null`) не трогаем: так выглядят
+ * копии, снятые до появления этого поля, и вполне возможно, что они как раз
+ * свои. Выбросить чужое — уборка, выбросить неизвестное — потеря страховки.
+ *
+ * Возвращает, сколько снимков убрано.
+ */
+export function foreignSnapshots(
+  index: CloudSnapshotSummary[],
+  currentUserId: number
+): CloudSnapshotSummary[] {
+  return index.filter((s) => s.userId != null && s.userId !== currentUserId);
+}
+
+export async function pruneForeignSnapshots(currentUserId: number): Promise<number> {
+  const index = await loadSnapshotIndex();
+  const foreign = foreignSnapshots(index, currentUserId);
+  if (foreign.length === 0) return 0;
+  for (const s of foreign) await db.saveJSON(snapshotKey(s.id), null);
+  const kept = index.filter((s) => !foreign.some((f) => f.id === s.id));
+  await db.saveJSON(INDEX_KEY, kept);
+  devLog(
+    "zen-snapshots",
+    `убрано снимков с других аккаунтов: ${foreign.length}`
+  );
+  return foreign.length;
+}
+
 export async function deleteSnapshot(id: string): Promise<void> {
   await db.saveJSON(snapshotKey(id), null);
   const idx = await loadSnapshotIndex();
