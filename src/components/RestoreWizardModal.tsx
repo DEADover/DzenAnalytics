@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
+  Loader2,
   Check,
+  Download,
   CheckCircle2,
   History,
   Info,
@@ -15,6 +17,7 @@ import { snapshotSummary } from "../lib/snapshotLabel";
 import { InfoPopover } from "./InfoPopover";
 import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
 import type { CleanupProgress, CleanupResult } from "../lib/accountCleanup";
+import type { RestoreProgress } from "../lib/cloudSnapshots";
 import type { RestorePreflight } from "../lib/restorePreflight";
 
 /**
@@ -50,11 +53,13 @@ export function RestoreWizardModal({
   busyOp,
   cleanupProgress,
   cleanupResult,
+  restoreProgress,
   error,
   onCheck,
   onCleanup,
   onRestore,
   onImportFile,
+  onDownload,
   onClose,
 }: {
   snapshots: CloudSnapshotSummary[];
@@ -65,11 +70,13 @@ export function RestoreWizardModal({
   busyOp: "snapshot" | "import" | "check" | "restore" | "cleanup" | null;
   cleanupProgress: CleanupProgress | null;
   cleanupResult: CleanupResult | null;
+  restoreProgress: RestoreProgress | null;
   error: string | null;
   onCheck: (id: string) => void;
   onCleanup: () => void;
   onRestore: (s: CloudSnapshotSummary) => void;
   onImportFile: (file: File) => void;
+  onDownload: (id: string) => void;
   onClose: () => void;
 }) {
   // Выбор — не состояние, а предпочтение поверх списка: пока человек ничего не
@@ -145,22 +152,30 @@ export function RestoreWizardModal({
         </div>
 
         <ol className="flex items-start gap-1.5 px-5 pt-4">
-          {STEPS.map((s, i) => (
-            <li key={s.id} className="flex-1 min-w-0">
-              <div
-                className={`h-1 rounded-full ${
-                  i < activeIndex ? "bg-income" : i === activeIndex ? "bg-accent" : "bg-border"
-                }`}
-              />
-              <div
-                className={`text-[11px] mt-1 truncate ${
-                  i === activeIndex ? "text-text font-medium" : "text-muted"
-                }`}
-              >
-                {s.title}
-              </div>
-            </li>
-          ))}
+          {STEPS.map((s, i) => {
+            // На «Готово» зелёная вся полоса, включая последний сегмент:
+            // он оставался синим, и законченный откат выглядел незаконченным.
+            const done = step === "done" || i < activeIndex;
+            const current = i === activeIndex && step !== "done";
+            return (
+              <li key={s.id} className="flex-1 min-w-0">
+                <div
+                  className={`h-1 rounded-full ${
+                    done ? "bg-income" : current ? "bg-accent" : "bg-border"
+                  }`}
+                />
+                <div
+                  className={`text-[11px] mt-1 truncate ${
+                    current || (done && s.id === "done")
+                      ? "text-text font-medium"
+                      : "text-muted"
+                  }`}
+                >
+                  {s.title}
+                </div>
+              </li>
+            );
+          })}
         </ol>
 
         <div className="px-5 py-4 text-sm space-y-3 max-h-[60vh] overflow-y-auto">
@@ -247,6 +262,40 @@ export function RestoreWizardModal({
                   e.target.value = "";
                 }}
               />
+
+              {/* Предупреждение — здесь, а не перед самой заливкой: решение
+                  «делаю это» принимается ДО того, как человек прошёл три шага
+                  и настроился заканчивать. Здесь же под рукой то, что делает
+                  предупреждение выполнимым, — сохранение снимка файлом. */}
+              {chosen && (
+                <div className="rounded-xl border border-warn/40 bg-warn/5 p-3 space-y-2">
+                  <p className="text-xs">
+                    Восстановление необратимо: вернуть аккаунт к нынешнему виду
+                    будет нечем. Сохраните снимок файлом — это единственный
+                    способ отыграть назад.
+                  </p>
+                  <button
+                    onClick={() => onDownload(chosen.id)}
+                    className="btn-ghost text-xs inline-flex items-center gap-2"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Сохранить файлом
+                  </button>
+                  <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={accepted}
+                      onChange={(e) => setAccepted(e.target.checked)}
+                      className="mt-0.5 shrink-0"
+                    />
+                    <span className="text-xs">
+                      Действую на свой страх и риск. За данные в Дзен-мани
+                      отвечаю я: DzenAnalytics такой ответственности не несёт.
+                    </span>
+                  </label>
+                </div>
+              )}
+
             </>
           )}
 
@@ -348,10 +397,50 @@ export function RestoreWizardModal({
 
           {step === "confirm" && chosen && (
             <>
-              <div className="flex items-start gap-2 text-income">
-                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                <span className="text-text">Аккаунт пуст — можно заливать.</span>
-              </div>
+              {/* Ход заливки — ЗДЕСЬ, а не на странице за окном. Раньше полоса
+                  рисовалась под модалкой: впереди застывшее «можно заливать» и
+                  неактивные кнопки, а всё живое — позади и недоступно. */}
+              {restoreProgress ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 font-medium">
+                    <Loader2 className="w-4 h-4 animate-spin text-accent2 shrink-0" />
+                    {restoreProgress.phase === "accounts"
+                      ? "Переношу счета"
+                      : restoreProgress.phase === "tags"
+                        ? "Переношу категории"
+                        : restoreProgress.phase === "merchants"
+                          ? "Переношу контрагентов"
+                          : restoreProgress.phase === "transactions"
+                            ? "Переношу операции"
+                            : "Заканчиваю"}
+                    {restoreProgress.total > 0 && (
+                      <span className="text-muted tabular-nums text-xs">
+                        {formatNum(restoreProgress.current)} из{" "}
+                        {formatNum(restoreProgress.total)}
+                      </span>
+                    )}
+                  </div>
+                  {restoreProgress.total > 0 && (
+                    <div className="h-1 rounded-full bg-border overflow-hidden">
+                      <div
+                        className="h-full bg-accent2 transition-all"
+                        style={{
+                          width: `${Math.min(100, Math.round((restoreProgress.current / restoreProgress.total) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-muted">
+                    Окно можно не закрывать — это займёт минуту-другую.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2 text-income">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span className="text-text">Аккаунт пуст — можно заливать.</span>
+                </div>
+              )}
+              {!restoreProgress && (
               <p className="text-xs text-muted">
                 В Дзен-мани уйдёт {formatNum(chosen.counts.transactions)}{" "}
                 {pluralRu(chosen.counts.transactions, [
@@ -371,23 +460,8 @@ export function RestoreWizardModal({
                 ])}
                 .
               </p>
+              )}
 
-              {/* Предупреждение об ответственности — галочкой, а не абзацем:
-                  прочитанным считается то, что человек подтвердил, а не то,
-                  мимо чего он проскроллил. */}
-              <label className="flex items-start gap-2.5 p-3 rounded-xl border border-warn/40 bg-warn/5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={accepted}
-                  onChange={(e) => setAccepted(e.target.checked)}
-                  className="mt-0.5 shrink-0"
-                />
-                <span className="text-xs">
-                  Отменить восстановление нельзя. Данные в Дзен-мани — ваши, и
-                  отвечаете за них тоже вы: DzenAnalytics ответственности за
-                  результат не несёт. Убедитесь, что снимок сохранён файлом.
-                </span>
-              </label>
             </>
           )}
 
@@ -434,7 +508,7 @@ export function RestoreWizardModal({
             {step === "pick" && (
               <button
                 onClick={() => setEntered(true)}
-                disabled={busy || !chosen}
+                disabled={busy || !chosen || !accepted}
                 className="btn-primary text-sm"
               >
                 Далее
@@ -471,7 +545,7 @@ export function RestoreWizardModal({
             {step === "confirm" && chosen && (
               <button
                 onClick={() => onRestore(chosen)}
-                disabled={busy || !accepted}
+                disabled={busy}
                 className="btn-primary text-sm !bg-warn hover:!bg-warn/90"
               >
                 {busyOp === "restore" ? "Восстанавливаю…" : "Восстановить"}

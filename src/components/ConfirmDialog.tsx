@@ -89,7 +89,9 @@ export function ConfirmDialog() {
         // to the backdrop and close the modal.
         onClick={(e) => e.stopPropagation()}
         className={clsx(
-          "w-full max-w-md rounded-xl border shadow-xl bg-panel",
+          // Шире, чем было (`max-w-md`): длинный текст в узкой колонке уходил
+          // вниз простынёй, и окно переставало помещаться по высоте.
+          "w-full max-w-xl rounded-xl border shadow-xl bg-panel",
           tone === "danger"
             ? "border-expense/40"
             : tone === "warning"

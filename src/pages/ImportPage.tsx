@@ -642,38 +642,24 @@ export function ImportPage() {
    */
   async function runRestore(s: CloudSnapshotSummary) {
 
-        // Считаем сверку ПЕРЕД вопросом: предупреждение из общих
-        // слов («победит свежая версия») человек прочитать не
-        // может — ему нужны числа про его аккаунт. Если сверка
-        // не удалась, спрашиваем по-старому, но не молчим.
-        let warn: string;
-        try {
-          const pre = await checkSnapshotReadiness(s.id);
-          warn = pre.ready
-            ? "Сверка: аккаунт готов, снимок ляжет целиком.\n\n"
-            : "Сверка показала:\n" +
-              pre.blockers.map((b) => `• ${b.text}`).join("\n") +
-              "\n\n";
-        } catch {
-          warn = "Сверить снимок с аккаунтом не удалось — что именно доедет, заранее неизвестно.\n\n";
-        }
-        const confirmed = await confirm({
-          title: `Восстановить Дзен-мани из снимка от ${new Date(s.createdAt).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}?`,
-          message:
-            warn +
-            `В Дзен-мани (на текущий токен) уйдут:\n` +
-            `• ${formatNum(s.counts.transactions)} ${pluralRu(s.counts.transactions, ["операция", "операции", "операций"])}\n` +
-            `• ${s.counts.accounts} ${pluralRu(s.counts.accounts, ["счёт", "счёта", "счетов"])}\n` +
-            `• ${s.counts.tags} ${pluralRu(s.counts.tags, ["категория", "категории", "категорий"])}\n` +
-            `• ${s.counts.merchants} ${pluralRu(s.counts.merchants, ["контрагент", "контрагента", "контрагентов"])}\n\n` +
-            `Снимок заливается ПОД НОВЫМИ НОМЕРАМИ: под прежними Дзен-мани не пускает обратно удалённые строки — молча, без ошибки. Из этого следует главное: старое НЕ ЗАМЕНЯЕТСЯ, снимок ложится рядом. Если в аккаунте что-то есть, вы получите и то, и другое.\n\n` +
-            `Поэтому заливать нужно в пустой аккаунт: сначала «Начать всё сначала» в Дзен-мани (в приложении — «Ещё → Настройки аккаунта»), затем шаг «Убрать категории и контрагентов», и только потом сюда.\n\n` +
-            `Привязка операций к банковским выпискам при этом теряется — номера у строк новые.\n\n` +
-            `⚠️ Если снимок сделан с другого аккаунта — операция может провалиться или привести к смешению данных. Перед действием убедитесь, что подключён нужный токен.`,
-          confirmLabel: "Восстановить",
-          tone: "warning",
-        });
-        if (!confirmed) return;
+
+    // Коротко и по делу: мастер уже провёл по шагам, объяснил механику и взял
+    // согласие галочкой. Прежнее подтверждение пересказывало всё это заново —
+    // выходила простыня, которую не читают именно потому, что она повторяет
+    // только что прочитанное.
+    const confirmed = await confirm({
+      title: `Восстановить из снимка от ${new Date(s.createdAt).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}?`,
+      message:
+        `В Дзен-мани уйдут ${formatNum(s.counts.transactions)} ` +
+        `${pluralRu(s.counts.transactions, ["операция", "операции", "операций"])}, ` +
+        `${s.counts.accounts} ${pluralRu(s.counts.accounts, ["счёт", "счёта", "счетов"])}, ` +
+        `${s.counts.tags} ${pluralRu(s.counts.tags, ["категория", "категории", "категорий"])}, ` +
+        `${s.counts.merchants} ${pluralRu(s.counts.merchants, ["контрагент", "контрагента", "контрагентов"])}.\n\n` +
+        `Отменить будет нельзя.`,
+      confirmLabel: "Восстановить",
+      tone: "warning",
+    });
+    if (!confirmed) return;
         try {
           await restoreCloudSnapshot(s.id);
         } catch {
@@ -2175,42 +2161,6 @@ export function ImportPage() {
               </span>
             </div>
 
-            {/* Live restore-progress bar — only visible while a
-                restore is in flight. Shows current phase + counter so
-                the user knows the operation is moving and where it is. */}
-            {restoreProgress && (
-              <div className="text-xs mb-3 p-3 rounded-lg bg-accent2/10 border border-accent2/30">
-                <div className="flex items-center gap-2 mb-1.5 text-accent2 font-medium">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Восстановление:{" "}
-                  {restoreProgress.phase === "accounts"
-                    ? "Счета"
-                    : restoreProgress.phase === "tags"
-                      ? "Теги"
-                      : restoreProgress.phase === "merchants"
-                        ? "Мерчанты"
-                        : restoreProgress.phase === "transactions"
-                          ? "Транзакции"
-                          : "Готово"}
-                  {restoreProgress.total > 0 && (
-                    <span className="text-muted tabular-nums">
-                      {restoreProgress.current} / {restoreProgress.total}
-                    </span>
-                  )}
-                </div>
-                {restoreProgress.total > 0 && (
-                  <div className="h-1 bg-panel2 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-accent2 transition-all"
-                      style={{
-                        width: `${Math.min(100, Math.round((restoreProgress.current / restoreProgress.total) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
             {cloudSnapshotsError && (
               <div className="text-xs text-expense flex items-start gap-2 mb-3">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -2277,6 +2227,7 @@ export function ImportPage() {
                 busyOp={cloudSnapshotsOp}
                 cleanupProgress={cleanupProgress}
                 cleanupResult={lastCleanupResult}
+                restoreProgress={restoreProgress}
                 error={cloudSnapshotsError}
                 onClose={() => setRestoreWizardOpen(false)}
                 onCheck={(id) => {
@@ -2285,6 +2236,7 @@ export function ImportPage() {
                   });
                 }}
                 onImportFile={(f) => importCloudSnapshot(f)}
+                onDownload={(id) => downloadCloudSnapshot(id)}
                 onCleanup={() => {
                   // Сразу после уборки пересверяем: кэш уже вычеркнул удалённое,
                   // и мастер должен сам перейти к заливке, а не ждать, пока
