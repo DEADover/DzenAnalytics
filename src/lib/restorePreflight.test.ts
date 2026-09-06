@@ -64,7 +64,7 @@ describe("restorePreflight", () => {
     });
     expect(p.ready).toBe(false);
     const b = p.blockers.find((x) => x.kind === "notEmpty");
-    expect(b?.text).toBe("В аккаунте пока 1 операция.");
+    expect(b?.text).toBe("В аккаунте 1 операция.");
   });
 
   it("оставшиеся счета заливке не мешают — это замечание, а не запрет", () => {

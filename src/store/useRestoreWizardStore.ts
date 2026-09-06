@@ -45,15 +45,15 @@ export type WizardPhase =
   | "pick"
   /** Ждём, пока пользователь очистит аккаунт в Дзен-мани. */
   | "clear"
-  /** Аккаунт пуст, остались справочники — их удаляем мы. */
+  /** Аккаунт пуст, остались категории и контрагенты — их удаляем мы. */
   | "dictionaries"
-  /** Всё готово, можно заливать. */
+  /** Всё готово, можно переносить. */
   | "ready"
-  /** Заливка идёт. */
+  /** Перенос идёт. */
   | "restoring"
-  /** Заливка упала на середине: часть данных уже в облаке. */
+  /** Перенос оборвался на середине: часть данных уже в облаке. */
   | "partial"
-  /** Заливка прошла. */
+  /** Перенос прошёл. */
   | "done";
 
 /** Сколько сверка считается свежей. Дальше — пересверить. */
@@ -87,9 +87,9 @@ interface State {
   back: () => void;
   /** Синхронизироваться и пересчитать готовность. */
   check: () => Promise<void>;
-  /** Удалить справочники, затем пересверить. */
+  /** Удалить категории и контрагентов, затем перепроверить. */
   cleanup: () => Promise<void>;
-  /** Залить снимок. */
+  /** Перенести снимок в Дзен-мани. */
   restore: () => Promise<void>;
 }
 
@@ -158,7 +158,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
       const snap = await loadSnapshot(snapshotId);
       if (!snap) throw new Error("Снимок не найден — возможно, его удалили");
       const cache = await loadZenCache();
-      if (!cache) throw new Error("Нет данных Дзен-мани");
+      if (!cache) throw new Error("Нет данных из Дзен-мани — сначала синхронизируйтесь");
       const result = restorePreflight(snap.raw, {
         transactions: cache.transactions,
         accounts: cache.accounts,
@@ -194,7 +194,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
       set({
         running: null,
         cleanupProgress: null,
-        error: e instanceof Error ? e.message : "Не удалось удалить справочники",
+        error: e instanceof Error ? e.message : "Не удалось удалить категории и контрагентов",
       });
       return;
     }
@@ -207,9 +207,9 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
   restore: async () => {
     const { snapshotId, running, phase } = get();
     if (!snapshotId || running) return;
-    // Заливать можно только из «готово». После неудачной попытки фаза
-    // `partial`, и повтор запрещён: он залил бы всё заново поверх уже
-    // залитого, под новыми номерами — то есть задвоил бы.
+    // Переносить можно только из «готово». После обрыва фаза `partial`, и
+    // повтор запрещён: он отправил бы всё заново поверх уже перенесённого,
+    // под новыми номерами — то есть задвоил бы.
     if (phase !== "ready") return;
     const token = useZenmoneyStore.getState().token;
     if (!token) return;
@@ -232,7 +232,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
         running: null,
         restoreProgress: null,
         phase: "partial",
-        error: e instanceof Error ? e.message : "Заливка прервалась",
+        error: e instanceof Error ? e.message : "Восстановление прервалось",
       });
     }
   },

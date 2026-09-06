@@ -28,8 +28,8 @@ import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
 const STEPS = [
   { id: "pick", title: "Снимок" },
   { id: "clear", title: "Очистка" },
-  { id: "dictionaries", title: "Справочники" },
-  { id: "ready", title: "Заливка" },
+  { id: "dictionaries", title: "Категории" },
+  { id: "ready", title: "Перенос" },
   { id: "done", title: "Готово" },
 ] as const;
 
@@ -161,7 +161,11 @@ export function RestoreWizardModal({
           )}
 
           {(w.phase === "ready" || w.phase === "restoring") && chosen && (
-            <ReadyStep snapshot={chosen} progress={w.restoreProgress} />
+            <ReadyStep
+              snapshot={chosen}
+              progress={w.restoreProgress}
+              notes={w.preflight?.notes ?? []}
+            />
           )}
 
           {w.phase === "partial" && <PartialStep />}
@@ -218,7 +222,7 @@ function PrimaryButton({
       <button
         onClick={w.begin}
         disabled={busy || !chosen || !w.accepted}
-        title={!w.accepted ? "Отметьте согласие выше" : undefined}
+        title={!w.accepted ? "Сначала отметьте согласие" : undefined}
         className="btn-primary text-sm"
       >
         Далее
@@ -279,14 +283,14 @@ function PickStep({
         <span className="font-medium">К какому состоянию вернуть аккаунт</span>
         <InfoPopover label="Как это работает">
           <p>
-            Снимок заводится в Дзен-мани заново, под новыми номерами: вернуть
-            удалённые записи под прежними сервис не даёт — принимает запрос и
-            молча ничего не меняет.
+            Дзен-мани не даёт вернуть удалённые записи: он принимает запрос и
+            ничего не меняет. Поэтому снимок заводится заново, под новыми
+            номерами.
           </p>
           <p>
-            Поэтому снимок не заменяет содержимое аккаунта, а добавляется к нему.
-            Аккаунт должен быть пуст, иначе данные задвоятся. По той же причине
-            теряется связь операций с банковскими выписками.
+            Значит он не заменяет содержимое аккаунта, а добавляется к нему.
+            Поэтому аккаунт нужно сначала очистить — иначе данные задвоятся. По
+            той же причине теряется связь операций с банковскими выписками.
           </p>
         </InfoPopover>
       </div>
@@ -341,7 +345,7 @@ function PickStep({
       <div className="rounded-xl border border-warn/40 bg-warn/5 p-3 space-y-2">
         <p className="text-xs">
           Аккаунт вернётся к выбранному состоянию. Всё, что появилось после,
-          пропадёт, и отменить это будет нечем.
+          пропадёт, и отменить это нельзя.
         </p>
         <button
           onClick={onTakeSnapshot}
@@ -349,7 +353,7 @@ function PickStep({
           className="btn-ghost text-xs inline-flex items-center gap-2"
         >
           <CloudDownload className="w-3.5 h-3.5" />
-          {takingSnapshot ? "Снимаю…" : "Снять снимок нынешнего состояния"}
+          {takingSnapshot ? "Сохраняю…" : "Сохранить нынешнее состояние"}
         </button>
         <label className="flex items-start gap-2.5 cursor-pointer pt-1">
           <input
@@ -359,8 +363,8 @@ function PickStep({
             className="mt-0.5 shrink-0"
           />
           <span className="text-xs">
-            Действую на свой страх и риск. За данные в Дзен-мани отвечаю я:
-            DzenAnalytics такой ответственности не несёт.
+            Действую на свой страх и риск. За данные в Дзен-мани отвечаю я,
+            а не DzenAnalytics.
           </span>
         </label>
       </div>
@@ -389,12 +393,12 @@ function ClearStep({
         </span>
       </div>
       <p className="text-xs text-muted">
-        Дзен-мани обновляет облако до пяти минут, поэтому сразу после очистки
+        Дзен-мани обновляет данные до пяти минут, поэтому сразу после очистки
         число может не измениться. Нажмите «Проверить» ещё раз через минуту.
       </p>
       {checkedAt && (
         <p className="text-xs text-muted">
-          Проверено в{" "}
+          Последняя проверка:{" "}
           {new Date(checkedAt).toLocaleTimeString("ru-RU", {
             hour: "2-digit",
             minute: "2-digit",
@@ -421,8 +425,8 @@ function DictionariesStep({
     <>
       <p>
         Операции и счета удалены, но категории и контрагенты остались: команда
-        «Начать всё сначала» их не затрагивает. Удалим их, иначе рядом с теми,
-        что приедут из снимка, останутся нынешние.
+        «Начать всё сначала» их не затрагивает. Иначе категории задвоятся: к
+        нынешним добавятся те, что придут из снимка.
       </p>
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-border p-3">
@@ -451,15 +455,14 @@ function DictionariesStep({
         </div>
       )}
       <p className="text-xs text-muted">
-        Категории удаляются по одной, Дзен-мани сверяет каждую со всеми
-        операциями. На несколько десятков уйдёт пара минут — окно можно не
-        закрывать.
+        Категории удаляются по одной: Дзен-мани сверяет каждую со всеми
+        операциями. На несколько десятков категорий уйдёт пара минут — окно
+        можно не закрывать.
       </p>
       {rejected > 0 && (
         <p className="text-xs text-warn">
-          {formatNum(rejected)}{" "}
-          {pluralRu(rejected, ["запись", "записи", "записей"])} Дзен-мани удалить
-          отказался. Их придётся удалить вручную в самом Дзен-мани.
+          Дзен-мани отказался удалить {formatNum(rejected)}{" "}
+          {pluralRu(rejected, ["категорию или контрагента", "категории или контрагентов", "категорий или контрагентов"])} — уберите их вручную.
         </p>
       )}
     </>
@@ -469,9 +472,12 @@ function DictionariesStep({
 function ReadyStep({
   snapshot,
   progress,
+  notes,
 }: {
   snapshot: CloudSnapshotSummary;
   progress: import("../lib/cloudSnapshots").RestoreProgress | null;
+  /** То, что заливке не мешает, но знать полезно — например, лишние счета. */
+  notes: string[];
 }) {
   const c = snapshot.counts;
   return (
@@ -489,6 +495,14 @@ function ReadyStep({
         <Cell label="Категории" value={c.tags} />
         <Cell label="Контрагенты" value={c.merchants} />
       </div>
+      {/* Замечания сверки. Раньше они вычислялись и не показывались нигде:
+          совет про лишние счета человек не видел никогда. */}
+      {!progress &&
+        notes.map((n) => (
+          <p key={n} className="text-xs text-muted">
+            {n}
+          </p>
+        ))}
       {progress && (
         <div className="space-y-1">
           <p className="text-xs text-muted tabular-nums">
@@ -543,8 +557,8 @@ function PartialStep() {
         <span className="text-text">Восстановление прервалось на середине.</span>
       </div>
       <p className="text-xs text-muted">
-        Часть данных уже в Дзен-мани. Повторять сейчас нельзя: снимок зальётся
-        заново и то, что успело пройти, задвоится.
+        Часть данных уже в Дзен-мани. Повторять сейчас нельзя: снимок
+        перенесётся заново, и то, что успело пройти, задвоится.
       </p>
       <p className="text-xs text-muted">
         Очистите аккаунт в Дзен-мани ещё раз («Ещё → Настройки аккаунта → Начать

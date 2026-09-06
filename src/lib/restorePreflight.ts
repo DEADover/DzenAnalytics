@@ -120,7 +120,7 @@ export function restorePreflight(
       kind: "notEmpty",
       count: transactions.inAccount,
       text:
-        `В аккаунте пока ${formatNum(transactions.inAccount)} ` +
+        `В аккаунте ${formatNum(transactions.inAccount)} ` +
         `${pluralRu(transactions.inAccount, ["операция", "операции", "операций"])}.`,
     });
   }
@@ -154,10 +154,9 @@ export function restorePreflight(
   const notes: string[] = [];
   if (accounts.inAccount > 0) {
     notes.push(
-      `В аккаунте ${formatNum(accounts.inAccount)} ` +
-        `${pluralRu(accounts.inAccount, ["счёт", "счёта", "счетов"])}; после ` +
-        `восстановления к ним добавятся ${formatNum(accounts.inSnapshot)} из снимка. ` +
-        `Лишние можно убрать в архив.`
+      `Сейчас ${formatNum(accounts.inAccount)} ` +
+        `${pluralRu(accounts.inAccount, ["счёт", "счёта", "счетов"])}, из снимка ` +
+        `добавятся ещё ${formatNum(accounts.inSnapshot)}. Лишние можно убрать в архив.`
     );
   }
 
