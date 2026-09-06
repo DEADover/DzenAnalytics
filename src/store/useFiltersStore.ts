@@ -49,7 +49,14 @@ interface FiltersState {
   // «Дополнительно» filters — all default to a no-op (null / empty / false).
   minAmount: number | null;
   maxAmount: number | null;
-  /** Operation kinds to keep: "income" | "expense" | "transfer". Empty = all. */
+  /**
+   * Какие типы операций оставить: `income` | `expense` | `transfer` | `refund`.
+   * Пусто — все.
+   *
+   * `expense` включает И возвраты: возврат гасит трату, и во всём сервисе это
+   * одна величина. `refund` — отдельный, более узкий выбор: показать одни
+   * возвраты. Выбранные вместе, они дают то же, что «Расходы» сами по себе.
+   */
   types: Set<string>;
   onlyUncategorized: boolean;
   hideZero: boolean;
@@ -307,9 +314,15 @@ export function applyFilters(
       if (state.maxAmount != null && amt > state.maxAmount) return false;
     }
     if (state.types.size) {
-      // Refunds bucket under «расходы» — they reverse a spend.
-      const k = t.kind === "refund" ? "expense" : t.kind;
-      if (!state.types.has(k)) return false;
+      // «Расходы» показывают траты ВМЕСТЕ с возвратами — так считает весь
+      // сервис: возврат гасит трату, и расход без возвратов не сошёлся бы ни с
+      // категориями, ни с бюджетом. А «Возвраты» — выбор поуже: только они.
+      // Возврат было нечем отобрать вовсе, хотя в ленте он помечен своей
+      // стрелкой: увидеть можно, а собрать вместе — нет.
+      const ok =
+        state.types.has(t.kind) ||
+        (t.kind === "refund" && state.types.has("expense"));
+      if (!ok) return false;
     }
     if (state.onlyUncategorized && t.category && t.category !== NO_CATEGORY)
       return false;

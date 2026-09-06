@@ -309,6 +309,33 @@ describe("applyFilters — «Дополнительно»", () => {
     expect(ids(applyFilters(withRefund, filt({ types: new Set(["expense"]) })))).toEqual(["a", "b", "r"]);
   });
 
+  describe("«Возвраты» — отдельный тип", () => {
+    // Возврат было нечем отобрать: «Расходы» отдавали его вперемешку с
+    // тратами, «Доходы» не отдавали вовсе.
+    const withRefund = [...txs, tx({ id: "r", kind: "refund", amountBase: 50 })];
+
+    it("показывает возвраты и только их", () => {
+      expect(ids(applyFilters(withRefund, filt({ types: new Set(["refund"]) })))).toEqual(["r"]);
+    });
+
+    it("не подмешивается к доходам", () => {
+      // Возврат — приход денег, но не доход: выбрав «Доходы», его быть не должно.
+      expect(ids(applyFilters(withRefund, filt({ types: new Set(["income"]) })))).toEqual(["c"]);
+      expect(ids(applyFilters(withRefund, filt({ types: new Set(["income", "refund"]) })))).toEqual(["c", "r"]);
+    });
+
+    it("вместе с «Расходами» ничего не добавляет — одна кнопка уже другой", () => {
+      const both = ids(applyFilters(withRefund, filt({ types: new Set(["expense", "refund"]) })));
+      const onlyExpense = ids(applyFilters(withRefund, filt({ types: new Set(["expense"]) })));
+      expect(both).toEqual(onlyExpense);
+      expect(both).toEqual(["a", "b", "r"]);
+    });
+
+    it("«Переводы» возвратов не приносят", () => {
+      expect(ids(applyFilters(withRefund, filt({ types: new Set(["transfer"]) })))).toEqual(["d"]);
+    });
+  });
+
   it("onlyUncategorized keeps «Без категории» / empty only", () => {
     expect(ids(applyFilters(txs, filt({ onlyUncategorized: true })))).toEqual(["d"]);
   });

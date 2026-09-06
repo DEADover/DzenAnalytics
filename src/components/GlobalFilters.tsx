@@ -40,10 +40,19 @@ const PRESETS: { value: DatePreset; label: string; title?: string }[] = [
   { value: "all", label: "Всё" },
 ];
 
-const OP_TYPES: { value: string; label: string }[] = [
+const OP_TYPES: { value: string; label: string; hint?: string }[] = [
   { value: "income", label: "Доходы" },
-  { value: "expense", label: "Расходы" },
+  {
+    value: "expense",
+    label: "Расходы",
+    hint: "Траты вместе с возвратами — как их считает Дзен-мани",
+  },
   { value: "transfer", label: "Переводы" },
+  {
+    value: "refund",
+    label: "Возвраты",
+    hint: "Только возвраты: приход по расходной категории, гасящий трату",
+  },
 ];
 
 
@@ -380,13 +389,16 @@ export function GlobalFilters({
               <div className="absolute z-[80] mt-1 left-0 w-72 card p-2 space-y-3 max-h-[70vh] overflow-auto">
                 <div>
                   <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">Тип операции</div>
-                  <div className="flex gap-1">
+                  {/* Сеткой 2×2, а не строкой: четвёртой кнопке в ряд уже не
+                      хватало ширины панели, и подписи начинали обрезаться. */}
+                  <div className="grid grid-cols-2 gap-1">
                     {OP_TYPES.map((t) => (
                       <button
                         key={t.value}
                         onClick={() => f.toggleType(t.value)}
+                        title={t.hint}
                         className={clsx(
-                          "flex-1 px-2 py-1 text-xs rounded-full border transition-colors duration-200",
+                          "px-2 py-1 text-xs rounded-full border transition-colors duration-200",
                           f.types.has(t.value)
                             ? "bg-accent text-accent-fg border-accent"
                             : "border-border text-muted hover:text-text"
