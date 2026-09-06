@@ -2389,7 +2389,7 @@ export function ImportPage() {
                     )}
                     ) ·{" "}
                     <strong>{lastRestoreResult.accepted.merchants}</strong>{" "}
-                    мерчантов.
+                    контрагентов.
                   </span>
                 </div>
 
@@ -2408,8 +2408,8 @@ export function ImportPage() {
                           parts.push(
                             <>
                               <strong>{lastRestoreResult.skipped.transactions}</strong>{" "}
-                              транзакций с битыми ссылками на счёт / тег /
-                              мерчант
+                              операций с битыми ссылками на счёт, категорию
+                              или контрагента
                             </>
                           );
                         }
