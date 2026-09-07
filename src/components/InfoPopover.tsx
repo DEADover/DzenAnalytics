@@ -117,13 +117,18 @@ export function InfoPopover({
         aria-label={label}
         title={label}
         className={clsx(
-          "p-1.5 rounded-full shrink-0",
+          "p-1 rounded-full shrink-0",
           open
             ? "text-accent bg-accent/10"
             : "text-muted hover:text-accent hover:bg-panel2"
         )}
       >
-        <HelpCircle className="w-5 h-5" />
+        {/* 16px, а не 20: рядом со строкой в 14px значок в 20px оказывался выше
+            самой строки, а вместе с отступами кнопка выходила 32×32 — заметно
+            крупнее того, что ею поясняется. По всему сервису значки в строке
+            набраны в 16px, знак вопроса выбивался один. Отступ ужат до 4px,
+            область нажатия остаётся 24×24. */}
+        <HelpCircle className="w-4 h-4" />
       </button>
       {open &&
         createPortal(
