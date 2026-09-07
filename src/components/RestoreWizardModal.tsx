@@ -316,8 +316,8 @@ function PickStep({
             className="mt-0.5 shrink-0"
           />
           <span className="text-xs">
-            Действую на свой страх и риск. За данные в Дзен-мани отвечаю я,
-            а не DzenAnalytics.
+            Действую на свой страх и риск. DzenAnalytics не отвечает за
+            корректность данных снимка и результаты его восстановления.
           </span>
         </label>
       </div>
