@@ -62,6 +62,7 @@ import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
 import { snapshotSummary } from "../lib/snapshotLabel";
+import { readSnapshotFile } from "../lib/snapshotFile";
 import { BackupComparison } from "../components/BackupComparison";
 import { RestoreWizardModal } from "../components/RestoreWizardModal";
 import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
@@ -633,7 +634,9 @@ export function ImportPage() {
     let dump: Record<string, unknown>;
     setBackupMsg(null);
     try {
-      const text = await file.text();
+      // Тем же чтением, что и у снимков: копию часто пересылают себе архивом,
+      // и «сервис не принял мой же бэкап» — плохой конец истории.
+      const text = await readSnapshotFile(file);
       // Validate + sanitize (type checks, prototype-pollution stripping,
       // size/depth bounds) before anything touches IndexedDB.
       dump = parseAndValidateBackup(text) as unknown as Record<string, unknown>;
@@ -1962,7 +1965,7 @@ export function ImportPage() {
           <input
             ref={backupRef}
             type="file"
-            accept="application/json,.json"
+            accept="application/json,.json,application/zip,.zip,application/gzip,.gz"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -2037,8 +2040,15 @@ export function ImportPage() {
               <InfoPopover label="Что попадает в снимок">
                 <p>
                   Полная копия того, что сейчас лежит в Дзен-мани: операции,
-                  счета, категории и контрагенты. Хранится на этом компьютере,
-                  в облако ничего не уходит. Копию можно скачать файлом.
+                  счета, категории, контрагенты и планы. Хранится на этом
+                  компьютере, в облако ничего не уходит. Копию можно скачать
+                  файлом.
+                </p>
+                <p>
+                  <InfoTerm>Планы пока только хранятся.</InfoTerm> В снимок они
+                  попадают целиком, но при восстановлении в Дзен-мани не
+                  переносятся — возвращаются операции, счета, категории и
+                  контрагенты.
                 </p>
                 <p>
                   Это страховка перед{" "}

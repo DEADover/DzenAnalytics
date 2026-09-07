@@ -190,10 +190,12 @@ export function RestoreWizardModal({
           </div>
         </div>
 
+        {/* Принимаем и .gz: партнёрский ZenTable выгружает бэкап Дзен-мани
+            пожатым, а внутри — тот же сырой ответ diff. */}
         <input
           ref={fileRef}
           type="file"
-          accept="application/json,.json"
+          accept="application/json,.json,application/zip,.zip,application/gzip,.gz"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -338,6 +340,12 @@ function PickStep({
         <Upload className="w-3.5 h-3.5" />
         Загрузить файл
       </button>
+      {/* Форматы названы прямо у кнопки: бэкап ZenTable приходит как
+          `.json.gz`, и без этой строки человек не знает, примем ли мы его,
+          пока не попробует. */}
+      <p className="text-[11px] text-muted -mt-1">
+        Снимок отсюда или бэкап ZenTable — json, zip или gz.
+      </p>
 
       {/* Страховка — это снимок ТЕКУЩЕГО состояния, а не тот, который сейчас
           зальют. Раньше здесь предлагалось «сохранить снимок файлом», и

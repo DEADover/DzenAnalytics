@@ -19,6 +19,8 @@ export interface SnapshotCounts {
   accounts: number;
   tags: number;
   instruments: number;
+  /** Планы. Необязательное: старые снимки их не забирали вовсе. */
+  reminders?: number;
 }
 
 /**
@@ -37,7 +39,7 @@ export function formatBytes(bytes: number): string {
  *
  * Валюты показываем только если их больше одной: строка «137 валют» полезна
  * мультивалютному пользователю и ничего не сообщает всем остальным, а место
- * занимает.
+ * занимает. По той же причине планы — только когда они есть.
  */
 export function snapshotSummary(counts: SnapshotCounts, bytes: number): string {
   const parts = [
@@ -45,6 +47,14 @@ export function snapshotSummary(counts: SnapshotCounts, bytes: number): string {
     `${formatNum(counts.accounts)} ${pluralRu(counts.accounts, ["счёт", "счёта", "счетов"])}`,
     `${formatNum(counts.tags)} ${pluralRu(counts.tags, ["категория", "категории", "категорий"])}`,
   ];
+  // Планы попали в снимок не сразу: пока их не запрашивали явно, копия
+  // аккаунта была неполной и молчала об этом. Строка в подписи — способ
+  // увидеть, что теперь они на месте.
+  if (counts.reminders) {
+    parts.push(
+      `${formatNum(counts.reminders)} ${pluralRu(counts.reminders, ["план", "плана", "планов"])}`
+    );
+  }
   if (counts.instruments > 1) {
     parts.push(
       `${formatNum(counts.instruments)} ${pluralRu(counts.instruments, ["валюта", "валюты", "валют"])}`

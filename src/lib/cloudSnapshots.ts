@@ -23,6 +23,7 @@
 import * as db from "./db";
 import type { ZenAccount, ZenDiffResponse, ZenTransaction } from "./zenmoney";
 import { fetchDiff, pushDiff, type PushPayload } from "./zenmoney";
+import { FULL_SYNC_ENTITIES } from "./zenmoneyCache";
 import { devLog } from "./devLog";
 
 const INDEX_KEY = "cloudSnapshotIndex";
@@ -53,6 +54,16 @@ export interface CloudSnapshotSummary {
     instruments: number;
     companies: number;
     user: number;
+    /**
+     * Планы и их операции.
+     *
+     * Необязательные: снимки, снятые до того, как мы стали запрашивать планы
+     * явно, их не считали — и приписывать им ноль значило бы утверждать, что
+     * планов в аккаунте не было, хотя мы их просто не забирали.
+     */
+    reminders?: number;
+    reminderMarkers?: number;
+    budgets?: number;
   };
   /** Approximate JSON byte size of the raw snapshot (after stringify). */
   approxBytes: number;
@@ -87,8 +98,14 @@ export async function loadSnapshot(id: string): Promise<CloudSnapshot | null> {
  */
 export async function takeSnapshot(token: string): Promise<CloudSnapshot> {
   if (!token) throw new Error("Нет токена Дзен-мани — снимок невозможен");
-  // `serverTimestamp=0` → full payload regardless of any previous sync.
-  const raw = await fetchDiff(token, 0);
+  // `serverTimestamp=0` → полный ответ по операциям, счетам и справочникам, но
+  // НЕ по планам: их сам по себе дифф отдаёт окном вокруг «сейчас», а
+  // исполненные плановые операции — только по явному запросу. Это уже стоило
+  // нам заниженного бюджета (см. `FULL_SYNC_ENTITIES` в `zenmoneyCache`), и
+  // ровно та же дыра была в снимке: он назывался полной копией аккаунта, а
+  // планы в него не попадали. Для сравнения, бэкап ZenTable того же аккаунта
+  // несёт 97 планов и 643 их операции.
+  const raw = await fetchDiff(token, 0, undefined, FULL_SYNC_ENTITIES);
 
   const now = Date.now();
   const id = new Date(now).toISOString();
@@ -120,6 +137,9 @@ export async function takeSnapshot(token: string): Promise<CloudSnapshot> {
       instruments: raw.instrument?.length ?? 0,
       companies: (raw.company as unknown[] | undefined)?.length ?? 0,
       user: raw.user?.length ?? 0,
+      reminders: raw.reminder?.length ?? 0,
+      reminderMarkers: raw.reminderMarker?.length ?? 0,
+      budgets: (raw.budget as unknown[] | undefined)?.length ?? 0,
     },
     approxBytes,
   };
@@ -519,6 +539,11 @@ export async function restoreSnapshotToCloud(
       // та, и банковская синхронизация приняла бы её за свою.
       outcomeBankID: freshIds ? null : t.outcomeBankID,
       incomeBankID: freshIds ? null : t.incomeBankID,
+      // Напоминания мы не переносим (см. «Limitations» выше), поэтому ссылка
+      // на экземпляр напоминания в новом аккаунте указывает в пустоту. У
+      // наших собственных снимков этого не всплывало — в тестовом аккаунте
+      // напоминаний не было; в бэкапе ZenTable таких операций 331 из 10 452.
+      reminderMarker: freshIds ? null : t.reminderMarker,
     });
   }
   if (brokenRefSkipped.length > 0) {
@@ -844,7 +869,9 @@ export async function restoreSnapshotToCloud(
  *
  * Accepts either:
  *   • The downloaded wrapped form `{ _meta, diff }`, or
- *   • A bare `ZenDiffResponse` (e.g. someone pasted raw API output).
+ *   • A bare `ZenDiffResponse` — raw API output, and also what the partner
+ *     service ZenTable writes into its `<login>-<serverTimestamp>.json.gz`
+ *     (decompression happens upstream, in `lib/snapshotFile`).
  *
  * The imported snapshot is stamped with a fresh `id` (current time)
  * and pushed into the rolling 5-slot index just like a fresh capture.
@@ -879,8 +906,8 @@ export async function importSnapshotFromJson(
   }
   if (!raw || typeof raw !== "object") {
     throw new Error(
-      "Не похоже на снимок DzenAnalytics. Ожидался JSON вида { _meta, diff } " +
-        "или сырой ответ API Дзена."
+      "Не похоже на снимок аккаунта. Подходит файл, сохранённый здесь, " +
+        "бэкап ZenTable (.json.gz) или сырой ответ API Дзен-мани."
     );
   }
   if (typeof raw.serverTimestamp !== "number") {
@@ -917,6 +944,9 @@ export async function importSnapshotFromJson(
       instruments: raw.instrument?.length ?? 0,
       companies: (raw.company as unknown[] | undefined)?.length ?? 0,
       user: raw.user?.length ?? 0,
+      reminders: raw.reminder?.length ?? 0,
+      reminderMarkers: raw.reminderMarker?.length ?? 0,
+      budgets: (raw.budget as unknown[] | undefined)?.length ?? 0,
     },
     approxBytes,
   };

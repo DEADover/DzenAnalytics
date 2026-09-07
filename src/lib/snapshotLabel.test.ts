@@ -84,3 +84,29 @@ describe("snapshotSummary", () => {
     );
   });
 });
+
+describe("snapshotSummary: планы", () => {
+  const base = { transactions: 10, accounts: 2, tags: 3, instruments: 1 };
+
+  it("показывает планы, когда они есть", () => {
+    expect(snapshotSummary({ ...base, reminders: 97 }, 1024)).toContain("97 планов");
+  });
+
+  it("склоняет по-русски", () => {
+    expect(snapshotSummary({ ...base, reminders: 1 }, 1024)).toContain("1 план");
+    expect(snapshotSummary({ ...base, reminders: 2 }, 1024)).toContain("2 плана");
+  });
+
+  it("молчит, когда планов нет", () => {
+    // Ноль и «поле не заполнено» здесь одинаково означают «показывать нечего»:
+    // строка про ноль планов только отнимает место.
+    expect(snapshotSummary({ ...base, reminders: 0 }, 1024)).not.toContain("план");
+    expect(snapshotSummary(base, 1024)).not.toContain("план");
+  });
+
+  it("планы идут перед валютами и объёмом", () => {
+    const s = snapshotSummary({ ...base, instruments: 5, reminders: 7 }, 1024);
+    expect(s.indexOf("7 планов")).toBeLessThan(s.indexOf("5 валют"));
+    expect(s.indexOf("5 валют")).toBeLessThan(s.indexOf("КБ"));
+  });
+});

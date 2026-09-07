@@ -9,6 +9,7 @@ import {
   importSnapshotFromJson as importSnapshotImpl,
   type CloudSnapshotSummary,
 } from "../lib/cloudSnapshots";
+import { readSnapshotFile } from "../lib/snapshotFile";
 import { useZenmoneyStore } from "./useZenmoneyStore";
 
 /**
@@ -112,7 +113,9 @@ export const useCloudSnapshotStore = create<State>((set) => ({
   importFromFile: async (file) => {
     set({ busy: true, busyOp: "import", error: null });
     try {
-      const text = await file.text();
+      // Не `file.text()`: бэкап ZenTable приходит пожатым (.json.gz), и
+      // читать его как текст значит скормить импорту двоичный мусор.
+      const text = await readSnapshotFile(file);
       await importSnapshotImpl(text);
       const list = await loadSnapshotIndex();
       set({ snapshots: list, busy: false, busyOp: null });
