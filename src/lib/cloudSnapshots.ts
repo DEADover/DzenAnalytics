@@ -484,6 +484,13 @@ export function remapPlans(
  *     or `user` (root account record) — only user-mutable entities.
  *   • `budget` (Планы месяца) пока не переносится: пуш по нему лоссовый,
  *     под-теги схлопываются. Планы (`reminder`) — переносятся.
+ *
+ * Приём планов пушем ПРОВЕРЕН на живом API: `{reminder: [...], reminderMarker:
+ * [...]}` возвращает 200 и обе записи в ответе, а `deletion` с `object`
+ * «reminder» / «reminderMarker» их убирает. Документация это разрешает
+ * («пользовательские сущности можно создавать / изменять / удалять»), но в
+ * этом API она уже дважды расходилась с поведением — молчаливый отказ на
+ * удалённые id и клиентское время в `changed`, — поэтому проверено руками.
  */
 export async function restoreSnapshotToCloud(
   id: string,

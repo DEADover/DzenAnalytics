@@ -501,12 +501,15 @@ function ReadyStep({
           <span className="text-text">Аккаунт пуст, можно восстанавливать.</span>
         </div>
       )}
-      {/* Счётчики видны и во время заливки: именно тогда по ним и сверяют. */}
-      <div className="grid grid-cols-4 gap-3">
+      {/* Счётчики видны и во время заливки: именно тогда по ним и сверяют.
+          Планы — пятой плиткой и только когда они есть: у аккаунта без планов
+          пустая клетка сообщала бы лишь о том, что мы умеем их считать. */}
+      <div className={`grid gap-3 ${c.reminders ? "grid-cols-5" : "grid-cols-4"}`}>
         <Cell label="Операции" value={c.transactions} />
         <Cell label="Счета" value={c.accounts} />
         <Cell label="Категории" value={c.tags} />
         <Cell label="Контрагенты" value={c.merchants} />
+        {c.reminders ? <Cell label="Планы" value={c.reminders} /> : null}
       </div>
       {/* Число удалённых записей называем ДО переноса. Иначе счётчик по ходу
           уходит выше обещанных операций, и это выглядит ошибкой. */}
