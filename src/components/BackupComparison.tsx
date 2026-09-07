@@ -46,9 +46,14 @@ export function BackupComparison() {
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr className="text-left">
-              <th className="table-th w-[26%]" />
-              <th className="table-th">Локальная копия</th>
-              <th className="table-th">Облачный снимок</th>
+              {/* Колонка подписей — по содержимому: доля от таблицы («26%») на
+                  широком экране давала полтысячи пикселей пустоты под «Где
+                  лежит». `w-px` + `whitespace-nowrap` сжимает её до подписи.
+                  Оставшееся делим поровну: иначе колонки расходятся по длине
+                  текста (802 против 534 на 1600 px) и таблицу перекашивает. */}
+              <th className="table-th w-px whitespace-nowrap" />
+              <th className="table-th w-1/2">Локальная копия</th>
+              <th className="table-th w-1/2">Облачный снимок</th>
             </tr>
           </thead>
           <tbody>
@@ -105,7 +110,7 @@ function Row({
 }) {
   return (
     <tr className="border-t border-border/60 align-top">
-      <td className="table-td text-muted">{label}</td>
+      <td className="table-td text-muted whitespace-nowrap pr-6">{label}</td>
       <td className="table-td">{local}</td>
       <td className="table-td">{cloud}</td>
     </tr>
