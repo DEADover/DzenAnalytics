@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { PushPayload } from "./zenmoney";
 import { chunk, MERCHANT_BATCH, runPool, TAG_BATCH } from "./accountCleanup";
 
 describe("chunk", () => {
@@ -71,5 +72,128 @@ describe("runPool", () => {
 
   it("пустой список не зависает", async () => {
     await expect(runPool([], 7, async () => {})).resolves.toBeUndefined();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// Что происходит, когда запрос падает.
+//
+// До сих пор эта ветка не была покрыта ничем, а именно она решает, окажется
+// ли человек в тупике: одна непроходимая категория не должна утаскивать за
+// собой соседние по партии.
+
+vi.mock("./zenmoney", () => ({ pushDiff: vi.fn() }));
+vi.mock("./zenmoneyCache", () => ({ loadZenCache: vi.fn() }));
+vi.mock("./devLog", () => ({ devLog: vi.fn() }));
+
+const tagOf = (id: string) => ({ id, user: 1, parent: null, title: id });
+
+async function runCleanup(opts: {
+  tags: string[];
+  /** id, на которых сервер отвечает ошибкой. */
+  failing?: string[];
+}) {
+  const { pushDiff } = await import("./zenmoney");
+  const { loadZenCache } = await import("./zenmoneyCache");
+  const { cleanupDictionaries } = await import("./accountCleanup");
+  const failing = new Set(opts.failing ?? []);
+  const sentIds: string[][] = [];
+  vi.mocked(loadZenCache).mockResolvedValue({
+    serverTimestamp: 1,
+    tags: opts.tags.map(tagOf),
+    merchants: [],
+  } as never);
+  vi.mocked(pushDiff).mockImplementation((async (
+    _token: string,
+    _ts: number,
+    payload: PushPayload
+  ) => {
+    const ids = (payload.deletion ?? []).map((d) => d.id);
+    sentIds.push(ids);
+    if (ids.some((id) => failing.has(id))) throw new Error("HTTP 500");
+    return {} as never;
+  }) as never);
+  const progress: number[] = [];
+  const result = await cleanupDictionaries(
+    "токен",
+    { tags: true, merchants: false },
+    (p) => {
+      // Завершающее «done» несёт sent: 0 — это конец работы, а не откат
+      // счётчика; в шкалу прогресса оно не входит.
+      if (p.phase !== "done") progress.push(p.sent);
+    }
+  );
+  return { result, sentIds, progress };
+}
+
+describe("cleanupDictionaries: сбои", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("всё прошло — отправлено столько же, отказов нет", async () => {
+    const { result } = await runCleanup({ tags: ["a", "b", "c"] });
+    expect(result.sentTags).toBe(3);
+    expect(result.rejected).toEqual([]);
+  });
+
+  it("одна плохая строка не утаскивает партию", async () => {
+    // Ради этого и заведён повтор по одной: иначе при следующем запуске те же
+    // пятеро снова соберутся вместе, и «нажмите ещё раз» не сбудется никогда.
+    const tags = ["a", "b", "c", "d", "e"];
+    const { result, sentIds } = await runCleanup({ tags, failing: ["c"] });
+    expect(result.sentTags).toBe(4);
+    expect(result.rejected.map((r) => r.id)).toEqual(["c"]);
+    // Партия целиком, затем каждая строка отдельно.
+    expect(sentIds[0]).toHaveLength(5);
+    expect(sentIds.slice(1).map((b) => b.length)).toEqual([1, 1, 1, 1, 1]);
+  });
+
+  it("падают все — отказы собраны, исключения наружу нет", async () => {
+    // Уборка не должна бросать: иначе мастер покажет ошибку вместо списка
+    // того, что осталось убрать руками.
+    const tags = ["a", "b"];
+    const { result } = await runCleanup({ tags, failing: tags });
+    expect(result.sentTags).toBe(0);
+    expect(result.rejected).toHaveLength(2);
+    expect(result.rejected.every((r) => r.kind === "tag")).toBe(true);
+  });
+
+  it("счётчик отправленного не считает отказы", async () => {
+    // `sentTags` — это «ушло без ошибки», а не «удалено». Приписать сюда
+    // отказавшие строки значило бы соврать в отчёте.
+    const { result } = await runCleanup({ tags: ["a", "b", "c"], failing: ["a"] });
+    expect(result.sentTags).toBe(2);
+  });
+
+  it("прогресс растёт и не превышает общего числа", async () => {
+    const { progress } = await runCleanup({ tags: ["a", "b", "c", "d"] });
+    expect(progress.length).toBeGreaterThan(0);
+    expect(Math.max(...progress)).toBe(4);
+    expect([...progress].sort((x, y) => x - y)).toEqual(progress);
+  });
+
+  it("подкатегории уходят раньше родителей", async () => {
+    // Родитель, удалённый первым, оставил бы ребёнка без ветки.
+    const { pushDiff } = await import("./zenmoney");
+    const { loadZenCache } = await import("./zenmoneyCache");
+    const { cleanupDictionaries } = await import("./accountCleanup");
+    const order: string[] = [];
+    vi.mocked(loadZenCache).mockResolvedValue({
+      serverTimestamp: 1,
+      tags: [
+        { id: "родитель", user: 1, parent: null },
+        { id: "ребёнок", user: 1, parent: "родитель" },
+      ],
+      merchants: [],
+    } as never);
+    vi.mocked(pushDiff).mockImplementation((async (
+      _token: string,
+      _ts: number,
+      payload: PushPayload
+    ) => {
+      for (const d of payload.deletion ?? []) order.push(d.id);
+      return {} as never;
+    }) as never);
+    await cleanupDictionaries("токен", { tags: true, merchants: false });
+    expect(order).toEqual(["ребёнок", "родитель"]);
   });
 });

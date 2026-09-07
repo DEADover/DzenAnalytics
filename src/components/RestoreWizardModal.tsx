@@ -158,7 +158,7 @@ export function RestoreWizardModal({
             <DictionariesStep
               preflight={w.preflight}
               progress={w.cleanupProgress}
-              rejected={w.cleanupResult?.rejected.length ?? 0}
+              result={w.cleanupResult}
             />
           )}
 
@@ -473,12 +473,14 @@ function Elapsed() {
 function DictionariesStep({
   preflight,
   progress,
-  rejected,
+  result,
 }: {
   preflight: import("../lib/restorePreflight").RestorePreflight | null;
   progress: import("../lib/accountCleanup").CleanupProgress | null;
-  rejected: number;
+  /** Итог последней уборки; null — её ещё не запускали. */
+  result: import("../lib/accountCleanup").CleanupResult | null;
 }) {
+  const rejected = result?.rejected.length ?? 0;
   const tags = preflight?.blockers.find((b) => b.kind === "leftoverTags")?.count ?? 0;
   const merchants =
     preflight?.blockers.find((b) => b.kind === "leftoverMerchants")?.count ?? 0;
@@ -526,6 +528,20 @@ function DictionariesStep({
         <p className="text-xs text-warn">
           Дзен-мани отказался удалить {formatNum(rejected)}{" "}
           {pluralRu(rejected, ["категорию или контрагента", "категории или контрагентов", "категорий или контрагентов"])} — уберите их вручную.
+        </p>
+      )}
+      {/* Итог ПРОВЕРКИ, а не отправки.
+          Дзен-мани умеет ответить 200 и ничего не сделать — на этом стоит вся
+          задача. Поэтому после уборки мы синхронизируемся и считаем заново, и
+          если что-то осталось, это надо сказать прямо: иначе человек видит те
+          же числа, что и до нажатия, и не понимает, сработало или нет. */}
+      {result && !progress && tags + merchants > 0 && (
+        <p className="text-xs text-warn">
+          Запросы ушли без ошибки, но после проверки осталось{" "}
+          {formatNum(tags + merchants)}{" "}
+          {pluralRu(tags + merchants, ["запись", "записи", "записей"])}: Дзен-мани
+          иногда принимает удаление и не выполняет его. Нажмите «Удалить» ещё раз
+          — уже удалённое повторно не пострадает.
         </p>
       )}
     </>
