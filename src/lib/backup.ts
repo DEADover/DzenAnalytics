@@ -7,6 +7,7 @@
 // the device unencrypted.
 
 import * as db from "./db";
+import { compressText } from "./snapshotFile";
 
 // Версия 2 добавила настройки и правки, которых в списке не было: правки
 // счетов, контрагентов и категорий, планы бюджета, разрезы данных, оформление.
@@ -325,28 +326,48 @@ export function parseAndValidateBackup(text: string): BackupPayload {
   return deepSanitize(obj) as BackupPayload;
 }
 
-export function backupFileName(now: Date = new Date(), tag?: string): string {
+export function backupFileName(
+  now: Date = new Date(),
+  tag?: string,
+  compressed = false
+): string {
   const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
   const stamp =
     `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
     `_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
   const suffix = tag ? `-${tag}` : "";
-  return `dzenanalytics-backup-${stamp}${suffix}.json`;
+  // `.json.gz`, а не `.gz`: имя должно говорить, что внутри именно json —
+  // иначе в папке загрузок это просто «архив непонятно чего».
+  const ext = compressed ? ".json.gz" : ".json";
+  return `dzenanalytics-backup-${stamp}${suffix}${ext}`;
 }
 
 /**
- * Build the backup payload and trigger a browser download.
- * Returns the byte size of the downloaded JSON.
+ * Собрать копию и отдать её браузеру на скачивание.
+ *
+ * Копия уезжает сжатой: это тот же JSON, только в разы меньше, а папка
+ * загрузок у человека копится месяцами — при расписании «каждый час» тем
+ * более. Восстановление распаковывает обратно само (`readSnapshotFile`), так
+ * что руками с архивом делать ничего не нужно.
+ *
+ * Если браузер сжимать не умеет, кладём как раньше: копия важнее экономии.
+ *
+ * Возвращает размер того, что реально ушло в файл, и его имя.
  */
 export async function downloadBackup(tag?: string): Promise<{
   size: number;
   fileName: string;
 }> {
   const payload = await buildBackupPayload();
-  const json = JSON.stringify(payload, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
+  // Без отступов: файл читает наш же импорт, а «красивый» JSON — это лишняя
+  // треть объёма ещё до сжатия.
+  const json = JSON.stringify(payload);
+  const gz = await compressText(json);
+  const blob = gz
+    ? new Blob([gz as BlobPart], { type: "application/gzip" })
+    : new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  const fileName = backupFileName(new Date(), tag);
+  const fileName = backupFileName(new Date(), tag, gz != null);
   const a = document.createElement("a");
   a.href = url;
   a.download = fileName;
@@ -355,5 +376,5 @@ export async function downloadBackup(tag?: string): Promise<{
   document.body.removeChild(a);
   // Release the blob URL after the click had a chance to take effect.
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return { size: json.length, fileName };
+  return { size: gz ? gz.byteLength : new Blob([json]).size, fileName };
 }

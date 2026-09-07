@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { parseAndValidateBackup, safePushModeOnRestore } from "./backup";
+import {
+  backupFileName,
+  parseAndValidateBackup,
+  safePushModeOnRestore,
+} from "./backup";
 
 describe("parseAndValidateBackup", () => {
   // issue #93: облачный снимок приносили в «Восстановить из бэкапа» и получали
@@ -88,5 +92,33 @@ describe("safePushModeOnRestore", () => {
     // и мы отдаём самый слабый из включённых режимов, а не самый сильный.
     expect(safePushModeOnRestore("АВТО")).toBe("manual");
     expect(safePushModeOnRestore(42)).toBe("manual");
+  });
+});
+
+describe("backupFileName", () => {
+  const at = new Date(2026, 8, 7, 13, 5, 9); // 7 сентября 2026, 13:05:09
+
+  it("ставит дату и время в имя", () => {
+    expect(backupFileName(at)).toBe("dzenanalytics-backup-2026-09-07_13-05-09.json");
+  });
+
+  it("сжатую копию называет .json.gz", () => {
+    // Не просто «.gz»: в папке загрузок должно быть видно, что внутри json,
+    // иначе это архив непонятно чего.
+    expect(backupFileName(at, undefined, true)).toBe(
+      "dzenanalytics-backup-2026-09-07_13-05-09.json.gz"
+    );
+  });
+
+  it("скачанную по расписанию помечает «-auto»", () => {
+    expect(backupFileName(at, "auto", true)).toBe(
+      "dzenanalytics-backup-2026-09-07_13-05-09-auto.json.gz"
+    );
+  });
+
+  it("однозначные числа дополняет нулём", () => {
+    // Иначе имена сортируются в папке не по времени.
+    const early = new Date(2026, 0, 2, 3, 4, 5);
+    expect(backupFileName(early)).toBe("dzenanalytics-backup-2026-01-02_03-04-05.json");
   });
 });
