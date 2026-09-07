@@ -336,16 +336,21 @@ function PickStep({
         </div>
       )}
 
-      <button onClick={onUpload} className="btn-ghost text-xs inline-flex items-center gap-2">
-        <Upload className="w-3.5 h-3.5" />
-        Загрузить файл
-      </button>
-      {/* Форматы названы прямо у кнопки: бэкап ZenTable приходит как
-          `.json.gz`, и без этой строки человек не знает, примем ли мы его,
-          пока не попробует. */}
-      <p className="text-[11px] text-muted -mt-1">
-        Снимок отсюда или бэкап ZenTable — json, zip или gz.
-      </p>
+      {/* Форматы названы РЯДОМ с кнопкой, а не под ней: бэкап ZenTable
+          приходит как `.json.gz`, и без этой строки человек не знает, примем
+          ли мы его, пока не попробует. Строкой ниже она отрывалась от кнопки и
+          читалась как подпись ко всему шагу. `flex-wrap` — чтобы на узком
+          окне подпись ушла под кнопку, а не сжала её. */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button onClick={onUpload} className="btn-ghost text-xs shrink-0">
+          <Upload className="w-3.5 h-3.5" />
+          Загрузить файл
+        </button>
+        <p className="text-[11px] text-muted">
+          Поддерживаются файлы бэкапа DzenAnalytics и ZenTable — в формате json,
+          zip или gz.
+        </p>
+      </div>
 
       {/* Страховка — это снимок ТЕКУЩЕГО состояния, а не тот, который сейчас
           зальют. Раньше здесь предлагалось «сохранить снимок файлом», и
