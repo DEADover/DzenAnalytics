@@ -26,7 +26,6 @@ import {
   CloudUpload,
   ChevronDown,
   Calculator,
-  HardDrive,
   ALargeSmall,
   ArrowLeftRight,
   HelpCircle,
@@ -390,8 +389,6 @@ export function ImportPage() {
 
   // Inner tab inside the Бэкапы section — local files vs cloud
   // snapshots. Mirrors the Источник данных card pattern.
-  type BackupTab = "local" | "cloud";
-  const [backupTab, setBackupTab] = useState<BackupTab>("local");
 
   // "Show all rates" toggle for the currency-rates grid in CSV
   // mode. By default only the 4 most-common currencies are shown
@@ -1898,46 +1895,14 @@ export function ImportPage() {
 
       {settingsTab === "backups" && (
       <section className="card-tray card-pad space-y-5">
-        {/* Header + Локальные/Облачные tab selector. Mirrors the
-            Источник данных card structure. */}
-        <SettingsSectionHeader
-          icon={History}
-          title="Резервные копии"
-          right={
-          <div className="inline-flex gap-0.5 bg-panel2 border border-border rounded-full p-1 shadow-tray">
-            <button
-              type="button"
-              onClick={() => setBackupTab("local")}
-              className={`px-3 py-1.5 text-sm rounded-full inline-flex items-center gap-1.5 transition-colors ${
-                backupTab === "local"
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:text-text"
-              }`}
-              title="Копия того, что настроено в приложении"
-            >
-              <HardDrive className="w-3.5 h-3.5" />
-              Локальные
-            </button>
-            <button
-              type="button"
-              onClick={() => setBackupTab("cloud")}
-              className={`px-3 py-1.5 text-sm rounded-full inline-flex items-center gap-1.5 transition-colors ${
-                backupTab === "cloud"
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:text-text"
-              }`}
-              title="Копия аккаунта в Дзен-мани"
-            >
-              <Cloud className="w-3.5 h-3.5" />
-              Облачные
-            </button>
-          </div>
-          }
-        />
+        {/* Обе копии на одной странице, друг под другом: раньше их развели
+            вкладками, и рядом они никогда не показывались — а разница между
+            ними как раз в том, что одна не заменяет другую. */}
+        <SettingsSectionHeader icon={History} title="Резервные копии" />
 
         <BackupComparison />
 
-        {backupTab === "local" && (<>
+        <>
         <div className="rounded-xl border border-border bg-panel2/30 p-4">
           {/* Что именно уезжает в файл — под знаком вопроса: это читают один
               раз, а место занимало постоянно, отодвигая сами кнопки вниз. */}
@@ -2055,14 +2020,14 @@ export function ImportPage() {
           </div>
         </div>
       </div>
-        </>)}
+        </>
 
         {/* Cloud snapshot — Phase 0 of two-way sync. Only available with
             an API token connected (there's nothing to snapshot in CSV
             mode). Stores up to 5 raw responses of POST /v8/diff/ so we
             can fall back to a known-good cloud state if a future push
             operation goes wrong. */}
-        {backupTab === "cloud" && (zenToken ? (
+        {zenToken ? (
           <div className="rounded-xl border border-border bg-panel2/30 p-4">
             <div className="flex items-center gap-2 mb-3">
               <History className="w-5 h-5 text-accent2 shrink-0" />
@@ -2196,10 +2161,10 @@ export function ImportPage() {
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-panel2/30 p-4 text-sm text-muted">
-            Облачные снимки доступны только при подключённом Дзен-мани API.
-            Подключите токен на вкладке «Данные».
+            Снимки аккаунта доступны только при подключённом Дзен-мани.
+            Подключите его на вкладке «Данные».
           </div>
-        ))}
+        )}
       </section>
       )}
 
@@ -2257,7 +2222,6 @@ export function ImportPage() {
                             onClick={() => {
                               setSyncInfoOpen(false);
                               setSettingsTab("backups");
-                              setBackupTab("cloud");
                             }}
                             className="text-accent hover:underline"
                           >
@@ -2405,7 +2369,6 @@ export function ImportPage() {
                     type="button"
                     onClick={() => {
                       setSettingsTab("backups");
-                      setBackupTab("cloud");
                     }}
                     className="text-accent hover:underline inline-flex items-center gap-0.5"
                   >

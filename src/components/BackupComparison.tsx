@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 
 /**
  * Чем локальная копия отличается от облачного снимка (#93).
@@ -16,7 +16,14 @@ import { AlertTriangle } from "lucide-react";
  */
 export function BackupComparison() {
   return (
-    <div className="space-y-3">
+    // Свёрнуто по умолчанию: это справка, её читают один раз, а место она
+    // занимала перед обеими карточками постоянно и отодвигала их вниз.
+    <details className="group rounded-xl border border-border bg-panel2/30">
+      <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer select-none text-sm list-none">
+        <ChevronRight className="w-4 h-4 shrink-0 text-muted transition-transform group-open:rotate-90" />
+        Чем копия приложения отличается от снимка аккаунта
+      </summary>
+      <div className="px-4 pb-4 space-y-3">
       <div className="overflow-x-auto -mx-1 px-1">
         <table className="w-full text-xs border-collapse">
           <thead>
@@ -62,7 +69,8 @@ export function BackupComparison() {
           вслед за облаком. Вернуть их в Дзен-мани может только облачный снимок.
         </span>
       </div>
-    </div>
+      </div>
+    </details>
   );
 }
 
