@@ -214,8 +214,19 @@ h2,
            transition-colors duration-200 hover:border-accent/50 hover:bg-panel2
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
   }
+  /**
+   * Прозрачная рамка в основе — чтобы варианты кнопок были одной высоты.
+   *
+   * У `.btn-ghost` и `.btn-danger` рамка есть, у `.btn-primary` и `.btn-warn`
+   * не было, и те выходили на 2 px ниже. Рядом в одном ряду это видно: в
+   * «Бэкапах» «Создать копию» ещё и растягивалась до соседней кнопки, потому
+   * что flex по умолчанию тянет элементы по высоте строки, — то есть одна и та
+   * же кнопка была то 36, то 38 в зависимости от соседей. Заодно кнопка теперь
+   * совпадает по высоте с полем ввода: у `.input` рамка тоже есть.
+   */
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full
+           border border-transparent
            text-sm font-medium
            transition-[color,background-color,box-shadow,transform,opacity] duration-200
            active:scale-[0.97]

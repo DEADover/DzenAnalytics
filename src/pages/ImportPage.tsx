@@ -983,9 +983,9 @@ export function ImportPage() {
                 className="btn-primary text-sm whitespace-nowrap"
               >
                 {zenStatus === "checking" ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : zenStatus === "syncing" ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <LinkIcon className="w-3.5 h-3.5" />
                 )}
@@ -1028,9 +1028,9 @@ export function ImportPage() {
                 className="btn-primary text-sm"
               >
                 {zenStatus === "syncing" ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className="w-4 h-4" />
                 )}
                 {zenStatus === "syncing" ? "Синхронизирую..." : "Синхронизировать"}
               </button>
@@ -1040,7 +1040,7 @@ export function ImportPage() {
                 className="btn-ghost text-sm text-muted"
                 title="Сбросить локальный кэш и скачать всё заново"
               >
-                <CloudDownload className="w-3.5 h-3.5" />
+                <CloudDownload className="w-4 h-4" />
                 Полная синхронизация
               </button>
               <button
@@ -1912,8 +1912,8 @@ export function ImportPage() {
           {/* Что именно уезжает в файл — под знаком вопроса: это читают один
               раз, а место занимало постоянно, отодвигая сами кнопки вниз. */}
           <div className="flex items-center gap-2 mb-3">
-            <Database className="w-5 h-5 text-accent shrink-0" />
-            <span className="font-medium">Копии данных сервиса</span>
+            <Database className="w-4 h-4 text-accent shrink-0" />
+            <span className="text-sm font-medium">Копии данных сервиса</span>
             <InfoPopover label="Что попадает в копию">
               <p>
                 Один JSON со всем, что живёт <InfoTerm>только здесь</InfoTerm>:
@@ -1954,7 +1954,7 @@ export function ImportPage() {
           <button
             onClick={exportBackup}
             disabled={backupBusy || transactions.length === 0}
-            className="btn-primary text-sm"
+            className="btn-primary"
           >
             <Download className="w-4 h-4" />
             Создать копию
@@ -1962,7 +1962,7 @@ export function ImportPage() {
           <button
             onClick={() => backupRef.current?.click()}
             disabled={backupBusy}
-            className="btn-ghost text-sm"
+            className="btn-ghost"
           >
             <Upload className="w-4 h-4" />
             Восстановить
@@ -1988,8 +1988,8 @@ export function ImportPage() {
             читался как вторая, чем-то другая функция. */}
         <div className="flex items-center justify-between gap-3 flex-wrap border-t border-border pt-3 mt-4">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <Clock className="w-5 h-5 text-accent shrink-0" />
-            <span className="font-medium">По расписанию</span>
+            <Clock className="w-4 h-4 text-accent shrink-0" />
+            <span className="text-sm font-medium">По расписанию</span>
             <InfoPopover label="Как работает расписание">
               <p>
                 Автоматически скачивает ту же копию с выбранной
@@ -2041,8 +2041,8 @@ export function ImportPage() {
         {zenToken ? (
           <div className="rounded-xl border border-border bg-panel2/30 p-4">
             <div className="flex items-center gap-2 mb-3">
-              <History className="w-5 h-5 text-accent2 shrink-0" />
-              <span className="font-medium">Снимки аккаунта Дзен-мани</span>
+              <History className="w-4 h-4 text-accent2 shrink-0" />
+              <span className="text-sm font-medium">Снимки аккаунта Дзен-мани</span>
               <InfoPopover label="Что попадает в снимок">
                 <p>
                   Полная копия того, что сейчас лежит в Дзен-мани: операции,
@@ -2079,12 +2079,12 @@ export function ImportPage() {
               <button
                 onClick={() => takeCloudSnapshot()}
                 disabled={cloudSnapshotsBusy}
-                className="btn-primary text-sm inline-flex items-center gap-2"
+                className="btn-primary"
               >
                 {cloudSnapshotsOp === "snapshot" ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <CloudDownload className="w-3.5 h-3.5" />
+                  <CloudDownload className="w-4 h-4" />
                 )}
                 {cloudSnapshotsOp === "snapshot" ? "Создаю снимок…" : "Создать снимок"}
               </button>
@@ -2097,9 +2097,9 @@ export function ImportPage() {
                   setRestoreWizardOpen(true);
                 }}
                 disabled={cloudSnapshotsBusy}
-                className="btn-ghost text-sm inline-flex items-center gap-2"
+                className="btn-ghost"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshCw className="w-4 h-4" />
                 Восстановить
               </button>
             </div>
@@ -2342,7 +2342,7 @@ export function ImportPage() {
                     className="btn-primary text-xs !py-1 inline-flex items-center gap-2 sm:ml-auto disabled:opacity-50"
                   >
                     {pushStatus === "syncing" ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <CloudUpload className="w-3.5 h-3.5" />
                     )}
