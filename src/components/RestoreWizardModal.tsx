@@ -372,7 +372,7 @@ function PickStep({
           className="btn-ghost text-xs inline-flex items-center gap-2"
         >
           <CloudDownload className="w-3.5 h-3.5" />
-          {takingSnapshot ? "Сохраняю…" : "Сохранить нынешнее состояние"}
+          {takingSnapshot ? "Сохраняю…" : "Сохранить текущее состояние"}
         </button>
         <label className="flex items-start gap-2.5 cursor-pointer pt-1">
           <input
@@ -541,7 +541,7 @@ function DictionariesStep({
           {formatNum(tags + merchants)}{" "}
           {pluralRu(tags + merchants, ["запись", "записи", "записей"])}: Дзен-мани
           иногда принимает удаление и не выполняет его. Нажмите «Удалить» ещё раз
-          — уже удалённое повторно не пострадает.
+          — попробуем повторно удалить оставшиеся записи.
         </p>
       )}
     </>
