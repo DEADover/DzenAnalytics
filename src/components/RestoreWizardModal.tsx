@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CloudDownload,
   History,
+  RefreshCw,
   Upload,
   X,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { pluralRu } from "../lib/plural";
 import { snapshotSummary } from "../lib/snapshotLabel";
 import { InfoPopover } from "./InfoPopover";
 import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
+import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
 
 /**
@@ -399,10 +401,28 @@ function ClearStep({
   const left = preflight?.blockers.find((b) => b.kind === "notEmpty")?.count ?? null;
   return (
     <>
-      <p>
-        Очистите аккаунт в Дзен-мани: <strong>Ещё → Настройки аккаунта → Начать
-        всё сначала</strong>. На сайте — то же в настройках профиля.
-      </p>
+      <p>Очистите аккаунт в Дзен-мани:</p>
+      {/* Два пути списком, а не одной фразой: человек делает это в своём
+          приложении или на сайте, и путь у них разный. Ссылка ведёт прямо в
+          профиль — искать его самому незачем. */}
+      <ul className="list-disc list-inside space-y-1">
+        <li>
+          В мобильном приложении — <strong>Ещё → Настройки аккаунта → Начать
+          всё сначала</strong>.
+        </li>
+        <li>
+          На сайте{" "}
+          <a
+            href="https://zenmoney.ru/a/#profile"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-accent hover:underline"
+          >
+            zenmoney.ru
+          </a>{" "}
+          — <strong>Профиль → Начать всё сначала</strong>.
+        </li>
+      </ul>
       <div className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
         <span className="text-xs text-muted">Операций в аккаунте</span>
         <span className="tabular-nums font-medium">
@@ -412,7 +432,7 @@ function ClearStep({
       <p className="text-xs text-muted">
         Дзен-мани обновляет данные не мгновенно — на это уходит до пяти минут,
         поэтому сразу после очистки число может не измениться. Нажмите
-        «Проверить» ещё раз через минуту.
+        «Проверить» ещё раз через несколько минут.
       </p>
       {checkedAt && (
         <p className="text-xs text-muted">
@@ -425,6 +445,29 @@ function ClearStep({
       )}
     </>
   );
+}
+
+/**
+ * Секундомер работы.
+ *
+ * Отдельным компонентом, а не состоянием шага: он должен обнуляться при каждом
+ * новом запуске, а сброс состояния прямо в эффекте — как раз то, за что ругает
+ * линтер (каскадные перерисовки). Монтирование обнуляет его само.
+ *
+ * Нужен, потому что «сколько удалено» меняется раз в минуту с лишним: без
+ * бегущих секунд экран выглядит замершим.
+ */
+function Elapsed() {
+  const [sec, setSec] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const id = setInterval(
+      () => setSec(Math.round((Date.now() - started) / 1000)),
+      1000
+    );
+    return () => clearInterval(id);
+  }, []);
+  return sec > 0 ? <> · {sec} c</> : null;
 }
 
 function DictionariesStep({
@@ -442,9 +485,9 @@ function DictionariesStep({
   return (
     <>
       <p>
-        Операции и счета удалены, а категории и контрагенты остались — команда
-        «Начать всё сначала» их не трогает. Удалить их нужно, иначе категории
-        задвоятся: к нынешним добавятся те, что придут из снимка.
+        Операции и счета удалены, но категории и контрагенты остались — команда
+        «Начать всё сначала» их не трогает. Для восстановления снимка их нужно
+        предварительно удалить.
       </p>
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-border p-3">
@@ -460,7 +503,12 @@ function DictionariesStep({
         <div className="space-y-1">
           <p className="text-xs text-muted tabular-nums">
             {progress.phase === "tags" ? "Удаляю категории" : "Удаляю контрагентов"}:{" "}
-            {formatNum(progress.sent)} из {formatNum(progress.total)}
+            {progress.inFlight > 0
+              ? `${formatNum(progress.sent + 1)}–${formatNum(
+                  progress.sent + progress.inFlight
+                )} из ${formatNum(progress.total)}`
+              : `${formatNum(progress.sent)} из ${formatNum(progress.total)}`}
+            <Elapsed />
           </p>
           <div className="h-1 rounded-full bg-border overflow-hidden">
             <div
@@ -473,10 +521,8 @@ function DictionariesStep({
         </div>
       )}
       <p className="text-xs text-muted">
-        На каждую категорию Дзен-мани тратит около пяти секунд, и ускорить это
-        нечем: одновременные запросы он всё равно выполняет по очереди. На
-        полсотни категорий уйдёт минут пять; контрагенты удалятся быстро.
-        Не перезагружайте страницу, пока идёт удаление.
+        На каждую категорию Дзен-мани тратит пару секунд, контрагенты удаляются
+        быстро. Не перезагружайте страницу, пока идёт удаление.
       </p>
       {rejected > 0 && (
         <p className="text-xs text-warn">
@@ -510,9 +556,12 @@ function ReadyStep({
           <span className="text-text">Аккаунт пуст, можно восстанавливать.</span>
         </div>
       )}
-      {/* Счётчики видны и во время заливки: именно тогда по ним и сверяют.
+      {/* Плиткам нужна подпись: без неё пять чисел висели в воздухе, и было
+          непонятно, это уже в аккаунте или только собирается туда.
+          Счётчики видны и во время заливки: именно тогда по ним и сверяют.
           Планы — пятой плиткой и только когда они есть: у аккаунта без планов
           пустая клетка сообщала бы лишь о том, что мы умеем их считать. */}
+      <p className="text-sm font-medium">Будут восстановлены:</p>
       <div className={`grid gap-3 ${c.reminders ? "grid-cols-5" : "grid-cols-4"}`}>
         <Cell label="Операции" value={c.transactions} />
         <Cell label="Счета" value={c.accounts} />
@@ -530,9 +579,10 @@ function ReadyStep({
             "удалённые записи",
             "удалённых записей",
           ])}
-          : снимок — полная копия, и историю удалений он сохраняет. В счётчике
-          ниже они учтены, поэтому всего будет{" "}
-          {formatNum(snapshot.counts.transactions + deleted)}.
+          : снимок — полная копия, и историю удалений он сохраняет. Поэтому по
+          ходу переноса счётчик дойдёт не до {formatNum(snapshot.counts.transactions)},
+          а до {formatNum(snapshot.counts.transactions + deleted)} — так и должно
+          быть.
         </p>
       )}
 
@@ -614,18 +664,62 @@ function PartialStep() {
   );
 }
 
+/**
+ * Перенос закончен.
+ *
+ * Синхронизация — кнопкой прямо здесь. Раньше последний шаг заканчивался
+ * фразой «здесь данные появятся после синхронизации», и человек оставался с
+ * пустым сервисом и заданием, которое надо где-то выполнить самому. Кнопка
+ * рядом с сообщением закрывает восстановление целиком.
+ */
 function DoneStep({
   result,
 }: {
   result: import("../lib/cloudSnapshots").RestoreResult | null;
 }) {
   const dropped = result?.skipped.transactions ?? 0;
+  const sent = result?.accepted;
+  const syncing = useZenmoneyStore((z) => z.status === "syncing");
+  const lastSyncAt = useZenmoneyStore((z) => z.lastSyncAt);
+  const sync = useZenmoneyStore((z) => z.sync);
+  const [synced, setSynced] = useState(false);
   return (
     <>
       <div className="flex items-start gap-2 text-income">
         <Check className="w-4 h-4 shrink-0 mt-0.5" />
-        <span className="text-text">Данные отправлены в Дзен-мани.</span>
+        <span className="text-text">Снимок перенесён в Дзен-мани.</span>
       </div>
+
+      {sent && (
+        <p className="text-xs text-muted">
+          Отправлено: {formatNum(sent.transactions.visible + sent.transactions.hidden)}{" "}
+          {pluralRu(
+            sent.transactions.visible + sent.transactions.hidden,
+            ["операция", "операции", "операций"]
+          )}
+          , {formatNum(sent.accounts.active + sent.accounts.archived)}{" "}
+          {pluralRu(
+            sent.accounts.active + sent.accounts.archived,
+            ["счёт", "счёта", "счетов"]
+          )}
+          , {formatNum(sent.tags.active + sent.tags.archived)}{" "}
+          {pluralRu(sent.tags.active + sent.tags.archived, [
+            "категория",
+            "категории",
+            "категорий",
+          ])}
+          , {formatNum(sent.merchants)}{" "}
+          {pluralRu(sent.merchants, ["контрагент", "контрагента", "контрагентов"])}
+          {sent.reminders > 0 && (
+            <>
+              , {formatNum(sent.reminders)}{" "}
+              {pluralRu(sent.reminders, ["план", "плана", "планов"])}
+            </>
+          )}
+          .
+        </p>
+      )}
+
       {dropped > 0 && (
         <p className="text-xs text-warn">
           {formatNum(dropped)}{" "}
@@ -633,9 +727,33 @@ function DoneStep({
           удалось: они ссылались на счёт или категорию, которых в снимке нет.
         </p>
       )}
+
+      <div className="rounded-xl border border-border p-3 space-y-2">
+        <p className="text-xs text-muted">
+          Осталось забрать данные обратно: пока в DzenAnalytics пусто, потому
+          что аккаунт очищали.
+        </p>
+        <button
+          onClick={async () => {
+            await sync({ force: true });
+            setSynced(true);
+          }}
+          disabled={syncing}
+          className="btn-primary text-sm"
+        >
+          <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+          {syncing ? "Синхронизирую…" : "Синхронизировать"}
+        </button>
+        {synced && !syncing && lastSyncAt && (
+          <p className="text-xs text-income">
+            Готово. Данные снова на месте — окно можно закрыть.
+          </p>
+        )}
+      </div>
+
       <p className="text-xs text-muted">
-        Проверьте результат в Дзен-мани: число операций должно совпасть с тем,
-        что было в снимке. Здесь данные появятся после синхронизации.
+        Заодно загляните в Дзен-мани: число операций там должно совпасть с тем,
+        что было в снимке.
       </p>
     </>
   );

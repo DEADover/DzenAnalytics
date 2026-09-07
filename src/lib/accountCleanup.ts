@@ -14,9 +14,20 @@
  * поэтому здесь мы только отправляем запросы, а итог считает тот, кто потом
  * заново спросит облако.
  *
- * ПОЧЕМУ ПАРТИЯМИ. Удаление категории дорогое: сервер обходит операции, которые
- * на неё ссылаются. Замерено на живом аккаунте: партия из 25 не завершилась и
- * за пять минут, по 5 — проходит. Контрагенты дешёвые, их шлём по 50.
+ * ПОЧЕМУ КАТЕГОРИИ — ПО ОДНОЙ. Стоимость запроса на удаление растёт КАК КВАДРАТ
+ * числа категорий в нём. Замерено на живом аккаунте (7 662 операции):
+ *
+ *     1 категория  —   1,5 с
+ *     5 категорий  —  48,2 с   (9,6 с на штуку)
+ *    10 категорий  — 176,7 с   (17,7 с на штуку)
+ *
+ * Отсюда и прежняя загадка «партия из 25 висит больше пяти минут»: она не
+ * висла, а честно считала свои ~18 минут. И отсюда же прежний неверный вывод
+ * «около пяти секунд на категорию, ускорить нечем» — эта цифра была свойством
+ * выбранного размера партии, а не сервера.
+ *
+ * Поэтому категории уходят ПО ОДНОЙ: полсотни занимают около минуты вместо
+ * восьми. Контрагенты так не дорожают — их по-прежнему шлём пачками.
  *
  * ПОЧЕМУ ПОВТОР ПО ОДНОМУ. Если одну категорию сервер удалять отказывается,
  * с ней падает вся партия — и при следующем запуске те же пятеро снова
@@ -30,7 +41,7 @@ import { loadZenCache } from "./zenmoneyCache";
 import { devLog } from "./devLog";
 
 /** Размер партии. Разный, и это не вкусовщина — см. шапку модуля. */
-export const TAG_BATCH = 5;
+export const TAG_BATCH = 1;
 export const MERCHANT_BATCH = 50;
 
 export interface CleanupProgress {
@@ -38,6 +49,15 @@ export interface CleanupProgress {
   /** Сколько ОТПРАВЛЕНО без ошибки; итог всё равно перепроверяется облаком. */
   sent: number;
   total: number;
+  /**
+   * Сколько строк прямо сейчас в работе.
+   *
+   * Без этого числа счётчик стоял на месте всё время, пока идёт запрос, — а
+   * партия категорий уходит больше чем на минуту. Человек видел неподвижные
+   * «0 из 48» и решал, что всё зависло. Теперь видно, что работа идёт и над
+   * чем именно.
+   */
+  inFlight: number;
 }
 
 export interface CleanupResult {
@@ -106,23 +126,26 @@ export async function cleanupDictionaries(
     phase: "tags" | "merchants"
   ): Promise<number> => {
     let sent = 0;
+    const total = deletions.length;
     for (const batch of chunk(deletions, size)) {
       if (signal?.aborted) break;
-      onProgress?.({ phase, sent, total: deletions.length });
+      onProgress?.({ phase, sent, total, inFlight: batch.length });
       if (await send(batch)) {
         sent += batch.length;
+        onProgress?.({ phase, sent, total, inFlight: 0 });
         continue;
       }
       // Партия упала — пробуем поштучно, чтобы одна непроходимая строка не
       // утаскивала за собой соседние.
       for (const one of batch) {
         if (signal?.aborted) break;
+        onProgress?.({ phase, sent, total, inFlight: 1 });
         if (await send([one])) sent += 1;
         else result.rejected.push({ kind, id: one.id, reason: "сервер отклонил удаление" });
-        onProgress?.({ phase, sent, total: deletions.length });
+        onProgress?.({ phase, sent, total, inFlight: 0 });
       }
     }
-    onProgress?.({ phase, sent, total: deletions.length });
+    onProgress?.({ phase, sent, total, inFlight: 0 });
     return sent;
   };
 
@@ -147,7 +170,7 @@ export async function cleanupDictionaries(
     );
   }
 
-  onProgress?.({ phase: "done", sent: 0, total: 0 });
+  onProgress?.({ phase: "done", sent: 0, total: 0, inFlight: 0 });
   devLog(
     "zen-cleanup",
     `отправлено: категорий ${result.sentTags}, контрагентов ${result.sentMerchants}, ` +
