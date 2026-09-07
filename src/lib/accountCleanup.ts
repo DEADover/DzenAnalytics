@@ -14,26 +14,28 @@
  * поэтому здесь мы только отправляем запросы, а итог считает тот, кто потом
  * заново спросит облако.
  *
- * СКОЛЬКО ЭТО СТОИТ И ПОЧЕМУ УСКОРИТЬ НЕЛЬЗЯ. Замерено на живом аккаунте
- * (7 662 операции) одноразовыми категориями, при боевом `serverTimestamp`:
+ * СКОЛЬКО ЭТО СТОИТ. Замерено на живом аккаунте (7 662 операции) одноразовыми
+ * категориями, при боевом `serverTimestamp`:
  *
- *    по одной   — 357 с на 20 категорий (17,9 с на штуку)
- *    по пять    — 84 и 83 с на запрос   (16,8 с на штуку)
+ *    последовательно, по одной   — 357 с на 20 категорий (18,0 с на штуку)
+ *    последовательно, пятёрками  — 341 с на 20 категорий (17,0 с на штуку)
+ *    СЕМЬ ПЯТЁРОК ОДНОВРЕМЕННО   — 128 с на 35 категорий (3,7 с на штуку)
  *
- * То есть цена — примерно 17 секунд ЗА КАТЕГОРИЮ, и от размера партии она не
- * зависит: экономии на общем запросе нет. Полсотни категорий поэтому и правда
- * занимают четверть часа, и это предел сервера, а не наша нерасторопность.
+ * То есть размер партии не решает ничего (разница 5%, шум), а вот
+ * ПАРАЛЛЕЛЬНОСТЬ решает: в 4,6 раза. Все семь запросов уходят разом и
+ * возвращаются за 103–128 с. Подсказал приём партнёрский ZenTable — у него в
+ * интерфейсе так и написано: размер партии 5, одновременно до 7.
  *
- * ОСТОРОЖНО С ЗАМЕРАМИ. Проба с `serverTimestamp: 0` показывала совсем другое
- * (1 шт — 1,5 с, 5 шт — 48 с, 10 шт — 177 с) и подталкивала к выводу, что цена
- * растёт как квадрат партии. Вывод был неверный: с нулевой меткой сервер
- * работает иначе, чем при инкрементальной, и мерить надо ровно так, как ходит
- * боевой код. Я на этом уже ошибся дважды — сначала решив, что дело в пяти
- * секундах на категорию, потом — что в размере партии.
+ * ОСТОРОЖНО С ЗАМЕРАМИ. По этому вопросу я ошибся трижды. Сначала «около пяти
+ * секунд на категорию» — цифра была свойством размера партии. Потом «цена
+ * растёт как квадрат партии» — тот замер шёл с `serverTimestamp: 0`, при
+ * котором сервер работает иначе, чем при боевой инкрементальной метке. Потом
+ * «сервер всё равно выполняет запросы по очереди» — не выполняет. Мерить надо
+ * ровно так, как ходит боевой код, и проверять параллельность отдельно.
  *
- * ПОЧЕМУ ВСЁ-ТАКИ ПО ОДНОЙ. Раз по времени разницы нет, выбираем по другому:
- * прогресс двигается раз в 18 секунд, а не раз в полторы минуты, и упавшая
- * строка стоит одного повтора, а не пяти. Контрагенты дешёвые, их шлём пачками.
+ * ПОЧЕМУ ДВУМЯ ВОЛНАМИ. Родителя нельзя удалять одновременно с его
+ * подкатегорией: порядок «снизу вверх» ради того и заведён. Поэтому сначала
+ * параллельно уходят все подкатегории, и только потом — все родители.
  *
  * ПОЧЕМУ ПОВТОР ПО ОДНОМУ. Если одну категорию сервер удалять отказывается,
  * с ней падает вся партия — и при следующем запуске те же пятеро снова
@@ -47,8 +49,17 @@ import { loadZenCache } from "./zenmoneyCache";
 import { devLog } from "./devLog";
 
 /** Размер партии. Разный, и это не вкусовщина — см. шапку модуля. */
-export const TAG_BATCH = 1;
+export const TAG_BATCH = 5;
 export const MERCHANT_BATCH = 50;
+/**
+ * Сколько запросов держим в воздухе одновременно.
+ *
+ * Семь — не наугад: столько же ставит партнёрский ZenTable, и на замере семь
+ * пятёрок дали 3,7 с на категорию против 17 с последовательно. Гнаться за
+ * бо́льшим числом не стали: выигрыш уже основной, а лишние соединения — риск
+ * упереться в ограничения сервера.
+ */
+export const PARALLEL = 7;
 
 export interface CleanupProgress {
   phase: "tags" | "merchants" | "done";
@@ -77,6 +88,28 @@ export interface CleanupResult {
 export interface CleanupOptions {
   tags: boolean;
   merchants: boolean;
+}
+
+/**
+ * Выполнить задачи, держа в воздухе не больше `limit` штук.
+ *
+ * `Promise.all` по всем партиям сразу открыл бы столько соединений, сколько
+ * партий, — а браузер и сервер этому не рады. Пул берёт следующую задачу, как
+ * только освобождается место.
+ */
+export async function runPool<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  let next = 0;
+  const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await worker(item);
+    }
+  });
+  await Promise.all(lanes);
 }
 
 /** Нарезать на партии фиксированного размера. */
@@ -125,52 +158,73 @@ export async function cleanupDictionaries(
     }
   };
 
+  /**
+   * Прогнать удаление по группам.
+   *
+   * Группы идут ПО ОЧЕРЕДИ, партии внутри группы — ПАРАЛЛЕЛЬНО. У категорий
+   * групп две (сначала подкатегории, потом родители), у контрагентов одна.
+   */
   const run = async (
     kind: "tag" | "merchant",
-    deletions: ZenDeletion[],
+    groups: ZenDeletion[][],
     size: number,
     phase: "tags" | "merchants"
   ): Promise<number> => {
+    const total = groups.reduce((n, g) => n + g.length, 0);
     let sent = 0;
-    const total = deletions.length;
-    for (const batch of chunk(deletions, size)) {
-      if (signal?.aborted) break;
-      onProgress?.({ phase, sent, total, inFlight: batch.length });
-      if (await send(batch)) {
-        sent += batch.length;
-        onProgress?.({ phase, sent, total, inFlight: 0 });
-        continue;
-      }
-      // Партия упала — пробуем поштучно, чтобы одна непроходимая строка не
-      // утаскивала за собой соседние.
-      for (const one of batch) {
-        if (signal?.aborted) break;
-        onProgress?.({ phase, sent, total, inFlight: 1 });
-        if (await send([one])) sent += 1;
-        else result.rejected.push({ kind, id: one.id, reason: "сервер отклонил удаление" });
-        onProgress?.({ phase, sent, total, inFlight: 0 });
-      }
+    let inFlight = 0;
+    const report = () => onProgress?.({ phase, sent, total, inFlight });
+    report();
+    for (const group of groups) {
+      await runPool(chunk(group, size), PARALLEL, async (batch) => {
+        if (signal?.aborted) return;
+        inFlight += batch.length;
+        report();
+        const ok = await send(batch);
+        inFlight -= batch.length;
+        if (ok) {
+          sent += batch.length;
+          report();
+          return;
+        }
+        // Партия упала — пробуем поштучно, чтобы одна непроходимая строка не
+        // утаскивала за собой соседние.
+        for (const one of batch) {
+          if (signal?.aborted) break;
+          inFlight += 1;
+          report();
+          const okOne = await send([one]);
+          inFlight -= 1;
+          if (okOne) sent += 1;
+          else result.rejected.push({ kind, id: one.id, reason: "сервер отклонил удаление" });
+          report();
+        }
+      });
     }
-    onProgress?.({ phase, sent, total, inFlight: 0 });
+    report();
     return sent;
   };
 
   if (opts.tags) {
-    // Снизу вверх: сначала подкатегории, потом их родители — иначе родитель
-    // уходит первым и оставляет ребёнка без ветки.
-    const ordered = [...cache.tags].sort((a, b) => (b.parent ? 1 : 0) - (a.parent ? 1 : 0));
-    result.sentTags = await run(
-      "tag",
-      ordered.map((t) => ({ id: t.id, object: "tag", user: t.user, stamp })),
-      TAG_BATCH,
-      "tags"
-    );
+    // Снизу вверх ДВУМЯ ВОЛНАМИ: сначала все подкатегории, потом все родители.
+    // Внутри волны запросы идут одновременно, а вот родителя с его ребёнком
+    // одновременно удалять нельзя — родитель уйдёт первым и оставит ребёнка
+    // без ветки.
+    const del = (t: (typeof cache.tags)[number]): ZenDeletion => ({
+      id: t.id,
+      object: "tag",
+      user: t.user,
+      stamp,
+    });
+    const children = cache.tags.filter((t) => t.parent).map(del);
+    const parents = cache.tags.filter((t) => !t.parent).map(del);
+    result.sentTags = await run("tag", [children, parents], TAG_BATCH, "tags");
   }
 
   if (opts.merchants) {
     result.sentMerchants = await run(
       "merchant",
-      cache.merchants.map((m) => ({ id: m.id, object: "merchant", user: m.user, stamp })),
+      [cache.merchants.map((m) => ({ id: m.id, object: "merchant", user: m.user, stamp }))],
       MERCHANT_BATCH,
       "merchants"
     );

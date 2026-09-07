@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { chunk, MERCHANT_BATCH, TAG_BATCH } from "./accountCleanup";
+import { chunk, MERCHANT_BATCH, runPool, TAG_BATCH } from "./accountCleanup";
 
 describe("chunk", () => {
   it("режет ровно по размеру партии", () => {
@@ -26,14 +26,50 @@ describe("chunk", () => {
     expect(batches.every((b) => b.length <= MERCHANT_BATCH)).toBe(true);
   });
 
-  it("категории уходят по одной", () => {
-    // Не ради скорости: замерено, что цена — около 17 с ЗА КАТЕГОРИЮ и от
-    // размера партии не зависит (20 шт по одной — 357 с, пятёрками — 84 с на
-    // запрос). Выбор в пользу единицы сделан ради прогресса: он двигается раз
-    // в 18 секунд, а не раз в полторы минуты, и упавшая строка стоит одного
-    // повтора, а не пяти.
-    expect(TAG_BATCH).toBe(1);
+  it("теги режутся мельче контрагентов", () => {
+    // Размер партии на скорость почти не влияет (замер: 17,0 против 18,0 с на
+    // категорию), а вот параллельность влияет вчетверо — см. шапку модуля.
+    // Пятёрка выбрана как у ZenTable: 7 таких партий разом дают 3,7 с/шт.
+    expect(TAG_BATCH).toBe(5);
     expect(TAG_BATCH).toBeLessThan(MERCHANT_BATCH);
-    expect(chunk(Array.from({ length: 48 }, (_, i) => i), TAG_BATCH).length).toBe(48);
+    expect(chunk(Array.from({ length: 48 }, (_, i) => i), TAG_BATCH).length).toBe(10);
+  });
+});
+
+describe("runPool", () => {
+  it("держит в воздухе не больше предела", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    await runPool(Array.from({ length: 20 }, (_, i) => i), 7, async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 1));
+      inFlight -= 1;
+    });
+    expect(peak).toBe(7);
+  });
+
+  it("выполняет каждую задачу ровно один раз", async () => {
+    const seen: number[] = [];
+    await runPool([1, 2, 3, 4, 5], 3, async (n) => {
+      seen.push(n);
+    });
+    expect(seen.sort()).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("предел больше числа задач не создаёт лишних дорожек", async () => {
+    let peak = 0;
+    let inFlight = 0;
+    await runPool([1, 2], 7, async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 1));
+      inFlight -= 1;
+    });
+    expect(peak).toBe(2);
+  });
+
+  it("пустой список не зависает", async () => {
+    await expect(runPool([], 7, async () => {})).resolves.toBeUndefined();
   });
 });

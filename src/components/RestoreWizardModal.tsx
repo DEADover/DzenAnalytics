@@ -503,11 +503,8 @@ function DictionariesStep({
         <div className="space-y-1">
           <p className="text-xs text-muted tabular-nums">
             {progress.phase === "tags" ? "Удаляю категории" : "Удаляю контрагентов"}:{" "}
-            {progress.inFlight > 0
-              ? `${formatNum(progress.sent + 1)}–${formatNum(
-                  progress.sent + progress.inFlight
-                )} из ${formatNum(progress.total)}`
-              : `${formatNum(progress.sent)} из ${formatNum(progress.total)}`}
+            {formatNum(progress.sent)} из {formatNum(progress.total)}
+            {progress.inFlight > 0 && ` · ${formatNum(progress.inFlight)} в работе`}
             <Elapsed />
           </p>
           <div className="h-1 rounded-full bg-border overflow-hidden">
@@ -521,9 +518,9 @@ function DictionariesStep({
         </div>
       )}
       <p className="text-xs text-muted">
-        Дзен-мани тратит около 15–20 секунд на каждую категорию, и ускорить это
-        нечем — так что полсотни займут четверть часа. Контрагенты удаляются
-        быстро. Не перезагружайте страницу, пока идёт удаление.
+        Категории удаляются по нескольку сразу, но всё равно небыстро: полсотни
+        занимают около трёх минут. Контрагенты уходят быстро. Не перезагружайте
+        страницу, пока идёт удаление.
       </p>
       {rejected > 0 && (
         <p className="text-xs text-warn">
