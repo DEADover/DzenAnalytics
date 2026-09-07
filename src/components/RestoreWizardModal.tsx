@@ -286,6 +286,42 @@ function PickStep({
 }) {
   return (
     <>
+      {/* Предупреждение — ПЕРВЫМ, до выбора снимка: сначала человек должен
+          понять, что это необратимо, и только потом выбирать, к чему
+          возвращаться. Внизу оно читалось как примечание к уже сделанному
+          выбору.
+
+          Страховка здесь — снимок ТЕКУЩЕГО состояния, а не тот, который сейчас
+          зальют. Раньше предлагалось «сохранить снимок файлом», и сохранялся
+          ровно тот, к которому возвращаются: отыграть назад им нельзя было в
+          принципе. */}
+      <div className="rounded-xl border border-warn/40 bg-warn/5 p-3 space-y-2">
+        <p className="text-xs">
+          Восстановление вернёт аккаунт к состоянию на момент снимка. Всё, что
+          появилось после, пропадёт, и отменить это нельзя.
+        </p>
+        <button
+          onClick={onTakeSnapshot}
+          disabled={takingSnapshot}
+          className="btn-ghost text-xs inline-flex items-center gap-2"
+        >
+          <CloudDownload className="w-3.5 h-3.5" />
+          {takingSnapshot ? "Сохраняю…" : "Сохранить текущее состояние"}
+        </button>
+        <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+          <input
+            type="checkbox"
+            checked={accepted}
+            onChange={(e) => onAccept(e.target.checked)}
+            className="mt-0.5 shrink-0"
+          />
+          <span className="text-xs">
+            Действую на свой страх и риск. За данные в Дзен-мани отвечаю я,
+            а не DzenAnalytics.
+          </span>
+        </label>
+      </div>
+
       <div className="flex items-center gap-1.5">
         <span className="font-medium">К какому состоянию вернуть аккаунт</span>
         <InfoPopover label="Как это работает">
@@ -357,36 +393,6 @@ function PickStep({
         </p>
       </div>
 
-      {/* Страховка — это снимок ТЕКУЩЕГО состояния, а не тот, который сейчас
-          зальют. Раньше здесь предлагалось «сохранить снимок файлом», и
-          сохранялся ровно тот, к которому возвращаются: отыграть назад им
-          нельзя было в принципе. */}
-      <div className="rounded-xl border border-warn/40 bg-warn/5 p-3 space-y-2">
-        <p className="text-xs">
-          Аккаунт вернётся к выбранному состоянию. Всё, что появилось после,
-          пропадёт, и отменить это нельзя.
-        </p>
-        <button
-          onClick={onTakeSnapshot}
-          disabled={takingSnapshot}
-          className="btn-ghost text-xs inline-flex items-center gap-2"
-        >
-          <CloudDownload className="w-3.5 h-3.5" />
-          {takingSnapshot ? "Сохраняю…" : "Сохранить текущее состояние"}
-        </button>
-        <label className="flex items-start gap-2.5 cursor-pointer pt-1">
-          <input
-            type="checkbox"
-            checked={accepted}
-            onChange={(e) => onAccept(e.target.checked)}
-            className="mt-0.5 shrink-0"
-          />
-          <span className="text-xs">
-            Действую на свой страх и риск. За данные в Дзен-мани отвечаю я,
-            а не DzenAnalytics.
-          </span>
-        </label>
-      </div>
     </>
   );
 }
