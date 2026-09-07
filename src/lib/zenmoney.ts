@@ -190,6 +190,23 @@ export interface ZenReminder {
   endDate?: string | null;
   payee?: string | null;
   comment?: string | null;
+  /**
+   * Ноги плана — те же, что у операции и у маркера.
+   *
+   * Раньше их тут не было: план читался ради одного поля `interval`, и
+   * описывать остальное значило бы делать вид, что мы с ним работаем. Теперь
+   * работаем — план переносится восстановлением, и каждую из этих ссылок надо
+   * перенумеровать (см. `remapPlans`). Состав полей взят с живого ответа API.
+   */
+  income?: number;
+  incomeInstrument?: number;
+  incomeAccount?: string;
+  outcome?: number;
+  outcomeInstrument?: number;
+  outcomeAccount?: string;
+  tag?: string[] | null;
+  merchant?: string | null;
+  notify?: boolean;
 }
 
 /**
@@ -273,6 +290,9 @@ interface DiffRequest {
   account?: ZenAccount[];
   tag?: ZenTag[];
   merchant?: ZenMerchant[];
+  budget?: ZenBudget[];
+  reminder?: ZenReminder[];
+  reminderMarker?: ZenReminderMarker[];
   /** Soft-delete: `{ id, object, stamp, user }` per item. */
   deletion?: ZenDeletion[];
 }
@@ -334,6 +354,11 @@ export interface PushPayload {
   tag?: ZenTag[];
   merchant?: ZenMerchant[];
   budget?: ZenBudget[];
+  /** Планы и их операции. Пользовательские сущности, как и всё выше: их можно
+   *  создавать и изменять пушем. Нужны восстановлению — без них снимок вернул
+   *  бы аккаунт без единого плана. */
+  reminder?: ZenReminder[];
+  reminderMarker?: ZenReminderMarker[];
   deletion?: ZenDeletion[];
 }
 

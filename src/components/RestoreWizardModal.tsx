@@ -541,9 +541,11 @@ function ReadyStep({
                 ? "Переношу категории"
                 : progress.phase === "merchants"
                   ? "Переношу контрагентов"
-                  : progress.phase === "transactions"
-                    ? "Переношу операции"
-                    : "Заканчиваю"}
+                  : progress.phase === "reminders"
+                    ? "Переношу планы"
+                    : progress.phase === "transactions"
+                        ? "Переношу операции"
+                        : "Заканчиваю"}
             {progress.total > 0 && (
               <>
                 : {formatNum(progress.current)} из {formatNum(progress.total)}

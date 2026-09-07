@@ -21,9 +21,14 @@
  */
 
 import * as db from "./db";
-import type { ZenAccount, ZenDiffResponse, ZenTransaction } from "./zenmoney";
+import type {
+  ZenAccount,
+  ZenDiffResponse,
+  ZenReminder,
+  ZenReminderMarker,
+  ZenTransaction,
+} from "./zenmoney";
 import { fetchDiff, pushDiff, type PushPayload } from "./zenmoney";
-import { FULL_SYNC_ENTITIES } from "./zenmoneyCache";
 import { devLog } from "./devLog";
 
 const INDEX_KEY = "cloudSnapshotIndex";
@@ -98,14 +103,19 @@ export async function loadSnapshot(id: string): Promise<CloudSnapshot | null> {
  */
 export async function takeSnapshot(token: string): Promise<CloudSnapshot> {
   if (!token) throw new Error("Нет токена Дзен-мани — снимок невозможен");
-  // `serverTimestamp=0` → полный ответ по операциям, счетам и справочникам, но
-  // НЕ по планам: их сам по себе дифф отдаёт окном вокруг «сейчас», а
-  // исполненные плановые операции — только по явному запросу. Это уже стоило
-  // нам заниженного бюджета (см. `FULL_SYNC_ENTITIES` в `zenmoneyCache`), и
-  // ровно та же дыра была в снимке: он назывался полной копией аккаунта, а
-  // планы в него не попадали. Для сравнения, бэкап ZenTable того же аккаунта
-  // несёт 97 планов и 643 их операции.
-  const raw = await fetchDiff(token, 0, undefined, FULL_SYNC_ENTITIES);
+  // `serverTimestamp=0` → полный ответ, ПЛАНЫ ВКЛЮЧАЯ.
+  //
+  // Здесь стоял `forceFetch: FULL_SYNC_ENTITIES` — по аналогии с полной
+  // синхронизацией, которая его передаёт. Замер на живом аккаунте с планами
+  // показал, что при нулевой метке он не меняет ничего: наборы `reminder` и
+  // `reminderMarker` совпадают по составу id с точностью до хэша. Оно и
+  // логично — `forceFetch` просит отдать тип «как при первой синхронизации», а
+  // при `serverTimestamp = 0` она и есть первая. Полезен он там, где метка
+  // НЕнулевая: в штатной инкрементальной синхронизации (см. `backfillEntities`).
+  //
+  // Оставлять параметр, который заведомо ничего не делает, значит приглашать
+  // следующего читателя гадать, зачем он тут.
+  const raw = await fetchDiff(token, 0);
 
   const now = Date.now();
   const id = new Date(now).toISOString();
@@ -270,6 +280,10 @@ export interface RestoreResult {
     accounts: { active: number; archived: number };
     tags: { active: number; archived: number };
     merchants: number;
+    /** Планы и их операции. Отправляются перед транзакциями: операция,
+     *  выполненная по плану, ссылается на его маркер. */
+    reminders: number;
+    reminderMarkers: number;
   };
   /** Counts of entities present in the snapshot but NOT pushed.
    *  `transactions` = dropped due to broken references (account /
@@ -316,9 +330,127 @@ export interface RestoreContext {
  * a status bar like "Восстановление: Счета 5 / 31".
  */
 export interface RestoreProgress {
-  phase: "accounts" | "tags" | "merchants" | "transactions" | "done";
+  phase: "accounts" | "tags" | "merchants" | "reminders" | "transactions" | "done";
   current: number;
   total: number;
+}
+
+/** Карты перенумерации, которые нужны переносу планов. */
+export interface PlanRemapMaps {
+  accountIdMap: Map<string, string>;
+  tagIdMap: Map<string, string>;
+  merchantIdMap: Map<string, string>;
+  reminderIdMap: Map<string, string>;
+  markerIdMap: Map<string, string>;
+  /** Долговой счёт снимка, слитый с уже существующим у текущего пользователя. */
+  debtIdRemap: { from: string; to: string } | null;
+  /** Заливаем ли под новыми номерами. Без этого карты не нужны вовсе. */
+  freshIds: boolean;
+}
+
+/**
+ * Перенумеровать планы и их операции для отправки в облако.
+ *
+ * ПОЧЕМУ ОТДЕЛЬНОЙ ФУНКЦИЕЙ. Внутри `restoreSnapshotToCloud` этот код нельзя
+ * ни проверить, ни прочитать: там сеть, IndexedDB и полтысячи строк отправки.
+ * А ошибиться тут легко — ссылок у плана столько же, сколько у операции.
+ *
+ * ПРАВИЛА. План (`reminder`) — шаблон, из которого Дзен-мани порождает плановые
+ * операции (`reminderMarker`); выполненная по плану операция ссылается на свой
+ * маркер. Отсюда порядок отправки: планы → маркеры → операции.
+ *
+ *   • счета — обязательны: без разрешимой ноги запись не отправляем вовсе,
+ *     иначе в чужом аккаунте она указывает в пустоту;
+ *   • категории и контрагент — пометки: неразрешимые снимаем, но запись
+ *     оставляем, терять из-за них план незачем;
+ *   • маркер без своего плана осиротел бы — Дзен-мани показывает плановую
+ *     операцию через план, и из интерфейса её потом не убрать. Такие
+ *     пропускаем вместе с планом.
+ */
+export function remapPlans(
+  reminders: ZenReminder[],
+  markers: ZenReminderMarker[],
+  maps: PlanRemapMaps
+): {
+  reminders: ZenReminder[];
+  markers: ZenReminderMarker[];
+  /** Новый номер маркера для ссылки из операции — либо null, если он не доехал. */
+  markerRef: (id: string) => string | null;
+} {
+  const {
+    accountIdMap,
+    tagIdMap,
+    merchantIdMap,
+    reminderIdMap,
+    markerIdMap,
+    debtIdRemap,
+    freshIds,
+  } = maps;
+  const mapped = (id: string, map: Map<string, string>) =>
+    freshIds ? map.get(id) || id : id;
+  const known = (id: string, map: Map<string, string>) =>
+    freshIds ? map.has(id) : true;
+
+  const remapLegs = <
+    T extends {
+      incomeAccount?: string;
+      outcomeAccount?: string;
+      tag?: string[] | null;
+      merchant?: string | null;
+    },
+  >(
+    e: T
+  ): T | null => {
+    const isDebt = (id: string | undefined) =>
+      debtIdRemap != null && id === debtIdRemap.from;
+    const legOk = (id: string | undefined) =>
+      id === undefined || isDebt(id) || known(id, accountIdMap);
+    if (!legOk(e.incomeAccount) || !legOk(e.outcomeAccount)) return null;
+    const leg = (id: string | undefined) =>
+      id === undefined
+        ? undefined
+        : isDebt(id)
+          ? debtIdRemap!.to
+          : mapped(id, accountIdMap);
+    const tags = e.tag ? e.tag.filter((id) => known(id, tagIdMap)) : e.tag;
+    return {
+      ...e,
+      incomeAccount: leg(e.incomeAccount),
+      outcomeAccount: leg(e.outcomeAccount),
+      tag: tags && tags.length > 0 ? tags.map((id) => mapped(id, tagIdMap)) : null,
+      merchant:
+        e.merchant && known(e.merchant, merchantIdMap)
+          ? mapped(e.merchant, merchantIdMap)
+          : null,
+    };
+  };
+
+  const outReminders: ZenReminder[] = [];
+  for (const r of reminders) {
+    const m = remapLegs(r);
+    if (!m) continue;
+    outReminders.push({ ...m, id: mapped(r.id, reminderIdMap) });
+  }
+  const keptReminders = new Set(outReminders.map((r) => r.id));
+
+  const outMarkers: ZenReminderMarker[] = [];
+  for (const mk of markers) {
+    const m = remapLegs(mk);
+    if (!m) continue;
+    const reminderRef = mapped(mk.reminder, reminderIdMap);
+    if (!keptReminders.has(reminderRef)) continue;
+    outMarkers.push({ ...m, id: mapped(mk.id, markerIdMap), reminder: reminderRef });
+  }
+  const keptMarkers = new Set(outMarkers.map((m) => m.id));
+
+  return {
+    reminders: outReminders,
+    markers: outMarkers,
+    markerRef: (id) => {
+      const next = mapped(id, markerIdMap);
+      return keptMarkers.has(next) ? next : null;
+    },
+  };
 }
 
 /**
@@ -348,8 +480,10 @@ export interface RestoreProgress {
  *   • Does NOT delete entities that exist in the cloud but not in the
  *     snapshot. A true rollback needs to compute a deletion list
  *     separately — out of scope here. This is upsert-only restore.
- *   • Doesn't push `instrument` (server-managed) or `user` (root
- *     account record) — only the four user-mutable entity types.
+ *   • Doesn't push `instrument`, `company` (server-managed reference data)
+ *     or `user` (root account record) — only user-mutable entities.
+ *   • `budget` (Планы месяца) пока не переносится: пуш по нему лоссовый,
+ *     под-теги схлопываются. Планы (`reminder`) — переносятся.
  */
 export async function restoreSnapshotToCloud(
   id: string,
@@ -434,6 +568,8 @@ export async function restoreSnapshotToCloud(
   const accountIdMap = new Map<string, string>();
   const tagIdMap = new Map<string, string>();
   const merchantIdMap = new Map<string, string>();
+  const reminderIdMap = new Map<string, string>();
+  const markerIdMap = new Map<string, string>();
   if (freshIds) {
     for (const a of accountsOut) accountIdMap.set(a.id, crypto.randomUUID());
     // Snapshot's debt account folded into current user's debt id —
@@ -442,6 +578,9 @@ export async function restoreSnapshotToCloud(
     for (const t of raw.tag || []) tagIdMap.set(t.id, crypto.randomUUID());
     for (const m of raw.merchant || [])
       merchantIdMap.set(m.id, crypto.randomUUID());
+    for (const r of raw.reminder || []) reminderIdMap.set(r.id, crypto.randomUUID());
+    for (const m of raw.reminderMarker || [])
+      markerIdMap.set(m.id, crypto.randomUUID());
   }
 
   const remapId = (oldId: string, map: Map<string, string>): string =>
@@ -464,6 +603,19 @@ export async function restoreSnapshotToCloud(
   const brokenRefSkipped: { id: string; reason: string }[] = [];
   const isMapped = (id: string, map: Map<string, string>) =>
     freshIds ? map.has(id) : true;
+
+  const plans = remapPlans(raw.reminder || [], raw.reminderMarker || [], {
+    accountIdMap,
+    tagIdMap,
+    merchantIdMap,
+    reminderIdMap,
+    markerIdMap,
+    debtIdRemap,
+    freshIds,
+  });
+  const remindersOut = plans.reminders;
+  const markersOut = plans.markers;
+  const remapMarkerRef = plans.markerRef;
 
   const transactionsOut: ZenTransaction[] = [];
   // Удалённые записи отправляем ТОЖЕ — снимок должен быть полной копией.
@@ -539,11 +691,12 @@ export async function restoreSnapshotToCloud(
       // та, и банковская синхронизация приняла бы её за свою.
       outcomeBankID: freshIds ? null : t.outcomeBankID,
       incomeBankID: freshIds ? null : t.incomeBankID,
-      // Напоминания мы не переносим (см. «Limitations» выше), поэтому ссылка
-      // на экземпляр напоминания в новом аккаунте указывает в пустоту. У
-      // наших собственных снимков этого не всплывало — в тестовом аккаунте
-      // напоминаний не было; в бэкапе ZenTable таких операций 331 из 10 452.
-      reminderMarker: freshIds ? null : t.reminderMarker,
+      // Ссылку на плановую операцию переводим на новый номер. Если её маркер
+      // до облака не доехал — ссылку снимаем, но саму операцию оставляем:
+      // это настоящие деньги, и терять их из-за потерянной пометки нельзя.
+      reminderMarker: t.reminderMarker
+        ? remapMarkerRef(t.reminderMarker)
+        : t.reminderMarker,
     });
   }
   if (brokenRefSkipped.length > 0) {
@@ -577,6 +730,9 @@ export async function restoreSnapshotToCloud(
     id: remapId(m.id, merchantIdMap),
   }));
 
+
+  const finalReminders = rewriteUser(remindersOut);
+  const finalMarkers = rewriteUser(markersOut);
   const finalTxs = rewriteUser(transactionsOut);
   const finalAccounts = rewriteUser(accountsRemapped);
   const finalTags = rewriteUser(tagsRemapped);
@@ -612,6 +768,8 @@ export async function restoreSnapshotToCloud(
     accounts: { active: 0, archived: 0 },
     tags: { active: 0, archived: 0 },
     merchants: 0,
+    reminders: 0,
+    reminderMarkers: 0,
   };
   let lastServerTs = 0;
   let chunkCount = 0;
@@ -634,6 +792,8 @@ export async function restoreSnapshotToCloud(
       account: payload.account?.length ?? 0,
       tag: payload.tag?.length ?? 0,
       merchant: payload.merchant?.length ?? 0,
+      reminder: payload.reminder?.length ?? 0,
+      reminderMarker: payload.reminderMarker?.length ?? 0,
     };
     const subMsg = `phase A.${label}: ${JSON.stringify(sectionSizes)}`;
     if (!import.meta.env.PROD) {
@@ -764,6 +924,42 @@ export async function restoreSnapshotToCloud(
       phase: "merchants",
       current: finalMerchants.length,
       total: finalMerchants.length,
+    });
+  }
+
+  // ── Phase A.4: планы, затем их операции ───────────────────────────
+  //
+  // Строго в этом порядке и строго до операций: маркер ссылается на план, а
+  // операция — на маркер. Дробим теми же порциями, что и справочники: на
+  // большом аккаунте маркеров сотни (643 в бэкапе ZenTable).
+  const PLAN_CHUNK = 100;
+  for (let i = 0; i < finalReminders.length; i += PLAN_CHUNK) {
+    const slice = finalReminders.slice(i, i + PLAN_CHUNK);
+    onProgress?.({ phase: "reminders", current: i, total: finalReminders.length });
+    await pushSubPhase(`reminders(${i}-${i + slice.length})`, { reminder: slice }, () => {
+      accepted.reminders += slice.length;
+    });
+  }
+  for (let i = 0; i < finalMarkers.length; i += PLAN_CHUNK) {
+    const slice = finalMarkers.slice(i, i + PLAN_CHUNK);
+    onProgress?.({
+      phase: "reminders",
+      current: finalReminders.length + i,
+      total: finalReminders.length + finalMarkers.length,
+    });
+    await pushSubPhase(
+      `reminderMarkers(${i}-${i + slice.length})`,
+      { reminderMarker: slice },
+      () => {
+        accepted.reminderMarkers += slice.length;
+      }
+    );
+  }
+  if (finalReminders.length + finalMarkers.length > 0) {
+    onProgress?.({
+      phase: "reminders",
+      current: finalReminders.length + finalMarkers.length,
+      total: finalReminders.length + finalMarkers.length,
     });
   }
 
