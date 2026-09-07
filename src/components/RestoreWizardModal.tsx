@@ -13,7 +13,7 @@ import {
 import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { snapshotSummary } from "../lib/snapshotLabel";
-import { InfoPopover } from "./InfoPopover";
+import { InfoPopover, InfoTerm } from "./InfoPopover";
 import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
@@ -120,8 +120,11 @@ export function RestoreWizardModal({
                 <div
                   className={`h-1 rounded-full ${passed ? "bg-income" : current ? "bg-accent" : "bg-border"}`}
                 />
+                {/* По центру своей полоски: слева подпись «Справочники»
+                    прижималась к началу бара и казалась подписью к промежутку
+                    между ним и соседним. */}
                 <div
-                  className={`text-[11px] mt-1 truncate ${current || (passed && i === 4) ? "text-text font-medium" : "text-muted"}`}
+                  className={`text-[11px] mt-1 truncate text-center ${current || (passed && i === 4) ? "text-text font-medium" : "text-muted"}`}
                 >
                   {s.title}
                 </div>
@@ -414,7 +417,19 @@ function ClearStep({
       <ul className="list-disc list-inside space-y-1">
         <li>
           В мобильном приложении — <strong>Ещё → Настройки аккаунта → Начать
-          всё сначала</strong>.
+          всё сначала</strong>.{" "}
+          <InfoPopover label="Очистил в приложении, а число не меняется">
+            <p>
+              Приложение хранит правки у себя и отправляет их на сервер не
+              сразу. Пока очистка не уехала в облако, мы её не увидим — сколько
+              ни нажимай «Проверить».
+            </p>
+            <p>
+              Чтобы поторопить: откройте в приложении экран{" "}
+              <InfoTerm>«Операции»</InfoTerm> и потяните список вниз. Это и есть
+              отправка на сервер.
+            </p>
+          </InfoPopover>
         </li>
         <li>
           На сайте{" "}
