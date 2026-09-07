@@ -63,6 +63,7 @@ import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
 import { snapshotSummary } from "../lib/snapshotLabel";
+import { BackupComparison } from "../components/BackupComparison";
 import { RestoreWizardModal } from "../components/RestoreWizardModal";
 import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
 import { useTagEditsStore } from "../store/useTagEditsStore";
@@ -644,7 +645,7 @@ export function ImportPage() {
 
     const count = Array.isArray(dump.transactions) ? dump.transactions.length : 0;
     const ok = await confirm({
-      title: "Восстановить из бэкапа?",
+      title: "Восстановить из копии?",
       message: `Текущие данные будут заменены. В файле ${formatNum(count)} операций.`,
       confirmLabel: "Восстановить",
       tone: "warning",
@@ -745,7 +746,7 @@ export function ImportPage() {
       <PageHeader
         icon={Settings}
         title="Настройки"
-        hint="Данные, расчёты, оформление и бэкапы"
+        hint="Данные, расчёты, оформление и резервные копии"
       />
 
       {/* Horizontal tab bar — top-level grouping for the long
@@ -767,7 +768,7 @@ export function ImportPage() {
           { id: "operations", label: "Справочники", icon: ArrowLeftRight },
           { id: "processing", label: "Расчёты", icon: Calculator },
           { id: "interface", label: "Оформление", icon: ALargeSmall },
-          { id: "backups", label: "Бэкапы", icon: History },
+          { id: "backups", label: "Копии", icon: History },
         ] as const).map((t) => {
           const active = settingsTab === t.id;
           const Icon = t.icon;
@@ -1490,7 +1491,7 @@ export function ImportPage() {
                 Обычно фильтры живут до перезагрузки вкладки: закрыли — открыли
                 чистым. Включите, и выбранные счета, статьи, валюты, поиск и
                 всё из <InfoTerm>«Дополнительно»</InfoTerm> вернутся такими же,
-                какими вы их оставили. Тогда же они начнут ездить в бэкапе.
+                какими вы их оставили. Тогда же они начнут попадать в копию.
               </p>
               <p>
                 <strong>Период не запоминается</strong> — ни при включённой
@@ -1912,7 +1913,7 @@ export function ImportPage() {
                   ? "bg-accent/10 text-accent"
                   : "text-muted hover:text-text"
               }`}
-              title="Скачивание JSON-бэкапов на ваше устройство"
+              title="Копия того, что настроено в приложении"
             >
               <HardDrive className="w-3.5 h-3.5" />
               Локальные
@@ -1925,7 +1926,7 @@ export function ImportPage() {
                   ? "bg-accent/10 text-accent"
                   : "text-muted hover:text-text"
               }`}
-              title="Снимки облачного состояния Дзен-мани"
+              title="Копия аккаунта в Дзен-мани"
             >
               <Cloud className="w-3.5 h-3.5" />
               Облачные
@@ -1934,14 +1935,16 @@ export function ImportPage() {
           }
         />
 
+        <BackupComparison />
+
         {backupTab === "local" && (<>
         <div className="rounded-xl border border-border bg-panel2/30 p-4">
           {/* Что именно уезжает в файл — под знаком вопроса: это читают один
               раз, а место занимало постоянно, отодвигая сами кнопки вниз. */}
           <div className="flex items-center gap-2 mb-3">
             <Database className="w-5 h-5 text-accent shrink-0" />
-            <span className="font-medium">Бэкап всех данных</span>
-            <InfoPopover label="Что попадает в бэкап">
+            <span className="font-medium">Копия данных приложения</span>
+            <InfoPopover label="Что попадает в копию">
               <p>
                 Один JSON со всем, что живёт <InfoTerm>только здесь</InfoTerm>:
                 операции и курсы валют по датам, бюджеты с их настройками, цели,
@@ -1979,7 +1982,7 @@ export function ImportPage() {
             className="btn-primary text-sm"
           >
             <Download className="w-4 h-4" />
-            Скачать бэкап
+            Создать копию
           </button>
           <button
             onClick={() => backupRef.current?.click()}
@@ -1987,7 +1990,7 @@ export function ImportPage() {
             className="btn-ghost text-sm"
           >
             <Upload className="w-4 h-4" />
-            Восстановить из бэкапа
+            Восстановить
           </button>
           <input
             ref={backupRef}
@@ -2014,14 +2017,14 @@ export function ImportPage() {
             <span className="font-medium">По расписанию</span>
             <InfoPopover label="Как работает расписание">
               <p>
-                Автоматически скачивает тот же JSON-бэкап с выбранной
+                Автоматически скачивает ту же копию с выбранной
                 периодичностью. Проверка запускается при открытии приложения и
                 каждые ~10 минут. Файл уходит в стандартную папку загрузок
                 браузера, к имени добавляется «-auto».
               </p>
               <p>
                 Срок считается от <InfoTerm>последней копии</InfoTerm>, включая
-                скачанную руками кнопкой «Скачать бэкап»: если копия только что
+                скачанную руками кнопкой «Создать копию»: если копия только что
                 сделана, повторять её через час незачем.
               </p>
               <p>
@@ -2039,7 +2042,7 @@ export function ImportPage() {
           <div className="w-44 shrink-0">
             <Select
               size="sm"
-              ariaLabel="Как часто делать бэкап"
+              ariaLabel="Как часто создавать копию"
               value={backupInterval}
               onChange={(v) => setBackupInterval(v)}
               options={[
@@ -2063,8 +2066,8 @@ export function ImportPage() {
           <div className="rounded-xl border border-border bg-panel2/30 p-4">
             <div className="flex items-center gap-2 mb-3">
               <History className="w-5 h-5 text-accent2 shrink-0" />
-              <span className="font-medium">Снимки данных из Дзен-мани</span>
-              <InfoPopover label="Зачем нужны снимки">
+              <span className="font-medium">Снимки аккаунта Дзен-мани</span>
+              <InfoPopover label="Что попадает в снимок">
                 <p>
                   Полная копия того, что сейчас лежит в Дзен-мани: операции,
                   счета, категории и контрагенты. Хранится на этом компьютере,
@@ -2100,7 +2103,7 @@ export function ImportPage() {
                 ) : (
                   <CloudDownload className="w-3.5 h-3.5" />
                 )}
-                {cloudSnapshotsOp === "snapshot" ? "Делаю снимок…" : "Сделать снимок"}
+                {cloudSnapshotsOp === "snapshot" ? "Создаю снимок…" : "Создать снимок"}
               </button>
               {/* Одна кнопка на всё восстановление: выбор снимка, проверка,
                   подготовка и заливка идут шагами внутри окна. На экране они
@@ -2258,7 +2261,7 @@ export function ImportPage() {
                             }}
                             className="text-accent hover:underline"
                           >
-                            списке облачных бэкапов
+                            списке облачных снимков
                           </button>
                           , его можно скачать или восстановить.
                         </p>
@@ -2406,7 +2409,7 @@ export function ImportPage() {
                     }}
                     className="text-accent hover:underline inline-flex items-center gap-0.5"
                   >
-                    Копии во вкладке «Бэкапы»
+                    Копии во вкладке «Резервные копии»
                     <ArrowRight className="w-3 h-3" />
                   </button>
                 </p>

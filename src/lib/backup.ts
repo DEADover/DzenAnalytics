@@ -286,7 +286,7 @@ export function parseAndValidateBackup(text: string): BackupPayload {
   const obj = parsed as Record<string, unknown>;
   if (!obj.version) {
     // Похоже на облачный снимок? Их легко перепутать: оба файла — JSON, оба
-    // лежат во вкладке «Бэкапы» и оба скачиваются кнопкой, только на соседних
+    // лежат во вкладке «Копии» и оба скачиваются кнопкой, только на соседних
     // подвкладках. Скажем, куда нести, вместо «не похоже на бэкап
     // DzenAnalytics» — про файл, внутри которого написано ровно обратное
     // (issue #93).
@@ -299,7 +299,8 @@ export function parseAndValidateBackup(text: string): BackupPayload {
       (obj.diff != null && typeof obj.diff === "object" && !Array.isArray(obj.diff));
     if (looksLikeSnapshot) {
       throw new Error(
-        "Это облачный снимок, а не бэкап. Его место — «Бэкапы → Облачные», " +
+        "Это облачный снимок, а не копия приложения. Его место — «Копии → " +
+        "Облачные», " +
           "кнопка «Загрузить из файла»."
       );
     }
