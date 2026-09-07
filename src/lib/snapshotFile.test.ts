@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { zipSync, strToU8 } from "fflate";
-import { readSnapshotFile } from "./snapshotFile";
+import { compressText, decompressBytes, readSnapshotFile } from "./snapshotFile";
 
 /** Сжать строку настоящим gzip — тем же, чем её жмёт ZenTable. */
 async function gzip(text: string): Promise<Blob> {
@@ -110,5 +110,43 @@ describe("readSnapshotFile: что внутри архива", () => {
 
   it("пустой архив не выдаёт за снимок", async () => {
     await expect(readSnapshotFile(zip({}))).rejects.toThrow(/нет файлов/);
+  });
+});
+
+describe("compressText / decompressBytes", () => {
+  it("текст переживает круг", async () => {
+    const gz = await compressText(SNAP);
+    expect(gz).not.toBeNull();
+    expect(await decompressBytes(gz!)).toBe(SNAP);
+  });
+
+  it("сжатое читается и обычным чтением файла", async () => {
+    // Один и тот же gzip и в базе, и в скачанном файле: пусть распаковка
+    // будет одна, иначе появятся два формата с одним расширением.
+    const gz = await compressText(SNAP);
+    expect(await readSnapshotFile(new Blob([gz! as BlobPart]))).toBe(SNAP);
+  });
+
+  it("кириллица не портится", async () => {
+    const text = '{"tag":[{"title":"Продукты и хозтовары"}]}';
+    expect(await decompressBytes((await compressText(text))!)).toBe(text);
+  });
+
+  it("на больших данных экономит место", async () => {
+    // Смысл упражнения — место; проверяем, что оно правда экономится, а не
+    // что вызов не падает.
+    const big = JSON.stringify({
+      transaction: Array.from({ length: 2000 }, (_, i) => ({
+        id: `id-${i}`,
+        payee: "Пятёрочка",
+        outcome: 100,
+      })),
+    });
+    const gz = await compressText(big);
+    expect(gz!.byteLength).toBeLessThan(big.length / 5);
+  });
+
+  it("пустая строка не ломается", async () => {
+    expect(await decompressBytes((await compressText(""))!)).toBe("");
   });
 });

@@ -112,6 +112,39 @@ async function unzipJson(buf: ArrayBuffer): Promise<string> {
 }
 
 /**
+ * Сжать текст снимка gzip-ом.
+ *
+ * Снимок — 8,6 МБ JSON, а слотов пять: сорок мегабайт в браузере под то, что
+ * жмётся в восемь раз. Замер на настоящем аккаунте: 8,63 → 1,06 МБ за 69 мс,
+ * распаковка обратно — 10 мс.
+ *
+ * Возвращает `null`, если браузер не умеет сжимать: тогда снимок ложится как
+ * был. Место — это удобство, а снимок — страховка, и терять её ради экономии
+ * нельзя.
+ */
+export async function compressText(text: string): Promise<Uint8Array | null> {
+  if (typeof CompressionStream === "undefined") return null;
+  try {
+    const stream = new Blob([text])
+      .stream()
+      .pipeThrough(new CompressionStream("gzip"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+/** Разжать то, что сжал `compressText`. */
+export async function decompressBytes(bytes: Uint8Array): Promise<string> {
+  return gunzip(
+    bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer
+  );
+}
+
+/**
  * Вернуть текст снимка из файла: как есть либо после распаковки.
  *
  * Разбором JSON не занимается — это забота `importSnapshotFromJson`, которая

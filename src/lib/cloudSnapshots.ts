@@ -29,6 +29,7 @@ import type {
   ZenTransaction,
 } from "./zenmoney";
 import { fetchDiff, pushDiff, type PushPayload } from "./zenmoney";
+import { compressText, decompressBytes } from "./snapshotFile";
 import { devLog } from "./devLog";
 
 const INDEX_KEY = "cloudSnapshotIndex";
@@ -70,13 +71,32 @@ export interface CloudSnapshotSummary {
     reminderMarkers?: number;
     budgets?: number;
   };
-  /** Approximate JSON byte size of the raw snapshot (after stringify). */
+  /**
+   * Сколько снимок ЗАНИМАЕТ — то есть размер того, что реально лежит в базе.
+   *
+   * У новых снимков это размер после сжатия (8,6 МБ JSON → 1,06 МБ), у снятых
+   * раньше — размер самого JSON: они и лежат несжатыми. В обоих случаях число
+   * отвечает на один и тот же вопрос «сколько места это стоит», поэтому
+   * подпись под датой показывает его как есть, без оговорок.
+   */
   approxBytes: number;
 }
 
 /** Full snapshot payload — separated so listing the index is cheap. */
 export interface CloudSnapshot extends CloudSnapshotSummary {
   raw: ZenDiffResponse;
+}
+
+/**
+ * Как снимок лежит в базе.
+ *
+ * `gz` — сжатый JSON, обычный случай. `raw` — несжатый объект: так выглядят
+ * снимки, снятые до сжатия, и те, что сняты в браузере без `CompressionStream`.
+ * Читать надо оба вида, иначе обновление обесценит уже сделанные страховки.
+ */
+interface StoredSnapshot extends CloudSnapshotSummary {
+  gz?: Uint8Array;
+  raw?: ZenDiffResponse;
 }
 
 function snapshotKey(id: string): string {
@@ -92,7 +112,73 @@ export async function loadSnapshotIndex(): Promise<CloudSnapshotSummary[]> {
 }
 
 export async function loadSnapshot(id: string): Promise<CloudSnapshot | null> {
-  return db.loadJSON<CloudSnapshot>(snapshotKey(id));
+  const rec = await db.loadJSON<StoredSnapshot>(snapshotKey(id));
+  if (!rec) return null;
+  if (rec.gz) {
+    const { gz: _gz, ...summary } = rec;
+    return { ...summary, raw: JSON.parse(await decompressBytes(rec.gz)) };
+  }
+  return rec.raw ? ({ ...rec, raw: rec.raw } as CloudSnapshot) : null;
+}
+
+/** Счётчики снимка. Одни и те же и для снятого, и для загруженного файлом. */
+function countsOf(raw: ZenDiffResponse): CloudSnapshotSummary["counts"] {
+  return {
+    // Живые операции — тот же фильтр, что применяет прямой разбор
+    // (`zenmoneyMap.ts`) перед тем, как они попадут в приложение: без
+    // удалённых и без записей с нулевой суммой (Дзен-мани держит такие как
+    // служебные). Так число на карточке совпадает с тем, что человек увидит
+    // после синхронизации. Отправляем при этом всё — и удалённые, и нулевые.
+    transactions:
+      raw.transaction?.filter(
+        (t) => !t.deleted && ((t.outcome || 0) > 0 || (t.income || 0) > 0)
+      ).length ?? 0,
+    accounts: raw.account?.length ?? 0,
+    tags: raw.tag?.length ?? 0,
+    merchants: raw.merchant?.length ?? 0,
+    instruments: raw.instrument?.length ?? 0,
+    companies: (raw.company as unknown[] | undefined)?.length ?? 0,
+    user: raw.user?.length ?? 0,
+    reminders: raw.reminder?.length ?? 0,
+    reminderMarkers: raw.reminderMarker?.length ?? 0,
+    budgets: (raw.budget as unknown[] | undefined)?.length ?? 0,
+  };
+}
+
+/**
+ * Сохранить снимок и подвинуть индекс, вытеснив лишние.
+ *
+ * Общий путь для снятого с облака и для загруженного файлом: раньше эти два
+ * места повторяли друг друга слово в слово, и правку счётчиков приходилось
+ * вносить дважды — один раз я на этом уже попался.
+ */
+async function persistSnapshot(
+  raw: ZenDiffResponse,
+  userId: number | null
+): Promise<CloudSnapshot> {
+  const now = Date.now();
+  const id = new Date(now).toISOString();
+  const json = JSON.stringify(raw);
+  const gz = await compressText(json);
+  const summary: CloudSnapshotSummary = {
+    id,
+    createdAt: now,
+    serverTimestamp: raw.serverTimestamp,
+    userId,
+    counts: countsOf(raw),
+    approxBytes: gz ? gz.byteLength : new Blob([json]).size,
+  };
+  const stored: StoredSnapshot = gz ? { ...summary, gz } : { ...summary, raw };
+  await db.saveJSON(snapshotKey(id), stored);
+
+  const prev = await loadSnapshotIndex();
+  const next = [summary, ...prev.filter((s) => s.id !== id)].slice(0, MAX_KEPT);
+  await db.saveJSON(INDEX_KEY, next);
+  const kept = new Set(next.map((s) => s.id));
+  for (const old of prev) {
+    if (!kept.has(old.id)) await db.saveJSON(snapshotKey(old.id), null);
+  }
+  return { ...summary, raw };
 }
 
 /**
@@ -113,64 +199,11 @@ export async function takeSnapshot(token: string): Promise<CloudSnapshot> {
   // при `serverTimestamp = 0` она и есть первая. Полезен он там, где метка
   // НЕнулевая: в штатной инкрементальной синхронизации (см. `backfillEntities`).
   //
-  // Оставлять параметр, который заведомо ничего не делает, значит приглашать
-  // следующего читателя гадать, зачем он тут.
+  // Сверено с бэкапом того же аккаунта из партнёрского ZenTable: 97 планов
+  // против 97, маркеры с того же 2023-03-08, `processed` и `deleted` совпадают
+  // до штуки. Никакого окна вокруг «сейчас» нет.
   const raw = await fetchDiff(token, 0);
-
-  const now = Date.now();
-  const id = new Date(now).toISOString();
-  const approxBytes = roughByteSize(raw);
-  const summary: CloudSnapshotSummary = {
-    id,
-    createdAt: now,
-    serverTimestamp: raw.serverTimestamp,
-    userId: raw.user?.[0]?.id ?? null,
-    counts: {
-      // Count "live" transactions only — the same filter the forward
-      // mapper (`zenmoneyMap.ts`) applies before they reach the app:
-      //   • drop `deleted: true` tombstones
-      //   • drop entries with both outcome=0 and income=0 (Zen
-      //     keeps these as reminders / system markers, no real money
-      //     movement)
-      // This way the count on the snapshot card matches the number
-      // the user sees in DzenAnalytics after a full sync of the
-      // restored cloud. Restore itself still pushes the full set —
-      // deleted and zero-amount entries included — and the restore
-      // report breaks down the active/deleted mix.
-      transactions:
-        raw.transaction?.filter(
-          (t) => !t.deleted && ((t.outcome || 0) > 0 || (t.income || 0) > 0)
-        ).length ?? 0,
-      accounts: raw.account?.length ?? 0,
-      tags: raw.tag?.length ?? 0,
-      merchants: raw.merchant?.length ?? 0,
-      instruments: raw.instrument?.length ?? 0,
-      companies: (raw.company as unknown[] | undefined)?.length ?? 0,
-      user: raw.user?.length ?? 0,
-      reminders: raw.reminder?.length ?? 0,
-      reminderMarkers: raw.reminderMarker?.length ?? 0,
-      budgets: (raw.budget as unknown[] | undefined)?.length ?? 0,
-    },
-    approxBytes,
-  };
-  const full: CloudSnapshot = { ...summary, raw };
-
-  await db.saveJSON(snapshotKey(id), full);
-
-  // Update index — prepend new, drop tails past the cap.
-  const prev = await loadSnapshotIndex();
-  const next = [summary, ...prev.filter((s) => s.id !== id)].slice(0, MAX_KEPT);
-  await db.saveJSON(INDEX_KEY, next);
-
-  // Garbage-collect any snapshot blobs not referenced by the new index.
-  const kept = new Set(next.map((s) => s.id));
-  for (const old of prev) {
-    if (!kept.has(old.id)) {
-      await db.saveJSON(snapshotKey(old.id), null);
-    }
-  }
-
-  return full;
+  return persistSnapshot(raw, raw.user?.[0]?.id ?? null);
 }
 
 /**
@@ -246,13 +279,18 @@ export async function downloadSnapshot(id: string): Promise<void> {
     },
     diff: snap.raw,
   };
-  const json = JSON.stringify(payload, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
+  // Без отступов: файл читает не человек, а наш же импорт, а «красивый» JSON
+  // на снимке добавляет к 8,6 МБ ещё половину.
+  const json = JSON.stringify(payload);
+  const gz = await compressText(json);
+  const blob = gz
+    ? new Blob([gz as BlobPart], { type: "application/gzip" })
+    : new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  const fname = `dzenanalytics-cloud-snapshot-${snap.id.replace(/[:.]/g, "-")}.json`;
-  a.download = fname;
+  const base = `dzenanalytics-cloud-snapshot-${snap.id.replace(/[:.]/g, "-")}`;
+  a.download = gz ? `${base}.json.gz` : `${base}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -1117,78 +1155,16 @@ export async function importSnapshotFromJson(
     throw new Error("В снимке нет поля serverTimestamp — файл повреждён.");
   }
 
-  const now = Date.now();
-  const id = new Date(now).toISOString();
-  const approxBytes = roughByteSize(raw);
-  const summary: CloudSnapshotSummary = {
-    id,
-    createdAt: now,
-    serverTimestamp: raw.serverTimestamp,
-    userId: raw.user?.[0]?.id ?? null,
-    counts: {
-      // Count "live" transactions only — the same filter the forward
-      // mapper (`zenmoneyMap.ts`) applies before they reach the app:
-      //   • drop `deleted: true` tombstones
-      //   • drop entries with both outcome=0 and income=0 (Zen
-      //     keeps these as reminders / system markers, no real money
-      //     movement)
-      // This way the count on the snapshot card matches the number
-      // the user sees in DzenAnalytics after a full sync of the
-      // restored cloud. Restore itself still pushes the full set —
-      // deleted and zero-amount entries included — and the restore
-      // report breaks down the active/deleted mix.
-      transactions:
-        raw.transaction?.filter(
-          (t) => !t.deleted && ((t.outcome || 0) > 0 || (t.income || 0) > 0)
-        ).length ?? 0,
-      accounts: raw.account?.length ?? 0,
-      tags: raw.tag?.length ?? 0,
-      merchants: raw.merchant?.length ?? 0,
-      instruments: raw.instrument?.length ?? 0,
-      companies: (raw.company as unknown[] | undefined)?.length ?? 0,
-      user: raw.user?.length ?? 0,
-      reminders: raw.reminder?.length ?? 0,
-      reminderMarkers: raw.reminderMarker?.length ?? 0,
-      budgets: (raw.budget as unknown[] | undefined)?.length ?? 0,
-    },
-    approxBytes,
-  };
-  // Imported snapshots are intentionally NOT bound to a specific
-  // userId — they're a manual artefact the user uploaded and should
-  // be visible regardless of which Zenmoney account is currently
-  // connected. Cross-user detection at restore time still reads
-  // `raw.user[0].id` (the original owner) from the snapshot body
-  // itself, so safety checks aren't affected.
-  summary.userId = null;
-  const full: CloudSnapshot = { ...summary, raw };
-
-  await db.saveJSON(snapshotKey(id), full);
-
-  // Same rolling-cap logic as `takeSnapshot`.
-  const prev = await loadSnapshotIndex();
-  const next = [summary, ...prev.filter((s) => s.id !== id)].slice(0, MAX_KEPT);
-  await db.saveJSON(INDEX_KEY, next);
-  const kept = new Set(next.map((s) => s.id));
-  for (const old of prev) {
-    if (!kept.has(old.id)) {
-      await db.saveJSON(snapshotKey(old.id), null);
-    }
-  }
-
-  return full;
+  // Тем же путём, что и снятый с облака: сжатие, счётчики, вытеснение старых.
+  //
+  // `userId: null` НАМЕРЕННО. Загруженный файл — ручная вещь, и прятать его
+  // из-за того, что сейчас подключён другой аккаунт, значило бы прятать
+  // единственное, что человек только что принёс. Проверку «снимок чужого
+  // аккаунта» восстановление делает по `raw.user[0].id` в теле снимка, так
+  // что на безопасность это не влияет.
+  return persistSnapshot(raw, null);
 }
 
-/** Best-effort byte size estimate. Avoids the cost of a full stringify
- *  for very large blobs — JSON.stringify is the canonical way but it
- *  duplicates the data in memory. UTF-8 string length × 2 is the rough
- *  worst case for non-ASCII; we sample-stringify to get a real number. */
-function roughByteSize(obj: unknown): number {
-  try {
-    return new Blob([JSON.stringify(obj)]).size;
-  } catch {
-    return 0;
-  }
-}
 
 /** Окно «свежести» снимка для политики «раз в сутки». */
 export const DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
