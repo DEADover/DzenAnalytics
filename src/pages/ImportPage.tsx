@@ -1910,7 +1910,7 @@ export function ImportPage() {
               раз, а место занимало постоянно, отодвигая сами кнопки вниз. */}
           <div className="flex items-center gap-2 mb-3">
             <Database className="w-5 h-5 text-accent shrink-0" />
-            <span className="font-medium">Копия данных сервиса</span>
+            <span className="font-medium">Копии данных сервиса</span>
             <InfoPopover label="Что попадает в копию">
               <p>
                 Один JSON со всем, что живёт <InfoTerm>только здесь</InfoTerm>:
@@ -2086,11 +2086,6 @@ export function ImportPage() {
                 <RefreshCw className="w-3.5 h-3.5" />
                 Восстановить
               </button>
-              <span className="text-xs text-muted">
-                {cloudSnapshots.length === 0
-                  ? "Снимков ещё не было"
-                  : `Занято ${visibleSnapshots.length} ${pluralRu(visibleSnapshots.length, ["слот", "слота", "слотов"])} из 5`}
-              </span>
             </div>
 
             {cloudSnapshotsError && (
@@ -2099,6 +2094,21 @@ export function ImportPage() {
                 <span>{cloudSnapshotsError}</span>
               </div>
             )}
+
+            {/* Счётчик слотов — заголовком списка, а не подписью у кнопок:
+                он описывает список, и рядом с «Создать снимок» читался как
+                состояние кнопки. */}
+            <div className="flex items-baseline justify-between gap-3 mb-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted">
+                {cloudSnapshots.length === 0 ? "Снимков ещё не было" : "Сохранённые снимки"}
+              </span>
+              {cloudSnapshots.length > 0 && (
+                <span className="text-xs text-muted tabular-nums">
+                  Занято {visibleSnapshots.length}{" "}
+                  {pluralRu(visibleSnapshots.length, ["слот", "слота", "слотов"])} из 5
+                </span>
+              )}
+            </div>
 
             {visibleSnapshots.length > 0 && (
               <div className="text-xs space-y-1 -mx-1 px-1 max-h-72 overflow-y-auto">
@@ -2374,7 +2384,7 @@ export function ImportPage() {
                     }}
                     className="text-accent hover:underline inline-flex items-center gap-0.5"
                   >
-                    Копии во вкладке «Резервные копии»
+                    Снимки во вкладке «Бэкапы»
                     <ArrowRight className="w-3 h-3" />
                   </button>
                 </p>
