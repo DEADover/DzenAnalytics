@@ -49,6 +49,18 @@ interface State {
   pruneForeign: (currentUserId: number) => Promise<number>;
 }
 
+/**
+ * Текст ошибки для человека: объяснение — наше, ответ сервера — дословно и в
+ * кавычках. Дзен-мани отвечает по-английски, и показывать его строку как
+ * собственную речь нельзя. Наши сообщения уже по-русски, их пропускаем.
+ */
+function errText(e: unknown, fallback: string): string {
+  const raw = e instanceof Error ? e.message.trim() : "";
+  if (!raw) return fallback;
+  if (/[А-Яа-яЁё]/.test(raw)) return raw;
+  return `${fallback}. Ответ Дзен-мани: «${raw}»`;
+}
+
 export const useCloudSnapshotStore = create<State>((set) => ({
   snapshots: [],
   loaded: false,
@@ -66,7 +78,7 @@ export const useCloudSnapshotStore = create<State>((set) => ({
     // too — e.g. the future "auto-snapshot before push" hook.
     const token = useZenmoneyStore.getState().token;
     if (!token) {
-      set({ error: "Сначала подключите токен Дзен-мани API" });
+      set({ error: "Сначала подключите Дзен-мани на вкладке «Данные»" });
       return;
     }
     set({ busy: true, busyOp: "snapshot", error: null });
@@ -77,10 +89,7 @@ export const useCloudSnapshotStore = create<State>((set) => ({
     } catch (e) {
       set({
         busy: false, busyOp: null,
-        error:
-          e instanceof Error
-            ? e.message
-            : "Не удалось сделать снимок (см. консоль браузера)",
+        error: errText(e, "Не удалось сделать снимок"),
       });
     }
   },
@@ -122,10 +131,7 @@ export const useCloudSnapshotStore = create<State>((set) => ({
     } catch (e) {
       set({
         busy: false, busyOp: null,
-        error:
-          e instanceof Error
-            ? e.message
-            : "Не удалось импортировать снимок",
+        error: errText(e, "Не удалось загрузить снимок"),
       });
     }
   },

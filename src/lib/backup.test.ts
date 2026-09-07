@@ -13,14 +13,15 @@ describe("parseAndValidateBackup", () => {
       _meta: { app: "DzenAnalytics", schema: "cloud-snapshot/v1" },
       diff: { transaction: [], account: [] },
     });
-    expect(() => parseAndValidateBackup(snapshot)).toThrow(/облачный снимок/i);
-    expect(() => parseAndValidateBackup(snapshot)).toThrow(/Загрузить из файла/);
+    expect(() => parseAndValidateBackup(snapshot)).toThrow(/снимок аккаунта/i);
+    // Текст ведёт к нужной кнопке, а не просто отказывает.
+    expect(() => parseAndValidateBackup(snapshot)).toThrow(/Загрузить файл/);
   });
 
   it("узнаёт снимок и без пометки — по одному полю diff", () => {
     // Файл могли переименовать, обрезать или собрать руками; опознаётся форма.
     const bare = JSON.stringify({ diff: { transaction: [] } });
-    expect(() => parseAndValidateBackup(bare)).toThrow(/облачный снимок/i);
+    expect(() => parseAndValidateBackup(bare)).toThrow(/снимок аккаунта/i);
   });
 
   it("не принимает за снимок бэкап с полем diff", () => {

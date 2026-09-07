@@ -93,6 +93,23 @@ interface State {
   restore: () => Promise<void>;
 }
 
+/**
+ * Текст ошибки для человека.
+ *
+ * Дзен-мани отвечает по-английски («It is not allowed to create several user
+ * debt accounts»), и раньше эта строка показывалась как есть — то есть от
+ * нашего лица. Перевести произвольный ответ сервера нельзя, но можно
+ * перестать выдавать его за свою речь: объяснение даём мы, ответ приводим
+ * дословно и в кавычках. Наши собственные сообщения уже по-русски — их
+ * пропускаем как есть.
+ */
+function errText(e: unknown, fallback: string): string {
+  const raw = e instanceof Error ? e.message.trim() : "";
+  if (!raw) return fallback;
+  if (/[А-Яа-яЁё]/.test(raw)) return raw;
+  return `${fallback}. Ответ Дзен-мани: «${raw}»`;
+}
+
 /** Фаза по итогу сверки. Единственное место, где результат превращается в шаг. */
 function phaseFor(p: RestorePreflight): WizardPhase {
   if (p.blockers.some((b) => b.kind === "notEmpty")) return "clear";
@@ -147,7 +164,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
     if (!snapshotId || running) return;
     const token = useZenmoneyStore.getState().token;
     if (!token) {
-      set({ error: "Подключите Дзен-мани — без него проверять нечего" });
+      set({ error: "Подключите Дзен-мани: без него проверять нечего" });
       return;
     }
     set({ running: "check", error: null });
@@ -158,7 +175,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
       const snap = await loadSnapshot(snapshotId);
       if (!snap) throw new Error("Снимок не найден — возможно, его удалили");
       const cache = await loadZenCache();
-      if (!cache) throw new Error("Нет данных из Дзен-мани — сначала синхронизируйтесь");
+      if (!cache) throw new Error("Нет данных из Дзен-мани: сначала синхронизируйтесь");
       const result = restorePreflight(snap.raw, {
         transactions: cache.transactions,
         accounts: cache.accounts,
@@ -174,7 +191,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
     } catch (e) {
       set({
         running: null,
-        error: e instanceof Error ? e.message : "Не удалось проверить аккаунт",
+        error: errText(e, "Не удалось проверить аккаунт"),
       });
     }
   },
@@ -194,7 +211,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
       set({
         running: null,
         cleanupProgress: null,
-        error: e instanceof Error ? e.message : "Не удалось удалить категории и контрагентов",
+        error: errText(e, "Не удалось удалить категории и контрагентов"),
       });
       return;
     }
@@ -232,7 +249,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
         running: null,
         restoreProgress: null,
         phase: "partial",
-        error: e instanceof Error ? e.message : "Восстановление прервалось",
+        error: errText(e, "Восстановление прервалось на середине"),
       });
     }
   },

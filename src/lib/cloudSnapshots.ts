@@ -274,8 +274,9 @@ export async function downloadSnapshot(id: string): Promise<void> {
       serverTimestamp: snap.serverTimestamp,
       counts: snap.counts,
       note:
-        "Это сырой ответ POST /v8/diff/ от Дзен-мани на момент снимка. " +
-        "Хранится как safety-net на случай неудачной Push-операции из приложения.",
+        "Копия аккаунта Дзен-мани на момент снимка — ответ POST /v8/diff/ " +
+        "как есть. Нужна, чтобы вернуть аккаунт, если отправка правок из " +
+        "DzenAnalytics что-то испортит.",
     },
     diff: snap.raw,
   };
@@ -1125,14 +1126,16 @@ export async function importSnapshotFromJson(
   try {
     parsed = JSON.parse(fileContent);
   } catch (e) {
+    // Текст от `JSON.parse` наружу НЕ показываем: он английский и говорит про
+    // позицию неожиданного символа — человеку, выбравшему не тот файл, это
+    // ничего не объясняет. Подробность остаётся в `cause` для отладки.
     throw new Error(
-      "Не удалось разобрать JSON: " +
-        (e instanceof Error ? e.message : String(e)),
+      "Файл не читается как JSON — возможно, он повреждён или это другой файл.",
       { cause: e }
     );
   }
   if (!parsed || typeof parsed !== "object") {
-    throw new Error("Файл не содержит корректный JSON-объект");
+    throw new Error("Файл не похож на JSON");
   }
 
   // Two accepted shapes:
@@ -1147,12 +1150,12 @@ export async function importSnapshotFromJson(
   }
   if (!raw || typeof raw !== "object") {
     throw new Error(
-      "Не похоже на снимок аккаунта. Подходит файл, сохранённый здесь, " +
-        "бэкап ZenTable (.json.gz) или сырой ответ API Дзен-мани."
+      "Не похоже на снимок аккаунта. Подходит снимок, сохранённый здесь, " +
+        "или бэкап ZenTable — в формате json, zip или gz."
     );
   }
   if (typeof raw.serverTimestamp !== "number") {
-    throw new Error("В снимке нет поля serverTimestamp — файл повреждён.");
+    throw new Error("Файл неполный: в нём нет отметки времени, которую ставит Дзен-мани.");
   }
 
   // Тем же путём, что и снятый с облака: сжатие, счётчики, вытеснение старых.
@@ -1183,16 +1186,16 @@ export async function snapshotPromiseText(
 ): Promise<string> {
   if (policy === "never") return "";
   if (policy === "always") {
-    return "Перед отправкой сохраним копию облачного состояния. ";
+    return "Перед отправкой сделаем снимок аккаунта. ";
   }
   const newest = (await loadSnapshotIndex())[0];
   const fresh = newest && Date.now() - newest.createdAt < DAILY_WINDOW_MS;
-  if (!fresh) return "Перед отправкой сохраним копию облачного состояния. ";
+  if (!fresh) return "Перед отправкой сделаем снимок аккаунта. ";
   const when = new Date(newest.createdAt).toLocaleString("ru-RU", {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
-  return `Копия облака уже есть — от ${when}, новую сегодня делать не будем. `;
+  return `Снимок аккаунта уже есть — от ${when}, новый сегодня делать не будем. `;
 }

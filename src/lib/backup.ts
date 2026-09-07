@@ -279,10 +279,10 @@ export function parseAndValidateBackup(text: string): BackupPayload {
   try {
     parsed = JSON.parse(text);
   } catch (e) {
-    throw new Error("Файл не является корректным JSON", { cause: e });
+    throw new Error("Файл не похож на JSON", { cause: e });
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Бэкап должен быть JSON-объектом");
+    throw new Error("Это не копия данных сервиса: внутри не тот вид файла");
   }
   const obj = parsed as Record<string, unknown>;
   if (!obj.version) {
@@ -300,19 +300,20 @@ export function parseAndValidateBackup(text: string): BackupPayload {
       (obj.diff != null && typeof obj.diff === "object" && !Array.isArray(obj.diff));
     if (looksLikeSnapshot) {
       throw new Error(
-        "Это облачный снимок, а не копия сервиса. Его место — «Бэкапы», " +
-          "кнопка «Загрузить из файла»."
+        "Это снимок аккаунта Дзен-мани, а не копия данных сервиса. " +
+          "Его загружают в «Снимках аккаунта Дзен-мани»: «Восстановить» → " +
+          "«Загрузить файл»."
       );
     }
-    throw new Error("Не похоже на бэкап DzenAnalytics (нет поля version)");
+    throw new Error("Не похоже на копию данных DzenAnalytics");
   }
   // transactions, if present, must be an array of bounded length.
   if (obj.transactions !== undefined) {
     if (!Array.isArray(obj.transactions)) {
-      throw new Error("Поле «transactions» повреждено (ожидался массив)");
+      throw new Error("Копия повреждена: список операций внутри неё испорчен");
     }
     if (obj.transactions.length > MAX_TRANSACTIONS) {
-      throw new Error("Слишком много операций в бэкапе");
+      throw new Error("В копии слишком много операций — файл повреждён");
     }
   }
   // rates, if present, must be an object (base + rates map).
@@ -321,7 +322,7 @@ export function parseAndValidateBackup(text: string): BackupPayload {
     obj.rates !== null &&
     (typeof obj.rates !== "object" || Array.isArray(obj.rates))
   ) {
-    throw new Error("Поле «rates» повреждено");
+    throw new Error("Копия повреждена: испорчены курсы валют");
   }
   return deepSanitize(obj) as BackupPayload;
 }
