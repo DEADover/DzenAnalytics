@@ -98,7 +98,7 @@ export function RestoreWizardModal({
               <History className="w-4 h-4" />
             </span>
             <div id="restore-wizard-title" className="font-semibold">
-              Восстановление из снимка
+              Восстановление снимка Дзен-мани
             </div>
           </div>
           <button
@@ -512,7 +512,6 @@ function DictionariesStep({
           <p className="text-xs text-muted tabular-nums">
             {progress.phase === "tags" ? "Удаляю категории" : "Удаляю контрагентов"}:{" "}
             {formatNum(progress.sent)} из {formatNum(progress.total)}
-            {progress.inFlight > 0 && ` · ${formatNum(progress.inFlight)} в работе`}
             <Elapsed />
           </p>
           <div className="h-1 rounded-full bg-border overflow-hidden">
@@ -526,9 +525,9 @@ function DictionariesStep({
         </div>
       )}
       <p className="text-xs text-muted">
-        Категории удаляются по нескольку сразу, но всё равно небыстро: полсотни
-        занимают около трёх минут. Контрагенты уходят быстро. Не перезагружайте
-        страницу, пока идёт удаление.
+        Категории удаляются по нескольку сразу, но всё равно небыстро: на
+        полсотни уходит до пяти минут. Контрагенты удаляются быстро. Не
+        перезагружайте страницу, пока идёт удаление.
       </p>
       {rejected > 0 && (
         <p className="text-xs text-warn">

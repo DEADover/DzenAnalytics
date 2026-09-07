@@ -66,15 +66,6 @@ export interface CleanupProgress {
   /** Сколько ОТПРАВЛЕНО без ошибки; итог всё равно перепроверяется облаком. */
   sent: number;
   total: number;
-  /**
-   * Сколько строк прямо сейчас в работе.
-   *
-   * Без этого числа счётчик стоял на месте всё время, пока идёт запрос, — а
-   * партия категорий уходит больше чем на минуту. Человек видел неподвижные
-   * «0 из 48» и решал, что всё зависло. Теперь видно, что работа идёт и над
-   * чем именно.
-   */
-  inFlight: number;
 }
 
 export interface CleanupResult {
@@ -172,16 +163,12 @@ export async function cleanupDictionaries(
   ): Promise<number> => {
     const total = groups.reduce((n, g) => n + g.length, 0);
     let sent = 0;
-    let inFlight = 0;
-    const report = () => onProgress?.({ phase, sent, total, inFlight });
+    const report = () => onProgress?.({ phase, sent, total });
     report();
     for (const group of groups) {
       await runPool(chunk(group, size), PARALLEL, async (batch) => {
         if (signal?.aborted) return;
-        inFlight += batch.length;
-        report();
         const ok = await send(batch);
-        inFlight -= batch.length;
         if (ok) {
           sent += batch.length;
           report();
@@ -191,10 +178,7 @@ export async function cleanupDictionaries(
         // утаскивала за собой соседние.
         for (const one of batch) {
           if (signal?.aborted) break;
-          inFlight += 1;
-          report();
           const okOne = await send([one]);
-          inFlight -= 1;
           if (okOne) sent += 1;
           else result.rejected.push({ kind, id: one.id, reason: "сервер отклонил удаление" });
           report();
@@ -230,7 +214,7 @@ export async function cleanupDictionaries(
     );
   }
 
-  onProgress?.({ phase: "done", sent: 0, total: 0, inFlight: 0 });
+  onProgress?.({ phase: "done", sent: 0, total: 0 });
   devLog(
     "zen-cleanup",
     `отправлено: категорий ${result.sentTags}, контрагентов ${result.sentMerchants}, ` +
