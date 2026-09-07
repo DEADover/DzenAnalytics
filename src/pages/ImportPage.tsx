@@ -615,8 +615,10 @@ export function ImportPage() {
     setBackupBusy(true);
     setBackupMsg(null);
     try {
-      const res = await runBackupNow();
-      setBackupMsg(`Скачано: ${res.fileName} (${Math.round(res.size / 1024)} КБ)`);
+      await runBackupNow();
+      // Имя файла и его размер не показываем: браузер и так сообщает о
+      // скачивании, а строка оставалась висеть рядом с кнопкой навсегда.
+      setBackupMsg(null);
     } catch (e) {
       setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Ошибка экспорта");
     } finally {
@@ -743,7 +745,7 @@ export function ImportPage() {
       <PageHeader
         icon={Settings}
         title="Настройки"
-        hint="Данные, расчёты, оформление и резервные копии"
+        hint="Данные, расчёты, оформление и бэкапы"
       />
 
       {/* Horizontal tab bar — top-level grouping for the long
@@ -765,7 +767,7 @@ export function ImportPage() {
           { id: "operations", label: "Справочники", icon: ArrowLeftRight },
           { id: "processing", label: "Расчёты", icon: Calculator },
           { id: "interface", label: "Оформление", icon: ALargeSmall },
-          { id: "backups", label: "Копии", icon: History },
+          { id: "backups", label: "Бэкапы", icon: History },
         ] as const).map((t) => {
           const active = settingsTab === t.id;
           const Icon = t.icon;
@@ -1908,7 +1910,7 @@ export function ImportPage() {
               раз, а место занимало постоянно, отодвигая сами кнопки вниз. */}
           <div className="flex items-center gap-2 mb-3">
             <Database className="w-5 h-5 text-accent shrink-0" />
-            <span className="font-medium">Копия данных приложения</span>
+            <span className="font-medium">Копия данных сервиса</span>
             <InfoPopover label="Что попадает в копию">
               <p>
                 Один JSON со всем, что живёт <InfoTerm>только здесь</InfoTerm>:
@@ -1983,7 +1985,7 @@ export function ImportPage() {
             <InfoPopover label="Как работает расписание">
               <p>
                 Автоматически скачивает ту же копию с выбранной
-                периодичностью. Проверка запускается при открытии приложения и
+                периодичностью. Проверка запускается при открытии сервиса и
                 каждые ~10 минут. Файл уходит в стандартную папку загрузок
                 браузера, к имени добавляется «-auto».
               </p>
@@ -2121,8 +2123,8 @@ export function ImportPage() {
                     <button
                       onClick={() => downloadCloudSnapshot(s.id)}
                       className="btn-ghost !px-2 !py-1 text-xs shrink-0"
-                      title="Сохранить снимок файлом на этот компьютер"
-                      aria-label="Скачать снимок файлом"
+                      title="Сохранить снимок файлом"
+                      aria-label="Сохранить снимок файлом"
                     >
                       <Download className="w-3.5 h-3.5" />
                     </button>

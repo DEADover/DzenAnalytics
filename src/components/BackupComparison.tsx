@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 
 /**
@@ -15,14 +16,31 @@ import { AlertTriangle, ChevronRight } from "lucide-react";
  * где ошибка стоит потери данных.
  */
 export function BackupComparison() {
+  // Свёрнуто по умолчанию: это справка, её читают один раз, а место она
+  // занимала перед обеими карточками постоянно и отодвигала их вниз.
+  const [open, setOpen] = useState(false);
   return (
-    // Свёрнуто по умолчанию: это справка, её читают один раз, а место она
-    // занимала перед обеими карточками постоянно и отодвигала их вниз.
-    <details className="group rounded-xl border border-border bg-panel2/30">
-      <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer select-none text-sm list-none">
-        <ChevronRight className="w-4 h-4 shrink-0 text-muted transition-transform group-open:rotate-90" />
-        Чем копия приложения отличается от снимка аккаунта
-      </summary>
+    <div className="rounded-xl border border-border bg-panel2/30">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-left"
+      >
+        <ChevronRight
+          className={`w-4 h-4 shrink-0 text-muted transition-transform duration-200 ${open ? "rotate-90" : ""}`}
+        />
+        Чем копия сервиса отличается от снимка аккаунта
+      </button>
+      {/* Раскрытие через сетку: `<details>` высоту не анимирует, а `max-height`
+          наугад либо режет содержимое, либо тормозит на коротком. Переход
+          `0fr → 1fr` берёт настоящую высоту и работает при любой длине. */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="overflow-hidden">
       <div className="px-4 pb-4 space-y-3">
       <div className="overflow-x-auto -mx-1 px-1">
         <table className="w-full text-xs border-collapse">
@@ -46,7 +64,7 @@ export function BackupComparison() {
             />
             <Row
               label="Что возвращает"
-              local="Это приложение — настройки, правила и всё, что вы здесь настроили."
+              local="Этот сервис — настройки, правила и всё, что вы здесь настроили."
               cloud="Аккаунт в самом Дзен-мани."
             />
             <Row
@@ -70,7 +88,9 @@ export function BackupComparison() {
         </span>
       </div>
       </div>
-    </details>
+        </div>
+      </div>
+    </div>
   );
 }
 
