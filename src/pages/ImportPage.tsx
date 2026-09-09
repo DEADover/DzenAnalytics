@@ -54,6 +54,7 @@ import { pluralRu } from "../lib/plural";
 import { useBackupStore, type BackupInterval } from "../store/useBackupStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { usePayeeAliasStore } from "../store/usePayeeAliasStore";
+import { UsersSettings } from "../components/UsersSettings";
 import { Combobox } from "../components/Combobox";
 import { PageHeader } from "../components/PageHeader";
 import { formatNum, formatDate, formatMoney } from "../lib/format";
@@ -2183,6 +2184,10 @@ export function ImportPage() {
         )}
       </section>
       )}
+
+      {/* Люди на общем аккаунте (#92). Сама карточка прячется, когда человек
+          один, — на личном аккаунте настраивать нечего. */}
+      {settingsTab === "source" && zenToken && sourceTab === "api" && <UsersSettings />}
 
       {/* Push в облако — Phase 1, opt-in via the toggle below.
           Only visible when an API token is connected; the safety-net

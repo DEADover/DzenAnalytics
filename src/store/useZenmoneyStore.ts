@@ -17,6 +17,7 @@ import {
   cacheToDiffResponse,
   forceFetchFor,
 } from "../lib/zenmoneyCache";
+import { zenUsers, type ZenUserOption } from "../lib/zenUsers";
 import {
   buildPushItems,
   buildBudgetPush,
@@ -423,6 +424,19 @@ export interface CategoryTag {
   icon: string | null;
   /** Raw Zenmoney packed-RGB colour int, or null. */
   color: number | null;
+}
+
+/**
+ * Люди на аккаунте из кэша Дзен-мани (#92).
+ *
+ * Нужен только для подписей: сам список тех, кого показывать, собирается по
+ * операциям — на общем аккаунте человек мог не завести ни одной, и пустая
+ * строка в фильтре только мешала бы. `null` в режиме CSV.
+ */
+export async function getZenUsersFromCache(): Promise<ZenUserOption[] | null> {
+  const cache = await loadZenCache();
+  if (!cache) return null;
+  return zenUsers(cache.user);
 }
 
 /**

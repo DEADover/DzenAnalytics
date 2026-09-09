@@ -19,6 +19,7 @@ function filt(p: Partial<FiltersState> = {}): FiltersState {
     accounts: new Set<string>(),
     categories: new Set<string>(),
     currencies: new Set<string>(),
+    users: new Set<string>(),
     search: "",
     excludeTransfers: false,
     ...p,
@@ -492,5 +493,44 @@ describe("stepPeriod", () => {
     useFiltersStore.getState().setYear(2022);
     // Месяц якоря сохранён: вернувшись в «Месяц», попадаешь в июль.
     expect(useFiltersStore.getState().monthYM).toBe("2022-07");
+  });
+});
+
+
+describe("applyFilters — фильтр по людям на общем аккаунте (#92)", () => {
+  const txs = [
+    tx({ id: "мой1", user: 1 }),
+    tx({ id: "мой2", user: 1 }),
+    tx({ id: "жена", user: 5 }),
+    tx({ id: "изCSV" }), // без пометки: понятия «чей» в CSV нет
+  ];
+
+  it("пусто — показываем всех, как у остальных множественных фильтров", () => {
+    expect(ids(applyFilters(txs, filt()))).toEqual(["жена", "изCSV", "мой1", "мой2"]);
+  });
+
+  it("выбран один — только его операции", () => {
+    expect(ids(applyFilters(txs, filt({ users: new Set(["1"]) })))).toEqual([
+      "мой1",
+      "мой2",
+    ]);
+  });
+
+  it("выбраны двое — операции обоих", () => {
+    expect(ids(applyFilters(txs, filt({ users: new Set(["1", "5"]) })))).toEqual([
+      "жена",
+      "мой1",
+      "мой2",
+    ]);
+  });
+
+  it("операции без пометки под фильтром прячутся", () => {
+    // «Покажи операции такого-то» о них ничего не утверждает, и показать их
+    // значило бы приписать их выбранному человеку.
+    expect(ids(applyFilters(txs, filt({ users: new Set(["5"]) })))).toEqual(["жена"]);
+  });
+
+  it("«снять все» не показывает ничего", () => {
+    expect(applyFilters(txs, filt({ users: new Set([FILTER_NONE]) }))).toEqual([]);
   });
 });

@@ -250,7 +250,15 @@ export interface ZenDiffResponse {
   tag: ZenTag[];
   merchant: ZenMerchant[];
   transaction: ZenTransaction[];
-  user: { id: number; currency: number; [k: string]: unknown }[];
+  /** Люди на аккаунте. На общем их несколько — см. `lib/zenUsers` (#92). */
+  user: {
+    id: number;
+    currency: number;
+    login?: string;
+    /** У дополнительных пользователей общего аккаунта — номер основного. */
+    parent?: number | null;
+    [k: string]: unknown;
+  }[];
   budget?: ZenBudget[];
   reminder?: ZenReminder[];
   reminderMarker?: ZenReminderMarker[];

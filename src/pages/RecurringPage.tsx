@@ -16,7 +16,9 @@ import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { detectRecurring, type RecurringCandidate } from "../lib/aggregations";
 import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
-import { plannedOps, type PlannedOp } from "../lib/plannedOps";
+import { plannedOps, ownPlannedOps, type PlannedOp } from "../lib/plannedOps";
+import { guessOwnerId, zenUsers } from "../lib/zenUsers";
+import { useUserAliasStore } from "../store/useUserAliasStore";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -115,7 +117,14 @@ export function RecurringPage() {
       cancelled = true;
     };
   }, [transactions]);
-  const planned = useMemo(() => plannedOps(zenCache, rates), [zenCache, rates]);
+  // Только свои планы: на общем аккаунте по одному токену приезжают планы
+  // всех подключённых людей, а мобильное приложение чужие не показывает (#92).
+  const ownerOverride = useUserAliasStore((s) => s.ownerId);
+  const planned = useMemo(() => {
+    const users = zenUsers(zenCache?.user);
+    const owner = users.length > 1 ? guessOwnerId(users, ownerOverride) : null;
+    return ownPlannedOps(plannedOps(zenCache, rates), owner);
+  }, [zenCache, rates, ownerOverride]);
   const [pageTab, setPageTab] = useState<PageTab>("zen");
   const [plannedTab, setPlannedTab] = useState<"all" | "plan" | "forecast">("all");
   const [plannedPeriod, setPlannedPeriod] = useState<PlannedPeriod>("month");

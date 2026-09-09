@@ -33,6 +33,14 @@ export interface PlannedOp {
   category: string;
   /** true = прогноз Дзена, false = запланировано вручную. */
   forecast: boolean;
+  /**
+   * Чей это план (`ZenReminderMarker.user`).
+   *
+   * На общем аккаунте по одному токену приезжают планы всех подключённых
+   * людей. Мобильное приложение чужие не показывает, а мы показывали все — и
+   * в виджете на главной, и на «Регулярных» (issue #92).
+   */
+  user?: number;
 }
 
 /**
@@ -119,6 +127,7 @@ export function plannedOps(
       comment: (m.comment || "").trim(),
       category: involvesDebt ? "Долг" : categoryOf(m.tag),
       forecast: m.isForecast === true,
+      user: m.user,
     });
   }
   out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -142,4 +151,21 @@ export function plannedBreakdown(
   if (plan > 0) out.push({ label: "План", amount: plan });
   if (forecast > 0) out.push({ label: "Прогноз", amount: forecast });
   return out;
+}
+
+/**
+ * Оставить планы одного человека — «мои».
+ *
+ * Мобильное приложение Дзен-мани чужие плановые операции не показывает, а мы
+ * показывали все: на общем аккаунте виджет на главной и «Регулярные» выдавали
+ * вперемешку планы всех подключённых людей, и понять, почему в списке чужая
+ * аренда, было нельзя (issue #92).
+ *
+ * `ownerId === null` — фильтровать нечем (личный аккаунт, режим CSV или список
+ * людей ещё не прочитан): отдаём как есть. Планы без пометки тоже оставляем —
+ * на личном аккаунте это норма, и прятать их значило бы опустошить список.
+ */
+export function ownPlannedOps(ops: PlannedOp[], ownerId: number | null): PlannedOp[] {
+  if (ownerId == null) return ops;
+  return ops.filter((p) => p.user == null || p.user === ownerId);
 }

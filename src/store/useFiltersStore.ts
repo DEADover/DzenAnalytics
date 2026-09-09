@@ -36,6 +36,9 @@ export type DatePreset =
  */
 export const FILTER_NONE = "\u0000__none__";
 
+/** Множественные фильтры — те, что живут набором значений. */
+export type SetFilter = "accounts" | "categories" | "currencies" | "users";
+
 interface FiltersState {
   preset: DatePreset;
   from: string | null;
@@ -44,6 +47,13 @@ interface FiltersState {
   accounts: Set<string>;
   categories: Set<string>;
   currencies: Set<string>;
+  /**
+   * Чьи операции показывать — номера пользователей Дзен-мани строками (#92).
+   *
+   * Пусто = все, как у остальных множественных фильтров. На личном аккаунте
+   * человек этого фильтра вообще не увидит: выбирать не из кого.
+   */
+  users: Set<string>;
   search: string;
   excludeTransfers: boolean;
   // «Дополнительно» filters — all default to a no-op (null / empty / false).
@@ -94,11 +104,11 @@ interface FiltersState {
   setYear: (year: number) => void;
   /** Шагнуть на соседний период — единица берётся из пресета: месяц или год. */
   stepPeriod: (delta: number, fallbackMaxYM: string) => void;
-  toggleSet: (kind: "accounts" | "categories" | "currencies", value: string) => void;
+  toggleSet: (kind: SetFilter, value: string) => void;
   /** Replace a multi-select set outright (used by «Выбрать все» / «Снять все»
    *  and the smart toggle that knows the full option list). */
-  setSet: (kind: "accounts" | "categories" | "currencies", values: Set<string>) => void;
-  resetSet: (kind: "accounts" | "categories" | "currencies") => void;
+  setSet: (kind: SetFilter, values: Set<string>) => void;
+  resetSet: (kind: SetFilter) => void;
   setSearch: (s: string) => void;
   setExcludeTransfers: (v: boolean) => void;
   setAmountRange: (min: number | null, max: number | null) => void;
@@ -127,6 +137,7 @@ const initial = {
   accounts: new Set<string>(),
   categories: new Set<string>(),
   currencies: new Set<string>(),
+  users: new Set<string>(),
   search: "",
   // Off by default — transfers are shown unless the user opts to hide them.
   excludeTransfers: false,
@@ -303,6 +314,13 @@ export function applyFilters(
     }
     if (state.currencies.size && (state.currencies.has(FILTER_NONE) || !state.currencies.has(t.currency)))
       return false;
+    // Чьи операции. Операции без пометки (из CSV) под фильтром по людям
+    // прячем: выбор «покажи операции такого-то» о них ничего не утверждает,
+    // а показать их значило бы приписать их выбранному.
+    if (state.users.size) {
+      if (state.users.has(FILTER_NONE)) return false;
+      if (t.user == null || !state.users.has(String(t.user))) return false;
+    }
     if (search) {
       const hay = `${payeeSearchText(t)} ${t.comment} ${t.categoryFull}`.toLowerCase();
       if (!hay.includes(search)) return false;

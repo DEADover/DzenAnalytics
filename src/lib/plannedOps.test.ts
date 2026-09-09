@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { plannedOps, plannedBreakdown } from "./plannedOps";
+import { plannedOps, plannedBreakdown, ownPlannedOps, type PlannedOp } from "./plannedOps";
 import {
   backfillEntities,
   cacheVersionOf,
@@ -273,5 +273,30 @@ describe("plannedBreakdown", () => {
 
   it("treats a negative sum as nothing (these totals are unsigned)", () => {
     expect(plannedBreakdown(-5, -1)).toEqual([]);
+  });
+});
+
+describe("ownPlannedOps — чужие планы на общем аккаунте (#92)", () => {
+  const op = (id: string, user?: number) => ({ id, user }) as unknown as PlannedOp;
+
+  it("оставляет только планы указанного человека", () => {
+    const out = ownPlannedOps([op("мой", 1), op("жены", 5), op("мой2", 1)], 1);
+    expect(out.map((p) => p.id)).toEqual(["мой", "мой2"]);
+  });
+
+  it("без хозяина не трогает список", () => {
+    // Личный аккаунт, режим CSV или список людей ещё не прочитан — фильтровать
+    // нечем, и прятать что-либо было бы произволом.
+    const ops = [op("a", 1), op("b", 5)];
+    expect(ownPlannedOps(ops, null)).toEqual(ops);
+  });
+
+  it("планы без пометки остаются", () => {
+    // На личном аккаунте это норма, и спрятать их значило бы опустошить список.
+    expect(ownPlannedOps([op("без")], 1).map((p) => p.id)).toEqual(["без"]);
+  });
+
+  it("пустой список не роняет", () => {
+    expect(ownPlannedOps([], 1)).toEqual([]);
   });
 });

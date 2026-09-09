@@ -7,6 +7,7 @@ import {
   SlidersHorizontal,
   Coins,
   Users,
+  UserRound,
 } from "lucide-react";
 import { DateField } from "./DateField";
 import { MultiSelect } from "./MultiSelect";
@@ -18,13 +19,19 @@ import { MonthPicker } from "./MonthPicker";
 import { currencySymbol } from "../lib/format";
 import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
-import { getLiveAccountsFromCache, getCategoryTagsFromCache } from "../store/useZenmoneyStore";
+import {
+  getLiveAccountsFromCache,
+  getCategoryTagsFromCache,
+  getZenUsersFromCache,
+} from "../store/useZenmoneyStore";
 import { accountOptions } from "../lib/accountOptions";
 import { useFiltersStore, type DatePreset } from "../store/useFiltersStore";
 import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { currencyFlagEmoji } from "../lib/currencyFlag";
+import { usersInData, userLabel, type ZenUserOption } from "../lib/zenUsers";
+import { useUserAliasStore } from "../store/useUserAliasStore";
 
 const PRESETS: { value: DatePreset; label: string; title?: string }[] = [
   { value: "30d", label: "30 дней" },
@@ -278,6 +285,24 @@ export function GlobalFilters({
     ];
   }, [transactions, tagKinds]);
 
+  // Люди на аккаунте (#92). Считаем по самим операциям, а не по списку
+  // аккаунта: на общем аккаунте человек мог не завести ни одной операции, и
+  // пустая строка в фильтре только мешала бы. На личном список выйдет из
+  // одного человека — тогда фильтр не показываем вовсе, выбирать не из кого.
+  const userIds = useMemo(() => usersInData(transactions), [transactions]);
+  const userOptions = useMemo(() => userIds.map(String), [userIds]);
+  const userAliases = useUserAliasStore((s) => s.aliases);
+  const [zenUserList, setZenUserList] = useState<ZenUserOption[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getZenUsersFromCache().then((list) => {
+      if (!cancelled && list) setZenUserList(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [transactions]);
+
   const currencies = useMemo(() => {
     const set = new Set<string>();
     for (const t of transactions) if (t.currency) set.add(t.currency);
@@ -328,6 +353,7 @@ export function GlobalFilters({
     f.accounts.size > 0 ||
     f.categories.size > 0 ||
     f.currencies.size > 0 ||
+    f.users.size > 0 ||
     f.search.length > 0 ||
     hasExtra ||
     !(f.preset === "month" && f.monthYM === defaultMonthYM);
@@ -629,6 +655,21 @@ export function GlobalFilters({
           selected={f.categories}
           onChange={(s) => f.setSet("categories", s)}
         />
+
+        {userOptions.length > 1 && (
+          <MultiSelect
+            className="w-52 shrink-0"
+            menuMinWidth={0}
+            label="Пользователи"
+            options={userOptions}
+            selected={f.users}
+            onChange={(s) => f.setSet("users", s)}
+            labelOf={(id) => userLabel(Number(id), zenUserList, userAliases)}
+            unitForms={["пользователь", "пользователя", "пользователей"]}
+            searchPlaceholder="Поиск пользователя"
+            renderIcon={() => <UserRound className="w-[18px] h-[18px] text-muted" />}
+          />
+        )}
 
         {currencies.length > 1 && (
           <MultiSelect
