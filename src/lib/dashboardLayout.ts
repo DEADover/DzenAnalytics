@@ -268,6 +268,18 @@ export interface WidgetPlacement {
   view?: string;
   /** Только у полоски: что стоит на каждом из шести мест. */
   links?: LinkSlots;
+  /**
+   * Сколько пустых клеток оставить слева от виджета в его ряду.
+   *
+   * Без этого виджет всегда прижат к левому краю своего ряда: раскладка —
+   * поток, и «поставить справа, а слева пусто» в ней было невыразимо. Отдельной
+   * распорки-виджета для этого заводить не стали — пустота не сущность, а
+   * свойство места, и живёт она у того, кого сдвигает.
+   *
+   * Считается от начала ряда и ограничен так, чтобы виджет в него влезал:
+   * у виджета в две трети отступ бывает только 0 или 1.
+   */
+  offset?: number;
 }
 
 export const DEFAULT_LAYOUT: readonly WidgetPlacement[] = WIDGETS.map((w) => {
@@ -330,6 +342,7 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
       hidden?: unknown;
       view?: unknown;
       links?: unknown;
+      offset?: unknown;
     };
     const kind = typeof rec.kind === "string" ? BY_KIND.get(rec.kind) : undefined;
     if (!kind) continue;
@@ -350,6 +363,8 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
       placement.links = links;
     }
     if (rec.hidden === true) placement.hidden = true;
+    const offset = clampOffset(rec.offset, kind);
+    if (offset > 0) placement.offset = offset;
 
     keys.add(key);
     kinds.add(kind.kind);
@@ -479,9 +494,17 @@ export function packLayout(
   let col = 0;
   for (const placement of visible) {
     const span = Math.min(widgetMeta(placement.kind).span, columns);
-    if (col > 0 && col + span > columns) {
+    const offset = clampOffset(placement.offset, widgetMeta(placement.kind), columns);
+    // Отступ едет вместе с виджетом: если вдвоём они в остаток ряда не влезают,
+    // на новый ряд переходят оба, и пустота остаётся слева от виджета, а не
+    // повисает хвостом предыдущего.
+    if (col > 0 && col + offset + span > columns) {
       cells.push({ type: "gap", span: columns - col, before: placement.key });
       col = 0;
+    }
+    if (offset > 0) {
+      cells.push({ type: "gap", span: offset, before: placement.key });
+      col += offset;
     }
     cells.push({ type: "widget", placement });
     col = (col + span) % columns;
@@ -490,8 +513,31 @@ export function packLayout(
   return cells;
 }
 
+/** Отступ, который виджет может себе позволить: дальше он в ряд не влезет. */
+export function maxOffset(meta: WidgetMeta, columns = 3): number {
+  return Math.max(0, columns - Math.min(meta.span, columns));
+}
+
+function clampOffset(
+  value: unknown,
+  meta: WidgetMeta,
+  columns = 3
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(Math.round(value), maxOffset(meta, columns)));
+}
+
 /**
  * Сдвинуть виджет на шаг вперёд или назад — это делают стрелки.
+ *
+ * ШАГ — ЭТО КЛЕТКА, А НЕ СОСЕД. Сначала виджет двигается внутри ряда: вправо —
+ * набирая пустую клетку слева, влево — отдавая её обратно. Только когда клеток
+ * больше нет (виджет во всю ширину или уже у края), шаг становится обменом с
+ * соседом. Так «поставить справа, слева пусто» получается теми же стрелками, а
+ * не требует отдельной распорки в раскладке.
+ *
+ * При обмене отступ сбрасывается: он про место В РЯДУ, а ряд у виджета теперь
+ * другой, и тащить за собой прежнюю пустоту незачем.
  *
  * Убранные виджеты пропускаем: их на экране нет, и шаг «через невидимое»
  * выглядел бы как нажатие вхолостую.
@@ -507,12 +553,31 @@ export function shiftWidget(
   });
   const at = visible.findIndex((i) => layout[i].key === key);
   if (at === -1) return layout.slice();
+
+  const idx = visible[at];
+  const meta = widgetMeta(layout[idx].kind);
+  const offset = clampOffset(layout[idx].offset, meta);
+  const room = maxOffset(meta);
+  if (dir === 1 ? offset < room : offset > 0) {
+    const next = layout.slice();
+    next[idx] = withOffset(layout[idx], offset + dir);
+    return next;
+  }
+
   const to = at + dir;
   if (to < 0 || to >= visible.length) return layout.slice();
   const next = layout.slice();
   const a = visible[at];
   const b = visible[to];
-  [next[a], next[b]] = [next[b], next[a]];
+  [next[a], next[b]] = [withOffset(next[b], 0), withOffset(next[a], 0)];
+  return next;
+}
+
+/** Тот же виджет с другим отступом; ноль поле убирает. */
+function withOffset(p: WidgetPlacement, offset: number): WidgetPlacement {
+  const next = { ...p };
+  if (offset > 0) next.offset = offset;
+  else delete next.offset;
   return next;
 }
 

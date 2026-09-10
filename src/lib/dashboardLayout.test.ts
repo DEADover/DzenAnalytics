@@ -286,21 +286,102 @@ describe("packLayout", () => {
 });
 
 describe("shiftWidget", () => {
-  it("меняет местами с соседом", () => {
-    const out = shiftWidget(DEFAULT_LAYOUT, "accounts", -1);
-    expect(keys(out).slice(0, 2)).toEqual(["accounts", "month"]);
+  const offsetOf = (l: readonly WidgetPlacement[], key: string) =>
+    l.find((p) => p.key === key)?.offset ?? 0;
+
+  it("шаг вправо оставляет пустую клетку слева, а не меняет соседей", () => {
+    // Ради этого всё и затевалось: «поставить справа, слева пусто».
+    const out = shiftWidget(DEFAULT_LAYOUT, "freeMoney", 1);
+    expect(offsetOf(out, "freeMoney")).toBe(1);
+    expect(keys(out)).toEqual(keys(DEFAULT_LAYOUT));
+  });
+
+  it("шаг влево возвращает клетку обратно", () => {
+    const right = shiftWidget(DEFAULT_LAYOUT, "freeMoney", 1);
+    const back = shiftWidget(right, "freeMoney", -1);
+    expect(offsetOf(back, "freeMoney")).toBe(0);
+    expect(keys(back)).toEqual(keys(DEFAULT_LAYOUT));
+  });
+
+  it("виджет в две трети дальше одной клетки не уезжает — меняется с соседом", () => {
+    const right = shiftWidget(DEFAULT_LAYOUT, "freeMoney", 1);
+    const out = shiftWidget(right, "freeMoney", 1);
+    expect(keys(out).slice(3, 5)).toEqual(["categories", "freeMoney"]);
+  });
+
+  it("при обмене отступ сбрасывается: ряд у виджета теперь другой", () => {
+    const right = shiftWidget(DEFAULT_LAYOUT, "freeMoney", 1);
+    const out = shiftWidget(right, "freeMoney", 1);
+    expect(offsetOf(out, "freeMoney")).toBe(0);
+  });
+
+  it("виджет во всю ширину клеток не набирает — сразу обмен", () => {
+    // У полоски `span: 3`, пустой клетке рядом с ней взяться неоткуда.
+    const out = shiftWidget(DEFAULT_LAYOUT, "links", -1);
+    expect(offsetOf(out, "links")).toBe(0);
+    expect(keys(out)).not.toEqual(keys(DEFAULT_LAYOUT));
   });
 
   it("на краю стоит на месте", () => {
     expect(keys(shiftWidget(DEFAULT_LAYOUT, "month", -1))).toEqual(keys(DEFAULT_LAYOUT));
-    const last = DEFAULT_LAYOUT[DEFAULT_LAYOUT.length - 1].key;
-    expect(keys(shiftWidget(DEFAULT_LAYOUT, last, 1))).toEqual(keys(DEFAULT_LAYOUT));
   });
 
   it("перешагивает убранные: шаг не должен уходить в пустоту", () => {
-    const layout = setWidgetHidden(DEFAULT_LAYOUT, "accounts", true);
+    // Клетки у «Итогов месяца» кончились — дальше шаг становится обменом, и
+    // перешагнуть он должен через снятый виджет, а не встать на его место.
+    let layout = setWidgetHidden(DEFAULT_LAYOUT, "accounts", true);
+    layout = shiftWidget(layout, "month", 1);
+    layout = shiftWidget(layout, "month", 1);
+    expect(offsetOf(layout, "month")).toBe(2);
     const out = shiftWidget(layout, "month", 1);
     expect(keys(out).slice(0, 3)).toEqual(["upcoming", "accounts", "month"]);
+  });
+});
+
+describe("packLayout и отступ", () => {
+  it("ставит пустую клетку слева от виджета", () => {
+    const out = packLayout([
+      { key: "freeMoney", kind: "freeMoney", offset: 1 },
+      { key: "categories", kind: "categories" },
+    ]);
+    expect(out.map((c) => (c.type === "widget" ? c.placement.key : `gap${c.span}`))).toEqual([
+      "gap1",
+      "freeMoney",
+      "categories",
+      "gap2",
+    ]);
+  });
+
+  it("отступ едет вместе с виджетом на новый ряд", () => {
+    // Иначе пустота повисла бы хвостом предыдущего ряда, а виджет всё равно
+    // встал бы слева — то есть отступ бы просто пропал.
+    const out = packLayout([
+      { key: "accounts", kind: "accounts" },
+      { key: "freeMoney", kind: "freeMoney", offset: 1 },
+    ]);
+    expect(out.map((c) => (c.type === "widget" ? c.placement.key : `gap${c.span}`))).toEqual([
+      "accounts",
+      "gap2",
+      "gap1",
+      "freeMoney",
+    ]);
+  });
+
+  it("отступ больше свободного места обрезается", () => {
+    // У виджета в две трети клетка бывает только одна: с двумя он не влез бы
+    // в ряд вовсе.
+    const out = packLayout([{ key: "freeMoney", kind: "freeMoney", offset: 9 }]);
+    expect(out.map((c) => (c.type === "widget" ? c.placement.key : `gap${c.span}`))).toEqual([
+      "gap1",
+      "freeMoney",
+    ]);
+  });
+
+  it("виджету во всю ширину отступ не полагается", () => {
+    const out = packLayout([{ key: "links", kind: "links", offset: 2 }]);
+    expect(out.map((c) => (c.type === "widget" ? c.placement.key : `gap${c.span}`))).toEqual([
+      "links",
+    ]);
   });
 });
 

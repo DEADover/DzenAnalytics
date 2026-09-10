@@ -43,6 +43,7 @@ import {
 import { useWidgetDrag } from "../../hooks/useWidgetDrag";
 import {
   isBareWidget,
+  maxOffset,
   packLayout,
   widgetMeta,
   widgetView,
@@ -856,11 +857,10 @@ export function DashboardView() {
 
   const visible = layout.filter((p) => !p.hidden);
   // Дырки в рядах считаем сами: сетка их оставляет, но в разметке их нет, а
-  // значит и уронить в них виджет нельзя. В обычном виде они не нужны — там
-  // ряды складывает сама сетка, и результат тот же.
-  const cells = editing
-    ? packLayout(visible)
-    : visible.map((placement) => ({ type: "widget" as const, placement }));
+  // значит и уронить в них виджет нельзя. Считаем ВСЕГДА, а не только в режиме
+  // настройки: пустая клетка слева от виджета — часть раскладки, и без неё
+  // сдвинутый виджет возвращался бы к левому краю, стоило выйти из настройки.
+  const cells = packLayout(visible);
 
   return (
     <div className="flex flex-col gap-5 3xl:gap-6">
@@ -870,9 +870,23 @@ export function DashboardView() {
         <EmptyDashboard />
       ) : (
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6">
-          {cells.map((cell) => {
+          {cells.map((cell, ci) => {
             if (cell.type === "gap") {
-              const gapKey = `gap:${cell.before ?? "end"}`;
+              // В ряду дырок бывает две: перенос на новый ряд и отступ слева от
+              // виджета. Ключ по одному лишь соседу их бы склеил — подсвечивались
+              // бы обе разом.
+              const gapKey = `gap:${ci}:${cell.before ?? "end"}`;
+              // Вне настройки дырка — просто пустое место: ни рамки, ни
+              // приглашения, ни обработчиков.
+              if (!editing) {
+                return (
+                  <div
+                    key={gapKey}
+                    aria-hidden
+                    className={clsx("hidden lg:block", cell.span === 2 && "lg:col-span-2")}
+                  />
+                );
+              }
               return (
                 <WidgetGap
                   key={gapKey}
@@ -904,8 +918,13 @@ export function DashboardView() {
               onDragEnd={drag.end}
               onDrop={(sourceKey) => drag.drop(sourceKey, p.key)}
               onShift={(dir) => void shift(p.key, dir)}
-              canBack={i > 0}
-              canForward={i < visible.length - 1}
+              // Шаг — это клетка, а не сосед: у крайнего виджета он ещё есть,
+              // пока в ряду остаётся пустое место.
+              canBack={i > 0 || (p.offset ?? 0) > 0}
+              canForward={
+                i < visible.length - 1 ||
+                (p.offset ?? 0) < maxOffset(widgetMeta(p.kind))
+              }
             >
               {widgetBody(p)}
             </WidgetShell>
