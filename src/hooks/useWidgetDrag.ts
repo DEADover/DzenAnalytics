@@ -10,8 +10,11 @@ import { useEffect, useState } from "react";
 
 export function useWidgetDrag(
   onMove: (dragKey: string, overKey: string) => void,
-  /** Бросок в дырку: встать перед этим виджетом; `null` — в самый конец. */
-  onMoveBefore: (dragKey: string, beforeKey: string | null) => void
+  /**
+   * Бросок в пустую клетку: виджет встаёт ровно в неё. `beforeKey` — сосед, перед
+   * которым дырка стоит (`null` — она в конце), `gapCol` — её колонка в ряду.
+   */
+  onMoveBefore: (dragKey: string, beforeKey: string | null, gapCol: number) => void
 ) {
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
@@ -59,11 +62,13 @@ export function useWidgetDrag(
       setDragKey(null);
       setOverKey(null);
     },
-    dropBefore: (sourceKey: string, beforeKey: string | null) => {
+    dropBefore: (sourceKey: string, beforeKey: string | null, gapCol: number) => {
       setDragKey(null);
       setOverKey(null);
-      if (sourceKey === beforeKey) return;
-      onMoveBefore(sourceKey, beforeKey);
+      // Бросок виджета в СОБСТВЕННЫЙ отступ раньше отсекался как бессмысленный.
+      // Он не бессмыслен: это и есть «сдвинуть влево, в пустую клетку».
+      if (!sourceKey) return;
+      onMoveBefore(sourceKey, beforeKey, gapCol);
     },
     drop: (sourceKey: string, targetKey: string) => {
       setDragKey(null);

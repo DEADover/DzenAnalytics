@@ -497,6 +497,73 @@ export function moveWidgetBefore(
   return next;
 }
 
+/**
+ * Бросок в пустую клетку: виджет встаёт РОВНО В НЕЁ.
+ *
+ * Одного переноса «перед соседом» для этого мало. Дырка в ряду стоит в его
+ * конце, а перенос ставит виджет сразу за последним занятым местом — то есть
+ * левее дырки, если в ряду что-то освободилось. Заметнее всего это на своём же
+ * ряду: виджет оттуда просто менялся местами с соседом, дырка оставалась на
+ * месте, и перетаскивание выглядело сломанным.
+ *
+ * Поэтому после переноса смотрим, в какую колонку виджет встал сам, и добираем
+ * разницу отступом. Если он и так попал куда надо (бросок из другого ряда),
+ * отступ выходит нулевым и ничего не меняется.
+ *
+ * `gapCol` — колонка, с которой дырка начинается, считая от начала ряда.
+ */
+export function dropIntoGap(
+  layout: readonly WidgetPlacement[],
+  dragKey: string,
+  /** Виджет, перед которым стоит дырка; `null` — дырка в конце раскладки. */
+  beforeKey: string | null,
+  gapCol: number,
+  columns = 3
+): WidgetPlacement[] {
+  const moved = moveWidgetBefore(layout, dragKey, beforeKey);
+  const at = moved.findIndex((p) => p.key === dragKey);
+  if (at === -1) return moved;
+
+  const meta = widgetMeta(moved[at].kind);
+  const actual = columnOf(moved, dragKey, columns);
+  if (actual === null) return moved;
+
+  const offset = clampOffset(moved[at].offset, meta, columns);
+  const next = moved.slice();
+  next[at] = withOffset(next[at], clampOffset(offset + gapCol - actual, meta, columns));
+
+  // Если дырка была ОТСТУПОМ соседа, часть её теперь занята — отдаём соседу
+  // ровно то, что осталось. Иначе он уехал бы ещё правее, а дырка выросла.
+  if (beforeKey !== null && beforeKey !== dragKey) {
+    const bi = next.findIndex((p) => p.key === beforeKey);
+    if (bi !== -1) {
+      const bMeta = widgetMeta(next[bi].kind);
+      const bOffset = clampOffset(next[bi].offset, bMeta, columns);
+      if (bOffset > 0) {
+        const span = Math.min(meta.span, columns);
+        next[bi] = withOffset(next[bi], Math.max(0, bOffset - span));
+      }
+    }
+  }
+  return next;
+}
+
+/** В какой колонке своего ряда стоит виджет. `null` — его на экране нет. */
+function columnOf(
+  layout: readonly WidgetPlacement[],
+  key: string,
+  columns = 3
+): number | null {
+  let col = 0;
+  for (const cell of packLayout(layout.filter((p) => !p.hidden), columns)) {
+    if (cell.type === "widget" && cell.placement.key === key) return col;
+    const span =
+      cell.type === "gap" ? cell.span : Math.min(widgetMeta(cell.placement.kind).span, columns);
+    col = (col + span) % columns;
+  }
+  return null;
+}
+
 /* ─────────────────────────────  раскладка по рядам  ───────────────────────────── */
 
 /** Ячейка сетки: виджет или пустое место, оставшееся до конца ряда. */

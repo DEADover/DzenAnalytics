@@ -16,6 +16,7 @@ import {
   defaultLayout,
   layoutFromStored,
   moveWidget,
+  dropIntoGap,
   moveWidgetBefore,
   removeWidget,
   setRowLinks,
@@ -35,8 +36,10 @@ interface State {
   hydrate: () => Promise<void>;
   setEditing: (on: boolean) => void;
   move: (dragKey: string, overKey: string) => Promise<void>;
-  /** Поставить виджет перед другим; `null` — в конец. Так работает бросок в дырку. */
+  /** Поставить виджет перед другим; `null` — в конец. */
   moveBefore: (dragKey: string, beforeKey: string | null) => Promise<void>;
+  /** Бросок в пустую клетку: виджет встаёт ровно в неё. */
+  dropInGap: (dragKey: string, beforeKey: string | null, gapCol: number) => Promise<void>;
   shift: (key: string, dir: -1 | 1) => Promise<void>;
   setHidden: (key: string, hidden: boolean, beforeKey?: string | null) => Promise<void>;
   /** Завести новую дорожку кнопок. */
@@ -71,6 +74,8 @@ export const useDashboardLayoutStore = create<State>((set, get) => {
     move: (dragKey, overKey) => apply(moveWidget(get().layout, dragKey, overKey)),
     moveBefore: (dragKey, beforeKey) =>
       apply(moveWidgetBefore(get().layout, dragKey, beforeKey)),
+    dropInGap: (dragKey, beforeKey, gapCol) =>
+      apply(dropIntoGap(get().layout, dragKey, beforeKey, gapCol)),
     shift: (key, dir) => apply(shiftWidget(get().layout, key, dir)),
     setHidden: (key, hidden, beforeKey = null) =>
       apply(setWidgetHidden(get().layout, key, hidden, beforeKey)),

@@ -10,6 +10,7 @@ import {
   moveWidget,
   moveWidgetBefore,
   normalizeLayout,
+  dropIntoGap,
   packLayout,
   removeWidget,
   isBareWidget,
@@ -337,6 +338,64 @@ describe("shiftWidget", () => {
     expect(offsetOf(layout, "month")).toBe(2);
     const out = shiftWidget(layout, "month", 1);
     expect(keys(out).slice(0, 3)).toEqual(["upcoming", "accounts", "month"]);
+  });
+});
+
+describe("dropIntoGap", () => {
+  const cols = (l: readonly WidgetPlacement[]) =>
+    packLayout(l).map((c) => (c.type === "widget" ? c.placement.key : `gap${c.span}`));
+
+  // Ряд из двух виджетов в треть и дырки: следом идёт виджет в две трети,
+  // который в остаток ряда не влез.
+  const row = [
+    { key: "upcoming", kind: "upcoming" as const },
+    { key: "accounts", kind: "accounts" as const },
+    { key: "freeMoney", kind: "freeMoney" as const },
+  ];
+
+  it("виджет из СВОЕГО ряда встаёт на место дырки", () => {
+    // Раньше он просто менялся местами с соседом, а дырка оставалась там же —
+    // со стороны это выглядело как «перетаскивание не работает».
+    const out = dropIntoGap(row, "upcoming", "freeMoney", 2);
+    expect(cols(out)).toEqual(["accounts", "gap1", "upcoming", "freeMoney", "gap1"]);
+  });
+
+  it("сосед по ряду тоже встаёт на место дырки, а первый остаётся слева", () => {
+    const out = dropIntoGap(row, "accounts", "freeMoney", 2);
+    expect(cols(out)).toEqual(["upcoming", "gap1", "accounts", "freeMoney", "gap1"]);
+  });
+
+  it("виджет из ДРУГОГО ряда просто заполняет дырку, без отступа", () => {
+    const layout = [...row, { key: "categories", kind: "categories" as const }];
+    const out = dropIntoGap(layout, "categories", "freeMoney", 2);
+    expect(cols(out)).toEqual(["upcoming", "accounts", "categories", "freeMoney", "gap1"]);
+    expect(out.find((p) => p.key === "categories")?.offset).toBeUndefined();
+  });
+
+  it("бросок в собственный отступ двигает виджет влево", () => {
+    // Дырка слева от виджета — его же отступ; бросок в неё её и убирает.
+    const layout = [
+      { key: "freeMoney", kind: "freeMoney" as const, offset: 1 },
+      { key: "categories", kind: "categories" as const },
+    ];
+    const out = dropIntoGap(layout, "freeMoney", "freeMoney", 0);
+    expect(cols(out)).toEqual(["freeMoney", "categories"]);
+  });
+
+  it("занятый чужой отступ соседу возвращается урезанным", () => {
+    // Дырка была отступом «Свободных денег»; её заняли — значит отступа больше
+    // нет, иначе виджет уехал бы ещё правее, а дырка выросла.
+    const layout = [
+      { key: "freeMoney", kind: "freeMoney" as const, offset: 1 },
+      { key: "categories", kind: "categories" as const },
+    ];
+    const out = dropIntoGap(layout, "categories", "freeMoney", 0);
+    expect(out.find((p) => p.key === "freeMoney")?.offset).toBeUndefined();
+    expect(cols(out)).toEqual(["categories", "freeMoney"]);
+  });
+
+  it("незнакомый ключ раскладку не трогает", () => {
+    expect(cols(dropIntoGap(row, "чужой", "freeMoney", 2))).toEqual(cols(row));
   });
 });
 
