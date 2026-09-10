@@ -6,7 +6,8 @@
  * иначе проверить расчёт можно будет только глазами на главной.
  */
 
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
+import { peekZenCache, subscribeZenCache } from "../lib/zenCacheMemo";
 import { useZenPlanned } from "./useZenPlanned";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { useFreeMoneyStore } from "../store/useFreeMoneyStore";
@@ -17,6 +18,7 @@ import { expenseDelta } from "../lib/txKindStyle";
 import {
   allowanceRatio,
   dailyAllowance,
+  discretionarySpent,
   freeBreakdown,
   plannedSums,
   spendableAccounts,
@@ -38,8 +40,10 @@ export interface FreeMoneyModel {
   method: DailyMethod;
   /** Названия счетов, попавших в расчёт: виджет объясняет, что он сложил. */
   accounts: string[];
-  /** Потрачено с начала периода по этим счетам. */
+  /** Потрачено с начала периода по этим счетам — всё, вместе с планами. */
   spent: number;
+  /** Сколько из этого ушло на проведённые плановые платежи. */
+  spentOnPlans: number;
   daysTotal: number;
   dayIndex: number;
   daysLeft: number;
@@ -92,18 +96,40 @@ export function useFreeMoney(
     return plannedSums(legs, range.to, today, titles);
   }, [plannedAll, plannedDeletions, range.to, today, titles]);
 
+  // Какие операции исполнили план. Ссылка `reminderMarker` живёт только в сыром
+  // кэше Дзен-мани: в наших операциях этого поля нет, а заводить его ради одного
+  // виджета значит тащить чужое поле через типы, снимки и бэкапы.
+  const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
+  const planTxIds = useMemo(() => {
+    const out = new Set<string>();
+    for (const t of cache?.transactions ?? []) {
+      if (t.deleted || !t.reminderMarker) continue;
+      out.add(String(t.id));
+    }
+    return out;
+  }, [cache]);
+
   // Потрачено с начала периода — только по учитываемым счетам: расход со вклада
   // не участвует в остатке, значит не должен участвовать и в бюджете периода.
   // Возвраты вычитаются (`expenseDelta`), переводы не считаются вовсе.
-  const spent = useMemo(() => {
-    let sum = 0;
+  //
+  // Считаем двумя вёдрами: всё и отдельно то, что ушло по планам. Дневной лимит
+  // строится по свободным тратам — иначе списавшаяся аренда возвращалась бы в
+  // бюджет периода и в день платежа поднимала бы лимит.
+  const { spent, spentOnPlans } = useMemo(() => {
+    let all = 0;
+    let onPlans = 0;
     for (const t of transactions) {
       if (t.date < range.from || t.date > today) continue;
       if (!titles.has(t.outcomeAccount)) continue;
-      sum += expenseDelta(t);
+      const delta = expenseDelta(t);
+      all += delta;
+      if (planTxIds.has(t.id)) onPlans += delta;
     }
-    return sum;
-  }, [transactions, range.from, today, titles]);
+    return { spent: all, spentOnPlans: onPlans };
+  }, [transactions, range.from, today, titles, planTxIds]);
+
+  const freeSpent = discretionarySpent(spent, spentOnPlans);
 
   const daysTotal = spanDays(range.from, range.to);
   const dayIndex = Math.min(daysTotal, Math.max(1, spanDays(range.from, today)));
@@ -120,9 +146,9 @@ export function useFreeMoney(
         free: breakdown.free,
         daysTotal,
         dayIndex,
-        spent,
+        spent: freeSpent,
       }),
-    [method, breakdown.free, daysTotal, dayIndex, spent]
+    [method, breakdown.free, daysTotal, dayIndex, freeSpent]
   );
 
   return {
@@ -136,6 +162,7 @@ export function useFreeMoney(
     method,
     accounts: mine.map((a) => a.title),
     spent,
+    spentOnPlans,
     daysTotal,
     dayIndex,
     daysLeft: Math.max(0, daysTotal - dayIndex + 1),

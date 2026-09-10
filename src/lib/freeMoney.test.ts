@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   allowanceRatio,
   dailyAllowance,
+  discretionarySpent,
   freeBreakdown,
   plannedSums,
   spendableAccounts,
@@ -275,6 +276,70 @@ describe("dailyAllowance — накопительный метод", () => {
     });
     expect(a.perDay).toBe(1000);
     expect(a.today).toBe(10000);
+  });
+});
+
+describe("discretionarySpent", () => {
+  it("проведённые планы из трат вычитаются", () => {
+    expect(discretionarySpent(52000, 40000)).toBe(12000);
+  });
+
+  it("план дешевле обещанного не дарит прибавку к лимиту", () => {
+    // Сэкономленное осталось на счёте и уже посчитано в свободных.
+    expect(discretionarySpent(39000, 40000)).toBe(0);
+  });
+
+  it("без планов считаются все траты", () => {
+    expect(discretionarySpent(12000, 0)).toBe(12000);
+  });
+});
+
+describe("накопительный метод и проведённые планы", () => {
+  // ГЛАВНЫЙ ИНВАРИАНТ МЕТОДА: списание планового платежа НЕ должно двигать
+  // дневной лимит. Денег стало меньше, но и обещаны они были заранее — лимит
+  // считался уже без них. Без вычета планов из «потрачено» аренда поднимала
+  // лимит ровно в день, когда деньги ушли.
+  //
+  // Сцена: период 30 дней, на счетах 100 000, аренда 40 000 по плану.
+  // Свободных — 60 000, то есть 2 000 ₽ в день.
+  const rentPlanned = () =>
+    dailyAllowance({
+      method: "cumulative",
+      free: 60000, // 100 000 на счетах − 40 000 плана
+      daysTotal: 30,
+      dayIndex: 10,
+      spent: 0, // свободных трат не было
+    });
+  const rentPaid = () =>
+    dailyAllowance({
+      method: "cumulative",
+      free: 60000, // 60 000 на счетах, плана больше нет
+      daysTotal: 30,
+      dayIndex: 20,
+      spent: discretionarySpent(40000, 40000), // потрачена ровно аренда
+    });
+
+  it("дневной лимит одинаков до и после списания аренды", () => {
+    expect(rentPlanned().perDay).toBe(2000);
+    expect(rentPaid().perDay).toBe(2000);
+  });
+
+  it("накопленное растёт по дням, а не скачет от платежа", () => {
+    expect(rentPlanned().today).toBe(20000);
+    expect(rentPaid().today).toBe(40000);
+  });
+
+  it("свободная трата сверх плана лимит съедает", () => {
+    // Аренда 40 000 плюс 15 000 своих: накоплено 40 000, доступно 25 000.
+    const a = dailyAllowance({
+      method: "cumulative",
+      free: 45000,
+      daysTotal: 30,
+      dayIndex: 20,
+      spent: discretionarySpent(55000, 40000),
+    });
+    expect(a.perDay).toBe(2000);
+    expect(a.today).toBe(25000);
   });
 });
 

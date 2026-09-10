@@ -1449,6 +1449,17 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
                 уже просрочено — деньги на них всё ещё нужны.
               </p>
             )}
+            {f.spentOnPlans > 0 && (
+              <p className="text-muted">
+                {/* Иначе непонятно, почему крупная трата не сдвинула лимит:
+                    плановый платёж был вычтен из свободных заранее. */}
+                Из потраченного{" "}
+                <span className="font-mono tabular-nums">
+                  {formatMoney(f.spentOnPlans, base)}
+                </span>{" "}
+                ушло по планам — в дневной лимит они не идут, их вычли раньше.
+              </p>
+            )}
             <p className="text-muted">
               {/* Названия счетов, а не одно их число: сумма «на счетах» иначе
                   ничем не проверяется, и разойтись с ожиданием она может тихо. */}
