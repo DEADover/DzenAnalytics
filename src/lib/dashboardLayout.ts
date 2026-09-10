@@ -594,7 +594,14 @@ function withOffset(p: WidgetPlacement, offset: number): WidgetPlacement {
 export function setWidgetHidden(
   layout: readonly WidgetPlacement[],
   key: string,
-  hidden: boolean
+  hidden: boolean,
+  /**
+   * Куда поставить возвращаемый виджет: перед этим соседом. `null` — в конец.
+   *
+   * Возвращают его теперь из той самой пустой клетки, куда и хотят поставить,
+   * так что «в конец, а дальше тащите сами» больше не годится.
+   */
+  beforeKey: string | null = null
 ): WidgetPlacement[] {
   const at = layout.findIndex((p) => p.key === key);
   if (at === -1) return layout.slice();
@@ -605,14 +612,27 @@ export function setWidgetHidden(
   if (hidden) next.hidden = true;
 
   const rest = layout.filter((x) => x.key !== key);
-  // Убираем — оставляем на месте: пока виджет на полке, его порядок никому не
+  // Убираем — оставляем на месте: пока виджет снят, его порядок никому не
   // мешает, зато сравнивать раскладку со стандартной становится нечестно.
   if (hidden) {
     const out = rest.slice();
     out.splice(at, 0, next);
     return out;
   }
-  return [...rest, next];
+  return insertBefore(rest, next, beforeKey);
+}
+
+/** Вставить перед названным соседом; `null` или незнакомый ключ — в конец. */
+function insertBefore(
+  layout: readonly WidgetPlacement[],
+  item: WidgetPlacement,
+  beforeKey: string | null
+): WidgetPlacement[] {
+  const out = layout.slice();
+  const to = beforeKey === null ? -1 : out.findIndex((p) => p.key === beforeKey);
+  if (to === -1) out.push(item);
+  else out.splice(to, 0, item);
+  return out;
 }
 
 /**
@@ -654,15 +674,20 @@ function firstUnusedLink(layout: readonly WidgetPlacement[]): string {
 }
 
 /** Завести новую полоску с кнопками — она встаёт в конец раскладки. */
-export function addLinksRow(layout: readonly WidgetPlacement[]): WidgetPlacement[] {
-  return [
-    ...layout,
+export function addLinksRow(
+  layout: readonly WidgetPlacement[],
+  /** Перед каким соседом встать; `null` — в конец. */
+  beforeKey: string | null = null
+): WidgetPlacement[] {
+  return insertBefore(
+    layout,
     {
       key: nextLinksKey(layout),
       kind: "links",
       links: [firstUnusedLink(layout), null, null, null, null, null],
     },
-  ];
+    beforeKey
+  );
 }
 
 /**

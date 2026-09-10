@@ -847,3 +847,38 @@ h2,
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgb(var(--c-border)); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-muted)); }
+
+/* ─── Настройка главной: появление списка виджетов и самого виджета ───────
+   Список раскрывается прямо из пустой клетки, поэтому и растёт он оттуда:
+   чуть снизу и чуть меньше нормального размера. Виджет, только что
+   поставленный на место, проявляется тем же движением — так видно, что
+   появился он именно там, куда нажали, а не «перерисовалась вся страница». */
+@keyframes widgetPickerIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+.animate-picker-in {
+  animation: widgetPickerIn 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+/* Плитки списка догоняют панель по одной: ступенька мелкая, читается как одно
+   движение, а не как отдельная анимация у каждой кнопки. */
+.picker-items > * { animation: menuItemIn 0.22s ease-out both; }
+.picker-items > *:nth-child(1) { animation-delay: 0.03s; }
+.picker-items > *:nth-child(2) { animation-delay: 0.05s; }
+.picker-items > *:nth-child(3) { animation-delay: 0.07s; }
+.picker-items > *:nth-child(4) { animation-delay: 0.09s; }
+.picker-items > *:nth-child(5) { animation-delay: 0.11s; }
+.picker-items > *:nth-child(n + 6) { animation-delay: 0.13s; }
+
+@keyframes widgetAppear {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+.animate-widget-in {
+  animation: widgetAppear 0.34s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-picker-in,
+  .picker-items > *,
+  .animate-widget-in { animation: none; }
+}

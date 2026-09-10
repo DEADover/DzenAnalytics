@@ -14,6 +14,7 @@
  * раскладка не пляшет под курсором и на диск уходит одна запись, а не тридцать.
  */
 
+import { useEffect, useState } from "react";
 import type { DragEvent, KeyboardEvent, ReactNode } from "react";
 import clsx from "clsx";
 import {
@@ -28,7 +29,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  LINK_SLOTS,
   WIDGETS,
   isDefaultLayout,
   widgetMeta,
@@ -48,6 +48,7 @@ export function WidgetShell({
   bare,
   sunken,
   editing,
+  appearing,
   dragging,
   dropTarget,
   onDragStart,
@@ -66,6 +67,8 @@ export function WidgetShell({
   /** Утопленная плоскость вместо поддона: одна коробка с тенью, без канта. */
   sunken: boolean;
   editing: boolean;
+  /** Виджет только что поставили — проявляем его, а не выкидываем на экран. */
+  appearing: boolean;
   /** Эту плитку сейчас везут. */
   dragging: boolean;
   /** Над этой плиткой висит другая — сюда и встанет. */
@@ -229,6 +232,7 @@ export function WidgetShell({
         // Высоту ряда задаёт сам виджет, а не сетка: полоска с кнопками ростом в
         // одну кнопку не должна вытягиваться до полутора экранов.
         meta.autoHeight ? "self-start" : "lg:h-[30rem]",
+        appearing && "animate-widget-in",
         inlineBar && "flex flex-col gap-3",
         // Кант в акценте — знак режима: пока он есть, плитку можно взять и
         // унести. Отодвинут от края, чтобы не сливаться с собственным кантом
@@ -290,8 +294,11 @@ export function WidgetGap({
   dragging,
   fits,
   highlight,
+  layout,
+  beforeKey,
   onEnter,
   onDrop,
+  onAdded,
 }: {
   span: number;
   /** Виджет сейчас везут — дырке пора звать. */
@@ -305,10 +312,16 @@ export function WidgetGap({
    */
   fits: boolean;
   highlight: boolean;
+  layout: readonly WidgetPlacement[];
+  /** Перед кем стоит эта клетка; `null` — она в конце раскладки. */
+  beforeKey: string | null;
   onEnter: () => void;
   onDrop: (sourceKey: string) => void;
+  /** Виджет поставлен отсюда — странице пора его подсветить появлением. */
+  onAdded: (key: string) => void;
 }) {
   const open = dragging && fits;
+  const [picking, setPicking] = useState(false);
   return (
     <div
       // Пока не влезает — дырка не принимает бросок вовсе, и курсор честно
@@ -333,7 +346,7 @@ export function WidgetGap({
       className={clsx(
         // Ниже большого экрана колонок нет вовсе: всё стоит в одну, и дырок не
         // бывает.
-        "hidden lg:grid place-items-center rounded-[18px] border border-dashed",
+        "hidden lg:grid place-items-center rounded-[18px] border border-dashed relative",
         span === 2 && "lg:col-span-2",
         highlight
           ? "border-accent bg-accent/10 text-accent"
@@ -346,9 +359,169 @@ export function WidgetGap({
           Не поместится — двигайте стрелками
         </span>
       )}
+      {/* Пока ничего не везут, пустая клетка — это место, куда ставят. Список
+          открывается здесь же: раньше он лежал полкой в самом низу страницы, и
+          виджет оттуда приходилось тащить через весь экран. */}
+      {!dragging && (
+        <WidgetPicker
+          layout={layout}
+          beforeKey={beforeKey}
+          open={picking}
+          onOpen={() => setPicking(true)}
+          onClose={() => setPicking(false)}
+          onAdded={onAdded}
+        />
+      )}
     </div>
   );
 }
+
+/* ─────────────────────────────  список виджетов  ───────────────────────────── */
+
+/** Что можно поставить в эту клетку: снятые виджеты и те, которых можно много. */
+function available(layout: readonly WidgetPlacement[]) {
+  const hidden = layout.filter((p) => p.hidden);
+  const fresh = WIDGETS.filter((w) => w.multi);
+  return { hidden, fresh, total: hidden.length + fresh.length };
+}
+
+/**
+ * Список виджетов прямо в пустой клетке.
+ *
+ * Открывается по «плюсу» и ставит выбранное СЮДА ЖЕ, а не в конец раскладки:
+ * человек уже показал пальцем, куда хочет, и заставлять его после этого тащить
+ * плитку через всю страницу незачем.
+ */
+function WidgetPicker({
+  layout,
+  beforeKey,
+  open,
+  onOpen,
+  onClose,
+  onAdded,
+}: {
+  layout: readonly WidgetPlacement[];
+  beforeKey: string | null;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onAdded: (key: string) => void;
+}) {
+  const setHidden = useDashboardLayoutStore((s) => s.setHidden);
+  const addLinks = useDashboardLayoutStore((s) => s.addLinks);
+  const remove = useDashboardLayoutStore((s) => s.remove);
+  const { hidden, fresh, total } = available(layout);
+
+  // Escape закрывает список — по всему сервису он закрывает любой слой поверх.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        title={
+          total > 0
+            ? "Поставить сюда виджет"
+            : "Ставить нечего: на главной уже всё, что есть"
+        }
+        aria-label="Поставить сюда виджет"
+        disabled={total === 0}
+        className={clsx(
+          "w-10 h-10 rounded-full grid place-items-center",
+          "border border-dashed border-border text-muted bg-panel/60",
+          "transition-[color,border-color,background-color,transform] duration-200",
+          "hover:text-accent hover:border-accent/60 hover:bg-accent/5 hover:scale-105",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+          "disabled:opacity-40 disabled:hover:scale-100 disabled:hover:text-muted",
+          "disabled:hover:border-border disabled:hover:bg-panel/60"
+        )}
+      >
+        <Plus className="w-5 h-5" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  const place = (run: () => Promise<void>, key: string) => {
+    onClose();
+    void run().then(() => onAdded(key));
+  };
+
+  return (
+    <>
+      {/* Клик мимо закрывает: список живёт внутри клетки, и уводить его в
+          портал незачем — но перекрыть остальную страницу надо. */}
+      <div className="fixed inset-0 z-20" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-label="Поставить виджет"
+        className={clsx(
+          "animate-picker-in absolute inset-2 z-30 overflow-y-auto scroll-soft",
+          "rounded-[14px] border border-border bg-panel shadow-xl p-2"
+        )}
+      >
+        <div className="picker-items flex flex-col gap-1">
+          {hidden.map((p) => {
+            const { text, title } = shelfLabel(p);
+            return (
+              <span key={p.key} className="flex items-center gap-1">
+                <button
+                  type="button"
+                  title={title}
+                  onClick={() => place(() => setHidden(p.key, false, beforeKey), p.key)}
+                  className={PICK_ITEM}
+                >
+                  <Plus className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{text}</span>
+                </button>
+                {/* Заведённое руками можно и стереть — иначе снятая полоска
+                    висела бы в списке навсегда. */}
+                {widgetMeta(p.kind).multi && (
+                  <button
+                    type="button"
+                    className="btn-icon-danger p-1 shrink-0"
+                    title="Удалить насовсем"
+                    aria-label="Удалить насовсем"
+                    onClick={() => void remove(p.key)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                )}
+              </span>
+            );
+          })}
+          {fresh.map((w) => (
+            <button
+              key={w.kind}
+              type="button"
+              title={`${w.title}\n${w.hint}`}
+              onClick={() => place(() => addLinks(beforeKey), w.kind)}
+              className={PICK_ITEM}
+            >
+              <Plus className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">Новая {w.title.toLowerCase()}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+const PICK_ITEM =
+  "flex-1 min-w-0 inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-2 " +
+  "text-[13px] font-medium text-left text-text " +
+  "transition-colors duration-150 hover:bg-accent/10 hover:text-accent " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
 /* ─────────────────────────────  панель режима  ───────────────────────────── */
 
@@ -393,21 +566,13 @@ export function LayoutToolbar({ layout }: { layout: readonly WidgetPlacement[] }
   );
 }
 
-/* ─────────────────────────────  полка  ───────────────────────────── */
-
-const CHIP =
-  "inline-flex items-center gap-1.5 rounded-full border border-border bg-panel " +
-  "px-3 py-1.5 text-[13px] font-medium " +
-  "transition-colors duration-200 hover:border-accent/50 hover:text-accent " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
-
-/** Чем подписать плитку на полке: полоски различаются кнопками, а не видом. */
+/** Чем подписать снятый виджет в списке: полоски различаются кнопками. */
 function shelfLabel(p: WidgetPlacement): { text: string; title: string } {
   if (p.kind !== "links") {
     const meta = widgetMeta(p.kind);
     return { text: meta.title, title: meta.hint };
   }
-  // Пустые места полоски в подписи не считаем: на полке важно, что на ней
+  // Пустые места полоски в подписи не считаем: в списке важно, что на ней
   // стоит, а не сколько дырок между кнопками.
   const labels = (p.links ?? [])
     .filter((to): to is string => Boolean(to))
@@ -418,94 +583,6 @@ function shelfLabel(p: WidgetPlacement): { text: string; title: string } {
   };
 }
 
-function ShelfRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <span className="text-[11.5px] uppercase tracking-[0.12em] text-muted font-medium w-full sm:w-[9.5rem] sm:shrink-0">
-        {label}
-      </span>
-      {children}
-    </div>
-  );
-}
-
-/**
- * Что можно поставить на главную: снятые виджеты и новая полоска с кнопками.
- *
- * Видна только в режиме настройки: в обычном она рассказывала бы про
- * отсутствующее — ровно то, от чего человек и избавился.
- */
-export function HiddenWidgets({ layout }: { layout: readonly WidgetPlacement[] }) {
-  const setHidden = useDashboardLayoutStore((s) => s.setHidden);
-  const addLinks = useDashboardLayoutStore((s) => s.addLinks);
-  const remove = useDashboardLayoutStore((s) => s.remove);
-  const hidden = layout.filter((p) => p.hidden);
-
-  return (
-    <div className="rounded-[18px] border border-dashed border-border bg-panel2/50 px-4 py-3 flex flex-col gap-2.5">
-      <ShelfRow label="Убранные">
-        {hidden.length === 0 ? (
-          <span className="text-[13px] text-muted">
-            Ни одного — на главной сейчас всё, что есть.
-          </span>
-        ) : (
-          hidden.map((p) => {
-            const { text, title } = shelfLabel(p);
-            const restore = (
-              <button
-                type="button"
-                title={`${title}\nВернётся в конец раскладки`}
-                onClick={() => void setHidden(p.key, false)}
-                className={clsx(
-                  CHIP,
-                  // У составной пилюли рамку и подложку рисует обойма.
-                  widgetMeta(p.kind).multi && "border-0 bg-transparent px-0 py-0"
-                )}
-              >
-                <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                {text}
-              </button>
-            );
-            // Виджет, заведённый руками, с полки можно и стереть: иначе снятая
-            // полоска осталась бы на ней навсегда.
-            if (!widgetMeta(p.kind).multi) return <span key={p.key}>{restore}</span>;
-            return (
-              <span
-                key={p.key}
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-panel pl-3 pr-1 py-1"
-              >
-                {restore}
-                <button
-                  type="button"
-                  className="btn-icon-danger p-1"
-                  title="Удалить полоску насовсем"
-                  aria-label="Удалить полоску насовсем"
-                  onClick={() => void remove(p.key)}
-                >
-                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
-              </span>
-            );
-          })
-        )}
-      </ShelfRow>
-
-      {/* Полосок можно поставить сколько угодно: в одну помещается шесть
-          кнопок, а кому нужно больше — заводит вторую. */}
-      <ShelfRow label="Новый виджет">
-        <button
-          type="button"
-          title={`Полоска с кнопками\nБыстрые переходы в разделы, до ${LINK_SLOTS} кнопок в ряд`}
-          onClick={() => void addLinks()}
-          className={CHIP}
-        >
-          <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-          Полоска с кнопками
-        </button>
-      </ShelfRow>
-    </div>
-  );
-}
 
 /* ─────────────────────────────  пустая главная  ───────────────────────────── */
 

@@ -16,7 +16,7 @@
  * знать ни про хранилища, ни про то, как открывается drawer.
  */
 
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowUpRight } from "lucide-react";
@@ -35,7 +35,6 @@ import {
 import { LinksRow } from "./LinksRow";
 import {
   EmptyDashboard,
-  HiddenWidgets,
   LayoutToolbar,
   WidgetGap,
   WidgetShell,
@@ -633,6 +632,19 @@ export function DashboardView() {
     [transactions, monthTx, showDrill, monthStartDay, m.ym]
   );
 
+  /**
+   * Виджет, только что поставленный из пустой клетки, — его и подсвечиваем
+   * появлением. Ключ сбрасывается сам: анимация одноразовая, и держать её
+   * включённой после того, как она отыграла, значит повторять её на каждой
+   * следующей перерисовке.
+   */
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+  useEffect(() => {
+    if (!justAdded) return;
+    const t = setTimeout(() => setJustAdded(null), 600);
+    return () => clearTimeout(t);
+  }, [justAdded]);
+
   /** Ширина того, что сейчас везут: дырка уже не примет виджет шире себя. */
   const dragSpan = useMemo(() => {
     if (!drag.dragKey) return 0;
@@ -860,7 +872,14 @@ export function DashboardView() {
   // значит и уронить в них виджет нельзя. Считаем ВСЕГДА, а не только в режиме
   // настройки: пустая клетка слева от виджета — часть раскладки, и без неё
   // сдвинутый виджет возвращался бы к левому краю, стоило выйти из настройки.
-  const cells = packLayout(visible);
+  const packed = packLayout(visible);
+  // В режиме настройки в конце всегда есть куда поставить: если ряды сошлись
+  // ровно, пустой клетки не остаётся вовсе — и «плюсу» негде жить. Полоса во
+  // всю ширину заодно принимает бросок любого виджета, даже самого широкого.
+  const cells =
+    editing && !(packed[packed.length - 1]?.type === "gap")
+      ? [...packed, { type: "gap" as const, span: 3, before: null }]
+      : packed;
 
   return (
     <div className="flex flex-col gap-5 3xl:gap-6">
@@ -894,8 +913,11 @@ export function DashboardView() {
                   dragging={drag.dragKey !== null}
                   fits={dragSpan <= cell.span}
                   highlight={drag.overKey === gapKey}
+                  layout={layout}
+                  beforeKey={cell.before}
                   onEnter={() => drag.enter(gapKey)}
                   onDrop={(sourceKey) => drag.dropBefore(sourceKey, cell.before)}
+                  onAdded={setJustAdded}
                 />
               );
             }
@@ -909,6 +931,7 @@ export function DashboardView() {
               bare={isBareWidget(widgetMeta(p.kind), p.view)}
               sunken={widgetView(widgetMeta(p.kind), p.view)?.sunken === true}
               editing={editing}
+              appearing={justAdded === p.key}
               dragging={drag.dragKey === p.key}
               dropTarget={
                 drag.overKey === p.key && drag.dragKey !== null && drag.dragKey !== p.key
@@ -933,7 +956,7 @@ export function DashboardView() {
         </section>
       )}
 
-      {editing && <HiddenWidgets layout={layout} />}
+
     </div>
   );
 }
