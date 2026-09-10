@@ -669,26 +669,11 @@ export function GlobalFilters({
           onChange={(s) => f.setSet("categories", s)}
         />
 
-        {userOptions.length > 1 && (
-          <MultiSelect
-            className="w-52 shrink-0"
-            menuMinWidth={0}
-            label="Участники"
-            options={userOptions}
-            selected={f.users}
-            onChange={(s) => f.setSet("users", s)}
-            labelOf={(id) =>
-              id === MEMBER_SHARED ? "Общие счета" : userLabel(Number(id), zenUserList, userAliases)
-            }
-            unitForms={["участник", "участника", "участников"]}
-            searchPlaceholder="Поиск участника"
-            renderIcon={() => <UserRound className="w-[18px] h-[18px] text-muted" />}
-          />
-        )}
-
         {currencies.length > 1 && (
           <MultiSelect
-            className="w-52 shrink-0"
+            // Уже соседей: коды валют короткие, «Валюта: Все (3)» и близко не
+            // занимает 13rem, а лишняя ширина отодвигала соседние фильтры.
+            className="w-40 shrink-0"
             menuMinWidth={0}
             label="Валюта"
             options={currencies}
@@ -703,6 +688,23 @@ export function GlobalFilters({
                 <Coins className="w-4 h-4 text-muted" />
               );
             }}
+          />
+        )}
+
+        {userOptions.length > 1 && (
+          <MultiSelect
+            className="w-52 shrink-0"
+            menuMinWidth={0}
+            label="Участники"
+            options={userOptions}
+            selected={f.users}
+            onChange={(s) => f.setSet("users", s)}
+            labelOf={(id) =>
+              id === MEMBER_SHARED ? "Общие счета" : userLabel(Number(id), zenUserList, userAliases)
+            }
+            unitForms={["участник", "участника", "участников"]}
+            searchPlaceholder="Поиск участника"
+            renderIcon={() => <UserRound className="w-[18px] h-[18px] text-muted" />}
           />
         )}
 
