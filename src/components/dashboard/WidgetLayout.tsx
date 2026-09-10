@@ -300,7 +300,8 @@ export function WidgetShell({
 export function WidgetGap({
   span,
   dragging,
-  fits,
+  accepts,
+  refusal,
   highlight,
   layout,
   beforeKey,
@@ -311,14 +312,19 @@ export function WidgetGap({
   span: number;
   /** Виджет сейчас везут — дырке пора звать. */
   dragging: boolean;
+  /** Примет ли дырка то, что везут. */
+  accepts: boolean;
   /**
-   * Влезает ли то, что везут. Виджет в две трети в дырку на треть не встанет:
-   * раскладка перенесла бы его на новый ряд и наделала дыр там, где их не было.
-   * Раньше дырка звала «Перенести сюда» и в этом случае — человек целился в
-   * неё, виджет уезжал в конец страницы, и это читалось как «ничего не
-   * произошло». Двигать такой виджет по клеткам умеют стрелки.
+   * Почему не примет — это и написано в дырке вместо приглашения.
+   *
+   * Отказов два, и оба про невозможное, а не про запрет. Виджет ШИРЕ дырки в
+   * неё не встанет: раскладка перенесла бы его на новый ряд и наделала дыр там,
+   * где их не было. Виджет ИЗ ЭТОГО ЖЕ РЯДА дырку не закроет в принципе — он
+   * лишь поменяется местами с соседом, а дырка останется на месте; раньше она
+   * в обоих случаях звала «Перенести сюда», человек целился в неё, и ничего не
+   * происходило.
    */
-  fits: boolean;
+  refusal: string | null;
   highlight: boolean;
   layout: readonly WidgetPlacement[];
   /** Перед кем стоит эта клетка; `null` — она в конце раскладки. */
@@ -328,7 +334,7 @@ export function WidgetGap({
   /** Виджет поставлен отсюда — странице пора его подсветить появлением. */
   onAdded: (key: string) => void;
 }) {
-  const open = dragging && fits;
+  const open = dragging && accepts;
   const [picking, setPicking] = useState(false);
   return (
     <div
@@ -369,9 +375,9 @@ export function WidgetGap({
       )}
     >
       {open && <span className="text-[13px] font-medium">Перенести сюда</span>}
-      {dragging && !fits && (
+      {dragging && refusal && (
         <span className="text-[13px] font-medium text-muted/70 px-3 text-center">
-          Не поместится — двигайте стрелками
+          {refusal}
         </span>
       )}
       {/* Пока ничего не везут, пустая клетка — это место, куда ставят. Список
@@ -603,9 +609,11 @@ export function LayoutToolbar({ layout }: { layout: readonly WidgetPlacement[] }
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-accent/40 bg-panel2 px-4 py-2.5">
+      {/* Три способа, которыми тут вообще что-то делают, — по порядку, каким
+          ими и пользуются. Про полку внизу страницы речи больше нет: её нет. */}
       <p className="text-[13px] text-muted">
-        Перетащите виджет на место другого или сдвиньте стрелками. Убранные ждут
-        внизу страницы.
+        Перетащите виджет на место другого, сдвиньте стрелками на клетку или
+        поставьте новый плюсом в пустой клетке.
       </p>
       <div className="flex items-center gap-2">
         <button

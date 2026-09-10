@@ -44,6 +44,7 @@ import {
   isBareWidget,
   maxOffset,
   packLayout,
+  type LayoutCell,
   widgetMeta,
   widgetView,
   type WidgetPlacement,
@@ -872,14 +873,53 @@ export function DashboardView() {
   // значит и уронить в них виджет нельзя. Считаем ВСЕГДА, а не только в режиме
   // настройки: пустая клетка слева от виджета — часть раскладки, и без неё
   // сдвинутый виджет возвращался бы к левому краю, стоило выйти из настройки.
-  const packed = packLayout(visible);
-  // В режиме настройки в конце всегда есть куда поставить: если ряды сошлись
-  // ровно, пустой клетки не остаётся вовсе — и «плюсу» негде жить. Полоса во
-  // всю ширину заодно принимает бросок любого виджета, даже самого широкого.
-  const cells =
-    editing && !(packed[packed.length - 1]?.type === "gap")
-      ? [...packed, { type: "gap" as const, span: 3, before: null }]
-      : packed;
+  const cells = useMemo(() => {
+    const packed = packLayout(visible);
+    // В режиме настройки в конце всегда есть куда поставить: если ряды сошлись
+    // ровно, пустой клетки не остаётся вовсе — и «плюсу» негде жить. Полоса во
+    // всю ширину заодно принимает бросок любого виджета, даже самого широкого.
+    if (!editing || packed[packed.length - 1]?.type === "gap") return packed;
+    return [...packed, { type: "gap" as const, span: 3, before: null }];
+  }, [visible, editing]);
+
+  /**
+   * Номер ряда для каждой ячейки раскладки.
+   *
+   * Нужен ровно для одного: дырку нельзя закрыть виджетом ИЗ ЭТОГО ЖЕ РЯДА. Он
+   * не встанет на её место, а поменяется местами с соседом, и дырка останется
+   * там же — со стороны это выглядит как «перетаскивание не работает».
+   */
+  const rowOf = (() => {
+    const out = new Map<LayoutCell, number>();
+    let row = 0;
+    let col = 0;
+    for (const cell of cells) {
+      const span =
+        cell.type === "gap" ? cell.span : widgetMeta(cell.placement.kind).span;
+      if (col > 0 && col + span > 3) {
+        row++;
+        col = 0;
+      }
+      out.set(cell, row);
+      col += span;
+      if (col >= 3) {
+        row++;
+        col = 0;
+      }
+    }
+    return out;
+  })();
+
+  /** Ключи виджетов, стоящих в том же ряду, что и эта дырка. */
+  const rowMates = (gap: LayoutCell): Set<string> => {
+    const row = rowOf.get(gap);
+    const out = new Set<string>();
+    for (const cell of cells) {
+      if (cell.type !== "widget" || rowOf.get(cell) !== row) continue;
+      out.add(cell.placement.key);
+    }
+    return out;
+  };
 
   return (
     <div className="flex flex-col gap-5 3xl:gap-6">
@@ -895,6 +935,15 @@ export function DashboardView() {
               // виджета. Ключ по одному лишь соседу их бы склеил — подсвечивались
               // бы обе разом.
               const gapKey = `gap:${ci}:${cell.before ?? "end"}`;
+              const tooWide = dragSpan > cell.span;
+              const sameRow =
+                drag.dragKey !== null && rowMates(cell).has(drag.dragKey);
+              const accepts = drag.dragKey !== null && !tooWide && !sameRow;
+              const refusal = tooWide
+                ? "Не поместится — двигайте стрелками"
+                : sameRow
+                  ? "Уже в этом ряду — возьмите виджет из другого"
+                  : null;
               // Вне настройки дырка — просто пустое место: ни рамки, ни
               // приглашения, ни обработчиков.
               if (!editing) {
@@ -911,7 +960,8 @@ export function DashboardView() {
                   key={gapKey}
                   span={cell.span}
                   dragging={drag.dragKey !== null}
-                  fits={dragSpan <= cell.span}
+                  accepts={accepts}
+                  refusal={refusal}
                   highlight={drag.overKey === gapKey}
                   layout={layout}
                   beforeKey={cell.before}
