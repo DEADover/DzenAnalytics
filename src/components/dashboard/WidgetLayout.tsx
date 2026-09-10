@@ -27,6 +27,7 @@ import {
   RotateCcw,
   Trash2,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import {
   WIDGETS,
@@ -456,6 +457,65 @@ function WidgetPicker({
     void run().then(() => onAdded(key));
   };
 
+  /** Одна плитка списка: значок, название и зачем этот виджет нужен. */
+  const tile = (
+    key: string,
+    icon: LucideIcon,
+    title: string,
+    hint: string,
+    onPick: () => void,
+    onDelete?: () => void
+  ) => {
+    const Icon = icon;
+    return (
+      <div key={key} className="relative">
+        <button
+          type="button"
+          onClick={onPick}
+          className={clsx(
+            "group w-full h-full text-left rounded-[14px] border border-border bg-panel2/60 p-3",
+            "flex items-start gap-2.5",
+            "transition-[border-color,background-color,transform,box-shadow] duration-200",
+            "hover:-translate-y-0.5 hover:border-accent/50 hover:bg-panel hover:shadow-tray",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          )}
+        >
+          <span
+            className={clsx(
+              "shrink-0 w-8 h-8 rounded-[10px] grid place-items-center",
+              "bg-accent/10 text-accent transition-colors duration-200",
+              "group-hover:bg-accent group-hover:text-accent-fg"
+            )}
+          >
+            <Icon className="w-4 h-4" aria-hidden="true" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[13.5px] font-semibold truncate">{title}</span>
+            {/* Подпись в две строки: она объясняет, зачем виджет, и одной
+                строки на это почти никогда не хватает. */}
+            <span className="block text-[12px] text-muted leading-snug line-clamp-2 mt-0.5">
+              {hint}
+            </span>
+          </span>
+        </button>
+        {/* Заведённое руками можно и стереть — иначе снятая полоска висела бы
+            в списке навсегда. Крестик поверх плитки, а не рядом: в ряду он
+            ломал бы сетку. */}
+        {onDelete && (
+          <button
+            type="button"
+            className="btn-icon-danger absolute top-1.5 right-1.5 p-1"
+            title="Удалить насовсем"
+            aria-label="Удалить насовсем"
+            onClick={onDelete}
+          >
+            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       {/* Клик мимо закрывает: список живёт внутри клетки, и уводить его в
@@ -465,63 +525,57 @@ function WidgetPicker({
         role="dialog"
         aria-label="Поставить виджет"
         className={clsx(
-          "animate-picker-in absolute inset-2 z-30 overflow-y-auto scroll-soft",
-          "rounded-[14px] border border-border bg-panel shadow-xl p-2"
+          "animate-picker-in absolute left-2 right-2 top-1/2 -translate-y-1/2 z-30",
+          // По содержимому, а не во всю клетку: полотно в пол-экрана с тремя
+          // строчками в углу выглядело сломанным.
+          "max-h-[calc(100%-1rem)] overflow-y-auto scroll-soft",
+          "rounded-[16px] border border-border bg-panel shadow-xl p-3"
         )}
       >
-        <div className="picker-items flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <span className="text-[11.5px] uppercase tracking-[0.12em] text-muted font-medium">
+            Поставить сюда
+          </span>
+          <button
+            type="button"
+            className="btn-icon p-1 -mr-1"
+            title="Закрыть"
+            aria-label="Закрыть"
+            onClick={onClose}
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
+        </div>
+        {/* Две колонки, пока клетка их вмещает: список из одного столбца в
+            широкой клетке оставлял справа пустое поле. */}
+        <div className="picker-items grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))]">
           {hidden.map((p) => {
+            const meta = widgetMeta(p.kind);
             const { text, title } = shelfLabel(p);
-            return (
-              <span key={p.key} className="flex items-center gap-1">
-                <button
-                  type="button"
-                  title={title}
-                  onClick={() => place(() => setHidden(p.key, false, beforeKey), p.key)}
-                  className={PICK_ITEM}
-                >
-                  <Plus className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{text}</span>
-                </button>
-                {/* Заведённое руками можно и стереть — иначе снятая полоска
-                    висела бы в списке навсегда. */}
-                {widgetMeta(p.kind).multi && (
-                  <button
-                    type="button"
-                    className="btn-icon-danger p-1 shrink-0"
-                    title="Удалить насовсем"
-                    aria-label="Удалить насовсем"
-                    onClick={() => void remove(p.key)}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                  </button>
-                )}
-              </span>
+            return tile(
+              p.key,
+              meta.icon,
+              text,
+              meta.multi ? title.split("\n").slice(1).join(" · ") || meta.hint : meta.hint,
+              () => place(() => setHidden(p.key, false, beforeKey), p.key),
+              meta.multi ? () => void remove(p.key) : undefined
             );
           })}
-          {fresh.map((w) => (
-            <button
-              key={w.kind}
-              type="button"
-              title={`${w.title}\n${w.hint}`}
-              onClick={() => place(() => addLinks(beforeKey), w.kind)}
-              className={PICK_ITEM}
-            >
-              <Plus className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">Новая {w.title.toLowerCase()}</span>
-            </button>
-          ))}
+          {fresh.map((w) =>
+            tile(
+              `new:${w.kind}`,
+              w.icon,
+              `Новая ${w.title.toLowerCase()}`,
+              w.hint,
+              () => place(() => addLinks(beforeKey), w.kind)
+            )
+          )}
         </div>
       </div>
     </>
   );
 }
 
-const PICK_ITEM =
-  "flex-1 min-w-0 inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-2 " +
-  "text-[13px] font-medium text-left text-text " +
-  "transition-colors duration-150 hover:bg-accent/10 hover:text-accent " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
 /* ─────────────────────────────  панель режима  ───────────────────────────── */
 

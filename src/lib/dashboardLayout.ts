@@ -16,6 +16,21 @@
  * `DashboardView`, где раскладка живёт — дело `useDashboardLayoutStore`.
  */
 
+import {
+  ArrowLeftRight,
+  BarChart3,
+  CalendarClock,
+  CalendarDays,
+  Coins,
+  Landmark,
+  LayoutGrid,
+  Lightbulb,
+  PieChart,
+  Scale,
+  TrendingDown,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
 import { SECONDARY, navSection } from "./navSections";
 
 export type WidgetSpan = 1 | 2 | 3;
@@ -56,6 +71,13 @@ export interface WidgetView {
 }
 
 export interface WidgetMeta {
+  /**
+   * Значок для списка «поставить виджет».
+   *
+   * Список из одних названий читался как оглавление: одинаковые строки, глазу
+   * не за что зацепиться. Значок делает плитку узнаваемой ещё до чтения.
+   */
+  icon: LucideIcon;
   kind: WidgetKind;
   /** Как виджет называется в настройке раскладки. */
   title: string;
@@ -115,6 +137,7 @@ export const DEFAULT_LINKS: LinkSlots = [
 export const WIDGETS: readonly WidgetMeta[] = [
   {
     kind: "month",
+    icon: Scale,
     title: "Итоги месяца",
     // Раньше здесь стояло «Свободные деньги, темп трат, доход и расход». После
     // появления виджета «Свободные деньги» (#96) это вводило в заблуждение: у
@@ -144,12 +167,14 @@ export const WIDGETS: readonly WidgetMeta[] = [
   },
   {
     kind: "accounts",
+    icon: Landmark,
     title: "Балансы счетов",
     hint: "Совокупный баланс и остаток на каждом счёте",
     span: 1,
   },
   {
     kind: "upcoming",
+    icon: CalendarClock,
     title: "Запланированные операции",
     hint: "Что спишется и что придёт до конца месяца",
     span: 1,
@@ -168,6 +193,7 @@ export const WIDGETS: readonly WidgetMeta[] = [
   },
   {
     kind: "freeMoney",
+    icon: Coins,
     title: "Свободные деньги",
     hint: "Сколько можно потратить до конца периода и сколько из этого — сегодня",
     // Две трети: кольцо с числом и разбивка «из чего сложилось» встают двумя
@@ -177,12 +203,14 @@ export const WIDGETS: readonly WidgetMeta[] = [
   },
   {
     kind: "categories",
+    icon: PieChart,
     title: "Расходы по категориям",
     hint: "На что ушли деньги в этом месяце",
     span: 1,
   },
   {
     kind: "links",
+    icon: LayoutGrid,
     title: "Полоска с кнопками",
     hint: "Быстрые переходы в разделы, до шести кнопок в ряд",
     // Всегда во всю строку: даже одна кнопка стоит в полноширинной полоске, а
@@ -195,12 +223,14 @@ export const WIDGETS: readonly WidgetMeta[] = [
   },
   {
     kind: "cashflow",
+    icon: BarChart3,
     title: "Доходы и расходы",
     hint: "Столбцы за последние двенадцать месяцев и прогноз",
     span: 2,
   },
   {
     kind: "monthOverMonth",
+    icon: ArrowLeftRight,
     title: "Месяц к месяцу",
     hint: "Доходы, расходы и чистый поток рядом с прошлым месяцем",
     span: 1,
@@ -210,18 +240,21 @@ export const WIDGETS: readonly WidgetMeta[] = [
   },
   {
     kind: "observations",
+    icon: Lightbulb,
     title: "Авто-наблюдения",
     hint: "Что выбилось из обычного: перерасход, подписки, пропуски",
     span: 1,
   },
   {
     kind: "activity",
+    icon: CalendarDays,
     title: "Активность в этом месяце",
     hint: "Календарь трат по дням",
     span: 2,
   },
   {
     kind: "donutExpense",
+    icon: TrendingDown,
     title: "Кольцо расходов",
     hint: "Доли статей друг относительно друга, как на «Категориях»",
     span: 1,
@@ -229,6 +262,7 @@ export const WIDGETS: readonly WidgetMeta[] = [
   },
   {
     kind: "donutIncome",
+    icon: TrendingUp,
     title: "Кольцо доходов",
     hint: "Откуда приходят деньги, теми же кольцами",
     span: 1,
