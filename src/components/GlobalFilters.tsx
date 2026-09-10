@@ -30,8 +30,14 @@ import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { currencyFlagEmoji } from "../lib/currencyFlag";
-import { usersInData, userLabel, type ZenUserOption } from "../lib/zenUsers";
-import { useUserAliasStore } from "../store/useUserAliasStore";
+import {
+  membersInData,
+  hasSharedItems,
+  userLabel,
+  MEMBER_SHARED,
+  type ZenUserOption,
+} from "../lib/zenUsers";
+import { useMembersStore } from "../store/useMembersStore";
 
 const PRESETS: { value: DatePreset; label: string; title?: string }[] = [
   { value: "30d", label: "30 дней" },
@@ -289,9 +295,16 @@ export function GlobalFilters({
   // аккаунта: на общем аккаунте человек мог не завести ни одной операции, и
   // пустая строка в фильтре только мешала бы. На личном список выйдет из
   // одного человека — тогда фильтр не показываем вовсе, выбирать не из кого.
-  const userIds = useMemo(() => usersInData(transactions), [transactions]);
-  const userOptions = useMemo(() => userIds.map(String), [userIds]);
-  const userAliases = useUserAliasStore((s) => s.aliases);
+  const memberIds = useMemo(() => membersInData(transactions), [transactions]);
+  // «Общие» — отдельным пунктом: операция на общем счёте не принадлежит
+  // никому, и выбрасывать её из выбора нельзя. Пункт добавляем только если
+  // общие счета в данных есть.
+  const userOptions = useMemo(() => {
+    const out = memberIds.map(String);
+    if (hasSharedItems(transactions)) out.push(MEMBER_SHARED);
+    return out;
+  }, [memberIds, transactions]);
+  const userAliases = useMembersStore((s) => s.aliases);
   const [zenUserList, setZenUserList] = useState<ZenUserOption[]>([]);
   useEffect(() => {
     let cancelled = false;
@@ -660,13 +673,15 @@ export function GlobalFilters({
           <MultiSelect
             className="w-52 shrink-0"
             menuMinWidth={0}
-            label="Пользователи"
+            label="Участники"
             options={userOptions}
             selected={f.users}
             onChange={(s) => f.setSet("users", s)}
-            labelOf={(id) => userLabel(Number(id), zenUserList, userAliases)}
-            unitForms={["пользователь", "пользователя", "пользователей"]}
-            searchPlaceholder="Поиск пользователя"
+            labelOf={(id) =>
+              id === MEMBER_SHARED ? "Общие счета" : userLabel(Number(id), zenUserList, userAliases)
+            }
+            unitForms={["участник", "участника", "участников"]}
+            searchPlaceholder="Поиск участника"
             renderIcon={() => <UserRound className="w-[18px] h-[18px] text-muted" />}
           />
         )}

@@ -76,6 +76,7 @@ export const BACKUP_META_KEYS = [
   "payeeAliases",
   "userAliases", // как звать людей на общем аккаунте Дзен-мани (#92)
   "userOwner", // кого из них считать собой (#92)
+  "membersShowForeign", // показывать ли чужие личные счета — хранится обратным, см. useMembersStore (#95)
   "reportPeriod",
   "categoryRules",
   "duplicateExclusions",

@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
-  guessOwnerId,
+  hasSharedItems,
+  likelyOwnerId,
+  membersInData,
   userLabel,
-  usersInData,
   zenUsers,
   type ZenUserOption,
 } from "./zenUsers";
@@ -56,43 +57,93 @@ describe("zenUsers", () => {
   });
 });
 
-describe("usersInData", () => {
+describe("membersInData", () => {
   it("по убыванию числа операций", () => {
-    const txs = [{ user: 2 }, { user: 1 }, { user: 2 }, { user: 2 }, { user: 1 }];
-    expect(usersInData(txs)).toEqual([2, 1]);
+    const txs = [{ member: 2 }, { member: 1 }, { member: 2 }, { member: 2 }, { member: 1 }];
+    expect(membersInData(txs)).toEqual([2, 1]);
   });
 
   it("при равенстве порядок по номеру — список не должен прыгать", () => {
-    expect(usersInData([{ user: 9 }, { user: 3 }])).toEqual([3, 9]);
+    expect(membersInData([{ member: 9 }, { member: 3 }])).toEqual([3, 9]);
   });
 
-  it("операции без пометки не создают пользователя", () => {
-    // Так выглядят данные из CSV: понятия «чей» там нет.
-    expect(usersInData([{}, { user: undefined }])).toEqual([]);
+  it("операции на общих счетах участника не создают", () => {
+    // `member: null` — общий счёт, он ничей; `undefined` — данные из CSV.
+    expect(membersInData([{ member: null }, { member: undefined }, {}])).toEqual([]);
   });
 });
 
-describe("guessOwnerId", () => {
-  it("хозяин — тот, у кого нет родителя", () => {
-    expect(guessOwnerId([u(5, "wife", 1), u(1, "main")])).toBe(1);
+describe("hasSharedItems", () => {
+  it("находит операции на общих счетах", () => {
+    expect(hasSharedItems([{ member: 1 }, { member: null }])).toBe(true);
   });
 
-  it("явный выбор перебивает догадку", () => {
-    // Догадка не проверена на живом общем аккаунте, поэтому последнее слово
-    // за человеком.
-    expect(guessOwnerId([u(5, "wife", 1), u(1, "main")], 5)).toBe(5);
+  it("операции из CSV считает общими — других сведений о них нет", () => {
+    expect(hasSharedItems([{}])).toBe(true);
   });
 
-  it("выбор несуществующего игнорируется", () => {
-    // Так бывает после восстановления бэкапа с другого аккаунта.
-    expect(guessOwnerId([u(1, "main")], 999)).toBe(1);
+  it("когда все на личных счетах — общих нет", () => {
+    expect(hasSharedItems([{ member: 1 }, { member: 5 }])).toBe(false);
+  });
+});
+
+describe("likelyOwnerId", () => {
+  it("подсказывает владельца подписки — у него пуст parent", () => {
+    expect(likelyOwnerId([u(5, "wife", 1), u(1, "main")])).toBe(1);
+  });
+
+  it("это ПОДСКАЗКА, а не ответ: для остальных участников она неверна", () => {
+    // Проверено на живом общем аккаунте: `user[]` у токенов разных участников
+    // совпадает байт в байт, поэтому функция всегда назовёт владельца
+    // подписки — кому бы токен ни принадлежал. Решение принимает человек.
+    const users = [u(1, "main"), u(5, "wife", 1)];
+    expect(likelyOwnerId(users)).toBe(1);
+    expect(likelyOwnerId(users)).not.toBe(5);
   });
 
   it("если родителя нет ни у кого — берём первого", () => {
-    expect(guessOwnerId([u(5, null, 1), u(7, null, 1)])).toBe(5);
+    expect(likelyOwnerId([u(5, null, 1), u(7, null, 1)])).toBe(5);
   });
 
-  it("пустой список — некого назначать", () => {
-    expect(guessOwnerId([])).toBeNull();
+  it("пустой список — подсказывать нечего", () => {
+    expect(likelyOwnerId([])).toBeNull();
+  });
+});
+
+describe("hideForeignMembers — правило скрытия (#95)", () => {
+  // Само правило живёт в `useDataStore`, но оно в одну строку и стоит того,
+  // чтобы быть записанным отдельно: от него зависит чужая приватность.
+  const hide = (
+    txs: { id: string; member?: number | null }[],
+    ownerId: number | null,
+    on: boolean
+  ) =>
+    ownerId == null || !on
+      ? txs
+      : txs.filter((t) => t.member == null || t.member === ownerId);
+
+  const txs = [
+    { id: "своя", member: 5 },
+    { id: "чужая", member: 1 },
+    { id: "общая", member: null },
+    { id: "изCSV" },
+  ];
+
+  it("убирает операции по чужим личным счетам", () => {
+    expect(hide(txs, 5, true).map((t) => t.id)).toEqual(["своя", "общая", "изCSV"]);
+  });
+
+  it("общие счета остаются — они на то и общие", () => {
+    expect(hide(txs, 5, true).map((t) => t.id)).toContain("общая");
+  });
+
+  it("пока участник не выбран, не прячем ничего", () => {
+    // Угадать владельца токена по ответу API нельзя, а ошибка спрятала бы своё
+    // и показала чужое.
+    expect(hide(txs, null, true)).toEqual(txs);
+  });
+
+  it("выключенный режим ничего не трогает", () => {
+    expect(hide(txs, 5, false)).toEqual(txs);
   });
 });

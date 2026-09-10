@@ -18,6 +18,7 @@ import {
   forceFetchFor,
 } from "../lib/zenmoneyCache";
 import { zenUsers, type ZenUserOption } from "../lib/zenUsers";
+import { useMembersStore } from "./useMembersStore";
 import {
   buildPushItems,
   buildBudgetPush,
@@ -331,7 +332,16 @@ async function readLiveAccounts(): Promise<LiveAccount[] | null> {
   if (!cache) return null;
   const instrumentsById = new Map(cache.instruments.map((i) => [i.id, i]));
   const companiesById = new Map((cache.companies || []).map((c) => [c.id, c]));
-  return cache.accounts.map((a) => ({
+  // Чужие личные счета не показываем НИГДЕ, где показываются счета: иначе из
+  // списков и фильтров видны их названия и балансы, даже когда операции по ним
+  // уже скрыты (#95). Условия те же, что у операций: знаем, кто мы, и режим
+  // включён. Общие счета (`role: null`) остаются всегда.
+  const { ownerId, hideForeignPrivate } = useMembersStore.getState();
+  const visible =
+    ownerId != null && hideForeignPrivate
+      ? cache.accounts.filter((a) => a.role == null || a.role === ownerId)
+      : cache.accounts;
+  return visible.map((a) => ({
     id: a.id,
     title: a.title,
     balance: a.balance || 0,

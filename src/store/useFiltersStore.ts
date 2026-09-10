@@ -4,6 +4,7 @@ import { currentPeriod, periodRange, shiftPeriod } from "../lib/period";
 import { payeeSearchText } from "../lib/format";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { debtSelection, matchesDebtSelection } from "../lib/debtFilter";
+import { MEMBER_SHARED } from "../lib/zenUsers";
 
 /**
  * «year» — КАЛЕНДАРНЫЙ год, который листается стрелками, а не «последние 12
@@ -48,10 +49,14 @@ interface FiltersState {
   categories: Set<string>;
   currencies: Set<string>;
   /**
-   * Чьи операции показывать — номера пользователей Дзен-мани строками (#92).
+   * Чьи операции показывать на общем аккаунте (#92).
+   *
+   * Значения — номера участников строками плюс `MEMBER_SHARED` для операций на
+   * общих счетах. Привязка идёт по `role` СЧЁТА, а не по «кто завёл»: в
+   * Дзен-мани такого поля нет вовсе (см. `lib/zenUsers`).
    *
    * Пусто = все, как у остальных множественных фильтров. На личном аккаунте
-   * человек этого фильтра вообще не увидит: выбирать не из кого.
+   * человек этого фильтра не увидит: выбирать не из кого.
    */
   users: Set<string>;
   search: string;
@@ -314,12 +319,13 @@ export function applyFilters(
     }
     if (state.currencies.size && (state.currencies.has(FILTER_NONE) || !state.currencies.has(t.currency)))
       return false;
-    // Чьи операции. Операции без пометки (из CSV) под фильтром по людям
-    // прячем: выбор «покажи операции такого-то» о них ничего не утверждает,
-    // а показать их значило бы приписать их выбранному.
+    // Чьи операции. Операция на общем счёте не принадлежит никому — у неё
+    // свой пункт «Общие»; операции из CSV пометки не имеют вовсе и попадают
+    // туда же, других сведений о них нет.
     if (state.users.size) {
       if (state.users.has(FILTER_NONE)) return false;
-      if (t.user == null || !state.users.has(String(t.user))) return false;
+      const key = t.member == null ? MEMBER_SHARED : String(t.member);
+      if (!state.users.has(key)) return false;
     }
     if (search) {
       const hay = `${payeeSearchText(t)} ${t.comment} ${t.categoryFull}`.toLowerCase();

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { applyFilters, presetToRange, useFiltersStore, FILTER_NONE } from "./useFiltersStore";
+import { MEMBER_SHARED } from "../lib/zenUsers";
 import { periodRange } from "../lib/period";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { tx } from "../test/fixtures";
@@ -497,37 +498,50 @@ describe("stepPeriod", () => {
 });
 
 
-describe("applyFilters — фильтр по людям на общем аккаунте (#92)", () => {
+describe("applyFilters — фильтр по участникам общего аккаунта (#92)", () => {
+  // Привязка идёт по `role` СЧЁТА: в Дзен-мани у операции нет поля «кто
+  // завёл» — `user` там у всех записей одинаков. `member: null` — общий счёт.
   const txs = [
-    tx({ id: "мой1", user: 1 }),
-    tx({ id: "мой2", user: 1 }),
-    tx({ id: "жена", user: 5 }),
-    tx({ id: "изCSV" }), // без пометки: понятия «чей» в CSV нет
+    tx({ id: "мой1", member: 1 }),
+    tx({ id: "мой2", member: 1 }),
+    tx({ id: "жена", member: 5 }),
+    tx({ id: "общий", member: null }),
+    tx({ id: "изCSV" }),
   ];
 
-  it("пусто — показываем всех, как у остальных множественных фильтров", () => {
-    expect(ids(applyFilters(txs, filt()))).toEqual(["жена", "изCSV", "мой1", "мой2"]);
+  it("пусто — показываем всё, как у остальных множественных фильтров", () => {
+    expect(ids(applyFilters(txs, filt()))).toEqual([
+      "жена",
+      "изCSV",
+      "мой1",
+      "мой2",
+      "общий",
+    ]);
   });
 
-  it("выбран один — только его операции", () => {
+  it("выбран участник — только его личные счета", () => {
     expect(ids(applyFilters(txs, filt({ users: new Set(["1"]) })))).toEqual([
       "мой1",
       "мой2",
     ]);
   });
 
-  it("выбраны двое — операции обоих", () => {
-    expect(ids(applyFilters(txs, filt({ users: new Set(["1", "5"]) })))).toEqual([
-      "жена",
-      "мой1",
-      "мой2",
+  it("общие счета — отдельный пункт, а не довесок к каждому", () => {
+    // Иначе сравнить двоих было бы нельзя: общий котёл попадал бы в оба.
+    expect(ids(applyFilters(txs, filt({ users: new Set([MEMBER_SHARED]) })))).toEqual([
+      "изCSV",
+      "общий",
     ]);
   });
 
-  it("операции без пометки под фильтром прячутся", () => {
-    // «Покажи операции такого-то» о них ничего не утверждает, и показать их
-    // значило бы приписать их выбранному человеку.
-    expect(ids(applyFilters(txs, filt({ users: new Set(["5"]) })))).toEqual(["жена"]);
+  it("участник вместе с общими", () => {
+    expect(
+      ids(applyFilters(txs, filt({ users: new Set(["5", MEMBER_SHARED]) })))
+    ).toEqual(["жена", "изCSV", "общий"]);
+  });
+
+  it("операции из CSV попадают в «Общие» — других сведений о них нет", () => {
+    expect(ids(applyFilters(txs, filt({ users: new Set(["1"]) })))).not.toContain("изCSV");
   });
 
   it("«снять все» не показывает ничего", () => {

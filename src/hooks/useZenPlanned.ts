@@ -14,8 +14,8 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { getZenCache, peekZenCache, subscribeZenCache } from "../lib/zenCacheMemo";
 import { plannedOps, ownPlannedOps, type PlannedOp } from "../lib/plannedOps";
-import { guessOwnerId, zenUsers } from "../lib/zenUsers";
-import { useUserAliasStore } from "../store/useUserAliasStore";
+
+import { useMembersStore } from "../store/useMembersStore";
 import { useDataStore } from "../store/useDataStore";
 
 /**
@@ -40,7 +40,7 @@ export function useZenPlanned(
 ): PlannedOp[] | null {
   const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
   const rates = useDataStore((s) => s.rates);
-  const ownerOverride = useUserAliasStore((s) => s.ownerId);
+  const ownerId = useMembersStore((s) => s.ownerId);
 
   useEffect(() => {
     if (cache === undefined) void getZenCache();
@@ -50,9 +50,9 @@ export function useZenPlanned(
     if (!cache) return cache === undefined ? [] : null;
     // Только свои: на общем аккаунте по одному токену приезжают планы всех
     // подключённых людей, а мобильное приложение чужие не показывает (#92).
-    const users = zenUsers(cache.user);
-    const owner = users.length > 1 ? guessOwnerId(users, ownerOverride) : null;
-    return ownPlannedOps(plannedOps(cache, rates), owner)
+    // Прячем только по ЯВНОМУ выбору участника: угадать владельца токена по
+    // ответу API нельзя, а ошибка спрятала бы свои планы и показала чужие.
+    return ownPlannedOps(plannedOps(cache, rates), ownerId)
       .filter(
         (p) =>
           p.date <= toIso && (p.date >= fromIso || (withOverdue && !p.forecast))
@@ -60,5 +60,5 @@ export function useZenPlanned(
       // По дате: просроченные старше всех, поэтому они и встают первыми — там,
       // где на них смотрят.
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [cache, rates, fromIso, toIso, withOverdue, ownerOverride]);
+  }, [cache, rates, fromIso, toIso, withOverdue, ownerId]);
 }

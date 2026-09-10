@@ -1,30 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
-import { UserRound } from "lucide-react";
+import { AlertTriangle, UserRound } from "lucide-react";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
+import { Switch } from "./Switch";
 import { getZenUsersFromCache } from "../store/useZenmoneyStore";
-import { guessOwnerId, userLabel, type ZenUserOption } from "../lib/zenUsers";
-import { useUserAliasStore } from "../store/useUserAliasStore";
+import {
+  likelyOwnerId,
+  membersInData,
+  userLabel,
+  type ZenUserOption,
+} from "../lib/zenUsers";
+import { useMembersStore } from "../store/useMembersStore";
 import { useDataStore } from "../store/useDataStore";
-import { usersInData } from "../lib/zenUsers";
 
 /**
- * Люди на общем аккаунте Дзен-мани (issue #92).
+ * Участники общего аккаунта Дзен-мани (issues #92, #95).
  *
- * Карточки нет вовсе, пока человек один: на личном аккаунте настраивать нечего,
- * а пустой раздел «Пользователи» только сбивал бы с толку.
+ * Карточки нет, пока участник один: на личном аккаунте настраивать нечего.
  *
- * Здесь две вещи, и обе — про то, как сервис к людям обращается, а не про сами
- * данные: как их звать (в фильтре «Жена» полезнее «user4821») и кто из них вы
- * (от этого зависит, чьи плановые операции показывать). В Дзен-мани отсюда
- * ничего не уезжает.
+ * ПОЧЕМУ ЗДЕСЬ ВОПРОС, А НЕ ДОГАДКА. По ответу API владельца токена не
+ * отличить — `user[]` у разных участников совпадает байт в байт (проверено на
+ * живом общем аккаунте). А от ответа зависит приватность: перепутав, сервис
+ * спрятал бы своё и показал чужое. Поэтому пока человек не ответил, не
+ * прячется ничего и на виду висит предупреждение.
  */
 export function UsersSettings() {
   const transactions = useDataStore((s) => s.transactions);
-  const aliases = useUserAliasStore((s) => s.aliases);
-  const ownerId = useUserAliasStore((s) => s.ownerId);
-  const setAlias = useUserAliasStore((s) => s.setAlias);
-  const setOwnerId = useUserAliasStore((s) => s.setOwnerId);
+  const aliases = useMembersStore((s) => s.aliases);
+  const ownerId = useMembersStore((s) => s.ownerId);
+  const hideForeign = useMembersStore((s) => s.hideForeignPrivate);
+  const setAlias = useMembersStore((s) => s.setAlias);
+  const setOwnerId = useMembersStore((s) => s.setOwnerId);
+  const setHideForeign = useMembersStore((s) => s.setHideForeignPrivate);
   const [users, setUsers] = useState<ZenUserOption[]>([]);
 
   useEffect(() => {
@@ -37,18 +44,18 @@ export function UsersSettings() {
     };
   }, [transactions]);
 
-  // Показываем тех, кто есть в справочнике аккаунта, — включая человека без
-  // единой операции: назвать его и отметить собой всё равно может понадобиться.
-  // Порядок берём по числу операций, чтобы самый активный стоял первым.
+  // Показываем всех из справочника аккаунта — включая участника без единого
+  // личного счёта: назвать его и отметить собой всё равно может понадобиться.
+  // Порядок по числу операций на личных счетах, чтобы заметный стоял первым.
   const ordered = useMemo(() => {
-    const byActivity = usersInData(transactions);
+    const byActivity = membersInData(transactions);
     const rank = new Map(byActivity.map((id, i) => [id, i]));
     return [...users].sort(
       (a, b) => (rank.get(a.id) ?? 1e6) - (rank.get(b.id) ?? 1e6) || a.id - b.id
     );
   }, [users, transactions]);
 
-  const effectiveOwner = guessOwnerId(users, ownerId);
+  const suggested = likelyOwnerId(users);
 
   if (ordered.length < 2) return null;
 
@@ -56,66 +63,99 @@ export function UsersSettings() {
     <div className="card-tray card-pad">
       <SettingsSectionHeader
         icon={UserRound}
-        title="Пользователи аккаунта"
+        title="Участники аккаунта"
         className="mb-1"
         right={
           <InfoPopover label="Откуда берутся эти люди">
             <p>
-              Дзен-мани разрешает подключить к аккаунту несколько человек, и по
-              одному токену приезжают операции всех. Сервис показывает их
-              вместе, а <InfoTerm>фильтр «Пользователи»</InfoTerm> в панели над
-              списками даёт посмотреть кого-то одного.
+              Дзен-мани разрешает подключить к аккаунту несколько человек. По
+              одному токену приезжают данные всех — и те счета, что каждый
+              пометил <InfoTerm>личными</InfoTerm>, тоже.
             </p>
             <p>
-              Имена и пометка «это я» живут <InfoTerm>только здесь</InfoTerm>: в
+              Само приложение Дзен-мани чужие личные счета прячет, а по API
+              отдаёт. Поэтому прячем их здесь — но для этого сервису нужно
+              знать, кто из списка вы.
+            </p>
+            <p>
+              Имена и пометка «Это я» живут <InfoTerm>только здесь</InfoTerm>: в
               Дзен-мани отсюда ничего не уезжает, чужой профиль мы не трогаем.
             </p>
           </InfoPopover>
         }
       />
       <p className="text-xs text-muted mb-3">
-        Как звать людей на этом аккаунте и кто из них вы. От второго зависит,
-        чьи плановые операции показывать на главной и в «Регулярных» — как в
-        мобильном приложении, где чужие не видны.
+        Кто из участников вы и как их называть. От первого зависит, чьи личные
+        счета и плановые операции скрывать.
       </p>
 
+      {ownerId == null && (
+        <div className="flex items-start gap-2 rounded-xl border border-warn/40 bg-warn/5 p-3 text-xs mb-3">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-warn" />
+          <span>
+            <strong>Укажите, кто вы.</strong> Пока не указано, сервис показывает
+            личные счета всех участников — определить владельца токена по данным
+            Дзен-мани нельзя, а угадать значило бы рискнуть чужой приватностью.
+            {suggested != null && (
+              <> Скорее всего это {userLabel(suggested, users, aliases)}.</>
+            )}
+          </span>
+        </div>
+      )}
+
       <div className="space-y-2">
-        {ordered.map((u) => {
-          const isOwner = u.id === effectiveOwner;
-          return (
-            <div
-              key={u.id}
-              className="flex items-center gap-3 flex-wrap rounded-xl border border-border p-3"
-            >
-              <label className="flex items-center gap-2 cursor-pointer shrink-0">
-                <input
-                  type="radio"
-                  name="zen-owner"
-                  checked={isOwner}
-                  onChange={() => setOwnerId(u.id)}
-                  className="shrink-0"
-                />
-                <span className="text-xs text-muted">Это я</span>
-              </label>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate">
-                  {userLabel(u.id, users, aliases)}
-                </div>
-                <div className="text-[11px] text-muted tabular-nums">
-                  {u.login ? `${u.login} · ` : ""}
-                  {u.id}
-                </div>
-              </div>
+        {ordered.map((u) => (
+          <div
+            key={u.id}
+            className="flex items-center gap-3 flex-wrap rounded-xl border border-border p-3"
+          >
+            <label className="flex items-center gap-2 cursor-pointer shrink-0">
               <input
-                className="input w-full sm:w-52 shrink-0"
-                placeholder="Как называть"
-                defaultValue={aliases[String(u.id)] ?? ""}
-                onBlur={(e) => setAlias(u.id, e.target.value)}
-                aria-label={`Имя для пользователя ${u.id}`}
+                type="radio"
+                name="zen-owner"
+                checked={u.id === ownerId}
+                onChange={() => setOwnerId(u.id)}
+                className="shrink-0"
               />
+              <span className="text-xs text-muted">Это я</span>
+            </label>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium truncate">
+                {userLabel(u.id, users, aliases)}
+              </div>
+              <div className="text-[11px] text-muted tabular-nums">
+                {u.login ? `${u.login} · ` : ""}
+                {u.id}
+              </div>
             </div>
-          );
-        })}
+            <input
+              className="input w-full sm:w-52 shrink-0"
+              placeholder="Как называть"
+              defaultValue={aliases[String(u.id)] ?? ""}
+              onBlur={(e) => setAlias(u.id, e.target.value)}
+              aria-label={`Имя для участника ${u.id}`}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 flex-wrap border-t border-border pt-3 mt-4">
+        <div className="min-w-0">
+          <div className="text-sm font-medium">Скрывать чужие личные счета</div>
+          <div className="text-xs text-muted">
+            {ownerId == null
+              ? "Заработает, когда вы отметите себя выше."
+              : hideForeign
+                ? "Операции по личным счетам других участников не показываются — как в Дзен-мани."
+                : "Показываются операции всех, включая личные счета других участников."}
+          </div>
+        </div>
+        <Switch
+          checked={hideForeign}
+          onChange={setHideForeign}
+          disabled={ownerId == null}
+          label="Скрывать чужие личные счета"
+        />
       </div>
     </div>
   );

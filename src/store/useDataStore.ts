@@ -30,6 +30,7 @@ import type { ZenTransaction } from "../lib/zenmoney";
 import { loadDrafts, useDraftsStore } from "./useDraftsStore";
 import { draftsToTransactions } from "../lib/draftsMap";
 import { aliasesToMap, type PayeeAlias } from "./usePayeeAliasStore";
+import { useMembersStore } from "./useMembersStore";
 
 // Rough cross-rates relative to RUB — purely a starting point so the rates UI
 // is populated out of the box. Users adjust to their own actual rates.
@@ -173,6 +174,24 @@ function recalcBase(
 }
 
 /**
+ * Убрать операции по ЧУЖИМ личным счетам (issue #95).
+ *
+ * Дзен-мани прячет их в своём приложении и на сайте, а по API отдаёт всё:
+ * токен участника получает и личные счета остальных, и операции по ним.
+ * Пометка «личный» — обещание, данное тем, кто её поставил, поэтому здесь
+ * единственное место, через которое проходит весь видимый список.
+ *
+ * НЕ прячем, пока человек не сказал, кто он: угадать по ответу API нельзя, а
+ * ошибка означала бы спрятать своё и показать чужое. Общие счета остаются
+ * всегда — они на то и общие.
+ */
+function hideForeignMembers(txs: Transaction[]): Transaction[] {
+  const { ownerId, hideForeignPrivate } = useMembersStore.getState();
+  if (ownerId == null || !hideForeignPrivate) return txs;
+  return txs.filter((t) => t.member == null || t.member === ownerId);
+}
+
+/**
  * The last step of the transactions pipeline: apply the user's edit
  * overlay, then drop any locally-deleted (hidden) rows. Everything that
  * sets `transactions` goes through here so the deletion filter is
@@ -197,7 +216,8 @@ async function finalize(
   // visible set: once a draft is pushed and echoed back into the cache, its
   // cloud row wins (and we then drop the draft from the store).
   const drafts = await loadDraftRows(rates, visible);
-  return drafts.length === 0 ? visible : [...visible, ...drafts];
+  const withDrafts = drafts.length === 0 ? visible : [...visible, ...drafts];
+  return hideForeignMembers(withDrafts);
 }
 
 /**
