@@ -63,7 +63,7 @@ export function UsersSettings() {
     <div className="card-tray card-pad">
       <SettingsSectionHeader
         icon={UserRound}
-        title="Участники аккаунта"
+        title="Совместный доступ"
         className="mb-1"
         right={
           <InfoPopover label="Откуда берутся эти люди">
@@ -85,19 +85,20 @@ export function UsersSettings() {
         }
       />
       <p className="text-xs text-muted mb-3">
-        Кто из участников вы и как их называть. От первого зависит, чьи личные
-        счета и плановые операции скрывать.
+        Отметьте себя — по этому выбору сервис понимает, какие личные счета и
+        планы ваши, а какие чужие. Имя участника можно поменять: щёлкните по
+        нему и напишите своё.
       </p>
 
       {ownerId == null && (
         <div className="flex items-start gap-2 rounded-xl border border-warn/40 bg-warn/5 p-3 text-xs mb-3">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-warn" />
           <span>
-            <strong>Укажите, кто вы.</strong> Пока не указано, сервис показывает
-            личные счета всех участников — определить владельца токена по данным
-            Дзен-мани нельзя, а угадать значило бы рискнуть чужой приватностью.
+            <strong>Отметьте себя.</strong> Пока не отмечено, видны личные счета
+            всех участников. По данным Дзен-мани не понять, чей это токен, а
+            угадывать нельзя: ошибись сервис — и откроет чужое, а ваше спрячет.
             {suggested != null && (
-              <> Скорее всего это {userLabel(suggested, users, aliases)}.</>
+              <> Похоже, что вы {userLabel(suggested, users, aliases)}.</>
             )}
           </span>
         </div>
@@ -109,32 +110,39 @@ export function UsersSettings() {
             key={u.id}
             className="flex items-center gap-3 flex-wrap rounded-xl border border-border p-3"
           >
-            <label className="flex items-center gap-2 cursor-pointer shrink-0">
-              <input
-                type="radio"
-                name="zen-owner"
-                checked={u.id === ownerId}
-                onChange={() => setOwnerId(u.id)}
-                className="shrink-0"
-              />
-              <span className="text-xs text-muted">Это я</span>
-            </label>
+            <input
+              type="radio"
+              name="zen-owner"
+              checked={u.id === ownerId}
+              onChange={() => setOwnerId(u.id)}
+              className="shrink-0 cursor-pointer"
+              aria-label={`Это я — ${userLabel(u.id, users, aliases)}`}
+            />
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium truncate">
-                {userLabel(u.id, users, aliases)}
-              </div>
-              <div className="text-[11px] text-muted tabular-nums">
+              {/* Имя правится на месте, а не в отдельном поле справа: поле
+                  дублировало ту же строку в полуметре от неё, и было неясно,
+                  какая из двух настоящая. Пустое значение показывает логин
+                  подсказкой — то же, что видно и без правки. */}
+              <input
+                // Подсказка набрана как обычный текст, а не бледным: пустое
+                // поле значит «звать по логину», и логин в нём — не намёк, а
+                // то самое имя, которое человек увидит везде. Бледным он
+                // выглядел незаполненным рядом с соседом, у кого имя задано.
+                className="w-full bg-transparent text-sm font-medium rounded px-1 -mx-1
+                           border border-transparent hover:border-border
+                           focus:outline-none focus:border-accent focus:bg-panel2
+                           placeholder:text-text placeholder:font-medium
+                           transition-colors"
+                placeholder={u.login ?? `Пользователь ${u.id}`}
+                defaultValue={aliases[String(u.id)] ?? ""}
+                onBlur={(e) => setAlias(u.id, e.target.value)}
+                aria-label={`Как называть участника ${u.id}`}
+              />
+              <div className="text-[11px] text-muted tabular-nums px-1 -mx-1">
                 {u.login ? `${u.login} · ` : ""}
                 {u.id}
               </div>
             </div>
-            <input
-              className="input w-full sm:w-52 shrink-0"
-              placeholder="Как называть"
-              defaultValue={aliases[String(u.id)] ?? ""}
-              onBlur={(e) => setAlias(u.id, e.target.value)}
-              aria-label={`Имя для участника ${u.id}`}
-            />
           </div>
         ))}
       </div>
