@@ -61,7 +61,9 @@ const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн",
   "июл", "авг", "сен", "окт", "ноя", "дек"];
 import type { DashboardModel } from "../../hooks/useDashboardModel";
+import type { FreeMoneyModel } from "../../hooks/useFreeMoney";
 import type { PlannedOp } from "../../lib/plannedOps";
+import type { Currency } from "../../types";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
 
@@ -1182,5 +1184,282 @@ function MomTile({
         )}
       </span>
     </div>
+  );
+}
+
+/* ────────────────────────  Свободные деньги (#96)  ──────────────────────── */
+
+/**
+ * Кольцо дневного лимита.
+ *
+ * Показывает ОДИН день, а не весь период: вопрос виджета — «сколько можно
+ * потратить сегодня», и растянуть дугу на остаток месяца значило бы ответить
+ * на другой. Накопленный запас в кольцо не влезает по определению, поэтому под
+ * ним стоит подпись, а сама дуга упирается в полный круг.
+ */
+function AllowanceRing({ ratio, tone }: { ratio: number; tone: string }) {
+  const r = 30;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width="72" height="72" viewBox="0 0 72 72" className="shrink-0" aria-hidden>
+      <circle
+        cx="36"
+        cy="36"
+        r={r}
+        fill="none"
+        stroke="rgb(var(--c-border))"
+        strokeWidth="6"
+      />
+      {ratio > 0 && (
+        <circle
+          cx="36"
+          cy="36"
+          r={r}
+          fill="none"
+          stroke={tone}
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={`${c * ratio} ${c}`}
+          // Начало дуги — вверху, а не справа: круг читается как циферблат.
+          transform="rotate(-90 36 36)"
+        />
+      )}
+    </svg>
+  );
+}
+
+/** Строка разбивки: подпись слева, сумма справа. */
+function FreeRow({
+  label,
+  value,
+  base,
+  sign,
+  muted,
+  strong,
+}: {
+  label: ReactNode;
+  value: number;
+  base: Currency;
+  /** Знак перед суммой — слагаемые без него читались как набор не связанных чисел. */
+  sign?: "+" | "−";
+  muted?: boolean;
+  strong?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-baseline justify-between gap-3 ${
+        strong ? "pt-2 mt-1 border-t border-border" : ""
+      }`}
+    >
+      <span className={`text-[13px] truncate ${muted ? "text-muted" : ""}`}>{label}</span>
+      <span
+        className={`font-mono tabular-nums shrink-0 ${
+          strong ? "text-[15px] font-semibold" : "text-[13px]"
+        } ${muted ? "text-muted" : ""} ${value < 0 && strong ? "text-expense" : ""}`}
+      >
+        {sign}
+        {sign ? " " : ""}
+        {formatMoney(Math.abs(value), base)}
+      </span>
+    </div>
+  );
+}
+
+export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency }) {
+  if (!f.ready) {
+    return (
+      <>
+        <BlockTitle title="Свободные деньги" />
+        <div className="text-sm text-muted">
+          Свободные деньги считаются от остатков на счетах, а они приходят
+          только из Дзен-мани. Подключите синхронизацию — и виджет заработает.
+        </div>
+      </>
+    );
+  }
+
+  const { allowance, breakdown } = f;
+  // Свободных денег нет вовсе — обещано больше, чем есть на счетах. Дневного
+  // лимита в этом случае не существует, и придумывать его нельзя: «сверх лимита
+  // в 0 ₽» не значит ничего. Ответ даёт соседняя колонка, где стоит минус.
+  const noBudget = breakdown.free <= 0;
+  const over = !noBudget && allowance.today < 0;
+  const low = !over && !noBudget && f.ratio <= 0.25;
+  const tone = over
+    ? "rgb(var(--c-expense))"
+    : low
+      ? "rgb(var(--c-warn))"
+      : "rgb(var(--c-income))";
+  const toneClass = over || noBudget ? "text-expense" : low ? "text-warn" : "";
+
+  return (
+    <>
+      <BlockTitle
+        title="Свободные деньги"
+        to="/accounts"
+        linkLabel="Счета"
+        info={
+          <>
+            <p>
+              Сколько можно потратить, не залезая в то, что уже обещано. Считаем
+              так: деньги на повседневных счетах, плюс плановые поступления до
+              конца периода, минус плановые списания, минус неснижаемый остаток.
+            </p>
+            <p>
+              В расчёт идут карты, наличные и обычные счета. Накопительные,
+              вклады, кредиты и всё, что вы убрали из баланса, — нет: тратить их
+              сегодня не предполагается, а со вкладом сумма выросла бы в разы и
+              перестала отвечать на свой вопрос.
+            </p>
+            <p>
+              Из планов берём только те, что вы завели сами: прогнозы Дзен-мани
+              — догадка по регулярности, и вычитать её из живых денег значит
+              занижать лимит без причины. Просроченные, наоборот, берём — дата
+              прошла, а платёж никуда не делся.
+            </p>
+            <p>
+              Метод деления по дням и неснижаемый остаток задаются в
+              «Настройках → Расчёты».
+            </p>
+          </>
+        }
+      />
+
+      {/* Три колонки — три вопроса подряд: сколько сегодня, из чего это
+          сложилось, до какого срока и как поделено. В одну колонку виджет
+          пришлось бы листать, а полоса во всю ширину как раз и даёт им встать
+          рядом. На узком экране складываются друг под друга. */}
+      <div className="grid gap-6 md:grid-cols-3 md:gap-8">
+        <div>
+          <SectionLabel>Сегодня</SectionLabel>
+          <div className="flex items-center gap-4 mt-2">
+            <AllowanceRing ratio={noBudget ? 0 : f.ratio} tone={tone} />
+            <div className="min-w-0">
+              <div
+                className={`font-mono tabular-nums font-semibold text-3xl leading-none ${toneClass}`}
+                style={{ wordSpacing: "-0.22em" }}
+              >
+                {noBudget ? (
+                  "—"
+                ) : (
+                  <>
+                    {over && "−"}
+                    {formatMoney(Math.abs(allowance.today), base)}
+                  </>
+                )}
+              </div>
+              <div className="text-[13px] text-muted mt-1.5">
+                {noBudget ? (
+                  "тратить нечего: обещано больше, чем есть на счетах"
+                ) : (
+                  <>
+                    {over ? "сверх лимита в " : "из "}
+                    {formatMoney(allowance.perDay, base)} на день
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          {/* Накопленное — то, ради чего накопительный метод и выбирают: без
+              этой строки непонятно, почему сегодня можно больше лимита. */}
+          {!noBudget && allowance.carried !== null && Math.abs(allowance.carried) >= 1 && (
+            <div className="text-[12.5px] text-muted mt-3">
+              {allowance.carried > 0 ? (
+                <>
+                  Из них{" "}
+                  <span className="font-mono tabular-nums text-income">
+                    {formatMoney(allowance.carried, base)}
+                  </span>{" "}
+                  — сэкономленное в прошлые дни.
+                </>
+              ) : (
+                <>
+                  Дневной лимит перебран на{" "}
+                  <span className="font-mono tabular-nums text-warn">
+                    {formatMoney(Math.abs(allowance.carried), base)}
+                  </span>
+                  .
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <SectionLabel>Свободно до {dayAndMonth(f.periodEnd)}</SectionLabel>
+          <div
+            className={`font-mono tabular-nums font-semibold text-2xl leading-none mt-2 mb-3 ${
+              breakdown.free < 0 ? "text-expense" : ""
+            }`}
+            style={{ wordSpacing: "-0.22em" }}
+          >
+            {breakdown.free < 0 && "−"}
+            {formatMoney(Math.abs(breakdown.free), base)}
+          </div>
+          <div className="space-y-1.5">
+            <FreeRow label="На счетах" value={breakdown.onAccounts} base={base} />
+            {breakdown.plannedIncome > 0 && (
+              <FreeRow
+                label="Плановые поступления"
+                value={breakdown.plannedIncome}
+                base={base}
+                sign="+"
+                muted
+              />
+            )}
+            {breakdown.plannedExpense > 0 && (
+              <FreeRow
+                label="Плановые списания"
+                value={breakdown.plannedExpense}
+                base={base}
+                sign="−"
+                muted
+              />
+            )}
+            {breakdown.reserve > 0 && (
+              <FreeRow
+                label="Неснижаемый остаток"
+                value={breakdown.reserve}
+                base={base}
+                sign="−"
+                muted
+              />
+            )}
+          </div>
+        </div>
+
+        <div>
+          <SectionLabel>Как поделено</SectionLabel>
+          <div className="text-[13px] mt-2 space-y-2">
+            <p>
+              Осталось{" "}
+              <span className="font-mono tabular-nums">{formatNum(f.daysLeft)}</span>{" "}
+              {pluralRu(f.daysLeft, ["день", "дня", "дней"])} из{" "}
+              <span className="font-mono tabular-nums">{formatNum(f.daysTotal)}</span>.{" "}
+              {f.method === "cumulative"
+                ? "Лимит на день один на весь период, непотраченное переносится."
+                : "Лимит пересчитывается каждый день заново по остатку."}
+            </p>
+            {f.planned.overdueExpense > 0 && (
+              <p className="text-muted">
+                Из плановых списаний{" "}
+                <span className="font-mono tabular-nums text-warn">
+                  {formatMoney(f.planned.overdueExpense, base)}
+                </span>{" "}
+                уже просрочено — деньги на них всё ещё нужны.
+              </p>
+            )}
+            <p className="text-muted">
+              {/* Названия счетов, а не одно их число: сумма «на счетах» иначе
+                  ничем не проверяется, и разойтись с ожиданием она может тихо. */}
+              В расчёте {f.accounts.length}{" "}
+              {pluralRu(f.accounts.length, ["счёт", "счёта", "счетов"])}:{" "}
+              {f.accounts.slice(0, 4).join(", ")}
+              {f.accounts.length > 4 && ` и ещё ${f.accounts.length - 4}`}.
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

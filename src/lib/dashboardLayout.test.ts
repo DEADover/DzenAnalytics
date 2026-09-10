@@ -187,6 +187,7 @@ describe("normalizeLayout", () => {
       "month",
       "accounts",
       "upcoming",
+      "freeMoney",
       "cashflow",
       "monthOverMonth",
       "categories",

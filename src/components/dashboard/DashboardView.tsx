@@ -30,6 +30,7 @@ import {
   ActivityHeat,
   ZenPlannedList,
   MonthOverMonthBlock,
+  FreeMoneyBlock,
 } from "./blocks";
 import { LinksRow } from "./LinksRow";
 import {
@@ -53,6 +54,7 @@ import { pluralRu } from "../../lib/plural";
 import { useDashboardModel, type DashboardModel } from "../../hooks/useDashboardModel";
 import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
 import { useZenPlanned } from "../../hooks/useZenPlanned";
+import { useFreeMoney } from "../../hooks/useFreeMoney";
 import { usePlannedDeletionsStore } from "../../store/usePlannedDeletionsStore";
 import { useDrillStore } from "../../store/useDrillStore";
 import { useCategoryMetaStore } from "../../store/useCategoryMetaStore";
@@ -543,6 +545,10 @@ export function DashboardView() {
     [zenPlanned]
   );
 
+  // Свободные деньги (#96). Счета отдаём из модели — они там уже приведены к
+  // базовой валюте и помечены архивом/внебалансом; остальное хук берёт сам.
+  const freeMoney = useFreeMoney(m.accounts, m.ym, todayIso, m.hasRealBalances);
+
   // Кольца статей: те же деревья, что на «Категориях», только за текущий месяц.
   const monthTx = useMemo(
     () => transactions.filter((t) => periodKey(t.date, monthStartDay) === m.ym),
@@ -636,6 +642,9 @@ export function DashboardView() {
         if (view === "split") return <HeroSplit m={m} />;
         return <HeroOpen m={m} sunken={view === "framed"} />;
       }
+
+      case "freeMoney":
+        return <FreeMoneyBlock f={freeMoney} base={m.base} />;
 
       case "accounts":
         return (

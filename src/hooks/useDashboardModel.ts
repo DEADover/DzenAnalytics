@@ -79,6 +79,15 @@ export interface DashboardModel {
   netWorth: number;
   netWorthSeries: { date: string; net: number }[];
   accounts: DashboardAccount[];
+  /**
+   * Остатки на счетах — настоящие, из Дзен-мани, а не сальдо по операциям.
+   *
+   * В режиме CSV счета собираются из самих операций, и «остаток» там — это
+   * сколько через счёт прошло за всю историю. Для списка это честно и полезно,
+   * а вот считать от него свободные деньги нельзя: получится ответ на другой
+   * вопрос, и по экрану его не отличить.
+   */
+  hasRealBalances: boolean;
   /** Разложение баланса: обычные счета, накопительные, вне баланса. */
   liquid: number;
   savings: number;
@@ -256,6 +265,8 @@ export function useDashboardModel(): DashboardModel {
       .sort((a, b) => Math.abs(b.balanceBase) - Math.abs(a.balanceBase));
   }, [liveAccounts, transactions, base, rates, includeOffBalance]);
 
+  const hasRealBalances = !!(liveAccounts && liveAccounts.length > 0);
+
   const netWorth = netWorthSeries.length
     ? netWorthSeries[netWorthSeries.length - 1].net
     : accounts.reduce((s, a) => s + a.balanceBase, 0);
@@ -379,6 +390,7 @@ export function useDashboardModel(): DashboardModel {
     netWorth,
     netWorthSeries,
     accounts,
+    hasRealBalances,
     liquid,
     savings,
     factIncome,

@@ -59,6 +59,7 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { usePayeeAliasStore } from "../store/usePayeeAliasStore";
 import { UsersSettings } from "../components/UsersSettings";
 import { useMembersStore } from "../store/useMembersStore";
+import { useFreeMoneyStore } from "../store/useFreeMoneyStore";
 import { Combobox } from "../components/Combobox";
 import { PageHeader } from "../components/PageHeader";
 import { formatNum, formatDate, formatMoney } from "../lib/format";
@@ -212,6 +213,11 @@ export function ImportPage() {
   // Совместный доступ: переключатель живёт в «Оформлении», а список участников
   // — в «Данных». Число участников считаем по справочнику аккаунта, чтобы на
   // личном аккаунте строки не было вовсе.
+  const freeMethod = useFreeMoneyStore((s) => s.method);
+  const setFreeMethod = useFreeMoneyStore((s) => s.setMethod);
+  const freeReserve = useFreeMoneyStore((s) => s.reserve);
+  const setFreeReserve = useFreeMoneyStore((s) => s.setReserve);
+
   const membersOwnerId = useMembersStore((s) => s.ownerId);
   const hideForeignMembers = useMembersStore((s) => s.hideForeignPrivate);
   const setHideForeignMembers = useMembersStore((s) => s.setHideForeignPrivate);
@@ -1721,6 +1727,92 @@ export function ImportPage() {
                 await recalcBalanceCalibration();
               }}
             />
+          }
+        />
+
+        {/* Виджет «Свободные деньги» (#96). Настройки живут в «Расчётах», а не
+            в «Оформлении»: они меняют не вид, а само число. */}
+        <SettingRow
+          title="Свободные деньги: расчёт на день"
+          status={
+            freeMethod === "cumulative"
+              ? "Накопительный: непотраченное переносится на завтра"
+              : "Ежедневный: лимит считается заново каждый день"
+          }
+          help={
+            <>
+              <p>
+                Виджет «Свободные деньги» на главной делит остаток на дни до
+                конца отчётного периода. Делить можно двумя способами.
+              </p>
+              <p>
+                <InfoTerm>Накопительный</InfoTerm> — лимит на день один на весь
+                период, а непотраченное переносится: не потратив ничего три дня,
+                на четвёртый можно потратить вчетверо больше. Прощает неровные
+                дни, а неровными траты и бывают.
+              </p>
+              <p>
+                <InfoTerm>Ежедневный</InfoTerm> — остаток делится на оставшиеся
+                дни заново каждое утро. Вчерашняя экономия не пропадает, но
+                отдельно её не видно: она просто чуть поднимает лимит.
+              </p>
+              <p>
+                Начало периода общее для всего сервиса — «Первый день отчётного
+                месяца» выше.
+              </p>
+            </>
+          }
+          control={
+            <Segmented
+              label="Метод расчёта свободных на день"
+              value={freeMethod}
+              onChange={(v) => void setFreeMethod(v)}
+              options={[
+                { value: "cumulative", label: "Накопительный" },
+                { value: "daily", label: "Ежедневный" },
+              ]}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Неснижаемый остаток"
+          status={
+            freeReserve > 0
+              ? `${formatMoney(freeReserve, rates.base)} не попадут в свободные`
+              : "Не задан — свободными считаются все деньги на счетах"
+          }
+          help={
+            <>
+              <p>
+                Сумма, которую вы не собираетесь тратить: подушка на счёте,
+                отложенное на крупную покупку. Вычитается из свободных денег
+                сразу, поэтому виджет не предложит потратить то, что трогать не
+                планировалось.
+              </p>
+              <p>
+                Это не то же самое, что счета вне баланса: там вы убираете счёт
+                целиком, здесь — часть суммы на обычных счетах.
+              </p>
+            </>
+          }
+          control={
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={freeReserve || ""}
+                placeholder="0"
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  void setFreeReserve(Number.isFinite(n) ? n : 0);
+                }}
+                aria-label="Неснижаемый остаток"
+                className="input text-sm w-32 tabular-nums text-right"
+              />
+              <span className="text-sm text-muted">{rates.base}</span>
+            </div>
           }
         />
 
