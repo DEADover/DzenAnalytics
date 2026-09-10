@@ -632,6 +632,13 @@ export function DashboardView() {
     [transactions, monthTx, showDrill, monthStartDay, m.ym]
   );
 
+  /** Ширина того, что сейчас везут: дырка уже не примет виджет шире себя. */
+  const dragSpan = useMemo(() => {
+    if (!drag.dragKey) return 0;
+    const p = layout.find((x) => x.key === drag.dragKey);
+    return p ? widgetMeta(p.kind)?.span ?? 1 : 0;
+  }, [drag.dragKey, layout]);
+
   /** Содержимое виджета. Обойму, ширину и ручки надевает `WidgetShell`. */
   function widgetBody(p: WidgetPlacement): ReactNode {
     switch (p.kind) {
@@ -871,6 +878,7 @@ export function DashboardView() {
                   key={gapKey}
                   span={cell.span}
                   dragging={drag.dragKey !== null}
+                  fits={dragSpan <= cell.span}
                   highlight={drag.overKey === gapKey}
                   onEnter={() => drag.enter(gapKey)}
                   onDrop={(sourceKey) => drag.dropBefore(sourceKey, cell.before)}

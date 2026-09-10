@@ -288,6 +288,7 @@ export function WidgetShell({
 export function WidgetGap({
   span,
   dragging,
+  fits,
   highlight,
   onEnter,
   onDrop,
@@ -295,21 +296,40 @@ export function WidgetGap({
   span: number;
   /** Виджет сейчас везут — дырке пора звать. */
   dragging: boolean;
+  /**
+   * Влезает ли то, что везут. Виджет в две трети в дырку на треть не встанет:
+   * раскладка перенесёт его на новый ряд и наделает дыр там, где их не было.
+   * Раньше дырка звала «Перенести сюда» и в этом случае — человек целился в
+   * неё, виджет уезжал в конец страницы, и это читалось как «ничего не
+   * произошло».
+   */
+  fits: boolean;
   highlight: boolean;
   onEnter: () => void;
   onDrop: (sourceKey: string) => void;
 }) {
+  const open = dragging && fits;
   return (
     <div
-      onDragEnter={onEnter}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        onDrop(e.dataTransfer.getData("text/plain"));
-      }}
+      // Пока не влезает — дырка не принимает бросок вовсе, и курсор честно
+      // показывает «сюда нельзя».
+      onDragEnter={open ? onEnter : undefined}
+      onDragOver={
+        open
+          ? (e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+            }
+          : undefined
+      }
+      onDrop={
+        open
+          ? (e) => {
+              e.preventDefault();
+              onDrop(e.dataTransfer.getData("text/plain"));
+            }
+          : undefined
+      }
       className={clsx(
         // Ниже большого экрана колонок нет вовсе: всё стоит в одну, и дырок не
         // бывает.
@@ -320,7 +340,12 @@ export function WidgetGap({
           : "border-border/70 text-muted"
       )}
     >
-      {dragging && <span className="text-[13px] font-medium">Перенести сюда</span>}
+      {open && <span className="text-[13px] font-medium">Перенести сюда</span>}
+      {dragging && !fits && (
+        <span className="text-[13px] font-medium text-muted/70 px-3 text-center">
+          Не поместится — поменяйте местами с соседом
+        </span>
+      )}
     </div>
   );
 }
