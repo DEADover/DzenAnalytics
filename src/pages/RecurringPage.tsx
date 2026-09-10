@@ -120,10 +120,11 @@ export function RecurringPage() {
   // Только свои планы: на общем аккаунте по одному токену приезжают планы
   // всех подключённых людей, а мобильное приложение чужие не показывает (#92).
   const ownerId = useMembersStore((s) => s.ownerId);
-  const planned = useMemo(() => {
-    // Только по явному выбору участника — см. `useZenPlanned`.
-    return ownPlannedOps(plannedOps(zenCache, rates), ownerId);
-  }, [zenCache, rates, ownerId]);
+  const allPlanned = useMemo(() => plannedOps(zenCache, rates), [zenCache, rates]);
+  // Только по явному выбору участника — см. `useZenPlanned`.
+  const planned = useMemo(() => ownPlannedOps(allPlanned, ownerId), [allPlanned, ownerId]);
+  /** Сколько планов спрятано как чужие — нужно пустому экрану, чтобы не врать. */
+  const hiddenPlanned = allPlanned.length - planned.length;
   const [pageTab, setPageTab] = useState<PageTab>("zen");
   const [plannedTab, setPlannedTab] = useState<"all" | "plan" | "forecast">("all");
   const [plannedPeriod, setPlannedPeriod] = useState<PlannedPeriod>("month");
@@ -592,8 +593,20 @@ export function RecurringPage() {
               <CalendarClock className="w-10 h-10 text-muted mx-auto mb-3" />
               <div className="font-medium mb-1">Нет запланированных операций из Дзен-мани</div>
               <div className="text-sm text-muted max-w-md mx-auto">
-                Планы и прогнозы появятся после синхронизации с Дзен-мани. Автоопределённые
-                регулярные платежи — во вкладке «Планы DzenAnalytics».
+                {hiddenPlanned > 0 ? (
+                  <>
+                    Все планы этого аккаунта стоят на личных счетах других
+                    участников, поэтому здесь их нет — как и в приложении
+                    Дзен-мани. Кого считать собой и показывать ли чужое,
+                    задаётся в «Настройки → Данные → Участники аккаунта».
+                  </>
+                ) : (
+                  <>
+                    Планы и прогнозы появятся после синхронизации с Дзен-мани.
+                    Автоопределённые регулярные платежи — во вкладке «Планы
+                    DzenAnalytics».
+                  </>
+                )}
               </div>
             </div>
           ) : (
