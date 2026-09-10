@@ -347,8 +347,15 @@ export function WidgetGap({
       className={clsx(
         // Ниже большого экрана колонок нет вовсе: всё стоит в одну, и дырок не
         // бывает.
-        "hidden lg:grid place-items-center rounded-[18px] border border-dashed relative",
+        // Своя минимальная высота нужна полосе в конце раскладки: там клетку
+        // держит только «плюс», и стоило открыть список — она схлопывалась,
+        // а страница под ней подпрыгивала.
+        "hidden lg:grid place-items-center rounded-[18px] border border-dashed relative min-h-[3.5rem]",
+        // Ширину дырки надо назвать явно: без класса на три колонки полоса
+        // «поставить сюда» в конце раскладки выходила узкой, в треть ряда, и в
+        // неё ничего не помещалось.
         span === 2 && "lg:col-span-2",
+        span === 3 && "lg:col-span-3",
         highlight
           ? "border-accent bg-accent/10 text-accent"
           : "border-border/70 text-muted"
@@ -521,14 +528,25 @@ function WidgetPicker({
       {/* Клик мимо закрывает: список живёт внутри клетки, и уводить его в
           портал незачем — но перекрыть остальную страницу надо. */}
       <div className="fixed inset-0 z-20" onClick={onClose} />
+      {/* Позиционирование и анимация — на РАЗНЫХ элементах. У анимации свой
+          `transform` в кадрах, и на одном элементе она перебивала центрирующий
+          `-translate-y-1/2`: список уезжал в нижнюю половину клетки. */}
+      <div
+        className={clsx(
+          // По центру клетки и по её ширине, но НЕ по её высоте: клетка бывает
+          // и в полэкрана, и в одну кнопку (полоса «поставить сюда» в конце
+          // раскладки), а список должен выглядеть одинаково в обеих.
+          "absolute left-2 right-2 top-1/2 -translate-y-1/2 z-30",
+          // Шире 32rem не растягиваем: в полосе во всю ширину плитка в строку
+          // растянулась бы на полтора метра, со значком в самом её начале.
+          "mx-auto max-w-[32rem]"
+        )}
+      >
       <div
         role="dialog"
         aria-label="Поставить виджет"
         className={clsx(
-          "animate-picker-in absolute left-2 right-2 top-1/2 -translate-y-1/2 z-30",
-          // По содержимому, а не во всю клетку: полотно в пол-экрана с тремя
-          // строчками в углу выглядело сломанным.
-          "max-h-[calc(100%-1rem)] overflow-y-auto scroll-soft",
+          "animate-picker-in max-h-[min(26rem,70vh)] overflow-y-auto scroll-soft",
           "rounded-[16px] border border-border bg-panel shadow-xl p-3"
         )}
       >
@@ -546,9 +564,10 @@ function WidgetPicker({
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
-        {/* Две колонки, пока клетка их вмещает: список из одного столбца в
-            широкой клетке оставлял справа пустое поле. */}
-        <div className="picker-items grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))]">
+        {/* По одному в строку: в две колонки название и подпись ужимались до
+            многоточия у каждой второй плитки, и список читался хуже, чем в
+            строку, хотя занимал ту же площадь. */}
+        <div className="picker-items flex flex-col gap-2">
           {hidden.map((p) => {
             const meta = widgetMeta(p.kind);
             const { text, title } = shelfLabel(p);
@@ -571,6 +590,7 @@ function WidgetPicker({
             )
           )}
         </div>
+      </div>
       </div>
     </>
   );
