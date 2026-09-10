@@ -151,12 +151,6 @@ export function RecurringPage() {
     () => planned.filter((p) => p.date < todayIso && !p.forecast),
     [planned, todayIso]
   );
-  /** Сколько просроченного осталось ЗАПЛАТИТЬ: поступления денег не требуют. */
-  const overdueDue = useMemo(
-    () =>
-      plannedOverdue.reduce((sum, p) => sum + (p.kind === "income" ? 0 : p.amountBase), 0),
-    [plannedOverdue]
-  );
   // Просроченные, снятые вручную и ещё не уехавшие в облако (issue #71).
   const queuedDeletions = usePlannedDeletionsStore((s) => s.deletions);
   /** Upcoming, ignoring tab & period — this decides whether the section shows at
@@ -370,6 +364,81 @@ export function RecurringPage() {
     [base]
   );
 
+  /**
+   * Колонки просроченного — те же, что в таблице ниже, с двумя отличиями.
+   *
+   * Вместо «Типа» — «Задержка»: прогнозы сюда не попадают, и колонка со
+   * сплошным «План» была бы пустой тратой места, а «сколько уже висит» — ровно
+   * то, ради чего на просроченное смотрят. Ширина та же, так что колонки обеих
+   * таблиц стоят по одной линии.
+   *
+   * И колонка действий в конце: снять операцию можно только отсюда. Место под
+   * неё взято у суммы — иначе съехали бы все колонки разом.
+   *
+   * Без `useMemo`: строк здесь единицы, а зависимостей (кнопка удаления,
+   * очередь снятий, сегодняшняя дата) столько, что список вышел бы длиннее
+   * самих колонок.
+   */
+  const overdueColumns: Column<PlannedOp>[] = [
+    ...plannedColumns.filter((c) => c.key === "date"),
+    {
+      key: "late",
+      label: "Задержка",
+      align: "center",
+      width: "8%",
+      // Сортировать нечего: порядок по задержке — это порядок по дате наоборот.
+      sortable: false,
+      render: (p) => {
+        const d = daysOverdue(p.date, todayIso);
+        return (
+          <span className="text-warn tabular-nums whitespace-nowrap">
+            {formatNum(d)} {pluralRu(d, ["день", "дня", "дней"])}
+          </span>
+        );
+      },
+    },
+    ...plannedColumns.filter((c) =>
+      ["payee", "category", "comment", "account"].includes(c.key)
+    ),
+    ...plannedColumns
+      .filter((c) => c.key === "amount")
+      .map((c) => ({ ...c, width: "10%" })),
+    {
+      key: "act",
+      label: "",
+      align: "right",
+      width: "3%",
+      sortable: false,
+      exportSkip: true,
+      render: (p) =>
+        queuedDeletions[p.id] !== undefined ? (
+          <button
+            type="button"
+            className="btn-icon"
+            aria-label="Вернуть операцию"
+            title="Удаление ждёт отправки — вернуть"
+            onClick={() => usePlannedDeletionsStore.getState().restore(p.id)}
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn-icon-danger"
+            aria-label="Удалить операцию"
+            title={
+              p.repeating === false
+                ? "Удалить разовый план в Дзен-мани"
+                : "Убрать эту дату из плана в Дзен-мани"
+            }
+            onClick={() => askDeletePlanned(p)}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        ),
+    },
+  ];
+
   const recurringColumns = useMemo<Column<RecurringCandidate>[]>(
     () => [
       {
@@ -549,7 +618,7 @@ export function RecurringPage() {
       <PageHeader
         title="Регулярные платежи"
         icon={Repeat}
-        hint="Планы из Дзен-мани и автодетект подписок по вашей истории — глобальные фильтры здесь не применяются"
+        hint="Планы из Дзен-мани и автодетект подписок по вашей истории"
         right={
           <InfoPopover label="Как находятся регулярные платежи">
             <p>
@@ -580,6 +649,11 @@ export function RecurringPage() {
               дольше двух своих циклов плюс две недели: для месячной подписки это
               примерно 75 дней. Скорее всего, её уже отменили — такие не попадают
               в ближайшие списания.
+            </p>
+            <p>
+              Верхние фильтры — счета, категории, валюта, период — на эту
+              страницу не действуют: план ещё не операция, фильтровать его не по
+              чему, а регулярность видно только по всей истории целиком.
             </p>
           </InfoPopover>
         }
@@ -680,116 +754,55 @@ export function RecurringPage() {
               ))}
             </div>
 
-            {/* Overdue plans — the ones that actually need action. Shown above the
-                upcoming table and independent of the tab/period filter. */}
+            {/* Просроченное — та же таблица, что и ниже: разбирать его удобнее
+                в привычных колонках, чем в собственной вёрстке со своими
+                правилами. Стоит выше и не зависит ни от вкладки, ни от
+                выбранного периода — это то, что просит действия. */}
             {plannedOverdue.length > 0 && (
-              <div className="rounded-xl border border-warn/40 bg-warn/5 p-3">
-                {/* Шапка несёт ещё и сумму: одно «Просрочено: 3» не говорит,
-                    три ли это кофе или три аренды. */}
-                <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
-                  <div className="text-xs font-semibold text-warn flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    Просрочено: {formatNum(plannedOverdue.length)}
-                  </div>
-                  {/* Сумма — то, что осталось ЗАПЛАТИТЬ: просроченное
-                      поступление денег не требует. Если просрочены одни
-                      поступления, сумма выйдет нулевой — тогда не показываем
-                      её вовсе, ноль рядом со счётчиком выглядел бы ошибкой. */}
-                  {overdueDue > 0 && (
-                    <div className="text-xs font-semibold text-warn tabular-nums">
-                      {formatMoney(overdueDue, base)}
-                    </div>
-                  )}
+              /* Боковых отступов у рамки нет намеренно: ячейки таблицы уже
+                 набраны с отступом 12px, и ещё столько же у рамки сдвигали
+                 колонки относительно таблицы ниже — две таблицы подряд читались
+                 бы как сбитая сетка. Заголовку отступ возвращён вручную. */
+              <div className="rounded-xl border border-warn/40 bg-warn/5 py-3">
+                <div className="text-xs font-semibold text-warn flex items-center gap-1.5 mb-1 px-3">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  Просрочено: {formatNum(plannedOverdue.length)}
+                  <InfoPopover label="Что это за операции">
+                    <p>
+                      Дзен-мани поставил их на прошедшие даты, но никто не
+                      провёл. Обычно это значит одно из двух: платёж прошёл, а
+                      отметить забыли, — или его не было вовсе.
+                    </p>
+                    <p>
+                      В первом случае проведите операцию{" "}
+                      <InfoTerm>в Дзен-мани</InfoTerm>: здесь она только
+                      показывается, провести её отсюда нельзя. Во втором —
+                      удалите строку кнопкой справа: у повторяющегося плана
+                      снимется одна эта дата, у разового удалится сам план.
+                    </p>
+                    <p>
+                      Прогнозов тут нет — Дзен-мани достраивает их по
+                      регулярности, и «просроченным» такое называть незачем.
+                    </p>
+                  </InfoPopover>
                 </div>
-                <p className="text-[11px] text-muted mb-2.5">
-                  Дзен-мани поставил их на прошедшие даты, но никто не провёл.
-                  Проведите в Дзен-мани — или уберите отсюда, если платежа не
-                  было.
-                </p>
-                <div className="space-y-2">
-                  {plannedOverdue.slice(0, 8).map((p) => {
-                    const queued = queuedDeletions[p.id] !== undefined;
-                    const dim = queued ? "text-muted line-through" : "";
-                    const late = daysOverdue(p.date, todayIso);
-                    // Вторая строка — то, чего не хватало: без категории и
-                    // счёта «PARKING» ничего не говорит, а без срока непонятно,
-                    // забыли вчера или полгода назад.
-                    // Срок ПЕРВЫМ: строка обрезается по ширине, и на телефоне
-                    // до хвоста дело не доходит — а «сколько уже висит» и есть
-                    // то, ради чего на просроченное смотрят.
-                    const details = [
-                      late === 0
-                        ? "сегодня"
-                        : `${formatNum(late)} ${pluralRu(late, ["день", "дня", "дней"])} назад`,
-                      p.category,
-                      p.account,
-                    ].filter(Boolean);
-                    return (
-                      <div key={p.id} className="text-sm">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`tabular-nums w-20 shrink-0 ${
-                              queued ? "text-muted line-through" : "text-warn"
-                            }`}
-                          >
-                            {formatDate(p.date, "short")}
-                          </span>
-                          <div className={`flex-1 min-w-0 truncate font-medium ${dim}`}>
-                            {plannedTitle(p)}
-                          </div>
-                          <span className={`shrink-0 ${dim}`}>
-                            {plannedAmount(p, base)}
-                          </span>
-                        {queued ? (
-                          <button
-                            type="button"
-                            className="btn-icon shrink-0"
-                            aria-label="Вернуть операцию"
-                            title="Удаление ждёт отправки — вернуть"
-                            onClick={() =>
-                              usePlannedDeletionsStore.getState().restore(p.id)
-                            }
-                          >
-                            <Undo2 className="w-3.5 h-3.5" />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn-icon-danger shrink-0"
-                            aria-label="Удалить операцию"
-                            title={
-                              p.repeating === false
-                                ? "Удалить разовый план в Дзен-мани"
-                                : "Убрать эту дату из плана в Дзен-мани"
-                            }
-                            onClick={() => askDeletePlanned(p)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        </div>
-                        {/* Подробности отдельной строкой во всю ширину: рядом
-                            с суммой и кнопкой на телефоне им оставалось
-                            полтора сантиметра, и «2 дня назад» резалось
-                            посреди слова. Отступ под заголовок — только на
-                            широком экране, где он есть куда девать. */}
-                        <div
-                          className={`text-[11px] truncate sm:pl-[5.75rem] ${
-                            queued ? "text-muted line-through" : "text-muted"
-                          }`}
-                        >
-                          {details.join(" · ")}
-                          {p.repeating === false && " · разовый"}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {plannedOverdue.length > 8 && (
-                  <div className="text-[11px] text-muted pt-2">
-                    и ещё {formatNum(plannedOverdue.length - 8)}
-                  </div>
-                )}
+                <SortableTable<PlannedOp>
+                  data={plannedOverdue}
+                  columns={overdueColumns}
+                  rowKey={(p) => p.id}
+                  defaultSortKey="date"
+                  defaultSortDir="asc"
+                  limit={10}
+                  exportable={false}
+                  // Снятое ждёт отправки в облако: строка ещё здесь, но уже
+                  // вычеркнута — видно, что она на выходе, и её можно вернуть.
+                  rowClassName={(p) =>
+                    queuedDeletions[p.id] !== undefined
+                      ? "line-through opacity-50"
+                      : ""
+                  }
+                  fixed
+                />
               </div>
             )}
 
