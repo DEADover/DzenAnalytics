@@ -8,6 +8,7 @@ import {
   Coins,
   Users,
   UserRound,
+  UsersRound,
 } from "lucide-react";
 import { DateField } from "./DateField";
 import { MultiSelect } from "./MultiSelect";
@@ -716,7 +717,17 @@ export function GlobalFilters({
             }
             unitForms={["участник", "участника", "участников"]}
             searchPlaceholder="Поиск участника"
-            renderIcon={() => <UserRound className="w-[18px] h-[18px] text-muted" />}
+            /* «Общие счета» — не человек, а строка «всё остальное»: с тем же
+               значком, что у участников, она читалась как ещё один человек по
+               имени «Общие счета». Значок из той же семьи, но с людьми во
+               множественном числе. */
+            renderIcon={(id) =>
+              id === MEMBER_SHARED ? (
+                <UsersRound className="w-[18px] h-[18px] text-muted" />
+              ) : (
+                <UserRound className="w-[18px] h-[18px] text-muted" />
+              )
+            }
           />
         )}
 
