@@ -231,6 +231,15 @@ export interface LiveAccount {
   bank: string | null;
   /** «Личный счёт» — hidden from a shared/family view in Zenmoney. */
   private: boolean;
+  /**
+   * Чей это личный счёт — участник общего аккаунта (#92, #95).
+   *
+   * `null` — общий счёт, он виден всем. Номер — личный счёт этого участника.
+   * Это `ZenAccount.role`, а НЕ `private`: на живом общем аккаунте `private`
+   * оказался `false` у ВСЕХ счетов, включая помеченные личными, — различает
+   * участников только `role`.
+   */
+  member: number | null;
   /** Credit limit (native currency); 0 for accounts without one. */
   creditLimit: number;
   /** Заполнен ли полный набор параметров вклада/кредита (дата открытия, срок,
@@ -363,6 +372,7 @@ async function readLiveAccounts(): Promise<LiveAccount[] | null> {
       (f) => (a as unknown as Record<string, unknown>)[f] != null
     ),
     private: a.private ?? false,
+    member: a.role ?? null,
     creditLimit: a.creditLimit || 0,
   }));
 }

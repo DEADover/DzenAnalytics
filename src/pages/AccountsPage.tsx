@@ -41,6 +41,7 @@ import {
   Table as TableIcon,
   Archive,
   Users,
+  UserRound,
 } from "lucide-react";
 import {
   debtPayeeKey,
@@ -62,7 +63,12 @@ import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { confirm } from "../store/useConfirmStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
-import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
+import {
+  getLiveAccountsFromCache,
+  getZenUsersFromCache,
+} from "../store/useZenmoneyStore";
+import { useMembersStore } from "../store/useMembersStore";
+import { userLabel, type ZenUserOption } from "../lib/zenUsers";
 import { useAccountEditsStore } from "../store/useAccountEditsStore";
 import {
   useAccountsViewStore,
@@ -257,25 +263,48 @@ function DropdownMenu({
 }
 
 /**
- * Пометки счёта — «Вне баланса» и «Архив» одинаковыми чипами. Раньше первая
- * была цветным текстом, вторая — серым: два признака одного рода читались как
- * разные сущности. Чип отделяет пометку от названия сам по себе, без точки.
+ * Пометки счёта — «Вне баланса», чужой личный счёт и «Архив» одинаковыми
+ * чипами. Раньше первая была цветным текстом, вторая — серым: два признака
+ * одного рода читались как разные сущности. Чип отделяет пометку от названия
+ * сам по себе, без точки.
  */
 function AccountMarks({
   offBalance,
   archive,
+  owner,
 }: {
   offBalance: boolean;
   archive: boolean;
+  /** Имя участника, чей это личный счёт. `null` — счёт общий или ваш. */
+  owner?: string | null;
 }) {
-  if (!offBalance && !archive) return null;
+  if (!offBalance && !archive && !owner) return null;
   const chip =
     "text-[10px] leading-4 px-1.5 rounded-full border whitespace-nowrap shrink-0";
+  // Группа НЕ `shrink-0`: имя участника длины непредсказуемой, и в узкой
+  // колонке несжимаемая пилюля съедала название счёта до одной буквы.
+  // Сжимается здесь только она — «Вне баланса» и «Архив» короткие и на своём.
+  // Но и сжиматься ей есть куда лишь до `min-w`: пилюля в один значок ничего
+  // не сообщает, а таблица счетов и так прокручивается вбок.
   return (
-    <span className="flex items-center gap-1 shrink-0">
+    <span className="flex items-center gap-1 min-w-0">
       {offBalance && (
         <span className={`${chip} border-accent2/40 text-accent2 bg-accent2/10`}>
           Вне баланса
+        </span>
+      )}
+      {/* Со значком, а не одним именем: серый чип с надписью «Ирина» иначе не
+          отличить от «Архива» — непонятно, пометка это или чьё-то название.
+          Человечек говорит, что речь о владельце, ещё до чтения. */}
+      {owner && (
+        <span
+          className="text-[10px] leading-4 px-1.5 rounded-full border border-border
+                     text-muted bg-panel2 inline-flex items-center gap-1
+                     min-w-[4rem] max-w-[10rem]"
+          title={`Личный счёт участника: ${owner}`}
+        >
+          <UserRound className="w-2.5 h-2.5 shrink-0" />
+          <span className="truncate">{owner}</span>
         </span>
       )}
       {archive && (
@@ -482,6 +511,38 @@ export function AccountsPage() {
       cancelled = true;
     };
   }, [transactions]);
+
+  // Участники общего аккаунта — чтобы подписать чужой личный счёт именем, а не
+  // номером. Список берём из того же кэша, что и счета: он приезжает вместе с
+  // ними, отдельной синхронизации не нужно.
+  const membersOwnerId = useMembersStore((s) => s.ownerId);
+  const memberAliases = useMembersStore((s) => s.aliases);
+  const [memberList, setMemberList] = useState<ZenUserOption[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getZenUsersFromCache().then((list) => {
+      if (!cancelled && list) setMemberList(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [transactions]);
+  /**
+   * Как подписать счёт участника — или `null`, если подписывать нечего.
+   *
+   * Свои счета не подписываем: пилюля у каждой второй строки перестала бы
+   * что-либо выделять. Пока участник не выбран (`ownerId === null`), своих нет
+   * вовсе — подписаны все личные, и это честно: кто из них ваш, сервис ещё не
+   * знает. На личном аккаунте участник один и `role` пуст у всех счетов, так
+   * что пилюли не появится нигде.
+   */
+  const memberLabelOf = useCallback(
+    (member: number | null | undefined): string | null =>
+      member == null || member === membersOwnerId
+        ? null
+        : userLabel(member, memberList, memberAliases),
+    [membersOwnerId, memberList, memberAliases]
+  );
 
   const showDrill = useDrillStore((s) => s.show);
   const calibration = useCalibrationStore((s) => s.calibration);
@@ -700,6 +761,8 @@ export function AccountsPage() {
         // land in the same «Без банка» bucket, which is honest — we have no
         // second source to tell them apart.
         bank: live?.bank ?? null,
+        /** Чей это личный счёт; `null` — общий или собранный из CSV. */
+        member: live?.member ?? null,
       };
     });
     // Active first, archived grouped below; within each group sort by real
@@ -772,6 +835,10 @@ export function AccountsPage() {
   const hasForeignCurrency = accountRows.some(
     (r) => r.nativeCurrency != null && r.nativeCurrency !== base
   );
+  // Пилюля с именем участника занимает место в колонке названия, а колонки у
+  // таблицы фиксированные: без запаса имя наезжало бы на соседний столбец.
+  // Запас нужен только на общем аккаунте — на личном пилюль нет ни одной.
+  const hasMemberPills = accountRows.some((r) => memberLabelOf(r.member) != null);
   // Признаки спрятаны в меню, поэтому включённые надо показать снаружи —
   // иначе непонятно, почему список короче ожидаемого.
   const effectiveScope = balanceScope;
@@ -2516,7 +2583,11 @@ export function AccountsPage() {
                         {hasReal && (
                           <span className="text-[10px] text-muted flex items-center gap-1.5">
                             {a.kind}
-                            <AccountMarks offBalance={a.offBalance} archive={a.archive} />
+                            <AccountMarks
+                              offBalance={a.offBalance}
+                              archive={a.archive}
+                              owner={memberLabelOf(a.member)}
+                            />
                           </span>
                         )}
                       </span>
@@ -2638,13 +2709,22 @@ export function AccountsPage() {
                 Numeric columns are sized to fit million-ruble values so nothing
                 overflows its cell (which would force a horizontal scrollbar). */}
             <table
-              className={`w-full text-base table-fixed ${
+              className="w-full text-base table-fixed"
+              style={{
                 // Минимум под НАБОР столбцов этой вкладки: на «Капитале» их
                 // пять, и ширина от восьми растянула бы таблицу пустотой.
-                capitalView
-                  ? hasForeignCurrency ? "min-w-[760px]" : "min-w-[670px]"
-                  : hasForeignCurrency ? "min-w-[1212px]" : "min-w-[1122px]"
-              }`}
+                // Плюс запас на пилюлю с именем участника, когда она есть:
+                // колонка названия забирает остаток ширины, и без запаса
+                // пилюля вылезала бы на соседний столбец.
+                minWidth:
+                  (capitalView
+                    ? hasForeignCurrency
+                      ? 760
+                      : 670
+                    : hasForeignCurrency
+                      ? 1212
+                      : 1122) + (hasMemberPills ? 130 : 0),
+              }}
             >
               <colgroup>
                 <col />
@@ -2806,8 +2886,12 @@ export function AccountsPage() {
                           <span className="self-center shrink-0">
                             <AccountLogo title={a.account} type={a.type} />
                           </span>
+                          {/* Нижний предел ширины — чтобы пометки справа не
+                              дожимали название до одной буквы: колонка скорее
+                              станет шире (таблица прокручивается), чем строка
+                              перестанет читаться. */}
                           <span
-                            className="font-medium truncate group-hover:text-accent"
+                            className="font-medium truncate min-w-[5rem] group-hover:text-accent"
                             title={a.displayTitle}
                           >
                             {a.displayTitle}
@@ -2850,7 +2934,11 @@ export function AccountsPage() {
                             </span>
                           )}
                           {hasReal && (
-                            <AccountMarks offBalance={a.offBalance} archive={a.archive} />
+                            <AccountMarks
+                              offBalance={a.offBalance}
+                              archive={a.archive}
+                              owner={memberLabelOf(a.member)}
+                            />
                           )}
                         </div>
                       </td>
