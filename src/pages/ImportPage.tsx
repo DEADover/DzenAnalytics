@@ -28,7 +28,6 @@ import {
   Calculator,
   ALargeSmall,
   ArrowLeftRight,
-  HelpCircle,
   ArrowRight,
 } from "lucide-react";
 import { parseCsv } from "../lib/csv";
@@ -44,7 +43,11 @@ import { Segmented } from "../components/Segmented";
 import { Select } from "../components/Select";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDataStore } from "../store/useDataStore";
-import { useZenmoneyStore, recalcBalanceCalibration } from "../store/useZenmoneyStore";
+import {
+  useZenmoneyStore,
+  recalcBalanceCalibration,
+  getZenUsersFromCache,
+} from "../store/useZenmoneyStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import { useCloudSnapshotStore } from "../store/useCloudSnapshotStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -55,6 +58,7 @@ import { useBackupStore, type BackupInterval } from "../store/useBackupStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { usePayeeAliasStore } from "../store/usePayeeAliasStore";
 import { UsersSettings } from "../components/UsersSettings";
+import { useMembersStore } from "../store/useMembersStore";
 import { Combobox } from "../components/Combobox";
 import { PageHeader } from "../components/PageHeader";
 import { formatNum, formatDate, formatMoney } from "../lib/format";
@@ -204,6 +208,23 @@ export function ImportPage() {
   const zenStatus = useZenmoneyStore((s) => s.status);
   const zenError = useZenmoneyStore((s) => s.error);
   const zenLastSyncAt = useZenmoneyStore((s) => s.lastSyncAt);
+
+  // Совместный доступ: переключатель живёт в «Оформлении», а список участников
+  // — в «Данных». Число участников считаем по справочнику аккаунта, чтобы на
+  // личном аккаунте строки не было вовсе.
+  const membersOwnerId = useMembersStore((s) => s.ownerId);
+  const hideForeignMembers = useMembersStore((s) => s.hideForeignPrivate);
+  const setHideForeignMembers = useMembersStore((s) => s.setHideForeignPrivate);
+  const [membersCount, setMembersCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    getZenUsersFromCache().then((list) => {
+      if (!cancelled) setMembersCount(list?.length ?? 0);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [zenLastSyncAt]);
   const zenLoaded = useZenmoneyStore((s) => s.loaded);
   const zenHydrate = useZenmoneyStore((s) => s.hydrate);
   const zenValidateAndSave = useZenmoneyStore((s) => s.validateAndSaveToken);
@@ -282,9 +303,6 @@ export function ImportPage() {
     });
   const pendingAll = pendingTotal + dictPendingCount;
   const [pendingModalOpen, setPendingModalOpen] = useState(false);
-  // «?» popover next to the sync section header (holds what used to be four
-  // paragraphs of prose inside the card).
-  const [syncInfoOpen, setSyncInfoOpen] = useState(false);
   // Orphaned edits: overrides whose transaction no longer exists in the data
   // (e.g. edits made on a CSV import, then switched to API — ids changed). They
   // can never apply or push, and a re-sync won't clear them, so we offer to
@@ -1519,6 +1537,46 @@ export function ImportPage() {
             />
           }
         />
+
+        {/* Совместный доступ: сама настройка про то, ЧТО показывать, поэтому
+            живёт здесь, а не рядом со списком участников. Строки нет, пока
+            участник один — на личном аккаунте прятать не у кого. */}
+        {membersCount > 1 && (
+          <SettingRow
+            title="Скрывать чужие личные счета"
+            status={
+              membersOwnerId == null
+                ? "Начнёт действовать, когда вы отметите себя в «Данных»"
+                : hideForeignMembers
+                  ? "Операции по личным счетам других участников скрыты"
+                  : "Видны операции по всем счетам, включая чужие личные"
+            }
+            help={
+              <>
+                <p>
+                  К аккаунту Дзен-мани можно подключить несколько человек, и
+                  счёт можно пометить <InfoTerm>личным</InfoTerm> — тогда
+                  остальные его не видят ни в приложении, ни на сайте. Но по
+                  API такие счета приходят всем, поэтому прячем их мы.
+                </p>
+                <p>
+                  Выключите, если на общем аккаунте вам нужнее видеть операции
+                  всех. Кто из участников вы, задаётся на вкладке{" "}
+                  <InfoTerm>«Данные»</InfoTerm> — без этого прятать не от кого
+                  и нечего.
+                </p>
+              </>
+            }
+            control={
+              <Switch
+                checked={hideForeignMembers}
+                disabled={membersOwnerId == null}
+                label="Скрывать личные счета других участников"
+                onChange={(next) => setHideForeignMembers(next)}
+              />
+            }
+          />
+        )}
       </div>
 
       </>)}
@@ -2199,68 +2257,42 @@ export function ImportPage() {
               title="Двусторонняя синхронизация с Дзен-мани"
               className="mb-3"
               right={
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setSyncInfoOpen((v) => !v)}
-                    aria-expanded={syncInfoOpen}
-                    aria-label="Как это работает"
-                    title="Как это работает"
-                    className={`p-1.5 rounded-full ${
-                      syncInfoOpen
-                        ? "text-accent bg-accent/10"
-                        : "text-muted hover:text-accent hover:bg-panel2"
-                    }`}
-                  >
-                    <HelpCircle className="w-5 h-5" />
-                  </button>
-                  {syncInfoOpen && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-20"
-                        onClick={() => setSyncInfoOpen(false)}
-                      />
-                      <div className="absolute right-0 z-30 mt-2 w-96 max-w-[calc(100vw-2rem)] border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2 text-xs text-muted text-left font-normal">
-                        <p>
-                          По умолчанию приложение работает в{" "}
-                          <strong className="text-text">режиме чтения</strong>:
-                          локальные правки остаются только в этом браузере.
-                          Выберите режим отправки, чтобы они уходили в облако.
-                        </p>
-                        <p>
-                          <strong className="text-text">Что отправляется:</strong>{" "}
-                          дата, получатель, бренд, комментарий, сумма, валюта,
-                          категория, подкатегория, смена типа между Расход /
-                          Доход / Возврат и на/с «Перевод», смена счёта (в т.ч.
-                          счетов перевода), мультивалютные операции.
-                        </p>
-                        <p>
-                          <strong className="text-text">Безопасность:</strong>{" "}
-                          перед отправкой сохраняется копия облачного состояния —
-                          она появится в{" "}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSyncInfoOpen(false);
-                              setSettingsTab("backups");
-                            }}
-                            className="text-accent hover:underline"
-                          >
-                            списке облачных снимков
-                          </button>
-                          , его можно скачать или восстановить.
-                        </p>
-                        <p>
-                          <strong className="text-text">Конфликты:</strong> сервер
-                          решает их по правилу «последний выиграл» (поле{" "}
-                          <code>changed</code>): если ту же операцию изменили в
-                          облаке позже, ваш Push для неё может проиграть. На этот
-                          случай и есть снимок.
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </div>
+                /* Общий знак вопроса, а не своя кнопка с панелью: самодельная
+                   была на 20px против 16 у всех прочих на настройках, со своим
+                   позиционированием и своим закрытием по клику мимо. Один
+                   компонент — один размер и одно поведение. */
+                <InfoPopover label="Как это работает">
+                  <p>
+                    По умолчанию сервис работает в <InfoTerm>режиме чтения</InfoTerm>:
+                    локальные правки остаются только в этом браузере. Выберите
+                    режим отправки, чтобы они уходили в облако.
+                  </p>
+                  <p>
+                    <InfoTerm>Что отправляется:</InfoTerm> дата, получатель,
+                    бренд, комментарий, сумма, валюта, категория, подкатегория,
+                    смена типа между Расход / Доход / Возврат и на/с «Перевод»,
+                    смена счёта (в том числе счетов перевода), мультивалютные
+                    операции.
+                  </p>
+                  <p>
+                    <InfoTerm>Безопасность:</InfoTerm> перед отправкой делается
+                    снимок аккаунта — он появится в{" "}
+                    <button
+                      type="button"
+                      onClick={() => setSettingsTab("backups")}
+                      className="text-accent hover:underline"
+                    >
+                      списке облачных снимков
+                    </button>
+                    , его можно скачать или восстановить.
+                  </p>
+                  <p>
+                    <InfoTerm>Конфликты:</InfoTerm> сервер решает их по правилу
+                    «последний выиграл» (поле <code>changed</code>): если ту же
+                    операцию изменили в облаке позже, ваша отправка для неё может
+                    проиграть. На этот случай и есть снимок.
+                  </p>
+                </InfoPopover>
               }
             />
 

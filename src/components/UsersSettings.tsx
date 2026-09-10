@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, UserRound } from "lucide-react";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
-import { Switch } from "./Switch";
 import { getZenUsersFromCache } from "../store/useZenmoneyStore";
 import {
   likelyOwnerId,
@@ -31,7 +30,6 @@ export function UsersSettings() {
   const hideForeign = useMembersStore((s) => s.hideForeignPrivate);
   const setAlias = useMembersStore((s) => s.setAlias);
   const setOwnerId = useMembersStore((s) => s.setOwnerId);
-  const setHideForeign = useMembersStore((s) => s.setHideForeignPrivate);
   const [users, setUsers] = useState<ZenUserOption[]>([]);
 
   useEffect(() => {
@@ -69,7 +67,7 @@ export function UsersSettings() {
           <InfoPopover label="Откуда берутся участники">
             <p>
               К аккаунту Дзен-мани можно подключить несколько человек. По одному
-              токену приезжают данные всех — включая счета, которые кто-то из
+              токену загружаются данные всех — включая счета, которые кто-то из
               них пометил <InfoTerm>личными</InfoTerm>.
             </p>
             <p>
@@ -85,9 +83,9 @@ export function UsersSettings() {
         }
       />
       <p className="text-xs text-muted mb-3">
-        Здесь сервис узнаёт, какие личные счета и планы ваши, а какие — других
-        участников. Имя любого из них можно вписать прямо в строке: щёлкните по
-        нему.
+        Здесь сервис узнаёт, какие личные счета и операции ваши, а какие —
+        других участников совместного доступа. Имя любого из них можно изменить
+        прямо в строке: щёлкните по нему.
       </p>
 
       {ownerId == null && (
@@ -148,24 +146,15 @@ export function UsersSettings() {
         ))}
       </div>
 
-      <div className="flex items-center justify-between gap-3 flex-wrap border-t border-border pt-3 mt-4">
-        <div className="min-w-0">
-          <div className="text-sm font-medium">Скрывать чужие личные счета</div>
-          <div className="text-xs text-muted">
-            {ownerId == null
-              ? "Начнёт действовать, когда вы отметите себя в списке."
-              : hideForeign
-                ? "Операции по личным счетам других участников скрыты — как в Дзен-мани."
-                : "Видны операции по всем счетам, включая личные счета других участников."}
-          </div>
-        </div>
-        <Switch
-          checked={hideForeign}
-          onChange={setHideForeign}
-          disabled={ownerId == null}
-          label="Скрывать чужие личные счета"
-        />
-      </div>
+      {/* Сам переключатель переехал в «Оформление» — он про то, ЧТО
+          показывать. Здесь остаётся указатель: человек, отметивший себя,
+          логично ищет продолжение рядом. */}
+      <p className="text-[11px] text-muted border-t border-border pt-3 mt-4">
+        {hideForeign
+          ? "Личные счета других участников сейчас скрыты."
+          : "Личные счета других участников сейчас видны."}{" "}
+        Переключается на вкладке «Оформление».
+      </p>
     </div>
   );
 }

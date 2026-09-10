@@ -56,17 +56,31 @@ interface DisplayState {
    * посредников: контрагент говорит «AliExpress», а деньги ушли «Сергей Г.».
    */
   statementLine: boolean;
+  /**
+   * Раскрыт ли журнал синхронизаций.
+   *
+   * По умолчанию свёрнут: это отладочная история, её открывают, когда что-то
+   * пошло не так, а место она занимала на пол-экрана постоянно.
+   *
+   * Живёт здесь, а не в состоянии компонента, по трём причинам сразу: вид
+   * должен пережить перезагрузку, вернуться при следующем заходе и попасть в
+   * копию данных сервиса. `displaySettings` уже умеет всё три — он один
+   * объект под одним ключом и входит в бэкап.
+   */
+  syncLogOpen: boolean;
   loaded: boolean;
   hydrate: () => Promise<void>;
   setFractionDigits: (n: FractionDigits) => Promise<void>;
   setTableFontLevel: (level: TableFontLevel) => Promise<void>;
   setStatementLine: (on: boolean) => Promise<void>;
+  setSyncLogOpen: (on: boolean) => Promise<void>;
 }
 
 export const useDisplayStore = create<DisplayState>((set, get) => ({
   fractionDigits: 0,
   tableFontLevel: DEFAULT_TABLE_FONT_LEVEL,
   statementLine: false,
+  syncLogOpen: false,
   loaded: false,
 
   hydrate: async () => {
@@ -74,6 +88,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       fractionDigits?: number;
       tableFontLevel?: number;
       statementLine?: boolean;
+      syncLogOpen?: boolean;
     }>(KEY);
     const fd: FractionDigits = stored?.fractionDigits === 2 ? 2 : 0;
     const level = normalizeLevel(stored?.tableFontLevel);
@@ -83,6 +98,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       fractionDigits: fd,
       tableFontLevel: level,
       statementLine: stored?.statementLine === true,
+      syncLogOpen: stored?.syncLogOpen === true,
       loaded: true,
     });
   },
@@ -104,6 +120,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     set({ statementLine: on });
     await db.saveJSON(KEY, { ...persisted(get()), statementLine: on });
   },
+
+  setSyncLogOpen: async (on) => {
+    set({ syncLogOpen: on });
+    await db.saveJSON(KEY, { ...persisted(get()), syncLogOpen: on });
+  },
 }));
 
 /** Всё, что кладём в IDB, — одним местом, чтобы сеттеры не забывали поля. */
@@ -112,5 +133,6 @@ function persisted(s: DisplayState) {
     fractionDigits: s.fractionDigits,
     tableFontLevel: s.tableFontLevel,
     statementLine: s.statementLine,
+    syncLogOpen: s.syncLogOpen,
   };
 }
