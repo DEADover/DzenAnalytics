@@ -25,7 +25,6 @@ import {
   LayoutTemplate,
   Plus,
   RotateCcw,
-  Trash2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -86,6 +85,7 @@ export function WidgetShell({
   children: ReactNode;
 }) {
   const setHidden = useDashboardLayoutStore((s) => s.setHidden);
+  const remove = useDashboardLayoutStore((s) => s.remove);
   const setView = useDashboardLayoutStore((s) => s.setView);
 
   const drag = editing
@@ -170,11 +170,18 @@ export function WidgetShell({
           <ChevronRight className="w-4 h-4" aria-hidden="true" />
         </button>
       </span>
+      {/* У виджета, заведённого руками, крестик УДАЛЯЕТ. Прятать его некуда:
+          в списке он лежал бы вечно, потому что завести такой же можно в любой
+          момент и в один клик. У штатных виджетов крестик по-прежнему прячет —
+          вернуть их можно только оттуда. */}
       <button
         type="button"
         className="btn-icon-danger shrink-0"
-        title="Убрать с главной"
-        onClick={() => void setHidden(placement.key, true)}
+        title={meta.multi ? `Удалить: ${meta.title}` : "Убрать с главной"}
+        aria-label={meta.multi ? `Удалить: ${meta.title}` : "Убрать с главной"}
+        onClick={() =>
+          void (meta.multi ? remove(placement.key) : setHidden(placement.key, true))
+        }
       >
         <X className="w-4 h-4" aria-hidden="true" />
       </button>
@@ -417,7 +424,6 @@ function WidgetPicker({
 }) {
   const setHidden = useDashboardLayoutStore((s) => s.setHidden);
   const addLinks = useDashboardLayoutStore((s) => s.addLinks);
-  const remove = useDashboardLayoutStore((s) => s.remove);
   const { hidden, fresh, total } = available(layout);
 
   // Escape закрывает список — по всему сервису он закрывает любой слой поверх.
@@ -470,8 +476,7 @@ function WidgetPicker({
     icon: LucideIcon,
     title: string,
     hint: string,
-    onPick: () => void,
-    onDelete?: () => void
+    onPick: () => void
   ) => {
     const Icon = icon;
     return (
@@ -505,20 +510,6 @@ function WidgetPicker({
             </span>
           </span>
         </button>
-        {/* Заведённое руками можно и стереть — иначе снятая полоска висела бы
-            в списке навсегда. Крестик поверх плитки, а не рядом: в ряду он
-            ломал бы сетку. */}
-        {onDelete && (
-          <button
-            type="button"
-            className="btn-icon-danger absolute top-1.5 right-1.5 p-1"
-            title="Удалить насовсем"
-            aria-label="Удалить насовсем"
-            onClick={onDelete}
-          >
-            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-        )}
       </div>
     );
   };
@@ -576,8 +567,7 @@ function WidgetPicker({
               meta.icon,
               text,
               meta.multi ? title.split("\n").slice(1).join(" · ") || meta.hint : meta.hint,
-              () => place(() => setHidden(p.key, false, beforeKey), p.key),
-              meta.multi ? () => void remove(p.key) : undefined
+              () => place(() => setHidden(p.key, false, beforeKey), p.key)
             );
           })}
           {fresh.map((w) =>

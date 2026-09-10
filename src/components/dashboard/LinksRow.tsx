@@ -211,10 +211,10 @@ export function LinksRow({
               </button>
               <button
                 type="button"
-                disabled={filled <= 1}
+                disabled={filled === 0}
                 title={
-                  filled <= 1
-                    ? "Последнюю кнопку убрать нельзя\nБез единой кнопки полоска превращается в пустое место; уберите её целиком"
+                  filled === 0
+                    ? "Убирать нечего"
                     : `Убрать «${section.label}» из полоски`
                 }
                 aria-label={`Убрать «${section.label}» из полоски`}

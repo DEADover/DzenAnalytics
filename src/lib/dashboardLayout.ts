@@ -31,7 +31,7 @@ import {
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
-import { SECONDARY, navSection } from "./navSections";
+import { navSection } from "./navSections";
 
 export type WidgetSpan = 1 | 2 | 3;
 
@@ -341,15 +341,16 @@ function cleanLinks(raw: unknown): LinkSlots | null {
   if (!Array.isArray(raw)) return null;
   const out: LinkSlots = new Array(LINK_SLOTS).fill(null);
   const seen = new Set<string>();
-  let filled = 0;
   for (let i = 0; i < Math.min(raw.length, LINK_SLOTS); i++) {
     const item = raw[i];
     if (typeof item !== "string" || !navSection(item) || seen.has(item)) continue;
     seen.add(item);
     out[i] = item;
-    filled++;
   }
-  return filled > 0 ? out : null;
+  // Пустая полоска — законное состояние: новую заводят именно такой, чтобы
+  // человек сам расставил кнопки, а не разбирал чужую подборку. Раньше пустой
+  // набор считался мусором и полоска молча теряла все места.
+  return out;
 }
 
 /**
@@ -696,17 +697,6 @@ function nextLinksKey(layout: readonly WidgetPlacement[]): string {
   }
 }
 
-/**
- * Кнопка для новой полоски — первый раздел, которого ещё нет ни на одной.
- *
- * Заводить полоску с той же кнопкой, что уже стоит рядом, бессмысленно; а если
- * на главной собраны уже все разделы, берём первый по порядку «Ещё».
- */
-function firstUnusedLink(layout: readonly WidgetPlacement[]): string {
-  const used = new Set(layout.flatMap((p) => p.links ?? []).filter(Boolean));
-  return (SECONDARY.find((s) => !used.has(s.to)) ?? SECONDARY[0]).to;
-}
-
 /** Завести новую полоску с кнопками — она встаёт в конец раскладки. */
 export function addLinksRow(
   layout: readonly WidgetPlacement[],
@@ -718,7 +708,9 @@ export function addLinksRow(
     {
       key: nextLinksKey(layout),
       kind: "links",
-      links: [firstUnusedLink(layout), null, null, null, null, null],
+      // Пустой: подбирать кнопку за человека не наше дело, а «первый неиспользо-
+      // ванный раздел» всё равно попадал мимо — его тут же меняли на нужный.
+      links: new Array(LINK_SLOTS).fill(null),
     },
     beforeKey
   );
@@ -727,9 +719,9 @@ export function addLinksRow(
 /**
  * Задать места полоски.
  *
- * Последнюю кнопку убрать нельзя: без единой кнопки полоска превращается в
- * пустое место, которое человеку пришлось бы искать глазами, чтобы снять.
- * Убирают саму полоску.
+ * Пустая полоска разрешена: она и заводится пустой, и опустеть может по ходу.
+ * Пустым местом на экране она не станет — в режиме настройки все шесть мест
+ * зовут плюсом, а вне его пустая полоска просто не рисуется.
  */
 export function setRowLinks(
   layout: readonly WidgetPlacement[],

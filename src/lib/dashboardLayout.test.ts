@@ -128,12 +128,14 @@ describe("normalizeLayout", () => {
     expect(row(out, "links").links).toEqual(["/goals", "/rules", null, null, null, null]);
   });
 
-  it("полоску без единой живой кнопки выбрасывает", () => {
+  it("полоска с несуществующим разделом остаётся пустой, а не пропадает", () => {
+    // Пустая полоска — законное состояние: человек расставит кнопки сам.
+    // Выбрасывать её значило бы решать за него, что она ему не нужна.
     const out = normalizeLayout([
       { key: "links", kind: "links", links: ["/раздела-больше-нет", null] },
       { key: "accounts", kind: "accounts" },
     ]);
-    expect(kinds(out)).not.toContain("links");
+    expect(row(out, "links").links).toEqual([null, null, null, null, null, null]);
   });
 
   it("снятую полоску обратно не подсовывает", () => {
@@ -416,20 +418,31 @@ describe("полоски с кнопками", () => {
     expect(keys(two)).toContain("links-3");
   });
 
-  it("новая полоска встаёт в конец с одной кнопкой на первом месте", () => {
+  it("новая полоска встаёт в конец пустой", () => {
+    // Пустой — чтобы человек расставил кнопки сам: подобранный за него раздел
+    // всё равно менялся на нужный первым же действием.
     const out = addLinksRow(DEFAULT_LAYOUT);
     const added = out[out.length - 1];
     expect(added.kind).toBe("links");
-    expect(added.links).toHaveLength(LINK_SLOTS);
-    expect(added.links!.filter(Boolean)).toHaveLength(1);
-    // Первый раздел «Ещё», которого ещё нет ни на одной полоске.
-    expect(DEFAULT_LINKS).not.toContain(added.links![0]);
+    expect(added.links).toEqual(new Array(LINK_SLOTS).fill(null));
+  });
+
+  it("полосок можно завести сколько угодно", () => {
+    let out = DEFAULT_LAYOUT.slice();
+    for (let i = 0; i < 4; i++) out = addLinksRow(out);
+    expect(out.filter((p) => p.kind === "links").map((p) => p.key)).toEqual([
+      "links",
+      "links-2",
+      "links-3",
+      "links-4",
+      "links-5",
+    ]);
   });
 
   it("на пустой главной полоска всё равно заводится", () => {
     const out = addLinksRow([]);
     expect(out).toHaveLength(1);
-    expect(out[0].links!.filter(Boolean)).toHaveLength(1);
+    expect(out[0].links).toEqual(new Array(LINK_SLOTS).fill(null));
   });
 
   it("кнопки можно расставить по местам как угодно", () => {
@@ -444,11 +457,13 @@ describe("полоски с кнопками", () => {
     expect(row(out, "links").links).toEqual(["/goals", null, null, "/rules", null, "/trash"]);
   });
 
-  it("полоску без единой кнопки не принимает", () => {
+  it("полоску можно опустошить целиком", () => {
+    // Пустым местом на экране она не станет: в настройке все шесть мест зовут
+    // плюсом, а вне её пустая полоска не рисуется.
     const one = setRowLinks(DEFAULT_LAYOUT, "links", ["/goals"]);
     expect(row(one, "links").links).toEqual(["/goals", null, null, null, null, null]);
-    const still = setRowLinks(one, "links", [null, null, null, null, null, null]);
-    expect(row(still, "links").links).toEqual(["/goals", null, null, null, null, null]);
+    const empty = setRowLinks(one, "links", [null, null, null, null, null, null]);
+    expect(row(empty, "links").links).toEqual([null, null, null, null, null, null]);
   });
 
   it("полоску можно стереть насовсем", () => {
