@@ -20,6 +20,7 @@ import { plannedOps, ownPlannedOps, type PlannedOp } from "../lib/plannedOps";
 
 import { useMembersStore } from "../store/useMembersStore";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
+import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
@@ -86,6 +87,19 @@ function plannedPeriodEnd(period: PlannedPeriod): string | null {
   }
 }
 
+
+/**
+ * Сколько дней операция просрочена — целыми сутками, по местному календарю.
+ *
+ * Считаем по датам, а не по миллисекундам: план стоит на дату без времени, и
+ * «вчера» должно быть вчера независимо от того, сколько сейчас на часах.
+ */
+function daysOverdue(iso: string, todayIso: string): number {
+  const d = new Date(`${iso}T00:00:00`);
+  const t = new Date(`${todayIso}T00:00:00`);
+  return Math.max(0, Math.round((t.getTime() - d.getTime()) / 86_400_000));
+}
+
 /** Signed, coloured amount for a planned op (shared by table + overdue list). */
 function plannedAmount(p: PlannedOp, base: string) {
   const sign = p.kind === "income" ? "+" : p.kind === "expense" ? "−" : "";
@@ -136,6 +150,12 @@ export function RecurringPage() {
   const plannedOverdue = useMemo(
     () => planned.filter((p) => p.date < todayIso && !p.forecast),
     [planned, todayIso]
+  );
+  /** Сколько просроченного осталось ЗАПЛАТИТЬ: поступления денег не требуют. */
+  const overdueDue = useMemo(
+    () =>
+      plannedOverdue.reduce((sum, p) => sum + (p.kind === "income" ? 0 : p.amountBase), 0),
+    [plannedOverdue]
   );
   // Просроченные, снятые вручную и ещё не уехавшие в облако (issue #71).
   const queuedDeletions = usePlannedDeletionsStore((s) => s.deletions);
@@ -663,33 +683,63 @@ export function RecurringPage() {
             {/* Overdue plans — the ones that actually need action. Shown above the
                 upcoming table and independent of the tab/period filter. */}
             {plannedOverdue.length > 0 && (
-              <div className="rounded-lg border border-warn/40 bg-warn/5 p-3">
-                <div className="text-xs font-semibold text-warn mb-2 flex items-center gap-1.5">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  Просрочено: {formatNum(plannedOverdue.length)}
+              <div className="rounded-xl border border-warn/40 bg-warn/5 p-3">
+                {/* Шапка несёт ещё и сумму: одно «Просрочено: 3» не говорит,
+                    три ли это кофе или три аренды. */}
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+                  <div className="text-xs font-semibold text-warn flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    Просрочено: {formatNum(plannedOverdue.length)}
+                  </div>
+                  {/* Сумма — то, что осталось ЗАПЛАТИТЬ: просроченное
+                      поступление денег не требует. Если просрочены одни
+                      поступления, сумма выйдет нулевой — тогда не показываем
+                      её вовсе, ноль рядом со счётчиком выглядел бы ошибкой. */}
+                  {overdueDue > 0 && (
+                    <div className="text-xs font-semibold text-warn tabular-nums">
+                      {formatMoney(overdueDue, base)}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-1.5">
+                <p className="text-[11px] text-muted mb-2.5">
+                  Дзен-мани поставил их на прошедшие даты, но никто не провёл.
+                  Проведите в Дзен-мани — или уберите отсюда, если платежа не
+                  было.
+                </p>
+                <div className="space-y-2">
                   {plannedOverdue.slice(0, 8).map((p) => {
                     const queued = queuedDeletions[p.id] !== undefined;
+                    const dim = queued ? "text-muted line-through" : "";
+                    const late = daysOverdue(p.date, todayIso);
+                    // Вторая строка — то, чего не хватало: без категории и
+                    // счёта «PARKING» ничего не говорит, а без срока непонятно,
+                    // забыли вчера или полгода назад.
+                    // Срок ПЕРВЫМ: строка обрезается по ширине, и на телефоне
+                    // до хвоста дело не доходит — а «сколько уже висит» и есть
+                    // то, ради чего на просроченное смотрят.
+                    const details = [
+                      late === 0
+                        ? "сегодня"
+                        : `${formatNum(late)} ${pluralRu(late, ["день", "дня", "дней"])} назад`,
+                      p.category,
+                      p.account,
+                    ].filter(Boolean);
                     return (
-                      <div key={p.id} className="flex items-center gap-3 text-sm">
-                        <span
-                          className={`tabular-nums w-20 shrink-0 ${
-                            queued ? "text-muted line-through" : "text-warn"
-                          }`}
-                        >
-                          {formatDate(p.date, "short")}
-                        </span>
-                        <span
-                          className={`flex-1 min-w-0 truncate ${
-                            queued ? "text-muted line-through" : ""
-                          }`}
-                        >
-                          {plannedTitle(p)}
-                        </span>
-                        <span className={`shrink-0 ${queued ? "text-muted line-through" : ""}`}>
-                          {plannedAmount(p, base)}
-                        </span>
+                      <div key={p.id} className="text-sm">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`tabular-nums w-20 shrink-0 ${
+                              queued ? "text-muted line-through" : "text-warn"
+                            }`}
+                          >
+                            {formatDate(p.date, "short")}
+                          </span>
+                          <div className={`flex-1 min-w-0 truncate font-medium ${dim}`}>
+                            {plannedTitle(p)}
+                          </div>
+                          <span className={`shrink-0 ${dim}`}>
+                            {plannedAmount(p, base)}
+                          </span>
                         {queued ? (
                           <button
                             type="button"
@@ -717,12 +767,26 @@ export function RecurringPage() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
+                        </div>
+                        {/* Подробности отдельной строкой во всю ширину: рядом
+                            с суммой и кнопкой на телефоне им оставалось
+                            полтора сантиметра, и «2 дня назад» резалось
+                            посреди слова. Отступ под заголовок — только на
+                            широком экране, где он есть куда девать. */}
+                        <div
+                          className={`text-[11px] truncate sm:pl-[5.75rem] ${
+                            queued ? "text-muted line-through" : "text-muted"
+                          }`}
+                        >
+                          {details.join(" · ")}
+                          {p.repeating === false && " · разовый"}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
                 {plannedOverdue.length > 8 && (
-                  <div className="text-[11px] text-muted pt-1.5">
+                  <div className="text-[11px] text-muted pt-2">
                     и ещё {formatNum(plannedOverdue.length - 8)}
                   </div>
                 )}
