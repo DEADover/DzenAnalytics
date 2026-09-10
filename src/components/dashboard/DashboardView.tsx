@@ -547,7 +547,7 @@ export function DashboardView() {
 
   // Свободные деньги (#96). Счета отдаём из модели — они там уже приведены к
   // базовой валюте и помечены архивом/внебалансом; остальное хук берёт сам.
-  const freeMoney = useFreeMoney(m.accounts, m.ym, todayIso, m.hasRealBalances);
+  const freeMoney = useFreeMoney(m.accounts, todayIso);
 
   // Кольца статей: те же деревья, что на «Категориях», только за текущий месяц.
   const monthTx = useMemo(

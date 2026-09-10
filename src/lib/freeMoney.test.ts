@@ -2,11 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   allowanceRatio,
   dailyAllowance,
-  discretionarySpent,
-  freeBreakdown,
-  plannedSums,
+  freeToSpend,
+  moneyBreakdown,
+  planRemainder,
+  savedSoFar,
   spendableAccounts,
-  type PlannedLeg,
+  type PlanRow,
   type SpendableAccount,
 } from "./freeMoney";
 
@@ -33,21 +34,12 @@ describe("spendableAccounts", () => {
     ]);
   });
 
-  it("не берёт накопительные и вклады", () => {
-    // Деньги там есть, но тратить их сегодня не предполагается: со вкладом
-    // «свободные» вырастают в разы и перестают отвечать на свой вопрос.
+  it("не берёт накопительные, вклады и долговые", () => {
     const list = [
       acc({ title: "Нак. счёт", type: "checking", savings: true }),
       acc({ title: "Вклад", type: "deposit", savings: true }),
-    ];
-    expect(spendableAccounts(list)).toEqual([]);
-  });
-
-  it("не берёт долговые: там задолженность, а не остаток", () => {
-    const list = [
       acc({ title: "Кредит", type: "loan" }),
       acc({ title: "Долги", type: "debt" }),
-      acc({ title: "Кредитка банка", type: "credit" }),
     ];
     expect(spendableAccounts(list)).toEqual([]);
   });
@@ -61,327 +53,238 @@ describe("spendableAccounts", () => {
   });
 
   it("минус на кредитной карте остаётся в расчёте", () => {
-    // Это настоящие потраченные деньги, которые придётся вернуть.
     const list = [acc({ title: "Кредитка", type: "ccard", balanceBase: -12000 })];
     expect(spendableAccounts(list)[0].balanceBase).toBe(-12000);
   });
 });
 
-describe("plannedSums", () => {
-  const leg = (p: Partial<PlannedLeg> & { date: string }): PlannedLeg => ({
-    kind: "expense",
-    amountBase: 1000,
-    account: "Карта",
-    forecast: false,
+describe("planRemainder", () => {
+  const row = (p: Partial<PlanRow> & { tagId: string }): PlanRow => ({
+    title: p.tagId,
+    plan: 0,
+    locked: false,
     ...p,
   });
-  const mine = new Set(["Карта", "Наличные"]);
+  const m = (o: Record<string, number>) => new Map(Object.entries(o));
+  /** Дерево категорий: тег → верхний предок. */
+  const tree = (o: Record<string, string>) => new Map(Object.entries(o));
+  const flat = new Map<string, string>();
 
-  it("складывает расходы и доходы до конца периода", () => {
-    const out = plannedSums(
-      [
-        leg({ date: "2026-09-15" }),
-        leg({ date: "2026-09-20", kind: "income", amountBase: 90000 }),
-      ],
-      "2026-09-30",
-      "2026-09-10",
-      mine
-    );
-    expect(out).toEqual({ income: 90000, expense: 1000, overdueExpense: 0 });
+  it("остаток категории — план минус потраченное", () => {
+    const out = planRemainder([row({ tagId: "Еда", plan: 50000 })], m({}), m({ Еда: 4645 }), flat);
+    expect(out.total).toBe(45355);
   });
 
-  it("не берёт прогнозы — это догадка, а не обещание", () => {
-    const out = plannedSums(
-      [leg({ date: "2026-09-15", forecast: true })],
-      "2026-09-30",
-      "2026-09-10",
-      mine
+  it("назначенные операции ПРИБАВЛЯЮТСЯ к бюджету категории", () => {
+    // Живой пример: «Подписки» — бюджет 8 719, назначенных списаний 18 101,
+    // и Дзен-мани показывает в остатке плана 26 720, а не 8 719.
+    const out = planRemainder(
+      [row({ tagId: "Подписки", plan: 8719.26 })],
+      m({ Подписки: 18101.16 }),
+      m({ Подписки: 100.42 }),
+      flat
     );
-    expect(out.expense).toBe(0);
+    expect(out.total).toBeCloseTo(26720, 0);
   });
 
-  it("берёт просроченное и считает его отдельно", () => {
-    // Дата прошла, платёж не проведён — деньги всё ещё нужны.
-    const out = plannedSums(
-      [leg({ date: "2026-09-05", amountBase: 4000 })],
-      "2026-09-30",
-      "2026-09-10",
-      mine
-    );
-    expect(out).toEqual({ income: 0, expense: 4000, overdueExpense: 4000 });
+  it("замок у родителя: дети — разбивка, а не добавка", () => {
+    // «Животные» с замком: 36 000 у родителя против 10 000 + 25 000 у детей.
+    // На экране 36 000, а не 71 000 — иначе те же деньги учтены дважды.
+    const rows = [
+      row({ tagId: "Животные", plan: 36000, locked: true }),
+      row({ tagId: "Кот", plan: 10000 }),
+      row({ tagId: "Собака", plan: 25000 }),
+    ];
+    const t = tree({ Животные: "Животные", Кот: "Животные", Собака: "Животные" });
+    expect(planRemainder(rows, m({}), m({}), t).total).toBe(36000);
   });
 
-  it("не берёт то, что за границей периода", () => {
-    const out = plannedSums(
-      [leg({ date: "2026-10-01" })],
-      "2026-09-30",
-      "2026-09-10",
-      mine
-    );
-    expect(out.expense).toBe(0);
+  it("без замка план категории складывается с под-категориями", () => {
+    // «Интернет-покупки» 2 000 + «Подписки» 8 719 = 10 719.
+    const rows = [row({ tagId: "Интернет", plan: 2000 }), row({ tagId: "Подписки", plan: 8719.26 })];
+    const t = tree({ Интернет: "Интернет", Подписки: "Интернет" });
+    expect(planRemainder(rows, m({}), m({}), t).total).toBeCloseTo(10719.26, 2);
   });
 
-  it("не берёт переводы: между своими счетами деньги не тратятся", () => {
-    const out = plannedSums(
-      [leg({ date: "2026-09-15", kind: "transfer" })],
-      "2026-09-30",
-      "2026-09-10",
-      mine
-    );
-    expect(out.expense).toBe(0);
+  it("трата по под-категории доезжает до родителя", () => {
+    // Своей строки бюджета у под-тега нет — раньше такие расходы терялись, и
+    // «София» показывала 27 619 ₽ вместо 20 419.
+    const rows = [row({ tagId: "София", plan: 34650 })];
+    const t = tree({ София: "София", Кружки: "София" });
+    const out = planRemainder(rows, m({ София: 350 }), m({ Кружки: 7200, София: 7381 }), t);
+    expect(out.total).toBe(34650 + 350 - 7200 - 7381);
   });
 
-  it("не берёт планы на неучитываемых счетах", () => {
-    // Остаток вклада в сумму не входит, значит и списание с него ничего в ней
-    // не меняет.
-    const out = plannedSums(
-      [leg({ date: "2026-09-15", account: "Вклад" })],
-      "2026-09-30",
-      "2026-09-10",
-      mine
-    );
-    expect(out.expense).toBe(0);
+  it("перебор по статье даёт ноль, а не минус", () => {
+    // Иначе перерасход на еде развязывал бы руки по всем остальным статьям.
+    const out = planRemainder([row({ tagId: "Еда", plan: 5000 })], m({}), m({ Еда: 9000 }), flat);
+    expect(out.total).toBe(0);
+  });
+
+  it("пустые строки в список не попадают", () => {
+    const rows = [row({ tagId: "Еда", plan: 5000 }), row({ tagId: "Пусто", plan: 0 })];
+    expect(planRemainder(rows, m({}), m({ Еда: 1000 }), flat).rows.map((r) => r.tagId)).toEqual([
+      "Еда",
+    ]);
+  });
+
+  it("строки идут по убыванию остатка — крупное сверху", () => {
+    const rows = [row({ tagId: "Мелочь", plan: 100 }), row({ tagId: "Аренда", plan: 40000 })];
+    expect(planRemainder(rows, m({}), m({}), flat).rows.map((r) => r.tagId)).toEqual([
+      "Аренда",
+      "Мелочь",
+    ]);
+  });
+
+  it("назначенный платёж без бюджета всё равно попадает в остаток", () => {
+    const out = planRemainder([], m({ Квартира: 4000 }), m({}), flat);
+    expect(out.total).toBe(4000);
   });
 });
 
-describe("freeBreakdown", () => {
-  const planned = { income: 90000, expense: 30000, overdueExpense: 0 };
-
-  it("остаток на счетах плюс планы минус резерв", () => {
-    const out = freeBreakdown({ onAccounts: 50000, planned, reserve: 10000 });
-    expect(out.free).toBe(100000);
+describe("moneyBreakdown / freeToSpend", () => {
+  it("складывает баланс периода и будущие поступления", () => {
+    // Живые цифры: 99 005 + 174 600 = 273 605.
+    const money = moneyBreakdown({ balance: 99005, stillToCome: 174600, excluded: 0 });
+    expect(money.total).toBe(273605);
   });
 
-  it("отрицательный резерв не увеличивает свободные", () => {
-    const out = freeBreakdown({ onAccounts: 50000, planned, reserve: -5000 });
-    expect(out.reserve).toBe(0);
-    expect(out.free).toBe(110000);
+  it("неснижаемый остаток вычитается сразу", () => {
+    const money = moneyBreakdown({ balance: 99005, stillToCome: 174600, excluded: 10000 });
+    expect(money.total).toBe(263605);
+  });
+
+  it("отрицательный остаток не увеличивает деньги", () => {
+    const money = moneyBreakdown({ balance: 1000, stillToCome: 0, excluded: -500 });
+    expect(money.excluded).toBe(0);
+    expect(money.total).toBe(1000);
+  });
+
+  it("свободные = деньги минус остаток плана", () => {
+    // 273 605 − 226 391 = 47 214: ровно то, что показывает Дзен-мани.
+    const money = moneyBreakdown({ balance: 99005, stillToCome: 174600, excluded: 0 });
+    expect(freeToSpend(money, 226391)).toBe(47214);
   });
 
   it("свободные бывают отрицательными — это и есть ответ", () => {
-    const out = freeBreakdown({
-      onAccounts: 1000,
-      planned: { income: 0, expense: 30000, overdueExpense: 0 },
-      reserve: 0,
-    });
-    expect(out.free).toBe(-29000);
+    const money = moneyBreakdown({ balance: 1000, stillToCome: 0, excluded: 0 });
+    expect(freeToSpend(money, 30000)).toBe(-29000);
   });
 });
 
-describe("dailyAllowance — ежедневный метод", () => {
-  it("делит остаток на оставшиеся дни, сегодня считая оставшимся", () => {
-    const a = dailyAllowance({
-      method: "daily",
-      free: 21000,
-      daysTotal: 30,
-      dayIndex: 10,
-      spent: 999999,
-    });
-    // 30 − 10 + 1 = 21 день впереди.
-    expect(a.perDay).toBe(1000);
-    expect(a.today).toBe(1000);
+describe("dailyAllowance — ежедневный пересчёт", () => {
+  it("делит свободные на оставшиеся дни", () => {
+    // Сверено с Дзен-мани: 47 213 ÷ 21 = 2 248 ₽.
+    const a = dailyAllowance({ method: "daily", free: 47213, daysLeft: 21, saved: 99999 });
+    expect(Math.round(a.perDay)).toBe(2248);
   });
 
-  it("потраченное на ответ не влияет — оно уже в остатке на счетах", () => {
-    const base = { method: "daily" as const, free: 21000, daysTotal: 30, dayIndex: 10 };
-    expect(dailyAllowance({ ...base, spent: 0 }).today).toBe(
-      dailyAllowance({ ...base, spent: 500000 }).today
-    );
-  });
-
-  it("копить нечего, поэтому переноса нет", () => {
-    const a = dailyAllowance({
-      method: "daily",
-      free: 1000,
-      daysTotal: 10,
-      dayIndex: 1,
-      spent: 0,
-    });
-    expect(a.carried).toBeNull();
+  it("накопленное этот метод не знает вовсе", () => {
+    const a = dailyAllowance({ method: "daily", free: 1000, daysLeft: 10, saved: 500 });
+    expect(a.saved).toBeNull();
   });
 
   it("в последний день доступен весь остаток", () => {
-    const a = dailyAllowance({
-      method: "daily",
-      free: 5000,
-      daysTotal: 30,
-      dayIndex: 30,
-      spent: 0,
-    });
-    expect(a.today).toBe(5000);
+    const a = dailyAllowance({ method: "daily", free: 5000, daysLeft: 1, saved: 0 });
+    expect(a.perDay).toBe(5000);
   });
 });
 
-describe("dailyAllowance — накопительный метод", () => {
-  it("лимит считается от бюджета всего периода", () => {
-    // Бюджет = свободные сейчас (25 000) + уже потраченное (5 000) = 30 000.
+describe("dailyAllowance — копим сэкономленное", () => {
+  it("накопленное лежит отдельно, остальное делится на оставшиеся дни", () => {
+    // Сверено с Дзен-мани: (47 213 − 24 408) ÷ 21 = 1 086 ₽.
     const a = dailyAllowance({
       method: "cumulative",
-      free: 25000,
-      daysTotal: 30,
-      dayIndex: 10,
-      spent: 5000,
+      free: 47213,
+      daysLeft: 21,
+      saved: 24408,
     });
-    expect(a.perDay).toBe(1000);
-    // За десять дней накопилось 10 000, из них потрачено 5 000.
-    expect(a.today).toBe(5000);
-    expect(a.carried).toBe(4000);
+    expect(Math.round(a.perDay)).toBe(1086);
+    expect(a.saved).toBe(24408);
   });
 
-  it("непотраченное переносится: три пустых дня дают четверной лимит", () => {
-    const a = dailyAllowance({
-      method: "cumulative",
-      free: 30000,
-      daysTotal: 30,
-      dayIndex: 4,
-      spent: 0,
-    });
-    expect(a.perDay).toBe(1000);
-    expect(a.today).toBe(4000);
+  it("инвариант: свободные = накоплено + лимит × оставшиеся дни", () => {
+    const a = dailyAllowance({ method: "cumulative", free: 47213, daysLeft: 21, saved: 24408 });
+    expect(a.saved! + a.perDay * 21).toBeCloseTo(47213, 6);
   });
 
-  it("перерасход показан отрицательным, а не нулём", () => {
-    // Соврать «ещё немного осталось» здесь хуже, чем сказать про минус.
-    const a = dailyAllowance({
-      method: "cumulative",
-      free: 10000,
-      daysTotal: 30,
-      dayIndex: 2,
-      spent: 20000,
-    });
-    expect(a.today).toBeLessThan(0);
-    expect(a.carried).toBeLessThan(0);
+  it("накопленное больше свободных не бывает: лимит не уходит в минус", () => {
+    // Иначе виджет обещал бы долг вместо денег.
+    const a = dailyAllowance({ method: "cumulative", free: 5000, daysLeft: 10, saved: 9000 });
+    expect(a.saved).toBe(5000);
+    expect(a.perDay).toBe(0);
   });
 
-  it("в последний день доступен ровно остаток", () => {
-    // Иначе метод обещал бы больше, чем есть на счетах.
-    const a = dailyAllowance({
-      method: "cumulative",
-      free: 7000,
-      daysTotal: 30,
-      dayIndex: 30,
-      spent: 23000,
-    });
-    expect(a.today).toBeCloseTo(7000, 6);
-  });
-
-  it("зарплата среди периода поднимает бюджет, а не растворяется", () => {
-    // На начало периода не было ничего, на пятый день пришло 30 000.
-    const a = dailyAllowance({
-      method: "cumulative",
-      free: 30000,
-      daysTotal: 30,
-      dayIndex: 10,
-      spent: 0,
-    });
-    expect(a.perDay).toBe(1000);
-    expect(a.today).toBe(10000);
+  it("при отрицательных свободных копить нечего", () => {
+    const a = dailyAllowance({ method: "cumulative", free: -3000, daysLeft: 10, saved: 4000 });
+    expect(a.saved).toBe(0);
+    expect(a.perDay).toBeLessThan(0);
   });
 });
 
-describe("discretionarySpent", () => {
-  it("проведённые планы из трат вычитаются", () => {
-    expect(discretionarySpent(52000, 40000)).toBe(12000);
+describe("savedSoFar", () => {
+  it("каждый прожитый день добавляет свою долю", () => {
+    // 30 дней, идёт четвёртый: накоплено за три прожитых.
+    expect(savedSoFar({ free: 30000, daysTotal: 30, dayIndex: 4 })).toBe(3000);
   });
 
-  it("план дешевле обещанного не дарит прибавку к лимиту", () => {
-    // Сэкономленное осталось на счёте и уже посчитано в свободных.
-    expect(discretionarySpent(39000, 40000)).toBe(0);
+  it("в первый день копить ещё нечего", () => {
+    expect(savedSoFar({ free: 30000, daysTotal: 30, dayIndex: 1 })).toBe(0);
   });
 
-  it("без планов считаются все траты", () => {
-    expect(discretionarySpent(12000, 0)).toBe(12000);
-  });
-});
-
-describe("накопительный метод и проведённые планы", () => {
-  // ГЛАВНЫЙ ИНВАРИАНТ МЕТОДА: списание планового платежа НЕ должно двигать
-  // дневной лимит. Денег стало меньше, но и обещаны они были заранее — лимит
-  // считался уже без них. Без вычета планов из «потрачено» аренда поднимала
-  // лимит ровно в день, когда деньги ушли.
-  //
-  // Сцена: период 30 дней, на счетах 100 000, аренда 40 000 по плану.
-  // Свободных — 60 000, то есть 2 000 ₽ в день.
-  const rentPlanned = () =>
-    dailyAllowance({
-      method: "cumulative",
-      free: 60000, // 100 000 на счетах − 40 000 плана
-      daysTotal: 30,
-      dayIndex: 10,
-      spent: 0, // свободных трат не было
-    });
-  const rentPaid = () =>
-    dailyAllowance({
-      method: "cumulative",
-      free: 60000, // 60 000 на счетах, плана больше нет
-      daysTotal: 30,
-      dayIndex: 20,
-      spent: discretionarySpent(40000, 40000), // потрачена ровно аренда
-    });
-
-  it("дневной лимит одинаков до и после списания аренды", () => {
-    expect(rentPlanned().perDay).toBe(2000);
-    expect(rentPaid().perDay).toBe(2000);
-  });
-
-  it("накопленное растёт по дням, а не скачет от платежа", () => {
-    expect(rentPlanned().today).toBe(20000);
-    expect(rentPaid().today).toBe(40000);
-  });
-
-  it("свободная трата сверх плана лимит съедает", () => {
-    // Аренда 40 000 плюс 15 000 своих: накоплено 40 000, доступно 25 000.
+  it("вместе с лимитом даёт ровно свободные деньги", () => {
+    // Инвариант метода: накоплено + лимит × оставшиеся = свободные.
+    const free = 47213, daysTotal = 30, dayIndex = 10;
+    const saved = savedSoFar({ free, daysTotal, dayIndex });
     const a = dailyAllowance({
       method: "cumulative",
-      free: 45000,
-      daysTotal: 30,
-      dayIndex: 20,
-      spent: discretionarySpent(55000, 40000),
+      free,
+      daysLeft: daysTotal - dayIndex + 1,
+      saved,
     });
-    expect(a.perDay).toBe(2000);
-    expect(a.today).toBe(25000);
-  });
-});
-
-describe("dailyAllowance — границы", () => {
-  it("день за пределами периода прижимается к его краям", () => {
-    const a = dailyAllowance({
-      method: "cumulative",
-      free: 3000,
-      daysTotal: 30,
-      dayIndex: 99,
-      spent: 0,
-    });
-    expect(a.today).toBeCloseTo(3000, 6);
+    expect(saved + a.perDay * (daysTotal - dayIndex + 1)).toBeCloseTo(free, 6);
   });
 
-  it("нулевая длина периода не роняет расчёт", () => {
-    const a = dailyAllowance({
-      method: "daily",
-      free: 1000,
-      daysTotal: 0,
-      dayIndex: 0,
-      spent: 0,
-    });
-    expect(Number.isFinite(a.today)).toBe(true);
-    expect(a.today).toBe(1000);
+  it("лимит выходит постоянным — свободные, делённые на длину периода", () => {
+    // Это и значит «лимит на день постоянный»: он не зависит от того, какой
+    // сейчас день периода.
+    const free = 30000, daysTotal = 30;
+    for (const dayIndex of [1, 7, 15, 30]) {
+      const saved = savedSoFar({ free, daysTotal, dayIndex });
+      const a = dailyAllowance({
+        method: "cumulative",
+        free,
+        daysLeft: daysTotal - dayIndex + 1,
+        saved,
+      });
+      expect(a.perDay).toBeCloseTo(1000, 6);
+    }
+  });
+
+  it("перерасход сверх плана снижает и накопленное", () => {
+    // Свободные упали — вместе с ними и доля прожитых дней.
+    expect(savedSoFar({ free: 15000, daysTotal: 30, dayIndex: 11 })).toBe(5000);
+  });
+
+  it("отрицательные свободные не дают отрицательного накопления", () => {
+    expect(savedSoFar({ free: -9000, daysTotal: 30, dayIndex: 11 })).toBe(0);
   });
 });
 
 describe("allowanceRatio", () => {
-  it("половина дневного лимита — половина кольца", () => {
-    expect(allowanceRatio({ perDay: 1000, today: 500, carried: null })).toBe(0.5);
+  it("половина лимита — половина кольца", () => {
+    expect(allowanceRatio(500, 1000)).toBe(0.5);
   });
 
-  it("накопленный запас не выкручивает кольцо за единицу", () => {
-    expect(allowanceRatio({ perDay: 1000, today: 4000, carried: 3000 })).toBe(1);
+  it("сверх лимита кольцо не выкручивается", () => {
+    expect(allowanceRatio(4000, 1000)).toBe(1);
   });
 
   it("перерасход — пустое кольцо, а не отрицательная дуга", () => {
-    expect(allowanceRatio({ perDay: 1000, today: -2000, carried: -3000 })).toBe(0);
+    expect(allowanceRatio(-2000, 1000)).toBe(0);
   });
 
-  it("нулевой лимит не даёт делить на ноль", () => {
-    expect(allowanceRatio({ perDay: 0, today: 0, carried: null })).toBe(0);
+  it("нулевой лимит не делится", () => {
+    expect(allowanceRatio(0, 0)).toBe(0);
   });
 });

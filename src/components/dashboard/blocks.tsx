@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { CategoryDot } from "../CategoryDot";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
-import { InfoPopover } from "../InfoPopover";
+import { InfoPopover, InfoTerm } from "../InfoPopover";
 import { AccountLogo } from "../AccountLogo";
 import { accountKindLabel } from "../../lib/accountType";
 import {
@@ -1271,51 +1271,49 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
       <>
         <BlockTitle title="Свободные деньги" />
         <div className="text-sm text-muted">
-          Свободные деньги считаются от остатков на счетах, а они приходят
-          только из Дзен-мани. Подключите синхронизацию — и виджет заработает.
+          Свободные деньги считаются по остаткам, планам и бюджету из Дзен-мани.
+          Подключите синхронизацию — и виджет заработает.
         </div>
       </>
     );
   }
 
-  const { allowance, breakdown } = f;
-  // Свободных денег нет вовсе — обещано больше, чем есть на счетах. Дневного
-  // лимита в этом случае не существует, и придумывать его нельзя: «сверх лимита
-  // в 0 ₽» не значит ничего. Ответ даёт соседняя колонка, где стоит минус.
-  const noBudget = breakdown.free <= 0;
-  const over = !noBudget && allowance.today < 0;
-  const low = !over && !noBudget && f.ratio <= 0.25;
-  const tone = over
+  const { allowance, money } = f;
+  // Свободных денег нет вовсе — план съел всё, что будет. Дневного лимита в
+  // этом случае не существует, и придумывать его нельзя.
+  const noBudget = f.free <= 0;
+  const low = !noBudget && f.today < allowance.perDay * 0.25;
+  const tone = noBudget
     ? "rgb(var(--c-expense))"
     : low
       ? "rgb(var(--c-warn))"
       : "rgb(var(--c-income))";
-  const toneClass = over || noBudget ? "text-expense" : low ? "text-warn" : "";
 
   return (
     <>
       <BlockTitle
         title="Свободные деньги"
-        to="/accounts"
-        linkLabel="Счета"
+        to="/budgets"
+        linkLabel="Бюджет"
         info={
           <>
             <p>
-              Сколько можно потратить, не залезая в то, что уже обещано. Считаем
-              так: деньги на повседневных счетах, плюс плановые поступления до
-              конца периода, минус плановые списания, минус неснижаемый остаток.
+              Сколько можно потратить, не залезая в запланированное. Считаем как
+              Дзен-мани: <InfoTerm>деньги до конца периода</InfoTerm> минус{" "}
+              <InfoTerm>остаток плана</InfoTerm>.
             </p>
             <p>
-              В расчёт идут карты, наличные и обычные счета. Накопительные,
-              вклады, кредиты и всё, что вы убрали из баланса, — нет: тратить их
-              сегодня не предполагается, а со вкладом сумма выросла бы в разы и
-              перестала отвечать на свой вопрос.
+              <InfoTerm>Деньги</InfoTerm> — это приход минус расход за период,
+              плюс то, что ещё поступит по планам и бюджету. Остаток на счетах к
+              началу периода не считается: так настроен ваш Дзен-мани, и мы берём
+              эту настройку у него, а не заводим свою.
             </p>
             <p>
-              Из планов берём только те, что вы завели сами: прогнозы Дзен-мани
-              — догадка по регулярности, и вычитать её из живых денег значит
-              занижать лимит без причины. Просроченные, наоборот, берём — дата
-              прошла, а платёж никуда не делся.
+              <InfoTerm>Остаток плана</InfoTerm> — сколько ещё не потрачено по
+              бюджету категорий вместе с назначенными платежами. Отсюда и
+              главное свойство: трата ВНУТРИ плана свободные деньги не
+              уменьшает — она уменьшает и деньги, и остаток плана поровну.
+              Свободные тратит только то, что вышло за план.
             </p>
             <p>
               Метод деления по дням и неснижаемый остаток задаются в
@@ -1325,62 +1323,42 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
         }
       />
 
-      {/* Три колонки — три вопроса подряд: сколько сегодня, из чего это
-          сложилось, до какого срока и как поделено. В одну колонку виджет
-          пришлось бы листать, а полоса во всю ширину как раз и даёт им встать
-          рядом. На узком экране складываются друг под друга. */}
       <div className="grid gap-6 md:grid-cols-3 md:gap-8">
         <div>
-          <SectionLabel>Сегодня</SectionLabel>
+          <SectionLabel>Свободно на день</SectionLabel>
           <div className="flex items-center gap-4 mt-2">
             <AllowanceRing ratio={noBudget ? 0 : f.ratio} tone={tone} />
             <div className="min-w-0">
               <div
-                className={`font-mono tabular-nums font-semibold text-3xl leading-none ${toneClass}`}
+                className={`font-mono tabular-nums font-semibold text-3xl leading-none ${
+                  noBudget ? "text-expense" : low ? "text-warn" : ""
+                }`}
                 style={{ wordSpacing: "-0.22em" }}
               >
-                {noBudget ? (
-                  "—"
-                ) : (
-                  <>
-                    {over && "−"}
-                    {formatMoney(Math.abs(allowance.today), base)}
-                  </>
-                )}
+                {noBudget ? "—" : formatMoney(allowance.perDay, base)}
               </div>
               <div className="text-[13px] text-muted mt-1.5">
-                {noBudget ? (
-                  "тратить нечего: обещано больше, чем есть на счетах"
-                ) : (
-                  <>
-                    {over ? "сверх лимита в " : "из "}
-                    {formatMoney(allowance.perDay, base)} на день
-                  </>
-                )}
+                {noBudget
+                  ? "тратить нечего: план больше, чем будет денег"
+                  : f.method === "cumulative"
+                    ? "лимит на день"
+                    : `${formatMoney(f.free, base)} на ${formatNum(f.daysLeft)} ${pluralRu(f.daysLeft, ["день", "дня", "дней"])}`}
               </div>
             </div>
           </div>
           {/* Накопленное — то, ради чего накопительный метод и выбирают: без
               этой строки непонятно, почему сегодня можно больше лимита. */}
-          {!noBudget && allowance.carried !== null && Math.abs(allowance.carried) >= 1 && (
+          {!noBudget && allowance.saved !== null && allowance.saved >= 1 && (
             <div className="text-[12.5px] text-muted mt-3">
-              {allowance.carried > 0 ? (
-                <>
-                  Из них{" "}
-                  <span className="font-mono tabular-nums text-income">
-                    {formatMoney(allowance.carried, base)}
-                  </span>{" "}
-                  — сэкономленное в прошлые дни.
-                </>
-              ) : (
-                <>
-                  Дневной лимит перебран на{" "}
-                  <span className="font-mono tabular-nums text-warn">
-                    {formatMoney(Math.abs(allowance.carried), base)}
-                  </span>
-                  .
-                </>
-              )}
+              Плюс{" "}
+              <span className="font-mono tabular-nums text-income">
+                {formatMoney(allowance.saved, base)}
+              </span>{" "}
+              накопленных — всего на сегодня{" "}
+              <span className="font-mono tabular-nums">
+                {formatMoney(f.today, base)}
+              </span>
+              .
             </div>
           )}
         </div>
@@ -1389,85 +1367,75 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
           <SectionLabel>Свободно до {dayAndMonth(f.periodEnd)}</SectionLabel>
           <div
             className={`font-mono tabular-nums font-semibold text-2xl leading-none mt-2 mb-3 ${
-              breakdown.free < 0 ? "text-expense" : ""
+              f.free < 0 ? "text-expense" : ""
             }`}
             style={{ wordSpacing: "-0.22em" }}
           >
-            {breakdown.free < 0 && "−"}
-            {formatMoney(Math.abs(breakdown.free), base)}
+            {f.free < 0 && "−"}
+            {formatMoney(Math.abs(f.free), base)}
           </div>
           <div className="space-y-1.5">
-            <FreeRow label="На счетах" value={breakdown.onAccounts} base={base} />
-            {breakdown.plannedIncome > 0 && (
+            <FreeRow
+              label={
+                f.balanceMode === "includeOpeningBalance"
+                  ? "На счетах"
+                  : "Баланс периода"
+              }
+              value={money.balance}
+              base={base}
+            />
+            {money.stillToCome > 0 && (
               <FreeRow
-                label="Плановые поступления"
-                value={breakdown.plannedIncome}
+                label="Ещё поступит"
+                value={money.stillToCome}
                 base={base}
                 sign="+"
                 muted
               />
             )}
-            {breakdown.plannedExpense > 0 && (
+            {money.excluded > 0 && (
               <FreeRow
-                label="Плановые списания"
-                value={breakdown.plannedExpense}
+                label="Не учитывать"
+                value={money.excluded}
                 base={base}
                 sign="−"
                 muted
               />
             )}
-            {breakdown.reserve > 0 && (
-              <FreeRow
-                label="Неснижаемый остаток"
-                value={breakdown.reserve}
-                base={base}
-                sign="−"
-                muted
-              />
-            )}
+            <FreeRow
+              label="Остаток плана"
+              value={f.planLeft}
+              base={base}
+              sign="−"
+              muted
+            />
           </div>
         </div>
 
         <div>
-          <SectionLabel>Как поделено</SectionLabel>
-          <div className="text-[13px] mt-2 space-y-2">
-            <p>
-              Осталось{" "}
-              <span className="font-mono tabular-nums">{formatNum(f.daysLeft)}</span>{" "}
-              {pluralRu(f.daysLeft, ["день", "дня", "дней"])} из{" "}
-              <span className="font-mono tabular-nums">{formatNum(f.daysTotal)}</span>.{" "}
-              {f.method === "cumulative"
-                ? "Лимит на день один на весь период, непотраченное переносится."
-                : "Лимит пересчитывается каждый день заново по остатку."}
+          <SectionLabel>Остаток плана</SectionLabel>
+          {f.planRows.length === 0 ? (
+            <p className="text-[13px] text-muted mt-2">
+              Бюджет на этот период не задан, поэтому вычитать из денег нечего.
+              Задайте его в «Бюджете» — и свободные деньги станут честнее.
             </p>
-            {f.planned.overdueExpense > 0 && (
-              <p className="text-muted">
-                Из плановых списаний{" "}
-                <span className="font-mono tabular-nums text-warn">
-                  {formatMoney(f.planned.overdueExpense, base)}
-                </span>{" "}
-                уже просрочено — деньги на них всё ещё нужны.
-              </p>
-            )}
-            {f.spentOnPlans > 0 && (
-              <p className="text-muted">
-                {/* Иначе непонятно, почему крупная трата не сдвинула лимит:
-                    плановый платёж был вычтен из свободных заранее. */}
-                Из потраченного{" "}
-                <span className="font-mono tabular-nums">
-                  {formatMoney(f.spentOnPlans, base)}
-                </span>{" "}
-                ушло по планам — в дневной лимит они не идут, их вычли раньше.
-              </p>
-            )}
-            <p className="text-muted">
-              {/* Названия счетов, а не одно их число: сумма «на счетах» иначе
-                  ничем не проверяется, и разойтись с ожиданием она может тихо. */}
-              В расчёте {f.accounts.length}{" "}
-              {pluralRu(f.accounts.length, ["счёт", "счёта", "счетов"])}:{" "}
-              {f.accounts.slice(0, 4).join(", ")}
-              {f.accounts.length > 4 && ` и ещё ${f.accounts.length - 4}`}.
-            </p>
+          ) : (
+            <div className="mt-2 space-y-1.5">
+              {f.planRows.slice(0, 6).map((r) => (
+                <FreeRow key={r.tagId} label={r.title} value={r.left} base={base} muted />
+              ))}
+              {f.planRows.length > 6 && (
+                <div className="text-[12px] text-muted pt-0.5">
+                  и ещё {formatNum(f.planRows.length - 6)}{" "}
+                  {pluralRu(f.planRows.length - 6, ["категория", "категории", "категорий"])}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="text-[12px] text-muted pt-2 mt-2 border-t border-border">
+            Осталось {formatNum(f.daysLeft)}{" "}
+            {pluralRu(f.daysLeft, ["день", "дня", "дней"])} из{" "}
+            {formatNum(f.daysTotal)}
           </div>
         </div>
       </div>
