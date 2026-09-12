@@ -66,9 +66,10 @@ describe("planRemainder", () => {
     ...p,
   });
   const m = (o: Record<string, number>) => new Map(Object.entries(o));
-  /** Дерево категорий: тег → верхний предок. */
-  const tree = (o: Record<string, string>) => new Map(Object.entries(o));
-  const flat = new Map<string, string>();
+  /** Дерево категорий: тег → родитель. */
+  const tree = (o: Record<string, string | null>) =>
+    new Map<string, string | null>(Object.entries(o));
+  const flat = new Map<string, string | null>();
 
   it("остаток категории — план минус потраченное", () => {
     const out = planRemainder([row({ tagId: "Еда", plan: 50000 })], m({}), m({ Еда: 4645 }), flat);
@@ -95,14 +96,14 @@ describe("planRemainder", () => {
       row({ tagId: "Кот", plan: 10000 }),
       row({ tagId: "Собака", plan: 25000 }),
     ];
-    const t = tree({ Животные: "Животные", Кот: "Животные", Собака: "Животные" });
+    const t = tree({ Животные: null, Кот: "Животные", Собака: "Животные" });
     expect(planRemainder(rows, m({}), m({}), t).total).toBe(36000);
   });
 
   it("без замка план категории складывается с под-категориями", () => {
     // «Интернет-покупки» 2 000 + «Подписки» 8 719 = 10 719.
     const rows = [row({ tagId: "Интернет", plan: 2000 }), row({ tagId: "Подписки", plan: 8719.26 })];
-    const t = tree({ Интернет: "Интернет", Подписки: "Интернет" });
+    const t = tree({ Интернет: null, Подписки: "Интернет" });
     expect(planRemainder(rows, m({}), m({}), t).total).toBeCloseTo(10719.26, 2);
   });
 
@@ -110,7 +111,7 @@ describe("planRemainder", () => {
     // Своей строки бюджета у под-тега нет — раньше такие расходы терялись, и
     // «София» показывала 27 619 ₽ вместо 20 419.
     const rows = [row({ tagId: "София", plan: 34650 })];
-    const t = tree({ София: "София", Кружки: "София" });
+    const t = tree({ София: null, Кружки: "София" });
     const out = planRemainder(rows, m({ София: 350 }), m({ Кружки: 7200, София: 7381 }), t);
     expect(out.total).toBe(34650 + 350 - 7200 - 7381);
   });
@@ -119,6 +120,54 @@ describe("planRemainder", () => {
     // Иначе перерасход на еде развязывал бы руки по всем остальным статьям.
     const out = planRemainder([row({ tagId: "Еда", plan: 5000 })], m({}), m({ Еда: 9000 }), flat);
     expect(out.total).toBe(0);
+    expect(out.overspent).toBe(4000);
+  });
+
+  it("перебор родителя не гасится остатком под-строки", () => {
+    // Живой случай: «Периодические» 3 800 при тратах 8 000 — перебор 4 200, а у
+    // под-категории «Платежи и комиссии» своя строка на 1 200, и она цела.
+    // Веткой целиком вышло бы −2 900, то есть на 1 300 ₽ свободных больше, чем
+    // показывает Дзен-мани.
+    const rows = [
+      row({ tagId: "Периодические", plan: 3800 }),
+      row({ tagId: "Платежи", plan: 1200 }),
+    ];
+    const t = tree({ Периодические: null, Платежи: "Периодические" });
+    const out = planRemainder(rows, m({}), m({ Периодические: 8000 }), t);
+    expect(out.total).toBe(1200);
+    expect(out.overspent).toBe(4200);
+  });
+
+  it("сумма переборов — та самая разница «свободно из»", () => {
+    // 12 сентября Дзен-мани показывал 40 116 из 51 789: ровно 11 673 ₽ съели
+    // три перебравшие строки.
+    const rows = [
+      row({ tagId: "Отдых", plan: 5000 }),
+      row({ tagId: "Периодические", plan: 3800 }),
+      row({ tagId: "Уход", plan: 5000 }),
+    ];
+    const t = tree({ Отдых: null, Периодические: null, Уход: null, Сережа: "Уход", Катя: "Уход" });
+    const out = planRemainder(
+      rows,
+      m({}),
+      m({ Отдых: 10219, Периодические: 8000, Уход: 97, Сережа: 3457, Катя: 3700 }),
+      t
+    );
+    expect(Math.round(out.overspent)).toBe(11673);
+    expect(out.total).toBe(0);
+  });
+
+  it("трата по категории вне плана остаток плана не трогает", () => {
+    // Строки у неё нет и выше по дереву тоже: такие деньги уходят прямо из
+    // свободных, а не из чьего-то бюджета.
+    const out = planRemainder(
+      [row({ tagId: "Еда", plan: 5000 })],
+      m({}),
+      m({ Еда: 1000, Казино: 20000 }),
+      flat
+    );
+    expect(out.total).toBe(4000);
+    expect(out.overspent).toBe(0);
   });
 
   it("пустые строки в список не попадают", () => {
@@ -137,7 +186,14 @@ describe("planRemainder", () => {
   });
 
   it("назначенный платёж без бюджета всё равно попадает в остаток", () => {
-    const out = planRemainder([], m({ Квартира: 4000 }), m({}), flat);
+    // Строку с нулевым планом для такой категории заводит вызывающий: платёж
+    // назначен, денег он потребует, и в остатке плана ему место.
+    const out = planRemainder(
+      [row({ tagId: "Квартира", plan: 0 })],
+      m({ Квартира: 4000 }),
+      m({}),
+      flat
+    );
     expect(out.total).toBe(4000);
   });
 });

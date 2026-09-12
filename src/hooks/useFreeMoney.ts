@@ -42,14 +42,22 @@ export interface FreeMoneyModel {
   /** Есть с чем работать: подключён Дзен-мани и счета известны. */
   ready: boolean;
   money: MoneyBreakdown;
-  /** Остаток плана — всего и по категориям. */
+  /** Остаток плана — всего и по строкам бюджета. */
   planLeft: number;
   planRows: PlanLeft[];
+  /** Потрачено сверх плана: ровно на столько свободных денег стало меньше. */
+  overspent: number;
   free: number;
+  /** Сколько свободных было бы, если бы ни одна статья не вышла за бюджет. */
+  freeTotal: number;
   allowance: DailyAllowance;
-  /** Сколько доступно сегодня: лимит плюс накопленное. */
+  /** Сколько положено на сегодня: лимит плюс накопленное. */
   today: number;
-  /** Доля дневного лимита, которая ещё цела, — для кольца. */
+  /** Сколько свободных съел сегодняшний день. Минус — сегодня их прибавилось. */
+  spentToday: number;
+  /** Сколько из положенного на сегодня ещё цело. */
+  todayLeft: number;
+  /** Доля сегодняшних денег, которая ещё не потрачена, — для кольца. */
   ratio: number;
   method: DailyMethod;
   balanceMode: BalanceMode;
@@ -64,9 +72,13 @@ const EMPTY: FreeMoneyModel = {
   money: { balance: 0, stillToCome: 0, excluded: 0, total: 0 },
   planLeft: 0,
   planRows: [],
+  overspent: 0,
   free: 0,
+  freeTotal: 0,
   allowance: { perDay: 0, saved: null },
   today: 0,
+  spentToday: 0,
+  todayLeft: 0,
   ratio: 0,
   method: "cumulative",
   balanceMode: "excludeOpeningBalance",
@@ -109,29 +121,43 @@ export function useFreeMoney(
     const conv = converter(cache, rates);
     const ours = accountIds(cache, titles);
     const tagById = new Map((cache.tags ?? []).map((t) => [t.id, t]));
-    const topOf = topAncestors(tagById);
+    const parents = parentLinks(tagById);
 
     // ── Баланс периода ────────────────────────────────────────────────────
     // «excludeOpeningBalance»: деньги, лежавшие на счетах к началу периода, в
     // расчёт не идут — только то, что пришло и ушло за него.
     let income = 0;
     let expense = 0;
+    // Сегодняшний оборот — отдельно: по нему считается, сколько свободных денег
+    // съел именно сегодняшний день (см. ниже про вчерашний срез).
+    let incomeToday = 0;
+    let expenseToday = 0;
     const factByTag = new Map<string, number>();
+    const factYesterday = new Map<string, number>();
     for (const t of cache.transactions) {
       if (t.deleted) continue;
       if (t.date < range.from || t.date > today) continue;
       const out = t.outcome || 0;
       const inc = t.income || 0;
       if (out > 0 && inc > 0) continue; // перевод: деньги не появились и не ушли
+      const isToday = t.date === today;
       if (out > 0 && ours.has(t.outcomeAccount)) {
         const v = conv(out, t.outcomeInstrument);
         expense += v;
+        if (isToday) expenseToday += v;
         // Без категории — мимо плана: строки бюджета у такой траты нет, и
         // приписывать её чужой значило бы съесть чужой лимит.
         const tag = firstTag(t.tag);
-        if (tag) factByTag.set(tag, (factByTag.get(tag) ?? 0) + v);
+        if (tag) {
+          factByTag.set(tag, (factByTag.get(tag) ?? 0) + v);
+          if (!isToday) factYesterday.set(tag, (factYesterday.get(tag) ?? 0) + v);
+        }
       }
-      if (inc > 0 && ours.has(t.incomeAccount)) income += conv(inc, t.incomeInstrument);
+      if (inc > 0 && ours.has(t.incomeAccount)) {
+        const v = conv(inc, t.incomeInstrument);
+        income += v;
+        if (isToday) incomeToday += v;
+      }
     }
     const balance =
       balanceMode === "includeOpeningBalance"
@@ -207,25 +233,45 @@ export function useFreeMoney(
       stillToCome += Math.max(incomePlan.get(tag) ?? 0, aheadIn.get(tag) ?? 0);
     }
 
-    const plan = planRemainder(planRows, aheadOut, factByTag, topOf);
+    const plan = planRemainder(planRows, aheadOut, factByTag, parents);
     const money = moneyBreakdown({ balance, stillToCome, excluded: reserve });
     const free = freeToSpend(money, plan.total);
     const saved = method === "cumulative" ? savedSoFar({ free, daysTotal, dayIndex }) : 0;
     const allowance = dailyAllowance({ method, free, daysLeft, saved });
+
+    // ── Сколько свободных денег съел сегодняшний день ─────────────────────
+    // Считаем тот же расчёт на вчерашний вечер и берём разницу. Прямо по тратам
+    // это не считается: трата внутри плана свободных не трогает, а перебор по
+    // статье съедает ровно столько, на сколько она вышла за бюджет.
+    // Назначенные операции берём сегодняшние для обоих срезов намеренно: платёж,
+    // проведённый сегодня, ушёл из «назначенных» и пришёл в «факт» на ту же
+    // сумму, так что разницы он не создаёт — и правильно, он был запланирован.
+    const planBefore = planRemainder(planRows, aheadOut, factYesterday, parents);
+    const moneyBefore = moneyBreakdown({
+      balance: balance - incomeToday + expenseToday,
+      stillToCome,
+      excluded: reserve,
+    });
+    const spentToday = freeToSpend(moneyBefore, planBefore.total) - free;
+    const todayTotal = allowance.perDay + (allowance.saved ?? 0);
+    const todayLeft = todayTotal - spentToday;
 
     return {
       ready: true,
       money,
       planLeft: plan.total,
       planRows: plan.rows,
+      overspent: plan.overspent,
       free,
+      freeTotal: free + plan.overspent,
       allowance,
-      // Доступно сегодня — лимит и всё накопленное: именно столько можно
+      // Положено на сегодня — лимит и всё накопленное: именно столько можно
       // потратить, не залезая в завтрашний день.
-      today: allowance.perDay + (allowance.saved ?? 0),
-      // Кольцо показывает ОДИН день: накопленное в него не влезает по смыслу,
-      // оно стоит подписью рядом, как и у Дзен-мани.
-      ratio: allowanceRatio(allowance.perDay, allowance.perDay),
+      today: todayTotal,
+      spentToday,
+      todayLeft,
+      // Кольцо показывает ОДИН день: сколько из сегодняшних денег ещё цело.
+      ratio: allowanceRatio(todayLeft, todayTotal),
       method,
       balanceMode,
       daysTotal,
@@ -250,25 +296,18 @@ function periodKeyOf(iso: string, startDay: number): string {
 const NULL_TAG = "00000000-0000-0000-0000-000000000000";
 
 /**
- * Тег → его верхняя категория.
+ * Тег → его родитель, только по тем родителям, которые в дереве есть.
  *
- * Считается один раз по всему дереву: остаток плана собирается по верхним
- * категориям, и трата по под-тегу без своей строки бюджета должна доехать до
- * родителя, а не потеряться.
+ * По этим связям остаток плана и разносит траты: у под-категории своей строки
+ * бюджета обычно нет, и её расход должен подняться до ближайшей строки выше.
  */
-function topAncestors(
+function parentLinks(
   tags: ReadonlyMap<string, { parent: string | null }>
-): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const id of tags.keys()) {
-    let cur = id;
-    // Цикл в дереве невозможен, но страховка дешевле зависшей вкладки.
-    for (let i = 0; i < 32; i++) {
-      const parent = tags.get(cur)?.parent;
-      if (!parent || !tags.has(parent)) break;
-      cur = parent;
-    }
-    out.set(id, cur);
+): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  for (const [id, tag] of tags) {
+    const parent = tag.parent;
+    out.set(id, parent && tags.has(parent) ? parent : null);
   }
   return out;
 }
