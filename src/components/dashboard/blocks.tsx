@@ -1519,10 +1519,7 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
         </div>
 
         <div className="flex flex-col min-h-0">
-          <SectionLabel>
-            План на месяц · {formatNum(lines.length)}{" "}
-            {pluralRu(lines.length, ["статья", "статьи", "статей"])}
-          </SectionLabel>
+          <SectionLabel>План на месяц</SectionLabel>
           {f.planRows.length === 0 ? (
             <p className="text-[13px] text-muted mt-2">
               Бюджет на этот период не задан, поэтому вычитать из денег нечего.
@@ -1533,10 +1530,12 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
               {lines.map(({ row, depth }) => (
                 <div
                   key={row.tagId}
+                  // Под-статья подчёркнута вертикальной полосой слева — тем же
+                  // приёмом, что и вложенные строки на «Счетах».
                   className={`flex items-baseline justify-between gap-3 h-9 border-b border-border/60 last:border-0 ${
-                    depth > 0 ? "text-muted" : ""
+                    depth > 0 ? "text-muted border-l-2 border-l-border pl-3" : ""
                   }`}
-                  style={depth > 0 ? { paddingLeft: `${depth * 0.85}rem` } : undefined}
+                  style={depth > 0 ? { marginLeft: `${(depth - 1) * 0.75 + 0.5}rem` } : undefined}
                 >
                   <span className="text-[13.5px] truncate">{row.title}</span>
                   <span className="font-mono tabular-nums text-[13.5px] text-muted shrink-0">
