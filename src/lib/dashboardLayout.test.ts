@@ -27,6 +27,9 @@ const keys = (layout: readonly WidgetPlacement[]) => layout.map((p) => p.key);
 const kinds = (layout: readonly WidgetPlacement[]) => layout.map((p) => p.kind);
 const row = (layout: readonly WidgetPlacement[], key: string) =>
   layout.find((p) => p.key === key)!;
+/** Раскладка, где стандартно снятый виджет стоит на своём месте видимым. */
+const shown = (layout: readonly WidgetPlacement[], key: string) =>
+  layout.map((p) => (p.key === key ? { key: p.key, kind: p.kind } : p));
 
 describe("layoutFromStored", () => {
   it("когда ничего не сохранено — стандартная раскладка целиком", () => {
@@ -156,6 +159,7 @@ describe("normalizeLayout", () => {
     expect([...out.filter((p) => p.hidden).map((p) => p.kind)].sort()).toEqual([
       "donutExpense",
       "donutIncome",
+      "freeMoney",
       "freeMoneyCompact",
       "monthOverMonth",
       "observations",
@@ -183,10 +187,11 @@ describe("normalizeLayout", () => {
       { key: "month", kind: "month" },
     ]);
     // Кольца стоят сразу за «наблюдениями» — там их место по стандартному
-    // порядку, а «наблюдения» в сохранённой раскладке первые.
+    // порядку, а «наблюдения» в сохранённой раскладке первые. «Активность» по
+    // стандартному порядку идёт ПЕРЕД «наблюдениями», и опереться ей не на
+    // что: такие уходят в конец.
     expect(kinds(out)).toEqual([
       "observations",
-      "activity",
       "donutExpense",
       "donutIncome",
       "month",
@@ -194,9 +199,10 @@ describe("normalizeLayout", () => {
       "upcoming",
       "freeMoney",
       "freeMoneyCompact",
-      "categories",
       "cashflow",
       "monthOverMonth",
+      "categories",
+      "activity",
     ]);
   });
 });
@@ -296,25 +302,25 @@ describe("shiftWidget", () => {
 
   it("шаг вправо оставляет пустую клетку слева, а не меняет соседей", () => {
     // Ради этого всё и затевалось: «поставить справа, слева пусто».
-    const out = shiftWidget(DEFAULT_LAYOUT, "freeMoney", 1);
+    const out = shiftWidget(shown(DEFAULT_LAYOUT, "freeMoney"), "freeMoney", 1);
     expect(offsetOf(out, "freeMoney")).toBe(1);
     expect(keys(out)).toEqual(keys(DEFAULT_LAYOUT));
   });
 
   it("шаг влево возвращает клетку обратно", () => {
-    const right = shiftWidget(DEFAULT_LAYOUT, "freeMoney", 1);
+    const right = shiftWidget(shown(DEFAULT_LAYOUT, "freeMoney"), "freeMoney", 1);
     const back = shiftWidget(right, "freeMoney", -1);
     expect(offsetOf(back, "freeMoney")).toBe(0);
     expect(keys(back)).toEqual(keys(DEFAULT_LAYOUT));
   });
 
   it("виджет в две трети дальше одной клетки не уезжает — меняется с соседом", () => {
-    const right = shiftWidget(DEFAULT_LAYOUT, "freeMoney", 1);
+    const right = shiftWidget(shown(DEFAULT_LAYOUT, "freeMoney"), "freeMoney", 1);
     const out = shiftWidget(right, "freeMoney", 1);
     // По видимому порядку: снятые виджеты стоят в раскладке, но шаг их
     // пропускает, и сравнивать с ними место бессмысленно.
     expect(keys(out.filter((p) => !p.hidden)).slice(3, 5)).toEqual([
-      "categories",
+      "links",
       "freeMoney",
     ]);
   });
