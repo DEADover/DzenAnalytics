@@ -1557,7 +1557,11 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
               {lines.map(({ row, depth, more, divider }) => (
                 <div
                   key={row.tagId}
-                  className={`relative flex items-baseline justify-between gap-3 h-9 ${
+                  // Содержимое по центру строки, а не по базовой линии: при
+                  // выравнивании по базовой текст прижимается к верху строки
+                  // высотой 36 px, и уголок под-статьи оказывался на восемь
+                  // пикселей ниже её названия.
+                  className={`relative flex items-center justify-between gap-3 h-9 ${
                     divider ? "border-b border-border/60" : ""
                   } ${depth > 0 ? "text-muted" : ""}`}
                   style={depth > 0 ? { paddingLeft: `${depth}rem` } : undefined}
