@@ -1283,15 +1283,42 @@ function FreeRow({
   );
 }
 
+/** Строка списка плана: сама статья, её глубина и что рисовать вокруг. */
+interface PlanLine {
+  row: PlanLeft;
+  depth: number;
+  /** Ветка продолжается ниже — вертикаль уголка идёт насквозь. */
+  more: boolean;
+  /** Строка закрывает категорию — под ней волосок. */
+  divider: boolean;
+}
+
 /**
- * Разворачивает дерево плана в строки с отступом: под-статьи идут сразу под
- * своей категорией, как в списке у Дзен-мани.
+ * Разворачивает дерево плана в строки: под-статьи идут сразу под своей
+ * категорией, как в списке у Дзен-мани.
+ *
+ * Заодно размечает, где ветка продолжается и где кончается категория:
+ * рисовать уголок и волосок по соседям в JSX было бы втрое многословнее.
  */
-function planLines(rows: readonly PlanLeft[], depth = 0): { row: PlanLeft; depth: number }[] {
-  return rows.flatMap((r) => [
-    { row: r, depth },
-    ...planLines(r.children ?? [], depth + 1),
-  ]);
+function planLines(rows: readonly PlanLeft[]): PlanLine[] {
+  const flat: { row: PlanLeft; depth: number }[] = [];
+  const walk = (list: readonly PlanLeft[], depth: number) => {
+    for (const r of list) {
+      flat.push({ row: r, depth });
+      walk(r.children ?? [], depth + 1);
+    }
+  };
+  walk(rows, 0);
+  return flat.map((item, i) => {
+    const next = flat[i + 1];
+    return {
+      ...item,
+      more: next !== undefined && next.depth >= item.depth && item.depth > 0,
+      // Волосок — только между категориями: внутри ветки он рвал бы вертикаль
+      // уголка на отрезки, а последний в списке обходится без черты.
+      divider: next !== undefined && next.depth === 0,
+    };
+  });
 }
 
 export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency }) {
@@ -1527,16 +1554,32 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
             </p>
           ) : (
             <div className="scroll-soft flex-1 min-h-0 mt-2 -mx-2 px-2">
-              {lines.map(({ row, depth }) => (
+              {lines.map(({ row, depth, more, divider }) => (
                 <div
                   key={row.tagId}
-                  // Под-статья подчёркнута вертикальной полосой слева — тем же
-                  // приёмом, что и вложенные строки на «Счетах».
-                  className={`flex items-baseline justify-between gap-3 h-9 border-b border-border/60 last:border-0 ${
-                    depth > 0 ? "text-muted border-l-2 border-l-border pl-3" : ""
-                  }`}
-                  style={depth > 0 ? { marginLeft: `${(depth - 1) * 0.75 + 0.5}rem` } : undefined}
+                  className={`relative flex items-baseline justify-between gap-3 h-9 ${
+                    divider ? "border-b border-border/60" : ""
+                  } ${depth > 0 ? "text-muted" : ""}`}
+                  style={depth > 0 ? { paddingLeft: `${depth}rem` } : undefined}
                 >
+                  {/* Уголок к родительской статье — тот же, что в «Бюджеты →
+                      Дашборд»: вертикаль идёт насквозь, пока ветка
+                      продолжается, и обрывается на середине последней
+                      под-статьи. */}
+                  {depth > 0 && (
+                    <>
+                      <span
+                        className={`absolute top-0 w-px bg-border ${
+                          more ? "bottom-0" : "bottom-1/2"
+                        }`}
+                        style={{ left: `${depth - 0.75}rem` }}
+                      />
+                      <span
+                        className="absolute top-1/2 w-2 h-px bg-border"
+                        style={{ left: `${depth - 0.75}rem` }}
+                      />
+                    </>
+                  )}
                   <span className="text-[13.5px] truncate">{row.title}</span>
                   <span className="font-mono tabular-nums text-[13.5px] text-muted shrink-0">
                     {formatMoney(row.left, base)}
