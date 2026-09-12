@@ -120,11 +120,18 @@ export interface PlanRow {
   locked: boolean;
 }
 
-/** Одна строка «Остатка плана» — как в списке под кольцом у Дзен-мани. */
+/** Одна строка плана — как в списке справа у Дзен-мани. */
 export interface PlanLeft {
   tagId: string;
   title: string;
+  /**
+   * Остаток строки. У верхней строки — вся ветка целиком, вместе с под-статьями:
+   * именно так показывает Дзен-мани («Еда дома 40 909» — это 35 909 своих плюс
+   * 5 000 «Алкоголя»).
+   */
   left: number;
+  /** Под-статьи — разбивка внутри строки. */
+  children?: PlanLeft[];
 }
 
 /** Итог расчёта остатка плана. */
@@ -180,7 +187,7 @@ export interface PlanRemainder {
  */
 export function planRemainder(
   rows: PlanRow[],
-  /** Назначенные операции впереди, по тегу. */
+  /** Назначенные операции периода, по тегу. */
   ahead: ReadonlyMap<string, number>,
   /** Потрачено с начала периода, по тегу. */
   fact: ReadonlyMap<string, number>,
@@ -191,7 +198,7 @@ export function planRemainder(
   const byTag = new Map(rows.map((r) => [r.tagId, r]));
 
   // Строки, у которых выше по дереву есть запертая строка, в расчёт не идут:
-  // их суммы уже внутри неё.
+  // их суммы уже внутри неё. Показать их всё равно стоит — разбивкой.
   const live = new Set<string>();
   for (const r of rows) {
     let cur = parent(r.tagId);
@@ -206,20 +213,22 @@ export function planRemainder(
     if (!swallowed) live.add(r.tagId);
   }
 
-  /** Строка, в чей конверт попадает тег: сам тег или ближайшая выше. */
-  const owner = (tagId: string): string | null => {
+  /** Ближайшая строка вверх по дереву, считая сам тег. */
+  const nearest = (tagId: string, within: ReadonlySet<string>): string | null => {
     let cur: string | null = tagId;
     for (let i = 0; i < 32 && cur; i++) {
-      if (live.has(cur)) return cur;
+      if (within.has(cur)) return cur;
       cur = parent(cur);
     }
     return null;
   };
-
-  const gather = (source: ReadonlyMap<string, number>) => {
+  const gather = (
+    source: ReadonlyMap<string, number>,
+    within: ReadonlySet<string>
+  ) => {
     const out = new Map<string, number>();
     for (const [tagId, v] of source) {
-      const key = owner(tagId);
+      const key = nearest(tagId, within);
       // Тег вне плана: строки у него нет и над ним тоже. Такая трата план не
       // трогает — она уходит прямо из свободных денег.
       if (key === null) continue;
@@ -227,10 +236,11 @@ export function planRemainder(
     }
     return out;
   };
-  const aheadBy = gather(ahead);
-  const factBy = gather(fact);
+  const aheadBy = gather(ahead, live);
+  const factBy = gather(fact, live);
 
-  const out: PlanLeft[] = [];
+  // Остаток каждой считаемой строки: перебор гасится на самой строке.
+  const leftOf = new Map<string, number>();
   let overspent = 0;
   for (const tagId of live) {
     const row = byTag.get(tagId);
@@ -239,11 +249,67 @@ export function planRemainder(
       row.plan +
       (row.locked ? 0 : (aheadBy.get(tagId) ?? 0)) -
       (factBy.get(tagId) ?? 0);
-    if (rest > 0) out.push({ tagId, title: row.title, left: rest });
-    else overspent += -rest;
+    leftOf.set(tagId, Math.max(0, rest));
+    if (rest < 0) overspent += -rest;
   }
-  out.sort((a, b) => b.left - a.left || a.title.localeCompare(b.title, "ru"));
-  return { total: out.reduce((s, r) => s + r.left, 0), rows: out, overspent };
+
+  // ── Разбивка по под-статьям ───────────────────────────────────────────
+  // Считаемые под-строки складываются в родительскую сумму; съеденные замком
+  // показываются справочно — по своему бюджету и своим тратам, как у Дзен-мани
+  // («Животные 22 909» с разбивкой «Кот 8 940» и «Собака 13 778»).
+  const all = new Set(byTag.keys());
+  const aheadAll = gather(ahead, all);
+  const factAll = gather(fact, all);
+
+  const kids = new Map<string, string[]>();
+  const tops: string[] = [];
+  for (const tagId of all) {
+    const up = parent(tagId);
+    const holder = up === null ? null : nearest(up, all);
+    if (holder === null) tops.push(tagId);
+    else kids.set(holder, [...(kids.get(holder) ?? []), tagId]);
+  }
+
+  /** Сумма остатков считаемых строк ветки — то, что показывает верхняя строка. */
+  const branch = (tagId: string): number => {
+    const own = leftOf.get(tagId) ?? 0;
+    return (kids.get(tagId) ?? []).reduce((s, k) => s + branch(k), own);
+  };
+  const build = (tagId: string): PlanLeft | null => {
+    const row = byTag.get(tagId);
+    if (!row) return null;
+    const left = live.has(tagId)
+      ? branch(tagId)
+      : // Строка под замком родителя: в сумму ветки она уже входит, поэтому
+        // показываем её собственные бюджет и траты — это разбивка, не добавка.
+        Math.max(
+          0,
+          row.plan +
+            (row.locked ? 0 : (aheadAll.get(tagId) ?? 0)) -
+            (factAll.get(tagId) ?? 0)
+        );
+    if (left <= 0) return null;
+    const children = (kids.get(tagId) ?? [])
+      .map(build)
+      .filter((c): c is PlanLeft => c !== null)
+      .sort(byLeft);
+    return children.length > 0 ? { tagId, title: row.title, left, children } : { tagId, title: row.title, left };
+  };
+
+  const out = tops
+    .map(build)
+    .filter((r): r is PlanLeft => r !== null)
+    .sort(byLeft);
+  return {
+    total: [...leftOf.values()].reduce((s, v) => s + v, 0),
+    rows: out,
+    overspent,
+  };
+}
+
+/** Крупное сверху, при равенстве — по алфавиту. */
+function byLeft(a: PlanLeft, b: PlanLeft): number {
+  return b.left - a.left || a.title.localeCompare(b.title, "ru");
 }
 
 /* ───────────────────────────  деньги и свободные  ─────────────────────────── */
@@ -277,7 +343,7 @@ export function moneyBreakdown(opts: {
   };
 }
 
-/** Свободные деньги = деньги минус остаток плана. */
+/** Свободные деньги = деньги минус план на месяц. */
 export function freeToSpend(money: MoneyBreakdown, planLeft: number): number {
   return money.total - planLeft;
 }

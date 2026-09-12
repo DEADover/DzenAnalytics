@@ -62,6 +62,7 @@ const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн"
   "июл", "авг", "сен", "окт", "ноя", "дек"];
 import type { DashboardModel } from "../../hooks/useDashboardModel";
 import type { FreeMoneyModel } from "../../hooks/useFreeMoney";
+import type { PlanLeft } from "../../lib/freeMoney";
 import type { PlannedOp } from "../../lib/plannedOps";
 import type { Currency } from "../../types";
 
@@ -1282,6 +1283,17 @@ function FreeRow({
   );
 }
 
+/**
+ * Разворачивает дерево плана в строки с отступом: под-статьи идут сразу под
+ * своей категорией, как в списке у Дзен-мани.
+ */
+function planLines(rows: readonly PlanLeft[], depth = 0): { row: PlanLeft; depth: number }[] {
+  return rows.flatMap((r) => [
+    { row: r, depth },
+    ...planLines(r.children ?? [], depth + 1),
+  ]);
+}
+
 export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency }) {
   if (!f.ready) {
     return (
@@ -1302,6 +1314,7 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
   // День уже перебрали: кольцо замыкается красным, как у Дзен-мани, — пустая
   // серая дуга в этом случае читалась бы как «ещё ничего не потрачено».
   const over = !noBudget && f.todayLeft < 0;
+  const lines = planLines(f.planRows);
   const tone = noBudget || over ? "rgb(var(--c-expense))" : "rgb(var(--c-income))";
 
   return (
@@ -1315,7 +1328,7 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
             <p>
               Сколько можно потратить, не залезая в запланированное. Считаем как
               Дзен-мани: <InfoTerm>деньги до конца периода</InfoTerm> минус{" "}
-              <InfoTerm>остаток плана</InfoTerm>.
+              <InfoTerm>план на месяц</InfoTerm>.
             </p>
             <p>
               <InfoTerm>Деньги</InfoTerm> — приход минус расход за период плюс
@@ -1324,11 +1337,11 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
               настройку мы берём у него, а не заводим свою.
             </p>
             <p>
-              <InfoTerm>Остаток плана</InfoTerm> — сколько ещё не потрачено по
+              <InfoTerm>План на месяц</InfoTerm> — сколько ещё не потрачено по
               бюджету категорий вместе с назначенными платежами. Отсюда главное
               свойство: трата ВНУТРИ плана свободные деньги не уменьшает — она
-              уменьшает и деньги, и остаток плана поровну. Свободные тратит
-              только то, что вышло за план.
+              уменьшает и деньги, и план поровну. Свободные тратит только то,
+              что вышло за план.
             </p>
             <p>
               Поэтому и стоит «из»: полная сумма — свободные деньги, какими они
@@ -1358,9 +1371,9 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
             «сколько осталось до конца периода». Обе тянутся поровну, чтобы
             колонка не заканчивалась на середине высоты. */}
         <div className="flex flex-col min-h-0 divide-y divide-border">
-          <div className="flex-1 flex flex-col justify-center pb-5">
+          <div className="flex-1 flex flex-col pb-5">
           <SectionLabel>На сегодня</SectionLabel>
-          <div className="flex items-center gap-4 mt-2.5">
+          <div className="flex-1 flex items-center gap-4 mt-2.5">
             <AllowanceRing ratio={noBudget ? 0 : over ? 1 : f.ratio} tone={tone} />
             <div className="min-w-0">
               <div
@@ -1495,7 +1508,7 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
                 />
               )}
               <FreeRow
-                label="Остаток плана"
+                label="План на месяц"
                 value={f.planLeft}
                 base={base}
                 sign="−"
@@ -1507,8 +1520,8 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
 
         <div className="flex flex-col min-h-0">
           <SectionLabel>
-            Остаток плана · {formatNum(f.planRows.length)}{" "}
-            {pluralRu(f.planRows.length, ["статья", "статьи", "статей"])}
+            План на месяц · {formatNum(lines.length)}{" "}
+            {pluralRu(lines.length, ["статья", "статьи", "статей"])}
           </SectionLabel>
           {f.planRows.length === 0 ? (
             <p className="text-[13px] text-muted mt-2">
@@ -1517,14 +1530,17 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
             </p>
           ) : (
             <div className="scroll-soft flex-1 min-h-0 mt-2 -mx-2 px-2">
-              {f.planRows.map((r) => (
+              {lines.map(({ row, depth }) => (
                 <div
-                  key={r.tagId}
-                  className="flex items-baseline justify-between gap-3 h-9 border-b border-border/60 last:border-0"
+                  key={row.tagId}
+                  className={`flex items-baseline justify-between gap-3 h-9 border-b border-border/60 last:border-0 ${
+                    depth > 0 ? "text-muted" : ""
+                  }`}
+                  style={depth > 0 ? { paddingLeft: `${depth * 0.85}rem` } : undefined}
                 >
-                  <span className="text-[13.5px] truncate">{r.title}</span>
+                  <span className="text-[13.5px] truncate">{row.title}</span>
                   <span className="font-mono tabular-nums text-[13.5px] text-muted shrink-0">
-                    {formatMoney(r.left, base)}
+                    {formatMoney(row.left, base)}
                   </span>
                 </div>
               ))}
