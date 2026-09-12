@@ -22,6 +22,7 @@ import {
   CalendarClock,
   CalendarDays,
   Coins,
+  Gauge,
   Landmark,
   LayoutGrid,
   Lightbulb,
@@ -40,6 +41,7 @@ export const WIDGET_KINDS = [
   "accounts",
   "upcoming",
   "freeMoney",
+  "freeMoneyCompact",
   "links",
   "cashflow",
   "monthOverMonth",
@@ -200,6 +202,18 @@ export const WIDGETS: readonly WidgetMeta[] = [
     // колонками, а остаток плана листается в третьей. В одну колонку это не
     // помещалось, во всю ширину — оставляло пустоту справа.
     span: 2,
+  },
+  {
+    kind: "freeMoneyCompact",
+    icon: Gauge,
+    title: "Свободные деньги · кратко",
+    hint: "То же самое в треть ширины, но без списка статей плана",
+    // Треть: без списка статей остаётся кольцо дня, свободные до конца периода
+    // и разбивка — всё это читается в узкой колонке.
+    span: 1,
+    // Стандартно снят: два расчёта свободных денег на одной главной никому не
+    // нужны, узкий — замена широкому, а не добавка к нему.
+    offByDefault: true,
   },
   {
     kind: "categories",

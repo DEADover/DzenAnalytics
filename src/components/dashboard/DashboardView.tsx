@@ -31,6 +31,7 @@ import {
   ZenPlannedList,
   MonthOverMonthBlock,
   FreeMoneyBlock,
+  FreeMoneyCompactBlock,
 } from "./blocks";
 import { LinksRow } from "./LinksRow";
 import {
@@ -666,6 +667,8 @@ export function DashboardView() {
 
       case "freeMoney":
         return <FreeMoneyBlock f={freeMoney} base={m.base} />;
+      case "freeMoneyCompact":
+        return <FreeMoneyCompactBlock f={freeMoney} base={m.base} />;
 
       case "accounts":
         return (

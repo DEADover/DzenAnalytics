@@ -156,6 +156,7 @@ describe("normalizeLayout", () => {
     expect([...out.filter((p) => p.hidden).map((p) => p.kind)].sort()).toEqual([
       "donutExpense",
       "donutIncome",
+      "freeMoneyCompact",
       "monthOverMonth",
       "observations",
     ]);
@@ -192,6 +193,7 @@ describe("normalizeLayout", () => {
       "accounts",
       "upcoming",
       "freeMoney",
+      "freeMoneyCompact",
       "categories",
       "cashflow",
       "monthOverMonth",
@@ -309,7 +311,12 @@ describe("shiftWidget", () => {
   it("виджет в две трети дальше одной клетки не уезжает — меняется с соседом", () => {
     const right = shiftWidget(DEFAULT_LAYOUT, "freeMoney", 1);
     const out = shiftWidget(right, "freeMoney", 1);
-    expect(keys(out).slice(3, 5)).toEqual(["categories", "freeMoney"]);
+    // По видимому порядку: снятые виджеты стоят в раскладке, но шаг их
+    // пропускает, и сравнивать с ними место бессмысленно.
+    expect(keys(out.filter((p) => !p.hidden)).slice(3, 5)).toEqual([
+      "categories",
+      "freeMoney",
+    ]);
   });
 
   it("при обмене отступ сбрасывается: ряд у виджета теперь другой", () => {
