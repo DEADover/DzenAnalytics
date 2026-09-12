@@ -21,9 +21,11 @@ import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { periodRange, spanDays } from "../lib/period";
 import type { ZenCache } from "../lib/zenmoneyCache";
 import type { CurrencyRates } from "../types";
+import { fulfilledMarkerIds, plannedOpsByTagMonth } from "../lib/zenBudgets";
 import {
   allowanceRatio,
   dailyAllowance,
+  freeSpentToday,
   freeToSpend,
   moneyBreakdown,
   planRemainder,
@@ -95,6 +97,7 @@ export function useFreeMoney(
   const method = useFreeMoneyStore((s) => s.method);
   const reserve = useFreeMoneyStore((s) => s.reserve);
   const rates = useDataStore((s) => s.rates);
+  const histDayRates = useDataStore((s) => s.histDayRates);
   const plannedDeletions = usePlannedDeletionsStore((s) => s.deletions);
   const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
 
@@ -128,9 +131,8 @@ export function useFreeMoney(
     // расчёт не идут — только то, что пришло и ушло за него.
     let income = 0;
     let expense = 0;
-    // Сегодняшний оборот — отдельно: по нему считается, сколько свободных денег
+    // Расход за сегодня — отдельно: по нему считается, сколько свободных денег
     // съел именно сегодняшний день (см. ниже про вчерашний срез).
-    let incomeToday = 0;
     let expenseToday = 0;
     const factByTag = new Map<string, number>();
     const factYesterday = new Map<string, number>();
@@ -156,7 +158,16 @@ export function useFreeMoney(
       if (inc > 0 && ours.has(t.incomeAccount)) {
         const v = conv(inc, t.incomeInstrument);
         income += v;
-        if (isToday) incomeToday += v;
+        // ВОЗВРАТ УМЕНЬШАЕТ ФАКТ КАТЕГОРИИ. Поступление с расходным тегом —
+        // это вернувшиеся деньги, а не доход по статье: Дзен-мани вычитает их
+        // из потраченного. У доходных категорий строки бюджета-расхода нет, и
+        // вычитание там просто никуда не попадает. Проверено на «Еде дома»:
+        // 6,36 ₽ возврата Ozon дают 40 909 ₽ остатка вместо 40 902.
+        const tag = firstTag(t.tag);
+        if (tag) {
+          factByTag.set(tag, (factByTag.get(tag) ?? 0) - v);
+          if (!isToday) factYesterday.set(tag, (factYesterday.get(tag) ?? 0) - v);
+        }
       }
     }
     const balance =
@@ -164,32 +175,34 @@ export function useFreeMoney(
         ? mine.reduce((s, a) => s + a.balanceBase, 0)
         : income - expense;
 
-    // ── Назначенные операции впереди ──────────────────────────────────────
-    // Просроченные тоже: дата прошла, а платёж не проведён — деньги на него всё
-    // ещё нужны. Прогнозы Дзена не берём — это догадка по регулярности, а не
-    // обещание, и у самого Дзена они выключены (`isForecastEnabled`).
+    // ── Назначенные операции периода ──────────────────────────────────────
+    // Считаем ровно тем же правилом, что и «Бюджеты», — своего здесь быть не
+    // должно: план месяца один. Оттуда же и неочевидное: ИСПОЛНЕННЫЕ плановые
+    // операции остаются в плане (план отвечает на «сколько собирались», а факт
+    // вычитается отдельно), просроченные — нет, прогнозы Дзена — нет.
+    // Проверено на живом аккаунте: «Квартира» — 21 000 ₽ бюджета плюс
+    // исполненный платёж 4 000 минус 5 309 факта = 19 691 ₽, как на экране.
+    const planned = plannedOpsByTagMonth(
+      (cache.reminderMarkers ?? []).filter((m) => plannedDeletions[m.id] === undefined),
+      cache.instruments,
+      me?.currency,
+      today,
+      (dateIso, code) => histDayRates[dateIso]?.[code] ?? null,
+      (id) => cache.instruments.find((i) => i.id === id)?.shortTitle,
+      fulfilledMarkerIds(cache.transactions)
+    );
+    // СЧЁТ У ПЛАНОВОЙ ОПЕРАЦИИ НЕ СМОТРИМ. Проценты по вкладу приходят на
+    // накопительный счёт, которого нет среди повседневных, — но деньги эти
+    // ваши, и Дзен-мани их считает. Проверено: без них «ещё поступит» выходило
+    // 173 100 ₽ вместо 174 600.
     const aheadOut = new Map<string, number>();
     const aheadIn = new Map<string, number>();
-    for (const m of cache.reminderMarkers ?? []) {
-      if (m.state !== "planned" || m.isForecast === true) continue;
-      if (!m.date || m.date > range.to) continue;
-      if (plannedDeletions[m.id] !== undefined) continue;
-      const out = m.outcome || 0;
-      const inc = m.income || 0;
-      if (out > 0 && inc > 0) continue;
-      const tag = firstTag(m.tag);
-      if (!tag) continue;
-      // Счёт у маркера необязательный: без него непонятно, наш ли это платёж.
-      if (out > 0 && m.outcomeAccount && ours.has(m.outcomeAccount)) {
-        aheadOut.set(tag, (aheadOut.get(tag) ?? 0) + conv(out, m.outcomeInstrument));
-      }
-      // ПОСТУПЛЕНИЯ ПО СЧЁТУ НЕ ФИЛЬТРУЕМ. Проценты по вкладу приходят на
-      // накопительный счёт, которого нет среди повседневных, — но деньги эти
-      // ваши, и Дзен-мани их в «ещё поступит» считает. Проверено: без них
-      // выходило 173 100 ₽ вместо 174 600.
-      if (inc > 0) {
-        aheadIn.set(tag, (aheadIn.get(tag) ?? 0) + conv(inc, m.incomeInstrument));
-      }
+    for (const [key, ops] of planned) {
+      const sep = key.lastIndexOf("|");
+      if (key.slice(sep + 1) !== ym) continue;
+      const tag = key.slice(0, sep);
+      if (ops.outcome > 0) aheadOut.set(tag, (aheadOut.get(tag) ?? 0) + ops.outcome);
+      if (ops.income > 0) aheadIn.set(tag, (aheadIn.get(tag) ?? 0) + ops.income);
     }
 
     // ── Бюджет месяца ─────────────────────────────────────────────────────
@@ -236,23 +249,27 @@ export function useFreeMoney(
     const plan = planRemainder(planRows, aheadOut, factByTag, parents);
     const money = moneyBreakdown({ balance, stillToCome, excluded: reserve });
     const free = freeToSpend(money, plan.total);
-    const saved = method === "cumulative" ? savedSoFar({ free, daysTotal, dayIndex }) : 0;
-    const allowance = dailyAllowance({ method, free, daysLeft, saved });
 
     // ── Сколько свободных денег съел сегодняшний день ─────────────────────
-    // Считаем тот же расчёт на вчерашний вечер и берём разницу. Прямо по тратам
-    // это не считается: трата внутри плана свободных не трогает, а перебор по
-    // статье съедает ровно столько, на сколько она вышла за бюджет.
-    // Назначенные операции берём сегодняшние для обоих срезов намеренно: платёж,
-    // проведённый сегодня, ушёл из «назначенных» и пришёл в «факт» на ту же
-    // сумму, так что разницы он не создаёт — и правильно, он был запланирован.
+    // Тот же остаток плана на вчерашний вечер показывает, сколько сегодняшних
+    // трат план впитал; остальное ушло из свободных. Назначенные операции для
+    // обоих срезов берём одни и те же: исполненная сегодня остаётся в плане и
+    // разницы не создаёт — она и была запланирована.
     const planBefore = planRemainder(planRows, aheadOut, factYesterday, parents);
-    const moneyBefore = moneyBreakdown({
-      balance: balance - incomeToday + expenseToday,
-      stillToCome,
-      excluded: reserve,
+    const spentToday = freeSpentToday({
+      expenseToday,
+      planLeftBefore: planBefore.total,
+      planLeftNow: plan.total,
     });
-    const spentToday = freeToSpend(moneyBefore, planBefore.total) - free;
+
+    // Лимит дня считается от свободных НА НАЧАЛО ДНЯ: сегодняшняя трата не
+    // должна уменьшать сегодняшний же лимит, иначе превышение недостижимо.
+    const freeAtDayStart = free + spentToday;
+    const saved =
+      method === "cumulative"
+        ? savedSoFar({ free: freeAtDayStart, daysTotal, dayIndex })
+        : 0;
+    const allowance = dailyAllowance({ method, free: freeAtDayStart, daysLeft, saved });
     const todayTotal = allowance.perDay + (allowance.saved ?? 0);
     const todayLeft = todayTotal - spentToday;
 
@@ -278,7 +295,17 @@ export function useFreeMoney(
       daysLeft,
       periodEnd: range.to,
     };
-  }, [cache, mine, rates, reserve, method, ownStartDay, today, plannedDeletions]);
+  }, [
+    cache,
+    mine,
+    rates,
+    histDayRates,
+    reserve,
+    method,
+    ownStartDay,
+    today,
+    plannedDeletions,
+  ]);
 }
 
 /** Период, в который попадает дата, при своём дне начала месяца. */

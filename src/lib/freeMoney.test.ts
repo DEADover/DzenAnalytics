@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   allowanceRatio,
   dailyAllowance,
+  freeSpentToday,
   freeToSpend,
   moneyBreakdown,
   planRemainder,
@@ -185,6 +186,21 @@ describe("planRemainder", () => {
     ]);
   });
 
+  it("под замком назначенные операции к сумме не прибавляются", () => {
+    // Замок значит «сумму я задал сам, не пересчитывай». Живой пример:
+    // «Платежи и комиссии» — 1 200 ₽ под замком и назначенный платёж на 100 ₽,
+    // а Дзен-мани показывает 1 200, а не 1 300.
+    const rows = [row({ tagId: "Платежи", plan: 1200, locked: true })];
+    const out = planRemainder(rows, m({ Платежи: 100 }), m({}), flat);
+    expect(out.total).toBe(1200);
+  });
+
+  it("без замка назначенная операция сумму поднимает", () => {
+    const rows = [row({ tagId: "Подписки", plan: 8719.26 })];
+    const out = planRemainder(rows, m({ Подписки: 15909 }), m({ Подписки: 300 }), flat);
+    expect(Math.round(out.total)).toBe(24328);
+  });
+
   it("назначенный платёж без бюджета всё равно попадает в остаток", () => {
     // Строку с нулевым планом для такой категории заводит вызывающий: платёж
     // назначен, денег он потребует, и в остатке плана ему место.
@@ -195,6 +211,27 @@ describe("planRemainder", () => {
       flat
     );
     expect(out.total).toBe(4000);
+  });
+});
+
+describe("freeSpentToday", () => {
+  it("считает только то, что план не впитал", () => {
+    // 12 сентября: 15 973 ₽ трат, остаток плана просел с 209 397 до 200 897 —
+    // значит из свободных ушло 7 473, ровно как показывает Дзен-мани.
+    const spent = freeSpentToday({
+      expenseToday: 15973,
+      planLeftBefore: 209397,
+      planLeftNow: 200897,
+    });
+    expect(Math.round(spent)).toBe(7473);
+  });
+
+  it("трата целиком внутри плана свободных не трогает", () => {
+    expect(freeSpentToday({ expenseToday: 4000, planLeftBefore: 54000, planLeftNow: 50000 })).toBe(0);
+  });
+
+  it("трата по категории вне плана уходит из свободных целиком", () => {
+    expect(freeSpentToday({ expenseToday: 3000, planLeftBefore: 50000, planLeftNow: 50000 })).toBe(3000);
   });
 });
 
@@ -233,6 +270,16 @@ describe("dailyAllowance — ежедневный пересчёт", () => {
     // Сверено с Дзен-мани: 47 213 ÷ 21 = 2 248 ₽.
     const a = dailyAllowance({ method: "daily", free: 47213, daysLeft: 21, saved: 99999 });
     expect(Math.round(a.perDay)).toBe(2248);
+  });
+
+  it("лимит считается от свободных на начало дня, а не от текущих", () => {
+    // 12 сентября: свободных 40 116, за день из них ушло 7 473, дней 19.
+    // Дзен-мани показывает лимит 2 505 и «4 968 ₽ сверх» — то есть делит
+    // 47 589, иначе сегодняшняя трата урезала бы сегодняшний же лимит.
+    const spent = 7473;
+    const a = dailyAllowance({ method: "daily", free: 40116 + spent, daysLeft: 19, saved: 0 });
+    expect(Math.round(a.perDay)).toBe(2505);
+    expect(Math.round(spent - a.perDay)).toBe(4968);
   });
 
   it("накопленное этот метод не знает вовсе", () => {

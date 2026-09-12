@@ -1299,7 +1299,10 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
   // Свободных денег нет вовсе — план съел всё, что будет. Дневного лимита в
   // этом случае не существует, и придумывать его нельзя.
   const noBudget = f.free <= 0;
-  const tone = noBudget ? "rgb(var(--c-expense))" : "rgb(var(--c-income))";
+  // День уже перебрали: кольцо замыкается красным, как у Дзен-мани, — пустая
+  // серая дуга в этом случае читалась бы как «ещё ничего не потрачено».
+  const over = !noBudget && f.todayLeft < 0;
+  const tone = noBudget || over ? "rgb(var(--c-expense))" : "rgb(var(--c-income))";
 
   return (
     <>
@@ -1335,7 +1338,9 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
             <p>
               <InfoTerm>Кольцо</InfoTerm> — сегодняшний день: сколько из
               положенного на сегодня ещё цело. Оно пустеет только от трат сверх
-              плана, поэтому обычный день его не трогает.
+              плана, поэтому обычный день его не трогает. Лимит дня считается от
+              свободных денег на утро: сегодняшняя трата сегодняшний же лимит не
+              урезает.
             </p>
             <p>
               Метод деления по дням и неснижаемый остаток задаются в
@@ -1356,7 +1361,7 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
           <div className="flex-1 flex flex-col justify-center pb-5">
           <SectionLabel>На сегодня</SectionLabel>
           <div className="flex items-center gap-4 mt-2.5">
-            <AllowanceRing ratio={noBudget ? 0 : f.ratio} tone={tone} />
+            <AllowanceRing ratio={noBudget ? 0 : over ? 1 : f.ratio} tone={tone} />
             <div className="min-w-0">
               <div
                 className={`font-mono tabular-nums font-semibold text-3xl 3xl:text-4xl leading-none ${
@@ -1364,14 +1369,7 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
                 }`}
                 style={{ wordSpacing: "-0.22em" }}
               >
-                {noBudget ? (
-                  "—"
-                ) : (
-                  <>
-                    {f.todayLeft < 0 && "−"}
-                    {formatMoney(Math.abs(f.todayLeft), base)}
-                  </>
-                )}
+                {noBudget ? "—" : formatMoney(Math.abs(f.todayLeft), base)}
               </div>
               {noBudget ? (
                 <div className="text-[13px] text-muted mt-1.5">
@@ -1380,7 +1378,17 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
               ) : (
                 <div className="text-[13px] text-muted mt-1.5 space-y-0.5">
                   <div>
-                    {f.method === "cumulative" && allowance.saved !== null && allowance.saved >= 1 ? (
+                    {f.todayLeft < 0 ? (
+                      <>
+                        Сверх лимита{" "}
+                        <span className="font-mono tabular-nums text-text">
+                          {formatMoney(f.today, base)}
+                        </span>{" "}
+                        на сегодня
+                      </>
+                    ) : f.method === "cumulative" &&
+                      allowance.saved !== null &&
+                      allowance.saved >= 1 ? (
                       <>
                         Лимит{" "}
                         <span className="font-mono tabular-nums text-text">
@@ -1405,15 +1413,14 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
                   <div>
                     {f.spentToday > 0.5 ? (
                       <>
-                        Сегодня ушло{" "}
+                        Сегодня из свободных ушло{" "}
                         <span className="font-mono tabular-nums text-expense">
                           {formatMoney(f.spentToday, base)}
-                        </span>{" "}
-                        сверх плана
+                        </span>
                       </>
                     ) : f.spentToday < -0.5 ? (
                       <>
-                        Сегодня прибавилось{" "}
+                        Сегодня свободных прибавилось{" "}
                         <span className="font-mono tabular-nums text-income">
                           {formatMoney(-f.spentToday, base)}
                         </span>
