@@ -48,6 +48,11 @@ export interface Column<T> {
   tone?: Tone | ((row: T) => Tone | undefined);
   /** Подсказка к заголовку колонки. */
   headerTitle?: string;
+  /**
+   * Контрол в шапке рядом с подписью — например, «₽ / %». Стоит перед
+   * подписью: у колонки справа так подпись остаётся над краем чисел.
+   */
+  headerLead?: ReactNode;
   /** Подсказка к ячейке. У текста в фиксированной таблице по умолчанию — сам текст. */
   cellTitle?: (row: T) => string | undefined;
   render: (row: T, index: number) => ReactNode;
@@ -67,6 +72,8 @@ interface Props<T> {
 
   onRowClick?: (row: T) => void;
   onRowDoubleClick?: (row: T) => void;
+  /** Наведение на строку и уход с неё — для связки с графиком рядом. */
+  onRowHover?: (row: T | null) => void;
   rowClassName?: (row: T) => string | undefined;
   emptyText?: ReactNode;
   /** Первая порция строк; дальше — «Показать ещё» и «Показать все». */
@@ -133,6 +140,7 @@ export function DataTable<T>({
   onSortChange,
   onRowClick,
   onRowDoubleClick,
+  onRowHover,
   rowClassName,
   emptyText = "Нет данных",
   limit,
@@ -293,7 +301,9 @@ export function DataTable<T>({
                         onToggle={() => setExpanded(allExpanded ? new Set() : new Set(expandableKeys))}
                         label={allExpanded ? "Свернуть все" : "Раскрыть все"}
                       />
-                    ) : undefined
+                    ) : (
+                      c.headerLead
+                    )
                   }
                   sort={
                     isSortable(c)
@@ -331,6 +341,8 @@ export function DataTable<T>({
                           : undefined
                     }
                     onDoubleClick={onRowDoubleClick ? () => onRowDoubleClick(f.row) : undefined}
+                    onMouseEnter={onRowHover ? () => onRowHover(f.row) : undefined}
+                    onMouseLeave={onRowHover ? () => onRowHover(null) : undefined}
                     className={clsx(
                       isSelected ? "bg-accent/5" : clickable && "hover:bg-panel2/50",
                       clickable && "cursor-pointer",

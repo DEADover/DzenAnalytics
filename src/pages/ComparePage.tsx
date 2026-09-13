@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, GitCompare } from "lucide-react";
+import { GitCompare } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
@@ -11,13 +11,7 @@ import {
   type KPI,
 } from "../lib/aggregations";
 import { affectsExpense } from "../lib/txKindStyle";
-import {
-  formatMoney,
-  formatPct,
-  formatDate,
-  formatNum,
-  currencySymbol,
-} from "../lib/format";
+import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { GlobalFilters } from "../components/GlobalFilters";
@@ -42,9 +36,9 @@ import {
   type DayRange,
 } from "../lib/period";
 import { DateField } from "../components/DateField";
-import { CategoryDot } from "../components/CategoryDot";
 import { KindSwitcher } from "../components/KindSwitcher";
 import { DeviationPill } from "../components/DeviationPill";
+import { CategoryTable, type CategoryTableRow } from "../components/CategoryTable";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
 import type { Transaction } from "../types";
@@ -265,127 +259,6 @@ function MetricCell({
   );
 }
 
-/**
- * Строка сравнения по категории — тот же вид, что во вкладке Bars на
- * «Категориях»: иконка, название, полоса и колонки справа.
- *
- * Смысл полосы здесь другой, и это главное: сама полоса — период А, а засечка
- * на ней — период Б. Раньше на этом месте стояли два столбика recharts разной
- * длины, и чтобы понять «стало больше или меньше», глаз должен был сравнивать
- * их между собой в каждой строке. Засечка делает ответ мгновенным: полоса
- * дотянулась за неё — потратили больше обычного.
- */
-function CompareBarRow({
-  name,
-  parent,
-  a,
-  b,
-  count,
-  share,
-  max,
-  color,
-  base,
-  devPct,
-  labelB,
-  kind,
-  onOpen,
-  expandable,
-  expanded,
-  onToggle,
-}: {
-  name: string;
-  parent?: string;
-  a: number;
-  b: number;
-  count: number;
-  share: number;
-  max: number;
-  color: string;
-  base: string;
-  devPct: boolean;
-  labelB: string;
-  /** Расход или доход: у расхода «меньше» — хорошо, у дохода наоборот. */
-  kind: "expense" | "income";
-  onOpen: () => void;
-  expandable?: boolean;
-  expanded?: boolean;
-  onToggle?: () => void;
-}) {
-  const barPct = max > 0 ? Math.max(0, Math.min(100, (a / max) * 100)) : 0;
-  const markPct = max > 0 ? Math.max(0, Math.min(100, (b / max) * 100)) : 0;
-  return (
-    <div
-      className={`flex items-center gap-2 px-1.5 py-1.5 rounded-md hover:bg-panel2/50 cursor-pointer ${
-        parent ? "pl-8" : ""
-      }`}
-      onClick={onOpen}
-    >
-      <CategoryDot category={name} parent={parent} size="w-7 h-7" />
-      <div className="flex-1 min-w-0">
-        <div className="truncate" title={parent ? `${parent} / ${name}` : name}>
-          {name}
-        </div>
-        <div className="relative h-2 mt-1 mr-3">
-          <div className="absolute inset-0 bg-panel2 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${barPct}%`, background: color }}
-            />
-          </div>
-          {b > 0 && (
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-0 border-l-2 border-solid border-text/80"
-              style={{ left: `${markPct}%`, height: "200%" }}
-              title={`${labelB}: ${formatMoney(b, base)}`}
-            />
-          )}
-        </div>
-      </div>
-      <span className="w-14 text-left tabular-nums shrink-0">
-        {formatPct(share, 1)}
-      </span>
-      <span className="w-20 text-left tabular-nums shrink-0">{count}</span>
-      <span className="w-28 text-left tabular-nums shrink-0">
-        {formatMoney(a, base)}
-      </span>
-      <span className="w-28 text-left text-muted tabular-nums shrink-0">
-        {b > 0 ? formatMoney(b, base) : "—"}
-      </span>
-      <span className="w-28 text-left shrink-0">
-        <DeviationPill
-          current={a}
-          baseline={b}
-          base={base}
-          asPct={devPct}
-          kind={kind}
-          sameLabel="≈ поровну"
-          upTitle="Больше, чем в периоде Б"
-          downTitle="Меньше, чем в периоде Б"
-        />
-      </span>
-      <span className="w-8 shrink-0 flex items-center justify-center">
-        {expandable && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle?.();
-            }}
-            title={expanded ? "Свернуть" : "Развернуть"}
-            aria-label={expanded ? "Свернуть" : "Развернуть"}
-            aria-expanded={expanded}
-            className="-m-1 p-1 rounded-full text-muted transition-colors hover:text-accent hover:bg-panel2"
-          >
-            <ChevronDown
-              className={`w-4 h-4 transition-transform duration-300 ${
-                expanded ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-        )}
-      </span>
-    </div>
-  );
-}
 
 /**
  * Шапка колонки периода: подпись, контрол выбора и настоящие даты под ним.
@@ -665,6 +538,36 @@ export function ComparePage() {
     ? Math.max(...rows.map((r) => Math.max(r.a, r.b)))
     : 1;
   const rowsTotalA = rows.reduce((sum, r) => sum + r.a, 0);
+
+  // Строки общей таблицы категорий: период А — сумма и полоса, период Б —
+  // колонка сравнения и засечка на полосе.
+  const compareRows = useMemo<CategoryTableRow[]>(
+    () =>
+      rows.map((row) => {
+        const color = colorForCategory(row.name, categoryMeta);
+        return {
+          key: row.name,
+          name: row.name,
+          value: row.a,
+          compare: row.b,
+          count: row.count,
+          share: rowsTotalA > 0 ? row.a / rowsTotalA : 0,
+          color,
+          children: row.subs.map((sub) => ({
+            key: `${row.name} / ${sub.name}`,
+            name: sub.name,
+            parent: row.name,
+            value: sub.a,
+            compare: sub.b,
+            count: sub.count,
+            share: rowsTotalA > 0 ? sub.a / rowsTotalA : 0,
+            color,
+            dotFallback: color,
+          })),
+        };
+      }),
+    [rows, rowsTotalA, categoryMeta]
+  );
 
   // ── Содержимое слотов панели ────────────────────────────────────────────
   // Правило одно: есть выбор — стоит контрол, нет выбора — стоит слово.
@@ -946,7 +849,7 @@ export function ComparePage() {
             тот прыжок, от которого избавлялись по вертикали. «Метрика» одна
             остаётся резиновой и забирает остаток ширины. */}
         <div className="overflow-x-auto -mx-1 px-1 border-t border-border pt-3">
-          <table className="w-full text-sm table-fixed min-w-[60rem]">
+          <table className="w-full table-fixed min-w-[60rem]">
             <thead>
               <tr>
                 <th scope="col" className="table-th align-bottom">
@@ -969,7 +872,7 @@ export function ComparePage() {
             </thead>
             <tbody>
               {METRICS.map((m) => (
-                <tr key={m.key} className="hover:bg-panel2/40">
+                <tr key={m.key} className="hover:bg-panel2/50">
                   <td className="table-td whitespace-nowrap" title={m.hint}>
                     {m.label}
                   </td>
@@ -1011,128 +914,43 @@ export function ComparePage() {
 
       </div>
 
-      <div className="card-tray card-pad">
-        <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
-          <div className="font-semibold">
-            {chartKind === "expense" ? "Расходы" : "Доходы"} по категориям:{" "}
-            {ranges.a.label} против {ranges.b.label}
-          </div>
-          {/* Переключатель тот же, что на «Категориях», — и стоит он только у
-              этого блока: карточки и таблица выше показывают доходы и расходы
-              одновременно, переключать там нечего. */}
-          <KindSwitcher kind={chartKind} onChange={setChartKind} />
-        </div>
-        {rows.length === 0 ? (
-          <div className="py-12 text-center text-sm text-muted">
-            {chartKind === "expense"
-              ? "Нет расходов по категориям в выбранных периодах"
-              : "Нет доходов по категориям в выбранных периодах"}{" "}
-            — поменяйте периоды или фильтры сверху.
-          </div>
-        ) : (
-          /* Строки-полосы вместо двух столбиков recharts — тот же язык, что во
-             вкладке Bars на «Категориях». Полоса это период А, засечка на ней —
-             период Б: сравнение читается по одной строке, а не по паре столбиков
-             разной длины. Размер шрифта подчиняется общей настройке таблиц. */
-          <div className="pr-1" style={{ fontSize: "var(--tbl-font)" }}>
-            <div className="bg-panel flex items-center gap-2 px-1.5 pb-1 mb-1 border-b border-border text-[0.85em] text-muted uppercase tracking-wide">
-              <span className="flex-1 min-w-0">Категория</span>
-              <span className="w-14 text-left shrink-0">%</span>
-              <span className="w-20 text-left shrink-0">Операции</span>
-              <span className="w-28 text-left shrink-0" title={ranges.a.label}>
-                Период А
-              </span>
-              <span className="w-28 text-left shrink-0" title={ranges.b.label}>
-                Период Б
-              </span>
-              <button
-                onClick={() => setDevPct((v) => !v)}
-                className="w-28 text-left shrink-0 uppercase tracking-wide text-muted hover:text-accent inline-flex items-center gap-1"
-                title={`Насколько период А отличается от периода Б. Клик — переключить ${currencySymbol(base)} / %`}
-              >
-                Изменение
-                <span className="normal-case rounded bg-panel2 px-1 text-[0.9em] leading-none text-text">
-                  {devPct ? "%" : currencySymbol(base)}
-                </span>
-              </button>
-              <span className="w-8 shrink-0 flex items-center justify-center">
-                {rows.some((r) => r.subs.length > 0) && (
-                  <button
-                    onClick={() =>
-                      setExpanded(
-                        expanded.size > 0
-                          ? new Set()
-                          : new Set(rows.filter((r) => r.subs.length > 0).map((r) => r.name))
-                      )
-                    }
-                    title={expanded.size > 0 ? "Свернуть все" : "Развернуть все"}
-                    aria-label={expanded.size > 0 ? "Свернуть все" : "Развернуть все"}
-                    className="-m-1 p-1 rounded-full text-muted transition-colors hover:text-accent hover:bg-panel2"
-                  >
-                    <ChevronDown
-                      className={`w-4 h-4 transition-transform duration-300 ${
-                        expanded.size > 0 ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-                )}
-              </span>
-            </div>
-            <div className="space-y-0.5">
-              {rows.map((row) => {
-                const isOpen = expanded.has(row.name);
-                return (
-                  <div key={row.name}>
-                    <CompareBarRow
-                      name={row.name}
-                      a={row.a}
-                      b={row.b}
-                      count={row.count}
-                      share={rowsTotalA > 0 ? row.a / rowsTotalA : 0}
-                      max={rowsMax}
-                      color={colorForCategory(row.name, categoryMeta)}
-                      base={base}
-                      devPct={devPct}
-                      labelB={ranges.b.label}
-                      kind={chartKind}
-                      onOpen={() => openCategoryInPeriod(row.name, "A")}
-                      expandable={row.subs.length > 0}
-                      expanded={isOpen}
-                      onToggle={() =>
-                        setExpanded((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(row.name)) next.delete(row.name);
-                          else next.add(row.name);
-                          return next;
-                        })
-                      }
-                    />
-                    {isOpen &&
-                      row.subs.map((sub) => (
-                        <CompareBarRow
-                          key={sub.name}
-                          name={sub.name}
-                          parent={row.name}
-                          a={sub.a}
-                          b={sub.b}
-                          count={sub.count}
-                          share={rowsTotalA > 0 ? sub.a / rowsTotalA : 0}
-                          max={rowsMax}
-                          color={colorForCategory(row.name, categoryMeta)}
-                          base={base}
-                          devPct={devPct}
-                          labelB={ranges.b.label}
-                          kind={chartKind}
-                          onOpen={() => openCategoryInPeriod(row.name, "A")}
-                        />
-                      ))}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Переключатель «Расходы / Доходы» стоит только у этого блока: карточки
+          и таблица выше показывают доходы и расходы одновременно. Полоса —
+          период А, засечка на ней — период Б. */}
+      <CategoryTable
+        card
+        title={`${chartKind === "expense" ? "Расходы" : "Доходы"} по категориям: ${ranges.a.label} против ${ranges.b.label}`}
+        actions={<KindSwitcher kind={chartKind} onChange={setChartKind} />}
+        rows={compareRows}
+        base={base}
+        kind={chartKind}
+        valueLabel="Период А"
+        valueTitle={ranges.a.label}
+        bar
+        barMax={rowsMax}
+        compare={{
+          label: "Период Б",
+          title: ranges.b.label,
+          changeLabel: "Изменение",
+          changeTitle: "Насколько период А отличается от периода Б",
+          comparable: true,
+          sameLabel: "≈ поровну",
+          upTitle: "Больше, чем в периоде Б",
+          downTitle: "Меньше, чем в периоде Б",
+          markerLabel: ranges.b.label,
+          asPct: devPct,
+          onAsPctChange: setDevPct,
+        }}
+        expanded={expanded}
+        onExpandedChange={setExpanded}
+        onRowClick={(r) => openCategoryInPeriod(r.parent ?? r.name, "A")}
+        exportName={`compare_categories_${chartKind}`}
+        emptyText={`${
+          chartKind === "expense"
+            ? "Нет расходов по категориям в выбранных периодах"
+            : "Нет доходов по категориям в выбранных периодах"
+        } — поменяйте периоды или фильтры сверху.`}
+      />
     </div>
   );
 }
