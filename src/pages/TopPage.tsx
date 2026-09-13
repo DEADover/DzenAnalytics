@@ -13,6 +13,7 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Segmented } from "../components/Segmented";
+import { KindSwitcher } from "../components/KindSwitcher";
 import { StatCell } from "../components/SectionCard";
 import { counterpartyOf } from "../lib/yearReview";
 import { formatNum } from "../lib/format";
@@ -22,7 +23,7 @@ type Tab = "categories" | "payees" | "transactions";
 
 /** Что за строки в топе — подпись под их числом. */
 const TAB_NOTE: Record<Tab, string> = {
-  categories: "статей с суммой",
+  categories: "категорий с суммой",
   payees: "контрагентов",
   transactions: "крупнейших операций",
 };
@@ -115,30 +116,34 @@ export function TopPage() {
       <PageHeader
         icon={TrendingUp}
         title="Топ"
-        hint="Статьи, контрагенты и крупнейшие операции"
+        hint="Категории, контрагенты и крупнейшие операции"
         right={
-          <div className="flex items-center gap-2">
-            <InfoPopover>
-              <p>
-                Списки считаются по операциям, попавшим в{" "}
-                <InfoTerm>общий фильтр</InfoTerm> сверху: период, счета, статьи,
-                поиск. Нажатие на строку открывает её операции.
-              </p>
-              <p>
-                На стороне расходов <InfoTerm>возвраты вычитаются</InfoTerm> из
-                суммы своей же статьи и своего контрагента: «заказал и вернул» —
-                это ноль, а не расход и доход по отдельности. Статья или
-                контрагент, у которых после возвратов не осталось расхода, из
-                топа выпадают.
-              </p>
-              <p>
-                Имя контрагента берётся из справочника, а не из банковской
-                строки: «DOSTAVKA PYATEROCHKA» и «DOSTAVKA IZ PYATEROCHK» — это
-                одна «Пятёрочка». Строка банка остаётся там, где контрагент к
-                операции не привязан.
-              </p>
-            </InfoPopover>
-          </div>
+          <InfoPopover>
+            <p>
+              На что больше всего уходит денег и откуда они приходят — за период,
+              счета и категории из <InfoTerm>общего фильтра</InfoTerm> сверху.
+            </p>
+            <p>
+              Переключатель слева выбирает сторону —{" "}
+              <InfoTerm>расходы или доходы</InfoTerm>, справа — разрез:{" "}
+              <InfoTerm>категории</InfoTerm> вместе с подкатегориями, тридцать
+              самых крупных <InfoTerm>контрагентов</InfoTerm> или пятьдесят{" "}
+              <InfoTerm>крупнейших операций</InfoTerm>.
+            </p>
+            <p>
+              Плитки над таблицей считают то, что в неё попало: сумму и её долю от
+              всего расхода или дохода за фильтр, число записей и операций в них
+              и среднюю операцию. Нажатие на строку открывает её операции, кнопка
+              «CSV» выгружает таблицу в текущей сортировке.
+            </p>
+            <p>
+              На стороне расходов <InfoTerm>возвраты вычитаются</InfoTerm> из
+              своей категории и своего контрагента: «заказал и вернул» — это ноль,
+              а не расход и доход по отдельности. Контрагент берётся из
+              справочника, а не из банковской строки: «DOSTAVKA PYATEROCHKA» и
+              «DOSTAVKA IZ PYATEROCHK» — это одна «Пятёрочка».
+            </p>
+          </InfoPopover>
         }
       />
       <GlobalFilters />
@@ -146,27 +151,19 @@ export function TopPage() {
       {/* Вкладки — общим контролом: своя полоска с подчёркиванием была третьим
           видом вкладок в продукте, при том что рядом на странице уже стоит
           сегментированный переключатель. */}
-      {/* Расходы и доходы — рядом с разрезом и того же размера: оба
-          переключателя отвечают на один вопрос «что в топе», и держать один из
-          них в шапке страницы значило искать его по экрану. */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Сторона слева, разрез справа. Расходы и доходы — тем же
+          переключателем, что в разделе «Категории»: один и тот же выбор в двух
+          разделах должен выглядеть одинаково. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <KindSwitcher kind={kind} onChange={setKind} />
         <Segmented
           value={tab}
           onChange={setTab}
           label="Что показывать в топе"
           options={[
-            { value: "categories" as Tab, label: "Статьи", icon: Tags },
+            { value: "categories" as Tab, label: "Категории", icon: Tags },
             { value: "payees" as Tab, label: "Контрагенты", icon: Users },
             { value: "transactions" as Tab, label: "Операции", icon: Receipt },
-          ]}
-        />
-        <Segmented
-          value={kind}
-          onChange={setKind}
-          label="Расходы или доходы"
-          options={[
-            { value: "expense" as const, label: "Расходы", icon: TrendingDown },
-            { value: "income" as const, label: "Доходы", icon: TrendingUp },
           ]}
         />
       </div>
@@ -224,13 +221,13 @@ export function TopPage() {
             title={
               <TableHeading
                 icon={<Tags className="w-4 h-4 text-accent" />}
-                title={`Статьи по ${kind === "expense" ? "расходам" : "доходам"}`}
+                title={kind === "expense" ? "Расходные категории" : "Доходные категории"}
                 info={
                   <p>
-                    Полные названия статей вместе с подкатегориями: «Еда / Продукты»
-                    и «Еда / Кафе» стоят отдельными строками. Доля считается от
-                    всего{kind === "expense" ? " расхода" : " дохода"} фильтра,
-                    «Средняя» — от суммы строки на её число операций.
+                    Полные названия категорий вместе с подкатегориями: «Еда /
+                    Продукты» и «Еда / Кафе» стоят отдельными строками. Доля
+                    считается от всего{kind === "expense" ? " расхода" : " дохода"}{" "}
+                    фильтра, «Средняя» — от суммы строки на её число операций.
                   </p>
                 }
               />
