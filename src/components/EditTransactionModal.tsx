@@ -1024,7 +1024,11 @@ export function EditTransactionModal({
         // самой высокой, и в прежние 740 px не влезала. Ширина шире на ступень,
         // чтобы теги чаще вставали в один ряд, а высота берётся с запасом под
         // два ряда тегов — поле комментария при этом не сжимается в щель.
-        className="card w-full max-w-xl h-[860px] max-h-[90vh] flex flex-col overflow-hidden"
+        //
+        // Ограничение — вся высота окна за вычетом отступа подложки, а не 90 %
+        // её: на ноутбуке окно браузера около 770 px, и десятая доля — это как
+        // раз те 77 px, которых форме не хватало до прокрутки.
+        className="card w-full max-w-xl h-[860px] max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden"
       >
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
           <div id="edit-tx-title" className="font-semibold flex items-center gap-2">
@@ -1287,19 +1291,32 @@ export function EditTransactionModal({
                 />
               </Field>
             </div>
-          ) : isDebt ? null : (
-            <Field label="Счёт">
-              <Combobox
-                value={account}
-                options={accountOptions}
-                groups={accountGroups}
-                onChange={setAccount}
-                placeholder="Введите или выберите из списка"
-                maxHeight={DROPDOWN_MAX}
-              />
-            </Field>
-          )}
-          <div className="grid grid-cols-2 gap-3">
+          ) : null}
+          {/* Счёт, сумма и валюта — одним рядом: «откуда, сколько и в чём».
+              Отдельный ряд под счёт стоил форме прокрутки на ноутбуке. У
+              перевода и долга счета свои и стоят выше — там ряд из двух. На
+              узком экране счёт уходит на всю ширину над суммой. */}
+          <div
+            className={`grid gap-3 ${
+              !isDebt && kind !== "transfer"
+                ? "grid-cols-2 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_6.5rem]"
+                : "grid-cols-2"
+            }`}
+          >
+            {!isDebt && kind !== "transfer" && (
+              <div className="col-span-2 sm:col-span-1 min-w-0">
+                <Field label="Счёт">
+                  <Combobox
+                    value={account}
+                    options={accountOptions}
+                    groups={accountGroups}
+                    onChange={setAccount}
+                    placeholder="Выберите счёт"
+                    maxHeight={DROPDOWN_MAX}
+                  />
+                </Field>
+              </div>
+            )}
             <Field
               label="Сумма"
               labelAfter={
