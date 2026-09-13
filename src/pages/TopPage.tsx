@@ -446,8 +446,12 @@ export function TopPage() {
                   width: TX_COL.date,
                   label: "Дата",
                   sortValue: (t) => t.date,
+                  // Тем же набором, что вторичные числа соседних вкладок — доля,
+                  // число операций, средняя: приглушённо и табличными цифрами.
+                  // Пропорциональные цифры даты выбивались из таблицы, где все
+                  // остальные числа стоят ровным столбцом.
                   render: (t) => (
-                    <span className="whitespace-nowrap text-muted">
+                    <span className="whitespace-nowrap tabular-nums text-muted">
                       {formatDate(t.date, "full")}
                     </span>
                   ),
@@ -479,7 +483,9 @@ export function TopPage() {
                   label: "Комментарий",
                   sortValue: (t) => t.comment || "",
                   render: (t) => (
-                    <span className="block truncate text-muted text-xs" title={t.comment}>
+                    // Обычного размера, как и остальной текст таблиц: мелкий шрифт
+                    // делал комментарий сноской, хотя он такая же колонка.
+                    <span className="block truncate text-muted" title={t.comment}>
                       {t.comment}
                     </span>
                   ),
