@@ -1019,8 +1019,12 @@ export function EditTransactionModal({
         // Fixed height (capped at 90vh on short screens) so the card never
         // changes size between operation kinds — only the inner body scrolls.
         // Keeps the modal from "jumping" while paging through ops with ←/→.
-        // 740px fits the tallest variant («Долг» ≈ 729px) without scrolling.
-        className="card w-full max-w-lg h-[740px] max-h-[90vh] flex flex-col overflow-hidden"
+        //
+        // Высота и ширина — под раздел «Теги» (#69): с ним форма расхода стала
+        // самой высокой, и в прежние 740 px не влезала. Ширина шире на ступень,
+        // чтобы теги чаще вставали в один ряд, а высота берётся с запасом под
+        // два ряда тегов — поле комментария при этом не сжимается в щель.
+        className="card w-full max-w-xl h-[860px] max-h-[90vh] flex flex-col overflow-hidden"
       >
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
           <div id="edit-tx-title" className="font-semibold flex items-center gap-2">
