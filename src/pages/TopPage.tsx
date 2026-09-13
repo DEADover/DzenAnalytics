@@ -29,6 +29,19 @@ const TAB_NOTE: Record<Tab, string> = {
 };
 
 /**
+ * Ширины колонок — одни на «Категории» и «Контрагенты» и на обе стороны.
+ *
+ * Без них таблица подбирала ширину под содержимое: переключишь «Расходы» на
+ * «Доходы» или категории на контрагентов — и «Сумма», «Доля», «Операций»
+ * переезжают вбок, потому что сменились самые длинные имя и число. Имя берёт
+ * всё, что осталось, и обрезается многоточием.
+ */
+const COL = { value: "11rem", share: "7rem", count: "8rem", avg: "10rem" } as const;
+
+/** Ширины таблицы крупнейших операций — тоже постоянные для обеих сторон. */
+const TX_COL = { date: "9rem", category: "15rem", payee: "15rem", amount: "11rem" } as const;
+
+/**
  * Шапка таблицы топа: значок, название и знак вопроса.
  *
  * Отдаётся в `title` самой таблицы, а не рисуется над ней отдельной карточкой:
@@ -238,6 +251,7 @@ export function TopPage() {
             defaultSortDir="desc"
             onRowClick={(c) => openCategoryFull(c.category)}
             limit={30}
+            fixed
             exportName={`top_categories_${kind}`}
             columns={
               [
@@ -245,10 +259,15 @@ export function TopPage() {
                   key: "name",
                   label: "Категория",
                   sortValue: (c) => c.category,
-                  render: (c) => c.category,
+                  render: (c) => (
+                    <span className="block truncate" title={c.category}>
+                      {c.category}
+                    </span>
+                  ),
                 },
                 {
                   key: "value",
+                  width: COL.value,
                   label: "Сумма",
                   align: "right",
                   sortValue: (c) => (kind === "expense" ? c.expense : c.income),
@@ -267,6 +286,7 @@ export function TopPage() {
                 },
                 {
                   key: "share",
+                  width: COL.share,
                   label: "Доля",
                   align: "right",
                   sortValue: (c) => (kind === "expense" ? c.expense : c.income) / (total || 1),
@@ -279,6 +299,7 @@ export function TopPage() {
                 },
                 {
                   key: "count",
+                  width: COL.count,
                   label: "Операций",
                   align: "center",
                   sortValue: (c) => c.count,
@@ -286,6 +307,7 @@ export function TopPage() {
                 },
                 {
                   key: "avg",
+                  width: COL.avg,
                   label: "Средняя",
                   align: "right",
                   sortValue: (c) =>
@@ -328,6 +350,7 @@ export function TopPage() {
             defaultSortDir="desc"
             onRowClick={(p) => openPayee(p.payee)}
             exportName={`top_payees_${kind}`}
+            fixed
             columns={
               [
                 {
@@ -335,13 +358,14 @@ export function TopPage() {
                   label: "Контрагент",
                   sortValue: (p) => p.payee,
                   render: (p) => (
-                    <span className="truncate max-w-[300px] inline-block" title={p.payee}>
+                    <span className="block truncate" title={p.payee}>
                       {p.payee}
                     </span>
                   ),
                 },
                 {
                   key: "total",
+                  width: COL.value,
                   label: "Сумма",
                   align: "right",
                   sortValue: (p) => p.total,
@@ -357,6 +381,7 @@ export function TopPage() {
                 },
                 {
                   key: "share",
+                  width: COL.share,
                   label: "Доля",
                   align: "right",
                   sortValue: (p) => p.total / (total || 1),
@@ -366,6 +391,7 @@ export function TopPage() {
                 },
                 {
                   key: "count",
+                  width: COL.count,
                   label: "Операций",
                   align: "center",
                   sortValue: (p) => p.count,
@@ -373,6 +399,7 @@ export function TopPage() {
                 },
                 {
                   key: "avg",
+                  width: COL.avg,
                   label: "Средняя",
                   align: "right",
                   sortValue: (p) => (p.count > 0 ? p.total / p.count : 0),
@@ -411,10 +438,12 @@ export function TopPage() {
             defaultSortDir="desc"
             onRowClick={(t) => openSingle(t.id)}
             exportName={`top_transactions_${kind}`}
+            fixed
             columns={
               [
                 {
                   key: "date",
+                  width: TX_COL.date,
                   label: "Дата",
                   sortValue: (t) => t.date,
                   render: (t) => (
@@ -425,23 +454,22 @@ export function TopPage() {
                 },
                 {
                   key: "category",
+                  width: TX_COL.category,
                   label: "Категория",
                   sortValue: (t) => t.categoryFull,
                   render: (t) => (
-                    <span className="truncate max-w-[180px] inline-block" title={t.categoryFull}>
+                    <span className="block truncate" title={t.categoryFull}>
                       {t.categoryFull}
                     </span>
                   ),
                 },
                 {
                   key: "payee",
+                  width: TX_COL.payee,
                   label: "Контрагент",
                   sortValue: (t) => counterpartyOf(t),
                   render: (t) => (
-                    <span
-                      className="truncate max-w-[180px] inline-block"
-                      title={counterpartyOf(t)}
-                    >
+                    <span className="block truncate" title={counterpartyOf(t)}>
                       {counterpartyOf(t) || "—"}
                     </span>
                   ),
@@ -451,16 +479,14 @@ export function TopPage() {
                   label: "Комментарий",
                   sortValue: (t) => t.comment || "",
                   render: (t) => (
-                    <span
-                      className="truncate max-w-[280px] inline-block text-muted text-xs"
-                      title={t.comment}
-                    >
+                    <span className="block truncate text-muted text-xs" title={t.comment}>
                       {t.comment}
                     </span>
                   ),
                 },
                 {
                   key: "amount",
+                  width: TX_COL.amount,
                   label: "Сумма",
                   align: "right",
                   sortValue: (t) => t.amountBase,
