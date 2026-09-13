@@ -155,7 +155,7 @@ export function TopPage() {
           переключателем, что в разделе «Категории»: один и тот же выбор в двух
           разделах должен выглядеть одинаково. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <KindSwitcher kind={kind} onChange={setKind} />
+        <KindSwitcher kind={kind} onChange={setKind} size="md" />
         <Segmented
           value={tab}
           onChange={setTab}
