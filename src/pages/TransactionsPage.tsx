@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CategorySubline } from "../components/CategorySubline";
 import {
   Search,
   Download,
@@ -1289,11 +1290,7 @@ function Row({
               />
             )}
           </div>
-          {tx.subcategory && (
-            <div className="text-[0.85em] text-muted truncate">
-              {tx.subcategory}
-            </div>
-          )}
+          <CategorySubline subcategory={tx.subcategory} extras={tx.extraCategories} />
         </div>
       </div>
       <div className="truncate text-muted" title={tx.account}>

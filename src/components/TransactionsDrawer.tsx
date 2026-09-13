@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { CategorySubline } from "./CategorySubline";
 import {
   X,
   Search,
@@ -505,11 +506,11 @@ export function TransactionsDrawer() {
                               />
                             )}
                           </div>
-                          {t.subcategory && (
-                            <div className="text-[0.85em] text-muted truncate" title={t.subcategory}>
-                              {t.subcategory}
-                            </div>
-                          )}
+                          <CategorySubline
+                            subcategory={t.subcategory}
+                            extras={t.extraCategories}
+                            withTitle
+                          />
                         </div>
                       </div>
                     </td>
