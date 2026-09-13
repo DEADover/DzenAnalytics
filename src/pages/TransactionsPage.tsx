@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CategorySubline } from "../components/CategorySubline";
+import { ExtraCategoriesLine } from "../components/ExtraCategoriesLine";
 import {
   Search,
   Download,
@@ -1290,7 +1290,14 @@ function Row({
               />
             )}
           </div>
-          <CategorySubline subcategory={tx.subcategory} extras={tx.extraCategories} />
+          {tx.subcategory && (
+            <div className="text-[0.85em] text-muted truncate">
+              {tx.subcategory}
+            </div>
+          )}
+          {/* Вторые категории — своей строкой: второй без подкатегории,
+              третьей с ней (#69). */}
+          <ExtraCategoriesLine extras={tx.extraCategories} />
         </div>
       </div>
       <div className="truncate text-muted" title={tx.account}>

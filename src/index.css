@@ -313,6 +313,18 @@ h2,
     width: 0;
     height: 0;
   }
+  /* То же вбок: строка, которая листается тачпадом, свайпом или колесом с
+     Shift, — без полосы, которая под мелким текстом была бы толще подписей. */
+  .scroll-soft-x {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scroll-soft-x::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
   .pill {
     @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium
            bg-panel2 border border-border text-text;
