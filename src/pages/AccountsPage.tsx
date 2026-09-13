@@ -29,8 +29,6 @@ import {
   ArrowUpDown,
   ChevronDown,
   Check,
-  ArrowUp,
-  ArrowDown,
   Pencil,
   HelpCircle,
   LineChart as LineChartIcon,
@@ -111,6 +109,8 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { capitalShare, mergeLiveByTitle, positiveBalanceTotal } from "../lib/accountOptions";
 import { depositTotals, projectDeposit, type DepositRow } from "../lib/deposits";
 import { SectionCard } from "../components/SectionCard";
+import { HeadCell, TreeElbow } from "../components/table/TableParts";
+import { cellClass, toneOfSigned, treeIndent, type ColumnType, type Tone } from "../components/table/tableKit";
 import { toIsoDate } from "../lib/period";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { Sparkline } from "../components/Sparkline";
@@ -341,44 +341,31 @@ function CheckItem({
 }
 
 /**
- * Заголовок сортируемой колонки. Стрелка появляется только у активной —
- * шесть постоянных значков «можно сортировать» шумят сильнее, чем помогают.
+ * Заголовок сортируемой колонки — общая шапка таблиц (`HeadCell`), только с
+ * ключом сортировки списка счетов: порядок строк считает сама страница, с
+ * группами и разбивкой долгов.
  */
 function SortTh({
   sortKey,
-  align = "left",
+  type = "text",
   active,
   dir,
   onSort,
   children,
 }: {
   sortKey: SortBy;
-  align?: "left" | "right" | "center";
+  type?: ColumnType;
   active: SortBy;
   dir: SortDir;
   onSort: (key: SortBy) => void;
   children: ReactNode;
 }) {
-  const on = active === sortKey;
-  const Arrow = dir === "asc" ? ArrowUp : ArrowDown;
   return (
-    <th
-      className={`table-th ${align === "right" ? "text-right" : align === "center" ? "text-center" : ""}`}
-      aria-sort={on ? (dir === "asc" ? "ascending" : "descending") : "none"}
-    >
-      {/* `uppercase` повторяется здесь не зря: браузер сбрасывает
-          text-transform на кнопках, поэтому без него заголовок-кнопка
-          выпадает из общего вида таблиц сервиса. */}
-      <button
-        onClick={() => onSort(sortKey)}
-        className={`inline-flex items-center gap-1 uppercase tracking-wider hover:text-text ${
-          align === "right" ? "flex-row-reverse" : ""
-        } ${on ? "text-accent" : ""}`}
-      >
-        {children}
-        {on && <Arrow className="w-3 h-3 shrink-0" />}
-      </button>
-    </th>
+    <HeadCell
+      type={type}
+      label={children}
+      sort={{ active: active === sortKey, dir, onToggle: () => onSort(sortKey) }}
+    />
   );
 }
 
@@ -2132,7 +2119,7 @@ export function AccountsPage() {
               вклад с длинным названием сдвигал бы столбцы с деньгами у всех
               остальных. Резиновым остаётся только название. */}
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full text-sm table-fixed min-w-[50rem]">
+            <table className="w-full table-fixed min-w-[50rem]">
               <colgroup>
                 <col />
                 <col style={{ width: 84 }} />
@@ -2143,24 +2130,12 @@ export function AccountsPage() {
               </colgroup>
               <thead>
                 <tr>
-                  <th scope="col" className="table-th">
-                    Вклад
-                  </th>
-                  <th scope="col" className="table-th text-right">
-                    Ставка
-                  </th>
-                  <th scope="col" className="table-th text-right">
-                    До закрытия
-                  </th>
-                  <th scope="col" className="table-th text-right">
-                    Сумма
-                  </th>
-                  <th scope="col" className="table-th text-right">
-                    Проценты
-                  </th>
-                  <th scope="col" className="table-th text-right">
-                    На конец срока
-                  </th>
+                  <HeadCell type="text" label="Вклад" />
+                  <HeadCell type="number" label="Ставка" />
+                  <HeadCell type="number" label="До закрытия" />
+                  <HeadCell type="money" label="Сумма" />
+                  <HeadCell type="money" label="Проценты" />
+                  <HeadCell type="main" label="На конец срока" />
                 </tr>
               </thead>
               <tbody>
@@ -2168,46 +2143,37 @@ export function AccountsPage() {
                   const p = r.projection;
                   const done = p.daysLeft === 0;
                   const isSel = selectedAccount === r.account.title;
+                  // Условия договора — в подсказке к названию: они объясняют
+                  // все числа строки, но строка таблицы остаётся одной.
+                  const terms = `${formatDate(r.account.startDate ?? "", "short")} — ${formatDate(p.endDate, "short")}${p.compounded ? " · С капитализацией" : ""}`;
                   return (
                     <tr
                       key={r.account.id}
                       onClick={() =>
                         setSelectedAccount(isSel ? null : r.account.title)
                       }
-                      className={`align-middle cursor-pointer group ${
+                      className={`cursor-pointer group ${
                         isSel ? "bg-accent/10" : "hover:bg-panel2/50"
                       }`}
                     >
-                      <td className="table-td">
+                      <td className={cellClass("text")} title={`${r.account.title}: ${terms}`}>
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="shrink-0">
+                          <span className="flex shrink-0">
                             <AccountLogo
                               title={r.account.title}
                               type={r.account.type}
+                              size={20}
                             />
                           </span>
-                          <span className="min-w-0">
-                            <span className="block font-medium truncate group-hover:text-accent">
-                              {r.account.title}
-                            </span>
-                            {/* Условия договора второй строкой: они объясняют
-                                все остальные числа этой строки. */}
-                            <span className="block text-[11px] text-muted truncate">
-                              {formatDate(r.account.startDate ?? "", "short")} —{" "}
-                              {formatDate(p.endDate, "short")}
-                              {p.compounded ? " · С капитализацией" : ""}
-                            </span>
+                          <span className="truncate group-hover:text-accent">
+                            {r.account.title}
                           </span>
                         </div>
                       </td>
-                      <td className="table-td text-right tabular-nums whitespace-nowrap">
+                      <td className={cellClass("number")}>
                         {formatPct(p.percent / 100, 1)}
                       </td>
-                      <td
-                        className={`table-td text-right tabular-nums whitespace-nowrap ${
-                          done ? "text-warn" : ""
-                        }`}
-                      >
+                      <td className={cellClass("number", { className: done ? "text-warn" : undefined })}>
                         {done
                           ? "Срок вышел"
                           : `${formatNum(p.daysLeft)} ${pluralRu(p.daysLeft, [
@@ -2216,17 +2182,13 @@ export function AccountsPage() {
                               "дней",
                             ])}`}
                       </td>
-                      <td className="table-td text-right tabular-nums whitespace-nowrap">
+                      <td className={cellClass("money")}>
                         {formatMoney(r.balance, base)}
                       </td>
-                      <td
-                        className={`table-td text-right tabular-nums whitespace-nowrap ${
-                          done ? "text-muted" : "text-income"
-                        }`}
-                      >
+                      <td className={cellClass("money", { muted: done })}>
                         {done ? "—" : `+${formatMoney(p.interestLeft, base)}`}
                       </td>
-                      <td className="table-td text-right tabular-nums whitespace-nowrap font-medium">
+                      <td className={cellClass("main")}>
                         {formatMoney(p.atMaturity, base)}
                       </td>
                     </tr>
@@ -2236,22 +2198,22 @@ export function AccountsPage() {
               {/* Итог строкой таблицы, а не подписью под ней: каждое число
                   стоит под своим столбцом и читается как сумма колонки. */}
               <tfoot>
-                <tr className="bg-panel2/60 font-semibold">
-                  <td className="table-td">Итого</td>
+                <tr className="table-row-group">
+                  <td className={cellClass("text")}>Итого</td>
                   <td
-                    className="table-td text-right tabular-nums font-normal text-muted whitespace-nowrap"
+                    className={cellClass("number", { muted: true, className: "font-normal" })}
                     title="Средняя ставка, взвешенная остатком вклада"
                   >
                     {formatPct(depositSum.avgPercent / 100, 1)}
                   </td>
                   <td className="table-td" />
-                  <td className="table-td text-right tabular-nums whitespace-nowrap">
+                  <td className={cellClass("money")}>
                     {formatMoney(depositSum.balance, base)}
                   </td>
-                  <td className="table-td text-right tabular-nums whitespace-nowrap text-income">
+                  <td className={cellClass("money")}>
                     +{formatMoney(depositSum.interestLeft, base)}
                   </td>
-                  <td className="table-td text-right tabular-nums whitespace-nowrap">
+                  <td className={cellClass("money")}>
                     {formatMoney(depositSum.atMaturity, base)}
                   </td>
                 </tr>
@@ -2701,7 +2663,7 @@ export function AccountsPage() {
                 Numeric columns are sized to fit million-ruble values so nothing
                 overflows its cell (which would force a horizontal scrollbar). */}
             <table
-              className="w-full text-base table-fixed"
+              className="w-full table-fixed"
               style={{
                 // Минимум под НАБОР столбцов этой вкладки: на «Капитале» их
                 // пять, и ширина от восьми растянула бы таблицу пустотой.
@@ -2753,38 +2715,38 @@ export function AccountsPage() {
                       отвечала сразу на два разных вопроса. */}
                   {capitalView ? (
                     <>
-                      <SortTh sortKey="balance" align="right" {...sortHead}>
+                      <SortTh sortKey="balance" type="main" {...sortHead}>
                         {hasRealBalances ? "Остаток" : "Накоплено"}
                       </SortTh>
-                      <SortTh sortKey="balance" align="right" {...sortHead}>
+                      <SortTh sortKey="balance" type="pct" {...sortHead}>
                         Доля
                       </SortTh>
                     </>
                   ) : (
                     <>
-                      <SortTh sortKey="income" align="right" {...sortHead}>
+                      <SortTh sortKey="income" type="money" {...sortHead}>
                         Поступления
                       </SortTh>
-                      <SortTh sortKey="expense" align="right" {...sortHead}>
+                      <SortTh sortKey="expense" type="money" {...sortHead}>
                         Списания
                       </SortTh>
-                      <SortTh sortKey="delta" align="right" {...sortHead}>
+                      <SortTh sortKey="delta" type="main" {...sortHead}>
                         Изменение
                       </SortTh>
-                      <SortTh sortKey="count" align="center" {...sortHead}>
+                      <SortTh sortKey="count" type="count" {...sortHead}>
                         Операции
                       </SortTh>
                     </>
                   )}
-                  <th className="table-th text-center">Действия</th>
+                  <HeadCell type="actions" label="Действия" />
                 </tr>
               </thead>
               <tbody>
                 {listItems.map((item) => {
                   if (item.kind === "header") {
                     return (
-                      <tr key={item.key} className="bg-panel2/60">
-                        <td className="table-td font-semibold">
+                      <tr key={item.key} className="table-row-group">
+                        <td className="table-td">
                           <span className="inline-block max-w-[240px] truncate align-bottom">
                             {item.label}
                           </span>
@@ -2797,11 +2759,7 @@ export function AccountsPage() {
                         {/* Сумма группы стоит ровно под колонкой с деньгами:
                             на «Капитале» это остаток, на «Движении» — поступления.
                             Хвост добивается пустыми ячейками до конца строки. */}
-                        <td
-                          className={`table-td text-right tabular-nums font-semibold whitespace-nowrap ${
-                            item.sum < 0 ? "text-expense" : "text-text"
-                          }`}
-                        >
+                        <td className={cellClass("money", { className: item.sum < 0 ? "text-expense" : undefined })}>
                           {formatMoney(item.sum, base)}
                         </td>
                         {/* Доля группы встаёт ровно под колонкой «Доля» —
@@ -2809,7 +2767,7 @@ export function AccountsPage() {
                         {capitalView ? (
                           <>
                             <td
-                              className="table-td text-right tabular-nums text-muted whitespace-nowrap"
+                              className={cellClass("pct")}
                               title="Доля от суммы положительных остатков"
                             >
                               {(() => {
@@ -2829,12 +2787,10 @@ export function AccountsPage() {
                   const isSel = selectedAccount === a.account;
                   const hasReal = a.balanceBase !== null;
                   const headline = hasReal ? a.balanceBase! : a.delta;
-                  const headlineNeg = headline < 0;
-                  const headlineColor = headlineNeg
-                    ? "text-expense"
-                    : hasReal
-                      ? "text-text"
-                      : "text-income";
+                  // Остаток — без цвета стороны; накопленное без остатков — как
+                  // приход; минус — как расход.
+                  const headlineTone: Tone =
+                    headline < 0 ? "expense" : hasReal ? "neutral" : "income";
                   // Долговой счёт раскрывается по контрагентам; если долговых
                   // операций нет вовсе, раскрывать нечего — шеврона тоже нет.
                   //
@@ -2874,16 +2830,18 @@ export function AccountsPage() {
                         {/* Пометки состояния идут за названием: тип уехал в свою
                             колонку, а «вне баланса» и «архив» — свойства самого
                             счёта, не его типа. */}
-                        <div className="flex items-baseline gap-2 min-w-0">
-                          <span className="self-center shrink-0">
-                            <AccountLogo title={a.account} type={a.type} />
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="flex shrink-0">
+                            {/* 20 px — в строку таблицы 37 px; крупнее значок
+                                раздвигал бы строку. */}
+                            <AccountLogo title={a.account} type={a.type} size={20} />
                           </span>
                           {/* Нижний предел ширины — чтобы пометки справа не
                               дожимали название до одной буквы: колонка скорее
                               станет шире (таблица прокручивается), чем строка
                               перестанет читаться. */}
                           <span
-                            className="font-medium truncate min-w-[5rem] group-hover:text-accent"
+                            className="truncate min-w-[5rem] group-hover:text-accent"
                             title={a.displayTitle}
                           >
                             {a.displayTitle}
@@ -2934,17 +2892,17 @@ export function AccountsPage() {
                           )}
                         </div>
                       </td>
-                      <td className="table-td text-muted truncate">{a.kind}</td>
+                      <td className={cellClass("text", { muted: true, className: "truncate" })}>{a.kind}</td>
                       {capitalView && (
                         <td
-                          className={`table-td text-right tabular-nums font-semibold whitespace-nowrap ${headlineColor}`}
+                          className={cellClass("main", { tone: headlineTone })}
                           title={formatMoney(headline, base, { decimals: 2 })}
                         >
                           {formatMoney(headline, base, { signed: !hasReal })}
                           {/* Валюта счёта — в скобках рядом, а не второй строкой:
                               строка таблицы не должна расти из-за одной суммы. */}
                           {hasReal && a.nativeCurrency && a.nativeCurrency !== base && (
-                            <span className="text-[13px] text-muted font-normal">
+                            <span className="text-[0.9em] text-muted font-normal">
                               {" "}
                               ({formatMoney(a.nativeBalance!, a.nativeCurrency)})
                             </span>
@@ -2953,7 +2911,7 @@ export function AccountsPage() {
                       )}
                       {capitalView ? (
                         <td
-                          className="table-td text-right tabular-nums text-muted whitespace-nowrap"
+                          className={cellClass("pct")}
                           title="Доля от суммы положительных остатков. У долгов доли нет"
                         >
                           {(() => {
@@ -2966,26 +2924,16 @@ export function AccountsPage() {
                         </td>
                       ) : (
                         <>
-                          <td className="table-td text-right tabular-nums text-income whitespace-nowrap">
-                            {formatMoney(a.income, base)}
-                          </td>
-                          <td className="table-td text-right tabular-nums text-expense whitespace-nowrap">
-                            {formatMoney(a.expense, base)}
-                          </td>
-                          <td
-                            className={`table-td text-right tabular-nums whitespace-nowrap ${
-                              a.delta >= 0 ? "text-income" : "text-expense"
-                            }`}
-                          >
+                          <td className={cellClass("money")}>{formatMoney(a.income, base)}</td>
+                          <td className={cellClass("money")}>{formatMoney(a.expense, base)}</td>
+                          <td className={cellClass("main", { tone: toneOfSigned(a.delta) })}>
                             {formatMoney(a.delta, base, { signed: true })}
                           </td>
-                          <td className="table-td text-center tabular-nums text-muted">
-                            {formatNum(a.count)}
-                          </td>
+                          <td className={cellClass("count")}>{formatNum(a.count)}</td>
                         </>
                       )}
-                      <td className="table-td">
-                        <div className="flex items-center justify-center gap-1">
+                      <td className={cellClass("actions")}>
+                        <div className="flex items-center justify-center gap-0.5">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -3051,32 +2999,24 @@ export function AccountsPage() {
                         владельца счетов, плюс значит «должны вам». Клик по
                         строке открывает операции этого контрагента. */}
                     {debtsOpen &&
-                      debtRows.map((d) => (
+                      debtRows.map((d, di) => (
                         <tr
                           key={`${a.account} ${d.payee}`}
                           onClick={() => openDebtCounterparty(a.account, d)}
-                          title={`Операции: ${d.payee}`}
-                          className="cursor-pointer bg-panel2/30 hover:bg-panel2/70"
+                          className="cursor-pointer hover:bg-panel2/50"
                         >
-                          {/* Имя и «сколько раз» — одной ячейкой, чтобы длинный
-                              хвост не лез под колонку действий и не обрезался.
-                              Отступ и полоска слева говорят, что строка
-                              подчинена счёту выше. */}
-                          <td className="table-td !py-1.5">
-                            <div className="pl-6 ml-2 border-l-2 border-border min-w-0">
-                              <div
-                                className={`text-sm truncate ${d.settled ? "text-muted" : ""}`}
-                              >
-                                {d.payee}
-                              </div>
-                              <div className="text-[11px] text-muted">
-                                {formatNum(d.count)}{" "}
-                                {pluralRu(d.count, ["операция", "операции", "операций"])} ·
-                                последняя {formatDate(d.last)}
-                              </div>
-                            </div>
+                          {/* Строка под счётом с уголком к нему — как подстрока
+                              любого дерева в таблицах. Сколько операций и когда
+                              последняя — в подсказке: строка остаётся одной. */}
+                          <td
+                            className={cellClass("text", { muted: true, className: "relative truncate" })}
+                            style={{ paddingLeft: treeIndent(1) }}
+                            title={`${d.payee}: ${formatNum(d.count)} ${pluralRu(d.count, ["операция", "операции", "операций"])}, последняя ${formatDate(d.last)}`}
+                          >
+                            <TreeElbow depth={1} last={di === debtRows.length - 1 && unallocated === 0} />
+                            {d.payee}
                           </td>
-                          <td className="table-td !py-1.5 text-xs text-muted whitespace-nowrap align-middle">
+                          <td className={cellClass("text", { muted: true, className: "truncate" })}>
                             {d.settled
                               ? "Рассчитались"
                               : d.amount > 0
@@ -3086,15 +3026,11 @@ export function AccountsPage() {
                           {/* Сумма встаёт под ту же колонку, что и у счёта:
                               на «Капитале» это остаток, на «Движении» —
                               изменение за период. */}
-                          {!capitalView && <td className="table-td !py-1.5" colSpan={2} />}
+                          {!capitalView && <td className="table-td" colSpan={2} />}
                           <td
-                            className={`table-td !py-1.5 text-right tabular-nums whitespace-nowrap align-middle ${
-                              d.settled
-                                ? "text-muted"
-                                : d.amount > 0
-                                  ? "text-income"
-                                  : "text-expense"
-                            }`}
+                            className={cellClass("main", {
+                              tone: d.settled ? "muted" : d.amount > 0 ? "income" : "expense",
+                            })}
                           >
                             {formatMoney(Math.abs(d.amount), base)}
                           </td>
@@ -3106,7 +3042,7 @@ export function AccountsPage() {
                               свободную ширину между ним и колонкой «Счёт», та
                               ужималась вдвое, и таблица на глазах съезжала
                               влево, оставляя пустое поле справа (issue #80). */}
-                          <td className="table-td !py-1.5" colSpan={2} />
+                          <td className="table-td" colSpan={2} />
                         </tr>
                       ))}
                     {/* Строка сверки: остаток счёта минус сумма по людям.
@@ -3116,33 +3052,29 @@ export function AccountsPage() {
                         сумма долгов у нас просто неверная (issue #80). */}
                     {debtsOpen && unallocated !== 0 && (
                       <tr
-                        className="bg-panel2/30"
                         title={
-                          "Остаток счёта из Дзен-мани минус сумма по контрагентам. " +
-                          "Разница — это начальный остаток счёта, операции старше " +
-                          "загруженной истории или курсовая разница у валютного долга: " +
-                          "операция пересчитана по курсу своего дня, а остаток счёта — " +
-                          "по сегодняшнему."
+                          "Начальный остаток, операции вне истории или курсовая разница. " +
+                          "Остаток счёта из Дзен-мани минус сумма по контрагентам: " +
+                          "начальный остаток счёта, операции старше загруженной истории " +
+                          "или курсовая разница у валютного долга — операция пересчитана " +
+                          "по курсу своего дня, а остаток счёта — по сегодняшнему."
                         }
                       >
-                        <td className="table-td !py-1.5">
-                          <div className="pl-6 ml-2 border-l-2 border-border min-w-0">
-                            <div className="text-sm text-muted">
-                              Не разложено по контрагентам
-                            </div>
-                            <div className="text-[11px] text-muted truncate">
-                              Начальный остаток, операции вне истории или курсовая
-                              разница
-                            </div>
-                          </div>
+                        <td
+                          className={cellClass("text", { muted: true, className: "relative truncate" })}
+                          style={{ paddingLeft: treeIndent(1) }}
+                        >
+                          <TreeElbow depth={1} last />
+                          Не разложено по контрагентам
                         </td>
-                        <td className="table-td !py-1.5 text-xs text-muted whitespace-nowrap align-middle">
+                        <td className={cellClass("text", { muted: true, className: "truncate" })}>
                           {unallocated > 0 ? "Должны вам" : "Должны вы"}
                         </td>
-                        <td className="table-td !py-1.5 text-right tabular-nums whitespace-nowrap align-middle text-muted">
+                        {!capitalView && <td className="table-td" colSpan={2} />}
+                        <td className={cellClass("money", { muted: true })}>
                           {formatMoney(Math.abs(unallocated), base)}
                         </td>
-                        <td className="table-td !py-1.5" colSpan={2} />
+                        <td className="table-td" colSpan={2} />
                       </tr>
                     )}
                     </Fragment>

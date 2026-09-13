@@ -1,20 +1,20 @@
 import { useMemo, useState } from "react";
-import { Search, Calendar, Coins, Tag, X, ArrowUpDown, Pencil, Trash2, XSquare } from "lucide-react";
+import { Search, Calendar, Coins, Tag, X, Pencil, Trash2, XSquare } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useEditsStore } from "../store/useEditsStore";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
-import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyle";
+import { kindGlyphClass, kindSignGlyph, kindTone } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { BulkEditModal } from "../components/BulkEditModal";
+import { DataTable } from "../components/DataTable";
 import { DateField } from "../components/DateField";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import type { Transaction } from "../types";
 
-type SortKey = "date" | "amount" | "category" | "payee";
 
 /** Значения отбора по типу. «Возвраты» — выбор поуже, чем «Расходы»: те
  *  показывают траты вместе с возвратами. */
@@ -36,21 +36,10 @@ export function SearchPage() {
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("date");
-  const [sortDesc, setSortDesc] = useState(true);
 
   // ── Bulk selection + edit ──────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
-
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   async function applyBulk(patch: TransactionEdit) {
     const ids = Array.from(selected);
@@ -130,29 +119,11 @@ export function SearchPage() {
     });
   }, [transactions, query, exclude, useRegex, from, to, minAmount, maxAmount, kind]);
 
-  const sorted = useMemo(() => {
-    const arr = [...matches];
-    arr.sort((a, b) => {
-      let r = 0;
-      if (sortKey === "date") r = a.date.localeCompare(b.date);
-      else if (sortKey === "amount") r = a.amountBase - b.amountBase;
-      else if (sortKey === "category") r = a.categoryFull.localeCompare(b.categoryFull, "ru");
-      else if (sortKey === "payee") r = (a.payee || "").localeCompare(b.payee || "", "ru");
-      return sortDesc ? -r : r;
-    });
-    return arr;
-  }, [matches, sortKey, sortDesc]);
-
-  // Select-all covers the whole result set (not just the 200 shown rows), so
-  // a mass edit can hit every match. Reset when the result set changes.
-  const allSelected = sorted.length > 0 && sorted.every((t) => selected.has(t.id));
-  const someSelected = selected.size > 0 && !allSelected;
-  function toggleSelectAll() {
-    setSelected(allSelected ? new Set() : new Set(sorted.map((t) => t.id)));
-  }
-  const [prevSorted, setPrevSorted] = useState(sorted);
-  if (sorted !== prevSorted) {
-    setPrevSorted(sorted);
+  // Выбор сбрасывается, когда меняется набор найденного: иначе массовая правка
+  // задела бы операции, которых на экране уже нет. Смена порядка его не трогает.
+  const [prevMatches, setPrevMatches] = useState(matches);
+  if (matches !== prevMatches) {
+    setPrevMatches(matches);
     if (selected.size > 0) setSelected(new Set());
   }
 
@@ -169,14 +140,6 @@ export function SearchPage() {
     }
     return { inc, exp, net: inc - exp };
   }, [matches]);
-
-  function toggleSort(k: SortKey) {
-    if (sortKey === k) setSortDesc((d) => !d);
-    else {
-      setSortKey(k);
-      setSortDesc(k === "date" || k === "amount");
-    }
-  }
 
   function openOne(t: Transaction) {
     showDrill(t.payee || t.categoryFull, [t], "Операция");
@@ -346,92 +309,86 @@ export function SearchPage() {
       </StatRow>
 
       {matches.length > 0 && (
-        <div className="card card-pad">
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-semibold">Результаты ({sorted.length})</div>
-            <button onClick={openAll} className="btn-ghost text-xs">
-              <Tag className="w-3 h-3" />
-              Открыть всё в drawer
+        <DataTable<Transaction>
+          title={`Результаты (${formatNum(matches.length)})`}
+          actions={
+            <button type="button" onClick={openAll} className="btn-ghost text-xs">
+              <Tag className="w-3.5 h-3.5" />
+              Открыть всё в шторке
             </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="table-th w-8">
-                    <input
-                      type="checkbox"
-                      className="accent-accent w-4 h-4 align-middle"
-                      checked={allSelected}
-                      ref={(el) => {
-                        if (el) el.indeterminate = someSelected;
-                      }}
-                      onChange={toggleSelectAll}
-                      title="Выбрать все результаты"
-                      aria-label="Выбрать все найденные операции"
-                    />
-                  </th>
-                  <SortHead label="Дата" k="date" cur={sortKey} desc={sortDesc} on={toggleSort} />
-                  <SortHead label="Категория" k="category" cur={sortKey} desc={sortDesc} on={toggleSort} />
-                  <SortHead label="Получатель" k="payee" cur={sortKey} desc={sortDesc} on={toggleSort} />
-                  <th className="table-th">Комментарий</th>
-                  <th className="table-th">Счёт</th>
-                  <SortHead label="Сумма" k="amount" cur={sortKey} desc={sortDesc} on={toggleSort} right />
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.slice(0, 200).map((t) => {
-                  const isSel = selected.has(t.id);
-                  return (
-                  <tr
-                    key={t.id}
-                    onClick={() => openOne(t)}
-                    className={`cursor-pointer align-middle ${
-                      isSel ? "bg-accent/5" : "hover:bg-panel2/50"
-                    }`}
-                  >
-                    <td className="table-td w-8">
-                      <input
-                        type="checkbox"
-                        className="accent-accent w-4 h-4 align-middle"
-                        checked={isSel}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={() => toggleSelect(t.id)}
-                        aria-label="Выбрать операцию"
-                      />
-                    </td>
-                    <td className="table-td whitespace-nowrap text-muted">
-                      {formatDate(t.date, "full")}
-                    </td>
-                    <td className="table-td truncate max-w-[160px]">{t.categoryFull}</td>
-                    <td className="table-td truncate max-w-[160px]">{t.payee || "—"}</td>
-                    <td className="table-td max-w-[260px] text-muted">
-                      <div className="line-clamp-2" title={t.comment}>
-                        {t.comment}
-                      </div>
-                    </td>
-                    <td className="table-td truncate max-w-[120px] text-muted">
-                      {t.account}
-                    </td>
-                    <td
-                      className={`table-td text-right tabular-nums font-medium whitespace-nowrap ${kindColorClass(t.kind)}`}
-                      title={t.kind === "refund" ? "Возврат — уменьшает расход категории" : undefined}
-                    >
-                      <span className={kindGlyphClass(t.kind)}>{kindSignGlyph(t.kind)}</span>
-                      {formatMoney(t.amount, t.currency)}
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {sorted.length > 200 && (
-              <div className="text-xs text-muted text-center mt-3">
-                Показано 200 из {sorted.length}. Уточните запрос.
-              </div>
-            )}
-          </div>
-        </div>
+          }
+          data={matches}
+          rowKey={(t) => t.id}
+          defaultSortKey="date"
+          onRowClick={openOne}
+          selection={{
+            selected,
+            onChange: setSelected,
+            label: "Выбрать все найденные операции",
+          }}
+          limit={200}
+          exportName="search"
+          fixed
+          columns={[
+            {
+              key: "date",
+              type: "date",
+              width: "8.5rem",
+              label: "Дата",
+              sortValue: (t) => t.date,
+              render: (t) => formatDate(t.date, "full"),
+            },
+            {
+              key: "category",
+              type: "text",
+              width: "13rem",
+              label: "Категория",
+              sortValue: (t) => t.categoryFull,
+              render: (t) => t.categoryFull,
+            },
+            {
+              key: "payee",
+              type: "text",
+              width: "13rem",
+              label: "Получатель",
+              sortValue: (t) => t.payee || "",
+              render: (t) => t.payee || "—",
+            },
+            {
+              key: "comment",
+              type: "text",
+              muted: true,
+              label: "Комментарий",
+              sortValue: (t) => t.comment || "",
+              render: (t) => t.comment,
+            },
+            {
+              key: "account",
+              type: "text",
+              muted: true,
+              width: "10rem",
+              label: "Счёт",
+              sortValue: (t) => t.account,
+              render: (t) => t.account,
+            },
+            {
+              key: "amount",
+              type: "main",
+              tone: (t) => kindTone(t.kind),
+              width: "10rem",
+              label: "Сумма",
+              sortValue: (t) => t.amountBase,
+              cellTitle: (t) =>
+                t.kind === "refund" ? "Возврат — уменьшает расход категории" : undefined,
+              render: (t) => (
+                <>
+                  <span className={kindGlyphClass(t.kind)}>{kindSignGlyph(t.kind)}</span>
+                  {formatMoney(t.amount, t.currency)}
+                </>
+              ),
+            },
+          ]}
+        />
       )}
 
       {/* Floating bulk-action bar — appears when ≥1 result is selected. */}
@@ -471,35 +428,5 @@ export function SearchPage() {
         />
       )}
     </div>
-  );
-}
-
-function SortHead({
-  label,
-  k,
-  cur,
-  desc,
-  on,
-  right,
-}: {
-  label: string;
-  k: SortKey;
-  cur: SortKey;
-  desc: boolean;
-  on: (k: SortKey) => void;
-  right?: boolean;
-}) {
-  const active = cur === k;
-  return (
-    <th className={`table-th ${right ? "text-right" : ""}`}>
-      <button
-        onClick={() => on(k)}
-        className={`inline-flex items-center gap-1 uppercase tracking-wider hover:text-text ${active ? "text-accent" : ""}`}
-      >
-        {label}
-        <ArrowUpDown className={`w-3 h-3 ${active ? "" : "opacity-30"}`} />
-        {active && <span className="text-[10px]">{desc ? "↓" : "↑"}</span>}
-      </button>
-    </th>
   );
 }

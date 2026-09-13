@@ -71,6 +71,16 @@ export function kindGlyphClass(kind: TxKind): string {
   return kind === "refund" ? "inline-block relative top-[2px]" : "";
 }
 
+/**
+ * Цвет суммы операции в ленте и таблицах: долг — жёлтым, как в редакторе
+ * операции; остальное — по виду операции.
+ */
+export function operationTone(
+  tx: Pick<Transaction, "kind" | "category">
+): "income" | "expense" | "accent2" | "muted" | "warn" {
+  return tx.category === "Долг" ? "warn" : kindTone(tx.kind);
+}
+
 // ─── refund-aware math helpers ────────────────────────────────────────────────
 
 /**

@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExtraCategoriesLine } from "../components/ExtraCategoriesLine";
 import {
   Search,
   Download,
   Plus,
-  Copy,
   Pencil,
-  Scissors,
   Trash2,
   Eye,
   Scale,
@@ -25,7 +22,6 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDataStore } from "../store/useDataStore";
-import { useDisplayStore } from "../store/useDisplayStore";
 import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
@@ -36,20 +32,20 @@ import { useZenmoneyStore, getLiveAccountsFromCache } from "../store/useZenmoney
 import { confirm, useConfirmStore } from "../store/useConfirmStore";
 import { pluralRu } from "../lib/plural";
 import { EditTransactionModal } from "../components/EditTransactionModal";
+import { OperationActions, OperationAmount, OperationCategory, OperationPayee } from "../components/operations/OperationCells";
+import { TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
-import { Tooltip } from "../components/Tooltip";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { transferTotals } from "../lib/aggregations";
-import { CategoryDot } from "../components/CategoryDot";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { Popover } from "../components/Popover";
 import { PageHeader } from "../components/PageHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
-import { formatMoney, formatNum, displayPayee, secondaryPayee, crossCurrencyReceived, payeeSearchText } from "../lib/format";
-import { kindColorClass, kindGlyphClass, kindLabel, kindSignGlyph } from "../lib/txKindStyle";
+import { formatMoney, formatNum, payeeSearchText } from "../lib/format";
+import { kindLabel, operationTone } from "../lib/txKindStyle";
 import { pluralOps } from "../lib/plural";
 import type { Transaction, TxKind } from "../types";
 
@@ -85,20 +81,6 @@ const ADD_OPTIONS: {
   { kind: "transfer", label: "Перевод", Icon: ArrowLeftRight, color: "text-slate-400" },
   { kind: "transfer", label: "Долг", Icon: HandCoins, color: "text-warn", debt: true },
 ];
-
-/**
- * For transfer transactions `payee` is blank. The "Счёт" column already
- * shows the source, so we only need to surface the target account in
- * the "Получатель" slot.
- */
-function transferCounterparty(t: Transaction): string | null {
-  if (t.kind !== "transfer") return null;
-  const from = t.outcomeAccount?.trim();
-  const to = t.incomeAccount?.trim();
-  if (!to) return null;
-  if (from && to === from) return null;
-  return to;
-}
 
 /**
  * Column templates are defined as CSS grid-template-columns and applied to
@@ -1169,8 +1151,6 @@ function Row({
   onToggleSelect: () => void;
   hideDate?: boolean;
 }) {
-  // Что показывать второй строкой под контрагентом — настройка «Оформления».
-  const statementLine = useDisplayStore((s) => s.statementLine);
   // Одиночный клик выделяет строку, двойной открывает редактор. Проблема в
   // том, что двойной клик В ЛЮБОМ СЛУЧАЕ проходит через одиночные, и строка
   // успевает мигнуть выделением. Поэтому выделение откладываем на порог
@@ -1185,12 +1165,6 @@ function Row({
   useEffect(() => cancelPendingSelect, []);
 
   const template = hideDate ? GRID_COLS_NODATE : GRID_COLS_FULL;
-  // Debt rides on kind=transfer, but gets its own accent (amber) instead of
-  // the transfer grey — so the feed matches the editor's «Долг» colour.
-  const amountColor =
-    tx.category === "Долг" ? "text-warn" : kindColorClass(tx.kind);
-  const amountSign = kindSignGlyph(tx.kind);
-  const amountSignClass = kindGlyphClass(tx.kind);
 
   return (
     <div
@@ -1241,158 +1215,21 @@ function Row({
           {tx.date.slice(8, 10)}.{tx.date.slice(5, 7)}.{tx.date.slice(0, 4)}
         </div>
       )}
-      {/* Без `title`: подсказка повторяла название, которое тут же и написано,
-          и всплывала при каждом проходе мышью над лентой. */}
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="relative inline-flex shrink-0">
-          {/* Sub-category operations show the SUB-tag's own icon (resolved by the
-              «Parent / Sub» path), not the parent's. */}
-          <CategoryDot
-            category={tx.subcategory || tx.category}
-            parent={tx.subcategory ? tx.category : undefined}
-            size="w-7 h-7"
-          />
-          {draft && (
-            <span
-              className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-expense border-2 border-panel"
-              aria-label="Новая операция — не синхронизирована"
-            />
-          )}
-          {/* «Новая» — операция приехала из банка, и в Дзен-мани её ещё не
-              открывали (`viewed: false`). Стоит тем же значком на иконке
-              категории, а не отдельной колонкой: колонка занимала место в
-              каждой строке ради метки, которая бывает у единиц. Столкнуться с
-              красной точкой черновика она не может — черновики этой пометки не
-              получают, у них своя. */}
-          {tx.unseen && !draft && (
-            <Tooltip content="Новая — вы ещё не открывали её в Дзен-мани">
-              <span
-                className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-panel"
-                role="img"
-                aria-label="Новая операция"
-              />
-            </Tooltip>
-          )}
-        </span>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="truncate">{tx.category}</span>
-            {edited && !draft && (
-              <Pencil
-                className="w-3 h-3 text-accent2 shrink-0"
-                aria-label="Отредактировано"
-              />
-            )}
-          </div>
-          {tx.subcategory && (
-            <div className="text-[0.85em] text-muted truncate">
-              {tx.subcategory}
-            </div>
-          )}
-          {/* Вторые категории — своей строкой: второй без подкатегории,
-              третьей с ней (#69). */}
-          <ExtraCategoriesLine extras={tx.extraCategories} />
-        </div>
-      </div>
+      {/* Без `title`: подсказка повторяла бы название, которое тут же и написано. */}
+      <OperationCategory tx={tx} edited={edited} draft={draft} />
       <div className="truncate text-muted" title={tx.account}>
         {tx.account}
       </div>
-      {/* Show brand (Zenmoney's curated name) as the primary payee
-          line. Raw bank-statement text (`tx.payee`) goes underneath
-          in muted small if it differs — keeps the "WB-MOSCOW-12345"
-          info visible without dominating. Tooltip shows both. */}
-      <div className="min-w-0">
-        {(() => {
-          const primary = displayPayee(tx) || transferCounterparty(tx) || "";
-          const secondary = statementLine ? secondaryPayee(tx, "statement") : null;
-          const tooltip = secondary ? `${primary} — ${secondary}` : primary;
-          return (
-            <>
-              <div className="truncate text-muted" title={tooltip}>
-                {primary || "—"}
-              </div>
-              {secondary && (
-                <div className="truncate text-[0.85em] text-text" title={secondary}>
-                  {secondary}
-                </div>
-              )}
-            </>
-          );
-        })()}
-      </div>
+      <OperationPayee tx={tx} />
       <div className="text-muted truncate" title={tx.comment || ""}>
         {tx.comment || ""}
       </div>
       <div
-        className={`text-right tabular-nums font-medium whitespace-nowrap ${amountColor}`}
+        className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
       >
-        {tx.category === "Долг" ? (
-          <HandCoins className="inline-block w-3.5 h-3.5 align-[-2px] mr-0.5" aria-hidden />
-        ) : tx.kind === "transfer" ? (
-          <ArrowLeftRight className="inline-block w-3.5 h-3.5 align-[-2px] mr-0.5" aria-hidden />
-        ) : (
-          <span className={amountSignClass}>{amountSign}</span>
-        )}
-        {formatMoney(tx.amount, tx.currency)}
-        {(() => {
-          const received = crossCurrencyReceived(tx);
-          return received ? (
-            <div className="text-[0.85em] font-normal text-muted/80">
-              ({received})
-            </div>
-          ) : null;
-        })()}
+        <OperationAmount tx={tx} />
       </div>
-      <div className="flex items-center justify-center gap-0.5">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit();
-          }}
-          className="btn-icon"
-          title="Редактировать"
-          aria-label="Редактировать операцию"
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
-        {onCopy && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onCopy();
-            }}
-            className="btn-icon"
-            title="Копировать — та же операция сегодняшним днём"
-            aria-label="Копировать операцию"
-          >
-            <Copy className="w-4 h-4" />
-          </button>
-        )}
-        {onSplit && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSplit();
-            }}
-            className="btn-icon"
-            title="Разделить — расписать операцию по нескольким статьям"
-            aria-label="Разделить операцию"
-          >
-            <Scissors className="w-4 h-4" />
-          </button>
-        )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="btn-icon-danger"
-          title="Удалить"
-          aria-label="Удалить операцию"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
+      <OperationActions onEdit={onEdit} onCopy={onCopy} onSplit={onSplit} onDelete={onDelete} />
     </div>
   );
 }

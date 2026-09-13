@@ -252,7 +252,9 @@ export function DataTable<T>({
           }
         />
       )}
-      <div className="overflow-x-auto">
+      {/* Липкой шапке нужен прокручиваемый предок снаружи: своя обёртка с
+          горизонтальной прокруткой стала бы им сама и не дала бы шапке липнуть. */}
+      <div className={stickyHead ? undefined : "overflow-x-auto"}>
         <table
           className={clsx("w-full", fixed && "table-fixed", density === "compact" && "table-compact")}
           style={minWidth ? { minWidth } : undefined}

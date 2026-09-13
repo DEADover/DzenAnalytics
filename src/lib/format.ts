@@ -12,6 +12,22 @@ export function displayPayee(t: Pick<Transaction, "payee" | "brand">): string {
 }
 
 /**
+ * Куда ушёл перевод — для колонки контрагента. У перевода `payee` пустой, а
+ * счёт-источник уже стоит в колонке «Счёт», поэтому показываем счёт-получатель.
+ * `null` — не перевод, получателя нет или перевод на тот же счёт.
+ */
+export function transferCounterparty(
+  t: Pick<Transaction, "kind" | "outcomeAccount" | "incomeAccount">
+): string | null {
+  if (t.kind !== "transfer") return null;
+  const from = t.outcomeAccount?.trim();
+  const to = t.incomeAccount?.trim();
+  if (!to) return null;
+  if (from && to === from) return null;
+  return to;
+}
+
+/**
  * Raw payee value to show as a secondary line / tooltip *when* it
  * differs from the brand. Returns null if there's no brand or the
  * payee is already the same string — avoids the noisy "Wildberries /
