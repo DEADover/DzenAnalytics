@@ -417,8 +417,8 @@ function Slider({
   );
 }
 
-// Inline label/value pair used INSIDE a card (not a standalone card tile), so it
-// deliberately does not use the design-system `Stat` (which renders its own card).
+// Inline label/value pair used INSIDE a card, so it deliberately is not a
+// `StatRow` cell (the row renders its own card).
 function MoneyStat({ label, value, base }: { label: string; value: number; base: string }) {
   return (
     <div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { Cloud, MousePointerClick } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
@@ -101,25 +102,16 @@ export function WordcloudPage() {
       />
       <GlobalFilters />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="card-tray card-pad">
-          <div className="label mb-1">Уникальных слов</div>
-          <div className="stat-num">{formatNum(words.length)}</div>
-        </div>
-        <div className="card-tray card-pad">
-          <div className="label mb-1">Операций с комментариями</div>
-          <div className="stat-num">{formatNum(totalCommentTxs)}</div>
-        </div>
-        <div className="card-tray card-pad">
-          <div className="label mb-1">Самое частое</div>
-          <div className="stat-num text-accent text-xl truncate" title={words[0]?.text}>
-            {words[0]?.text || "—"}
-          </div>
-          <div className="text-xs text-muted mt-1">
-            {words[0] ? `${formatNum(words[0].count)} раз` : ""}
-          </div>
-        </div>
-      </div>
+      <StatRow>
+        <StatCell label="Уникальных слов" value={formatNum(words.length)} />
+        <StatCell label="Операций с комментариями" value={formatNum(totalCommentTxs)} />
+        <StatCell
+          label="Самое частое"
+          value={<span title={words[0]?.text}>{words[0]?.text || "—"}</span>}
+          tone="accent"
+          note={words[0] ? `${formatNum(words[0].count)} раз` : undefined}
+        />
+      </StatRow>
 
       {words.length === 0 ? (
         <div className="card-tray card-pad text-center py-12 text-muted">

@@ -8,7 +8,7 @@ import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { DateField } from "../components/DateField";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
@@ -324,8 +324,8 @@ export function SearchPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Stat
+      <StatRow>
+        <StatCell
           label="Найдено"
           value={
             <>
@@ -336,14 +336,14 @@ export function SearchPage() {
             </>
           }
         />
-        <Stat label="Доходы" value={formatMoney(totals.inc, base)} tone="income" />
-        <Stat label="Расходы" value={formatMoney(totals.exp, base)} tone="expense" />
-        <Stat
+        <StatCell label="Доходы" value={formatMoney(totals.inc, base)} tone="income" />
+        <StatCell label="Расходы" value={formatMoney(totals.exp, base)} tone="expense" />
+        <StatCell
           label="Чистый"
           value={formatMoney(totals.net, base, { signed: true })}
           tone={totals.net >= 0 ? "income" : "expense"}
         />
-      </div>
+      </StatRow>
 
       {matches.length > 0 && (
         <div className="card card-pad">

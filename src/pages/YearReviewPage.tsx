@@ -50,7 +50,7 @@ import { PageHeader } from "../components/PageHeader";
 import { MonthPicker } from "../components/MonthPicker";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
-import { SectionCard, StatCell } from "../components/SectionCard";
+import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 
 const INCOME = "#10B981";
@@ -156,7 +156,7 @@ export function YearReviewPage() {
   if (transactions.length === 0) return <EmptyState />;
   if (!review.hasData) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <PageHeader icon={Sparkles} title="Год в цифрах" />
         <div className="card-tray card-pad text-center text-muted py-12">
           В данных нет операций за {year} год.
@@ -174,7 +174,7 @@ export function YearReviewPage() {
   const partial = review.window.to < `${year}-12-31`;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       <PageHeader
         icon={Sparkles}
         title={`Год в цифрах: ${year}`}
@@ -216,70 +216,62 @@ export function YearReviewPage() {
       />
 
       {/* Итоги года */}
-      <div className="tray">
-        <div className="tray-core px-5 py-4">
-          {/* Пять чисел в ряд с разделителями. Число операций стояло мелкой
-              служебной строчкой над ними, хотя это такой же итог года, как
-              доход и расход, — просто не в рублях. */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-4 gap-y-4 divide-border lg:divide-x">
-            <StatCell
-              label="Доход"
-              value={formatMoney(review.totalIncome, baseCurrency)}
-              note={review.prev.available ? incomeDelta.text : undefined}
-              noteCls={review.prev.available ? incomeDelta.cls : undefined}
-              icon={<TrendingUp className="w-4 h-4" />}
-              tone="income"
-            />
-            <StatCell
-              label="Расход"
-              value={formatMoney(review.totalExpense, baseCurrency)}
-              note={review.prev.available ? expenseDelta.text : undefined}
-              noteCls={review.prev.available ? expenseDelta.cls : undefined}
-              icon={<TrendingDown className="w-4 h-4" />}
-              tone="expense"
-              pad
-            />
-            <StatCell
-              label="Чистый поток"
-              value={formatMoney(review.netFlow, baseCurrency, { signed: true })}
-              note={review.prev.available ? netDelta.text : undefined}
-              noteCls={review.prev.available ? netDelta.cls : undefined}
-              icon={<Trophy className="w-4 h-4" />}
-              tone={review.netFlow >= 0 ? "income" : "expense"}
-              pad
-            />
-            <StatCell
-              label="Норма сбережений"
-              value={review.totalIncome > 0 ? formatPct(review.savingsRate, 0) : "—"}
-              // «−290 800 ₽ остаётся» — не по-русски и не по смыслу: при
-              // отрицательном потоке ничего не остаётся, его не хватило.
-              note={
-                review.totalIncome > 0
-                  ? review.netFlow >= 0
-                    ? `${formatMoney(review.netFlow, baseCurrency)} осталось`
-                    : `${formatMoney(-review.netFlow, baseCurrency)} не хватило`
-                  : undefined
-              }
-              icon={<PiggyBank className="w-4 h-4" />}
-              tone={review.netFlow >= 0 ? "income" : "expense"}
-              pad
-            />
-            <StatCell
-              label="Операций"
-              value={formatNum(review.txCount)}
-              // Честная граница данных: иначе «за 2026 год» читается как «за
-              // весь 2026», а год ещё идёт и итоги неизбежно скромнее.
-              note={partial ? `данные по ${dayLabel(review.window.to)}` : "год целиком"}
-              icon={<Receipt className="w-4 h-4" />}
-              pad
-            />
-          </div>
-        </div>
-      </div>
+      {/* Пять чисел в ряд с разделителями. Число операций стояло мелкой
+          служебной строчкой над ними, хотя это такой же итог года, как
+          доход и расход, — просто не в рублях. */}
+      <StatRow>
+        <StatCell
+          label="Доход"
+          value={formatMoney(review.totalIncome, baseCurrency)}
+          note={review.prev.available ? incomeDelta.text : undefined}
+          noteCls={review.prev.available ? incomeDelta.cls : undefined}
+          icon={<TrendingUp className="w-4 h-4" />}
+          tone="income"
+        />
+        <StatCell
+          label="Расход"
+          value={formatMoney(review.totalExpense, baseCurrency)}
+          note={review.prev.available ? expenseDelta.text : undefined}
+          noteCls={review.prev.available ? expenseDelta.cls : undefined}
+          icon={<TrendingDown className="w-4 h-4" />}
+          tone="expense"
+        />
+        <StatCell
+          label="Чистый поток"
+          value={formatMoney(review.netFlow, baseCurrency, { signed: true })}
+          note={review.prev.available ? netDelta.text : undefined}
+          noteCls={review.prev.available ? netDelta.cls : undefined}
+          icon={<Trophy className="w-4 h-4" />}
+          tone={review.netFlow >= 0 ? "income" : "expense"}
+        />
+        <StatCell
+          label="Норма сбережений"
+          value={review.totalIncome > 0 ? formatPct(review.savingsRate, 0) : "—"}
+          // «−290 800 ₽ остаётся» — не по-русски и не по смыслу: при
+          // отрицательном потоке ничего не остаётся, его не хватило.
+          note={
+            review.totalIncome > 0
+              ? review.netFlow >= 0
+                ? `${formatMoney(review.netFlow, baseCurrency)} осталось`
+                : `${formatMoney(-review.netFlow, baseCurrency)} не хватило`
+              : undefined
+          }
+          icon={<PiggyBank className="w-4 h-4" />}
+          tone={review.netFlow >= 0 ? "income" : "expense"}
+        />
+        <StatCell
+          label="Операций"
+          value={formatNum(review.txCount)}
+          // Честная граница данных: иначе «за 2026 год» читается как «за
+          // весь 2026», а год ещё идёт и итоги неизбежно скромнее.
+          note={partial ? `данные по ${dayLabel(review.window.to)}` : "год целиком"}
+          icon={<Receipt className="w-4 h-4" />}
+        />
+      </StatRow>
 
       {/* Год по месяцам и профиль недели — половина ширины каждому: на широком
           мониторе двенадцать столбцов растягивались в пустое поле. */}
-      <div className="grid lg:grid-cols-2 gap-3">
+      <div className="grid lg:grid-cols-2 gap-4">
         <YearBars review={review} base={baseCurrency} onMonth={drillMonth} />
         <WeekProfile review={review} base={baseCurrency} onDay={drillWeekday} />
       </div>
@@ -288,7 +280,7 @@ export function YearReviewPage() {
       <Quarters review={review} base={baseCurrency} onQuarter={drillQuarter} />
 
       {/* Рекорды месяцев */}
-      <div className="grid sm:grid-cols-3 gap-3">
+      <div className="grid sm:grid-cols-3 gap-4">
         <Record
           label="Лучший месяц"
           icon={<PiggyBank className="w-4 h-4 text-income" />}
@@ -328,7 +320,7 @@ export function YearReviewPage() {
       </div>
 
       {/* Куда уходили деньги */}
-      <div className="grid lg:grid-cols-2 gap-3">
+      <div className="grid lg:grid-cols-2 gap-4">
         <TopList
           title="Куда уходили деньги"
           info={
@@ -369,7 +361,7 @@ export function YearReviewPage() {
           высота уходит в промежутки между рядами плиток, а их три — прибавка
           расходится по двум зазорам и не превращается в дыру, как это было у
           сетки из двух рядов с `content-between`. */}
-      <div className="grid lg:grid-cols-2 gap-3">
+      <div className="grid lg:grid-cols-2 gap-4">
         <SectionCard
           icon={<Coins className="w-4 h-4 text-expense" />}
           title="Самые дорогие покупки"

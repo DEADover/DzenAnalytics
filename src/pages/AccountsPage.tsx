@@ -112,7 +112,7 @@ import { capitalShare, mergeLiveByTitle, positiveBalanceTotal } from "../lib/acc
 import { depositTotals, projectDeposit, type DepositRow } from "../lib/deposits";
 import { SectionCard } from "../components/SectionCard";
 import { toIsoDate } from "../lib/period";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { Sparkline } from "../components/Sparkline";
 import { AccountLogo } from "../components/AccountLogo";
 import { MultiSelect } from "../components/MultiSelect";
@@ -1724,16 +1724,12 @@ export function AccountsPage() {
         </div>
       )}
 
-      <div
-        className={
-          tab === "capital" ? "grid grid-cols-2 md:grid-cols-2 gap-4" : "hidden"
-        }
-      >
-        <Stat
+      <StatRow className={tab === "capital" ? undefined : "hidden"}>
+        <StatCell
           label="Совокупный баланс"
           tone={noWindowData ? "accent" : lastNetWorth >= 0 ? "income" : "expense"}
           value={noWindowData ? "—" : formatMoney(lastNetWorth, base, { signed: true })}
-          hint={
+          note={
             noWindowData
               ? "В выбранном периоде нет операций"
               : viewWindow
@@ -1741,13 +1737,13 @@ export function AccountsPage() {
                 : "На последний день истории"
           }
         />
-        <Stat
+        <StatCell
           label="Наибольший баланс"
           tone="accent"
           value={noWindowData ? "—" : formatMoney(peakNetWorth, base)}
           // То же окно, что и у «Совокупного баланса», — значит и подпись
           // должна честно называть его, а не молчать про период.
-          hint={
+          note={
             noWindowData
               ? "В выбранном периоде нет операций"
               : viewWindow
@@ -1755,41 +1751,37 @@ export function AccountsPage() {
                 : "За всю историю"
           }
         />
-      </div>
+      </StatRow>
 
       {/* ── «Движение»: всё, что подчиняется фильтру ─────────────────────── */}
-      <div
-        className={
-          tab === "flow" ? "grid grid-cols-2 md:grid-cols-4 gap-4" : "hidden"
-        }
-      >
-        <Stat
+      <StatRow className={tab === "flow" ? undefined : "hidden"}>
+        <StatCell
           label="Доходы"
           tone="income"
           value={formatMoney(totalIncome, base)}
-          hint="Без переводов между счетами"
+          note="Без переводов между счетами"
         />
-        <Stat
+        <StatCell
           label="Расходы"
           tone="expense"
           value={formatMoney(totalExpense, base)}
-          hint="Без переводов между счетами"
+          note="Без переводов между счетами"
         />
-        <Stat
+        <StatCell
           label="Изменение по фильтру"
           tone={totalNet >= 0 ? "income" : "expense"}
           value={formatMoney(totalNet, base, { signed: true })}
-          hint="Доходы минус расходы"
+          note="Доходы минус расходы"
         />
-        <Stat
+        <StatCell
           label="Изменение за всю историю"
           tone={totalAllAccounts >= 0 ? "income" : "expense"}
           value={formatMoney(totalAllAccounts, base, { signed: true })}
           // Стоит рядом с «по фильтру» намеренно: эти два числа сравнивают, и в
           // этом весь их смысл. Раньше пара терялась в середине страницы.
-          hint="Для сравнения — без фильтра"
+          note="Для сравнения — без фильтра"
         />
-      </div>
+      </StatRow>
 
       <div className={tab === "capital" ? "card-tray card-pad" : "hidden"}>
         <div className="flex items-center justify-between mb-4">

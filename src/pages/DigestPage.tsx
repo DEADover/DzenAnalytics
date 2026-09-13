@@ -19,7 +19,7 @@ import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Segmented } from "../components/Segmented";
-import { SectionCard, StatCell } from "../components/SectionCard";
+import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 import type { Transaction } from "../types";
 
@@ -48,7 +48,7 @@ export function DigestPage() {
   if (transactions.length === 0) return <EmptyState />;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       <PageHeader
         icon={Newspaper}
         title="Дайджест"
@@ -206,52 +206,45 @@ function DigestDetail({
   );
 
   return (
-    <div className="space-y-3">
-      <div className="tray">
-        <div className="tray-core px-5 py-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4 divide-border lg:divide-x">
-            <StatCell
-              label="Доход"
-              value={formatMoney(entry.income, baseCurrency)}
-              icon={<TrendingUp className="w-4 h-4" />}
-              tone="income"
-              note={deltaNote(entry.incomeDelta)}
-              noteCls={incCls}
-            />
-            <StatCell
-              label="Расход"
-              value={formatMoney(entry.expense, baseCurrency)}
-              icon={<TrendingDown className="w-4 h-4" />}
-              tone="expense"
-              note={deltaNote(entry.expenseDelta)}
-              noteCls={expCls}
-              pad
-            />
-            <StatCell
-              label="Чистый поток"
-              value={formatMoney(entry.net, baseCurrency, { signed: true })}
-              icon={<Trophy className="w-4 h-4" />}
-              tone={entry.net >= 0 ? "income" : "expense"}
-              note={deltaNote(
-                Math.abs(entry.prevNet) > 0.01
-                  ? (entry.net - entry.prevNet) / Math.abs(entry.prevNet)
-                  : 0
-              )}
-              noteCls={netCls}
-              pad
-            />
-            {/* Число операций было мелкой служебной строчкой над числами —
-                такой же итог периода, просто не в рублях. */}
-            <StatCell
-              label="Операций"
-              value={formatNum(entry.txCount)}
-              icon={<Coins className="w-4 h-4" />}
-              note={entry.label}
-              pad
-            />
-          </div>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <StatRow>
+        <StatCell
+          label="Доход"
+          value={formatMoney(entry.income, baseCurrency)}
+          icon={<TrendingUp className="w-4 h-4" />}
+          tone="income"
+          note={deltaNote(entry.incomeDelta)}
+          noteCls={incCls}
+        />
+        <StatCell
+          label="Расход"
+          value={formatMoney(entry.expense, baseCurrency)}
+          icon={<TrendingDown className="w-4 h-4" />}
+          tone="expense"
+          note={deltaNote(entry.expenseDelta)}
+          noteCls={expCls}
+        />
+        <StatCell
+          label="Чистый поток"
+          value={formatMoney(entry.net, baseCurrency, { signed: true })}
+          icon={<Trophy className="w-4 h-4" />}
+          tone={entry.net >= 0 ? "income" : "expense"}
+          note={deltaNote(
+            Math.abs(entry.prevNet) > 0.01
+              ? (entry.net - entry.prevNet) / Math.abs(entry.prevNet)
+              : 0
+          )}
+          noteCls={netCls}
+        />
+        {/* Число операций было мелкой служебной строчкой над числами —
+            такой же итог периода, просто не в рублях. */}
+        <StatCell
+          label="Операций"
+          value={formatNum(entry.txCount)}
+          icon={<Coins className="w-4 h-4" />}
+          note={entry.label}
+        />
+      </StatRow>
 
       {entry.movers.length > 0 && (
         <SectionCard

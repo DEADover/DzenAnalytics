@@ -28,7 +28,7 @@ import { confirm } from "../store/useConfirmStore";
 import { CategoryDot } from "./CategoryDot";
 import { Tooltip } from "./Tooltip";
 import { EditTransactionModal } from "./EditTransactionModal";
-import { Stat } from "./Stat";
+import { StatCell, StatRow } from "./SectionCard";
 import { BulkEditModal } from "./BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { formatMoney, formatDate, formatNum, displayPayee, secondaryPayee, crossCurrencyReceived, payeeSearchText } from "../lib/format";
@@ -383,18 +383,19 @@ export function TransactionsDrawer() {
           </div>
         )}
 
-        {/* Те же плитки, что на страницах: три числа тут стояли голым текстом
-            на плоской полосе — единственное место в продукте, где показатели
-            выглядели так. */}
-        <div className="px-5 md:px-6 py-3 border-b border-border grid grid-cols-3 gap-3">
-          <Stat dense label="Доходы" tone="income" value={formatMoney(totals.inc, base)} />
-          <Stat dense label="Расходы" tone="expense" value={formatMoney(totals.exp, base)} />
-          <Stat
-            dense
-            label="Чистый"
-            tone={totals.net >= 0 ? "income" : "expense"}
-            value={formatMoney(totals.net, base, { signed: true })}
-          />
+        {/* Тот же ряд итогов, что на страницах: три числа тут стояли голым
+            текстом на плоской полосе — единственное место в продукте, где
+            показатели выглядели так. */}
+        <div className="px-5 md:px-6 py-3 border-b border-border">
+          <StatRow>
+            <StatCell label="Доходы" tone="income" value={formatMoney(totals.inc, base)} />
+            <StatCell label="Расходы" tone="expense" value={formatMoney(totals.exp, base)} />
+            <StatCell
+              label="Чистый"
+              tone={totals.net >= 0 ? "income" : "expense"}
+              value={formatMoney(totals.net, base, { signed: true })}
+            />
+          </StatRow>
         </div>
 
         <div className="px-5 md:px-6 py-3 border-b border-border flex items-center gap-3">

@@ -12,7 +12,7 @@ import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { DuplicateExclusionsModal } from "../components/DuplicateExclusionsModal";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 
@@ -138,16 +138,16 @@ export function DuplicatesPage() {
         }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Stat label="Групп дубликатов" value={groups.length} tone="warn" />
-        <Stat label="Всего операций в группах" value={formatNum(totalCount)} />
-        <Stat
+      <StatRow>
+        <StatCell label="Групп дубликатов" value={formatNum(groups.length)} tone="warn" />
+        <StatCell label="Всего операций в группах" value={formatNum(totalCount)} />
+        <StatCell
           label="Лишняя сумма"
           value={formatMoney(totalDuplicateAmount, base)}
           tone="expense"
-          hint="если все «лишние» копии — действительно дубли"
+          note="если все «лишние» копии — действительно дубли"
         />
-      </div>
+      </StatRow>
 
 
       {groups.length === 0 ? (

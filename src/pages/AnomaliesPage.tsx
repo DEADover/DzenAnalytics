@@ -10,10 +10,10 @@ import { SortableTable, type Column } from "../components/SortableTable";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { GlobalFilters } from "../components/GlobalFilters";
-import { formatMoney, formatDate, monthLabel } from "../lib/format";
+import { formatMoney, formatDate, formatNum, monthLabel } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 
 export function AnomaliesPage() {
   // Обороты и взаимозачёты не аномалии, а шум: категории, помеченные «не
@@ -146,32 +146,28 @@ export function AnomaliesPage() {
 
       <GlobalFilters />
 
-      {/* Плотный вариант плиток: три коротких числа в полный рост занимали
-          треть первого экрана. И подпись есть у каждой — без неё средняя плитка
-          выходила ниже соседних, и ряд читался сломанным. */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 items-stretch">
-        <Stat
-          dense
+      {/* Подпись есть у каждой ячейки — без неё средняя выходила бы ниже
+          соседних, и ряд читался бы сломанным. */}
+      <StatRow>
+        <StatCell
           label="Аномальных операций"
-          value={anomalies.length}
+          value={formatNum(anomalies.length)}
           tone="warn"
-          hint={<>Порог: σ &gt; {threshold}</>}
+          note={<>Порог: σ &gt; {threshold}</>}
         />
-        <Stat
-          dense
+        <StatCell
           label="Их сумма"
           value={formatMoney(totalAnomalyAmount, base)}
           tone="expense"
-          hint={<>Сверх обычного для своей категории</>}
+          note="Сверх обычного для своей категории"
         />
-        <Stat
-          dense
+        <StatCell
           label="Всплески по категориям"
-          value={spikes.length}
+          value={formatNum(spikes.length)}
           tone="warn"
-          hint={<>Превышение {formatMoney(totalSpikesDelta, base)}</>}
+          note={<>Превышение {formatMoney(totalSpikesDelta, base)}</>}
         />
-      </div>
+      </StatRow>
 
       <div className="inline-flex items-center gap-0.5 self-start rounded-full p-1 bg-panel2 border border-border shadow-tray">
         {(

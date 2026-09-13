@@ -24,7 +24,7 @@ import { PeriodPills } from "../components/PeriodPills";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { SeriesTooltip } from "../components/TooltipFacts";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
 import {
   formatMoney,
@@ -159,29 +159,29 @@ export function Budget503020Page() {
         </div>
       </details>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Stat
+      <StatRow>
+        <StatCell
           label="Нужды"
           value={pct(split.needsPct)}
           tone={split.needsPct > 0.5 ? "expense" : "default"}
           icon={<Home className="w-4 h-4" />}
-          hint={`${formatMoney(split.needs, base)} · цель ≤ 50%`}
+          note={`${formatMoney(split.needs, base)} · цель ≤ 50%`}
         />
-        <Stat
+        <StatCell
           label="Желания"
           value={pct(split.wantsPct)}
           tone={split.wantsPct > 0.3 ? "warn" : "default"}
           icon={<ShoppingBag className="w-4 h-4" />}
-          hint={`${formatMoney(split.wants, base)} · цель ≤ 30%`}
+          note={`${formatMoney(split.wants, base)} · цель ≤ 30%`}
         />
-        <Stat
+        <StatCell
           label="Сбережения"
           value={pct(split.savingsPct)}
           tone={split.savingsPct >= 0.2 ? "income" : "expense"}
           icon={<PiggyBank className="w-4 h-4" />}
-          hint={`${formatMoney(split.savings, base, { signed: true })} · цель ≥ 20%`}
+          note={`${formatMoney(split.savings, base, { signed: true })} · цель ≥ 20%`}
         />
-      </div>
+      </StatRow>
 
       {split.needs > 0 && split.wants === 0 && (
         <div className="card card-pad bg-accent/5 border-accent/40 flex items-start gap-2 text-sm">

@@ -71,6 +71,7 @@ import {
   type BudgetLine,
 } from "../lib/budgets";
 import { formatMoney } from "../lib/format";
+import { StatCell, StatRow, type StatTone } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { DateField } from "../components/DateField";
@@ -1099,12 +1100,12 @@ export function BudgetsPage() {
       {view === "month" && (
         <>
       {/* Summary: расходы / доходы / дельта — у каждого явные «Факт» и «План» */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <StatRow>
         <PlanFactCard
           title="Расходы за месяц"
           fact={expFact}
           plan={expPlan}
-          factClass="text-expense"
+          tone="expense"
           base={base}
           kind="expense"
           withTransfers={settings.perimeterTransfers ? expFact + expTransfers : undefined}
@@ -1113,7 +1114,7 @@ export function BudgetsPage() {
           title="Доходы за месяц"
           fact={incFact}
           plan={incPlan}
-          factClass="text-income"
+          tone="income"
           base={base}
           kind="income"
           withTransfers={settings.perimeterTransfers ? incFact + incTransfers : undefined}
@@ -1122,13 +1123,13 @@ export function BudgetsPage() {
           title="Разница (доходы − расходы)"
           fact={factDelta}
           plan={planDelta}
-          factClass={factDelta >= 0 ? "text-income" : "text-expense"}
+          tone={factDelta >= 0 ? "income" : "expense"}
           signed
           base={base}
           kind="delta"
           withTransfers={settings.perimeterTransfers ? factDelta : undefined}
         />
-      </div>
+      </StatRow>
 
       {/* Full-width cash-flow widget: cumulative income/expense over the month
           with a linear end-of-month forecast (Zen «Планы» style). */}
@@ -1217,7 +1218,7 @@ function PlanFactCard({
   title,
   fact,
   plan,
-  factClass,
+  tone,
   base,
   signed = false,
   kind,
@@ -1226,45 +1227,41 @@ function PlanFactCard({
   title: string;
   fact: number;
   plan: number;
-  factClass: string;
+  tone: StatTone;
   base: string;
   signed?: boolean;
   kind: "expense" | "income" | "delta";
   /**
    * Тот же факт, но вместе с переводами. Задан — под суммой появляется вторая
-   * строка; ЗАДАВАТЬ ЕГО НАДО ВСЕМ ТРЁМ карточкам сразу, когда переводы
-   * учитываются. Иначе у одной карточки строка есть, у другой нет — и пилюли
-   * «План» и «%» встают на разной высоте, хотя карточки стоят в один ряд.
+   * строка; ЗАДАВАТЬ ЕГО НАДО ВСЕМ ТРЁМ ячейкам сразу, когда переводы
+   * учитываются. Иначе у одной ячейки строка есть, у другой нет — и пилюли
+   * «План» и «%» встают на разной высоте, хотя ячейки стоят в один ряд.
    */
   withTransfers?: number;
 }) {
   return (
-    <div className="tray">
-    <div className="tray-core card-pad">
-      <div className="label mb-1.5">{title}</div>
-      <div className={`stat-num ${factClass} mb-3`}>
-        {formatMoney(fact, base, { signed })}
-      </div>
-      {/* Оборот по счетам показываем ОТДЕЛЬНОЙ строкой, а не вместо факта:
-          перекладывание денег между своими счетами тратой не является. У
-          «Дельты» переводы внутри бюджета гасят друг друга, и вторая сумма
-          совпадает с первой — там строка держит место пустой, чтобы ряд
-          карточек не разъезжался. */}
-      {withTransfers !== undefined && (
-        <div
-          className="-mt-2 mb-3 text-[13px] text-muted tabular-nums"
-          aria-hidden={withTransfers === fact}
-        >
-          {withTransfers === fact ? (
-            <span className="invisible">—</span>
-          ) : (
-            <>
-              {formatMoney(withTransfers, base, { signed })} включая переводы
-            </>
-          )}
-        </div>
-      )}
-      <div className="flex items-center gap-2 flex-wrap">
+    <StatCell
+      label={title}
+      value={formatMoney(fact, base, { signed })}
+      tone={tone}
+      // Оборот по счетам показываем ОТДЕЛЬНОЙ строкой, а не вместо факта:
+      // перекладывание денег между своими счетами тратой не является. У
+      // «Разницы» переводы внутри бюджета гасят друг друга, и вторая сумма
+      // совпадает с первой — там строка держит место пустой, чтобы пилюли
+      // соседних ячеек стояли на одной высоте.
+      note={
+        withTransfers === undefined ? undefined : withTransfers === fact ? (
+          <span className="invisible" aria-hidden>
+            —
+          </span>
+        ) : (
+          <span className="tabular-nums">
+            {formatMoney(withTransfers, base, { signed })} включая переводы
+          </span>
+        )
+      }
+    >
+      <div className="flex items-center gap-2 flex-wrap mt-3">
         <span className="text-sm px-3 py-1 rounded-full bg-panel2 text-muted tabular-nums whitespace-nowrap">
           План {formatMoney(plan, base, { signed })}
         </span>
@@ -1288,8 +1285,7 @@ function PlanFactCard({
           )
         )}
       </div>
-    </div>
-    </div>
+    </StatCell>
   );
 }
 

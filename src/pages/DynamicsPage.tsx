@@ -218,7 +218,7 @@ export function DynamicsPage() {
   const avgLabel = `Среднее за ${GRANULARITY_UNIT[granularity]}`;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader
         icon={Activity}
         title="Динамика"

@@ -19,7 +19,6 @@ import {
   TrendingUp,
   Wallet,
   List,
-  Calendar,
   ChevronLeft,
   ChevronRight,
   BarChart3,
@@ -48,6 +47,7 @@ import {
 import { InsightsPanel } from "../components/InsightsPanel";
 import {
   formatMoney,
+  formatPct,
   monthLabel,
   monthLabelFull,
   formatNum,
@@ -56,7 +56,7 @@ import {
   chartGridStroke,
   chartAxisStroke,
 } from "../lib/format";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
@@ -219,42 +219,47 @@ export function CashflowPage() {
       />
       <GlobalFilters period={lp} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Stat
+      <StatRow>
+        <StatCell
           label="Доходы"
           value={formatMoney(kpi.income, base)}
           tone="income"
           icon={<TrendingUp className="w-4 h-4" />}
-          hint={`${formatNum(avgMonthlyIncome)} ${base} / мес`}
+          note={`${formatNum(avgMonthlyIncome)} ${base} / мес`}
         />
-        <Stat
+        <StatCell
           label="Расходы"
           value={formatMoney(kpi.expense, base)}
           tone="expense"
           icon={<TrendingDown className="w-4 h-4" />}
-          hint={`${formatNum(avgMonthlyExpense)} ${base} / мес`}
+          note={`${formatNum(avgMonthlyExpense)} ${base} / мес`}
         />
-        <Stat
+        <StatCell
           label="Чистый поток"
           value={formatMoney(kpi.net, base, { signed: true })}
           tone={kpi.net >= 0 ? "income" : "expense"}
           icon={<Wallet className="w-4 h-4" />}
-          hint={`Норма сбережений: ${(savingsRate * 100).toFixed(1)}%`}
+          note={`Норма сбережений: ${formatPct(savingsRate, 1)}`}
         />
-        <button onClick={openAll} className="text-left">
-          <Stat
-            label="Операций (клик)"
-            value={formatNum(kpi.count)}
-            icon={<List className="w-4 h-4" />}
-            hint={
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                {kpi.daysSpan} дн · {kpi.uniqueCategories} кат · {kpi.uniquePayees} получ.
-              </span>
-            }
-          />
-        </button>
-      </div>
+        {/* Итог не кликается целиком: действие — отдельной кнопкой-значком,
+            иначе непонятно, какое из четырёх чисел ведёт в операции. */}
+        <StatCell
+          label="Операций"
+          value={formatNum(kpi.count)}
+          icon={
+            <button
+              type="button"
+              onClick={openAll}
+              className="btn-icon -m-1.5"
+              title="Открыть операции периода"
+              aria-label="Открыть операции периода"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          }
+          note={`${kpi.daysSpan} дн · ${kpi.uniqueCategories} кат · ${kpi.uniquePayees} получ.`}
+        />
+      </StatRow>
 
       <InsightsPanel insights={insights} base={base} />
 

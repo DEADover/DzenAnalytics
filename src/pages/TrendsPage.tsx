@@ -43,7 +43,9 @@ import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { SeriesTooltip } from "../components/TooltipFacts";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
+import { KindSwitcher } from "../components/KindSwitcher";
+import { Segmented } from "../components/Segmented";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
 import { useEffect } from "react";
@@ -172,37 +174,22 @@ export function TrendsPage() {
         title="Тренды"
         hint="Помесячная динамика и паттерны по дням недели"
         right={
-          <div className="flex flex-wrap gap-2">
-            <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
-              <button
-                onClick={() => setKind("expense")}
-                className={`px-3 py-1 text-xs rounded-full ${kind === "expense" ? "bg-expense text-white" : "text-muted"}`}
-              >
-                Расходы
-              </button>
-              <button
-                onClick={() => setKind("income")}
-                className={`px-3 py-1 text-xs rounded-full ${kind === "income" ? "bg-income text-white" : "text-muted"}`}
-              >
-                Доходы
-              </button>
-            </div>
-            <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
-              <button
-                onClick={() => setLevel("top")}
-                title="Группировать по верхнеуровневым категориям"
-                className={`px-3 py-1 text-xs rounded-full ${level === "top" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                Крупно
-              </button>
-              <button
-                onClick={() => setLevel("full")}
-                title="Разбивать по подкатегориям"
-                className={`px-3 py-1 text-xs rounded-full ${level === "full" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                Детально
-              </button>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Свои пилюли с красной и зелёной заливкой были третьим видом
+                выбора «Расходы / Доходы» в продукте. Теперь — общий
+                переключатель, а детализация рядом — общими сегментами той же
+                высоты. */}
+            <KindSwitcher kind={kind} onChange={setKind} />
+            <Segmented
+              value={level}
+              onChange={setLevel}
+              label="Детализация категорий"
+              size="sm"
+              options={[
+                { value: "top" as const, label: "Крупно", title: "Группировать по верхнеуровневым категориям" },
+                { value: "full" as const, label: "Детально", title: "Разбивать по подкатегориям" },
+              ]}
+            />
           </div>
         }
       />
@@ -378,29 +365,29 @@ export function TrendsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Stat
+      <StatRow>
+        <StatCell
           label="Будни (среднее за день)"
           tone={kind === "expense" ? "expense" : "income"}
           value={formatMoney(weekdayAvg, base)}
-          hint={`Всего за будни: ${formatMoney(weekdayTotal, base)}`}
+          note={`Всего за будни: ${formatMoney(weekdayTotal, base)}`}
         />
-        <Stat
+        <StatCell
           label="Выходные (среднее за день)"
           tone="accent2"
           value={formatMoney(weekendAvg, base)}
-          hint={`Всего за выходные: ${formatMoney(weekendTotal, base)}`}
+          note={`Всего за выходные: ${formatMoney(weekendTotal, base)}`}
         />
-        <Stat
+        <StatCell
           label="Соотношение"
-          value={weekdayAvg > 0 ? `${(weekendAvg / weekdayAvg).toFixed(2)}×` : "—"}
-          hint={
+          value={weekdayAvg > 0 ? `${formatNum(weekendAvg / weekdayAvg, { fractionDigits: 2 })}×` : "—"}
+          note={
             weekendAvg > weekdayAvg
               ? "В выходные тратите больше за день"
               : "В будни тратите больше за день"
           }
         />
-      </div>
+      </StatRow>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <HourOfWeekHeatmap cells={howCells} kind={kind} base={base} />

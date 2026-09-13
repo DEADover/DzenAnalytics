@@ -16,6 +16,7 @@ import { formatMoney, formatPct } from "../lib/format";
 import { MONTHS } from "../lib/months";
 import { Segmented } from "./Segmented";
 import { Tooltip } from "./Tooltip";
+import { StatCell, StatRow } from "./SectionCard";
 import { TooltipFacts } from "./TooltipFacts";
 
 /**
@@ -45,7 +46,7 @@ function money(v: number | null, base: string): string {
   return v === null ? "—" : formatMoney(v, base);
 }
 
-/** Плитка показателя: крупное число, под ним план и сравнение с прошлым годом. */
+/** Ячейка ряда итогов: крупное число, под ним план и сравнение с прошлым годом. */
 function Kpi({
   title,
   fact,
@@ -69,39 +70,37 @@ function Kpi({
   withTransfers?: number;
 }) {
   const g = growth(fact, prev);
-  const factClass =
-    tone === "expense" ? "text-expense" : tone === "income" ? "text-income" : fact >= 0 ? "text-income" : "text-expense";
+  const numTone = tone === "delta" ? (fact >= 0 ? "income" : "expense") : tone;
   // У расхода рост — это «хуже», у дохода и разницы — «лучше». Красить всё
   // подряд зелёным на плюсе значило бы хвалить за выросшие траты.
   const goodGrowth = g !== null && (tone === "expense" ? g < 0 : g >= 0);
   return (
-    <div className="card-tray card-pad">
-      <div className="label mb-1.5">{title}</div>
-      <div className={`stat-num whitespace-nowrap ${factClass} mb-2`}>
-        {formatMoney(fact, base, { signed: tone === "delta" })}
-      </div>
-      {withTransfers !== undefined && (
-        <div
-          className="-mt-1.5 mb-2 text-[13px] text-muted tabular-nums whitespace-nowrap"
-          aria-hidden={withTransfers === fact}
-        >
-          {withTransfers === fact ? (
-            <span className="invisible">—</span>
-          ) : (
-            `${money(withTransfers, base)} включая переводы`
-          )}
-        </div>
-      )}
+    <StatCell
+      label={title}
+      value={formatMoney(fact, base, { signed: tone === "delta" })}
+      tone={numTone}
+      note={
+        withTransfers === undefined ? undefined : withTransfers === fact ? (
+          <span className="invisible" aria-hidden>
+            —
+          </span>
+        ) : (
+          <span className="tabular-nums whitespace-nowrap">
+            {money(withTransfers, base)} включая переводы
+          </span>
+        )
+      }
+    >
       {/* План и сравнение — ВСЕГДА двумя строками, а не рядом с переносом по
-          месту. Иначе высота плитки зависит от длины чисел: в апреле подпись
-          влезала в строку, в июне — уже нет, и плитки прыгали при каждом
+          месту. Иначе высота ячейки зависит от длины чисел: в апреле подпись
+          влезала в строку, в июне — уже нет, и ряд прыгал при каждом
           переключении месяца. */}
-      <div className="flex flex-col items-start gap-1.5 text-sm">
+      <div className="flex flex-col items-start gap-1.5 text-sm mt-2">
         <span className="px-3 py-1 rounded-full bg-panel2 text-muted tabular-nums whitespace-nowrap">
           {plan === null ? "Плана нет" : `План ${money(plan, base)}`}
         </span>
         {g === null ? (
-          // Держим место строки: без неё плитка без прошлого года была бы ниже
+          // Держим место строки: без неё ячейка без прошлого года была бы ниже
           // соседних. Пустую строку прячем и от читалок.
           <span className="invisible" aria-hidden>
             —
@@ -116,7 +115,7 @@ function Kpi({
           </span>
         )}
       </div>
-    </div>
+    </StatCell>
   );
 }
 
@@ -352,7 +351,7 @@ export function BudgetDashboardView({ dashboard: d, base, onOpenRow }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <StatRow>
         <Kpi
           title="Расходы за месяц"
           fact={mFact(e)}
@@ -396,7 +395,7 @@ export function BudgetDashboardView({ dashboard: d, base, onOpenRow }: Props) {
               : undefined
           }
         />
-      </div>
+      </StatRow>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Donut

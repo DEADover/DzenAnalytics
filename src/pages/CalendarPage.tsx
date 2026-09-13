@@ -23,9 +23,9 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { Tooltip } from "../components/Tooltip";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
-import { Segmented } from "../components/Segmented";
+import { KindSwitcher } from "../components/KindSwitcher";
 import { MonthPicker } from "../components/MonthPicker";
-import { StatCell } from "../components/SectionCard";
+import { StatCell, StatRow } from "../components/SectionCard";
 
 const WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
 const MONTHS = [
@@ -205,16 +205,9 @@ export function CalendarPage() {
             {/* Общие контролы вместо двух самодельных: свои пилюли и своя
                 перелистывалка года повторяли то, что в продукте уже есть, и
                 расходились с ними в мелочах. */}
-            <Segmented
-              value={kind}
-              onChange={setKind}
-              label="Что показывать на карте"
-              size="sm"
-              options={[
-                { value: "expense" as const, label: "Расходы", icon: TrendingDown },
-                { value: "income" as const, label: "Доходы", icon: TrendingUp },
-              ]}
-            />
+            {/* Расходы и доходы — тем же переключателем, что в «Категориях» и
+                «Топе»: один и тот же выбор везде выглядит одинаково. */}
+            <KindSwitcher kind={kind} onChange={setKind} />
             <MonthPicker
               value={`${year}-01`}
               minYM={`${yearMin}-01`}
@@ -252,53 +245,45 @@ export function CalendarPage() {
       {/* Пять чисел одним рядом с волосяными чертами — как итоги на других
           страницах. Пятью отдельными карточками они несли столько же рамок и
           отступов, сколько содержимого. */}
-      <div className="tray">
-        <div className="tray-core px-5 py-4">
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-4 gap-y-4 divide-border lg:divide-x">
-            <StatCell
-              label={`Расходы за ${year}`}
-              value={formatMoney(yearStats.total, base)}
-              icon={<TrendingDown className="w-4 h-4" />}
-              tone="expense"
-              note={plannedNote(plannedYear.planExpense, plannedYear.fcExpense, base)}
-            />
-            <StatCell
-              label={`Доходы за ${year}`}
-              value={formatMoney(yearStats.totalInc, base)}
-              icon={<TrendingUp className="w-4 h-4" />}
-              tone="income"
-              note={plannedNote(plannedYear.planIncome, plannedYear.fcIncome, base)}
-              pad
-            />
-            <StatCell
-              label={`Накопления за ${year}`}
-              value={formatMoney(savingsYear, base, { signed: true })}
-              icon={<PiggyBank className="w-4 h-4" />}
-              tone={savingsYear > 0 ? "income" : savingsYear < 0 ? "expense" : "default"}
-              note="переводы на копилки минус с них"
-              pad
-            />
-            <StatCell
-              label="Операций"
-              value={formatNum(yearStats.count)}
-              icon={<Receipt className="w-4 h-4" />}
-              note={`${formatNum(daysInYear(year))} дней в году`}
-              pad
-            />
-            <StatCell
-              label="Активных дней"
-              value={`${formatNum(yearStats.activeDays)} из ${formatNum(daysInYear(year))}`}
-              icon={<CalendarCheck className="w-4 h-4" />}
-              note={
-                daysInYear(year) > 0
-                  ? `${Math.round((yearStats.activeDays / daysInYear(year)) * 100)}% дней с операциями`
-                  : undefined
-              }
-              pad
-            />
-          </div>
-        </div>
-      </div>
+      <StatRow>
+        <StatCell
+          label={`Расходы за ${year}`}
+          value={formatMoney(yearStats.total, base)}
+          icon={<TrendingDown className="w-4 h-4" />}
+          tone="expense"
+          note={plannedNote(plannedYear.planExpense, plannedYear.fcExpense, base)}
+        />
+        <StatCell
+          label={`Доходы за ${year}`}
+          value={formatMoney(yearStats.totalInc, base)}
+          icon={<TrendingUp className="w-4 h-4" />}
+          tone="income"
+          note={plannedNote(plannedYear.planIncome, plannedYear.fcIncome, base)}
+        />
+        <StatCell
+          label={`Накопления за ${year}`}
+          value={formatMoney(savingsYear, base, { signed: true })}
+          icon={<PiggyBank className="w-4 h-4" />}
+          tone={savingsYear > 0 ? "income" : savingsYear < 0 ? "expense" : "default"}
+          note="переводы на копилки минус с них"
+        />
+        <StatCell
+          label="Операций"
+          value={formatNum(yearStats.count)}
+          icon={<Receipt className="w-4 h-4" />}
+          note={`${formatNum(daysInYear(year))} дней в году`}
+        />
+        <StatCell
+          label="Активных дней"
+          value={`${formatNum(yearStats.activeDays)} из ${formatNum(daysInYear(year))}`}
+          icon={<CalendarCheck className="w-4 h-4" />}
+          note={
+            daysInYear(year) > 0
+              ? `${Math.round((yearStats.activeDays / daysInYear(year)) * 100)}% дней с операциями`
+              : undefined
+          }
+        />
+      </StatRow>
 
       <div className="card-tray card-pad">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

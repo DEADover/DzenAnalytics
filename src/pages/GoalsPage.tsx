@@ -18,10 +18,10 @@ import { useGoalsStore, type Goal } from "../store/useGoalsStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
 import { groupByMonth } from "../lib/aggregations";
-import { formatMoney, formatDate } from "../lib/format";
+import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { Combobox } from "../components/Combobox";
 import { Tooltip } from "../components/Tooltip";
 import { DateField } from "../components/DateField";
@@ -250,11 +250,10 @@ export function GoalsPage() {
       />
 
       {goals.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Stat
-            dense
+        <StatRow>
+          <StatCell
             label="Целей"
-            value={goals.length}
+            value={formatNum(goals.length)}
             icon={<Target className="w-4 h-4" />}
             tooltip={
               summary.done > 0
@@ -262,30 +261,27 @@ export function GoalsPage() {
                 : "Все цели в работе"
             }
           />
-          <Stat
-            dense
+          <StatCell
             label="Накоплено"
             value={formatMoney(summary.saved, base)}
             tone="income"
             icon={<Landmark className="w-4 h-4" />}
             tooltip="Сумма прогресса по всем целям: для привязанных к счёту — их текущий баланс, для остальных — введённое вручную."
           />
-          <Stat
-            dense
+          <StatCell
             label="Осталось"
             value={formatMoney(summary.remaining, base)}
             icon={<Target className="w-4 h-4" />}
             tooltip="Сколько ещё нужно накопить суммарно по всем недостигнутым целям."
           />
-          <Stat
-            dense
+          <StatCell
             label="Темп"
             value={`${avgSavings >= 0 ? "+" : ""}${formatMoney(avgSavings, base)}`}
             tone={avgSavings > 0 ? "income" : avgSavings < 0 ? "expense" : "default"}
             icon={<TrendingUp className="w-4 h-4" />}
             tooltip="Средние сбережения в месяц (доходы минус расходы за последние 6 месяцев). На их основе строится общий прогноз достижения целей."
           />
-        </div>
+        </StatRow>
       )}
 
       {adding && (

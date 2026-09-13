@@ -15,7 +15,7 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
-import { StatCell } from "../components/SectionCard";
+import { StatCell, StatRow } from "../components/SectionCard";
 
 const COLORS = {
   income: "#10B981",
@@ -101,7 +101,7 @@ export function SankeyPage() {
 
   if (data.links.length === 0) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-6">
         {header}
         <GlobalFilters />
         <div className="card-tray card-pad text-center py-12 text-muted">
@@ -112,54 +112,47 @@ export function SankeyPage() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       {header}
       <GlobalFilters />
 
       {/* Итоги фильтра. Диаграмма показывает пропорции и ничего не говорит о
           суммах: чтобы узнать, сколько всего пришло, приходилось уходить на
           другую страницу. */}
-      <div className="tray">
-        <div className="tray-core px-5 py-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4 divide-border lg:divide-x">
-            <StatCell
-              label="Доход"
-              value={formatMoney(totals.income, base)}
-              icon={<TrendingUp className="w-4 h-4" />}
-              tone="income"
-              note={`${totals.count} ${totals.count % 10 === 1 && totals.count % 100 !== 11 ? "операция" : "операций"} в фильтре`}
-            />
-            <StatCell
-              label="Расход"
-              value={formatMoney(totals.expense, base)}
-              icon={<TrendingDown className="w-4 h-4" />}
-              tone="expense"
-              note={
-                totals.income > 0
-                  ? `${formatPct(totals.expense / totals.income, 0)} от дохода`
-                  : undefined
-              }
-              pad
-            />
-            <StatCell
-              label="Чистый поток"
-              value={formatMoney(totals.net, base, { signed: true })}
-              icon={<Trophy className="w-4 h-4" />}
-              tone={totals.net >= 0 ? "income" : "expense"}
-              note={totals.net >= 0 ? "ушло в сбережения" : "покрыто со счетов"}
-              pad
-            />
-            <StatCell
-              label="Норма сбережений"
-              value={totals.income > 0 ? formatPct(totals.net / totals.income, 0) : "—"}
-              icon={<PiggyBank className="w-4 h-4" />}
-              tone={totals.net >= 0 ? "income" : "expense"}
-              note="доля дохода, которая осталась"
-              pad
-            />
-          </div>
-        </div>
-      </div>
+      <StatRow>
+        <StatCell
+          label="Доход"
+          value={formatMoney(totals.income, base)}
+          icon={<TrendingUp className="w-4 h-4" />}
+          tone="income"
+          note={`${totals.count} ${totals.count % 10 === 1 && totals.count % 100 !== 11 ? "операция" : "операций"} в фильтре`}
+        />
+        <StatCell
+          label="Расход"
+          value={formatMoney(totals.expense, base)}
+          icon={<TrendingDown className="w-4 h-4" />}
+          tone="expense"
+          note={
+            totals.income > 0
+              ? `${formatPct(totals.expense / totals.income, 0)} от дохода`
+              : undefined
+          }
+        />
+        <StatCell
+          label="Чистый поток"
+          value={formatMoney(totals.net, base, { signed: true })}
+          icon={<Trophy className="w-4 h-4" />}
+          tone={totals.net >= 0 ? "income" : "expense"}
+          note={totals.net >= 0 ? "ушло в сбережения" : "покрыто со счетов"}
+        />
+        <StatCell
+          label="Норма сбережений"
+          value={totals.income > 0 ? formatPct(totals.net / totals.income, 0) : "—"}
+          icon={<PiggyBank className="w-4 h-4" />}
+          tone={totals.net >= 0 ? "income" : "expense"}
+          note="доля дохода, которая осталась"
+        />
+      </StatRow>
 
       <div className="card-tray px-4 py-3">
         <div className="h-[600px]">

@@ -14,7 +14,7 @@ import { pluralRu } from "../lib/plural";
 import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
 import { SortableTable, type Column } from "../components/SortableTable";
 import type { Transaction } from "../types";
@@ -158,15 +158,15 @@ export function UncategorizedPage() {
         hintWrap
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Stat
+      <StatRow>
+        <StatCell
           label="Найдено"
           value={formatNum(list.length)}
-          hint={`из ${formatNum(transactions.length)} всего`}
+          note={`из ${formatNum(transactions.length)} всего`}
         />
-        <Stat label="Сумма" value={formatMoney(total, base)} tone="warn" />
-        <Stat label="Доля от всех потоков" value={`${(share * 100).toFixed(1)}%`} />
-      </div>
+        <StatCell label="Сумма" value={formatMoney(total, base)} tone="warn" />
+        <StatCell label="Доля от всех потоков" value={formatPct(share, 1)} />
+      </StatRow>
 
       {/* Smart suggestions */}
       {list.length > 0 && suggestions.length > 0 && (

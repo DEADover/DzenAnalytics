@@ -43,7 +43,7 @@ import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
 import { Popover } from "../components/Popover";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
@@ -429,38 +429,38 @@ export function RulesPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader
         icon={Wand2}
         title="Правила категоризации"
         hint="Меняют категорию, получателя и комментарий операций по условию"
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Stat
+      <StatRow>
+        <StatCell
           label="Активных правил"
           value={
             <>
-              {enabledCount}{" "}
-              <span className="text-muted text-sm font-normal">из {rules.length}</span>
+              {formatNum(enabledCount)}{" "}
+              <span className="text-muted text-sm font-normal">из {formatNum(rules.length)}</span>
             </>
           }
         />
-        <Stat
+        <StatCell
           label="Изменено операций"
           tone="accent"
           value={formatNum(totalAffected)}
-          hint={
+          note={
             totalAffected > 0 && waiting === 0 ? "Всё записано в операции" : undefined
           }
         />
-        <Stat
+        <StatCell
           label="Ждут записи"
           tone={waiting > 0 ? "warn" : "default"}
           value={formatNum(waiting)}
-          hint="Результат выбранных правил, ещё не ставший правкой операции"
+          note="Результат выбранных правил, ещё не ставший правкой операции"
         />
-      </div>
+      </StatRow>
 
       <div className="card-tray card-pad">
         {/* Панель действий — как в справочниках: заголовок со счётчиком,

@@ -54,7 +54,10 @@ export function Segmented<T extends string | number>({
               "inline-flex items-center gap-1.5 rounded-full whitespace-nowrap font-medium",
               "transition-colors duration-200",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-              size === "sm" ? "px-3 py-1 text-[12.5px]" : "px-3.5 py-1.5 text-[13.5px]",
+              // Строка задана явно: без неё высота шла от 1.5 × кегля, и
+              // дорожка выходила 36.75 и 42.25 — на полпикселя-три выше
+              // соседей той же ступени (выбор месяца, «Расходы / Доходы»).
+              size === "sm" ? "px-3 py-1 text-[12.5px] leading-4" : "px-3.5 py-1.5 text-[13.5px] leading-5",
               active
                 ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
                 : "text-muted hover:text-text hover:bg-panel/70"

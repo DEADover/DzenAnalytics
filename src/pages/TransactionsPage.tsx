@@ -47,7 +47,7 @@ import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { Popover } from "../components/Popover";
 import { PageHeader } from "../components/PageHeader";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { formatMoney, formatNum, displayPayee, secondaryPayee, crossCurrencyReceived, payeeSearchText } from "../lib/format";
 import { kindColorClass, kindGlyphClass, kindLabel, kindSignGlyph } from "../lib/txKindStyle";
 import { pluralOps } from "../lib/plural";
@@ -542,37 +542,32 @@ export function TransactionsPage() {
       />
       <GlobalFilters />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Stat
-          dense
+      <StatRow>
+        <StatCell
           label="Доходы"
           value={formatMoney(totals.inc, base)}
           tone="income"
           icon={<ArrowUp className="w-4 h-4" />}
         />
-        <Stat
-          dense
+        <StatCell
           label="Расходы"
           value={formatMoney(totals.exp, base)}
           tone="expense"
           icon={<ArrowDown className="w-4 h-4" />}
         />
-        <Stat
-          dense
+        <StatCell
           label="Прибыль"
           value={formatMoney(totals.net, base, { signed: true })}
           tone={totals.net >= 0 ? "income" : "expense"}
           icon={<Scale className="w-4 h-4" />}
         />
-        <Stat
-          dense
+        <StatCell
           label="Переводы"
           value={formatMoney(totals.xfer, base)}
           icon={<ArrowLeftRight className="w-4 h-4" />}
           tooltip="Сумма переводов между своими счетами за период"
         />
-        <Stat
-          dense
+        <StatCell
           label="Накопления"
           value={formatMoney(totals.savings, base, { signed: true })}
           tone={totals.savings > 0 ? "income" : totals.savings < 0 ? "expense" : "default"}
@@ -583,14 +578,13 @@ export function TransactionsPage() {
               : `Переводы НА накопительные счета минус переводы С них. Перевод между двумя накопительными даёт ноль. Учтено счетов: ${savingsAccounts.size} (включая архивные). Начальные остатки счетов не учитываются — только переводы.`
           }
         />
-        <Stat
-          dense
+        <StatCell
           label="Операций"
           value={formatNum(totals.count)}
           icon={<List className="w-4 h-4" />}
-          hint={pageSearch ? `из ${filtered.length} в фильтре` : undefined}
+          note={pageSearch ? `из ${filtered.length} в фильтре` : undefined}
         />
-      </div>
+      </StatRow>
 
       {/* Двойной кант вокруг таблицы — как у карточек главной. */}
       <div className="tray">

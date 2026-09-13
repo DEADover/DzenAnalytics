@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import { Children, createContext, useContext, type ReactNode } from "react";
+import clsx from "clsx";
 import { InfoPopover } from "./InfoPopover";
+import { Tooltip } from "./Tooltip";
 
 /**
  * Карточка раздела: значок, заголовок, знак вопроса и содержимое.
@@ -39,7 +41,7 @@ export function SectionCard({
   );
 }
 
-/** Смысловой цвет числа — тот же набор, что у плитки `Stat`. */
+/** Смысловой цвет числа в ряду итогов. */
 export type StatTone = "default" | "income" | "expense" | "warn" | "accent" | "accent2";
 
 const STAT_TONE: Record<StatTone, string> = {
@@ -52,16 +54,25 @@ const STAT_TONE: Record<StatTone, string> = {
 };
 
 /**
- * Ячейка сводки: подпись, крупное число, уточнение.
+ * Ряд итогов знает, сколько в нём ячеек, — ячейке это нужно, чтобы выбрать
+ * размер числа. Шесть чисел в ряд на экране 1280 в 28 px не помещаются:
+ * «+1 487 066 ₽» шире ячейки и залезает на соседнюю.
+ */
+const StatRowContext = createContext<{ wide: boolean }>({ wide: false });
+
+/**
+ * Ячейка ряда итогов: подпись, крупное число, уточнение.
  *
- * Вид один в один с плиткой `Stat` со страницы «Операции»: подпись слева,
- * значок СЕРЫЙ и справа, цвет несёт само число. Значок цветом дублировал то,
- * что и так сказано числом, и при этом перетягивал взгляд на себя — в ряду из
- * пяти ячеек первым читался хоровод разноцветных иконок, а не суммы.
+ * Подпись слева, значок СЕРЫЙ и справа, цвет несёт само число. Значок цветом
+ * дублировал то, что и так сказано числом, и перетягивал взгляд на себя — в
+ * ряду из пяти ячеек первым читался хоровод разноцветных иконок, а не суммы.
  *
- * Отдельно от `Stat`, потому что та рисует себе карточку с двойным кантом, а
- * ряд итогов держит несколько ячеек в ОДНОЙ карточке, разделяя их волосяными
- * чертами. Начинка при этом обязана совпадать.
+ * Одна ячейка на весь продукт. Раньше рядом жили отдельные плитки `Stat` с
+ * числом 24 / 600 — на двенадцати страницах — и эти ячейки с числом 28 / 700
+ * на пяти: одно и то же «итого за период» выглядело двумя разными элементами.
+ *
+ * Ячейка ничего не делает по нажатию: действие с итогом — отдельная кнопка
+ * (в `icon` или в `children`), иначе непонятно, какая из цифр кликается.
  */
 export function StatCell({
   label,
@@ -70,44 +81,83 @@ export function StatCell({
   noteCls,
   icon,
   tone = "default",
-  /** Отступ слева от вертикальной черты — у всех ячеек ряда, кроме первой. */
-  pad,
+  tooltip,
+  children,
 }: {
   label: string;
-  value: string;
-  note?: string;
+  value: ReactNode;
+  /** Уточнение под числом. Продолжает подпись фразой — поэтому со строчной. */
+  note?: ReactNode;
   noteCls?: string;
+  /** Серый значок справа от подписи — или кнопка-значок действия с итогом. */
   icon?: ReactNode;
   tone?: StatTone;
-  pad?: boolean;
+  /** Как это считается — подсказкой при наведении, а не лишней строкой. */
+  tooltip?: ReactNode;
+  /** Под уточнением: план, статус, ссылка на действие. */
+  children?: ReactNode;
 }) {
-  return (
-    <div className={pad ? "lg:pl-4" : undefined}>
-      <div className="flex items-center justify-between gap-2 mb-0.5">
-        <div className="label">{label}</div>
-        {icon && <div className="text-muted shrink-0">{icon}</div>}
+  const { wide } = useContext(StatRowContext);
+  const cell = (
+    <div className={clsx("min-w-0", tooltip && "cursor-help")}>
+      <div className="flex items-center justify-between gap-2 mb-0.5 min-h-4">
+        <div className="label truncate">{label}</div>
+        {icon && <div className="text-muted shrink-0 flex items-center">{icon}</div>}
       </div>
       <div
-        className={`stat-num text-2xl xl:text-[28px] font-bold tabular-nums leading-tight ${STAT_TONE[tone]}`}
+        className={clsx(
+          "stat-num font-bold tabular-nums leading-tight truncate",
+          wide ? "text-2xl 2xl:text-[28px]" : "text-2xl xl:text-[28px]",
+          STAT_TONE[tone]
+        )}
       >
         {value}
       </div>
-      {note && <div className={`text-xs mt-0.5 ${noteCls || "text-muted"}`}>{note}</div>}
+      {note && <div className={clsx("text-xs mt-0.5", noteCls || "text-muted")}>{note}</div>}
+      {children}
     </div>
   );
+  return tooltip ? <Tooltip content={tooltip}>{cell}</Tooltip> : cell;
 }
 
+/** Колонки ряда на широком экране — по числу ячеек. */
+const ROW_COLS: Record<number, string> = {
+  1: "lg:grid-cols-1",
+  2: "lg:grid-cols-2",
+  3: "lg:grid-cols-3",
+  4: "lg:grid-cols-4",
+  5: "lg:grid-cols-5",
+  6: "lg:grid-cols-3 xl:grid-cols-6",
+};
+
 /**
- * Ряд ячеек сводки — вертикальные черты между ними и общая колонка.
+ * Ряд итогов раздела: ячейки в одной карточке с двойным кантом, между ними
+ * волосяные черты.
  *
- * Отдельным компонентом, потому что сетку с `divide-x` легко собрать не так:
- * первая ячейка не должна получать отступ слева, а на узком экране черты надо
- * убирать, иначе они режут строку посередине.
+ * Сетка и черты живут здесь, а не на каждой странице: `divide-x` легко
+ * собрать не так — первая ячейка не должна получать отступ слева, а на узком
+ * экране, где ячейки идут по две в строку, черты надо убирать, иначе они режут
+ * строку посередине. Шесть ячеек до 1280 px стоят двумя строками по три — и
+ * тоже без черт.
  */
-export function StatRow({ children }: { children: ReactNode }) {
+export function StatRow({ children, className }: { children: ReactNode; className?: string }) {
+  const count = Children.toArray(children).length;
+  const wide = count >= 6;
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4 divide-border lg:divide-x">
-      {children}
+    <div className={clsx("tray", className)}>
+      <div className="tray-core px-5 py-4">
+        <StatRowContext.Provider value={{ wide }}>
+          <div
+            className={clsx(
+              "grid grid-cols-2 gap-x-4 gap-y-4 divide-border",
+              ROW_COLS[Math.min(Math.max(count, 1), 6)],
+              wide ? "xl:divide-x xl:[&>*+*]:pl-4" : "lg:divide-x lg:[&>*+*]:pl-4"
+            )}
+          >
+            {children}
+          </div>
+        </StatRowContext.Provider>
+      </div>
     </div>
   );
 }

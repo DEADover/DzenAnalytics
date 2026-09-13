@@ -24,7 +24,7 @@ import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
-import { Stat } from "../components/Stat";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { SortableTable, type Column } from "../components/SortableTable";
 import { confirm } from "../store/useConfirmStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
@@ -837,55 +837,49 @@ export function RecurringPage() {
       {/* ══ Планы DzenAnalytics — автодетект по истории (#4) ════════════════ */}
       {pageTab === "dzen" && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Stat
-          dense
+          <StatRow>
+        <StatCell
           label="Найдено"
           value={formatNum(candidates.length)}
           icon={<Repeat className="w-4 h-4" />}
-          hint="регулярных платежей"
+          note="регулярных платежей"
         />
-        <Stat
-          dense
+        <StatCell
           label="≈ в месяц"
           value={formatMoney(totalMonthly, base)}
           tone="warn"
           icon={<Coins className="w-4 h-4" />}
-          hint="оценка нагрузки"
+          note="оценка нагрузки"
         />
-        <Stat
-          dense
+        <StatCell
           label="≈ в год"
           value={formatMoney(totalMonthly * 12, base)}
           tone="warn"
           icon={<Calendar className="w-4 h-4" />}
-          hint="экстраполяция"
+          note="экстраполяция"
         />
-        {/* "Подорожали" — clickable filter tile; matches the dense Stat look. */}
-        <button
-          type="button"
-          onClick={() => priceUpCount > 0 && setOnlyPriceUp((v) => !v)}
-          disabled={priceUpCount === 0}
-          className={`card p-3 text-left transition-colors ${
-            priceUpCount > 0 ? "hover:border-warn cursor-pointer" : "cursor-default"
-          } ${onlyPriceUp ? "border-warn ring-1 ring-warn/30" : ""}`}
+        {/* «Подорожали» фильтрует список ниже. Кликалась вся плитка — теперь
+            действие отдельной ссылкой: в ряду итогов остальные числа не
+            нажимаются, и по одному виду нельзя было понять, какое из них живое. */}
+        <StatCell
+          label="Подорожали"
+          value={formatNum(priceUpCount)}
+          tone={priceUpCount > 0 ? "warn" : "default"}
+          icon={<TrendingUp className="w-4 h-4" />}
+          note={priceUpCount > 0 ? undefined : "за всю историю"}
         >
-          <div className="flex items-center justify-between mb-0.5">
-            <div className="label">Подорожали</div>
-            <TrendingUp className={`w-4 h-4 ${priceUpCount > 0 ? "text-warn" : "text-muted"}`} />
-          </div>
-          <div
-            className={`text-xl font-semibold tabular-nums ${
-              priceUpCount > 0 ? "text-warn" : "text-muted"
-            }`}
-          >
-            {formatNum(priceUpCount)}
-          </div>
-          <div className="text-xs text-muted mt-1">
-            {priceUpCount > 0 ? "клик — показать только их" : "за всю историю"}
-          </div>
-        </button>
-      </div>
+          {priceUpCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setOnlyPriceUp((v) => !v)}
+              aria-pressed={onlyPriceUp}
+              className="text-xs mt-0.5 text-accent hover:underline"
+            >
+              {onlyPriceUp ? "Показать все" : "Показать только их"}
+            </button>
+          )}
+        </StatCell>
+      </StatRow>
 
       {/* Cadence filter — three mutually-exclusive pills + "Все", plus the
           active-only toggle. Hidden when nothing has been detected yet. */}

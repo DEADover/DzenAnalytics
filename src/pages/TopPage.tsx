@@ -14,7 +14,7 @@ import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Segmented } from "../components/Segmented";
 import { KindSwitcher } from "../components/KindSwitcher";
-import { StatCell } from "../components/SectionCard";
+import { StatCell, StatRow } from "../components/SectionCard";
 import { counterpartyOf } from "../lib/yearReview";
 import { formatNum } from "../lib/format";
 import { TrendingUp, TrendingDown, Tags, Users, Receipt, Coins } from "lucide-react";
@@ -125,7 +125,7 @@ export function TopPage() {
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       <PageHeader
         icon={TrendingUp}
         title="Топ"
@@ -183,50 +183,43 @@ export function TopPage() {
 
       {/* Итоги фильтра: страница показывала таблицу и ни одного числа сверху —
           сколько всего в этом топе, было видно только сложением глазами. */}
-      <div className="tray">
-        <div className="tray-core px-5 py-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4 divide-border lg:divide-x">
-            <StatCell
-              label={kind === "expense" ? "Расход в топе" : "Доход в топе"}
-              value={formatMoney(total, base)}
-              icon={
-                kind === "expense" ? (
-                  <TrendingDown className="w-4 h-4" />
-                ) : (
-                  <TrendingUp className="w-4 h-4" />
-                )
-              }
-              tone={kind === "expense" ? "expense" : "income"}
-              note={
-                periodTotal > 0
-                  ? `${formatPct(total / periodTotal, 0)} от всего за период`
-                  : undefined
-              }
-            />
-            <StatCell
-              label="Записей"
-              value={formatNum(rowCount)}
-              icon={<Tags className="w-4 h-4" />}
-              note={TAB_NOTE[tab]}
-              pad
-            />
-            <StatCell
-              label="Операций"
-              value={formatNum(opCount)}
-              icon={<Receipt className="w-4 h-4" />}
-              note="в этих записях"
-              pad
-            />
-            <StatCell
-              label="В среднем"
-              value={opCount > 0 ? formatMoney(total / opCount, base) : "—"}
-              icon={<Coins className="w-4 h-4" />}
-              note="на одну операцию"
-              pad
-            />
-          </div>
-        </div>
-      </div>
+      <StatRow>
+        <StatCell
+          label={kind === "expense" ? "Расход в топе" : "Доход в топе"}
+          value={formatMoney(total, base)}
+          icon={
+            kind === "expense" ? (
+              <TrendingDown className="w-4 h-4" />
+            ) : (
+              <TrendingUp className="w-4 h-4" />
+            )
+          }
+          tone={kind === "expense" ? "expense" : "income"}
+          note={
+            periodTotal > 0
+              ? `${formatPct(total / periodTotal, 0)} от всего за период`
+              : undefined
+          }
+        />
+        <StatCell
+          label="Записей"
+          value={formatNum(rowCount)}
+          icon={<Tags className="w-4 h-4" />}
+          note={TAB_NOTE[tab]}
+        />
+        <StatCell
+          label="Операций"
+          value={formatNum(opCount)}
+          icon={<Receipt className="w-4 h-4" />}
+          note="в этих записях"
+        />
+        <StatCell
+          label="В среднем"
+          value={opCount > 0 ? formatMoney(total / opCount, base) : "—"}
+          icon={<Coins className="w-4 h-4" />}
+          note="на одну операцию"
+        />
+      </StatRow>
 
       {tab === "categories" && (
         <div className="card-tray px-4 py-3">

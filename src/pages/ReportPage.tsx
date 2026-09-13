@@ -356,7 +356,7 @@ export function ReportPage() {
   if (all.length === 0) return <EmptyState />;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader
         title="Доходы и расходы"
         icon={TableIcon}
