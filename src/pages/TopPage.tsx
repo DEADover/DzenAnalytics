@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -13,7 +13,7 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Segmented } from "../components/Segmented";
-import { SectionCard, StatCell } from "../components/SectionCard";
+import { StatCell } from "../components/SectionCard";
 import { counterpartyOf } from "../lib/yearReview";
 import { formatNum } from "../lib/format";
 import { TrendingUp, TrendingDown, Tags, Users, Receipt, Coins } from "lucide-react";
@@ -26,6 +26,23 @@ const TAB_NOTE: Record<Tab, string> = {
   payees: "контрагентов",
   transactions: "крупнейших операций",
 };
+
+/**
+ * Шапка таблицы топа: значок, название и знак вопроса.
+ *
+ * Отдаётся в `title` самой таблицы, а не рисуется над ней отдельной карточкой:
+ * так заголовок и кнопка CSV стоят в одной строке. Отдельной шапкой кнопка
+ * уезжала на строку ниже, и над таблицей висели два ряда вместо одного.
+ */
+function TableHeading({ icon, title, info }: { icon: ReactNode; title: string; info: ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5 min-w-0">
+      {icon}
+      <span className="truncate">{title}</span>
+      <InfoPopover>{info}</InfoPopover>
+    </span>
+  );
+}
 
 export function TopPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -98,19 +115,9 @@ export function TopPage() {
       <PageHeader
         icon={TrendingUp}
         title="Топ"
-        hint="Статьи, контрагенты и крупнейшие операции за фильтр"
+        hint="Статьи, контрагенты и крупнейшие операции"
         right={
           <div className="flex items-center gap-2">
-            <Segmented
-              value={kind}
-              onChange={setKind}
-              label="Что показывать"
-              size="sm"
-              options={[
-                { value: "expense" as const, label: "Расходы", icon: TrendingDown },
-                { value: "income" as const, label: "Доходы", icon: TrendingUp },
-              ]}
-            />
             <InfoPopover>
               <p>
                 Списки считаются по операциям, попавшим в{" "}
@@ -139,6 +146,9 @@ export function TopPage() {
       {/* Вкладки — общим контролом: своя полоска с подчёркиванием была третьим
           видом вкладок в продукте, при том что рядом на странице уже стоит
           сегментированный переключатель. */}
+      {/* Расходы и доходы — рядом с разрезом и того же размера: оба
+          переключателя отвечают на один вопрос «что в топе», и держать один из
+          них в шапке страницы значило искать его по экрану. */}
       <div className="flex flex-wrap items-center gap-3">
         <Segmented
           value={tab}
@@ -148,6 +158,15 @@ export function TopPage() {
             { value: "categories" as Tab, label: "Статьи", icon: Tags },
             { value: "payees" as Tab, label: "Контрагенты", icon: Users },
             { value: "transactions" as Tab, label: "Операции", icon: Receipt },
+          ]}
+        />
+        <Segmented
+          value={kind}
+          onChange={setKind}
+          label="Расходы или доходы"
+          options={[
+            { value: "expense" as const, label: "Расходы", icon: TrendingDown },
+            { value: "income" as const, label: "Доходы", icon: TrendingUp },
           ]}
         />
       </div>
@@ -175,7 +194,7 @@ export function TopPage() {
               }
             />
             <StatCell
-              label="Строк"
+              label="Записей"
               value={formatNum(rowCount)}
               icon={<Tags className="w-4 h-4" />}
               note={TAB_NOTE[tab]}
@@ -185,7 +204,7 @@ export function TopPage() {
               label="Операций"
               value={formatNum(opCount)}
               icon={<Receipt className="w-4 h-4" />}
-              note="в этих строках"
+              note="в этих записях"
               pad
             />
             <StatCell
@@ -200,19 +219,22 @@ export function TopPage() {
       </div>
 
       {tab === "categories" && (
-        <SectionCard
-          icon={<Tags className="w-4 h-4 text-accent" />}
-          title={`Статьи по ${kind === "expense" ? "расходам" : "доходам"}`}
-          info={
-            <p>
-              Полные названия статей вместе с подкатегориями: «Еда / Продукты» и
-              «Еда / Кафе» стоят отдельными строками. Доля считается от всего
-              {kind === "expense" ? " расхода" : " дохода"} фильтра, «Средняя» — от
-              суммы строки на её число операций.
-            </p>
-          }
-        >
+        <div className="card-tray px-4 py-3">
           <SortableTable<CategoryBucket>
+            title={
+              <TableHeading
+                icon={<Tags className="w-4 h-4 text-accent" />}
+                title={`Статьи по ${kind === "expense" ? "расходам" : "доходам"}`}
+                info={
+                  <p>
+                    Полные названия статей вместе с подкатегориями: «Еда / Продукты»
+                    и «Еда / Кафе» стоят отдельными строками. Доля считается от
+                    всего{kind === "expense" ? " расхода" : " дохода"} фильтра,
+                    «Средняя» — от суммы строки на её число операций.
+                  </p>
+                }
+              />
+            }
             data={shownCats}
             rowKey={(c) => c.category}
             defaultSortKey="value"
@@ -283,23 +305,26 @@ export function TopPage() {
               ] as Column<CategoryBucket>[]
             }
           />
-        </SectionCard>
+        </div>
       )}
 
       {tab === "payees" && (
-        <SectionCard
-          icon={<Users className="w-4 h-4 text-accent2" />}
-          title={`Контрагенты по ${kind === "expense" ? "расходам" : "доходам"}`}
-          info={
-            <p>
-              Имя берётся из справочника контрагентов, а не из банковской строки.
-              Операции без привязанного контрагента собраны в одну строку
-              «{NO_PAYEE_LABEL}» — разобрать их можно в «Настройки → Справочники
-              → Контрагенты».
-            </p>
-          }
-        >
+        <div className="card-tray px-4 py-3">
           <SortableTable<PayeeBucket>
+            title={
+              <TableHeading
+                icon={<Users className="w-4 h-4 text-accent2" />}
+                title={`Контрагенты по ${kind === "expense" ? "расходам" : "доходам"}`}
+                info={
+                  <p>
+                    Имя берётся из справочника контрагентов, а не из банковской
+                    строки. Операции без привязанного контрагента собраны в одну
+                    строку «{NO_PAYEE_LABEL}» — разобрать их можно в «Настройки →
+                    Справочники → Контрагенты».
+                  </p>
+                }
+              />
+            }
             data={payees}
             rowKey={(p) => p.payee}
             defaultSortKey="total"
@@ -345,9 +370,9 @@ export function TopPage() {
                 {
                   key: "count",
                   label: "Операций",
-                  align: "right",
+                  align: "center",
                   sortValue: (p) => p.count,
-                  render: (p) => <span className="text-muted">{p.count}</span>,
+                  render: (p) => <span className="tabular-nums text-muted">{p.count}</span>,
                 },
                 {
                   key: "avg",
@@ -363,23 +388,26 @@ export function TopPage() {
               ] as Column<PayeeBucket>[]
             }
           />
-        </SectionCard>
+        </div>
       )}
 
       {tab === "transactions" && (
-        <SectionCard
-          icon={<Receipt className="w-4 h-4 text-expense" />}
-          title={`Крупнейшие ${kind === "expense" ? "расходы" : "поступления"}`}
-          info={
-            <p>
-              Пятьдесят самых крупных операций фильтра, по одной строке на
-              операцию. Сумма показана в валюте операции, а сортируется список по
-              сумме в базовой валюте — иначе покупка в лирах встала бы выше
-              квартиры.
-            </p>
-          }
-        >
+        <div className="card-tray px-4 py-3">
           <SortableTable<Transaction>
+            title={
+              <TableHeading
+                icon={<Receipt className="w-4 h-4 text-expense" />}
+                title={`Крупнейшие ${kind === "expense" ? "расходы" : "поступления"}`}
+                info={
+                  <p>
+                    Пятьдесят самых крупных операций фильтра, по одной строке на
+                    операцию. Сумма показана в валюте операции, а сортируется
+                    список по сумме в базовой валюте — иначе покупка в лирах
+                    встала бы выше квартиры.
+                  </p>
+                }
+              />
+            }
             data={txs}
             rowKey={(t) => t.id}
             defaultSortKey="amount"
@@ -452,7 +480,7 @@ export function TopPage() {
               ] as Column<Transaction>[]
             }
           />
-        </SectionCard>
+        </div>
       )}
     </div>
   );
