@@ -1,4 +1,4 @@
-import { Children, createContext, useContext, type ReactNode } from "react";
+import { Children, createContext, isValidElement, useContext, type ReactNode } from "react";
 import clsx from "clsx";
 import { InfoPopover } from "./InfoPopover";
 import { Tooltip } from "./Tooltip";
@@ -54,11 +54,45 @@ const STAT_TONE: Record<StatTone, string> = {
 };
 
 /**
- * Ряд итогов знает, сколько в нём ячеек, — ячейке это нужно, чтобы выбрать
- * размер числа. Шесть чисел в ряд на экране 1280 в 28 px не помещаются:
+ * Что ряд итогов сообщает своим ячейкам.
+ *
+ * `wide` — ячеек шесть: такие числа в 28 px на экране 1280 не помещаются,
  * «+1 487 066 ₽» шире ячейки и залезает на соседнюю.
+ *
+ * `notesInTooltip` — уточнение под числом есть не у всех ячеек. Тогда оно
+ * уходит в подсказку при наведении: одна подпись у одной ячейки из трёх
+ * делала весь ряд на строку выше, а у остальных ячеек под числом оставалась
+ * пустота.
  */
-const StatRowContext = createContext<{ wide: boolean }>({ wide: false });
+const StatRowContext = createContext<{ wide: boolean; notesInTooltip: boolean }>({
+  wide: false,
+  notesInTooltip: false,
+});
+
+/** Строка из подсказки стоит отдельно, поэтому начинается с заглавной. */
+function capitalizeFirst(node: ReactNode): ReactNode {
+  return typeof node === "string" && node.length > 0
+    ? node.charAt(0).toUpperCase() + node.slice(1)
+    : node;
+}
+
+/** Уточнение и пояснение одной подсказкой: уточнение — заголовком. */
+function mergeTooltip(note: ReactNode, noteCls: string | undefined, tooltip: ReactNode): ReactNode {
+  const head = capitalizeFirst(note);
+  if (tooltip == null || tooltip === false || tooltip === "") {
+    return noteCls ? <span className={noteCls}>{head}</span> : head;
+  }
+  // Две строки — и Tooltip сам сделает первую заголовком, вторую пояснением.
+  if (typeof head === "string" && typeof tooltip === "string" && !noteCls) {
+    return `${head}\n${tooltip}`;
+  }
+  return (
+    <>
+      <div className={clsx("font-medium", noteCls)}>{head}</div>
+      <div className="text-muted mt-1">{tooltip}</div>
+    </>
+  );
+}
 
 /**
  * Ячейка ряда итогов: подпись, крупное число, уточнение.
@@ -97,9 +131,12 @@ export function StatCell({
   /** Под уточнением: план, статус, ссылка на действие. */
   children?: ReactNode;
 }) {
-  const { wide } = useContext(StatRowContext);
+  const { wide, notesInTooltip } = useContext(StatRowContext);
+  const hasNote = note != null && note !== false && note !== "";
+  const noteInTooltip = notesInTooltip && hasNote;
+  const tip = noteInTooltip ? mergeTooltip(note, noteCls, tooltip) : tooltip;
   const cell = (
-    <div className={clsx("min-w-0", tooltip && "cursor-help")}>
+    <div className={clsx("min-w-0", tip && "cursor-help")}>
       <div className="flex items-center justify-between gap-2 mb-0.5 min-h-4">
         <div className="label truncate">{label}</div>
         {icon && <div className="text-muted shrink-0 flex items-center">{icon}</div>}
@@ -113,11 +150,38 @@ export function StatCell({
       >
         {value}
       </div>
-      {note && <div className={clsx("text-xs mt-0.5", noteCls || "text-muted")}>{note}</div>}
+      {/* Уточнение — в одну строку. Перенос делал ячейку выше соседних, а с
+          ней и весь ряд; не влезло — многоточие, полный текст в подсказке. */}
+      {hasNote && !noteInTooltip && (
+        <div
+          className={clsx("text-xs mt-0.5 truncate", noteCls || "text-muted")}
+          title={typeof note === "string" ? note : undefined}
+        >
+          {note}
+        </div>
+      )}
       {children}
     </div>
   );
-  return tooltip ? <Tooltip content={tooltip}>{cell}</Tooltip> : cell;
+  return tip ? <Tooltip content={tip}>{cell}</Tooltip> : cell;
+}
+
+StatCell.statCell = true;
+
+/**
+ * Есть ли у ячейки строка под числом — уточнение или действие.
+ *
+ * `null` — ячейка обёрнута в свой компонент (итоги «Бюджета»): его подписей
+ * отсюда не видно, и такой ряд за строки ячеек отвечает сам.
+ */
+function noteLineOf(child: ReactNode): boolean | null {
+  // По метке, а не по ссылке на функцию: горячая перезагрузка в разработке
+  // подменяет компонент, и сравнение `type === StatCell` молча ломалось.
+  if (!isValidElement(child) || !(child.type as { statCell?: boolean }).statCell) return null;
+  const p = child.props as { note?: ReactNode; children?: ReactNode };
+  const hasNote = p.note != null && p.note !== false && p.note !== "";
+  const hasExtra = p.children != null && p.children !== false;
+  return hasNote || hasExtra;
 }
 
 /** Колонки ряда на широком экране — по числу ячеек. */
@@ -141,12 +205,18 @@ const ROW_COLS: Record<number, string> = {
  * тоже без черт.
  */
 export function StatRow({ children, className }: { children: ReactNode; className?: string }) {
-  const count = Children.toArray(children).length;
+  const cells = Children.toArray(children);
+  const count = cells.length;
   const wide = count >= 6;
+  // Строка под числом — у всех ячеек ряда или ни у одной. Если она есть
+  // только у части, уточнения уходят в подсказки, и ряд остаётся низким.
+  const lines = cells.map(noteLineOf);
+  const withLine = lines.filter((l) => l === true).length;
+  const notesInTooltip = !lines.includes(null) && withLine > 0 && withLine < count;
   return (
     <div className={clsx("tray", className)}>
       <div className="tray-core px-5 py-4">
-        <StatRowContext.Provider value={{ wide }}>
+        <StatRowContext.Provider value={{ wide, notesInTooltip }}>
           <div
             className={clsx(
               "grid grid-cols-2 gap-x-4 gap-y-4 divide-border",

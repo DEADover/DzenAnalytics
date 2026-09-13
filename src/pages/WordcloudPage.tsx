@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { StatCell, StatRow } from "../components/SectionCard";
+import { pluralRu } from "../lib/plural";
 import { Cloud, MousePointerClick } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
@@ -109,7 +110,7 @@ export function WordcloudPage() {
           label="Самое частое"
           value={<span title={words[0]?.text}>{words[0]?.text || "—"}</span>}
           tone="accent"
-          note={words[0] ? `${formatNum(words[0].count)} раз` : undefined}
+          note={words[0] ? `встречается ${formatNum(words[0].count)} ${pluralRu(words[0].count, ["раз", "раза", "раз"])}` : undefined}
         />
       </StatRow>
 
