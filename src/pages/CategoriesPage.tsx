@@ -560,7 +560,7 @@ export function CategoriesPage() {
             <div className="mb-4 flex items-start justify-between gap-2">
               <div>
                 <div className="mb-4">
-                  <KindSwitcher kind={kind} onChange={setKind} />
+                  <KindSwitcher kind={kind} onChange={setKind} size="md" />
                 </div>
                 <div>
                   <span

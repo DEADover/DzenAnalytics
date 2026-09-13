@@ -99,7 +99,9 @@ export function CategorySunburst({
   // В плитке вид задан самим виджетом: переключателя нет, и рисовать его
   // некуда — заголовок карточки уже говорит, расходы это или доходы.
   const kindSwitcher =
-    compact || !onKindChange ? null : <KindSwitcher kind={kind} onChange={onKindChange} />;
+    // Крупная ступень, как в «Топе»: переключатель стоит над всем содержимым
+    // раздела, а рядом в шапке — сегменты вида той же высоты.
+    compact || !onKindChange ? null : <KindSwitcher kind={kind} onChange={onKindChange} size="md" />;
   const [drill, setDrill] = useState<string | null>(null);
   // Which direction the ring last moved — drives the zoom-in / zoom-out
   // animation (replayed by re-keying the <svg> on every level change).
