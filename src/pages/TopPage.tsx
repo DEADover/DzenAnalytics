@@ -283,9 +283,9 @@ export function TopPage() {
                 {
                   key: "count",
                   label: "Операций",
-                  align: "right",
+                  align: "center",
                   sortValue: (c) => c.count,
-                  render: (c) => <span className="text-muted">{c.count}</span>,
+                  render: (c) => <span className="tabular-nums text-muted">{c.count}</span>,
                 },
                 {
                   key: "avg",
