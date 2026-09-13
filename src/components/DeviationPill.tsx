@@ -42,8 +42,10 @@ export function DeviationPill({
   // Все три состояния — «не с чем сравнивать», «без изменений» и сама пилюля —
   // занимают ОДИНАКОВУЮ коробку. Иначе строка таблицы становится ниже там, где
   // изменений нет, и высота блока пляшет от данных.
+  // Строка 16 px, по середине строки и с отрицательным полем в 2 px: в ячейке
+  // таблицы пилюля не раздвигает строку дальше стандартных 37 px.
   const box =
-    "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[0.85em] tabular-nums";
+    "inline-flex items-center gap-0.5 px-1.5 py-0.5 -my-0.5 rounded-full text-[0.85em] leading-4 align-middle tabular-nums";
   const quiet = `${box} bg-panel2 text-muted`;
   if (!comparable)
     return (

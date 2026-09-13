@@ -329,18 +329,48 @@ h2,
     @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium
            bg-panel2 border border-border text-text;
   }
-  /* Unified table typography (single source of truth):
-     header = 12px uppercase muted · value = 16px · secondary metadata = 13px
-     (apply `text-[13px] text-muted` on the secondary cell/sub-line). */
+  /**
+   * Табличный стандарт: шапка 12/20, 500, капс, разрядка 0.05em; строка 14/20;
+   * поля 8/12 — шапка и строка по 37 px. Размер следует настройке «Размер
+   * текста в таблицах» (`--tbl-font`), строка — вместе с ним, поэтому высота
+   * задана явно, а не достаётся от родителя: в одной таблице она была 20, в
+   * соседней 24, и строки выходили то 37, то 45.
+   *
+   * Типы колонок и их вид — в `components/table/tableKit.ts`.
+   */
   .table-th {
-    @apply text-left uppercase tracking-wider text-muted font-medium px-3 py-2 border-b border-border;
-    /* Header tracks the table text size but stays a notch smaller
-       (matches the old text-xs at the default level). */
+    @apply text-left uppercase tracking-wider text-muted font-medium px-3 py-2 border-b border-border align-middle;
     font-size: calc(var(--tbl-font) - 0.125rem);
+    line-height: calc(var(--tbl-font) + 0.375rem);
+  }
+  /* Кнопка сортировки в шапке: браузер сбрасывает у кнопок капс и разрядку. */
+  .table-th button {
+    text-transform: inherit;
+    letter-spacing: inherit;
   }
   .table-td {
-    @apply px-3 py-2 border-b border-border/60;
+    @apply px-3 py-2 border-b border-border/60 align-middle;
     font-size: var(--tbl-font);
+    line-height: calc(var(--tbl-font) + 0.375rem);
+  }
+  /* Кнопка-значок в строке (28 px) не раздвигает строку: стандартная высота
+     37 держится, кнопка выступает на свои 4 px в поля ячейки. */
+  .table-td .btn-icon,
+  .table-td .btn-icon-danger {
+    margin-top: -4px;
+    margin-bottom: -4px;
+    vertical-align: middle;
+  }
+  /* Компактная плотность — 32 px: списки на главной и в «Итогах года». */
+  .table-compact .table-th,
+  .table-compact .table-td {
+    padding-top: 6px;
+    padding-bottom: 5px;
+  }
+  /* Строка-группа: шапка блока внутри таблицы. */
+  .table-row-group > td,
+  .table-row-group > th {
+    @apply bg-panel2/60 font-semibold;
   }
 }
 

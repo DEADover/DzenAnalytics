@@ -62,7 +62,8 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { pluralRu } from "../lib/plural";
 import { ChartTooltipCard, TooltipFacts, SeriesTooltip } from "../components/TooltipFacts";
-import { SortableTable } from "../components/SortableTable";
+import { DataTable } from "../components/DataTable";
+import { toneOfSigned } from "../components/table/tableKit";
 import type { MonthBucket } from "../lib/aggregations";
 
 export function CashflowPage() {
@@ -715,81 +716,60 @@ export function CashflowPage() {
         </div>
       )}
 
-      <div className="card-tray card-pad">
-        <SortableTable<MonthBucket>
-          title="Помесячная сводка"
-          data={months}
-          rowKey={(m) => m.ym}
-          defaultSortKey="ym"
-          defaultSortDir="desc"
-          onRowClick={(m) => openMonth(m.ym)}
-          exportName="cashflow_monthly"
-          columns={[
-            {
-              key: "ym",
-              label: "Месяц",
-              sortValue: (m) => m.ym,
-              render: (m) => <span className="font-medium">{monthLabelFull(m.ym)}</span>,
-            },
-            {
-              key: "income",
-              label: "Доходы",
-              align: "right",
-              sortValue: (m) => m.income,
-              render: (m) => (
-                <span className="tabular-nums text-income">
-                  {formatMoney(m.income, base)}
-                </span>
-              ),
-            },
-            {
-              key: "expense",
-              label: "Расходы",
-              align: "right",
-              sortValue: (m) => m.expense,
-              render: (m) => (
-                <span className="tabular-nums text-expense">
-                  {formatMoney(m.expense, base)}
-                </span>
-              ),
-            },
-            {
-              key: "net",
-              label: "Чистый",
-              align: "right",
-              sortValue: (m) => m.net,
-              render: (m) => (
-                <span
-                  className={`tabular-nums font-medium ${
-                    m.net >= 0 ? "text-income" : "text-expense"
-                  }`}
-                >
-                  {formatMoney(m.net, base, { signed: true })}
-                </span>
-              ),
-            },
-            {
-              key: "rate",
-              label: "Норма сбер.",
-              align: "right",
-              sortValue: (m) => (m.income > 0 ? (m.income - m.expense) / m.income : -999),
-              render: (m) => {
-                const sr = m.income > 0 ? (m.income - m.expense) / m.income : 0;
-                return (
-                  <span className="tabular-nums text-muted">{(sr * 100).toFixed(0)}%</span>
-                );
-              },
-            },
-            {
-              key: "count",
-              label: "Операций",
-              align: "right",
-              sortValue: (m) => m.count,
-              render: (m) => <span className="text-muted">{m.count}</span>,
-            },
-          ]}
-        />
-      </div>
+      <DataTable<MonthBucket>
+        title="Помесячная сводка"
+        data={months}
+        rowKey={(m) => m.ym}
+        defaultSortKey="ym"
+        defaultSortDir="desc"
+        onRowClick={(m) => openMonth(m.ym)}
+        exportName="cashflow_monthly"
+        columns={[
+          {
+            key: "ym",
+            type: "text",
+            label: "Месяц",
+            sortValue: (m) => m.ym,
+            render: (m) => monthLabelFull(m.ym),
+          },
+          {
+            key: "income",
+            type: "money",
+            label: "Доходы",
+            sortValue: (m) => m.income,
+            render: (m) => formatMoney(m.income, base),
+          },
+          {
+            key: "expense",
+            type: "money",
+            label: "Расходы",
+            sortValue: (m) => m.expense,
+            render: (m) => formatMoney(m.expense, base),
+          },
+          {
+            key: "net",
+            type: "main",
+            tone: (m) => toneOfSigned(m.net),
+            label: "Чистый",
+            sortValue: (m) => m.net,
+            render: (m) => formatMoney(m.net, base, { signed: true }),
+          },
+          {
+            key: "rate",
+            type: "pct",
+            label: "Норма сбер.",
+            sortValue: (m) => (m.income > 0 ? (m.income - m.expense) / m.income : null),
+            render: (m) => (m.income > 0 ? formatPct((m.income - m.expense) / m.income, 0) : "—"),
+          },
+          {
+            key: "count",
+            type: "count",
+            label: "Операций",
+            sortValue: (m) => m.count,
+            render: (m) => formatNum(m.count),
+          },
+        ]}
+      />
     </div>
   );
 }

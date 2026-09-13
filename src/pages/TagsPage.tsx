@@ -10,7 +10,6 @@ import {
   hashtagCategoryTrees,
   computeKPI,
   tagReturn,
-  type TagBucket,
 } from "../lib/aggregations";
 import { formatMoney, formatNum, formatPct } from "../lib/format";
 import { pluralOps, pluralRu } from "../lib/plural";
@@ -18,7 +17,8 @@ import { EmptyState } from "../components/EmptyState";
 import { CategoryDot } from "../components/CategoryDot";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
-import { SortableTable, type Column } from "../components/SortableTable";
+import { DataTable, type Column } from "../components/DataTable";
+import { toneOfSigned } from "../components/table/tableKit";
 import { HashtagRenameModal } from "../components/HashtagRenameModal";
 import { useTagModeStore } from "../store/useTagModeStore";
 import { tagLabel, tagsOf, type TagMode } from "../lib/operationTags";
@@ -79,25 +79,34 @@ function TagModeSwitch() {
  * Итог по тегу: доход минус расход. Знак несёт цвет, поэтому «+» рисуем сами —
  * без него плюс и минус различались бы только оттенком.
  */
-function NetCell({ value, base }: { value: number; base: string }) {
-  if (Math.abs(value) < 0.005) return <span className="tabular-nums text-muted">—</span>;
-  return (
-    <span className={`tabular-nums ${value > 0 ? "text-income" : "text-expense"}`}>
-      {value > 0 ? "+" : "−"}
-      {formatMoney(Math.abs(value), base)}
-    </span>
-  );
+/** Доход минус расход — со знаком; ноль — прочерк. */
+function netText(value: number, base: string): string {
+  if (Math.abs(value) < 0.005) return "—";
+  return `${value > 0 ? "+" : "−"}${formatMoney(Math.abs(value), base)}`;
 }
 
 /** Доходность тега. Пусто — расхода не было, и делить не на что. */
-function RateCell({ rate }: { rate: number | null }) {
-  if (rate === null) return <span className="tabular-nums text-muted">—</span>;
-  return (
-    <span className={`tabular-nums ${rate >= 0 ? "text-income" : "text-expense"}`}>
-      {rate > 0 ? "+" : ""}
-      {formatPct(rate, 1)}
-    </span>
-  );
+function rateText(rate: number | null): string {
+  if (rate === null) return "—";
+  return `${rate > 0 ? "+" : ""}${formatPct(rate, 1)}`;
+}
+
+/**
+ * Строка таблицы тегов: сам тег, категория внутри тега или подкатегория. Одна
+ * форма на все три уровня — таблица рисует их одними колонками, дерево
+ * раскрывается шевроном.
+ */
+interface TagRow {
+  key: string;
+  level: 0 | 1 | 2;
+  name: string;
+  tag: string;
+  category?: string;
+  sub?: string;
+  expense: number;
+  income: number;
+  count: number;
+  children?: TagRow[];
 }
 
 export function TagsPage() {
@@ -119,14 +128,6 @@ export function TagsPage() {
   const tags = useMemo(() => groupByHashtag(filtered, getTags), [filtered, getTags]);
   // Per-tag expense breakdown by category → subcategory.
   const catTrees = useMemo(() => hashtagCategoryTrees(filtered, getTags), [filtered, getTags]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggle = (tag: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(tag)) next.delete(tag);
-      else next.add(tag);
-      return next;
-    });
 
   // Tagged-only expense sum — shown as «всего» in the header.
   const totalExpense = tags.reduce((s, t) => s + t.expense, 0);
@@ -192,6 +193,163 @@ export function TagsPage() {
       {count}
     </button>
   );
+
+  // Дерево для таблицы: тег → категория → подкатегория, одними колонками.
+  const tagRows = useMemo<TagRow[]>(
+    () =>
+      tags.map((t) => ({
+        key: t.tag,
+        level: 0,
+        name: t.tag,
+        tag: t.tag,
+        expense: t.expense,
+        income: t.income,
+        count: t.count,
+        children: (catTrees.get(t.tag) ?? []).map((n) => ({
+          key: n.category,
+          level: 1,
+          name: n.category,
+          tag: t.tag,
+          category: n.category,
+          expense: n.expense,
+          income: n.income,
+          count: n.count,
+          children: n.subs.map((sub) => ({
+            key: sub.name,
+            level: 2,
+            name: sub.name,
+            tag: t.tag,
+            category: n.category,
+            sub: sub.name,
+            expense: sub.expense,
+            income: sub.income,
+            count: sub.count,
+          })),
+        })),
+      })),
+    [tags, catTrees]
+  );
+
+  const openRow = (r: TagRow) =>
+    r.level === 0 ? openTag(r.tag) : openTagCategory(r.tag, r.category!, r.sub);
+
+  const tagColumns: Column<TagRow>[] = [
+    {
+      key: "tag",
+      type: "text",
+      label: "Тег",
+      sortValue: (r) => r.name,
+      render: (r) =>
+        r.level === 0 ? (
+          <span className="flex items-center gap-1.5 min-w-0">
+            <TagMark tag={r.tag} mode={mode} />
+            <span className="truncate">{r.name}</span>
+          </span>
+        ) : (
+          <span className="flex items-center gap-2 min-w-0">
+            <CategoryDot
+              category={r.name}
+              parent={r.level === 2 ? r.category : undefined}
+              size={r.level === 2 ? "w-3.5 h-3.5" : "w-4 h-4"}
+            />
+            <span className="truncate">{r.name}</span>
+          </span>
+        ),
+    },
+    {
+      key: "expense",
+      type: "money",
+      label: "Расход",
+      sortValue: (r) => r.expense,
+      render: (r) => (r.expense > 0 ? formatMoney(r.expense, base) : "—"),
+    },
+    {
+      key: "income",
+      type: "money",
+      label: "Доход",
+      sortValue: (r) => r.income,
+      render: (r) => (r.income > 0 ? formatMoney(r.income, base) : "—"),
+    },
+    {
+      key: "net",
+      type: "main",
+      tone: (r) => {
+        const net = tagReturn(r).net;
+        return Math.abs(net) < 0.005 ? "muted" : toneOfSigned(net);
+      },
+      label: "Доход − расход",
+      sortValue: (r) => tagReturn(r).net,
+      render: (r) => netText(tagReturn(r).net, base),
+    },
+    {
+      key: "rate",
+      type: "change",
+      label: "Доходность",
+      // Тег без расхода в сортировке уходит вниз, а не притворяется нулевой
+      // доходностью; в выгрузку идёт пусто.
+      sortValue: (r) => tagReturn(r).rate,
+      render: (r) => rateText(tagReturn(r).rate),
+    },
+    {
+      key: "total",
+      type: "pct",
+      label: "Доля от расходов",
+      sortValue: (r) => (periodExpense > 0 ? r.expense / periodExpense : 0),
+      render: (r) =>
+        periodExpense > 0 && r.expense > 0 ? formatPct(r.expense / periodExpense, 1) : "—",
+    },
+    {
+      key: "incomeShare",
+      type: "pct",
+      label: "Доля от дохода",
+      sortValue: (r) => (periodIncome > 0 ? r.income / periodIncome : 0),
+      render: (r) =>
+        periodIncome > 0 && r.income > 0 ? formatPct(r.income / periodIncome, 1) : "—",
+    },
+    {
+      key: "count",
+      type: "count",
+      label: "Операций",
+      sortValue: (r) => r.count,
+      render: (r) =>
+        countButton(
+          r.count,
+          () => openRow(r),
+          r.level === 0
+            ? `Показать операции с тегом ${label(r.tag)}`
+            : r.level === 1
+              ? `Показать операции с тегом ${label(r.tag)} в категории «${r.name}»`
+              : `Показать операции с тегом ${label(r.tag)} в подкатегории «${r.name}»`
+        ),
+    },
+    ...(canRename
+      ? [
+          {
+            key: "actions",
+            type: "actions",
+            label: "Действия",
+            width: "6rem",
+            // Переименовать можно только тег целиком.
+            render: (r: TagRow) =>
+              r.level === 0 ? (
+                <button
+                  type="button"
+                  // Клик по строке раскрывает разбивку — не пускаем его туда.
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRenaming(r.tag);
+                  }}
+                  className="btn-icon"
+                  title="Переименовать тег или перенести операции в другой"
+                  aria-label={`Переименовать тег ${label(r.tag)}`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              ) : null,
+          } satisfies Column<TagRow>,
+        ]
+      : []),
+  ];
 
   if (transactions.length === 0) return <EmptyState />;
 
@@ -275,258 +433,25 @@ export function TagsPage() {
         </div>
       </div>
 
-      <div className="card-tray card-pad">
-        <SortableTable<TagBucket>
-          title={
-            <span className="flex items-baseline gap-2 flex-wrap min-w-0">
-              <span>Все теги</span>
-              {periodExpense > 0 && (
-                <span className="text-xs font-normal text-muted">
-                  Проценты — доля от всех расходов за период (
-                  {formatMoney(periodExpense, base)}
-                  {periodIncome > 0 && ` · доходов ${formatMoney(periodIncome, base)}`})
-                </span>
-              )}
-            </span>
-          }
-          data={tags}
-          rowKey={(t) => t.tag}
-          defaultSortKey="total"
-          defaultSortDir="desc"
-          exportName={mode === "hashtags" ? "hashtags" : "tags"}
-          columns={
-            (
-            [
-              {
-                key: "tag",
-                label: "Тег",
-                sortValue: (t) => t.tag,
-                render: (t) => (
-                  <span className="inline-flex items-center gap-1.5">
-                    <TagMark tag={t.tag} mode={mode} />
-                    {t.tag}
-                  </span>
-                ),
-              },
-              {
-                key: "expense",
-                label: "Расход",
-                align: "center",
-                sortValue: (t) => t.expense,
-                render: (t) => (
-                  <span className="tabular-nums text-expense">
-                    {t.expense > 0 ? formatMoney(t.expense, base) : "—"}
-                  </span>
-                ),
-              },
-              {
-                key: "income",
-                label: "Доход",
-                align: "center",
-                sortValue: (t) => t.income,
-                render: (t) => (
-                  <span className="tabular-nums text-income">
-                    {t.income > 0 ? formatMoney(t.income, base) : "—"}
-                  </span>
-                ),
-              },
-              {
-                key: "net",
-                label: "Доход − расход",
-                align: "center",
-                sortValue: (t) => tagReturn(t).net,
-                render: (t) => <NetCell value={tagReturn(t).net} base={base} />,
-              },
-              {
-                key: "rate",
-                label: "Доходность",
-                align: "center",
-                // Тег без расхода в сортировке уходит вниз, а не притворяется
-                // нулевой доходностью.
-                sortValue: (t) => tagReturn(t).rate ?? Number.NEGATIVE_INFINITY,
-                // В выгрузку идёт пусто, а не «-Infinity», которым тег без
-                // расхода уходит вниз списка.
-                exportValue: (t) => tagReturn(t).rate ?? "",
-                render: (t) => <RateCell rate={tagReturn(t).rate} />,
-              },
-              {
-                key: "total",
-                label: "Доля от расходов",
-                align: "center",
-                sortValue: (t) => (periodExpense > 0 ? t.expense / periodExpense : 0),
-                render: (t) => (
-                  <span className="tabular-nums text-muted">
-                    {periodExpense > 0 && t.expense > 0
-                      ? formatPct(t.expense / periodExpense, 1)
-                      : "—"}
-                  </span>
-                ),
-              },
-              {
-                key: "incomeShare",
-                label: "Доля от дохода",
-                align: "center",
-                sortValue: (t) => (periodIncome > 0 ? t.income / periodIncome : 0),
-                render: (t) => (
-                  <span className="tabular-nums text-muted">
-                    {periodIncome > 0 && t.income > 0
-                      ? formatPct(t.income / periodIncome, 1)
-                      : "—"}
-                  </span>
-                ),
-              },
-              {
-                key: "count",
-                label: "Операций",
-                align: "center",
-                sortValue: (t) => t.count,
-                render: (t) =>
-                  countButton(t.count, () => openTag(t.tag), `Показать операции с тегом ${label(t.tag)}`),
-              },
-              {
-                key: "actions",
-                label: "Действия",
-                align: "center",
-                // Именно длина в CSS, а не Tailwind-класс: SortableTable кладёт
-                // `width` прямо в инлайновый стиль, и «w-24» браузер молча
-                // выбрасывает как невалидное значение.
-                width: "6rem",
-                sortable: false,
-                // Кнопки в выгрузке бессмысленны — колонку в CSV не берём вовсе.
-                exportSkip: true,
-                render: (t) => (
-                  <div className="flex items-center justify-center">
-                    <button
-                      type="button"
-                      // Клик по строке раскрывает разбивку по категориям —
-                      // без остановки всплытия карандаш заодно её дёргал бы.
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRenaming(t.tag);
-                      }}
-                      className="btn-ghost !p-1.5 text-muted hover:text-accent"
-                      title="Переименовать тег или перенести операции в другой"
-                      aria-label={`Переименовать тег ${label(t.tag)}`}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  </div>
-                ),
-              },
-            ] as Column<TagBucket>[]
-            ).filter((c) => canRename || c.key !== "actions")
-          }
-          isExpanded={(t) => expanded.has(t.tag)}
-          onToggleExpand={(t) => toggle(t.tag)}
-          // Раскрыть все теги сразу — иконкой в шапке колонки со шевронами.
-          onToggleAllExpanded={(expand) =>
-            setExpanded(expand ? new Set(tags.map((t) => t.tag)) : new Set())
-          }
-          renderExpanded={(t) => {
-            const nodes = catTrees.get(t.tag);
-            if (!nodes || nodes.length === 0) {
-              return (
-                <tr className="bg-panel2/20">
-                  <td className="table-td" />
-                  <td className="table-td text-xs text-muted" colSpan={canRename ? 9 : 8}>
-                    Нет операций по категориям
-                  </td>
-                </tr>
-              );
-            }
-            return nodes.flatMap((n) => [
-              <tr key={`${t.tag}:${n.category}`} className="bg-panel2/20">
-                <td className="table-td" />
-                <td className="table-td pl-6">
-                  <span className="inline-flex items-center gap-2 min-w-0">
-                    <CategoryDot category={n.category} size="w-4 h-4" />
-                    <span className="truncate">{n.category}</span>
-                  </span>
-                </td>
-                <td className="table-td text-center tabular-nums text-expense">
-                  {n.expense > 0 ? formatMoney(n.expense, base) : "—"}
-                </td>
-                <td className="table-td text-center tabular-nums text-income">
-                  {n.income > 0 ? formatMoney(n.income, base) : "—"}
-                </td>
-                <td className="table-td text-center">
-                  <NetCell value={tagReturn(n).net} base={base} />
-                </td>
-                <td className="table-td text-center">
-                  <RateCell rate={tagReturn(n).rate} />
-                </td>
-                <td className="table-td text-center tabular-nums text-muted">
-                  {periodExpense > 0 && n.expense > 0
-                    ? formatPct(n.expense / periodExpense, 1)
-                    : "—"}
-                </td>
-                <td className="table-td text-center tabular-nums text-muted">
-                  {periodIncome > 0 && n.income > 0
-                    ? formatPct(n.income / periodIncome, 1)
-                    : "—"}
-                </td>
-                <td className="table-td text-center">
-                  {countButton(
-                    n.count,
-                    () => openTagCategory(t.tag, n.category),
-                    `Показать операции с тегом ${label(t.tag)} в категории «${n.category}»`
-                  )}
-                </td>
-                {/* Под колонку действий — переименовывать можно только тег целиком. */}
-                {canRename && <td className="table-td" />}
-              </tr>,
-              ...n.subs.map((s) => (
-                <tr
-                  key={`${t.tag}:${n.category}:${s.name}`}
-                  className="bg-panel2/10 text-xs text-muted"
-                >
-                  <td className="table-td" />
-                  <td className="table-td pl-10">
-                    <span className="inline-flex items-center gap-2 min-w-0">
-                      <CategoryDot
-                        category={s.name}
-                        parent={n.category}
-                        size="w-3.5 h-3.5"
-                      />
-                      <span className="truncate">{s.name}</span>
-                    </span>
-                  </td>
-                  <td className="table-td text-center tabular-nums">
-                    {s.expense > 0 ? formatMoney(s.expense, base) : "—"}
-                  </td>
-                  <td className="table-td text-center tabular-nums">
-                    {s.income > 0 ? formatMoney(s.income, base) : "—"}
-                  </td>
-                  <td className="table-td text-center">
-                    <NetCell value={tagReturn(s).net} base={base} />
-                  </td>
-                  <td className="table-td text-center">
-                    <RateCell rate={tagReturn(s).rate} />
-                  </td>
-                  <td className="table-td text-center tabular-nums">
-                    {periodExpense > 0 && s.expense > 0
-                      ? formatPct(s.expense / periodExpense, 1)
-                      : "—"}
-                  </td>
-                  <td className="table-td text-center tabular-nums">
-                    {periodIncome > 0 && s.income > 0
-                      ? formatPct(s.income / periodIncome, 1)
-                      : "—"}
-                  </td>
-                  <td className="table-td text-center">
-                    {countButton(
-                      s.count,
-                      () => openTagCategory(t.tag, n.category, s.name),
-                      `Показать операции с тегом ${label(t.tag)} в подкатегории «${s.name}»`
-                    )}
-                  </td>
-                  {canRename && <td className="table-td" />}
-                </tr>
-              )),
-            ]);
-          }}
-        />
-      </div>
+      <DataTable<TagRow>
+        title="Все теги"
+        info={
+          periodExpense > 0 ? (
+            <p>
+              Проценты — доля от всех расходов за период ({formatMoney(periodExpense, base)})
+              {periodIncome > 0 && ` и от всех доходов (${formatMoney(periodIncome, base)})`}, а
+              не только от операций с тегами. Строка тега раскрывается разбивкой по
+              категориям и подкатегориям.
+            </p>
+          ) : undefined
+        }
+        data={tagRows}
+        rowKey={(r) => r.key}
+        subRows={(r) => r.children}
+        defaultSortKey="total"
+        exportName={mode === "hashtags" ? "hashtags" : "tags"}
+        columns={tagColumns}
+      />
 
       {canRename && renaming && (
         <HashtagRenameModal

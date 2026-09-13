@@ -6,7 +6,7 @@ import { useDrillStore } from "../store/useDrillStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { detectAnomalies, detectMonthSpikes, type Anomaly, type MonthSpike } from "../lib/aggregations";
-import { SortableTable, type Column } from "../components/SortableTable";
+import { DataTable } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { GlobalFilters } from "../components/GlobalFilters";
@@ -200,93 +200,72 @@ export function AnomaliesPage() {
             </div>
           </div>
         ) : (
-          <div className="card-tray card-pad">
-            <SortableTable<Anomaly>
-              data={anomalies}
-              rowKey={(a) => a.tx.id}
-              defaultSortKey="zScore"
-              defaultSortDir="desc"
-              onRowClick={(a) => openTx(a.tx.id)}
-              limit={100}
-              exportName="anomalies"
-              columns={
-                [
-                  {
-                    key: "date",
-                    label: "Дата",
-                    sortValue: (a) => a.tx.date,
-                    render: (a) => (
-                      <span className="whitespace-nowrap text-muted">
-                        {formatDate(a.tx.date, "full")}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "payee",
-                    label: "Получатель",
-                    sortValue: (a) => a.tx.payee || "",
-                    render: (a) => (
-                      <span className="font-medium truncate max-w-[160px] inline-block" title={a.tx.payee}>
-                        {a.tx.payee || "—"}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "category",
-                    label: "Категория",
-                    sortValue: (a) => a.tx.categoryFull,
-                    render: (a) => (
-                      <span
-                        className="truncate max-w-[140px] inline-block text-muted text-xs"
-                        title={a.tx.categoryFull}
-                      >
-                        {a.tx.categoryFull}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "context",
-                    label: "Контекст",
-                    sortable: false,
-                    render: (a) => (
-                      <div className="text-xs text-muted max-w-[300px]">
-                        <div className="line-clamp-2" title={a.context}>
-                          {a.context}
-                        </div>
-                        {a.tx.comment && (
-                          <div className="text-[0.8em] mt-1 italic line-clamp-1" title={a.tx.comment}>
-                            {a.tx.comment}
-                          </div>
-                        )}
-                      </div>
-                    ),
-                  },
-                  {
-                    key: "zScore",
-                    label: "σ",
-                    align: "right",
-                    sortValue: (a) => a.zScore,
-                    render: (a) => (
-                      <span className="tabular-nums text-warn font-medium">
-                        {a.zScore.toFixed(1)}σ
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "amount",
-                    label: "Сумма",
-                    align: "right",
-                    sortValue: (a) => a.tx.amountBase,
-                    render: (a) => (
-                      <span className="tabular-nums text-expense font-semibold whitespace-nowrap">
-                        −{formatMoney(a.tx.amount, a.tx.currency)}
-                      </span>
-                    ),
-                  },
-                ] as Column<Anomaly>[]
-              }
-            />
-          </div>
+          <DataTable<Anomaly>
+            data={anomalies}
+            rowKey={(a) => a.tx.id}
+            defaultSortKey="zScore"
+            onRowClick={(a) => openTx(a.tx.id)}
+            limit={100}
+            exportName="anomalies"
+            fixed
+            columns={[
+              {
+                key: "date",
+                type: "date",
+                width: "8.5rem",
+                label: "Дата",
+                sortValue: (a) => a.tx.date,
+                render: (a) => formatDate(a.tx.date, "full"),
+              },
+              {
+                key: "payee",
+                type: "text",
+                width: "13rem",
+                label: "Получатель",
+                sortValue: (a) => a.tx.payee || "",
+                render: (a) => a.tx.payee || "—",
+              },
+              {
+                key: "category",
+                type: "text",
+                muted: true,
+                width: "13rem",
+                label: "Категория",
+                sortValue: (a) => a.tx.categoryFull,
+                render: (a) => a.tx.categoryFull,
+              },
+              {
+                key: "context",
+                type: "text",
+                muted: true,
+                label: "Контекст",
+                sortable: false,
+                exportValue: (a) => a.context,
+                // Одна строка, как во всех таблицах: полный текст и комментарий
+                // операции — в подсказке при наведении.
+                cellTitle: (a) => (a.tx.comment ? `${a.context}\n${a.tx.comment}` : a.context),
+                render: (a) => a.context,
+              },
+              {
+                key: "zScore",
+                type: "number",
+                width: "5.5rem",
+                label: "σ",
+                headerTitle: "Во сколько раз трата дальше от обычной, чем привычный разброс",
+                sortValue: (a) => a.zScore,
+                render: (a) => `${formatNum(a.zScore, { fractionDigits: 1 })}σ`,
+              },
+              {
+                key: "amount",
+                type: "main",
+                tone: "expense",
+                width: "10rem",
+                label: "Сумма",
+                sortValue: (a) => a.tx.amountBase,
+                render: (a) => formatMoney(a.tx.amount, a.tx.currency),
+              },
+            ]}
+          />
         ))}
 
       {tab === "spikes" &&
@@ -299,78 +278,60 @@ export function AnomaliesPage() {
             </div>
           </div>
         ) : (
-          <div className="card-tray card-pad">
-            <SortableTable<MonthSpike>
-              data={spikes}
-              rowKey={(s, i) => `${s.ym}-${s.category}-${i}`}
-              defaultSortKey="delta"
-              defaultSortDir="desc"
-              onRowClick={(s) => openCategoryMonth(s.category, s.ym)}
-              exportName="month_spikes"
-              columns={
-                [
-                  {
-                    key: "ym",
-                    label: "Месяц",
-                    sortValue: (s) => s.ym,
-                    render: (s) => (
-                      <span className="whitespace-nowrap font-medium">{monthLabel(s.ym)}</span>
-                    ),
-                  },
-                  {
-                    key: "category",
-                    label: "Категория",
-                    sortValue: (s) => s.category,
-                    render: (s) => s.category,
-                  },
-                  {
-                    key: "baseline",
-                    label: "База (3 мес ср.)",
-                    align: "right",
-                    sortValue: (s) => s.baseline,
-                    render: (s) => (
-                      <span className="tabular-nums text-muted">
-                        {formatMoney(s.baseline, base)}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "current",
-                    label: "Факт",
-                    align: "right",
-                    sortValue: (s) => s.current,
-                    render: (s) => (
-                      <span className="tabular-nums text-expense">
-                        {formatMoney(s.current, base)}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "delta",
-                    label: "Превышение",
-                    align: "right",
-                    sortValue: (s) => s.delta,
-                    render: (s) => (
-                      <span className="tabular-nums text-warn font-medium">
-                        +{formatMoney(s.delta, base)}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "ratio",
-                    label: "×",
-                    align: "right",
-                    sortValue: (s) => s.ratio,
-                    render: (s) => (
-                      <span className="tabular-nums text-warn font-bold">
-                        {s.ratio.toFixed(1)}×
-                      </span>
-                    ),
-                  },
-                ] as Column<MonthSpike>[]
-              }
-            />
-          </div>
+          <DataTable<MonthSpike>
+            data={spikes}
+            rowKey={(sp, i) => `${sp.ym}-${sp.category}-${i}`}
+            defaultSortKey="delta"
+            onRowClick={(sp) => openCategoryMonth(sp.category, sp.ym)}
+            exportName="month_spikes"
+            columns={[
+              {
+                key: "ym",
+                type: "text",
+                label: "Месяц",
+                sortValue: (sp) => sp.ym,
+                render: (sp) => monthLabel(sp.ym),
+              },
+              {
+                key: "category",
+                type: "text",
+                label: "Категория",
+                sortValue: (sp) => sp.category,
+                render: (sp) => sp.category,
+              },
+              {
+                key: "baseline",
+                type: "money",
+                muted: true,
+                label: "База (3 мес ср.)",
+                sortValue: (sp) => sp.baseline,
+                render: (sp) => formatMoney(sp.baseline, base),
+              },
+              {
+                key: "current",
+                type: "money",
+                label: "Факт",
+                sortValue: (sp) => sp.current,
+                render: (sp) => formatMoney(sp.current, base),
+              },
+              {
+                key: "delta",
+                type: "main",
+                tone: "expense",
+                label: "Превышение",
+                sortValue: (sp) => sp.delta,
+                render: (sp) => `+${formatMoney(sp.delta, base)}`,
+              },
+              {
+                key: "ratio",
+                type: "number",
+                label: "×",
+                headerTitle: "Во сколько раз расход месяца больше среднего за три предыдущих",
+                sortValue: (sp) => sp.ratio,
+                render: (sp) => `${formatNum(sp.ratio, { fractionDigits: 1 })}×`,
+              },
+            ]}
+          />
         ))}
     </div>
   );

@@ -1,10 +1,10 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { topPayees, topTransactions, groupByCategory, NO_PAYEE_LABEL, type CategoryBucket, type PayeeBucket } from "../lib/aggregations";
-import { SortableTable, type Column } from "../components/SortableTable";
+import { DataTable } from "../components/DataTable";
 import type { Transaction } from "../types";
 import { formatMoney, formatDate, formatPct } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
@@ -41,23 +41,6 @@ const COL = { value: "11rem", share: "7rem", count: "8rem", avg: "10rem" } as co
 /** Ширины таблицы крупнейших операций — тоже постоянные для обеих сторон. */
 const TX_COL = { date: "9rem", category: "15rem", payee: "15rem", amount: "11rem" } as const;
 
-/**
- * Шапка таблицы топа: значок, название и знак вопроса.
- *
- * Отдаётся в `title` самой таблицы, а не рисуется над ней отдельной карточкой:
- * так заголовок и кнопка CSV стоят в одной строке. Отдельной шапкой кнопка
- * уезжала на строку ниже, и над таблицей висели два ряда вместо одного.
- */
-function TableHeading({ icon, title, info }: { icon: ReactNode; title: string; info: ReactNode }) {
-  return (
-    <span className="flex items-center gap-1.5 min-w-0">
-      {icon}
-      <span className="truncate">{title}</span>
-      <InfoPopover>{info}</InfoPopover>
-    </span>
-  );
-}
-
 export function TopPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
@@ -66,6 +49,8 @@ export function TopPage() {
 
   const [tab, setTab] = useState<Tab>("categories");
   const [kind, setKind] = useState<"expense" | "income">("expense");
+  // Главная сумма каждой таблицы топа — цветом стороны.
+  const sideTone = kind === "expense" ? "expense" : "income";
 
   const showDrill = useDrillStore((s) => s.show);
 
@@ -222,287 +207,198 @@ export function TopPage() {
       </StatRow>
 
       {tab === "categories" && (
-        <div className="card-tray px-4 py-3">
-          <SortableTable<CategoryBucket>
-            title={
-              <TableHeading
-                icon={<Tags className="w-4 h-4 text-accent" />}
-                title={kind === "expense" ? "Расходные категории" : "Доходные категории"}
-                info={
-                  <p>
-                    Полные названия категорий вместе с подкатегориями: «Еда /
-                    Продукты» и «Еда / Кафе» стоят отдельными строками. Доля
-                    считается от всего{kind === "expense" ? " расхода" : " дохода"}{" "}
-                    фильтра, «Средняя» — от суммы строки на её число операций.
-                  </p>
-                }
-              />
-            }
-            data={shownCats}
-            rowKey={(c) => c.category}
-            defaultSortKey="value"
-            defaultSortDir="desc"
-            onRowClick={(c) => openCategoryFull(c.category)}
-            limit={30}
-            fixed
-            exportName={`top_categories_${kind}`}
-            columns={
-              [
-                {
-                  key: "name",
-                  label: "Категория",
-                  sortValue: (c) => c.category,
-                  render: (c) => (
-                    <span className="block truncate" title={c.category}>
-                      {c.category}
-                    </span>
-                  ),
-                },
-                {
-                  key: "value",
-                  width: COL.value,
-                  label: "Сумма",
-                  align: "right",
-                  sortValue: (c) => (kind === "expense" ? c.expense : c.income),
-                  render: (c) => {
-                    const v = kind === "expense" ? c.expense : c.income;
-                    return (
-                      <span
-                        className={`tabular-nums font-medium ${
-                          kind === "expense" ? "text-expense" : "text-income"
-                        }`}
-                      >
-                        {formatMoney(v, base)}
-                      </span>
-                    );
-                  },
-                },
-                {
-                  key: "share",
-                  width: COL.share,
-                  label: "Доля",
-                  align: "right",
-                  sortValue: (c) => (kind === "expense" ? c.expense : c.income) / (total || 1),
-                  render: (c) => {
-                    const v = kind === "expense" ? c.expense : c.income;
-                    return (
-                      <span className="tabular-nums text-muted">{formatPct(v / total, 1)}</span>
-                    );
-                  },
-                },
-                {
-                  key: "count",
-                  width: COL.count,
-                  label: "Операций",
-                  align: "center",
-                  sortValue: (c) => c.count,
-                  render: (c) => <span className="tabular-nums text-muted">{c.count}</span>,
-                },
-                {
-                  key: "avg",
-                  width: COL.avg,
-                  label: "Средняя",
-                  align: "right",
-                  sortValue: (c) =>
-                    c.count > 0 ? (kind === "expense" ? c.expense : c.income) / c.count : 0,
-                  render: (c) => {
-                    const v = kind === "expense" ? c.expense : c.income;
-                    return (
-                      <span className="tabular-nums text-muted">
-                        {formatMoney(v / c.count, base)}
-                      </span>
-                    );
-                  },
-                },
-              ] as Column<CategoryBucket>[]
-            }
-          />
-        </div>
+        <DataTable<CategoryBucket>
+          icon={Tags}
+          title={kind === "expense" ? "Расходные категории" : "Доходные категории"}
+          info={
+            <p>
+              Полные названия категорий вместе с подкатегориями: «Еда /
+              Продукты» и «Еда / Кафе» стоят отдельными строками. Доля
+              считается от всего{kind === "expense" ? " расхода" : " дохода"}{" "}
+              фильтра, «Средняя» — от суммы строки на её число операций.
+            </p>
+          }
+          data={shownCats}
+          rowKey={(c) => c.category}
+          defaultSortKey="value"
+          onRowClick={(c) => openCategoryFull(c.category)}
+          limit={30}
+          fixed
+          exportName={`top_categories_${kind}`}
+          columns={[
+            {
+              key: "name",
+              type: "text",
+              label: "Категория",
+              sortValue: (c) => c.category,
+              render: (c) => c.category,
+            },
+            {
+              key: "value",
+              type: "main",
+              tone: sideTone,
+              width: COL.value,
+              label: "Сумма",
+              sortValue: (c) => (kind === "expense" ? c.expense : c.income),
+              render: (c) => formatMoney(kind === "expense" ? c.expense : c.income, base),
+            },
+            {
+              key: "share",
+              type: "pct",
+              width: COL.share,
+              label: "Доля",
+              sortValue: (c) => (kind === "expense" ? c.expense : c.income) / (total || 1),
+              render: (c) => formatPct((kind === "expense" ? c.expense : c.income) / total, 1),
+            },
+            {
+              key: "count",
+              type: "count",
+              width: COL.count,
+              label: "Операций",
+              sortValue: (c) => c.count,
+              render: (c) => formatNum(c.count),
+            },
+            {
+              key: "avg",
+              type: "money",
+              muted: true,
+              width: COL.avg,
+              label: "Средняя",
+              sortValue: (c) =>
+                c.count > 0 ? (kind === "expense" ? c.expense : c.income) / c.count : 0,
+              render: (c) =>
+                formatMoney((kind === "expense" ? c.expense : c.income) / c.count, base),
+            },
+          ]}
+        />
       )}
 
       {tab === "payees" && (
-        <div className="card-tray px-4 py-3">
-          <SortableTable<PayeeBucket>
-            title={
-              <TableHeading
-                icon={<Users className="w-4 h-4 text-accent2" />}
-                title={`Контрагенты по ${kind === "expense" ? "расходам" : "доходам"}`}
-                info={
-                  <p>
-                    Имя берётся из справочника контрагентов, а не из банковской
-                    строки. Операции без привязанного контрагента собраны в одну
-                    строку «{NO_PAYEE_LABEL}» — разобрать их можно в «Настройки →
-                    Справочники → Контрагенты».
-                  </p>
-                }
-              />
-            }
-            data={payees}
-            rowKey={(p) => p.payee}
-            defaultSortKey="total"
-            defaultSortDir="desc"
-            onRowClick={(p) => openPayee(p.payee)}
-            exportName={`top_payees_${kind}`}
-            fixed
-            columns={
-              [
-                {
-                  key: "payee",
-                  label: "Контрагент",
-                  sortValue: (p) => p.payee,
-                  render: (p) => (
-                    <span className="block truncate" title={p.payee}>
-                      {p.payee}
-                    </span>
-                  ),
-                },
-                {
-                  key: "total",
-                  width: COL.value,
-                  label: "Сумма",
-                  align: "right",
-                  sortValue: (p) => p.total,
-                  render: (p) => (
-                    <span
-                      className={`tabular-nums font-medium ${
-                        kind === "expense" ? "text-expense" : "text-income"
-                      }`}
-                    >
-                      {formatMoney(p.total, base)}
-                    </span>
-                  ),
-                },
-                {
-                  key: "share",
-                  width: COL.share,
-                  label: "Доля",
-                  align: "right",
-                  sortValue: (p) => p.total / (total || 1),
-                  render: (p) => (
-                    <span className="tabular-nums text-muted">{formatPct(p.total / total, 1)}</span>
-                  ),
-                },
-                {
-                  key: "count",
-                  width: COL.count,
-                  label: "Операций",
-                  align: "center",
-                  sortValue: (p) => p.count,
-                  render: (p) => <span className="tabular-nums text-muted">{p.count}</span>,
-                },
-                {
-                  key: "avg",
-                  width: COL.avg,
-                  label: "Средняя",
-                  align: "right",
-                  sortValue: (p) => (p.count > 0 ? p.total / p.count : 0),
-                  render: (p) => (
-                    <span className="tabular-nums text-muted">
-                      {formatMoney(p.total / p.count, base)}
-                    </span>
-                  ),
-                },
-              ] as Column<PayeeBucket>[]
-            }
-          />
-        </div>
+        <DataTable<PayeeBucket>
+          icon={Users}
+          title={`Контрагенты по ${kind === "expense" ? "расходам" : "доходам"}`}
+          info={
+            <p>
+              Имя берётся из справочника контрагентов, а не из банковской
+              строки. Операции без привязанного контрагента собраны в одну
+              строку «{NO_PAYEE_LABEL}» — разобрать их можно в «Настройки →
+              Справочники → Контрагенты».
+            </p>
+          }
+          data={payees}
+          rowKey={(p) => p.payee}
+          defaultSortKey="total"
+          onRowClick={(p) => openPayee(p.payee)}
+          exportName={`top_payees_${kind}`}
+          fixed
+          columns={[
+            {
+              key: "payee",
+              type: "text",
+              label: "Контрагент",
+              sortValue: (p) => p.payee,
+              render: (p) => p.payee,
+            },
+            {
+              key: "total",
+              type: "main",
+              tone: sideTone,
+              width: COL.value,
+              label: "Сумма",
+              sortValue: (p) => p.total,
+              render: (p) => formatMoney(p.total, base),
+            },
+            {
+              key: "share",
+              type: "pct",
+              width: COL.share,
+              label: "Доля",
+              sortValue: (p) => p.total / (total || 1),
+              render: (p) => formatPct(p.total / total, 1),
+            },
+            {
+              key: "count",
+              type: "count",
+              width: COL.count,
+              label: "Операций",
+              sortValue: (p) => p.count,
+              render: (p) => formatNum(p.count),
+            },
+            {
+              key: "avg",
+              type: "money",
+              muted: true,
+              width: COL.avg,
+              label: "Средняя",
+              sortValue: (p) => (p.count > 0 ? p.total / p.count : 0),
+              render: (p) => formatMoney(p.total / p.count, base),
+            },
+          ]}
+        />
       )}
 
       {tab === "transactions" && (
-        <div className="card-tray px-4 py-3">
-          <SortableTable<Transaction>
-            title={
-              <TableHeading
-                icon={<Receipt className="w-4 h-4 text-expense" />}
-                title={`Крупнейшие ${kind === "expense" ? "расходы" : "поступления"}`}
-                info={
-                  <p>
-                    Пятьдесят самых крупных операций фильтра, по одной строке на
-                    операцию. Сумма показана в валюте операции, а сортируется
-                    список по сумме в базовой валюте — иначе покупка в лирах
-                    встала бы выше квартиры.
-                  </p>
-                }
-              />
-            }
-            data={txs}
-            rowKey={(t) => t.id}
-            defaultSortKey="amount"
-            defaultSortDir="desc"
-            onRowClick={(t) => openSingle(t.id)}
-            exportName={`top_transactions_${kind}`}
-            fixed
-            columns={
-              [
-                {
-                  key: "date",
-                  width: TX_COL.date,
-                  label: "Дата",
-                  sortValue: (t) => t.date,
-                  // Тем же набором, что вторичные числа соседних вкладок — доля,
-                  // число операций, средняя: приглушённо и табличными цифрами.
-                  // Пропорциональные цифры даты выбивались из таблицы, где все
-                  // остальные числа стоят ровным столбцом.
-                  render: (t) => (
-                    <span className="whitespace-nowrap tabular-nums text-muted">
-                      {formatDate(t.date, "full")}
-                    </span>
-                  ),
-                },
-                {
-                  key: "category",
-                  width: TX_COL.category,
-                  label: "Категория",
-                  sortValue: (t) => t.categoryFull,
-                  render: (t) => (
-                    <span className="block truncate" title={t.categoryFull}>
-                      {t.categoryFull}
-                    </span>
-                  ),
-                },
-                {
-                  key: "payee",
-                  width: TX_COL.payee,
-                  label: "Контрагент",
-                  sortValue: (t) => counterpartyOf(t),
-                  render: (t) => (
-                    <span className="block truncate" title={counterpartyOf(t)}>
-                      {counterpartyOf(t) || "—"}
-                    </span>
-                  ),
-                },
-                {
-                  key: "comment",
-                  label: "Комментарий",
-                  sortValue: (t) => t.comment || "",
-                  render: (t) => (
-                    // Обычного размера, как и остальной текст таблиц: мелкий шрифт
-                    // делал комментарий сноской, хотя он такая же колонка.
-                    <span className="block truncate text-muted" title={t.comment}>
-                      {t.comment}
-                    </span>
-                  ),
-                },
-                {
-                  key: "amount",
-                  width: TX_COL.amount,
-                  label: "Сумма",
-                  align: "right",
-                  sortValue: (t) => t.amountBase,
-                  render: (t) => (
-                    <span
-                      className={`tabular-nums font-medium ${
-                        kind === "expense" ? "text-expense" : "text-income"
-                      }`}
-                    >
-                      {formatMoney(t.amount, t.currency)}
-                    </span>
-                  ),
-                },
-              ] as Column<Transaction>[]
-            }
-          />
-        </div>
+        <DataTable<Transaction>
+          icon={Receipt}
+          title={`Крупнейшие ${kind === "expense" ? "расходы" : "поступления"}`}
+          info={
+            <p>
+              Пятьдесят самых крупных операций фильтра, по одной строке на
+              операцию. Сумма показана в валюте операции, а сортируется
+              список по сумме в базовой валюте — иначе покупка в лирах
+              встала бы выше квартиры.
+            </p>
+          }
+          data={txs}
+          rowKey={(t) => t.id}
+          defaultSortKey="amount"
+          onRowClick={(t) => openSingle(t.id)}
+          exportName={`top_transactions_${kind}`}
+          fixed
+          columns={[
+            {
+              key: "date",
+              type: "date",
+              width: TX_COL.date,
+              label: "Дата",
+              sortValue: (t) => t.date,
+              render: (t) => formatDate(t.date, "full"),
+            },
+            {
+              key: "category",
+              type: "text",
+              width: TX_COL.category,
+              label: "Категория",
+              sortValue: (t) => t.categoryFull,
+              render: (t) => t.categoryFull,
+            },
+            {
+              key: "payee",
+              type: "text",
+              width: TX_COL.payee,
+              label: "Контрагент",
+              sortValue: (t) => counterpartyOf(t),
+              render: (t) => counterpartyOf(t) || "—",
+            },
+            {
+              key: "comment",
+              type: "text",
+              muted: true,
+              label: "Комментарий",
+              sortValue: (t) => t.comment || "",
+              render: (t) => t.comment,
+            },
+            {
+              key: "amount",
+              type: "main",
+              tone: sideTone,
+              width: TX_COL.amount,
+              label: "Сумма",
+              sortValue: (t) => t.amountBase,
+              render: (t) => formatMoney(t.amount, t.currency),
+            },
+          ]}
+        />
       )}
     </div>
   );

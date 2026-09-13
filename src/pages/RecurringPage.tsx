@@ -4,7 +4,6 @@ import {
   Calendar,
   AlertCircle,
   TrendingUp,
-  TrendingDown,
   CalendarClock,
   Coins,
   Sparkles,
@@ -19,13 +18,14 @@ import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
 import { plannedOps, ownPlannedOps, type PlannedOp } from "../lib/plannedOps";
 
 import { useMembersStore } from "../store/useMembersStore";
-import { formatMoney, formatDate, formatNum } from "../lib/format";
+import { formatMoney, formatDate, formatNum, formatPct } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { StatCell, StatRow } from "../components/SectionCard";
-import { SortableTable, type Column } from "../components/SortableTable";
+import { DataTable, type Column, type Tone } from "../components/DataTable";
+import { DeviationPill } from "../components/DeviationPill";
 import { confirm } from "../store/useConfirmStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 
@@ -101,16 +101,14 @@ function daysOverdue(iso: string, todayIso: string): number {
 }
 
 /** Signed, coloured amount for a planned op (shared by table + overdue list). */
-function plannedAmount(p: PlannedOp, base: string) {
+function plannedAmount(p: PlannedOp, base: string): string {
   const sign = p.kind === "income" ? "+" : p.kind === "expense" ? "−" : "";
-  const tone =
-    p.kind === "income" ? "text-income" : p.kind === "transfer" ? "text-muted" : "text-expense";
-  return (
-    <span className={`tabular-nums whitespace-nowrap ${tone}`}>
-      {sign}
-      {formatMoney(p.amountBase, base)}
-    </span>
-  );
+  return `${sign}${formatMoney(p.amountBase, base)}`;
+}
+
+/** Сторона плановой суммы: перевод — без цвета. */
+function plannedTone(p: PlannedOp): Tone {
+  return p.kind === "income" ? "income" : p.kind === "expense" ? "expense" : "neutral";
 }
 
 export function RecurringPage() {
@@ -277,19 +275,16 @@ export function RecurringPage() {
     () => [
       {
         key: "date",
+        type: "date",
         label: "Дата",
         width: "7%",
         sortValue: (p) => p.date,
-        render: (p) => (
-          <span className="text-muted whitespace-nowrap tabular-nums">
-            {formatDate(p.date, "short")}
-          </span>
-        ),
+        render: (p) => formatDate(p.date, "short"),
       },
       {
         key: "type",
+        type: "mark",
         label: "Тип",
-        align: "center",
         width: "8%",
         sortValue: (p) => (p.forecast ? 1 : 0),
         exportValue: (p) => (p.forecast ? "Прогноз" : "План"),
@@ -305,59 +300,48 @@ export function RecurringPage() {
       },
       {
         key: "payee",
+        type: "text",
         label: "Получатель",
         width: "16%",
         sortValue: (p) => p.payee || "",
-        render: (p) => (
-          <span className="block truncate font-semibold" title={p.payee || ""}>
-            {p.payee || "—"}
-          </span>
-        ),
+        render: (p) => p.payee || "—",
       },
       {
         key: "category",
+        type: "text",
+        muted: true,
         label: "Категория",
         width: "19%",
         sortValue: (p) => p.category,
-        render: (p) => (
-          <span className="block truncate text-muted" title={p.category || ""}>
-            {p.category || "—"}
-          </span>
-        ),
+        render: (p) => p.category || "—",
       },
       {
         key: "comment",
+        type: "text",
+        muted: true,
         label: "Комментарий",
         width: "22%",
         sortValue: (p) => p.comment || "",
-        render: (p) =>
-          p.comment ? (
-            <span className="block truncate text-muted" title={p.comment}>
-              {p.comment}
-            </span>
-          ) : (
-            <span className="text-muted/50">—</span>
-          ),
+        render: (p) => p.comment || "—",
       },
       {
         key: "account",
+        type: "text",
+        muted: true,
         label: "Счёт",
         width: "15%",
         sortValue: (p) => p.account,
-        render: (p) => (
-          <span className="block truncate text-muted">
-            {p.kind === "transfer" ? `${p.account} → ${p.toAccount}` : p.account}
-          </span>
-        ),
+        cellTitle: (p) => (p.kind === "transfer" ? `${p.account} → ${p.toAccount}` : p.account),
+        render: (p) => (p.kind === "transfer" ? `${p.account} → ${p.toAccount}` : p.account),
       },
       {
         key: "amount",
+        type: "main",
+        tone: plannedTone,
         label: "Сумма",
-        align: "right",
         width: "13%",
         sortValue: (p) => p.amountBase,
-        exportValue: (p) =>
-          (p.kind === "expense" ? -p.amountBase : p.amountBase).toFixed(2),
+        exportValue: (p) => (p.kind === "expense" ? -p.amountBase : p.amountBase).toFixed(2),
         render: (p) => plannedAmount(p, base),
       },
     ],
@@ -383,18 +367,15 @@ export function RecurringPage() {
     ...plannedColumns.filter((c) => c.key === "date"),
     {
       key: "late",
+      type: "mark",
+      tone: "warn",
       label: "Задержка",
-      align: "center",
       width: "8%",
       // Сортировать нечего: порядок по задержке — это порядок по дате наоборот.
       sortable: false,
       render: (p) => {
         const d = daysOverdue(p.date, todayIso);
-        return (
-          <span className="text-warn tabular-nums whitespace-nowrap">
-            {formatNum(d)} {pluralRu(d, ["день", "дня", "дней"])}
-          </span>
-        );
+        return `${formatNum(d)} ${pluralRu(d, ["день", "дня", "дней"])}`;
       },
     },
     ...plannedColumns.filter((c) =>
@@ -405,11 +386,9 @@ export function RecurringPage() {
       .map((c) => ({ ...c, width: "10%" })),
     {
       key: "act",
+      type: "actions",
       label: "",
-      align: "right",
       width: "3%",
-      sortable: false,
-      exportSkip: true,
       render: (p) =>
         queuedDeletions[p.id] !== undefined ? (
           <button
@@ -442,159 +421,131 @@ export function RecurringPage() {
   const recurringColumns = useMemo<Column<RecurringCandidate>[]>(
     () => [
       {
-        // Traffic-light status: green = active (payments on schedule),
-        // red = inactive (no payment for more than ~2 expected cycles).
+        // Светофор: зелёный — платежи идут по графику, красный — платежа нет
+        // дольше двух ожидаемых циклов.
         key: "status",
+        type: "mark",
         label: "Статус",
-        align: "center",
         width: "6%",
         sortValue: (c) => (c.stale ? "неактивен" : "активен"),
+        cellTitle: (c) =>
+          c.stale
+            ? `Неактивен: нет платежа ${c.daysSinceLast} дн. при периоде ~${c.avgIntervalDays} дн.`
+            : "Активен: платежи идут по графику",
         render: (c) => (
           <span
-            className={`inline-block w-2.5 h-2.5 rounded-full ${
+            className={`inline-block w-2.5 h-2.5 rounded-full align-middle ${
               c.stale ? "bg-expense" : "bg-income"
             }`}
-            title={
-              c.stale
-                ? `Неактивен: нет платежа ${c.daysSinceLast} дн. при периоде ~${c.avgIntervalDays} дн.`
-                : "Активен: платежи идут по графику"
-            }
           />
         ),
       },
       {
         key: "payee",
+        type: "text",
         label: "Получатель",
         width: "15%",
         sortValue: (c) => c.payee,
-        render: (c) => (
-          <span className="block truncate font-medium" title={c.payee}>
-            {c.payee}
-          </span>
-        ),
+        render: (c) => c.payee,
       },
       {
         key: "category",
+        type: "text",
+        muted: true,
         label: "Категория",
         width: "11%",
         sortValue: (c) => c.category,
-        render: (c) => (
-          <span className="block truncate text-muted" title={c.category}>
-            {c.category}
-          </span>
-        ),
+        render: (c) => c.category,
       },
       {
         key: "avgAmount",
+        type: "money",
         label: "Сумма ср.",
-        align: "right",
         width: "9%",
         sortValue: (c) => c.avgAmount,
-        render: (c) => (
-          <span className="tabular-nums whitespace-nowrap">
-            {formatMoney(c.avgAmount, c.currency)}
-          </span>
-        ),
+        render: (c) => formatMoney(c.avgAmount, c.currency),
       },
       {
-        // Price-trend column — shows a small arrow + the % change of the *last*
-        // charge vs. the historical average. Empty cell for "flat" so the column
-        // stays visually quiet on the (majority) stable subscriptions.
+        // Последний платёж против исторического среднего. У ровных подписок —
+        // прочерк: колонка не рябит там, где ничего не меняется.
         key: "priceTrend",
+        type: "change",
         label: "Изменение",
-        align: "right",
         width: "8%",
         sortValue: (c) => c.priceTrend.changePct,
-        render: (c) => {
-          const { priceFlag, changePct } = c.priceTrend;
-          if (priceFlag === "flat") return <span className="text-muted">—</span>;
-          const pct = (changePct * 100).toFixed(0);
-          const Icon = priceFlag === "up" ? TrendingUp : TrendingDown;
-          return (
-            <span
-              className={`inline-flex items-center justify-end gap-1 tabular-nums ${
-                priceFlag === "up" ? "text-warn" : "text-income"
-              }`}
-              title={
-                priceFlag === "up"
-                  ? "Последний платёж дороже исторического среднего"
-                  : "Последний платёж дешевле исторического среднего"
-              }
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {priceFlag === "up" ? "+" : ""}
-              {pct}%
-            </span>
-          );
-        },
+        render: (c) =>
+          c.priceTrend.priceFlag === "flat" ? (
+            <span className="text-muted">—</span>
+          ) : (
+            <DeviationPill
+              current={1 + c.priceTrend.changePct}
+              baseline={1}
+              base={c.currency}
+              asPct
+              kind="expense"
+              upTitle="Последний платёж дороже исторического среднего"
+              downTitle="Последний платёж дешевле исторического среднего"
+            />
+          ),
       },
       {
         key: "avgInterval",
+        type: "number",
         label: "Раз в",
-        align: "right",
         width: "6%",
         sortValue: (c) => c.avgIntervalDays,
-        render: (c) => <span className="text-muted whitespace-nowrap">{c.avgIntervalDays} дн</span>,
+        render: (c) => `${formatNum(c.avgIntervalDays)} дн`,
       },
       {
         key: "occurrences",
+        type: "count",
         label: "Повторов",
-        align: "right",
         width: "7%",
         sortValue: (c) => c.occurrences,
-        render: (c) => <span className="text-muted tabular-nums">{formatNum(c.occurrences)}</span>,
+        render: (c) => formatNum(c.occurrences),
       },
       {
         key: "consistency",
+        type: "pct",
         label: "Стабильность",
-        align: "right",
         width: "12%",
         sortValue: (c) => c.consistency,
         render: (c) => (
-          <div className="flex items-center justify-end gap-2">
-            <div className="w-12 h-1.5 bg-panel2 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-accent"
+          <span className="flex items-center justify-end gap-2">
+            <span className="w-12 h-1.5 bg-panel2 rounded-full overflow-hidden">
+              <span
+                className="block h-full bg-accent"
                 style={{ width: `${c.consistency * 100}%` }}
               />
-            </div>
-            <span className="text-xs text-muted tabular-nums w-10 text-right">
-              {(c.consistency * 100).toFixed(0)}%
             </span>
-          </div>
+            <span className="w-10">{formatPct(c.consistency, 0)}</span>
+          </span>
         ),
       },
       {
         key: "lastDate",
+        type: "date",
         label: "Последний",
         width: "8%",
         sortValue: (c) => c.lastDate,
-        render: (c) => (
-          <span className="text-muted whitespace-nowrap">{formatDate(c.lastDate, "short")}</span>
-        ),
+        render: (c) => formatDate(c.lastDate, "short"),
       },
       {
         key: "nextExpected",
+        type: "date",
         label: "Следующий",
         width: "8%",
         sortValue: (c) => c.nextExpected,
-        render: (c) => (
-          <span className="text-muted whitespace-nowrap">
-            {formatDate(c.nextExpected, "short")}
-          </span>
-        ),
+        render: (c) => formatDate(c.nextExpected, "short"),
       },
       {
         key: "totalSpent",
+        type: "main",
+        tone: "expense",
         label: "Итого",
-        align: "right",
         width: "10%",
         sortValue: (c) => c.totalSpent,
-        render: (c) => (
-          <span className="tabular-nums whitespace-nowrap text-expense font-medium">
-            {formatMoney(c.totalSpent, c.currency)}
-          </span>
-        ),
+        render: (c) => formatMoney(c.totalSpent, c.currency),
       },
     ],
     []
@@ -787,7 +738,8 @@ export function RecurringPage() {
                     </p>
                   </InfoPopover>
                 </div>
-                <SortableTable<PlannedOp>
+                <DataTable<PlannedOp>
+                  bare
                   data={plannedOverdue}
                   columns={overdueColumns}
                   rowKey={(p) => p.id}
@@ -818,7 +770,8 @@ export function RecurringPage() {
                       : "Ничего не запланировано на будущее."}
               </div>
             ) : (
-              <SortableTable<PlannedOp>
+              <DataTable<PlannedOp>
+                bare
                 data={plannedShown}
                 columns={plannedColumns}
                 rowKey={(p) => p.id}
@@ -993,24 +946,17 @@ export function RecurringPage() {
       )}
 
       {candidates.length > 0 && (
-        <div className="card-tray card-pad">
-          <SortableTable<RecurringCandidate>
-            title={
-              <span className="flex items-center gap-2">
-                <ListChecks className="w-4 h-4 text-accent" />
-                Все регулярные платежи
-              </span>
-            }
-            data={candidates}
-            columns={recurringColumns}
-            rowKey={(c) => c.payee + c.currency}
-            defaultSortKey="totalSpent"
-            defaultSortDir="desc"
-            onRowClick={openCandidate}
-            exportName="recurring_payments"
-            fixed
-          />
-        </div>
+        <DataTable<RecurringCandidate>
+          icon={ListChecks}
+          title="Все регулярные платежи"
+          data={candidates}
+          columns={recurringColumns}
+          rowKey={(c) => c.payee + c.currency}
+          defaultSortKey="totalSpent"
+          onRowClick={openCandidate}
+          exportName="recurring_payments"
+          fixed
+        />
       )}
         </>
       )}

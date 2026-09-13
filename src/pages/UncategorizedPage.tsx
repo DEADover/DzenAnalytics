@@ -11,12 +11,12 @@ import {
 } from "../lib/aggregations";
 import { formatMoney, formatDate, formatNum, formatPct } from "../lib/format";
 import { pluralRu } from "../lib/plural";
-import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyle";
+import { kindGlyphClass, kindSignGlyph, kindTone } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
-import { SortableTable, type Column } from "../components/SortableTable";
+import { DataTable } from "../components/DataTable";
 import type { Transaction } from "../types";
 import type { RuleField } from "../store/useCategoryRulesStore";
 
@@ -317,87 +317,75 @@ export function UncategorizedPage() {
           </div>
         </div>
       ) : (
-        <div className="card-tray card-pad">
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-semibold">Все без категории ({list.length})</div>
+        <DataTable<Transaction>
+          title={`Все без категории (${formatNum(list.length)})`}
+          actions={
             <button
+              type="button"
               onClick={() => showDrill("Незакатегоризованные", list, "Чистка категорий")}
               className="btn-ghost text-xs"
             >
-              Открыть в drawer
+              Открыть в шторке
             </button>
-          </div>
-          <SortableTable<Transaction>
-            data={list}
-            rowKey={(t) => t.id}
-            defaultSortKey="date"
-            defaultSortDir="desc"
-            limit={200}
-            exportName="uncategorized"
-            columns={
-              [
-                {
-                  key: "date",
-                  label: "Дата",
-                  sortValue: (t) => t.date,
-                  render: (t) => (
-                    <span className="whitespace-nowrap text-muted">
-                      {formatDate(t.date, "full")}
-                    </span>
-                  ),
-                },
-                {
-                  key: "category",
-                  label: "Категория",
-                  sortValue: (t) => t.categoryFull,
-                  render: (t) => (
-                    <span className="truncate max-w-[150px] inline-block text-warn">
-                      {t.categoryFull || "—"}
-                    </span>
-                  ),
-                },
-                {
-                  key: "payee",
-                  label: "Получатель",
-                  sortValue: (t) => t.payee || "",
-                  render: (t) => (
-                    <span className="truncate max-w-[160px] inline-block">
-                      {t.payee || "—"}
-                    </span>
-                  ),
-                },
-                {
-                  key: "comment",
-                  label: "Комментарий",
-                  sortValue: (t) => t.comment,
-                  render: (t) => (
-                    <span
-                      className="truncate max-w-[280px] inline-block text-xs text-muted"
-                      title={t.comment}
-                    >
-                      {t.comment}
-                    </span>
-                  ),
-                },
-                {
-                  key: "amount",
-                  label: "Сумма",
-                  align: "right",
-                  sortValue: (t) => t.amountBase,
-                  render: (t) => (
-                    <span
-                      className={`tabular-nums whitespace-nowrap ${kindColorClass(t.kind)}`}
-                      title={t.kind === "refund" ? "Возврат — уменьшает расход категории" : undefined}
-                    >
-                      <span className={kindGlyphClass(t.kind)}>{kindSignGlyph(t.kind)}</span>
-                      {formatMoney(t.amount, t.currency)}
-                    </span>
-                  ),
-                },
-              ] as Column<Transaction>[]
-            }
-          />
-        </div>
+          }
+          data={list}
+          rowKey={(t) => t.id}
+          defaultSortKey="date"
+          limit={200}
+          exportName="uncategorized"
+          fixed
+          columns={[
+            {
+              key: "date",
+              type: "date",
+              width: "8.5rem",
+              label: "Дата",
+              sortValue: (t) => t.date,
+              render: (t) => formatDate(t.date, "full"),
+            },
+            {
+              key: "category",
+              type: "text",
+              muted: true,
+              width: "12rem",
+              label: "Категория",
+              sortValue: (t) => t.categoryFull,
+              render: (t) => t.categoryFull || "—",
+            },
+            {
+              key: "payee",
+              type: "text",
+              width: "14rem",
+              label: "Получатель",
+              sortValue: (t) => t.payee || "",
+              render: (t) => t.payee || "—",
+            },
+            {
+              key: "comment",
+              type: "text",
+              muted: true,
+              label: "Комментарий",
+              sortValue: (t) => t.comment,
+              render: (t) => t.comment,
+            },
+            {
+              key: "amount",
+              type: "main",
+              tone: (t) => kindTone(t.kind),
+              width: "10rem",
+              label: "Сумма",
+              sortValue: (t) => t.amountBase,
+              cellTitle: (t) =>
+                t.kind === "refund" ? "Возврат — уменьшает расход категории" : undefined,
+              render: (t) => (
+                <>
+                  <span className={kindGlyphClass(t.kind)}>{kindSignGlyph(t.kind)}</span>
+                  {formatMoney(t.amount, t.currency)}
+                </>
+              ),
+            },
+          ]}
+        />
       )}
     </div>
   );
