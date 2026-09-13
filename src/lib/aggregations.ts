@@ -1818,11 +1818,19 @@ export function tagReturn(bucket: { expense: number; income: number }): {
   };
 }
 
-export function groupByHashtag(txs: Transaction[]): TagBucket[] {
+/**
+ * Откуда брать теги операции. По умолчанию — хэштеги из комментария; раздел
+ * «Теги» подставляет сюда выбранный режим (#69, см. `lib/operationTags`).
+ */
+export type TagGetter = (t: Transaction) => string[];
+
+const hashtagsOf: TagGetter = (t) => extractHashtags(t.comment);
+
+export function groupByHashtag(txs: Transaction[], tagsOf: TagGetter = hashtagsOf): TagBucket[] {
   const map = new Map<string, TagBucket>();
   for (const t of txs) {
     if (t.kind === "transfer") continue;
-    const tags = extractHashtags(t.comment);
+    const tags = tagsOf(t);
     for (const tag of tags) {
       let b = map.get(tag);
       if (!b) {
@@ -1864,7 +1872,8 @@ export interface TagCatNode {
  * income lands in its own bucket. Sorted by expense+income, descending.
  */
 export function hashtagCategoryTrees(
-  txs: Transaction[]
+  txs: Transaction[],
+  tagsOf: TagGetter = hashtagsOf
 ): Map<string, TagCatNode[]> {
   const add = (b: { expense: number; income: number }, t: Transaction) => {
     if (t.kind === "income") b.income += t.amountBase;
@@ -1874,7 +1883,7 @@ export function hashtagCategoryTrees(
   const byTag = new Map<string, Map<string, TagCatNode>>();
   for (const t of txs) {
     if (t.kind === "transfer") continue;
-    const tags = extractHashtags(t.comment);
+    const tags = tagsOf(t);
     if (tags.length === 0) continue;
     for (const tag of tags) {
       let cats = byTag.get(tag);

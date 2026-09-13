@@ -333,7 +333,7 @@ export function TransactionsPage() {
     const q = pageSearch.trim().toLowerCase();
     if (!q) return filtered;
     return filtered.filter((t) =>
-      `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${t.account}`
+      `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
         .toLowerCase()
         .includes(q)
     );

@@ -65,6 +65,7 @@ import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
 import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
 import { useMembersStore } from "./store/useMembersStore";
 import { useFreeMoneyStore } from "./store/useFreeMoneyStore";
+import { useTagModeStore } from "./store/useTagModeStore";
 import { useDashboardLayoutStore } from "./store/useDashboardLayoutStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 import { useImportBatchesStore } from "./store/useImportBatchesStore";
@@ -135,6 +136,7 @@ function App() {
     useSplitGroupsStore.getState().hydrate();
     useMembersStore.getState().hydrate();
     useFreeMoneyStore.getState().hydrate();
+    useTagModeStore.getState().hydrate();
     hydrate();
     backupHydrate();
     reportPeriodHydrate();

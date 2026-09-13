@@ -232,6 +232,15 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
         : null;
 
     const cat = buildCategory(zt.tag, tagsById);
+    // Вторые и следующие категории (#69). Основная уже в `cat`; повтор основной
+    // и неизвестные теги отбрасываем, порядок — как в Дзен-мани.
+    const extraCategories: string[] = [];
+    for (const tagId of (zt.tag ?? []).slice(1)) {
+      const extra = buildCategory([tagId], tagsById);
+      if (extra.category === NO_CATEGORY) continue;
+      if (extra.full === cat.full || extraCategories.includes(extra.full)) continue;
+      extraCategories.push(extra.full);
+    }
     // Display-only overrides. The transaction's tag/category from Zenmoney is
     // preserved in `*Original` fields below (for category rules to match
     // against), but the visible `category` / `categoryFull` are forced to our
@@ -310,6 +319,7 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
       // У перевода предпочитаем личную ногу: перевод, коснувшийся личного
       // счёта, принадлежит его хозяину, а не «общему котлу».
       member: outAcc?.role ?? inAcc?.role ?? null,
+      ...(extraCategories.length > 0 ? { extraCategories } : {}),
     });
   }
 

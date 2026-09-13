@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Transaction } from "../types";
 import { currentPeriod, periodRange, shiftPeriod } from "../lib/period";
 import { payeeSearchText } from "../lib/format";
+import { hasCategory } from "../lib/operationTags";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { debtSelection, matchesDebtSelection } from "../lib/debtFilter";
 import { MEMBER_SHARED } from "../lib/zenUsers";
@@ -310,12 +311,23 @@ export function applyFilters(
     }
     // The category filter holds leaf keys equal to `categoryFull`: a bare
     // category «Еда» (a transaction tagged with just the parent) or a full
-    // «Еда / Кафе». Matching is STRICTLY by `categoryFull` — category and
+    // «Еда / Кафе». Matching is STRICTLY by the full name — category and
     // sub-category are distinct in Zenmoney, so selecting a sub never pulls in
     // the parent's bare transactions, and vice-versa.
+    //
+    // ВТОРЫЕ КАТЕГОРИИ ТОЖЕ СЧИТАЮТСЯ (#69). «Отпуск», поставленный второй,
+    // находит операцию так же, как в мобильном приложении Дзен-мани. Суммы по
+    // категориям это не задваивает: там операция по-прежнему идёт под основной.
     if (state.categories.size) {
       if (state.categories.has(FILTER_NONE)) return false;
-      if (!state.categories.has(t.categoryFull)) return false;
+      let picked = false;
+      for (const key of state.categories) {
+        if (hasCategory(t, key)) {
+          picked = true;
+          break;
+        }
+      }
+      if (!picked) return false;
     }
     if (state.currencies.size && (state.currencies.has(FILTER_NONE) || !state.currencies.has(t.currency)))
       return false;
@@ -328,7 +340,8 @@ export function applyFilters(
       if (!state.users.has(key)) return false;
     }
     if (search) {
-      const hay = `${payeeSearchText(t)} ${t.comment} ${t.categoryFull}`.toLowerCase();
+      // Вторые категории — тоже: «Отпуск» ищется, даже если он всегда второй (#69).
+      const hay = `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")}`.toLowerCase();
       if (!hay.includes(search)) return false;
     }
     // ── «Дополнительно» ──

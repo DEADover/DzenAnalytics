@@ -60,6 +60,7 @@ import { usePayeeAliasStore } from "../store/usePayeeAliasStore";
 import { UsersSettings } from "../components/UsersSettings";
 import { useMembersStore } from "../store/useMembersStore";
 import { useFreeMoneyStore } from "../store/useFreeMoneyStore";
+import { useTagModeStore } from "../store/useTagModeStore";
 import { Combobox } from "../components/Combobox";
 import { PageHeader } from "../components/PageHeader";
 import { formatNum, formatDate, formatMoney } from "../lib/format";
@@ -217,6 +218,8 @@ export function ImportPage() {
   const setFreeMethod = useFreeMoneyStore((s) => s.setMethod);
   const freeReserve = useFreeMoneyStore((s) => s.reserve);
   const setFreeReserve = useFreeMoneyStore((s) => s.setReserve);
+  const tagMode = useTagModeStore((s) => s.mode);
+  const setTagMode = useTagModeStore((s) => s.setMode);
 
   const membersOwnerId = useMembersStore((s) => s.ownerId);
   const hideForeignMembers = useMembersStore((s) => s.hideForeignPrivate);
@@ -1726,6 +1729,54 @@ export function ImportPage() {
                 // обновился сразу (только режим API; для CSV — no-op).
                 await recalcBalanceCalibration();
               }}
+            />
+          }
+        />
+
+        {/* Теги (#69). В «Расчётах», а не в «Оформлении»: от выбора зависит,
+            какие операции попадут в суммы раздела «Теги». */}
+        <SettingRow
+          title="Теги операций"
+          status={
+            tagMode === "hashtags"
+              ? "Хэштеги из комментария: «Ужин #отпуск»"
+              : "Вторая и следующие категории операции"
+          }
+          help={
+            <>
+              <p>
+                Пометить операцию сверх категории в Дзен-мани можно двумя
+                способами, и раздел «Теги» умеет оба — выберите тот, которым
+                пользуетесь.
+              </p>
+              <p>
+                <InfoTerm>Хэштеги</InfoTerm> — слова с решёткой в комментарии:
+                «Ужин #отпуск». Пишутся прямо в тексте, решётка подсказывает уже
+                знакомые.
+              </p>
+              <p>
+                <InfoTerm>Вторые категории</InfoTerm> — Дзен-мани разрешает
+                поставить операции несколько категорий. Первая остаётся основной
+                и по ней считается вся аналитика, а вторую и следующие многие
+                ведут как теги: «Отпуск», «Ремонт». В этом режиме их можно
+                ставить и снимать прямо в карточке операции.
+              </p>
+              <p>
+                Выбор влияет только на раздел «Теги» и поле тегов в карточке.
+                Вторые категории и без него видны в фильтре категорий, находятся
+                поиском и считаются в справочнике.
+              </p>
+            </>
+          }
+          control={
+            <Segmented
+              label="Что считать тегами"
+              value={tagMode}
+              onChange={(v) => void setTagMode(v)}
+              options={[
+                { value: "hashtags", label: "Хэштеги" },
+                { value: "categories", label: "Вторые категории" },
+              ]}
             />
           }
         />

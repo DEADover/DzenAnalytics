@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Hash, Pencil } from "lucide-react";
+import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import {
   groupByHashtag,
-  extractHashtags,
   hashtagCategoryTrees,
   computeKPI,
   tagReturn,
@@ -20,6 +20,60 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { SortableTable, type Column } from "../components/SortableTable";
 import { HashtagRenameModal } from "../components/HashtagRenameModal";
+import { useTagModeStore } from "../store/useTagModeStore";
+import { tagLabel, tagsOf, type TagMode } from "../lib/operationTags";
+import type { Transaction } from "../types";
+
+/**
+ * Значок тега. Хэштег — решёткой, как его набирают в комментарии. Вторая
+ * категория — своим значком и цветом из справочника: это та же категория, что
+ * и в остальном сервисе, и узнаваться она должна так же.
+ */
+function TagMark({ tag, mode, size = "w-3 h-3" }: { tag: string; mode: TagMode; size?: string }) {
+  if (mode === "hashtags") return <Hash className={`${size} text-accent shrink-0`} />;
+  const [parent, ...rest] = tag.split(/\s*\/\s*/);
+  const leaf = rest.join(" / ");
+  return leaf ? (
+    <CategoryDot category={leaf} parent={parent} size="w-4 h-4" />
+  ) : (
+    <CategoryDot category={parent} size="w-4 h-4" />
+  );
+}
+
+/** Переключатель режима прямо в шапке: эффект выбора виден здесь же. */
+function TagModeSwitch() {
+  const mode = useTagModeStore((s) => s.mode);
+  const setMode = useTagModeStore((s) => s.setMode);
+  const options: { value: TagMode; label: string }[] = [
+    { value: "hashtags", label: "Хэштеги" },
+    { value: "categories", label: "Вторые категории" },
+  ];
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Что считать тегами"
+      className="inline-flex gap-0.5 rounded-full p-1 bg-panel2 border border-border shadow-tray text-xs"
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={mode === o.value}
+          onClick={() => void setMode(o.value)}
+          className={clsx(
+            "px-2.5 py-1 rounded-full transition-colors duration-200",
+            mode === o.value
+              ? "bg-accent text-accent-fg"
+              : "text-muted hover:text-text hover:bg-panel/70"
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Итог по тегу: доход минус расход. Знак несёт цвет, поэтому «+» рисуем сами —
@@ -53,10 +107,18 @@ export function TagsPage() {
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const showDrill = useDrillStore((s) => s.show);
 
+  const mode = useTagModeStore((s) => s.mode);
+  // Откуда брать теги (#69): хэштеги из комментария или вторые категории.
+  const getTags = useCallback((t: Transaction) => tagsOf(t, mode), [mode]);
+  const label = (tag: string) => tagLabel(tag, mode);
+  // Переименовать можно только хэштег: он живёт в тексте комментариев. Вторая
+  // категория — запись справочника, и переименовывают её там же, в «Справочниках».
+  const canRename = mode === "hashtags";
+
   const filtered = useMemo(() => applyFilters(transactions, filters, monthStartDay), [transactions, filters, monthStartDay]);
-  const tags = useMemo(() => groupByHashtag(filtered), [filtered]);
+  const tags = useMemo(() => groupByHashtag(filtered, getTags), [filtered, getTags]);
   // Per-tag expense breakdown by category → subcategory.
-  const catTrees = useMemo(() => hashtagCategoryTrees(filtered), [filtered]);
+  const catTrees = useMemo(() => hashtagCategoryTrees(filtered, getTags), [filtered, getTags]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (tag: string) =>
     setExpanded((prev) => {
@@ -74,8 +136,8 @@ export function TagsPage() {
   const periodExpense = periodKpi.expense;
   const periodIncome = periodKpi.income;
   const taggedCount = useMemo(
-    () => filtered.filter((t) => extractHashtags(t.comment).length > 0).length,
-    [filtered]
+    () => filtered.filter((t) => getTags(t).length > 0).length,
+    [filtered, getTags]
   );
 
   const maxTotal = tags[0] ? tags[0].expense + tags[0].income : 1;
@@ -93,20 +155,20 @@ export function TagsPage() {
   const [renaming, setRenaming] = useState<string | null>(null);
 
   function openTag(tag: string) {
-    const txs = filtered.filter((t) => extractHashtags(t.comment).includes(tag));
-    showDrill(`#${tag}`, txs, "Операции с тегом");
+    const txs = filtered.filter((t) => getTags(t).includes(tag));
+    showDrill(label(tag), txs, "Операции с тегом");
   }
 
   /** Тот же дрилл, но сузенный до одной категории или подкатегории тега. */
   function openTagCategory(tag: string, category: string, sub?: string) {
     const txs = filtered.filter(
       (t) =>
-        extractHashtags(t.comment).includes(tag) &&
+        getTags(t).includes(tag) &&
         t.category === category &&
         (sub === undefined || t.subcategory === sub)
     );
     showDrill(
-      `#${tag} · ${sub ?? category}`,
+      `${label(tag)} · ${sub ?? category}`,
       txs,
       sub ? "Операции с тегом по подкатегории" : "Операции с тегом по категории"
     );
@@ -133,13 +195,23 @@ export function TagsPage() {
 
   if (transactions.length === 0) return <EmptyState />;
 
+  const hint =
+    mode === "hashtags"
+      ? "Группировка операций по хэштегам из комментариев"
+      : "Группировка операций по второй и следующим категориям";
+
   if (tags.length === 0) {
     return (
       <div className="space-y-6">
         <PageHeader
           icon={Hash}
           title="Теги"
-          hint="Метки `#проект` в комментариях группируют операции по темам — в текущей выборке тегов нет"
+          hint={
+            mode === "hashtags"
+              ? "Метки `#проект` в комментариях группируют операции по темам — в текущей выборке тегов нет"
+              : "Вторая категория операции — «Отпуск», «Ремонт» — группирует операции по темам. В текущей выборке таких операций нет"
+          }
+          right={<TagModeSwitch />}
         />
         <GlobalFilters />
       </div>
@@ -152,12 +224,7 @@ export function TagsPage() {
           что они описывают: счётчики тегов — в шапке облака, знаменатели
           процентов — в шапке таблицы. Заголовок должен объяснять страницу, а не
           пересказывать её содержимое. */}
-      <PageHeader
-        icon={Hash}
-        title="Теги"
-        hint="Группировка операций по хэштегам из комментариев"
-        hintWrap
-      />
+      <PageHeader icon={Hash} title="Теги" hint={hint} hintWrap right={<TagModeSwitch />} />
       <GlobalFilters />
 
       <div className="card-tray card-pad">
@@ -197,7 +264,7 @@ export function TagsPage() {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-panel2 hover:border-accent hover:bg-accent/10 transition-colors"
                 style={{ fontSize }}
               >
-                <Hash className="w-3 h-3 text-accent shrink-0" />
+                <TagMark tag={t.tag} mode={mode} />
                 <span className="font-medium">{t.tag}</span>
                 <span className="text-muted text-xs tabular-nums">
                   {formatNum(t.count)} {pluralOps(t.count)}
@@ -226,16 +293,17 @@ export function TagsPage() {
           rowKey={(t) => t.tag}
           defaultSortKey="total"
           defaultSortDir="desc"
-          exportName="hashtags"
+          exportName={mode === "hashtags" ? "hashtags" : "tags"}
           columns={
+            (
             [
               {
                 key: "tag",
                 label: "Тег",
                 sortValue: (t) => t.tag,
                 render: (t) => (
-                  <span className="inline-flex items-center gap-1">
-                    <Hash className="w-3 h-3 text-accent" />
+                  <span className="inline-flex items-center gap-1.5">
+                    <TagMark tag={t.tag} mode={mode} />
                     {t.tag}
                   </span>
                 ),
@@ -313,7 +381,7 @@ export function TagsPage() {
                 align: "center",
                 sortValue: (t) => t.count,
                 render: (t) =>
-                  countButton(t.count, () => openTag(t.tag), `Показать операции с тегом #${t.tag}`),
+                  countButton(t.count, () => openTag(t.tag), `Показать операции с тегом ${label(t.tag)}`),
               },
               {
                 key: "actions",
@@ -338,7 +406,7 @@ export function TagsPage() {
                       }}
                       className="btn-ghost !p-1.5 text-muted hover:text-accent"
                       title="Переименовать тег или перенести операции в другой"
-                      aria-label={`Переименовать тег #${t.tag}`}
+                      aria-label={`Переименовать тег ${label(t.tag)}`}
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -346,6 +414,7 @@ export function TagsPage() {
                 ),
               },
             ] as Column<TagBucket>[]
+            ).filter((c) => canRename || c.key !== "actions")
           }
           isExpanded={(t) => expanded.has(t.tag)}
           onToggleExpand={(t) => toggle(t.tag)}
@@ -359,7 +428,7 @@ export function TagsPage() {
               return (
                 <tr className="bg-panel2/20">
                   <td className="table-td" />
-                  <td className="table-td text-xs text-muted" colSpan={9}>
+                  <td className="table-td text-xs text-muted" colSpan={canRename ? 9 : 8}>
                     Нет операций по категориям
                   </td>
                 </tr>
@@ -400,11 +469,11 @@ export function TagsPage() {
                   {countButton(
                     n.count,
                     () => openTagCategory(t.tag, n.category),
-                    `Показать операции с тегом #${t.tag} в категории «${n.category}»`
+                    `Показать операции с тегом ${label(t.tag)} в категории «${n.category}»`
                   )}
                 </td>
                 {/* Под колонку действий — переименовывать можно только тег целиком. */}
-                <td className="table-td" />
+                {canRename && <td className="table-td" />}
               </tr>,
               ...n.subs.map((s) => (
                 <tr
@@ -448,10 +517,10 @@ export function TagsPage() {
                     {countButton(
                       s.count,
                       () => openTagCategory(t.tag, n.category, s.name),
-                      `Показать операции с тегом #${t.tag} в подкатегории «${s.name}»`
+                      `Показать операции с тегом ${label(t.tag)} в подкатегории «${s.name}»`
                     )}
                   </td>
-                  <td className="table-td" />
+                  {canRename && <td className="table-td" />}
                 </tr>
               )),
             ]);
@@ -459,7 +528,7 @@ export function TagsPage() {
         />
       </div>
 
-      {renaming && (
+      {canRename && renaming && (
         <HashtagRenameModal
           hashtag={renaming}
           onClose={() => setRenaming(null)}

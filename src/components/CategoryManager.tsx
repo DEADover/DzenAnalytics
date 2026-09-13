@@ -10,6 +10,7 @@
 // treats `required !== false` as a need.
 
 import { useEffect, useMemo, useState } from "react";
+import { categoryKeysOf, hasCategory } from "../lib/operationTags";
 import { useLazyList } from "../hooks/useLazyList";
 import { Link } from "react-router-dom";
 import {
@@ -87,10 +88,13 @@ export function CategoryManager() {
 
   // Operation count per category leaf, keyed by `categoryFull` (root by title,
   // sub by «Родитель / Подкатегория») — matches how a tag maps to its tx.
+  //
+  // Вторые категории операции считаются тоже (#69): «Отпуск», который всегда
+  // стоит второй, иначе показывал бы ноль операций при сотне настоящих.
   const countByFull = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of transactions) {
-      m.set(t.categoryFull, (m.get(t.categoryFull) ?? 0) + 1);
+      for (const key of categoryKeysOf(t)) m.set(key, (m.get(key) ?? 0) + 1);
     }
     return m;
   }, [transactions]);
@@ -275,7 +279,7 @@ export function CategoryManager() {
    *  is the same `categoryFull` the count is built from, so what opens matches
    *  the number exactly (a root shows only its own ops, not its subs'). */
   function openOperations(fullKey: string) {
-    const txs = transactions.filter((t) => t.categoryFull === fullKey);
+    const txs = transactions.filter((t) => hasCategory(t, fullKey));
     if (txs.length === 0) return;
     showDrill(fullKey, txs, "Категория");
   }

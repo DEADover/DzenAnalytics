@@ -62,6 +62,37 @@ describe("applyFilters — category leaf matching (issue #9)", () => {
   });
 });
 
+describe("applyFilters — вторые категории (#69)", () => {
+  const txs = [
+    tx({ id: "dinner", category: "Еда", subcategory: null, categoryFull: "Еда", extraCategories: ["Отпуск"] }),
+    tx({ id: "hotel", category: "Жильё", subcategory: null, categoryFull: "Жильё", extraCategories: ["Путешествия / Италия"] }),
+    tx({ id: "lunch", category: "Еда", subcategory: null, categoryFull: "Еда" }),
+  ];
+
+  it("операция находится фильтром по второй категории", () => {
+    // Пункт 1 задачи: «Отпуск» стоит всегда вторым, и отобрать по нему было нечем.
+    const out = applyFilters(txs, filt({ categories: new Set(["Отпуск"]) }));
+    expect(ids(out)).toEqual(["dinner"]);
+  });
+
+  it("по основной — как раньше, вторые не мешают", () => {
+    const out = applyFilters(txs, filt({ categories: new Set(["Еда"]) }));
+    expect(ids(out)).toEqual(["dinner", "lunch"]);
+  });
+
+  it("вторая подкатегория строго по полному названию — родителя не тянет", () => {
+    expect(ids(applyFilters(txs, filt({ categories: new Set(["Путешествия"]) })))).toEqual([]);
+    expect(
+      ids(applyFilters(txs, filt({ categories: new Set(["Путешествия / Италия"]) })))
+    ).toEqual(["hotel"]);
+  });
+
+  it("поиск находит по второй категории", () => {
+    // Пункт 2 задачи: строка поиска в категории не смотрела.
+    expect(ids(applyFilters(txs, filt({ search: "отпуск" })))).toEqual(["dinner"]);
+  });
+});
+
 describe("applyFilters — date window", () => {
   it("preset 'all' keeps every transaction regardless of date", () => {
     const txs = [

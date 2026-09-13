@@ -326,7 +326,9 @@ function collapseTransfer(
     if (!resolved) {
       return { skip: `Категория «${edit.category}» не найдена в Дзен-мани — возможно, её удалили или убрали в архив` };
     }
-    zen.tag = [resolved];
+    const composed = composeTags(resolved, original, edit, tagsByTitle, tagsById);
+    if ("skip" in composed) return { skip: composed.skip };
+    zen.tag = composed.tag;
   } else {
     // No category / «Без категории» / synthetic → tag-less.
     zen.tag = null;
@@ -849,11 +851,13 @@ export function buildPushItems(
       }
     }
 
+    // Основная категория: `undefined` — не менялась, `null` — снята.
+    let mainTag: string | null | undefined = undefined;
     if (edit.category !== undefined) {
       if (edit.category === NO_CATEGORY || edit.category === "") {
         // «Без категории» = no tag. Zenmoney has no uncategorized tag, so a
         // clear is simply `tag: null` — never a lookup (which would 404).
-        zen.tag = null;
+        mainTag = null;
       } else {
         const resolved = resolveTagId(
           edit.category,
@@ -868,7 +872,7 @@ export function buildPushItems(
           });
           continue;
         }
-        zen.tag = [resolved];
+        mainTag = resolved;
       }
     } else if (edit.subcategory !== undefined && original.tag?.[0]) {
       // The user changed only the subcategory. Try to find a sibling tag
@@ -889,7 +893,18 @@ export function buildPushItems(
         });
         continue;
       }
-      zen.tag = [resolved];
+      mainTag = resolved;
+    }
+    // Список тегов пересобираем, только если менялась основная или вторые:
+    // иначе правка суммы или комментария переписывала бы теги без нужды.
+    if (mainTag !== undefined || edit.extraCategories !== undefined) {
+      const main = mainTag !== undefined ? mainTag : (original.tag?.[0] ?? null);
+      const composed = composeTags(main, original, edit, tagsByTitle, tagsById);
+      if ("skip" in composed) {
+        skipped.push({ id, reason: composed.skip });
+        continue;
+      }
+      zen.tag = composed.tag;
     }
 
     // Account change (non-transfer rows). Runs last so the effective leg
@@ -1052,6 +1067,66 @@ function resolveTagId(
   return null;
 }
 
+/**
+ * Тег по полному названию категории — такому, как в `categoryFull`:
+ * «Отпуск» или «Путешествия / Италия».
+ */
+function resolveFullTitle(
+  full: string,
+  tagsByTitle: Map<string, ZenTag[]>,
+  tagsById: Map<string, ZenTag>
+): string | null {
+  const parts = full.split(/\s*\/\s*/);
+  const category = parts[0] ?? "";
+  const subcategory = parts.slice(1).join(" / ") || null;
+  return category ? resolveTagId(category, subcategory, tagsByTitle, tagsById) : null;
+}
+
+/**
+ * Итоговый список тегов операции: основная категория первой, дальше — вторые
+ * (#69).
+ *
+ * РАНЬШЕ ВТОРЫЕ СТИРАЛИСЬ. Смена основной категории записывала в Дзен-мани
+ * один-единственный тег, и «Отпуск», поставленный второй категорией, пропадал
+ * из облака молча — даже у тех, кто этих категорий в сервисе и не видел.
+ * Теперь вторые берутся из правки, если их меняли, а иначе — из облака как
+ * есть.
+ *
+ * Без основной вторые не живут: Дзен-мани считает основной первую по порядку,
+ * и снятая основная молча сделала бы основной «Отпуск». Такую правку не
+ * отправляем, а объясняем, что мешает.
+ */
+function composeTags(
+  main: string | null,
+  original: ZenTransaction,
+  edit: TransactionEdit,
+  tagsByTitle: Map<string, ZenTag[]>,
+  tagsById: Map<string, ZenTag>
+): { tag: string[] | null } | { skip: string } {
+  let extras: string[];
+  if (edit.extraCategories !== undefined) {
+    extras = [];
+    for (const full of edit.extraCategories) {
+      const id = resolveFullTitle(full, tagsByTitle, tagsById);
+      if (!id) {
+        return { skip: `Категория «${full}» не найдена в Дзен-мани — возможно, её удалили или убрали в архив` };
+      }
+      extras.push(id);
+    }
+  } else {
+    extras = (original.tag ?? []).slice(1);
+  }
+  const unique = extras.filter((id, i) => id !== main && extras.indexOf(id) === i);
+  if (main === null) {
+    if (unique.length === 0) return { tag: null };
+    const names = unique.map((id) => tagsById.get(id)?.title ?? id).join(", ");
+    return {
+      skip: `У операции есть и другие категории — ${names}. Без основной Дзен-мани их не хранит: сначала уберите их или задайте основную`,
+    };
+  }
+  return { tag: [main, ...unique] };
+}
+
 /** A fresh UUID for a locally-created transaction. Thin wrapper around
  *  `crypto.randomUUID()` so the create flow can inject a stable id in tests. */
 export function newDraftId(): string {
@@ -1088,6 +1163,8 @@ export interface DraftFields {
    *  matches the dictionary, else stored as a free-text payee. */
   payee?: string;
   comment?: string;
+  /** Вторые категории новой операции — полными названиями (#69). */
+  extraCategories?: string[];
 }
 
 export type DraftBuildResult =
@@ -1232,7 +1309,18 @@ export function buildDraftTransaction(
           skip: `Категория «${category}${fields.subcategory ? ` / ${fields.subcategory}` : ""}» не найдена в Дзен-мани — возможно, её удалили или убрали в архив`,
         };
       }
-      zen.tag = [tagId];
+      const extras: string[] = [];
+      for (const full of fields.extraCategories ?? []) {
+        const id = resolveFullTitle(full, tagsByTitle, tagsById);
+        if (!id) {
+          return { skip: `Категория «${full}» не найдена в Дзен-мани — возможно, её удалили или убрали в архив` };
+        }
+        if (id !== tagId && !extras.includes(id)) extras.push(id);
+      }
+      zen.tag = [tagId, ...extras];
+    } else if ((fields.extraCategories ?? []).length > 0) {
+      // Без основной вторые не живут — см. `composeTags`.
+      return { skip: "Задайте основную категорию: без неё Дзен-мани вторые не хранит" };
     }
     // «Без категории» → leave zen.tag = null (an uncategorized operation).
   }

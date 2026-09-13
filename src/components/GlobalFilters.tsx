@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import type { Transaction } from "../types";
 import {
   X,
   ChevronDown,
@@ -234,19 +235,30 @@ export function GlobalFilters({
       string,
       { subs: Set<string>; hasBare: boolean; seenIncome: boolean; seenExpense: boolean }
     >();
+    // Сначала — плоский список листьев: основная категория каждой операции и
+    // её вторые (#69). «Отпуск», стоящий всегда вторым, иначе в фильтре не
+    // появлялся бы вовсе.
+    const leaves: [Transaction["kind"], string, string | null][] = [];
     for (const t of transactions) {
       if (!t.category) continue;
-      let e = map.get(t.category);
+      leaves.push([t.kind, t.category, t.subcategory]);
+      for (const full of t.extraCategories ?? []) {
+        const [category, ...rest] = full.split(/\s*\/\s*/);
+        if (category) leaves.push([t.kind, category, rest.join(" / ") || null]);
+      }
+    }
+    for (const [kind, category, subcategory] of leaves) {
+      let e = map.get(category);
       if (!e) {
         e = { subs: new Set<string>(), hasBare: false, seenIncome: false, seenExpense: false };
-        map.set(t.category, e);
+        map.set(category, e);
       }
       // A transaction tagged with just the parent (no sub) is "bare" — a
       // distinct leaf from any «Category / Subcategory».
-      if (t.subcategory) e.subs.add(t.subcategory);
+      if (subcategory) e.subs.add(subcategory);
       else e.hasBare = true;
-      if (t.kind === "income") e.seenIncome = true;
-      else if (t.kind === "expense" || t.kind === "refund") e.seenExpense = true;
+      if (kind === "income") e.seenIncome = true;
+      else if (kind === "expense" || kind === "refund") e.seenExpense = true;
     }
     // Тип берём из справочника Дзен-мани, а если его нет (режим CSV) — выводим
     // из самих операций: категория, встреченная только в доходах, доходная.

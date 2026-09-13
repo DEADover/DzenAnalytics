@@ -29,6 +29,8 @@ import { validateOperation } from "../lib/operationValidation";
 import { DateField } from "./DateField";
 import type { ZenTag } from "../lib/zenmoney";
 import { HashtagTextarea } from "./HashtagTextarea";
+import { CategoryDot } from "./CategoryDot";
+import { useTagModeStore } from "../store/useTagModeStore";
 import { getHistoricalRubRate, type HistoricalRate } from "../lib/historicalRates";
 import { formatDate } from "../lib/format";
 import type { Transaction, TxKind } from "../types";
@@ -448,6 +450,11 @@ export function EditTransactionModal({
   );
   const [category, setCategory] = useState(tx.category);
   const [subcategory, setSubcategory] = useState(tx.subcategory ?? "");
+  // Вторые категории (#69). Держим всегда, а не только в режиме тегов-категорий:
+  // у копии операции они должны переехать вместе с остальным, даже если поля
+  // тегов человек не видит.
+  const [extras, setExtras] = useState<string[]>(tx.extraCategories ?? []);
+  const tagMode = useTagModeStore((s) => s.mode);
   // Single "Получатель" field — saves into `brand`, which is the
   // displayed counterparty name. Falls back to `tx.payee` for
   // transactions that don't have a brand attached yet (CSV imports,
@@ -695,6 +702,7 @@ export function EditTransactionModal({
       // A debt op MUST carry the counterparty (payee); a plain transfer has none.
       payee: isDebt ? payee.trim() : kind === "transfer" ? undefined : payee.trim(),
       comment: comment.trim(),
+      extraCategories: isDebt || kind === "transfer" ? undefined : extras,
     };
   }
 
@@ -767,6 +775,17 @@ export function EditTransactionModal({
   // (issue #19: 2, 7, 8). Mirrors the builder/push skip-reasons.
   function validate(): string | null {
     const cat = category.trim();
+    // Без основной категории вторые в Дзен-мани не живут: основной молча стала
+    // бы первая из них. Лучше сказать сразу, чем застрять правкой при отправке.
+    if (
+      tagMode === "categories" &&
+      !isDebt &&
+      kind !== "transfer" &&
+      extras.length > 0 &&
+      (!cat || cat === "Без категории")
+    ) {
+      return "Задайте основную категорию: без неё теги-категории не сохраняются";
+    }
     return validateOperation({
       kind,
       isDebt,
@@ -838,6 +857,17 @@ export function EditTransactionModal({
       const nextSubRaw = subcategory.trim();
       const nextSub = nextSubRaw || null;
       if (changed(nextSubRaw, tx.subcategory ?? "")) patch.subcategory = nextSub;
+
+      // Вторые категории — только если список действительно поменялся: иначе
+      // любая правка суммы пересобирала бы теги операции.
+      const beforeExtras = tx.extraCategories ?? [];
+      if (
+        !isDebt &&
+        kind !== "transfer" &&
+        (extras.length !== beforeExtras.length || extras.some((e, i) => e !== beforeExtras[i]))
+      ) {
+        patch.extraCategories = extras;
+      }
 
       // Brand — single "Получатель" UI field maps to the brand field
       // on the data model. Empty → null so display falls back to raw
@@ -1128,6 +1158,60 @@ export function EditTransactionModal({
                   setSubcategory(sub);
                 }}
               />
+            </Field>
+          )}
+          {/* Теги-категории (#69): вторая и следующие категории операции. Поле
+              есть только в этом режиме — при хэштегах теги пишут прямо в
+              комментарии, и второе поле для них было бы лишним. */}
+          {tagMode === "categories" && kind !== "transfer" && !isDebt && (
+            <Field label="Теги">
+              <div className="space-y-2">
+                {extras.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {extras.map((full) => {
+                      const [parent, ...rest] = full.split(/\s*\/\s*/);
+                      const leaf = rest.join(" / ");
+                      return (
+                        <span
+                          key={full}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-panel2 border border-border pl-1.5 pr-1 py-0.5 text-[13px] max-w-full"
+                        >
+                          {leaf ? (
+                            <CategoryDot category={leaf} parent={parent} size="w-4 h-4" />
+                          ) : (
+                            <CategoryDot category={parent} size="w-4 h-4" />
+                          )}
+                          <span className="truncate">{full}</span>
+                          <button
+                            type="button"
+                            onClick={() => setExtras((list) => list.filter((e) => e !== full))}
+                            className="rounded-full p-0.5 text-muted hover:text-expense hover:bg-panel"
+                            aria-label={`Убрать тег ${full}`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                <CategoryCascadePicker
+                  category=""
+                  subcategory=""
+                  categories={categoryNodes}
+                  placeholder={extras.length > 0 ? "Добавить ещё тег" : "Добавить тег"}
+                  portal
+                  onChange={(cat, sub) => {
+                    const full = sub ? `${cat} / ${sub}` : cat;
+                    const main = subcategory.trim()
+                      ? `${category.trim()} / ${subcategory.trim()}`
+                      : category.trim();
+                    // Основная категория тегом не бывает, повторы — тоже.
+                    if (!full || full === main) return;
+                    setExtras((list) => (list.includes(full) ? list : [...list, full]));
+                  }}
+                />
+              </div>
             </Field>
           )}
           {/* «Долг»: direction + the real account. The debt account «Долги»

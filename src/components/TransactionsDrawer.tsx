@@ -209,7 +209,7 @@ export function TransactionsDrawer() {
     const q = search.trim().toLowerCase();
     const filtered = q
       ? liveTransactions.filter((t) =>
-          `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${t.account}`
+          `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
             .toLowerCase()
             .includes(q)
         )

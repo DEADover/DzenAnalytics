@@ -88,6 +88,13 @@ const ASPECTS: Aspect[] = [
     // `buildRulePlan`.
     getBefore: (t) => dash(t.categoryFullOriginal || t.categoryFull),
   },
+  {
+    keys: ["extraCategories"],
+    label: "Теги",
+    // Вторые категории операции (#69): без этой грани правка тегов уезжала бы
+    // в облако, а в списке на отправку не показывалась вовсе.
+    get: (t) => dash((t.extraCategories ?? []).join(", ")),
+  },
   { keys: ["payee", "brand"], label: "Получатель", get: (t) => dash(displayPayee(t)) },
   { keys: ["comment"], label: "Комментарий", get: (t) => dash(t.comment) },
   {

@@ -47,3 +47,43 @@ describe("mapZenmoneyDiff — category colour decode", () => {
     expect(colorOf(null)).toBeNull();
   });
 });
+
+describe("mapZenmoneyDiff — вторые категории (#69)", () => {
+  const tags = [
+    tag({ id: "food", title: "Еда" }),
+    tag({ id: "trip", title: "Путешествия" }),
+    tag({ id: "italy", title: "Италия", parent: "trip" }),
+    tag({ id: "vac", title: "Отпуск" }),
+  ];
+  const run = (tagIds: string[] | null) => {
+    const diff = {
+      instrument: [{ id: 2, shortTitle: "RUB", rate: 1 }],
+      user: [{ id: 1, currency: 2 }],
+      account: [{ id: "a", title: "Карта", instrument: 2, type: "ccard", archive: false, inBalance: true }],
+      tag: tags,
+      transaction: [
+        {
+          id: "tx", date: "2026-09-01", created: 0, deleted: false,
+          outcome: 500, outcomeAccount: "a", outcomeInstrument: 2,
+          income: 0, incomeAccount: "a", incomeInstrument: 2,
+          tag: tagIds, payee: "", comment: "", merchant: null,
+        },
+      ],
+    } as unknown as ZenDiffResponse;
+    return mapZenmoneyDiff(diff).transactions[0];
+  };
+
+  it("основная — первая, остальные попадают во вторые полными названиями", () => {
+    const t = run(["food", "vac", "italy"]);
+    expect(t.categoryFull).toBe("Еда");
+    expect(t.extraCategories).toEqual(["Отпуск", "Путешествия / Италия"]);
+  });
+
+  it("у операции с одной категорией вторых нет вовсе", () => {
+    expect(run(["food"]).extraCategories).toBeUndefined();
+  });
+
+  it("повтор основной и неизвестный тег отбрасываются", () => {
+    expect(run(["food", "food", "ghost", "vac"]).extraCategories).toEqual(["Отпуск"]);
+  });
+});

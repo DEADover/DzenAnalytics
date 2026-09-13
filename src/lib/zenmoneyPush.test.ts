@@ -631,6 +631,80 @@ describe("buildPushItems — clear category («Без категории»)", ()
   });
 });
 
+describe("buildPushItems — вторые категории (#69)", () => {
+  const tags = [
+    { id: "t-food", title: "Еда", parent: null, archive: false },
+    { id: "t-cafe", title: "Кафе", parent: "t-food", archive: false },
+    { id: "t-home", title: "Дом", parent: null, archive: false },
+    { id: "t-vac", title: "Отпуск", parent: null, archive: false },
+    { id: "t-trip", title: "Путешествия", parent: null, archive: false },
+    { id: "t-italy", title: "Италия", parent: "t-trip", archive: false },
+  ] as ZenTag[];
+  const multiCache = (t: ZenTransaction): ZenCache => ({
+    serverTimestamp: 0,
+    instruments: [{ id: 2, shortTitle: "RUB" } as ZenInstrument],
+    accounts: [{ id: ACC, title: "Карта" } as ZenAccount],
+    tags,
+    merchants: [],
+    transactions: [t],
+    user: [],
+  });
+  const push = (t: ZenTransaction, edit: TransactionEdit) =>
+    buildPushItems({ [t.id]: edit }, multiCache(t));
+
+  it("смена основной категории вторые не стирает", () => {
+    // Сама ошибка: раньше в облако уезжал один тег, и «Отпуск» пропадал молча.
+    const t = fullTx({ id: "x", outcome: 500, tag: ["t-food", "t-vac"] });
+    const { toPush, skipped } = push(t, { category: "Дом", subcategory: null });
+    expect(skipped).toHaveLength(0);
+    expect(toPush[0].zen.tag).toEqual(["t-home", "t-vac"]);
+  });
+
+  it("смена одной подкатегории вторые тоже не стирает", () => {
+    const t = fullTx({ id: "x", outcome: 500, tag: ["t-food", "t-vac"] });
+    const { toPush } = push(t, { subcategory: "Кафе" });
+    expect(toPush[0].zen.tag).toEqual(["t-cafe", "t-vac"]);
+  });
+
+  it("правка вторых меняет только вторые, основная остаётся", () => {
+    const t = fullTx({ id: "x", outcome: 500, tag: ["t-food", "t-vac"] });
+    const { toPush } = push(t, { extraCategories: ["Путешествия / Италия"] });
+    expect(toPush[0].zen.tag).toEqual(["t-food", "t-italy"]);
+  });
+
+  it("пустой список вторых оставляет одну основную", () => {
+    const t = fullTx({ id: "x", outcome: 500, tag: ["t-food", "t-vac"] });
+    const { toPush } = push(t, { extraCategories: [] });
+    expect(toPush[0].zen.tag).toEqual(["t-food"]);
+  });
+
+  it("основная среди вторых и повторы в облако не уезжают", () => {
+    const t = fullTx({ id: "x", outcome: 500, tag: ["t-food"] });
+    const { toPush } = push(t, { extraCategories: ["Еда", "Отпуск", "Отпуск"] });
+    expect(toPush[0].zen.tag).toEqual(["t-food", "t-vac"]);
+  });
+
+  it("снять основную при вторых нельзя — иначе основной молча станет «Отпуск»", () => {
+    const t = fullTx({ id: "x", outcome: 500, tag: ["t-food", "t-vac"] });
+    const { toPush, skipped } = push(t, { category: NO_CATEGORY, subcategory: null });
+    expect(toPush).toHaveLength(0);
+    expect(skipped[0].reason).toMatch(/Отпуск/);
+  });
+
+  it("незнакомая вторая категория не отправляется", () => {
+    const t = fullTx({ id: "x", outcome: 500, tag: ["t-food"] });
+    const { toPush, skipped } = push(t, { extraCategories: ["Призрак"] });
+    expect(toPush).toHaveLength(0);
+    expect(skipped[0].reason).toMatch(/не найдена/);
+  });
+
+  it("правка без категорий теги не трогает", () => {
+    const t = fullTx({ id: "x", outcome: 500, tag: ["t-food", "t-vac"] });
+    const { toPush } = push(t, { comment: "ужин" });
+    expect(toPush[0].zen.tag).toEqual(["t-food", "t-vac"]);
+  });
+});
+
 // Правила — не отдельный канал в облако: кнопка «Применить правила» кладёт
 // патчи в тот же слой правок, что и редактор операции, а отсюда их забирает
 // тот же `buildPushItems`. Тест держит этот стык: патч берётся не руками, а из
@@ -1218,6 +1292,31 @@ describe("buildDraftTransaction", () => {
     account: "Карта",
     category: "Еда",
   };
+
+  it("новая операция уезжает со вторыми категориями следом за основной (#69)", () => {
+    const c = draftCache();
+    c.tags = [
+      ...c.tags,
+      { id: "t-vac", title: "Отпуск", parent: null, archive: false },
+    ] as unknown as ZenCache["tags"];
+    const r = buildDraftTransaction({ ...base, extraCategories: ["Отпуск"] }, c, 1000);
+    expect(r.zen?.tag).toEqual(["t-food", "t-vac"]);
+  });
+
+  it("вторые без основной у новой операции не отправляются (#69)", () => {
+    const c = draftCache();
+    c.tags = [
+      ...c.tags,
+      { id: "t-vac", title: "Отпуск", parent: null, archive: false },
+    ] as unknown as ZenCache["tags"];
+    const r = buildDraftTransaction(
+      { ...base, category: NO_CATEGORY, extraCategories: ["Отпуск"] },
+      c,
+      1000
+    );
+    expect(r.zen).toBeUndefined();
+    expect(r.skip).toMatch(/основную/);
+  });
 
   // issue #19.3 — editing a not-yet-pushed draft rebuilds it IN PLACE (same id,
   // updated fields), so it stays ONE create, not a create + separate edit.

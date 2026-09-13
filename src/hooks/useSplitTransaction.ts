@@ -69,6 +69,9 @@ export function useSplitTransaction() {
             subcategory: part.subcategory,
             payee: payee || tx.brand || tx.payee || undefined,
             comment: part.comment?.trim() || tx.comment || undefined,
+            // Теги-категории исходной операции — каждой части (#69): чек из
+            // отпуска, разложенный на еду и сувениры, остаётся отпуском целиком.
+            extraCategories: tx.extraCategories,
           },
           cache,
           stamp,
