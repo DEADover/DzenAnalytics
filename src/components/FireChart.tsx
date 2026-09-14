@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Select } from "./Select";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -107,7 +108,7 @@ export function FireChart({
   // скруглением в шесть пикселей — последний такой ряд на «Финансовом
   // здоровье».
   const pillCls = (active: boolean) =>
-    `text-xs px-2.5 py-1 rounded-full border transition-colors duration-200 ${
+    `text-xs px-3 py-2 rounded-full border transition-colors duration-200 ${
       active
         ? "bg-accent text-accent-fg border-accent"
         : "bg-panel2 border-border text-muted hover:text-text"
@@ -344,33 +345,27 @@ export function FireChart({
         <div className="ml-auto flex items-center gap-2">
           <label className="inline-flex items-center gap-1.5 text-xs text-muted">
             Период
-            <select
+            <Select
+              size="sm"
+              className="w-24"
               value={range}
-              onChange={(e) => setRange(e.target.value as Range)}
-              className="input text-xs py-1 px-2 w-auto"
+              onChange={setRange}
+              options={RANGES.map((r) => ({ value: r.id, label: r.label }))}
+              ariaLabel="Период графика"
               title="За какой отрезок истории построить график"
-            >
-              {RANGES.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <label className="inline-flex items-center gap-1.5 text-xs text-muted">
             Шкала
-            <select
+            <Select
+              size="sm"
+              className="w-28"
               value={scale}
-              onChange={(e) => setScale(e.target.value as Scale)}
-              className="input text-xs py-1 px-2 w-auto"
+              onChange={setScale}
+              options={SCALES.map((s) => ({ value: s.id, label: s.label }))}
+              ariaLabel="Шаг по оси времени"
               title="Шаг по оси времени: месяцы, кварталы или годы (берётся значение на конец периода)"
-            >
-              {SCALES.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+            />
           </label>
         </div>
       </div>

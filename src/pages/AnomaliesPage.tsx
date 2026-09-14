@@ -8,6 +8,7 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { detectAnomalies, detectMonthSpikes, type Anomaly, type MonthSpike } from "../lib/aggregations";
 import { DataTable } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
+import { Segmented } from "../components/Segmented";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { formatMoney, formatDate, formatNum, monthLabel } from "../lib/format";
@@ -169,26 +170,17 @@ export function AnomaliesPage() {
         />
       </StatRow>
 
-      <div className="inline-flex items-center gap-0.5 self-start rounded-full p-1 bg-panel2 border border-border shadow-tray">
-        {(
-          [
-            ["transactions", "Операции-выбросы", anomalies.length],
-            ["spikes", "Всплески по категориям", spikes.length],
-          ] as const
-        ).map(([k, l, n]) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`px-3.5 py-1.5 rounded-full text-[13.5px] font-medium whitespace-nowrap transition-colors duration-200 ${
-              tab === k
-                ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
-                : "text-muted hover:text-text hover:bg-panel/70"
-            }`}
-          >
-            {l} <span className={tab === k ? "opacity-80" : "text-muted"}>({n})</span>
-          </button>
-        ))}
-      </div>
+      <Segmented
+        tabs
+        label="Что показать"
+        value={tab}
+        onChange={setTab}
+        className="flex w-fit"
+        options={[
+          { value: "transactions", label: "Операции-выбросы", count: anomalies.length },
+          { value: "spikes", label: "Всплески по категориям", count: spikes.length },
+        ]}
+      />
 
       {tab === "transactions" &&
         (anomalies.length === 0 ? (

@@ -114,7 +114,7 @@ export function UsersSettings() {
               name="zen-owner"
               checked={u.id === ownerId}
               onChange={() => setOwnerId(u.id)}
-              className="shrink-0 cursor-pointer"
+              className="w-4 h-4 shrink-0 accent-accent cursor-pointer"
               aria-label={`Это я — ${userLabel(u.id, users, aliases)}`}
             />
             <div className="min-w-0 flex-1">

@@ -264,7 +264,7 @@ function TransferSelect({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="input h-10 flex items-center justify-between gap-2 w-full text-left"
+        className="input h-[38px] flex items-center justify-between gap-2 w-full text-left"
       >
         <span className={clsx("truncate text-sm", !current && "text-muted")}>
           {current

@@ -1,16 +1,42 @@
 import clsx from "clsx";
 import type { LucideIcon } from "lucide-react";
+import { formatNum } from "../lib/format";
+
+/** Тон выбранного варианта: цвет, когда он несёт смысл (тип операции). */
+export type SegmentedTone = "accent" | "expense" | "income" | "accent2" | "warn" | "muted";
+
+/** Имена классов целиком: собранные строкой, они выпали бы из сборки CSS. */
+const TONE_CLASS: Record<SegmentedTone, string | undefined> = {
+  accent: undefined,
+  expense: "seg-tone-expense",
+  income: "seg-tone-income",
+  accent2: "seg-tone-accent2",
+  warn: "seg-tone-warn",
+  muted: "seg-tone-muted",
+};
+
+export interface SegmentedOption<T> {
+  value: T;
+  label: string;
+  title?: string;
+  icon?: LucideIcon;
+  /** Число рядом с подписью: сколько записей за вкладкой. */
+  count?: number;
+  /** Вариант есть, но выбрать его нельзя — например, за ним пусто. */
+  disabled?: boolean;
+  tone?: SegmentedTone;
+  /** Зелёная точка «включено» с этой подсказкой — активный источник данных. */
+  dot?: string;
+}
 
 /**
  * Сегментированный переключатель: несколько взаимоисключающих вариантов в
- * одной пилюле. Тот же вид, что у «Таблица / Карточки» на «Счетах», — вынесен
- * отдельно, потому что в настройках таких рядов стало несколько.
+ * одной пилюле. Единственный на весь продукт — разделы настроек, вкладки
+ * страниц, разрезы графиков, пресеты периода и тип операции в карточке
+ * собраны из него, а вид живёт в классах `.seg-*` (`index.css`).
  *
- * Набран в том же премиум-ключе, что и остальной интерфейс: дорожка-пилюля с
- * подложкой и кантом, выбранный вариант — своей пилюлей с мягкой тенью. Прежде
- * это был плоский прямоугольник со скруглением в 8 пикселей и мелким текстом
- * в 12 — на странице он читался как служебная мелочь, хотя переключает
- * содержимое целиком.
+ * Прежде дорожек-копий было два десятка, и каждая разошлась с соседями то
+ * высотой, то кеглем, то свечением выбранного.
  */
 export function Segmented<T extends string | number>({
   value,
@@ -18,27 +44,42 @@ export function Segmented<T extends string | number>({
   onChange,
   label,
   size = "md",
+  tight = false,
+  block = false,
+  tabs = false,
   className,
 }: {
   value: T;
-  options: { value: T; label: string; title?: string; icon?: LucideIcon }[];
+  options: SegmentedOption<T>[];
   onChange: (next: T) => void;
   /** Для скринридера: что выбирает эта группа. */
   label: string;
-  /** `sm` — плотный вариант для рядов с шестью и более вариантами: при обычном
-   *  размере такой ряд не влезает на узкий экран и выдавливает соседей. */
+  /**
+   * Ступень высоты. `md` 42 — ряд контролов раздела; `sm` 34 — шапка
+   * карточки, правый слот шапки раздела, строки настроек и формы.
+   */
   size?: "sm" | "md";
-  /** Для случаев, когда ряд должен переноситься или занимать всю ширину. */
+  /**
+   * Плотный набор для рядов из шести-семи коротких вариантов (пресеты
+   * периода): поля уже, начертание обычное. Высота — как у `sm`.
+   */
+  tight?: boolean;
+  /** Во всю ширину, варианты делят её поровну — в полях формы. */
+  block?: boolean;
+  /**
+   * Переключает содержимое ниже, как вкладки. Для скринридера это `tablist`,
+   * а не группа кнопок-переключателей.
+   */
+  tabs?: boolean;
+  /** Отступы и перенос ряда — со стороны страницы. */
   className?: string;
 }) {
+  const small = size === "sm" || tight;
   return (
     <div
-      role="group"
+      role={tabs ? "tablist" : "group"}
       aria-label={label}
-      className={clsx(
-        "inline-flex items-center gap-0.5 rounded-full p-1 bg-panel2 border border-border shadow-tray",
-        className
-      )}
+      className={clsx("seg-track", block && "flex w-full", className)}
     >
       {options.map((o) => {
         const active = value === o.value;
@@ -47,24 +88,27 @@ export function Segmented<T extends string | number>({
           <button
             key={String(o.value)}
             type="button"
+            role={tabs ? "tab" : undefined}
+            aria-selected={tabs ? active : undefined}
+            aria-pressed={tabs ? undefined : active}
+            disabled={o.disabled}
             onClick={() => onChange(o.value)}
-            aria-pressed={active}
             title={o.title}
             className={clsx(
-              "inline-flex items-center gap-1.5 rounded-full whitespace-nowrap font-medium",
-              "transition-colors duration-200",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-              // Строка задана явно: без неё высота шла от 1.5 × кегля, и
-              // дорожка выходила 36.75 и 42.25 — на полпикселя-три выше
-              // соседей той же ступени (выбор месяца, «Расходы / Доходы»).
-              size === "sm" ? "px-3 py-1 text-[12.5px] leading-4" : "px-3.5 py-1.5 text-[13.5px] leading-5",
-              active
-                ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
-                : "text-muted hover:text-text hover:bg-panel/70"
+              "seg-item",
+              small ? "seg-item-sm" : "seg-item-md",
+              tight && "seg-item-tight",
+              block && "flex-1 min-w-0",
+              active && "seg-on",
+              active && o.tone && TONE_CLASS[o.tone]
             )}
           >
-            {Icon && <Icon className={size === "sm" ? "w-3.5 h-3.5" : "w-4 h-4"} aria-hidden="true" />}
+            {Icon && (
+              <Icon className={clsx("shrink-0", small ? "w-3.5 h-3.5" : "w-4 h-4")} aria-hidden="true" />
+            )}
             {o.label}
+            {o.count !== undefined && <span className="seg-count">{formatNum(o.count)}</span>}
+            {o.dot && <span className="seg-dot" title={o.dot} aria-label={o.dot} role="img" />}
           </button>
         );
       })}

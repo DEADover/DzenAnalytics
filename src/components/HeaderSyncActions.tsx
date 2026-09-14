@@ -134,8 +134,8 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
   // bordered container, so they themselves don't carry a border — just
   // a hover/focus background tint and the error-state colour when the
   // store is in `error` and we don't have a flash up at the moment.
-  const innerBtn =
-    "group p-1.5 rounded-full transition-colors duration-200 text-muted hover:text-accent hover:bg-panel/70 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  // Кнопки дорожки — общий `.seg-icon`: 32 в дорожке 42, как у значков шапки.
+  const innerBtn = "seg-icon seg-icon-md group";
 
   // Which push controls the header shows, per the mode:
   //   • «Выключено» — nothing: edits never leave the device.
@@ -200,12 +200,10 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
           // Дорожка-пилюля, как у меню и переключателей разделов. Прежде это
           // была обойма со скруглением в восемь пикселей — в ряду, где всё
           // остальное уже пилюли, она читалась деталью из другого набора.
-          "inline-flex items-center gap-0.5 rounded-full p-1 border shadow-tray",
+          "seg-track",
           error && !busy && !flash
-            ? "border-expense/40 bg-panel2"
-            : hasPending
-              ? "border-accent/40 bg-accent/5"
-              : "border-border bg-panel2"
+            ? "!border-expense/40"
+            : hasPending && "!border-accent/40 !bg-accent/5"
         )}
       >
         {/* Слот в начале дорожки — сюда шапка кладёт переключатель разреза:
@@ -225,10 +223,7 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
                     ? "Нет изменений, ожидающих отправки"
                     : `Просмотреть изменения перед отправкой (${formatNum(pending.total)})`
                 }
-                className={clsx(
-                  innerBtn,
-                  "rounded-full inline-flex items-center gap-1.5 text-accent"
-                )}
+                className={clsx(innerBtn, "gap-1.5 text-accent")}
               >
                 <ListChecks className="w-4 h-4" />
                 {/* min-w держит ширину кластера постоянной, чтобы соседние
@@ -248,7 +243,7 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
                     ? "Нет изменений для отправки"
                     : "Отправить изменения в Дзен-мани"
                 }
-                className={clsx(innerBtn, "rounded-full text-accent")}
+                className={clsx(innerBtn, "text-accent")}
               >
                 <UploadCloud className={clsx("w-4 h-4", pushing && "animate-pulse")} />
               </button>
@@ -261,7 +256,7 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
           onClick={runIncremental}
           disabled={busy}
           title={`Синхронизация с Дзен-мани (только изменения)\n${lastSyncHuman}`}
-          className={clsx(innerBtn, "rounded-full")}
+          className={innerBtn}
         >
           <RefreshCw
             className={clsx("w-4 h-4", busy && "animate-spin")}
@@ -273,7 +268,7 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
           onClick={runFull}
           disabled={busy}
           title="Полная синхронизация (сбросить кэш и заново скачать всё)"
-          className={clsx(innerBtn, "rounded-full")}
+          className={innerBtn}
         >
           <CloudDownload className="w-4 h-4" />
         </button>

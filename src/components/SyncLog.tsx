@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Select } from "./Select";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -165,20 +166,17 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
         >
           <label className="text-xs text-muted flex items-center gap-2">
             Записей на странице:
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
+            <Select
+              size="sm"
+              className="w-20"
+              value={String(pageSize)}
+              onChange={(v) => {
+                setPageSize(Number(v));
                 setPage(1);
               }}
-              className="input text-xs !py-1 !px-2 !w-auto"
-            >
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+              options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+              ariaLabel="Записей на странице"
+            />
           </label>
           {entries.length > 0 && (
             <button
@@ -298,7 +296,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={safePage === 1}
-                  className="btn-ghost !p-1.5 text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="btn-ghost btn-square disabled:opacity-30 disabled:cursor-not-allowed"
                   title="Предыдущая"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
@@ -309,7 +307,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={safePage === totalPages}
-                  className="btn-ghost !p-1.5 text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="btn-ghost btn-square disabled:opacity-30 disabled:cursor-not-allowed"
                   title="Следующая"
                 >
                   <ChevronRight className="w-3.5 h-3.5" />

@@ -24,7 +24,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Tooltip } from "../components/Tooltip";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { KindSwitcher } from "../components/KindSwitcher";
-import { MonthPicker } from "../components/MonthPicker";
+import { YearPicker } from "../components/MonthPicker";
 import { StatCell, StatRow } from "../components/SectionCard";
 
 const WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
@@ -208,16 +208,7 @@ export function CalendarPage() {
             {/* Расходы и доходы — тем же переключателем, что в «Категориях» и
                 «Топе»: один и тот же выбор везде выглядит одинаково. */}
             <KindSwitcher kind={kind} onChange={setKind} />
-            <MonthPicker
-              value={`${year}-01`}
-              minYM={`${yearMin}-01`}
-              maxYM={`${yearMax}-12`}
-              active
-              mode="year"
-              onSelect={(ym) => setYear(Number(ym.slice(0, 4)))}
-              onSelectYear={setYear}
-              onStep={(dir) => setYear((y) => Math.min(yearMax, Math.max(yearMin, y + dir)))}
-            />
+            <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} />
             <InfoPopover>
               <p>
                 Каждая клетка — день года, её цвет — сколько в этот день{" "}

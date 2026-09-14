@@ -3,6 +3,7 @@
 // bulk). Everything is staged in a local overlay and flushed to Дзен-мани
 // through the normal Push flow, mirroring the categories editor.
 
+import { Checkbox } from "./Checkbox";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLazyList } from "../hooks/useLazyList";
 import { createPortal } from "react-dom";
@@ -753,8 +754,7 @@ export function CounterpartyManager() {
           >
             <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
               <span className="w-6 shrink-0 flex items-center justify-center">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={
                     orphanPayees.length > 0 && orphanSel.size === orphanPayees.length
                   }
@@ -765,8 +765,7 @@ export function CounterpartyManager() {
                         : new Set(orphanPayees.map((o) => dupKey(o.title)))
                     )
                   }
-                  aria-label="Выделить все"
-                  className="accent-[var(--accent)] cursor-pointer"
+                  label="Выделить все"
                 />
               </span>
               <span className="flex-1 min-w-0">Получатель</span>
@@ -779,8 +778,7 @@ export function CounterpartyManager() {
                 return (
                   <div key={key} className="px-3 py-2 flex items-center gap-3">
                     <span className="w-6 shrink-0 flex items-center justify-center">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={orphanSel.has(key)}
                         onChange={() =>
                           setOrphanSel((s) => {
@@ -790,8 +788,7 @@ export function CounterpartyManager() {
                             return next;
                           })
                         }
-                        aria-label={`Выбрать «${o.title}»`}
-                        className="accent-[var(--accent)] cursor-pointer"
+                        label={`Выбрать «${o.title}»`}
                       />
                     </span>
                     <span className="flex-1 min-w-0 flex items-center gap-2">
@@ -871,12 +868,10 @@ export function CounterpartyManager() {
         <div style={{ fontSize: "var(--tbl-font)" }}>
           <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
             <span className="w-6 shrink-0 flex items-center justify-center">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={allSelected}
                 onChange={toggleAll}
-                aria-label="Выделить все"
-                className="accent-[var(--accent)] cursor-pointer"
+                label="Выделить все"
               />
             </span>
             <span className="flex-1 min-w-0">Название</span>
@@ -909,12 +904,10 @@ export function CounterpartyManager() {
                   )}
                 >
                   <span className="w-6 shrink-0 flex items-center justify-center">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selected.has(row.id)}
                       onChange={() => toggleOne(row.id)}
-                      aria-label={`Выбрать ${row.title}`}
-                      className="accent-[var(--accent)] cursor-pointer"
+                      label={`Выбрать ${row.title}`}
                     />
                   </span>
                   <span className="flex items-center gap-2 min-w-0 flex-1">

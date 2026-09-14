@@ -222,7 +222,7 @@ export function RuleModePanel({
                     setSchedule({ everyN: Math.min(999, Math.round(n)) });
                 }}
                 aria-label="Как часто, число"
-                className="input h-8 text-xs !px-2 !py-1 w-14 tabular-nums"
+                className="input h-[34px] text-xs !px-2 !py-1 w-14 tabular-nums"
               />
             )}
             <Select
@@ -267,7 +267,7 @@ export function RuleModePanel({
                         setSchedule({ depthN: Math.min(999, Math.round(n)) });
                     }}
                     aria-label="Глубина, число"
-                    className="input h-8 text-xs !px-2 !py-1 w-14 tabular-nums"
+                    className="input h-[34px] text-xs !px-2 !py-1 w-14 tabular-nums"
                   />
                 )}
                 <Select

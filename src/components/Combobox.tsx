@@ -244,9 +244,9 @@ export function Combobox({
           placeholder={placeholder}
           // Extra right-padding when the clear-X is showing, otherwise
           // the typed value collides with two stacked icons.
-          // `h-10` — та же высота, что задаёт себе `Select`: в строке действия
+          // Ступень 38 — та же, что у `Select` и поля ввода: в строке действия
           // они стоят рядом, и разница в пиксель читается как перекос.
-          className={`input h-10 text-sm w-full ${clearable && value ? "pr-12" : "pr-7"} ${!allowCustom && !searchable ? "cursor-pointer" : ""} ${prefix ? "pl-7" : ""}`}
+          className={`input h-[38px] text-sm w-full ${clearable && value ? "pr-12" : "pr-7"} ${!allowCustom && !searchable ? "cursor-pointer" : ""} ${prefix ? "pl-7" : ""}`}
         />
         {prefix && (
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none">

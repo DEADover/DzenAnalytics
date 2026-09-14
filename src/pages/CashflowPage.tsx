@@ -19,8 +19,6 @@ import {
   TrendingUp,
   Wallet,
   List,
-  ChevronLeft,
-  ChevronRight,
   BarChart3,
   Layers,
   LineChart as LineChartIcon,
@@ -60,6 +58,9 @@ import { StatCell, StatRow } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { Segmented } from "../components/Segmented";
+import { KindSwitcher } from "../components/KindSwitcher";
+import { YearPicker } from "../components/MonthPicker";
 import { pluralRu } from "../lib/plural";
 import { ChartTooltipCard, TooltipFacts, SeriesTooltip } from "../components/TooltipFacts";
 import { DataTable } from "../components/DataTable";
@@ -151,6 +152,16 @@ export function CashflowPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (allYears.length && !allYears.includes(yoyYear)) setYoyYear(allYears[allYears.length - 1]);
   }, [allYears, yoyYear]);
+  // Годы без операций перешагиваем: сравнивать в них не с чем, а эффект выше
+  // всё равно вернул бы выбор к последнему году.
+  const pickYoyYear = (y: number) => {
+    if (allYears.includes(y)) return setYoyYear(y);
+    const next =
+      y > yoyYear
+        ? allYears.find((v) => v > yoyYear)
+        : [...allYears].reverse().find((v) => v < yoyYear);
+    if (next !== undefined) setYoyYear(next);
+  };
   const yoyData = useMemo(
     () => yearOverYearMonthly(dimensionFiltered, yoyYear, yoyKind),
     [dimensionFiltered, yoyYear, yoyKind]
@@ -277,22 +288,16 @@ export function CashflowPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
-              <button
-                onClick={() => setVizMode("bars")}
-                className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 ${vizMode === "bars" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                <BarChart3 className="w-3 h-3" />
-                Бары
-              </button>
-              <button
-                onClick={() => setVizMode("stream")}
-                className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 ${vizMode === "stream" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              >
-                <Layers className="w-3 h-3" />
-                Поток
-              </button>
-            </div>
+            <Segmented
+              size="sm"
+              label="Вид графика"
+              value={vizMode}
+              onChange={setVizMode}
+              options={[
+                { value: "bars", label: "Бары", icon: BarChart3 },
+                { value: "stream", label: "Поток", icon: Layers },
+              ]}
+            />
             <div className="text-xs text-muted">{months.length} мес.</div>
           </div>
         </div>
@@ -529,48 +534,17 @@ export function CashflowPage() {
                 Сравнение с тем же месяцем годом ранее · вся история (период не влияет)
               </div>
             </div>
-            <div className="flex gap-2">
-              <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
-                <button
-                  onClick={() => setYoyKind("expense")}
-                  className={`px-3 py-1 text-xs rounded-full ${yoyKind === "expense" ? "bg-expense text-white" : "text-muted"}`}
-                >
-                  Расходы
-                </button>
-                <button
-                  onClick={() => setYoyKind("income")}
-                  className={`px-3 py-1 text-xs rounded-full ${yoyKind === "income" ? "bg-income text-white" : "text-muted"}`}
-                >
-                  Доходы
-                </button>
-              </div>
-              <div className="flex items-center gap-1 bg-panel2 rounded-full p-1 border border-border shadow-tray">
-                <button
-                  onClick={() =>
-                    setYoyYear((y) => {
-                      const idx = allYears.indexOf(y);
-                      return idx > 0 ? allYears[idx - 1] : y;
-                    })
-                  }
-                  disabled={allYears.indexOf(yoyYear) <= 0}
-                  className="p-1 hover:text-accent disabled:opacity-30"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="px-3 text-sm font-medium tabular-nums">{yoyYear}</span>
-                <button
-                  onClick={() =>
-                    setYoyYear((y) => {
-                      const idx = allYears.indexOf(y);
-                      return idx < allYears.length - 1 ? allYears[idx + 1] : y;
-                    })
-                  }
-                  disabled={allYears.indexOf(yoyYear) >= allYears.length - 1}
-                  className="p-1 hover:text-accent disabled:opacity-30"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
+            {/* Расходы / доходы и год — общими контролами, как в «Календаре»:
+                своя дорожка с красной и зелёной заливкой и своя перелистывалка
+                года без подписи-кнопки повторяли их в другом виде. */}
+            <div className="flex items-center gap-2">
+              <KindSwitcher kind={yoyKind} onChange={setYoyKind} />
+              <YearPicker
+                year={yoyYear}
+                minYear={allYears[0]}
+                maxYear={allYears[allYears.length - 1]}
+                onChange={pickYoyYear}
+              />
             </div>
           </div>
           <div className="h-72">

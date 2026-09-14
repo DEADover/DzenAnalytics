@@ -244,7 +244,7 @@ export function HashtagRenameModal({
                 </span>
                 <input
                   id="hashtag-new-name"
-                  className="input h-10 text-sm w-full pl-7"
+                  className="input text-sm w-full pl-7"
                   value={renameTo}
                   onChange={(e) => setRenameTo(e.target.value.replace(/^#+/, ""))}
                   onKeyDown={(e) => e.key === "Enter" && canApply && void apply()}

@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Checkbox } from "../components/Checkbox";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -228,7 +229,7 @@ function DropdownMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         style={minWidth ? { minWidth } : undefined}
-        className={`px-3 py-1.5 text-xs rounded-full border flex items-center gap-1.5 whitespace-nowrap transition-colors duration-200 ${
+        className={`px-3 py-2 text-xs rounded-full border flex items-center gap-1.5 whitespace-nowrap transition-colors duration-200 ${
           active
             ? "bg-accent/10 border-accent/40 text-accent"
             : "bg-panel2 border-border text-muted hover:text-text"
@@ -328,11 +329,11 @@ function CheckItem({
 }) {
   return (
     <label className="flex items-center gap-2.5 px-3 py-1.5 text-xs hover:bg-panel2 cursor-pointer">
-      <input
-        type="checkbox"
+      <Checkbox
         checked={checked}
         onChange={onChange}
-        className="accent-accent shrink-0"
+        label="Включить признак"
+        className="shrink-0"
       />
       <Icon className="w-3.5 h-3.5 text-muted shrink-0" />
       <span className="whitespace-nowrap">{label}</span>
@@ -1848,24 +1849,22 @@ export function AccountsPage() {
                 compactSummary
               />
             )}
-            <div className="flex gap-0.5 bg-panel2 rounded-full p-1 border border-border shadow-tray shrink-0">
-            <button
-              onClick={() => setView("stacked")}
-              className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 transition-colors duration-200 ${view === "stacked" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              title="Разложить по счетам"
-            >
-              <Layers className="w-3 h-3" />
-              По счетам
-            </button>
-            <button
-              onClick={() => setView("single")}
-              className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 transition-colors duration-200 ${view === "single" ? "bg-accent text-accent-fg" : "text-muted"}`}
-              title="Одной линией: активы минус долги"
-            >
-              <LineChartIcon className="w-3 h-3" />
-              Совокупно
-            </button>
-            </div>
+            <Segmented
+              size="sm"
+              label="Вид графика"
+              value={view}
+              onChange={setView}
+              className="shrink-0"
+              options={[
+                { value: "stacked", label: "По счетам", icon: Layers, title: "Разложить по счетам" },
+                {
+                  value: "single",
+                  label: "Совокупно",
+                  icon: LineChartIcon,
+                  title: "Одной линией: активы минус долги",
+                },
+              ]}
+            />
           </div>
         </div>
         <div className="h-96">
@@ -2382,52 +2381,39 @@ export function AccountsPage() {
               }
             </DropdownMenu>
           )}
-          <div
-            role="group"
-            aria-label="Вид списка счетов"
-            className="ml-auto flex gap-0.5 bg-panel2 rounded-full p-1 border border-border shadow-tray"
-          >
-            <button
-              onClick={() =>
-                void patchPrefs({
-                  listView: "table",
-                  // В таблице колонки «Банк» нет: заголовки не подсветятся, и
-                  // порядок будет выглядеть случайным. Возвращаемся к сумме.
-                  ...(sortBy === "bank"
-                    ? { sortBy: "balance" as const, sortDir: DEFAULT_DIR.balance }
-                    : {}),
-                })
-              }
-              aria-pressed={accountsView === "table"}
-              className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 transition-colors duration-200 ${
-                accountsView === "table" ? "bg-accent text-accent-fg" : "text-muted"
-              }`}
-            >
-              <TableIcon className="w-3 h-3" />
-              Таблица
-            </button>
-            <button
-              onClick={() =>
-                void patchPrefs({
-                  listView: "cards",
-                  // «Поступления», «Опер.» и прочие колонки в карточках выбрать
-                  // нечем, поэтому меню сортировки показывало бы порядок,
-                  // которого в нём нет. Возвращаемся к сумме — она есть на
-                  // каждой карточке.
-                  ...(CARD_SORT_OPTIONS.some((o) => o.value === sortBy)
-                    ? {}
-                    : { sortBy: "balance" as const, sortDir: DEFAULT_DIR.balance }),
-                })
-              }
-              aria-pressed={accountsView === "cards"}
-              className={`px-3 py-1 text-xs rounded-full flex items-center gap-1 transition-colors duration-200 ${
-                accountsView === "cards" ? "bg-accent text-accent-fg" : "text-muted"
-              }`}
-            >
-              <LayoutGrid className="w-3 h-3" />
-              Карточки
-            </button>
-          </div>
+          <Segmented
+            size="sm"
+            label="Вид списка счетов"
+            value={accountsView}
+            onChange={(next) =>
+              void patchPrefs(
+                next === "table"
+                  ? {
+                      listView: "table",
+                      // В таблице колонки «Банк» нет: заголовки не подсветятся, и
+                      // порядок будет выглядеть случайным. Возвращаемся к сумме.
+                      ...(sortBy === "bank"
+                        ? { sortBy: "balance" as const, sortDir: DEFAULT_DIR.balance }
+                        : {}),
+                    }
+                  : {
+                      listView: "cards",
+                      // «Поступления», «Опер.» и прочие колонки в карточках выбрать
+                      // нечем, поэтому меню сортировки показывало бы порядок,
+                      // которого в нём нет. Возвращаемся к сумме — она есть на
+                      // каждой карточке.
+                      ...(CARD_SORT_OPTIONS.some((o) => o.value === sortBy)
+                        ? {}
+                        : { sortBy: "balance" as const, sortDir: DEFAULT_DIR.balance }),
+                    }
+              )
+            }
+            className="ml-auto"
+            options={[
+              { value: "table", label: "Таблица", icon: TableIcon },
+              { value: "cards", label: "Карточки", icon: LayoutGrid },
+            ]}
+          />
           <AppTooltip content={listHint} placement="bottom">
             <button
               className="btn-icon shrink-0"

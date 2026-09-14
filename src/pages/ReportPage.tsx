@@ -30,6 +30,7 @@ import { formatMoney } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { Segmented } from "../components/Segmented";
 import type { Transaction } from "../types";
 
 const SCALES: ReportScale[] = ["month", "quarter", "year", "total"];
@@ -363,19 +364,16 @@ export function ReportPage() {
 
       <div className="flex items-center gap-2 flex-wrap">
         <span className="label">Разбивка</span>
-        <div className="flex bg-panel2 rounded-full p-1 border border-border shadow-tray">
-          {SCALES.map((s) => (
-            <button
-              key={s}
-              onClick={() => setScale(s)}
-              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                scale === s ? "bg-accent text-accent-fg" : "text-muted hover:text-text"
-              }`}
-            >
-              {s === "total" ? "Всего" : SCALE_LABELS[s]}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          size="sm"
+          label="Разбивка"
+          value={scale}
+          onChange={setScale}
+          options={SCALES.map((sc) => ({
+            value: sc,
+            label: sc === "total" ? "Всего" : SCALE_LABELS[sc],
+          }))}
+        />
         {/* Переключателя «Вид» здесь больше нет: он существовал только потому,
             что закреплённая шапка и таблица во весь рост считались
             несовместимыми. Теперь работает и то и другое сразу, и выбирать
@@ -423,7 +421,7 @@ export function ReportPage() {
             тому, что ниже, а не к заголовку страницы. */}
         <span className="flex-1 min-w-2" />
         <button
-          className="btn-ghost text-sm shrink-0"
+          className="btn-ghost text-xs shrink-0"
           onClick={() => setExportOpen(true)}
           disabled={empty}
           title="Скачать отчёт в Excel"

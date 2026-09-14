@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
 import { Hash, Pencil } from "lucide-react";
-import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -17,6 +16,7 @@ import { EmptyState } from "../components/EmptyState";
 import { CategoryDot } from "../components/CategoryDot";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { Segmented } from "../components/Segmented";
 import { DataTable, type Column } from "../components/DataTable";
 import { toneOfSigned } from "../components/table/tableKit";
 import { HashtagRenameModal } from "../components/HashtagRenameModal";
@@ -49,29 +49,13 @@ function TagModeSwitch() {
     { value: "categories", label: "Вторые категории" },
   ];
   return (
-    <div
-      role="radiogroup"
-      aria-label="Что считать тегами"
-      className="inline-flex gap-0.5 rounded-full p-1 bg-panel2 border border-border shadow-tray text-xs"
-    >
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="radio"
-          aria-checked={mode === o.value}
-          onClick={() => void setMode(o.value)}
-          className={clsx(
-            "px-2.5 py-1 rounded-full transition-colors duration-200",
-            mode === o.value
-              ? "bg-accent text-accent-fg"
-              : "text-muted hover:text-text hover:bg-panel/70"
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      size="sm"
+      label="Что считать тегами"
+      value={mode}
+      onChange={(next) => void setMode(next)}
+      options={options}
+    />
   );
 }
 
@@ -396,20 +380,16 @@ export function TagsPage() {
               {totalExpense > 0 && ` · по тегам ${formatMoney(totalExpense, base)}`}
             </span>
           </div>
-          <div className="inline-flex gap-0.5 rounded-full p-1 bg-panel2 border border-border shadow-tray text-xs">
-            <button
-              onClick={() => setCloudAlpha(false)}
-              className={`px-2.5 py-1 rounded-full transition-colors duration-200 ${!cloudAlpha ? "bg-accent text-accent-fg" : "text-muted hover:text-text hover:bg-panel/70"}`}
-            >
-              По сумме
-            </button>
-            <button
-              onClick={() => setCloudAlpha(true)}
-              className={`px-2.5 py-1 rounded-full transition-colors duration-200 ${cloudAlpha ? "bg-accent text-accent-fg" : "text-muted hover:text-text hover:bg-panel/70"}`}
-            >
-              А–Я
-            </button>
-          </div>
+          <Segmented
+            size="sm"
+            label="Порядок тегов в облаке"
+            value={cloudAlpha ? "alpha" : "sum"}
+            onChange={(next) => setCloudAlpha(next === "alpha")}
+            options={[
+              { value: "sum", label: "По сумме" },
+              { value: "alpha", label: "А–Я" },
+            ]}
+          />
         </div>
         <div className="flex flex-wrap gap-2">
           {cloudTags.map((t) => {

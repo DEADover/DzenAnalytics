@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Checkbox } from "./Checkbox";
 import { createPortal } from "react-dom";
 import { X, ArrowRight, ListChecks, Info, Loader2, Pencil } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
@@ -176,21 +177,17 @@ export function RulePreviewModal({
         {plan.rows.length > 0 && (
           <div className="flex items-center gap-3 px-5 py-2 border-b border-border shrink-0 text-xs text-muted flex-wrap">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={allSelected}
+              <Checkbox
                 // Частичный выбор показываем третьим состоянием: пустая
                 // галочка при «Отмечено: 134 из 138» читается как «не выбрано
                 // ничего».
-                ref={(el) => {
-                  if (el) el.indeterminate = selected.size > 0 && !allSelected;
-                }}
+                checked={allSelected}
                 onChange={() =>
                   setSelected(allSelected ? new Set() : new Set(pendingIds))
                 }
                 disabled={pendingIds.length === 0}
-                aria-label="Выбрать все операции"
-                className="accent-accent w-4 h-4"
+                indeterminate={selected.size > 0 && !allSelected}
+                label="Выбрать все операции"
               />
               Выбрать все
             </label>
@@ -263,13 +260,11 @@ export function RulePreviewModal({
                     )}
                   >
                     <span className="w-4 shrink-0 flex items-center justify-center pt-1.5">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selected.has(row.tx.id)}
                         onChange={() => toggle(row.tx.id)}
                         disabled={!selectable}
-                        aria-label={`Выбрать операцию: ${rowTitle(row.tx)}, ${formatDate(row.tx.date)}`}
-                        className="accent-accent w-4 h-4 disabled:opacity-40"
+                        label={`Выбрать операцию: ${rowTitle(row.tx)}, ${formatDate(row.tx.date)}`}
                       />
                     </span>
                     <CategoryDot category={row.tx.category} size="w-7 h-7" />

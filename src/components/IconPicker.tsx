@@ -40,7 +40,7 @@ export function IconPicker({ value, color, onChange }: Props) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="input h-10 flex items-center justify-between gap-2 w-full text-left"
+        className="input h-[38px] flex items-center justify-between gap-2 w-full text-left"
       >
         <span className="flex items-center gap-2 min-w-0">
           <ZenIcon id={value} className="w-5 h-5 shrink-0" style={color ? { color } : undefined} />

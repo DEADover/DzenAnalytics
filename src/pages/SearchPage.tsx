@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { Checkbox } from "../components/Checkbox";
+import { Select } from "../components/Select";
 import { Search, Calendar, Coins, Tag, X, Pencil, Trash2, XSquare } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
@@ -185,7 +187,7 @@ export function SearchPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={useRegex ? "regex (например, ^яндекс)" : "слова через пробел"}
-                className="input pl-9"
+                className="input text-sm pl-9"
                 autoFocus
               />
               {query && (
@@ -206,7 +208,7 @@ export function SearchPage() {
                 value={exclude}
                 onChange={(e) => setExclude(e.target.value)}
                 placeholder="слова, которых не должно быть"
-                className="input pl-9"
+                className="input text-sm pl-9"
               />
             </div>
           </div>
@@ -256,26 +258,27 @@ export function SearchPage() {
           </div>
           <div>
             <label className="label block mb-1.5">Тип</label>
-            <select
+            <Select
+              size="sm"
               value={kind}
-              onChange={(e) => setKind(e.target.value as KindFilter)}
-              className="input text-xs"
-            >
-              <option value="all">Все</option>
-              <option value="expense">Расходы</option>
-              <option value="income">Доходы</option>
-              <option value="refund">Возвраты</option>
-            </select>
+              onChange={setKind}
+              options={[
+                { value: "all" as const, label: "Все" },
+                { value: "expense" as const, label: "Расходы" },
+                { value: "income" as const, label: "Доходы" },
+                { value: "refund" as const, label: "Возвраты" },
+              ]}
+              ariaLabel="Тип операции"
+            />
           </div>
         </div>
 
         <div className="flex items-center justify-between flex-wrap gap-3">
           <label className="flex items-center gap-2 text-xs text-muted">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={useRegex}
-              onChange={(e) => setUseRegex(e.target.checked)}
-              className="accent-accent"
+              onChange={(on) => setUseRegex(on)}
+              label="Регулярное выражение"
             />
             Regex (регистронезависимо)
           </label>

@@ -442,11 +442,11 @@ export function ImportXlsxModal({
         <div className="px-5 py-3 border-t border-border shrink-0 space-y-2">
           {autoPush && (
             <label className="flex items-start gap-2 text-xs cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={hold}
-                onChange={(e) => setHold(e.target.checked)}
-                className="accent-accent w-4 h-4 mt-0.5"
+                onChange={(on) => setHold(on)}
+                label="Придержать отправку до моей проверки"
+                className="mt-0.5"
               />
               <span>
                 <span className="text-text">Придержать отправку до моей проверки</span>

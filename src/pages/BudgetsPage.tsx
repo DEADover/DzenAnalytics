@@ -896,7 +896,7 @@ export function BudgetsPage() {
     <Tooltip content={kind === "expense" ? "Добавить категорию расходов" : "Добавить категорию доходов"}>
       <button
         onClick={() => startDraft(kind)}
-        className="btn-primary !p-2"
+        className="btn-primary btn-square"
         aria-label="Добавить категорию"
       >
         <Plus className="w-4 h-4" />
@@ -916,7 +916,6 @@ export function BudgetsPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-1.5">
           <Segmented
-            size="sm"
             label="Вид бюджета"
             value={view}
             onChange={(v) => setView(v)}
@@ -936,10 +935,9 @@ export function BudgetsPage() {
           <Tooltip content={monthPeriod ? "Предыдущий месяц" : "Предыдущий год"}>
             <button
               onClick={() => (monthPeriod ? setYm((m) => addMonths(m, -1)) : shiftYear(-1))}
-              // Поле в 10 пикселей, а не 8: в одной строке шапки стоят
-              // переключатель вида, выбор месяца и «Заполнить по среднему» —
-              // все ростом 38, и кнопка в 34 читалась осевшей.
-              className="btn-ghost !p-2.5"
+              // Ряд переключателей раздела — крупная ступень 42: вид бюджета,
+              // стрелки, месяц и действия стоят вровень.
+              className="btn-ghost btn-square-lg"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -965,17 +963,17 @@ export function BudgetsPage() {
               // Пилюля, а не скруглённое поле: вокруг одни пилюли, и
               // двенадцатипиксельный радиус посреди них был единственным на всю
               // строку.
-              className="input text-sm font-medium w-[132px] !px-3 !rounded-full"
+              className="input text-sm font-medium w-[132px] !px-3 !py-2.5 !rounded-full"
             />
           ) : (
-            <span className="text-sm font-medium tabular-nums px-4 py-2 rounded-full bg-panel2 border border-border">
+            <span className="text-sm font-medium tabular-nums px-4 py-2.5 rounded-full bg-panel2 border border-border">
               {year}
             </span>
           )}
           <Tooltip content={monthPeriod ? "Следующий месяц" : "Следующий год"}>
             <button
               onClick={() => (monthPeriod ? setYm((m) => addMonths(m, 1)) : shiftYear(1))}
-              className="btn-ghost !p-2.5"
+              className="btn-ghost btn-square-lg"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -1022,7 +1020,7 @@ export function BudgetsPage() {
         <div className="flex items-center gap-2">
           {yearView && (
             <Tooltip content="Годовой отчёт файлом: таблицами в Excel или сводкой в PDF">
-              <button onClick={() => setExportOpen(true)} className="btn-ghost text-sm">
+              <button onClick={() => setExportOpen(true)} className="btn-ghost btn-lg text-sm">
                 <Download className="w-4 h-4" />
                 Экспорт
               </button>
@@ -1035,7 +1033,7 @@ export function BudgetsPage() {
               отчёт, а не место, где правят планы. */}
           {view === "month" && (
             <Tooltip content="Подставить суммы по истории операций">
-              <button onClick={() => setFillOpen(true)} className="btn-ghost text-sm">
+              <button onClick={() => setFillOpen(true)} className="btn-ghost btn-lg text-sm">
                 <Wand2 className="w-4 h-4" />
                 Заполнить по среднему
               </button>

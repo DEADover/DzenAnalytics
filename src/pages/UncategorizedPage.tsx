@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Checkbox } from "../components/Checkbox";
 import { Tag, AlertCircle, Sparkles, Wand2, CheckCircle2 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
@@ -208,14 +209,11 @@ export function UncategorizedPage() {
           {selectable.length > 0 && (
             <div className="flex items-center gap-3 px-2 py-1.5 mb-1 text-xs border-b border-border/50">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={allSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = selectedCount > 0 && !allSelected;
-                  }}
                   onChange={toggleSelectAll}
-                  className="accent-accent"
+                  indeterminate={selectedCount > 0 && !allSelected}
+                  label="Выбрать все предложения"
                 />
                 <span className="text-muted">Выбрать все ({selectable.length})</span>
               </label>
@@ -235,12 +233,10 @@ export function UncategorizedPage() {
                     applied ? "bg-income/10" : "bg-panel2/40 hover:bg-panel2/70"
                   }`}
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={selected.has(s.txId)}
                     disabled={applied || !ruleKeyFor(s)}
                     onChange={() => toggleSelect(s.txId)}
-                    className="accent-accent shrink-0"
                     title={
                       !ruleKeyFor(s)
                         ? "Нет получателя и комментария — правило не создать"
@@ -248,6 +244,8 @@ export function UncategorizedPage() {
                           ? "Уже применено"
                           : "Выбрать для применения"
                     }
+                    label="Выбрать для применения"
+                    className="shrink-0"
                   />
                   <div className="text-xs text-muted whitespace-nowrap tabular-nums w-20">
                     {formatDate(s.date, "full")}

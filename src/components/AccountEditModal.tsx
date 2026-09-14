@@ -332,7 +332,7 @@ export function AccountEditModal({ account, pending, onClose }: Props) {
               id="acc-name"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="input h-10 text-sm"
+              className="input text-sm"
               placeholder="Название счёта"
               autoComplete="off"
             />
@@ -354,7 +354,7 @@ export function AccountEditModal({ account, pending, onClose }: Props) {
                 onFocus={() => setMoneyFocus("limit")}
                 onBlur={() => setMoneyFocus(null)}
                 onChange={(e) => setCreditLimit(limitCents(e.target.value))}
-                className="input h-10 text-sm font-mono tabular-nums"
+                className="input text-sm font-mono tabular-nums"
               />
             </div>
             <div>
@@ -369,7 +369,7 @@ export function AccountEditModal({ account, pending, onClose }: Props) {
                 onFocus={() => setMoneyFocus("balance")}
                 onBlur={() => setMoneyFocus(null)}
                 onChange={(e) => setBalance(limitCents(e.target.value))}
-                className="input h-10 text-sm font-mono tabular-nums"
+                className="input text-sm font-mono tabular-nums"
               />
             </div>
           </div>
@@ -410,7 +410,7 @@ export function AccountEditModal({ account, pending, onClose }: Props) {
                 <DateField
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="input h-10 w-full text-sm"
+                  className="input w-full text-sm"
                 />
               </div>
               <div className="flex items-end gap-3">
@@ -425,7 +425,7 @@ export function AccountEditModal({ account, pending, onClose }: Props) {
                       inputMode="numeric"
                       value={termValue}
                       onChange={(e) => setTermValue(e.target.value.replace(/[^\d]/g, ""))}
-                      className="input h-10 w-20 shrink-0 text-sm font-mono tabular-nums"
+                      className="input w-20 shrink-0 text-sm font-mono tabular-nums"
                     />
                     <Select
                       value={termUnit}
@@ -445,7 +445,7 @@ export function AccountEditModal({ account, pending, onClose }: Props) {
                     inputMode="decimal"
                     value={percent}
                     onChange={(e) => setPercent(limitCents(e.target.value))}
-                    className="input h-10 text-sm font-mono tabular-nums"
+                    className="input text-sm font-mono tabular-nums"
                   />
                 </div>
               </div>

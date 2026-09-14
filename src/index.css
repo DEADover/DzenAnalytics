@@ -270,6 +270,144 @@ h2,
   .btn-warn {
     @apply btn bg-warn text-white hover:opacity-90;
   }
+  /**
+   * Ступени высоты кнопок. Обычная кнопка — 38 с `text-sm` и 34 с `text-xs`;
+   * `.btn-lg` — 42, для ряда переключателей раздела, где рядом стоят дорожки
+   * крупной ступени.
+   */
+  .btn-lg {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  /**
+   * Кнопка-значок в ряду контролов — квадрат ступени: 34 в рядах фильтров и
+   * шапках карточек, 38 в формах, 42 в ряду переключателей раздела. Размер
+   * задан шириной и высотой, а не отступом: с отступом высота зависела от
+   * значка, и кнопка оседала рядом с полем на пару пикселей.
+   */
+  .btn-square,
+  .btn-square-md,
+  .btn-square-lg {
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .btn-square {
+    width: 34px;
+    height: 34px;
+  }
+  .btn-square-md {
+    width: 38px;
+    height: 38px;
+  }
+  .btn-square-lg {
+    width: 42px;
+    height: 42px;
+  }
+  /**
+   * Дорожка-пилюля и её пункты — один вид на все переключатели продукта:
+   * `Segmented`, меню и дорожки значков в шапке, выбор месяца.
+   *
+   * Прежде дорожка жила в двух десятках копий разметки по страницам и
+   * разошлась в мелочах: сегменты 24, 28, 32.25 и 33 px, шрифт 12, 12.5, 13.5
+   * и 14, у одних выбранный светится, у других нет, меню в шапке выходило
+   * 43 px, а дорожка значков рядом с ним — 38. Теперь страница выбирает только
+   * размер.
+   *
+   * Ступени — как у всех контролов: `sm` — дорожка 34 (пункт 24, 12.5 / 16),
+   * `md` — 42 (пункт 32, 13.5 / 20). Строка задана явно: без неё высота шла
+   * от 1.5 × кегля, и дорожка выходила на полпикселя-пиксель выше соседей.
+   */
+  /* Капс и разрядку не наследует: дорожка встаёт и в шапку таблицы («Сравнение»),
+     а там подпись месяца выходила «МАЙ 26 Г.». */
+  .seg-track {
+    @apply inline-flex items-center gap-0.5 rounded-full p-1 bg-panel2 border border-border shadow-tray
+           normal-case tracking-normal;
+  }
+  .seg-item {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full whitespace-nowrap font-medium
+           text-muted transition-colors duration-200
+           hover:text-text hover:bg-panel/70
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted;
+  }
+  .seg-item-sm {
+    @apply px-3 py-1 text-[12.5px] leading-4;
+  }
+  .seg-item-md {
+    @apply px-3.5 py-1.5 text-[13.5px] leading-5;
+  }
+  /* Пресеты периода: вариантов до семи, поля уже, начертание у выбранного то
+     же — дорожка не прыгает по ширине. Высота — как у `sm`. */
+  .seg-item-tight {
+    @apply px-2 text-xs leading-4 font-normal;
+  }
+  /* Пункт меню в шапке: кегль крупнее, высота та же, что у `md`. */
+  .seg-item-nav {
+    @apply gap-2 px-3.5 py-1.5 text-sm leading-5;
+  }
+  /* Значок в дорожке: 24 в дорожке 34, 32 в дорожке 42. */
+  .seg-icon {
+    @apply inline-flex items-center justify-center rounded-full text-muted transition-colors duration-200
+           hover:text-accent hover:bg-panel/70
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
+  }
+  /* Погашенная через `aria-disabled` — чтобы подсказка «почему» всё же
+     показывалась: у `disabled` браузер глушит события мыши. */
+  .seg-icon[aria-disabled="true"],
+  .seg-icon[aria-disabled="true"]:hover {
+    @apply opacity-40 cursor-not-allowed text-muted bg-transparent;
+  }
+  .seg-icon-sm {
+    @apply p-1;
+  }
+  .seg-icon-md {
+    @apply p-2;
+  }
+  /**
+   * Выбранный пункт: заливка тоном и мягкое свечение того же цвета. Тон по
+   * умолчанию — акцент; `seg-tone-*` меняет его там, где цвет несёт смысл
+   * (тип операции в карточке). Правило стоит после `.seg-item`, чтобы
+   * наведение не перекрашивало выбранный пункт.
+   */
+  .seg-on,
+  .seg-on:hover {
+    background-color: rgb(var(--seg-tone, var(--c-accent)));
+    color: rgb(var(--seg-tone-fg, var(--c-accent-fg)));
+    box-shadow: 0 6px 16px -8px rgb(var(--seg-tone, var(--c-accent)));
+  }
+  .seg-tone-expense {
+    --seg-tone: var(--c-expense);
+    --seg-tone-fg: 255 255 255;
+  }
+  .seg-tone-income {
+    --seg-tone: var(--c-income);
+    --seg-tone-fg: 255 255 255;
+  }
+  .seg-tone-accent2 {
+    --seg-tone: var(--c-accent2);
+    --seg-tone-fg: 255 255 255;
+  }
+  .seg-tone-warn {
+    --seg-tone: var(--c-warn);
+    --seg-tone-fg: 255 255 255;
+  }
+  .seg-tone-muted {
+    --seg-tone: var(--c-muted);
+    --seg-tone-fg: 255 255 255;
+  }
+  /* Число рядом с подписью — «Операции-выбросы 12». */
+  .seg-count {
+    @apply tabular-nums opacity-70;
+  }
+  /* Точка «включено» — активный источник данных. На выбранном пункте
+     зелёная точка сливалась бы с заливкой, поэтому берёт цвет текста. */
+  .seg-dot {
+    @apply w-1.5 h-1.5 rounded-full bg-income shrink-0;
+  }
+  .seg-on .seg-dot {
+    background-color: currentColor;
+  }
   .input {
     @apply w-full bg-panel2 text-text placeholder:text-muted px-3 py-2 rounded-xl
            border border-border transition-colors

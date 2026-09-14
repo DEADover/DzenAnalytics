@@ -47,7 +47,7 @@ import {
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
-import { MonthPicker } from "../components/MonthPicker";
+import { YearPicker } from "../components/MonthPicker";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
@@ -86,6 +86,9 @@ export function YearReviewPage() {
 
   const years = useMemo(() => availableYears(transactions), [transactions]);
   const [year, setYear] = useState<number>(() => years[0] || new Date().getFullYear());
+  // `years` отсортированы по убыванию: первый — самый свежий.
+  const yearMax = years[0] ?? year;
+  const yearMin = years[years.length - 1] ?? year;
 
   // Clamp the selected year to the available list when it changes
   // (e.g. after a data reload). Keeps the picker on a valid value.
@@ -163,7 +166,7 @@ export function YearReviewPage() {
           В данных нет операций за {year} год.
         </div>
         {years.length > 0 && (
-          <YearSwitcher year={year} years={years} onChange={setYear} />
+          <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} />
         )}
       </div>
     );
@@ -182,7 +185,7 @@ export function YearReviewPage() {
         hint="Итоги, рекорды и любопытные факты за выбранный год"
         right={
           <div className="flex items-center gap-2">
-            <YearSwitcher year={year} years={years} onChange={setYear} />
+            <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} />
             <InfoPopover>
               <p>
                 Всё на странице считается за <InfoTerm>календарный год</InfoTerm> —
@@ -837,44 +840,6 @@ function QuarterBar({
 }
 
 /* ─────────────────────────────  Мелочи  ───────────────────────────────── */
-
-/**
- * Выбор года — тем же контролом, что и выбор месяца во всём остальном продукте.
- *
- * Был `Select`: год прижат влево, шеврон справа, и цифра в поле стояла не по
- * центру. У `MonthPicker` в режиме года ровно то, что нужно, — стрелки
- * перелистывания по бокам и год посередине, — и он уже знаком по другим
- * разделам. Своего контрола заводить незачем.
- */
-function YearSwitcher({
-  year,
-  years,
-  onChange,
-}: {
-  year: number;
-  years: number[];
-  onChange: (y: number) => void;
-}) {
-  // `years` отсортированы по убыванию: первый — самый свежий.
-  const maxY = years[0] ?? year;
-  const minY = years[years.length - 1] ?? year;
-  return (
-    <MonthPicker
-      value={`${year}-01`}
-      minYM={`${minY}-01`}
-      maxYM={`${maxY}-12`}
-      active
-      mode="year"
-      onSelect={(ym) => onChange(Number(ym.slice(0, 4)))}
-      onSelectYear={onChange}
-      onStep={(dir) => {
-        const next = year + dir;
-        if (next >= minY && next <= maxY) onChange(next);
-      }}
-    />
-  );
-}
-
 
 /** Месяц-рекордсмен: подпись, месяц и одна поясняющая строка. */
 function Record({

@@ -8,6 +8,7 @@ import { extractHashtags } from "../lib/aggregations";
 import { useCategoryDictionary } from "../hooks/useCategoryDictionary";
 import type { Transaction } from "../types";
 import type { TransactionEdit } from "../store/useEditsStore";
+import { Segmented } from "./Segmented";
 
 /**
  * Bulk-edit modal. Lets the user change Категория (+подкатегория),
@@ -223,22 +224,16 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
           <div>
             <div className="flex items-center justify-between mb-1 gap-2">
               <label className="label">Комментарий</label>
-              <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
-                <button
-                  type="button"
-                  onClick={() => setCommentMode("replace")}
-                  className={`px-2.5 py-1 ${commentMode === "replace" ? "bg-accent text-accent-fg" : "text-muted hover:text-text"}`}
-                >
-                  Заменить
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCommentMode("append")}
-                  className={`px-2.5 py-1 ${commentMode === "append" ? "bg-accent text-accent-fg" : "text-muted hover:text-text"}`}
-                >
-                  Дополнить
-                </button>
-              </div>
+              <Segmented
+                size="sm"
+                label="Как изменить комментарий"
+                value={commentMode}
+                onChange={setCommentMode}
+                options={[
+                  { value: "replace", label: "Заменить" },
+                  { value: "append", label: "Дополнить" },
+                ]}
+              />
             </div>
             <HashtagTextarea
               value={comment}

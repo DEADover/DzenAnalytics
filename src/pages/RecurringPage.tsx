@@ -22,6 +22,8 @@ import { formatMoney, formatDate, formatNum, formatPct } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { Segmented } from "../components/Segmented";
+import { Switch } from "../components/Switch";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { DataTable, type Column, type Tone } from "../components/DataTable";
@@ -616,20 +618,14 @@ export function RecurringPage() {
       />
 
       {/* Page-level tabs: Zen plans vs our own detection (#3). */}
-      <div className="flex gap-1 bg-panel2 rounded-full p-1 border border-border shadow-tray w-fit">
-        {PAGE_TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setPageTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              pageTab === t.id ? "bg-accent text-accent-fg" : "text-muted hover:text-text"
-            }`}
-          >
-            <t.icon className="w-4 h-4" />
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        tabs
+        label="Разделы страницы"
+        value={pageTab}
+        onChange={setPageTab}
+        className="flex w-fit"
+        options={PAGE_TABS.map((t) => ({ value: t.id, label: t.label, icon: t.icon }))}
+      />
 
       {/* ══ Планы из Дзен-мани (issue #47) ══════════════════════════════════ */}
       {pageTab === "zen" && (
@@ -662,48 +658,35 @@ export function RecurringPage() {
                 <CalendarClock className="w-4 h-4 text-accent" />
                 Планируемые операции
               </div>
-              <div className="flex gap-0.5 bg-panel2 rounded-full p-1 border border-border shadow-tray shrink-0">
-                {plannedTabs.map((t) => {
-                  const empty = plannedCounts[t.id] === 0;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => setPlannedTab(t.id)}
-                      disabled={empty}
-                      title={empty ? "Нет таких операций в выбранном периоде" : undefined}
-                      className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                        effectiveTab === t.id
-                          ? "bg-accent text-accent-fg"
-                          : empty
-                            ? "text-muted/40 cursor-not-allowed"
-                            : "text-muted hover:text-text"
-                      }`}
-                    >
-                      {t.label}
-                      <span className="opacity-60"> {plannedCounts[t.id]}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <Segmented
+                size="sm"
+                label="Какие плановые операции показать"
+                value={effectiveTab}
+                onChange={setPlannedTab}
+                className="shrink-0"
+                options={plannedTabs.map((t) => ({
+                  value: t.id,
+                  label: t.label,
+                  count: plannedCounts[t.id],
+                  disabled: plannedCounts[t.id] === 0,
+                  title:
+                    plannedCounts[t.id] === 0
+                      ? "Нет таких операций в выбранном периоде"
+                      : undefined,
+                }))}
+              />
             </div>
 
             {/* Date-window filter for the plans table. */}
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-muted mr-1">Период:</span>
-              {PLANNED_PERIODS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setPlannedPeriod(p.id)}
-                  className={`px-3 py-1 rounded-full border transition-colors ${
-                    plannedPeriod === p.id
-                      ? "bg-accent/10 border-accent/40 text-accent"
-                      : "border-border text-muted hover:text-text"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="label">Период</span>
+              <Segmented
+                tight
+                label="Период плановых операций"
+                value={plannedPeriod}
+                onChange={setPlannedPeriod}
+                options={PLANNED_PERIODS.map((p) => ({ value: p.id, label: p.label }))}
+              />
             </div>
 
             {/* Просроченное — та же таблица, что и ниже: разбирать его удобнее
@@ -838,64 +821,41 @@ export function RecurringPage() {
           active-only toggle. Hidden when nothing has been detected yet. */}
       {allCandidates.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-muted mr-1">Период:</span>
-          {(["all", "monthly", "weekly", "quarterly"] as const).map((c) => {
-            const label = c === "all" ? "Все" : CADENCE_LABEL[c];
-            const count =
-              c === "all"
-                ? filterPool.length
-                : filterPool.filter((x) => x.cadence === c).length;
-            const active = cadenceFilter === c;
-            return (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCadenceFilter(c)}
-                className={`px-3 py-1 rounded-full border transition-colors ${
-                  active
-                    ? "bg-accent/10 border-accent/40 text-accent"
-                    : "border-border text-muted hover:text-text"
-                }`}
-              >
-                {label}
-                <span className="ml-1.5 opacity-60">{count}</span>
-              </button>
-            );
-          })}
+          <span className="label">Периодичность</span>
+          <Segmented
+            size="sm"
+            label="Периодичность платежей"
+            value={cadenceFilter}
+            onChange={setCadenceFilter}
+            options={(["all", "monthly", "weekly", "quarterly"] as const).map((c) => ({
+              value: c,
+              label: c === "all" ? "Все" : CADENCE_LABEL[c],
+              count:
+                c === "all"
+                  ? filterPool.length
+                  : filterPool.filter((x) => x.cadence === c).length,
+            }))}
+          />
           {onlyPriceUp && (
             <button
               type="button"
               onClick={() => setOnlyPriceUp(false)}
-              className="px-3 py-1 rounded-full border border-warn/40 bg-warn/10 text-warn"
+              className="px-3 py-2 leading-4 rounded-full border border-warn/40 bg-warn/10 text-warn"
             >
               Только подорожавшие ×
             </button>
           )}
           {/* Active-only is a toggle, not a period — different style (switch)
               and pushed to the right edge so it doesn't read as a 5th pill. */}
-          <button
-            type="button"
-            role="switch"
-            aria-checked={onlyActive}
-            onClick={() => setOnlyActive((v) => !v)}
+          <label
             title={"Только активные\nНеактивные — те, по которым пропущено больше двух ожидаемых платежей подряд."}
-            className={`ml-auto flex items-center gap-2 transition-colors ${
+            className={`ml-auto flex items-center gap-2 cursor-pointer transition-colors ${
               onlyActive ? "text-text" : "text-muted hover:text-text"
             }`}
           >
             <span>Только активные</span>
-            <span
-              className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
-                onlyActive ? "bg-accent" : "bg-border"
-              }`}
-            >
-              <span
-                className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${
-                  onlyActive ? "translate-x-3.5" : "translate-x-0.5"
-                }`}
-              />
-            </span>
-          </button>
+            <Switch checked={onlyActive} onChange={setOnlyActive} label="Только активные" />
+          </label>
         </div>
       )}
 

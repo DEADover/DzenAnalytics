@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { Checkbox } from "../components/Checkbox";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Upload,
@@ -784,45 +785,22 @@ export function ImportPage() {
           sections; sub-headings inside each tab keep their own
           structure (e.g. "Резервные копии" → "Облачный снимок" +
           "Push в облако"). */}
-      {/* Дорожка-пилюля, как все переключатели разделов в продукте. Прежде это
-          был ряд с подчёркиванием — приём, который после переезда «Счетов» на
-          пилюли остался в приложении в единственном экземпляре, на этой самой
-          странице. */}
-      <div
-        role="tablist"
-        aria-label="Разделы настроек"
-        className="inline-flex items-center gap-0.5 self-start -mt-1 rounded-full p-1 bg-panel2 border border-border shadow-tray overflow-x-auto"
-      >
-        {([
-          { id: "source", label: "Данные", icon: Database },
-          { id: "operations", label: "Справочники", icon: ArrowLeftRight },
-          { id: "processing", label: "Расчёты", icon: Calculator },
-          { id: "interface", label: "Оформление", icon: ALargeSmall },
-          { id: "backups", label: "Бэкапы", icon: History },
-        ] as const).map((t) => {
-          const active = settingsTab === t.id;
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={active}
-              onClick={() => setSettingsTab(t.id)}
-              className={[
-                "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full",
-                "text-[13.5px] font-medium whitespace-nowrap transition-colors duration-200",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-                active
-                  ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
-                  : "text-muted hover:text-text hover:bg-panel/70",
-              ].join(" ")}
-            >
-              <Icon className="w-4 h-4" />
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Разделы настроек — общим `Segmented` крупной ступени, как
+          переключатели разделов на других страницах. */}
+      <Segmented
+        tabs
+        label="Разделы настроек"
+        value={settingsTab}
+        onChange={setSettingsTab}
+        className="self-start -mt-1 overflow-x-auto"
+        options={[
+          { value: "source", label: "Данные", icon: Database },
+          { value: "operations", label: "Справочники", icon: ArrowLeftRight },
+          { value: "processing", label: "Расчёты", icon: Calculator },
+          { value: "interface", label: "Оформление", icon: ALargeSmall },
+          { value: "backups", label: "Бэкапы", icon: History },
+        ]}
+      />
 
       {settingsTab === "source" && (<>
       {/* Unified data-source card. Replaces what used to be three
@@ -841,46 +819,32 @@ export function ImportPage() {
           icon={Database}
           title="Источник данных"
           right={
-          <div className="inline-flex gap-0.5 bg-panel2 border border-border rounded-full p-1 shadow-tray">
-            <button
-              type="button"
-              onClick={() => setSourceTab("api")}
-              className={`px-3 py-1.5 text-sm rounded-full inline-flex items-center gap-1.5 transition-colors ${
-                sourceTab === "api"
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:text-text"
-              }`}
-              title="Онлайн-синхронизация с Дзен-мани через токен API"
-            >
-              <Cloud className="w-3.5 h-3.5" />
-              Дзен-мани API
-              {zenToken && (
-                <span
-                  className="ml-1 w-1.5 h-1.5 rounded-full bg-income"
-                  title="Источник активен"
-                />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSourceTab("csv")}
-              className={`px-3 py-1.5 text-sm rounded-full inline-flex items-center gap-1.5 transition-colors ${
-                sourceTab === "csv"
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:text-text"
-              }`}
-              title="Офлайн-импорт CSV-выгрузки из мобильного приложения"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              CSV-файл
-              {meta?.source === "csv" && transactions.length > 0 && (
-                <span
-                  className="ml-1 w-1.5 h-1.5 rounded-full bg-income"
-                  title="Источник активен"
-                />
-              )}
-            </button>
-          </div>
+          <Segmented
+            size="sm"
+            tabs
+            label="Источник данных"
+            value={sourceTab}
+            onChange={setSourceTab}
+            options={[
+              {
+                value: "api",
+                label: "Дзен-мани API",
+                icon: Cloud,
+                title: "Онлайн-синхронизация с Дзен-мани через токен API",
+                dot: zenToken ? "Источник активен" : undefined,
+              },
+              {
+                value: "csv",
+                label: "CSV-файл",
+                icon: Upload,
+                title: "Офлайн-импорт CSV-выгрузки из мобильного приложения",
+                dot:
+                  meta?.source === "csv" && transactions.length > 0
+                    ? "Источник активен"
+                    : undefined,
+              },
+            ]}
+          />
           }
         />
 
@@ -919,13 +883,12 @@ export function ImportPage() {
                   {/* Расписание рядом с состоянием: «Подключено · каждые 30 мин»
                       читается одной строкой. */}
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={autoSyncEnabled}
-                      onChange={(e) =>
-                        setAutoSync(e.target.checked, autoSyncValue, autoSyncUnit)
+                      onChange={(on) =>
+                        setAutoSync(on, autoSyncValue, autoSyncUnit)
                       }
-                      className="accent-accent w-3.5 h-3.5"
+                      label="Авто-синхронизация"
                     />
                     <span>Авто-синхронизация каждые</span>
                     <input
@@ -939,23 +902,20 @@ export function ImportPage() {
                           setAutoSync(autoSyncEnabled, n, autoSyncUnit);
                         }
                       }}
-                      className="input text-xs !py-1 !px-2 w-14 tabular-nums"
+                      className="input text-xs !px-2.5 w-14 tabular-nums"
                     />
-                    <select
+                    <Select
+                      size="sm"
+                      className="w-24"
                       value={autoSyncUnit}
-                      onChange={(e) =>
-                        setAutoSync(
-                          autoSyncEnabled,
-                          autoSyncValue,
-                          e.target.value as typeof autoSyncUnit
-                        )
-                      }
-                      className="input text-xs !py-1 !px-2 !w-auto"
-                    >
-                      <option value="min">мин</option>
-                      <option value="hour">час</option>
-                      <option value="day">день</option>
-                    </select>
+                      onChange={(v) => setAutoSync(autoSyncEnabled, autoSyncValue, v)}
+                      options={[
+                        { value: "min" as const, label: "мин" },
+                        { value: "hour" as const, label: "час" },
+                        { value: "day" as const, label: "день" },
+                      ]}
+                      ariaLabel="Единица интервала синхронизации"
+                    />
                   </label>
                 </div>
               )}
@@ -1160,32 +1120,26 @@ export function ImportPage() {
                       {formatNum(transactions.length)}
                     </strong>
                   </span>
-                  <div className="inline-flex gap-0.5 bg-panel2 border border-border rounded-full p-1 shadow-tray">
-                    <button
-                      onClick={() => setMode("merge")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
-                        mode === "merge"
-                          ? "bg-accent text-accent-fg"
-                          : "text-muted hover:text-text"
-                      }`}
-                      title="Добавить новые операции, дубликаты по id отбрасываются"
-                    >
-                      <Layers className="w-3.5 h-3.5" />
-                      Дополнить
-                    </button>
-                    <button
-                      onClick={() => setMode("replace")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
-                        mode === "replace"
-                          ? "bg-accent text-accent-fg"
-                          : "text-muted hover:text-text"
-                      }`}
-                      title="Удалить все текущие данные и загрузить файл с нуля"
-                    >
-                      <Replace className="w-3.5 h-3.5" />
-                      Заменить
-                    </button>
-                  </div>
+                  <Segmented
+                    size="sm"
+                    label="Как загрузить файл"
+                    value={mode}
+                    onChange={setMode}
+                    options={[
+                      {
+                        value: "merge",
+                        label: "Дополнить",
+                        icon: Layers,
+                        title: "Добавить новые операции, дубликаты по id отбрасываются",
+                      },
+                      {
+                        value: "replace",
+                        label: "Заменить",
+                        icon: Replace,
+                        title: "Удалить все текущие данные и загрузить файл с нуля",
+                      },
+                    ]}
+                  />
                 </div>
               )}
             </div>
@@ -1977,11 +1931,10 @@ export function ImportPage() {
 
           {/* — Auto grouping toggle — *\/}
           <label className="flex items-center gap-3 p-3 bg-panel2 rounded-lg border border-border cursor-pointer">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={payeeGrouping}
-              onChange={(e) => setPayeeGrouping(e.target.checked)}
-              className="accent-accent w-4 h-4"
+              onChange={(on) => setPayeeGrouping(on)}
+              label="Группировать по контрагентам"
             />
             <div className="flex-1">
               <div className="font-medium text-sm">
@@ -2462,31 +2415,18 @@ export function ImportPage() {
                   <span className="text-sm font-medium w-44 shrink-0">
                     Отправка правок в облако
                   </span>
-                  <div className="inline-flex gap-0.5 bg-panel border border-border rounded-full p-1 shadow-tray">
-                    {(
-                      [
-                        ["off", "Выключена"],
-                        ["manual", "Вручную"],
-                        ["auto", "Авто"],
-                        ["on-sync", "При синке"],
-                      ] as const
-                    ).map(([value, label]) => {
-                      const active = pushMode === value;
-                      return (
-                        <button
-                          key={value}
-                          onClick={() => setPushMode(value)}
-                          className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                            active
-                              ? "bg-accent text-accent-fg"
-                              : "text-muted hover:text-text"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <Segmented
+                    size="sm"
+                    label="Отправка правок в облако"
+                    value={pushMode}
+                    onChange={setPushMode}
+                    options={[
+                      { value: "off", label: "Выключена" },
+                      { value: "manual", label: "Вручную" },
+                      { value: "auto", label: "Авто" },
+                      { value: "on-sync", label: "При синке" },
+                    ]}
+                  />
                   {/* Always present, so the row never changes shape — it just
                       enables in «Вручную», where sending is a manual act. */}
                   <button
@@ -2545,30 +2485,17 @@ export function ImportPage() {
                   <span className="text-sm font-medium w-44 shrink-0">
                     Копия облака перед отправкой
                   </span>
-                  <div className="inline-flex gap-0.5 bg-panel border border-border rounded-full p-1 shadow-tray">
-                    {(
-                      [
-                        ["always", "Каждый раз"],
-                        ["daily", "Раз в день"],
-                        ["never", "Никогда"],
-                      ] as const
-                    ).map(([value, label]) => {
-                      const active = snapshotPolicy === value;
-                      return (
-                        <button
-                          key={value}
-                          onClick={() => setSnapshotPolicy(value)}
-                          className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                            active
-                              ? "bg-accent text-accent-fg"
-                              : "text-muted hover:text-text"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <Segmented
+                    size="sm"
+                    label="Копия облака перед отправкой"
+                    value={snapshotPolicy}
+                    onChange={setSnapshotPolicy}
+                    options={[
+                      { value: "always", label: "Каждый раз" },
+                      { value: "daily", label: "Раз в день" },
+                      { value: "never", label: "Никогда" },
+                    ]}
+                  />
                 </div>
                 <p className="text-xs text-muted mt-1.5 sm:ml-[calc(11rem+0.75rem)]">
                   Сохраняем состояние облака до отправки — если что-то пойдёт не

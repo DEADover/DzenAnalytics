@@ -454,7 +454,7 @@ export function SplitTransactionModal({
                         ? "В разбивке должно остаться хотя бы две части"
                         : "Убрать часть"
                     }
-                    className="btn-ghost !p-2 shrink-0 text-muted hover:text-expense"
+                    className="btn-ghost btn-square-md text-muted hover:text-expense"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

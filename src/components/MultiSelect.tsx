@@ -8,6 +8,7 @@
 // Set semantics (shared with useFiltersStore): empty = everything selected,
 // {FILTER_NONE} = nothing selected, anything else = that exact subset.
 
+import { Checkbox } from "./Checkbox";
 import {
   Fragment,
   useEffect,
@@ -371,7 +372,7 @@ export function MultiSelect({
           setQuery("");
         }}
         className={clsx(
-          "btn-ghost text-xs py-1.5 h-[30px] w-full justify-between",
+          "btn-ghost text-xs w-full justify-between",
           selected.size > 0 && "border-accent text-accent"
         )}
       >
@@ -478,14 +479,12 @@ export function MultiSelect({
                         {/* Родитель, у которого отмечена только часть веток,
                             показывается «частично» — иначе на экране стоял бы
                             снятый счёт с отмеченным контрагентом внутри. */}
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={isChecked(opt)}
-                          ref={(el) => {
-                            if (el) el.indeterminate = isPartial(opt);
-                          }}
                           onChange={() => toggle(opt)}
-                          className="accent-accent shrink-0"
+                          indeterminate={isPartial(opt)}
+                          label="Выбрать вариант"
+                          className="shrink-0"
                         />
                         {renderIcon && (
                           <span className="shrink-0">{renderIcon(opt)}</span>

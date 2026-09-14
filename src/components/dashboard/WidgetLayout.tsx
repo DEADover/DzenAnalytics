@@ -204,7 +204,9 @@ export function WidgetShell({
    */
   const views = meta.views;
   const viewTrack = editing && views && views.length > 1 && (
-    <span className="absolute top-2 right-2 z-20 flex items-center gap-0.5 rounded-full bg-panel border border-border shadow-tray p-1">
+    // Общая дорожка `.seg-*`, но с белой подложкой: она лежит поверх самой
+    // плитки, и серая сливалась бы с её графиком.
+    <span className="seg-track absolute top-2 right-2 z-20 !bg-panel">
       {views.map((v, i) => {
         const on = v.id === (widgetView(meta, placement.view)?.id ?? v.id);
         return (
@@ -215,12 +217,8 @@ export function WidgetShell({
             aria-label={`Вид ${i + 1}: ${v.title}`}
             onClick={() => void setView(placement.key, v.id)}
             className={clsx(
-              "w-6 h-6 rounded-full text-[12px] font-semibold leading-none tabular-nums",
-              "transition-colors duration-200",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-              on
-                ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
-                : "text-muted hover:text-text"
+              "seg-item w-6 h-6 text-[12px] font-semibold leading-none tabular-nums",
+              on && "seg-on"
             )}
           >
             {i + 1}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Checkbox } from "./Checkbox";
 import { createPortal } from "react-dom";
 import { ArrowRight, Wand2, X } from "lucide-react";
 import type { Transaction } from "../types";
@@ -159,11 +160,11 @@ export function BudgetFillModal({
                 key={r.key}
                 className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer hover:bg-panel2/40"
               >
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={on}
                   onChange={() => toggle(r.key)}
-                  className="shrink-0 accent-[var(--accent)]"
+                  label="Подставить эту статью"
+                  className="shrink-0"
                 />
                 {r.subcategory ? (
                   <CategoryDot category={r.subcategory} parent={r.category} size="w-6 h-6" />

@@ -582,7 +582,7 @@ export function TransactionsPage() {
               value={pageSearch}
               onChange={(e) => setPageSearch(e.target.value)}
               placeholder="Быстрый поиск по таблице…"
-              className="input pl-9 text-xs py-1.5 h-[30px]"
+              className="input pl-9 text-xs"
             />
           </div>
           {/* Compact sort — icon button (field glyph + direction) opening a
@@ -591,7 +591,7 @@ export function TransactionsPage() {
             <div className="relative" ref={addMenuRef}>
               <button
                 onClick={() => setAddMenuOpen((o) => !o)}
-                className="btn-primary text-xs py-1.5 h-[30px] whitespace-nowrap"
+                className="btn-primary text-xs whitespace-nowrap"
                 title="Добавить новую операцию"
                 aria-haspopup="menu"
                 aria-expanded={addMenuOpen}
@@ -634,7 +634,7 @@ export function TransactionsPage() {
               return (
                 <button
                   onClick={() => setSortOpen((o) => !o)}
-                  className="btn-ghost text-xs py-1.5 h-[30px] !px-2"
+                  className="btn-ghost text-xs !px-2.5 h-[34px]"
                   title={`Сортировка: ${active.label}`}
                   aria-haspopup="menu"
                   aria-expanded={sortOpen}
@@ -674,7 +674,7 @@ export function TransactionsPage() {
               })}
             </Popover>
           </div>
-          <button onClick={exportCsv} className="btn-ghost text-xs py-1.5 h-[30px] whitespace-nowrap">
+          <button onClick={exportCsv} className="btn-ghost text-xs whitespace-nowrap">
             <Download className="w-3.5 h-3.5" />
             CSV
           </button>
@@ -690,7 +690,7 @@ export function TransactionsPage() {
                 aria-expanded={trashOpen}
                 aria-label={`Удалённые операции: ${deletedCount}`}
                 title="Корзина"
-                className="relative btn-ghost text-xs py-1.5 h-[30px] !px-2"
+                className="relative btn-ghost text-xs !px-2"
               >
                 <Trash2 className="w-4 h-4" />
                 <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-expense text-white text-[10px] leading-4 text-center tabular-nums">
@@ -700,7 +700,7 @@ export function TransactionsPage() {
             ) : (
               <Link
                 to="/trash"
-                className="relative btn-ghost text-xs py-1.5 h-[30px] !px-2"
+                className="relative btn-ghost text-xs !px-2"
                 title="Корзина пуста"
                 aria-label="Удалённые операции"
               >

@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Tags, Users, ArrowLeftRight } from "lucide-react";
-import clsx from "clsx";
 import { CategoryManager } from "./CategoryManager";
 import { CounterpartyManager } from "./CounterpartyManager";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { useDictionaryCounts } from "../hooks/useDictionaries";
-import { formatNum } from "../lib/format";
+import { Segmented } from "./Segmented";
 
 type SubTab = "categories" | "counterparties";
 
@@ -46,48 +45,25 @@ export function OperationsSettings() {
         облако.
       </p>
 
-      {/* Дорожка-пилюля, как остальные переключатели: подчёркивание было
-          последним следом прежнего набора внутри «Настроек». */}
-      <div
-        role="tablist"
-        aria-label="Разделы справочников"
-        className="inline-flex items-center gap-0.5 self-start rounded-full p-1 bg-panel2 border border-border shadow-tray mb-4"
-      >
-        {tabs.map((t) => {
-          const active = sub === t.id;
-          return (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={active}
-              onClick={() => setSub(t.id)}
-              className={clsx(
-                "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[13.5px] font-medium transition-colors duration-200",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-                active
-                  ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
-                  : "text-muted hover:text-text hover:bg-panel/70"
-              )}
-            >
-              <t.icon className="w-4 h-4" />
-              {t.label}
-              {/* Число записей — сразу на обеих вкладках: сколько всего в
-                  справочнике, видно не открывая его. Без кэша Дзен-мани
-                  справочника нет вовсе, тогда и числа нет. */}
-              {t.count !== null && (
-                <span
-                  className={clsx(
-                    "text-xs tabular-nums rounded-full px-1.5 py-0.5",
-                    active ? "bg-accent/10 text-accent" : "bg-panel2 text-muted"
-                  )}
-                >
-                  {formatNum(t.count)}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* Вкладки внутри карточки — ступенью `sm`: крупная дорожка уже стоит
+          над карточкой и переключает сами разделы настроек. Число записей —
+          сразу на обеих вкладках: сколько всего в справочнике, видно не
+          открывая его. Без кэша Дзен-мани справочника нет вовсе, тогда и числа
+          нет. */}
+      <Segmented
+        tabs
+        size="sm"
+        label="Разделы справочников"
+        value={sub}
+        onChange={setSub}
+        options={tabs.map((t) => ({
+          value: t.id,
+          label: t.label,
+          icon: t.icon,
+          count: t.count ?? undefined,
+        }))}
+        className="mb-4"
+      />
 
       {sub === "categories" && <CategoryManager />}
       {sub === "counterparties" && <CounterpartyManager />}

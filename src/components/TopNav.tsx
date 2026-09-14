@@ -33,12 +33,13 @@ const PRIMARY = [
 
 
 
-/** Пункт меню в дорожке: те же размеры и та же пилюля, что у `Segmented`. */
-const NAV_ITEM =
-  "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[14px] font-medium whitespace-nowrap transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
-const NAV_ITEM_ACTIVE =
-  "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]";
-const NAV_ITEM_IDLE = "text-muted hover:text-text hover:bg-panel/70";
+/**
+ * Пункт меню и кнопка-значок в дорожке — общими классами `.seg-*`: та же
+ * пилюля, что у `Segmented`, и та же ступень 42, что у дорожек значков рядом.
+ * Прежде меню выходило 43, а дорожка значков — 38.
+ */
+const navItem = (active: boolean) => clsx("seg-item seg-item-nav", active && "seg-on");
+const iconItem = (active = false) => clsx("seg-icon seg-icon-md group relative", active && "seg-on");
 
 export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -161,18 +162,13 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             одинаково. Выбранный пункт залит целиком, а не десятью процентами
             цвета, — прежнюю бледную заливку на светлой теме приходилось искать
             глазами. */}
-        <nav className="hidden lg:inline-flex items-center gap-0.5 shrink-0 rounded-full p-1 bg-panel2 border border-border shadow-tray">
+        <nav className="seg-track hidden lg:inline-flex shrink-0">
           {PRIMARY.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               end={to === "/"}
-              className={({ isActive }) =>
-                clsx(
-                  NAV_ITEM,
-                  isActive ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE
-                )
-              }
+              className={({ isActive }) => navItem(isActive)}
             >
               <Icon className="w-4 h-4" />
               {label}
@@ -184,10 +180,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
               onClick={() => setMoreOpen((o) => !o)}
               aria-expanded={moreOpen}
               aria-haspopup="true"
-              className={clsx(
-                NAV_ITEM,
-                moreOpen || inSecondary ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE
-              )}
+              className={navItem(moreOpen || inSecondary)}
             >
               <MoreHorizontal className="w-4 h-4" />
               Ещё
@@ -203,14 +196,14 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             со скруглением 8, обойма-пилюля, пилюля темы и два голых значка, —
             и правый край читался собранным из разных наборов. */}
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
-        <HeaderSyncActions leading={hasSlices ? <SliceSwitcher inline /> : undefined} />
+        <HeaderSyncActions leading={hasSlices ? <SliceSwitcher /> : undefined} />
 
         {/* Системная дорожка. Поиск живёт здесь же: он открывает палитру
             команд, то есть тоже про приложение, а не про данные на экране. */}
-        <div className="inline-flex items-center gap-0.5 shrink-0 rounded-full p-1 bg-panel2 border border-border shadow-tray">
+        <div className="seg-track shrink-0">
         <button
           onClick={onOpenPalette}
-          className="p-1.5 rounded-full text-muted hover:text-accent hover:bg-panel/70 transition-colors duration-200"
+          className={iconItem()}
           title="Команды и поиск (⌘K / Ctrl+K)"
           aria-label="Команды и поиск"
         >
@@ -218,19 +211,11 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         </button>
         <ThemeSwitcher />
 
-        {/* Settings — gear icon. Active style matches PRIMARY nav (bg-accent/10
-            text-accent) so the whole header speaks one design language. */}
+        {/* Settings — gear icon. Выбранный — той же заливкой, что пункт меню. */}
         <NavLink
           to="/settings"
           title="Настройки"
-          className={({ isActive }) =>
-            clsx(
-              "group relative p-1.5 rounded-full transition-colors duration-200",
-              isActive
-                ? "bg-accent text-accent-fg"
-                : "text-muted hover:text-accent hover:bg-panel/70"
-            )
-          }
+          className={({ isActive }) => iconItem(isActive)}
         >
           <Settings
             className="w-4 h-4 transition-transform duration-500 ease-out group-hover:rotate-90"
@@ -259,13 +244,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
           }
           aria-label="Настроить главную"
           aria-pressed={editingLayout}
-          className={clsx(
-            "group relative p-1.5 rounded-full transition-colors duration-200",
-            !onDashboard && "text-muted/40 cursor-not-allowed",
-            onDashboard && editingLayout
-              ? "bg-accent text-accent-fg"
-              : onDashboard && "text-muted hover:text-accent hover:bg-panel/70"
-          )}
+          className={iconItem(!!onDashboard && editingLayout)}
         >
           <LayoutTemplate className="w-4 h-4" />
         </button>
@@ -274,14 +253,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         <NavLink
           to="/help"
           title="Справка"
-          className={({ isActive }) =>
-            clsx(
-              "group relative p-1.5 rounded-full transition-colors duration-200",
-              isActive
-                ? "bg-accent text-accent-fg"
-                : "text-muted hover:text-accent hover:bg-panel/70"
-            )
-          }
+          className={({ isActive }) => iconItem(isActive)}
         >
           <HelpCircle className="w-4 h-4 transition-transform duration-300 ease-out group-hover:scale-110" />
         </NavLink>

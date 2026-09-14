@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Checkbox } from "./Checkbox";
 import {
   Filter,
   ChevronDown,
@@ -179,7 +180,7 @@ export function FiltersMenu() {
       <button
         onClick={() => setOpen((o) => !o)}
         className={clsx(
-          "relative btn-ghost text-xs py-1.5 h-[30px] w-52",
+          "relative btn-ghost text-xs w-52",
           activeView && "text-accent2"
         )}
         title="Фильтры"
@@ -327,11 +328,10 @@ export function FiltersMenu() {
                   </div>
                 )}
                 <label className="flex items-center gap-2 text-xs text-muted">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={withPeriod}
-                    onChange={(e) => setWithPeriod(e.target.checked)}
-                    className="accent-accent"
+                    onChange={(on) => setWithPeriod(on)}
+                    label="Сохранять вместе с периодом"
                   />
                   Включить период (месяц/диапазон)
                 </label>

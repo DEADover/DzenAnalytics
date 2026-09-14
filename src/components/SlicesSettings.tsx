@@ -90,7 +90,7 @@ export function SlicesSettings() {
                 checked={isActive}
                 onChange={() => void setActive(s.id)}
                 aria-label={`Сделать активным разрез «${s.name}»`}
-                className="accent-[var(--accent)] cursor-pointer shrink-0"
+                className="accent-accent w-4 h-4 cursor-pointer shrink-0"
               />
               {editing === s.id ? (
                 <>
@@ -105,7 +105,7 @@ export function SlicesSettings() {
                       }
                       if (e.key === "Escape") setEditing(null);
                     }}
-                    className="input h-9 text-sm flex-1 min-w-0"
+                    className="input text-sm !py-1.5 flex-1 min-w-0"
                   />
                   <button
                     onClick={() => {

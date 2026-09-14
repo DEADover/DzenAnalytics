@@ -17,7 +17,7 @@ import { PageHeader } from "../components/PageHeader";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { pluralRu } from "../lib/plural";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
-import { MonthPicker } from "../components/MonthPicker";
+import { MonthPicker, YearPicker } from "../components/MonthPicker";
 import { Segmented } from "../components/Segmented";
 import { Switch } from "../components/Switch";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -289,7 +289,7 @@ function PeriodHead({
   return (
     <th scope="col" className="table-th text-right align-bottom font-normal w-[20rem]">
       <div className="label mb-1.5">{title}</div>
-      <div className="flex items-center justify-end gap-2 h-[30px]">{children}</div>
+      <div className="flex items-center justify-end gap-2 h-[34px]">{children}</div>
       <div className="text-xs text-muted mt-1.5 normal-case tracking-normal tabular-nums truncate">
         {days > 0 ? (
           <>
@@ -583,15 +583,11 @@ export function ComparePage() {
     />
   );
   const yearPicker = (value: number, set: (y: number) => void) => (
-    <MonthPicker
-      value={`${value}-01`}
-      minYM={minYM}
-      maxYM={maxYM}
-      active
-      mode="year"
-      onSelect={(ym) => set(Number(ym.slice(0, 4)))}
-      onSelectYear={set}
-      onStep={(dir) => set(value + dir)}
+    <YearPicker
+      year={value}
+      minYear={Number(minYM.slice(0, 4))}
+      maxYear={Number(maxYM.slice(0, 4))}
+      onChange={set}
     />
   );
   const dateFields = (
@@ -602,14 +598,14 @@ export function ComparePage() {
       <DateField
         value={r.from}
         onChange={(e) => set({ ...r, from: e.target.value })}
-        className="input text-xs py-1"
+        className="input text-xs"
         wrapperClassName="flex-1 min-w-0"
       />
       <span className="text-muted text-xs shrink-0">—</span>
       <DateField
         value={r.to}
         onChange={(e) => set({ ...r, to: e.target.value })}
-        className="input text-xs py-1"
+        className="input text-xs"
         wrapperClassName="flex-1 min-w-0"
       />
     </>

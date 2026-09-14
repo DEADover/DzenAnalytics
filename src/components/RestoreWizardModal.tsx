@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Checkbox } from "./Checkbox";
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
@@ -312,10 +313,10 @@ function PickStep({
           {takingSnapshot ? "Сохраняю…" : "Сохранить текущее состояние"}
         </button>
         <label className="flex items-start gap-2.5 cursor-pointer pt-1">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={accepted}
-            onChange={(e) => onAccept(e.target.checked)}
+            onChange={(on) => onAccept(on)}
+            label="Понимаю последствия"
             className="mt-0.5 shrink-0"
           />
           <span className="text-xs">
@@ -360,7 +361,7 @@ function PickStep({
                 name="snapshot"
                 checked={chosen?.id === s.id}
                 onChange={() => onPick(s.id)}
-                className="mt-1 shrink-0"
+                className="mt-1 w-4 h-4 shrink-0 accent-accent cursor-pointer"
               />
               <span className="min-w-0">
                 <span className="block font-medium">

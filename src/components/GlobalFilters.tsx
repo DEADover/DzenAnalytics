@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { Checkbox } from "./Checkbox";
 import type { Transaction } from "../types";
 import {
   X,
@@ -18,6 +19,7 @@ import { accountKindLabel, DEBT_TYPES } from "../lib/accountType";
 import { parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
 import { CategoryFilterPicker } from "./CategoryFilterPicker";
 import { MonthPicker } from "./MonthPicker";
+import { Segmented } from "./Segmented";
 import { currencySymbol } from "../lib/format";
 import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
@@ -421,7 +423,7 @@ export function GlobalFilters({
           <button
             onClick={() => setAdditionalOpen((o) => !o)}
             className={clsx(
-              "btn-ghost text-xs py-1.5 h-[30px] w-52",
+              "btn-ghost text-xs w-52",
               hasExtra && "border-accent text-accent"
             )}
             title="Дополнительные фильтры"
@@ -475,7 +477,7 @@ export function GlobalFilters({
                       onChange={(e) =>
                         f.setAmountRange(e.target.value === "" ? null : Number(e.target.value), f.maxAmount)
                       }
-                      className="input text-xs py-1.5 flex-1 min-w-0"
+                      className="input text-xs flex-1 min-w-0"
                     />
                     <span className="text-muted text-xs">—</span>
                     <input
@@ -486,7 +488,7 @@ export function GlobalFilters({
                       onChange={(e) =>
                         f.setAmountRange(f.minAmount, e.target.value === "" ? null : Number(e.target.value))
                       }
-                      className="input text-xs py-1.5 flex-1 min-w-0"
+                      className="input text-xs flex-1 min-w-0"
                     />
                   </div>
                 </div>
@@ -515,11 +517,11 @@ export function GlobalFilters({
                       className="flex items-center justify-between gap-2 text-xs px-1.5 py-1.5 rounded hover:bg-panel2 cursor-pointer"
                     >
                       <span>{row.label}</span>
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={row.checked}
-                        onChange={(e) => row.on(e.target.checked)}
-                        className="accent-accent shrink-0"
+                        onChange={(on) => row.on(on)}
+                        label="Включить фильтр"
+                        className="shrink-0"
                       />
                     </label>
                   ))}
@@ -555,30 +557,14 @@ export function GlobalFilters({
               className={clsx("contents", !showDateRange && "pointer-events-none")}
               inert={!showDateRange}
             >
-            {/* Дорожка та же, что у всех переключателей продукта. Прежде здесь
-                стояло скругление в шесть пикселей — и в одной строке с
-                соседними пилюлями («Без фильтрации», «Счета», «Валюта») это
-                читалось как чужая деталь. */}
-            <div className="inline-flex rounded-full p-1 bg-panel2 border border-border shadow-tray shrink-0">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.value}
-                  onClick={() => periodCtl.setPreset(p.value)}
-                  title={p.title}
-                  aria-pressed={periodCtl.preset === p.value}
-                  className={clsx(
-                    // No weight change on active — keeps the control width stable.
-                    "px-2 py-1 text-xs rounded-full whitespace-nowrap transition-colors duration-200",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-                    periodCtl.preset === p.value
-                      ? "bg-accent text-accent-fg shadow-[0_6px_16px_-8px_rgb(var(--c-accent))]"
-                      : "text-muted hover:text-text hover:bg-panel/70"
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              tight
+              label="Период"
+              value={periodCtl.preset}
+              onChange={periodCtl.setPreset}
+              className="shrink-0"
+              options={PRESETS.map((p) => ({ value: p.value, label: p.label, title: p.title }))}
+            />
 
             {/* Month picker + custom range. Fully live for both the global
                 filter store AND a page-local controlled period (Cash-flow,
@@ -601,7 +587,7 @@ export function GlobalFilters({
                   onChange={(e) =>
                     periodCtl.setRange(e.target.value || null, periodCtl.to)
                   }
-                  className="input text-xs py-1.5"
+                  className="input text-xs"
                   wrapperClassName="flex-1 min-w-0"
                 />
                 <span className="text-muted text-xs">—</span>
@@ -610,7 +596,7 @@ export function GlobalFilters({
                   onChange={(e) =>
                     periodCtl.setRange(periodCtl.from, e.target.value || null)
                   }
-                  className="input text-xs py-1.5"
+                  className="input text-xs"
                   wrapperClassName="flex-1 min-w-0"
                 />
               </div>
@@ -636,7 +622,7 @@ export function GlobalFilters({
           // `ml-auto` pins it to the right edge of the row. When the inline date
           // controls are shown they already grow to fill the row (flex-1), so
           // this has no effect there and the reset stays next to the divider.
-          className="btn-ghost text-xs py-1.5 px-2 shrink-0 ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2"
+          className="btn-ghost text-xs px-3 shrink-0 ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2"
         >
           <FilterX className="w-4 h-4" />
         </button>

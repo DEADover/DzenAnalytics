@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Checkbox } from "./Checkbox";
 import { createPortal } from "react-dom";
 import {
   X,
@@ -672,7 +673,7 @@ export function RuleEditModal({
                       <button
                         type="button"
                         onClick={() => removeCondition(c.id!)}
-                        className="btn-ghost !p-1.5 text-muted hover:text-expense shrink-0"
+                        className="btn-ghost btn-square-md text-muted hover:text-expense"
                         title="Удалить условие"
                         aria-label="Удалить условие"
                       >
@@ -778,13 +779,12 @@ export function RuleEditModal({
                           className="flex items-center gap-1.5 text-xs text-muted cursor-pointer shrink-0 whitespace-nowrap"
                           title="Считать «магнит» и «МАГНИТ» одним и тем же"
                         >
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={c.caseInsensitive}
-                            onChange={(e) =>
-                              patchCondition(c.id!, { caseInsensitive: e.target.checked })
+                            onChange={(on) =>
+                              patchCondition(c.id!, { caseInsensitive: on })
                             }
-                            className="accent-accent w-4 h-4"
+                            label="Без учёта регистра"
                           />
                           Регистр не важен
                         </label>
@@ -908,7 +908,7 @@ export function RuleEditModal({
                           actions: d.actions.filter((x) => x.id !== a.id),
                         }))
                       }
-                      className="btn-ghost !p-1.5 text-muted hover:text-expense shrink-0"
+                      className="btn-ghost btn-square-md text-muted hover:text-expense"
                       title="Удалить действие"
                       aria-label="Удалить действие"
                     >

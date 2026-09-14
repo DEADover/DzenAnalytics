@@ -27,7 +27,7 @@ export function ThemeSwitcher() {
       onClick={() => setMode(isDark ? "light" : "dark")}
       title={isDark ? "Тёмная → светлая" : "Светлая → тёмная"}
       aria-label={`Тема: ${isDark ? "тёмная" : "светлая"}`}
-      className="group p-1.5 rounded-full shrink-0 text-muted transition-colors duration-200 hover:text-accent hover:bg-panel/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      className="seg-icon seg-icon-md group shrink-0"
     >
       {isDark ? (
         <Sun className="w-4 h-4 transition-transform duration-500 ease-out group-hover:rotate-45" />

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Select } from "./Select";
 import { createPortal } from "react-dom";
 import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
@@ -25,6 +26,7 @@ import { Combobox, type ComboboxGroup } from "./Combobox";
 import { CategoryCascadePicker, type CategoryNode } from "./CategoryCascadePicker";
 import { buildCategoryNodes } from "../lib/categoryNodes";
 import { Tooltip } from "./Tooltip";
+import { Segmented } from "./Segmented";
 import { validateOperation } from "../lib/operationValidation";
 import { DateField } from "./DateField";
 import type { ZenTag } from "../lib/zenmoney";
@@ -1073,63 +1075,32 @@ export function EditTransactionModal({
               flow on an expense category; it inflows the account but
               shrinks the category's spend rather than adding to income. */}
           <Field label="Тип операции">
-            {/* Дорожка набрана как все переключатели в продукте: пилюля с
-                подложкой, кантом и мягкой тенью. Прежние восемь пикселей
-                скругления и отступ в полпикселя остались от старого плоского
-                стиля, а это самый верхний контрол карточки — он задаёт тон
-                всему, что ниже. */}
-            <div className="inline-flex gap-0.5 w-full rounded-full p-1 bg-panel2 border border-border shadow-tray">
-              <KindButton
-                active={kind === "expense" && !isDebt}
-                onClick={() => {
-                  setKind("expense");
-                  setIsDebt(false);
-                }}
-                icon={TrendingDown}
-                label="Расход"
-                tone="expense"
-              />
-              <KindButton
-                active={kind === "income" && !isDebt}
-                onClick={() => {
-                  setKind("income");
-                  setIsDebt(false);
-                }}
-                icon={TrendingUp}
-                label="Доход"
-                tone="income"
-              />
-              <KindButton
-                active={kind === "refund" && !isDebt}
-                onClick={() => {
-                  setKind("refund");
-                  setIsDebt(false);
-                }}
-                icon={Undo2}
-                label="Возврат"
-                tone="accent2"
-              />
-              <KindButton
-                active={kind === "transfer" && !isDebt}
-                onClick={() => {
-                  setKind("transfer");
-                  setIsDebt(false);
-                }}
-                icon={ArrowLeftRight}
-                label="Перевод"
-                tone="slate"
-              />
-              <KindButton
-                active={isDebt}
-                onClick={() => {
+            {/* Общий `Segmented`: цвет выбранного типа — тот же, что у сумм
+                этого типа в таблицах. Во всю ширину, варианты делят её поровну. */}
+            <Segmented
+              size="sm"
+              block
+              label="Тип операции"
+              value={isDebt ? "debt" : kind}
+              onChange={(next) => {
+                if (next === "debt") {
                   setKind("transfer");
                   setIsDebt(true);
-                }}
-                icon={HandCoins}
-                label="Долг"
-                tone="warn"
-              />
-            </div>
+                } else {
+                  setKind(next);
+                  setIsDebt(false);
+                }
+              }}
+              options={[
+                { value: "expense", label: "Расход", icon: TrendingDown, tone: "expense" },
+                { value: "income", label: "Доход", icon: TrendingUp, tone: "income" },
+                // «Возврат» — деньги назад по расходной категории: счёт
+                // пополняется, но уменьшается расход, а не растёт доход.
+                { value: "refund", label: "Возврат", icon: Undo2, tone: "accent2" },
+                { value: "transfer", label: "Перевод", icon: ArrowLeftRight, tone: "muted" },
+                { value: "debt", label: "Долг", icon: HandCoins, tone: "warn" },
+              ]}
+            />
           </Field>
           {/* Date needs room for «дд.мм.гггг» + the calendar icon; time only
               holds «чч:мм», so give the date the wider column. */}
@@ -1227,31 +1198,29 @@ export function EditTransactionModal({
           {isDebt && (
             <>
               <Field label="Операция с долгом">
-                {/* Та же дорожка, что у «Типа операции» строкой выше: два
-                    переключателя подряд обязаны выглядеть одинаково, иначе
-                    карточка читается собранной из разных мест. */}
-                <div className="grid grid-cols-2 gap-0.5 w-full rounded-full p-1 bg-panel2 border border-border shadow-tray">
-                  <Tooltip content="Я дал в долг | Я вернул долг">
-                    <button
-                      type="button"
-                      onClick={() => setDebtOutgoing(true)}
-                      aria-pressed={debtOutgoing}
-                      className={`w-full text-[12.5px] font-medium py-1.5 px-2 rounded-full whitespace-nowrap transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${debtOutgoing ? "bg-warn text-white shadow-[0_6px_16px_-8px_currentColor]" : "text-muted hover:text-text hover:bg-panel/70"}`}
-                    >
-                      Я дал / вернул
-                    </button>
-                  </Tooltip>
-                  <Tooltip content="Мне дали в долг | Мне вернули долг">
-                    <button
-                      type="button"
-                      onClick={() => setDebtOutgoing(false)}
-                      aria-pressed={!debtOutgoing}
-                      className={`w-full text-[12.5px] font-medium py-1.5 px-2 rounded-full whitespace-nowrap transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${!debtOutgoing ? "bg-warn text-white shadow-[0_6px_16px_-8px_currentColor]" : "text-muted hover:text-text hover:bg-panel/70"}`}
-                    >
-                      Мне дали / вернули
-                    </button>
-                  </Tooltip>
-                </div>
+                {/* Тот же `Segmented`, что у «Типа операции» строкой выше: два
+                    переключателя подряд обязаны выглядеть одинаково. */}
+                <Segmented
+                  size="sm"
+                  block
+                  label="Операция с долгом"
+                  value={debtOutgoing ? "out" : "in"}
+                  onChange={(next) => setDebtOutgoing(next === "out")}
+                  options={[
+                    {
+                      value: "out",
+                      label: "Я дал / вернул",
+                      title: "Я дал в долг | Я вернул долг",
+                      tone: "warn",
+                    },
+                    {
+                      value: "in",
+                      label: "Мне дали / вернули",
+                      title: "Мне дали в долг | Мне вернули долг",
+                      tone: "warn",
+                    },
+                  ]}
+                />
               </Field>
               <Field label={debtOutgoing ? "С какого счёта" : "На какой счёт"}>
                 <Combobox
@@ -1341,20 +1310,16 @@ export function EditTransactionModal({
               />
             </Field>
             <Field label="Валюта">
-              <select
+              <Select
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
+                onChange={(v) => setCurrency(v)}
                 // Create + single-leg: currency follows the account (the
                 // draft's amount is in the account's own currency).
                 disabled={isCreate && kind !== "transfer"}
-                className="input text-sm w-full disabled:opacity-60"
-              >
-                {currencyOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+                options={currencyOptions.map((c) => ({ value: c, label: c }))}
+                ariaLabel="Валюта"
+                portal
+              />
             </Field>
           </div>
           {/* Cross-currency transfer: the destination leg holds a different
@@ -1606,43 +1571,5 @@ function Field({
       </div>
       {children}
     </div>
-  );
-}
-
-function KindButton({
-  active,
-  onClick,
-  icon: Icon,
-  label,
-  tone,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  tone: "income" | "expense" | "warn" | "accent2" | "slate";
-}) {
-  const activeBg =
-    tone === "income"
-      ? "bg-income text-white"
-      : tone === "expense"
-        ? "bg-expense text-white"
-        : tone === "accent2"
-          ? "bg-accent2 text-white"
-          : tone === "slate"
-            ? "bg-muted text-white"
-            : "bg-warn text-white";
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-full text-[12.5px] font-medium whitespace-nowrap transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
-        active ? `${activeBg} shadow-[0_6px_16px_-8px_currentColor]` : "text-muted hover:text-text hover:bg-panel/70"
-      }`}
-    >
-      <Icon className="w-3.5 h-3.5 shrink-0" />
-      {label}
-    </button>
   );
 }

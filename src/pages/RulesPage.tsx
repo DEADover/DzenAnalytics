@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { accountKindLabel } from "../lib/accountType";
 import { getLiveAccountsFromCache, getBrandTitlesFromCache } from "../store/useZenmoneyStore";
 import {
@@ -7,7 +7,6 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
-  HelpCircle,
   GripVertical,
   Pencil,
   ListChecks,
@@ -48,7 +47,7 @@ import { Tooltip } from "../components/Tooltip";
 import { Checkbox } from "../components/Checkbox";
 import { HeadCell } from "../components/table/TableParts";
 import { cellClass } from "../components/table/tableKit";
-import { Popover } from "../components/Popover";
+import { InfoPopover } from "../components/InfoPopover";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
 import { buildRulePlan, type RuleRow } from "../lib/rulePlan";
@@ -135,8 +134,6 @@ export function RulesPage() {
 
   /** null — окно закрыто, «create» — новое правило, иначе редактируем. */
   const [editing, setEditing] = useState<StoredCategoryRule | "create" | null>(null);
-  const [infoOpen, setInfoOpen] = useState(false);
-  const infoRef = useRef<HTMLDivElement>(null);
   const [loadedZenTags, setZenTags] = useState<ZenTag[] | null>(null);
   // Отключились от Дзен-мани — справочника нет, и это видно прямо здесь.
   // Раньше состояние обнулял эффект: он срабатывал уже после отрисовки, и
@@ -476,76 +473,50 @@ export function RulesPage() {
             </span>
           </div>
 
-          <div ref={infoRef} className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setInfoOpen((v) => !v)}
-              aria-expanded={infoOpen}
-              aria-label="Как это работает"
-              title="Как это работает"
-              className={clsx(
-                "p-1.5 rounded-full",
-                infoOpen
-                  ? "text-accent bg-accent/10"
-                  : "text-muted hover:text-accent hover:bg-panel2"
-              )}
-            >
-              <HelpCircle className="w-5 h-5" />
-            </button>
-            {/* Панель должна помещаться целиком: `Popover` закрывается на любую
-                прокрутку — так задумано для меню, — поэтому внутренний скролл в
-                ней не работал бы. Отсюда и ширина, и краткость: всё, что нужно
-                знать про раздел, пятью абзацами. */}
-            <Popover
-              open={infoOpen}
-              anchorRef={infoRef}
-              onClose={() => setInfoOpen(false)}
-              className="w-[34rem] max-w-[calc(100vw-2rem)]"
-            >
-              <div className="border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2.5 text-xs text-muted">
-                <p>
-                  <strong className="text-text">Правило</strong> отбирает операции
-                  по условиям и меняет у них категорию, получателя или
-                  комментарий. Само по себе оно ничего не переписывает.
-                </p>
-                <p>
-                  <strong className="text-text">«Режим»</strong> — что правило
-                  делает вообще:
-                </p>
-                <ul className="list-disc list-inside space-y-0.5 pl-1">
-                  <li>
-                    <strong className="text-text">Выкл</strong> — не работает
-                    нигде;
-                  </li>
-                  <li>
-                    <strong className="text-text">По кнопке</strong> — только
-                    через «Проверить и применить»;
-                  </li>
-                  <li>
-                    <strong className="text-text">Авто</strong> — само, при
-                    синхронизации. По умолчанию трогает лишь операции, которых
-                    раньше не было; с расписанием — проходит и по истории.
-                  </li>
-                </ul>
-                <p>
-                  <strong className="text-text">Галочки слева</strong> — какие
-                  правила разобрать кнопкой сейчас. Так прогоняют одно правило,
-                  не выключая остальные. Они сбрасываются при перезагрузке и на
-                  сами правила не влияют.
-                </p>
-                <p>
-                  <strong className="text-text">Порядок важен:</strong> поле
-                  занимает первое высказавшееся о нём правило — верхнее поставит
-                  категорию, нижнее ещё допишет комментарий. Двигать — стрелками
-                  в колонке «№».
-                </p>
-                <p>
-                  Записанное становится обычной правкой операции: откатывается
-                  построчно в списке изменений, а не выключением правила.
-                </p>
-              </div>
-            </Popover>
-          </div>
+          {/* Общий знак вопроса: свой с отдельной панелью был 32 px — выше
+              строки, к которой относится, — и не прокручивался внутри. */}
+          <InfoPopover label="Как это работает">
+            <p>
+              <strong className="text-text">Правило</strong> отбирает операции
+              по условиям и меняет у них категорию, получателя или
+              комментарий. Само по себе оно ничего не переписывает.
+            </p>
+            <p>
+              <strong className="text-text">«Режим»</strong> — что правило
+              делает вообще:
+            </p>
+            <ul className="list-disc list-inside space-y-0.5 pl-1">
+              <li>
+                <strong className="text-text">Выкл</strong> — не работает
+                нигде;
+              </li>
+              <li>
+                <strong className="text-text">По кнопке</strong> — только
+                через «Проверить и применить»;
+              </li>
+              <li>
+                <strong className="text-text">Авто</strong> — само, при
+                синхронизации. По умолчанию трогает лишь операции, которых
+                раньше не было; с расписанием — проходит и по истории.
+              </li>
+            </ul>
+            <p>
+              <strong className="text-text">Галочки слева</strong> — какие
+              правила разобрать кнопкой сейчас. Так прогоняют одно правило,
+              не выключая остальные. Они сбрасываются при перезагрузке и на
+              сами правила не влияют.
+            </p>
+            <p>
+              <strong className="text-text">Порядок важен:</strong> поле
+              занимает первое высказавшееся о нём правило — верхнее поставит
+              категорию, нижнее ещё допишет комментарий. Двигать — стрелками
+              в колонке «№».
+            </p>
+            <p>
+              Записанное становится обычной правкой операции: откатывается
+              построчно в списке изменений, а не выключением правила.
+            </p>
+          </InfoPopover>
 
           {/* Оба замечания стоят В ШАПКЕ, а не полосой над таблицей: полоса
               появлялась и исчезала при каждом переключении режима и двигала

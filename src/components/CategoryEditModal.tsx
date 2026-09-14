@@ -15,6 +15,7 @@ import { ZenIcon } from "./ZenIcon";
 import { IconPicker } from "./IconPicker";
 import { ColorPicker } from "./ColorPicker";
 import { CategoryDot } from "./CategoryDot";
+import { Segmented } from "./Segmented";
 
 interface Props {
   /** Root categories eligible as a parent. */
@@ -289,33 +290,20 @@ export function CategoryEditModal({
             )}
           </div>
 
-          {/* Obligation — 2-state segmented. */}
+          {/* Обязательность — общим `Segmented` во всю ширину поля. */}
           <div>
             <div className="label mb-1">Обязательность</div>
-            <div className="inline-flex rounded-lg border border-border overflow-hidden text-sm w-full">
-              <button
-                type="button"
-                onClick={() => setObligatory(true)}
-                aria-pressed={obligatory}
-                className={clsx(
-                  "flex-1 px-3 py-1.5",
-                  obligatory ? "bg-accent text-accent-fg" : "text-muted hover:text-text"
-                )}
-              >
-                Обязательная
-              </button>
-              <button
-                type="button"
-                onClick={() => setObligatory(false)}
-                aria-pressed={!obligatory}
-                className={clsx(
-                  "flex-1 px-3 py-1.5 border-l border-border",
-                  !obligatory ? "bg-accent text-accent-fg" : "text-muted hover:text-text"
-                )}
-              >
-                Необязательная
-              </button>
-            </div>
+            <Segmented
+              size="sm"
+              block
+              label="Обязательность"
+              value={obligatory ? "yes" : "no"}
+              onChange={(next) => setObligatory(next === "yes")}
+              options={[
+                { value: "yes", label: "Обязательная" },
+                { value: "no", label: "Необязательная" },
+              ]}
+            />
           </div>
 
           {/* Hierarchy */}
@@ -413,7 +401,7 @@ function ParentSelect({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="input h-10 flex items-center justify-between gap-2 w-full text-left"
+        className="input h-[38px] flex items-center justify-between gap-2 w-full text-left"
       >
         <span className="flex items-center gap-2 min-w-0">
           {currentTitle && <CategoryDot category={currentTitle} size="w-5 h-5" />}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Select } from "../components/Select";
 import { useSearchParams } from "react-router-dom";
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
 import { Maximize2, X, BarChart3, LayoutGrid } from "lucide-react";
@@ -588,18 +589,19 @@ export function CategoriesPage() {
               {view === "bars" && (
                 <label className="shrink-0 mt-1 inline-flex items-center gap-2 text-xs text-muted">
                   Сравнить со средним за
-                  <select
-                    value={avgMonths}
-                    onChange={(e) =>
-                      setAvgMonths(Number(e.target.value) as 3 | 6 | 12)
-                    }
-                    className="input text-xs py-1 px-2 w-auto"
+                  <Select
+                    size="sm"
+                    className="w-24"
+                    value={String(avgMonths)}
+                    onChange={(v) => setAvgMonths(Number(v) as 3 | 6 | 12)}
+                    options={[
+                      { value: "3", label: "3 мес" },
+                      { value: "6", label: "6 мес" },
+                      { value: "12", label: "12 мес" },
+                    ]}
+                    ariaLabel="Сколько предыдущих месяцев усреднять"
                     title="Сколько предыдущих месяцев усреднять для базовой линии"
-                  >
-                    <option value={3}>3 мес</option>
-                    <option value={6}>6 мес</option>
-                    <option value={12}>12 мес</option>
-                  </select>
+                  />
                 </label>
               )}
             </div>

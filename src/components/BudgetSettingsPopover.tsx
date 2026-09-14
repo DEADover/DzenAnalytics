@@ -50,7 +50,7 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
           onClick={() => setOpen((o) => !o)}
           // Ростом с соседями по строке шапки: переключателем вида, выбором
           // месяца и «Заполнить по среднему».
-          className="btn-ghost !p-2.5"
+          className="btn-ghost btn-square-lg"
           aria-label="Настройки бюджета"
         >
           <Settings2 className="w-4 h-4" />

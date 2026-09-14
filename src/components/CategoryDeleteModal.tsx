@@ -211,7 +211,7 @@ function ReplacementSelect({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="input h-10 flex items-center justify-between gap-2 w-full text-left"
+        className="input h-[38px] flex items-center justify-between gap-2 w-full text-left"
       >
         <span className="flex items-center gap-2 min-w-0">
           {current && (
