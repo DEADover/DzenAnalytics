@@ -205,7 +205,7 @@ export function TrendsPage() {
                 : `Выбрано: ${selected.length}`}
               {" · "}
               <button onClick={() => setSelected([])} className="text-accent hover:underline">
-                сбросить
+                Сбросить
               </button>
             </>
           }

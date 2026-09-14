@@ -67,7 +67,7 @@ export function IconPicker({ value, color, onChange }: Props) {
             size="sm"
             value={query}
             onChange={setQuery}
-            placeholder="Поиск иконки (напр. car, food)…"
+            placeholder="Имя значка по-английски: car, food"
             className="mb-2"
           />
           <div className="grid grid-cols-6 gap-1 max-h-56 overflow-y-auto">

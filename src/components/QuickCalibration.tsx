@@ -229,7 +229,7 @@ export function QuickCalibration() {
             <input
               type="number"
               inputMode="numeric"
-              placeholder="например, 2900000"
+              placeholder="Например, 2900000"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && applyManual()}

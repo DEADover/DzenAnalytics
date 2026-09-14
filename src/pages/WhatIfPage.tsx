@@ -21,7 +21,7 @@ import { netWorthSeries } from "../lib/aggregations";
 import { CardHeader } from "../components/CardHeader";
 import { HeadCell } from "../components/table/TableParts";
 import { cellClass } from "../components/table/tableKit";
-import { formatMoney, formatPct } from "../lib/format";
+import { formatMoney, formatPct, formatFixed } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
@@ -40,7 +40,7 @@ function years(v: number): string {
   if (v < 0) return "0";
   if (v < 1) return `${(v * 12).toFixed(0)} мес`;
   if (v >= 100) return "100+";
-  return `${v.toFixed(1)}`;
+  return formatFixed(v);
 }
 
 export function WhatIfPage() {
@@ -317,12 +317,12 @@ export function WhatIfPage() {
               <div className="mt-3 text-sm">
                 {out.yearsSavedOnFire > 0 ? (
                   <span className="text-income">
-                    Сэкономлено {out.yearsSavedOnFire.toFixed(1)} лет до финансовой
+                    Сэкономлено {formatFixed(out.yearsSavedOnFire)} лет до финансовой
                     свободы
                   </span>
                 ) : (
                   <span className="text-expense">
-                    Срок отодвинется на {Math.abs(out.yearsSavedOnFire).toFixed(1)} лет
+                    Срок отодвинется на {formatFixed(Math.abs(out.yearsSavedOnFire))} лет
                   </span>
                 )}
               </div>
@@ -333,9 +333,9 @@ export function WhatIfPage() {
           <div className="card-tray card-pad">
             <CardHeader icon={PiggyBank} tone="accent2" title="Прогноз капитала" />
             <div className="grid grid-cols-3 gap-3">
-              <MoneyStat label="через 1 год" value={out.projected1y} base={base} />
-              <MoneyStat label="через 5 лет" value={out.projected5y} base={base} />
-              <MoneyStat label="через 10 лет" value={out.projected10y} base={base} />
+              <MoneyStat label="Через 1 год" value={out.projected1y} base={base} />
+              <MoneyStat label="Через 5 лет" value={out.projected5y} base={base} />
+              <MoneyStat label="Через 10 лет" value={out.projected10y} base={base} />
             </div>
             <div className="text-[11px] text-muted mt-3">
               Линейный прогноз без учёта доходности инвестиций. Реальные суммы при

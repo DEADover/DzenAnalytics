@@ -11,7 +11,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Segmented } from "../components/Segmented";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { GlobalFilters } from "../components/GlobalFilters";
-import { formatMoney, formatDate, formatNum, monthLabel } from "../lib/format";
+import { formatMoney, formatDate, formatNum, monthLabel, formatFixed } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { StatCell, StatRow } from "../components/SectionCard";
@@ -104,7 +104,7 @@ export function AnomaliesPage() {
                   className="accent-accent"
                 />
                 <span className="text-xs tabular-nums w-8">
-                  {threshold.toFixed(1)}
+                  {formatFixed(threshold)}
                 </span>
               </div>
             )}
@@ -120,7 +120,7 @@ export function AnomaliesPage() {
                 из привычных сумм. Для каждой категории и для каждого получателя
                 считаем средний чек и разброс вокруг него, а потом ищем операции,
                 которые ушли от среднего больше чем на{" "}
-                <InfoTerm>{threshold.toFixed(1)} разброса</InfoTerm> — это и есть
+                <InfoTerm>{formatFixed(threshold)} разброса</InfoTerm> — это и есть
                 ползунок «Чувствительность». Поставьте меньше — попадёт больше
                 операций.
               </p>
@@ -128,7 +128,7 @@ export function AnomaliesPage() {
                 Считаем только расходы. Категория или получатель участвуют,
                 начиная с <InfoTerm>5 операций</InfoTerm>: на трёх покупках
                 «обычная сумма» — это ещё не статистика. В строке видно, с чем
-                сравнивали: «обычный чек у «Пятёрочки» — 900 ₽, эта в 4.2× больше».
+                сравнивали: «обычный чек у «Пятёрочки» — 900 ₽, эта в 4,2× больше».
               </p>
               <p>
                 <InfoTerm>Всплески по категориям</InfoTerm> — про месяцы, а не про
@@ -171,7 +171,7 @@ export function AnomaliesPage() {
           label="Аномальных операций"
           value={formatNum(anomalies.length)}
           tone="warn"
-          note={<>Порог: σ &gt; {threshold}</>}
+          note={<>Порог: σ &gt; {formatFixed(threshold)}</>}
         />
         <StatCell
           label="Их сумма"
@@ -270,7 +270,7 @@ export function AnomaliesPage() {
             icon={TrendingUp}
             title="Всплесков по категориям не найдено"
           >
-            Категория должна вырасти минимум в 1.5× к среднему за 3 предыдущих месяца
+            Категория должна вырасти минимум в 1,5× к среднему за 3 предыдущих месяца
           </SectionEmpty>
         ) : (
           <DataTable<MonthSpike>

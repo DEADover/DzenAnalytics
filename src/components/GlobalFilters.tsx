@@ -472,7 +472,7 @@ export function GlobalFilters({
                     <input
                       type="number"
                       inputMode="numeric"
-                      placeholder="от"
+                      placeholder="От"
                       value={f.minAmount ?? ""}
                       onChange={(e) =>
                         f.setAmountRange(e.target.value === "" ? null : Number(e.target.value), f.maxAmount)
@@ -483,7 +483,7 @@ export function GlobalFilters({
                     <input
                       type="number"
                       inputMode="numeric"
-                      placeholder="до"
+                      placeholder="До"
                       value={f.maxAmount ?? ""}
                       onChange={(e) =>
                         f.setAmountRange(f.minAmount, e.target.value === "" ? null : Number(e.target.value))

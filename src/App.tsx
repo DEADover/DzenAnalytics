@@ -391,7 +391,7 @@ function App() {
   if (!loaded) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted">
-        Загрузка...
+        Загрузка…
       </div>
     );
   }

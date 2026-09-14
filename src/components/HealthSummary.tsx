@@ -13,7 +13,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import type { HealthComponent, HealthScore } from "../lib/health";
-import { formatMoney, formatPct } from "../lib/format";
+import { formatMoney, formatPct, formatFixed } from "../lib/format";
 import { Tooltip } from "./Tooltip";
 import { CardHeader } from "./CardHeader";
 import { ProgressBar } from "./ProgressBar";
@@ -34,12 +34,12 @@ function formatValue(c: HealthComponent): string {
     case "fixed_load":
       return formatPct(c.value, 1);
     case "emergency_fund":
-      return `${c.value.toFixed(1)} мес`;
+      return `${formatFixed(c.value)} мес`;
     case "stability":
       // Show the spread as a plain word, not the raw «CV» coefficient.
       return c.value <= 0.5 ? "Ровно" : c.value <= 1 ? "С колебаниями" : "Скачет";
     default:
-      return c.value.toFixed(2);
+      return formatFixed(c.value, 2);
   }
 }
 
@@ -163,7 +163,7 @@ function ScoreRow({ c, base }: { c: HealthComponent; base: string }) {
 
           {c.extra && (
             <div className="text-[11px] text-muted mt-1.5 tabular-nums">
-              По обязательным — {c.extra.obligatoryMonths.toFixed(1)} мес · в
+              По обязательным — {formatFixed(c.extra.obligatoryMonths)} мес · в
               среднем {formatMoney(c.extra.avgMonthly, base)} / мес
             </div>
           )}

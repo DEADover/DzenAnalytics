@@ -377,7 +377,7 @@ export function CategoryManager() {
             className="text-xs flex items-center gap-1 text-muted hover:text-text shrink-0"
             title="Сбросить несохранённые правки (облако не меняется)"
           >
-            <RotateCcw className="w-3.5 h-3.5" /> сбросить
+            <RotateCcw className="w-3.5 h-3.5" /> Сбросить
           </button>
         )}
         <button

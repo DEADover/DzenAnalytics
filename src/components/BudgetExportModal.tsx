@@ -78,7 +78,7 @@ export function BudgetExportModal({
     <Modal onClose={onClose} busy={busy} width="lg">
       <ModalHeader
         icon={Download}
-        title={`Годовой отчёт за ${year}`}
+        title={`Годовой отчёт за ${year} год`}
         subtitle={<span className="block truncate">{budgetExportFileName(year, month, format)}</span>}
       />
 

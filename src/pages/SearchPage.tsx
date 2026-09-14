@@ -174,7 +174,7 @@ export function SearchPage() {
       <PageHeader
         icon={Search}
         title="Поиск"
-        hint="Полнотекст по получателю, комментарию, категории и счёту — несколько слов = AND"
+        hint="По получателю, комментарию, категории и счёту — несколько слов ищутся все сразу"
         hintWrap
       />
 
@@ -185,7 +185,7 @@ export function SearchPage() {
             <SearchInput
               value={query}
               onChange={setQuery}
-              placeholder={useRegex ? "Regex, например ^яндекс" : "Слова через пробел"}
+              placeholder={useRegex ? "Например, ^яндекс" : "Слова через пробел"}
               ariaLabel="Содержит"
               autoFocus
             />
@@ -197,7 +197,7 @@ export function SearchPage() {
               <input
                 value={exclude}
                 onChange={(e) => setExclude(e.target.value)}
-                placeholder="слова, которых не должно быть"
+                placeholder="Слова, которых не должно быть"
                 className="input text-sm pl-9"
               />
             </div>
@@ -270,7 +270,7 @@ export function SearchPage() {
               onChange={(on) => setUseRegex(on)}
               label="Регулярное выражение"
             />
-            Regex (регистронезависимо)
+            Регулярное выражение, без учёта регистра
           </label>
           {hasFilters && (
             <button onClick={reset} className="text-xs text-muted hover:text-accent underline">

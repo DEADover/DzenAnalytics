@@ -124,7 +124,7 @@ export function ImportRowEditor({
                 set({ incomeAmount: parseNum(e.target.value) });
               }}
               inputMode="decimal"
-              placeholder="если валюты разные"
+              placeholder="Если валюты разные"
               aria-label="Сумма зачисления"
               className="input text-sm w-full font-mono tabular-nums"
             />

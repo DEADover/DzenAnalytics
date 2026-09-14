@@ -23,6 +23,7 @@ import { useDisplayStore } from "../store/useDisplayStore";
 import { pluralRu } from "../lib/plural";
 import { Callout } from "./Callout";
 import { Badge } from "./Badge";
+import { formatFixed } from "../lib/format";
 
 /**
  * Sync log table.
@@ -473,6 +474,6 @@ function formatN(n: number): string {
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms} мс`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} с`;
+  if (ms < 60_000) return `${formatFixed(ms / 1000)} с`;
   return `${Math.floor(ms / 60_000)} мин ${Math.floor((ms % 60_000) / 1000)} с`;
 }

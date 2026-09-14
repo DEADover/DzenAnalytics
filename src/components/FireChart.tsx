@@ -21,6 +21,7 @@ import {
   chartGridStroke,
   chartAxisStroke,
   chartColor,
+  formatFixed,
 } from "../lib/format";
 import { Tooltip } from "./Tooltip";
 import { TooltipFacts } from "./TooltipFacts";
@@ -323,7 +324,7 @@ export function FireChart({
               formatter={(v: unknown) =>
                 mode === "months"
                   ? [
-                      `${Number(v).toFixed(1)} мес · ${((Number(v) / FIRE_TARGET) * 100).toFixed(0)}% пути к цели`,
+                      `${formatFixed(Number(v))} мес · ${((Number(v) / FIRE_TARGET) * 100).toFixed(0)}% пути к цели`,
                       "Запас",
                     ]
                   : [

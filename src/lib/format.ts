@@ -156,6 +156,18 @@ export function crossCurrencyReceived(
   return formatMoney(t.incomeAmount, t.incomeCurrency);
 }
 
+/**
+ * Дробное число с постоянным числом знаков и русской запятой: «2,5 мес»,
+ * «1,0σ». `toFixed` ставил точку — «2.5 мес» посреди русского текста, — а
+ * `formatNum` отбрасывает нули, и у бегунка «2» и «2,5» прыгала ширина.
+ */
+export function formatFixed(value: number, digits = 1): string {
+  return new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
 export function formatNum(
   value: number,
   opts?: { compact?: boolean; fractionDigits?: number }

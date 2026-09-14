@@ -4,6 +4,7 @@ import {
   niceStep,
   currencySymbol,
   displayPayee,
+  formatFixed,
   formatNum,
   formatPct,
   payeeSearchText,
@@ -247,5 +248,17 @@ describe("truncateWords", () => {
     expect(truncateWords("", 10)).toBe("");
     expect(truncateWords(null, 10)).toBe("");
     expect(truncateWords(undefined, 10)).toBe("");
+  });
+});
+
+describe("formatFixed", () => {
+  it("ставит русскую запятую и держит число знаков", () => {
+    expect(formatFixed(2.5)).toBe("2,5");
+    expect(formatFixed(2)).toBe("2,0");
+    expect(formatFixed(1.234, 2)).toBe("1,23");
+  });
+
+  it("группирует тысячи, как остальные числа", () => {
+    expect(formatFixed(12345.6).replace(/\s/g, " ")).toBe("12 345,6");
   });
 });
