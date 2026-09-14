@@ -519,12 +519,7 @@ export function CounterpartyManager() {
             }}
             aria-pressed={orphanOnly}
             title={"Получатели без записи в справочнике\nПришли из выписок. Число — сколько таких получателей, а не операций."}
-            className={clsx(
-              "text-sm flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border shrink-0",
-              orphanOnly
-                ? "border-accent bg-accent/10 text-accent"
-                : "border-border text-muted hover:text-text hover:bg-panel2"
-            )}
+            className={clsx("chip chip-md shrink-0", orphanOnly && "chip-on")}
           >
             <UserPlus className="w-4 h-4" />
             Без контрагента
@@ -540,12 +535,7 @@ export function CounterpartyManager() {
             }}
             aria-pressed={dupOnly}
             title="Контрагенты с одинаковым названием"
-            className={clsx(
-              "text-sm flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border shrink-0",
-              dupOnly
-                ? "border-accent bg-accent/10 text-accent"
-                : "border-border text-muted hover:text-text hover:bg-panel2"
-            )}
+            className={clsx("chip chip-md shrink-0", dupOnly && "chip-on")}
           >
             <Combine className="w-4 h-4" />
             Дубли

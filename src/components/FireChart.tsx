@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Select } from "./Select";
+import { Segmented } from "./Segmented";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -10,7 +11,7 @@ import {
   Tooltip as RTooltip,
   ReferenceLine,
 } from "recharts";
-import { Flame, ChevronDown, Check } from "lucide-react";
+import { Flame } from "lucide-react";
 import type { FirePoint } from "../lib/aggregations";
 import {
   formatMoney,
@@ -89,31 +90,8 @@ export function FireChart({
 }) {
   const [mode, setMode] = useState<Mode>("months");
   const [expKind, setExpKind] = useState<ExpKind>("obligatory");
-  const [expMenuOpen, setExpMenuOpen] = useState(false);
   const [scale, setScale] = useState<Scale>("month");
   const [range, setRange] = useState<Range>("all");
-  const expRef = useRef<HTMLDivElement>(null);
-
-  // Close the «Обязательные/Все» dropdown on outside click.
-  useEffect(() => {
-    if (!expMenuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (expRef.current && !expRef.current.contains(e.target as Node))
-        setExpMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [expMenuOpen]);
-
-  // Пилюли, как все переключатели продукта: прежде это были прямоугольники со
-  // скруглением в шесть пикселей — последний такой ряд на «Финансовом
-  // здоровье».
-  const pillCls = (active: boolean) =>
-    `text-xs px-3 py-2 rounded-full border transition-colors duration-200 ${
-      active
-        ? "bg-accent text-accent-fg border-accent"
-        : "bg-panel2 border-border text-muted hover:text-text"
-    }`;
 
   const chart = useMemo(() => {
     // 1) Period — trailing window over the monthly points.
@@ -251,86 +229,35 @@ export function FireChart({
         }
       />
 
-      <div className="flex items-center gap-1 mb-3 flex-wrap">
-        <button
-          onClick={() => {
-            setMode("months");
-            setExpMenuOpen(false);
-          }}
-          className={pillCls(mode === "months")}
-        >
-          Месяцы жизни
-        </button>
-
-        <button
-          onClick={() => {
-            setMode("income");
-            setExpMenuOpen(false);
-          }}
-          className={pillCls(mode === "income")}
-        >
-          Доходы
-        </button>
-
-        {/* «Расходы» is a dropdown: pick obligatory vs all without a second row */}
-        <div className="relative" ref={expRef}>
-          <button
-            onClick={() => {
-              if (mode !== "expense") {
-                setMode("expense");
-                setExpMenuOpen(true);
-              } else {
-                setExpMenuOpen((o) => !o);
-              }
-            }}
-            className={`${pillCls(mode === "expense")} inline-flex items-center gap-1`}
-            aria-haspopup="menu"
-            aria-expanded={mode === "expense" && expMenuOpen}
-          >
-            Расходы
-            {mode === "expense" && (
-              <span className="opacity-70">
-                · {expKind === "obligatory" ? "обязательные" : "все"}
-              </span>
-            )}
-            <ChevronDown
-              className={`w-3 h-3 transition-transform ${
-                mode === "expense" && expMenuOpen ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-          <div
-            role="menu"
-            className={`absolute left-0 top-full mt-1 z-20 min-w-[160px] rounded-xl border border-border bg-panel shadow-lg overflow-hidden origin-top transition duration-150 ${
-              mode === "expense" && expMenuOpen
-                ? "opacity-100 scale-100"
-                : "opacity-0 scale-95 pointer-events-none"
-            }`}
-          >
-            {(
-              [
-                { id: "obligatory", label: "Обязательные" },
-                { id: "all", label: "Все" },
-              ] as { id: ExpKind; label: string }[]
-            ).map((k) => (
-              <button
-                key={k.id}
-                role="menuitemradio"
-                aria-checked={expKind === k.id}
-                onClick={() => {
-                  setExpKind(k.id);
-                  setExpMenuOpen(false);
-                }}
-                className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs hover:bg-panel2 ${
-                  expKind === k.id ? "text-accent" : "text-text"
-                }`}
-              >
-                {k.label}
-                {expKind === k.id && <Check className="w-3 h-3" />}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {/* Что откладываем по оси — общим `Segmented`. Вид расходов прежде
+            прятался в выпадающее меню внутри пилюли «Расходы» — своя
+            разметка, которой больше нигде нет; теперь это поле рядом,
+            и появляется оно, только когда выбраны расходы. */}
+        <Segmented
+          size="sm"
+          label="Что показать на графике"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "months", label: "Месяцы жизни" },
+            { value: "income", label: "Доходы" },
+            { value: "expense", label: "Расходы" },
+          ]}
+        />
+        {mode === "expense" && (
+          <Select
+            size="sm"
+            className="w-36"
+            value={expKind}
+            onChange={setExpKind}
+            options={[
+              { value: "obligatory", label: "Обязательные" },
+              { value: "all", label: "Все" },
+            ]}
+            ariaLabel="Какие расходы"
+          />
+        )}
 
         {/* Period + scale of the chart (issue #35). Pushed right so the series
             pills stay the primary control. */}

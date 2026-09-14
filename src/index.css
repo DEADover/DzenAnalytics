@@ -483,6 +483,32 @@ h2,
     width: 0;
     height: 0;
   }
+  /**
+   * Чип — нажимаемый элемент набора: признак-фильтр («Без контрагента»,
+   * «Дубли»), выпадающий фильтр в ряду над списком. Выбранный — кант и
+   * подложка акцента. Высота — ступень 34 (`.chip`) или 38 (`.chip-md`, в
+   * одном ряду с полем и кнопкой `text-sm`).
+   *
+   * Прежде чипы были то пилюлей, то прямоугольником со скруглением 8, а
+   * выбранный — то сплошной заливкой, то подложкой на 10 %.
+   */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border bg-panel2 px-3 py-2
+           text-xs leading-4 text-muted whitespace-nowrap transition-colors duration-200
+           hover:text-text
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
+  }
+  .chip-md {
+    @apply px-3.5 text-sm leading-5;
+  }
+  /* Плотный — в наборе у графика («Категории по месяцам»), где чипов десятки. */
+  .chip-sm {
+    @apply px-2.5 py-1;
+  }
+  .chip-on,
+  .chip-on:hover {
+    @apply border-accent bg-accent/15 text-accent;
+  }
   .pill {
     @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium
            bg-panel2 border border-border text-text;

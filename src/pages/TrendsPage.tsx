@@ -221,13 +221,7 @@ export function TrendsPage() {
               <button
                 key={cat}
                 onClick={() => toggleCategory(cat)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  isSelected
-                    ? "bg-accent/15 text-text border-accent"
-                    : isActive
-                      ? "bg-panel2 text-text border-border"
-                      : "bg-panel2 text-muted border-border hover:border-accent/50"
-                }`}
+                className={`chip chip-sm ${isSelected ? "chip-on" : isActive ? "text-text" : ""}`}
                 style={isActive ? { borderLeftWidth: 3, borderLeftColor: color } : {}}
               >
                 {cat}

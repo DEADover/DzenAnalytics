@@ -10,6 +10,7 @@ import {
   ListChecks,
   Trash2,
   Undo2,
+  X,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
@@ -837,9 +838,11 @@ export function RecurringPage() {
             <button
               type="button"
               onClick={() => setOnlyPriceUp(false)}
-              className="px-3 py-2 leading-4 rounded-full border border-warn/40 bg-warn/10 text-warn"
+              className="chip chip-on"
+              aria-label="Снять фильтр «Только подорожавшие»"
             >
-              Только подорожавшие ×
+              Только подорожавшие
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           )}
           {/* Active-only is a toggle, not a period — different style (switch)

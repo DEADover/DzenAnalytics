@@ -231,11 +231,7 @@ function DropdownMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         style={minWidth ? { minWidth } : undefined}
-        className={`px-3 py-2 text-xs rounded-full border flex items-center gap-1.5 whitespace-nowrap transition-colors duration-200 ${
-          active
-            ? "bg-accent/10 border-accent/40 text-accent"
-            : "bg-panel2 border-border text-muted hover:text-text"
-        }`}
+        className={clsx("chip", active && "chip-on")}
       >
         <Icon className="w-3.5 h-3.5 shrink-0" />
         {label}
