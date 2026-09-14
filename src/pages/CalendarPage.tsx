@@ -27,6 +27,7 @@ import { KindSwitcher } from "../components/KindSwitcher";
 import { YearPicker } from "../components/MonthPicker";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionControls } from "../components/SectionControls";
+import { navSection } from "../lib/navSections";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const MONTHS = [
@@ -200,7 +201,7 @@ export function CalendarPage() {
       <PageHeader
         icon={CalendarDays}
         title="Календарь"
-        hint="Тепловая карта по дням года"
+        hint={navSection("/calendar")?.hint}
         right={
           <div className="flex flex-wrap gap-2 items-center">
             {/* Общие контролы вместо двух самодельных: свои пилюли и своя

@@ -24,6 +24,8 @@ import { useTagModeStore } from "../store/useTagModeStore";
 import { tagLabel, tagsOf, type TagMode } from "../lib/operationTags";
 import type { Transaction } from "../types";
 import { CardHeader } from "../components/CardHeader";
+import { SectionEmpty } from "../components/SectionEmpty";
+import { navSection } from "../lib/navSections";
 
 /**
  * Значок тега. Хэштег — решёткой, как его набирают в комментарии. Вторая
@@ -338,36 +340,34 @@ export function TagsPage() {
 
   if (transactions.length === 0) return <EmptyState />;
 
-  const hint =
-    mode === "hashtags"
-      ? "Группировка операций по хэштегам из комментариев"
-      : "Группировка операций по второй и следующим категориям";
+  // Подпись под заголовком — статичная и та же, что в меню «Ещё». Цифры
+  // выборки живут рядом с тем, что они описывают: счётчики тегов — в шапке
+  // облака, знаменатели процентов — в шапке таблицы. А «тегов нет» — не
+  // подпись раздела, а его пустое состояние: оно стоит под фильтрами.
+  const header = (
+    <PageHeader icon={Hash} title="Теги" hint={navSection("/tags")?.hint} right={<TagModeSwitch />} />
+  );
 
   if (tags.length === 0) {
     return (
       <div className="space-y-6">
-        <PageHeader
-          icon={Hash}
-          title="Теги"
-          hint={
-            mode === "hashtags"
-              ? "Метки `#проект` в комментариях группируют операции по темам — в текущей выборке тегов нет"
-              : "Вторая категория операции — «Отпуск», «Ремонт» — группирует операции по темам. В текущей выборке таких операций нет"
-          }
-          right={<TagModeSwitch />}
-        />
+        {header}
         <GlobalFilters />
+        <SectionEmpty
+          icon={Hash}
+          title={mode === "hashtags" ? "В выборке нет тегов" : "В выборке нет операций со второй категорией"}
+        >
+          {mode === "hashtags"
+            ? "Метки вида #проект в комментариях собирают операции по темам"
+            : "Вторая категория операции, например «Отпуск» или «Ремонт», собирает операции по темам"}
+        </SectionEmpty>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Подпись под заголовком — статичная. Цифры выборки живут рядом с тем,
-          что они описывают: счётчики тегов — в шапке облака, знаменатели
-          процентов — в шапке таблицы. Заголовок должен объяснять страницу, а не
-          пересказывать её содержимое. */}
-      <PageHeader icon={Hash} title="Теги" hint={hint} hintWrap right={<TagModeSwitch />} />
+      {header}
       <GlobalFilters />
 
       <div className="card-tray card-pad">

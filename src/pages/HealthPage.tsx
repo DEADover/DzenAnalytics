@@ -14,6 +14,7 @@ import { HealthSummary } from "../components/HealthSummary";
 import { FireChart } from "../components/FireChart";
 import { FireIndependence } from "../components/FireIndependence";
 import { SectionDivider } from "../components/SectionDivider";
+import { navSection } from "../lib/navSections";
 
 export function HealthPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -54,8 +55,7 @@ export function HealthPage() {
       <PageHeader
         icon={HeartPulse}
         title="Финансовое здоровье"
-        hint="Насколько устойчивы ваши финансы сейчас и как близко до финансовой независимости"
-        hintWrap
+        hint={navSection("/health")?.hint}
       />
 
       <SectionDivider

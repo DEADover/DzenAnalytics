@@ -42,6 +42,7 @@ import { CategoryTable, type CategoryTableRow } from "../components/CategoryTabl
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
 import type { Transaction } from "../types";
+import { navSection } from "../lib/navSections";
 
 /** Same logic as `periodKey` but accepts a Date instead of an ISO string. */
 function periodKeyFromDate(d: Date, startDay: number): string {
@@ -726,7 +727,7 @@ export function ComparePage() {
       <PageHeader
         icon={GitCompare}
         title="Сравнение периодов"
-        hint="Два периода рядом: ключевые метрики и расходы по категориям"
+        hint={navSection("/compare")?.hint}
       />
 
       {/* Фильтры режут цифры этой страницы и без панели — `applyFilters` ниже

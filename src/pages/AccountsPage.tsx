@@ -1534,7 +1534,7 @@ export function AccountsPage() {
       <PageHeader
         icon={Wallet}
         title="Счета"
-        hint="Остатки на счетах, их история и обороты за период"
+        hint="Остатки, их история и обороты за период"
         right={
           <div className="flex flex-wrap items-center gap-2">
             {/* Значок стоит слева от «Калибровки». Ряд прижат к правому краю,

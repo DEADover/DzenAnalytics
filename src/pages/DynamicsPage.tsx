@@ -49,6 +49,7 @@ import { ChartTooltipCard, TooltipFacts } from "../components/TooltipFacts";
 import { MultiSelect } from "../components/MultiSelect";
 import { InfoPopover } from "../components/InfoPopover";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { navSection } from "../lib/navSections";
 
 const METRICS: DynamicsMetric[] = ["expense", "income", "net", "balance"];
 const GRANULARITIES: Granularity[] = ["day", "week", "month", "year"];
@@ -223,7 +224,7 @@ export function DynamicsPage() {
       <PageHeader
         icon={Activity}
         title="Динамика"
-        hint="Отобранные операции на временной оси — сколько и как часто"
+        hint={navSection("/dynamics")?.hint}
       />
 
       <GlobalFilters period={lp} />

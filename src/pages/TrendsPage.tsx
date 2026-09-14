@@ -52,6 +52,7 @@ import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
 import { useEffect } from "react";
 import { SectionControls } from "../components/SectionControls";
+import { navSection } from "../lib/navSections";
 
 export function TrendsPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -175,7 +176,7 @@ export function TrendsPage() {
       <PageHeader
         icon={Activity}
         title="Тренды"
-        hint="Помесячная динамика и паттерны по дням недели"
+        hint={navSection("/trends")?.hint}
       />
       <GlobalFilters period={lp} />
 

@@ -59,6 +59,7 @@ import { nextSort, sortRows, type SortState } from "../components/table/tableKit
 import { SectionEmpty } from "../components/SectionEmpty";
 import { ProgressBar } from "../components/ProgressBar";
 import { Badge } from "../components/Badge";
+import { navSection } from "../lib/navSections";
 
 const INCOME = chartColor.income;
 const EXPENSE = chartColor.expense;
@@ -167,7 +168,7 @@ export function YearReviewPage() {
   if (!review.hasData) {
     return (
       <div className="space-y-6">
-        <PageHeader icon={Sparkles} title="Год в цифрах" />
+        <PageHeader icon={Sparkles} title="Год в цифрах" hint={navSection("/year-review")?.hint} />
         <SectionEmpty icon={Sparkles} title={`В данных нет операций за ${year} год`} />
         {years.length > 0 && (
           <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} />
@@ -186,7 +187,7 @@ export function YearReviewPage() {
       <PageHeader
         icon={Sparkles}
         title={`Год в цифрах: ${year}`}
-        hint="Итоги, рекорды и любопытные факты за выбранный год"
+        hint={navSection("/year-review")?.hint}
         right={
           <div className="flex items-center gap-2">
             <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} />

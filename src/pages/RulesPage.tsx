@@ -58,6 +58,7 @@ import { ruleModeFields, ruleModeOf, type RuleMode } from "../lib/ruleMode";
 import type { RuleSchedule } from "../lib/ruleSchedule";
 import { userEdits } from "../lib/editOrigins";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { navSection } from "../lib/navSections";
 
 /** Подпись поля, которое занимает действие, — для колонки «Что меняет». */
 const TARGET_LABELS: Record<RuleTargetField, string> = {
@@ -434,7 +435,7 @@ export function RulesPage() {
       <PageHeader
         icon={Wand2}
         title="Правила категоризации"
-        hint="Меняют категорию, получателя и комментарий операций по условию"
+        hint={navSection("/rules")?.hint}
       />
 
       <StatRow>

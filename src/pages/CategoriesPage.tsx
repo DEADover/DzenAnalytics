@@ -539,7 +539,7 @@ export function CategoriesPage() {
       <PageHeader
         icon={PieChartIcon}
         title="Категории"
-        hint="Данные и аналитика с разбивкой по категориям и подкатегориям"
+        hint="Структура расходов и доходов по категориям"
       />
       <GlobalFilters />
 

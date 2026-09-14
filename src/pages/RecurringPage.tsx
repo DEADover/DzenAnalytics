@@ -35,6 +35,7 @@ import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { ProgressBar } from "../components/ProgressBar";
 import { SectionControls } from "../components/SectionControls";
+import { navSection } from "../lib/navSections";
 
 // One pill per coarse cadence bucket, plus an "all" pseudo-option.
 // Order matches the user's likely usage frequency on this page:
@@ -571,7 +572,7 @@ export function RecurringPage() {
       <PageHeader
         title="Регулярные платежи"
         icon={Repeat}
-        hint="Плановые операции из Дзен-мани и подписки, найденные по вашей истории"
+        hint={navSection("/recurring")?.hint}
         right={
           <InfoPopover label="Что на этой странице">
             <p>

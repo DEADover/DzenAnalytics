@@ -26,6 +26,7 @@ import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Callout } from "../components/Callout";
+import { navSection } from "../lib/navSections";
 
 const INITIAL: WhatIfInputs = {
   incomeMul: 1,
@@ -108,8 +109,7 @@ export function WhatIfPage() {
       <PageHeader
         icon={FlaskConical}
         title="Что-если — сценарии"
-        hint="Норма сбережений, срок до FIRE и капитал через 1/5/10 лет при разных вводных"
-        hintWrap
+        hint={navSection("/whatif")?.hint}
         right={
           <div className="flex items-center gap-2">
             {dirty && (

@@ -81,6 +81,7 @@ import {
 } from "../lib/budgetExportName";
 import { InfoPopover } from "../components/InfoPopover";
 import { Badge, type BadgeTone } from "../components/Badge";
+import { navSection } from "../lib/navSections";
 
 function currentMonth(): string {
   const d = new Date();
@@ -910,7 +911,7 @@ export function BudgetsPage() {
       <PageHeader
         icon={Wallet}
         title="Бюджет"
-        hint="План и факт по статьям — за месяц и за год"
+        hint={navSection("/budgets")?.hint}
       />
 
       {/* Панель: вид и период (слева), действия (справа). */}

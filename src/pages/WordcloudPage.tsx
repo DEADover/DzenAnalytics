@@ -13,6 +13,7 @@ import { DataTable } from "../components/DataTable";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { navSection } from "../lib/navSections";
 
 const PALETTE = [
   "#22D3EE",
@@ -74,7 +75,7 @@ export function WordcloudPage() {
       <PageHeader
         icon={Cloud}
         title="Облако слов"
-        hint="Самые частые слова в комментариях"
+        hint={navSection("/wordcloud")?.hint}
         right={
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 text-xs text-muted">

@@ -19,6 +19,7 @@ import { counterpartyOf } from "../lib/yearReview";
 import { formatNum } from "../lib/format";
 import { TrendingUp, TrendingDown, Tags, Users, Receipt, Coins } from "lucide-react";
 import { SectionControls } from "../components/SectionControls";
+import { navSection } from "../lib/navSections";
 
 type Tab = "categories" | "payees" | "transactions";
 
@@ -115,7 +116,7 @@ export function TopPage() {
       <PageHeader
         icon={TrendingUp}
         title="Топ"
-        hint="Категории, контрагенты и крупнейшие операции"
+        hint={navSection("/top")?.hint}
         right={
           <InfoPopover>
             <p>

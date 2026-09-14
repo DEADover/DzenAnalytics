@@ -28,6 +28,7 @@ import { DateField } from "../components/DateField";
 import { CardHeader } from "../components/CardHeader";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { ProgressBar } from "../components/ProgressBar";
+import { navSection } from "../lib/navSections";
 
 function monthsBetween(fromIso: string, toIso: string): number {
   const a = new Date(fromIso);
@@ -239,7 +240,7 @@ export function GoalsPage() {
       <PageHeader
         title="Цели"
         icon={Target}
-        hint="Копите на конкретные цели и следите за прогрессом и расчётным сроком достижения"
+        hint={navSection("/goals")?.hint}
         right={
           // Hidden while the add form is open — the form has its own «Отмена»,
           // so a second one in the header would just be redundant.

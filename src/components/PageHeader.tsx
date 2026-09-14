@@ -17,7 +17,8 @@ interface Props {
    */
   iconTone?: string;
   /**
-   * Short subtitle / hint text shown under the title in muted style.
+   * Подпись рядом с заголовком: одной короткой строкой, что делает раздел.
+   * У разделов из «Ещё» — та же строчка, что в меню (`navSection(to).hint`).
    */
   hint?: ReactNode;
   /**
@@ -28,12 +29,6 @@ interface Props {
    * cleanly on narrow ones.
    */
   right?: ReactNode;
-  /**
-   * Allow the hint to wrap onto multiple lines instead of truncating to one.
-   * Off by default (keeps header heights uniform); opt in for pages with a
-   * genuinely longer subtitle.
-   */
-  hintWrap?: boolean;
 }
 
 /**
@@ -53,7 +48,6 @@ export function PageHeader({
   iconTone = "text-accent",
   hint,
   right,
-  hintWrap,
 }: Props) {
   return (
     <div className="flex items-center justify-between flex-wrap gap-3">
@@ -89,13 +83,13 @@ export function PageHeader({
                 читалась как служебная сноска, хотя на половине разделов именно
                 она объясняет, что страница делает. Ступень взята из той же
                 шкалы, что и строки в карточках дашборда, — крупнее подпись уже
-                начала бы спорить с заголовком. */}
-            <p
-              className={`text-muted text-[14.5px] min-w-0 ${hintWrap ? "" : "truncate"}`}
-              title={typeof hint === "string" ? hint : undefined}
-            >
-              {hint}
-            </p>
+                начала бы спорить с заголовком.
+
+                Без всплывающей подсказки и без обрезки: подсказка повторяла
+                бы ровно то, что уже написано, а текст, которому не хватило
+                строки, переносится вниз целиком. Подпись — одна короткая
+                строка; объяснения на абзац ей не место. */}
+            <p className="text-muted text-[14.5px] min-w-0">{hint}</p>
           </>
         )}
       </div>

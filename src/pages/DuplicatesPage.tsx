@@ -20,6 +20,7 @@ import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { navSection } from "../lib/navSections";
 
 export function DuplicatesPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -103,8 +104,7 @@ export function DuplicatesPage() {
         icon={Copy}
         iconTone="text-warn"
         title="Дубликаты"
-        hint="Подозрительно похожие операции: одинаковая сумма, тот же получатель и тот же тип в пределах окна — часто бывают при двойном импорте"
-        hintWrap
+        hint={navSection("/duplicates")?.hint}
         right={
           <div className="flex items-center gap-4 flex-wrap">
             {exclusionsCount > 0 && (

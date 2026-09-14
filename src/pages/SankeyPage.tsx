@@ -17,6 +17,7 @@ import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { navSection } from "../lib/navSections";
 
 const COLORS = {
   income: chartColor.income,
@@ -68,7 +69,7 @@ export function SankeyPage() {
     <PageHeader
       icon={GitFork}
       title="Потоки денег"
-      hint="Откуда пришли деньги и куда ушли — одной картиной"
+      hint={navSection("/sankey")?.hint}
       right={
         <InfoPopover>
           <p>

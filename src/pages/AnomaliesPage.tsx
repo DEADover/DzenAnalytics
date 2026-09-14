@@ -17,6 +17,7 @@ import { EmptyState } from "../components/EmptyState";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { SectionControls } from "../components/SectionControls";
+import { navSection } from "../lib/navSections";
 
 export function AnomaliesPage() {
   // Обороты и взаимозачёты не аномалии, а шум: категории, помеченные «не
@@ -87,8 +88,7 @@ export function AnomaliesPage() {
         icon={Zap}
         iconTone="text-warn"
         title="Аномалии"
-        hint="Необычные траты и резкие всплески по категориям"
-        hintWrap
+        hint={navSection("/anomalies")?.hint}
         right={
           <div className="flex items-center gap-2">
             {tab === "transactions" && (

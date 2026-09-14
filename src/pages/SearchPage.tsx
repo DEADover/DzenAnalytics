@@ -174,8 +174,7 @@ export function SearchPage() {
       <PageHeader
         icon={Search}
         title="Поиск"
-        hint="По получателю, комментарию, категории и счёту — несколько слов ищутся все сразу"
-        hintWrap
+        hint="По получателю, комментарию, категории и счёту"
       />
 
       <div className="card card-pad space-y-4">
