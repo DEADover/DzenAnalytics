@@ -23,6 +23,7 @@ export function MonthPicker({
   maxYM,
   active,
   mode = "month",
+  size = "sm",
   onSelect,
   onSelectYear,
   onStep,
@@ -35,6 +36,11 @@ export function MonthPicker({
   active: boolean;
   /** Что выбираем — месяц или год. */
   mode?: "month" | "year";
+  /**
+   * Ступень: `sm` 34 — ряд общего фильтра и шапки карточек, `md` 42 — ряд
+   * контролов раздела, где рядом дорожки крупной ступени.
+   */
+  size?: "sm" | "md";
   onSelect: (ym: string) => void;
   onSelectYear?: (year: number) => void;
   onStep: (dir: -1 | 1) => void;
@@ -107,7 +113,7 @@ export function MonthPicker({
       <button
         onClick={() => onStep(-1)}
         disabled={!canPrev}
-        className="seg-icon seg-icon-sm"
+        className={clsx("seg-icon", size === "md" ? "seg-icon-md" : "seg-icon-sm")}
         title={isYear ? "Предыдущий год" : "Предыдущий месяц"}
       >
         <ChevronLeft className="w-4 h-4" />
@@ -124,17 +130,23 @@ export function MonthPicker({
         }}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={clsx("seg-item seg-item-sm min-w-[118px]", active && "seg-on")}
+        className={clsx(
+          "seg-item",
+          size === "md" ? "seg-item-md min-w-[132px]" : "seg-item-sm min-w-[118px]",
+          active && "seg-on"
+        )}
       >
-        <CalendarRange className="w-3.5 h-3.5" />
+        <CalendarRange className={size === "md" ? "w-4 h-4" : "w-3.5 h-3.5"} />
         {isYear ? year : value ? monthLabel(value) : "Месяц"}
-        <ChevronDown className={clsx("w-3.5 h-3.5 transition-transform", open && "rotate-180")} />
+        <ChevronDown
+          className={clsx(size === "md" ? "w-4 h-4" : "w-3.5 h-3.5", "transition-transform", open && "rotate-180")}
+        />
       </button>
 
       <button
         onClick={() => onStep(1)}
         disabled={!canNext}
-        className="seg-icon seg-icon-sm"
+        className={clsx("seg-icon", size === "md" ? "seg-icon-md" : "seg-icon-sm")}
         title={isYear ? "Следующий год" : "Следующий месяц"}
       >
         <ChevronRight className="w-4 h-4" />
@@ -240,14 +252,18 @@ export function YearPicker({
   minYear,
   maxYear,
   onChange,
+  size = "sm",
 }: {
   year: number;
   minYear: number;
   maxYear: number;
   onChange: (year: number) => void;
+  /** `md` 42 — год раздела в ряду контролов; `sm` 34 — в шапке карточки. */
+  size?: "sm" | "md";
 }) {
   return (
     <MonthPicker
+      size={size}
       value={`${year}-01`}
       minYM={`${minYear}-01`}
       maxYM={`${maxYear}-12`}

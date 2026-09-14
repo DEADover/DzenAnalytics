@@ -57,6 +57,7 @@ import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 import { nextSort, sortRows, type SortState } from "../components/table/tableKit";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { SectionControls } from "../components/SectionControls";
 import { ProgressBar } from "../components/ProgressBar";
 import { Badge } from "../components/Badge";
 
@@ -168,10 +169,12 @@ export function YearReviewPage() {
     return (
       <div className="space-y-6">
         <PageHeader icon={Sparkles} title="Год в цифрах" hint="Как прошёл год в деньгах и чем отличался от прошлого" />
-        <SectionEmpty icon={Sparkles} title={`В данных нет операций за ${year} год`} />
         {years.length > 0 && (
-          <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} />
+          <SectionControls>
+            <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} size="md" />
+          </SectionControls>
         )}
+        <SectionEmpty icon={Sparkles} title={`В данных нет операций за ${year} год`} />
       </div>
     );
   }
@@ -188,40 +191,44 @@ export function YearReviewPage() {
         title={`Год в цифрах: ${year}`}
         hint="Как прошёл год в деньгах и чем отличался от прошлого"
         right={
-          <div className="flex items-center gap-2">
-            <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} />
-            <InfoPopover>
-              <p>
-                Всё на странице считается за <InfoTerm>календарный год</InfoTerm> —
-                с 1 января по 31 декабря, независимо от того, с какого числа у вас
-                начинается месяц в других отчётах. Проценты рядом с суммами —
-                сравнение с тем же периодом прошлого года; если данных за прошлый
-                год нет, их и не показываем.
-              </p>
-              <p>
-                Переводы между своими счетами в доход и расход не идут. Операции,
-                исключённые из аналитики на странице «Категории» (обороты,
-                взаимозачёты), сюда тоже не попадают — иначе рекорды набирались бы
-                из перекладываний между своими же счетами.
-              </p>
-              <p>
-                Всё, что считается «по дням» — средний расход, перерывы без трат, —
-                мерится по <InfoTerm>отрезку с данными</InfoTerm>: от первой
-                операции в вашей истории до сегодняшнего дня, а не по календарю.
-                Иначе у идущего года будущее засчитывалось бы за долгий перерыв в
-                тратах, а средний расход делился бы на дни, которых ещё не было.
-              </p>
-              <p>
-                Имя контрагента берётся из справочника, а не из банковской строки:
-                «DOSTAVKA PYATEROCHKA» и «DOSTAVKA IZ PYATEROCHK» — это одна
-                «Пятёрочка». Строка банка остаётся только там, где контрагент к
-                операции не привязан; такие можно разобрать в{" "}
-                <InfoTerm>Настройки → Справочники → Контрагенты</InfoTerm>.
-              </p>
-            </InfoPopover>
-          </div>
+          <InfoPopover>
+            <p>
+              Всё на странице считается за <InfoTerm>календарный год</InfoTerm> —
+              с 1 января по 31 декабря, независимо от того, с какого числа у вас
+              начинается месяц в других отчётах. Проценты рядом с суммами —
+              сравнение с тем же периодом прошлого года; если данных за прошлый
+              год нет, их и не показываем.
+            </p>
+            <p>
+              Переводы между своими счетами в доход и расход не идут. Операции,
+              исключённые из аналитики на странице «Категории» (обороты,
+              взаимозачёты), сюда тоже не попадают — иначе рекорды набирались бы
+              из перекладываний между своими же счетами.
+            </p>
+            <p>
+              Всё, что считается «по дням» — средний расход, перерывы без трат, —
+              мерится по <InfoTerm>отрезку с данными</InfoTerm>: от первой
+              операции в вашей истории до сегодняшнего дня, а не по календарю.
+              Иначе у идущего года будущее засчитывалось бы за долгий перерыв в
+              тратах, а средний расход делился бы на дни, которых ещё не было.
+            </p>
+            <p>
+              Имя контрагента берётся из справочника, а не из банковской строки:
+              «DOSTAVKA PYATEROCHKA» и «DOSTAVKA IZ PYATEROCHK» — это одна
+              «Пятёрочка». Строка банка остаётся только там, где контрагент к
+              операции не привязан; такие можно разобрать в{" "}
+              <InfoTerm>Настройки → Справочники → Контрагенты</InfoTerm>.
+            </p>
+          </InfoPopover>
         }
       />
+
+      {/* Год — рядом контролов раздела, над итогами: он меняет всю страницу.
+          В шапке он стоял в правом углу рядом с «?», а без данных за год —
+          вообще под пустым состоянием. */}
+      <SectionControls>
+        <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} size="md" />
+      </SectionControls>
 
       {/* Итоги года */}
       {/* Пять чисел в ряд с разделителями. Число операций стояло мелкой

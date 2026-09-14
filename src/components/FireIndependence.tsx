@@ -10,6 +10,7 @@ import { Tooltip } from "./Tooltip";
 import { TooltipFacts } from "./TooltipFacts";
 import { CardHeader } from "./CardHeader";
 import { ProgressBar } from "./ProgressBar";
+import { Slider } from "./Slider";
 
 /** FIRE goal on the 4%-rule: 25 годовых расходов = 300 месяцев. */
 const FIRE_MONTHS = 300;
@@ -333,33 +334,27 @@ export function FireIndependence({
         </div>
       </div>
 
-      {/* Interactive scenario slider */}
-      <div className="mt-4">
-        <div className="flex items-baseline justify-between gap-3 text-sm mb-1.5">
-          <span className="text-muted">Если откладывать долю дохода</span>
-          <span className="tabular-nums">
-            <span className="font-semibold">{scenarioRate}%</span>
-            <span className="text-muted"> → </span>
-            <span className={`font-semibold ${Number.isFinite(scenYears) ? "text-warn" : "text-muted"}`}>
+      {/* Сценарий: общий бегунок, как в «Что-если», — со своим значением
+          «доля → срок». */}
+      <Slider
+        layout="stacked"
+        className="mt-4"
+        label="Если откладывать долю дохода"
+        value={scenarioRate}
+        min={1}
+        max={99}
+        onChange={setScenarioRate}
+        format={(v) => `${v}%`}
+        display={
+          <>
+            {scenarioRate}%<span className="text-muted font-normal"> → </span>
+            <span className={Number.isFinite(scenYears) ? "text-warn" : "text-muted"}>
               {Number.isFinite(scenYears) ? yearsFmt(scenYears) : "—"}
             </span>
-          </span>
-        </div>
-        <input
-          type="range"
-          min={1}
-          max={99}
-          step={1}
-          value={scenarioRate}
-          onChange={(e) => setScenarioRate(Number(e.target.value))}
-          className="w-full"
-          style={{ accentColor: "rgb(var(--c-accent))" }}
-          aria-label="Доля дохода, которую откладывать"
-        />
-        <div className="text-[11px] text-muted mt-1">
-          Сейчас вы откладываете {currentRatePct}%. С учётом уже накопленного.
-        </div>
-      </div>
+          </>
+        }
+        hint={`Сейчас вы откладываете ${currentRatePct}%. С учётом уже накопленного`}
+      />
     </div>
   );
 }

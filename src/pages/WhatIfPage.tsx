@@ -19,6 +19,7 @@ import {
 } from "../lib/whatif";
 import { netWorthSeries } from "../lib/aggregations";
 import { CardHeader } from "../components/CardHeader";
+import { Slider } from "../components/Slider";
 import { HeadCell } from "../components/table/TableParts";
 import { cellClass } from "../components/table/tableKit";
 import { formatMoney, formatPct, formatFixed } from "../lib/format";
@@ -110,38 +111,30 @@ export function WhatIfPage() {
         title="Что-если — сценарии"
         hint="Как изменятся сбережения, капитал и срок до FIRE"
         right={
-          <div className="flex items-center gap-2">
-            {dirty && (
-              <button onClick={reset} className="btn-ghost text-xs">
-                <RotateCcw className="w-3.5 h-3.5" />
-                Сбросить
-              </button>
-            )}
-            <InfoPopover>
-              <p>
-                За точку отсчёта берём ваши{" "}
-                <InfoTerm>средние доход и расход за 6 месяцев</InfoTerm>.
-                Слайдеры меняют именно их: «расходы −10%» — это десять процентов
-                от среднего месячного расхода, а не от какой-то одной покупки.
-              </p>
-              <p>
-                Дальше всё считается в лоб, без процентов на остаток:{" "}
-                <InfoTerm>откладываете в месяц = доход − расход + «отложить
-                дополнительно»</InfoTerm>, а капитал через год — это стартовый
-                капитал плюс двенадцать таких месяцев. Инвестиционной доходности
-                здесь нет намеренно: это прикидка «что будет, если жить так же»,
-                а не прогноз портфеля.
-              </p>
-              <p>
-                <InfoTerm>Срок до FIRE</InfoTerm> — сколько лет копить до суммы,
-                на проценты с которой можно жить: годовые расходы{" "}
-                <InfoTerm>× 25</InfoTerm> (это правило 4%). Обратите внимание:
-                цель считается от НОВЫХ расходов, поэтому урезание трат
-                приближает FIRE дважды — и копится больше, и цель становится
-                меньше.
-              </p>
-            </InfoPopover>
-          </div>
+          <InfoPopover>
+            <p>
+              За точку отсчёта берём ваши{" "}
+              <InfoTerm>средние доход и расход за 6 месяцев</InfoTerm>.
+              Слайдеры меняют именно их: «расходы −10%» — это десять процентов
+              от среднего месячного расхода, а не от какой-то одной покупки.
+            </p>
+            <p>
+              Дальше всё считается в лоб, без процентов на остаток:{" "}
+              <InfoTerm>откладываете в месяц = доход − расход + «отложить
+              дополнительно»</InfoTerm>, а капитал через год — это стартовый
+              капитал плюс двенадцать таких месяцев. Инвестиционной доходности
+              здесь нет намеренно: это прикидка «что будет, если жить так же»,
+              а не прогноз портфеля.
+            </p>
+            <p>
+              <InfoTerm>Срок до FIRE</InfoTerm> — сколько лет копить до суммы,
+              на проценты с которой можно жить: годовые расходы{" "}
+              <InfoTerm>× 25</InfoTerm> (это правило 4%). Обратите внимание:
+              цель считается от НОВЫХ расходов, поэтому урезание трат
+              приближает FIRE дважды — и копится больше, и цель становится
+              меньше.
+            </p>
+          </InfoPopover>
         }
       />
 
@@ -149,38 +142,56 @@ export function WhatIfPage() {
         {/* Inputs */}
         <div className="card-tray card-pad space-y-5">
           <div>
-            <CardHeader icon={Coins} title="Основные параметры" />
-            <Slider
-              label="Изменение дохода"
-              value={inputs.incomeMul}
-              min={0.5}
-              max={2.0}
-              step={0.05}
-              format={(v) => `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`}
-              hint={`Текущий: ${formatMoney(baseScenario.avgIncome, base)}/мес → ${formatMoney(out.newIncome, base)}/мес`}
-              onChange={(v) => setInputs((prev) => ({ ...prev, incomeMul: v }))}
+            {/* «Сбросить» — в шапке карточки с бегунками, которые он
+                возвращает: в шапке раздела он появлялся через экран от них. */}
+            <CardHeader
+              icon={Coins}
+              title="Основные параметры"
+              right={
+                dirty && (
+                  <button onClick={reset} className="btn-ghost text-xs">
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Сбросить
+                  </button>
+                )
+              }
             />
-            <Slider
-              label="Изменение расхода"
-              value={inputs.expenseMul}
-              min={0.5}
-              max={1.5}
-              step={0.05}
-              format={(v) => `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`}
-              hint={`Текущий: ${formatMoney(baseScenario.avgExpense, base)}/мес → ${formatMoney(out.newExpense, base)}/мес`}
-              onChange={(v) => setInputs((prev) => ({ ...prev, expenseMul: v }))}
-            />
-            <Slider
-              label="Дополнительно отложить в месяц"
-              value={inputs.extraMonthlySave}
-              min={0}
-              max={Math.max(50000, baseScenario.avgIncome * 0.5)}
-              step={500}
-              format={(v) => `+${formatMoney(v, base)}`}
-              hint="Фиксированная сумма поверх нынешнего баланса доход−расход"
-              onChange={(v) => setInputs((prev) => ({ ...prev, extraMonthlySave: v }))}
-            />
-            <div className="mt-3">
+            <div className="space-y-4">
+              <Slider
+                layout="stacked"
+                label="Изменение дохода"
+                value={inputs.incomeMul}
+                min={0.5}
+                max={2.0}
+                step={0.05}
+                format={(v) => `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`}
+                hint={`Текущий: ${formatMoney(baseScenario.avgIncome, base)}/мес → ${formatMoney(out.newIncome, base)}/мес`}
+                onChange={(v) => setInputs((prev) => ({ ...prev, incomeMul: v }))}
+              />
+              <Slider
+                layout="stacked"
+                label="Изменение расхода"
+                value={inputs.expenseMul}
+                min={0.5}
+                max={1.5}
+                step={0.05}
+                format={(v) => `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`}
+                hint={`Текущий: ${formatMoney(baseScenario.avgExpense, base)}/мес → ${formatMoney(out.newExpense, base)}/мес`}
+                onChange={(v) => setInputs((prev) => ({ ...prev, expenseMul: v }))}
+              />
+              <Slider
+                layout="stacked"
+                label="Дополнительно отложить в месяц"
+                value={inputs.extraMonthlySave}
+                min={0}
+                max={Math.max(50000, baseScenario.avgIncome * 0.5)}
+                step={500}
+                format={(v) => `+${formatMoney(v, base)}`}
+                hint="Фиксированная сумма поверх нынешнего баланса доход−расход"
+                onChange={(v) => setInputs((prev) => ({ ...prev, extraMonthlySave: v }))}
+              />
+            </div>
+            <div className="mt-4">
               <label className="label block mb-1">Стартовый капитал</label>
               <div className="flex items-center gap-2">
                 <input
@@ -214,6 +225,7 @@ export function WhatIfPage() {
                   return (
                     <Slider
                       key={c.category}
+                      layout="stacked"
                       label={c.category}
                       value={mul}
                       min={0}
@@ -359,45 +371,6 @@ export function WhatIfPage() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function Slider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  format,
-  hint,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  format: (v: number) => string;
-  hint?: string;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div className="mb-3 last:mb-0">
-      <div className="flex items-center justify-between text-sm">
-        <span>{label}</span>
-        <span className="font-mono tabular-nums text-accent [word-spacing:-0.22em]">{format(value)}</span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-accent"
-      />
-      {hint && <div className="text-[11px] text-muted">{hint}</div>}
     </div>
   );
 }

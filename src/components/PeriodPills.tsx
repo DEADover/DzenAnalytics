@@ -11,9 +11,9 @@ const PRESETS: { value: DatePreset; label: string }[] = [
 ];
 
 /**
- * Compact period selector (preset pills) for the history charts (Cash-flow,
- * Trends) that want their own period independent of the global «месяц» filter,
- * so they default to a meaningful span instead of a single current month.
+ * Свой период раздела — пресеты пилюлями, независимо от периода в общем
+ * фильтре: раздел по умолчанию смотрит на осмысленный отрезок, а не на один
+ * текущий месяц. Стоит в ряду контролов раздела, поэтому ступень крупная, 42.
  */
 export function PeriodPills({
   value,
@@ -24,7 +24,6 @@ export function PeriodPills({
 }) {
   return (
     <Segmented
-      tight
       label="Период"
       value={value}
       onChange={onChange}

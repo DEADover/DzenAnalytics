@@ -20,6 +20,8 @@ import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { SectionControls } from "../components/SectionControls";
+import { Slider } from "../components/Slider";
 
 export function DuplicatesPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -104,34 +106,29 @@ export function DuplicatesPage() {
         iconTone="text-warn"
         title="Дубликаты"
         hint="Удалите лишние копии или отметьте, что операции разные"
-        right={
-          <div className="flex items-center gap-4 flex-wrap">
-            {exclusionsCount > 0 && (
-              <Tooltip content="Управление исключениями «не дубликаты»">
-                <button
-                  onClick={() => setExclusionsModalOpen(true)}
-                  className="btn-ghost text-xs"
-                >
-                  <ShieldOff className="w-3.5 h-3.5" />
-                  Исключения ({exclusionsCount})
-                </button>
-              </Tooltip>
-            )}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted">Окно (дней)</span>
-              <input
-                type="range"
-                min="0"
-                max="14"
-                value={windowDays}
-                onChange={(e) => setWindowDays(Number(e.target.value))}
-                className="accent-accent"
-              />
-              <span className="text-xs tabular-nums w-6">{windowDays}</span>
-            </div>
-          </div>
-        }
       />
+
+      {/* Что считать копией — рядом контролов раздела: разница в датах меняет
+          весь список групп ниже, а исключения — то, что из него убрано. В
+          шапке бегунок стоял в правом углу, через экран от групп. */}
+      <SectionControls>
+        <Slider
+          label="Разница в датах"
+          value={windowDays}
+          min={0}
+          max={14}
+          onChange={setWindowDays}
+          format={(v) => `${v} дн`}
+        />
+        {exclusionsCount > 0 && (
+          <Tooltip content="Группы, отмеченные «Не дубликаты»">
+            <button onClick={() => setExclusionsModalOpen(true)} className="btn-ghost btn-lg">
+              <ShieldOff className="w-4 h-4" />
+              Исключения ({formatNum(exclusionsCount)})
+            </button>
+          </Tooltip>
+        )}
+      </SectionControls>
 
       <StatRow>
         <StatCell label="Групп дубликатов" value={formatNum(groups.length)} tone="warn" />
@@ -150,7 +147,9 @@ export function DuplicatesPage() {
           icon={AlertCircle}
           title="Дубликатов не найдено"
         >
-          В окне ±{windowDays} дн нет подозрительно похожих операций
+          {windowDays < 14
+            ? "Увеличьте разницу в датах выше — банк мог провести копию позже"
+            : "Даже с разницей в датах до 14 дн похожих операций нет"}
         </SectionEmpty>
       ) : (
         <div className="space-y-4">

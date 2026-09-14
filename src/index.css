@@ -442,6 +442,83 @@ h2,
   .overline {
     @apply text-[11px] leading-4 uppercase tracking-wide text-muted font-normal;
   }
+  /**
+   * Бегунок (`Slider`, `RangeInput`): дорожка 4 px цвета канта, пройденная
+   * часть — акцент, ручка 16 px акцентом в кольце цвета карточки.
+   *
+   * Системный бегунок, даже окрашенный акцентом, в каждом браузере свой: в
+   * Chrome дорожка вдвое толще и с кантом, и рядом с дорожками-переключателями
+   * он выглядел чужой деталью. Пройденную часть рисует градиент по
+   * `--range-fill` — у WebKit нет для неё отдельного псевдоэлемента.
+   */
+  .range {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 16px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range:focus {
+    outline: none;
+  }
+  .range:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: linear-gradient(
+      to right,
+      rgb(var(--c-accent)) 0 var(--range-fill, 0%),
+      rgb(var(--c-border)) var(--range-fill, 0%) 100%
+    );
+  }
+  .range::-moz-range-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: rgb(var(--c-border));
+  }
+  .range::-moz-range-progress {
+    height: 4px;
+    border-radius: 9999px;
+    background: rgb(var(--c-accent));
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    /* Ручка выше дорожки на 12 px — поднимаем на половину. */
+    margin-top: -6px;
+    border-radius: 9999px;
+    border: 2px solid rgb(var(--c-panel));
+    background: rgb(var(--c-accent));
+    box-shadow: 0 1px 3px rgb(15 23 42 / 0.25);
+    transition: box-shadow 200ms;
+  }
+  .range::-moz-range-thumb {
+    box-sizing: border-box;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    border: 2px solid rgb(var(--c-panel));
+    background: rgb(var(--c-accent));
+    box-shadow: 0 1px 3px rgb(15 23 42 / 0.25);
+    transition: box-shadow 200ms;
+  }
+  .range:not(:disabled):hover::-webkit-slider-thumb {
+    box-shadow: 0 0 0 4px rgb(var(--c-accent) / 0.15), 0 1px 3px rgb(15 23 42 / 0.25);
+  }
+  .range:not(:disabled):hover::-moz-range-thumb {
+    box-shadow: 0 0 0 4px rgb(var(--c-accent) / 0.15), 0 1px 3px rgb(15 23 42 / 0.25);
+  }
+  .range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 4px rgb(var(--c-accent) / 0.4);
+  }
+  .range:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 4px rgb(var(--c-accent) / 0.4);
+  }
   .stat-num {
     @apply text-2xl font-semibold tabular-nums font-mono;
     /* Geist Mono's separator space is as wide as a digit, so «3 667 479»

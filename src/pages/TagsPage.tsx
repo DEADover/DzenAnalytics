@@ -25,6 +25,7 @@ import { tagLabel, tagsOf, type TagMode } from "../lib/operationTags";
 import type { Transaction } from "../types";
 import { CardHeader } from "../components/CardHeader";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { SectionControls } from "../components/SectionControls";
 
 /**
  * Значок тега. Хэштег — решёткой, как его набирают в комментарии. Вторая
@@ -42,7 +43,10 @@ function TagMark({ tag, mode, size = "w-3 h-3" }: { tag: string; mode: TagMode; 
   );
 }
 
-/** Переключатель режима прямо в шапке: эффект выбора виден здесь же. */
+/**
+ * Что считать тегами — в ряду контролов раздела, под общим фильтром: выбор
+ * меняет всю страницу ниже. В шапке он стоял в правом углу мелкой ступенью.
+ */
 function TagModeSwitch() {
   const mode = useTagModeStore((s) => s.mode);
   const setMode = useTagModeStore((s) => s.setMode);
@@ -52,7 +56,6 @@ function TagModeSwitch() {
   ];
   return (
     <Segmented
-      size="sm"
       label="Что считать тегами"
       value={mode}
       onChange={(next) => void setMode(next)}
@@ -342,16 +345,22 @@ export function TagsPage() {
   // Подпись под заголовком — статичная. Цифры выборки живут рядом с тем, что
   // они описывают: счётчики тегов — в шапке облака, знаменатели процентов — в
   // шапке таблицы. А «тегов нет» — не подпись раздела, а его пустое
-  // состояние: оно стоит под фильтрами.
+  // состояние: оно стоит под фильтрами. Шапка, фильтр и режим тегов — одни на
+  // обе ветки, пустую и полную.
   const header = (
-    <PageHeader icon={Hash} title="Теги" hint="Итоги по каждой теме: проекту, поездке, ремонту" right={<TagModeSwitch />} />
+    <>
+      <PageHeader icon={Hash} title="Теги" hint="Итоги по каждой теме: проекту, поездке, ремонту" />
+      <GlobalFilters />
+      <SectionControls>
+        <TagModeSwitch />
+      </SectionControls>
+    </>
   );
 
   if (tags.length === 0) {
     return (
       <div className="space-y-6">
         {header}
-        <GlobalFilters />
         <SectionEmpty
           icon={Hash}
           title={mode === "hashtags" ? "В выборке нет тегов" : "В выборке нет операций со второй категорией"}
@@ -367,7 +376,6 @@ export function TagsPage() {
   return (
     <div className="space-y-6">
       {header}
-      <GlobalFilters />
 
       <div className="card-tray card-pad">
         <CardHeader

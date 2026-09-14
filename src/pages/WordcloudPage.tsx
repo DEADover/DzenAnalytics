@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { pluralRu } from "../lib/plural";
-import { Cloud, MousePointerClick, ListOrdered } from "lucide-react";
+import { Cloud, ListOrdered } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -13,6 +13,9 @@ import { DataTable } from "../components/DataTable";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { SectionControls } from "../components/SectionControls";
+import { Slider } from "../components/Slider";
+import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 
 const PALETTE = [
   "#22D3EE",
@@ -76,40 +79,50 @@ export function WordcloudPage() {
         title="Облако слов"
         hint="Чем крупнее слово, тем чаще оно встречается"
         right={
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 text-xs text-muted">
-              <span>Мин. длина</span>
-              <input
-                type="range"
-                min="2"
-                max="6"
-                value={minLen}
-                onChange={(e) => setMinLen(Number(e.target.value))}
-                className="accent-accent"
-              />
-              <span className="tabular-nums w-4">{minLen}</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted">
-              <span>топ</span>
-              <input
-                type="range"
-                min="40"
-                max="300"
-                step="20"
-                value={topN}
-                onChange={(e) => setTopN(Number(e.target.value))}
-                className="accent-accent"
-              />
-              <span className="tabular-nums w-10">{topN}</span>
-            </div>
-            <span className="inline-flex items-center gap-1 text-xs text-muted">
-              <MousePointerClick className="w-3.5 h-3.5" />
-              Кликабельные
-            </span>
-          </div>
+          <InfoPopover>
+            <p>
+              Слова берём из комментариев к операциям за период и фильтры сверху,
+              переводы не считаем. Слово засчитывается один раз на операцию и
+              попадает в облако, если встретилось хотя бы в{" "}
+              <InfoTerm>двух операциях</InfoTerm>. Числа и служебные слова вроде
+              «и», «на», «для» пропускаем.
+            </p>
+            <p>
+              <InfoTerm>«Длина слова»</InfoTerm> отсекает слова короче, чем
+              выбрано, <InfoTerm>«Слов в облаке»</InfoTerm> — сколько самых частых
+              показать. Размер слова — частота, цвет — только для удобства чтения.
+            </p>
+            <p>Нажатие на слово или строку таблицы открывает операции с ним.</p>
+          </InfoPopover>
         }
       />
       <GlobalFilters />
+
+      {/* Бегунки — рядом контролов раздела: они меняют и облако, и итоги, и
+          таблицу. В шапке они стояли без рамки, у одного подпись была со
+          строчной («топ»), а рядом висела пометка «Кликабельные» — теперь это
+          сказано в «?». */}
+      <SectionControls>
+        <div className="flex flex-wrap items-center gap-3">
+          <Slider
+            label="Длина слова"
+            value={minLen}
+            min={2}
+            max={6}
+            onChange={setMinLen}
+            format={(v) => `от ${v} букв`}
+          />
+          <Slider
+            label="Слов в облаке"
+            value={topN}
+            min={40}
+            max={300}
+            step={20}
+            onChange={setTopN}
+            format={(v) => formatNum(v)}
+          />
+        </div>
+      </SectionControls>
 
       <StatRow>
         <StatCell label="Уникальных слов" value={formatNum(words.length)} />

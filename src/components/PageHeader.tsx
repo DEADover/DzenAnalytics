@@ -23,11 +23,14 @@ interface Props {
    */
   hint?: ReactNode;
   /**
-   * Optional right-aligned slot for page-level actions
-   * (e.g. "Снимок PNG", "Экспорт", year selector). The header arranges
-   * itself with `flex items-end justify-between flex-wrap gap-3` so this
-   * stays balanced against the title block on wide viewports and wraps
-   * cleanly on narrow ones.
+   * Правый угол: «?» о разделе и действия над разделом целиком («Новая
+   * цель», «Очистить корзину»), компактной ступенью 34.
+   *
+   * Настройкам того, что показано, — бегункам, году, режиму, периоду — здесь
+   * не место: они стоят в `SectionControls` под общим фильтром, рядом с тем,
+   * что меняют. В шапке бегунок оказывался в другом конце экрана от таблицы,
+   * которую настраивал, а подписи вроде «период выбирается ниже» указывали
+   * мимо.
    */
   right?: ReactNode;
 }

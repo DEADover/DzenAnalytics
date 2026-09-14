@@ -1536,26 +1536,11 @@ export function AccountsPage() {
         title="Счета"
         hint="Остатки, их история и обороты за период"
         right={
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Значок стоит слева от «Калибровки». Ряд прижат к правому краю,
-                поэтому появление и исчезновение САМОГО ЛЕВОГО элемента ничего
-                не двигает: короче становится только левый край ряда. */}
-            {tab === "capital" && (
-              <InfoPopover label="Что делают фильтры на «Капитале»">
-                <p>{CAPITAL_FILTERS_HINT}</p>
-              </InfoPopover>
-            )}
-            {zenLoaded && !zenToken && (
-              <button
-                onClick={() => setCalibOpen((o) => !o)}
-                className={`btn-ghost text-xs ${calibration ? "border-accent2 text-accent2" : ""}`}
-                title="Привязать график к фактическому балансу"
-              >
-                <Settings2 className="w-3.5 h-3.5" />
-                {calibration ? "Калибровка вкл." : "Калибровка"}
-              </button>
-            )}
-          </div>
+          tab === "capital" && (
+            <InfoPopover label="Что делают фильтры на «Капитале»">
+              <p>{CAPITAL_FILTERS_HINT}</p>
+            </InfoPopover>
+          )
         }
       />
       {/* Панель больше не гаснет: фильтр в деле на обеих вкладках. На «Капитале»
@@ -1573,7 +1558,9 @@ export function AccountsPage() {
 
       {/* Выбор раздела меняет страницу целиком — рядом контролов раздела, как
           в «Топе» и «Категориях». В шапке он стоял рядом с кнопками ступени 34
-          и был выше их на восемь пикселей. */}
+          и был выше их на восемь пикселей. «Калибровка» — там же, справа: это
+          настройка графика «Капитала», и только там она что-то меняет. В шапке
+          она стояла и на «Движении», где нажатие ничего не показывало. */}
       <SectionControls>
         <Segmented
           tabs
@@ -1597,6 +1584,17 @@ export function AccountsPage() {
             },
           ]}
         />
+        {tab === "capital" && zenLoaded && !zenToken && (
+          <button
+            onClick={() => setCalibOpen((o) => !o)}
+            aria-expanded={calibOpen}
+            className={`btn-ghost btn-lg ${calibration ? "border-accent2 text-accent2" : ""}`}
+            title="Привязать график к фактическому балансу"
+          >
+            <Settings2 className="w-4 h-4" />
+            {calibration ? "Калибровка вкл." : "Калибровка"}
+          </button>
+        )}
       </SectionControls>
 
       {tab === "capital" && calibOpen && !zenToken && (

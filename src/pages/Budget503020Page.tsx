@@ -21,6 +21,7 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { buildNeedsWants, savingsRateSeries } from "../lib/needsWants";
 import { PeriodPills } from "../components/PeriodPills";
+import { SectionControls } from "../components/SectionControls";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { CardHeader } from "../components/CardHeader";
@@ -115,9 +116,14 @@ export function Budget503020Page() {
         icon={PieIcon}
         title="50/30/20"
         hint="Укладываются ли ваши траты в правило 50/30/20"
-        right={<PeriodPills value={period} onChange={setPeriod} />}
       />
-      <GlobalFilters showDateRange={false} dateRangeHint="Правило 50/30/20 считается за месяц, выбранный ниже" />
+      <GlobalFilters showDateRange={false} dateRangeHint="Правило 50/30/20 считается за период, выбранный ниже" />
+
+      {/* Свой период раздела — рядом контролов раздела, под фильтром: подпись
+          фильтра говорит «выбранный ниже», а пилюли стояли выше, в шапке. */}
+      <SectionControls>
+        <PeriodPills value={period} onChange={setPeriod} />
+      </SectionControls>
 
       <details className="card-tray card-pad text-sm group">
         <summary className="cursor-pointer flex items-center gap-2 font-medium list-none">

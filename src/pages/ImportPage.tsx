@@ -85,6 +85,7 @@ import {
 import * as db from "../lib/db";
 import { ImportXlsxCard } from "../components/ImportXlsxCard";
 import { Callout } from "../components/Callout";
+import { RangeInput } from "../components/Slider";
 
 type Mode = "replace" | "merge";
 
@@ -1427,17 +1428,14 @@ export function ImportPage() {
               <span className="text-muted text-[12px]" aria-hidden>
                 А
               </span>
-              <input
-                type="range"
+              <RangeInput
+                value={tableFontLevel}
                 min={1}
                 max={5}
-                step={1}
-                value={tableFontLevel}
-                onChange={(e) =>
-                  setTableFontLevel(Number(e.target.value) as TableFontLevel)
-                }
-                className="w-40 accent-accent cursor-pointer"
-                aria-label="Размер текста в таблицах"
+                onChange={(v) => setTableFontLevel(v as TableFontLevel)}
+                ariaLabel="Размер текста в таблицах"
+                valueText={TABLE_FONT_LABELS[tableFontLevel]}
+                className="w-40"
               />
               <span className="text-muted text-[18px]" aria-hidden>
                 А
