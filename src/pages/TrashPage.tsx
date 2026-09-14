@@ -18,7 +18,6 @@ import { PageHeader } from "../components/PageHeader";
 import type { Transaction } from "../types";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { Callout } from "../components/Callout";
-import { navSection } from "../lib/navSections";
 
 /**
  * «Корзина» — locally-deleted (hidden) transactions and a way to bring
@@ -127,7 +126,7 @@ export function TrashPage() {
         <PageHeader
           icon={Trash2}
           title="Удалённые"
-          hint={navSection("/trash")?.hint}
+          hint="Пока операции здесь, в расчётах они не участвуют"
         />
         <SectionEmpty
           icon={Trash2}
@@ -145,7 +144,7 @@ export function TrashPage() {
       <PageHeader
         icon={Trash2}
         title="Удалённые"
-        hint={navSection("/trash")?.hint}
+        hint="Пока операции здесь, в расчётах они не участвуют"
         right={
           <div className="flex items-center gap-2">
             <button

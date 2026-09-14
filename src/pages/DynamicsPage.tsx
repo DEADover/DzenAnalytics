@@ -49,7 +49,6 @@ import { ChartTooltipCard, TooltipFacts } from "../components/TooltipFacts";
 import { MultiSelect } from "../components/MultiSelect";
 import { InfoPopover } from "../components/InfoPopover";
 import { SectionEmpty } from "../components/SectionEmpty";
-import { navSection } from "../lib/navSections";
 
 const METRICS: DynamicsMetric[] = ["expense", "income", "net", "balance"];
 const GRANULARITIES: Granularity[] = ["day", "week", "month", "year"];
@@ -224,7 +223,7 @@ export function DynamicsPage() {
       <PageHeader
         icon={Activity}
         title="Динамика"
-        hint={navSection("/dynamics")?.hint}
+        hint="Как менялись траты и доходы — в целом или у одного получателя"
       />
 
       <GlobalFilters period={lp} />

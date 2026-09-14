@@ -22,7 +22,6 @@ import { DataTable } from "../components/DataTable";
 import type { Transaction } from "../types";
 import type { RuleField } from "../store/useCategoryRulesStore";
 import { SectionEmpty } from "../components/SectionEmpty";
-import { navSection } from "../lib/navSections";
 
 /** Build the rule key for a suggestion: by получатель when present, otherwise
  *  by the comment. Some operations (dividend payouts, bank fees) have no payee
@@ -158,7 +157,7 @@ export function UncategorizedPage() {
       <PageHeader
         icon={Tag}
         title="Без категории"
-        hint={navSection("/uncategorized")?.hint}
+        hint="Примите предложенные категории или выберите свои"
       />
 
       <StatRow>

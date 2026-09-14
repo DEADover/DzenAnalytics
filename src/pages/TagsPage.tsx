@@ -25,7 +25,6 @@ import { tagLabel, tagsOf, type TagMode } from "../lib/operationTags";
 import type { Transaction } from "../types";
 import { CardHeader } from "../components/CardHeader";
 import { SectionEmpty } from "../components/SectionEmpty";
-import { navSection } from "../lib/navSections";
 
 /**
  * Значок тега. Хэштег — решёткой, как его набирают в комментарии. Вторая
@@ -340,12 +339,12 @@ export function TagsPage() {
 
   if (transactions.length === 0) return <EmptyState />;
 
-  // Подпись под заголовком — статичная и та же, что в меню «Ещё». Цифры
-  // выборки живут рядом с тем, что они описывают: счётчики тегов — в шапке
-  // облака, знаменатели процентов — в шапке таблицы. А «тегов нет» — не
-  // подпись раздела, а его пустое состояние: оно стоит под фильтрами.
+  // Подпись под заголовком — статичная. Цифры выборки живут рядом с тем, что
+  // они описывают: счётчики тегов — в шапке облака, знаменатели процентов — в
+  // шапке таблицы. А «тегов нет» — не подпись раздела, а его пустое
+  // состояние: оно стоит под фильтрами.
   const header = (
-    <PageHeader icon={Hash} title="Теги" hint={navSection("/tags")?.hint} right={<TagModeSwitch />} />
+    <PageHeader icon={Hash} title="Теги" hint="Итоги по каждой теме: проекту, поездке, ремонту" right={<TagModeSwitch />} />
   );
 
   if (tags.length === 0) {

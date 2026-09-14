@@ -70,7 +70,6 @@ import { ChartTooltipCard, TooltipFacts, SeriesTooltip } from "../components/Too
 import { DataTable } from "../components/DataTable";
 import { toneOfSigned } from "../components/table/tableKit";
 import type { MonthBucket } from "../lib/aggregations";
-import { navSection } from "../lib/navSections";
 
 export function CashflowPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -232,7 +231,7 @@ export function CashflowPage() {
       <PageHeader
         icon={LineChartIcon}
         title="Cash-flow"
-        hint={navSection("/cashflow")?.hint}
+        hint="Сколько остаётся после всех трат и больше ли, чем год назад"
       />
       <GlobalFilters period={lp} />
 

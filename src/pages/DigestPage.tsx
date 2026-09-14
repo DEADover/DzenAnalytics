@@ -24,7 +24,6 @@ import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 import { nextSort, sortRows, type SortState } from "../components/table/tableKit";
 import type { Transaction } from "../types";
 import { SectionEmpty } from "../components/SectionEmpty";
-import { navSection } from "../lib/navSections";
 
 
 type Tab = "week" | "month";
@@ -55,7 +54,7 @@ export function DigestPage() {
       <PageHeader
         icon={Newspaper}
         title="Дайджест"
-        hint={navSection("/digest")?.hint}
+        hint="Что изменилось по сравнению с предыдущей неделей или месяцем"
         right={
           <InfoPopover>
             <p>

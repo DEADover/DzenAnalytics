@@ -36,7 +36,6 @@ import {
   chartColor,
 } from "../lib/format";
 import { Callout } from "../components/Callout";
-import { navSection } from "../lib/navSections";
 
 const NEEDS_COLOR = chartColor.accent;
 const WANTS_COLOR = chartColor.warn;
@@ -115,7 +114,7 @@ export function Budget503020Page() {
       <PageHeader
         icon={PieIcon}
         title="50/30/20"
-        hint={navSection("/50-30-20")?.hint}
+        hint="Укладываются ли ваши траты в правило 50/30/20"
         right={<PeriodPills value={period} onChange={setPeriod} />}
       />
       <GlobalFilters showDateRange={false} dateRangeHint="Правило 50/30/20 считается за месяц, выбранный ниже" />

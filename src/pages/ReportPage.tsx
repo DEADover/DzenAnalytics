@@ -33,7 +33,6 @@ import { PageHeader } from "../components/PageHeader";
 import { Segmented } from "../components/Segmented";
 import type { Transaction } from "../types";
 import { SectionEmpty } from "../components/SectionEmpty";
-import { navSection } from "../lib/navSections";
 
 const SCALES: ReportScale[] = ["month", "quarter", "year", "total"];
 
@@ -359,7 +358,7 @@ export function ReportPage() {
       <PageHeader
         title="Доходы и расходы"
         icon={TableIcon}
-        hint={navSection("/report")?.hint}
+        hint="Как менялась каждая категория от периода к периоду"
       />
 
       <GlobalFilters period={lp} />
