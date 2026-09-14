@@ -43,6 +43,7 @@ import {
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
+  chartColor,
 } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
@@ -59,8 +60,8 @@ import { SectionEmpty } from "../components/SectionEmpty";
 import { ProgressBar } from "../components/ProgressBar";
 import { Badge } from "../components/Badge";
 
-const INCOME = "#10B981";
-const EXPENSE = "#EF4444";
+const INCOME = chartColor.income;
+const EXPENSE = chartColor.expense;
 
 /** «14 марта» — дата без года: год и так в заголовке страницы. */
 function dayLabel(iso: string): string {

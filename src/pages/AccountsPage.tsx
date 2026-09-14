@@ -100,6 +100,7 @@ import {
   chartAxisStroke,
   chartTotalStroke,
   niceStep,
+  chartColor,
 } from "../lib/format";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import { EmptyState } from "../components/EmptyState";
@@ -127,6 +128,7 @@ import { debtKey, parseDebtKey, withDebtCounterparties } from "../lib/debtFilter
 import { pluralRu } from "../lib/plural";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { Badge } from "../components/Badge";
+import { SectionControls } from "../components/SectionControls";
 
 const STACK_COLORS = [
   "#22D3EE", "#A78BFA", "#F59E0B", "#10B981", "#EC4899",
@@ -137,9 +139,9 @@ const STACK_COLORS = [
 const NEG_ZONE = 0.1;
 
 /** Цвет линии «Совокупного баланса» — и самой линии, и метки в подсказке. */
-const NET_STROKE = "#22D3EE";
+const NET_STROKE = chartColor.accent;
 /** Цвет линии «Изменения по фильтру» — там же. */
-const FLOW_STROKE = "#A78BFA";
+const FLOW_STROKE = chartColor.accent2;
 
 // Типы настроек показа переехали в свой стор вместе с самими настройками:
 // страница их только читает. «Капитал» — остатки и их история, «Движение» —
@@ -1535,45 +1537,14 @@ export function AccountsPage() {
         hint="Остатки на счетах, их история и обороты за период"
         right={
           <div className="flex flex-wrap items-center gap-2">
-            {/* Переключатели «Вся история / По фильтрам» и «По счетам /
-                Совокупно» жили здесь, в шапке страницы, и по ним нельзя было
-                понять, на что каждый влияет. Теперь каждый стоит там, где
-                действует: первый — над блоком показателей и графиков, которые
-                он пересчитывает, второй — в карточке своего графика.
-
-                А вот выбор раздела здесь как раз на месте: он меняет страницу
-                целиком, и стоит там же, где такой же выбор на «Категориях». */}
-            {/* Значок стоит слева от переключателя, а не между ним и
-                «Калибровкой». Ряд прижат к правому краю, поэтому появление и
-                исчезновение САМОГО ЛЕВОГО элемента ничего не двигает: короче
-                становится только левый край ряда. Стоял бы он в середине — при
-                переходе на «Движение» кнопки прыгали бы вбок. */}
+            {/* Значок стоит слева от «Калибровки». Ряд прижат к правому краю,
+                поэтому появление и исчезновение САМОГО ЛЕВОГО элемента ничего
+                не двигает: короче становится только левый край ряда. */}
             {tab === "capital" && (
               <InfoPopover label="Что делают фильтры на «Капитале»">
                 <p>{CAPITAL_FILTERS_HINT}</p>
               </InfoPopover>
             )}
-            <Segmented
-              value={tab}
-              onChange={setTab}
-              label="Разделы страницы «Счета»"
-              options={[
-                {
-                  value: "capital",
-                  label: "Капитал",
-                  icon: Landmark,
-                  // Не «фильтру не подчиняется»: период на этой вкладке работает —
-                  // просто выбирает показанный отрезок, а не пересчитывает суммы.
-                  title: "Сколько денег на счетах и как менялось",
-                },
-                {
-                  value: "flow",
-                  label: "Движение",
-                  icon: ArrowLeftRight,
-                  title: "Поступления и списания за выбранный период",
-                },
-              ]}
-            />
             {zenLoaded && !zenToken && (
               <button
                 onClick={() => setCalibOpen((o) => !o)}
@@ -1599,6 +1570,34 @@ export function AccountsPage() {
         showDataFilters={tab !== "capital"}
         dataFiltersHint={CAPITAL_FILTERS_HINT}
       />
+
+      {/* Выбор раздела меняет страницу целиком — рядом контролов раздела, как
+          в «Топе» и «Категориях». В шапке он стоял рядом с кнопками ступени 34
+          и был выше их на восемь пикселей. */}
+      <SectionControls>
+        <Segmented
+          tabs
+          value={tab}
+          onChange={setTab}
+          label="Разделы страницы «Счета»"
+          options={[
+            {
+              value: "capital",
+              label: "Капитал",
+              icon: Landmark,
+              // Не «фильтру не подчиняется»: период на этой вкладке работает —
+              // просто выбирает показанный отрезок, а не пересчитывает суммы.
+              title: "Сколько денег на счетах и как менялось",
+            },
+            {
+              value: "flow",
+              label: "Движение",
+              icon: ArrowLeftRight,
+              title: "Поступления и списания за выбранный период",
+            },
+          ]}
+        />
+      </SectionControls>
 
       {tab === "capital" && calibOpen && !zenToken && (
         <div className="card card-pad bg-accent2/5 border-accent2/40">

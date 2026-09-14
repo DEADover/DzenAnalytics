@@ -149,17 +149,17 @@ export function TrashPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => restoreTransactionMany(deletedTxs.map((t) => t.id))}
-              className="btn-ghost text-sm"
+              className="btn-ghost text-xs"
             >
-              <Undo2 className="w-4 h-4" />
+              <Undo2 className="w-3.5 h-3.5" />
               Восстановить все ({formatNum(deletedTxs.length)})
             </button>
             <button
               onClick={handlePurge}
-              className="btn-danger text-sm"
+              className="btn-danger text-xs"
               title="Окончательно удалить все операции из корзины"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-3.5 h-3.5" />
               Очистить корзину
             </button>
           </div>

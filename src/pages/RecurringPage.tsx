@@ -34,6 +34,7 @@ import { confirm } from "../store/useConfirmStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { ProgressBar } from "../components/ProgressBar";
+import { SectionControls } from "../components/SectionControls";
 
 // One pill per coarse cadence bucket, plus an "all" pseudo-option.
 // Order matches the user's likely usage frequency on this page:
@@ -617,14 +618,15 @@ export function RecurringPage() {
       />
 
       {/* Page-level tabs: Zen plans vs our own detection (#3). */}
-      <Segmented
-        tabs
-        label="Разделы страницы"
-        value={pageTab}
-        onChange={setPageTab}
-        className="flex w-fit"
-        options={PAGE_TABS.map((t) => ({ value: t.id, label: t.label, icon: t.icon }))}
-      />
+      <SectionControls>
+        <Segmented
+          tabs
+          label="Разделы страницы"
+          value={pageTab}
+          onChange={setPageTab}
+          options={PAGE_TABS.map((t) => ({ value: t.id, label: t.label, icon: t.icon }))}
+        />
+      </SectionControls>
 
       {/* ══ Планы из Дзен-мани (issue #47) ══════════════════════════════════ */}
       {pageTab === "zen" && (

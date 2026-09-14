@@ -25,6 +25,7 @@ import { CategoryTable, type CategoryTableRow } from "../components/CategoryTabl
 import { KindSwitcher } from "../components/KindSwitcher";
 import { PieChart as PieChartIcon } from "lucide-react";
 import type { Transaction } from "../types";
+import { SectionControls } from "../components/SectionControls";
 
 const COLORS = [
   "#22D3EE", "#A78BFA", "#F59E0B", "#10B981", "#EF4444",
@@ -538,22 +539,25 @@ export function CategoriesPage() {
         icon={PieChartIcon}
         title="Категории"
         hint="Данные и аналитика с разбивкой по категориям и подкатегориям"
-        right={
-          <div className="flex flex-wrap gap-2">
-            <Segmented
-              value={view}
-              onChange={setView}
-              label="Как показать категории"
-              options={[
-                { value: "rings", label: "Donut", title: "Кольцо: доли категорий друг относительно друга", icon: PieChartIcon },
-                { value: "bars", label: "Bars", title: "Полосы: категории списком, со сравнением со средним", icon: BarChart3 },
-                { value: "treemap", label: "Treemap", title: "Плитки: площадь плитки — доля категории", icon: LayoutGrid },
-              ]}
-            />
-          </div>
-        }
       />
       <GlobalFilters />
+
+      {/* Сторона слева, вид справа — как в «Топе». Прежде вид стоял в шапке
+          страницы, а «Расходы / Доходы» — внутри карточки, у каждого вида
+          на своём месте. */}
+      <SectionControls>
+        <KindSwitcher kind={kind} onChange={setKind} size="md" />
+        <Segmented
+          value={view}
+          onChange={setView}
+          label="Как показать категории"
+          options={[
+            { value: "rings", label: "Кольцо", title: "Доли категорий друг относительно друга", icon: PieChartIcon },
+            { value: "bars", label: "Полосы", title: "Категории списком, со сравнением со средним", icon: BarChart3 },
+            { value: "treemap", label: "Плитки", title: "Площадь плитки — доля категории", icon: LayoutGrid },
+          ]}
+        />
+      </SectionControls>
 
       <div>
         <div className="card-tray card-pad">
@@ -563,18 +567,13 @@ export function CategoriesPage() {
           {view !== "rings" && (
             <div className="mb-4 flex items-start justify-between gap-2">
               <div>
-                <div className="mb-4">
-                  <KindSwitcher kind={kind} onChange={setKind} size="md" />
-                </div>
-                <div>
-                  <span
-                    className={`inline-flex px-4 py-1 rounded-full text-3xl font-bold tabular-nums ${
-                      kind === "expense" ? "bg-expense/15 text-expense" : "bg-income/15 text-income"
-                    }`}
-                  >
-                    {formatMoney(totalAll, base)}
-                  </span>
-                </div>
+                <span
+                  className={`inline-flex px-4 py-1 rounded-full text-3xl font-bold tabular-nums ${
+                    kind === "expense" ? "bg-expense/15 text-expense" : "bg-income/15 text-income"
+                  }`}
+                >
+                  {formatMoney(totalAll, base)}
+                </span>
               </div>
               {view === "treemap" && (
                 <button
@@ -612,7 +611,6 @@ export function CategoriesPage() {
               meta={categoryMeta}
               base={base}
               kind={kind}
-              onKindChange={setKind}
               onOpenCategory={openCategory}
               onOpenSubcategory={openSubcategory}
             />

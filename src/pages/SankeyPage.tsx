@@ -8,7 +8,7 @@ import { colorForCategory } from "../lib/categoryColor";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { buildSankey } from "../lib/aggregations";
-import { formatMoney, formatPct, chartTooltipProps } from "../lib/format";
+import { formatMoney, formatPct, chartTooltipProps, chartColor } from "../lib/format";
 import { affectsExpense, expenseDelta } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
@@ -19,11 +19,11 @@ import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
 
 const COLORS = {
-  income: "#10B981",
-  account: "#22D3EE",
-  category: "#EF4444",
-  savings: "#A78BFA",
-  funding: "#F59E0B",
+  income: chartColor.income,
+  account: chartColor.accent,
+  category: chartColor.expense,
+  savings: chartColor.accent2,
+  funding: chartColor.warn,
 };
 
 export function SankeyPage() {
@@ -296,7 +296,7 @@ export function SankeyPage() {
           <LegendChip color={COLORS.account} label="Бюджет" />
           <LegendChip
             label="Категории расходов"
-            gradient="conic-gradient(#22D3EE 0 90deg, #A78BFA 90deg 180deg, #F59E0B 180deg 270deg, #10B981 270deg 360deg)"
+            gradient={`conic-gradient(${chartColor.accent} 0 90deg, ${chartColor.accent2} 90deg 180deg, ${chartColor.warn} 180deg 270deg, ${chartColor.income} 270deg 360deg)`}
           />
           {data.nodes.some((n) => n.kind === "savings") && (
             <LegendChip color={COLORS.savings} label="Сбережения" />

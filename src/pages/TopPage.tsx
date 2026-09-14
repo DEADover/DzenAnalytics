@@ -18,6 +18,7 @@ import { StatCell, StatRow } from "../components/SectionCard";
 import { counterpartyOf } from "../lib/yearReview";
 import { formatNum } from "../lib/format";
 import { TrendingUp, TrendingDown, Tags, Users, Receipt, Coins } from "lucide-react";
+import { SectionControls } from "../components/SectionControls";
 
 type Tab = "categories" | "payees" | "transactions";
 
@@ -152,7 +153,7 @@ export function TopPage() {
       {/* Сторона слева, разрез справа. Расходы и доходы — тем же
           переключателем, что в разделе «Категории»: один и тот же выбор в двух
           разделах должен выглядеть одинаково. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <SectionControls>
         <KindSwitcher kind={kind} onChange={setKind} size="md" />
         <Segmented
           value={tab}
@@ -164,7 +165,7 @@ export function TopPage() {
             { value: "transactions" as Tab, label: "Операции", icon: Receipt },
           ]}
         />
-      </div>
+      </SectionControls>
 
       {/* Итоги фильтра: страница показывала таблицу и ни одного числа сверху —
           сколько всего в этом топе, было видно только сложением глазами. */}

@@ -20,6 +20,7 @@ import {
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
+  chartColor,
 } from "../lib/format";
 import { Tooltip } from "./Tooltip";
 import { TooltipFacts } from "./TooltipFacts";
@@ -36,9 +37,9 @@ type Scale = "month" | "quarter" | "year";
 type Range = "1y" | "3y" | "5y" | "all";
 
 const MODES: { id: Mode; label: string; color: string }[] = [
-  { id: "months", label: "Месяцы жизни", color: "#10B981" },
-  { id: "expense", label: "Расходы", color: "#EF4444" },
-  { id: "income", label: "Доходы", color: "#22D3EE" },
+  { id: "months", label: "Месяцы жизни", color: chartColor.income },
+  { id: "expense", label: "Расходы", color: chartColor.expense },
+  { id: "income", label: "Доходы", color: chartColor.accent },
 ];
 
 const SCALES: { id: Scale; label: string }[] = [
@@ -338,13 +339,13 @@ export function FireChart({
             {mode === "months" && showTarget && (
               <ReferenceLine
                 y={FIRE_TARGET}
-                stroke="#F59E0B"
+                stroke={chartColor.warn}
                 strokeWidth={2}
                 strokeDasharray="4 4"
                 label={{
                   value: "цель · FIRE 100%",
                   position: "insideTopRight",
-                  fill: "#F59E0B",
+                  fill: chartColor.warn,
                   fontSize: 11,
                 }}
               />

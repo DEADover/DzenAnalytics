@@ -16,6 +16,7 @@ import { affectsExpense } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { SectionControls } from "../components/SectionControls";
 
 export function AnomaliesPage() {
   // Обороты и взаимозачёты не аномалии, а шум: категории, помеченные «не
@@ -148,6 +149,21 @@ export function AnomaliesPage() {
 
       <GlobalFilters />
 
+      {/* Выбор раздела — рядом контролов раздела, над итогами, как на других
+          страницах: итоги описывают оба раздела, а переключатель — то, что ниже. */}
+      <SectionControls>
+        <Segmented
+          tabs
+          label="Что показать"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "transactions", label: "Операции-выбросы", count: anomalies.length },
+            { value: "spikes", label: "Всплески по категориям", count: spikes.length },
+          ]}
+        />
+      </SectionControls>
+
       {/* Подпись есть у каждой ячейки — без неё средняя выходила бы ниже
           соседних, и ряд читался бы сломанным. */}
       <StatRow>
@@ -170,18 +186,6 @@ export function AnomaliesPage() {
           note={<>Превышение {formatMoney(totalSpikesDelta, base)}</>}
         />
       </StatRow>
-
-      <Segmented
-        tabs
-        label="Что показать"
-        value={tab}
-        onChange={setTab}
-        className="flex w-fit"
-        options={[
-          { value: "transactions", label: "Операции-выбросы", count: anomalies.length },
-          { value: "spikes", label: "Всплески по категориям", count: spikes.length },
-        ]}
-      />
 
       {tab === "transactions" &&
         (anomalies.length === 0 ? (

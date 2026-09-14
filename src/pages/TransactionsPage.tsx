@@ -80,7 +80,7 @@ const ADD_OPTIONS: {
   { kind: "expense", label: "Расход", Icon: ArrowDown, color: "text-expense" },
   { kind: "income", label: "Доход", Icon: ArrowUp, color: "text-income" },
   { kind: "refund", label: "Возврат", Icon: Undo2, color: "text-accent2" },
-  { kind: "transfer", label: "Перевод", Icon: ArrowLeftRight, color: "text-slate-400" },
+  { kind: "transfer", label: "Перевод", Icon: ArrowLeftRight, color: "text-muted" },
   { kind: "transfer", label: "Долг", Icon: HandCoins, color: "text-warn", debt: true },
 ];
 
@@ -1064,7 +1064,7 @@ function DayGroup({
           </span>
           {showTransfers && totals.xfer > 0 && (
             <span
-              className="flex items-center gap-1 text-slate-400 whitespace-nowrap"
+              className="flex items-center gap-1 text-muted whitespace-nowrap"
               title="Переводы за день"
             >
               <ArrowLeftRight className="w-4 h-4" aria-hidden />

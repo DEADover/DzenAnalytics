@@ -37,6 +37,7 @@ import {
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
+  chartColor,
 } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
 import type { Transaction } from "../types";
@@ -50,6 +51,7 @@ import { Segmented } from "../components/Segmented";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
 import { useEffect } from "react";
+import { SectionControls } from "../components/SectionControls";
 
 export function TrendsPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -174,27 +176,23 @@ export function TrendsPage() {
         icon={Activity}
         title="Тренды"
         hint="Помесячная динамика и паттерны по дням недели"
-        right={
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Свои пилюли с красной и зелёной заливкой были третьим видом
-                выбора «Расходы / Доходы» в продукте. Теперь — общий
-                переключатель, а детализация рядом — общими сегментами той же
-                высоты. */}
-            <KindSwitcher kind={kind} onChange={setKind} />
-            <Segmented
-              value={level}
-              onChange={setLevel}
-              label="Детализация категорий"
-              size="sm"
-              options={[
-                { value: "top" as const, label: "Крупно", title: "Группировать по верхнеуровневым категориям" },
-                { value: "full" as const, label: "Детально", title: "Разбивать по подкатегориям" },
-              ]}
-            />
-          </div>
-        }
       />
       <GlobalFilters period={lp} />
+
+      {/* Сторона слева, детализация справа — рядом контролов раздела, как в
+          «Топе»: оба выбора перестраивают все графики страницы. */}
+      <SectionControls>
+        <KindSwitcher kind={kind} onChange={setKind} size="md" />
+        <Segmented
+          value={level}
+          onChange={setLevel}
+          label="Детализация категорий"
+          options={[
+            { value: "top" as const, label: "Крупно", title: "Группировать по верхнеуровневым категориям" },
+            { value: "full" as const, label: "Детально", title: "Разбивать по подкатегориям" },
+          ]}
+        />
+      </SectionControls>
 
       <div className="card-tray card-pad">
         <CardHeader
@@ -309,7 +307,7 @@ export function TrendsPage() {
                   {dowChart.map((d, i) => (
                     <Cell
                       key={i}
-                      fill={d.isWeekend ? "#A78BFA" : kind === "expense" ? "#EF4444" : "#10B981"}
+                      fill={d.isWeekend ? chartColor.accent2 : kind === "expense" ? chartColor.expense : chartColor.income}
                     />
                   ))}
                 </Bar>
@@ -337,8 +335,8 @@ export function TrendsPage() {
                 <Radar
                   dataKey="value"
                   name="Средний за день"
-                  stroke="#22D3EE"
-                  fill="#22D3EE"
+                  stroke={chartColor.accent}
+                  fill={chartColor.accent}
                   fillOpacity={0.3}
                   strokeWidth={2}
                 />
@@ -533,7 +531,7 @@ function HourOfDayBars({
   }, [cells]);
 
   const peak = data.reduce((m, d) => (d.total > m.total ? d : m), data[0]);
-  const color = kind === "expense" ? "#EF4444" : "#10B981";
+  const color = kind === "expense" ? chartColor.expense : chartColor.income;
 
   return (
     <div className="card-tray card-pad flex flex-col">

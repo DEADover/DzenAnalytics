@@ -20,10 +20,11 @@ import {
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
+  chartColor,
 } from "../lib/format";
 
-const INCOME = "#10B981";
-const EXPENSE = "#EF4444";
+const INCOME = chartColor.income;
+const EXPENSE = chartColor.expense;
 
 /**
  * Full-width «денежный поток за месяц» widget — cumulative income (green) and

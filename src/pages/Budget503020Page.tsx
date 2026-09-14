@@ -33,12 +33,13 @@ import {
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
+  chartColor,
 } from "../lib/format";
 import { Callout } from "../components/Callout";
 
-const NEEDS_COLOR = "#3B82F6";
-const WANTS_COLOR = "#F59E0B";
-const SAVINGS_COLOR = "#10B981";
+const NEEDS_COLOR = chartColor.accent;
+const WANTS_COLOR = chartColor.warn;
+const SAVINGS_COLOR = chartColor.income;
 
 /**
  * «50/30/20» — fixed expenses (needs) vs everything else (wants) vs what's
@@ -286,9 +287,9 @@ export function Budget503020Page() {
               />
               <ReferenceLine
                 y={20}
-                stroke="#888780"
+                stroke={chartColor.muted}
                 strokeDasharray="5 4"
-                label={{ value: "цель 20%", position: "right", fontSize: 10, fill: "#888780" }}
+                label={{ value: "цель 20%", position: "right", fontSize: 10, fill: chartColor.muted }}
               />
               <Area
                 type="monotone"

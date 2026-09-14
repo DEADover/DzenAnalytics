@@ -30,7 +30,6 @@ export default {
         mono: ["Geist Mono Variable", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       boxShadow: {
-        card: "var(--shadow-card)",
         tray: "var(--shadow-tray)",
       },
     },

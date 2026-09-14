@@ -55,6 +55,7 @@ import {
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
+  chartColor,
 } from "../lib/format";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
@@ -356,10 +357,10 @@ export function CashflowPage() {
                 content={() => (
                   <div className="flex flex-wrap justify-center gap-4 pt-1 text-xs">
                     {[
-                      { label: "Доходы", color: "#10B981", bar: true },
-                      { label: "Расходы", color: "#EF4444", bar: true },
-                      { label: "Чистый поток", color: "#22D3EE", bar: false },
-                      { label: "Прогноз", color: "#A78BFA", bar: false, dashed: true },
+                      { label: "Доходы", color: chartColor.income, bar: true },
+                      { label: "Расходы", color: chartColor.expense, bar: true },
+                      { label: "Чистый поток", color: chartColor.accent, bar: false },
+                      { label: "Прогноз", color: chartColor.accent2, bar: false, dashed: true },
                     ].map((it) => (
                       <span key={it.label} className="inline-flex items-center gap-1.5" style={{ color: it.color }}>
                         {it.bar ? (
@@ -376,24 +377,24 @@ export function CashflowPage() {
               {/* Two bar series only (Доходы/Расходы); forecast months are the
                   same series, styled apart per-point via <Cell> (lighter +
                   dashed). No separate forecast bars → no reserved empty slots. */}
-              <Bar dataKey="income" name="Доходы" fill="#10B981" radius={[4, 4, 0, 0]} activeBar={false} isAnimationActive={false}>
+              <Bar dataKey="income" name="Доходы" fill={chartColor.income} radius={[4, 4, 0, 0]} activeBar={false} isAnimationActive={false}>
                 {chartData.map((d, i) => (
                   <Cell
                     key={i}
-                    fill="#10B981"
+                    fill={chartColor.income}
                     fillOpacity={d.isForecast ? 0.4 : 1}
-                    stroke={d.isForecast ? "#10B981" : undefined}
+                    stroke={d.isForecast ? chartColor.income : undefined}
                     strokeDasharray={d.isForecast ? "3 3" : undefined}
                   />
                 ))}
               </Bar>
-              <Bar dataKey="expense" name="Расходы" fill="#EF4444" radius={[4, 4, 0, 0]} activeBar={false} isAnimationActive={false}>
+              <Bar dataKey="expense" name="Расходы" fill={chartColor.expense} radius={[4, 4, 0, 0]} activeBar={false} isAnimationActive={false}>
                 {chartData.map((d, i) => (
                   <Cell
                     key={i}
-                    fill="#EF4444"
+                    fill={chartColor.expense}
                     fillOpacity={d.isForecast ? 0.4 : 1}
-                    stroke={d.isForecast ? "#EF4444" : undefined}
+                    stroke={d.isForecast ? chartColor.expense : undefined}
                     strokeDasharray={d.isForecast ? "3 3" : undefined}
                   />
                 ))}
@@ -403,7 +404,7 @@ export function CashflowPage() {
                 type="monotone"
                 dataKey="net"
                 name="Чистый поток"
-                stroke="#22D3EE"
+                stroke={chartColor.accent}
                 strokeWidth={2}
                 dot={{ r: 3 }}
                 isAnimationActive={false}
@@ -415,7 +416,7 @@ export function CashflowPage() {
                 dataKey="netForecastTop"
                 name="Прогноз (оптимист)"
                 stroke="none"
-                fill="#A78BFA"
+                fill={chartColor.accent2}
                 fillOpacity={0.12}
                 legendType="none"
                 isAnimationActive={false}
@@ -425,7 +426,7 @@ export function CashflowPage() {
                 dataKey="netForecastBottom"
                 name="Прогноз (пессимист)"
                 stroke="none"
-                fill="#A78BFA"
+                fill={chartColor.accent2}
                 fillOpacity={0.12}
                 legendType="none"
                 isAnimationActive={false}
@@ -434,7 +435,7 @@ export function CashflowPage() {
                 type="monotone"
                 dataKey="netForecastMid"
                 name="Прогноз (реалист)"
-                stroke="#A78BFA"
+                stroke={chartColor.accent2}
                 strokeWidth={2}
                 strokeDasharray="5 3"
                 dot={false}
@@ -566,14 +567,14 @@ export function CashflowPage() {
                 <Bar
                   dataKey="lastYear"
                   name={`${yoyYear - 1}`}
-                  fill="#A78BFA"
+                  fill={chartColor.accent2}
                   radius={[4, 4, 0, 0]}
                   activeBar={false}
                 />
                 <Bar
                   dataKey="thisYear"
                   name={`${yoyYear}`}
-                  fill={yoyKind === "expense" ? "#EF4444" : "#10B981"}
+                  fill={yoyKind === "expense" ? chartColor.expense : chartColor.income}
                   radius={[4, 4, 0, 0]}
                   activeBar={false}
                 />
@@ -640,9 +641,9 @@ export function CashflowPage() {
                   content={() => (
                     <div className="flex flex-wrap justify-center gap-4 pt-1 text-xs">
                       {[
-                        { label: "Ниже среднего", color: "#10B981" },
-                        { label: "Около среднего", color: "#A78BFA" },
-                        { label: "Выше среднего", color: "#EF4444" },
+                        { label: "Ниже среднего", color: chartColor.income },
+                        { label: "Около среднего", color: chartColor.accent2 },
+                        { label: "Выше среднего", color: chartColor.expense },
                       ].map((it) => (
                         <span key={it.label} className="inline-flex items-center gap-1.5" style={{ color: it.color }}>
                           <span style={{ width: 12, height: 12, borderRadius: 2, background: it.color }} />
@@ -656,7 +657,7 @@ export function CashflowPage() {
                   {seasonality.map((s, i) => {
                     const dev = s.expenseDeviationPct;
                     const color =
-                      dev > 0.15 ? "#EF4444" : dev < -0.15 ? "#10B981" : "#A78BFA";
+                      dev > 0.15 ? chartColor.expense : dev < -0.15 ? chartColor.income : chartColor.accent2;
                     return <Cell key={i} fill={color} />;
                   })}
                 </Bar>

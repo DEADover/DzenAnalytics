@@ -244,8 +244,8 @@ export function GoalsPage() {
           // Hidden while the add form is open — the form has its own «Отмена»,
           // so a second one in the header would just be redundant.
           !adding && (
-            <button onClick={() => setAdding(true)} className="btn-primary text-sm">
-              <Plus className="w-4 h-4" />
+            <button onClick={() => setAdding(true)} className="btn-primary text-xs">
+              <Plus className="w-3.5 h-3.5" />
               Новая цель
             </button>
           )

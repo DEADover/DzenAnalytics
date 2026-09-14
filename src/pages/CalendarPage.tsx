@@ -26,6 +26,7 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { KindSwitcher } from "../components/KindSwitcher";
 import { YearPicker } from "../components/MonthPicker";
 import { StatCell, StatRow } from "../components/SectionCard";
+import { SectionControls } from "../components/SectionControls";
 
 const WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
 const MONTHS = [
@@ -205,9 +206,6 @@ export function CalendarPage() {
             {/* Общие контролы вместо двух самодельных: свои пилюли и своя
                 перелистывалка года повторяли то, что в продукте уже есть, и
                 расходились с ними в мелочах. */}
-            {/* Расходы и доходы — тем же переключателем, что в «Категориях» и
-                «Топе»: один и тот же выбор везде выглядит одинаково. */}
-            <KindSwitcher kind={kind} onChange={setKind} />
             <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} />
             <InfoPopover>
               <p>
@@ -232,6 +230,13 @@ export function CalendarPage() {
         }
       />
       <GlobalFilters showDateRange={false} dateRangeHint="Период задаётся календарём ниже" />
+
+      {/* Расходы и доходы — рядом контролов раздела, тем же переключателем,
+          что в «Категориях» и «Топе»: он меняет всю карту, а не мелочь в
+          шапке. Год остаётся в шапке — это период. */}
+      <SectionControls>
+        <KindSwitcher kind={kind} onChange={setKind} size="md" />
+      </SectionControls>
 
       {/* Пять чисел одним рядом с волосяными чертами — как итоги на других
           страницах. Пятью отдельными карточками они несли столько же рамок и
