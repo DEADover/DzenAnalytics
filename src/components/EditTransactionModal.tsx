@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
-import { createPortal } from "react-dom";
 import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
@@ -36,6 +35,7 @@ import { useTagModeStore } from "../store/useTagModeStore";
 import { getHistoricalRubRate, type HistoricalRate } from "../lib/historicalRates";
 import { formatDate } from "../lib/format";
 import type { Transaction, TxKind } from "../types";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 interface Props {
   /** The transaction to edit. Omit (or null) to open the modal in
@@ -636,18 +636,9 @@ export function EditTransactionModal({
     }
   }
 
-  // Tracks whether the most recent mousedown landed on the backdrop. Used
-  // by the click handler to decide whether to close — drags that started
-  // inside the modal but happened to release on the backdrop must NOT
-  // count as a backdrop click.
-  const backdropMouseDownRef = useRef(false);
-
+  // Escape и щелчок мимо обрабатывает `Modal`; здесь — только перелистывание.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-        return;
-      }
       // ←/→ step to the previous/next operation — but only when not typing in
       // a field (there the arrows must move the text cursor), no modifiers,
       // and only while editing an existing op (create mode has no neighbours).
@@ -669,7 +660,7 @@ export function EditTransactionModal({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, onNavigate, isCreate]);
+  }, [onNavigate, isCreate]);
 
   // Create mode: build a fresh ZenTransaction from the form and store it as
   // a draft. Validation/resolution lives in `buildDraftTransaction` (pure,
@@ -991,560 +982,498 @@ export function EditTransactionModal({
   // element pushed the scrim down 24px — leaving an uncovered strip at
   // the top. A body-level portal also matches the standard modal pattern
   // (immune to ancestor transforms / containing blocks).
-  return createPortal(
-    <div
-      // Plain dim scrim — NO backdrop-filter. A full-viewport
-      // `backdrop-blur` over the chart-heavy page makes Chromium snapshot
-      // the page to blur it, which intermittently flashes the root
-      // (white) background for a frame on open. A solid dim never does.
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      // Only treat as "click on backdrop" when both press AND release
-      // happened on the backdrop itself. Otherwise a mousedown inside
-      // the modal (e.g. text-selecting through to whitespace, or
-      // dragging the cursor a bit while typing) that ends outside the
-      // modal would close it — really annoying.
-      onMouseDown={(e) => {
-        backdropMouseDownRef.current = e.target === e.currentTarget;
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && backdropMouseDownRef.current) {
-          onClose();
-        }
-        backdropMouseDownRef.current = false;
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-tx-title"
-        // Fixed height (capped at 90vh on short screens) so the card never
-        // changes size between operation kinds — only the inner body scrolls.
-        // Keeps the modal from "jumping" while paging through ops with ←/→.
-        //
-        // Высота и ширина — под раздел «Теги» (#69): с ним форма расхода стала
-        // самой высокой, и в прежние 740 px не влезала. Ширина шире на ступень,
-        // чтобы теги чаще вставали в один ряд, а высота берётся с запасом под
-        // два ряда тегов — поле комментария при этом не сжимается в щель.
-        //
-        // Ограничение — вся высота окна за вычетом отступа подложки, а не 90 %
-        // её: на ноутбуке окно браузера около 770 px, и десятая доля — это как
-        // раз те 77 px, которых форме не хватало до прокрутки.
-        className="card w-full max-w-xl h-[860px] max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden"
-      >
-        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
-          <div id="edit-tx-title" className="font-semibold flex items-center gap-2">
-            {isCreate ? (
-              <Plus className="w-4 h-4 text-accent2" />
-            ) : (
-              <Pencil className="w-4 h-4 text-accent2" />
-            )}
-            {isCopy ? "Копия операции" : isCreate ? "Новая операция" : "Редактирование операции"}
-          </div>
-          <div className="flex items-center gap-3">
-            {!isCreate && onNavigate && (
-              <span
-                className="hidden sm:flex items-center gap-1 text-[11px] text-muted"
-                title="Листать операции стрелками ← / →"
-              >
-                <kbd className="kbd">←</kbd>
-                <kbd className="kbd">→</kbd>
-                перелистывание
-              </span>
-            )}
-            <button
-              onClick={onClose}
-              aria-label="Закрыть"
-              className="text-muted hover:text-text"
+  return (
+    <Modal onClose={onClose} width="xl" className="h-[860px]">
+      <ModalHeader
+        icon={isCreate ? Plus : Pencil}
+        tone="accent2"
+        title={isCopy ? "Копия операции" : isCreate ? "Новая операция" : "Редактирование операции"}
+        actions={
+          !isCreate && onNavigate ? (
+            <span
+              className="hidden sm:flex items-center gap-1 text-[11px] text-muted"
+              title="Листать операции стрелками ← / →"
             >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-        <div
-          // Flex column so the comment field (its `flex-1` below) grows to fill
-          // the leftover height down to the footer — the same bottom edge for
-          // every operation type, regardless of how many fields sit above it.
-          className="flex-1 overflow-y-auto p-5 space-y-2 flex flex-col"
-          // Reserve the scrollbar's space at all times so toggling a field
-          // (e.g. the cross-currency «Получено» row appearing when you pick a
-          // foreign-currency account) doesn't change the content width.
-          style={{ scrollbarGutter: "stable" }}
-        >
-          {/* Kind switcher — 4-way pill toggle. "Возврат" is a money-back
-              flow on an expense category; it inflows the account but
-              shrinks the category's spend rather than adding to income. */}
-          <Field label="Тип операции">
-            {/* Общий `Segmented`: цвет выбранного типа — тот же, что у сумм
-                этого типа в таблицах. Во всю ширину, варианты делят её поровну. */}
-            <Segmented
-              size="sm"
-              block
-              label="Тип операции"
-              value={isDebt ? "debt" : kind}
-              onChange={(next) => {
-                if (next === "debt") {
-                  setKind("transfer");
-                  setIsDebt(true);
-                } else {
-                  setKind(next);
-                  setIsDebt(false);
-                }
-              }}
-              options={[
-                { value: "expense", label: "Расход", icon: TrendingDown, tone: "expense" },
-                { value: "income", label: "Доход", icon: TrendingUp, tone: "income" },
-                // «Возврат» — деньги назад по расходной категории: счёт
-                // пополняется, но уменьшается расход, а не растёт доход.
-                { value: "refund", label: "Возврат", icon: Undo2, tone: "accent2" },
-                { value: "transfer", label: "Перевод", icon: ArrowLeftRight, tone: "muted" },
-                { value: "debt", label: "Долг", icon: HandCoins, tone: "warn" },
-              ]}
+              <kbd className="kbd">←</kbd>
+              <kbd className="kbd">→</kbd>
+              перелистывание
+            </span>
+          ) : undefined
+        }
+      />
+      <ModalBody scroll gap={2} className="flex flex-col">
+        {/* Kind switcher — 4-way pill toggle. "Возврат" is a money-back
+            flow on an expense category; it inflows the account but
+            shrinks the category's spend rather than adding to income. */}
+        <Field label="Тип операции">
+          {/* Общий `Segmented`: цвет выбранного типа — тот же, что у сумм
+              этого типа в таблицах. Во всю ширину, варианты делят её поровну. */}
+          <Segmented
+            size="sm"
+            block
+            label="Тип операции"
+            value={isDebt ? "debt" : kind}
+            onChange={(next) => {
+              if (next === "debt") {
+                setKind("transfer");
+                setIsDebt(true);
+              } else {
+                setKind(next);
+                setIsDebt(false);
+              }
+            }}
+            options={[
+              { value: "expense", label: "Расход", icon: TrendingDown, tone: "expense" },
+              { value: "income", label: "Доход", icon: TrendingUp, tone: "income" },
+              // «Возврат» — деньги назад по расходной категории: счёт
+              // пополняется, но уменьшается расход, а не растёт доход.
+              { value: "refund", label: "Возврат", icon: Undo2, tone: "accent2" },
+              { value: "transfer", label: "Перевод", icon: ArrowLeftRight, tone: "muted" },
+              { value: "debt", label: "Долг", icon: HandCoins, tone: "warn" },
+            ]}
+          />
+        </Field>
+        {/* Date needs room for «дд.мм.гггг» + the calendar icon; time only
+            holds «чч:мм», so give the date the wider column. */}
+        <div className="grid grid-cols-[3fr_2fr] gap-3">
+          <Field label="Дата">
+            <DateField
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="input text-sm w-full"
             />
           </Field>
-          {/* Date needs room for «дд.мм.гггг» + the calendar icon; time only
-              holds «чч:мм», so give the date the wider column. */}
-          <div className="grid grid-cols-[3fr_2fr] gap-3">
-            <Field label="Дата">
-              <DateField
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="input text-sm w-full"
-              />
-            </Field>
-            <Field label="Время">
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="input text-sm w-full"
-              />
-            </Field>
-          </div>
-          {/* Category / Subcategory — not shown for transfers: a transfer is
-              just money moving between the user's own accounts, it has no
-              spending/income category. */}
-          {kind !== "transfer" && (
-            // Single full-width field: top level lists only real categories;
-            // a category's sub-categories open to the right (issue #12).
-            <Field label="Категория">
-              <CategoryCascadePicker
-                category={category}
-                subcategory={subcategory}
-                categories={categoryNodes}
-                onChange={(cat, sub) => {
-                  setCategory(cat);
-                  setSubcategory(sub);
-                }}
-              />
-            </Field>
-          )}
-          {/* Теги-категории (#69): вторая и следующие категории операции. Поле
-              есть только в этом режиме — при хэштегах теги пишут прямо в
-              комментарии, и второе поле для них было бы лишним. */}
-          {tagMode === "categories" && kind !== "transfer" && !isDebt && (
-            <Field label="Теги">
-              <div className="space-y-2">
-                {extras.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {extras.map((full) => {
-                      const [parent, ...rest] = full.split(/\s*\/\s*/);
-                      const leaf = rest.join(" / ");
-                      return (
-                        <span
-                          key={full}
-                          className="inline-flex items-center gap-1.5 rounded-full bg-panel2 border border-border pl-1.5 pr-1 py-0.5 text-[13px] max-w-full"
+          <Field label="Время">
+            <input
+              type="time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              className="input text-sm w-full"
+            />
+          </Field>
+        </div>
+        {/* Category / Subcategory — not shown for transfers: a transfer is
+            just money moving between the user's own accounts, it has no
+            spending/income category. */}
+        {kind !== "transfer" && (
+          // Single full-width field: top level lists only real categories;
+          // a category's sub-categories open to the right (issue #12).
+          <Field label="Категория">
+            <CategoryCascadePicker
+              category={category}
+              subcategory={subcategory}
+              categories={categoryNodes}
+              onChange={(cat, sub) => {
+                setCategory(cat);
+                setSubcategory(sub);
+              }}
+            />
+          </Field>
+        )}
+        {/* Теги-категории (#69): вторая и следующие категории операции. Поле
+            есть только в этом режиме — при хэштегах теги пишут прямо в
+            комментарии, и второе поле для них было бы лишним. */}
+        {tagMode === "categories" && kind !== "transfer" && !isDebt && (
+          <Field label="Теги">
+            <div className="space-y-2">
+              {extras.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {extras.map((full) => {
+                    const [parent, ...rest] = full.split(/\s*\/\s*/);
+                    const leaf = rest.join(" / ");
+                    return (
+                      <span
+                        key={full}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-panel2 border border-border pl-1.5 pr-1 py-0.5 text-[13px] max-w-full"
+                      >
+                        {leaf ? (
+                          <CategoryDot category={leaf} parent={parent} size="w-4 h-4" />
+                        ) : (
+                          <CategoryDot category={parent} size="w-4 h-4" />
+                        )}
+                        <span className="truncate">{full}</span>
+                        <button
+                          type="button"
+                          onClick={() => setExtras((list) => list.filter((e) => e !== full))}
+                          className="rounded-full p-0.5 text-muted hover:text-expense hover:bg-panel"
+                          aria-label={`Убрать тег ${full}`}
                         >
-                          {leaf ? (
-                            <CategoryDot category={leaf} parent={parent} size="w-4 h-4" />
-                          ) : (
-                            <CategoryDot category={parent} size="w-4 h-4" />
-                          )}
-                          <span className="truncate">{full}</span>
-                          <button
-                            type="button"
-                            onClick={() => setExtras((list) => list.filter((e) => e !== full))}
-                            className="rounded-full p-0.5 text-muted hover:text-expense hover:bg-panel"
-                            aria-label={`Убрать тег ${full}`}
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-                <CategoryCascadePicker
-                  category=""
-                  subcategory=""
-                  categories={categoryNodes}
-                  placeholder={extras.length > 0 ? "Добавить ещё тег" : "Добавить тег"}
-                  portal
-                  onChange={(cat, sub) => {
-                    const full = sub ? `${cat} / ${sub}` : cat;
-                    const main = subcategory.trim()
-                      ? `${category.trim()} / ${subcategory.trim()}`
-                      : category.trim();
-                    // Основная категория тегом не бывает, повторы — тоже.
-                    if (!full || full === main) return;
-                    setExtras((list) => (list.includes(full) ? list : [...list, full]));
-                  }}
-                />
-              </div>
-            </Field>
-          )}
-          {/* «Долг»: direction + the real account. The debt account «Долги»
-              is implicit (Zenmoney keeps one per user). */}
-          {isDebt && (
-            <>
-              <Field label="Операция с долгом">
-                {/* Тот же `Segmented`, что у «Типа операции» строкой выше: два
-                    переключателя подряд обязаны выглядеть одинаково. */}
-                <Segmented
-                  size="sm"
-                  block
-                  label="Операция с долгом"
-                  value={debtOutgoing ? "out" : "in"}
-                  onChange={(next) => setDebtOutgoing(next === "out")}
-                  options={[
-                    {
-                      value: "out",
-                      label: "Я дал / вернул",
-                      title: "Я дал в долг | Я вернул долг",
-                      tone: "warn",
-                    },
-                    {
-                      value: "in",
-                      label: "Мне дали / вернули",
-                      title: "Мне дали в долг | Мне вернули долг",
-                      tone: "warn",
-                    },
-                  ]}
-                />
-              </Field>
-              <Field label={debtOutgoing ? "С какого счёта" : "На какой счёт"}>
-                <Combobox
-                  value={realAcc}
-                  options={accountOptions}
-                  groups={accountGroups}
-                  onChange={setRealAcc}
-                  placeholder="Реальный счёт"
-                  maxHeight={DROPDOWN_MAX}
-                />
-              </Field>
-            </>
-          )}
-          {/* Account(s): one field for income/expense, two for transfer.
-              Placed right under category — it's the second-most
-              identifying attribute of a transaction after the category. */}
-          {!isDebt && kind === "transfer" ? (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Со счёта">
-                <Combobox
-                  value={outAcc}
-                  options={accountOptions}
-                  groups={accountGroups}
-                  onChange={setOutAcc}
-                  placeholder="Источник"
-                  maxHeight={DROPDOWN_MAX}
-                />
-              </Field>
-              <Field label="На счёт">
-                <Combobox
-                  value={inAcc}
-                  options={accountOptions}
-                  groups={accountGroups}
-                  onChange={setInAcc}
-                  placeholder="Получатель"
-                  maxHeight={DROPDOWN_MAX}
-                />
-              </Field>
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              <CategoryCascadePicker
+                category=""
+                subcategory=""
+                categories={categoryNodes}
+                placeholder={extras.length > 0 ? "Добавить ещё тег" : "Добавить тег"}
+                portal
+                onChange={(cat, sub) => {
+                  const full = sub ? `${cat} / ${sub}` : cat;
+                  const main = subcategory.trim()
+                    ? `${category.trim()} / ${subcategory.trim()}`
+                    : category.trim();
+                  // Основная категория тегом не бывает, повторы — тоже.
+                  if (!full || full === main) return;
+                  setExtras((list) => (list.includes(full) ? list : [...list, full]));
+                }}
+              />
             </div>
-          ) : null}
-          {/* Счёт, сумма и валюта — одним рядом: «откуда, сколько и в чём».
-              Отдельный ряд под счёт стоил форме прокрутки на ноутбуке. У
-              перевода и долга счета свои и стоят выше — там ряд из двух. На
-              узком экране счёт уходит на всю ширину над суммой. */}
-          <div
-            className={`grid gap-3 ${
-              !isDebt && kind !== "transfer"
-                ? "grid-cols-2 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_6.5rem]"
-                : "grid-cols-2"
-            }`}
-          >
-            {!isDebt && kind !== "transfer" && (
-              <div className="col-span-2 sm:col-span-1 min-w-0">
-                <Field label="Счёт">
-                  <Combobox
-                    value={account}
-                    options={accountOptions}
-                    groups={accountGroups}
-                    onChange={setAccount}
-                    placeholder="Выберите счёт"
-                    maxHeight={DROPDOWN_MAX}
-                  />
-                </Field>
-              </div>
-            )}
-            <Field
-              label="Сумма"
-              labelAfter={
-                isForeignCurrency && fxTooltip ? (
-                  <span className="relative inline-flex group shrink-0">
-                    <Info className="w-3.5 h-3.5 text-muted cursor-help" aria-hidden />
-                    <span
-                      role="tooltip"
-                      className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-150 absolute z-50 left-0 top-full mt-1.5 w-60 rounded-lg border border-border bg-panel shadow-lg px-3 py-2 text-xs leading-relaxed text-text whitespace-pre-line"
-                    >
-                      {fxTooltip}
-                    </span>
-                  </span>
-                ) : undefined
-              }
-            >
-              <input
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                inputMode="decimal"
-                className="input text-sm w-full font-mono tabular-nums"
+          </Field>
+        )}
+        {/* «Долг»: direction + the real account. The debt account «Долги»
+            is implicit (Zenmoney keeps one per user). */}
+        {isDebt && (
+          <>
+            <Field label="Операция с долгом">
+              {/* Тот же `Segmented`, что у «Типа операции» строкой выше: два
+                  переключателя подряд обязаны выглядеть одинаково. */}
+              <Segmented
+                size="sm"
+                block
+                label="Операция с долгом"
+                value={debtOutgoing ? "out" : "in"}
+                onChange={(next) => setDebtOutgoing(next === "out")}
+                options={[
+                  {
+                    value: "out",
+                    label: "Я дал / вернул",
+                    title: "Я дал в долг | Я вернул долг",
+                    tone: "warn",
+                  },
+                  {
+                    value: "in",
+                    label: "Мне дали / вернули",
+                    title: "Мне дали в долг | Мне вернули долг",
+                    tone: "warn",
+                  },
+                ]}
               />
             </Field>
-            <Field label="Валюта">
-              <Select
-                value={currency}
-                onChange={(v) => setCurrency(v)}
-                // Create + single-leg: currency follows the account (the
-                // draft's amount is in the account's own currency).
-                disabled={isCreate && kind !== "transfer"}
-                options={currencyOptions.map((c) => ({ value: c, label: c }))}
-                ariaLabel="Валюта"
-                portal
+            <Field label={debtOutgoing ? "С какого счёта" : "На какой счёт"}>
+              <Combobox
+                value={realAcc}
+                options={accountOptions}
+                groups={accountGroups}
+                onChange={setRealAcc}
+                placeholder="Реальный счёт"
+                maxHeight={DROPDOWN_MAX}
+              />
+            </Field>
+          </>
+        )}
+        {/* Account(s): one field for income/expense, two for transfer.
+            Placed right under category — it's the second-most
+            identifying attribute of a transaction after the category. */}
+        {!isDebt && kind === "transfer" ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Со счёта">
+              <Combobox
+                value={outAcc}
+                options={accountOptions}
+                groups={accountGroups}
+                onChange={setOutAcc}
+                placeholder="Источник"
+                maxHeight={DROPDOWN_MAX}
+              />
+            </Field>
+            <Field label="На счёт">
+              <Combobox
+                value={inAcc}
+                options={accountOptions}
+                groups={accountGroups}
+                onChange={setInAcc}
+                placeholder="Получатель"
+                maxHeight={DROPDOWN_MAX}
               />
             </Field>
           </div>
-          {/* Cross-currency transfer: the destination leg holds a different
-              sum in its own currency. Pre-filled from the synced FX rate, but
-              the user can override it (they may have exchanged at another rate). */}
-          {isCrossCurrencyTransfer && (
-            <Field label={`Получено (${inAccCurrency})`}>
-              <input
-                value={inAmountValue}
-                onChange={(e) => {
-                  setInAmount(e.target.value);
-                  setManualIn(true);
-                }}
-                inputMode="decimal"
-                placeholder={`Сколько пришло на счёт в ${inAccCurrency}`}
-                className="input text-sm w-full font-mono tabular-nums"
-              />
-              <div className="text-[10px] text-muted mt-1 flex items-center gap-2 flex-wrap">
-                {manualIn ? (
-                  <span>Сумма указана вручную.</span>
-                ) : (
-                  <span>Пересчитано по курсу синхронизации — можно поправить.</span>
-                )}
-                {manualIn && suggestedIn !== null && (
-                  <Tooltip content={`По курсу: ≈ ${suggestedIn.toLocaleString("ru-RU")} ${inAccCurrency}`}>
-                    <button
-                      type="button"
-                      onClick={() => setManualIn(false)}
-                      className="text-accent hover:underline"
-                    >
-                      ↻ пересчитать по курсу
-                    </button>
-                  </Tooltip>
-                )}
-              </div>
-            </Field>
-          )}
-          {!isCreate && isCrossCurrencyMove && (
-            <p className="text-xs text-muted -mt-1">
-              Счёт в {accountNativeCurrency}: укажите «Сумму» в{" "}
-              {accountNativeCurrency}. Исходная сумма ({tx.amount} {currency})
-              сохранится как операционная (мультивалютная операция).
-            </p>
-          )}
-          {/* Single "Получатель" field — autocompletes from the
-              Zenmoney merchant dictionary plus historical raw-payee
-              strings. Hidden for transfers (counterparty there is the
-              income account, surfaced above in its own field). */}
-          {(kind !== "transfer" || isDebt) && (
-            <div className={tx.payeeRaw ? "grid grid-cols-2 gap-3 items-start" : ""}>
-              <Field
-                label={
-                  isDebt
-                    ? "Контрагент"
-                    : kind === "income" || kind === "refund"
-                      ? "Плательщик"
-                      : "Место платежа"
-                }
-                labelAfter={
-                  // Состояние справочника рядом с ярлыком. ✓ — запись есть, и
-                  // операция сохранится СВЯЗЬЮ с ней. Плюс — записи нет, но мы
-                  // заведём её вместе с операцией (только при СОЗДАНии: правка
-                  // чужой операции не должна плодить записи из банковских
-                  // строк вроде «MAGNIT 7712 MOSCOW» — там по-прежнему ✗ и
-                  // свободный текст). Значок повторяет ту же логику, что и
-                  // отправка, поэтому он не врёт. Молчит, пока справочник
-                  // грузится или поле пусто.
-                  payeeStatus === null ? undefined : (
-                    <span
-                      className="inline-flex"
-                      title={
-                        payeeStatus === "existing"
-                          ? "Есть в справочнике контрагентов — сохранится связью с записью"
-                          : mintsCounterparty
-                            ? "Нет в справочнике — заведём запись вместе с операцией"
-                            : "Нет в справочнике контрагентов — сохранится свободным текстом"
-                      }
-                    >
-                      {payeeStatus === "existing" ? (
-                        <BadgeCheck
-                          className="w-3.5 h-3.5 text-income"
-                          aria-label="Есть в справочнике контрагентов"
-                        />
-                      ) : mintsCounterparty ? (
-                        <BadgePlus
-                          className="w-3.5 h-3.5 text-accent"
-                          aria-label="Новый контрагент — заведём в справочнике"
-                        />
-                      ) : (
-                        <BadgeX
-                          className="w-3.5 h-3.5 text-muted"
-                          aria-label="Нет в справочнике контрагентов"
-                        />
-                      )}
-                    </span>
-                  )
-                }
-              >
+        ) : null}
+        {/* Счёт, сумма и валюта — одним рядом: «откуда, сколько и в чём».
+            Отдельный ряд под счёт стоил форме прокрутки на ноутбуке. У
+            перевода и долга счета свои и стоят выше — там ряд из двух. На
+            узком экране счёт уходит на всю ширину над суммой. */}
+        <div
+          className={`grid gap-3 ${
+            !isDebt && kind !== "transfer"
+              ? "grid-cols-2 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_6.5rem]"
+              : "grid-cols-2"
+          }`}
+        >
+          {!isDebt && kind !== "transfer" && (
+            <div className="col-span-2 sm:col-span-1 min-w-0">
+              <Field label="Счёт">
                 <Combobox
-                  value={payee}
-                  options={payeeOptions}
-                  groups={payeeGroups}
-                  onChange={setPayee}
-                  placeholder="Введите или выберите из списка"
+                  value={account}
+                  options={accountOptions}
+                  groups={accountGroups}
+                  onChange={setAccount}
+                  placeholder="Выберите счёт"
                   maxHeight={DROPDOWN_MAX}
                 />
               </Field>
-              {/* Read-only «as printed by the bank» field — the immutable
-                  `payeeRaw` (originalPayee from the API). Sits beside the
-                  editable counterparty so the source text stays visible
-                  without taking its own line. */}
-              {tx.payeeRaw && (
-                <Field label="В выписке">
-                  <input
-                    type="text"
-                    value={tx.payeeRaw}
-                    readOnly
-                    tabIndex={-1}
-                    title={tx.payeeRaw}
-                    aria-label="Текст из банковской выписки (не редактируется)"
-                    className="input text-sm w-full text-muted bg-panel2/60 cursor-default"
-                  />
-                </Field>
-              )}
             </div>
           )}
           <Field
-            label="Комментарий"
-            // Grows to fill the leftover modal height so the comment ends at the
-            // same bottom edge for every operation type.
-            className="flex-1 flex flex-col min-h-0"
+            label="Сумма"
+            labelAfter={
+              isForeignCurrency && fxTooltip ? (
+                <span className="relative inline-flex group shrink-0">
+                  <Info className="w-3.5 h-3.5 text-muted cursor-help" aria-hidden />
+                  <span
+                    role="tooltip"
+                    className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-150 absolute z-50 left-0 top-full mt-1.5 w-60 rounded-lg border border-border bg-panel shadow-lg px-3 py-2 text-xs leading-relaxed text-text whitespace-pre-line"
+                  >
+                    {fxTooltip}
+                  </span>
+                </span>
+              ) : undefined
+            }
           >
-            <HashtagTextarea
-              key={commentKey}
-              value={comment}
-              onChange={setComment}
-              tags={allTags}
-              rows={4}
-              // `flex-1` stretches it to fill the remaining height down to the
-              // footer (same bottom edge for all types); min-h is the floor for
-              // manual (drag) shrinking / the rare no-spare-space case.
-              className="input text-sm w-full resize-y min-h-[3.75rem] flex-1"
+            <input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              inputMode="decimal"
+              className="input text-sm w-full font-mono tabular-nums"
+            />
+          </Field>
+          <Field label="Валюта">
+            <Select
+              value={currency}
+              onChange={(v) => setCurrency(v)}
+              // Create + single-leg: currency follows the account (the
+              // draft's amount is in the account's own currency).
+              disabled={isCreate && kind !== "transfer"}
+              options={currencyOptions.map((c) => ({ value: c, label: c }))}
+              ariaLabel="Валюта"
+              portal
             />
           </Field>
         </div>
-        {error && (
-          <div className="shrink-0 px-5 pt-2 pb-1 text-xs text-expense">{error}</div>
-        )}
-        <div className="shrink-0 flex items-center justify-between gap-2 px-5 py-4 border-t border-border">
-          {isCreate ? (
-            <span />
-          ) : (
-            // Четыре подписи в ряд перестали помещаться в карточку шириной
-            // 512 пикселей, и кнопки поехали к самым краям. Удаление осталось
-            // одним значком: подпись ему не нужна (корзину читают без слов), а
-            // разрушительное действие и не должно быть самым широким предметом
-            // в подвале. Освободившееся место ушло «Копировать», которое без
-            // подписи как раз непонятно.
-            <div className="flex items-center gap-2">
-              {/* Значок без подписи — только когда рядом стоит «Копировать» и
-                  места на две подписи не хватает. Один он смотрелся сиротой у
-                  левого края, а места в этом случае вдоволь. */}
-              <Tooltip content="Удалить операцию">
-                <button
-                  onClick={handleDelete}
-                  disabled={saving}
-                  aria-label="Удалить операцию"
-                  className={onCopy ? "btn-danger text-sm px-3" : "btn-danger text-sm"}
-                >
-                  <Trash2 className={onCopy ? "w-4 h-4" : "w-3.5 h-3.5"} />
-                  {!onCopy && "Удалить"}
-                </button>
-              </Tooltip>
-              {/* Копирование и разделение — значками без подписей. Обе
-                  подписи рядом с «Удалить» забивали подвал текстом, а
-                  действия эти опознаются по значку: ножницы и две страницы
-                  трактовать иначе трудно. */}
-              {onCopy && (
-                <Tooltip content="Копировать — такая же операция сегодняшним днём">
-                  <button
-                    onClick={onCopy}
-                    disabled={saving}
-                    aria-label="Копировать операцию"
-                    className="btn-ghost text-sm px-3"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </Tooltip>
+        {/* Cross-currency transfer: the destination leg holds a different
+            sum in its own currency. Pre-filled from the synced FX rate, but
+            the user can override it (they may have exchanged at another rate). */}
+        {isCrossCurrencyTransfer && (
+          <Field label={`Получено (${inAccCurrency})`}>
+            <input
+              value={inAmountValue}
+              onChange={(e) => {
+                setInAmount(e.target.value);
+                setManualIn(true);
+              }}
+              inputMode="decimal"
+              placeholder={`Сколько пришло на счёт в ${inAccCurrency}`}
+              className="input text-sm w-full font-mono tabular-nums"
+            />
+            <div className="text-[10px] text-muted mt-1 flex items-center gap-2 flex-wrap">
+              {manualIn ? (
+                <span>Сумма указана вручную.</span>
+              ) : (
+                <span>Пересчитано по курсу синхронизации — можно поправить.</span>
               )}
-              {onSplit && (
-                <Tooltip content="Разделить — расписать операцию по нескольким статьям">
+              {manualIn && suggestedIn !== null && (
+                <Tooltip content={`По курсу: ≈ ${suggestedIn.toLocaleString("ru-RU")} ${inAccCurrency}`}>
                   <button
-                    onClick={onSplit}
-                    disabled={saving}
-                    aria-label="Разделить операцию"
-                    className="btn-ghost text-sm px-3"
+                    type="button"
+                    onClick={() => setManualIn(false)}
+                    className="text-accent hover:underline"
                   >
-                    <Scissors className="w-4 h-4" />
+                    ↻ пересчитать по курсу
                   </button>
                 </Tooltip>
               )}
             </div>
-          )}
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="btn-ghost text-sm">
-              <X className="w-3.5 h-3.5" />
-              Отмена
-            </button>
-            <button
-              onClick={save}
-              disabled={saving}
-              className="btn-primary text-sm"
+          </Field>
+        )}
+        {!isCreate && isCrossCurrencyMove && (
+          <p className="text-xs text-muted -mt-1">
+            Счёт в {accountNativeCurrency}: укажите «Сумму» в{" "}
+            {accountNativeCurrency}. Исходная сумма ({tx.amount} {currency})
+            сохранится как операционная (мультивалютная операция).
+          </p>
+        )}
+        {/* Single "Получатель" field — autocompletes from the
+            Zenmoney merchant dictionary plus historical raw-payee
+            strings. Hidden for transfers (counterparty there is the
+            income account, surfaced above in its own field). */}
+        {(kind !== "transfer" || isDebt) && (
+          <div className={tx.payeeRaw ? "grid grid-cols-2 gap-3 items-start" : ""}>
+            <Field
+              label={
+                isDebt
+                  ? "Контрагент"
+                  : kind === "income" || kind === "refund"
+                    ? "Плательщик"
+                    : "Место платежа"
+              }
+              labelAfter={
+                // Состояние справочника рядом с ярлыком. ✓ — запись есть, и
+                // операция сохранится СВЯЗЬЮ с ней. Плюс — записи нет, но мы
+                // заведём её вместе с операцией (только при СОЗДАНии: правка
+                // чужой операции не должна плодить записи из банковских
+                // строк вроде «MAGNIT 7712 MOSCOW» — там по-прежнему ✗ и
+                // свободный текст). Значок повторяет ту же логику, что и
+                // отправка, поэтому он не врёт. Молчит, пока справочник
+                // грузится или поле пусто.
+                payeeStatus === null ? undefined : (
+                  <span
+                    className="inline-flex"
+                    title={
+                      payeeStatus === "existing"
+                        ? "Есть в справочнике контрагентов — сохранится связью с записью"
+                        : mintsCounterparty
+                          ? "Нет в справочнике — заведём запись вместе с операцией"
+                          : "Нет в справочнике контрагентов — сохранится свободным текстом"
+                    }
+                  >
+                    {payeeStatus === "existing" ? (
+                      <BadgeCheck
+                        className="w-3.5 h-3.5 text-income"
+                        aria-label="Есть в справочнике контрагентов"
+                      />
+                    ) : mintsCounterparty ? (
+                      <BadgePlus
+                        className="w-3.5 h-3.5 text-accent"
+                        aria-label="Новый контрагент — заведём в справочнике"
+                      />
+                    ) : (
+                      <BadgeX
+                        className="w-3.5 h-3.5 text-muted"
+                        aria-label="Нет в справочнике контрагентов"
+                      />
+                    )}
+                  </span>
+                )
+              }
             >
-              {isCreate ? (
-                <Plus className="w-3.5 h-3.5" />
-              ) : (
-                <Save className="w-3.5 h-3.5" />
-              )}
-              {isCreate ? "Создать" : "Сохранить"}
-            </button>
+              <Combobox
+                value={payee}
+                options={payeeOptions}
+                groups={payeeGroups}
+                onChange={setPayee}
+                placeholder="Введите или выберите из списка"
+                maxHeight={DROPDOWN_MAX}
+              />
+            </Field>
+            {/* Read-only «as printed by the bank» field — the immutable
+                `payeeRaw` (originalPayee from the API). Sits beside the
+                editable counterparty so the source text stays visible
+                without taking its own line. */}
+            {tx.payeeRaw && (
+              <Field label="В выписке">
+                <input
+                  type="text"
+                  value={tx.payeeRaw}
+                  readOnly
+                  tabIndex={-1}
+                  title={tx.payeeRaw}
+                  aria-label="Текст из банковской выписки (не редактируется)"
+                  className="input text-sm w-full text-muted bg-panel2/60 cursor-default"
+                />
+              </Field>
+            )}
           </div>
+        )}
+        <Field
+          label="Комментарий"
+          // Grows to fill the leftover modal height so the comment ends at the
+          // same bottom edge for every operation type.
+          className="flex-1 flex flex-col min-h-0"
+        >
+          <HashtagTextarea
+            key={commentKey}
+            value={comment}
+            onChange={setComment}
+            tags={allTags}
+            rows={4}
+            // `flex-1` stretches it to fill the remaining height down to the
+            // footer (same bottom edge for all types); min-h is the floor for
+            // manual (drag) shrinking / the rare no-spare-space case.
+            className="input text-sm w-full resize-y min-h-[3.75rem] flex-1"
+          />
+        </Field>
+      </ModalBody>
+      {error && (
+        <div className="shrink-0 px-5 pt-2 pb-1 text-xs text-expense">{error}</div>
+      )}
+      <ModalFooter justify="between">
+        {isCreate ? (
+          <span />
+        ) : (
+          // Четыре подписи в ряд перестали помещаться в карточку шириной
+          // 512 пикселей, и кнопки поехали к самым краям. Удаление осталось
+          // одним значком: подпись ему не нужна (корзину читают без слов), а
+          // разрушительное действие и не должно быть самым широким предметом
+          // в подвале. Освободившееся место ушло «Копировать», которое без
+          // подписи как раз непонятно.
+          <div className="flex items-center gap-2">
+            {/* Значок без подписи — только когда рядом стоит «Копировать» и
+                места на две подписи не хватает. Один он смотрелся сиротой у
+                левого края, а места в этом случае вдоволь. */}
+            <Tooltip content="Удалить операцию">
+              <button
+                onClick={handleDelete}
+                disabled={saving}
+                aria-label="Удалить операцию"
+                className={onCopy ? "btn-danger text-sm px-3" : "btn-danger text-sm"}
+              >
+                <Trash2 className={onCopy ? "w-4 h-4" : "w-3.5 h-3.5"} />
+                {!onCopy && "Удалить"}
+              </button>
+            </Tooltip>
+            {/* Копирование и разделение — значками без подписей. Обе
+                подписи рядом с «Удалить» забивали подвал текстом, а
+                действия эти опознаются по значку: ножницы и две страницы
+                трактовать иначе трудно. */}
+            {onCopy && (
+              <Tooltip content="Копировать — такая же операция сегодняшним днём">
+                <button
+                  onClick={onCopy}
+                  disabled={saving}
+                  aria-label="Копировать операцию"
+                  className="btn-ghost text-sm px-3"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </Tooltip>
+            )}
+            {onSplit && (
+              <Tooltip content="Разделить — расписать операцию по нескольким статьям">
+                <button
+                  onClick={onSplit}
+                  disabled={saving}
+                  aria-label="Разделить операцию"
+                  className="btn-ghost text-sm px-3"
+                >
+                  <Scissors className="w-4 h-4" />
+                </button>
+              </Tooltip>
+            )}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="btn-ghost text-sm">
+            <X className="w-3.5 h-3.5" />
+            Отмена
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="btn-primary text-sm"
+          >
+            {isCreate ? (
+              <Plus className="w-3.5 h-3.5" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            {isCreate ? "Создать" : "Сохранить"}
+          </button>
         </div>
-      </div>
-    </div>,
-    document.body
+      </ModalFooter>
+    </Modal>
   );
 }
 

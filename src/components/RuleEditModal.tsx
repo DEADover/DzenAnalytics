@@ -1,8 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Checkbox } from "./Checkbox";
-import { createPortal } from "react-dom";
 import {
-  X,
   Wand2,
   ChevronDown,
   Plus,
@@ -50,6 +48,7 @@ import { ruleModeFields, ruleModeOf } from "../lib/ruleMode";
 import type { RuleSchedule } from "../lib/ruleSchedule";
 import { useDataStore } from "../store/useDataStore";
 import type { Transaction } from "../types";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 const RULE_FIELDS: { value: RuleField; label: string }[] = (
   Object.keys(FIELD_LABELS) as RuleField[]
@@ -292,7 +291,6 @@ export function RuleEditModal({
   onClose,
   onSave,
 }: Props) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const [showMatches, setShowMatches] = useState(false);
 
   /**
@@ -348,13 +346,6 @@ export function RuleEditModal({
         }
       : EMPTY
   );
-
-  useEffect(() => {
-    panelRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   function patchCondition(id: string, patch: Partial<RuleCondition>) {
     setDraft((d) => ({
@@ -517,536 +508,507 @@ export function RuleEditModal({
     onClose();
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rule-edit-title"
-        className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-border bg-panel shadow-2xl outline-none"
-      >
-        <div className="flex items-center gap-3 px-5 py-4 bg-panel2/50 border-b border-border rounded-t-2xl shrink-0">
-          <span className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-            <Wand2 className="w-5 h-5 text-accent" />
+  return (
+    <Modal onClose={onClose} width="2xl">
+      <ModalHeader
+        icon={Wand2}
+        overline={rule ? "Правило" : "Новое правило"}
+        // Описание показываем, только когда правило уже что-то значит: на пустом
+        // бланке «Получатель содержит «»» — шум, а не подсказка.
+        title={
+          <span title={hasSubstance ? describeRule(cleaned) : undefined}>
+            {hasSubstance ? describeRule(cleaned) : "Условие → что изменить"}
           </span>
-          <div className="min-w-0 flex-1">
-            <div
-              className="text-[11px] uppercase tracking-wider text-muted"
-              id="rule-edit-title"
-            >
-              {rule ? "Правило" : "Новое правило"}
-            </div>
-            {/* Описание показываем, только когда правило уже что-то значит:
-                на пустом бланке «Получатель содержит «»» — шум, а не подсказка. */}
-            <div className="font-semibold truncate" title={hasSubstance ? describeRule(cleaned) : undefined}>
-              {hasSubstance ? describeRule(cleaned) : "Условие → что изменить"}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn-ghost !p-1.5 text-muted hover:text-text shrink-0"
-            aria-label="Закрыть"
-            title="Закрыть (Esc)"
-          >
-            <X className="w-4 h-4" />
-          </button>
+        }
+      />
+
+      <ModalBody scroll gap={5}>
+        <div>
+          <label className="label block mb-1" htmlFor="rule-title">
+            Название <span className="font-normal normal-case">— необязательно</span>
+          </label>
+          <input
+            id="rule-title"
+            value={draft.title}
+            onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+            placeholder="Купоны по облигациям"
+            className={FIELD}
+            autoFocus
+          />
         </div>
 
-        <div className="p-5 space-y-5 overflow-y-auto">
-          <div>
-            <label className="label block mb-1" htmlFor="rule-title">
-              Название <span className="font-normal normal-case">— необязательно</span>
-            </label>
-            <input
-              id="rule-title"
-              value={draft.title}
-              onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-              placeholder="Купоны по облигациям"
-              className={FIELD}
-              autoFocus
-            />
-          </div>
+        {/* --- Режим ------------------------------------------------------
+            Раньше режим жил только в таблице: правило создавалось молча
+            включённым «по кнопке», и человек, задумавший автоправило с
+            расписанием, узнавал об этом уже после сохранения. */}
+        <div>
+          <div className="label mb-2">Режим</div>
+          <RuleModePanel
+            // Журнал и ручной запуск — только у сохранённого правила: у
+            // нового прогонять ещё нечего, оно существует лишь в этом окне.
+            run={rule ? ruleRuns[rule.id] : undefined}
+            onRunNow={rule ? () => runRuleNow(rule.id) : undefined}
+            value={{
+              mode: ruleModeOf({ enabled: draft.enabled, autoApply: draft.autoApply }),
+              schedule: draft.schedule,
+            }}
+            onChange={(next) =>
+              setDraft((d) => ({
+                ...d,
+                ...ruleModeFields(next.mode),
+                schedule: next.schedule,
+              }))
+            }
+          />
+        </div>
 
-          {/* --- Режим ------------------------------------------------------
-              Раньше режим жил только в таблице: правило создавалось молча
-              включённым «по кнопке», и человек, задумавший автоправило с
-              расписанием, узнавал об этом уже после сохранения. */}
-          <div>
-            <div className="label mb-2">Режим</div>
-            <RuleModePanel
-              // Журнал и ручной запуск — только у сохранённого правила: у
-              // нового прогонять ещё нечего, оно существует лишь в этом окне.
-              run={rule ? ruleRuns[rule.id] : undefined}
-              onRunNow={rule ? () => runRuleNow(rule.id) : undefined}
-              value={{
-                mode: ruleModeOf({ enabled: draft.enabled, autoApply: draft.autoApply }),
-                schedule: draft.schedule,
-              }}
-              onChange={(next) =>
-                setDraft((d) => ({
-                  ...d,
-                  ...ruleModeFields(next.mode),
-                  schedule: next.schedule,
-                }))
-              }
-            />
-          </div>
+        {/* --- Условия --------------------------------------------------- */}
+        <div>
+          <div className="label mb-2">Если</div>
 
-          {/* --- Условия --------------------------------------------------- */}
-          <div>
-            <div className="label mb-2">Если</div>
+          {/* Связка И/ИЛИ стоит МЕЖДУ карточками, а не в заголовке: там она
+              читалась как свойство раздела, хотя описывает стык условий.
+              Слово «если» у первой строки убрано — заголовок уже сказал это.
 
-            {/* Связка И/ИЛИ стоит МЕЖДУ карточками, а не в заголовке: там она
-                читалась как свойство раздела, хотя описывает стык условий.
-                Слово «если» у первой строки убрано — заголовок уже сказал это.
-
-                Условия живут в группах — это скобки выражения. Пока группа одна,
-                рамки вокруг неё нет: у простого правила лишняя коробка только
-                утяжеляет форму. */}
-            <div className="space-y-2">
-              {draft.groups.map((g, gi) => (
-                <Fragment key={g.id}>
-                  {gi > 0 && (
-                    <JoinRow
-                      value={draft.join}
-                      editable={gi === 1}
-                      onChange={(j) => setDraft((d) => ({ ...d, join: j }))}
-                      label="Как объединять группы"
-                      andTitle="Должны выполниться все группы"
-                      orTitle="Достаточно одной группы"
-                      staticTitle="Связка одна на все группы — меняется переключателем выше"
-                    />
+              Условия живут в группах — это скобки выражения. Пока группа одна,
+              рамки вокруг неё нет: у простого правила лишняя коробка только
+              утяжеляет форму. */}
+          <div className="space-y-2">
+            {draft.groups.map((g, gi) => (
+              <Fragment key={g.id}>
+                {gi > 0 && (
+                  <JoinRow
+                    value={draft.join}
+                    editable={gi === 1}
+                    onChange={(j) => setDraft((d) => ({ ...d, join: j }))}
+                    label="Как объединять группы"
+                    andTitle="Должны выполниться все группы"
+                    orTitle="Достаточно одной группы"
+                    staticTitle="Связка одна на все группы — меняется переключателем выше"
+                  />
+                )}
+                <div
+                  className={clsx(
+                    "space-y-2",
+                    multiGroup && "rounded-xl border border-accent/30 bg-panel2/20 p-2"
                   )}
-                  <div
-                    className={clsx(
-                      "space-y-2",
-                      multiGroup && "rounded-xl border border-accent/30 bg-panel2/20 p-2"
-                    )}
-                  >
-              {g.conditions.map((c, i) => (
-                <Fragment key={c.id}>
-                  {i > 0 && (
-                    <JoinRow
-                      value={g.join}
-                      editable={i === 1}
-                      onChange={(j) => patchGroup(g.id!, { join: j })}
-                      label="Как объединять условия в группе"
-                      andTitle="Должны выполниться все условия группы"
-                      orTitle="Достаточно одного условия группы"
-                      staticTitle="Связка одна на всю группу — меняется переключателем выше"
-                    />
-                  )}
-                  <div className="rounded-lg border border-border bg-panel2/40 p-2 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Select
-                        className="flex-1 min-w-0"
-                        ariaLabel="Поле условия"
-                        portal
-                        value={c.field}
-                        options={RULE_FIELDS}
-                        onChange={(v) =>
-                          // Значение осмысленно только внутри своего поля:
-                          // название счёта в поле комментария — мусор. Операция
-                          // тоже: «Сумма содержит» — бессмыслица, поэтому при
-                          // смене вида поля берём первую операцию из его списка.
-                          patchCondition(c.id!, {
-                            field: v,
-                            value: "",
-                            op: opsForField(v).includes(c.op) ? c.op : opsForField(v)[0],
-                          })
-                        }
-                      />
-                      <Select
-                        className="flex-1 min-w-0"
-                        ariaLabel="Условие"
-                        portal
-                        value={c.op}
-                        options={opsOf(c.field)}
-                        onChange={(v) => patchCondition(c.id!, { op: v })}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeCondition(c.id!)}
-                        className="btn-ghost btn-square-md text-muted hover:text-expense"
-                        title="Удалить условие"
-                        aria-label="Удалить условие"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    {/* «Не заполнено» / «Заполнено» значения не требуют — поле
-                        прячем, чтобы не спрашивать то, что не будет учтено. */}
-                    {!VALUELESS_OPS.has(c.op) && (
-                      <div className="flex items-center gap-2">
-                        {/* У счёта и категории значение — не свободный текст, а
-                            название из списка: набирать его руками негде и
-                            незачем, а у категории ещё и легко ошибиться —
-                            сравнение идёт с полным путём «Родитель / Ребёнок»,
-                            и «Кафе» вместо «Еда / Кафе» молча не совпадёт ни с
-                            чем. Для «содержит» и регулярных выражений поле
-                            остаётся текстовым — там как раз нужен кусок строки. */}
-                        {c.field === "account" && c.op === "equals" ? (
-                          <div className="flex-1 min-w-0">
-                            <Combobox
-                              value={c.value}
-                              options={accounts}
-                              groups={accountGroups}
-                              renderIcon={(title) => (
-                                <AccountLogo title={title} size={18} />
-                              )}
-                              allowCustom={false}
-                              searchable
-                              portal
-                              onChange={(v) => patchCondition(c.id!, { value: v })}
-                              placeholder="Поиск счёта"
-                            />
-                          </div>
-                        ) : c.field === "category" && c.op === "equals" ? (
-                          <div className="flex-1 min-w-0">
-                            <CategoryCascadePicker
-                              category={
-                                c.value.trim() ? splitCategoryFull(c.value).category : ""
-                              }
-                              subcategory={
-                                c.value.trim()
-                                  ? splitCategoryFull(c.value).subcategory ?? ""
-                                  : ""
-                              }
-                              categories={categoryNodes}
-                              portal
-                              onChange={(cat, sub) =>
-                                patchCondition(c.id!, {
-                                  value: joinCategoryFull(cat, sub || null),
-                                })
-                              }
-                            />
-                          </div>
-                        ) : (
-                        <input
-                          value={c.value}
-                          onChange={(e) => patchCondition(c.id!, { value: e.target.value })}
-                          placeholder={
-                            NUMERIC_FIELDS.has(c.field)
-                              ? "1000"
-                              : c.op === "regex"
-                                ? "^(яндекс|ozon)"
-                                : "магнит"
-                          }
-                          inputMode={NUMERIC_FIELDS.has(c.field) ? "decimal" : undefined}
-                          className={clsx(
-                            FIELD,
-                            c.op === "regex" && "font-mono",
-                            NUMERIC_FIELDS.has(c.field) && "tabular-nums"
-                          )}
-                          aria-label="Значение условия"
-                          aria-invalid={c.op === "regex" && brokenRegex.has(c.id!)}
-                        />
-                        )}
-                        {c.op === "regex" && (
-                          <Tooltip content={REGEX_HINT} placement="bottom">
-                            <button
-                              type="button"
-                              className={clsx(
-                                "shrink-0",
-                                brokenRegex.has(c.id!)
-                                  ? "text-expense"
-                                  : "text-muted hover:text-accent"
-                              )}
-                              aria-label="Синтаксис регулярных выражений"
-                            >
-                              <HelpCircle className="w-4 h-4" />
-                            </button>
-                          </Tooltip>
-                        )}
-                        {/* У числа регистра нет — галочке рядом с суммой
-                            отвечать не на что. Вместо неё подпись о том, в чём
-                            сумма считается: правило по счёту в долларах иначе
-                            выглядит загадкой. */}
-                        {NUMERIC_FIELDS.has(c.field) ? (
-                          <Tooltip content="Сумма берётся в валюте отчётов и без знака: «больше 1000» поймает и трату, и поступление">
-                            <span className="text-xs text-muted shrink-0 whitespace-nowrap border-b border-dotted border-border cursor-help">
-                              {base}
-                            </span>
-                          </Tooltip>
-                        ) : (
-                        <label
-                          className="flex items-center gap-1.5 text-xs text-muted cursor-pointer shrink-0 whitespace-nowrap"
-                          title="Считать «магнит» и «МАГНИТ» одним и тем же"
-                        >
-                          <Checkbox
-                            checked={c.caseInsensitive}
-                            onChange={(on) =>
-                              patchCondition(c.id!, { caseInsensitive: on })
-                            }
-                            label="Без учёта регистра"
-                          />
-                          Регистр не важен
-                        </label>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </Fragment>
-              ))}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        patchGroup(g.id!, { conditions: [...g.conditions, newCondition()] })
-                      }
-                      className="btn-ghost text-xs"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Условие
-                    </button>
-                  </div>
-                </Fragment>
-              ))}
-            </div>
-
-            <Tooltip content="Отдельная скобка: внутри неё будет своя связка И/ИЛИ">
-              <button
-                type="button"
-                onClick={() =>
-                  setDraft((d) => ({ ...d, groups: [...d.groups, newGroup()] }))
-                }
-                className="btn-ghost text-xs mt-2"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Группа условий
-              </button>
-            </Tooltip>
-          </div>
-
-          {/* --- Действия -------------------------------------------------- */}
-          <div>
-            <div className="label mb-2">То</div>
-            <div className="space-y-2">
-              {draft.actions.map((a) => {
-                const target = actionTarget(a.kind);
-                // Цель, занятая ДРУГИМ действием, из списка убирается: одно
-                // правило не может задавать одно и то же поле дважды —
-                // применилось бы последнее, а человек видел бы два действия.
-                const takenByOthers = new Set(
-                  draft.actions.filter((x) => x.id !== a.id).map((x) => actionTarget(x.kind))
-                );
-                const targetOptions = ACTION_TARGETS.filter(
-                  (o) => o.value === target || !takenByOthers.has(o.value)
-                );
-                return (
-                  <div key={a.id} className="flex items-center gap-2 min-w-0">
+                >
+            {g.conditions.map((c, i) => (
+              <Fragment key={c.id}>
+                {i > 0 && (
+                  <JoinRow
+                    value={g.join}
+                    editable={i === 1}
+                    onChange={(j) => patchGroup(g.id!, { join: j })}
+                    label="Как объединять условия в группе"
+                    andTitle="Должны выполниться все условия группы"
+                    orTitle="Достаточно одного условия группы"
+                    staticTitle="Связка одна на всю группу — меняется переключателем выше"
+                  />
+                )}
+                <div className="rounded-lg border border-border bg-panel2/40 p-2 space-y-2">
+                  <div className="flex items-center gap-2">
                     <Select
-                      className="w-36 shrink-0"
-                      ariaLabel="Что менять"
+                      className="flex-1 min-w-0"
+                      ariaLabel="Поле условия"
                       portal
-                      value={target}
-                      options={targetOptions}
+                      value={c.field}
+                      options={RULE_FIELDS}
                       onChange={(v) =>
-                        patchAction(a.id!, {
-                          kind: DEFAULT_KIND[v],
-                          // Значение осмысленно только внутри своей цели:
-                          // категория в поле комментария — мусор.
+                        // Значение осмысленно только внутри своего поля:
+                        // название счёта в поле комментария — мусор. Операция
+                        // тоже: «Сумма содержит» — бессмыслица, поэтому при
+                        // смене вида поля берём первую операцию из его списка.
+                        patchCondition(c.id!, {
+                          field: v,
                           value: "",
+                          op: opsForField(v).includes(c.op) ? c.op : opsForField(v)[0],
                         })
                       }
                     />
-                    {target === "comment" && (
-                      <Select
-                        className="w-52 shrink-0"
-                        ariaLabel="Как записать комментарий"
-                        portal
-                        value={a.kind}
-                        options={COMMENT_MODES}
-                        onChange={(v) => patchAction(a.id!, { kind: v })}
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      {target === "category" ? (
-                        <CategoryCascadePicker
-                          category={a.value.trim() ? splitCategoryFull(a.value).category : ""}
-                          subcategory={
-                            a.value.trim() ? splitCategoryFull(a.value).subcategory ?? "" : ""
-                          }
-                          // Записать правило может только живую категорию:
-                          // старые имена из истории отправка не примет.
-                          categories={liveCategories ?? categoryNodes}
-                          portal
-                          onChange={(cat, sub) =>
-                            patchAction(a.id!, { value: joinCategoryFull(cat, sub || null) })
-                          }
-                        />
-                      ) : target === "payee" ? (
-                        <Combobox
-                          value={a.value}
-                          options={payees}
-                          portal
-                          onChange={(v) => patchAction(a.id!, { value: v })}
-                          placeholder="Сбербанк"
-                        />
-                      ) : (
-                        <input
-                          value={a.value}
-                          onChange={(e) => patchAction(a.id!, { value: e.target.value })}
-                          placeholder={
-                            a.kind === "setComment" ? "Новый комментарий" : "[купон]"
-                          }
-                          className={FIELD}
-                          aria-label="Значение действия"
-                        />
-                      )}
-                    </div>
+                    <Select
+                      className="flex-1 min-w-0"
+                      ariaLabel="Условие"
+                      portal
+                      value={c.op}
+                      options={opsOf(c.field)}
+                      onChange={(v) => patchCondition(c.id!, { op: v })}
+                    />
                     <button
                       type="button"
-                      onClick={() =>
-                        setDraft((d) => ({
-                          ...d,
-                          actions: d.actions.filter((x) => x.id !== a.id),
-                        }))
-                      }
+                      onClick={() => removeCondition(c.id!)}
                       className="btn-ghost btn-square-md text-muted hover:text-expense"
-                      title="Удалить действие"
-                      aria-label="Удалить действие"
+                      title="Удалить условие"
+                      aria-label="Удалить условие"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                );
-              })}
-            </div>
+                  {/* «Не заполнено» / «Заполнено» значения не требуют — поле
+                      прячем, чтобы не спрашивать то, что не будет учтено. */}
+                  {!VALUELESS_OPS.has(c.op) && (
+                    <div className="flex items-center gap-2">
+                      {/* У счёта и категории значение — не свободный текст, а
+                          название из списка: набирать его руками негде и
+                          незачем, а у категории ещё и легко ошибиться —
+                          сравнение идёт с полным путём «Родитель / Ребёнок»,
+                          и «Кафе» вместо «Еда / Кафе» молча не совпадёт ни с
+                          чем. Для «содержит» и регулярных выражений поле
+                          остаётся текстовым — там как раз нужен кусок строки. */}
+                      {c.field === "account" && c.op === "equals" ? (
+                        <div className="flex-1 min-w-0">
+                          <Combobox
+                            value={c.value}
+                            options={accounts}
+                            groups={accountGroups}
+                            renderIcon={(title) => (
+                              <AccountLogo title={title} size={18} />
+                            )}
+                            allowCustom={false}
+                            searchable
+                            portal
+                            onChange={(v) => patchCondition(c.id!, { value: v })}
+                            placeholder="Поиск счёта"
+                          />
+                        </div>
+                      ) : c.field === "category" && c.op === "equals" ? (
+                        <div className="flex-1 min-w-0">
+                          <CategoryCascadePicker
+                            category={
+                              c.value.trim() ? splitCategoryFull(c.value).category : ""
+                            }
+                            subcategory={
+                              c.value.trim()
+                                ? splitCategoryFull(c.value).subcategory ?? ""
+                                : ""
+                            }
+                            categories={categoryNodes}
+                            portal
+                            onChange={(cat, sub) =>
+                              patchCondition(c.id!, {
+                                value: joinCategoryFull(cat, sub || null),
+                              })
+                            }
+                          />
+                        </div>
+                      ) : (
+                      <input
+                        value={c.value}
+                        onChange={(e) => patchCondition(c.id!, { value: e.target.value })}
+                        placeholder={
+                          NUMERIC_FIELDS.has(c.field)
+                            ? "1000"
+                            : c.op === "regex"
+                              ? "^(яндекс|ozon)"
+                              : "магнит"
+                        }
+                        inputMode={NUMERIC_FIELDS.has(c.field) ? "decimal" : undefined}
+                        className={clsx(
+                          FIELD,
+                          c.op === "regex" && "font-mono",
+                          NUMERIC_FIELDS.has(c.field) && "tabular-nums"
+                        )}
+                        aria-label="Значение условия"
+                        aria-invalid={c.op === "regex" && brokenRegex.has(c.id!)}
+                      />
+                      )}
+                      {c.op === "regex" && (
+                        <Tooltip content={REGEX_HINT} placement="bottom">
+                          <button
+                            type="button"
+                            className={clsx(
+                              "shrink-0",
+                              brokenRegex.has(c.id!)
+                                ? "text-expense"
+                                : "text-muted hover:text-accent"
+                            )}
+                            aria-label="Синтаксис регулярных выражений"
+                          >
+                            <HelpCircle className="w-4 h-4" />
+                          </button>
+                        </Tooltip>
+                      )}
+                      {/* У числа регистра нет — галочке рядом с суммой
+                          отвечать не на что. Вместо неё подпись о том, в чём
+                          сумма считается: правило по счёту в долларах иначе
+                          выглядит загадкой. */}
+                      {NUMERIC_FIELDS.has(c.field) ? (
+                        <Tooltip content="Сумма берётся в валюте отчётов и без знака: «больше 1000» поймает и трату, и поступление">
+                          <span className="text-xs text-muted shrink-0 whitespace-nowrap border-b border-dotted border-border cursor-help">
+                            {base}
+                          </span>
+                        </Tooltip>
+                      ) : (
+                      <label
+                        className="flex items-center gap-1.5 text-xs text-muted cursor-pointer shrink-0 whitespace-nowrap"
+                        title="Считать «магнит» и «МАГНИТ» одним и тем же"
+                      >
+                        <Checkbox
+                          checked={c.caseInsensitive}
+                          onChange={(on) =>
+                            patchCondition(c.id!, { caseInsensitive: on })
+                          }
+                          label="Без учёта регистра"
+                        />
+                        Регистр не важен
+                      </label>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </Fragment>
+            ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      patchGroup(g.id!, { conditions: [...g.conditions, newCondition()] })
+                    }
+                    className="btn-ghost text-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Условие
+                  </button>
+                </div>
+              </Fragment>
+            ))}
+          </div>
 
+          <Tooltip content="Отдельная скобка: внутри неё будет своя связка И/ИЛИ">
             <button
               type="button"
-              disabled={freeTargets.length === 0}
               onClick={() =>
-                setDraft((d) => {
-                  const used = new Set(d.actions.map((x) => actionTarget(x.kind)));
-                  const next = ACTION_TARGETS.find((t) => !used.has(t.value));
-                  if (!next) return d;
-                  return {
-                    ...d,
-                    actions: [
-                      ...d.actions,
-                      { id: nextId(), kind: DEFAULT_KIND[next.value], value: "" },
-                    ],
-                  };
-                })
+                setDraft((d) => ({ ...d, groups: [...d.groups, newGroup()] }))
               }
-              className="btn-ghost text-xs mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
-              title={
-                freeTargets.length === 0
-                  ? "Все поля уже заданы: категория, получатель и комментарий"
-                  : "Добавить действие"
-              }
+              className="btn-ghost text-xs mt-2"
             >
               <Plus className="w-3.5 h-3.5" />
-              Действие
+              Группа условий
             </button>
-
-          </div>
-
-          {/* Живой счётчик: правило видно «в деле» ещё до сохранения. Список
-              раскрывается тут же — уходить из окна, чтобы посмотреть, что
-              зацепило правило, значит потерять недописанное условие. */}
-          <div className="rounded-lg border border-border bg-panel2/50">
-            <div className="px-3 py-2 flex items-center gap-3">
-              <div className="text-sm min-w-0 flex-1">
-                {usableConditions.length === 0 ? (
-                  <span className="text-muted">Заполните условие — покажу совпадения</span>
-                ) : count > 0 ? (
-                  <>
-                    Подойдёт <strong className="tabular-nums">{formatNum(count)}</strong>{" "}
-                    {pluralRu(count, ["операция", "операции", "операций"])}
-                    {/* Раньше про отложенную запись говорил значок у каждого
-                        действия. Теперь так работают все три поля — значит это
-                        свойство правила, а не отдельного действия, и сказать о
-                        нём достаточно один раз. */}
-                    <span className="block text-xs text-muted mt-0.5">
-                      Изменятся после кнопки «Проверить и применить» и только те, что
-                      вы отметите в окне
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-muted">Совпадений нет</span>
-                )}
-              </div>
-              {count > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowMatches((v) => !v)}
-                  className="btn-ghost text-xs shrink-0"
-                  aria-expanded={showMatches}
-                  aria-controls="rule-matches"
-                >
-                  <ChevronDown
-                    className={clsx(
-                      "w-3.5 h-3.5 transition-transform",
-                      showMatches && "rotate-180"
-                    )}
-                    aria-hidden
-                  />
-                  {showMatches ? "Скрыть" : "Показать"}
-                </button>
-              )}
-            </div>
-
-            {showMatches && count > 0 && (
-              <div
-                id="rule-matches"
-                className="border-t border-border max-h-60 overflow-y-auto px-3 py-2 space-y-1"
-              >
-                {matches.slice(0, MATCH_LIMIT).map((t) => (
-                  <div key={t.id} className="flex items-center gap-2.5 text-sm">
-                    <CategoryDot category={t.category} size="w-6 h-6" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate">{matchTitle(t)}</div>
-                      <div className="text-xs text-muted truncate">
-                        {formatDate(t.date)} · {t.category || "Без категории"}
-                      </div>
-                    </div>
-                    <div
-                      className={clsx(
-                        "shrink-0 tabular-nums whitespace-nowrap",
-                        t.kind === "income" ? "text-income" : "text-text"
-                      )}
-                    >
-                      {formatMoney(t.amount, t.currency)}
-                    </div>
-                  </div>
-                ))}
-                {count > MATCH_LIMIT && (
-                  <div className="text-xs text-muted pt-1">
-                    Показаны первые {MATCH_LIMIT} из {formatNum(count)} — правило
-                    применится ко всем.
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          </Tooltip>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border shrink-0">
-          {blocker && (
-            <span className="text-xs text-muted mr-auto">{blocker}</span>
-          )}
-          <button type="button" onClick={onClose} className="btn-ghost text-sm">
-            Отмена
-          </button>
+        {/* --- Действия -------------------------------------------------- */}
+        <div>
+          <div className="label mb-2">То</div>
+          <div className="space-y-2">
+            {draft.actions.map((a) => {
+              const target = actionTarget(a.kind);
+              // Цель, занятая ДРУГИМ действием, из списка убирается: одно
+              // правило не может задавать одно и то же поле дважды —
+              // применилось бы последнее, а человек видел бы два действия.
+              const takenByOthers = new Set(
+                draft.actions.filter((x) => x.id !== a.id).map((x) => actionTarget(x.kind))
+              );
+              const targetOptions = ACTION_TARGETS.filter(
+                (o) => o.value === target || !takenByOthers.has(o.value)
+              );
+              return (
+                <div key={a.id} className="flex items-center gap-2 min-w-0">
+                  <Select
+                    className="w-36 shrink-0"
+                    ariaLabel="Что менять"
+                    portal
+                    value={target}
+                    options={targetOptions}
+                    onChange={(v) =>
+                      patchAction(a.id!, {
+                        kind: DEFAULT_KIND[v],
+                        // Значение осмысленно только внутри своей цели:
+                        // категория в поле комментария — мусор.
+                        value: "",
+                      })
+                    }
+                  />
+                  {target === "comment" && (
+                    <Select
+                      className="w-52 shrink-0"
+                      ariaLabel="Как записать комментарий"
+                      portal
+                      value={a.kind}
+                      options={COMMENT_MODES}
+                      onChange={(v) => patchAction(a.id!, { kind: v })}
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    {target === "category" ? (
+                      <CategoryCascadePicker
+                        category={a.value.trim() ? splitCategoryFull(a.value).category : ""}
+                        subcategory={
+                          a.value.trim() ? splitCategoryFull(a.value).subcategory ?? "" : ""
+                        }
+                        // Записать правило может только живую категорию:
+                        // старые имена из истории отправка не примет.
+                        categories={liveCategories ?? categoryNodes}
+                        portal
+                        onChange={(cat, sub) =>
+                          patchAction(a.id!, { value: joinCategoryFull(cat, sub || null) })
+                        }
+                      />
+                    ) : target === "payee" ? (
+                      <Combobox
+                        value={a.value}
+                        options={payees}
+                        portal
+                        onChange={(v) => patchAction(a.id!, { value: v })}
+                        placeholder="Сбербанк"
+                      />
+                    ) : (
+                      <input
+                        value={a.value}
+                        onChange={(e) => patchAction(a.id!, { value: e.target.value })}
+                        placeholder={
+                          a.kind === "setComment" ? "Новый комментарий" : "[купон]"
+                        }
+                        className={FIELD}
+                        aria-label="Значение действия"
+                      />
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        actions: d.actions.filter((x) => x.id !== a.id),
+                      }))
+                    }
+                    className="btn-ghost btn-square-md text-muted hover:text-expense"
+                    title="Удалить действие"
+                    aria-label="Удалить действие"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
           <button
             type="button"
-            onClick={save}
-            disabled={!canSave}
-            className="btn-primary text-sm"
+            disabled={freeTargets.length === 0}
+            onClick={() =>
+              setDraft((d) => {
+                const used = new Set(d.actions.map((x) => actionTarget(x.kind)));
+                const next = ACTION_TARGETS.find((t) => !used.has(t.value));
+                if (!next) return d;
+                return {
+                  ...d,
+                  actions: [
+                    ...d.actions,
+                    { id: nextId(), kind: DEFAULT_KIND[next.value], value: "" },
+                  ],
+                };
+              })
+            }
+            className="btn-ghost text-xs mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={
+              freeTargets.length === 0
+                ? "Все поля уже заданы: категория, получатель и комментарий"
+                : "Добавить действие"
+            }
           >
-            {rule ? "Сохранить" : "Создать"}
+            <Plus className="w-3.5 h-3.5" />
+            Действие
           </button>
+
         </div>
-      </div>
-    </div>,
-    document.body
+
+        {/* Живой счётчик: правило видно «в деле» ещё до сохранения. Список
+            раскрывается тут же — уходить из окна, чтобы посмотреть, что
+            зацепило правило, значит потерять недописанное условие. */}
+        <div className="rounded-lg border border-border bg-panel2/50">
+          <div className="px-3 py-2 flex items-center gap-3">
+            <div className="text-sm min-w-0 flex-1">
+              {usableConditions.length === 0 ? (
+                <span className="text-muted">Заполните условие — покажу совпадения</span>
+              ) : count > 0 ? (
+                <>
+                  Подойдёт <strong className="tabular-nums">{formatNum(count)}</strong>{" "}
+                  {pluralRu(count, ["операция", "операции", "операций"])}
+                  {/* Раньше про отложенную запись говорил значок у каждого
+                      действия. Теперь так работают все три поля — значит это
+                      свойство правила, а не отдельного действия, и сказать о
+                      нём достаточно один раз. */}
+                  <span className="block text-xs text-muted mt-0.5">
+                    Изменятся после кнопки «Проверить и применить» и только те, что
+                    вы отметите в окне
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted">Совпадений нет</span>
+              )}
+            </div>
+            {count > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowMatches((v) => !v)}
+                className="btn-ghost text-xs shrink-0"
+                aria-expanded={showMatches}
+                aria-controls="rule-matches"
+              >
+                <ChevronDown
+                  className={clsx(
+                    "w-3.5 h-3.5 transition-transform",
+                    showMatches && "rotate-180"
+                  )}
+                  aria-hidden
+                />
+                {showMatches ? "Скрыть" : "Показать"}
+              </button>
+            )}
+          </div>
+
+          {showMatches && count > 0 && (
+            <div
+              id="rule-matches"
+              className="border-t border-border max-h-60 overflow-y-auto px-3 py-2 space-y-1"
+            >
+              {matches.slice(0, MATCH_LIMIT).map((t) => (
+                <div key={t.id} className="flex items-center gap-2.5 text-sm">
+                  <CategoryDot category={t.category} size="w-6 h-6" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{matchTitle(t)}</div>
+                    <div className="text-xs text-muted truncate">
+                      {formatDate(t.date)} · {t.category || "Без категории"}
+                    </div>
+                  </div>
+                  <div
+                    className={clsx(
+                      "shrink-0 tabular-nums whitespace-nowrap",
+                      t.kind === "income" ? "text-income" : "text-text"
+                    )}
+                  >
+                    {formatMoney(t.amount, t.currency)}
+                  </div>
+                </div>
+              ))}
+              {count > MATCH_LIMIT && (
+                <div className="text-xs text-muted pt-1">
+                  Показаны первые {MATCH_LIMIT} из {formatNum(count)} — правило
+                  применится ко всем.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </ModalBody>
+
+      <ModalFooter>
+        {blocker && (
+          <span className="text-xs text-muted mr-auto">{blocker}</span>
+        )}
+        <button type="button" onClick={onClose} className="btn-ghost text-sm">
+          Отмена
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!canSave}
+          className="btn-primary text-sm"
+        >
+          {rule ? "Сохранить" : "Создать"}
+        </button>
+      </ModalFooter>
+    </Modal>
   );
 }

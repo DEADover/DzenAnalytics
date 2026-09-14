@@ -6,14 +6,12 @@
 import { Checkbox } from "./Checkbox";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLazyList } from "../hooks/useLazyList";
-import { createPortal } from "react-dom";
 import {
   Search,
   Pencil,
   Trash2,
   Plus,
   Undo2,
-  X,
   Combine,
   UserPlus,
   XSquare,
@@ -39,6 +37,7 @@ import {
   CounterpartyDeleteModal,
   type TransferTarget,
 } from "./CounterpartyDeleteModal";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 /** A row as rendered: cached merchant or unpushed draft, with overlay applied. */
 interface Row {
@@ -1067,23 +1066,14 @@ function CounterpartyModal({
   onAdopt?: (title: string) => void | Promise<void>;
   onClose: () => void;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(row?.title ?? payee?.title ?? "");
 
+  // Фокус сразу в поле названия; вернуть его на место при закрытии — забота
+  // `Modal`.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
     const t = setTimeout(() => inputRef.current?.focus(), 30);
-    return () => {
-      clearTimeout(t);
-      if (prev && document.contains(prev)) prev.focus();
-    };
+    return () => clearTimeout(t);
   }, []);
 
   const trimmed = title.trim();
@@ -1118,98 +1108,78 @@ function CounterpartyModal({
     onClose();
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cp-modal-title"
-        className="w-full max-w-md rounded-2xl border border-border bg-panel shadow-2xl outline-none"
-      >
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border rounded-t-2xl">
-          <div id="cp-modal-title" className="font-semibold">
+  return (
+    <Modal onClose={onClose} width="md" initialFocus={false}>
+      <ModalHeader
+        icon={payee ? UserPlus : row ? Pencil : Plus}
+        title={
+          payee
+            ? "Привязать получателя"
+            : row
+              ? "Редактирование контрагента"
+              : "Новый контрагент"
+        }
+      />
+
+      <ModalBody gap={0}>
+        {payee && (
+          <p className="text-xs text-muted mb-3">
+            Сейчас у{" "}
+            <strong className="text-text tabular-nums">
+              {formatNum(payee.count)}
+            </strong>{" "}
+            {pluralRu(payee.count, ["операции", "операций", "операций"])}{" "}
+            получатель — текст от банка «{payee.title}». Задайте имя, под которым
+            их собрать: можно оставить как есть или выбрать уже заведённого
+            контрагента.
+          </p>
+        )}
+        <label htmlFor="cp-name" className="label block mb-1">
+          Название
+        </label>
+        {/* В привязке — с подсказками из справочника: чаще всего банковскую
+            строку нужно свести к уже существующему контрагенту. */}
+        {payee ? (
+          <Combobox
+            value={title}
+            options={existing.map((e) => e.title)}
+            onChange={setTitle}
+            placeholder="Например, Магнит у дома"
+          />
+        ) : (
+          <input
+            id="cp-name"
+            ref={inputRef}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && save()}
+            placeholder="Например, Магнит у дома"
+            autoComplete="off"
+            className="input w-full text-sm"
+          />
+        )}
+        {duplicate && (
+          <p className={clsx("text-xs mt-1", payee ? "text-muted" : "text-warn")}>
             {payee
-              ? "Привязать получателя"
-              : row
-                ? "Редактирование контрагента"
-                : "Новый контрагент"}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted hover:text-text"
-            aria-label="Закрыть"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+              ? "Такой контрагент уже есть — операции привяжутся к нему, новая запись не появится."
+              : "Контрагент с таким названием уже есть."}
+          </p>
+        )}
+      </ModalBody>
 
-        <div className="px-5 py-4">
-          {payee && (
-            <p className="text-xs text-muted mb-3">
-              Сейчас у{" "}
-              <strong className="text-text tabular-nums">
-                {formatNum(payee.count)}
-              </strong>{" "}
-              {pluralRu(payee.count, ["операции", "операций", "операций"])}{" "}
-              получатель — текст от банка «{payee.title}». Задайте имя, под которым
-              их собрать: можно оставить как есть или выбрать уже заведённого
-              контрагента.
-            </p>
-          )}
-          <label htmlFor="cp-name" className="label block mb-1">
-            Название
-          </label>
-          {/* В привязке — с подсказками из справочника: чаще всего банковскую
-              строку нужно свести к уже существующему контрагенту. */}
-          {payee ? (
-            <Combobox
-              value={title}
-              options={existing.map((e) => e.title)}
-              onChange={setTitle}
-              placeholder="Например, Магнит у дома"
-            />
-          ) : (
-            <input
-              id="cp-name"
-              ref={inputRef}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && save()}
-              placeholder="Например, Магнит у дома"
-              autoComplete="off"
-              className="input w-full text-sm"
-            />
-          )}
-          {duplicate && (
-            <p className={clsx("text-xs mt-1", payee ? "text-muted" : "text-warn")}>
-              {payee
-                ? "Такой контрагент уже есть — операции привяжутся к нему, новая запись не появится."
-                : "Контрагент с таким названием уже есть."}
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border rounded-b-2xl">
-          <button type="button" onClick={onClose} className="btn-ghost text-sm">
-            Отмена
-          </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={!canSave}
-            className="btn-primary text-sm"
-          >
-            {payee ? "Привязать" : row ? "Сохранить" : "Создать"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+      <ModalFooter>
+        <button type="button" onClick={onClose} className="btn-ghost text-sm">
+          Отмена
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!canSave}
+          className="btn-primary text-sm"
+        >
+          {payee ? "Привязать" : row ? "Сохранить" : "Создать"}
+        </button>
+      </ModalFooter>
+    </Modal>
   );
 }

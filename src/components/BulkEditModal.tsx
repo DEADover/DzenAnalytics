@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { Layers, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Layers } from "lucide-react";
 import { Combobox } from "./Combobox";
 import { HashtagTextarea } from "./HashtagTextarea";
 import { pluralOps } from "../lib/plural";
@@ -9,6 +8,7 @@ import { useCategoryDictionary } from "../hooks/useCategoryDictionary";
 import type { Transaction } from "../types";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { Segmented } from "./Segmented";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 /**
  * Bulk-edit modal. Lets the user change Категория (+подкатегория),
@@ -48,27 +48,6 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
   const [commentMode, setCommentMode] = useState<"replace" | "append">("replace");
 
   const [saving, setSaving] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  // Move focus into the dialog on open and return it to whatever was
-  // focused before (e.g. the «Изменить» button) on close — keyboard and
-  // screen-reader users keep their place.
-  useEffect(() => {
-    const prevFocused = document.activeElement as HTMLElement | null;
-    const t = setTimeout(() => panelRef.current?.focus(), 30);
-    return () => {
-      clearTimeout(t);
-      if (prevFocused && document.contains(prevFocused)) prevFocused.focus();
-    };
-  }, []);
 
   // Categories come from the dictionary as well as the dataset, so a category
   // created in Справочники can be used before it has a single operation.
@@ -134,137 +113,107 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
     }
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="bulk-edit-title"
-        className="w-full max-w-lg rounded-xl border border-border bg-panel shadow-xl outline-none"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
-          <div id="bulk-edit-title" className="flex items-center gap-2 font-semibold">
-            <Layers className="w-4 h-4 text-accent" />
-            Массовое изменение
-            <span className="text-muted font-normal text-sm">
-              · выбрано {count} {pluralOps(count)}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted hover:text-text"
-            aria-label="Закрыть"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+  return (
+    <Modal onClose={onClose} width="lg">
+      <ModalHeader
+        icon={Layers}
+        title="Массовое изменение"
+        subtitle={`Выбрано ${count} ${pluralOps(count)}`}
+      />
 
-        {/* Body */}
-        <div className="px-5 py-4 space-y-4">
-          <p className="text-xs text-muted">
-            Изменения применятся ко всем выбранным операциям.
-          </p>
+      <ModalBody>
+        <p className="text-xs text-muted">
+          Изменения применятся ко всем выбранным операциям.
+        </p>
 
-          {/* Category + subcategory */}
-          <div>
-            <label className="label block mb-1">Категория</label>
-            <div className="grid grid-cols-2 gap-2">
-              <Combobox
-                value={category}
-                options={categoryOptions}
-                allowCustom={false}
-                onChange={(next) => {
-                  setCategory(next);
-                  if (
-                    subcategory &&
-                    !subcatByCategory.get(next)?.has(subcategory)
-                  ) {
-                    setSubcategory("");
-                  }
-                }}
-                placeholder="Категория без изменений"
-                maxHeight="200px"
-              />
-              <Combobox
-                value={subcategory}
-                options={Array.from(subcatByCategory.get(category) || []).sort(
-                  (a, b) => a.localeCompare(b, "ru")
-                )}
-                allowCustom={false}
-                clearable
-                onChange={setSubcategory}
-                placeholder="Подкатегория"
-                maxHeight="200px"
-              />
-            </div>
-          </div>
-
-          {/* Payee */}
-          <div>
-            <label className="label block mb-1">Получатель</label>
+        {/* Category + subcategory */}
+        <div>
+          <label className="label block mb-1">Категория</label>
+          <div className="grid grid-cols-2 gap-2">
             <Combobox
-              value={payee}
-              options={payeeOptions}
-              onChange={setPayee}
-              placeholder="Получатель без изменений"
+              value={category}
+              options={categoryOptions}
+              allowCustom={false}
+              onChange={(next) => {
+                setCategory(next);
+                if (
+                  subcategory &&
+                  !subcatByCategory.get(next)?.has(subcategory)
+                ) {
+                  setSubcategory("");
+                }
+              }}
+              placeholder="Категория без изменений"
+              maxHeight="200px"
+            />
+            <Combobox
+              value={subcategory}
+              options={Array.from(subcatByCategory.get(category) || []).sort(
+                (a, b) => a.localeCompare(b, "ru")
+              )}
+              allowCustom={false}
+              clearable
+              onChange={setSubcategory}
+              placeholder="Подкатегория"
               maxHeight="200px"
             />
           </div>
+        </div>
 
-          {/* Comment */}
-          <div>
-            <div className="flex items-center justify-between mb-1 gap-2">
-              <label className="label">Комментарий</label>
-              <Segmented
-                size="sm"
-                label="Как изменить комментарий"
-                value={commentMode}
-                onChange={setCommentMode}
-                options={[
-                  { value: "replace", label: "Заменить" },
-                  { value: "append", label: "Дополнить" },
-                ]}
-              />
-            </div>
-            <HashtagTextarea
-              value={comment}
-              onChange={setComment}
-              tags={tagOptions}
-              rows={2}
-              placeholder={
-                commentMode === "append"
-                  ? "Текст добавится к текущему комментарию"
-                  : "Комментарий без изменений"
-              }
-              className="input text-sm w-full resize-y min-h-[2.5rem]"
+        {/* Payee */}
+        <div>
+          <label className="label block mb-1">Получатель</label>
+          <Combobox
+            value={payee}
+            options={payeeOptions}
+            onChange={setPayee}
+            placeholder="Получатель без изменений"
+            maxHeight="200px"
+          />
+        </div>
+
+        {/* Comment */}
+        <div>
+          <div className="flex items-center justify-between mb-1 gap-2">
+            <label className="label">Комментарий</label>
+            <Segmented
+              size="sm"
+              label="Как изменить комментарий"
+              value={commentMode}
+              onChange={setCommentMode}
+              options={[
+                { value: "replace", label: "Заменить" },
+                { value: "append", label: "Дополнить" },
+              ]}
             />
           </div>
+          <HashtagTextarea
+            value={comment}
+            onChange={setComment}
+            tags={tagOptions}
+            rows={2}
+            placeholder={
+              commentMode === "append"
+                ? "Текст добавится к текущему комментарию"
+                : "Комментарий без изменений"
+            }
+            className="input text-sm w-full resize-y min-h-[2.5rem]"
+          />
         </div>
+      </ModalBody>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-panel2/40 rounded-b-xl">
-          <button onClick={onClose} className="btn-ghost text-sm">
-            Отмена
-          </button>
-          <button
-            onClick={apply}
-            disabled={!canApply || saving}
-            className="btn-primary text-sm"
-          >
-            Применить к выбранным ({count})
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+      <ModalFooter>
+        <button onClick={onClose} className="btn-ghost text-sm">
+          Отмена
+        </button>
+        <button
+          onClick={apply}
+          disabled={!canApply || saving}
+          className="btn-primary text-sm"
+        >
+          Применить к выбранным ({count})
+        </button>
+      </ModalFooter>
+    </Modal>
   );
 }

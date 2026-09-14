@@ -22,12 +22,12 @@
 // вариантом «не переносить»: цель обязательна, и кнопка говорит «Перенести».
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { AlertTriangle, Check, ChevronDown, Combine, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Combine } from "lucide-react";
 import clsx from "clsx";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 /** A counterparty offered as the new home for the deleted one's operations. */
 export interface TransferTarget {
@@ -62,19 +62,6 @@ export function CounterpartyDeleteModal({
   const affected = targets.reduce((n, t) => n + t.count, 0);
   const many = targets.length > 1;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    return () => {
-      if (prev && document.contains(prev)) prev.focus();
-    };
-  }, []);
-
   async function apply() {
     if (busy) return;
     // В режиме переноса цель обязательна: без неё это было бы удаление, а его
@@ -97,126 +84,97 @@ export function CounterpartyDeleteModal({
     onClose();
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cp-del-title"
-        className="w-full max-w-md rounded-2xl border border-border bg-panel shadow-2xl outline-none"
-      >
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border rounded-t-2xl">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className={clsx(
-                "p-1.5 rounded-lg shrink-0",
-                moving ? "bg-accent/10 text-accent" : "bg-expense/10 text-expense"
-              )}
-            >
-              {moving ? <Combine className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-            </span>
-            <div className="min-w-0">
-              <div id="cp-del-title" className="font-semibold truncate">
-                {moving
-                  ? "Перенести операции?"
-                  : many
-                    ? `Удалить ${formatNum(targets.length)} ${pluralRu(targets.length, ["контрагента", "контрагента", "контрагентов"])}?`
-                    : "Удалить контрагента?"}
-              </div>
-              <div className="text-xs text-muted truncate">
-                {many
-                  ? targets.map((t) => t.title).join(", ")
-                  : targets[0]?.title}
-              </div>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted hover:text-text shrink-0"
-            aria-label="Закрыть"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+  return (
+    <Modal onClose={onClose} width="md">
+      <ModalHeader
+        icon={moving ? Combine : AlertTriangle}
+        tone={moving ? "accent" : "expense"}
+        title={
+          moving
+            ? "Перенести операции?"
+            : many
+              ? `Удалить ${formatNum(targets.length)} ${pluralRu(targets.length, ["контрагента", "контрагента", "контрагентов"])}?`
+              : "Удалить контрагента?"
+        }
+        subtitle={
+          <span className="block truncate">
+            {many ? targets.map((t) => t.title).join(", ") : targets[0]?.title}
+          </span>
+        }
+      />
 
-        <div className="px-5 py-4 space-y-4">
-          <div>
-            <label className="label block mb-1">
-              {affected > 0 ? (
-                <>
-                  Куда перенести {formatNum(affected)}{" "}
-                  {pluralRu(affected, ["операцию", "операции", "операций"])}
-                </>
-              ) : moving ? (
-                "Куда перенести"
-              ) : (
-                "Куда переносить операции"
-              )}
-            </label>
-            <TransferSelect
-              value={transferTo}
-              options={options}
-              allowNone={!moving}
-              onChange={setTransferTo}
-            />
-            {moving ? (
-              <p className="text-xs text-muted mt-1">
-                {affected === 0
-                  ? "Операций у контрагента нет — переедет одна запись справочника. "
-                  : `Контрагент сменится у ${formatNum(affected)} ${pluralRu(affected, ["операции", "операций", "операций"])}. `}
-                Запись «{targets[0]?.title}» после переноса исчезнет из справочника: в
-                Дзен-мани перенос — это объединение двух записей в одну.
-              </p>
-            ) : affected === 0 ? (
-              <p className="text-xs text-muted mt-1">
-                {many ? "У выбранных контрагентов нет операций" : "Операций у контрагента нет"}
-                {" "}— переносить нечего.
-              </p>
-            ) : transferTo === null ? (
-              <p className="text-xs text-warn mt-1">
-                У {formatNum(affected)}{" "}
-                {pluralRu(affected, ["операции", "операций", "операций"])} очистится
-                контрагент — вместе с текстом, который прислал банк. После отправки
-                в облако это не отменить.
-              </p>
+      <ModalBody>
+        <div>
+          <label className="label block mb-1">
+            {affected > 0 ? (
+              <>
+                Куда перенести {formatNum(affected)}{" "}
+                {pluralRu(affected, ["операцию", "операции", "операций"])}
+              </>
+            ) : moving ? (
+              "Куда перенести"
             ) : (
-              <p className="text-xs text-muted mt-1">
-                Операции переедут на выбранного контрагента — связь со справочником
-                сохранится. Эти записи удалятся.
-              </p>
+              "Куда переносить операции"
             )}
-          </div>
-
-          <p className="text-xs text-muted">
-            Правка копится локально и уйдёт в Дзен-мани при отправке в облако — до
-            этого момента её можно отменить.
-          </p>
+          </label>
+          <TransferSelect
+            value={transferTo}
+            options={options}
+            allowNone={!moving}
+            onChange={setTransferTo}
+          />
+          {moving ? (
+            <p className="text-xs text-muted mt-1">
+              {affected === 0
+                ? "Операций у контрагента нет — переедет одна запись справочника. "
+                : `Контрагент сменится у ${formatNum(affected)} ${pluralRu(affected, ["операции", "операций", "операций"])}. `}
+              Запись «{targets[0]?.title}» после переноса исчезнет из справочника: в
+              Дзен-мани перенос — это объединение двух записей в одну.
+            </p>
+          ) : affected === 0 ? (
+            <p className="text-xs text-muted mt-1">
+              {many ? "У выбранных контрагентов нет операций" : "Операций у контрагента нет"}
+              {" "}— переносить нечего.
+            </p>
+          ) : transferTo === null ? (
+            <p className="text-xs text-warn mt-1">
+              У {formatNum(affected)}{" "}
+              {pluralRu(affected, ["операции", "операций", "операций"])} очистится
+              контрагент — вместе с текстом, который прислал банк. После отправки
+              в облако это не отменить.
+            </p>
+          ) : (
+            <p className="text-xs text-muted mt-1">
+              Операции переедут на выбранного контрагента — связь со справочником
+              сохранится. Эти записи удалятся.
+            </p>
+          )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border rounded-b-2xl">
-          <button type="button" onClick={onClose} className="btn-ghost text-sm">
-            Отмена
-          </button>
-          <button
-            type="button"
-            onClick={apply}
-            disabled={busy || (moving && !transferTo)}
-            className={clsx(
-              "text-sm",
-              transferTo || moving ? "btn-primary" : "btn-danger",
-              moving && !transferTo && "opacity-40 cursor-not-allowed"
-            )}
-          >
-            {moving ? "Перенести" : transferTo ? "Перенести и удалить" : "Удалить"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+        <p className="text-xs text-muted">
+          Правка копится локально и уйдёт в Дзен-мани при отправке в облако — до
+          этого момента её можно отменить.
+        </p>
+      </ModalBody>
+
+      <ModalFooter>
+        <button type="button" onClick={onClose} className="btn-ghost text-sm">
+          Отмена
+        </button>
+        <button
+          type="button"
+          onClick={apply}
+          disabled={busy || (moving && !transferTo)}
+          className={clsx(
+            "text-sm",
+            transferTo || moving ? "btn-primary" : "btn-danger",
+            moving && !transferTo && "opacity-40 cursor-not-allowed"
+          )}
+        >
+          {moving ? "Перенести" : transferTo ? "Перенести и удалить" : "Удалить"}
+        </button>
+      </ModalFooter>
+    </Modal>
   );
 }
 

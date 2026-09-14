@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import {
-  X,
   Scale,
   Lock,
   Archive,
@@ -17,6 +15,7 @@ import { formatMoney } from "../lib/format";
 import { AccountLogo } from "./AccountLogo";
 import { Select } from "./Select";
 import { DateField } from "./DateField";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 /** Единицы срока в том виде, в каком их принимает Дзен-мани. */
 const TERM_UNITS: { value: ZenTermUnit; label: string }[] = [
@@ -107,8 +106,6 @@ interface Props {
  * но не редактируются.
  */
 export function AccountEditModal({ account, pending, onClose }: Props) {
-  const panelRef = useRef<HTMLDivElement>(null);
-
   // Стартовые значения: кэш плюс уже накопленная правка.
   const eff = {
     title: pending?.title ?? account.title,
@@ -179,21 +176,6 @@ export function AccountEditModal({ account, pending, onClose }: Props) {
   // выплата раз в полгода). Такой график сворачивается в «В конце срока», и
   // без этого флага переименование вклада молча переписало бы его.
   const [payoffTouched, setPayoffTouched] = useState(false);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    const t = setTimeout(() => panelRef.current?.focus(), 30);
-    return () => {
-      clearTimeout(t);
-      if (prev && document.contains(prev)) prev.focus();
-    };
-  }, []);
 
   // Округляем до копейки: 6941.17 − 6941.17 в двоичной арифметике даёт не
   // ноль, и без этого редактор сохранял бы «правку» там, где ничего не меняли.
@@ -284,272 +266,245 @@ export function AccountEditModal({ account, pending, onClose }: Props) {
     onClose();
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="acc-edit-title"
-        className="w-full max-w-md rounded-2xl border border-border bg-panel shadow-2xl outline-none max-h-[90vh] flex flex-col overflow-hidden"
-      >
-        <div className="shrink-0 flex items-center gap-3 px-5 py-4 bg-panel2/50 border-b border-border rounded-t-2xl">
+  return (
+    <Modal onClose={onClose} width="md">
+      <ModalHeader
+        badge={
           <AccountLogo
             title={title || account.title}
             type={type}
             size={44}
             className="rounded-xl shrink-0"
           />
-          <div className="min-w-0 flex-1">
-            <div
-              className="text-[11px] uppercase tracking-wider text-muted"
-              id="acc-edit-title"
-            >
-              {accountKindLabel(type, savings)}
-            </div>
-            <div className="font-semibold truncate">{title || "Без названия"}</div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted hover:text-text shrink-0"
-            aria-label="Закрыть"
-          >
-            <X className="w-4 h-4" />
-          </button>
+        }
+        overline={accountKindLabel(type, savings)}
+        title={title || "Без названия"}
+      />
+
+      <ModalBody scroll>
+        <div>
+          <label htmlFor="acc-name" className="label block mb-1">
+            Название
+          </label>
+          <input
+            id="acc-name"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="input text-sm"
+            placeholder="Название счёта"
+            autoComplete="off"
+          />
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        {/* Денежные поля — `type="text"` с числовой клавиатурой: у
+            `type="number"` браузер молча стирает значение, как только в нём
+            появляется запятая, а её набирают постоянно. */}
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="acc-name" className="label block mb-1">
-              Название
+            <label htmlFor="acc-limit" className="label block mb-1">
+              Кредитный лимит ({account.currency})
             </label>
             <input
-              id="acc-name"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="input text-sm"
-              placeholder="Название счёта"
-              autoComplete="off"
+              id="acc-limit"
+              type="text"
+              inputMode="decimal"
+              value={moneyFocus === "limit" ? creditLimit : groupDigits(creditLimit)}
+              onFocus={() => setMoneyFocus("limit")}
+              onBlur={() => setMoneyFocus(null)}
+              onChange={(e) => setCreditLimit(limitCents(e.target.value))}
+              className="input text-sm font-mono tabular-nums"
             />
           </div>
-
-          {/* Денежные поля — `type="text"` с числовой клавиатурой: у
-              `type="number"` браузер молча стирает значение, как только в нём
-              появляется запятая, а её набирают постоянно. */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="acc-limit" className="label block mb-1">
-                Кредитный лимит ({account.currency})
-              </label>
-              <input
-                id="acc-limit"
-                type="text"
-                inputMode="decimal"
-                value={moneyFocus === "limit" ? creditLimit : groupDigits(creditLimit)}
-                onFocus={() => setMoneyFocus("limit")}
-                onBlur={() => setMoneyFocus(null)}
-                onChange={(e) => setCreditLimit(limitCents(e.target.value))}
-                className="input text-sm font-mono tabular-nums"
-              />
-            </div>
-            <div>
-              <label htmlFor="acc-balance" className="label block mb-1">
-                Баланс ({account.currency})
-              </label>
-              <input
-                id="acc-balance"
-                type="text"
-                inputMode="decimal"
-                value={moneyFocus === "balance" ? balance : groupDigits(balance)}
-                onFocus={() => setMoneyFocus("balance")}
-                onBlur={() => setMoneyFocus(null)}
-                onChange={(e) => setBalance(limitCents(e.target.value))}
-                className="input text-sm font-mono tabular-nums"
-              />
-            </div>
-          </div>
-
           <div>
-            <div className="label mb-1">Вид счёта</div>
-            {/* Вид — это пара (type, savings): «Накопительный счёт» в Дзен-мани
-                хранится как обычный счёт с признаком накопительного, поэтому
-                отдельного переключателя «Накопительный» здесь нет. */}
-            <Select
-              value={accountKindLabel(type, savings)}
-              options={kindOptions}
-              onChange={(label) => {
-                const k = ACCOUNT_KINDS.find((x) => x.label === label);
-                if (!k) return;
-                setType(k.type);
-                setSavings(k.savings);
-              }}
+            <label htmlFor="acc-balance" className="label block mb-1">
+              Баланс ({account.currency})
+            </label>
+            <input
+              id="acc-balance"
+              type="text"
+              inputMode="decimal"
+              value={moneyFocus === "balance" ? balance : groupDigits(balance)}
+              onFocus={() => setMoneyFocus("balance")}
+              onBlur={() => setMoneyFocus(null)}
+              onChange={(e) => setBalance(limitCents(e.target.value))}
+              className="input text-sm font-mono tabular-nums"
             />
           </div>
+        </div>
 
-          {isTermAccount && (
-            <div className="rounded-lg border border-border bg-panel2/40 p-3">
-              {/* Заголовок раздела НЕ `.label`: рядом сразу идёт подпись поля
-                  того же вида, и два одинаковых мелких капса читались как одна
-                  двухстрочная надпись. Даём другой вес, размер и отбивку. */}
-              <div className="text-sm font-semibold mb-3 pb-2 border-b border-border">
-                Параметры {type === "loan" ? "кредита" : "вклада"}
-              </div>
-              <div className="space-y-3">
-              {/* Дату открытия Дзен-мани хранит только у этих двух видов —
-                  проверено на API: у наличных запрос проходит, а значение
-                  возвращается пустым. */}
-              <div>
-                <div className="label mb-1">Дата открытия</div>
-                {/* `.input` на самой кнопке: без него поле не отличается от
-                    фона и читается как подпись, а не как поле ввода. */}
-                <DateField
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="input w-full text-sm"
-                />
-              </div>
-              <div className="flex items-end gap-3">
-                <div className="flex-1 min-w-0">
-                  <label htmlFor="acc-term" className="label block mb-1">
-                    Срок
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="acc-term"
-                      type="text"
-                      inputMode="numeric"
-                      value={termValue}
-                      onChange={(e) => setTermValue(e.target.value.replace(/[^\d]/g, ""))}
-                      className="input w-20 shrink-0 text-sm font-mono tabular-nums"
-                    />
-                    <Select
-                      value={termUnit}
-                      options={TERM_UNITS}
-                      onChange={setTermUnit}
-                      className="flex-1 min-w-0"
-                    />
-                  </div>
-                </div>
-                <div className="w-24 shrink-0">
-                  <label htmlFor="acc-percent" className="label block mb-1">
-                    Ставка (%)
-                  </label>
+        <div>
+          <div className="label mb-1">Вид счёта</div>
+          {/* Вид — это пара (type, savings): «Накопительный счёт» в Дзен-мани
+              хранится как обычный счёт с признаком накопительного, поэтому
+              отдельного переключателя «Накопительный» здесь нет. */}
+          <Select
+            value={accountKindLabel(type, savings)}
+            options={kindOptions}
+            onChange={(label) => {
+              const k = ACCOUNT_KINDS.find((x) => x.label === label);
+              if (!k) return;
+              setType(k.type);
+              setSavings(k.savings);
+            }}
+          />
+        </div>
+
+        {isTermAccount && (
+          <div className="rounded-lg border border-border bg-panel2/40 p-3">
+            {/* Заголовок раздела НЕ `.label`: рядом сразу идёт подпись поля
+                того же вида, и два одинаковых мелких капса читались как одна
+                двухстрочная надпись. Даём другой вес, размер и отбивку. */}
+            <div className="text-sm font-semibold mb-3 pb-2 border-b border-border">
+              Параметры {type === "loan" ? "кредита" : "вклада"}
+            </div>
+            <div className="space-y-3">
+            {/* Дату открытия Дзен-мани хранит только у этих двух видов —
+                проверено на API: у наличных запрос проходит, а значение
+                возвращается пустым. */}
+            <div>
+              <div className="label mb-1">Дата открытия</div>
+              {/* `.input` на самой кнопке: без него поле не отличается от
+                  фона и читается как подпись, а не как поле ввода. */}
+              <DateField
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="input w-full text-sm"
+              />
+            </div>
+            <div className="flex items-end gap-3">
+              <div className="flex-1 min-w-0">
+                <label htmlFor="acc-term" className="label block mb-1">
+                  Срок
+                </label>
+                <div className="flex gap-2">
                   <input
-                    id="acc-percent"
+                    id="acc-term"
                     type="text"
-                    inputMode="decimal"
-                    value={percent}
-                    onChange={(e) => setPercent(limitCents(e.target.value))}
-                    className="input text-sm font-mono tabular-nums"
+                    inputMode="numeric"
+                    value={termValue}
+                    onChange={(e) => setTermValue(e.target.value.replace(/[^\d]/g, ""))}
+                    className="input w-20 shrink-0 text-sm font-mono tabular-nums"
+                  />
+                  <Select
+                    value={termUnit}
+                    options={TERM_UNITS}
+                    onChange={setTermUnit}
+                    className="flex-1 min-w-0"
                   />
                 </div>
               </div>
-              <div>
-                <div className="label mb-1">Начисление процентов</div>
-                <Select
-                  value={payoff}
-                  options={PAYOFF_OPTIONS}
-                  onChange={(v) => {
-                    setPayoff(v);
-                    setPayoffTouched(true);
-                  }}
+              <div className="w-24 shrink-0">
+                <label htmlFor="acc-percent" className="label block mb-1">
+                  Ставка (%)
+                </label>
+                <input
+                  id="acc-percent"
+                  type="text"
+                  inputMode="decimal"
+                  value={percent}
+                  onChange={(e) => setPercent(limitCents(e.target.value))}
+                  className="input text-sm font-mono tabular-nums"
                 />
-              </div>
-                <FlagRow
-                  icon={<Percent className="w-4 h-4" />}
-                  label="Капитализация процентов"
-                  hint="Проценты добавляются к сумме вклада"
-                  on={capitalization}
-                  onToggle={() => setCapitalization((v) => !v)}
-                />
-                {/* 11. Подсказка стоит вплотную к полям, к которым относится,
-                    и жёлтая: это «не заполнено», а не ошибка. */}
-                {termIncomplete && (
-                  <p className="text-xs text-warn">
-                    Заполните дату открытия, срок и ставку — Дзен-мани не
-                    принимает вклад и кредит без них.
-                  </p>
-                )}
               </div>
             </div>
-          )}
-
-
-          <div>
-            <div className="label mb-1">Признаки</div>
-            <div className="space-y-1.5">
-              <FlagRow
-                icon={<Scale className="w-4 h-4" />}
-                label="Учитывать в балансе"
-                hint="Счёт входит в совокупный баланс"
-                on={inBalance}
-                onToggle={() => setInBalance((v) => !v)}
+            <div>
+              <div className="label mb-1">Начисление процентов</div>
+              <Select
+                value={payoff}
+                options={PAYOFF_OPTIONS}
+                onChange={(v) => {
+                  setPayoff(v);
+                  setPayoffTouched(true);
+                }}
               />
+            </div>
               <FlagRow
-                icon={<Lock className="w-4 h-4" />}
-                label="Личный"
-                hint="Скрыт из общего доступа в Дзен-мани"
-                on={isPrivate}
-                onToggle={() => setIsPrivate((v) => !v)}
+                icon={<Percent className="w-4 h-4" />}
+                label="Капитализация процентов"
+                hint="Проценты добавляются к сумме вклада"
+                on={capitalization}
+                onToggle={() => setCapitalization((v) => !v)}
               />
-              <FlagRow
-                icon={<Archive className="w-4 h-4" />}
-                label="Архивный"
-                hint="Счёт закрыт, уходит в конец списка"
-                on={archive}
-                onToggle={() => setArchive((v) => !v)}
-              />
+              {/* 11. Подсказка стоит вплотную к полям, к которым относится,
+                  и жёлтая: это «не заполнено», а не ошибка. */}
+              {termIncomplete && (
+                <p className="text-xs text-warn">
+                  Заполните дату открытия, срок и ставку — Дзен-мани не
+                  принимает вклад и кредит без них.
+                </p>
+              )}
             </div>
           </div>
+        )}
 
-          {/* Что известно, но не правится здесь — чтобы не искать это в другом
-              месте и не гадать, почему поля нет. */}
-          <div className="rounded-lg border border-border bg-panel2/40 px-3 py-2 space-y-1 text-xs text-muted">
-            <div className="label pb-1">Прочие данные (не редактируются)</div>
-            <div className="flex justify-between gap-3">
-              <span>Начальный остаток</span>
-              <span className="tabular-nums text-text">
-                {formatMoney(nextStartBalance, account.currency)}
-              </span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span>Сумма операций</span>
-              <span className="tabular-nums text-text">
-                {formatMoney(opsSum, account.currency, { signed: true })}
-              </span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span>Валюта</span>
-              <span className="text-text">{account.currency}</span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span>Банк</span>
-              <span className="text-text">{account.bank ?? "не указан"}</span>
-            </div>
+        <div>
+          <div className="label mb-1">Признаки</div>
+          <div className="space-y-1.5">
+            <FlagRow
+              icon={<Scale className="w-4 h-4" />}
+              label="Учитывать в балансе"
+              hint="Счёт входит в совокупный баланс"
+              on={inBalance}
+              onToggle={() => setInBalance((v) => !v)}
+            />
+            <FlagRow
+              icon={<Lock className="w-4 h-4" />}
+              label="Личный"
+              hint="Скрыт из общего доступа в Дзен-мани"
+              on={isPrivate}
+              onToggle={() => setIsPrivate((v) => !v)}
+            />
+            <FlagRow
+              icon={<Archive className="w-4 h-4" />}
+              label="Архивный"
+              hint="Счёт закрыт, уходит в конец списка"
+              on={archive}
+              onToggle={() => setArchive((v) => !v)}
+            />
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-2 px-5 py-4 border-t border-border rounded-b-2xl">
-          <button type="button" onClick={onClose} className="btn-ghost text-sm ml-auto">
-            Отмена
-          </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={!canSave}
-            className="btn-primary text-sm"
-          >
-            Сохранить
-          </button>
+        {/* Что известно, но не правится здесь — чтобы не искать это в другом
+            месте и не гадать, почему поля нет. */}
+        <div className="rounded-lg border border-border bg-panel2/40 px-3 py-2 space-y-1 text-xs text-muted">
+          <div className="label pb-1">Прочие данные (не редактируются)</div>
+          <div className="flex justify-between gap-3">
+            <span>Начальный остаток</span>
+            <span className="tabular-nums text-text">
+              {formatMoney(nextStartBalance, account.currency)}
+            </span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>Сумма операций</span>
+            <span className="tabular-nums text-text">
+              {formatMoney(opsSum, account.currency, { signed: true })}
+            </span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>Валюта</span>
+            <span className="text-text">{account.currency}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>Банк</span>
+            <span className="text-text">{account.bank ?? "не указан"}</span>
+          </div>
         </div>
-      </div>
-    </div>,
-    document.body
+      </ModalBody>
+
+      <ModalFooter>
+        <button type="button" onClick={onClose} className="btn-ghost text-sm ml-auto">
+          Отмена
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!canSave}
+          className="btn-primary text-sm"
+        >
+          Сохранить
+        </button>
+      </ModalFooter>
+    </Modal>
   );
 }
 

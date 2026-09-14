@@ -8,14 +8,14 @@
 // builder refuses that batch outright.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { AlertTriangle, Check, ChevronDown, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import type { CategoryTag } from "../store/useZenmoneyStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { CategoryDot } from "./CategoryDot";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 /** A category offered as the new home for the deleted one's operations. */
 export interface ReplacementOption {
@@ -47,19 +47,6 @@ export function CategoryDeleteModal({
   const [replacement, setReplacement] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    return () => {
-      if (prev && document.contains(prev)) prev.focus();
-    };
-  }, []);
-
   async function confirmDelete() {
     if (busy) return;
     setBusy(true);
@@ -71,105 +58,79 @@ export function CategoryDeleteModal({
     onClose();
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cat-del-title"
-        className="w-full max-w-md rounded-2xl border border-border bg-panel shadow-2xl outline-none"
-      >
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border rounded-t-2xl">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="p-1.5 rounded-lg bg-expense/10 text-expense shrink-0">
-              <AlertTriangle className="w-4 h-4" />
-            </span>
-            <div className="min-w-0">
-              <div id="cat-del-title" className="font-semibold truncate">
-                Удалить категорию?
-              </div>
-              <div className="text-xs text-muted truncate">{target.title}</div>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted hover:text-text shrink-0"
-            aria-label="Закрыть"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+  return (
+    <Modal onClose={onClose} width="md">
+      <ModalHeader
+        icon={AlertTriangle}
+        tone="expense"
+        title="Удалить категорию?"
+        subtitle={<span className="block truncate">{target.title}</span>}
+      />
 
-        <div className="px-5 py-4 space-y-4">
-          {subcategories.length > 0 && (
-            <p className="text-sm text-warn">
-              Вместе с ней удалятся{" "}
-              <strong>
-                {formatNum(subcategories.length)}{" "}
-                {pluralRu(subcategories.length, [
-                  "подкатегория",
-                  "подкатегории",
-                  "подкатегорий",
-                ])}
-              </strong>{" "}
-              — в Дзен-мани подкатегория не может остаться без родителя.
+      <ModalBody>
+        {subcategories.length > 0 && (
+          <p className="text-sm text-warn">
+            Вместе с ней удалятся{" "}
+            <strong>
+              {formatNum(subcategories.length)}{" "}
+              {pluralRu(subcategories.length, [
+                "подкатегория",
+                "подкатегории",
+                "подкатегорий",
+              ])}
+            </strong>{" "}
+            — в Дзен-мани подкатегория не может остаться без родителя.
+          </p>
+        )}
+
+        <div>
+          <label className="label block mb-1">
+            {affected > 0 ? (
+              <>
+                Куда перенести {formatNum(affected)}{" "}
+                {pluralRu(affected, ["операцию", "операции", "операций"])}
+              </>
+            ) : (
+              "Куда переносить операции"
+            )}
+          </label>
+          <ReplacementSelect
+            value={replacement}
+            options={options}
+            onChange={setReplacement}
+          />
+          {affected === 0 && (
+            <p className="text-xs text-muted mt-1">
+              Операций в этой категории нет — переносить нечего.
             </p>
           )}
-
-          <div>
-            <label className="label block mb-1">
-              {affected > 0 ? (
-                <>
-                  Куда перенести {formatNum(affected)}{" "}
-                  {pluralRu(affected, ["операцию", "операции", "операций"])}
-                </>
-              ) : (
-                "Куда переносить операции"
-              )}
-            </label>
-            <ReplacementSelect
-              value={replacement}
-              options={options}
-              onChange={setReplacement}
-            />
-            {affected === 0 && (
-              <p className="text-xs text-muted mt-1">
-                Операций в этой категории нет — переносить нечего.
-              </p>
-            )}
-            {affected > 0 && replacement === null && (
-              <p className="text-xs text-warn mt-1">
-                Операции останутся без категории.
-              </p>
-            )}
-          </div>
-
-          <p className="text-xs text-muted">
-            Удаление копится локально и уйдёт в Дзен-мани при отправке в облако —
-            до этого момента его можно отменить.
-          </p>
+          {affected > 0 && replacement === null && (
+            <p className="text-xs text-warn mt-1">
+              Операции останутся без категории.
+            </p>
+          )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border rounded-b-2xl">
-          <button type="button" onClick={onClose} className="btn-ghost text-sm">
-            Отмена
-          </button>
-          <button
-            type="button"
-            onClick={confirmDelete}
-            disabled={busy}
-            className="btn-danger text-sm"
-          >
-            Удалить
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+        <p className="text-xs text-muted">
+          Удаление копится локально и уйдёт в Дзен-мани при отправке в облако —
+          до этого момента его можно отменить.
+        </p>
+      </ModalBody>
+
+      <ModalFooter>
+        <button type="button" onClick={onClose} className="btn-ghost text-sm">
+          Отмена
+        </button>
+        <button
+          type="button"
+          onClick={confirmDelete}
+          disabled={busy}
+          className="btn-danger text-sm"
+        >
+          Удалить
+        </button>
+      </ModalFooter>
+    </Modal>
   );
 }
 

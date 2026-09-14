@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { X, ArrowDown, ArrowUp, ChevronDown, Check } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ChevronDown, Check } from "lucide-react";
 import clsx from "clsx";
 import type { CategoryTag } from "../store/useZenmoneyStore";
 import { useTagEditsStore, type TagEdit } from "../store/useTagEditsStore";
@@ -16,6 +15,7 @@ import { IconPicker } from "./IconPicker";
 import { ColorPicker } from "./ColorPicker";
 import { CategoryDot } from "./CategoryDot";
 import { Segmented } from "./Segmented";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 interface Props {
   /** Root categories eligible as a parent. */
@@ -58,7 +58,6 @@ export function CategoryEditModal({
   draft,
   initialParent,
 }: Props) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const isNew = create || !!draft; // works against the new-categories store
   const hasChildren = !isNew && !!hasChildrenProp;
 
@@ -93,21 +92,6 @@ export function CategoryEditModal({
   const [icon, setIcon] = useState<string | null>(eff.icon);
   const [colorHex, setColorHex] = useState<string | null>(colorIntToHex(eff.color));
   const [obligatory, setObligatory] = useState(isObligatory(eff.required ?? null));
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    const t = setTimeout(() => panelRef.current?.focus(), 30);
-    return () => {
-      clearTimeout(t);
-      if (prev && document.contains(prev)) prev.focus();
-    };
-  }, []);
 
   const selfId = tag?.id ?? draft?.id;
   const parentOptions = useMemo(
@@ -203,151 +187,126 @@ export function CategoryEditModal({
     onClose();
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cat-edit-title"
-        className="w-full max-w-md rounded-2xl border border-border bg-panel shadow-2xl outline-none"
-      >
-        {/* Live-preview header — a big dot with the chosen glyph + name. */}
-        <div className="flex items-center gap-3 px-5 py-4 bg-panel2/50 border-b border-border rounded-t-2xl">
+  return (
+    <Modal onClose={onClose} width="md">
+      <ModalHeader
+        // Живой предпросмотр: плашка цвета категории с выбранным значком.
+        badge={
           <span
             className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
             style={{ background: previewColor }}
           >
             <ZenIcon id={icon} className="w-5 h-5 text-white" />
           </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-[11px] uppercase tracking-wider text-muted" id="cat-edit-title">
-              {kindLabel}
-            </div>
-            <div className="font-semibold truncate">{title || "Без названия"}</div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted hover:text-text shrink-0"
-            aria-label="Закрыть"
-          >
-            <X className="w-4 h-4" />
-          </button>
+        }
+        overline={kindLabel}
+        title={title || "Без названия"}
+      />
+
+      <ModalBody>
+        <div>
+          <label htmlFor="cat-name" className="label block mb-1">
+            Название
+          </label>
+          <input
+            id="cat-name"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="input w-full text-sm"
+            placeholder="Название категории"
+            autoComplete="off"
+          />
         </div>
 
-        {/* Body */}
-        <div className="px-5 py-4 space-y-4">
-          <div>
-            <label htmlFor="cat-name" className="label block mb-1">
-              Название
-            </label>
-            <input
-              id="cat-name"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="input w-full text-sm"
-              placeholder="Название категории"
-              autoComplete="off"
-            />
+        {/* Icon + colour on one row, tops aligned (both controls 40px). */}
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <label className="label block mb-1 h-4">Иконка</label>
+            <IconPicker value={icon} color={previewColor} onChange={setIcon} />
           </div>
-
-          {/* Icon + colour on one row, tops aligned (both controls 40px). */}
-          <div className="flex items-start gap-3">
-            <div className="flex-1 min-w-0">
-              <label className="label block mb-1 h-4">Иконка</label>
-              <IconPicker value={icon} color={previewColor} onChange={setIcon} />
-            </div>
-            <div className="relative">
-              <label className="label block mb-1 h-4">Цвет</label>
-              <ColorPicker value={colorHex} onChange={setColorHex} />
-            </div>
-          </div>
-
-          {/* Type — two independent pills (a tag can be both). */}
-          <div>
-            <div className="label mb-1">Тип</div>
-            <div className="flex gap-2">
-              <TypePill
-                label="Расходная"
-                icon={<ArrowDown className="w-3.5 h-3.5" />}
-                on={showOutcome}
-                onToggle={() => setShowOutcome((v) => !v)}
-              />
-              <TypePill
-                label="Доходная"
-                icon={<ArrowUp className="w-3.5 h-3.5" />}
-                on={showIncome}
-                onToggle={() => setShowIncome((v) => !v)}
-              />
-            </div>
-            {!typeValid && (
-              <p className="text-xs text-warn mt-1">Выберите хотя бы один тип.</p>
-            )}
-          </div>
-
-          {/* Обязательность — общим `Segmented` во всю ширину поля. */}
-          <div>
-            <div className="label mb-1">Обязательность</div>
-            <Segmented
-              size="sm"
-              block
-              label="Обязательность"
-              value={obligatory ? "yes" : "no"}
-              onChange={(next) => setObligatory(next === "yes")}
-              options={[
-                { value: "yes", label: "Обязательная" },
-                { value: "no", label: "Необязательная" },
-              ]}
-            />
-          </div>
-
-          {/* Hierarchy */}
-          <div>
-            <div className="label mb-1">Родительская категория</div>
-            {hasChildren ? (
-              <p className="text-xs text-muted">
-                У категории есть подкатегории — она может быть только верхнего уровня.
-              </p>
-            ) : (
-              <ParentSelect value={parent} options={parentOptions} onChange={setParent} />
-            )}
+          <div className="relative">
+            <label className="label block mb-1 h-4">Цвет</label>
+            <ColorPicker value={colorHex} onChange={setColorHex} />
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center gap-2 px-5 py-4 border-t border-border rounded-b-2xl">
-          {draft && (
-            <button
-              type="button"
-              onClick={async () => {
-                await useNewCategoriesStore.getState().remove(draft.id);
-                onClose();
-              }}
-              className="btn-ghost text-sm text-expense mr-auto"
-            >
-              Удалить
-            </button>
+        {/* Type — two independent pills (a tag can be both). */}
+        <div>
+          <div className="label mb-1">Тип</div>
+          <div className="flex gap-2">
+            <TypePill
+              label="Расходная"
+              icon={<ArrowDown className="w-3.5 h-3.5" />}
+              on={showOutcome}
+              onToggle={() => setShowOutcome((v) => !v)}
+            />
+            <TypePill
+              label="Доходная"
+              icon={<ArrowUp className="w-3.5 h-3.5" />}
+              on={showIncome}
+              onToggle={() => setShowIncome((v) => !v)}
+            />
+          </div>
+          {!typeValid && (
+            <p className="text-xs text-warn mt-1">Выберите хотя бы один тип.</p>
           )}
-          <button type="button" onClick={onClose} className="btn-ghost text-sm">
-            Отмена
-          </button>
+        </div>
+
+        {/* Обязательность — общим `Segmented` во всю ширину поля. */}
+        <div>
+          <div className="label mb-1">Обязательность</div>
+          <Segmented
+            size="sm"
+            block
+            label="Обязательность"
+            value={obligatory ? "yes" : "no"}
+            onChange={(next) => setObligatory(next === "yes")}
+            options={[
+              { value: "yes", label: "Обязательная" },
+              { value: "no", label: "Необязательная" },
+            ]}
+          />
+        </div>
+
+        {/* Hierarchy */}
+        <div>
+          <div className="label mb-1">Родительская категория</div>
+          {hasChildren ? (
+            <p className="text-xs text-muted">
+              У категории есть подкатегории — она может быть только верхнего уровня.
+            </p>
+          ) : (
+            <ParentSelect value={parent} options={parentOptions} onChange={setParent} />
+          )}
+        </div>
+      </ModalBody>
+
+      <ModalFooter>
+        {draft && (
           <button
             type="button"
-            onClick={save}
-            disabled={!canSave}
-            className="btn-primary text-sm"
+            onClick={async () => {
+              await useNewCategoriesStore.getState().remove(draft.id);
+              onClose();
+            }}
+            className="btn-ghost text-sm text-expense mr-auto"
           >
-            {saveLabel}
+            Удалить
           </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+        )}
+        <button type="button" onClick={onClose} className="btn-ghost text-sm">
+          Отмена
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!canSave}
+          className="btn-primary text-sm"
+        >
+          {saveLabel}
+        </button>
+      </ModalFooter>
+    </Modal>
   );
 }
 

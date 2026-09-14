@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Checkbox } from "./Checkbox";
-import { createPortal } from "react-dom";
-import { ArrowRight, Wand2, X } from "lucide-react";
+import { ArrowRight, Wand2 } from "lucide-react";
 import type { Transaction } from "../types";
 import type { BudgetKind, BudgetLine } from "../lib/budgets";
 import {
@@ -18,6 +17,7 @@ import { CategoryDot } from "./CategoryDot";
 import { Segmented } from "./Segmented";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
 import { Tooltip } from "./Tooltip";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 /** Одна статья к применению — ровно то, что уходит в план и в Дзен-мани. */
 export interface FillItem {
@@ -74,7 +74,6 @@ export function BudgetFillModal({
   onApply: (items: FillItem[]) => void;
   onClose: () => void;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const [months, setMonths] = useState(defaultMonths);
   const [basis, setBasis] = useState<ForecastBasis>(defaultBasis);
   const [coverage, setCoverage] = useState<ForecastScope>("empty");
@@ -85,21 +84,6 @@ export function BudgetFillModal({
   // Снятые галочки, а не отмеченные: при смене окна или охвата список строк
   // меняется, и новые статьи должны приходить уже выбранными.
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    const t = setTimeout(() => panelRef.current?.focus(), 30);
-    return () => {
-      clearTimeout(t);
-      if (prev && document.contains(prev)) prev.focus();
-    };
-  }, []);
 
   const rows = useMemo(
     () =>
@@ -220,171 +204,137 @@ export function BudgetFillModal({
       </div>
     );
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="budget-fill-title"
-        className="w-full max-w-3xl rounded-2xl border border-border bg-panel shadow-2xl outline-none flex flex-col max-h-[85vh]"
-      >
-        <div className="flex items-center gap-3 px-5 py-4 bg-panel2/50 border-b border-border rounded-t-2xl">
-          <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-accent/10 text-accent">
-            <Wand2 className="w-5 h-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div
-              className="text-[11px] uppercase tracking-wider text-muted"
-              id="budget-fill-title"
-            >
-              Заполнение бюджета
-            </div>
-            <div className="font-semibold truncate">{monthLabelFull(ym)}</div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted hover:text-text shrink-0"
-            aria-label="Закрыть"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+  return (
+    <Modal onClose={onClose} width="3xl">
+      <ModalHeader icon={Wand2} overline="Заполнение бюджета" title={monthLabelFull(ym)} />
 
-        <div className="px-5 py-4 space-y-4 overflow-y-auto">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Segmented
-              size="sm"
-              label="Откуда брать суммы"
-              value={source}
-              onChange={(v) => setSource(v)}
-              options={[
-                {
-                  value: "fact" as const,
-                  label: "По истории",
-                  title: "Посчитать по фактическим тратам за период",
-                },
-                {
-                  value: "prevPlan" as const,
-                  label: "План прошлого месяца",
-                  title: "Скопировать суммы, запланированные на прошлый месяц",
-                },
-              ]}
-            />
-            {source === "fact" && (
-              <>
-            <Segmented
-              size="sm"
-              label="За какой период считать"
-              value={months}
-              onChange={(v) => {
-                setMonths(v);
-                onParamsChange?.({ months: v, basis });
-              }}
-              options={PERIODS}
-            />
-            <Segmented
-              size="sm"
-              label="Как считать сумму"
-              value={basis}
-              onChange={(v) => {
-                setBasis(v as ForecastBasis);
-                onParamsChange?.({ months, basis: v as ForecastBasis });
-              }}
-              options={[
-                { value: "average", label: "Среднее", title: "Среднее арифметическое за период" },
-                { value: "median", label: "Медиана", title: "Середина ряда — устойчива к разовым всплескам" },
-              ]}
-            />
-              </>
-            )}
-            <Segmented
-              size="sm"
-              label="Какие статьи заполнять"
-              value={coverage}
-              onChange={(v) => setCoverage(v as ForecastScope)}
-              options={[
-                { value: "empty", label: "Только без плана", title: "Не трогать уже заданные суммы" },
-                { value: "all", label: "Все статьи", title: "Переписать и уже заданные суммы" },
-              ]}
-            />
-            <InfoPopover label="Как считается">
-              <p>
-                Суммы берутся из истории самих операций за выбранный период{" "}
-                <InfoTerm>перед</InfoTerm> заполняемым месяцем: сам он ещё не
-                кончился и занизил бы среднее.
-              </p>
-              <p>
-                <InfoTerm>Среднее</InfoTerm> — сумма за период, делённая на
-                число месяцев. <InfoTerm>Медиана</InfoTerm> — середина ряда: один
-                отпуск или разовая покупка не задирают план на весь год.
-              </p>
-              <p>
-                Месяцы до первой операции по категории не учитываются — иначе у
-                категории, появившейся месяц назад, средним за год вышла бы
-                двенадцатая часть реальных трат. Пустые месяцы внутри периода
-                учитываются: редкая трата честно размазывается по месяцам.
-              </p>
-              <p>
-                Переводы и операции без категории в бюджет не идут, возвраты
-                уменьшают факт месяца. Суммы округляются до сотни.
-              </p>
-              <p>
-                <InfoTerm>План прошлого месяца</InfoTerm> — это не то же самое,
-                что «по истории» за месяц: копируется сумма, которую вы
-                запланировали, а не та, что потратили.
-              </p>
-            </InfoPopover>
-          </div>
-
-          {changes.length === 0 ? (
-            <p className="text-sm text-muted py-6 text-center">
-              {rows.length === 0
-                ? source === "prevPlan"
-                  ? "В прошлом месяце планов не было — копировать нечего."
-                  : "За выбранный период операций не нашлось — заполнять нечего."
-                : "Все статьи уже спланированы. Выберите «Все статьи», чтобы пересчитать суммы."}
-            </p>
-          ) : (
+      <ModalBody scroll>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Segmented
+            size="sm"
+            label="Откуда брать суммы"
+            value={source}
+            onChange={(v) => setSource(v)}
+            options={[
+              {
+                value: "fact" as const,
+                label: "По истории",
+                title: "Посчитать по фактическим тратам за период",
+              },
+              {
+                value: "prevPlan" as const,
+                label: "План прошлого месяца",
+                title: "Скопировать суммы, запланированные на прошлый месяц",
+              },
+            ]}
+          />
+          {source === "fact" && (
             <>
-              <div className="flex items-center justify-between gap-2 text-sm">
-                <button
-                  type="button"
-                  onClick={toggleAll}
-                  className="text-accent hover:underline"
-                >
-                  {allOn ? "Снять все" : "Выбрать все"}
-                </button>
-                <span className="text-muted">
-                  Выбрано статей: {picked.length} из {changes.length}
-                </span>
-              </div>
-              {group("Расходы", expense, "expense")}
-              {group("Доходы", income, "income")}
+          <Segmented
+            size="sm"
+            label="За какой период считать"
+            value={months}
+            onChange={(v) => {
+              setMonths(v);
+              onParamsChange?.({ months: v, basis });
+            }}
+            options={PERIODS}
+          />
+          <Segmented
+            size="sm"
+            label="Как считать сумму"
+            value={basis}
+            onChange={(v) => {
+              setBasis(v as ForecastBasis);
+              onParamsChange?.({ months, basis: v as ForecastBasis });
+            }}
+            options={[
+              { value: "average", label: "Среднее", title: "Среднее арифметическое за период" },
+              { value: "median", label: "Медиана", title: "Середина ряда — устойчива к разовым всплескам" },
+            ]}
+          />
             </>
           )}
+          <Segmented
+            size="sm"
+            label="Какие статьи заполнять"
+            value={coverage}
+            onChange={(v) => setCoverage(v as ForecastScope)}
+            options={[
+              { value: "empty", label: "Только без плана", title: "Не трогать уже заданные суммы" },
+              { value: "all", label: "Все статьи", title: "Переписать и уже заданные суммы" },
+            ]}
+          />
+          <InfoPopover label="Как считается">
+            <p>
+              Суммы берутся из истории самих операций за выбранный период{" "}
+              <InfoTerm>перед</InfoTerm> заполняемым месяцем: сам он ещё не
+              кончился и занизил бы среднее.
+            </p>
+            <p>
+              <InfoTerm>Среднее</InfoTerm> — сумма за период, делённая на
+              число месяцев. <InfoTerm>Медиана</InfoTerm> — середина ряда: один
+              отпуск или разовая покупка не задирают план на весь год.
+            </p>
+            <p>
+              Месяцы до первой операции по категории не учитываются — иначе у
+              категории, появившейся месяц назад, средним за год вышла бы
+              двенадцатая часть реальных трат. Пустые месяцы внутри периода
+              учитываются: редкая трата честно размазывается по месяцам.
+            </p>
+            <p>
+              Переводы и операции без категории в бюджет не идут, возвраты
+              уменьшают факт месяца. Суммы округляются до сотни.
+            </p>
+            <p>
+              <InfoTerm>План прошлого месяца</InfoTerm> — это не то же самое,
+              что «по истории» за месяц: копируется сумма, которую вы
+              запланировали, а не та, что потратили.
+            </p>
+          </InfoPopover>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border rounded-b-2xl">
-          <button type="button" onClick={onClose} className="btn-ghost text-sm">
-            Отмена
-          </button>
-          <button
-            type="button"
-            onClick={apply}
-            disabled={picked.length === 0}
-            className="btn-primary text-sm"
-          >
-            {picked.length > 0 ? `Заполнить (${picked.length})` : "Заполнить"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+        {changes.length === 0 ? (
+          <p className="text-sm text-muted py-6 text-center">
+            {rows.length === 0
+              ? source === "prevPlan"
+                ? "В прошлом месяце планов не было — копировать нечего."
+                : "За выбранный период операций не нашлось — заполнять нечего."
+              : "Все статьи уже спланированы. Выберите «Все статьи», чтобы пересчитать суммы."}
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="text-accent hover:underline"
+              >
+                {allOn ? "Снять все" : "Выбрать все"}
+              </button>
+              <span className="text-muted">
+                Выбрано статей: {picked.length} из {changes.length}
+              </span>
+            </div>
+            {group("Расходы", expense, "expense")}
+            {group("Доходы", income, "income")}
+          </>
+        )}
+      </ModalBody>
+
+      <ModalFooter>
+        <button type="button" onClick={onClose} className="btn-ghost text-sm">
+          Отмена
+        </button>
+        <button
+          type="button"
+          onClick={apply}
+          disabled={picked.length === 0}
+          className="btn-primary text-sm"
+        >
+          {picked.length > 0 ? `Заполнить (${picked.length})` : "Заполнить"}
+        </button>
+      </ModalFooter>
+    </Modal>
   );
 }

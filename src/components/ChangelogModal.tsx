@@ -1,7 +1,6 @@
-import { useEffect } from "react";
-import { createPortal } from "react-dom";
-import { History, X } from "lucide-react";
+import { History } from "lucide-react";
 import { ChangelogView } from "./ChangelogView";
+import { Modal, ModalBody, ModalHeader } from "./Modal";
 
 // lucide dropped brand icons — inline the GitHub mark.
 function GithubMark({ className }: { className?: string }) {
@@ -23,59 +22,30 @@ export function ChangelogModal({
   open: boolean;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
   if (!open) return null;
 
-  return createPortal(
-    <div
-      // Solid dim scrim — NO backdrop-filter. A full-viewport backdrop-blur
-      // over the chart-heavy page makes Chromium snapshot the page to blur it,
-      // which intermittently flashes the root (white) background for a frame on
-      // open. A plain dim never does. (Same call as EditTransactionModal.)
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="card w-full max-w-2xl max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-          <div className="font-semibold flex items-center gap-2">
-            <History className="w-4 h-4 text-accent2" />
-            История изменений
-          </div>
-          <div className="flex items-center gap-3">
-            <a
-              href="https://github.com/DEADover/DzenAnalytics"
-              target="_blank"
-              rel="noreferrer"
-              className="text-muted hover:text-accent transition-colors flex items-center gap-1.5 text-xs"
-              title="Проект на GitHub"
-            >
-              <GithubMark className="w-4 h-4" />
-              <span className="hidden sm:inline">GitHub</span>
-            </a>
-            <button
-              onClick={onClose}
-              className="text-muted hover:text-text"
-              aria-label="Закрыть"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-        <div className="p-5 overflow-y-auto">
-          <ChangelogView />
-        </div>
-      </div>
-    </div>,
-    document.body
+  return (
+    <Modal onClose={onClose} width="2xl">
+      <ModalHeader
+        icon={History}
+        tone="accent2"
+        title="История изменений"
+        actions={
+          <a
+            href="https://github.com/DEADover/DzenAnalytics"
+            target="_blank"
+            rel="noreferrer"
+            className="text-muted hover:text-accent transition-colors flex items-center gap-1.5 text-xs"
+            title="Проект на GitHub"
+          >
+            <GithubMark className="w-4 h-4" />
+            <span className="hidden sm:inline">GitHub</span>
+          </a>
+        }
+      />
+      <ModalBody scroll>
+        <ChangelogView />
+      </ModalBody>
+    </Modal>
   );
 }

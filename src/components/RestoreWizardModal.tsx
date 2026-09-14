@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Checkbox } from "./Checkbox";
-import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   Check,
@@ -9,7 +8,6 @@ import {
   History,
   RefreshCw,
   Upload,
-  X,
 } from "lucide-react";
 import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
@@ -18,6 +16,7 @@ import { InfoPopover, InfoTerm } from "./InfoPopover";
 import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 /**
  * Мастер восстановления из снимка (#93).
@@ -62,156 +61,113 @@ export function RestoreWizardModal({
 }) {
   const w = useRestoreWizardStore();
   const fileRef = useRef<HTMLInputElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
   const busy = w.running !== null || takingSnapshot;
-
-  // Esc закрывает, фокус приходит в окно. Раньше не было ни того, ни другого:
-  // мастер закрывался только случайным кликом по фону — тем самым, которого
-  // человек не хотел.
-  useEffect(() => {
-    dialogRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
 
   const chosen = snapshots.find((s) => s.id === w.snapshotId) ?? null;
   const active = SEGMENT[w.phase] ?? 0;
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}
-    >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="restore-wizard-title"
-        tabIndex={-1}
-        className="w-full max-w-2xl rounded-2xl border border-border bg-panel shadow-2xl outline-none"
-      >
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="p-1.5 rounded-lg bg-accent2/10 text-accent2 shrink-0">
-              <History className="w-4 h-4" />
-            </span>
-            <div id="restore-wizard-title" className="font-semibold">
-              Восстановление снимка Дзен-мани
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={busy}
-            className="text-muted hover:text-text shrink-0 disabled:opacity-40"
-            aria-label="Закрыть"
-          >
-            <X className="w-4 h-4" />
-          </button>
+  return (
+    <Modal onClose={onClose} busy={busy} width="2xl">
+      <ModalHeader icon={History} tone="accent2" title="Восстановление снимка Дзен-мани" />
+
+      <ol className="flex items-start gap-1.5 px-5 pt-4">
+        {STEPS.map((s, i) => {
+          const passed = w.phase === "done" || i < active;
+          const current = i === active && w.phase !== "done";
+          return (
+            <li key={s.id} className="flex-1 min-w-0">
+              <div
+                className={`h-1 rounded-full ${passed ? "bg-income" : current ? "bg-accent" : "bg-border"}`}
+              />
+              {/* По центру своей полоски: слева подпись «Справочники»
+                  прижималась к началу бара и казалась подписью к промежутку
+                  между ним и соседним. */}
+              <div
+                className={`text-[11px] mt-1 truncate text-center ${current || (passed && i === 4) ? "text-text font-medium" : "text-muted"}`}
+              >
+                {s.title}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      {/* Ошибка — вверху: внизу прокручиваемой области она уходила под сгиб. */}
+      {w.error && (
+        <div className="mx-5 mt-4 flex items-start gap-2 rounded-xl border border-expense/40 bg-expense/5 p-3 text-xs">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-expense" />
+          <span>{w.error}</span>
         </div>
+      )}
 
-        <ol className="flex items-start gap-1.5 px-5 pt-4">
-          {STEPS.map((s, i) => {
-            const passed = w.phase === "done" || i < active;
-            const current = i === active && w.phase !== "done";
-            return (
-              <li key={s.id} className="flex-1 min-w-0">
-                <div
-                  className={`h-1 rounded-full ${passed ? "bg-income" : current ? "bg-accent" : "bg-border"}`}
-                />
-                {/* По центру своей полоски: слева подпись «Справочники»
-                    прижималась к началу бара и казалась подписью к промежутку
-                    между ним и соседним. */}
-                <div
-                  className={`text-[11px] mt-1 truncate text-center ${current || (passed && i === 4) ? "text-text font-medium" : "text-muted"}`}
-                >
-                  {s.title}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-
-        {/* Ошибка — вверху: внизу прокручиваемой области она уходила под сгиб. */}
-        {w.error && (
-          <div className="mx-5 mt-4 flex items-start gap-2 rounded-xl border border-expense/40 bg-expense/5 p-3 text-xs">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-expense" />
-            <span>{w.error}</span>
-          </div>
+      <ModalBody scroll gap={3} className="text-sm max-h-[55vh]">
+        {w.phase === "pick" && (
+          <PickStep
+            snapshots={snapshots}
+            chosen={chosen}
+            onPick={w.pick}
+            accepted={w.accepted}
+            onAccept={w.accept}
+            onUpload={() => fileRef.current?.click()}
+            onTakeSnapshot={onTakeSnapshot}
+            takingSnapshot={takingSnapshot}
+          />
         )}
 
-        <div className="px-5 py-4 text-sm space-y-3 max-h-[55vh] overflow-y-auto">
-          {w.phase === "pick" && (
-            <PickStep
-              snapshots={snapshots}
-              chosen={chosen}
-              onPick={w.pick}
-              accepted={w.accepted}
-              onAccept={w.accept}
-              onUpload={() => fileRef.current?.click()}
-              onTakeSnapshot={onTakeSnapshot}
-              takingSnapshot={takingSnapshot}
-            />
-          )}
+        {w.phase === "clear" && <ClearStep preflight={w.preflight} checkedAt={w.checkedAt} />}
 
-          {w.phase === "clear" && <ClearStep preflight={w.preflight} checkedAt={w.checkedAt} />}
+        {w.phase === "dictionaries" && (
+          <DictionariesStep
+            preflight={w.preflight}
+            progress={w.cleanupProgress}
+            result={w.cleanupResult}
+          />
+        )}
 
-          {w.phase === "dictionaries" && (
-            <DictionariesStep
-              preflight={w.preflight}
-              progress={w.cleanupProgress}
-              result={w.cleanupResult}
-            />
-          )}
+        {(w.phase === "ready" || w.phase === "restoring") && chosen && (
+          <ReadyStep
+            snapshot={chosen}
+            progress={w.restoreProgress}
+            notes={w.preflight?.notes ?? []}
+            deleted={w.preflight?.deletedInSnapshot ?? 0}
+          />
+        )}
 
-          {(w.phase === "ready" || w.phase === "restoring") && chosen && (
-            <ReadyStep
-              snapshot={chosen}
-              progress={w.restoreProgress}
-              notes={w.preflight?.notes ?? []}
-              deleted={w.preflight?.deletedInSnapshot ?? 0}
-            />
-          )}
+        {w.phase === "partial" && <PartialStep />}
 
-          {w.phase === "partial" && <PartialStep />}
+        {w.phase === "done" && <DoneStep result={w.restoreResult} />}
+      </ModalBody>
 
-          {w.phase === "done" && <DoneStep result={w.restoreResult} />}
-        </div>
-
-        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border">
-          <div>
-            {(w.phase === "clear" || w.phase === "dictionaries") && (
-              <button onClick={w.back} disabled={busy} className="btn-ghost text-sm">
-                Назад
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} disabled={busy} className="btn-ghost text-sm">
-              {w.phase === "done" || w.phase === "partial" ? "Закрыть" : "Отмена"}
+      <ModalFooter justify="between">
+        <div>
+          {(w.phase === "clear" || w.phase === "dictionaries") && (
+            <button onClick={w.back} disabled={busy} className="btn-ghost text-sm">
+              Назад
             </button>
-            <PrimaryButton chosen={chosen} busy={busy} />
-          </div>
+          )}
         </div>
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} disabled={busy} className="btn-ghost text-sm">
+            {w.phase === "done" || w.phase === "partial" ? "Закрыть" : "Отмена"}
+          </button>
+          <PrimaryButton chosen={chosen} busy={busy} />
+        </div>
+      </ModalFooter>
 
-        {/* Принимаем и .gz: партнёрский ZenTable выгружает бэкап Дзен-мани
-            пожатым, а внутри — тот же сырой ответ diff. */}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json,.json,application/zip,.zip,application/gzip,.gz"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onImportFile(f);
-            e.target.value = "";
-          }}
-        />
-      </div>
-    </div>,
-    document.body
+      {/* Принимаем и .gz: партнёрский ZenTable выгружает бэкап Дзен-мани
+          пожатым, а внутри — тот же сырой ответ diff. */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json,.json,application/zip,.zip,application/gzip,.gz"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onImportFile(f);
+          e.target.value = "";
+        }}
+      />
+    </Modal>
   );
 }
 

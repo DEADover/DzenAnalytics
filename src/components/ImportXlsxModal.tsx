@@ -1,9 +1,8 @@
 import { Checkbox } from "./Checkbox";
 import { HeadCell } from "./table/TableParts";
 import { cellClass } from "./table/tableKit";
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { AlertTriangle, Check, Copy, FileSpreadsheet, Pencil, UserPlus, X } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { AlertTriangle, Check, Copy, FileSpreadsheet, Pencil, UserPlus } from "lucide-react";
 import clsx from "clsx";
 import { Segmented } from "./Segmented";
 import { Tooltip } from "./Tooltip";
@@ -12,6 +11,7 @@ import type { CategoryNode } from "./CategoryCascadePicker";
 import { formatDate, formatMoney, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import type { ImportPlan, ParsedRow, PlanRow, RowVerdict } from "../lib/importRows";
+import { Modal, ModalHeader } from "./Modal";
 
 /**
  * Отчёт проверки файла — единственное место, где импорт можно остановить.
@@ -89,16 +89,6 @@ export function ImportXlsxModal({
   // собой место в списке: человек правит их подряд и должен видеть, где
   // остановился. Счётчики на вкладках при этом честные, текущие.
   const [home] = useState<Map<number, Bucket>>(() => classify(initialPlan));
-
-  // Esc закрывает окно — но только когда не открыт редактор: там этой же
-  // клавишей закрываются списки и календарь, и окно уезжало бы вместе с ними.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && editing === null && !busy) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [busy, editing, onClose]);
 
   const shown = useMemo(
     () =>
@@ -182,328 +172,304 @@ export function ImportXlsxModal({
   const allShownPicked =
     shown.filter(canPick).length > 0 && shown.filter(canPick).every((r) => picked.has(r.excelRow));
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Проверка файла импорта"
-        className="card w-full max-w-7xl max-h-[88vh] flex flex-col"
-      >
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="p-1.5 rounded-lg bg-accent/10 text-accent shrink-0">
-              <FileSpreadsheet className="w-4 h-4" />
-            </span>
-            <div className="min-w-0">
-              <div className="font-semibold truncate">Проверка файла</div>
-              <div className="text-xs text-muted truncate">
-                {fileName} · Готово: {formatNum(plan.ready)} · С ошибками:{" "}
-                {formatNum(plan.failed)} · Похоже на дубликаты: {formatNum(plan.duplicates)}
-                {newPayees.length > 0 && ` · Новых контрагентов: ${formatNum(newPayees.length)}`}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={busy}
-            className="text-muted hover:text-text shrink-0"
-            aria-label="Закрыть"
-            title="Закрыть (Esc)"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+  return (
+    <Modal onClose={onClose} busy={busy} closeOnEscape={editing === null} width="7xl">
+      <ModalHeader
+        icon={FileSpreadsheet}
+        title="Проверка файла"
+        subtitle={
+          <span className="block truncate">
+            {fileName} · Готово: {formatNum(plan.ready)} · С ошибками:{" "}
+            {formatNum(plan.failed)} · Похоже на дубликаты: {formatNum(plan.duplicates)}
+            {newPayees.length > 0 && ` · Новых контрагентов: ${formatNum(newPayees.length)}`}
+          </span>
+        }
+      />
 
-        {seenBefore && (
-          <div className="px-5 py-2 border-b border-border shrink-0 text-xs text-warn flex items-start gap-2">
-            <Copy className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+      {seenBefore && (
+        <div className="px-5 py-2 border-b border-border shrink-0 text-xs text-warn flex items-start gap-2">
+          <Copy className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>
+            Этот файл уже загружали {seenBefore.at} — тогда создали{" "}
+            {formatNum(seenBefore.count)}{" "}
+            {pluralRu(seenBefore.count, ["операцию", "операции", "операций"])}. Похожие строки ниже
+            отмечены и по умолчанию сняты.
+          </span>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 px-5 py-2 border-b border-border shrink-0 text-xs text-muted flex-wrap">
+        <span className="tabular-nums">Отмечено: {formatNum(chosen.length)}</span>
+        <span className="tabular-nums">
+          {fixed.size > 0
+            ? `Исправлено: ${formatNum(fixed.size)}`
+            : "Нажмите на строку, чтобы исправить"}
+        </span>
+        <span className="flex-1" />
+        <Segmented
+          size="sm"
+          label="Какие строки показывать"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: "all" as const, label: `Все (${formatNum(plan.rows.length)})` },
+            { value: "ready" as const, label: `Готовые (${formatNum(plan.ready)})` },
+            { value: "failed" as const, label: `Ошибки (${formatNum(plan.failed)})` },
+            { value: "dups" as const, label: `Дубликаты (${formatNum(plan.duplicates)})` },
+          ]}
+        />
+      </div>
+
+      <div className="overflow-auto grow">
+        {/* Строки идут в порядке файла — номер строки Excel и есть смысл,
+            поэтому сортировки у таблицы нет. */}
+        <table className="w-full">
+          <thead className="sticky top-0 bg-panel z-10">
+            <tr>
+              <th className="table-th w-10 text-center">
+                {/* Отметить показанные — там же, где галочки строк: в отдельной
+                    строке тулбара эта связь читалась не сразу. */}
+                <Checkbox
+                  checked={allShownPicked}
+                  indeterminate={shown.some((r) => picked.has(r.excelRow))}
+                  onChange={() =>
+                    setPicked((prev) => {
+                      const next = new Set(prev);
+                      for (const r of shown.filter(canPick)) {
+                        if (allShownPicked) next.delete(r.excelRow);
+                        else next.add(r.excelRow);
+                      }
+                      return next;
+                    })
+                  }
+                  label="Отметить показанные строки"
+                  title="Отметить показанные строки"
+                />
+              </th>
+              <HeadCell type="count" label="#" width="3rem" />
+              <HeadCell type="date" label="Дата" width="8rem" />
+              <HeadCell type="text" label="Тип" width="6rem" />
+              <HeadCell type="text" label="Категория" />
+              <HeadCell type="text" label="Счёт" width="14rem" />
+              <HeadCell type="money" label="Сумма" width="8rem" />
+              <HeadCell type="text" label="Контрагент" width="10rem" />
+              <HeadCell type="text" label="Статус" width="18rem" />
+              <th className="table-th w-10" />
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r) => {
+              const dup = r.verdict.ok ? r.verdict.duplicateOf : undefined;
+              const open = editing === r.excelRow;
+              const shutting = closing === r.excelRow && !open;
+              return (
+                <Fragment key={r.excelRow}>
+                  <tr
+                    onClick={() => openEditor(r.excelRow)}
+                    className={clsx(
+                      "cursor-pointer hover:bg-panel2/50",
+                      !r.verdict.ok && "bg-expense/5",
+                      dup && "bg-warn/5",
+                      open && "bg-panel2/60"
+                    )}
+                  >
+                    <td className={cellClass("mark")} onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={picked.has(r.excelRow)}
+                        disabled={!canPick(r)}
+                        onChange={() => toggle(r)}
+                        label={`Строка ${r.excelRow}`}
+                      />
+                    </td>
+                    <td className={cellClass("count")}>
+                      <span className="inline-flex items-center justify-center gap-1">
+                        {fixed.has(r.excelRow) && (
+                          <Tooltip content="Строка исправлена в отчёте — в вашем файле она осталась прежней">
+                            <Pencil className="w-3 h-3 text-accent" />
+                          </Tooltip>
+                        )}
+                        {r.excelRow}
+                      </span>
+                    </td>
+                    <td className={cellClass("date")}>
+                      {r.date ? formatDate(r.date, "full") : "—"}
+                      {r.time && <span className="text-muted"> {r.time}</span>}
+                    </td>
+                    <td className={cellClass("text", { muted: true, className: "whitespace-nowrap" })}>{r.type || "—"}</td>
+                    <td className={cellClass("text")}>
+                      <div className="truncate">{r.category || "—"}</div>
+                    </td>
+                    <td className={cellClass("text", { muted: true })}>
+                      {/* У перевода счетов два, и стрелка между ними — самая
+                          короткая запись «откуда куда». */}
+                      <div className="truncate">
+                        {[r.outAccount, r.inAccount].filter(Boolean).join(" → ") || "—"}
+                      </div>
+                    </td>
+                    <td className={cellClass("money")}>
+                      {r.verdict.ok
+                        ? formatMoney(r.amount ?? 0, currencyOf(r), { signed: false })
+                        : r.amount === null
+                          ? "—"
+                          : formatNum(r.amount)}
+                    </td>
+                    <td className="table-td">
+                      {r.payee ? (
+                        <>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate">{r.payee}</span>
+                            {r.verdict.ok && r.verdict.newCounterparty && (
+                              <Tooltip content="Такого контрагента нет в справочнике — заведём запись вместе с операциями">
+                                <span className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent">
+                                  Новый
+                                </span>
+                              </Tooltip>
+                            )}
+                          </div>
+                          {r.verdict.ok && r.verdict.payeeHint && (
+                            <div className="text-[0.85em] text-muted truncate">
+                              Похоже на «{r.verdict.payeeHint}»
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="table-td">
+                      {!r.verdict.ok ? (
+                        <span className="text-expense flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <span>{r.verdict.reason}</span>
+                        </span>
+                      ) : dup ? (
+                        <span className="text-warn">Похожая операция уже есть</span>
+                      ) : (
+                        <span className="text-income flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5 shrink-0" />
+                          Готово к созданию
+                        </span>
+                      )}
+                    </td>
+                    <td className="table-td text-center">
+                      <span
+                        className={clsx(
+                          "inline-flex p-1 rounded-md",
+                          open ? "bg-accent/15 text-accent" : "text-muted"
+                        )}
+                        aria-hidden
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </span>
+                    </td>
+                  </tr>
+                  {(open || shutting) && (
+                    <tr>
+                      <td colSpan={COLUMNS} className="p-0 border-b border-border/60">
+                        {/* Раскрытие и сворачивание: растим и убираем
+                            грид-трек 0fr → 1fr, как у под-статей бюджета.
+                            Высоту содержимого знать не нужно — а она тут и
+                            неизвестна заранее, у перевода полей больше.
+                            Списки пикеров рисуются в портале и из-под
+                            `overflow-hidden` не обрезаются. */}
+                        <div
+                          className={clsx(
+                            "grid grid-rows-[1fr]",
+                            open
+                              ? "animate-row-expand"
+                              : "animate-row-collapse pointer-events-none"
+                          )}
+                          onAnimationEnd={() => shutting && setClosing(null)}
+                        >
+                          <div className="overflow-hidden">
+                            <ImportRowEditor
+                              row={r}
+                              accounts={accounts}
+                              payees={payees}
+                              categories={categories}
+                              check={check}
+                              payeeStatus={payeeStatus}
+                              onSave={saveEdit}
+                              onCancel={closeEditor}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+        {shown.length === 0 && (
+          <div className="text-center text-muted py-10">Таких строк нет</div>
+        )}
+      </div>
+
+      <div className="px-5 py-3 border-t border-border shrink-0 space-y-2">
+        {autoPush && (
+          <label className="flex items-start gap-2 text-xs cursor-pointer">
+            <Checkbox
+              checked={hold}
+              onChange={(on) => setHold(on)}
+              label="Придержать отправку до моей проверки"
+              className="mt-0.5"
+            />
             <span>
-              Этот файл уже загружали {seenBefore.at} — тогда создали{" "}
-              {formatNum(seenBefore.count)}{" "}
-              {pluralRu(seenBefore.count, ["операцию", "операции", "операций"])}. Похожие строки ниже
-              отмечены и по умолчанию сняты.
+              <span className="text-text">Придержать отправку до моей проверки</span>
+              <span className="block text-muted">
+                Отправка стоит на «Авто» — без этого созданные операции уедут в
+                Дзен-мани через пару секунд. Режим переключится на «Вручную», вернуть
+                можно там же.
+              </span>
+            </span>
+          </label>
+        )}
+        {newPayees.length > 0 && (
+          <div className="text-xs text-muted flex items-start gap-2">
+            <UserPlus className="w-3.5 h-3.5 shrink-0 mt-0.5 text-accent" />
+            <span>
+              {/* Единственное место, где полный список виден ДО нажатия:
+                  запись в справочнике переживёт отмену импорта труднее, чем
+                  операция, и человек вправе увидеть, что именно заведётся. */}
+              Заведём в справочнике{" "}
+              {pluralRu(newPayees.length, ["контрагента", "контрагентов", "контрагентов"])}:{" "}
+              <span className="text-text">{newPayees.slice(0, 6).join(", ")}</span>
+              {newPayees.length > 6 && ` и ещё ${formatNum(newPayees.length - 6)}`}
             </span>
           </div>
         )}
-
-        <div className="flex items-center gap-3 px-5 py-2 border-b border-border shrink-0 text-xs text-muted flex-wrap">
-          <span className="tabular-nums">Отмечено: {formatNum(chosen.length)}</span>
-          <span className="tabular-nums">
-            {fixed.size > 0
-              ? `Исправлено: ${formatNum(fixed.size)}`
-              : "Нажмите на строку, чтобы исправить"}
-          </span>
-          <span className="flex-1" />
-          <Segmented
-            size="sm"
-            label="Какие строки показывать"
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: "all" as const, label: `Все (${formatNum(plan.rows.length)})` },
-              { value: "ready" as const, label: `Готовые (${formatNum(plan.ready)})` },
-              { value: "failed" as const, label: `Ошибки (${formatNum(plan.failed)})` },
-              { value: "dups" as const, label: `Дубликаты (${formatNum(plan.duplicates)})` },
-            ]}
-          />
-        </div>
-
-        <div className="overflow-auto grow">
-          {/* Строки идут в порядке файла — номер строки Excel и есть смысл,
-              поэтому сортировки у таблицы нет. */}
-          <table className="w-full">
-            <thead className="sticky top-0 bg-panel z-10">
-              <tr>
-                <th className="table-th w-10 text-center">
-                  {/* Отметить показанные — там же, где галочки строк: в отдельной
-                      строке тулбара эта связь читалась не сразу. */}
-                  <Checkbox
-                    checked={allShownPicked}
-                    indeterminate={shown.some((r) => picked.has(r.excelRow))}
-                    onChange={() =>
-                      setPicked((prev) => {
-                        const next = new Set(prev);
-                        for (const r of shown.filter(canPick)) {
-                          if (allShownPicked) next.delete(r.excelRow);
-                          else next.add(r.excelRow);
-                        }
-                        return next;
-                      })
-                    }
-                    label="Отметить показанные строки"
-                    title="Отметить показанные строки"
-                  />
-                </th>
-                <HeadCell type="count" label="#" width="3rem" />
-                <HeadCell type="date" label="Дата" width="8rem" />
-                <HeadCell type="text" label="Тип" width="6rem" />
-                <HeadCell type="text" label="Категория" />
-                <HeadCell type="text" label="Счёт" width="14rem" />
-                <HeadCell type="money" label="Сумма" width="8rem" />
-                <HeadCell type="text" label="Контрагент" width="10rem" />
-                <HeadCell type="text" label="Статус" width="18rem" />
-                <th className="table-th w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((r) => {
-                const dup = r.verdict.ok ? r.verdict.duplicateOf : undefined;
-                const open = editing === r.excelRow;
-                const shutting = closing === r.excelRow && !open;
-                return (
-                  <Fragment key={r.excelRow}>
-                    <tr
-                      onClick={() => openEditor(r.excelRow)}
-                      className={clsx(
-                        "cursor-pointer hover:bg-panel2/50",
-                        !r.verdict.ok && "bg-expense/5",
-                        dup && "bg-warn/5",
-                        open && "bg-panel2/60"
-                      )}
-                    >
-                      <td className={cellClass("mark")} onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={picked.has(r.excelRow)}
-                          disabled={!canPick(r)}
-                          onChange={() => toggle(r)}
-                          label={`Строка ${r.excelRow}`}
-                        />
-                      </td>
-                      <td className={cellClass("count")}>
-                        <span className="inline-flex items-center justify-center gap-1">
-                          {fixed.has(r.excelRow) && (
-                            <Tooltip content="Строка исправлена в отчёте — в вашем файле она осталась прежней">
-                              <Pencil className="w-3 h-3 text-accent" />
-                            </Tooltip>
-                          )}
-                          {r.excelRow}
-                        </span>
-                      </td>
-                      <td className={cellClass("date")}>
-                        {r.date ? formatDate(r.date, "full") : "—"}
-                        {r.time && <span className="text-muted"> {r.time}</span>}
-                      </td>
-                      <td className={cellClass("text", { muted: true, className: "whitespace-nowrap" })}>{r.type || "—"}</td>
-                      <td className={cellClass("text")}>
-                        <div className="truncate">{r.category || "—"}</div>
-                      </td>
-                      <td className={cellClass("text", { muted: true })}>
-                        {/* У перевода счетов два, и стрелка между ними — самая
-                            короткая запись «откуда куда». */}
-                        <div className="truncate">
-                          {[r.outAccount, r.inAccount].filter(Boolean).join(" → ") || "—"}
-                        </div>
-                      </td>
-                      <td className={cellClass("money")}>
-                        {r.verdict.ok
-                          ? formatMoney(r.amount ?? 0, currencyOf(r), { signed: false })
-                          : r.amount === null
-                            ? "—"
-                            : formatNum(r.amount)}
-                      </td>
-                      <td className="table-td">
-                        {r.payee ? (
-                          <>
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="truncate">{r.payee}</span>
-                              {r.verdict.ok && r.verdict.newCounterparty && (
-                                <Tooltip content="Такого контрагента нет в справочнике — заведём запись вместе с операциями">
-                                  <span className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent">
-                                    Новый
-                                  </span>
-                                </Tooltip>
-                              )}
-                            </div>
-                            {r.verdict.ok && r.verdict.payeeHint && (
-                              <div className="text-[0.85em] text-muted truncate">
-                                Похоже на «{r.verdict.payeeHint}»
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="table-td">
-                        {!r.verdict.ok ? (
-                          <span className="text-expense flex items-start gap-1.5">
-                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                            <span>{r.verdict.reason}</span>
-                          </span>
-                        ) : dup ? (
-                          <span className="text-warn">Похожая операция уже есть</span>
-                        ) : (
-                          <span className="text-income flex items-center gap-1.5">
-                            <Check className="w-3.5 h-3.5 shrink-0" />
-                            Готово к созданию
-                          </span>
-                        )}
-                      </td>
-                      <td className="table-td text-center">
-                        <span
-                          className={clsx(
-                            "inline-flex p-1 rounded-md",
-                            open ? "bg-accent/15 text-accent" : "text-muted"
-                          )}
-                          aria-hidden
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </span>
-                      </td>
-                    </tr>
-                    {(open || shutting) && (
-                      <tr>
-                        <td colSpan={COLUMNS} className="p-0 border-b border-border/60">
-                          {/* Раскрытие и сворачивание: растим и убираем
-                              грид-трек 0fr → 1fr, как у под-статей бюджета.
-                              Высоту содержимого знать не нужно — а она тут и
-                              неизвестна заранее, у перевода полей больше.
-                              Списки пикеров рисуются в портале и из-под
-                              `overflow-hidden` не обрезаются. */}
-                          <div
-                            className={clsx(
-                              "grid grid-rows-[1fr]",
-                              open
-                                ? "animate-row-expand"
-                                : "animate-row-collapse pointer-events-none"
-                            )}
-                            onAnimationEnd={() => shutting && setClosing(null)}
-                          >
-                            <div className="overflow-hidden">
-                              <ImportRowEditor
-                                row={r}
-                                accounts={accounts}
-                                payees={payees}
-                                categories={categories}
-                                check={check}
-                                payeeStatus={payeeStatus}
-                                onSave={saveEdit}
-                                onCancel={closeEditor}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-          {shown.length === 0 && (
-            <div className="text-center text-muted py-10">Таких строк нет</div>
-          )}
-        </div>
-
-        <div className="px-5 py-3 border-t border-border shrink-0 space-y-2">
-          {autoPush && (
-            <label className="flex items-start gap-2 text-xs cursor-pointer">
-              <Checkbox
-                checked={hold}
-                onChange={(on) => setHold(on)}
-                label="Придержать отправку до моей проверки"
-                className="mt-0.5"
-              />
-              <span>
-                <span className="text-text">Придержать отправку до моей проверки</span>
-                <span className="block text-muted">
-                  Отправка стоит на «Авто» — без этого созданные операции уедут в
-                  Дзен-мани через пару секунд. Режим переключится на «Вручную», вернуть
-                  можно там же.
-                </span>
-              </span>
-            </label>
-          )}
-          {newPayees.length > 0 && (
-            <div className="text-xs text-muted flex items-start gap-2">
-              <UserPlus className="w-3.5 h-3.5 shrink-0 mt-0.5 text-accent" />
-              <span>
-                {/* Единственное место, где полный список виден ДО нажатия:
-                    запись в справочнике переживёт отмену импорта труднее, чем
-                    операция, и человек вправе увидеть, что именно заведётся. */}
-                Заведём в справочнике{" "}
-                {pluralRu(newPayees.length, ["контрагента", "контрагентов", "контрагентов"])}:{" "}
-                <span className="text-text">{newPayees.slice(0, 6).join(", ")}</span>
-                {newPayees.length > 6 && ` и ещё ${formatNum(newPayees.length - 6)}`}
-              </span>
-            </div>
-          )}
-          <div className="flex items-center justify-between gap-3">
-            <Tooltip content="Операции появятся в приложении сразу и будут ждать отправки в Дзен-мани. Отменить импорт можно одной кнопкой, пока он не отправлен">
-              <span className="text-xs text-muted cursor-help border-b border-dotted border-border">
-                Что произойдёт
-              </span>
-            </Tooltip>
-            <div className="flex items-center gap-2">
-              <button onClick={onClose} disabled={busy} className="btn-ghost text-sm">
-                Отмена
-              </button>
-              <button
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    await onCreate(chosen, hold);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-                disabled={busy || chosen.length === 0}
-                className="btn-primary text-sm"
-              >
-                {busy
-                  ? "Создаю…"
-                  : `Создать ${formatNum(chosen.length)} ${plural(chosen.length)}`}
-              </button>
-            </div>
+        <div className="flex items-center justify-between gap-3">
+          <Tooltip content="Операции появятся в приложении сразу и будут ждать отправки в Дзен-мани. Отменить импорт можно одной кнопкой, пока он не отправлен">
+            <span className="text-xs text-muted cursor-help border-b border-dotted border-border">
+              Что произойдёт
+            </span>
+          </Tooltip>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} disabled={busy} className="btn-ghost text-sm">
+              Отмена
+            </button>
+            <button
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await onCreate(chosen, hold);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              disabled={busy || chosen.length === 0}
+              className="btn-primary text-sm"
+            >
+              {busy
+                ? "Создаю…"
+                : `Создать ${formatNum(chosen.length)} ${plural(chosen.length)}`}
+            </button>
           </div>
         </div>
       </div>
-    </div>,
-    document.body
+    </Modal>
   );
 }
 

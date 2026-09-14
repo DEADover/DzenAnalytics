@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Checkbox } from "./Checkbox";
-import { createPortal } from "react-dom";
-import { X, ArrowRight, ListChecks, Info, Loader2, Pencil } from "lucide-react";
+import { ArrowRight, ListChecks, Info, Loader2, Pencil } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { EditTransactionModal } from "./EditTransactionModal";
 import { Tooltip } from "./Tooltip";
@@ -12,6 +11,7 @@ import { pluralRu } from "../lib/plural";
 import { CategoryDot } from "./CategoryDot";
 import { Segmented } from "./Segmented";
 import type { Transaction } from "../types";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
 /**
  * Окно «Что изменят правила» — предпросмотр и применение (пункты 9–12 issue #49).
@@ -89,16 +89,6 @@ export function RulePreviewModal({
   const openEditor = (id: string, fallback: Transaction) =>
     setEditing(displayed.find((t) => t.id === id) ?? fallback);
 
-  useEffect(() => {
-    // Пока сверху открыт редактор операции, Escape принадлежит ему: иначе одно
-    // нажатие закрывало бы оба окна разом.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !editing) onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, editing]);
-
   const allSelected = pendingIds.length > 0 && selected.size === pendingIds.length;
 
   function toggle(id: string) {
@@ -139,40 +129,19 @@ export function RulePreviewModal({
     return false;
   }, [plan]);
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Что изменят правила"
-        className="card w-full max-w-3xl max-h-[88vh] flex flex-col"
-      >
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="p-1.5 rounded-lg bg-accent/10 text-accent shrink-0">
-              <ListChecks className="w-4 h-4" />
-            </span>
-            <div className="min-w-0">
-              <div className="font-semibold truncate">Что изменят правила</div>
-              <div className="text-xs text-muted">
-                Правил включено: {ruleCount} · Совпадений:{" "}
-                {formatNum(plan.rows.length)} · К записи:{" "}
-                {formatNum(plan.pending.length)}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-muted hover:text-text shrink-0"
-            aria-label="Закрыть"
-            title="Закрыть (Esc)"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+  return (
+    <>
+      <Modal onClose={onClose} width="3xl">
+        <ModalHeader
+          icon={ListChecks}
+          title="Что изменят правила"
+          subtitle={
+            <>
+              Правил включено: {ruleCount} · Совпадений: {formatNum(plan.rows.length)} · К записи:{" "}
+              {formatNum(plan.pending.length)}
+            </>
+          }
+        />
 
         {plan.rows.length > 0 && (
           <div className="flex items-center gap-3 px-5 py-2 border-b border-border shrink-0 text-xs text-muted flex-wrap">
@@ -227,7 +196,7 @@ export function RulePreviewModal({
           </div>
         )}
 
-        <div className="overflow-y-auto px-5 py-3 flex-1">
+        <ModalBody scroll>
           {visible.length === 0 ? (
             <div className="text-center text-muted text-sm py-10">
               {ruleCount === 0
@@ -359,7 +328,7 @@ export function RulePreviewModal({
               })}
             </div>
           )}
-        </div>
+        </ModalBody>
 
         {(notes.length > 0 || plan.skippedCount > 0) && (
           <div className="px-5 py-3 border-t border-border shrink-0 space-y-2">
@@ -389,7 +358,7 @@ export function RulePreviewModal({
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border shrink-0">
+        <ModalFooter>
           <button type="button" onClick={onClose} className="btn-ghost text-sm">
             Закрыть
           </button>
@@ -404,9 +373,8 @@ export function RulePreviewModal({
             ) : null}
             Применить правила ({formatNum(selected.size)})
           </button>
-        </div>
-      </div>
-
+        </ModalFooter>
+      </Modal>
       {editing && (
         <EditTransactionModal
           key={editing.id}
@@ -414,7 +382,6 @@ export function RulePreviewModal({
           onClose={() => setEditing(null)}
         />
       )}
-    </div>,
-    document.body
+    </>
   );
 }
