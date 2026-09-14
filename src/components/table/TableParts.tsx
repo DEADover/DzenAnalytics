@@ -11,7 +11,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Download } from "lucide-r
 import clsx from "clsx";
 import { formatNum } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
-import { TREE_ELBOW_LEFT, TREE_STEP, alignOf, cellClass, headClass, type ColumnType, type SortDir, type Tone } from "./tableKit";
+import { TREE_ELBOW_LEFT, TREE_STEP, alignOf, cellClass, headClass, scaledWidth, type ColumnType, type SortDir, type Tone } from "./tableKit";
 
 /** В покое — ↕ на 30%, у активной колонки — стрелка направления. */
 export function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
@@ -29,17 +29,14 @@ export interface HeadSort {
 /**
  * Подпись сортируемой колонки — кнопка с подписью и значком. Одна на шапки
  * таблиц и списков-мер: вид и поведение сортировки в продукте одни.
+ *
+ * Значок — всегда после подписи, как бы колонка ни была выровнена. Прежде у
+ * колонок справа он стоял перед подписью, чтобы её край совпадал с краем
+ * чисел, и в одной шапке значки чередовались: «Категория ↕», «↕ Доля»,
+ * «Операций ↕», «↕ Сумма». Теперь у числовой колонки над краем чисел стоит
+ * сам значок, а подпись — сразу перед ним.
  */
-export function SortButton({
-  label,
-  sort,
-  right = false,
-}: {
-  label: ReactNode;
-  sort: HeadSort;
-  /** Колонка справа: значок перед подписью, подпись — над краем чисел. */
-  right?: boolean;
-}) {
+export function SortButton({ label, sort }: { label: ReactNode; sort: HeadSort }) {
   return (
     <button
       type="button"
@@ -47,7 +44,6 @@ export function SortButton({
       className={clsx(
         "inline-flex items-center gap-1 min-w-0 rounded transition-colors duration-200 hover:text-text",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-        right && "flex-row-reverse",
         sort.active && "text-accent hover:text-accent"
       )}
     >
@@ -58,10 +54,8 @@ export function SortButton({
 }
 
 /**
- * Ячейка шапки. Выравнивание — по типу колонки, как у значений под ней.
- *
- * У колонки справа значок стоит ПЕРЕД подписью: иначе правый край подписи
- * отъезжал бы от правого края чисел на ширину значка.
+ * Ячейка шапки. Выравнивание — по типу колонки, как у значений под ней;
+ * значок сортировки — после подписи у любой колонки (см. `SortButton`).
  */
 export function HeadCell({
   type = "text",
@@ -92,7 +86,7 @@ export function HeadCell({
       title={title}
       aria-sort={sort ? (sort.active ? (sort.dir === "asc" ? "ascending" : "descending") : "none") : undefined}
       className={headClass(type, clsx("whitespace-nowrap", className))}
-      style={width ? { width } : undefined}
+      style={width ? { width: scaledWidth(width) } : undefined}
     >
       {/* Блочный flex, а не inline: строчный добавлял снизу место под
           выносные элементы, и шапка выходила 39 вместо 37. */}
@@ -104,7 +98,7 @@ export function HeadCell({
       >
         {lead}
         {sort ? (
-          <SortButton label={label} sort={sort} right={right} />
+          <SortButton label={label} sort={sort} />
         ) : (
           <span className="truncate">{label}</span>
         )}

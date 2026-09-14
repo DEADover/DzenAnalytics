@@ -295,6 +295,7 @@ export function CategoriesPage() {
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
   const [view, setView] = useState<View>("rings");
+  const [exportSlot, setExportSlot] = useState<HTMLSpanElement | null>(null);
   // С главной сюда приходят по ссылке из виджета-кольца, и она говорит, какой
   // вид открыть: кольцо расходов ведёт к расходам, кольцо доходов — к доходам.
   // Без этого раздел всегда открывался расходами, и с кольца доходов человек
@@ -565,44 +566,50 @@ export function CategoriesPage() {
               own header (kind badge + scope + big total) so all three read as
               one family. Donut carries its own header, so this is hidden there. */}
           {view !== "rings" && (
-            <div className="mb-4 flex items-start justify-between gap-2">
-              <div>
-                <span
-                  className={`inline-flex px-4 py-1 rounded-full text-3xl font-bold tabular-nums ${
-                    kind === "expense" ? "bg-expense/15 text-expense" : "bg-income/15 text-income"
-                  }`}
-                >
-                  {formatMoney(totalAll, base)}
-                </span>
+            <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+              <span
+                className={`inline-flex px-4 py-1 rounded-full text-3xl font-bold tabular-nums ${
+                  kind === "expense" ? "bg-expense/15 text-expense" : "bg-income/15 text-income"
+                }`}
+              >
+                {formatMoney(totalAll, base)}
+              </span>
+              <div className="flex items-center gap-2">
+                {view === "treemap" && (
+                  <button
+                    onClick={() => setTreemapFull(true)}
+                    className="btn-ghost text-xs"
+                    title="Открыть на весь экран"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    На весь экран
+                  </button>
+                )}
+                {view === "bars" && (
+                  <>
+                    <label className="inline-flex items-center gap-2 text-xs text-muted">
+                      Сравнить со средним за
+                      <Select
+                        size="sm"
+                        className="w-24"
+                        value={String(avgMonths)}
+                        onChange={(v) => setAvgMonths(Number(v) as 3 | 6 | 12)}
+                        options={[
+                          { value: "3", label: "3 мес" },
+                          { value: "6", label: "6 мес" },
+                          { value: "12", label: "12 мес" },
+                        ]}
+                        ariaLabel="Сколько предыдущих месяцев усреднять"
+                        title="Сколько предыдущих месяцев усреднять для базовой линии"
+                      />
+                    </label>
+                    {/* Выгрузка таблицы — в этой же строке: своей шапки у
+                        таблицы нет, и отдельная строка ради «CSV» была бы
+                        пустой. */}
+                    <span ref={setExportSlot} className="flex" />
+                  </>
+                )}
               </div>
-              {view === "treemap" && (
-                <button
-                  onClick={() => setTreemapFull(true)}
-                  className="inline-flex items-center gap-1 text-xs text-muted hover:text-accent shrink-0 mt-1"
-                  title="Открыть на весь экран"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  На весь экран
-                </button>
-              )}
-              {view === "bars" && (
-                <label className="shrink-0 mt-1 inline-flex items-center gap-2 text-xs text-muted">
-                  Сравнить со средним за
-                  <Select
-                    size="sm"
-                    className="w-24"
-                    value={String(avgMonths)}
-                    onChange={(v) => setAvgMonths(Number(v) as 3 | 6 | 12)}
-                    options={[
-                      { value: "3", label: "3 мес" },
-                      { value: "6", label: "6 мес" },
-                      { value: "12", label: "12 мес" },
-                    ]}
-                    ariaLabel="Сколько предыдущих месяцев усреднять"
-                    title="Сколько предыдущих месяцев усреднять для базовой линии"
-                  />
-                </label>
-              )}
             </div>
           )}
           {view === "rings" && (
@@ -642,6 +649,7 @@ export function CategoriesPage() {
               onExpandedChange={setExpanded}
               onRowClick={(r) => (r.parent ? openSubcategory(r.key) : openCategory(r.key))}
               exportName={`categories_${kind}`}
+              exportSlot={exportSlot}
             />
           )}
         </div>

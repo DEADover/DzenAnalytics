@@ -620,7 +620,7 @@ export function RulesPage() {
                   </th>
                   {/* Порядок правил — это порядок, в котором они срабатывают:
                       его задают перетаскиванием, поэтому сортировки у таблицы нет. */}
-                  <HeadCell type="count" label="№" width="7rem" />
+                  <HeadCell type="mark" label="№" width="7rem" />
                   <HeadCell type="text" label="Правило" className="w-full" />
                   <HeadCell type="text" label="Что меняет" width="18rem" />
                   <HeadCell type="mark" label="Режим" width="13rem" />
@@ -695,7 +695,7 @@ export function RulesPage() {
                           label="Прогнать это правило"
                         />
                       </td>
-                      <td className={cellClass("count")}>
+                      <td className={cellClass("mark", { muted: true, className: "tabular-nums" })}>
                         <div className="flex items-center justify-center gap-0.5">
                           {/* Ручка — подсказка, что строку можно тащить. Тянется
                               вся строка, но без видимого захвата об этом никто

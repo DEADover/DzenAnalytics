@@ -197,6 +197,10 @@ export function AnomaliesPage() {
           </SectionEmpty>
         ) : (
           <DataTable<Anomaly>
+            // Заголовок у таблицы есть, как в «Топе»: без него строка шапки
+            // держала бы одну кнопку «CSV».
+            icon={AlertTriangle}
+            title="Операции-выбросы"
             data={anomalies}
             rowKey={(a) => a.tx.id}
             defaultSortKey="zScore"
@@ -274,6 +278,8 @@ export function AnomaliesPage() {
           </SectionEmpty>
         ) : (
           <DataTable<MonthSpike>
+            icon={TrendingUp}
+            title="Всплески по категориям"
             data={spikes}
             rowKey={(sp, i) => `${sp.ym}-${sp.category}-${i}`}
             defaultSortKey="delta"

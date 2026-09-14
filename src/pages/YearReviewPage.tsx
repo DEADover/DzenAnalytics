@@ -656,10 +656,10 @@ function YearBars({
  */
 /** Колонки профиля недели: у дня нет числа операций, только доля и сумма. */
 const WEEK_COLUMNS: MeterCell[] = [
-  { text: "Доля", width: "w-14" },
+  { text: "Доля", width: "3.5rem" },
   // Полной суммой, а не «490,3 тыс. ₽»: сокращение экономило десяток пикселей
   // и отнимало у числа точность там, где место под него есть.
-  { text: "Расход", width: "w-28" },
+  { text: "Расход", width: "7rem" },
 ];
 
 function WeekProfile({
@@ -889,9 +889,9 @@ function Record({
 
 /** Колонки топов: доля, операции, сумма — ширины общие у шапки и строк. */
 const TOP_COLUMNS: MeterCell[] = [
-  { text: "Доля", width: "w-14", sortKey: "share" },
-  { text: "Опер.", width: "w-14", sortKey: "count" },
-  { text: "Сумма", width: "w-28", sortKey: "amount" },
+  { text: "Доля", width: "3.5rem", sortKey: "share" },
+  { text: "Опер.", width: "3.5rem", sortKey: "count" },
+  { text: "Сумма", width: "7rem", sortKey: "amount" },
 ];
 
 function TopList({

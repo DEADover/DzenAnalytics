@@ -34,9 +34,19 @@ const TABLE_FONT_REM: Record<TableFontLevel, string> = {
 
 export const DEFAULT_TABLE_FONT_LEVEL: TableFontLevel = 3;
 
+/** Во сколько раз текст таблиц крупнее обычных 14 px — множитель ширин колонок. */
+const TABLE_FONT_SCALE: Record<TableFontLevel, string> = {
+  1: String(12 / 14),
+  2: String(13 / 14),
+  3: "1",
+  4: String(15 / 14),
+  5: String(16 / 14),
+};
+
 function applyTableFont(level: TableFontLevel): void {
   if (typeof document === "undefined") return;
   document.documentElement.style.setProperty("--tbl-font", TABLE_FONT_REM[level]);
+  document.documentElement.style.setProperty("--tbl-scale", TABLE_FONT_SCALE[level]);
 }
 
 function normalizeLevel(n: unknown): TableFontLevel {

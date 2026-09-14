@@ -51,8 +51,8 @@ interface CompareSpec {
  *
  * Раньше это были три скопированных списка на `div` со своей шапкой: числа
  * прижаты влево, сортировки нет, подкатегории отбиты цветной полосой. Теперь
- * это обычная таблица продукта: доля, сумма и сравнение справа, счётчик по
- * центру, сортировка по любой колонке, подкатегории — уголком под родителем.
+ * это обычная таблица продукта: числа справа, сортировка по любой колонке,
+ * подкатегории — уголком под родителем.
  */
 export function CategoryTable({
   rows,
@@ -69,6 +69,7 @@ export function CategoryTable({
   hoverKey,
   onHover,
   exportName,
+  exportSlot,
   emptyText,
   card = false,
   icon,
@@ -91,6 +92,8 @@ export function CategoryTable({
   hoverKey?: string | null;
   onHover?: (row: CategoryTableRow | null) => void;
   exportName?: string;
+  /** Кнопка выгрузки в чужой строке заголовка — см. `DataTable`. */
+  exportSlot?: HTMLElement | null;
   emptyText?: ReactNode;
   /** Своя карточка с шапкой. Без неё таблица встаёт в чужую карточку. */
   card?: boolean;
@@ -129,7 +132,9 @@ export function CategoryTable({
     {
       key: "count",
       type: "count",
-      width: "6.5rem",
+      // «Операций» с значком сортировки — 111 px при обычном размере текста:
+      // в 6.5rem подпись обрезалась до «Операц…», и колонка выглядела сбитой.
+      width: "7.5rem",
       label: "Операций",
       sortValue: (r) => r.count,
       render: (r) => formatNum(r.count),
@@ -138,7 +143,9 @@ export function CategoryTable({
       key: "value",
       type: "main",
       tone: kind,
-      width: "9rem",
+      // Сумма до «99 999 999 ₽»: 9rem оставляли слева от коротких сумм полосу
+      // пустоты, и счётчик рядом казался уехавшим влево.
+      width: "8rem",
       label: valueLabel,
       headerTitle: valueTitle,
       sortValue: (r) => r.value,
@@ -219,6 +226,7 @@ export function CategoryTable({
       rowClassName={(r) => (hoverKey && hoverKey === r.key ? "bg-panel2/50" : undefined)}
       exportable={!!exportName}
       exportName={exportName}
+      exportSlot={exportSlot}
       emptyText={emptyText}
     />
   );

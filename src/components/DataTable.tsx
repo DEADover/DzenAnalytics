@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { LucideIcon } from "lucide-react";
 import clsx from "clsx";
 import { CardHeader } from "./CardHeader";
@@ -10,6 +11,7 @@ import {
   csvFileName,
   downloadCsv,
   nextSort,
+  scaledWidth,
   sortRows,
   treeIndent,
   type ColumnType,
@@ -86,6 +88,13 @@ interface Props<T> {
   actions?: ReactNode;
   exportName?: string;
   exportable?: boolean;
+  /**
+   * Куда поставить кнопку выгрузки, если у таблицы нет своей шапки: в строку
+   * заголовка карточки, в которой таблица стоит. Иначе ради одной кнопки
+   * «CSV» появлялась отдельная строка над таблицей. Пока место не отрисовано
+   * (`null`), кнопки нет нигде.
+   */
+  exportSlot?: HTMLElement | null;
   /** Без карточки — для таблицы внутри окна, шторки или другой карточки. */
   bare?: boolean;
   className?: string;
@@ -150,6 +159,7 @@ export function DataTable<T>({
   actions,
   exportName,
   exportable = true,
+  exportSlot,
   bare = false,
   className,
   fixed = false,
@@ -241,7 +251,9 @@ export function DataTable<T>({
   const selectedCount = selection ? allKeys.filter((k) => selection.selected.has(k)).length : 0;
 
   const colCount = columns.length + (selection ? 1 : 0);
-  const hasHeader = title !== undefined || icon !== undefined || showExport || actions !== undefined;
+  const exportInHeader = showExport && exportSlot === undefined;
+  const hasHeader =
+    title !== undefined || icon !== undefined || exportInHeader || actions !== undefined;
 
   const table = (
     <>
@@ -251,10 +263,10 @@ export function DataTable<T>({
           title={title}
           info={info}
           right={
-            actions || showExport ? (
+            actions || exportInHeader ? (
               <>
                 {actions}
-                {showExport && <ExportButton rows={sorted.length} onClick={exportCsv} />}
+                {exportInHeader && <ExportButton rows={sorted.length} onClick={exportCsv} />}
               </>
             ) : undefined
           }
@@ -271,7 +283,7 @@ export function DataTable<T>({
             <colgroup>
               {selection && <col style={{ width: "2.5rem" }} />}
               {columns.map((c) => (
-                <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+                <col key={c.key} style={c.width ? { width: scaledWidth(c.width) } : undefined} />
               ))}
             </colgroup>
           )}
@@ -424,7 +436,15 @@ export function DataTable<T>({
                                 label={expanded.has(f.key) ? "Свернуть" : "Раскрыть"}
                               />
                             )}
-                            <span className="block min-w-0 truncate">{content}</span>
+                            {/* Растягивается на всю ширину колонки: иначе содержимое
+                                с полосой («Полосы» на «Категориях») сжималось до
+                                длины названия, и полоса выходила короче текста.
+                                Обрезка — только по горизонтали: засечка сравнения
+                                выступает под полосу, и `overflow: hidden` срезал
+                                её низ. */}
+                            <span className="block flex-1 min-w-0 overflow-x-clip text-ellipsis whitespace-nowrap">
+                              {content}
+                            </span>
                           </span>
                         </td>
                       );
@@ -437,6 +457,9 @@ export function DataTable<T>({
           {footer && <tfoot>{footer}</tfoot>}
         </table>
       </div>
+      {showExport &&
+        exportSlot &&
+        createPortal(<ExportButton rows={sorted.length} onClick={exportCsv} />, exportSlot)}
       {limit !== undefined && (
         <ShowMore
           shown={visible.length}

@@ -165,9 +165,9 @@ export function DigestPage() {
  */
 const MOVER_COLUMNS: MeterCell[] = [
   // «Рост», а не «Доля»: здесь процент изменения к прошлому периоду.
-  { text: "Рост", width: "w-16", sortKey: "pct" },
-  { text: "Было → стало", width: "w-52", sortKey: "current" },
-  { text: "Разница", width: "w-28", sortKey: "diff" },
+  { text: "Рост", width: "4rem", sortKey: "pct" },
+  { text: "Было → стало", width: "13rem", sortKey: "current" },
+  { text: "Разница", width: "7rem", sortKey: "diff" },
 ];
 
 function DigestDetail({

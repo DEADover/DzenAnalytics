@@ -1,5 +1,5 @@
 import { SortButton } from "./table/TableParts";
-import type { SortDir } from "./table/tableKit";
+import { scaledWidth, type SortDir } from "./table/tableKit";
 
 /**
  * Промежуток между именем и колонками — общий у строки и у её шапки. Разойдись
@@ -12,7 +12,10 @@ const METER_GAP = { underlay: "gap-2", track: "gap-3" } as const;
 /** Колонка чисел в строке-мере: своя ширина, свой вес. */
 export interface MeterCell {
   text: string;
-  /** Класс ширины — общий у ячейки и у её заголовка, иначе колонки разъедутся. */
+  /**
+   * Ширина (`rem`) — общая у ячейки и у её заголовка, иначе колонки разъедутся.
+   * Растёт вместе с размером текста таблиц, как ширины колонок `DataTable`.
+   */
   width: string;
   /** Второстепенное число — приглушённо, того же размера. Главное — 500. */
   muted?: boolean;
@@ -78,9 +81,10 @@ export function MeterRow({
   const numbers = cells.map((c, i) => (
     <span
       key={i}
-      className={`relative tabular-nums whitespace-nowrap shrink-0 text-right ${c.width} ${
+      className={`relative tabular-nums whitespace-nowrap shrink-0 text-right ${
         c.muted ? "text-muted" : "font-medium"
       }`}
+      style={{ width: scaledWidth(c.width) }}
     >
       {c.text}
     </span>
@@ -185,8 +189,8 @@ export function MeterHead({
       {columns.map((c, i) => {
         const s = sortOf(c.sortKey);
         return (
-          <span key={i} className={`shrink-0 flex justify-end ${c.width}`}>
-            {s ? <SortButton label={c.text} sort={s} right /> : c.text}
+          <span key={i} className="shrink-0 flex justify-end" style={{ width: scaledWidth(c.width) }}>
+            {s ? <SortButton label={c.text} sort={s} /> : c.text}
           </span>
         );
       })}

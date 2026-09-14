@@ -22,7 +22,9 @@ export type SortDir = "asc" | "desc";
  * - `number` — число, но не деньги: ставка, дни, σ, «во сколько раз». Вправо.
  * - `pct` — доля. Вправо, приглушённо.
  * - `change` — изменение: знак, процент или пилюля. Вправо.
- * - `count` — счётчик. По центру, приглушённо.
+ * - `count` — счётчик. Вправо, приглушённо: по центру он стоял в стороне от
+ *   соседних чисел, прижатых вправо, — рядом с долей и суммой колонка казалась
+ *   уехавшей влево.
  * - `mark` — статус, метка, значок. По центру.
  * - `actions` — кнопки. По центру, не сортируется и не выгружается.
  */
@@ -69,7 +71,7 @@ export const COLUMN_TYPES: Record<ColumnType, TypeSpec> = {
   number: { align: "right", cell: NUM, firstDir: "desc", sortable: true, exported: true },
   pct: { align: "right", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
   change: { align: "right", cell: NUM, firstDir: "desc", sortable: true, exported: true },
-  count: { align: "center", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
+  count: { align: "right", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
   mark: { align: "center", cell: "whitespace-nowrap", firstDir: "asc", sortable: true, exported: true },
   actions: { align: "center", cell: "whitespace-nowrap", firstDir: "asc", sortable: false, exported: false },
 };
@@ -127,6 +129,22 @@ export function cellClass(
 export const TREE_ELBOW_LEFT = 34;
 /** Сдвиг каждого следующего уровня дерева. */
 export const TREE_STEP = 18;
+
+/**
+ * Ширина колонки, растущая вместе с настройкой «Размер текста в таблицах».
+ *
+ * Ширины заданы в `rem` под текст 14 px. Крупнее текст — подпись шапки и
+ * числа перестают помещаться в ту же колонку: на «Категориях» «Операций»
+ * обрезалось до «Операц…» уже на обычном размере. Множитель `--tbl-scale`
+ * (1 при 14 px) ставит вместе с `--tbl-font` сама настройка. Проценты и `auto`
+ * — доли таблицы, их не трогаем.
+ */
+export function scaledWidth(width: string | undefined): string | undefined {
+  if (!width) return undefined;
+  const w = width.trim();
+  if (w === "auto" || w.endsWith("%")) return w;
+  return `calc(${w} * var(--tbl-scale, 1))`;
+}
 
 /** Левое поле ячейки с подстрокой уровня `depth` (1 — дети, 2 — внуки). */
 export function treeIndent(depth: number): number {

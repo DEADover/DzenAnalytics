@@ -854,7 +854,7 @@ export function CounterpartyManager() {
               />
             </span>
             <span className="flex-1 min-w-0">Название</span>
-            <span className="w-24 shrink-0 flex items-center justify-center">
+            <span className="w-24 shrink-0 flex items-center justify-end">
               <CountSortHeader sort={sort} onChange={setSort} />
             </span>
             <span className="w-20 shrink-0 text-center whitespace-nowrap">Действия</span>
@@ -912,7 +912,7 @@ export function CounterpartyManager() {
                       </Badge>
                     )}
                   </span>
-                  <span className="w-24 shrink-0 flex items-center justify-center">
+                  <span className="w-24 shrink-0 flex items-center justify-end">
                     {row.count ? (
                       <button
                         onClick={() => openOperations(row)}

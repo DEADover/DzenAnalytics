@@ -8,12 +8,13 @@ import {
   csvFileName,
   headClass,
   nextSort,
+  scaledWidth,
   sortRows,
   toneOfSigned,
 } from "./tableKit";
 
 describe("тип колонки → выравнивание", () => {
-  it("текст и дата влево, деньги и доли вправо, счётчики и действия по центру", () => {
+  it("текст и дата влево, числа вправо, метки и действия по центру", () => {
     expect(alignOf("text")).toBe("left");
     expect(alignOf("date")).toBe("left");
     expect(alignOf("money")).toBe("right");
@@ -21,14 +22,14 @@ describe("тип колонки → выравнивание", () => {
     expect(alignOf("number")).toBe("right");
     expect(alignOf("pct")).toBe("right");
     expect(alignOf("change")).toBe("right");
-    expect(alignOf("count")).toBe("center");
+    expect(alignOf("count")).toBe("right");
     expect(alignOf("mark")).toBe("center");
     expect(alignOf("actions")).toBe("center");
   });
 
   it("шапка выравнивается так же, как значения", () => {
     expect(headClass("money")).toContain("text-right");
-    expect(headClass("count")).toContain("text-center");
+    expect(headClass("count")).toContain("text-right");
     expect(headClass("text")).toContain("text-left");
   });
 });
@@ -127,5 +128,19 @@ describe("выгрузка CSV", () => {
       "dzenanalytics_топ_категорий_расходы_2026-09-14.csv"
     );
     expect(csvFileName(undefined, new Date("2026-09-14T10:00:00Z"))).toBe("dzenanalytics_table_2026-09-14.csv");
+  });
+});
+
+describe("ширина колонки", () => {
+  it("растёт вместе с размером текста таблиц", () => {
+    expect(scaledWidth("6.5rem")).toBe("calc(6.5rem * var(--tbl-scale, 1))");
+    expect(scaledWidth("120px")).toBe("calc(120px * var(--tbl-scale, 1))");
+  });
+
+  it("доли таблицы и auto не трогает, пустая ширина — без стиля", () => {
+    expect(scaledWidth("12%")).toBe("12%");
+    expect(scaledWidth("auto")).toBe("auto");
+    expect(scaledWidth(undefined)).toBeUndefined();
+    expect(scaledWidth("")).toBeUndefined();
   });
 });

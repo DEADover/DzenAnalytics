@@ -26,6 +26,11 @@ const ICON_TONE: Record<CardHeaderTone, string> = {
  *
  * Высота строки — ступень 34 всегда, есть справа кнопка или нет: иначе у
  * соседних карточек содержимое начиналось бы с разной высоты.
+ *
+ * Правый угол не переносится на отдельную строку: длинный заголовок
+ * обрезается, а кнопки остаются на своей высоте. С переносом «CSV» уезжал
+ * вниз, стоило заголовку оказаться длиннее свободного места. Переносится
+ * ряд только на телефоне, где иначе кнопкам не хватит места вовсе.
  */
 export function CardHeader({
   icon: Icon,
@@ -51,12 +56,12 @@ export function CardHeader({
   return (
     <div
       className={clsx(
-        "flex items-center justify-between gap-x-3 gap-y-2 flex-wrap min-h-[34px]",
+        "flex items-center justify-between gap-x-3 gap-y-2 max-sm:flex-wrap min-h-[34px]",
         subtitle ? "mb-3" : "mb-2",
         className
       )}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 min-w-0 font-semibold">
           {Icon && <Icon className={clsx("w-4 h-4 shrink-0", ICON_TONE[tone])} aria-hidden />}
           <span className="min-w-0 truncate">{title}</span>
@@ -64,7 +69,7 @@ export function CardHeader({
         </div>
         {subtitle && <div className="text-xs text-muted mt-0.5">{subtitle}</div>}
       </div>
-      {right && <div className="flex items-center gap-2 shrink-0 flex-wrap">{right}</div>}
+      {right && <div className="flex items-center gap-2 shrink-0 max-sm:flex-wrap">{right}</div>}
     </div>
   );
 }
