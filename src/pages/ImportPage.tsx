@@ -84,6 +84,7 @@ import {
 } from "../store/useCounterpartyEditsStore";
 import * as db from "../lib/db";
 import { ImportXlsxCard } from "../components/ImportXlsxCard";
+import { Callout } from "../components/Callout";
 
 type Mode = "replace" | "merge";
 
@@ -2515,9 +2516,8 @@ export function ImportPage() {
             </div>
 
             {orphanEditIds.length > 0 && (
-                  <div className="text-xs flex items-start gap-2 mb-3 p-2.5 rounded-lg bg-warn/10 border border-warn/30">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-warn" />
-                    <div className="flex-1">
+                  <Callout tone="warn" className="mb-3">
+                    <div>
                       <div>
                         <strong>{orphanEditIds.length}</strong>{" "}
                         {pluralRu(orphanEditIds.length, ["правка", "правки", "правок"])}{" "}
@@ -2547,7 +2547,7 @@ export function ImportPage() {
                         {pluralRu(orphanEditIds.length, ["правку", "правки", "правок"])}
                       </button>
                     </div>
-                  </div>
+                  </Callout>
                 )}
 
             {/* Sync history, merged into this card. Rendered as an inset panel

@@ -32,6 +32,7 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { Segmented } from "../components/Segmented";
 import type { Transaction } from "../types";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 const SCALES: ReportScale[] = ["month", "quarter", "year", "total"];
 
@@ -441,9 +442,9 @@ export function ReportPage() {
       )}
 
       {empty ? (
-        <div className="card-tray card-pad text-sm text-muted text-center py-10">
-          За выбранный период нет доходов и расходов — измените фильтр выше.
-        </div>
+        <SectionEmpty icon={TableIcon} title="За выбранный период нет доходов и расходов">
+          Измените фильтр выше.
+        </SectionEmpty>
       ) : (
         // `overflow-clip`, а НЕ `overflow-hidden`: скруглённые углы карточки
         // надо вернуть — непрозрачные ячейки шапки закрашивают их, — но

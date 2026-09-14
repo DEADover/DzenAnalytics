@@ -10,7 +10,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
-import { PieChart as PieIcon, Home, ShoppingBag, PiggyBank, Info, ChevronDown } from "lucide-react";
+import { PieChart as PieIcon, Home, ShoppingBag, PiggyBank, Info, ChevronDown, Target } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import {
   useFiltersStore,
@@ -23,6 +23,7 @@ import { buildNeedsWants, savingsRateSeries } from "../lib/needsWants";
 import { PeriodPills } from "../components/PeriodPills";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { CardHeader } from "../components/CardHeader";
 import { SeriesTooltip } from "../components/TooltipFacts";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
@@ -33,6 +34,7 @@ import {
   chartGridStroke,
   chartAxisStroke,
 } from "../lib/format";
+import { Callout } from "../components/Callout";
 
 const NEEDS_COLOR = "#3B82F6";
 const WANTS_COLOR = "#F59E0B";
@@ -184,26 +186,24 @@ export function Budget503020Page() {
       </StatRow>
 
       {split.needs > 0 && split.wants === 0 && (
-        <div className="card card-pad bg-accent/5 border-accent/40 flex items-start gap-2 text-sm">
-          <Info className="w-4 h-4 text-accent shrink-0 mt-0.5" />
-          <span className="text-muted">
-            Все расходы засчитаны в «нужды» — по умолчанию все категории считаются
-            обязательными. Чтобы перенести часть в «желания», отметьте такие
-            категории как <strong>«Необязательная»</strong> в блоке{" "}
-            <strong>«Обязательность расходов в категориях»</strong> на странице{" "}
-            <Link to="/categories" className="text-accent hover:underline">
-              «Категории»
-            </Link>{" "}
-            (изменение уйдёт в облако Дзен-мани).
-          </span>
-        </div>
+        <Callout size="banner">
+          Все расходы засчитаны в «нужды» — по умолчанию все категории считаются
+          обязательными. Чтобы перенести часть в «желания», отметьте такие
+          категории как <strong>«Необязательная»</strong> в блоке{" "}
+          <strong>«Обязательность расходов в категориях»</strong> на странице{" "}
+          <Link to="/categories" className="text-accent hover:underline">
+            «Категории»
+          </Link>{" "}
+          (изменение уйдёт в облако Дзен-мани).
+        </Callout>
       )}
 
       <div className="card-tray card-pad">
-        <div className="font-semibold mb-1">Факт против цели</div>
-        <div className="text-xs text-muted mb-4">
-          Доли от дохода. Пунктир — границы правила 50/30/20.
-        </div>
+        <CardHeader
+          icon={Target}
+          title="Факт против цели"
+          subtitle="Доли от дохода. Пунктир — границы правила 50/30/20."
+        />
         <div className="relative">
           <div className="flex h-8 rounded-full overflow-hidden">
             {split.needs > 0 && (
@@ -263,10 +263,11 @@ export function Budget503020Page() {
       </div>
 
       <div className="card-tray card-pad">
-        <div className="font-semibold mb-1">Норма сбережений за 12 месяцев</div>
-        <div className="text-xs text-muted mb-4">
-          (доход − расход) / доход по месяцам. Пунктир — цель 20%.
-        </div>
+        <CardHeader
+          icon={PiggyBank}
+          title="Норма сбережений за 12 месяцев"
+          subtitle="(доход − расход) / доход по месяцам. Пунктир — цель 20%."
+        />
         <div className="h-72">
           <ResponsiveContainer>
             <AreaChart data={trend}>

@@ -41,6 +41,7 @@ import {
   Archive,
   Users,
   UserRound,
+  TrendingUp,
 } from "lucide-react";
 import {
   debtPayeeKey,
@@ -110,6 +111,7 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { capitalShare, mergeLiveByTitle, positiveBalanceTotal } from "../lib/accountOptions";
 import { depositTotals, projectDeposit, type DepositRow } from "../lib/deposits";
 import { SectionCard } from "../components/SectionCard";
+import { CardHeader } from "../components/CardHeader";
 import { HeadCell, TreeElbow } from "../components/table/TableParts";
 import { cellClass, toneOfSigned, treeIndent, type ColumnType, type Tone } from "../components/table/tableKit";
 import { toIsoDate } from "../lib/period";
@@ -125,6 +127,7 @@ import { ACCOUNT_KINDS, accountKindLabel, DEBT_TYPES } from "../lib/accountType"
 import { accountOptions } from "../lib/accountOptions";
 import { debtKey, parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
 import { pluralRu } from "../lib/plural";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 const STACK_COLORS = [
   "#22D3EE", "#A78BFA", "#F59E0B", "#10B981", "#EC4899",
@@ -1612,10 +1615,7 @@ export function AccountsPage() {
 
       {tab === "capital" && calibOpen && !zenToken && (
         <div className="card card-pad bg-accent2/5 border-accent2/40">
-          <div className="font-semibold mb-2 flex items-center gap-2">
-            <Settings2 className="w-4 h-4 text-accent2" />
-            Калибровка совокупного баланса
-          </div>
+          <CardHeader icon={Settings2} tone="accent2" title="Калибровка совокупного баланса" />
           <p className="text-xs text-muted mb-4">
             В CSV нет начальных остатков счетов, поэтому без калибровки график
             показывает <em>изменение</em>, а не реальный баланс. Укажите, сколько
@@ -1772,19 +1772,20 @@ export function AccountsPage() {
       </StatRow>
 
       <div className={tab === "capital" ? "card-tray card-pad" : "hidden"}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="font-semibold">
-              {view === "stacked"
-                ? hasRealBalances
-                  ? "Остатки по счетам"
-                  : "Накоплено по счетам"
-                : "Совокупный баланс"}
-            </div>
-            {/* Подпись говорит про период ровно то, что есть на деле. Раньше у
-                стопки стояло «без фильтров» всегда — а она строится из того же
-                набора операций, что и остальное. */}
-            <div className="text-xs text-muted">
+        {/* Подпись говорит про период ровно то, что есть на деле. Раньше у
+            стопки стояло «без фильтров» всегда — а она строится из того же
+            набора операций, что и остальное. */}
+        <CardHeader
+          icon={view === "stacked" ? Layers : LineChartIcon}
+          title={
+            view === "stacked"
+              ? hasRealBalances
+                ? "Остатки по счетам"
+                : "Накоплено по счетам"
+              : "Совокупный баланс"
+          }
+          subtitle={
+            <>
               {view === "stacked" && chartNothingPicked ? (
                 // Ни одного счёта не отмечено — рисовать нечего, и рассказывать
                 // про слои и период тут значило бы описывать пустое место.
@@ -1819,54 +1820,56 @@ export function AccountsPage() {
                         : "")}
                 </>
               )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Фильтр счетов — только у стопки: «Совокупно» показывает активы
-                минус долги целиком, и выкидывать оттуда счета нельзя, конец
-                кривой прибит к сумме ВСЕХ реальных остатков. */}
-            {view === "stacked" && chartAccountOptions.length > 1 && (
-              <MultiSelect
-                className="w-48 shrink-0"
-                label="Счета"
-                options={chartAccountOptions}
-                selected={chartAccounts}
-                onChange={setChartAccounts}
-                renderIcon={(name) =>
-                  parseDebtKey(name) ? (
-                    <Users className="w-[18px] h-[18px] text-muted" />
-                  ) : (
-                    <AccountLogo title={name} size={18} />
-                  )
-                }
-                labelOf={(name) => parseDebtKey(name)?.payee ?? name}
-                nestedOf={(name) => parseDebtKey(name) !== null}
-                nestedUnitForms={["контрагент", "контрагента", "контрагентов"]}
-                groupOf={chartAccountGroup}
-                unitForms={["счёт", "счёта", "счетов"]}
-                searchPlaceholder="Поиск счёта"
-                archivedSet={chartArchived}
-                compactSummary
+            </>
+          }
+          right={
+            <>
+              {/* Фильтр счетов — только у стопки: «Совокупно» показывает активы
+                  минус долги целиком, и выкидывать оттуда счета нельзя, конец
+                  кривой прибит к сумме ВСЕХ реальных остатков. */}
+              {view === "stacked" && chartAccountOptions.length > 1 && (
+                <MultiSelect
+                  className="w-48 shrink-0"
+                  label="Счета"
+                  options={chartAccountOptions}
+                  selected={chartAccounts}
+                  onChange={setChartAccounts}
+                  renderIcon={(name) =>
+                    parseDebtKey(name) ? (
+                      <Users className="w-[18px] h-[18px] text-muted" />
+                    ) : (
+                      <AccountLogo title={name} size={18} />
+                    )
+                  }
+                  labelOf={(name) => parseDebtKey(name)?.payee ?? name}
+                  nestedOf={(name) => parseDebtKey(name) !== null}
+                  nestedUnitForms={["контрагент", "контрагента", "контрагентов"]}
+                  groupOf={chartAccountGroup}
+                  unitForms={["счёт", "счёта", "счетов"]}
+                  searchPlaceholder="Поиск счёта"
+                  archivedSet={chartArchived}
+                  compactSummary
+                />
+              )}
+              <Segmented
+                size="sm"
+                label="Вид графика"
+                value={view}
+                onChange={setView}
+                className="shrink-0"
+                options={[
+                  { value: "stacked", label: "По счетам", icon: Layers, title: "Разложить по счетам" },
+                  {
+                    value: "single",
+                    label: "Совокупно",
+                    icon: LineChartIcon,
+                    title: "Одной линией: активы минус долги",
+                  },
+                ]}
               />
-            )}
-            <Segmented
-              size="sm"
-              label="Вид графика"
-              value={view}
-              onChange={setView}
-              className="shrink-0"
-              options={[
-                { value: "stacked", label: "По счетам", icon: Layers, title: "Разложить по счетам" },
-                {
-                  value: "single",
-                  label: "Совокупно",
-                  icon: LineChartIcon,
-                  title: "Одной линией: активы минус долги",
-                },
-              ]}
-            />
-          </div>
-        </div>
+            </>
+          }
+        />
         <div className="h-96">
           {view === "stacked" && chartNothingPicked ? (
             <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted">
@@ -2034,23 +2037,18 @@ export function AccountsPage() {
       </div>
 
       <div className={tab === "flow" ? "card-tray card-pad" : "hidden"}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="font-semibold">
-              {selectedAccount
-                ? `Изменение по счёту: ${selectedAccount}`
-                : "Изменение по фильтру"}
-            </div>
-            <div className="text-xs text-muted">
-              Нарастающим итогом с начала периода
-            </div>
-          </div>
-          {selectedAccount && (
-            <button onClick={() => setSelectedAccount(null)} className="btn-ghost text-xs">
-              Все счета
-            </button>
-          )}
-        </div>
+        <CardHeader
+          icon={TrendingUp}
+          title={selectedAccount ? `Изменение по счёту: ${selectedAccount}` : "Изменение по фильтру"}
+          subtitle="Нарастающим итогом с начала периода"
+          right={
+            selectedAccount && (
+              <button onClick={() => setSelectedAccount(null)} className="btn-ghost text-xs">
+                Все счета
+              </button>
+            )
+          }
+        />
         <div className="h-64">
           <ResponsiveContainer>
             <AreaChart data={series}>
@@ -2093,7 +2091,7 @@ export function AccountsPage() {
           за период, а вклад отвечает на другой вопрос — сколько он принесёт. */}
       {capitalView && depositRows.length > 0 && (
         <SectionCard
-          icon={<PiggyBank className="w-4 h-4 text-income" />}
+          icon={PiggyBank} tone="income"
           title="Вклады"
           info={
             <p>
@@ -2425,23 +2423,27 @@ export function AccountsPage() {
         </div>
 
         {visibleRows.length === 0 ? (
-          <div className="text-center py-10 text-sm text-muted">
-            <div>Ни один счёт не подошёл под фильтр.</div>
-            <button
-              onClick={() =>
-                void patchPrefs({
-                  typeFilter: [],
-                  bankFilter: [],
-                  balanceScope: "all",
-                  onlySavings: false,
-                  hideArchived: false,
-                })
-              }
-              className="btn-ghost text-xs mt-3"
-            >
-              Сбросить фильтры
-            </button>
-          </div>
+          <SectionEmpty
+            variant="inline"
+            action={
+              <button
+                onClick={() =>
+                  void patchPrefs({
+                    typeFilter: [],
+                    bankFilter: [],
+                    balanceScope: "all",
+                    onlySavings: false,
+                    hideArchived: false,
+                  })
+                }
+                className="btn-ghost text-sm"
+              >
+                Сбросить фильтры
+              </button>
+            }
+          >
+            Ни один счёт не подошёл под фильтр.
+          </SectionEmpty>
         ) : accountsView === "cards" ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {listItems.map((item) => {

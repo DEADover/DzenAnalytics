@@ -18,6 +18,7 @@ import { Segmented } from "./Segmented";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
 import { Tooltip } from "./Tooltip";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { SectionEmpty } from "./SectionEmpty";
 
 /** Одна статья к применению — ровно то, что уходит в план и в Дзен-мани. */
 export interface FillItem {
@@ -295,13 +296,13 @@ export function BudgetFillModal({
         </div>
 
         {changes.length === 0 ? (
-          <p className="text-sm text-muted py-6 text-center">
+          <SectionEmpty variant="compact">
             {rows.length === 0
               ? source === "prevPlan"
                 ? "В прошлом месяце планов не было — копировать нечего."
                 : "За выбранный период операций не нашлось — заполнять нечего."
               : "Все статьи уже спланированы. Выберите «Все статьи», чтобы пересчитать суммы."}
-          </p>
+          </SectionEmpty>
         ) : (
           <>
             <div className="flex items-center justify-between gap-2 text-sm">

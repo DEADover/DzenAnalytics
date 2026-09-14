@@ -48,6 +48,7 @@ import { Segmented } from "../components/Segmented";
 import { ChartTooltipCard, TooltipFacts } from "../components/TooltipFacts";
 import { MultiSelect } from "../components/MultiSelect";
 import { InfoPopover } from "../components/InfoPopover";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 const METRICS: DynamicsMetric[] = ["expense", "income", "net", "balance"];
 const GRANULARITIES: Granularity[] = ["day", "week", "month", "year"];
@@ -308,9 +309,9 @@ export function DynamicsPage() {
         </div>
 
         {series.points.length === 0 ? (
-          <div className="text-sm text-muted text-center py-16">
+          <SectionEmpty variant="inline">
             За выбранный период нет подходящих операций — измените фильтр выше.
-          </div>
+          </SectionEmpty>
         ) : (
           <>
             <div className="h-80">

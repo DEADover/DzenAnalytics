@@ -47,6 +47,7 @@ import { pluralRu } from "../lib/plural";
 import { kindLabel, kindColorClass } from "../lib/txKindStyle";
 import type { Transaction } from "../types";
 import { Modal, ModalBody, ModalHeader } from "./Modal";
+import { SectionEmpty } from "./SectionEmpty";
 
 // Which patch fields map to which human-readable «changed aspect».
 /** Одна «грань» операции: какие ключи патча её задевают, как она называется и
@@ -563,9 +564,9 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
 
         <ModalBody scroll>
           {total === 0 ? (
-            <div className="text-center text-muted text-sm py-10">
+            <SectionEmpty variant="inline">
               Нет несинхронизированных изменений — всё отправлено в Дзен-мани.
-            </div>
+            </SectionEmpty>
           ) : (
             <div className="space-y-6">
               <EntityGroup

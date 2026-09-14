@@ -12,6 +12,7 @@ import { formatDate, formatMoney, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import type { ImportPlan, ParsedRow, PlanRow, RowVerdict } from "../lib/importRows";
 import { Modal, ModalHeader } from "./Modal";
+import { SectionEmpty } from "./SectionEmpty";
 
 /**
  * Отчёт проверки файла — единственное место, где импорт можно остановить.
@@ -403,7 +404,9 @@ export function ImportXlsxModal({
           </tbody>
         </table>
         {shown.length === 0 && (
-          <div className="text-center text-muted py-10">Таких строк нет</div>
+          <SectionEmpty variant="inline">
+            Таких строк нет
+          </SectionEmpty>
         )}
       </div>
 

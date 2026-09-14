@@ -313,6 +313,7 @@ export function SearchPage() {
 
       {matches.length > 0 && (
         <DataTable<Transaction>
+          icon={Search}
           title={`Результаты (${formatNum(matches.length)})`}
           actions={
             <button type="button" onClick={openAll} className="btn-ghost text-xs">

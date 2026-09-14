@@ -15,6 +15,7 @@ import {
 import type { HealthComponent, HealthScore } from "../lib/health";
 import { formatMoney, formatPct } from "../lib/format";
 import { Tooltip } from "./Tooltip";
+import { CardHeader } from "./CardHeader";
 
 const COMPONENT_ICONS: Record<string, typeof HeartPulse> = {
   savings_rate: TrendingUp,
@@ -206,20 +207,17 @@ export function HealthSummary({
   return (
     <div className="card-tray card-pad">
       {!hideHeading && (
-        <div className="flex items-center justify-between mb-4">
-          <div className="font-semibold flex items-center gap-2">
-            <HeartPulse className="w-4 h-4 text-accent" />
-            Финансовое здоровье
-          </div>
-          {to && (
-            <Link
-              to={to}
-              className="text-xs text-accent hover:underline flex items-center gap-1"
-            >
-              Подробнее <ArrowRight className="w-3 h-3" />
-            </Link>
-          )}
-        </div>
+        <CardHeader
+          icon={HeartPulse}
+          title="Финансовое здоровье"
+          right={
+            to && (
+              <Link to={to} className="pill-link">
+                Подробнее <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            )
+          }
+        />
       )}
 
       <div className="flex flex-col md:flex-row md:items-stretch gap-6">

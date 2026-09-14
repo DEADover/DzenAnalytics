@@ -16,6 +16,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { StatCell, StatRow } from "../components/SectionCard";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 const COLORS = {
   income: "#10B981",
@@ -104,9 +105,9 @@ export function SankeyPage() {
       <div className="space-y-6">
         {header}
         <GlobalFilters />
-        <div className="card-tray card-pad text-center py-12 text-muted">
-          Нет данных для построения потоков в текущем фильтре.
-        </div>
+        <SectionEmpty icon={GitFork} title="Нет данных для построения потоков">
+          В текущем фильтре нет доходов и расходов — измените фильтр выше.
+        </SectionEmpty>
       </div>
     );
   }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, UserRound } from "lucide-react";
+import { UserRound } from "lucide-react";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { InfoPopover, InfoTerm } from "./InfoPopover";
 import { getZenUsersFromCache } from "../store/useZenmoneyStore";
@@ -11,6 +11,7 @@ import {
 } from "../lib/zenUsers";
 import { useMembersStore } from "../store/useMembersStore";
 import { useDataStore } from "../store/useDataStore";
+import { Callout } from "./Callout";
 
 /**
  * Участники общего аккаунта Дзен-мани (issues #92, #95).
@@ -89,18 +90,13 @@ export function UsersSettings() {
       </p>
 
       {ownerId == null && (
-        <div className="flex items-start gap-2 rounded-xl border border-warn/40 bg-warn/5 p-3 text-xs mb-3">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-warn" />
-          <span>
-            <strong>Отметьте себя.</strong> Пока отметки нет, видны личные счета
-            всех участников: по данным Дзен-мани не определить, чей это токен, а
-            угадывать здесь нельзя — ошибка открыла бы чужие счета и спрятала
-            ваши.
-            {suggested != null && (
-              <> Похоже, что вы {userLabel(suggested, users, aliases)}.</>
-            )}
-          </span>
-        </div>
+        <Callout tone="warn" className="mb-3">
+          <strong>Отметьте себя.</strong> Пока отметки нет, видны личные счета
+          всех участников: по данным Дзен-мани не определить, чей это токен, а
+          угадывать здесь нельзя — ошибка открыла бы чужие счета и спрятала
+          ваши.
+          {suggested != null && <> Похоже, что вы {userLabel(suggested, users, aliases)}.</>}
+        </Callout>
       )}
 
       <div className="space-y-2">

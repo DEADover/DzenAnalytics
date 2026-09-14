@@ -1,6 +1,7 @@
 import { Lightbulb, TrendingUp, AlertTriangle, Info } from "lucide-react";
 import type { Insight } from "../lib/aggregations";
 import { formatMoney } from "../lib/format";
+import { CardHeader } from "./CardHeader";
 
 const ICONS = {
   highlight: Lightbulb,
@@ -21,10 +22,7 @@ export function InsightsPanel({ insights, base }: { insights: Insight[]; base: s
 
   return (
     <div className="card-tray card-pad">
-      <div className="font-semibold mb-3 flex items-center gap-2">
-        <Lightbulb className="w-4 h-4 text-warn" />
-        Авто-наблюдения
-      </div>
+      <CardHeader icon={Lightbulb} tone="warn" title="Авто-наблюдения" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {insights.map((ins, i) => {
           const Icon = ICONS[ins.kind];

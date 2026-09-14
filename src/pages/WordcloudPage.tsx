@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { pluralRu } from "../lib/plural";
-import { Cloud, MousePointerClick } from "lucide-react";
+import { Cloud, MousePointerClick, ListOrdered } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -12,6 +12,7 @@ import { EmptyState } from "../components/EmptyState";
 import { DataTable } from "../components/DataTable";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 const PALETTE = [
   "#22D3EE",
@@ -122,9 +123,9 @@ export function WordcloudPage() {
       </StatRow>
 
       {words.length === 0 ? (
-        <div className="card-tray card-pad text-center py-12 text-muted">
+        <SectionEmpty icon={Cloud} title="Нет слов для облака">
           В текущем фильтре нет комментариев или все они слишком короткие
-        </div>
+        </SectionEmpty>
       ) : (
         <div className="card-tray card-pad">
           <div className="flex flex-wrap gap-2 justify-center items-center py-6">
@@ -150,6 +151,7 @@ export function WordcloudPage() {
 
       {words.length > 0 && (
         <DataTable<WordcloudWord & { rank: number }>
+          icon={ListOrdered}
           title="Топ-30 слов"
           data={topWords}
           rowKey={(w) => w.text}

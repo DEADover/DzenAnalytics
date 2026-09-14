@@ -17,8 +17,9 @@ import {
   Radar,
   Legend,
 } from "recharts";
-import { Activity, Calendar } from "lucide-react";
+import { Activity, Calendar, Clock, Grid3x3, LineChart as LineChartIcon, Radar as RadarIcon } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
+import { CardHeader } from "../components/CardHeader";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useLocalPeriod } from "../hooks/useLocalPeriod";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -196,10 +197,11 @@ export function TrendsPage() {
       <GlobalFilters period={lp} />
 
       <div className="card-tray card-pad">
-        <div className="flex items-start justify-between mb-3 flex-wrap gap-3">
-          <div>
-            <div className="font-semibold">Категории по месяцам</div>
-            <div className="text-xs text-muted">
+        <CardHeader
+          icon={LineChartIcon}
+          title="Категории по месяцам"
+          subtitle={
+            <>
               {selected.length === 0
                 ? `Авто: топ-5 категорий (${activeCategories.length})`
                 : `Выбрано: ${selected.length}`}
@@ -207,9 +209,9 @@ export function TrendsPage() {
               <button onClick={() => setSelected([])} className="text-accent hover:underline">
                 сбросить
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
         <div className="flex flex-wrap gap-1.5 mb-4">
           {allCategories.slice(0, 30).map((cat) => {
             const isActive = activeCategories.includes(cat);
@@ -276,15 +278,11 @@ export function TrendsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card-tray card-pad lg:col-span-2">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <div className="font-semibold flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-accent" />
-                По дням недели
-              </div>
-              <div className="text-xs text-muted">Средний чек {kind === "expense" ? "расхода" : "дохода"} за день</div>
-            </div>
-          </div>
+          <CardHeader
+            icon={Calendar}
+            title="По дням недели"
+            subtitle={<>Средний чек {kind === "expense" ? "расхода" : "дохода"} за день</>}
+          />
           <div className="h-64">
             <ResponsiveContainer>
               <BarChart
@@ -327,16 +325,11 @@ export function TrendsPage() {
         </div>
 
         <div className="card-tray card-pad">
-          <div className="mb-3">
-            <div className="font-semibold flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-accent" />
-              Радар
-            </div>
-            <div className="text-xs text-muted">
-              Средний чек {kind === "expense" ? "расхода" : "дохода"} за день —
-              форма недели
-            </div>
-          </div>
+          <CardHeader
+            icon={RadarIcon}
+            title="Радар"
+            subtitle={`Средний чек ${kind === "expense" ? "расхода" : "дохода"} за день — форма недели`}
+          />
           <div className="h-64">
             <ResponsiveContainer>
               <RadarChart data={radarData}>
@@ -455,12 +448,11 @@ function HourOfWeekHeatmap({
 
   return (
     <div className="card-tray card-pad flex flex-col">
-      <div className="font-semibold mb-1">
-        Когда вы {kind === "expense" ? "тратите" : "получаете"}
-      </div>
-      <div className="text-xs text-muted mb-3">
-        По дням недели и часам. Чем темнее клетка — тем больше сумма.
-      </div>
+      <CardHeader
+        icon={Grid3x3}
+        title={`Когда вы ${kind === "expense" ? "тратите" : "получаете"}`}
+        subtitle="По дням недели и часам. Чем темнее клетка — тем больше сумма."
+      />
       <div className="flex-1 flex items-center overflow-x-auto">
         <div className="grid w-full gap-[2px]" style={{ gridTemplateColumns: `auto repeat(24, minmax(18px, 1fr))` }}>
           <div></div>
@@ -551,12 +543,17 @@ function HourOfDayBars({
 
   return (
     <div className="card-tray card-pad flex flex-col">
-      <div className="font-semibold mb-1">По часам суток</div>
-      <div className="text-xs text-muted mb-3">
-        Сумма {kind === "expense" ? "расходов" : "доходов"} по каждому часу дня
-        за период.
-        {peak.total > 0 && ` Пик — около ${peak.hour}:00.`}
-      </div>
+      <CardHeader
+        icon={Clock}
+        title="По часам суток"
+        subtitle={
+          <>
+            Сумма {kind === "expense" ? "расходов" : "доходов"} по каждому часу дня
+            за период.
+            {peak.total > 0 && ` Пик — около ${peak.hour}:00.`}
+          </>
+        }
+      />
       <div className="flex-1 min-h-[240px]">
         <ResponsiveContainer>
           <BarChart data={data}>

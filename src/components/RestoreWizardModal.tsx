@@ -17,6 +17,7 @@ import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { Callout } from "./Callout";
 
 /**
  * Мастер восстановления из снимка (#93).
@@ -94,10 +95,9 @@ export function RestoreWizardModal({
 
       {/* Ошибка — вверху: внизу прокручиваемой области она уходила под сгиб. */}
       {w.error && (
-        <div className="mx-5 mt-4 flex items-start gap-2 rounded-xl border border-expense/40 bg-expense/5 p-3 text-xs">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-expense" />
-          <span>{w.error}</span>
-        </div>
+        <Callout tone="expense" className="mx-5 mt-4">
+          {w.error}
+        </Callout>
       )}
 
       <ModalBody scroll gap={3} className="text-sm max-h-[55vh]">
@@ -255,32 +255,34 @@ function PickStep({
           зальют. Раньше предлагалось «сохранить снимок файлом», и сохранялся
           ровно тот, к которому возвращаются: отыграть назад им нельзя было в
           принципе. */}
-      <div className="rounded-xl border border-warn/40 bg-warn/5 p-3 space-y-2">
-        <p className="text-xs">
-          Восстановление вернёт аккаунт к состоянию на момент снимка. Всё, что
-          появилось после, пропадёт, и отменить это нельзя.
-        </p>
-        <button
-          onClick={onTakeSnapshot}
-          disabled={takingSnapshot}
-          className="btn-ghost text-xs inline-flex items-center gap-2"
-        >
-          <CloudDownload className="w-3.5 h-3.5" />
-          {takingSnapshot ? "Сохраняю…" : "Сохранить текущее состояние"}
-        </button>
-        <label className="flex items-start gap-2.5 cursor-pointer pt-1">
-          <Checkbox
-            checked={accepted}
-            onChange={(on) => onAccept(on)}
-            label="Понимаю последствия"
-            className="mt-0.5 shrink-0"
-          />
-          <span className="text-xs">
-            Действую на свой страх и риск. DzenAnalytics не отвечает за
-            корректность данных снимка и результаты его восстановления.
-          </span>
-        </label>
-      </div>
+      <Callout tone="warn" icon={null}>
+        <div className="space-y-2">
+          <p className="text-xs">
+            Восстановление вернёт аккаунт к состоянию на момент снимка. Всё, что
+            появилось после, пропадёт, и отменить это нельзя.
+          </p>
+          <button
+            onClick={onTakeSnapshot}
+            disabled={takingSnapshot}
+            className="btn-ghost text-xs inline-flex items-center gap-2"
+          >
+            <CloudDownload className="w-3.5 h-3.5" />
+            {takingSnapshot ? "Сохраняю…" : "Сохранить текущее состояние"}
+          </button>
+          <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+            <Checkbox
+              checked={accepted}
+              onChange={(on) => onAccept(on)}
+              label="Понимаю последствия"
+              className="mt-0.5 shrink-0"
+            />
+            <span className="text-xs">
+              Действую на свой страх и риск. DzenAnalytics не отвечает за
+              корректность данных снимка и результаты его восстановления.
+            </span>
+          </label>
+        </div>
+      </Callout>
 
       <div className="flex items-center gap-1.5">
         <span className="font-medium">К какому состоянию вернуть аккаунт</span>

@@ -6,6 +6,7 @@ import { confirm } from "../store/useConfirmStore";
 import { formatMoney } from "../lib/format";
 import { kindLabel } from "../lib/txKindStyle";
 import { Modal, ModalBody, ModalHeader } from "./Modal";
+import { SectionEmpty } from "./SectionEmpty";
 
 /**
  * Manage the «не дубликаты» exclusion rules. A modal (not an inline list) so a
@@ -74,14 +75,14 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
 
       <ModalBody scroll list gap={0}>
         {total === 0 ? (
-          <div className="text-center text-muted text-sm py-10">
+          <SectionEmpty variant="inline">
             Пока нет исключений. Отметьте группу «Не дубликаты» на странице — правило
             появится здесь.
-          </div>
+          </SectionEmpty>
         ) : list.length === 0 ? (
-          <div className="text-center text-muted text-sm py-10">
+          <SectionEmpty variant="inline">
             По запросу ничего не найдено.
-          </div>
+          </SectionEmpty>
         ) : (
           <DataTable<(typeof list)[number]>
             bare

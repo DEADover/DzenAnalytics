@@ -50,9 +50,12 @@ import { PageHeader } from "../components/PageHeader";
 import { YearPicker } from "../components/MonthPicker";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
+import type { LucideIcon } from "lucide-react";
+import type { CardHeaderTone } from "../components/CardHeader";
 import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 import { nextSort, sortRows, type SortState } from "../components/table/tableKit";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 const INCOME = "#10B981";
 const EXPENSE = "#EF4444";
@@ -162,9 +165,7 @@ export function YearReviewPage() {
     return (
       <div className="space-y-6">
         <PageHeader icon={Sparkles} title="Год в цифрах" />
-        <div className="card-tray card-pad text-center text-muted py-12">
-          В данных нет операций за {year} год.
-        </div>
+        <SectionEmpty icon={Sparkles} title={`В данных нет операций за ${year} год`} />
         {years.length > 0 && (
           <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} />
         )}
@@ -334,7 +335,7 @@ export function YearReviewPage() {
               расходные операции за год.
             </p>
           }
-          icon={<Tags className="w-4 h-4 text-accent" />}
+          icon={Tags}
           items={review.topCategories}
           baseCurrency={baseCurrency}
           total={review.totalExpense}
@@ -351,7 +352,7 @@ export function YearReviewPage() {
               остаётся там, где контрагент к операции не привязан.
             </p>
           }
-          icon={<Users className="w-4 h-4 text-accent2" />}
+          icon={Users} tone="accent2"
           items={review.topPayees}
           baseCurrency={baseCurrency}
           total={review.totalExpense}
@@ -367,7 +368,7 @@ export function YearReviewPage() {
           сетки из двух рядов с `content-between`. */}
       <div className="grid lg:grid-cols-2 gap-4">
         <SectionCard
-          icon={<Coins className="w-4 h-4 text-expense" />}
+          icon={Coins} tone="expense"
           title="Самые дорогие покупки"
           info={
             <p>
@@ -377,7 +378,9 @@ export function YearReviewPage() {
           }
         >
           {review.topTransactions.length === 0 ? (
-            <div className="text-sm text-muted py-6 text-center">Покупок за год нет.</div>
+            <SectionEmpty variant="compact">
+              Покупок за год нет.
+            </SectionEmpty>
           ) : (
             <div className="space-y-0.5">
               {review.topTransactions.map((t, i) => (
@@ -421,7 +424,7 @@ export function YearReviewPage() {
         </SectionCard>
 
         <SectionCard
-          icon={<Sparkles className="w-4 h-4 text-accent2" />}
+          icon={Sparkles} tone="accent2"
           title="Любопытные факты"
           info={
             <p>
@@ -524,7 +527,7 @@ function YearBars({
 
   return (
     <SectionCard
-      icon={<TrendingUp className="w-4 h-4 text-accent" />}
+      icon={TrendingUp}
       title="Год по месяцам"
       info={
         <p>
@@ -669,7 +672,7 @@ function WeekProfile({
   const sum = review.weekdays.reduce((n, d) => n + d.total, 0);
   return (
     <SectionCard
-      icon={<CalendarDays className="w-4 h-4 text-accent" />}
+      icon={CalendarDays}
       title="Расходы по дням недели"
       info={
         <p>
@@ -730,7 +733,7 @@ function Quarters({
   const ROMAN = ["I", "II", "III", "IV"];
   return (
     <SectionCard
-      icon={<CalendarRange className="w-4 h-4 text-accent2" />}
+      icon={CalendarRange} tone="accent2"
       title="По кварталам"
       info={
         <p>
@@ -893,6 +896,7 @@ function TopList({
   title,
   info,
   icon,
+  tone,
   items,
   baseCurrency,
   total,
@@ -901,7 +905,8 @@ function TopList({
 }: {
   title: string;
   info: React.ReactNode;
-  icon: React.ReactNode;
+  icon: LucideIcon;
+  tone?: CardHeaderTone;
   items: { name: string; amount: number; count: number }[];
   baseCurrency: string;
   total: number;
@@ -915,9 +920,11 @@ function TopList({
     key === "name" ? item.name : key === "count" ? item.count : item.amount;
   const sorted = sortRows(ranked, valueOf(sort.key), sort.dir);
   return (
-    <SectionCard icon={icon} title={title} info={info}>
+    <SectionCard icon={icon} tone={tone} title={title} info={info}>
       {items.length === 0 ? (
-        <div className="text-sm text-muted py-6 text-center">Расходов за год нет.</div>
+        <SectionEmpty variant="compact">
+          Расходов за год нет.
+        </SectionEmpty>
       ) : (
         <>
           <MeterHead

@@ -38,6 +38,7 @@ import {
   type TransferTarget,
 } from "./CounterpartyDeleteModal";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { SectionEmpty } from "./SectionEmpty";
 
 /** A row as rendered: cached merchant or unpushed draft, with overlay applied. */
 interface Row {
@@ -881,11 +882,11 @@ export function CounterpartyManager() {
           </div>
 
           {rows.length === 0 ? (
-            <div className="text-sm text-muted py-6 text-center">
+            <SectionEmpty variant="compact">
               {cached.length === 0 && created.length === 0
                 ? "Контрагенты не найдены."
                 : "Ничего не найдено."}
-            </div>
+            </SectionEmpty>
           ) : (
             <div className="divide-y divide-border/60">
               {visibleRows.map((row) => {

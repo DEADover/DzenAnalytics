@@ -19,6 +19,7 @@ import { DuplicateExclusionsModal } from "../components/DuplicateExclusionsModal
 import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 export function DuplicatesPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -146,13 +147,12 @@ export function DuplicatesPage() {
 
 
       {groups.length === 0 ? (
-        <div className="card-tray card-pad text-center py-12">
-          <AlertCircle className="w-10 h-10 text-muted mx-auto mb-3" />
-          <div className="font-medium mb-1">Дубликатов не найдено</div>
-          <div className="text-sm text-muted">
-            В окне ±{windowDays} дн нет подозрительно похожих операций
-          </div>
-        </div>
+        <SectionEmpty
+          icon={AlertCircle}
+          title="Дубликатов не найдено"
+        >
+          В окне ±{windowDays} дн нет подозрительно похожих операций
+        </SectionEmpty>
       ) : (
         <div className="space-y-4">
           {groups.map((g, i) => {
@@ -160,6 +160,7 @@ export function DuplicatesPage() {
             return (
               <DataTable<Transaction>
                 key={i}
+                icon={Copy}
                 title={`${first.payee || first.categoryFull} · ${formatNum(g.txs.length)} ${pluralRu(g.txs.length, ["копия", "копии", "копий"])}`}
                 actions={
                   <>

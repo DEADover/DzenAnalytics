@@ -10,7 +10,7 @@ import {
   Tooltip as RTooltip,
   ReferenceLine,
 } from "recharts";
-import { Flame, ChevronDown, Check, HelpCircle } from "lucide-react";
+import { Flame, ChevronDown, Check } from "lucide-react";
 import type { FirePoint } from "../lib/aggregations";
 import {
   formatMoney,
@@ -22,6 +22,7 @@ import {
 } from "../lib/format";
 import { Tooltip } from "./Tooltip";
 import { TooltipFacts } from "./TooltipFacts";
+import { CardHeader } from "./CardHeader";
 
 /** FIRE goal on the 4%-rule: 25 годовых расходов = 300 месяцев. */
 const FIRE_TARGET = 300;
@@ -234,30 +235,21 @@ export function FireChart({
 
   return (
     <div className={bare ? "" : "card card-pad"}>
-      <div className="flex items-start justify-between flex-wrap gap-3 mb-3">
-        <div className="min-w-0">
-          <div className="font-semibold flex items-center gap-2">
-            <Flame className="w-4 h-4 text-accent" />
-            Путь к FIRE
-            <Tooltip content={howItWorks} placement="bottom">
-              <button
-                type="button"
-                className="text-muted hover:text-accent shrink-0"
-                aria-label="Как считается «Путь к FIRE»"
-              >
-                <HelpCircle className="w-4 h-4" />
-              </button>
-            </Tooltip>
+      <CardHeader
+        icon={Flame}
+        title="Путь к FIRE"
+        infoLabel="Как считается «Путь к FIRE»"
+        info={howItWorks}
+        subtitle={description}
+        right={
+          <div className="text-right">
+            <div className="text-2xl font-bold tabular-nums text-income leading-none">
+              {headline}
+            </div>
+            <div className="text-xs text-muted mt-1 tabular-nums">{subline}</div>
           </div>
-          <div className="text-xs text-muted mt-1 truncate">{description}</div>
-        </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold tabular-nums text-income leading-none">
-            {headline}
-          </div>
-          <div className="text-xs text-muted mt-1 tabular-nums">{subline}</div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex items-center gap-1 mb-3 flex-wrap">
         <button

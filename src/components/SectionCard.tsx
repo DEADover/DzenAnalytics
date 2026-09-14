@@ -1,26 +1,32 @@
 import { Children, createContext, isValidElement, useContext, type ReactNode } from "react";
 import clsx from "clsx";
-import { InfoPopover } from "./InfoPopover";
+import type { LucideIcon } from "lucide-react";
+import { CardHeader, type CardHeaderTone } from "./CardHeader";
 import { Tooltip } from "./Tooltip";
 
 /**
- * Карточка раздела: значок, заголовок, знак вопроса и содержимое.
+ * Карточка раздела: шапка (`CardHeader`) и содержимое.
  *
  * Каждая страница верстала эту шапку по-своему — где-то `mb-2`, где-то `mb-3`,
- * где-то с поясняющей строкой под названием, где-то без. Один компонент держит
- * их в строю, а объяснение «как это считается» уводит под знак вопроса: текст,
- * который читают один раз, не должен занимать высоту постоянно.
+ * где-то с поясняющей строкой под названием, где-то без. Шапка общая с
+ * таблицами (`DataTable`), а объяснение «как это считается» уходит под знак
+ * вопроса: текст, который читают один раз, не должен занимать высоту
+ * постоянно.
  */
 export function SectionCard({
   icon,
+  tone,
   title,
+  subtitle,
   info,
   right,
   children,
   className,
 }: {
-  icon: ReactNode;
-  title: string;
+  icon: LucideIcon;
+  tone?: CardHeaderTone;
+  title: ReactNode;
+  subtitle?: ReactNode;
   /** Как это считается — под знаком вопроса рядом с заголовком. */
   info?: ReactNode;
   /** Правый угол шапки: переключатель, легенда, счётчик. */
@@ -29,13 +35,8 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <div className={`card-tray px-4 py-3 flex flex-col ${className ?? ""}`}>
-      <div className="flex items-center gap-1.5 mb-2.5">
-        {icon}
-        <span className="font-semibold truncate">{title}</span>
-        {info && <InfoPopover>{info}</InfoPopover>}
-        {right && <div className="ml-auto shrink-0">{right}</div>}
-      </div>
+    <div className={clsx("card-tray px-4 py-3 flex flex-col", className)}>
+      <CardHeader icon={icon} tone={tone} title={title} subtitle={subtitle} info={info} right={right} />
       {children}
     </div>
   );

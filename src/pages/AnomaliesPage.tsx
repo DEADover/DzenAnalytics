@@ -15,6 +15,7 @@ import { formatMoney, formatDate, formatNum, monthLabel } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { StatCell, StatRow } from "../components/SectionCard";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 export function AnomaliesPage() {
   // Обороты и взаимозачёты не аномалии, а шум: категории, помеченные «не
@@ -184,13 +185,12 @@ export function AnomaliesPage() {
 
       {tab === "transactions" &&
         (anomalies.length === 0 ? (
-          <div className="card-tray card-pad text-center py-12">
-            <AlertTriangle className="w-10 h-10 text-muted mx-auto mb-3" />
-            <div className="font-medium mb-1">Аномалий не обнаружено</div>
-            <div className="text-sm text-muted">
-              Уменьшите чувствительность ниже, чтобы увидеть менее сильные выбросы
-            </div>
-          </div>
+          <SectionEmpty
+            icon={AlertTriangle}
+            title="Аномалий не обнаружено"
+          >
+            Уменьшите чувствительность ниже, чтобы увидеть менее сильные выбросы
+          </SectionEmpty>
         ) : (
           <DataTable<Anomaly>
             data={anomalies}
@@ -262,13 +262,12 @@ export function AnomaliesPage() {
 
       {tab === "spikes" &&
         (spikes.length === 0 ? (
-          <div className="card-tray card-pad text-center py-12">
-            <TrendingUp className="w-10 h-10 text-muted mx-auto mb-3" />
-            <div className="font-medium mb-1">Всплесков по категориям не найдено</div>
-            <div className="text-sm text-muted">
-              Категория должна вырасти минимум в 1.5× к среднему за 3 предыдущих месяца
-            </div>
-          </div>
+          <SectionEmpty
+            icon={TrendingUp}
+            title="Всплесков по категориям не найдено"
+          >
+            Категория должна вырасти минимум в 1.5× к среднему за 3 предыдущих месяца
+          </SectionEmpty>
         ) : (
           <DataTable<MonthSpike>
             data={spikes}

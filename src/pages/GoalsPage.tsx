@@ -25,6 +25,8 @@ import { StatCell, StatRow } from "../components/SectionCard";
 import { Combobox } from "../components/Combobox";
 import { Tooltip } from "../components/Tooltip";
 import { DateField } from "../components/DateField";
+import { CardHeader } from "../components/CardHeader";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 function monthsBetween(fromIso: string, toIso: string): number {
   const a = new Date(fromIso);
@@ -285,11 +287,8 @@ export function GoalsPage() {
       )}
 
       {adding && (
-        <div className="card card-pad border-accent/40 bg-accent/[0.03]">
-          <div className="font-semibold mb-4 flex items-center gap-2">
-            <Plus className="w-4 h-4 text-accent" />
-            Новая цель
-          </div>
+        <div className="card card-pad bg-accent/5 border-accent/40">
+          <CardHeader icon={Plus} title="Новая цель" />
           <GoalForm
             name={name}
             setName={setName}
@@ -327,20 +326,19 @@ export function GoalsPage() {
 
       {goals.length === 0 ? (
         !adding && (
-          <div className="card-tray card-pad text-center py-14">
-            <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
-              <Target className="w-7 h-7 text-accent" />
-            </div>
-            <div className="font-semibold mb-1">Пока нет целей</div>
-            <div className="text-sm text-muted mb-5 max-w-sm mx-auto">
-              Создайте цель — и увидите прогресс, расчётный срок достижения и статус по
-              дедлайну.
-            </div>
-            <button onClick={() => setAdding(true)} className="btn-primary text-sm mx-auto">
-              <Plus className="w-4 h-4" />
-              Создать первую цель
-            </button>
-          </div>
+          <SectionEmpty
+            icon={Target}
+            title="Пока нет целей"
+            action={
+              <button onClick={() => setAdding(true)} className="btn-primary text-sm">
+                <Plus className="w-4 h-4" />
+                Создать первую цель
+              </button>
+            }
+          >
+            Создайте цель — и увидите прогресс, расчётный срок достижения и статус по
+            дедлайну.
+          </SectionEmpty>
         )
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">

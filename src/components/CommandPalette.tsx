@@ -38,6 +38,7 @@ import { useFiltersStore } from "../store/useFiltersStore";
 import { useSavedViewsStore } from "../store/useSavedViewsStore";
 import { groupByCategory, topPayees, NO_PAYEE_LABEL } from "../lib/aggregations";
 import { monthLabel, ymKey } from "../lib/format";
+import { SectionEmpty } from "./SectionEmpty";
 
 interface Item {
   id: string;
@@ -342,7 +343,9 @@ export function CommandPalette({ open, onClose }: Props) {
 
         <div ref={listRef} className="flex-1 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <div className="text-center text-sm text-muted py-8">Ничего не найдено</div>
+            <SectionEmpty variant="compact">
+              Ничего не найдено
+            </SectionEmpty>
           ) : (
             filtered.map((item, idx) => {
               const Icon = item.icon;

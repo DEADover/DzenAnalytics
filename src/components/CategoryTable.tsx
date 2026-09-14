@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 import { currencySymbol, formatMoney, formatNum, formatPct } from "../lib/format";
 import { CategoryDot } from "./CategoryDot";
 import { DataTable, type Column } from "./DataTable";
@@ -70,6 +71,7 @@ export function CategoryTable({
   exportName,
   emptyText,
   card = false,
+  icon,
   title,
   actions,
 }: {
@@ -92,6 +94,7 @@ export function CategoryTable({
   emptyText?: ReactNode;
   /** Своя карточка с шапкой. Без неё таблица встаёт в чужую карточку. */
   card?: boolean;
+  icon?: LucideIcon;
   title?: ReactNode;
   actions?: ReactNode;
 }) {
@@ -200,6 +203,7 @@ export function CategoryTable({
   return (
     <DataTable<CategoryTableRow>
       bare={!card}
+      icon={icon}
       title={title}
       actions={actions}
       fixed

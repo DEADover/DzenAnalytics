@@ -49,6 +49,7 @@ import { formatMoney, formatNum, payeeSearchText } from "../lib/format";
 import { kindLabel, operationTone } from "../lib/txKindStyle";
 import { pluralOps } from "../lib/plural";
 import type { Transaction, TxKind } from "../types";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 type SortMode = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
 
@@ -750,9 +751,9 @@ export function TransactionsPage() {
         </div>
 
         {sorted.length === 0 ? (
-          <div className="text-center text-muted text-sm py-16">
+          <SectionEmpty variant="inline">
             По текущим фильтрам ничего не найдено
-          </div>
+          </SectionEmpty>
         ) : groupedByDay ? (
           <div>
             <HeaderRow

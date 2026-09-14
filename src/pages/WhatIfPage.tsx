@@ -25,6 +25,7 @@ import { formatMoney, formatPct } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
+import { Callout } from "../components/Callout";
 
 const INITIAL: WhatIfInputs = {
   incomeMul: 1,
@@ -149,10 +150,7 @@ export function WhatIfPage() {
         {/* Inputs */}
         <div className="card-tray card-pad space-y-5">
           <div>
-            <div className="font-semibold mb-3 flex items-center gap-2">
-              <Coins className="w-4 h-4 text-accent" />
-              Основные параметры
-            </div>
+            <CardHeader icon={Coins} title="Основные параметры" />
             <Slider
               label="Изменение дохода"
               value={inputs.incomeMul}
@@ -210,10 +208,7 @@ export function WhatIfPage() {
 
           {categories.length > 0 && (
             <div>
-              <div className="font-semibold mb-3 flex items-center gap-2">
-                <TrendingDown className="w-4 h-4 text-accent" />
-                Категории расходов (топ-{categories.length})
-              </div>
+              <CardHeader icon={TrendingDown} title={`Категории расходов (топ-${categories.length})`} />
               <div className="space-y-3">
                 {categories.map((c) => {
                   const mul = inputs.categoryMul?.[c.category] ?? 1;
@@ -303,10 +298,7 @@ export function WhatIfPage() {
 
           {/* FIRE */}
           <div className="card-tray card-pad">
-            <div className="flex items-center gap-2 font-semibold mb-3">
-              <Flame className="w-4 h-4 text-warn" />
-              FIRE
-            </div>
+            <CardHeader icon={Flame} tone="warn" title="FIRE" />
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="label">Лет до FIRE сейчас</div>
@@ -339,10 +331,7 @@ export function WhatIfPage() {
 
           {/* Projected capital */}
           <div className="card-tray card-pad">
-            <div className="flex items-center gap-2 font-semibold mb-3">
-              <PiggyBank className="w-4 h-4 text-accent2" />
-              Прогноз капитала
-            </div>
+            <CardHeader icon={PiggyBank} tone="accent2" title="Прогноз капитала" />
             <div className="grid grid-cols-3 gap-3">
               <MoneyStat label="через 1 год" value={out.projected1y} base={base} />
               <MoneyStat label="через 5 лет" value={out.projected5y} base={base} />
@@ -356,25 +345,18 @@ export function WhatIfPage() {
 
           {/* Annual delta */}
           {Math.abs(out.annualSavingsDelta) > 100 && (
-            <div className="card card-pad bg-accent/5 border-accent/40">
-              <div className="flex items-center gap-2 text-sm">
-                {out.annualSavingsDelta > 0 ? (
-                  <TrendingUp className="w-4 h-4 text-income shrink-0" />
-                ) : (
-                  <TrendingDown className="w-4 h-4 text-expense shrink-0" />
-                )}
-                <span>
-                  За год это{" "}
-                  <strong
-                    className={out.annualSavingsDelta > 0 ? "text-income" : "text-expense"}
-                  >
-                    {out.annualSavingsDelta > 0 ? "+" : ""}
-                    {formatMoney(out.annualSavingsDelta, base)}
-                  </strong>{" "}
-                  к текущей траектории.
-                </span>
-              </div>
-            </div>
+            <Callout
+              size="banner"
+              tone={out.annualSavingsDelta > 0 ? "income" : "expense"}
+              icon={out.annualSavingsDelta > 0 ? TrendingUp : TrendingDown}
+            >
+              За год это{" "}
+              <strong className={out.annualSavingsDelta > 0 ? "text-income" : "text-expense"}>
+                {out.annualSavingsDelta > 0 ? "+" : ""}
+                {formatMoney(out.annualSavingsDelta, base)}
+              </strong>{" "}
+              к текущей траектории.
+            </Callout>
           )}
         </div>
       </div>

@@ -39,6 +39,7 @@ import {
 import { navSection } from "../../lib/navSections";
 import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
 import { pluralRu } from "../../lib/plural";
+import { SectionEmpty } from "../SectionEmpty";
 
 /* ─────────────────────────────  обойма виджета  ───────────────────────────── */
 
@@ -662,26 +663,27 @@ export function EmptyDashboard() {
   const setEditing = useDashboardLayoutStore((s) => s.setEditing);
   const reset = useDashboardLayoutStore((s) => s.reset);
   return (
-    <div className="card card-pad text-center py-16">
-      <h2 className="font-semibold text-[17px]">На главной ничего не осталось</h2>
-      <p className="text-sm text-muted mt-1.5">
-        Все {WIDGETS.length}{" "}
-        {pluralRu(WIDGETS.length, ["виджет", "виджета", "виджетов"])} убраны.
-        Верните нужные или соберите главную заново.
-      </p>
-      <div className="flex items-center justify-center gap-2 mt-5">
-        {/* В самом режиме кнопка звала бы туда, где человек уже стоит. */}
-        {!editing && (
-          <button type="button" className="btn-ghost text-sm" onClick={() => setEditing(true)}>
-            <LayoutTemplate className="w-3.5 h-3.5" aria-hidden="true" />
-            Настроить главную
+    <SectionEmpty
+      icon={LayoutTemplate}
+      title="На главной ничего не осталось"
+      action={
+        <>
+          {/* В самом режиме кнопка звала бы туда, где человек уже стоит. */}
+          {!editing && (
+            <button type="button" className="btn-ghost text-sm" onClick={() => setEditing(true)}>
+              <LayoutTemplate className="w-3.5 h-3.5" aria-hidden="true" />
+              Настроить главную
+            </button>
+          )}
+          <button type="button" className="btn-primary text-sm" onClick={() => void reset()}>
+            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+            Вернуть стандартную
           </button>
-        )}
-        <button type="button" className="btn-primary text-sm" onClick={() => void reset()}>
-          <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-          Вернуть стандартную
-        </button>
-      </div>
-    </div>
+        </>
+      }
+    >
+      Все {WIDGETS.length} {pluralRu(WIDGETS.length, ["виджет", "виджета", "виджетов"])} убраны.
+      Верните нужные или соберите главную заново.
+    </SectionEmpty>
   );
 }

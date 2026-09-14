@@ -914,6 +914,7 @@ export function ComparePage() {
           и таблица выше показывают доходы и расходы одновременно. Полоса —
           период А, засечка на ней — период Б. */}
       <CategoryTable
+        icon={GitCompare}
         card
         title={`${chartKind === "expense" ? "Расходы" : "Доходы"} по категориям: ${ranges.a.label} против ${ranges.b.label}`}
         actions={<KindSwitcher kind={chartKind} onChange={setChartKind} />}

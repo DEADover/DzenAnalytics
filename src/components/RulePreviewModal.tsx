@@ -12,6 +12,8 @@ import { CategoryDot } from "./CategoryDot";
 import { Segmented } from "./Segmented";
 import type { Transaction } from "../types";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { SectionEmpty } from "./SectionEmpty";
+import { Callout } from "./Callout";
 
 /**
  * Окно «Что изменят правила» — предпросмотр и применение (пункты 9–12 issue #49).
@@ -198,13 +200,13 @@ export function RulePreviewModal({
 
         <ModalBody scroll>
           {visible.length === 0 ? (
-            <div className="text-center text-muted text-sm py-10">
+            <SectionEmpty variant="inline">
               {ruleCount === 0
                 ? "Все правила выключены — включите нужные, и покажу, что они сделают."
                 : plan.rows.length === 0
                   ? "Ни одна операция не подходит под выбранные правила."
                   : "Записывать нечего: правила уже применены. Переключитесь на «Все», чтобы увидеть весь разбор."}
-            </div>
+            </SectionEmpty>
           ) : (
             <div className="space-y-0.5">
               {shown.map((row) => {
@@ -333,7 +335,7 @@ export function RulePreviewModal({
         {(notes.length > 0 || plan.skippedCount > 0) && (
           <div className="px-5 py-3 border-t border-border shrink-0 space-y-2">
             {plan.skippedCount > 0 && (
-              <div className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
+              <Callout tone="warn">
                 {formatNum(plan.skippedCount)}{" "}
                 {pluralRu(plan.skippedCount, ["операция", "операции", "операций"])} не
                 записать — в справочнике Дзен-мани нет категории{" "}
@@ -343,7 +345,7 @@ export function RulePreviewModal({
                   .join(", ")}
                 {plan.skipped.length > 3 ? ` и ещё ${plan.skipped.length - 3}` : ""}.
                 Заведите её в справочнике категорий и откройте окно снова.
-              </div>
+              </Callout>
             )}
             {notes.length > 0 && (
               <div className="flex gap-2 text-xs text-muted">

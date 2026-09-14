@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, RotateCcw, Undo2, Info } from "lucide-react";
+import { Trash2, RotateCcw, Undo2 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
@@ -16,6 +16,8 @@ import { DataTable } from "../components/DataTable";
 import { OperationAmount, OperationCategory, OperationPayee } from "../components/operations/OperationCells";
 import { PageHeader } from "../components/PageHeader";
 import type { Transaction } from "../types";
+import { SectionEmpty } from "../components/SectionEmpty";
+import { Callout } from "../components/Callout";
 
 /**
  * «Корзина» — locally-deleted (hidden) transactions and a way to bring
@@ -126,14 +128,13 @@ export function TrashPage() {
           title="Удалённые"
           hint="Удалённые операции скрыты из всех расчётов, но хранятся локально — здесь их можно вернуть"
         />
-        <div className="card-tray card-pad text-center py-16">
-          <Trash2 className="w-10 h-10 text-muted mx-auto mb-3" />
-          <div className="font-medium mb-1">Корзина пуста</div>
-          <div className="text-sm text-muted">
-            Удалённых операций нет. Удалить операцию можно иконкой 🗑️ в ленте
-            «Операции» или в карточке операции.
-          </div>
-        </div>
+        <SectionEmpty
+          icon={Trash2}
+          title="Корзина пуста"
+        >
+          Удалённых операций нет. Удалить операцию можно иконкой 🗑️ в ленте
+          «Операции» или в карточке операции.
+        </SectionEmpty>
       </div>
     );
   }
@@ -166,15 +167,12 @@ export function TrashPage() {
       />
 
       {pushMode !== "off" && (
-        <div className="card card-pad bg-accent/5 border-accent/40 flex items-start gap-2 text-sm">
-          <Info className="w-4 h-4 text-accent shrink-0 mt-0.5" />
-          <span className="text-muted">
-            Включена двусторонняя синхронизация: восстановление вернёт операцию
-            <strong> и в облако Дзен-мани</strong> — она будет создана заново при
-            следующей отправке/синхронизации (со всеми полями: получатель, теги,
-            суммы).
-          </span>
-        </div>
+        <Callout size="banner">
+          Включена двусторонняя синхронизация: восстановление вернёт операцию
+          <strong> и в облако Дзен-мани</strong> — она будет создана заново при
+          следующей отправке/синхронизации (со всеми полями: получатель, теги,
+          суммы).
+        </Callout>
       )}
 
       <DataTable<Transaction>

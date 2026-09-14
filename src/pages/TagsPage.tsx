@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Hash, Pencil } from "lucide-react";
+import { Hash, Pencil, Cloud } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -23,6 +23,7 @@ import { HashtagRenameModal } from "../components/HashtagRenameModal";
 import { useTagModeStore } from "../store/useTagModeStore";
 import { tagLabel, tagsOf, type TagMode } from "../lib/operationTags";
 import type { Transaction } from "../types";
+import { CardHeader } from "../components/CardHeader";
 
 /**
  * Значок тега. Хэштег — решёткой, как его набирают в комментарии. Вторая
@@ -370,27 +371,30 @@ export function TagsPage() {
       <GlobalFilters />
 
       <div className="card-tray card-pad">
-        <div className="flex items-center justify-between mb-4 gap-3">
-          <div className="font-semibold flex items-baseline gap-2 flex-wrap min-w-0">
-            <span>Облако тегов</span>
-            <span className="text-xs font-normal text-muted">
+        <CardHeader
+          icon={Cloud}
+          title="Облако тегов"
+          subtitle={
+            <>
               {tags.length} {pluralRu(tags.length, ["тег", "тега", "тегов"])} в{" "}
               {taggedCount}{" "}
               {pluralRu(taggedCount, ["операции", "операциях", "операциях"])}
               {totalExpense > 0 && ` · по тегам ${formatMoney(totalExpense, base)}`}
-            </span>
-          </div>
-          <Segmented
-            size="sm"
-            label="Порядок тегов в облаке"
-            value={cloudAlpha ? "alpha" : "sum"}
-            onChange={(next) => setCloudAlpha(next === "alpha")}
-            options={[
-              { value: "sum", label: "По сумме" },
-              { value: "alpha", label: "А–Я" },
-            ]}
-          />
-        </div>
+            </>
+          }
+          right={
+            <Segmented
+              size="sm"
+              label="Порядок тегов в облаке"
+              value={cloudAlpha ? "alpha" : "sum"}
+              onChange={(next) => setCloudAlpha(next === "alpha")}
+              options={[
+                { value: "sum", label: "По сумме" },
+                { value: "alpha", label: "А–Я" },
+              ]}
+            />
+          }
+        />
         <div className="flex flex-wrap gap-2">
           {cloudTags.map((t) => {
             const score = (t.expense + t.income) / maxTotal;
@@ -414,6 +418,7 @@ export function TagsPage() {
       </div>
 
       <DataTable<TagRow>
+        icon={Hash}
         title="Все теги"
         info={
           periodExpense > 0 ? (

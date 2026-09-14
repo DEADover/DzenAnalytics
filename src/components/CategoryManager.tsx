@@ -48,6 +48,7 @@ import {
 } from "./CategoryDeleteModal";
 import { InfoPopover } from "./InfoPopover";
 import { CountSortHeader, type SortMode } from "./CountSortHeader";
+import { SectionEmpty } from "./SectionEmpty";
 
 /** What the edit/create modal is currently doing. */
 type ModalState =
@@ -421,9 +422,9 @@ export function CategoryManager() {
           </div>
 
           {groups.length === 0 ? (
-            <div className="text-sm text-muted py-6 text-center">
+            <SectionEmpty variant="compact">
               {tags.length === 0 ? "Категории не найдены." : "Ничего не найдено."}
-            </div>
+            </SectionEmpty>
           ) : (
             <div className="divide-y divide-border/60">
               {visibleGroups.map(({ root, children }) => {

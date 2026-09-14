@@ -21,6 +21,7 @@ import { ExpandChevron, HeadCell } from "./table/TableParts";
 import { cellClass } from "./table/tableKit";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { pluralRu } from "../lib/plural";
+import { Callout } from "./Callout";
 
 /**
  * Sync log table.
@@ -393,12 +394,11 @@ function LogTableRow({
           <td colSpan={6} className="table-td pl-[34px] pr-3 py-3">
             <div className="text-xs space-y-2">
               {entry.error && (
-                <div className="flex items-start gap-2 p-2 rounded-md bg-expense/5 border border-expense/30 text-expense">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span className="whitespace-pre-wrap break-words font-mono text-[11px]">
+                <Callout tone="expense">
+                  <span className="whitespace-pre-wrap break-words font-mono text-[11px] text-expense">
                     {entry.error}
                   </span>
-                </div>
+                </Callout>
               )}
               {entry.details?.skipped && entry.details.skipped.length > 0 && (
                 <details>

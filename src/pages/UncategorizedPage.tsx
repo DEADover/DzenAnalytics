@@ -15,11 +15,13 @@ import { pluralRu } from "../lib/plural";
 import { kindGlyphClass, kindSignGlyph, kindTone } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { CardHeader } from "../components/CardHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
 import { DataTable } from "../components/DataTable";
 import type { Transaction } from "../types";
 import type { RuleField } from "../store/useCategoryRulesStore";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 /** Build the rule key for a suggestion: by получатель when present, otherwise
  *  by the comment. Some operations (dividend payouts, bank fees) have no payee
@@ -172,39 +174,41 @@ export function UncategorizedPage() {
       {/* Smart suggestions */}
       {list.length > 0 && suggestions.length > 0 && (
         <div className="card card-pad bg-accent2/5 border-accent2/40">
-          <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-            <div>
-              <div className="font-semibold flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-accent2" />
-                Подсказки категорий ({suggestions.length})
-              </div>
-              <div className="text-xs text-muted mt-1">
+          <CardHeader
+            icon={Sparkles}
+            tone="accent2"
+            title={<>Подсказки категорий ({suggestions.length})</>}
+            infoLabel="Как подбираются подсказки"
+            info={
+              <p>
                 Подобраны по похожести получателя, комментария и категории. Применение
                 создаёт правило (по получателю, а если его нет — по комментарию) —
-                можно отменить на странице «Правила».
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Tooltip content="Создаст правила (по получателю или комментарию) для выбранных подсказок и применит их">
-                <button
-                  onClick={applySelected}
-                  disabled={busy || selectedCount === 0}
-                  className="btn-primary text-xs"
-                >
-                  <Wand2 className="w-3.5 h-3.5" />
-                  Применить подсказки ({selectedCount})
-                </button>
-              </Tooltip>
-              <Tooltip content="Скрыть подсказки">
-                <button
-                  onClick={() => setShowSuggestions(false)}
-                  className="btn-ghost text-xs text-muted"
-                >
-                  ×
-                </button>
-              </Tooltip>
-            </div>
-          </div>
+                его можно отменить на странице «Правила».
+              </p>
+            }
+            right={
+              <>
+                <Tooltip content="Создаст правила (по получателю или комментарию) для выбранных подсказок и применит их">
+                  <button
+                    onClick={applySelected}
+                    disabled={busy || selectedCount === 0}
+                    className="btn-primary text-xs"
+                  >
+                    <Wand2 className="w-3.5 h-3.5" />
+                    Применить подсказки ({selectedCount})
+                  </button>
+                </Tooltip>
+                <Tooltip content="Скрыть подсказки">
+                  <button
+                    onClick={() => setShowSuggestions(false)}
+                    className="btn-ghost text-xs text-muted"
+                  >
+                    ×
+                  </button>
+                </Tooltip>
+              </>
+            }
+          />
           {/* Select-all + quick presets. */}
           {selectable.length > 0 && (
             <div className="flex items-center gap-3 px-2 py-1.5 mb-1 text-xs border-b border-border/50">
@@ -307,15 +311,16 @@ export function UncategorizedPage() {
       )}
 
       {list.length === 0 ? (
-        <div className="card-tray card-pad text-center py-12">
-          <AlertCircle className="w-10 h-10 text-income mx-auto mb-3" />
-          <div className="font-medium mb-1">Все операции категоризированы — отлично!</div>
-          <div className="text-sm text-muted">
-            Не найдено операций без категории
-          </div>
-        </div>
+        <SectionEmpty
+          icon={AlertCircle}
+          tone="income"
+          title="Все операции категоризированы — отлично!"
+        >
+          Не найдено операций без категории
+        </SectionEmpty>
       ) : (
         <DataTable<Transaction>
+          icon={Tag}
           title={`Все без категории (${formatNum(list.length)})`}
           actions={
             <button

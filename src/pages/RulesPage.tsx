@@ -47,7 +47,7 @@ import { Tooltip } from "../components/Tooltip";
 import { Checkbox } from "../components/Checkbox";
 import { HeadCell } from "../components/table/TableParts";
 import { cellClass } from "../components/table/tableKit";
-import { InfoPopover } from "../components/InfoPopover";
+import { CardHeader } from "../components/CardHeader";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
 import { buildRulePlan, type RuleRow } from "../lib/rulePlan";
@@ -57,6 +57,7 @@ import { RuleModeChip } from "../components/RuleModeControl";
 import { ruleModeFields, ruleModeOf, type RuleMode } from "../lib/ruleMode";
 import type { RuleSchedule } from "../lib/ruleSchedule";
 import { userEdits } from "../lib/editOrigins";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 /** Подпись поля, которое занимает действие, — для колонки «Что меняет». */
 const TARGET_LABELS: Record<RuleTargetField, string> = {
@@ -465,129 +466,130 @@ export function RulesPage() {
       <div className="card-tray card-pad">
         {/* Панель действий — как в справочниках: заголовок со счётчиком,
             пояснение под «?», действия справа. */}
-        <div className="flex items-center gap-2 flex-wrap mb-3">
-          <div className="font-semibold flex items-center gap-2 mr-1">
-            <Wand2 className="w-4 h-4 shrink-0" />
-            <span>
+        <CardHeader
+          icon={Wand2}
+          title={
+            <>
               Правила (<span className="tabular-nums">{rules.length}</span>)
-            </span>
-          </div>
+            </>
+          }
+          infoLabel="Как это работает"
+          info={
+            <>
+              <p>
+                <strong className="text-text">Правило</strong> отбирает операции
+                по условиям и меняет у них категорию, получателя или
+                комментарий. Само по себе оно ничего не переписывает.
+              </p>
+              <p>
+                <strong className="text-text">«Режим»</strong> — что правило
+                делает вообще:
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 pl-1">
+                <li>
+                  <strong className="text-text">Выкл</strong> — не работает
+                  нигде;
+                </li>
+                <li>
+                  <strong className="text-text">По кнопке</strong> — только
+                  через «Проверить и применить»;
+                </li>
+                <li>
+                  <strong className="text-text">Авто</strong> — само, при
+                  синхронизации. По умолчанию трогает лишь операции, которых
+                  раньше не было; с расписанием — проходит и по истории.
+                </li>
+              </ul>
+              <p>
+                <strong className="text-text">Галочки слева</strong> — какие
+                правила разобрать кнопкой сейчас. Так прогоняют одно правило,
+                не выключая остальные. Они сбрасываются при перезагрузке и на
+                сами правила не влияют.
+              </p>
+              <p>
+                <strong className="text-text">Порядок важен:</strong> поле
+                занимает первое высказавшееся о нём правило — верхнее поставит
+                категорию, нижнее ещё допишет комментарий. Двигать — стрелками
+                в колонке «№».
+              </p>
+              <p>
+                Записанное становится обычной правкой операции: откатывается
+                построчно в списке изменений, а не выключением правила.
+              </p>
+            </>
+          }
+          right={
+            <>
+              {/* Оба замечания стоят В ШАПКЕ, а не полосой над таблицей: полоса
+                  появлялась и исчезала при каждом переключении режима и двигала
+                  таблицу на свою высоту — строки прыгали под курсором. Подробности
+                  замечания живут в подсказке, а высота шапки не меняется. */}
+              {plan.skippedCount > 0 && (
+                <Tooltip
+                  content={
+                    <>
+                      Правило хочет поставить категорию, которой нет в справочнике
+                      Дзен-мани: {plan.skipped.map((x) => `«${x.category}»`).join(", ")}.
+                      Такую правку облако не примет — заведите категорию в справочнике
+                      или поправьте правило.
+                    </>
+                  }
+                >
+                  <span className="inline-flex items-center gap-1 text-xs text-warn whitespace-nowrap">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    {formatNum(plan.skippedCount)}{" "}
+                    {pluralRu(plan.skippedCount, ["операция", "операции", "операций"])} без
+                    категории в Дзен-мани
+                  </span>
+                </Tooltip>
+              )}
 
-          {/* Общий знак вопроса: свой с отдельной панелью был 32 px — выше
-              строки, к которой относится, — и не прокручивался внутри. */}
-          <InfoPopover label="Как это работает">
-            <p>
-              <strong className="text-text">Правило</strong> отбирает операции
-              по условиям и меняет у них категорию, получателя или
-              комментарий. Само по себе оно ничего не переписывает.
-            </p>
-            <p>
-              <strong className="text-text">«Режим»</strong> — что правило
-              делает вообще:
-            </p>
-            <ul className="list-disc list-inside space-y-0.5 pl-1">
-              <li>
-                <strong className="text-text">Выкл</strong> — не работает
-                нигде;
-              </li>
-              <li>
-                <strong className="text-text">По кнопке</strong> — только
-                через «Проверить и применить»;
-              </li>
-              <li>
-                <strong className="text-text">Авто</strong> — само, при
-                синхронизации. По умолчанию трогает лишь операции, которых
-                раньше не было; с расписанием — проходит и по истории.
-              </li>
-            </ul>
-            <p>
-              <strong className="text-text">Галочки слева</strong> — какие
-              правила разобрать кнопкой сейчас. Так прогоняют одно правило,
-              не выключая остальные. Они сбрасываются при перезагрузке и на
-              сами правила не влияют.
-            </p>
-            <p>
-              <strong className="text-text">Порядок важен:</strong> поле
-              занимает первое высказавшееся о нём правило — верхнее поставит
-              категорию, нижнее ещё допишет комментарий. Двигать — стрелками
-              в колонке «№».
-            </p>
-            <p>
-              Записанное становится обычной правкой операции: откатывается
-              построчно в списке изменений, а не выключением правила.
-            </p>
-          </InfoPopover>
+              {/* «Нечего применять» стоит В ШАПКЕ, а не полосой над таблицей: полоса
+                  появлялась и исчезала при каждом выключении последнего правила и
+                  двигала таблицу на свою высоту — строки прыгали под курсором. */}
+              {enabledIds.length === 0 && rules.length > 0 && (
+                <Tooltip content="Включите нужные правила режимом «По кнопке» или «Авто» — тогда их будет что проверить и применить">
+                  <span className="text-xs text-muted whitespace-nowrap">
+                    Все правила выключены
+                  </span>
+                </Tooltip>
+              )}
 
-          {/* Оба замечания стоят В ШАПКЕ, а не полосой над таблицей: полоса
-              появлялась и исчезала при каждом переключении режима и двигала
-              таблицу на свою высоту — строки прыгали под курсором. Подробности
-              замечания живут в подсказке, а высота шапки не меняется. */}
-          {plan.skippedCount > 0 && (
-            <Tooltip
-              content={
-                <>
-                  Правило хочет поставить категорию, которой нет в справочнике
-                  Дзен-мани: {plan.skipped.map((x) => `«${x.category}»`).join(", ")}.
-                  Такую правку облако не примет — заведите категорию в справочнике
-                  или поправьте правило.
-                </>
-              }
-            >
-              <span className="inline-flex items-center gap-1 text-xs text-warn whitespace-nowrap">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                {formatNum(plan.skippedCount)}{" "}
-                {pluralRu(plan.skippedCount, ["операция", "операции", "операций"])} без
-                категории в Дзен-мани
-              </span>
-            </Tooltip>
-          )}
-
-          {/* «Нечего применять» стоит В ШАПКЕ, а не полосой над таблицей: полоса
-              появлялась и исчезала при каждом выключении последнего правила и
-              двигала таблицу на свою высоту — строки прыгали под курсором. */}
-          {enabledIds.length === 0 && rules.length > 0 && (
-            <Tooltip content="Включите нужные правила режимом «По кнопке» или «Авто» — тогда их будет что проверить и применить">
-              <span className="text-xs text-muted whitespace-nowrap">
-                Все правила выключены
-              </span>
-            </Tooltip>
-          )}
-
-          <span className="flex-1 min-w-2" />
-
-          {/* Одна кнопка на оба сценария: окно и раньше было одно, а две кнопки
-              отличались лишь тем, отмечены ли строки заранее. Разницу
-              приходилось объяснять абзацем в справке — значит её и не было. */}
-          <button
-            type="button"
-            onClick={() => setPreview(true)}
-            disabled={selectedIds.size === 0}
-            className="btn-ghost text-sm shrink-0"
-            title="Показать, что сделают выбранные правила, и записать отмеченное"
-          >
-            <ListChecks className="w-4 h-4" aria-hidden />
-            Проверить и применить ({formatNum(plan.pending.length)})
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditing("create")}
-            className="btn-primary text-sm shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            Добавить
-          </button>
-        </div>
+              {/* Одна кнопка на оба сценария: окно и раньше было одно, а две кнопки
+                  отличались лишь тем, отмечены ли строки заранее. Разницу
+                  приходилось объяснять абзацем в справке — значит её и не было. */}
+              <button
+                type="button"
+                onClick={() => setPreview(true)}
+                disabled={selectedIds.size === 0}
+                className="btn-ghost text-xs shrink-0"
+                title="Показать, что сделают выбранные правила, и записать отмеченное"
+              >
+                <ListChecks className="w-4 h-4" aria-hidden />
+                Проверить и применить ({formatNum(plan.pending.length)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditing("create")}
+                className="btn-primary text-xs shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Добавить
+              </button>
+            </>
+          }
+        />
 
         {rules.length === 0 ? (
-          <div className="text-center py-12">
-            <Wand2 className="w-10 h-10 text-muted mx-auto mb-3" />
-            <div className="font-medium mb-1">Нет правил</div>
-            <div className="text-sm text-muted">
-              Создайте первое правило кнопкой <strong>«Добавить»</strong> — оно
-              будет автоматически менять категорию, получателя и комментарий
-              операций по условию
-            </div>
-          </div>
+          <SectionEmpty
+            variant="inline"
+            icon={Wand2}
+            title="Нет правил"
+          >
+            Создайте первое правило кнопкой <strong>«Добавить»</strong> — оно
+            будет автоматически менять категорию, получателя и комментарий
+            операций по условию
+          </SectionEmpty>
         ) : (
           <div className="overflow-x-auto -mx-1 px-1">
             <table className="w-full">

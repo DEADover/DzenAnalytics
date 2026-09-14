@@ -23,6 +23,7 @@ import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 import { nextSort, sortRows, type SortState } from "../components/table/tableKit";
 import type { Transaction } from "../types";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 
 type Tab = "week" | "month";
@@ -96,9 +97,7 @@ export function DigestPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="card-tray card-pad text-center text-muted py-12">
-          Нет завершённых периодов для дайджеста.
-        </div>
+        <SectionEmpty icon={Newspaper} title="Нет завершённых периодов для дайджеста" />
       ) : (
         <div className="grid md:grid-cols-[260px_1fr] gap-4">
           {/* Список периодов. На широком экране панель тянется во всю высоту
@@ -267,7 +266,7 @@ function DigestDetail({
 
       {entry.movers.length > 0 && (
         <SectionCard
-          icon={<TrendingUp className="w-4 h-4 text-accent" />}
+          icon={TrendingUp}
           title="Категории, где «выстрелило»"
           info={
             <p>
@@ -335,7 +334,7 @@ function DigestDetail({
 
       {entry.topTransactions.length > 0 && (
         <SectionCard
-          icon={<Coins className="w-4 h-4 text-expense" />}
+          icon={Coins} tone="expense"
           title="Самое дорогое за период"
           info={<p>Пять самых крупных расходов периода с комментарием к операции.</p>}
         >

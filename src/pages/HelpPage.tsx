@@ -48,6 +48,7 @@ import {
   Trash2,
   FileSpreadsheet,
 } from "lucide-react";
+import { Callout } from "../components/Callout";
 
 type Group = "main" | "more" | "concepts";
 
@@ -927,11 +928,11 @@ const SECTIONS: Section[] = [
     title: "Бюджет",
     body: (
       <>
-        <p className="rounded bg-warn/10 border border-warn/30 px-3 py-2 text-xs">
-          ⚠️ <strong>Раздел в активной доработке.</strong> Бюджеты сейчас
+        <Callout tone="warn">
+          <strong>Раздел в активной доработке.</strong> Бюджеты сейчас
           переписываются и сближаются с «Планами» Дзен-мани — поведение и вид
           ещё будут меняться от версии к версии.
-        </p>
+        </Callout>
         <p className="mt-2">
           План/факт по категориям <strong>и под-категориям</strong> с
           переключателем месяца (← →). Бюджеты бывают расходные и доходные — две

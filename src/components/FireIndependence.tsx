@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Flame, Wallet, ChevronDown, Check, Info } from "lucide-react";
+import { Flame, Wallet, ChevronDown, Check } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFireStore } from "../store/useFireStore";
 import { useFireCapital } from "../hooks/useFireCapital";
@@ -8,6 +8,7 @@ import { groupByMonth } from "../lib/aggregations";
 import { formatMoney } from "../lib/format";
 import { Tooltip } from "./Tooltip";
 import { TooltipFacts } from "./TooltipFacts";
+import { CardHeader } from "./CardHeader";
 
 /** FIRE goal on the 4%-rule: 25 годовых расходов = 300 месяцев. */
 const FIRE_MONTHS = 300;
@@ -18,7 +19,7 @@ const INTRO = [
   "FIRE — это когда накоплений столько, что на доход с них можно жить, не завися от зарплаты.",
   "Нужная сумма — обязательные расходы за год × 25 (правило 4%): снимая около 4% в год, вы покрываете обязательные траты, а накопления не иссякают.",
   "Цель считается от обязательных расходов — это порог финансовой безопасности. Чтобы сохранить весь текущий уровень жизни, ориентир будет выше.",
-].join("\n\n");
+];
 
 /** Correct Russian plural for «год» (1 год · 2 года · 5 лет). */
 function yearsWord(n: number): string {
@@ -112,15 +113,14 @@ export function FireIndependence({
 
   return (
     <div className={bare ? "" : "card card-pad"}>
-      <div className="flex items-center gap-2 mb-4">
-        <Flame className="w-4 h-4 text-accent" />
-        <span className="font-semibold">FIRE — финансовая независимость</span>
-        <Tooltip content={INTRO}>
-          <span className="cursor-help text-muted hover:text-text">
-            <Info className="w-3.5 h-3.5" />
-          </span>
-        </Tooltip>
-      </div>
+      <CardHeader
+        icon={Flame}
+        title="FIRE — финансовая независимость"
+        infoLabel="Что такое FIRE"
+        info={INTRO.map((p) => (
+          <p key={p}>{p}</p>
+        ))}
+      />
 
       {/* Progress: % пути + лет до цели */}
       <div className="flex items-baseline justify-between flex-wrap gap-2 text-sm mb-1.5">

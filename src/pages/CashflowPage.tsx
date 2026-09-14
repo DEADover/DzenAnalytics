@@ -20,9 +20,11 @@ import {
   Wallet,
   List,
   BarChart3,
+  CalendarRange,
   Layers,
   LineChart as LineChartIcon,
   Sparkles,
+  Table as TableIcon,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
@@ -58,6 +60,7 @@ import { StatCell, StatRow } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
+import { CardHeader } from "../components/CardHeader";
 import { Segmented } from "../components/Segmented";
 import { KindSwitcher } from "../components/KindSwitcher";
 import { YearPicker } from "../components/MonthPicker";
@@ -276,31 +279,30 @@ export function CashflowPage() {
       <InsightsPanel insights={insights} base={base} />
 
       <div className="card-tray card-pad">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <div>
-            <div className="font-semibold">
-              {vizMode === "bars" ? "Доходы и расходы по месяцам" : "Поток расходов по категориям"}
-            </div>
-            <div className="text-xs text-muted">
-              {vizMode === "bars"
-                ? "Столбцы — суммы, линия — чистый поток"
-                : "Категории как реки расходов во времени"}
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Segmented
-              size="sm"
-              label="Вид графика"
-              value={vizMode}
-              onChange={setVizMode}
-              options={[
-                { value: "bars", label: "Бары", icon: BarChart3 },
-                { value: "stream", label: "Поток", icon: Layers },
-              ]}
-            />
-            <div className="text-xs text-muted">{months.length} мес.</div>
-          </div>
-        </div>
+        <CardHeader
+          icon={vizMode === "bars" ? BarChart3 : Layers}
+          title={vizMode === "bars" ? "Доходы и расходы по месяцам" : "Поток расходов по категориям"}
+          subtitle={
+            vizMode === "bars"
+              ? "Столбцы — суммы, линия — чистый поток"
+              : "Категории как реки расходов во времени"
+          }
+          right={
+            <>
+              <Segmented
+                size="sm"
+                label="Вид графика"
+                value={vizMode}
+                onChange={setVizMode}
+                options={[
+                  { value: "bars", label: "Бары", icon: BarChart3 },
+                  { value: "stream", label: "Поток", icon: Layers },
+                ]}
+              />
+              <div className="text-xs text-muted">{months.length} мес.</div>
+            </>
+          }
+        />
         <div className="h-80">
           {vizMode === "bars" ? (
           <ResponsiveContainer>
@@ -527,26 +529,25 @@ export function CashflowPage() {
 
       {allYears.length >= 2 && (
         <div className="card-tray card-pad">
-          <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-            <div>
-              <div className="font-semibold">Год к году</div>
-              <div className="text-xs text-muted">
-                Сравнение с тем же месяцем годом ранее · вся история (период не влияет)
-              </div>
-            </div>
-            {/* Расходы / доходы и год — общими контролами, как в «Календаре»:
-                своя дорожка с красной и зелёной заливкой и своя перелистывалка
-                года без подписи-кнопки повторяли их в другом виде. */}
-            <div className="flex items-center gap-2">
-              <KindSwitcher kind={yoyKind} onChange={setYoyKind} />
-              <YearPicker
-                year={yoyYear}
-                minYear={allYears[0]}
-                maxYear={allYears[allYears.length - 1]}
-                onChange={pickYoyYear}
-              />
-            </div>
-          </div>
+          {/* Расходы / доходы и год — общими контролами, как в «Календаре»:
+              своя дорожка с красной и зелёной заливкой и своя перелистывалка
+              года без подписи-кнопки повторяли их в другом виде. */}
+          <CardHeader
+            icon={CalendarRange}
+            title="Год к году"
+            subtitle="Сравнение с тем же месяцем годом ранее · вся история (период не влияет)"
+            right={
+              <>
+                <KindSwitcher kind={yoyKind} onChange={setYoyKind} />
+                <YearPicker
+                  year={yoyYear}
+                  minYear={allYears[0]}
+                  maxYear={allYears[allYears.length - 1]}
+                  onChange={pickYoyYear}
+                />
+              </>
+            }
+          />
           <div className="h-72">
             <ResponsiveContainer>
               <ComposedChart data={yoyData}>
@@ -585,17 +586,12 @@ export function CashflowPage() {
       {/* Seasonality */}
       {seasonality.some((s) => s.yearsSampled >= 2) && (
         <div className="card-tray card-pad">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-            <div>
-              <div className="font-semibold flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-warn" />
-                Сезонность расходов
-              </div>
-              <div className="text-xs text-muted">
-                Средний расход по месяцу года, цветом — отклонение от общего среднего · вся история (период не влияет)
-              </div>
-            </div>
-          </div>
+          <CardHeader
+            icon={Sparkles}
+            tone="warn"
+            title="Сезонность расходов"
+            subtitle="Средний расход по месяцу года, цветом — отклонение от общего среднего · вся история (период не влияет)"
+          />
           <div className="h-64">
             <ResponsiveContainer>
               <ComposedChart data={seasonality}>
@@ -691,6 +687,7 @@ export function CashflowPage() {
       )}
 
       <DataTable<MonthBucket>
+        icon={TableIcon}
         title="Помесячная сводка"
         data={months}
         rowKey={(m) => m.ym}

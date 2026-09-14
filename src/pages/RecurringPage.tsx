@@ -22,6 +22,7 @@ import { formatMoney, formatDate, formatNum, formatPct } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { CardHeader } from "../components/CardHeader";
 import { Segmented } from "../components/Segmented";
 import { Switch } from "../components/Switch";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
@@ -30,6 +31,7 @@ import { DataTable, type Column, type Tone } from "../components/DataTable";
 import { DeviationPill } from "../components/DeviationPill";
 import { confirm } from "../store/useConfirmStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
+import { SectionEmpty } from "../components/SectionEmpty";
 
 // One pill per coarse cadence bucket, plus an "all" pseudo-option.
 // Order matches the user's likely usage frequency on this page:
@@ -631,51 +633,50 @@ export function RecurringPage() {
       {pageTab === "zen" && (
         <>
           {plannedUpcoming.length === 0 && plannedOverdue.length === 0 ? (
-            <div className="card-tray card-pad text-center py-12">
-              <CalendarClock className="w-10 h-10 text-muted mx-auto mb-3" />
-              <div className="font-medium mb-1">Нет запланированных операций из Дзен-мани</div>
-              <div className="text-sm text-muted max-w-md mx-auto">
-                {hiddenPlanned > 0 ? (
-                  <>
-                    Все планы этого аккаунта стоят на личных счетах других
-                    участников, поэтому здесь их нет — как и в приложении
-                    Дзен-мани. Кого считать собой и показывать ли чужое,
-                    задаётся в «Настройки → Данные → Участники аккаунта».
-                  </>
-                ) : (
-                  <>
-                    Планы и прогнозы появятся после синхронизации с Дзен-мани.
-                    Автоопределённые регулярные платежи — во вкладке «Планы
-                    DzenAnalytics».
-                  </>
-                )}
-              </div>
-            </div>
+            <SectionEmpty
+              icon={CalendarClock}
+              title="Нет запланированных операций из Дзен-мани"
+            >
+              {hiddenPlanned > 0 ? (
+                <>
+                  Все планы этого аккаунта стоят на личных счетах других
+                  участников, поэтому здесь их нет — как и в приложении
+                  Дзен-мани. Кого считать собой и показывать ли чужое,
+                  задаётся в «Настройки → Данные → Участники аккаунта».
+                </>
+              ) : (
+                <>
+                  Планы и прогнозы появятся после синхронизации с Дзен-мани.
+                  Автоопределённые регулярные платежи — во вкладке «Планы
+                  DzenAnalytics».
+                </>
+              )}
+            </SectionEmpty>
           ) : (
           <div className="card-tray card-pad space-y-4">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="font-semibold flex items-center gap-2">
-                <CalendarClock className="w-4 h-4 text-accent" />
-                Планируемые операции
-              </div>
-              <Segmented
-                size="sm"
-                label="Какие плановые операции показать"
-                value={effectiveTab}
-                onChange={setPlannedTab}
-                className="shrink-0"
-                options={plannedTabs.map((t) => ({
-                  value: t.id,
-                  label: t.label,
-                  count: plannedCounts[t.id],
-                  disabled: plannedCounts[t.id] === 0,
-                  title:
-                    plannedCounts[t.id] === 0
-                      ? "Нет таких операций в выбранном периоде"
-                      : undefined,
-                }))}
-              />
-            </div>
+            <CardHeader
+              icon={CalendarClock}
+              title="Планируемые операции"
+              right={
+                <Segmented
+                  size="sm"
+                  label="Какие плановые операции показать"
+                  value={effectiveTab}
+                  onChange={setPlannedTab}
+                  className="shrink-0"
+                  options={plannedTabs.map((t) => ({
+                    value: t.id,
+                    label: t.label,
+                    count: plannedCounts[t.id],
+                    disabled: plannedCounts[t.id] === 0,
+                    title:
+                      plannedCounts[t.id] === 0
+                        ? "Нет таких операций в выбранном периоде"
+                        : undefined,
+                  }))}
+                />
+              }
+            />
 
             {/* Date-window filter for the plans table. */}
             <div className="flex flex-wrap items-center gap-2">
@@ -860,21 +861,17 @@ export function RecurringPage() {
       )}
 
       {candidates.length === 0 && (
-        <div className="card-tray card-pad text-center py-12">
-          <AlertCircle className="w-10 h-10 text-muted mx-auto mb-3" />
-          <div className="font-medium mb-1">Регулярных платежей не найдено</div>
-          <div className="text-sm text-muted">
-            Нужно минимум 3 повтора одного получателя с интервалом ~раз в месяц.
-          </div>
-        </div>
+        <SectionEmpty
+          icon={AlertCircle}
+          title="Регулярных платежей не найдено"
+        >
+          Нужно минимум 3 повтора одного получателя с интервалом ~раз в месяц.
+        </SectionEmpty>
       )}
 
       {upcoming.length > 0 && (
         <div className="card-tray card-pad">
-          <div className="font-semibold mb-3 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-accent" />
-            Ближайшие ожидаемые
-          </div>
+          <CardHeader icon={Calendar} title="Ближайшие ожидаемые" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {upcoming.slice(0, 6).map((c) => {
               const daysUntil = Math.round(

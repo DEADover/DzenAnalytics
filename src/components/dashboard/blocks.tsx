@@ -65,6 +65,7 @@ import type { FreeMoneyModel } from "../../hooks/useFreeMoney";
 import type { PlanLeft } from "../../lib/freeMoney";
 import type { PlannedOp } from "../../lib/plannedOps";
 import type { Currency } from "../../types";
+import { SectionEmpty } from "../SectionEmpty";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
 
@@ -455,7 +456,7 @@ export function AccountsList({
   onAccount?: (title: string) => void;
 }) {
   if (m.accounts.length === 0) {
-    return <div className="text-sm text-muted text-center py-6">Счетов пока нет</div>;
+    return <SectionEmpty variant="compact">Счетов пока нет</SectionEmpty>;
   }
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -531,9 +532,9 @@ export function CategoriesList({
   const rows = m.categories;
   if (rows.length === 0) {
     return (
-      <div className="text-sm text-muted text-center py-6">
+      <SectionEmpty variant="compact">
         За {monthLabel(m.ym)} расходов ещё не было
-      </div>
+      </SectionEmpty>
     );
   }
   // Полоса меряется от САМОЙ КРУПНОЙ статьи — так видно соотношение между
@@ -592,9 +593,9 @@ export function CategoriesList({
 export function UpcomingList({ m }: { m: DashboardModel }) {
   if (m.upcoming.length === 0) {
     return (
-      <div className="text-sm text-muted text-center py-6">
+      <SectionEmpty variant="compact">
         До конца месяца регулярных платежей не ждём
-      </div>
+      </SectionEmpty>
     );
   }
   return (
@@ -682,20 +683,20 @@ export function ZenPlannedList({
 }) {
   if (rows === null) {
     return (
-      <div className="text-sm text-muted text-center py-6">
+      <SectionEmpty variant="compact">
         Планы приезжают из Дзен-мани — подключите синхронизацию
-      </div>
+      </SectionEmpty>
     );
   }
   if (rows.length === 0) {
     return (
-      <div className="text-sm text-muted text-center py-6">
+      <SectionEmpty variant="compact">
         {/* Называем последний день окна, а не «конец месяца»: виджет смотрит
             вперёд ровно до этой даты, и точное число не оставляет вопроса,
             что именно проверили. Прежнее «ни впереди, ни просроченных»
             читалось как «планов нет вообще». */}
         Планов по {dayAndMonth(until)} нет — и ничего просроченного
-      </div>
+      </SectionEmpty>
     );
   }
   return (
