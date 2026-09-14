@@ -18,6 +18,9 @@ import {
   type WhatIfInputs,
 } from "../lib/whatif";
 import { netWorthSeries } from "../lib/aggregations";
+import { CardHeader } from "../components/CardHeader";
+import { HeadCell } from "../components/table/TableParts";
+import { cellClass } from "../components/table/tableKit";
 import { formatMoney, formatPct } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -244,54 +247,55 @@ export function WhatIfPage() {
         {/* Outputs */}
         <div className="space-y-4">
           {/* Compare scenarios */}
-          <div className="card-tray card-pad">
-            <div className="font-semibold mb-3">Сравнение</div>
-            <table className="w-full text-base">
+          <div className="card-tray px-4 py-3">
+            <CardHeader title="Сравнение" />
+            {/* Две строки сценария — порядок метрик и есть смысл, сортировать нечего. */}
+            <table className="w-full table-fixed">
               <thead>
                 <tr>
-                  <th className="table-th">Метрика</th>
-                  <th className="table-th text-right">Сейчас</th>
-                  <th className="table-th text-right">Если так</th>
+                  <HeadCell type="text" label="Метрика" />
+                  <HeadCell type="money" label="Сейчас" width="9.5rem" />
+                  <HeadCell type="main" label="Если так" width="9.5rem" />
                 </tr>
               </thead>
-              <tbody className="tabular-nums">
-                <tr className="align-middle">
-                  <td className="table-td">Доход / мес</td>
-                  <td className="table-td text-right">
+              <tbody>
+                <tr>
+                  <td className={cellClass("text")}>Доход / мес</td>
+                  <td className={cellClass("money", { muted: true })}>
                     {formatMoney(baseScenario.avgIncome, base)}
                   </td>
-                  <td className="table-td text-right">
-                    {formatMoney(out.newIncome, base)}
-                  </td>
+                  <td className={cellClass("main")}>{formatMoney(out.newIncome, base)}</td>
                 </tr>
-                <tr className="align-middle">
-                  <td className="table-td">Расход / мес</td>
-                  <td className="table-td text-right">
+                <tr>
+                  <td className={cellClass("text")}>Расход / мес</td>
+                  <td className={cellClass("money", { muted: true })}>
                     {formatMoney(baseScenario.avgExpense, base)}
                   </td>
-                  <td className="table-td text-right">
-                    {formatMoney(out.newExpense, base)}
-                  </td>
+                  <td className={cellClass("main")}>{formatMoney(out.newExpense, base)}</td>
                 </tr>
-                <tr className="align-middle">
-                  <td className="table-td">Сбережения / мес</td>
-                  <td className="table-td text-right">
+                <tr>
+                  <td className={cellClass("text")}>Сбережения / мес</td>
+                  <td className={cellClass("money", { muted: true })}>
                     {formatMoney(baseScenario.avgSavings, base)}
                   </td>
+                  {/* Цвет — только у итога сценария: стало лучше или хуже, чем сейчас. */}
                   <td
-                    className={`table-td text-right font-semibold ${out.newSavings > baseScenario.avgSavings ? "text-income" : out.newSavings < baseScenario.avgSavings ? "text-expense" : ""}`}
+                    className={cellClass("main", {
+                      tone:
+                        out.newSavings > baseScenario.avgSavings
+                          ? "income"
+                          : out.newSavings < baseScenario.avgSavings
+                            ? "expense"
+                            : "neutral",
+                    })}
                   >
                     {formatMoney(out.newSavings, base)}
                   </td>
                 </tr>
-                <tr className="align-middle">
-                  <td className="table-td">Норма сбережений</td>
-                  <td className="table-td text-right">
-                    {formatPct(baseScenario.savingsRate, 0)}
-                  </td>
-                  <td className="table-td text-right font-semibold">
-                    {formatPct(out.newRate, 0)}
-                  </td>
+                <tr>
+                  <td className={cellClass("text")}>Норма сбережений</td>
+                  <td className={cellClass("pct")}>{formatPct(baseScenario.savingsRate, 0)}</td>
+                  <td className={cellClass("main")}>{formatPct(out.newRate, 0)}</td>
                 </tr>
               </tbody>
             </table>

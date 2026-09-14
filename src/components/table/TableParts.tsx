@@ -27,6 +27,37 @@ export interface HeadSort {
 }
 
 /**
+ * Подпись сортируемой колонки — кнопка с подписью и значком. Одна на шапки
+ * таблиц и списков-мер: вид и поведение сортировки в продукте одни.
+ */
+export function SortButton({
+  label,
+  sort,
+  right = false,
+}: {
+  label: ReactNode;
+  sort: HeadSort;
+  /** Колонка справа: значок перед подписью, подпись — над краем чисел. */
+  right?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={sort.onToggle}
+      className={clsx(
+        "inline-flex items-center gap-1 min-w-0 rounded transition-colors duration-200 hover:text-text",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+        right && "flex-row-reverse",
+        sort.active && "text-accent hover:text-accent"
+      )}
+    >
+      <span className="truncate">{label}</span>
+      <SortIcon active={sort.active} dir={sort.dir} />
+    </button>
+  );
+}
+
+/**
  * Ячейка шапки. Выравнивание — по типу колонки, как у значений под ней.
  *
  * У колонки справа значок стоит ПЕРЕД подписью: иначе правый край подписи
@@ -73,19 +104,7 @@ export function HeadCell({
       >
         {lead}
         {sort ? (
-          <button
-            type="button"
-            onClick={sort.onToggle}
-            className={clsx(
-              "inline-flex items-center gap-1 min-w-0 rounded transition-colors duration-200 hover:text-text",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-              right && "flex-row-reverse",
-              sort.active && "text-accent hover:text-accent"
-            )}
-          >
-            <span className="truncate">{label}</span>
-            <SortIcon active={sort.active} dir={sort.dir} />
-          </button>
+          <SortButton label={label} sort={sort} right={right} />
         ) : (
           <span className="truncate">{label}</span>
         )}
@@ -127,11 +146,14 @@ export function ExpandChevron({
   open,
   onToggle,
   label,
+  tabIndex,
 }: {
   open: boolean;
   onToggle?: () => void;
   /** Что раскрывается — для скринридера. Без обработчика шеврон просто значок. */
   label?: string;
+  /** `-1` — для копии шапки, которую не должен обходить Tab. */
+  tabIndex?: number;
 }) {
   const icon = (
     <ChevronDown
@@ -150,6 +172,7 @@ export function ExpandChevron({
       aria-expanded={open}
       aria-label={label}
       title={label}
+      tabIndex={tabIndex}
       className="inline-flex shrink-0 -m-0.5 p-0.5 rounded-full text-muted transition-colors hover:text-accent hover:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       {icon}

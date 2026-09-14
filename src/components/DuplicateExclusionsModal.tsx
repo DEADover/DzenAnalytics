@@ -1,3 +1,4 @@
+import { DataTable } from "./DataTable";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ShieldOff, X, Search, Trash2 } from "lucide-react";
@@ -109,47 +110,74 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
               По запросу ничего не найдено.
             </div>
           ) : (
-            <table className="w-full text-base">
-              <thead>
-                <tr>
-                  <th className="table-th">Получатель</th>
-                  <th className="table-th">Тип</th>
-                  <th className="table-th">Категория</th>
-                  <th className="table-th text-right">Сумма</th>
-                  <th className="table-th text-right whitespace-nowrap">Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((r) => (
-                  <tr key={r.signature} className="align-middle">
-                    <td className="table-td max-w-[240px] truncate" title={r.payee || "Без получателя"}>
-                      {r.payee || "Без получателя"}
-                    </td>
-                    <td className="table-td text-muted whitespace-nowrap capitalize">{kindLabel(r.kind)}</td>
-                    <td className="table-td max-w-[200px] truncate text-muted" title={r.category || ""}>
-                      {r.category || "—"}
-                    </td>
-                    <td className="table-td text-right tabular-nums whitespace-nowrap">
-                      {formatMoney(r.amount, r.currency)}
-                    </td>
-                    <td className="table-td text-right">
-                      <button
-                        onClick={() => remove(r.signature)}
-                        className="p-1 text-muted hover:text-expense shrink-0"
-                        title="Удалить правило — снова проверять эту группу"
-                        aria-label="Удалить правило"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable<(typeof list)[number]>
+              bare
+              fixed
+              exportable={false}
+              data={list}
+              rowKey={(r) => r.signature}
+              defaultSortKey="payee"
+              columns={[
+                {
+                  key: "payee",
+                  type: "text",
+                  label: "Получатель",
+                  sortValue: (r) => r.payee || "",
+                  render: (r) => r.payee || "Без получателя",
+                },
+                {
+                  key: "kind",
+                  type: "text",
+                  muted: true,
+                  width: "7rem",
+                  label: "Тип",
+                  sortValue: (r) => kindLabel(r.kind),
+                  render: (r) => capitalizeFirst(kindLabel(r.kind)),
+                },
+                {
+                  key: "category",
+                  type: "text",
+                  muted: true,
+                  width: "12rem",
+                  label: "Категория",
+                  sortValue: (r) => r.category || "",
+                  render: (r) => r.category || "—",
+                },
+                {
+                  key: "amount",
+                  type: "money",
+                  width: "8rem",
+                  label: "Сумма",
+                  sortValue: (r) => r.amount,
+                  render: (r) => formatMoney(r.amount, r.currency),
+                },
+                {
+                  key: "actions",
+                  type: "actions",
+                  width: "6rem",
+                  label: "Действия",
+                  render: (r) => (
+                    <button
+                      onClick={() => remove(r.signature)}
+                      className="btn-icon-danger"
+                      title="Удалить правило — снова проверять эту группу"
+                      aria-label="Удалить правило"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  ),
+                },
+              ]}
+            />
           )}
         </div>
       </div>
     </div>,
     document.body
   );
+}
+
+/** «расход» → «Расход»: вид операции стоит в ячейке самостоятельной подписью. */
+function capitalizeFirst(text: string): string {
+  return text ? text[0].toUpperCase() + text.slice(1) : text;
 }

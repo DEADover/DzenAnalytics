@@ -282,7 +282,16 @@ export function DataTable<T>({
                   <Checkbox
                     checked={selectedCount > 0 && selectedCount === allKeys.length}
                     indeterminate={selectedCount > 0}
-                    onChange={(on) => selection.onChange(on ? new Set(allKeys) : new Set())}
+                    // Чекбокс шапки отмечает и снимает только строки этой таблицы:
+                    // выбор может быть общим на несколько таблиц (группы дубликатов).
+                    onChange={(on) => {
+                      const next = new Set(selection.selected);
+                      for (const k of allKeys) {
+                        if (on) next.add(k);
+                        else next.delete(k);
+                      }
+                      selection.onChange(next);
+                    }}
                     label={selection.label ?? "Выбрать все строки"}
                   />
                 </th>

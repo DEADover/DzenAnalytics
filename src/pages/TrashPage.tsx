@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, RotateCcw, Undo2, Info } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
-import { useDisplayStore } from "../store/useDisplayStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDeletedPayloadsStore } from "../store/useDeletedPayloadsStore";
@@ -11,15 +10,10 @@ import { pluralRu } from "../lib/plural";
 import { applyEdits } from "../lib/applyEdits";
 import { loadZenCache, cacheToDiffResponse } from "../lib/zenmoneyCache";
 import { mapZenmoneyDiff } from "../lib/zenmoneyMap";
-import {
-  formatMoney,
-  formatDate,
-  formatNum,
-  displayPayee,
-  secondaryPayee,
-} from "../lib/format";
-import { kindColorClass, kindGlyphClass, kindSignGlyph } from "../lib/txKindStyle";
-import { CategoryDot } from "../components/CategoryDot";
+import { formatDate, formatNum, displayPayee } from "../lib/format";
+import { operationTone } from "../lib/txKindStyle";
+import { DataTable } from "../components/DataTable";
+import { OperationAmount, OperationCategory, OperationPayee } from "../components/operations/OperationCells";
 import { PageHeader } from "../components/PageHeader";
 import type { Transaction } from "../types";
 
@@ -38,7 +32,6 @@ import type { Transaction } from "../types";
 export function TrashPage() {
   const transactionsRaw = useDataStore((s) => s.transactionsRaw);
   const rates = useDataStore((s) => s.rates);
-  const statementLine = useDisplayStore((s) => s.statementLine);
   const restoreTransaction = useDataStore((s) => s.restoreTransaction);
   const restoreTransactionMany = useDataStore((s) => s.restoreTransactionMany);
   const purgeDeleted = useDataStore((s) => s.purgeDeleted);
@@ -184,88 +177,87 @@ export function TrashPage() {
         </div>
       )}
 
-      <div className="card-tray card-pad">
-        <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold flex items-center gap-2">
-            <Trash2 className="w-4 h-4" />
-            Удалённые операции ({formatNum(deletedTxs.length)})
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-base">
-            <thead>
-              <tr>
-                <th className="table-th">Дата</th>
-                <th className="table-th">Категория</th>
-                <th className="table-th">Получатель</th>
-                <th className="table-th">Комментарий</th>
-                <th className="table-th">Счёт</th>
-                <th className="table-th text-right">Сумма</th>
-                <th className="table-th text-right">Действие</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deletedTxs.map((t) => {
-                const primary = displayPayee(t) || "";
-                const secondary = statementLine ? secondaryPayee(t, "statement") : null;
-                return (
-                  <tr key={t.id} className="align-middle">
-                    <td className="table-td whitespace-nowrap text-muted">
-                      {formatDate(t.date, "full")}
-                    </td>
-                    <td className="table-td max-w-[180px]">
-                      <div className="truncate flex items-center gap-2" title={t.categoryFull}>
-                        <CategoryDot category={t.category} size="w-5 h-5" />
-                        <span className="truncate">{t.category || "—"}</span>
-                      </div>
-                      {t.subcategory && (
-                        <div className="text-[0.85em] text-muted truncate pl-7">
-                          {t.subcategory}
-                        </div>
-                      )}
-                    </td>
-                    <td className="table-td max-w-[180px]">
-                      <div className="truncate text-muted" title={primary}>
-                        {primary || "—"}
-                      </div>
-                      {secondary && (
-                        <div className="truncate text-[0.85em] text-text" title={secondary}>
-                          {secondary}
-                        </div>
-                      )}
-                    </td>
-                    <td className="table-td max-w-[260px] text-muted">
-                      <div className="line-clamp-2" title={t.comment}>
-                        {t.comment || ""}
-                      </div>
-                    </td>
-                    <td className="table-td max-w-[140px] truncate text-muted" title={t.account}>
-                      {t.account}
-                    </td>
-                    <td
-                      className={`table-td text-right tabular-nums font-medium whitespace-nowrap ${kindColorClass(t.kind)}`}
-                    >
-                      <span className={kindGlyphClass(t.kind)}>{kindSignGlyph(t.kind)}</span>
-                      {formatMoney(t.amount, t.currency)}
-                    </td>
-                    <td className="table-td text-right">
-                      <button
-                        onClick={() => restoreTransaction(t.id)}
-                        className="btn-ghost text-xs !py-1 whitespace-nowrap"
-                        title="Восстановить операцию"
-                        aria-label="Восстановить операцию"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        Восстановить
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable<Transaction>
+        icon={Trash2}
+        title={`Удалённые операции (${formatNum(deletedTxs.length)})`}
+        data={deletedTxs}
+        rowKey={(t) => t.id}
+        defaultSortKey="date"
+        exportName="trash"
+        fixed
+        minWidth="60rem"
+        columns={[
+          {
+            key: "date",
+            type: "date",
+            width: "7rem",
+            label: "Дата",
+            sortValue: (t) => t.date,
+            render: (t) => formatDate(t.date, "full"),
+          },
+          {
+            key: "category",
+            type: "text",
+            width: "15rem",
+            label: "Категория",
+            sortValue: (t) => t.categoryFull,
+            cellTitle: () => "",
+            render: (t) => <OperationCategory tx={t} edited={false} />,
+          },
+          {
+            key: "payee",
+            type: "text",
+            width: "13rem",
+            label: "Получатель",
+            sortValue: (t) => displayPayee(t),
+            cellTitle: () => "",
+            render: (t) => <OperationPayee tx={t} />,
+          },
+          {
+            key: "comment",
+            type: "text",
+            muted: true,
+            label: "Комментарий",
+            sortValue: (t) => t.comment || "",
+            render: (t) => t.comment || "",
+          },
+          {
+            key: "account",
+            type: "text",
+            muted: true,
+            width: "10rem",
+            label: "Счёт",
+            sortValue: (t) => t.account,
+            render: (t) => t.account,
+          },
+          {
+            key: "amount",
+            type: "main",
+            tone: operationTone,
+            width: "10rem",
+            label: "Сумма",
+            sortValue: (t) => t.amountBase,
+            render: (t) => <OperationAmount tx={t} />,
+          },
+          {
+            key: "restore",
+            type: "actions",
+            width: "9.5rem",
+            label: "Действие",
+            render: (t) => (
+              <button
+                onClick={() => restoreTransaction(t.id)}
+                className="btn-ghost text-xs whitespace-nowrap -my-2"
+                title="Восстановить операцию"
+                aria-label="Восстановить операцию"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Восстановить
+              </button>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

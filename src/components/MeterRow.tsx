@@ -1,3 +1,6 @@
+import { SortButton } from "./table/TableParts";
+import type { SortDir } from "./table/tableKit";
+
 /**
  * Промежуток между именем и колонками — общий у строки и у её шапки. Разойдись
  * они хоть на четыре пикселя, подписи колонок встанут не над своими числами.
@@ -11,7 +14,10 @@ export interface MeterCell {
   text: string;
   /** Класс ширины — общий у ячейки и у её заголовка, иначе колонки разъедутся. */
   width: string;
+  /** Второстепенное число — приглушённо, того же размера. Главное — 500. */
   muted?: boolean;
+  /** Ключ сортировки — у колонки шапки, если список сортируется по ней. */
+  sortKey?: string;
 }
 
 /**
@@ -73,7 +79,7 @@ export function MeterRow({
     <span
       key={i}
       className={`relative tabular-nums whitespace-nowrap shrink-0 text-right ${c.width} ${
-        c.muted ? "text-[11px] text-muted" : "font-medium"
+        c.muted ? "text-muted" : "font-medium"
       }`}
     >
       {c.text}
@@ -115,7 +121,7 @@ export function MeterRow({
             style={{ width }}
           />
           {rank !== undefined && (
-            <span className="relative text-[11px] text-muted tabular-nums w-4 shrink-0">
+            <span className="relative text-muted tabular-nums w-5 shrink-0">
               {rank}
             </span>
           )}
@@ -128,7 +134,7 @@ export function MeterRow({
       </>
     );
   const cls = [
-    "relative w-full flex items-center text-sm text-left rounded-md px-2 py-1.5",
+    "meter-list relative w-full flex items-center text-left rounded-md px-2 py-1.5",
     bar === "track" ? METER_GAP.track : METER_GAP.underlay,
   ].join(" ");
   if (!onClick) return <div className={cls}>{inner}</div>;
@@ -149,24 +155,41 @@ export function MeterHead({
   columns,
   lead,
   bar = "underlay",
+  nameLabel,
+  sort,
+  onSort,
 }: {
   columns: MeterCell[];
   /** Ширина места под номер или значок слева — как у строк списка. */
   lead?: string;
   /** Тот же режим, что у строк: от него зависит промежуток до колонок. */
   bar?: "underlay" | "track";
+  /** Подпись колонки имени. */
+  nameLabel?: string;
+  /** Текущая сортировка списка; колонки с `sortKey` становятся кнопками. */
+  sort?: { key: string; dir: SortDir };
+  onSort?: (key: string) => void;
 }) {
+  const sortOf = (key?: string) =>
+    key && sort && onSort
+      ? { active: sort.key === key, dir: sort.dir, onToggle: () => onSort(key) }
+      : undefined;
   return (
-    <div
-      className={`flex items-center ${METER_GAP[bar]} px-2 pb-1 text-[10px] uppercase tracking-wide text-muted`}
-    >
-      {lead !== "" && <span className={`shrink-0 ${lead ?? "w-4"}`} />}
-      <span className="flex-1 min-w-0" />
-      {columns.map((c, i) => (
-        <span key={i} className={`shrink-0 text-right ${c.width}`}>
-          {c.text}
-        </span>
-      ))}
+    // Поля 6 и 5 с чертой снизу — 32 px, как строка списка.
+    <div className={`list-head flex items-center ${METER_GAP[bar]} px-2 pt-1.5 pb-[5px] mb-1`}>
+      {lead !== "" && <span className={`shrink-0 ${lead ?? "w-5"}`} />}
+      <span className="flex-1 min-w-0 flex">
+        {nameLabel &&
+          (sortOf("name") ? <SortButton label={nameLabel} sort={sortOf("name")!} /> : nameLabel)}
+      </span>
+      {columns.map((c, i) => {
+        const s = sortOf(c.sortKey);
+        return (
+          <span key={i} className={`shrink-0 flex justify-end ${c.width}`}>
+            {s ? <SortButton label={c.text} sort={s} right /> : c.text}
+          </span>
+        );
+      })}
     </div>
   );
 }

@@ -32,6 +32,7 @@ import { useZenmoneyStore, getLiveAccountsFromCache } from "../store/useZenmoney
 import { confirm, useConfirmStore } from "../store/useConfirmStore";
 import { pluralRu } from "../lib/plural";
 import { EditTransactionModal } from "../components/EditTransactionModal";
+import { Checkbox } from "../components/Checkbox";
 import { OperationActions, OperationAmount, OperationCategory, OperationPayee } from "../components/operations/OperationCells";
 import { TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
@@ -983,19 +984,15 @@ function HeaderRow({
   const template = grouped ? GRID_COLS_NODATE : GRID_COLS_FULL;
   return (
     <div
-      className="grid items-center gap-3 px-3 py-2 border-b border-border bg-panel text-[length:calc(var(--tbl-font)-0.125rem)] uppercase tracking-wider text-muted font-medium sticky top-0 z-20"
+      className="list-head grid items-center gap-3 px-3 py-2 bg-panel sticky top-0 z-20"
       style={{ gridTemplateColumns: template }}
     >
-      <input
-        type="checkbox"
-        className="accent-accent w-4 h-4"
+      <Checkbox
         checked={allSelected}
-        ref={(el) => {
-          if (el) el.indeterminate = someSelected;
-        }}
+        indeterminate={someSelected}
         onChange={onToggleAll}
         title="Выбрать всё (под фильтрами)"
-        aria-label="Выбрать все операции"
+        label="Выбрать все операции"
       />
       {!grouped && <div>Дата</div>}
       <div>Категория</div>
@@ -1202,13 +1199,11 @@ function Row({
       }`}
       style={{ gridTemplateColumns: template }}
     >
-      <input
-        type="checkbox"
-        className="accent-accent w-4 h-4"
+      <Checkbox
         checked={selected}
-        onClick={(e) => e.stopPropagation()}
+        stopPropagation
         onChange={onToggleSelect}
-        aria-label="Выбрать операцию"
+        label="Выбрать операцию"
       />
       {!hideDate && (
         <div className="text-muted tabular-nums whitespace-nowrap">

@@ -52,6 +52,7 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
+import { nextSort, sortRows, type SortState } from "../components/table/tableKit";
 
 const INCOME = "#10B981";
 const EXPENSE = "#EF4444";
@@ -646,7 +647,7 @@ function YearBars({
  */
 /** Колонки профиля недели: у дня нет числа операций, только доля и сумма. */
 const WEEK_COLUMNS: MeterCell[] = [
-  { text: "Доля", width: "w-11" },
+  { text: "Доля", width: "w-14" },
   // Полной суммой, а не «490,3 тыс. ₽»: сокращение экономило десяток пикселей
   // и отнимало у числа точность там, где место под него есть.
   { text: "Расход", width: "w-28" },
@@ -685,8 +686,8 @@ function WeekProfile({
             share={d.total / max}
             strong={d.total > 0 && d.total === max}
             cells={[
-              { text: sum > 0 ? formatPct(d.total / sum, 0) : "—", width: "w-11", muted: true },
-              { text: formatMoney(d.total, base), width: "w-28" },
+              { text: sum > 0 ? formatPct(d.total / sum, 0) : "—", width: WEEK_COLUMNS[0].width, muted: true },
+              { text: formatMoney(d.total, base), width: WEEK_COLUMNS[1].width },
             ]}
             barCls="bg-accent"
             onClick={d.total > 0 ? () => onDay(i, d.dative) : undefined}
@@ -918,9 +919,9 @@ function Record({
 
 /** Колонки топов: доля, операции, сумма — ширины общие у шапки и строк. */
 const TOP_COLUMNS: MeterCell[] = [
-  { text: "Доля", width: "w-11" },
-  { text: "Опер.", width: "w-10" },
-  { text: "Сумма", width: "w-24" },
+  { text: "Доля", width: "w-14", sortKey: "share" },
+  { text: "Опер.", width: "w-14", sortKey: "count" },
+  { text: "Сумма", width: "w-28", sortKey: "amount" },
 ];
 
 function TopList({
@@ -942,23 +943,36 @@ function TopList({
   barCls: string;
   onOpen: (name: string) => void;
 }) {
+  // Место в топе — по сумме и не меняется, когда список пересортировали.
+  const [sort, setSort] = useState<SortState>({ key: "amount", dir: "desc" });
+  const ranked = items.map((item, i) => ({ ...item, rank: i + 1 }));
+  const valueOf = (key: string | undefined) => (item: (typeof ranked)[number]) =>
+    key === "name" ? item.name : key === "count" ? item.count : item.amount;
+  const sorted = sortRows(ranked, valueOf(sort.key), sort.dir);
   return (
     <SectionCard icon={icon} title={title} info={info}>
       {items.length === 0 ? (
         <div className="text-sm text-muted py-6 text-center">Расходов за год нет.</div>
       ) : (
         <>
-          <MeterHead columns={TOP_COLUMNS} />
+          <MeterHead
+            columns={TOP_COLUMNS}
+            nameLabel="Название"
+            sort={sort.key ? { key: sort.key, dir: sort.dir } : undefined}
+            onSort={(key) =>
+              setSort((cur) => nextSort(cur, key, key === "name" ? "text" : "money"))
+            }
+          />
           <div className="space-y-0.5">
-            {items.map((item, i) => {
+            {sorted.map((item) => {
               const share = total > 0 ? item.amount / total : 0;
               return (
                 <MeterRow
                   key={item.name}
-                  rank={i + 1}
+                  rank={item.rank}
                   label={item.name}
                   share={share}
-                  strong={i === 0}
+                  strong={item.rank === 1}
                   cells={[
                     { text: formatPct(share, 1), width: TOP_COLUMNS[0].width, muted: true },
                     { text: formatNum(item.count), width: TOP_COLUMNS[1].width, muted: true },

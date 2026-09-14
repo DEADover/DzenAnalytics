@@ -45,6 +45,9 @@ import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
+import { Checkbox } from "../components/Checkbox";
+import { HeadCell } from "../components/table/TableParts";
+import { cellClass } from "../components/table/tableKit";
 import { Popover } from "../components/Popover";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
@@ -616,7 +619,7 @@ export function RulesPage() {
           </div>
         ) : (
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full" style={{ fontSize: "var(--tbl-font)" }}>
+            <table className="w-full">
               <thead>
                 <tr>
                   {/* Сначала СУТЬ правила, потом переключатели: читают строку
@@ -633,28 +636,23 @@ export function RulesPage() {
                       шапке заодно отмечает и снимает все разом. */}
                   <th className="table-th w-12 text-center">
                     <Tooltip content={PICK_HELP} placement="bottom">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={allPicked}
-                        ref={(el) => {
-                          if (el)
-                            el.indeterminate = !allPicked && selectedIds.size > 0;
-                        }}
+                        indeterminate={selectedIds.size > 0}
                         disabled={enabledIds.length === 0}
-                        onChange={(e) =>
-                          setPicked(e.target.checked ? new Set(enabledIds) : new Set())
-                        }
-                        className="accent-accent w-4 h-4 align-middle disabled:opacity-40"
-                        aria-label={allPicked ? "Снять все правила" : "Отметить все правила"}
+                        onChange={(on) => setPicked(on ? new Set(enabledIds) : new Set())}
+                        label={allPicked ? "Снять все правила" : "Отметить все правила"}
                       />
                     </Tooltip>
                   </th>
-                  <th className="table-th w-20">№</th>
-                  <th className="table-th w-full">Правило</th>
-                  <th className="table-th w-72 min-w-[18rem]">Что меняет</th>
-                  <th className="table-th w-52 text-center">Режим</th>
-                  <th className="table-th w-28 text-center">Совпадений</th>
-                  <th className="table-th text-center w-24">Действия</th>
+                  {/* Порядок правил — это порядок, в котором они срабатывают:
+                      его задают перетаскиванием, поэтому сортировки у таблицы нет. */}
+                  <HeadCell type="count" label="№" width="6.5rem" />
+                  <HeadCell type="text" label="Правило" className="w-full" />
+                  <HeadCell type="text" label="Что меняет" width="18rem" />
+                  <HeadCell type="mark" label="Режим" width="13rem" />
+                  <HeadCell type="count" label="Совпадений" width="7rem" />
+                  <HeadCell type="actions" label="Действия" width="6rem" />
                 </tr>
               </thead>
               <tbody>
@@ -701,21 +699,19 @@ export function RulesPage() {
                       }}
                       onDoubleClick={() => setEditing(rule)}
                       className={clsx(
-                        "align-middle cursor-pointer group hover:bg-panel2/50",
+                        "cursor-pointer group hover:bg-panel2/50",
                         checked && "bg-accent/5",
                         !rule.enabled && "opacity-60",
                         dragId === rule.id && "opacity-40",
                         dragOver === rule.id && "outline outline-2 -outline-offset-2 outline-accent"
                       )}
                     >
-                      <td className="table-td text-center">
-                        <input
-                          type="checkbox"
+                      <td className={cellClass("mark")}>
+                        <Checkbox
                           checked={checked}
                           disabled={!rule.enabled}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => togglePicked(rule.id, e.target.checked)}
-                          className="accent-accent w-4 h-4 align-middle disabled:opacity-40"
+                          stopPropagation
+                          onChange={(on) => togglePicked(rule.id, on)}
                           title={
                             !rule.enabled
                               ? "Режим «Выкл» — правило не сработает, прогонять нечего"
@@ -723,11 +719,11 @@ export function RulesPage() {
                                 ? "Не прогонять это правило по кнопке «Проверить и применить»"
                                 : "Прогнать это правило по кнопке «Проверить и применить»"
                           }
-                          aria-label="Прогнать это правило"
+                          label="Прогнать это правило"
                         />
                       </td>
-                      <td className="table-td">
-                        <div className="flex items-center gap-1">
+                      <td className={cellClass("count")}>
+                        <div className="flex items-center justify-center gap-1">
                           {/* Ручка — подсказка, что строку можно тащить. Тянется
                               вся строка, но без видимого захвата об этом никто
                               не догадается. */}
@@ -735,33 +731,33 @@ export function RulesPage() {
                             className="w-3.5 h-3.5 text-muted/50 group-hover:text-muted cursor-grab shrink-0"
                             aria-hidden
                           />
-                          <span className="tabular-nums text-muted w-5">{idx + 1}</span>
-                          <span className="flex flex-col">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void move(rule.id, -1).then(reapplyRules);
-                              }}
-                              disabled={idx === 0}
-                              className="text-muted hover:text-accent disabled:opacity-30"
-                              title="Выше"
-                              aria-label="Поднять правило"
-                            >
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void move(rule.id, 1).then(reapplyRules);
-                              }}
-                              disabled={idx === rules.length - 1}
-                              className="text-muted hover:text-accent disabled:opacity-30"
-                              title="Ниже"
-                              aria-label="Опустить правило"
-                            >
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
-                          </span>
+                          <span className="w-5 text-center">{idx + 1}</span>
+                          {/* Стрелки в строку, а не столбиком: столбик из двух
+                              значков делал строку выше стандартных 37 px. */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void move(rule.id, -1).then(reapplyRules);
+                            }}
+                            disabled={idx === 0}
+                            className="text-muted hover:text-accent disabled:opacity-30"
+                            title="Выше"
+                            aria-label="Поднять правило"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void move(rule.id, 1).then(reapplyRules);
+                            }}
+                            disabled={idx === rules.length - 1}
+                            className="text-muted hover:text-accent disabled:opacity-30"
+                            title="Ниже"
+                            aria-label="Опустить правило"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                       {/* `max-w-0` в паре с `w-full` у заголовка — то, что
@@ -770,20 +766,24 @@ export function RulesPage() {
                           экрана. Правило без своего имени описывается фразой из
                           собственных условий, и она бывает очень длинной;
                           целиком её показывает подсказка. */}
-                      <td className="table-td max-w-0">
-                        <div
-                          className="truncate font-medium group-hover:text-accent"
-                          title={describeRule(rule)}
-                        >
-                          {describeRule(rule) || "Правило не дописано"}
+                      <td className={cellClass("text", { className: "max-w-0" })}>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {/* Пустое правило помечено значком с подсказкой, а не
+                              второй строкой: строка таблицы остаётся одной. */}
+                          {!ruleHasEffect(rule) && (
+                            <Tooltip content="Ни одно действие не заполнено — правило ничего не делает">
+                              <AlertTriangle
+                                className="w-3.5 h-3.5 shrink-0 text-warn"
+                                aria-label="Правило ничего не делает"
+                              />
+                            </Tooltip>
+                          )}
+                          <span className="truncate group-hover:text-accent" title={describeRule(rule)}>
+                            {describeRule(rule) || "Правило не дописано"}
+                          </span>
                         </div>
-                        {!ruleHasEffect(rule) && (
-                          <div className="text-xs text-warn mt-0.5">
-                            Ни одно действие не заполнено — правило ничего не делает
-                          </div>
-                        )}
                       </td>
-                      <td className="table-td whitespace-nowrap">
+                      <td className={cellClass("text")}>
                         <div className="flex items-center gap-1">
                           {targets.length === 0 ? (
                             <span className="text-muted">—</span>
@@ -804,10 +804,7 @@ export function RulesPage() {
                           )}
                         </div>
                       </td>
-                      <td
-                        className="table-td text-center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
+                      <td className={cellClass("mark")} onClick={(e) => e.stopPropagation()}>
                         {/* Место под значок отведено ЗАРАНЕЕ и не зависит от
                             режима: без этого «Выкл» ужимал колонку, «Авто ·
                             Каждые 30 мин.» растягивал, и соседние столбцы
@@ -821,7 +818,7 @@ export function RulesPage() {
                           />
                         </div>
                       </td>
-                      <td className="table-td text-center tabular-nums">
+                      <td className={cellClass("count")}>
                         {count > 0 ? (
                           <button
                             onClick={(e) => {
@@ -837,14 +834,14 @@ export function RulesPage() {
                           <span className="text-muted px-1">—</span>
                         )}
                       </td>
-                      <td className="table-td">
-                        <div className="flex items-center justify-center gap-1">
+                      <td className={cellClass("actions")}>
+                        <div className="flex items-center justify-center gap-0.5">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setEditing(rule);
                             }}
-                            className="btn-ghost !p-1.5 text-muted hover:text-accent"
+                            className="btn-icon"
                             title="Изменить правило"
                             aria-label="Изменить правило"
                           >
@@ -855,7 +852,7 @@ export function RulesPage() {
                               e.stopPropagation();
                               void removeRule(rule);
                             }}
-                            className="btn-ghost !p-1.5 text-muted hover:text-expense"
+                            className="btn-icon-danger"
                             title="Удалить правило"
                             aria-label="Удалить правило"
                           >

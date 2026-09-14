@@ -2,8 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Table as TableIcon,
   Download,
-  ChevronRight,
-  ChevronDown,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useDataStore } from "../store/useDataStore";
@@ -25,6 +23,8 @@ import {
   type XlsxNumberStyle,
 } from "../lib/categoryReportXlsx";
 import { ReportExportModal } from "../components/ReportExportModal";
+import { ExpandChevron, TreeElbow } from "../components/table/TableParts";
+import { treeIndent } from "../components/table/tableKit";
 import { InfoPopover } from "../components/InfoPopover";
 import { formatMoney } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
@@ -322,24 +322,20 @@ export function ReportPage() {
             стоят шевроны отдельных категорий, и не занимает отдельную строку
             над таблицей. */}
         {hasSubcategories ? (
-          <button
-            onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(allParents))}
-            className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-text"
-            title={allCollapsed ? "Развернуть все" : "Свернуть все"}
-            aria-label={allCollapsed ? "Развернуть все" : "Свернуть все"}
-            aria-expanded={!allCollapsed}
-            tabIndex={forClone ? -1 : undefined}
+          <span
+            className="flex items-center gap-1.5"
             // Мышь фокусирует кнопку даже с `tabIndex={-1}`, а фокус внутри
-            // `aria-hidden`-поддерева — это то, чего быть не должно.
+            // `aria-hidden`-поддерева двойника — это то, чего быть не должно.
             onMouseDown={forClone ? (e) => e.preventDefault() : undefined}
           >
-            {allCollapsed ? (
-              <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden />
-            ) : (
-              <ChevronDown className="w-3.5 h-3.5 shrink-0" aria-hidden />
-            )}
+            <ExpandChevron
+              open={!allCollapsed}
+              onToggle={() => setCollapsed(allCollapsed ? new Set() : new Set(allParents))}
+              label={allCollapsed ? "Развернуть все" : "Свернуть все"}
+              tabIndex={forClone ? -1 : undefined}
+            />
             Категория
-          </button>
+          </span>
         ) : (
           "Категория"
         )}
@@ -478,7 +474,7 @@ export function ReportPage() {
               onScroll={syncBack}
             >
               <table
-                className="text-sm border-separate border-spacing-0"
+                className="border-separate border-spacing-0"
                 style={{
                   tableLayout: "fixed",
                   width: tableWidth > 0 ? `${tableWidth}px` : undefined,
@@ -506,7 +502,7 @@ export function ReportPage() {
           >
           <table
             ref={tableRef}
-            className="w-full text-sm border-separate border-spacing-0"
+            className="w-full border-separate border-spacing-0"
           >
             <thead>
               <tr>{headerCells(false)}</tr>
@@ -520,8 +516,9 @@ export function ReportPage() {
                 tone="text-income"
                 showTotal={showTotal}
               />
-              {report.income.map((row) => (
+              {report.income.map((row, i, rows) => (
                 <BodyRow
+                  last={rows[i + 1]?.depth !== 1}
                   key={`i-${row.key}`}
                   row={row}
                   base={base}
@@ -545,8 +542,9 @@ export function ReportPage() {
                 tone="text-expense"
                 showTotal={showTotal}
               />
-              {report.expense.map((row) => (
+              {report.expense.map((row, i, rows) => (
                 <BodyRow
+                  last={rows[i + 1]?.depth !== 1}
                   key={`e-${row.key}`}
                   row={row}
                   base={base}
@@ -661,11 +659,14 @@ function BodyRow({
   hidden,
   collapsed,
   hasKids: kids,
+  last,
   showTotal,
   onToggle,
   onCell,
 }: {
   row: ReportRow;
+  /** Последняя подкатегория своего родителя — уголок обрывается на ней. */
+  last: boolean;
   base: string;
   columns: { key: string; label: string }[];
   hidden: boolean;
@@ -677,25 +678,32 @@ function BodyRow({
 }) {
   if (hidden) return null;
   return (
-    <tr className="group hover:bg-panel2/60">
+    <tr className="group hover:bg-panel2/50">
+      {/* Подкатегория — строкой под родителем с уголком и приглушённым именем,
+          как в дереве любой таблицы. Ячейка закреплена слева и непрозрачна:
+          под ней уезжают столбцы при прокрутке вбок. */}
       <td
         className={`table-td sticky left-0 bg-panel group-hover:bg-panel2 z-10 whitespace-nowrap ${
-          row.depth === 1 ? "pl-8 text-muted" : ""
+          row.depth === 1 ? "text-muted" : ""
         }`}
+        style={row.depth === 1 ? { paddingLeft: treeIndent(1) } : undefined}
       >
+        {row.depth === 1 && <TreeElbow depth={1} last={last} />}
         {kids ? (
-          <button
-            className="inline-flex items-center gap-1 hover:text-accent"
-            onClick={onToggle}
-            title={collapsed ? "Развернуть" : "Свернуть"}
-          >
-            {collapsed ? (
-              <ChevronRight className="w-3.5 h-3.5" aria-hidden />
-            ) : (
-              <ChevronDown className="w-3.5 h-3.5" aria-hidden />
-            )}
+          <span className="flex items-center gap-1.5">
+            <ExpandChevron
+              open={!collapsed}
+              onToggle={onToggle}
+              label={collapsed ? "Развернуть" : "Свернуть"}
+            />
             {row.label}
-          </button>
+          </span>
+        ) : row.depth === 0 ? (
+          // Место под шеврон — чтобы имена без подкатегорий стояли в одну линию.
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 shrink-0" aria-hidden />
+            {row.label}
+          </span>
         ) : (
           row.label
         )}

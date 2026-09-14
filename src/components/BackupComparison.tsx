@@ -1,3 +1,5 @@
+import { HeadCell } from "./table/TableParts";
+import { cellClass } from "./table/tableKit";
 import { useState } from "react";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 
@@ -43,17 +45,17 @@ export function BackupComparison() {
         <div className="overflow-hidden">
       <div className="px-4 pb-4 space-y-3">
       <div className="overflow-x-auto -mx-1 px-1">
-        <table className="w-full text-xs border-collapse">
+        <table className="w-full">
           <thead>
-            <tr className="text-left">
+            <tr>
               {/* Колонка подписей — по содержимому: доля от таблицы («26%») на
                   широком экране давала полтысячи пикселей пустоты под «Где
                   лежит». `w-px` + `whitespace-nowrap` сжимает её до подписи.
                   Оставшееся делим поровну: иначе колонки расходятся по длине
                   текста (802 против 534 на 1600 px) и таблицу перекашивает. */}
               <th className="table-th w-px whitespace-nowrap" />
-              <th className="table-th w-1/2">Локальная копия</th>
-              <th className="table-th w-1/2">Облачный снимок</th>
+              <HeadCell type="text" label="Локальная копия" className="w-1/2" />
+              <HeadCell type="text" label="Облачный снимок" className="w-1/2" />
             </tr>
           </thead>
           <tbody>
@@ -104,10 +106,12 @@ function Row({
   cloud: string;
 }) {
   return (
-    <tr className="border-t border-border/60 align-top">
-      <td className="table-td text-muted whitespace-nowrap pr-6">{label}</td>
-      <td className="table-td">{local}</td>
-      <td className="table-td">{cloud}</td>
+    // Сравнение словами, а не данными: ячейки — абзацы, поэтому переносятся и
+    // выравниваются по верху. Шрифт, поля и черты — табличные.
+    <tr>
+      <td className={cellClass("text", { muted: true, className: "whitespace-nowrap align-top pr-6" })}>{label}</td>
+      <td className={cellClass("text", { className: "align-top" })}>{local}</td>
+      <td className={cellClass("text", { className: "align-top" })}>{cloud}</td>
     </tr>
   );
 }

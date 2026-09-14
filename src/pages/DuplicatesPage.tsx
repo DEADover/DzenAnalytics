@@ -7,7 +7,11 @@ import type { TransactionEdit } from "../store/useEditsStore";
 import { useDuplicateExclusionsStore } from "../store/useDuplicateExclusionsStore";
 import { detectDuplicates, type DuplicateGroup } from "../lib/aggregations";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
-import { kindColorClass, kindGlyphClass, kindLabel, kindSignGlyph } from "../lib/txKindStyle";
+import { operationTone } from "../lib/txKindStyle";
+import { pluralRu } from "../lib/plural";
+import type { Transaction } from "../types";
+import { DataTable } from "../components/DataTable";
+import { OperationAmount } from "../components/operations/OperationCells";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { BulkEditModal } from "../components/BulkEditModal";
@@ -58,15 +62,6 @@ export function DuplicatesPage() {
   // ── Bulk selection + edit (global across all duplicate groups) ──────
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
-
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   async function applyBulk(patch: TransactionEdit) {
     const ids = Array.from(selected);
@@ -159,38 +154,17 @@ export function DuplicatesPage() {
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {groups.map((g, i) => {
             const first = g.txs[0];
-            const groupAll = g.txs.length > 0 && g.txs.every((t) => selected.has(t.id));
-            const groupSome = g.txs.some((t) => selected.has(t.id)) && !groupAll;
-            const toggleGroup = () =>
-              setSelected((prev) => {
-                const next = new Set(prev);
-                if (groupAll) g.txs.forEach((t) => next.delete(t.id));
-                else g.txs.forEach((t) => next.add(t.id));
-                return next;
-              });
             return (
-              <div key={i} className="card-tray card-pad">
-                <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
-                  <div className="min-w-0">
-                    <div className="font-medium">
-                      {first.payee || first.categoryFull}
-                    </div>
-                    <div className="text-xs text-muted mt-0.5">
-                      {kindLabel(first.kind).replace(/^./, (c) => c.toUpperCase())} ·{" "}
-                      {first.categoryFull} ·{" "}
-                      {formatMoney(first.amount, first.currency)} ·{" "}
-                      {g.txs.length} копий
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
+              <DataTable<Transaction>
+                key={i}
+                title={`${first.payee || first.categoryFull} · ${formatNum(g.txs.length)} ${pluralRu(g.txs.length, ["копия", "копии", "копий"])}`}
+                actions={
+                  <>
                     <Tooltip content="Это не дубликаты — больше не помечать эту группу">
-                      <button
-                        onClick={() => markNotDuplicates(g)}
-                        className="btn-ghost text-xs"
-                      >
+                      <button onClick={() => markNotDuplicates(g)} className="btn-ghost text-xs">
                         <ShieldOff className="w-3.5 h-3.5" />
                         Не дубликаты
                       </button>
@@ -199,88 +173,63 @@ export function DuplicatesPage() {
                       onClick={() => showDrill(first.payee || first.categoryFull, g.txs, "Дубликаты")}
                       className="btn-ghost text-xs"
                     >
-                      Открыть в Drawer
+                      Открыть в шторке
                     </button>
-                  </div>
-                </div>
-                <table className="w-full text-sm table-fixed">
-                  {/* Shared column template — identical in every group so the
-                      columns line up across all duplicate cards. */}
-                  <colgroup>
-                    <col style={{ width: "36px" }} />
-                    <col style={{ width: "92px" }} />
-                    <col style={{ width: "22%" }} />
-                    <col />
-                    <col style={{ width: "16%" }} />
-                    <col style={{ width: "120px" }} />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th className="table-th w-8">
-                        <input
-                          type="checkbox"
-                          className="accent-accent w-4 h-4 align-middle"
-                          checked={groupAll}
-                          ref={(el) => {
-                            if (el) el.indeterminate = groupSome;
-                          }}
-                          onChange={toggleGroup}
-                          title="Выбрать всю группу"
-                          aria-label="Выбрать все операции группы"
-                        />
-                      </th>
-                      <th className="table-th">Дата</th>
-                      <th className="table-th">Категория</th>
-                      <th className="table-th">Комментарий</th>
-                      <th className="table-th">Счёт</th>
-                      <th className="table-th text-right">Сумма</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.txs.map((t) => {
-                      const isSel = selected.has(t.id);
-                      return (
-                      <tr
-                        key={t.id}
-                        className={isSel ? "bg-accent/5" : "hover:bg-panel2/40"}
-                      >
-                        <td className="table-td w-8">
-                          <input
-                            type="checkbox"
-                            className="accent-accent w-4 h-4 align-middle"
-                            checked={isSel}
-                            onChange={() => toggleSelect(t.id)}
-                            aria-label="Выбрать операцию"
-                          />
-                        </td>
-                        <td className="table-td whitespace-nowrap text-muted">
-                          {formatDate(t.date, "full")}
-                        </td>
-                        <td className="table-td truncate" title={t.categoryFull}>
-                          {t.categoryFull}
-                        </td>
-                        <td
-                          className="table-td truncate text-muted"
-                          title={t.comment}
-                        >
-                          {t.comment}
-                        </td>
-                        <td className="table-td truncate text-muted" title={t.account}>
-                          {t.account}
-                        </td>
-                        <td
-                          className={`table-td text-right tabular-nums whitespace-nowrap ${kindColorClass(t.kind)}`}
-                          title={t.kind === "refund" ? "Возврат — уменьшает расход категории" : undefined}
-                        >
-                          <span className={kindGlyphClass(t.kind)}>{kindSignGlyph(t.kind)}</span>
-                          {formatMoney(t.amount, t.currency)}
-                        </td>
-                      </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                  </>
+                }
+                exportable={false}
+                data={g.txs}
+                rowKey={(t) => t.id}
+                defaultSortKey="date"
+                selection={{ selected, onChange: setSelected, label: "Выбрать все операции группы" }}
+                fixed
+                columns={[
+                  {
+                    key: "date",
+                    type: "date",
+                    width: "7rem",
+                    label: "Дата",
+                    sortValue: (t) => t.date,
+                    render: (t) => formatDate(t.date, "full"),
+                  },
+                  {
+                    key: "category",
+                    type: "text",
+                    width: "22%",
+                    label: "Категория",
+                    sortValue: (t) => t.categoryFull,
+                    render: (t) => t.categoryFull,
+                  },
+                  {
+                    key: "comment",
+                    type: "text",
+                    muted: true,
+                    label: "Комментарий",
+                    sortValue: (t) => t.comment || "",
+                    render: (t) => t.comment,
+                  },
+                  {
+                    key: "account",
+                    type: "text",
+                    muted: true,
+                    width: "16%",
+                    label: "Счёт",
+                    sortValue: (t) => t.account,
+                    render: (t) => t.account,
+                  },
+                  {
+                    key: "amount",
+                    type: "main",
+                    tone: operationTone,
+                    width: "9rem",
+                    label: "Сумма",
+                    sortValue: (t) => t.amountBase,
+                    cellTitle: (t) =>
+                      t.kind === "refund" ? "Возврат — уменьшает расход категории" : "",
+                    render: (t) => <OperationAmount tx={t} />,
+                  },
+                ]}
+              />
             );
           })}
         </div>

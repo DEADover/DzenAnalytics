@@ -21,6 +21,7 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Segmented } from "../components/Segmented";
 import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
+import { nextSort, sortRows, type SortState } from "../components/table/tableKit";
 import type { Transaction } from "../types";
 
 
@@ -164,9 +165,10 @@ export function DigestPage() {
  * выделенной строки, а её правый край обрывался посреди пустоты.
  */
 const MOVER_COLUMNS: MeterCell[] = [
-  { text: "Доля", width: "w-14" },
-  { text: "Было → стало", width: "w-36" },
-  { text: "Изменение", width: "w-24" },
+  // «Рост», а не «Доля»: здесь процент изменения к прошлому периоду.
+  { text: "Рост", width: "w-16", sortKey: "pct" },
+  { text: "Было → стало", width: "w-52", sortKey: "current" },
+  { text: "Разница", width: "w-28", sortKey: "diff" },
 ];
 
 function DigestDetail({
@@ -203,6 +205,23 @@ function DigestDetail({
   const maxMove = Math.max(
     ...entry.movers.map((m) => Math.abs(m.current - m.previous)),
     1
+  );
+
+  // Движители сортируются по любой колонке; по умолчанию — по величине разницы.
+  const [sort, setSort] = useState<SortState>({ key: "diff", dir: "desc" });
+  const movers = sortRows(
+    entry.movers,
+    (m) =>
+      sort.key === "name"
+        ? m.category
+        : sort.key === "pct"
+          ? m.previous > 0
+            ? m.delta
+            : null
+          : sort.key === "current"
+            ? m.current
+            : Math.abs(m.current - m.previous),
+    sort.dir
   );
 
   return (
@@ -260,9 +279,16 @@ function DigestDetail({
             </p>
           }
         >
-          <MeterHead columns={MOVER_COLUMNS} lead="" bar="track" />
+          <MeterHead
+            columns={MOVER_COLUMNS}
+            lead=""
+            bar="track"
+            nameLabel="Статья"
+            sort={sort.key ? { key: sort.key, dir: sort.dir } : undefined}
+            onSort={(key) => setSort((cur) => nextSort(cur, key, key === "name" ? "text" : "money"))}
+          />
           <div className="space-y-0.5">
-            {entry.movers.map((m) => {
+            {movers.map((m) => {
               const up = m.current > m.previous;
               const diff = Math.abs(m.current - m.previous);
               return (

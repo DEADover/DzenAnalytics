@@ -367,6 +367,22 @@ h2,
     padding-top: 6px;
     padding-bottom: 5px;
   }
+  /* Списки с колонками на div — строки с полосой доли (итоги года,
+     дайджест) и справочники: типографика таблиц. Шапка `.list-head` — та же,
+     что у `.table-th`; строка списка-меры — компактная, 32 px. */
+  .meter-list {
+    font-size: var(--tbl-font);
+    line-height: calc(var(--tbl-font) + 0.375rem);
+  }
+  .list-head {
+    @apply uppercase tracking-wider text-muted font-medium border-b border-border;
+    font-size: calc(var(--tbl-font) - 0.125rem);
+    line-height: calc(var(--tbl-font) + 0.375rem);
+  }
+  .list-head button {
+    text-transform: inherit;
+    letter-spacing: inherit;
+  }
   /* Строка-группа: шапка блока внутри таблицы. */
   .table-row-group > td,
   .table-row-group > th {

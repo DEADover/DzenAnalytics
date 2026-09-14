@@ -408,7 +408,7 @@ export function CategoryManager() {
           // Obeys the «Размер текста в таблицах» slider — rows inherit this.
           style={{ fontSize: "var(--tbl-font)" }}
         >
-          <div className="sticky top-0 z-10 bg-panel border-b border-border flex items-center gap-3 px-3 py-2 text-[0.85em] text-muted uppercase tracking-wide">
+          <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
             <span className="flex-1 min-w-0">Категория</span>
             <span className="hidden sm:block w-24 shrink-0 text-center">Расходная</span>
             <span className="hidden sm:block w-24 shrink-0 text-center">Доходная</span>
@@ -502,12 +502,7 @@ export function CategoryManager() {
                           aria-label={
                             rExcluded ? "Вернуть категорию в аналитику" : "Исключить категорию из аналитики"
                           }
-                          className={clsx(
-                            "p-1.5 rounded-md",
-                            rExcluded
-                              ? "text-warn bg-warn/10"
-                              : "text-muted hover:text-accent hover:bg-panel2"
-                          )}
+                          className={clsx("btn-icon", rExcluded && "text-warn bg-warn/10 hover:text-warn")}
                         >
                           {rExcluded ? (
                             <EyeOff className="w-4 h-4" />
@@ -525,7 +520,7 @@ export function CategoryManager() {
                           disabled={rDeleted}
                           title="Редактировать категорию"
                           aria-label="Редактировать категорию"
-                          className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="btn-icon disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -534,7 +529,7 @@ export function CategoryManager() {
                             onClick={() => useTagDeletionsStore.getState().restore(root.id)}
                             title="Отменить удаление"
                             aria-label="Отменить удаление категории"
-                            className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                            className="btn-icon"
                           >
                             <Undo2 className="w-4 h-4" />
                           </button>
@@ -543,7 +538,7 @@ export function CategoryManager() {
                             onClick={() => onDelete(root)}
                             title="Удалить категорию"
                             aria-label="Удалить категорию"
-                            className="p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10"
+                            className="btn-icon-danger"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -649,11 +644,9 @@ export function CategoryManager() {
                                       : "Исключить подкатегорию из аналитики"
                                   }
                                   className={clsx(
-                                    "p-1.5 rounded-md",
+                                    "btn-icon",
                                     rExcluded && "opacity-40 cursor-not-allowed",
-                                    cExcluded
-                                      ? "text-warn bg-warn/10"
-                                      : "text-muted hover:text-accent hover:bg-panel2"
+                                    cExcluded && "text-warn bg-warn/10 hover:text-warn"
                                   )}
                                 >
                                   {cExcluded ? (
@@ -669,7 +662,7 @@ export function CategoryManager() {
                                   disabled={cDeleted}
                                   title="Редактировать подкатегорию"
                                   aria-label="Редактировать подкатегорию"
-                                  className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  className="btn-icon disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                   <Pencil className="w-4 h-4" />
                                 </button>
@@ -678,7 +671,7 @@ export function CategoryManager() {
                                     onClick={() => useTagDeletionsStore.getState().restore(c.id)}
                                     title="Отменить удаление"
                                     aria-label="Отменить удаление подкатегории"
-                                    className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                                    className="btn-icon"
                                   >
                                     <Undo2 className="w-4 h-4" />
                                   </button>
@@ -692,7 +685,7 @@ export function CategoryManager() {
                                         : "Удалить подкатегорию"
                                     }
                                     aria-label="Удалить подкатегорию"
-                                    className="p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="btn-icon-danger disabled:opacity-40 disabled:cursor-not-allowed"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>

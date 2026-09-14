@@ -1,14 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   CheckCircle2,
   AlertTriangle,
   AlertCircle,
-  ChevronDown,
   ChevronRight,
   ChevronLeft,
   History,
   Trash2,
-  Info,
   HelpCircle,
 } from "lucide-react";
 import {
@@ -17,6 +15,9 @@ import {
   type SyncLogStatus,
 } from "../store/useSyncLogStore";
 import { confirm } from "../store/useConfirmStore";
+import { InfoPopover } from "./InfoPopover";
+import { ExpandChevron, HeadCell } from "./table/TableParts";
+import { cellClass } from "./table/tableKit";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { pluralRu } from "../lib/plural";
 
@@ -227,55 +228,50 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
       ) : (
         <>
           <div>
-            <table
-              className="w-full border-collapse"
-              style={{ fontSize: "var(--tbl-font)" }}
-            >
+            <table className="w-full">
               <thead>
-                <tr className="text-left text-[0.85em] uppercase tracking-wider text-muted border-b border-border">
-                  {/* «Тип» absorbs the slack (`w-full`), every other column
-                      hugs its content (`w-px` + nowrap). That keeps the numbers
-                      and status packed on the right instead of each column
-                      getting a share of the empty space. */}
-                  <th className="font-medium px-2 py-2 w-full">
-                    {/* Mirror the row's chevron slot so the label lines up with
-                        the titles below it. */}
-                    <span className="flex items-center gap-1.5">
-                      {anyExpandable && <span className="w-3.5 shrink-0" />}
-                      Тип
-                    </span>
-                  </th>
-                  <th className="font-medium px-2 py-2 w-px whitespace-nowrap text-center">
-                    Дата-время
-                  </th>
-                  <th className="font-medium px-2 py-2 w-px whitespace-nowrap text-center hidden md:table-cell">
-                    <HeaderWithHint
-                      label="Новых транзакций"
-                      hint={
-                        "Сколько записей пришло от сервера в этом синке.\n" +
-                        "Для синхронизации — это новые/изменённые операции.\n" +
-                        "Для полной — весь объём целиком (включая удалённые\n" +
-                        "и нулевые служебные записи).\n" +
-                        "Для Push — сколько правок ушло в облако."
-                      }
-                    />
-                  </th>
-                  <th className="font-medium px-2 py-2 w-px whitespace-nowrap text-center hidden md:table-cell">
-                    <HeaderWithHint
-                      label="Всего транзакций"
-                      hint={
-                        "Сколько операций видно в приложении после синка\n" +
-                        "(удалённые и нулевые служебные записи отфильтрованы).\n" +
-                        "Поэтому это число может быть меньше «Новых\nтранзакций» при полной синхронизации."
-                      }
-                    />
-                  </th>
-                  <th className="font-medium px-2 py-2 w-px whitespace-nowrap text-center hidden md:table-cell">
-                    Длительность
-                  </th>
-                  <th className="font-medium px-2 py-2 w-px whitespace-nowrap text-center">
-                    Статус
-                  </th>
+                <tr>
+                  {/* «Тип» забирает остаток ширины, остальные колонки — по
+                      содержимому: числа и статус остаются справа плотной группой. */}
+                  <HeadCell type="text" label="Тип" className="w-full" />
+                  <HeadCell type="date" label="Дата и время" className="w-px" />
+                  <HeadCell
+                    type="count"
+                    className="w-px hidden md:table-cell"
+                    label={
+                      <span className="inline-flex items-center gap-1">
+                        Новых операций
+                        <InfoPopover label="Что считается">
+                          <p>
+                            Сколько записей пришло от сервера в этом синке. Для
+                            синхронизации — новые и изменённые операции, для
+                            полной — весь объём целиком, включая удалённые и
+                            нулевые служебные записи. Для отправки — сколько правок
+                            ушло в облако.
+                          </p>
+                        </InfoPopover>
+                      </span>
+                    }
+                  />
+                  <HeadCell
+                    type="count"
+                    className="w-px hidden md:table-cell"
+                    label={
+                      <span className="inline-flex items-center gap-1">
+                        Всего операций
+                        <InfoPopover label="Что считается">
+                          <p>
+                            Сколько операций видно в приложении после синка:
+                            удалённые и нулевые служебные записи отфильтрованы.
+                            Поэтому при полной синхронизации это число может быть
+                            меньше «Новых операций».
+                          </p>
+                        </InfoPopover>
+                      </span>
+                    }
+                  />
+                  <HeadCell type="number" label="Длительность" className="w-px hidden md:table-cell" />
+                  <HeadCell type="mark" label="Статус" className="w-px" />
                 </tr>
               </thead>
               <tbody>
@@ -361,66 +357,42 @@ function LogTableRow({
     <>
       <tr
         onClick={hasDetails ? onToggle : undefined}
-        className={`border-b border-border/40 last:border-b-0 ${
-          hasDetails ? "cursor-pointer hover:bg-panel2/40" : ""
-        } transition-colors`}
+        className={hasDetails ? "cursor-pointer hover:bg-panel2/50" : undefined}
       >
-        {/* The expand chevron rides inside the «Тип» cell — as its own column
-            it left an empty gutter down the whole left edge of the table. */}
-        <td className="px-2 py-2 align-middle">
+        {/* Шеврон раскрытия — внутри ячейки «Тип», перед названием, как в
+            дереве любой таблицы. Итог записи — той же строкой, приглушённо. */}
+        <td className={cellClass("text")}>
           <div className="flex items-center gap-1.5 min-w-0">
-            {reserveChevron && (
-              <span className="w-3.5 shrink-0">
-                {hasDetails ? (
-                  expanded ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-muted" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-muted" />
-                  )
-                ) : null}
-              </span>
-            )}
-            <div className="min-w-0">
-              <div className="font-medium truncate">{entry.title}</div>
-              {/* Human summary as a sub-line so the result is always
-                  visible without expanding — e.g. "удалено: 1",
-                  "Отправлено: 1", "+3 новых/изменённых". For deletions
-                  this is the only place the count shows, since the
-                  numeric columns track new/total transactions only. */}
-              {entry.summary && (
-                <div
-                  className="text-muted truncate"
-                  title={capitalize(entry.summary)}
-                >
-                  {capitalize(entry.summary)}
-                </div>
-              )}
-            </div>
+            {reserveChevron &&
+              (hasDetails ? (
+                <ExpandChevron open={expanded} />
+              ) : (
+                <span className="w-4 shrink-0" aria-hidden />
+              ))}
+            <span className="truncate" title={entry.summary ? `${entry.title} · ${capitalize(entry.summary)}` : entry.title}>
+              {entry.title}
+              {entry.summary && <span className="text-muted"> · {capitalize(entry.summary)}</span>}
+            </span>
           </div>
         </td>
-        <td className="px-2 py-2 align-middle text-muted tabular-nums whitespace-nowrap text-center">
-          {new Date(entry.ts).toLocaleString("ru-RU")}
-        </td>
-        <td className="px-2 py-2 align-middle tabular-nums text-center hidden md:table-cell">
+        <td className={cellClass("date")}>{new Date(entry.ts).toLocaleString("ru-RU")}</td>
+        <td className={cellClass("count", { className: "hidden md:table-cell" })}>
           {newCount !== undefined ? formatN(newCount) : "—"}
         </td>
-        <td className="px-2 py-2 align-middle tabular-nums text-center hidden md:table-cell">
+        <td className={cellClass("count", { className: "hidden md:table-cell" })}>
           {totalCount !== undefined ? formatN(totalCount) : "—"}
         </td>
-        <td className="px-2 py-2 align-middle tabular-nums text-muted text-center whitespace-nowrap hidden md:table-cell">
-          {typeof entry.durationMs === "number"
-            ? formatDuration(entry.durationMs)
-            : "—"}
+        <td className={cellClass("number", { muted: true, className: "hidden md:table-cell" })}>
+          {typeof entry.durationMs === "number" ? formatDuration(entry.durationMs) : "—"}
         </td>
-        <td className="px-2 py-2 align-middle text-center">
+        <td className={cellClass("mark")}>
           <StatusBadge status={entry.status} />
         </td>
       </tr>
       {expanded && hasDetails && (
-        <tr className="bg-panel2/30 border-b border-border/40">
-          {/* pl-7 = the row's px-2 (8px) + chevron slot (14px) + gap (6px), so
-              the details line up with the title above instead of the cell edge. */}
-          <td colSpan={6} className="pl-7 pr-3 py-3">
+        <tr className="bg-panel2/30">
+          {/* Отступ — до начала названия над строкой: поле 12 + шеврон 16 + промежуток 6. */}
+          <td colSpan={6} className="table-td pl-[34px] pr-3 py-3">
             <div className="text-xs space-y-2">
               {entry.error && (
                 <div className="flex items-start gap-2 p-2 rounded-md bg-expense/5 border border-expense/30 text-expense">
@@ -458,69 +430,6 @@ function LogTableRow({
   );
 }
 
-/**
- * Column header with a click-triggered popover. Native `title` was too
- * slow (~500 ms hover delay) and visually inconsistent with the rest
- * of the app, so we render a real positioned panel on click and
- * dismiss on outside-click / Escape. The popover positions below the
- * icon (top-full) and uses the same panel colours as cards.
- *
- * Multi-line `hint` strings are rendered with `whitespace-pre-line`
- * so `\n` produces a real line break.
- */
-function HeaderWithHint({ label, hint }: { label: string; hint: string }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLSpanElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onClick(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  return (
-    <span
-      ref={rootRef}
-      className="relative inline-flex items-center gap-1 whitespace-nowrap"
-    >
-      {label}
-      <button
-        type="button"
-        onClick={(e) => {
-          // Don't let the click bubble up to the document-level
-          // dismiss handler in the same tick.
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }}
-        aria-expanded={open}
-        aria-label={`Подсказка: ${label}`}
-        className={`text-muted/70 hover:text-text transition-colors cursor-pointer ${
-          open ? "text-accent" : ""
-        }`}
-      >
-        <Info className="w-3 h-3" />
-      </button>
-      {open && (
-        <div
-          role="tooltip"
-          className="absolute bottom-full left-0 mb-2 z-20 w-72 p-3 rounded-lg border border-border bg-panel shadow-lg text-xs text-text whitespace-pre-line normal-case font-normal"
-        >
-          {hint}
-        </div>
-      )}
-    </span>
-  );
-}
 
 function StatusBadge({ status }: { status: SyncLogStatus }) {
   const conf = {

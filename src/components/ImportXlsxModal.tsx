@@ -1,3 +1,6 @@
+import { Checkbox } from "./Checkbox";
+import { HeadCell } from "./table/TableParts";
+import { cellClass } from "./table/tableKit";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Check, Copy, FileSpreadsheet, Pencil, UserPlus, X } from "lucide-react";
@@ -250,21 +253,17 @@ export function ImportXlsxModal({
         </div>
 
         <div className="overflow-auto grow">
-          <table className="w-full" style={{ fontSize: "var(--tbl-font)" }}>
+          {/* Строки идут в порядке файла — номер строки Excel и есть смысл,
+              поэтому сортировки у таблицы нет. */}
+          <table className="w-full">
             <thead className="sticky top-0 bg-panel z-10">
               <tr>
                 <th className="table-th w-10 text-center">
                   {/* Отметить показанные — там же, где галочки строк: в отдельной
                       строке тулбара эта связь читалась не сразу. */}
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={allShownPicked}
-                    ref={(el) => {
-                      if (el) {
-                        el.indeterminate =
-                          !allShownPicked && shown.some((r) => picked.has(r.excelRow));
-                      }
-                    }}
+                    indeterminate={shown.some((r) => picked.has(r.excelRow))}
                     onChange={() =>
                       setPicked((prev) => {
                         const next = new Set(prev);
@@ -275,19 +274,18 @@ export function ImportXlsxModal({
                         return next;
                       })
                     }
-                    aria-label="Отметить показанные строки"
+                    label="Отметить показанные строки"
                     title="Отметить показанные строки"
-                    className="accent-accent w-4 h-4 align-middle"
                   />
                 </th>
-                <th className="table-th w-12 text-center">#</th>
-                <th className="table-th w-32">Дата</th>
-                <th className="table-th w-24">Тип</th>
-                <th className="table-th">Категория</th>
-                <th className="table-th w-56">Счёт</th>
-                <th className="table-th w-32 text-right">Сумма</th>
-                <th className="table-th w-40">Контрагент</th>
-                <th className="table-th w-72">Статус</th>
+                <HeadCell type="count" label="#" width="3rem" />
+                <HeadCell type="date" label="Дата" width="8rem" />
+                <HeadCell type="text" label="Тип" width="6rem" />
+                <HeadCell type="text" label="Категория" />
+                <HeadCell type="text" label="Счёт" width="14rem" />
+                <HeadCell type="money" label="Сумма" width="8rem" />
+                <HeadCell type="text" label="Контрагент" width="10rem" />
+                <HeadCell type="text" label="Статус" width="18rem" />
                 <th className="table-th w-10" />
               </tr>
             </thead>
@@ -301,23 +299,21 @@ export function ImportXlsxModal({
                     <tr
                       onClick={() => openEditor(r.excelRow)}
                       className={clsx(
-                        "border-t border-border/60 cursor-pointer hover:bg-panel2/40",
+                        "cursor-pointer hover:bg-panel2/50",
                         !r.verdict.ok && "bg-expense/5",
                         dup && "bg-warn/5",
                         open && "bg-panel2/60"
                       )}
                     >
-                      <td className="table-td text-center" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
+                      <td className={cellClass("mark")} onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
                           checked={picked.has(r.excelRow)}
                           disabled={!canPick(r)}
                           onChange={() => toggle(r)}
-                          aria-label={`Строка ${r.excelRow}`}
-                          className="accent-accent w-4 h-4"
+                          label={`Строка ${r.excelRow}`}
                         />
                       </td>
-                      <td className="table-td text-center tabular-nums text-muted">
+                      <td className={cellClass("count")}>
                         <span className="inline-flex items-center justify-center gap-1">
                           {fixed.has(r.excelRow) && (
                             <Tooltip content="Строка исправлена в отчёте — в вашем файле она осталась прежней">
@@ -327,22 +323,22 @@ export function ImportXlsxModal({
                           {r.excelRow}
                         </span>
                       </td>
-                      <td className="table-td whitespace-nowrap tabular-nums">
+                      <td className={cellClass("date")}>
                         {r.date ? formatDate(r.date, "full") : "—"}
                         {r.time && <span className="text-muted"> {r.time}</span>}
                       </td>
-                      <td className="table-td whitespace-nowrap">{r.type || "—"}</td>
-                      <td className="table-td">
+                      <td className={cellClass("text", { muted: true, className: "whitespace-nowrap" })}>{r.type || "—"}</td>
+                      <td className={cellClass("text")}>
                         <div className="truncate">{r.category || "—"}</div>
                       </td>
-                      <td className="table-td">
+                      <td className={cellClass("text", { muted: true })}>
                         {/* У перевода счетов два, и стрелка между ними — самая
                             короткая запись «откуда куда». */}
                         <div className="truncate">
                           {[r.outAccount, r.inAccount].filter(Boolean).join(" → ") || "—"}
                         </div>
                       </td>
-                      <td className="table-td text-right tabular-nums whitespace-nowrap">
+                      <td className={cellClass("money")}>
                         {r.verdict.ok
                           ? formatMoney(r.amount ?? 0, currencyOf(r), { signed: false })
                           : r.amount === null
@@ -363,7 +359,7 @@ export function ImportXlsxModal({
                               )}
                             </div>
                             {r.verdict.ok && r.verdict.payeeHint && (
-                              <div className="text-xs text-muted truncate">
+                              <div className="text-[0.85em] text-muted truncate">
                                 Похоже на «{r.verdict.payeeHint}»
                               </div>
                             )}
@@ -400,8 +396,8 @@ export function ImportXlsxModal({
                       </td>
                     </tr>
                     {(open || shutting) && (
-                      <tr className="border-t border-border/60">
-                        <td colSpan={COLUMNS} className="p-0">
+                      <tr>
+                        <td colSpan={COLUMNS} className="p-0 border-b border-border/60">
                           {/* Раскрытие и сворачивание: растим и убираем
                               грид-трек 0fr → 1fr, как у под-статей бюджета.
                               Высоту содержимого знать не нужно — а она тут и
@@ -439,7 +435,7 @@ export function ImportXlsxModal({
             </tbody>
           </table>
           {shown.length === 0 && (
-            <div className="text-center text-sm text-muted py-10">Таких строк нет</div>
+            <div className="text-center text-muted py-10">Таких строк нет</div>
           )}
         </div>
 

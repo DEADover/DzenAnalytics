@@ -9,6 +9,7 @@ import { useDrillStore } from "../store/useDrillStore";
 import { buildWordcloud, type WordcloudWord } from "../lib/aggregations";
 import { formatMoney, formatNum } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
+import { DataTable } from "../components/DataTable";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 
@@ -39,6 +40,12 @@ export function WordcloudPage() {
   const words = useMemo(
     () => buildWordcloud(filtered, minLen, topN),
     [filtered, minLen, topN]
+  );
+
+  // Место слова — по частоте: сортировка таблицы его не меняет.
+  const topWords = useMemo(
+    () => words.slice(0, 30).map((w, i) => ({ ...w, rank: i + 1 })),
+    [words]
   );
 
   if (transactions.length === 0) return <EmptyState />;
@@ -142,35 +149,51 @@ export function WordcloudPage() {
       )}
 
       {words.length > 0 && (
-        <div className="card-tray card-pad">
-          <div className="font-semibold mb-3">Топ-30 слов</div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th className="table-th w-10">#</th>
-                <th className="table-th">Слово</th>
-                <th className="table-th text-right">Частота</th>
-                <th className="table-th text-right">Сумма операций</th>
-              </tr>
-            </thead>
-            <tbody>
-              {words.slice(0, 30).map((w, i) => (
-                <tr
-                  key={w.text}
-                  onClick={() => openWord(w)}
-                  className="hover:bg-panel2/50 cursor-pointer"
-                >
-                  <td className="table-td text-muted">{i + 1}</td>
-                  <td className="table-td font-medium">{w.text}</td>
-                  <td className="table-td text-right tabular-nums">{w.count}</td>
-                  <td className="table-td text-right tabular-nums text-muted">
-                    {formatMoney(w.totalAmount, base)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<WordcloudWord & { rank: number }>
+          title="Топ-30 слов"
+          data={topWords}
+          rowKey={(w) => w.text}
+          defaultSortKey="rank"
+          defaultSortDir="asc"
+          onRowClick={openWord}
+          exportName="wordcloud_top"
+          fixed
+          columns={[
+            {
+              key: "rank",
+              type: "count",
+              width: "4rem",
+              label: "#",
+              headerTitle: "Место по частоте",
+              sortValue: (w) => w.rank,
+              render: (w) => formatNum(w.rank),
+            },
+            {
+              key: "text",
+              type: "text",
+              label: "Слово",
+              sortValue: (w) => w.text,
+              render: (w) => w.text,
+            },
+            {
+              key: "count",
+              type: "count",
+              width: "8rem",
+              label: "Частота",
+              sortValue: (w) => w.count,
+              render: (w) => formatNum(w.count),
+            },
+            {
+              key: "total",
+              type: "money",
+              muted: true,
+              width: "11rem",
+              label: "Сумма операций",
+              sortValue: (w) => w.totalAmount,
+              render: (w) => formatMoney(w.totalAmount, base),
+            },
+          ]}
+        />
       )}
     </div>
   );

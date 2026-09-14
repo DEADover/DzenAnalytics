@@ -635,7 +635,7 @@ export function CounterpartyManager() {
           >
             {/* Column header — the counts need a name, and the fixed widths
                 below keep them (and the buttons) on one grid. */}
-            <div className="sticky top-0 z-10 bg-panel border-b border-border flex items-center gap-3 px-3 py-2 text-[0.85em] text-muted uppercase tracking-wide">
+            <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
               <span className="flex-1 min-w-0">Контрагент</span>
               <span className="w-20 shrink-0 text-right">Операций</span>
               <span className="w-36 shrink-0 text-right">Действия</span>
@@ -751,7 +751,7 @@ export function CounterpartyManager() {
           <div
             style={{ fontSize: "var(--tbl-font)" }}
           >
-            <div className="sticky top-0 z-10 bg-panel border-b border-border flex items-center gap-3 px-3 py-2 text-[0.85em] text-muted uppercase tracking-wide">
+            <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
               <span className="w-6 shrink-0 flex items-center justify-center">
                 <input
                   type="checkbox"
@@ -828,7 +828,7 @@ export function CounterpartyManager() {
                         onClick={() => setModal({ kind: "adopt", payee: o })}
                         title={`Привязать под другим именем — например, к уже заведённому контрагенту`}
                         aria-label={`Привязать «${o.title}» под другим именем`}
-                        className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                        className="btn-icon"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
@@ -840,7 +840,7 @@ export function CounterpartyManager() {
                             : `Завести контрагента «${o.title}» и проставить его в ${formatNum(o.count)} ${pluralRu(o.count, ["операции", "операциях", "операциях"])}`
                         }
                         aria-label={`Привязать получателя «${o.title}» как есть`}
-                        className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                        className="btn-icon"
                       >
                         <UserPlus className="w-4 h-4" />
                       </button>
@@ -869,7 +869,7 @@ export function CounterpartyManager() {
       {!dupOnly && !orphanOnly && (
       <div className="border border-border rounded-lg overflow-hidden">
         <div style={{ fontSize: "var(--tbl-font)" }}>
-          <div className="sticky top-0 z-10 bg-panel border-b border-border flex items-center gap-3 px-3 py-2 text-[0.85em] text-muted uppercase tracking-wide">
+          <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
             <span className="w-6 shrink-0 flex items-center justify-center">
               <input
                 type="checkbox"
@@ -961,7 +961,7 @@ export function CounterpartyManager() {
                       disabled={gone}
                       title="Переименовать"
                       aria-label="Переименовать контрагента"
-                      className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="btn-icon disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -977,7 +977,7 @@ export function CounterpartyManager() {
                           : "Перенести операции на другого контрагента"
                       }
                       aria-label="Перенести операции на другого контрагента"
-                      className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="btn-icon disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Combine className="w-4 h-4" />
                     </button>
@@ -988,7 +988,7 @@ export function CounterpartyManager() {
                         aria-label={
                           row.mergedInto ? "Отменить объединение" : "Отменить удаление"
                         }
-                        className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                        className="btn-icon"
                       >
                         <Undo2 className="w-4 h-4" />
                       </button>
@@ -997,7 +997,7 @@ export function CounterpartyManager() {
                         onClick={() => removeOne(row)}
                         title="Удалить"
                         aria-label="Удалить контрагента"
-                        className="p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10"
+                        className="btn-icon-danger"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
