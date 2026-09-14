@@ -66,6 +66,7 @@ import type { PlanLeft } from "../../lib/freeMoney";
 import type { PlannedOp } from "../../lib/plannedOps";
 import type { Currency } from "../../types";
 import { SectionEmpty } from "../SectionEmpty";
+import { ProgressBar } from "../ProgressBar";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
 
@@ -574,12 +575,12 @@ export function CategoriesList({
                   {formatMoney(c.expense, m.base)}
                 </span>
               </div>
-              <div className="h-2 mt-1 rounded-full bg-panel2 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-expense"
-                  style={{ width: `${frac * 100}%`, opacity: 0.35 + 0.65 * frac }}
-                />
-              </div>
+              <ProgressBar
+                value={frac}
+                tone="expense"
+                fillStyle={{ opacity: 0.35 + 0.65 * frac }}
+                className="mt-1"
+              />
             </div>
           </button>
         );
@@ -1238,12 +1239,7 @@ function AllowanceRing({ ratio, tone }: { ratio: number; tone: string }) {
  */
 function FreeBar({ ratio }: { ratio: number }) {
   return (
-    <div className="h-1.5 rounded-full bg-border/70 overflow-hidden" aria-hidden>
-      <div
-        className="h-full rounded-full bg-income transition-[width] duration-500"
-        style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%` }}
-      />
-    </div>
+    <ProgressBar value={ratio} tone="income" />
   );
 }
 

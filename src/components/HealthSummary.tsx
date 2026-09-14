@@ -16,6 +16,7 @@ import type { HealthComponent, HealthScore } from "../lib/health";
 import { formatMoney, formatPct } from "../lib/format";
 import { Tooltip } from "./Tooltip";
 import { CardHeader } from "./CardHeader";
+import { ProgressBar } from "./ProgressBar";
 
 const COMPONENT_ICONS: Record<string, typeof HeartPulse> = {
   savings_rate: TrendingUp,
@@ -158,12 +159,7 @@ function ScoreRow({ c, base }: { c: HealthComponent; base: string }) {
             </span>
           </div>
 
-          <div className="h-1.5 rounded-full overflow-hidden bg-panel2 mt-2">
-            <div
-              className={`h-full ${statusBar(c.status)}`}
-              style={{ width: `${barPct}%` }}
-            />
-          </div>
+          <ProgressBar value={barPct / 100} fillClassName={statusBar(c.status)} className="mt-2" />
 
           {c.extra && (
             <div className="text-[11px] text-muted mt-1.5 tabular-nums">

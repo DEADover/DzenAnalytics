@@ -9,6 +9,7 @@ import { formatMoney } from "../lib/format";
 import { Tooltip } from "./Tooltip";
 import { TooltipFacts } from "./TooltipFacts";
 import { CardHeader } from "./CardHeader";
+import { ProgressBar } from "./ProgressBar";
 
 /** FIRE goal on the 4%-rule: 25 годовых расходов = 300 месяцев. */
 const FIRE_MONTHS = 300;
@@ -175,12 +176,11 @@ export function FireIndependence({
           </span>
         </Tooltip>
       </div>
-      <div className="h-2 rounded-full bg-panel2 overflow-hidden">
-        <div
-          className={`h-full rounded-full ${fireAchieved ? "bg-income" : "bg-accent"}`}
-          style={{ width: `${Math.min(Math.max(capitalProgress, 0), 1) * 100}%` }}
-        />
-      </div>
+      <ProgressBar
+        value={capitalProgress}
+        tone={fireAchieved ? "income" : "accent"}
+        label="Путь к финансовой независимости"
+      />
 
       {/* Accounts expander (functional — which accounts count as capital) */}
       {capitalAccounts.length > 0 ? (

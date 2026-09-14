@@ -166,7 +166,7 @@ function AutoGroupRow({
         {overridden && (
           <button
             onClick={() => onReset(from)}
-            className="text-muted hover:text-text p-1"
+            className="btn-icon btn-icon-sm"
             title="Сбросить к авто-группировке"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -2046,7 +2046,7 @@ export function ImportPage() {
                     </span>
                     <button
                       onClick={() => dropAlias(a.from)}
-                      className="text-muted hover:text-expense p-1"
+                      className="btn-icon-danger btn-icon-sm"
                       title="Удалить правило"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -2271,7 +2271,7 @@ export function ImportPage() {
                 он описывает список, и рядом с «Создать снимок» читался как
                 состояние кнопки. */}
             <div className="flex items-baseline justify-between gap-3 mb-1">
-              <span className="text-[11px] uppercase tracking-wide text-muted">
+              <span className="overline">
                 {cloudSnapshots.length === 0 ? "Снимков ещё не было" : "Сохранённые снимки"}
               </span>
               {cloudSnapshots.length > 0 && (

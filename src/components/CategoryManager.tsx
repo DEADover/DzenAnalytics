@@ -14,7 +14,6 @@ import { categoryKeysOf, hasCategory } from "../lib/operationTags";
 import { useLazyList } from "../hooks/useLazyList";
 import { Link } from "react-router-dom";
 import {
-  Search,
   RotateCcw,
   Eye,
   EyeOff,
@@ -49,6 +48,8 @@ import {
 import { InfoPopover } from "./InfoPopover";
 import { CountSortHeader, type SortMode } from "./CountSortHeader";
 import { SectionEmpty } from "./SectionEmpty";
+import { SearchInput } from "./SearchInput";
+import { Badge } from "./Badge";
 
 /** What the edit/create modal is currently doing. */
 type ModalState =
@@ -319,24 +320,12 @@ export function CategoryManager() {
     <div className="space-y-3">
       {/* Toolbar: search + «?» info popover + pending/reset/push + Добавить. */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-2 bg-panel2 rounded-lg px-2 py-1 border border-border flex-1 min-w-[200px]">
-          <Search className="w-3.5 h-3.5 text-muted shrink-0" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск категории…"
-            className="bg-transparent text-sm flex-1 outline-none min-w-0"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              className="text-xs text-muted hover:text-text"
-              aria-label="Очистить поиск"
-            >
-              ✕
-            </button>
-          )}
-        </div>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Поиск категории…"
+          className="flex-1 min-w-[200px]"
+        />
 
         <InfoPopover label="Как это работает">
                 <p>
@@ -459,14 +448,14 @@ export function CategoryManager() {
                           {rEdit?.title ?? root.title}
                         </span>
                         {rIsNew && !rDeleted && (
-                          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent/10 text-accent shrink-0">
-                            новая
-                          </span>
+                          <Badge tone="accent" className="shrink-0">
+                            Новая
+                          </Badge>
                         )}
                         {rDeleted && (
-                          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-expense/10 text-expense shrink-0">
-                            удалена
-                          </span>
+                          <Badge tone="expense" className="shrink-0">
+                            Удалена
+                          </Badge>
                         )}
                       </span>
                       <span className="hidden sm:flex w-24 shrink-0 items-center justify-center">
@@ -595,14 +584,14 @@ export function CategoryManager() {
                                   {cEdit?.title ?? c.title}
                                 </span>
                                 {cIsNew && !cDeleted && (
-                                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent/10 text-accent shrink-0">
-                                    новая
-                                  </span>
+                                  <Badge tone="accent" className="shrink-0">
+                                    Новая
+                                  </Badge>
                                 )}
                                 {cDeleted && (
-                                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-expense/10 text-expense shrink-0">
-                                    удалена
-                                  </span>
+                                  <Badge tone="expense" className="shrink-0">
+                                    Удалена
+                                  </Badge>
                                 )}
                               </span>
                               <span className="hidden sm:flex w-24 shrink-0 items-center justify-center">

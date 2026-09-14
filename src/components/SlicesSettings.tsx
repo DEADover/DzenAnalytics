@@ -114,7 +114,7 @@ export function SlicesSettings() {
                     }}
                     title="Сохранить"
                     aria-label="Сохранить название"
-                    className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                    className="btn-icon"
                   >
                     <Check className="w-4 h-4" />
                   </button>
@@ -122,7 +122,7 @@ export function SlicesSettings() {
                     onClick={() => setEditing(null)}
                     title="Отмена"
                     aria-label="Отменить переименование"
-                    className="p-1.5 rounded-md text-muted hover:text-text hover:bg-panel2"
+                    className="btn-icon"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -151,7 +151,7 @@ export function SlicesSettings() {
                     }}
                     title="Переименовать"
                     aria-label="Переименовать разрез"
-                    className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-panel2"
+                    className="btn-icon"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
@@ -164,7 +164,7 @@ export function SlicesSettings() {
                         : "Удалить разрез"
                     }
                     aria-label="Удалить разрез"
-                    className="p-1.5 rounded-md text-muted hover:text-expense hover:bg-expense/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="btn-icon-danger"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

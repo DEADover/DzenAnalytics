@@ -7,7 +7,6 @@ import { Checkbox } from "./Checkbox";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLazyList } from "../hooks/useLazyList";
 import {
-  Search,
   Pencil,
   Trash2,
   Plus,
@@ -39,6 +38,8 @@ import {
 } from "./CounterpartyDeleteModal";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
+import { SearchInput } from "./SearchInput";
+import { Badge } from "./Badge";
 
 /** A row as rendered: cached merchant or unpushed draft, with overlay applied. */
 interface Row {
@@ -452,24 +453,12 @@ export function CounterpartyManager() {
     <div className="space-y-3">
       {/* Toolbar: search + «?» info popover + pending/reset/push + Добавить. */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-2 bg-panel2 rounded-lg px-2 py-1 border border-border flex-1 min-w-[200px]">
-          <Search className="w-3.5 h-3.5 text-muted shrink-0" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск контрагента…"
-            className="bg-transparent text-sm flex-1 outline-none min-w-0"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              className="text-xs text-muted hover:text-text"
-              aria-label="Очистить поиск"
-            >
-              ✕
-            </button>
-          )}
-        </div>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Поиск контрагента…"
+          className="flex-1 min-w-[200px]"
+        />
 
         <InfoPopover label="Как это работает">
                 <p>
@@ -660,9 +649,9 @@ export function CounterpartyManager() {
                           {row.title}
                         </span>
                         {isSurvivor && (
-                          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent/10 text-accent shrink-0">
-                            останется
-                          </span>
+                          <Badge tone="accent" className="shrink-0">
+                            Останется
+                          </Badge>
                         )}
                         <span className="flex-1 min-w-2" />
                         <span className="w-20 shrink-0 text-right">
@@ -796,9 +785,9 @@ export function CounterpartyManager() {
                       {/* Такой контрагент уже заведён — значит операции просто не
                           связаны с ним, и заводить второго не нужно. */}
                       {o.inDictionary && (
-                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-panel2 text-muted shrink-0">
-                          есть в справочнике
-                        </span>
+                        <Badge tone="neutral" className="shrink-0">
+                          Есть в справочнике
+                        </Badge>
                       )}
                     </span>
                     <span className="w-20 shrink-0 text-right">
@@ -918,19 +907,19 @@ export function CounterpartyManager() {
                       {row.title}
                     </span>
                     {row.isNew && !gone && (
-                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent/10 text-accent shrink-0">
-                        новый
-                      </span>
+                      <Badge tone="accent" className="shrink-0">
+                        Новый
+                      </Badge>
                     )}
                     {row.isDeleted && (
-                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-expense/10 text-expense shrink-0">
-                        удалён
-                      </span>
+                      <Badge tone="expense" className="shrink-0">
+                        Удалён
+                      </Badge>
                     )}
                     {row.mergedInto && (
-                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent/10 text-accent shrink-0">
-                        объединён
-                      </span>
+                      <Badge tone="accent" className="shrink-0">
+                        Объединён
+                      </Badge>
                     )}
                   </span>
                   <span className="w-24 shrink-0 flex items-center justify-center">

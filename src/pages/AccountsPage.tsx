@@ -31,7 +31,6 @@ import {
   ChevronDown,
   Check,
   Pencil,
-  HelpCircle,
   LineChart as LineChartIcon,
   Settings2,
   Trash2,
@@ -121,13 +120,13 @@ import { AccountLogo } from "../components/AccountLogo";
 import { MultiSelect } from "../components/MultiSelect";
 import { AccountEditModal } from "../components/AccountEditModal";
 import { Popover } from "../components/Popover";
-import { Tooltip as AppTooltip } from "../components/Tooltip";
 import { DateField } from "../components/DateField";
 import { ACCOUNT_KINDS, accountKindLabel, DEBT_TYPES } from "../lib/accountType";
 import { accountOptions } from "../lib/accountOptions";
 import { debtKey, parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
 import { pluralRu } from "../lib/plural";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { Badge } from "../components/Badge";
 
 const STACK_COLORS = [
   "#22D3EE", "#A78BFA", "#F59E0B", "#10B981", "#EC4899",
@@ -283,8 +282,6 @@ function AccountMarks({
   owner?: string | null;
 }) {
   if (!offBalance && !archive && !owner) return null;
-  const chip =
-    "text-[10px] leading-4 px-1.5 rounded-full border whitespace-nowrap shrink-0";
   // Группа НЕ `shrink-0`: имя участника длины непредсказуемой, и в узкой
   // колонке несжимаемая пилюля съедала название счёта до одной буквы.
   // Сжимается здесь только она — «Вне баланса» и «Архив» короткие и на своём.
@@ -293,26 +290,20 @@ function AccountMarks({
   return (
     <span className="flex items-center gap-1 min-w-0">
       {offBalance && (
-        <span className={`${chip} border-accent2/40 text-accent2 bg-accent2/10`}>
+        <Badge tone="accent2" className="shrink-0">
           Вне баланса
-        </span>
+        </Badge>
       )}
       {/* Со значком, а не одним именем: серый чип с надписью «Ирина» иначе не
           отличить от «Архива» — непонятно, пометка это или чьё-то название.
           Человечек говорит, что речь о владельце, ещё до чтения. */}
       {owner && (
-        <span
-          className="text-[10px] leading-4 px-1.5 rounded-full border border-border
-                     text-muted bg-panel2 inline-flex items-center gap-1
-                     min-w-[4rem] max-w-[10rem]"
-          title={`Личный счёт участника: ${owner}`}
-        >
-          <UserRound className="w-2.5 h-2.5 shrink-0" />
+        <Badge icon={UserRound} title={`Личный счёт участника: ${owner}`} className="min-w-[4rem] max-w-[10rem]">
           <span className="truncate">{owner}</span>
-        </span>
+        </Badge>
       )}
       {archive && (
-        <span className={`${chip} border-border text-muted bg-panel2`}>Архив</span>
+        <Badge className="shrink-0">Архив</Badge>
       )}
     </span>
   );
@@ -2412,14 +2403,7 @@ export function AccountsPage() {
               { value: "cards", label: "Карточки", icon: LayoutGrid },
             ]}
           />
-          <AppTooltip content={listHint} placement="bottom">
-            <button
-              className="btn-icon shrink-0"
-              aria-label="Как читать список счетов"
-            >
-              <HelpCircle className="w-4 h-4" />
-            </button>
-          </AppTooltip>
+          <InfoPopover label="Как читать список счетов">{listHint}</InfoPopover>
         </div>
 
         {visibleRows.length === 0 ? (
@@ -2536,12 +2520,9 @@ export function AccountsPage() {
                     </button>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {a.edited && (
-                        <span
-                          className="text-[10px] leading-4 px-1.5 rounded-full border border-warn/40 text-warn bg-warn/10 whitespace-nowrap"
-                          title="Правка ещё не отправлена в Дзен-мани"
-                        >
+                        <Badge tone="warn" title="Правка ещё не отправлена в Дзен-мани">
                           Изменён
-                        </span>
+                        </Badge>
                       )}
                       <span
                         className="pill text-[10px]"
@@ -2572,7 +2553,7 @@ export function AccountsPage() {
                     onClick={() => setSelectedAccount(isSel ? null : a.account)}
                     className="block text-left w-full"
                   >
-                    <div className="text-[10px] uppercase tracking-wider text-muted">
+                    <div className="overline">
                       {capitalView ? (hasReal ? "Остаток" : "Накоплено") : "Изменение"}
                     </div>
                     <div className="flex items-end justify-between gap-2">
@@ -2854,7 +2835,7 @@ export function AccountsPage() {
                               title={
                                 debtsOpen ? "Свернуть контрагентов" : "Показать контрагентов"
                               }
-                              className="self-center shrink-0 -my-1 p-1 rounded text-muted hover:text-accent hover:bg-panel2"
+                              className="btn-icon btn-icon-sm self-center shrink-0 -my-1"
                             >
                               <ChevronDown
                                 className={`w-3.5 h-3.5 transition-transform ${
@@ -2864,12 +2845,9 @@ export function AccountsPage() {
                             </button>
                           )}
                           {a.edited && (
-                            <span
-                              className="text-[10px] leading-4 px-1.5 rounded-full border border-warn/40 text-warn bg-warn/10 whitespace-nowrap shrink-0"
-                              title="Правка ещё не отправлена в Дзен-мани"
-                            >
+                            <Badge tone="warn" title="Правка ещё не отправлена в Дзен-мани" className="shrink-0">
                               Изменён
-                            </span>
+                            </Badge>
                           )}
                           {hasReal && (
                             <AccountMarks

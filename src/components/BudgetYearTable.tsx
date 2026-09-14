@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronDown, Coins, HelpCircle, Scale, Target } from "lucide-react";
+import { ChevronDown, Coins, Scale, Target } from "lucide-react";
 import {
   hasTransfers,
   yearDiff,
@@ -19,6 +19,8 @@ import { Tooltip } from "./Tooltip";
 import { ExpandChevron, TreeElbow } from "./table/TableParts";
 import { treeIndent } from "./table/tableKit";
 import { TooltipFacts } from "./TooltipFacts";
+import { InfoPopover } from "./InfoPopover";
+import { Badge } from "./Badge";
 
 /** Три колонки на месяц плюс столько же на год — их и заполняем. */
 const SUB_COLUMNS = ["План", "Факт", "Разница"] as const;
@@ -649,37 +651,17 @@ export function BudgetYearTable({
             {/* Какой раздел сейчас под шапкой. Только в двойнике: он и есть та
                 полоса, что остаётся на экране, когда «Расходы» уехали вверх. */}
             {forClone && activeSection && (
-              <span
-                className={`text-[11px] font-normal px-1.5 py-0.5 rounded-full ${
-                  activeSection === "income"
-                    ? "bg-income/10 text-income"
-                    : "bg-expense/10 text-expense"
-                }`}
-              >
+              <Badge tone={activeSection === "income" ? "income" : "expense"} className="normal-case tracking-normal">
                 {activeSection === "income" ? "Доходы" : "Расходы"}
-              </span>
+              </Badge>
             )}
-            <Tooltip
-              content={
-                <>
-                  Суммы в {base}. «Разница» у расходов — сколько осталось до
-                  плана, у доходов — насколько план перевыполнен; больше нуля
-                  везде значит «хорошо».
-                </>
-              }
-            >
-              <button
-                type="button"
-                aria-label="Как читать таблицу"
-                className="text-muted hover:text-accent"
-                tabIndex={forClone ? -1 : undefined}
-                // Мышь фокусирует кнопку даже с `tabIndex={-1}`, а фокус внутри
-                // `aria-hidden`-поддерева — это то, чего быть не должно.
-                onMouseDown={forClone ? (e) => e.preventDefault() : undefined}
-              >
-                <HelpCircle className="w-3.5 h-3.5" />
-              </button>
-            </Tooltip>
+            <InfoPopover label="Как читать таблицу" focusable={!forClone}>
+              <p>
+                Суммы в {base}. «Разница» у расходов — сколько осталось до
+                плана, у доходов — насколько план перевыполнен; больше нуля
+                везде значит «хорошо».
+              </p>
+            </InfoPopover>
           </span>
         </th>
         {report.months.map((m) => (

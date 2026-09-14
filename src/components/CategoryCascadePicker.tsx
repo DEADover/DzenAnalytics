@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { CategoryDot } from "./CategoryDot";
+import { SearchInput } from "./SearchInput";
 
 export interface CategoryNode {
   name: string;
@@ -216,16 +217,7 @@ export function CategoryCascadePicker({
           }
           style={portal && pos ? { left: pos.left, top: pos.top, width: pos.width } : undefined}
         >
-          <div className="flex items-center gap-2 px-2.5 py-2 border-b border-border">
-            <Search className="w-3.5 h-3.5 text-muted shrink-0" />
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Поиск категории"
-              className="bg-transparent text-sm w-full outline-none"
-            />
-          </div>
+          <SearchInput variant="menu" value={query} onChange={setQuery} placeholder="Поиск категории" autoFocus />
           {searchLeaves ? (
             /* Search mode — one flat list with directly-selectable leaves,
                sub-categories included (issue #21). */

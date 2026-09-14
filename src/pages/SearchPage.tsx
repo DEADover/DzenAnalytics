@@ -16,6 +16,7 @@ import { DataTable } from "../components/DataTable";
 import { DateField } from "../components/DateField";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import type { Transaction } from "../types";
+import { SearchInput } from "../components/SearchInput";
 
 
 /** Значения отбора по типу. «Возвраты» — выбор поуже, чем «Расходы»: те
@@ -181,24 +182,13 @@ export function SearchPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="label block mb-1.5">Содержит</label>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={useRegex ? "regex (например, ^яндекс)" : "слова через пробел"}
-                className="input text-sm pl-9"
-                autoFocus
-              />
-              {query && (
-                <button
-                  onClick={() => setQuery("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-text"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder={useRegex ? "Regex, например ^яндекс" : "Слова через пробел"}
+              ariaLabel="Содержит"
+              autoFocus
+            />
           </div>
           <div>
             <label className="label block mb-1.5">Исключить</label>

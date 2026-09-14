@@ -13,6 +13,7 @@ import { pluralRu } from "../lib/plural";
 import type { ImportPlan, ParsedRow, PlanRow, RowVerdict } from "../lib/importRows";
 import { Modal, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
+import { Badge } from "./Badge";
 
 /**
  * Отчёт проверки файла — единственное место, где импорт можно остановить.
@@ -321,9 +322,9 @@ export function ImportXlsxModal({
                             <span className="truncate">{r.payee}</span>
                             {r.verdict.ok && r.verdict.newCounterparty && (
                               <Tooltip content="Такого контрагента нет в справочнике — заведём запись вместе с операциями">
-                                <span className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent">
+                                <Badge tone="accent" className="shrink-0">
                                   Новый
-                                </span>
+                                </Badge>
                               </Tooltip>
                             )}
                           </div>

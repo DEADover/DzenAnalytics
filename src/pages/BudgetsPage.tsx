@@ -11,7 +11,6 @@ import {
   Check,
   X,
   ArrowUp,
-  HelpCircle,
   Wand2,
   Download,
   CalendarClock,
@@ -80,6 +79,8 @@ import {
   budgetExportFileName,
   type BudgetExportFormat,
 } from "../lib/budgetExportName";
+import { InfoPopover } from "../components/InfoPopover";
+import { Badge, type BadgeTone } from "../components/Badge";
 
 function currentMonth(): string {
   const d = new Date();
@@ -879,7 +880,7 @@ export function BudgetsPage() {
           </button>
         </Tooltip>
         <Tooltip content="Отмена">
-          <button onClick={resetForm} className="text-muted hover:text-text shrink-0 p-1">
+          <button onClick={resetForm} className="btn-icon shrink-0">
             <X className="w-5 h-5" />
           </button>
         </Tooltip>
@@ -992,29 +993,19 @@ export function BudgetsPage() {
               экране: два из трёх фактов видно и так (заголовки плиток и сам
               период в шапке), а третий нужен раз в жизни. */}
           {view === "dashboard" && (
-            <Tooltip
-              content={
-                <TooltipFacts
-                  title="Показатели на этом экране"
-                  facts={[
-                    { label: "За месяц", value: `${monthOf(dashboardMonth, true)} ${year}` },
-                    {
-                      label: "С начала года",
-                      value: `Январь — ${monthOf(dashboardMonth)}`,
-                    },
-                  ]}
-                  note={<span className="italic">Прошлый год берётся тем же отрезком</span>}
-                />
-              }
-            >
-              <button
-                type="button"
-                aria-label="За какой период показатели на этом экране"
-                className="text-muted hover:text-text"
-              >
-                <HelpCircle className="w-4 h-4" />
-              </button>
-            </Tooltip>
+            <InfoPopover label="За какой период показатели на этом экране">
+              <TooltipFacts
+                title="Показатели на этом экране"
+                facts={[
+                  { label: "За месяц", value: `${monthOf(dashboardMonth, true)} ${year}` },
+                  {
+                    label: "С начала года",
+                    value: `Январь — ${monthOf(dashboardMonth)}`,
+                  },
+                ]}
+                note={<span className="italic">Прошлый год берётся тем же отрезком</span>}
+              />
+            </InfoPopover>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -1260,26 +1251,18 @@ function PlanFactCard({
       }
     >
       <div className="flex items-center gap-2 flex-wrap mt-3">
-        <span className="text-sm px-3 py-1 rounded-full bg-panel2 text-muted tabular-nums whitespace-nowrap">
+        <Badge size="md" className="tabular-nums font-normal">
           План {formatMoney(plan, base, { signed })}
-        </span>
+        </Badge>
         {kind === "delta" ? (
-          <span
-            className={`text-sm font-medium px-3 py-1 rounded-full whitespace-nowrap ${
-              fact >= 0 ? PILL_TONE.income : PILL_TONE.expense
-            }`}
-          >
+          <Badge size="md" tone={fact >= 0 ? PILL_TONE.income : PILL_TONE.expense}>
             {fact >= 0 ? "Профицит" : "Дефицит"}
-          </span>
+          </Badge>
         ) : (
           plan > 0 && (
-            <span
-              className={`text-sm font-medium px-3 py-1 rounded-full tabular-nums ${
-                PILL_TONE[summaryTone(fact / plan, kind === "income")]
-              }`}
-            >
+            <Badge size="md" tone={PILL_TONE[summaryTone(fact / plan, kind === "income")]} className="tabular-nums">
               {Math.round((fact / plan) * 100)}%
-            </span>
+            </Badge>
           )
         )}
       </div>
@@ -1628,49 +1611,38 @@ function BarLegend({ isIncome, showTick }: { isIncome: boolean; showTick: boolea
         { c: "bg-expense", t: "Лимит превышен — больше 100%" },
       ];
   return (
-    <Tooltip
-      placement="bottom"
-      content={
-        <div className="space-y-1.5 text-left leading-snug">
-          <div className="font-medium">Как читать полоску</div>
-          {swatches.map((s) => (
-            <div key={s.t} className="flex items-center gap-2">
-              <span className={`inline-block w-3.5 h-2 rounded-full ${s.c}`} />
-              <span>{s.t}</span>
-            </div>
-          ))}
-          <div className="space-y-1.5 pt-1.5 mt-1 border-t border-border/60">
-            <div className="flex items-center gap-2">
-              <span className="inline-block w-3.5 h-2 rounded-full bg-panel2 ring-1 ring-border" />
-              <span>Серый фон — сколько ещё осталось до плана</span>
-            </div>
-            {showTick && (
-              <div className="flex items-center gap-2">
-                <span className="relative inline-block w-3.5 h-2 rounded-full bg-panel2 ring-1 ring-border">
-                  <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0 h-4 border-l-2 border-solid border-text/80" />
-                </span>
-                <span>Засечка — сегодняшний день месяца</span>
-              </div>
-            )}
+    <InfoPopover label="Как читать полоску бюджета">
+      <div className="space-y-1.5 text-left leading-snug">
+        <div className="font-medium">Как читать полоску</div>
+        {swatches.map((s) => (
+          <div key={s.t} className="flex items-center gap-2">
+            <span className={`inline-block w-3.5 h-2 rounded-full ${s.c}`} />
+            <span>{s.t}</span>
           </div>
+        ))}
+        <div className="space-y-1.5 pt-1.5 mt-1 border-t border-border/60">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-3.5 h-2 rounded-full bg-panel2 ring-1 ring-border" />
+            <span>Серый фон — сколько ещё осталось до плана</span>
+          </div>
+          {showTick && (
+            <div className="flex items-center gap-2">
+              <span className="relative inline-block w-3.5 h-2 rounded-full bg-panel2 ring-1 ring-border">
+                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0 h-4 border-l-2 border-solid border-text/80" />
+              </span>
+              <span>Засечка — сегодняшний день месяца</span>
+            </div>
+          )}
         </div>
-      }
-    >
-      <button
-        type="button"
-        aria-label="Как читать полоску бюджета"
-        className="text-muted hover:text-text shrink-0"
-      >
-        <HelpCircle className="w-4 h-4" />
-      </button>
-    </Tooltip>
+      </div>
+    </InfoPopover>
   );
 }
 
-const PILL_TONE: Record<string, string> = {
-  income: "text-income bg-income/15",
-  warn: "text-warn bg-warn/15",
-  expense: "text-expense bg-expense/15",
+const PILL_TONE: Record<string, BadgeTone> = {
+  income: "income",
+  warn: "warn",
+  expense: "expense",
 };
 
 /**
@@ -1746,11 +1718,9 @@ function PctPill({
   return (
     <span className="w-16 shrink-0 flex justify-center">
       {planned > 0 ? (
-        <span
-          className={`text-xs font-medium tabular-nums px-2 py-0.5 rounded-full ${PILL_TONE[summaryTone(ratio, isIncome)]}`}
-        >
+        <Badge tone={PILL_TONE[summaryTone(ratio, isIncome)]} className="tabular-nums">
           {(ratio * 100).toFixed(0)}%
-        </span>
+        </Badge>
       ) : (
         <span className="text-xs text-muted">—</span>
       )}
@@ -1928,7 +1898,7 @@ function BudgetRow({
       {hasSubs ? (
         <button
           onClick={onToggle}
-          className="shrink-0 text-muted hover:text-text"
+          className="btn-icon btn-icon-sm -m-1 shrink-0"
           aria-expanded={expanded}
           aria-label={expanded ? "Свернуть подкатегории" : "Показать подкатегории"}
         >

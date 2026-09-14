@@ -27,6 +27,7 @@ import { Tooltip } from "../components/Tooltip";
 import { DateField } from "../components/DateField";
 import { CardHeader } from "../components/CardHeader";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { ProgressBar } from "../components/ProgressBar";
 
 function monthsBetween(fromIso: string, toIso: string): number {
   const a = new Date(fromIso);
@@ -378,7 +379,7 @@ function Field({
       {/* Smaller, single-line label (`whitespace-nowrap`) so even a long one like
           «Ежемесячные отчисления» stays on ONE row — every input in a row then
           starts at the same y, with a tight, uniform gap to its label. */}
-      <div className="mb-1.5 flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted font-medium whitespace-nowrap">
+      <div className="label mb-1.5 flex items-center gap-1 whitespace-nowrap">
         <span>{label}</span>
         {hint && (
           <Tooltip content={hint}>
@@ -668,14 +669,7 @@ function GoalCard({
       </div>
 
       {/* Progress bar */}
-      <div className="h-2.5 bg-panel2 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-[width] duration-500 ${
-            m.done ? "bg-income" : "bg-accent"
-          }`}
-          style={{ width: `${m.ratio * 100}%` }}
-        />
-      </div>
+      <ProgressBar value={m.ratio} tone={m.done ? "income" : "accent"} label="Прогресс цели" />
 
       {/* Body: the view content ALWAYS stays in flow (only its opacity changes),
           so the card keeps the exact same size when the edit overlay opens on

@@ -256,7 +256,7 @@ function CalendarPopup({
               <button
                 type="button"
                 onClick={prevMonth}
-                className="p-1 rounded-full text-muted transition-colors hover:text-text hover:bg-panel2"
+                className="btn-icon btn-icon-sm"
                 aria-label="Предыдущий месяц"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -264,7 +264,7 @@ function CalendarPopup({
               <button
                 type="button"
                 onClick={nextMonth}
-                className="p-1 rounded-full text-muted transition-colors hover:text-text hover:bg-panel2"
+                className="btn-icon btn-icon-sm"
                 aria-label="Следующий месяц"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -327,7 +327,7 @@ function CalendarPopup({
               <button
                 type="button"
                 onClick={() => setView((v) => ({ ...v, y: v.y - 1 }))}
-                className="p-1 rounded-full text-muted transition-colors hover:text-text hover:bg-panel2"
+                className="btn-icon btn-icon-sm"
                 aria-label="Предыдущий год"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -335,7 +335,7 @@ function CalendarPopup({
               <button
                 type="button"
                 onClick={() => setView((v) => ({ ...v, y: v.y + 1 }))}
-                className="p-1 rounded-full text-muted transition-colors hover:text-text hover:bg-panel2"
+                className="btn-icon btn-icon-sm"
                 aria-label="Следующий год"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -384,7 +384,7 @@ function CalendarPopup({
               <button
                 type="button"
                 onClick={() => setYearStart((s) => s - 12)}
-                className="p-1 rounded-full text-muted transition-colors hover:text-text hover:bg-panel2"
+                className="btn-icon btn-icon-sm"
                 aria-label="Предыдущие годы"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -392,7 +392,7 @@ function CalendarPopup({
               <button
                 type="button"
                 onClick={() => setYearStart((s) => s + 12)}
-                className="p-1 rounded-full text-muted transition-colors hover:text-text hover:bg-panel2"
+                className="btn-icon btn-icon-sm"
                 aria-label="Следующие годы"
               >
                 <ChevronRight className="w-4 h-4" />

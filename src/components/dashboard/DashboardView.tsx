@@ -67,6 +67,7 @@ import { periodKey, shiftPeriod } from "../../lib/period";
 import { monthOverMonth } from "../../lib/monthOverMonth";
 import { monthEnd } from "../../lib/dashboardModel";
 import { affectsExpense } from "../../lib/txKindStyle";
+import { ProgressBar } from "../ProgressBar";
 
 /** Название месяца отдельно от года: в пилюле год только шумит. */
 function monthName(ym: string): string {
@@ -447,12 +448,7 @@ function HeroSplit({ m }: { m: DashboardModel }) {
                 {m.month.day} из {m.month.days} {pluralRu(m.month.days, ["дня", "дней", "дней"])}
               </span>
             </div>
-            <div className="h-1.5 rounded-full bg-panel2 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-accent"
-                style={{ width: `${Math.round(m.month.progress * 100)}%` }}
-              />
-            </div>
+            <ProgressBar value={m.month.progress} label="Сколько месяца прошло" />
           </div>
         </div>
 

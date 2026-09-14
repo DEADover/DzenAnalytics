@@ -56,6 +56,8 @@ import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 import { nextSort, sortRows, type SortState } from "../components/table/tableKit";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { ProgressBar } from "../components/ProgressBar";
+import { Badge } from "../components/Badge";
 
 const INCOME = "#10B981";
 const EXPENSE = "#EF4444";
@@ -761,9 +763,9 @@ function Quarters({
                   <span className="font-semibold text-text">{ROMAN[q.q - 1]}</span> квартал
                 </span>
                 {!empty && q.expense === peak && (
-                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-expense/10 text-expense">
-                    пик
-                  </span>
+                  <Badge tone="expense">
+                    Пик
+                  </Badge>
                 )}
               </div>
               {/* Квартал, который ещё не наступил, — это не «ноль рублей». Три
@@ -829,12 +831,11 @@ function QuarterBar({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="h-1.5 flex-1 rounded-full bg-panel2 overflow-hidden">
-        <div
-          className={`h-full rounded-full ${cls}`}
-          style={{ width: `${Math.max(1.5, Math.min(100, (value / scale) * 100))}%` }}
-        />
-      </div>
+      <ProgressBar
+        value={Math.max(0.015, value / scale)}
+        fillClassName={cls}
+        className="flex-1"
+      />
       <span className={`text-[11px] tabular-nums whitespace-nowrap w-16 text-right ${tone}`}>
         {label}
       </span>
@@ -997,7 +998,7 @@ function Fact({
 }) {
   return (
     <div className="card-sunken px-3 py-2.5 min-w-0">
-      <div className="text-[11px] uppercase tracking-wide text-muted leading-tight truncate">
+      <div className="overline truncate">
         {label}
       </div>
       <div className="stat-num text-xl font-bold tabular-nums leading-tight mt-1 truncate">

@@ -18,6 +18,7 @@ import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { Callout } from "./Callout";
+import { ProgressBar } from "./ProgressBar";
 
 /**
  * Мастер восстановления из снимка (#93).
@@ -489,14 +490,10 @@ function DictionariesStep({
             {formatNum(progress.sent)} из {formatNum(progress.total)}
             <Elapsed />
           </p>
-          <div className="h-1 rounded-full bg-border overflow-hidden">
-            <div
-              className="h-full bg-accent transition-all"
-              style={{
-                width: `${progress.total > 0 ? Math.round((progress.sent / progress.total) * 100) : 0}%`,
-              }}
-            />
-          </div>
+          <ProgressBar
+            value={progress.total > 0 ? progress.sent / progress.total : 0}
+            label="Удаление справочников"
+          />
         </div>
       )}
       <p className="text-xs text-muted">
@@ -608,14 +605,11 @@ function ReadyStep({
               </>
             )}
           </p>
-          <div className="h-1 rounded-full bg-border overflow-hidden">
-            <div
-              className="h-full bg-accent2 transition-all"
-              style={{
-                width: `${progress.total > 0 ? Math.min(100, Math.round((progress.current / progress.total) * 100)) : 0}%`,
-              }}
-            />
-          </div>
+          <ProgressBar
+            tone="accent2"
+            value={progress.total > 0 ? progress.current / progress.total : 0}
+            label="Восстановление"
+          />
           <p className="text-xs text-muted">
             Займёт минуту-другую. Не перезагружайте страницу, пока идёт перенос.
           </p>

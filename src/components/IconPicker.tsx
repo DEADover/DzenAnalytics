@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, Search, X } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import { ZEN_ICON_IDS } from "../lib/zenIconLucide";
 import { ZenIcon } from "./ZenIcon";
+import { SearchInput } from "./SearchInput";
 
 interface Props {
   /** Current Zenmoney icon id, or null. */
@@ -62,25 +63,13 @@ export function IconPicker({ value, color, onChange }: Props) {
 
       {open && (
         <div className="absolute left-0 right-0 z-30 mt-2 border border-border rounded-lg bg-panel p-2 shadow-xl">
-          <div className="flex items-center gap-2 bg-panel2 rounded-lg px-2 py-1 border border-border mb-2">
-            <Search className="w-3.5 h-3.5 text-muted shrink-0" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Поиск иконки (напр. car, food)…"
-              className="bg-transparent text-sm flex-1 outline-none min-w-0"
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                className="text-muted hover:text-text"
-                aria-label="Очистить поиск"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+          <SearchInput
+            size="sm"
+            value={query}
+            onChange={setQuery}
+            placeholder="Поиск иконки (напр. car, food)…"
+            className="mb-2"
+          />
           <div className="grid grid-cols-6 gap-1 max-h-56 overflow-y-auto">
             {ids.map((id) => {
               const active = id === value;

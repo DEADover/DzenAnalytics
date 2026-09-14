@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import { HelpCircle } from "lucide-react";
 import clsx from "clsx";
+import { SURFACE_ATTR } from "./Popover";
 
 /** ПРЕДЕЛ ширины панели, а не сама ширина: короткое пояснение в одну строку
  *  растягивалось на весь предел и выглядело нелепо рядом со своим значком.
@@ -38,10 +39,19 @@ const MIN_BELOW = 240;
  */
 export function InfoPopover({
   label = "Как это считается",
+  tone = "default",
+  focusable = true,
   children,
 }: {
   /** Подпись кнопки — она же в подсказке при наведении. */
   label?: string;
+  /** `expense` — знак красный: с тем, что он поясняет, сейчас что-то не так. */
+  tone?: "default" | "expense";
+  /**
+   * `false` — копия в двойнике липкой шапки: до неё не дотягивается Tab, а
+   * щелчок не оставляет фокус внутри `aria-hidden`-поддерева.
+   */
+  focusable?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -116,11 +126,15 @@ export function InfoPopover({
         aria-expanded={open}
         aria-label={label}
         title={label}
+        tabIndex={focusable ? undefined : -1}
+        onMouseDown={focusable ? undefined : (e) => e.preventDefault()}
         className={clsx(
           "p-1 rounded-full shrink-0",
           open
             ? "text-accent bg-accent/10"
-            : "text-muted hover:text-accent hover:bg-panel2"
+            : tone === "expense"
+              ? "text-expense hover:bg-expense/10"
+              : "text-muted hover:text-accent hover:bg-panel2"
         )}
       >
         {/* 16px, а не 20: рядом со строкой в 14px значок в 20px оказывался выше
@@ -136,6 +150,9 @@ export function InfoPopover({
             <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} />
             <div
               ref={panelRef}
+              // Своя прокрутка панели не должна закрывать окно, из которого
+              // её открыли (настройки режима правила — это `Popover`).
+              {...{ [SURFACE_ATTR]: "" }}
               role="dialog"
               aria-label={label}
               className="fixed z-[91] w-max max-w-[min(30rem,calc(100vw-1rem))] overflow-y-auto border border-border rounded-xl bg-panel p-4 shadow-xl space-y-2.5 text-xs text-muted leading-relaxed"

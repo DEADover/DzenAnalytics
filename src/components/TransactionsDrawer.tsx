@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   X,
-  Search,
   ArrowUp,
   ArrowDown,
   ArrowLeftRight,
@@ -32,6 +31,7 @@ import { DataTable, type Column, type SortState } from "./DataTable";
 import { OperationActions, OperationAmount, OperationCategory, OperationPayee } from "./operations/OperationCells";
 import { buildCsv, csvFileName, downloadCsv, sortRows } from "./table/tableKit";
 import type { Transaction } from "../types";
+import { SearchInput } from "./SearchInput";
 
 
 export function TransactionsDrawer() {
@@ -409,15 +409,12 @@ export function TransactionsDrawer() {
         </div>
 
         <div className="px-5 md:px-6 py-3 border-b border-border flex items-center gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск по получателю/комментарию/категории/счёту"
-              className="input pl-9 text-sm"
-            />
-          </div>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Поиск по получателю, комментарию, категории и счёту"
+            className="flex-1"
+          />
           <button onClick={exportCsv} className="btn-ghost text-xs whitespace-nowrap">
             <Download className="w-3.5 h-3.5" />
             CSV

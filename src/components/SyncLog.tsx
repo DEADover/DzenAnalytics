@@ -22,6 +22,7 @@ import { cellClass } from "./table/tableKit";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { pluralRu } from "../lib/plural";
 import { Callout } from "./Callout";
+import { Badge } from "./Badge";
 
 /**
  * Sync log table.
@@ -136,7 +137,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
           {/* Record count as a labelled chip — a bare «· 8» next to the title
               didn't say what it counted, and blended into the status text. */}
           {entries.length > 0 && (
-            <span className="text-xs text-muted tabular-nums px-2 py-0.5 rounded-md bg-panel2 border border-border shrink-0">
+            <span className="pill text-muted tabular-nums shrink-0">
               {formatN(entries.length)}{" "}
               {pluralRu(entries.length, ["запись", "записи", "записей"])}
             </span>
@@ -434,34 +435,31 @@ function StatusBadge({ status }: { status: SyncLogStatus }) {
     ok: {
       Icon: CheckCircle2,
       label: "Успешно",
-      cls: "text-income bg-income/10 border-income/30",
+      tone: "income" as const,
     },
     partial: {
       Icon: AlertCircle,
       label: "Частично",
-      cls: "text-warn bg-warn/10 border-warn/30",
+      tone: "warn" as const,
     },
     error: {
       Icon: AlertTriangle,
       label: "Ошибка",
-      cls: "text-expense bg-expense/10 border-expense/30",
+      tone: "expense" as const,
     },
   }[status];
   // Незнакомый статус — не повод ронять всю страницу настроек: запись могла
   // прийти из другой версии или пережить сбой записи. Показываем нейтральный
   // значок с самим значением, чтобы было видно, что именно не распозналось.
-  const { Icon, label, cls } = conf ?? {
+  const { Icon, label, tone } = conf ?? {
     Icon: HelpCircle,
     label: String(status || "—"),
-    cls: "text-muted bg-panel2 border-border",
+    tone: "neutral" as const,
   };
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded-md border ${cls} whitespace-nowrap`}
-    >
-      <Icon className="w-3 h-3" />
+    <Badge tone={tone} icon={Icon}>
       {label}
-    </span>
+    </Badge>
   );
 }
 

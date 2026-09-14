@@ -1,12 +1,13 @@
 import { DataTable } from "./DataTable";
 import { useMemo, useState } from "react";
-import { ShieldOff, X, Search, Trash2 } from "lucide-react";
+import { ShieldOff, X, Trash2 } from "lucide-react";
 import { useDuplicateExclusionsStore } from "../store/useDuplicateExclusionsStore";
 import { confirm } from "../store/useConfirmStore";
 import { formatMoney } from "../lib/format";
 import { kindLabel } from "../lib/txKindStyle";
 import { Modal, ModalBody, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
+import { SearchInput } from "./SearchInput";
 
 /**
  * Manage the «не дубликаты» exclusion rules. A modal (not an inline list) so a
@@ -55,16 +56,13 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
       />
 
       <div className="px-5 py-3 border-b border-border shrink-0 flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по получателю или сумме"
-            className="input pl-9 text-sm"
-            autoFocus
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Поиск по получателю или сумме"
+          autoFocus
+          className="flex-1"
+        />
         {total > 0 && (
           <button onClick={handleClearAll} className="btn-ghost text-xs text-expense whitespace-nowrap">
             <Trash2 className="w-3.5 h-3.5" />

@@ -5,7 +5,6 @@ import {
   ChevronDown,
   Plus,
   Trash2,
-  HelpCircle,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -49,6 +48,7 @@ import type { RuleSchedule } from "../lib/ruleSchedule";
 import { useDataStore } from "../store/useDataStore";
 import type { Transaction } from "../types";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { InfoPopover } from "./InfoPopover";
 
 const RULE_FIELDS: { value: RuleField; label: string }[] = (
   Object.keys(FIELD_LABELS) as RuleField[]
@@ -713,20 +713,12 @@ export function RuleEditModal({
                       />
                       )}
                       {c.op === "regex" && (
-                        <Tooltip content={REGEX_HINT} placement="bottom">
-                          <button
-                            type="button"
-                            className={clsx(
-                              "shrink-0",
-                              brokenRegex.has(c.id!)
-                                ? "text-expense"
-                                : "text-muted hover:text-accent"
-                            )}
-                            aria-label="Синтаксис регулярных выражений"
-                          >
-                            <HelpCircle className="w-4 h-4" />
-                          </button>
-                        </Tooltip>
+                        <InfoPopover
+                          label="Синтаксис регулярных выражений"
+                          tone={brokenRegex.has(c.id!) ? "expense" : "default"}
+                        >
+                          {REGEX_HINT}
+                        </InfoPopover>
                       )}
                       {/* У числа регистра нет — галочке рядом с суммой
                           отвечать не на что. Вместо неё подпись о том, в чём

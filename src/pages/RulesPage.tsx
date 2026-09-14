@@ -620,7 +620,7 @@ export function RulesPage() {
                   </th>
                   {/* Порядок правил — это порядок, в котором они срабатывают:
                       его задают перетаскиванием, поэтому сортировки у таблицы нет. */}
-                  <HeadCell type="count" label="№" width="6.5rem" />
+                  <HeadCell type="count" label="№" width="7rem" />
                   <HeadCell type="text" label="Правило" className="w-full" />
                   <HeadCell type="text" label="Что меняет" width="18rem" />
                   <HeadCell type="mark" label="Режим" width="13rem" />
@@ -696,7 +696,7 @@ export function RulesPage() {
                         />
                       </td>
                       <td className={cellClass("count")}>
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-0.5">
                           {/* Ручка — подсказка, что строку можно тащить. Тянется
                               вся строка, но без видимого захвата об этом никто
                               не догадается. */}
@@ -713,7 +713,7 @@ export function RulesPage() {
                               void move(rule.id, -1).then(reapplyRules);
                             }}
                             disabled={idx === 0}
-                            className="text-muted hover:text-accent disabled:opacity-30"
+                            className="btn-icon btn-icon-sm"
                             title="Выше"
                             aria-label="Поднять правило"
                           >
@@ -725,7 +725,7 @@ export function RulesPage() {
                               void move(rule.id, 1).then(reapplyRules);
                             }}
                             disabled={idx === rules.length - 1}
-                            className="text-muted hover:text-accent disabled:opacity-30"
+                            className="btn-icon btn-icon-sm"
                             title="Ниже"
                             aria-label="Опустить правило"
                           >

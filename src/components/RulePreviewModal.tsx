@@ -14,6 +14,7 @@ import type { Transaction } from "../types";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
 import { Callout } from "./Callout";
+import { Badge, type BadgeTone } from "./Badge";
 
 /**
  * Окно «Что изменят правила» — предпросмотр и применение (пункты 9–12 issue #49).
@@ -47,11 +48,11 @@ const STATUS_LABEL: Record<RuleRow["status"], string> = {
   blocked: "Нет категории в Дзен-мани",
 };
 
-const STATUS_TONE: Record<RuleRow["status"], string> = {
-  pending: "bg-warn/10 text-warn",
-  written: "bg-income/10 text-income",
-  same: "bg-panel2 text-muted",
-  blocked: "bg-expense/10 text-expense",
+const STATUS_TONE: Record<RuleRow["status"], BadgeTone> = {
+  pending: "warn",
+  written: "income",
+  same: "neutral",
+  blocked: "expense",
 };
 
 export function RulePreviewModal({
@@ -249,24 +250,17 @@ export function RulePreviewModal({
                             подпись молчит: она повторялась бы в каждой строке,
                             а её и так видно в шапке окна. */}
                         {showRule && oneRule && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-panel2 text-muted whitespace-nowrap max-w-[14rem] truncate">
-                            {oneRule}
-                          </span>
+                          <Badge className="max-w-[14rem] truncate">{oneRule}</Badge>
                         )}
                         {STATUS_LABEL[row.status] && (
-                          <span
-                            className={clsx(
-                              "text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap",
-                              STATUS_TONE[row.status]
-                            )}
-                          >
+<Badge tone={STATUS_TONE[row.status]}>
                             {STATUS_LABEL[row.status]}
                             {row.status === "blocked" && row.blockedCategory
                               ? `: «${row.blockedCategory}»`
                               : row.status === "blocked" && row.blockedPayee
                                 ? `: контрагента «${row.blockedPayee}» больше нет`
                                 : ""}
-                          </span>
+                          </Badge>
                         )}
                       </div>
                       <div className="mt-1 space-y-0.5">

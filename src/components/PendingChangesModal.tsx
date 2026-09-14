@@ -48,6 +48,7 @@ import { kindLabel, kindColorClass } from "../lib/txKindStyle";
 import type { Transaction } from "../types";
 import { Modal, ModalBody, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
+import { Badge } from "./Badge";
 
 // Which patch fields map to which human-readable «changed aspect».
 /** Одна «грань» операции: какие ключи патча её задевают, как она называется и
@@ -837,12 +838,9 @@ function Row({
           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
             <span className="text-xs text-muted truncate">{t.categoryFull}</span>
             {fields?.map((f) => (
-              <span
-                key={f}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-warn/10 text-warn whitespace-nowrap"
-              >
+              <Badge key={f} tone="warn">
                 {f}
-              </span>
+              </Badge>
             ))}
           </div>
         </div>
@@ -869,7 +867,7 @@ function Row({
           {onEdit && (
             <button
               onClick={onEdit}
-              className="p-1.5 rounded-md shrink-0 text-muted opacity-70 hover:opacity-100 hover:text-accent hover:bg-panel2 group-hover:opacity-100 transition-colors"
+              className="btn-icon shrink-0 opacity-70 hover:opacity-100 group-hover:opacity-100"
               title="Открыть в редакторе операции"
               aria-label="Открыть в редакторе операции"
             >
@@ -933,7 +931,7 @@ function RevertButton({
   return (
     <button
       onClick={() => void onAction()}
-      className="p-1.5 rounded-md shrink-0 text-muted opacity-70 hover:opacity-100 hover:text-accent hover:bg-panel2 group-hover:opacity-100 transition-colors"
+      className="btn-icon shrink-0 opacity-70 hover:opacity-100 group-hover:opacity-100"
       title={`${action} (локально, без облака)`}
       aria-label={action}
     >

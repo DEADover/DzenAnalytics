@@ -64,7 +64,7 @@ export function HistRatesProgress() {
         </div>
         <button
           type="button"
-          className="shrink-0 self-start text-muted hover:text-text"
+          className="btn-icon btn-icon-sm -m-1 shrink-0 self-start"
           onClick={dismiss}
           title="Закрыть"
           aria-label="Закрыть"

@@ -32,6 +32,7 @@ import { DeviationPill } from "../components/DeviationPill";
 import { confirm } from "../store/useConfirmStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { ProgressBar } from "../components/ProgressBar";
 
 // One pill per coarse cadence bucket, plus an "all" pseudo-option.
 // Order matches the user's likely usage frequency on this page:
@@ -516,12 +517,7 @@ export function RecurringPage() {
         sortValue: (c) => c.consistency,
         render: (c) => (
           <span className="flex items-center justify-end gap-2">
-            <span className="w-12 h-1.5 bg-panel2 rounded-full overflow-hidden">
-              <span
-                className="block h-full bg-accent"
-                style={{ width: `${c.consistency * 100}%` }}
-              />
-            </span>
+            <ProgressBar value={c.consistency} className="w-12 shrink-0" />
             <span className="w-10">{formatPct(c.consistency, 0)}</span>
           </span>
         ),

@@ -260,11 +260,21 @@ h2,
     @apply inline-flex items-center justify-center p-1.5 rounded-full text-muted
            transition-colors duration-200
            hover:text-accent hover:bg-panel2
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted;
   }
   /** То же, но действие разрушительное: подсветка красная. */
   .btn-icon-danger {
     @apply btn-icon hover:text-expense hover:bg-expense/10;
+  }
+  /**
+   * Плотная кнопка-значок, 24 × 24 со значком 16 (или 22 со значком 14): в
+   * календаре, в столбце «№», в строке списка, где 28 раздвинули бы строку.
+   * Прежде такие кнопки были голыми значками без подложки — область нажатия
+   * совпадала с самим значком, и в него трудно было попасть.
+   */
+  .btn-icon-sm {
+    @apply p-1;
   }
 
   .btn-warn {
@@ -421,6 +431,16 @@ h2,
      even if showPicker() isn't available. */
   .label {
     @apply text-xs uppercase tracking-wider text-muted font-medium;
+  }
+  /**
+   * Надпись над группой: «Тип операции» в панели фильтров, «Архивные» и
+   * группы в выпадающих списках, разделы палитры команд и мобильного меню.
+   * Тише `.label` — 11 px и без полужирного: это подпись к набору пунктов, а
+   * не к полю. Прежде таких надписей было пять видов — 10 и 11 px, разрядка
+   * 0.025 и 0.05 em.
+   */
+  .overline {
+    @apply text-[11px] leading-4 uppercase tracking-wide text-muted font-normal;
   }
   .stat-num {
     @apply text-2xl font-semibold tabular-nums font-mono;

@@ -442,7 +442,7 @@ export function GlobalFilters({
               <div className="fixed inset-0 z-[70]" onClick={() => setAdditionalOpen(false)} />
               <div className="absolute z-[80] mt-1 left-0 w-72 card p-2 space-y-3 max-h-[70vh] overflow-auto">
                 <div>
-                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">Тип операции</div>
+                  <div className="overline mb-1.5">Тип операции</div>
                   {/* Сеткой 2×2, а не строкой: четвёртой кнопке в ряд уже не
                       хватало ширины панели, и подписи начинали обрезаться. */}
                   <div className="grid grid-cols-2 gap-1">
@@ -465,7 +465,7 @@ export function GlobalFilters({
                 </div>
 
                 <div>
-                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">
+                  <div className="overline mb-1.5">
                     Сумма, {currencySymbol(base)}
                   </div>
                   <div className="flex items-center gap-2">

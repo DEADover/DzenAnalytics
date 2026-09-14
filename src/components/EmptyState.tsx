@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Cloud, Upload } from "lucide-react";
+import { Badge } from "./Badge";
 
 /**
  * Shown on every analytics page while there are no transactions yet.
@@ -27,9 +28,9 @@ export function EmptyState() {
               <Cloud className="w-5 h-5" />
             </span>
             <span className="font-semibold">Подключить Дзен-мани</span>
-            <span className="ml-auto text-[11px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent shrink-0">
+            <Badge tone="accent" className="ml-auto shrink-0">
               Рекомендуем
-            </span>
+            </Badge>
           </div>
           <p className="text-sm text-muted">
             Онлайн-синхронизация по токену API: операции, счета и категории

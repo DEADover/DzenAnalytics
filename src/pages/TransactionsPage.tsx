@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Search,
   Download,
   Plus,
   Pencil,
@@ -50,6 +49,7 @@ import { kindLabel, operationTone } from "../lib/txKindStyle";
 import { pluralOps } from "../lib/plural";
 import type { Transaction, TxKind } from "../types";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { SearchInput } from "../components/SearchInput";
 
 type SortMode = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
 
@@ -574,18 +574,14 @@ export function TransactionsPage() {
       <div className="tray">
       <div className="tray-core overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-3 flex-wrap">
-          <div
-            className="relative flex-1 min-w-[220px]"
+          <SearchInput
+            size="sm"
+            value={pageSearch}
+            onChange={setPageSearch}
+            placeholder="Быстрый поиск по таблице…"
             title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту. Не сохраняется и на другие страницы не влияет."}
-          >
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-            <input
-              value={pageSearch}
-              onChange={(e) => setPageSearch(e.target.value)}
-              placeholder="Быстрый поиск по таблице…"
-              className="input pl-9 text-xs"
-            />
-          </div>
+            className="flex-1 min-w-[220px]"
+          />
           {/* Compact sort — icon button (field glyph + direction) opening a
               small menu with the four named options. */}
           {apiConnected && (

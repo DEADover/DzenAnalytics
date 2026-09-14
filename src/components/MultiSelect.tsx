@@ -20,11 +20,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { SURFACE_ATTR } from "./Popover";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import { FILTER_NONE } from "../store/useFiltersStore";
 import { pluralRu } from "../lib/plural";
 import { nestedBranches, visibleOptions } from "../lib/nestedOptions";
+import { SearchInput } from "./SearchInput";
 
 export function MultiSelect({
   label,
@@ -251,7 +252,7 @@ export function MultiSelect({
           className
         )}
       >
-        <span className="text-[11px] uppercase tracking-wide text-muted truncate">
+        <span className="overline truncate">
           {title}
         </span>
         <button
@@ -419,16 +420,15 @@ export function MultiSelect({
                 </button>
               </div>
               {showSearch && (
-                <div className="flex items-center gap-2 px-2 py-1.5 mb-1 border-b border-border/60">
-                  <Search className="w-3.5 h-3.5 text-muted shrink-0" />
-                  <input
-                    autoFocus
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={searchPlaceholder ?? `Поиск: ${label.toLowerCase()}`}
-                    className="bg-transparent text-xs w-full outline-none"
-                  />
-                </div>
+                <SearchInput
+                  variant="menu"
+                  size="sm"
+                  value={query}
+                  onChange={setQuery}
+                  placeholder={searchPlaceholder ?? `Поиск: ${label.toLowerCase()}`}
+                  autoFocus
+                  className="!px-2 mb-1"
+                />
               )}
               {visible.length === 0 ? (
                 <div className="px-2 py-2 text-xs text-muted">Ничего не найдено</div>
