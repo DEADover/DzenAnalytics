@@ -80,8 +80,13 @@ interface Columns {
 }
 
 /**
- * Сетка — та же, что у ленты «Операций», плюс «Удалена» и «Статус»; вместо
+ * Сетка — та же, что у ленты «Операций», плюс «Статус» и «Удалена»; вместо
  * четырёх кнопок действий — одна.
+ *
+ * Статус стоит сразу за комментарием, а сумма — вплотную к действиям: так
+ * решил пользователь (15.09.2026). Сумма у правого края читается рядом с
+ * кнопкой возврата, к которой относится, а статус — продолжением описания
+ * операции.
  */
 function gridTemplate(cols: Columns): string {
   return [
@@ -91,9 +96,9 @@ function gridTemplate(cols: Columns): string {
     "minmax(0, 1fr)",
     "minmax(0, 1.3fr)",
     "minmax(0, 2.6fr)",
-    "140px",
-    cols.deleted && "84px",
     cols.status && "120px",
+    cols.deleted && "84px",
+    "140px",
     "72px",
   ]
     .filter(Boolean)
@@ -580,9 +585,9 @@ function DeletedFeed({
               <div>Счёт</div>
               <div>Контрагент</div>
               <div>Комментарий</div>
-              <div className="text-right">Сумма</div>
-              {cols.deleted && <div>Удалена</div>}
               {cols.status && <div className="text-center">Статус</div>}
+              {cols.deleted && <div>Удалена</div>}
+              <div className="text-right">Сумма</div>
               <div className="text-center">Действия</div>
             </OperationListHead>
             {days
@@ -692,21 +697,21 @@ function FeedRowView({
       <div className="text-muted truncate" title={tx.comment || ""}>
         {tx.comment || ""}
       </div>
-      <div
-        className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
-      >
-        <OperationAmount tx={tx} />
-      </div>
-      {cols.deleted && (
-        <div className="text-muted tabular-nums whitespace-nowrap">
-          {row.deletedAt ? formatDate(dayOfMs(row.deletedAt), "full") : "—"}
-        </div>
-      )}
       {cols.status && (
         <div className="flex justify-center min-w-0">
           <StatusBadge row={row} />
         </div>
       )}
+      {cols.deleted && (
+        <div className="text-muted tabular-nums whitespace-nowrap">
+          {row.deletedAt ? formatDate(dayOfMs(row.deletedAt), "full") : "—"}
+        </div>
+      )}
+      <div
+        className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
+      >
+        <OperationAmount tx={tx} />
+      </div>
       <div className="flex items-center justify-center">
         {row.status === "restore-pending" ? (
           onCancel && (
@@ -745,9 +750,14 @@ function FeedRowView({
 function statusText(r: Pick<FeedRow, "status" | "hasTwin">): string {
   if (r.status === "restore-pending") return "Вернётся";
   if (r.status === "delete-pending") return "Удаление ждёт отправки";
-  return r.hasTwin ? "Есть такая же" : "";
+  return r.hasTwin ? "Есть такая же" : "Удалена";
 }
 
+/**
+ * Статус есть у каждой строки: пустая ячейка у большинства операций читалась
+ * как «статус неизвестен». Обычная удалённая — нейтральная «Удалена»; то, что
+ * ещё уйдёт в Дзен-мани, — акцентом, как итог «Ждут отправки» над лентой.
+ */
 function StatusBadge({ row }: { row: FeedRow }) {
   if (row.status === "restore-pending") {
     return (
@@ -758,7 +768,7 @@ function StatusBadge({ row }: { row: FeedRow }) {
   }
   if (row.status === "delete-pending") {
     return (
-      <Badge tone="neutral" title="Удалена здесь, в Дзен-мани пока живая">
+      <Badge tone="accent" title="Удалена здесь, в Дзен-мани пока живая">
         Ждёт отправки
       </Badge>
     );
@@ -770,5 +780,9 @@ function StatusBadge({ row }: { row: FeedRow }) {
       </Badge>
     );
   }
-  return null;
+  return (
+    <Badge tone="neutral" title="Удалена в Дзен-мани — можно вернуть копией">
+      Удалена
+    </Badge>
+  );
 }
