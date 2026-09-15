@@ -3,6 +3,7 @@ import { PageHeader } from "../components/PageHeader";
 import {
   HelpCircle,
   History,
+  Heart,
   Table as TableIcon,
   ChevronDown,
   ChevronRight,
@@ -53,7 +54,7 @@ import {
 import { Callout } from "../components/Callout";
 import { ChangelogModal } from "../components/ChangelogModal";
 import { GithubMark } from "../components/GithubMark";
-import { PROJECT_URL } from "../lib/support";
+import { PROJECT_URL, SUPPORT_TITLE, SUPPORT_URL } from "../lib/support";
 import { formatReleaseDate, parseRelease } from "../lib/releaseInfo";
 import changelogRaw from "../../CHANGELOG.md?raw";
 
@@ -3910,6 +3911,13 @@ export function HelpPage() {
             <a href={PROJECT_URL} target="_blank" rel="noreferrer" className="btn-ghost">
               <GithubMark className="w-4 h-4" />
               GitHub
+            </a>
+            {/* Здесь — всегда, даже если сердечко в шапке убрано: настройка
+                прячет значок, который на виду на каждой странице, а в справку
+                приходят сами. */}
+            <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="btn-ghost">
+              <Heart className="w-4 h-4 text-expense" />
+              {SUPPORT_TITLE}
             </a>
           </div>
         </div>
