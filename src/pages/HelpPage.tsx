@@ -56,7 +56,6 @@ import { GithubMark } from "../components/GithubMark";
 import { PROJECT_URL } from "../lib/support";
 import { formatReleaseDate, parseRelease } from "../lib/releaseInfo";
 import changelogRaw from "../../CHANGELOG.md?raw";
-import logoDa from "../assets/logo-da.png";
 
 type Group = "main" | "more" | "concepts";
 
@@ -3885,20 +3884,17 @@ export function HelpPage() {
       {/* О сервисе — первым блоком: версия, когда вышла, что нового и где код.
           Прежде версия и «Что нового» жили в подвале каждой страницы, где их
           никто не искал, а справка — место, куда приходят разбираться, в том
-          числе в том, что поменялось. Название и дата выпуска — из самого
-          CHANGELOG.md (`lib/releaseInfo`), чтобы не расходиться с ним. */}
+          числе в том, что поменялось. Дата выпуска — из самого CHANGELOG.md
+          (`lib/releaseInfo`), чтобы не расходиться с ним. Знака здесь нет: он
+          и так всегда виден в шапке. */}
       <div className="space-y-2">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted px-1">
           О сервисе
         </h2>
         <div className="card-tray card-pad flex flex-wrap items-center gap-x-5 gap-y-4">
-          <img src={logoDa} alt="" className="h-11 w-auto shrink-0" />
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-baseline gap-x-2">
-              <span className="text-base font-semibold">
-                DzenAnalytics <span className="tabular-nums">v{__APP_VERSION__}</span>
-              </span>
-              {release?.name && <span className="text-sm text-muted">«{release.name}»</span>}
+            <div className="text-base font-semibold">
+              DzenAnalytics <span className="tabular-nums">v{__APP_VERSION__}</span>
             </div>
             <div className="text-sm text-muted">
               {release?.date
