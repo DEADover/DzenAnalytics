@@ -6,11 +6,11 @@ import type { NavSection } from "../lib/navSections";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
 
 /**
- * Окно «Меню в шапке»: какие разделы стоят в дорожке меню и в каком порядке.
+ * Окно «Основное меню»: какие разделы стоят в дорожке меню шапки и в каком порядке.
  *
  * Слева — то, что в шапке, со стрелками порядка и кнопкой «убрать в „Ещё“».
  * Справа — всё остальное теми же группами, что в панели «Ещё», с кнопкой
- * «в шапку». Правка применяется сразу: шапка видна над окном.
+ * «в меню». Правка применяется сразу: шапка видна над окном.
  */
 export function HeaderNavModal() {
   const open = useHeaderNavStore((s) => s.editorOpen);
@@ -33,14 +33,14 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
     <Modal onClose={onClose} width="3xl" className="h-[min(760px,calc(100dvh-2rem))]">
       <ModalHeader
         icon={PanelTop}
-        title="Меню в шапке"
-        subtitle="Какие разделы стоят в шапке, а какие — в «Ещё»"
+        title="Основное меню"
+        subtitle="Какие разделы стоят в основном меню, а какие — в «Ещё»"
       />
       <ModalBody scroll gap={0}>
         <div className="grid gap-6 md:grid-cols-2 md:gap-8">
           <section>
             <div className="flex items-baseline justify-between gap-3 mb-2">
-              <h3 className="text-sm font-semibold">В шапке</h3>
+              <h3 className="text-sm font-semibold">В меню</h3>
               <span className="text-xs text-muted tabular-nums">{inHeader.length}</span>
             </div>
             {inHeader.length === 0 ? (
@@ -103,8 +103,8 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
                           type="button"
                           className="btn-icon"
                           onClick={() => add(s.to)}
-                          aria-label={`Поставить «${s.label}» в шапку`}
-                          title="В шапку"
+                          aria-label={`Поставить «${s.label}» в основное меню`}
+                          title="В меню"
                         >
                           <Plus className="w-4 h-4" />
                         </button>
@@ -124,7 +124,7 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
           onClick={reset}
           disabled={isDefaultHeaderNav(items)}
         >
-          Вернуть как было
+          Стандартный вид
         </button>
         <button type="button" className="btn-primary" onClick={onClose}>
           Готово
@@ -141,7 +141,7 @@ function SectionRow({
   children,
 }: {
   section: NavSection;
-  /** Строка в шапке — в рамке: это набор, который собирают. */
+  /** Строка основного меню — в рамке: это набор, который собирают. */
   framed?: boolean;
   children: React.ReactNode;
 }) {

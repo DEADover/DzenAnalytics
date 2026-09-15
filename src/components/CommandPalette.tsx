@@ -147,7 +147,7 @@ export function CommandPalette({ open, onClose }: Props) {
       { id: "theme:dark", group: "Действия", title: "Тёмная тема", icon: Moon, action: () => setMode("dark") },
       { id: "theme:auto", group: "Действия", title: "Тема: авто", icon: Monitor, action: () => setMode("auto") },
       { id: "theme:pick", group: "Действия", title: "Выбрать тему оформления", icon: Palette, action: showThemeModal },
-      { id: "header-nav:edit", group: "Действия", title: "Настроить меню в шапке", icon: PanelTop, action: openHeaderNavEditor },
+      { id: "header-nav:edit", group: "Действия", title: "Настроить основное меню", icon: PanelTop, action: openHeaderNavEditor },
       // Все двенадцать тем: «тема лагуна» или «уголь» находит нужную сразу.
       // Из палитры тему просят увидеть — поэтому включаем и её вид.
       ...ALL_SCHEMES.map((sc) => ({

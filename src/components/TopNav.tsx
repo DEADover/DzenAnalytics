@@ -12,7 +12,7 @@ import {
   Moon,
   Sun,
   CloudDownload,
-  PanelTop,
+  Pencil,
 } from "lucide-react";
 import clsx from "clsx";
 import { useThemeStore } from "../store/useThemeStore";
@@ -361,7 +361,23 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             aria-hidden="true"
           />
           <div className="hidden lg:block absolute left-0 right-0 top-full z-20 px-4 md:px-6 pt-1">
-            <div className="card-tray p-5 3xl:p-6">
+            <div className="card-tray relative p-5 3xl:p-6">
+              {/* Настройка основного меню — значком в углу панели: тут видно,
+                  чего не хватает в шапке, и значок не отнимает места у разделов.
+                  Верх угла свободен при любом числе столбцов — заголовки групп
+                  короткие и прижаты влево. */}
+              <button
+                type="button"
+                className="btn-icon absolute top-3 right-3"
+                onClick={() => {
+                  setMoreOpen(false);
+                  openHeaderEditor();
+                }}
+                title="Настроить основное меню"
+                aria-label="Настроить основное меню"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
               {/* Колонки не шире 64rem и прижаты влево, под меню, а не растянуты
                   по всей ширине: на мониторе в 1800 пикселей колонка выходила по
                   539, а текста в ней на 250 — строки повисали в пустоте и
@@ -410,20 +426,6 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                     ))}
                   </div>
                 ))}
-              </div>
-              {/* Настройка — тут же, где видно, чего не хватает в шапке. */}
-              <div className="mt-4 pt-3 border-t border-border/60 flex">
-                <button
-                  type="button"
-                  className="btn-ghost text-xs"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    openHeaderEditor();
-                  }}
-                >
-                  <PanelTop className="w-3.5 h-3.5" />
-                  Настроить меню в шапке
-                </button>
               </div>
             </div>
           </div>

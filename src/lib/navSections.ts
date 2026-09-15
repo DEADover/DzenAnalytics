@@ -105,7 +105,7 @@ export const SECONDARY_GROUPS: { title: string; items: NavSection[] }[] = [
 export const SECONDARY: NavSection[] = SECONDARY_GROUPS.flatMap((g) => g.items);
 
 /**
- * Основные разделы — те, что по умолчанию стоят в шапке. Меню в шапке
+ * Основные разделы — те, что по умолчанию стоят в шапке. Основное меню
  * настраивается (`lib/headerNav`): основной раздел можно убрать в «Ещё», и
  * там он встаёт группой «Обзор», поэтому пояснение нужно и ему.
  */

@@ -11,7 +11,7 @@ import {
 } from "./headerNav";
 import { ALL_SECTIONS, SECONDARY } from "./navSections";
 
-describe("меню в шапке", () => {
+describe("основное меню", () => {
   it("по умолчанию — прежние четыре основных раздела", () => {
     expect(normalizeHeaderNav(undefined)).toEqual(["/", "/transactions", "/accounts", "/categories"]);
     expect(isDefaultHeaderNav(normalizeHeaderNav(null))).toBe(true);
