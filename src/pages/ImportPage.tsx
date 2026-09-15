@@ -197,6 +197,8 @@ export function ImportPage() {
   const themeMode = useThemeStore((s) => s.mode);
   const resolvedTheme = useThemeStore((s) => s.resolved);
   const setThemeMode = useThemeStore((s) => s.setMode);
+  const lightPalette = useThemeStore((s) => s.lightPalette);
+  const setLightPalette = useThemeStore((s) => s.setLightPalette);
   const fractionDigits = useDisplayStore((s) => s.fractionDigits);
   const statementLine = useDisplayStore((s) => s.statementLine);
   const rememberFilters = useFilterMemoryStore((s) => s.enabled);
@@ -1353,6 +1355,33 @@ export function ImportPage() {
                 { value: "light", label: "Светлая" },
                 { value: "dark", label: "Тёмная" },
                 { value: "auto", label: "Как в системе" },
+              ]}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Палитра светлой темы"
+          status={
+            (lightPalette === "neutral" ? "Нейтральная" : "Холодная") +
+            (resolvedTheme === "dark" ? " · Видна в светлой теме" : "")
+          }
+          help={
+            <p>
+              Оттенок фона, карточек, окон и линий в светлой теме. Холодная —
+              серые с лёгкой синевой, нейтральная — чистые серые без оттенка.
+              Акцент, цвета дохода, расхода и категорий не меняются. Тёмная
+              тема от этой настройки не зависит.
+            </p>
+          }
+          control={
+            <Segmented
+              label="Палитра светлой темы"
+              value={lightPalette}
+              onChange={(p) => setLightPalette(p)}
+              options={[
+                { value: "cool", label: "Холодная" },
+                { value: "neutral", label: "Нейтральная" },
               ]}
             />
           }

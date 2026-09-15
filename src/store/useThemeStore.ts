@@ -2,8 +2,14 @@ import { create } from "zustand";
 
 export type ThemeMode = "light" | "dark" | "auto";
 export type ResolvedTheme = "light" | "dark";
+/**
+ * Палитра светлой темы: `cool` — основная, серые с синевой; `neutral` —
+ * эксперимент на чистых серых. На тёмную тему не влияет.
+ */
+export type LightPalette = "cool" | "neutral";
 
 const STORAGE_KEY = "dzen.theme";
+const PALETTE_KEY = "dzen.lightPalette";
 
 function loadMode(): ThemeMode {
   try {
@@ -13,6 +19,16 @@ function loadMode(): ThemeMode {
     // ignore
   }
   return "light";
+}
+
+function loadPalette(): LightPalette {
+  try {
+    const v = localStorage.getItem(PALETTE_KEY);
+    if (v === "cool" || v === "neutral") return v;
+  } catch {
+    // ignore
+  }
+  return "cool";
 }
 
 function resolveAuto(): ResolvedTheme {
@@ -28,16 +44,25 @@ function applyTheme(resolved: ResolvedTheme) {
   document.documentElement.style.colorScheme = resolved;
 }
 
+/** Пометка палитры стоит всегда, а действует только вместе со светлой темой (index.css). */
+function applyPalette(palette: LightPalette) {
+  if (typeof document === "undefined") return;
+  document.documentElement.setAttribute("data-palette", palette);
+}
+
 interface ThemeState {
   mode: ThemeMode;
   resolved: ResolvedTheme;
+  lightPalette: LightPalette;
   setMode: (m: ThemeMode) => void;
+  setLightPalette: (p: LightPalette) => void;
   init: () => () => void;
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
   mode: loadMode(),
   resolved: "light",
+  lightPalette: loadPalette(),
   setMode: (mode) => {
     try {
       localStorage.setItem(STORAGE_KEY, mode);
@@ -48,10 +73,20 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     applyTheme(resolved);
     set({ mode, resolved });
   },
+  setLightPalette: (lightPalette) => {
+    try {
+      localStorage.setItem(PALETTE_KEY, lightPalette);
+    } catch {
+      // ignore
+    }
+    applyPalette(lightPalette);
+    set({ lightPalette });
+  },
   init: () => {
-    const { mode } = get();
+    const { mode, lightPalette } = get();
     const resolved: ResolvedTheme = mode === "auto" ? resolveAuto() : mode;
     applyTheme(resolved);
+    applyPalette(lightPalette);
     set({ resolved });
 
     const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
