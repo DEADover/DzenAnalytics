@@ -13,6 +13,7 @@ import {
   Sun,
   CloudDownload,
   Pencil,
+  Heart,
 } from "lucide-react";
 import clsx from "clsx";
 import { useThemeStore } from "../store/useThemeStore";
@@ -27,6 +28,8 @@ import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 import { SmoothNavLink } from "./SmoothNavLink";
 import { fitCount, headerSections, moreGroups } from "../lib/headerNav";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
+import { useDisplayStore } from "../store/useDisplayStore";
+import { SUPPORT_TITLE, SUPPORT_URL } from "../lib/support";
 import logoDa from "../assets/logo-da.png";
 
 /**
@@ -56,6 +59,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const theme = useThemeStore((s) => s.resolved);
   const setThemeMode = useThemeStore((s) => s.setMode);
   const zenToken = useZenmoneyStore((s) => s.token);
+  const hideThanks = useDisplayStore((s) => s.hideThanks);
   const { busy: syncBusy, runFull } = useSyncCommands();
 
   // Разделы шапки — из настройки (`lib/headerNav`). Сколько из них влезает,
@@ -325,6 +329,23 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         >
           <HelpCircle className="w-4 h-4 transition-transform duration-300 ease-out group-hover:scale-110" />
         </SmoothNavLink>
+
+        {/* Благодарность автору — рядом со справкой: там же, где всё «про
+            приложение». Прежде ссылка жила в подвале, куда мало кто
+            долистывал. Серая в покое, как соседи, сердце краснеет под
+            курсором. Убирается в «Настройки → Оформление». */}
+        {!hideThanks && (
+          <a
+            href={SUPPORT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={SUPPORT_TITLE}
+            aria-label={SUPPORT_TITLE}
+            className={iconItem()}
+          >
+            <Heart className="w-4 h-4 transition-[color,fill,transform] duration-300 ease-out group-hover:text-expense group-hover:fill-current group-hover:scale-110" />
+          </a>
+        )}
         </div>
 
         {/* Меню узкого экрана — последним значком той же дорожки. Отдельной
@@ -530,6 +551,18 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                 <HelpCircle className="w-4 h-4" />
                 Справка
               </SmoothNavLink>
+              {!hideThanks && (
+                <a
+                  href={SUPPORT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMobileOpen(false)}
+                  className={sheetRow()}
+                >
+                  <Heart className="w-4 h-4" />
+                  Отблагодарить автора
+                </a>
+              )}
               {/* Подпись — то, на что переключит, как значок в шапке. Меню не
                   закрывается: смену темы видно сразу за ним. */}
               <button

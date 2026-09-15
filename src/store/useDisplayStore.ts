@@ -78,12 +78,18 @@ interface DisplayState {
    * объект под одним ключом и входит в бэкап.
    */
   syncLogOpen: boolean;
+  /**
+   * Спрятать значок-сердечко «Отблагодарить автора» в шапке и строку в меню
+   * телефона. По умолчанию значок есть: раньше ссылка стояла в подвале.
+   */
+  hideThanks: boolean;
   loaded: boolean;
   hydrate: () => Promise<void>;
   setFractionDigits: (n: FractionDigits) => Promise<void>;
   setTableFontLevel: (level: TableFontLevel) => Promise<void>;
   setStatementLine: (on: boolean) => Promise<void>;
   setSyncLogOpen: (on: boolean) => Promise<void>;
+  setHideThanks: (on: boolean) => Promise<void>;
 }
 
 export const useDisplayStore = create<DisplayState>((set, get) => ({
@@ -91,6 +97,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   tableFontLevel: DEFAULT_TABLE_FONT_LEVEL,
   statementLine: false,
   syncLogOpen: false,
+  hideThanks: false,
   loaded: false,
 
   hydrate: async () => {
@@ -99,6 +106,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       tableFontLevel?: number;
       statementLine?: boolean;
       syncLogOpen?: boolean;
+      hideThanks?: boolean;
     }>(KEY);
     const fd: FractionDigits = stored?.fractionDigits === 2 ? 2 : 0;
     const level = normalizeLevel(stored?.tableFontLevel);
@@ -109,6 +117,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       tableFontLevel: level,
       statementLine: stored?.statementLine === true,
       syncLogOpen: stored?.syncLogOpen === true,
+      hideThanks: stored?.hideThanks === true,
       loaded: true,
     });
   },
@@ -135,6 +144,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     set({ syncLogOpen: on });
     await db.saveJSON(KEY, { ...persisted(get()), syncLogOpen: on });
   },
+
+  setHideThanks: async (on) => {
+    set({ hideThanks: on });
+    await db.saveJSON(KEY, { ...persisted(get()), hideThanks: on });
+  },
 }));
 
 /** Всё, что кладём в IDB, — одним местом, чтобы сеттеры не забывали поля. */
@@ -144,5 +158,6 @@ function persisted(s: DisplayState) {
     tableFontLevel: s.tableFontLevel,
     statementLine: s.statementLine,
     syncLogOpen: s.syncLogOpen,
+    hideThanks: s.hideThanks,
   };
 }

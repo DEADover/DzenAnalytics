@@ -12,8 +12,8 @@ function GithubMark({ className }: { className?: string }) {
 }
 
 /**
- * Full changelog in a centered modal over a blurred backdrop. Opened from the
- * footer's «Что нового». Content comes from ChangelogView (CHANGELOG.md).
+ * История изменений в окне. Открывается ссылкой «Что нового» в шапке «Справки»;
+ * текст — ChangelogView (CHANGELOG.md).
  */
 export function ChangelogModal({
   open,

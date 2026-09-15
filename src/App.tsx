@@ -8,7 +8,6 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ThemeModal } from "./components/ThemeModal";
 import { HeaderNavModal } from "./components/HeaderNavModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
-import { ChangelogModal } from "./components/ChangelogModal";
 import { HistRatesProgress } from "./components/HistRatesProgress";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -122,7 +121,6 @@ function App() {
   useDisplayStore((s) => s.fractionDigits);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [changelogOpen, setChangelogOpen] = useState(false);
   useGlobalShortcuts(() => setPaletteOpen(true));
 
   useEffect(() => {
@@ -462,37 +460,10 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      <footer className="border-t border-border mt-4">
-        <div className="w-full px-4 md:px-6 py-3 flex items-center justify-center gap-2.5 text-xs text-muted">
-          <span>
-            DzenAnalytics{" "}
-            <span className="tabular-nums">v{__APP_VERSION__}</span>
-          </span>
-          <span className="text-border">·</span>
-          <button
-            onClick={() => setChangelogOpen(true)}
-            className="hover:text-accent transition-colors"
-          >
-            Что нового
-          </button>
-          <span className="text-border">·</span>
-          <a
-            href="https://pay.cloudtips.ru/p/bbde8948"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 hover:text-accent transition-colors"
-            title="Поддержать автора чаевыми"
-          >
-            <span aria-hidden>❤️</span>
-            Отблагодарить автора
-          </a>
-        </div>
-      </footer>
       <TransactionsDrawer />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ThemeModal />
       <HeaderNavModal />
-      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
       <ConfirmDialog />
       <HistRatesProgress />
     </div>

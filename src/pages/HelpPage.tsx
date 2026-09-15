@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import {
   HelpCircle,
+  History,
   Table as TableIcon,
   ChevronDown,
   ChevronRight,
@@ -50,6 +51,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { Callout } from "../components/Callout";
+import { ChangelogModal } from "../components/ChangelogModal";
 
 type Group = "main" | "more" | "concepts";
 
@@ -3849,6 +3851,7 @@ const SECTIONS: Section[] = [
 
 export function HelpPage() {
   const [open, setOpen] = useState<Set<string>>(new Set([SECTIONS[0].id]));
+  const [changelogOpen, setChangelogOpen] = useState(false);
 
   function toggle(id: string) {
     setOpen((prev) => {
@@ -3871,7 +3874,27 @@ export function HelpPage() {
         icon={HelpCircle}
         title="Справка"
         hint="Что делает каждый раздел и как устроены расчёты"
+        right={
+          // Версия и «Что нового» — справа, теми же двумя строками, что
+          // название и подпись слева. Прежде они жили в подвале каждой
+          // страницы, где их никто не искал; справка — место, куда приходят
+          // разбираться, в том числе в том, что поменялось.
+          <div className="sm:text-right leading-tight">
+            <div className="text-sm font-medium">
+              DzenAnalytics <span className="tabular-nums">v{__APP_VERSION__}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setChangelogOpen(true)}
+              className="mt-1 inline-flex items-center gap-1.5 rounded text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              <History className="w-3.5 h-3.5" />
+              Что нового
+            </button>
+          </div>
+        }
       />
+      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
 
       {groups.map((g) => {
         const items = SECTIONS.filter((s) => s.group === g);

@@ -211,6 +211,8 @@ export function ImportPage() {
   const rememberFilters = useFilterMemoryStore((s) => s.enabled);
   const setRememberFilters = useFilterMemoryStore((s) => s.setEnabled);
   const setStatementLine = useDisplayStore((s) => s.setStatementLine);
+  const hideThanks = useDisplayStore((s) => s.hideThanks);
+  const setHideThanks = useDisplayStore((s) => s.setHideThanks);
   const setFractionDigits = useDisplayStore((s) => s.setFractionDigits);
   const tableFontLevel = useDisplayStore((s) => s.tableFontLevel);
   const setTableFontLevel = useDisplayStore((s) => s.setTableFontLevel);
@@ -1438,6 +1440,29 @@ export function ImportPage() {
               checked={statementLine}
               label="Показывать строку из выписки"
               onChange={(next) => setStatementLine(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Убрать иконку благодарности"
+          status={
+            hideThanks
+              ? "Сердечко скрыто — в шапке и в меню телефона"
+              : "Сердечко «Поддержать проект» — в шапке рядом со справкой"
+          }
+          help={
+            <p>
+              Значок с сердечком ведёт на страницу, где можно оставить автору
+              чаевые. Если он мешает — включите, и значок пропадёт из шапки и из
+              меню на телефоне. Больше ничего не меняется.
+            </p>
+          }
+          control={
+            <Switch
+              checked={hideThanks}
+              label="Убрать иконку благодарности"
+              onChange={(next) => setHideThanks(next)}
             />
           }
         />
