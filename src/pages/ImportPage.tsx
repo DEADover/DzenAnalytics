@@ -788,13 +788,15 @@ export function ImportPage() {
           structure (e.g. "Резервные копии" → "Облачный снимок" +
           "Push в облако"). */}
       {/* Разделы настроек — общим `Segmented` крупной ступени, как
-          переключатели разделов на других страницах. */}
+          переключатели разделов на других страницах. `max-w-full` — чтобы на
+          телефоне дорожка листалась внутри себя, а не растягивала страницу:
+          без него прокрутка не включалась, и пять вкладок уходили за край. */}
       <Segmented
         tabs
         label="Разделы настроек"
         value={settingsTab}
         onChange={setSettingsTab}
-        className="self-start -mt-1 overflow-x-auto"
+        className="self-start -mt-1 overflow-x-auto max-w-full"
         options={[
           { value: "source", label: "Данные", icon: Database },
           { value: "operations", label: "Справочники", icon: ArrowLeftRight },
@@ -2414,11 +2416,14 @@ export function ImportPage() {
                   <span className="text-sm font-medium w-44 shrink-0">
                     Отправка правок в облако
                   </span>
+                  {/* Четыре режима на телефоне шире карточки: дорожка листается
+                      внутри себя, а не растягивает страницу. */}
                   <Segmented
                     size="sm"
                     label="Отправка правок в облако"
                     value={pushMode}
                     onChange={setPushMode}
+                    className="max-w-full overflow-x-auto"
                     options={[
                       { value: "off", label: "Выключена" },
                       { value: "manual", label: "Вручную" },

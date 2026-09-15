@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { RefreshCw, CloudDownload, Check, AlertTriangle, UploadCloud, ListChecks } from "lucide-react";
 import clsx from "clsx";
-import { useZenmoneyStore, type SyncResult } from "../store/useZenmoneyStore";
+import { useZenmoneyStore } from "../store/useZenmoneyStore";
+import { useSyncFlashStore } from "../store/useSyncFlashStore";
+import { useSyncCommands } from "../hooks/useSyncCommands";
 import { confirm } from "../store/useConfirmStore";
 import { snapshotPromiseText } from "../lib/cloudSnapshots";
 import { formatNum } from "../lib/format";
@@ -33,12 +35,11 @@ import { PendingChangesModal } from "./PendingChangesModal";
  */
 export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
   const token = useZenmoneyStore((s) => s.token);
-  const status = useZenmoneyStore((s) => s.status);
   const error = useZenmoneyStore((s) => s.error);
   const lastSyncAt = useZenmoneyStore((s) => s.lastSyncAt);
   const loaded = useZenmoneyStore((s) => s.loaded);
   const hydrate = useZenmoneyStore((s) => s.hydrate);
-  const sync = useZenmoneyStore((s) => s.sync);
+  const { busy, runIncremental, runFull } = useSyncCommands();
   // Push side of the header (issue #50): in «Вручную» the only way to send
   // edits used to be a trip into Настройки, which is slow and easy to forget.
   const pushMode = useZenmoneyStore((s) => s.pushMode);
@@ -46,11 +47,14 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
   const pending = usePendingChanges();
   const [reviewOpen, setReviewOpen] = useState(false);
 
-  const [flash, setFlash] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
-  // Two-phase dismiss: while `closing` is true the toast plays its
-  // fade-out animation, then unmounts. Keeps the visual exit smooth
-  // instead of a hard pop.
-  const [closing, setClosing] = useState(false);
+  // Плашка итога живёт в сторе: полную синхронизацию на телефоне запускают из
+  // меню, а итог показывает шапка. Исчезает в два шага — пока `closing`,
+  // доигрывает затухание, потом снимается.
+  const flash = useSyncFlashStore((s) => s.flash);
+  const closing = useSyncFlashStore((s) => s.closing);
+  const showFlash = useSyncFlashStore((s) => s.show);
+  const startClosing = useSyncFlashStore((s) => s.startClosing);
+  const clearFlash = useSyncFlashStore((s) => s.clear);
 
   // Hydrate the token from IndexedDB on first mount so the buttons
   // appear straight away if the user is already connected (header
@@ -60,71 +64,17 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
   }, [loaded, hydrate]);
 
   // Schedule: 5s visible, then 0.18s fade-out, then unmount.
-  // `closing` is reset in `setFlash(...)` callers (not here) so this
-  // effect can stay free of in-effect setState — matters for the
-  // react-hooks/set-state-in-effect lint rule and for cleaner renders.
   useEffect(() => {
     if (!flash) return;
-    const tFade = setTimeout(() => setClosing(true), 5000);
-    const tDrop = setTimeout(() => setFlash(null), 5000 + 200);
+    const tFade = setTimeout(startClosing, 5000);
+    const tDrop = setTimeout(clearFlash, 5000 + 200);
     return () => {
       clearTimeout(tFade);
       clearTimeout(tDrop);
     };
-  }, [flash]);
+  }, [flash, startClosing, clearFlash]);
 
   if (!loaded || !token) return null;
-
-  const busy = status === "syncing" || status === "checking";
-
-  // Helper that resets the closing flag before showing a new toast.
-  // Doing this here keeps the dismiss-effect free of inner setState
-  // calls (which the lint rule warns about).
-  function showFlash(next: { tone: "ok" | "err"; text: string }) {
-    setClosing(false);
-    setFlash(next);
-  }
-
-  function formatResult(r: SyncResult): string {
-    if (r.full) return `Полный синк: ${formatNum(r.count)} операций.`;
-    if (r.delta.transactions === 0 && r.delta.deletions === 0) {
-      return `Без изменений. Всего ${formatNum(r.count)} операций.`;
-    }
-    const parts: string[] = [];
-    if (r.delta.transactions > 0) parts.push(`+${formatNum(r.delta.transactions)} новых/изменённых`);
-    if (r.delta.deletions > 0) parts.push(`${formatNum(r.delta.deletions)} удалено`);
-    return `${parts.join(", ")}. Всего ${formatNum(r.count)} операций.`;
-  }
-
-  async function runIncremental() {
-    if (busy) return;
-    setFlash(null);
-    try {
-      const r = await sync();
-      showFlash({ tone: "ok", text: formatResult(r) });
-    } catch {
-      showFlash({ tone: "err", text: useZenmoneyStore.getState().error || "Ошибка синхронизации" });
-    }
-  }
-
-  async function runFull() {
-    if (busy) return;
-    const ok = await confirm({
-      title: "Полная синхронизация?",
-      message:
-        "Сбросит локальный кэш и заново скачает все данные. Используйте, если данные не сходятся или после массовых переименований категорий в Дзен-мани.",
-      confirmLabel: "Полный синк",
-      tone: "warning",
-    });
-    if (!ok) return;
-    setFlash(null);
-    try {
-      const r = await sync({ force: true });
-      showFlash({ tone: "ok", text: formatResult(r) });
-    } catch {
-      showFlash({ tone: "err", text: useZenmoneyStore.getState().error || "Ошибка синхронизации" });
-    }
-  }
 
   const lastSyncHuman = lastSyncAt
     ? `Последняя синхронизация: ${new Date(lastSyncAt).toLocaleString("ru-RU")}`
@@ -263,12 +213,15 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
           />
         </button>
 
+        {/* На телефоне полная синхронизация — в меню: в шапку шириной 375
+            вместе со знаком, поиском и меню она уже не помещалась, а нужна
+            редко. Обычная синхронизация остаётся — это главное действие. */}
         <button
           type="button"
           onClick={runFull}
           disabled={busy}
           title="Полная синхронизация (сбросить кэш и заново скачать всё)"
-          className={innerBtn}
+          className={clsx(innerBtn, "max-sm:hidden")}
         >
           <CloudDownload className="w-4 h-4" />
         </button>

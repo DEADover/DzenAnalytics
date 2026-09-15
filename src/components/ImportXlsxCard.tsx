@@ -294,8 +294,10 @@ export function ImportXlsxCard() {
           </div>
         </div>
 
+        {/* На телефоне ряд кнопок, уехав на свою строку, сжимается до её
+            ширины и переносит кнопки — иначе оставался шире экрана. */}
         {token && (
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <div className="flex items-center gap-2 flex-wrap shrink-0 max-sm:shrink max-sm:min-w-0">
             <button
               type="button"
               onClick={downloadTemplate}

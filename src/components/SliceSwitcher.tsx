@@ -73,16 +73,20 @@ export function SliceSwitcher() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         title="Разрез данных — что учитывается в аналитике"
+        aria-label={`Разрез данных: ${current.name}`}
         // Живёт только внутри дорожки шапки: пункт той же высоты, что значки
         // рядом (32), — прежде он был 28 и без скругления, и подсветка под
         // курсором выходила прямоугольником внутри пилюли.
+        //
+        // На телефоне — один значок, без названия: иначе шапка не помещалась
+        // в экран. Какой разрез выбран, видно в самом списке.
         className={clsx(
-          "seg-item px-2.5 py-2 text-xs leading-4 max-w-[10rem]",
+          "seg-item px-2.5 max-sm:px-2 py-2 text-xs leading-4 max-w-[10rem]",
           open && "!bg-accent/10 !text-accent"
         )}
       >
         <Layers className="w-3.5 h-3.5 shrink-0" />
-        <span className="truncate">{current.name}</span>
+        <span className="truncate max-sm:hidden">{current.name}</span>
       </button>
       {open &&
         createPortal(
