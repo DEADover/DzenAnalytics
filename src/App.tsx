@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
+import { isViewTransitionUpdate } from "./lib/viewTransition";
 import { TopNav } from "./components/TopNav";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { TransactionsDrawer } from "./components/TransactionsDrawer";
@@ -80,12 +81,21 @@ function PlainLayout() {
   // Re-key the boundary on the route so a crash on one page is cleared the
   // moment you navigate elsewhere (the boundary remounts fresh).
   const { pathname } = useLocation();
+  // Играть ли появление — решаем ОДИН раз на адрес, в той отрисовке, что
+  // сменила страницу. Переход плавной сменой кадров уже проявил её целиком, и
+  // своя анимация была бы лишней. Раньше её гасила пометка на <html> на время
+  // перехода: пометку снимали — анимация запускалась заново, и страница
+  // «открывалась» второй раз.
+  const [enter, setEnter] = useState({ path: pathname, animate: true });
+  if (enter.path !== pathname) {
+    setEnter({ path: pathname, animate: !isViewTransitionUpdate() });
+  }
   return (
     <ErrorBoundary key={pathname}>
       {/* Обёртка нужна только ради появления: ключ по адресу заставляет её
           пересоздаваться на каждом переходе, а с новым узлом заново
           проигрывается и анимация. */}
-      <div key={pathname} className="page-enter">
+      <div key={pathname} className={enter.animate ? "page-enter" : undefined}>
         <Outlet />
       </div>
     </ErrorBoundary>

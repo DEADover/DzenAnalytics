@@ -1,5 +1,20 @@
 import { flushSync } from "react-dom";
 
+/** Идёт ли сейчас перерисовка внутри плавной смены кадров. */
+let inTransitionUpdate = false;
+
+/**
+ * Рисуется ли экран прямо сейчас внутри `withViewTransition`. Страница по
+ * этому решает, играть ли своё появление `.page-enter`: при смене кадров оно
+ * задвоило бы движение.
+ *
+ * Читать только во время отрисовки, которую запустил переход, — и запоминать
+ * решение: позже флаг уже снят.
+ */
+export function isViewTransitionUpdate(): boolean {
+  return inTransitionUpdate;
+}
+
 /**
  * Сменить экран плавной сменой кадров — View Transitions API браузера.
  *
@@ -19,14 +34,12 @@ export function withViewTransition(update: () => void): void {
     update();
     return;
   }
-  const root = document.documentElement;
-  // Пока идёт смена кадров, `.page-enter` молчит: новая страница и так
-  // проявляется целиком, вторая анимация поверх задвоила бы движение.
-  root.dataset.viewTransition = "";
-  const done = () => {
-    delete root.dataset.viewTransition;
-  };
-  // Переход, прерванный следующим (быстрый двойной клик), отклоняет `finished`
-  // — это не ошибка, убираем пометку в обоих случаях.
-  document.startViewTransition(() => flushSync(update)).finished.then(done, done);
+  document.startViewTransition(() => {
+    inTransitionUpdate = true;
+    try {
+      flushSync(update);
+    } finally {
+      inTransitionUpdate = false;
+    }
+  });
 }

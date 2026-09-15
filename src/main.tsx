@@ -17,9 +17,15 @@ const isFileProtocol =
 // eslint-disable-next-line react-refresh/only-export-components
 const Router = isFileProtocol ? HashRouter : BrowserRouter;
 
+// `useTransitions={false}`: смена адреса рисуется сразу, а не в
+// `startTransition`, как по умолчанию в React Router 7. Иначе плавная смена
+// кадров (`withViewTransition`) снимала «новый» кадр раньше, чем React успевал
+// нарисовать новую страницу: анимация шла от старой страницы к ней же, а потом
+// страница подменялась ещё раз — рывком, будто открывалась дважды. Отложенная
+// отрисовка нам ничего не даёт: ленивых разделов и `Suspense` в приложении нет.
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Router>
+    <Router useTransitions={false}>
       <App />
     </Router>
   </StrictMode>
