@@ -2533,7 +2533,7 @@ export function AccountsPage() {
                             e.stopPropagation();
                             openAccountEditor(a.id);
                           }}
-                          className="btn-ghost !p-1 text-muted hover:text-accent"
+                          className="btn-icon btn-icon-sm"
                           title="Изменить счёт"
                           aria-label="Изменить счёт"
                         >
@@ -2609,9 +2609,9 @@ export function AccountsPage() {
                   </button>
                   <button
                     onClick={() => openAccount(a.account)}
-                    className="btn-ghost text-xs w-full !py-1.5"
+                    className="btn-ghost text-xs w-full"
                   >
-                    <List className="w-3 h-3" />
+                    <List className="w-3.5 h-3.5" />
                     Операции
                   </button>
                 </div>

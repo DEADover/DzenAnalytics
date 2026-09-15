@@ -290,8 +290,8 @@ export function UncategorizedPage() {
                     <button
                       onClick={() => applyOne(s)}
                       disabled={busy || applied || !ruleKeyFor(s)}
-                      className={`btn-ghost !p-1.5 text-xs ${
-                        applied ? "text-income" : ""
+                      className={`btn-icon ${
+                        applied ? "text-income hover:text-income" : ""
                       }`}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />

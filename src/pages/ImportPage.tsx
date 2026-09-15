@@ -2303,7 +2303,7 @@ export function ImportPage() {
                     </div>
                     <button
                       onClick={() => downloadCloudSnapshot(s.id)}
-                      className="btn-ghost !px-2 !py-1 text-xs shrink-0"
+                      className="btn-icon shrink-0"
                       title="Сохранить снимок файлом"
                       aria-label="Сохранить снимок файлом"
                     >
@@ -2319,7 +2319,7 @@ export function ImportPage() {
                         });
                         if (ok) deleteCloudSnapshot(s.id);
                       }}
-                      className="text-muted hover:text-expense p-1 shrink-0"
+                      className="btn-icon-danger shrink-0"
                       title="Удалить снимок с этого компьютера"
                       aria-label="Удалить снимок"
                       disabled={cloudSnapshotsBusy}
@@ -2459,10 +2459,10 @@ export function ImportPage() {
                           ? "Нет накопленных правок"
                           : "Отправить накопленные правки в Дзен-мани"
                     }
-                    className="btn-primary text-xs !py-1 inline-flex items-center gap-2 sm:ml-auto disabled:opacity-50"
+                    className="btn-primary text-xs sm:ml-auto"
                   >
                     {pushStatus === "syncing" ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <CloudUpload className="w-3.5 h-3.5" />
                     )}
@@ -2538,7 +2538,7 @@ export function ImportPage() {
                           await clearManyEdits(orphanEditIds);
                           await reapplyRules();
                         }}
-                        className="btn-ghost text-xs mt-2 !py-1 text-warn hover:text-expense"
+                        className="btn-danger text-xs mt-2"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         Убрать {orphanEditIds.length}{" "}

@@ -359,9 +359,9 @@ export function TransactionsDrawer() {
                 );
                 show(`Категория: ${t.categoryFull}`, sim, "Похожие операции");
               }}
-              className="btn-ghost !py-1 !px-2 text-xs"
+              className="btn-ghost text-xs"
             >
-              <Tag className="w-3 h-3" />
+              <Tag className="w-3.5 h-3.5" />
               По категории «{transactions[0].categoryFull}»
             </button>
             {transactions[0].payee && (
@@ -373,9 +373,9 @@ export function TransactionsDrawer() {
                   );
                   show(`Получатель: ${t.payee}`, sim, "Похожие операции");
                 }}
-                className="btn-ghost !py-1 !px-2 text-xs"
+                className="btn-ghost text-xs"
               >
-                <User className="w-3 h-3" />
+                <User className="w-3.5 h-3.5" />
                 По получателю «{transactions[0].payee}»
               </button>
             )}

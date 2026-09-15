@@ -2014,7 +2014,7 @@ function BudgetRow({
               меню и фокус с клавиатуры тоже держат её видимой. */}
           <button
             onClick={() => setMenuOpen((o) => !o)}
-            className={`btn-ghost !p-1.5 text-muted hover:text-text transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100 sm:focus-visible:opacity-100 ${
+            className={`btn-icon transition-[color,background-color,opacity] sm:opacity-0 sm:group-hover/row:opacity-100 sm:focus-visible:opacity-100 ${
               menuOpen ? "sm:opacity-100" : ""
             }`}
             aria-label="Действия с бюджетом"

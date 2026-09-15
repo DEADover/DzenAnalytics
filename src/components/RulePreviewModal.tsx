@@ -313,7 +313,7 @@ export function RulePreviewModal({
                       <button
                         type="button"
                         onClick={() => openEditor(row.tx.id, row.tx)}
-                        className="btn-ghost !p-1.5 text-muted hover:text-accent shrink-0"
+                        className="btn-icon shrink-0"
                         aria-label={`Открыть операцию: ${rowTitle(row.tx)}`}
                       >
                         <Pencil className="w-4 h-4" />
