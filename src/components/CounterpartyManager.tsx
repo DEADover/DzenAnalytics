@@ -617,7 +617,7 @@ export function CounterpartyManager() {
                 below keep them (and the buttons) on one grid. */}
             <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
               <span className="flex-1 min-w-0">Контрагент</span>
-              <span className="w-20 shrink-0 text-right">Операций</span>
+              <span className="w-20 shrink-0 text-left">Операций</span>
               <span className="w-36 shrink-0 text-right">Действия</span>
             </div>
             <div className="divide-y divide-border/60">
@@ -644,17 +644,17 @@ export function CounterpartyManager() {
                           </Badge>
                         )}
                         <span className="flex-1 min-w-2" />
-                        <span className="w-20 shrink-0 text-right">
+                        <span className="w-20 shrink-0 text-left">
                           {row.count ? (
                             <button
                               onClick={() => openOperations(row)}
                               title="Показать операции контрагента"
-                              className="tabular-nums text-muted hover:text-accent hover:underline px-1 rounded"
+                              className="tabular-nums text-muted hover:text-accent hover:underline px-1 -ml-1 rounded"
                             >
                               {formatNum(row.count)}
                             </button>
                           ) : (
-                            <span className="text-muted tabular-nums px-1">—</span>
+                            <span className="text-muted tabular-nums">—</span>
                           )}
                         </span>
                       </div>
@@ -748,7 +748,7 @@ export function CounterpartyManager() {
                 />
               </span>
               <span className="flex-1 min-w-0">Получатель</span>
-              <span className="w-20 shrink-0 text-right">Операций</span>
+              <span className="w-20 shrink-0 text-left">Операций</span>
               <span className="w-28 shrink-0 text-center whitespace-nowrap">Действия</span>
             </div>
             <div className="divide-y divide-border/60">
@@ -780,7 +780,7 @@ export function CounterpartyManager() {
                         </Badge>
                       )}
                     </span>
-                    <span className="w-20 shrink-0 text-right">
+                    <span className="w-20 shrink-0 text-left">
                       <button
                         onClick={() => {
                           const ids = new Set(o.txIds);
@@ -791,7 +791,7 @@ export function CounterpartyManager() {
                           );
                         }}
                         title="Показать операции этого получателя"
-                        className="tabular-nums text-muted hover:text-accent hover:underline px-1 rounded"
+                        className="tabular-nums text-muted hover:text-accent hover:underline px-1 -ml-1 rounded"
                       >
                         {formatNum(o.count)}
                       </button>
@@ -854,7 +854,7 @@ export function CounterpartyManager() {
               />
             </span>
             <span className="flex-1 min-w-0">Название</span>
-            <span className="w-24 shrink-0 flex items-center justify-end">
+            <span className="w-24 shrink-0 flex items-center justify-start">
               <CountSortHeader sort={sort} onChange={setSort} />
             </span>
             <span className="w-20 shrink-0 text-center whitespace-nowrap">Действия</span>
@@ -912,12 +912,12 @@ export function CounterpartyManager() {
                       </Badge>
                     )}
                   </span>
-                  <span className="w-24 shrink-0 flex items-center justify-end">
+                  <span className="w-24 shrink-0 flex items-center justify-start">
                     {row.count ? (
                       <button
                         onClick={() => openOperations(row)}
                         title="Показать операции контрагента"
-                        className="tabular-nums text-muted hover:text-accent hover:underline px-1 rounded"
+                        className="tabular-nums text-muted hover:text-accent hover:underline px-1 -ml-1 rounded"
                       >
                         {formatNum(row.count)}
                       </button>

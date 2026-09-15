@@ -300,7 +300,8 @@ export function WhatIfPage() {
                 </tr>
                 <tr>
                   <td className={cellClass("text")}>Норма сбережений</td>
-                  <td className={cellClass("pct")}>{formatPct(baseScenario.savingsRate, 0)}</td>
+                  {/* Процент в колонке сумм — тем же выравниванием, что суммы над ним. */}
+                  <td className={cellClass("money", { muted: true })}>{formatPct(baseScenario.savingsRate, 0)}</td>
                   <td className={cellClass("main")}>{formatPct(out.newRate, 0)}</td>
                 </tr>
               </tbody>

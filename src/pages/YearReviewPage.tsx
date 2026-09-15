@@ -663,7 +663,7 @@ function YearBars({
  */
 /** Колонки профиля недели: у дня нет числа операций, только доля и сумма. */
 const WEEK_COLUMNS: MeterCell[] = [
-  { text: "Доля", width: "3.5rem" },
+  { text: "Доля", width: "3.5rem", type: "pct" },
   // Полной суммой, а не «490,3 тыс. ₽»: сокращение экономило десяток пикселей
   // и отнимало у числа точность там, где место под него есть.
   { text: "Расход", width: "7rem" },
@@ -702,7 +702,7 @@ function WeekProfile({
             share={d.total / max}
             strong={d.total > 0 && d.total === max}
             cells={[
-              { text: sum > 0 ? formatPct(d.total / sum, 0) : "—", width: WEEK_COLUMNS[0].width, muted: true },
+              { text: sum > 0 ? formatPct(d.total / sum, 0) : "—", width: WEEK_COLUMNS[0].width, type: "pct", muted: true },
               { text: formatMoney(d.total, base), width: WEEK_COLUMNS[1].width },
             ]}
             barCls="bg-accent"
@@ -896,8 +896,8 @@ function Record({
 
 /** Колонки топов: доля, операции, сумма — ширины общие у шапки и строк. */
 const TOP_COLUMNS: MeterCell[] = [
-  { text: "Доля", width: "3.5rem", sortKey: "share" },
-  { text: "Опер.", width: "3.5rem", sortKey: "count" },
+  { text: "Доля", width: "3.5rem", sortKey: "share", type: "pct" },
+  { text: "Опер.", width: "3.5rem", sortKey: "count", type: "count" },
   { text: "Сумма", width: "7rem", sortKey: "amount" },
 ];
 
@@ -955,8 +955,8 @@ function TopList({
                   share={share}
                   strong={item.rank === 1}
                   cells={[
-                    { text: formatPct(share, 1), width: TOP_COLUMNS[0].width, muted: true },
-                    { text: formatNum(item.count), width: TOP_COLUMNS[1].width, muted: true },
+                    { text: formatPct(share, 1), width: TOP_COLUMNS[0].width, type: "pct", muted: true },
+                    { text: formatNum(item.count), width: TOP_COLUMNS[1].width, type: "count", muted: true },
                     {
                       text: formatMoney(item.amount, baseCurrency),
                       width: TOP_COLUMNS[2].width,

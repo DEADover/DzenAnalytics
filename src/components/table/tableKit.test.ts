@@ -19,17 +19,19 @@ describe("тип колонки → выравнивание", () => {
     expect(alignOf("date")).toBe("left");
     expect(alignOf("money")).toBe("right");
     expect(alignOf("main")).toBe("right");
+    expect(alignOf("balance")).toBe("left");
     expect(alignOf("number")).toBe("right");
-    expect(alignOf("pct")).toBe("right");
+    expect(alignOf("pct")).toBe("left");
     expect(alignOf("change")).toBe("right");
-    expect(alignOf("count")).toBe("right");
+    expect(alignOf("count")).toBe("left");
     expect(alignOf("mark")).toBe("center");
     expect(alignOf("actions")).toBe("center");
   });
 
   it("шапка выравнивается так же, как значения", () => {
     expect(headClass("money")).toContain("text-right");
-    expect(headClass("count")).toContain("text-right");
+    expect(headClass("count")).toContain("text-left");
+    expect(headClass("money")).toContain("text-right");
     expect(headClass("text")).toContain("text-left");
   });
 });
@@ -44,6 +46,14 @@ describe("цвет ячейки", () => {
   it("метка может быть цветной, нейтральный тон цвета не даёт", () => {
     expect(cellClass("mark", { tone: "warn" })).toContain("text-warn");
     expect(cellClass("main", { tone: "neutral" })).not.toMatch(/text-(expense|income|warn)/);
+  });
+
+  it("остаток — главная колонка «Капитала»: 500, влево, минус красным", () => {
+    const cls = cellClass("balance", { tone: "expense" });
+    expect(cls).toContain("text-left");
+    expect(cls).toContain("font-medium");
+    expect(cls).toContain("text-expense");
+    expect(cellClass("balance", { tone: "neutral" })).not.toMatch(/text-(expense|income|warn)/);
   });
 
   it("главная сумма — 500, числа — табличными цифрами", () => {

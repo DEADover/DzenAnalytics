@@ -113,7 +113,7 @@ import { depositTotals, projectDeposit, type DepositRow } from "../lib/deposits"
 import { SectionCard } from "../components/SectionCard";
 import { CardHeader } from "../components/CardHeader";
 import { HeadCell, TreeElbow } from "../components/table/TableParts";
-import { cellClass, toneOfSigned, treeIndent, type ColumnType, type Tone } from "../components/table/tableKit";
+import { cellClass, scaledWidth, toneOfSigned, treeIndent, type ColumnType, type Tone } from "../components/table/tableKit";
 import { toIsoDate } from "../lib/period";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { Sparkline } from "../components/Sparkline";
@@ -2644,24 +2644,27 @@ export function AccountsPage() {
             >
               <colgroup>
                 <col />
-                {/* 170px = самая длинная подпись вида счёта («Накопительный
+                {/* 10.75rem = самая длинная подпись вида счёта («Накопительный
                     счёт», замер 140px) плюс отступы ячейки: иначе она режется
-                    многоточием у большинства счетов. */}
-                <col style={{ width: 170 }} />
+                    многоточием у большинства счетов. Ширины — в rem и растут
+                    с размером текста таблиц, как у остальных таблиц: в
+                    пикселях «Поступления» и «Операции» на «Движении»
+                    резались многоточием. */}
+                <col style={{ width: scaledWidth("10.75rem") }} />
                 {capitalView ? (
                   <>
-                    <col style={{ width: hasForeignCurrency ? 230 : 140 }} />
-                    <col style={{ width: 110 }} />
+                    <col style={{ width: scaledWidth(hasForeignCurrency ? "14.5rem" : "8.75rem") }} />
+                    <col style={{ width: scaledWidth("7rem") }} />
                   </>
                 ) : (
                   <>
-                    <col style={{ width: 130 }} />
-                    <col style={{ width: 130 }} />
-                    <col style={{ width: 126 }} />
-                    <col style={{ width: 96 }} />
+                    <col style={{ width: scaledWidth("8.75rem") }} />
+                    <col style={{ width: scaledWidth("8.75rem") }} />
+                    <col style={{ width: scaledWidth("8rem") }} />
+                    <col style={{ width: scaledWidth("7rem") }} />
                   </>
                 )}
-                <col style={{ width: 120 }} />
+                <col style={{ width: scaledWidth("7.5rem") }} />
               </colgroup>
               <thead>
                 <tr>
@@ -2677,7 +2680,7 @@ export function AccountsPage() {
                       отвечала сразу на два разных вопроса. */}
                   {capitalView ? (
                     <>
-                      <SortTh sortKey="balance" type="main" {...sortHead}>
+                      <SortTh sortKey="balance" type="balance" {...sortHead}>
                         {hasRealBalances ? "Остаток" : "Накоплено"}
                       </SortTh>
                       <SortTh sortKey="balance" type="pct" {...sortHead}>
@@ -2719,9 +2722,16 @@ export function AccountsPage() {
                         </td>
                         <td className="table-td" />
                         {/* Сумма группы стоит ровно под колонкой с деньгами:
-                            на «Капитале» это остаток, на «Движении» — поступления.
-                            Хвост добивается пустыми ячейками до конца строки. */}
-                        <td className={cellClass("money", { className: item.sum < 0 ? "text-expense" : undefined })}>
+                            на «Капитале» это остаток (прижат влево, как он), на
+                            «Движении» — поступления (вправо). Хвост добивается
+                            пустыми ячейками до конца строки. */}
+                        <td
+                          className={cellClass(capitalView ? "balance" : "money", {
+                            // У строки группы сумма обычным начертанием, как была:
+                            // 500 у остатка — для строк счетов.
+                            className: clsx("!font-normal", item.sum < 0 && "text-expense"),
+                          })}
+                        >
                           {formatMoney(item.sum, base)}
                         </td>
                         {/* Доля группы встаёт ровно под колонкой «Доля» —
@@ -2854,7 +2864,7 @@ export function AccountsPage() {
                       <td className={cellClass("text", { muted: true, className: "truncate" })}>{a.kind}</td>
                       {capitalView && (
                         <td
-                          className={cellClass("main", { tone: headlineTone })}
+                          className={cellClass("balance", { tone: headlineTone })}
                           title={formatMoney(headline, base, { decimals: 2 })}
                         >
                           {formatMoney(headline, base, { signed: !hasReal })}

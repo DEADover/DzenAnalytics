@@ -19,20 +19,27 @@ export type SortDir = "asc" | "desc";
  * - `date` — дата. Влево, приглушённо, табличные цифры.
  * - `money` — сумма. Вправо, обычным цветом.
  * - `main` — главная сумма таблицы, одна на таблицу. Вправо, 500, цвет стороны.
+ * - `balance` — остаток: сколько лежит на счёте сейчас (или накоплено), а не
+ *   сколько прошло за период. Влево, 500, цвет — только у минуса. Главная
+ *   колонка «Капитала» вместо `main`.
  * - `number` — число, но не деньги: ставка, дни, σ, «во сколько раз». Вправо.
- * - `pct` — доля. Вправо, приглушённо.
+ * - `pct` — доля. Влево, приглушённо.
  * - `change` — изменение: знак, процент или пилюля. Вправо.
- * - `count` — счётчик. Вправо, приглушённо: по центру он стоял в стороне от
- *   соседних чисел, прижатых вправо, — рядом с долей и суммой колонка казалась
- *   уехавшей влево.
+ * - `count` — счётчик. Влево, приглушённо.
  * - `mark` — статус, метка, значок. По центру.
  * - `actions` — кнопки. По центру, не сортируется и не выгружается.
+ *
+ * Доля, счётчик и остаток прижаты влево по решению пользователя (14.09.2026):
+ * по центру счётчик казался уехавшим, а прижатые вправо узкие колонки с
+ * подписью и значком сортировки читались сдвинутыми относительно шапки.
+ * Суммы операций и изменения остаются справа.
  */
 export type ColumnType =
   | "text"
   | "date"
   | "money"
   | "main"
+  | "balance"
   | "number"
   | "pct"
   | "change"
@@ -68,10 +75,11 @@ export const COLUMN_TYPES: Record<ColumnType, TypeSpec> = {
   date: { align: "left", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
   money: { align: "right", cell: NUM, firstDir: "desc", sortable: true, exported: true },
   main: { align: "right", cell: `${NUM} font-medium`, firstDir: "desc", sortable: true, exported: true },
+  balance: { align: "left", cell: `${NUM} font-medium`, firstDir: "desc", sortable: true, exported: true },
   number: { align: "right", cell: NUM, firstDir: "desc", sortable: true, exported: true },
-  pct: { align: "right", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
+  pct: { align: "left", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
   change: { align: "right", cell: NUM, firstDir: "desc", sortable: true, exported: true },
-  count: { align: "right", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
+  count: { align: "left", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
   mark: { align: "center", cell: "whitespace-nowrap", firstDir: "asc", sortable: true, exported: true },
   actions: { align: "center", cell: "whitespace-nowrap", firstDir: "asc", sortable: false, exported: false },
 };
@@ -106,15 +114,16 @@ export function headClass(type: ColumnType, className?: string): string {
 }
 
 /**
- * Классы ячейки. Цвет берётся только у главной суммы и у метки — правило
- * «цвет у одной суммы на таблицу» держится здесь, а не на каждой странице.
+ * Классы ячейки. Цвет берётся только у главной суммы (или остатка) и у метки —
+ * правило «цвет у одной суммы на таблицу» держится здесь, а не на каждой
+ * странице.
  */
 export function cellClass(
   type: ColumnType,
   opts: { muted?: boolean; tone?: Tone; className?: string } = {}
 ): string {
   const spec = COLUMN_TYPES[type];
-  const colored = type === "main" || type === "mark";
+  const colored = type === "main" || type === "balance" || type === "mark";
   return clsx(
     "table-td",
     ALIGN_CLASS[spec.align],

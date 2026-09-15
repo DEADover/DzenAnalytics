@@ -1,5 +1,5 @@
 import { SortButton } from "./table/TableParts";
-import { scaledWidth, type SortDir } from "./table/tableKit";
+import { alignOf, scaledWidth, type ColumnType, type SortDir } from "./table/tableKit";
 
 /**
  * Промежуток между именем и колонками — общий у строки и у её шапки. Разойдись
@@ -21,7 +21,15 @@ export interface MeterCell {
   muted?: boolean;
   /** Ключ сортировки — у колонки шапки, если список сортируется по ней. */
   sortKey?: string;
+  /**
+   * Тип колонки из табличного стандарта — от него выравнивание, одно у ячейки и
+   * у её заголовка: доля и счётчик влево, суммы вправо. По умолчанию — сумма.
+   */
+  type?: ColumnType;
 }
+
+const CELL_ALIGN = { left: "text-left", right: "text-right", center: "text-center" } as const;
+const HEAD_ALIGN = { left: "justify-start", right: "justify-end", center: "justify-center" } as const;
 
 /**
  * Строка-мера: подпись, доля полосой и числа колонками.
@@ -81,7 +89,7 @@ export function MeterRow({
   const numbers = cells.map((c, i) => (
     <span
       key={i}
-      className={`relative tabular-nums whitespace-nowrap shrink-0 text-right ${
+      className={`relative tabular-nums whitespace-nowrap shrink-0 ${CELL_ALIGN[alignOf(c.type ?? "money")]} ${
         c.muted ? "text-muted" : "font-medium"
       }`}
       style={{ width: scaledWidth(c.width) }}
@@ -189,7 +197,11 @@ export function MeterHead({
       {columns.map((c, i) => {
         const s = sortOf(c.sortKey);
         return (
-          <span key={i} className="shrink-0 flex justify-end" style={{ width: scaledWidth(c.width) }}>
+          <span
+            key={i}
+            className={`shrink-0 flex ${HEAD_ALIGN[alignOf(c.type ?? "money")]}`}
+            style={{ width: scaledWidth(c.width) }}
+          >
             {s ? <SortButton label={c.text} sort={s} /> : c.text}
           </span>
         );
