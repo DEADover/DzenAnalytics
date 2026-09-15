@@ -59,7 +59,8 @@ export function FiltersDock() {
 
   return createPortal(
     <div
-      className="fixed inset-x-0 z-20 px-4 md:px-6 pt-2 pointer-events-none"
+      // Без полей по бокам: панель — продолжение шапки, во всю её ширину.
+      className="fixed inset-x-0 z-20 pointer-events-none"
       style={{ top: "var(--app-header-h)" }}
       hidden={phase === "hidden"}
       inert={!open || undefined}

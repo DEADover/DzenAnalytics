@@ -422,7 +422,12 @@ export function GlobalFilters({
     <div className={docked ? undefined : "mb-4 md:mb-6"}>
       <div
         className={clsx(
-          "card-tray p-3 md:card-pad md:p-4",
+          // В режиме кнопки панель продолжает шапку: во всю ширину, с её же
+          // полями и чертой снизу, без скруглений и без просвета сверху. На
+          // странице — обычная карточка с двойным кантом.
+          docked
+            ? "border-b border-border bg-panel/95 backdrop-blur shadow-tray px-4 md:px-6 py-3"
+            : "card-tray p-3 md:card-pad md:p-4",
           // `inert` снимает и клики, и обход с клавиатуры, и внимание читалок —
           // одним атрибутом, без перебора всех контролов внутри.
           dimmed && "opacity-45 grayscale select-none"
