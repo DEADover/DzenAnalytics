@@ -62,6 +62,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const setThemeMode = useThemeStore((s) => s.setMode);
   const zenToken = useZenmoneyStore((s) => s.token);
   const hideThanks = useDisplayStore((s) => s.hideThanks);
+  const filtersDocked = useDisplayStore((s) => s.filtersMode) === "button";
   const filtersOpen = useFiltersDockStore((s) => s.open);
   const filtersAvailable = useFiltersDockStore((s) => s.clients) > 0;
   const filtersActive = useFiltersDockStore((s) => s.active);
@@ -273,10 +274,12 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         {/* Системная дорожка. Поиск живёт здесь же: он открывает палитру
             команд, то есть тоже про приложение, а не про данные на экране. */}
         <div className="seg-track shrink-0">
-        {/* Общие фильтры — первой кнопкой: панель выезжает из-под шапки поверх
+        {/* Общие фильтры — первой кнопкой (только в режиме «По кнопке»: во
+            втором режиме панель стоит на самой странице, и кнопка не нужна): панель выезжает из-под шапки поверх
             страницы с любого места прокрутки (`FiltersDock`). Точка — заданы
             фильтры, есть что сбросить; на страницах без фильтров кнопка
             погашена, а не пропадает, как «Настроить главную». */}
+        {filtersDocked && (
         <button
           type="button"
           onClick={() => {
@@ -303,6 +306,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             />
           )}
         </button>
+        )}
         <button
           onClick={onOpenPalette}
           className={iconItem()}

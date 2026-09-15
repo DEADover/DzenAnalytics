@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useFiltersDockStore } from "../store/useFiltersDockStore";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { Checkbox } from "./Checkbox";
 import type { Transaction } from "../types";
 import {
@@ -396,22 +397,29 @@ export function GlobalFilters({
     hasExtra ||
     !(f.preset === "month" && f.monthYM === defaultMonthYM);
 
-  // Панель живёт не на странице, а под шапкой (`FiltersDock`): страница только
-  // говорит, какой она должна быть. Кнопка в шапке активна, пока смонтирована
-  // хоть одна панель, а точка на ней — пока есть что сбросить.
+  // Где рисовать панель, решает настройка «Панель фильтров» (Оформление):
+  // «По кнопке» — уходим порталом под шапку (`FiltersDock`), «На странице» —
+  // остаёмся первым блоком страницы, как было раньше. Кнопка в шапке активна,
+  // пока смонтирована хоть одна панель в режиме кнопки, а точка на ней — пока
+  // есть что сбросить.
   const hasData = transactions.length > 0;
+  const docked = useDisplayStore((s) => s.filtersMode) === "button";
   const registerDock = useFiltersDockStore((s) => s.register);
   const setDockActive = useFiltersDockStore((s) => s.setActive);
   const dockEl = useFiltersDockStore((s) => s.dockEl);
-  useEffect(() => (hasData ? registerDock() : undefined), [hasData, registerDock]);
+  useEffect(
+    () => (hasData && docked ? registerDock() : undefined),
+    [hasData, docked, registerDock]
+  );
   useEffect(() => {
-    if (hasData) setDockActive(hasFilters);
-  }, [hasData, hasFilters, setDockActive]);
+    if (hasData && docked) setDockActive(hasFilters);
+  }, [hasData, docked, hasFilters, setDockActive]);
 
-  if (!hasData || !dockEl) return null;
+  if (!hasData) return null;
+  if (docked && !dockEl) return null;
 
-  return createPortal(
-    <div>
+  const panel = (
+    <div className={docked ? undefined : "mb-4 md:mb-6"}>
       <div
         className={clsx(
           "card-tray p-3 md:card-pad md:p-4",
@@ -795,7 +803,8 @@ export function GlobalFilters({
           того, что объясняет. Теперь оно стоит у самого переключателя раздела,
           который эти фильтры и гасит (см. «Счета»), а на самих погашенных
           контролах остаётся та же подсказка при наведении. */}
-    </div>,
-    dockEl
+    </div>
   );
+
+  return docked && dockEl ? createPortal(panel, dockEl) : panel;
 }

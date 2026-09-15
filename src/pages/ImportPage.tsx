@@ -211,6 +211,8 @@ export function ImportPage() {
   const rememberFilters = useFilterMemoryStore((s) => s.enabled);
   const setRememberFilters = useFilterMemoryStore((s) => s.setEnabled);
   const setStatementLine = useDisplayStore((s) => s.setStatementLine);
+  const filtersMode = useDisplayStore((s) => s.filtersMode);
+  const setFiltersMode = useDisplayStore((s) => s.setFiltersMode);
   const hideThanks = useDisplayStore((s) => s.hideThanks);
   const setHideThanks = useDisplayStore((s) => s.setHideThanks);
   const setFractionDigits = useDisplayStore((s) => s.setFractionDigits);
@@ -1440,6 +1442,47 @@ export function ImportPage() {
               checked={statementLine}
               label="Показывать строку из выписки"
               onChange={(next) => setStatementLine(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Панель фильтров"
+          status={
+            filtersMode === "button"
+              ? "По кнопке в шапке — не занимает места"
+              : "На странице — всегда на виду"
+          }
+          help={
+            <>
+              <p>
+                Общие фильтры — период, счета, категории, валюты и поиск —
+                работают на всех аналитических страницах. Показывать их можно
+                двумя способами.
+              </p>
+              <p className="mt-2">
+                <strong>По кнопке в шапке.</strong> Панель не занимает места на
+                странице: открывается кнопкой с ползунками справа в шапке, с
+                любого места прокрутки выезжает поверх страницы и ничего не
+                сдвигает. Прячется той же кнопкой, клавишей Escape и при
+                переходе в другой раздел. Точка на кнопке — фильтры заданы.
+              </p>
+              <p className="mt-2">
+                <strong>На странице.</strong> Панель стоит первым блоком
+                каждой страницы и всегда на виду, как было раньше; кнопки в
+                шапке в этом случае нет.
+              </p>
+            </>
+          }
+          control={
+            <Segmented
+              label="Панель фильтров"
+              value={filtersMode}
+              onChange={(m) => setFiltersMode(m)}
+              options={[
+                { value: "button", label: "По кнопке" },
+                { value: "page", label: "На странице" },
+              ]}
             />
           }
         />

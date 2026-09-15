@@ -19,6 +19,13 @@ const KEY = "displaySettings";
 
 type FractionDigits = 0 | 2;
 
+/**
+ * Где живут общие фильтры: `button` — панелью из-под шапки по кнопке (не
+ * занимают места, вызываются с любой прокрутки), `page` — первым блоком
+ * страницы, как было раньше; кнопки в шапке тогда нет вовсе.
+ */
+export type FiltersMode = "button" | "page";
+
 /** 1 (smallest) … 5 (largest); 3 is the default 14px baseline. */
 export type TableFontLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -83,6 +90,7 @@ interface DisplayState {
    * телефона. По умолчанию значок есть: раньше ссылка стояла в подвале.
    */
   hideThanks: boolean;
+  filtersMode: FiltersMode;
   loaded: boolean;
   hydrate: () => Promise<void>;
   setFractionDigits: (n: FractionDigits) => Promise<void>;
@@ -90,6 +98,7 @@ interface DisplayState {
   setStatementLine: (on: boolean) => Promise<void>;
   setSyncLogOpen: (on: boolean) => Promise<void>;
   setHideThanks: (on: boolean) => Promise<void>;
+  setFiltersMode: (mode: FiltersMode) => Promise<void>;
 }
 
 export const useDisplayStore = create<DisplayState>((set, get) => ({
@@ -98,6 +107,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   statementLine: false,
   syncLogOpen: false,
   hideThanks: false,
+  filtersMode: "button",
   loaded: false,
 
   hydrate: async () => {
@@ -107,6 +117,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       statementLine?: boolean;
       syncLogOpen?: boolean;
       hideThanks?: boolean;
+      filtersMode?: string;
     }>(KEY);
     const fd: FractionDigits = stored?.fractionDigits === 2 ? 2 : 0;
     const level = normalizeLevel(stored?.tableFontLevel);
@@ -118,6 +129,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       statementLine: stored?.statementLine === true,
       syncLogOpen: stored?.syncLogOpen === true,
       hideThanks: stored?.hideThanks === true,
+      filtersMode: stored?.filtersMode === "page" ? "page" : "button",
       loaded: true,
     });
   },
@@ -149,6 +161,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     set({ hideThanks: on });
     await db.saveJSON(KEY, { ...persisted(get()), hideThanks: on });
   },
+
+  setFiltersMode: async (filtersMode) => {
+    set({ filtersMode });
+    await db.saveJSON(KEY, { ...persisted(get()), filtersMode });
+  },
 }));
 
 /** Всё, что кладём в IDB, — одним местом, чтобы сеттеры не забывали поля. */
@@ -159,5 +176,6 @@ function persisted(s: DisplayState) {
     statementLine: s.statementLine,
     syncLogOpen: s.syncLogOpen,
     hideThanks: s.hideThanks,
+    filtersMode: s.filtersMode,
   };
 }
