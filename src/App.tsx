@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { TransactionsDrawer } from "./components/TransactionsDrawer";
 import { CommandPalette } from "./components/CommandPalette";
 import { ThemeModal } from "./components/ThemeModal";
+import { HeaderNavModal } from "./components/HeaderNavModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ChangelogModal } from "./components/ChangelogModal";
 import { HistRatesProgress } from "./components/HistRatesProgress";
@@ -68,6 +69,7 @@ import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
 import { useMembersStore } from "./store/useMembersStore";
 import { useFreeMoneyStore } from "./store/useFreeMoneyStore";
 import { useTagModeStore } from "./store/useTagModeStore";
+import { useHeaderNavStore } from "./store/useHeaderNavStore";
 import { useDashboardLayoutStore } from "./store/useDashboardLayoutStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 import { useImportBatchesStore } from "./store/useImportBatchesStore";
@@ -148,6 +150,7 @@ function App() {
     useMembersStore.getState().hydrate();
     useFreeMoneyStore.getState().hydrate();
     useTagModeStore.getState().hydrate();
+    useHeaderNavStore.getState().hydrate();
     hydrate();
     backupHydrate();
     reportPeriodHydrate();
@@ -488,6 +491,7 @@ function App() {
       <TransactionsDrawer />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ThemeModal />
+      <HeaderNavModal />
       <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
       <ConfirmDialog />
       <HistRatesProgress />

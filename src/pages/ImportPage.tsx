@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Trash2,
   Palette,
+  PanelTop,
   Replace,
   Layers,
   Download,
@@ -70,6 +71,8 @@ import { useFilterMemoryStore } from "../store/useFilterMemoryStore";
 import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { useThemeModalStore } from "../store/useThemeModalStore";
+import { useHeaderNavStore } from "../store/useHeaderNavStore";
+import { headerSections } from "../lib/headerNav";
 import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
 import { snapshotSummary } from "../lib/snapshotLabel";
 import { readSnapshotFile } from "../lib/snapshotFile";
@@ -199,6 +202,8 @@ export function ImportPage() {
   const themeMode = useThemeStore((s) => s.mode);
   const resolvedTheme = useThemeStore((s) => s.resolved);
   const showThemeModal = useThemeModalStore((s) => s.show);
+  const headerNavItems = useHeaderNavStore((s) => s.items);
+  const openHeaderNavEditor = useHeaderNavStore((s) => s.openEditor);
   const lightSchemeName = useThemeStore((s) => schemeById(s.lightScheme)?.name ?? "");
   const darkSchemeName = useThemeStore((s) => schemeById(s.darkScheme)?.name ?? "");
   const fractionDigits = useDisplayStore((s) => s.fractionDigits);
@@ -1353,6 +1358,29 @@ export function ImportPage() {
             <button type="button" className="btn-ghost" onClick={showThemeModal}>
               <Palette className="w-4 h-4" />
               Выбрать тему
+            </button>
+          }
+        />
+
+        <SettingRow
+          title="Меню в шапке"
+          status={
+            headerNavItems.length === 0
+              ? "Все разделы — в «Ещё»"
+              : headerSections(headerNavItems).map((s) => s.label).join(", ")
+          }
+          help={
+            <p>
+              Какие разделы стоят в меню шапки и в каком порядке. Любой раздел из
+              «Ещё» можно поставить в шапку, а основной — убрать в «Ещё». Если на
+              узком экране разделы не помещаются, последние сами уходят в «Ещё».
+              Открыть настройку можно и из панели «Ещё».
+            </p>
+          }
+          control={
+            <button type="button" className="btn-ghost" onClick={openHeaderNavEditor}>
+              <PanelTop className="w-4 h-4" />
+              Настроить
             </button>
           }
         />

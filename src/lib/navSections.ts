@@ -21,9 +21,12 @@ import {
   GitFork,
   Hash,
   HeartPulse,
+  LayoutDashboard,
   LineChart,
+  ListChecks,
   Newspaper,
   Percent,
+  PieChart,
   Repeat,
   Sparkles,
   Table,
@@ -31,6 +34,7 @@ import {
   Target,
   Trash2,
   TrendingUp,
+  Wallet,
   Wand2,
   Zap,
 } from "lucide-react";
@@ -99,6 +103,21 @@ export const SECONDARY_GROUPS: { title: string; items: NavSection[] }[] = [
 
 /** Те же разделы плоским списком — в порядке панели «Ещё». */
 export const SECONDARY: NavSection[] = SECONDARY_GROUPS.flatMap((g) => g.items);
+
+/**
+ * Основные разделы — те, что по умолчанию стоят в шапке. Меню в шапке
+ * настраивается (`lib/headerNav`): основной раздел можно убрать в «Ещё», и
+ * там он встаёт группой «Обзор», поэтому пояснение нужно и ему.
+ */
+export const PRIMARY_SECTIONS: NavSection[] = [
+  { to: "/", label: "Главная", icon: LayoutDashboard, hint: "Сводка месяца и виджеты" },
+  { to: "/transactions", label: "Операции", icon: ListChecks, hint: "Лента всех операций с фильтрами" },
+  { to: "/accounts", label: "Счета", icon: Wallet, hint: "Балансы и движение по счетам" },
+  { to: "/categories", label: "Категории", icon: PieChart, hint: "Куда уходят и откуда приходят деньги" },
+];
+
+/** Все разделы, которые можно поставить в шапку: основные, затем из «Ещё». */
+export const ALL_SECTIONS: NavSection[] = [...PRIMARY_SECTIONS, ...SECONDARY];
 
 const BY_PATH = new Map(SECONDARY.map((s) => [s.to, s]));
 
