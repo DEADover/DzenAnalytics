@@ -943,7 +943,7 @@ export function ActivityHeat({
           const dayTone = future
             ? "text-muted/50"
             : hot
-              ? "text-white font-medium"
+              ? "text-on-tone font-medium"
               : step > 0
                 ? "text-text"
                 : "text-muted";

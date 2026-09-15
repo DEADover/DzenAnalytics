@@ -624,7 +624,7 @@ export function TransactionsPage() {
                   className="relative btn-ghost text-xs !px-2"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-expense text-white text-[10px] leading-4 text-center tabular-nums">
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-expense text-on-tone text-[10px] leading-4 text-center tabular-nums">
                     {deletedCount}
                   </span>
                 </button>

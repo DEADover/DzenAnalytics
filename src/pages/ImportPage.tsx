@@ -197,8 +197,8 @@ export function ImportPage() {
   const themeMode = useThemeStore((s) => s.mode);
   const resolvedTheme = useThemeStore((s) => s.resolved);
   const setThemeMode = useThemeStore((s) => s.setMode);
-  const lightPalette = useThemeStore((s) => s.lightPalette);
-  const setLightPalette = useThemeStore((s) => s.setLightPalette);
+  const palette = useThemeStore((s) => s.palette);
+  const setPalette = useThemeStore((s) => s.setPalette);
   const fractionDigits = useDisplayStore((s) => s.fractionDigits);
   const statementLine = useDisplayStore((s) => s.statementLine);
   const rememberFilters = useFilterMemoryStore((s) => s.enabled);
@@ -1361,26 +1361,30 @@ export function ImportPage() {
         />
 
         <SettingRow
-          title="Палитра светлой темы"
-          status={
-            (lightPalette === "neutral" ? "Нейтральная" : "Холодная") +
-            (resolvedTheme === "dark" ? " · Видна в светлой теме" : "")
-          }
+          title="Цветовая схема"
+          status={palette === "neutral" ? "Нейтральная" : "Классическая"}
           help={
-            <p>
-              Оттенок фона, карточек, окон и линий в светлой теме. Холодная —
-              серые с лёгкой синевой, нейтральная — чистые серые без оттенка.
-              Акцент, цвета дохода, расхода и категорий не меняются. Тёмная
-              тема от этой настройки не зависит.
-            </p>
+            <>
+              <p>
+                Классическая — прежние цвета: серые с лёгкой синевой, в тёмной
+                теме — тёмно-синий фон.
+              </p>
+              <p className="mt-2">
+                Нейтральная — чистые серые без оттенка. В светлой теме — серый
+                фон и белые карточки. В тёмной — тёмно-серый фон, который
+                светлеет к карточкам и полям, и приглушённые цвета дохода,
+                расхода и акцента: так на тёмном легче читать.
+              </p>
+              <p className="mt-2">Цвета категорий в обеих схемах одинаковые.</p>
+            </>
           }
           control={
             <Segmented
-              label="Палитра светлой темы"
-              value={lightPalette}
-              onChange={(p) => setLightPalette(p)}
+              label="Цветовая схема"
+              value={palette}
+              onChange={(p) => setPalette(p)}
               options={[
-                { value: "cool", label: "Холодная" },
+                { value: "classic", label: "Классическая" },
                 { value: "neutral", label: "Нейтральная" },
               ]}
             />

@@ -219,7 +219,7 @@ export function FireIndependence({
                     on ? "bg-accent border-accent" : "border-border"
                   }`}
                 >
-                  {on && <Check className="w-3 h-3 text-white" />}
+                  {on && <Check className="w-3 h-3 text-accent-fg" />}
                 </span>
                 <span className={`flex-1 truncate ${on ? "" : "text-muted line-through"}`}>
                   {a.title}

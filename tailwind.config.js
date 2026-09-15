@@ -20,6 +20,7 @@ export default {
         text: "rgb(var(--c-text) / <alpha-value>)",
         accent: "rgb(var(--c-accent) / <alpha-value>)",
         "accent-fg": "rgb(var(--c-accent-fg) / <alpha-value>)",
+        "on-tone": "rgb(var(--c-on-tone) / <alpha-value>)",
         accent2: "rgb(var(--c-accent2) / <alpha-value>)",
         income: "rgb(var(--c-income) / <alpha-value>)",
         expense: "rgb(var(--c-expense) / <alpha-value>)",

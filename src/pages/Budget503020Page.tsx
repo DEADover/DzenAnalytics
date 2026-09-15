@@ -216,7 +216,7 @@ export function Budget503020Page() {
             {split.needs > 0 && (
               <div
                 style={{ width: `${w(split.needs)}%`, backgroundColor: NEEDS_COLOR }}
-                className="flex items-center justify-center text-white text-xs font-medium"
+                className="flex items-center justify-center text-on-tone text-xs font-medium"
               >
                 {w(split.needs) > 8 ? pct(split.needsPct) : ""}
               </div>
@@ -224,7 +224,7 @@ export function Budget503020Page() {
             {split.wants > 0 && (
               <div
                 style={{ width: `${w(split.wants)}%`, backgroundColor: WANTS_COLOR }}
-                className="flex items-center justify-center text-white text-xs font-medium"
+                className="flex items-center justify-center text-on-tone text-xs font-medium"
               >
                 {w(split.wants) > 8 ? pct(split.wantsPct) : ""}
               </div>
@@ -232,7 +232,7 @@ export function Budget503020Page() {
             {split.savings > 0 && (
               <div
                 style={{ width: `${w(split.savings)}%`, backgroundColor: SAVINGS_COLOR }}
-                className="flex items-center justify-center text-white text-xs font-medium"
+                className="flex items-center justify-center text-on-tone text-xs font-medium"
               >
                 {w(split.savings) > 8 ? pct(split.savingsPct) : ""}
               </div>
