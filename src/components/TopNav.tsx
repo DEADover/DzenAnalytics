@@ -14,6 +14,7 @@ import {
   CloudDownload,
   Pencil,
   Heart,
+  SlidersHorizontal,
 } from "lucide-react";
 import clsx from "clsx";
 import { useThemeStore } from "../store/useThemeStore";
@@ -29,6 +30,7 @@ import { SmoothNavLink } from "./SmoothNavLink";
 import { fitCount, headerSections, moreGroups } from "../lib/headerNav";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
 import { useDisplayStore } from "../store/useDisplayStore";
+import { useFiltersDockStore } from "../store/useFiltersDockStore";
 import { SUPPORT_TITLE, SUPPORT_URL } from "../lib/support";
 import logoDa from "../assets/logo-da.png";
 
@@ -60,6 +62,10 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const setThemeMode = useThemeStore((s) => s.setMode);
   const zenToken = useZenmoneyStore((s) => s.token);
   const hideThanks = useDisplayStore((s) => s.hideThanks);
+  const filtersOpen = useFiltersDockStore((s) => s.open);
+  const filtersAvailable = useFiltersDockStore((s) => s.clients) > 0;
+  const filtersActive = useFiltersDockStore((s) => s.active);
+  const toggleFilters = useFiltersDockStore((s) => s.toggle);
   const { busy: syncBusy, runFull } = useSyncCommands();
 
   // Разделы шапки — из настройки (`lib/headerNav`). Сколько из них влезает,
@@ -267,6 +273,36 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         {/* Системная дорожка. Поиск живёт здесь же: он открывает палитру
             команд, то есть тоже про приложение, а не про данные на экране. */}
         <div className="seg-track shrink-0">
+        {/* Общие фильтры — первой кнопкой: панель выезжает из-под шапки поверх
+            страницы с любого места прокрутки (`FiltersDock`). Точка — заданы
+            фильтры, есть что сбросить; на страницах без фильтров кнопка
+            погашена, а не пропадает, как «Настроить главную». */}
+        <button
+          type="button"
+          onClick={() => {
+            setMoreOpen(false);
+            toggleFilters();
+          }}
+          aria-disabled={!filtersAvailable}
+          aria-pressed={filtersOpen}
+          aria-label={filtersOpen ? "Скрыть фильтры" : "Показать фильтры"}
+          title={
+            filtersAvailable
+              ? filtersOpen
+                ? "Скрыть фильтры"
+                : `Фильтры\nПериод, счета, категории и поиск${filtersActive ? " — заданы" : ""}`
+              : "Фильтры\nНа этой странице их нет"
+          }
+          className={iconItem(filtersOpen && filtersAvailable)}
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          {filtersActive && filtersAvailable && !filtersOpen && (
+            <span
+              aria-hidden
+              className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent ring-2 ring-panel2"
+            />
+          )}
+        </button>
         <button
           onClick={onOpenPalette}
           className={iconItem()}

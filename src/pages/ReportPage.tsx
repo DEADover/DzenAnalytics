@@ -443,7 +443,7 @@ export function ReportPage() {
 
       {empty ? (
         <SectionEmpty icon={TableIcon} title="За выбранный период нет доходов и расходов">
-          Измените фильтр выше.
+          Измените фильтры — они открываются кнопкой в шапке.
         </SectionEmpty>
       ) : (
         // `overflow-clip`, а НЕ `overflow-hidden`: скруглённые углы карточки

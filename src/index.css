@@ -1002,6 +1002,20 @@ h2,
   animation: donutZoomOut 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
   transform-origin: 50% 50%;
 }
+/* Панель общих фильтров из-под шапки (FiltersDock): выезжает вниз и
+   проявляется, уходит — вверх и гаснет. Без заливки у появления: в покое у
+   панели нет transform, иначе fixed-меню фильтров считались бы от неё. Уход —
+   с заливкой, после него панель прячется целиком. */
+@keyframes dockIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dockOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-10px); }
+}
+.animate-dock-in { animation: dockIn 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
+.animate-dock-out { animation: dockOut 0.18s cubic-bezier(0.4, 0, 1, 1) forwards; }
 .animate-slide { animation: drawerSlide 0.18s ease-out; }
 .animate-fade { animation: fadeIn 0.18s ease-out; }
 .animate-cat-subs { animation: catSubsIn 0.18s ease-out; }

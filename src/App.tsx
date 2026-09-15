@@ -7,6 +7,7 @@ import { TransactionsDrawer } from "./components/TransactionsDrawer";
 import { CommandPalette } from "./components/CommandPalette";
 import { ThemeModal } from "./components/ThemeModal";
 import { HeaderNavModal } from "./components/HeaderNavModal";
+import { FiltersDock } from "./components/FiltersDock";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HistRatesProgress } from "./components/HistRatesProgress";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
@@ -464,6 +465,7 @@ function App() {
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ThemeModal />
       <HeaderNavModal />
+      <FiltersDock />
       <ConfirmDialog />
       <HistRatesProgress />
     </div>

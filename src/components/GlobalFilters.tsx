@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { useFiltersDockStore } from "../store/useFiltersDockStore";
 import { Checkbox } from "./Checkbox";
 import type { Transaction } from "../types";
 import {
@@ -394,10 +396,22 @@ export function GlobalFilters({
     hasExtra ||
     !(f.preset === "month" && f.monthYM === defaultMonthYM);
 
-  if (transactions.length === 0) return null;
+  // Панель живёт не на странице, а под шапкой (`FiltersDock`): страница только
+  // говорит, какой она должна быть. Кнопка в шапке активна, пока смонтирована
+  // хоть одна панель, а точка на ней — пока есть что сбросить.
+  const hasData = transactions.length > 0;
+  const registerDock = useFiltersDockStore((s) => s.register);
+  const setDockActive = useFiltersDockStore((s) => s.setActive);
+  const dockEl = useFiltersDockStore((s) => s.dockEl);
+  useEffect(() => (hasData ? registerDock() : undefined), [hasData, registerDock]);
+  useEffect(() => {
+    if (hasData) setDockActive(hasFilters);
+  }, [hasData, hasFilters, setDockActive]);
 
-  return (
-    <div className="mb-4 md:mb-6">
+  if (!hasData || !dockEl) return null;
+
+  return createPortal(
+    <div>
       <div
         className={clsx(
           "card-tray p-3 md:card-pad md:p-4",
@@ -781,6 +795,7 @@ export function GlobalFilters({
           того, что объясняет. Теперь оно стоит у самого переключателя раздела,
           который эти фильтры и гасит (см. «Счета»), а на самих погашенных
           контролах остаётся та же подсказка при наведении. */}
-    </div>
+    </div>,
+    dockEl
   );
 }
