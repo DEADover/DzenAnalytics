@@ -41,7 +41,6 @@ import { SettingRow } from "../components/SettingRow";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Switch } from "../components/Switch";
 import { Segmented } from "../components/Segmented";
-import { ThemeSchemePicker } from "../components/ThemeSchemePicker";
 import { schemeById } from "../lib/themeSchemes";
 import { Select } from "../components/Select";
 import { useDeletedStore } from "../store/useDeletedStore";
@@ -70,6 +69,7 @@ import { formatNum, formatDate, formatMoney } from "../lib/format";
 import { useFilterMemoryStore } from "../store/useFilterMemoryStore";
 import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
+import { useThemeModalStore } from "../store/useThemeModalStore";
 import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
 import { snapshotSummary } from "../lib/snapshotLabel";
 import { readSnapshotFile } from "../lib/snapshotFile";
@@ -198,7 +198,7 @@ export function ImportPage() {
   // до этого нигде не выбиралась — жила в хранилище без интерфейса.
   const themeMode = useThemeStore((s) => s.mode);
   const resolvedTheme = useThemeStore((s) => s.resolved);
-  const setThemeMode = useThemeStore((s) => s.setMode);
+  const showThemeModal = useThemeModalStore((s) => s.show);
   const lightSchemeName = useThemeStore((s) => schemeById(s.lightScheme)?.name ?? "");
   const darkSchemeName = useThemeStore((s) => schemeById(s.darkScheme)?.name ?? "");
   const fractionDigits = useDisplayStore((s) => s.fractionDigits);
@@ -1333,63 +1333,29 @@ export function ImportPage() {
 
         <SettingRow
           title="Тема"
-          status={
+          status={`Светлая — ${lightSchemeName}, тёмная — ${darkSchemeName} · ${
             themeMode === "auto"
-              ? `Как в системе — сейчас ${resolvedTheme === "dark" ? "тёмная" : "светлая"}`
-              : themeMode === "dark"
-                ? "Тёмная"
-                : "Светлая"
-          }
+              ? `Как в системе, сейчас ${resolvedTheme === "dark" ? "тёмный" : "светлый"} вид`
+              : resolvedTheme === "dark"
+                ? "Тёмный вид"
+                : "Светлый вид"
+          }`}
           help={
             <p>
-              «Как в системе» следует за настройкой оформления в вашей ОС и
-              переключается вместе с ней — в том числе по расписанию, если оно
-              там настроено. Кнопка в шапке переключает между светлой и тёмной
-              напрямую.
+              В окне темы — вид (светлый, тёмный или как в системе) и по шесть
+              тем для каждого вида: галочкой отмечается, какая нравится. «Как в
+              системе» переключается вместе с вашей ОС, в том числе по
+              расписанию. Кнопка в шапке переключает светлый и тёмный вид
+              напрямую, каждый — со своей темой.
             </p>
           }
           control={
-            <Segmented
-              label="Тема оформления"
-              value={themeMode}
-              onChange={(m) => setThemeMode(m)}
-              options={[
-                { value: "light", label: "Светлая" },
-                { value: "dark", label: "Тёмная" },
-                { value: "auto", label: "Как в системе" },
-              ]}
-            />
+            <button type="button" className="btn-ghost" onClick={showThemeModal}>
+              <Palette className="w-4 h-4" />
+              Выбрать тему
+            </button>
           }
         />
-
-        <SettingRow
-          title="Светлая тема"
-          status={`${lightSchemeName}${resolvedTheme === "light" ? " · Включена сейчас" : ""}`}
-          help={
-            <p>
-              Цвета фона, карточек, окон, текста, акцента и сумм, когда включён
-              светлый вид. Выбор светлой темы переключает на светлый вид, если
-              сейчас тёмный; в режиме «Как в системе» тема просто запомнится.
-              Цвета категорий во всех темах одинаковые.
-            </p>
-          }
-        >
-          <ThemeSchemePicker kind="light" />
-        </SettingRow>
-
-        <SettingRow
-          title="Тёмная тема"
-          status={`${darkSchemeName}${resolvedTheme === "dark" ? " · Включена сейчас" : ""}`}
-          help={
-            <p>
-              То же для тёмного вида. «Чёрный» — для OLED-экранов: чистый чёрный
-              фон бережёт заряд. Любую из двенадцати тем можно включить и из
-              палитры команд — например, «тема уголь».
-            </p>
-          }
-        >
-          <ThemeSchemePicker kind="dark" />
-        </SettingRow>
 
         <SettingRow
           title="Дробная часть сумм"

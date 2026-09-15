@@ -5,6 +5,7 @@ import { TopNav } from "./components/TopNav";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { TransactionsDrawer } from "./components/TransactionsDrawer";
 import { CommandPalette } from "./components/CommandPalette";
+import { ThemeModal } from "./components/ThemeModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ChangelogModal } from "./components/ChangelogModal";
 import { HistRatesProgress } from "./components/HistRatesProgress";
@@ -486,6 +487,7 @@ function App() {
       </footer>
       <TransactionsDrawer />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <ThemeModal />
       <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
       <ConfirmDialog />
       <HistRatesProgress />

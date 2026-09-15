@@ -69,9 +69,9 @@ interface ThemeState {
   darkScheme: DarkSchemeId;
   setMode: (m: ThemeMode) => void;
   /**
-   * Выбрать тему. Выбор светлой темы при тёмном виде (и наоборот) переключает
-   * и вид — иначе нажатие ничего бы не показало. В режиме «Как в системе» вид
-   * не трогаем: тема запомнится и включится вместе с системой.
+   * Отметить тему для её вида. Вид не переключает: светлую тему можно выбрать
+   * и сидя в тёмном — она включится, когда включится светлый вид. Показать
+   * тему сразу — вызвать ещё и `setMode` с её видом (так делает палитра).
    */
   setScheme: (id: SchemeId) => void;
   init: () => () => void;
@@ -105,7 +105,6 @@ export const useThemeStore = create<ThemeState>((set, get) => {
           // ignore
         }
         set({ lightScheme: id });
-        if (get().mode === "dark") get().setMode("light");
       } else if (isDarkSchemeId(id)) {
         try {
           localStorage.setItem(DARK_SCHEME_KEY, id);
@@ -113,7 +112,6 @@ export const useThemeStore = create<ThemeState>((set, get) => {
           // ignore
         }
         set({ darkScheme: id });
-        if (get().mode === "light") get().setMode("dark");
       }
       const { resolved } = get();
       applyTheme(resolved, schemeFor(resolved));

@@ -34,6 +34,7 @@ import {
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useThemeStore } from "../store/useThemeStore";
+import { useThemeModalStore } from "../store/useThemeModalStore";
 import { useFiltersStore } from "../store/useFiltersStore";
 import { useSavedViewsStore } from "../store/useSavedViewsStore";
 import { groupByCategory, topPayees, NO_PAYEE_LABEL } from "../lib/aggregations";
@@ -115,6 +116,7 @@ export function CommandPalette({ open, onClose }: Props) {
   const showDrill = useDrillStore((s) => s.show);
   const setMode = useThemeStore((s) => s.setMode);
   const setScheme = useThemeStore((s) => s.setScheme);
+  const showThemeModal = useThemeModalStore((s) => s.show);
   const setMonth = useFiltersStore((s) => s.setMonth);
   const views = useSavedViewsStore((s) => s.views);
   const filtersStore = useFiltersStore;
@@ -141,14 +143,19 @@ export function CommandPalette({ open, onClose }: Props) {
       { id: "theme:light", group: "Действия", title: "Светлая тема", icon: Sun, action: () => setMode("light") },
       { id: "theme:dark", group: "Действия", title: "Тёмная тема", icon: Moon, action: () => setMode("dark") },
       { id: "theme:auto", group: "Действия", title: "Тема: авто", icon: Monitor, action: () => setMode("auto") },
+      { id: "theme:pick", group: "Действия", title: "Выбрать тему оформления", icon: Palette, action: showThemeModal },
       // Все двенадцать тем: «тема лагуна» или «уголь» находит нужную сразу.
+      // Из палитры тему просят увидеть — поэтому включаем и её вид.
       ...ALL_SCHEMES.map((sc) => ({
         id: `scheme:${sc.id}`,
         group: "Действия",
         title: `Тема: ${sc.name}`,
         hint: `${sc.kind === "dark" ? "Тёмная" : "Светлая"} · ${sc.hint}`,
         icon: Palette,
-        action: () => setScheme(sc.id),
+        action: () => {
+          setScheme(sc.id);
+          setMode(sc.kind);
+        },
       })),
       {
         id: "filter:reset",
@@ -247,7 +254,7 @@ export function CommandPalette({ open, onClose }: Props) {
     }
 
     return list;
-  }, [transactions, views, nav, setMode, setScheme, setMonth, showDrill, filtersStore]);
+  }, [transactions, views, nav, setMode, setScheme, showThemeModal, setMonth, showDrill, filtersStore]);
 
   const filtered = useMemo(() => {
     if (!query) return items.slice(0, 80);

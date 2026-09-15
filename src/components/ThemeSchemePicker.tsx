@@ -4,30 +4,29 @@ import { DARK_SCHEMES, LIGHT_SCHEMES, type ThemeKind } from "../lib/themeSchemes
 import { useThemeStore } from "../store/useThemeStore";
 
 /**
- * Выбор темы одного вида — шесть плиток с превью.
+ * Выбор темы одного вида — шесть плиток с превью и галочкой.
  *
  * Превью не нарисовано отдельными цветами: на коробку надета пометка
  * `data-scheme`, и внутри неё те же токены (`bg-panel`, `text-expense`…)
  * отдают цвета этой темы. Поэтому плитка всегда совпадает с тем, что
  * получится, а новая тема в `index.css` появляется здесь сама.
  *
- * Подпись под превью — уже в цветах текущей темы, как и рамка выбора.
+ * Галочка только отмечает тему для вида и вид не переключает: включена ли
+ * тёмная, решает переключатель вида над списком.
  */
-export function ThemeSchemePicker({ kind }: { kind: ThemeKind }) {
+export function ThemeSchemePicker({ kind, className }: { kind: ThemeKind; className?: string }) {
   const schemes = kind === "dark" ? DARK_SCHEMES : LIGHT_SCHEMES;
   const selected = useThemeStore((s) => (kind === "dark" ? s.darkScheme : s.lightScheme));
-  const resolved = useThemeStore((s) => s.resolved);
   const setScheme = useThemeStore((s) => s.setScheme);
 
   return (
     <div
-      className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3"
+      className={clsx("grid grid-cols-2 sm:grid-cols-3 gap-3", className)}
       role="radiogroup"
-      aria-label={kind === "dark" ? "Тёмная тема" : "Светлая тема"}
+      aria-label={kind === "dark" ? "Тёмные темы" : "Светлые темы"}
     >
       {schemes.map((sc) => {
         const on = sc.id === selected;
-        const live = on && resolved === kind;
         return (
           <button
             key={sc.id}
@@ -36,7 +35,7 @@ export function ThemeSchemePicker({ kind }: { kind: ThemeKind }) {
             aria-checked={on}
             onClick={() => setScheme(sc.id)}
             className={clsx(
-              "group text-left rounded-[14px] border p-1.5 transition-colors duration-200",
+              "text-left rounded-[14px] border p-1.5 transition-colors duration-200",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
               on ? "border-accent bg-accent/5" : "border-border hover:border-accent/40"
             )}
@@ -49,17 +48,15 @@ export function ThemeSchemePicker({ kind }: { kind: ThemeKind }) {
                 </div>
                 <div className="text-xs text-muted leading-snug mt-0.5">{sc.hint}</div>
               </div>
-              {on && (
-                <span
-                  className={clsx(
-                    "shrink-0 mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full",
-                    live ? "bg-accent text-accent-fg" : "border border-accent text-accent"
-                  )}
-                  title={live ? "Включена сейчас" : "Включится с этим видом темы"}
-                >
-                  <Check className="w-3 h-3" strokeWidth={3} />
-                </span>
-              )}
+              <span
+                className={clsx(
+                  "shrink-0 mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full border transition-colors duration-200",
+                  on ? "bg-accent border-accent text-accent-fg" : "border-border text-transparent"
+                )}
+                aria-hidden
+              >
+                <Check className="w-3 h-3" strokeWidth={3} />
+              </span>
             </div>
           </button>
         );
