@@ -41,6 +41,8 @@ import { SettingRow } from "../components/SettingRow";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Switch } from "../components/Switch";
 import { Segmented } from "../components/Segmented";
+import { ThemeSchemePicker } from "../components/ThemeSchemePicker";
+import { schemeById } from "../lib/themeSchemes";
 import { Select } from "../components/Select";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDataStore } from "../store/useDataStore";
@@ -197,8 +199,8 @@ export function ImportPage() {
   const themeMode = useThemeStore((s) => s.mode);
   const resolvedTheme = useThemeStore((s) => s.resolved);
   const setThemeMode = useThemeStore((s) => s.setMode);
-  const palette = useThemeStore((s) => s.palette);
-  const setPalette = useThemeStore((s) => s.setPalette);
+  const lightSchemeName = useThemeStore((s) => schemeById(s.lightScheme)?.name ?? "");
+  const darkSchemeName = useThemeStore((s) => schemeById(s.darkScheme)?.name ?? "");
   const fractionDigits = useDisplayStore((s) => s.fractionDigits);
   const statementLine = useDisplayStore((s) => s.statementLine);
   const rememberFilters = useFilterMemoryStore((s) => s.enabled);
@@ -1361,35 +1363,33 @@ export function ImportPage() {
         />
 
         <SettingRow
-          title="Цветовая схема"
-          status={palette === "neutral" ? "Нейтральная" : "Классическая"}
+          title="Светлая тема"
+          status={`${lightSchemeName}${resolvedTheme === "light" ? " · Включена сейчас" : ""}`}
           help={
-            <>
-              <p>
-                Классическая — прежние цвета: серые с лёгкой синевой, в тёмной
-                теме — тёмно-синий фон.
-              </p>
-              <p className="mt-2">
-                Нейтральная — чистые серые без оттенка. В светлой теме — серый
-                фон и белые карточки. В тёмной — тёмно-серый фон, который
-                светлеет к карточкам и полям, и приглушённые цвета дохода,
-                расхода и акцента: так на тёмном легче читать.
-              </p>
-              <p className="mt-2">Цвета категорий в обеих схемах одинаковые.</p>
-            </>
+            <p>
+              Цвета фона, карточек, окон, текста, акцента и сумм, когда включён
+              светлый вид. Выбор светлой темы переключает на светлый вид, если
+              сейчас тёмный; в режиме «Как в системе» тема просто запомнится.
+              Цвета категорий во всех темах одинаковые.
+            </p>
           }
-          control={
-            <Segmented
-              label="Цветовая схема"
-              value={palette}
-              onChange={(p) => setPalette(p)}
-              options={[
-                { value: "classic", label: "Классическая" },
-                { value: "neutral", label: "Нейтральная" },
-              ]}
-            />
+        >
+          <ThemeSchemePicker kind="light" />
+        </SettingRow>
+
+        <SettingRow
+          title="Тёмная тема"
+          status={`${darkSchemeName}${resolvedTheme === "dark" ? " · Включена сейчас" : ""}`}
+          help={
+            <p>
+              То же для тёмного вида. «Чёрный» — для OLED-экранов: чистый чёрный
+              фон бережёт заряд. Любую из двенадцати тем можно включить и из
+              палитры команд — например, «тема уголь».
+            </p>
           }
-        />
+        >
+          <ThemeSchemePicker kind="dark" />
+        </SettingRow>
 
         <SettingRow
           title="Дробная часть сумм"

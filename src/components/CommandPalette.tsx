@@ -29,6 +29,7 @@ import {
   Moon,
   Monitor,
   Trash2,
+  Palette,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
@@ -39,6 +40,7 @@ import { groupByCategory, topPayees, NO_PAYEE_LABEL } from "../lib/aggregations"
 import { monthLabel, ymKey } from "../lib/format";
 import { SectionEmpty } from "./SectionEmpty";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
+import { ALL_SCHEMES } from "../lib/themeSchemes";
 
 interface Item {
   id: string;
@@ -112,6 +114,7 @@ export function CommandPalette({ open, onClose }: Props) {
   const transactions = useDataStore((s) => s.transactions);
   const showDrill = useDrillStore((s) => s.show);
   const setMode = useThemeStore((s) => s.setMode);
+  const setScheme = useThemeStore((s) => s.setScheme);
   const setMonth = useFiltersStore((s) => s.setMonth);
   const views = useSavedViewsStore((s) => s.views);
   const filtersStore = useFiltersStore;
@@ -138,6 +141,15 @@ export function CommandPalette({ open, onClose }: Props) {
       { id: "theme:light", group: "Действия", title: "Светлая тема", icon: Sun, action: () => setMode("light") },
       { id: "theme:dark", group: "Действия", title: "Тёмная тема", icon: Moon, action: () => setMode("dark") },
       { id: "theme:auto", group: "Действия", title: "Тема: авто", icon: Monitor, action: () => setMode("auto") },
+      // Все двенадцать тем: «тема лагуна» или «уголь» находит нужную сразу.
+      ...ALL_SCHEMES.map((sc) => ({
+        id: `scheme:${sc.id}`,
+        group: "Действия",
+        title: `Тема: ${sc.name}`,
+        hint: `${sc.kind === "dark" ? "Тёмная" : "Светлая"} · ${sc.hint}`,
+        icon: Palette,
+        action: () => setScheme(sc.id),
+      })),
       {
         id: "filter:reset",
         group: "Действия",
@@ -235,7 +247,7 @@ export function CommandPalette({ open, onClose }: Props) {
     }
 
     return list;
-  }, [transactions, views, nav, setMode, setMonth, showDrill, filtersStore]);
+  }, [transactions, views, nav, setMode, setScheme, setMonth, showDrill, filtersStore]);
 
   const filtered = useMemo(() => {
     if (!query) return items.slice(0, 80);
