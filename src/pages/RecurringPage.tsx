@@ -118,6 +118,15 @@ function plannedTone(p: PlannedOp): Tone {
   return p.kind === "income" ? "income" : p.kind === "expense" ? "expense" : "neutral";
 }
 
+/**
+ * Уже этого таблицы запланированного и просроченного не сжимаются, а
+ * прокручиваются вбок. Ширины колонок в rem, текстовые делят остаток: пока
+ * колонки были в процентах, на экране около 1000 px подписи шапки обрезались
+ * («ДАТ…», «ПОВТО…»). 32,75rem — сумма узких колонок, по 8rem — на три
+ * текстовые. У просроченных сумма узких та же, поэтому колонки совпадают.
+ */
+const PLANNED_MIN_WIDTH = "57rem";
+
 export function RecurringPage() {
   const transactions = useDataStore((s) => s.transactions);
   const rates = useDataStore((s) => s.rates);
@@ -284,7 +293,7 @@ export function RecurringPage() {
         key: "date",
         type: "date",
         label: "Дата",
-        width: "7%",
+        width: "5.5rem",
         sortValue: (p) => p.date,
         render: (p) => formatDate(p.date, "short"),
       },
@@ -292,7 +301,8 @@ export function RecurringPage() {
         key: "type",
         type: "mark",
         label: "Тип",
-        width: "8%",
+        // Как «Задержка» у просроченных: колонки обеих таблиц стоят по одной линии.
+        width: "7.25rem",
         sortValue: (p) => (p.forecast ? 1 : 0),
         exportValue: (p) => (p.forecast ? "Прогноз" : "План"),
         render: (p) => (
@@ -309,7 +319,6 @@ export function RecurringPage() {
         key: "payee",
         type: "text",
         label: "Получатель",
-        width: "16%",
         sortValue: (p) => p.payee || "",
         render: (p) => p.payee || "—",
       },
@@ -318,7 +327,6 @@ export function RecurringPage() {
         type: "text",
         muted: true,
         label: "Категория",
-        width: "19%",
         sortValue: (p) => p.category,
         render: (p) => p.category || "—",
       },
@@ -327,7 +335,6 @@ export function RecurringPage() {
         type: "text",
         muted: true,
         label: "Комментарий",
-        width: "22%",
         sortValue: (p) => p.comment || "",
         render: (p) => p.comment || "—",
       },
@@ -336,7 +343,7 @@ export function RecurringPage() {
         type: "text",
         muted: true,
         label: "Счёт",
-        width: "15%",
+        width: "10rem",
         sortValue: (p) => p.account,
         cellTitle: (p) => (p.kind === "transfer" ? `${p.account} → ${p.toAccount}` : p.account),
         render: (p) => (p.kind === "transfer" ? `${p.account} → ${p.toAccount}` : p.account),
@@ -346,7 +353,7 @@ export function RecurringPage() {
         type: "main",
         tone: plannedTone,
         label: "Сумма",
-        width: "13%",
+        width: "10rem",
         sortValue: (p) => p.amountBase,
         exportValue: (p) => (p.kind === "expense" ? -p.amountBase : p.amountBase).toFixed(2),
         render: (p) => plannedAmount(p, base),
@@ -377,7 +384,7 @@ export function RecurringPage() {
       type: "mark",
       tone: "warn",
       label: "Задержка",
-      width: "8%",
+      width: "7.25rem",
       // Сортировать нечего: порядок по задержке — это порядок по дате наоборот.
       sortable: false,
       render: (p) => {
@@ -390,12 +397,12 @@ export function RecurringPage() {
     ),
     ...plannedColumns
       .filter((c) => c.key === "amount")
-      .map((c) => ({ ...c, width: "10%" })),
+      .map((c) => ({ ...c, width: "7.5rem" })),
     {
       key: "act",
       type: "actions",
       label: "",
-      width: "3%",
+      width: "2.5rem",
       render: (p) =>
         queuedDeletions[p.id] !== undefined ? (
           <button
@@ -433,7 +440,7 @@ export function RecurringPage() {
         key: "status",
         type: "mark",
         label: "Статус",
-        width: "6%",
+        width: "5.75rem",
         sortValue: (c) => (c.stale ? "неактивен" : "активен"),
         cellTitle: (c) =>
           c.stale
@@ -451,7 +458,6 @@ export function RecurringPage() {
         key: "payee",
         type: "text",
         label: "Получатель",
-        width: "15%",
         sortValue: (c) => c.payee,
         render: (c) => c.payee,
       },
@@ -460,7 +466,6 @@ export function RecurringPage() {
         type: "text",
         muted: true,
         label: "Категория",
-        width: "11%",
         sortValue: (c) => c.category,
         render: (c) => c.category,
       },
@@ -468,7 +473,7 @@ export function RecurringPage() {
         key: "avgAmount",
         type: "money",
         label: "Сумма ср.",
-        width: "9%",
+        width: "7.25rem",
         sortValue: (c) => c.avgAmount,
         render: (c) => formatMoney(c.avgAmount, c.currency),
       },
@@ -478,7 +483,7 @@ export function RecurringPage() {
         key: "priceTrend",
         type: "change",
         label: "Изменение",
-        width: "8%",
+        width: "7.75rem",
         sortValue: (c) => c.priceTrend.changePct,
         render: (c) =>
           c.priceTrend.priceFlag === "flat" ? (
@@ -499,7 +504,7 @@ export function RecurringPage() {
         key: "avgInterval",
         type: "number",
         label: "Раз в",
-        width: "6%",
+        width: "5rem",
         sortValue: (c) => c.avgIntervalDays,
         render: (c) => `${formatNum(c.avgIntervalDays)} дн`,
       },
@@ -507,7 +512,7 @@ export function RecurringPage() {
         key: "occurrences",
         type: "count",
         label: "Повторов",
-        width: "7%",
+        width: "7.25rem",
         sortValue: (c) => c.occurrences,
         render: (c) => formatNum(c.occurrences),
       },
@@ -515,7 +520,7 @@ export function RecurringPage() {
         key: "consistency",
         type: "pct",
         label: "Стабильность",
-        width: "12%",
+        width: "9.5rem",
         sortValue: (c) => c.consistency,
         render: (c) => (
           <span className="flex items-center justify-end gap-2">
@@ -528,7 +533,7 @@ export function RecurringPage() {
         key: "lastDate",
         type: "date",
         label: "Последний",
-        width: "8%",
+        width: "8rem",
         sortValue: (c) => c.lastDate,
         render: (c) => formatDate(c.lastDate, "short"),
       },
@@ -536,7 +541,7 @@ export function RecurringPage() {
         key: "nextExpected",
         type: "date",
         label: "Следующий",
-        width: "8%",
+        width: "8.25rem",
         sortValue: (c) => c.nextExpected,
         render: (c) => formatDate(c.nextExpected, "short"),
       },
@@ -545,7 +550,7 @@ export function RecurringPage() {
         type: "main",
         tone: "expense",
         label: "Итого",
-        width: "10%",
+        width: "7.5rem",
         sortValue: (c) => c.totalSpent,
         render: (c) => formatMoney(c.totalSpent, c.currency),
       },
@@ -725,6 +730,7 @@ export function RecurringPage() {
                   bare
                   data={plannedOverdue}
                   columns={overdueColumns}
+                  minWidth={PLANNED_MIN_WIDTH}
                   rowKey={(p) => p.id}
                   defaultSortKey="date"
                   defaultSortDir="asc"
@@ -757,6 +763,7 @@ export function RecurringPage() {
                 bare
                 data={plannedShown}
                 columns={plannedColumns}
+                minWidth={PLANNED_MIN_WIDTH}
                 rowKey={(p) => p.id}
                 defaultSortKey="date"
                 defaultSortDir="asc"
@@ -909,6 +916,8 @@ export function RecurringPage() {
           title="Все регулярные платежи"
           data={candidates}
           columns={recurringColumns}
+          // 66,25rem узких колонок и по ~8rem получателю и категории.
+          minWidth="82rem"
           rowKey={(c) => c.payee + c.currency}
           defaultSortKey="totalSpent"
           onRowClick={openCandidate}

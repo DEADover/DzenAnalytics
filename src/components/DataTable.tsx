@@ -103,6 +103,11 @@ interface Props<T> {
   fixed?: boolean;
   density?: Density;
   stickyHead?: boolean;
+  /**
+   * Ширина, уже которой таблица не сжимается, а прокручивается вбок, — чтобы
+   * подписи шапки не обрезались. Растёт с размером текста таблиц, как ширины
+   * колонок.
+   */
   minWidth?: string;
 
   /** Выбор строк чекбоксами. Ключи — из `rowKey`. */
@@ -277,7 +282,7 @@ export function DataTable<T>({
       <div className={stickyHead ? undefined : "overflow-x-auto"}>
         <table
           className={clsx("w-full", fixed && "table-fixed", density === "compact" && "table-compact")}
-          style={minWidth ? { minWidth } : undefined}
+          style={minWidth ? { minWidth: scaledWidth(minWidth) } : undefined}
         >
           {fixed && (
             <colgroup>
