@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Search as SearchIcon,
   ArrowRight,
@@ -39,6 +38,7 @@ import { useSavedViewsStore } from "../store/useSavedViewsStore";
 import { groupByCategory, topPayees, NO_PAYEE_LABEL } from "../lib/aggregations";
 import { monthLabel, ymKey } from "../lib/format";
 import { SectionEmpty } from "./SectionEmpty";
+import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 
 interface Item {
   id: string;
@@ -107,7 +107,8 @@ function score(query: string, text: string, aliases: string[] = []): number {
 }
 
 export function CommandPalette({ open, onClose }: Props) {
-  const nav = useNavigate();
+  // Переход в раздел — той же плавной сменой экрана, что из шапки и меню.
+  const nav = useSmoothNavigate();
   const transactions = useDataStore((s) => s.transactions);
   const showDrill = useDrillStore((s) => s.show);
   const setMode = useThemeStore((s) => s.setMode);

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import {
   PieChart,
   Wallet,
@@ -26,6 +26,8 @@ import { useSlicesStore } from "../store/useSlicesStore";
 import { useDashboardLayoutStore } from "../store/useDashboardLayoutStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useSyncCommands } from "../hooks/useSyncCommands";
+import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
+import { SmoothNavLink } from "./SmoothNavLink";
 import { SECONDARY, SECONDARY_GROUPS } from "../lib/navSections";
 import logoHorizontal from "../assets/logo-horizontal.svg";
 import logoHorizontalDark from "../assets/logo-horizontal-dark.svg";
@@ -81,7 +83,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   // Работает только на самих четырёх разделах: с «Отчёта» или «Календаря»
   // прыжок в «Операции» был бы неожиданностью. Кольца нет — на «Главной» левая
   // стрелка ничего не делает, иначе с края экрана улетаешь на другой край.
-  const navigate = useNavigate();
+  const smoothNavigate = useSmoothNavigate();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -108,11 +110,11 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
       // выглядит как два выбранных пункта сразу. Обработчик висит на окне и
       // фокуса не требует — листать это не мешает.
       if (ae && ae.closest("nav")) ae.blur();
-      navigate(PRIMARY[next].to);
+      smoothNavigate(PRIMARY[next].to);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [moreOpen, mobileOpen, loc.pathname, navigate]);
+  }, [moreOpen, mobileOpen, loc.pathname, smoothNavigate]);
 
   // Панель закрывается по Escape — она большая, накрывает пол-экрана, и уводить
   // руку к мыши ради «передумал» незачем.
@@ -149,7 +151,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   return (
     <header
       ref={headerRef}
-      className="relative border-b border-border bg-panel/80 backdrop-blur sticky top-0 z-30"
+      className="app-header relative border-b border-border bg-panel/80 backdrop-blur sticky top-0 z-30"
     >
       <div className="w-full px-4 md:px-6 py-3 flex items-center gap-2 sm:gap-3 md:gap-6">
         {/* Меню стоит посередине СВОБОДНОГО МЕСТА — между знаком и кнопками, —
@@ -192,15 +194,16 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             читаются. */}
         <nav className="seg-track hidden lg:inline-flex shrink-0">
           {PRIMARY.map(({ to, label, icon: Icon }) => (
-            <NavLink
+            <SmoothNavLink
               key={to}
               to={to}
               end={to === "/"}
+              onNavigate={() => setMoreOpen(false)}
               className={({ isActive }) => navItem(isActive)}
             >
               <Icon className="w-4 h-4 max-xl:hidden" />
               {label}
-            </NavLink>
+            </SmoothNavLink>
           ))}
 
           <div>
@@ -244,15 +247,16 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         <ThemeSwitcher />
 
         {/* Settings — gear icon. Выбранный — той же заливкой, что пункт меню. */}
-        <NavLink
+        <SmoothNavLink
           to="/settings"
+          onNavigate={() => setMoreOpen(false)}
           title="Настройки"
           className={({ isActive }) => iconItem(isActive)}
         >
           <Settings
             className="w-4 h-4 transition-transform duration-500 ease-out group-hover:rotate-90"
           />
-        </NavLink>
+        </SmoothNavLink>
 
         {/* Настройка главной. Стоит здесь, а не на самой странице: это действие
             над экраном, как тема и настройки, а не ещё один его блок. Работает
@@ -282,13 +286,14 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         </button>
 
         {/* Help — question icon. Same active treatment as Settings. */}
-        <NavLink
+        <SmoothNavLink
           to="/help"
+          onNavigate={() => setMoreOpen(false)}
           title="Справка"
           className={({ isActive }) => iconItem(isActive)}
         >
           <HelpCircle className="w-4 h-4 transition-transform duration-300 ease-out group-hover:scale-110" />
-        </NavLink>
+        </SmoothNavLink>
         </div>
 
         {/* Меню узкого экрана — последним значком той же дорожки. Отдельной
@@ -335,10 +340,10 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                       {group.title}
                     </div>
                     {group.items.map(({ to, label, hint, icon: Icon }) => (
-                      <NavLink
+                      <SmoothNavLink
                         key={to}
                         to={to}
-                        onClick={() => setMoreOpen(false)}
+                        onNavigate={() => setMoreOpen(false)}
                         className={({ isActive }) =>
                           clsx(
                             "flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[14px] transition-colors duration-200",
@@ -357,7 +362,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                             </span>
                           )}
                         </span>
-                      </NavLink>
+                      </SmoothNavLink>
                     ))}
                   </div>
                 ))}
@@ -393,16 +398,16 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                 Основное
               </div>
               {PRIMARY.map(({ to, label, icon: Icon }) => (
-                <NavLink
+                <SmoothNavLink
                   key={to}
                   to={to}
                   end={to === "/"}
-                  onClick={() => setMobileOpen(false)}
+                  onNavigate={() => setMobileOpen(false)}
                   className={({ isActive }) => sheetRow(isActive)}
                 >
                   <Icon className="w-4 h-4" />
                   {label}
-                </NavLink>
+                </SmoothNavLink>
               ))}
               {SECONDARY_GROUPS.map((group) => (
                 <div key={group.title}>
@@ -410,15 +415,15 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                     {group.title}
                   </div>
                   {group.items.map(({ to, label, icon: Icon }) => (
-                    <NavLink
+                    <SmoothNavLink
                       key={to}
                       to={to}
-                      onClick={() => setMobileOpen(false)}
+                      onNavigate={() => setMobileOpen(false)}
                       className={({ isActive }) => sheetRow(isActive)}
                     >
                       <Icon className="w-4 h-4" />
                       {label}
-                    </NavLink>
+                    </SmoothNavLink>
                   ))}
                 </div>
               ))}
@@ -445,22 +450,22 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                 </div>
               )}
               <div className="caps-label px-4 pt-1 pb-1">Приложение</div>
-              <NavLink
+              <SmoothNavLink
                 to="/settings"
-                onClick={() => setMobileOpen(false)}
+                onNavigate={() => setMobileOpen(false)}
                 className={({ isActive }) => sheetRow(isActive)}
               >
                 <Settings className="w-4 h-4" />
                 Настройки
-              </NavLink>
-              <NavLink
+              </SmoothNavLink>
+              <SmoothNavLink
                 to="/help"
-                onClick={() => setMobileOpen(false)}
+                onNavigate={() => setMobileOpen(false)}
                 className={({ isActive }) => sheetRow(isActive)}
               >
                 <HelpCircle className="w-4 h-4" />
                 Справка
-              </NavLink>
+              </SmoothNavLink>
               {/* Подпись — то, на что переключит, как значок в шапке. Меню не
                   закрывается: смену темы видно сразу за ним. */}
               <button
