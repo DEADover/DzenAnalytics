@@ -1,8 +1,20 @@
 import { useEffect, type ComponentType } from "react";
-import { HandCoins, ArrowLeftRight } from "lucide-react";
+import { HandCoins, ArrowLeftRight, createLucideIcon } from "lucide-react";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { zenIconToLucide } from "../lib/zenIconLucide";
 import { SYNTHETIC_CATEGORY_COLORS, fallbackColorForName } from "../lib/categoryColor";
+import { NO_CATEGORY } from "../lib/zenmoneyMap";
+
+/**
+ * Знак вопроса без обводки. Все вопросы в lucide — в круге или значке, и в
+ * круге категории второй круг читался бы мишенью, а сам знак выходил мелким.
+ * Это знак из `CircleQuestionMark`, увеличенный в 1,75 раза, чтобы заполнить
+ * значок, как остальные глифы.
+ */
+const QuestionMark = createLucideIcon("question-mark", [
+  ["path", { d: "M6.91 7.3a5.25 5.25 0 0 1 10.2 1.75c0 3.5-5.25 5.25-5.25 5.25", key: "arc" }],
+  ["path", { d: "M12 21.3h.01", key: "dot" }],
+]);
 
 interface Props {
   category: string;
@@ -28,12 +40,25 @@ interface Props {
  */
 const SYNTHETIC_CATEGORIES: Record<
   string,
-  { icon: ComponentType<{ className?: string }>; color: string }
+  {
+    icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+    color: string;
+    /** Толщина линии, если стандартная для глифа тонка. */
+    strokeWidth?: number;
+  }
 > = {
   Долг: { icon: HandCoins, color: SYNTHETIC_CATEGORY_COLORS["Долг"] },
   Перевод: { icon: ArrowLeftRight, color: SYNTHETIC_CATEGORY_COLORS["Перевод"] },
   // Статья бюджета — во множественном числе; значок и цвет те же.
   Переводы: { icon: ArrowLeftRight, color: SYNTHETIC_CATEGORY_COLORS["Переводы"] },
+  // Серый круг без значка выглядел категорией, которой просто не выбрали
+  // картинку. Знак вопроса говорит прямо: категории нет. Линия потолще: знак
+  // из одной тонкой дуги на светло-сером терялся.
+  [NO_CATEGORY]: {
+    icon: QuestionMark,
+    color: SYNTHETIC_CATEGORY_COLORS[NO_CATEGORY],
+    strokeWidth: 2.5,
+  },
 };
 
 /**
@@ -84,7 +109,7 @@ export function CategoryDot({
         className={`inline-flex items-center justify-center rounded-full shrink-0 text-white ${size}`}
         style={{ background: synthetic.color }}
       >
-        <Icon className="w-3/5 h-3/5" />
+        <Icon className="w-3/5 h-3/5" strokeWidth={synthetic.strokeWidth} />
       </span>
     );
   }
