@@ -52,6 +52,11 @@ import {
 } from "lucide-react";
 import { Callout } from "../components/Callout";
 import { ChangelogModal } from "../components/ChangelogModal";
+import { GithubMark } from "../components/GithubMark";
+import { PROJECT_URL } from "../lib/support";
+import { formatReleaseDate, parseRelease } from "../lib/releaseInfo";
+import changelogRaw from "../../CHANGELOG.md?raw";
+import logoDa from "../assets/logo-da.png";
 
 type Group = "main" | "more" | "concepts";
 
@@ -3852,6 +3857,7 @@ const SECTIONS: Section[] = [
 export function HelpPage() {
   const [open, setOpen] = useState<Set<string>>(new Set([SECTIONS[0].id]));
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const release = parseRelease(changelogRaw, __APP_VERSION__);
 
   function toggle(id: string) {
     setOpen((prev) => {
@@ -3874,26 +3880,44 @@ export function HelpPage() {
         icon={HelpCircle}
         title="Справка"
         hint="Что делает каждый раздел и как устроены расчёты"
-        right={
-          // Версия и «Что нового» — справа, теми же двумя строками, что
-          // название и подпись слева. Прежде они жили в подвале каждой
-          // страницы, где их никто не искал; справка — место, куда приходят
-          // разбираться, в том числе в том, что поменялось.
-          <div className="sm:text-right leading-tight">
-            <div className="text-sm font-medium">
-              DzenAnalytics <span className="tabular-nums">v{__APP_VERSION__}</span>
+      />
+
+      {/* О сервисе — первым блоком: версия, когда вышла, что нового и где код.
+          Прежде версия и «Что нового» жили в подвале каждой страницы, где их
+          никто не искал, а справка — место, куда приходят разбираться, в том
+          числе в том, что поменялось. Название и дата выпуска — из самого
+          CHANGELOG.md (`lib/releaseInfo`), чтобы не расходиться с ним. */}
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted px-1">
+          О сервисе
+        </h2>
+        <div className="card-tray card-pad flex flex-wrap items-center gap-x-5 gap-y-4">
+          <img src={logoDa} alt="" className="h-11 w-auto shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className="text-base font-semibold">
+                DzenAnalytics <span className="tabular-nums">v{__APP_VERSION__}</span>
+              </span>
+              {release?.name && <span className="text-sm text-muted">«{release.name}»</span>}
             </div>
-            <button
-              type="button"
-              onClick={() => setChangelogOpen(true)}
-              className="mt-1 inline-flex items-center gap-1.5 rounded text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-            >
-              <History className="w-3.5 h-3.5" />
+            <div className="text-sm text-muted">
+              {release?.date
+                ? `Обновлено ${formatReleaseDate(release.date)}`
+                : "Рабочая сборка — запись о выпуске ещё не готова"}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className="btn-ghost" onClick={() => setChangelogOpen(true)}>
+              <History className="w-4 h-4" />
               Что нового
             </button>
+            <a href={PROJECT_URL} target="_blank" rel="noreferrer" className="btn-ghost">
+              <GithubMark className="w-4 h-4" />
+              GitHub
+            </a>
           </div>
-        }
-      />
+        </div>
+      </div>
       <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
 
       {groups.map((g) => {
