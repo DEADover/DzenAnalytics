@@ -125,6 +125,7 @@ export const BACKUP_META_KEYS = [
   // файла нечем было бы узнать.
   "importBatches",
   "deletedTransactions",
+  "deletedTransactionsAt", // когда спрятаны — порядок в разделе «Удалённые»
   "deletedPayloads",
   "tagEdits",
   "tagDeletions",

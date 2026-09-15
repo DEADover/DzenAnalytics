@@ -73,6 +73,7 @@ import { useDeletedStore } from "./useDeletedStore";
 import {
   useDeletedPayloadsStore,
   loadDeletedPayloads,
+  hasPendingRestores,
 } from "./useDeletedPayloadsStore";
 import { useSyncLogStore } from "./useSyncLogStore";
 import { useBudgetsStore } from "./useBudgetsStore";
@@ -931,6 +932,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         get().pushMode === "on-sync" &&
         (Object.keys(useEditsStore.getState().edits).length > 0 ||
           useDeletedStore.getState().deletedIds.length > 0 ||
+          hasPendingRestores() ||
           Object.keys(useDraftsStore.getState().drafts).length > 0 ||
           Object.keys(useTagEditsStore.getState().edits).length > 0 ||
           Object.keys(useBudgetEditsStore.getState().edits).length > 0)
@@ -997,6 +999,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       const hasPending =
         Object.keys(useEditsStore.getState().edits).length > 0 ||
         useDeletedStore.getState().deletedIds.length > 0 ||
+        hasPendingRestores() ||
         Object.keys(useDraftsStore.getState().drafts).length > 0 ||
         Object.keys(useTagEditsStore.getState().edits).length > 0 ||
         Object.keys(useBudgetEditsStore.getState().edits).length > 0;

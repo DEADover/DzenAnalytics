@@ -122,26 +122,21 @@ export function TransactionsPage() {
   const deleteTransactionMany = useDataStore((s) => s.deleteTransactionMany);
   const deletedCount = useDeletedStore((s) => s.deletedIds.length);
   const purgeDeleted = useDataStore((s) => s.purgeDeleted);
-  const pushMode = useZenmoneyStore((s) => s.pushMode);
+  const zenToken = useZenmoneyStore((s) => s.token);
   const [trashOpen, setTrashOpen] = useState(false);
   const trashRef = useRef<HTMLDivElement>(null);
 
-  /** Очистить корзину — тот же вопрос и то же действие, что на её странице:
-   *  безвозвратное удаление обязано спрашивать одинаково, откуда бы его ни
-   *  запустили. */
+  /** Удалить окончательно — тот же вопрос и то же действие, что на странице
+   *  «Удалённые»: безвозвратное удаление обязано спрашивать одинаково, откуда
+   *  бы его ни запустили. Только без Дзен-мани: там удалённое хранит сам
+   *  Дзен-мани, и стирать у нас нечего. */
   async function emptyTrash() {
     const n = deletedCount;
     if (n === 0) return;
-    const ops = pluralRu(n, ["операция", "операции", "операций"]);
-    const willBe = pluralRu(n, ["будет", "будут", "будут"]);
     const ok = await confirm({
-      title: "Очистить корзину окончательно?",
-      message:
-        `${formatNum(n)} ${ops} ${willBe} безвозвратно удалены из локального хранилища и исчезнут из корзины — восстановить их будет нельзя.` +
-        (pushMode !== "off"
-          ? " Уже удалённые в облаке Дзен-мани остаются удалёнными; операции, удаление которых ещё не отправлено в облако, могут вернуться при полной синхронизации."
-          : ""),
-      confirmLabel: "Очистить корзину",
+      title: "Удалить окончательно?",
+      message: `${formatNum(n)} ${pluralRu(n, ["операция будет", "операции будут", "операций будут"])} безвозвратно удалены из локального хранилища — вернуть их будет нельзя.`,
+      confirmLabel: "Удалить окончательно",
       tone: "danger",
     });
     if (!ok) return;
@@ -675,18 +670,20 @@ export function TransactionsPage() {
             <Download className="w-3.5 h-3.5" />
             CSV
           </button>
-          {/* Корзина — меню, а не ссылка: чтобы очистить её, приходилось идти на
-              отдельную страницу и возвращаться обратно. Пустая корзина остаётся
-              простой ссылкой: меню из одного пункта — лишний клик. */}
+          {/* «Удалённые» без Дзен-мани — меню, а не ссылка: чтобы стереть
+              спрятанное, приходилось идти на отдельную страницу и возвращаться
+              обратно. С Дзен-мани стирать у нас нечего — удалённые хранит он
+              сам, и остаётся простая ссылка без счётчика: номера наших
+              удалений копятся всю жизнь, и число на значке только росло бы. */}
           <div ref={trashRef} className="relative">
-            {deletedCount > 0 ? (
+            {deletedCount > 0 && !zenToken ? (
               <button
                 type="button"
                 onClick={() => setTrashOpen((o) => !o)}
                 aria-haspopup="menu"
                 aria-expanded={trashOpen}
                 aria-label={`Удалённые операции: ${deletedCount}`}
-                title="Корзина"
+                title="Удалённые"
                 className="relative btn-ghost text-xs !px-2"
               >
                 <Trash2 className="w-4 h-4" />
@@ -698,7 +695,7 @@ export function TransactionsPage() {
               <Link
                 to="/trash"
                 className="relative btn-ghost text-xs !px-2"
-                title="Корзина пуста"
+                title="Удалённые"
                 aria-label="Удалённые операции"
               >
                 <Trash2 className="w-4 h-4" />
@@ -720,7 +717,7 @@ export function TransactionsPage() {
                 <span>
                   <span className="block text-sm font-medium">Просмотреть</span>
                   <span className="block text-xs text-muted">
-                    Список удалённых, поштучное восстановление
+                    Список удалённых и возврат
                   </span>
                 </span>
               </Link>
@@ -734,7 +731,7 @@ export function TransactionsPage() {
               >
                 <Trash2 className="w-4 h-4 mt-0.5 shrink-0 text-expense" />
                 <span>
-                  <span className="block text-sm font-medium">Очистить</span>
+                  <span className="block text-sm font-medium">Удалить окончательно</span>
                   <span className="block text-xs text-muted">
                     Удалить {formatNum(deletedCount)}{" "}
                     {pluralRu(deletedCount, ["операцию", "операции", "операций"])}{" "}

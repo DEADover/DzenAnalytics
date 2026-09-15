@@ -13,6 +13,7 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
 import type { ZenTransaction } from "../lib/zenmoney";
+import { useDeletedStore } from "./useDeletedStore";
 
 const KEY = "deletedPayloads";
 
@@ -65,6 +66,17 @@ export const useDeletedPayloadsStore = create<DeletedPayloadsState>((set, get) =
     await db.saveJSON(KEY, {});
   },
 }));
+
+/**
+ * Есть ли возвращённые операции, копии которых ещё не ушли в облако: снимок
+ * есть, а операция у нас не спрятана. Грубо — сюда попадает и снимок
+ * операции, вернувшейся до отправки удаления, — но это только лишний повод
+ * заглянуть в отправку, где `buildResurrections` разберётся точно.
+ */
+export function hasPendingRestores(): boolean {
+  const hidden = useDeletedStore.getState().deletedSet;
+  return Object.keys(useDeletedPayloadsStore.getState().payloads).some((id) => !hidden.has(id));
+}
 
 /** Read snapshots without a hook — for the push builder. Prefers the
  *  in-memory copy, falls back to disk before first hydrate. */

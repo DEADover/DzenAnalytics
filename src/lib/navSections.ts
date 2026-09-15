@@ -92,7 +92,7 @@ export const SECONDARY_GROUPS: { title: string; items: NavSection[] }[] = [
       { to: "/rules", label: "Правила", icon: Wand2, hint: "Категории и получатели по условиям" },
       { to: "/tags", label: "Теги", icon: Hash, hint: "Операции по хэштегам и вторым категориям" },
       { to: "/wordcloud", label: "Облако слов", icon: Cloud, hint: "Частые слова в комментариях" },
-      { to: "/trash", label: "Корзина", icon: Trash2, hint: "Удалённые операции — их можно вернуть" },
+      { to: "/trash", label: "Удалённые", icon: Trash2, hint: "Удалённые операции — их можно вернуть" },
     ],
   },
 ];

@@ -23,18 +23,33 @@ import { create } from "zustand";
 import * as db from "../lib/db";
 
 const KEY = "deletedTransactions";
+/** Когда операцию спрятали — для раздела «Удалённые», где свежие удаления
+ *  идут первыми. Отдельным ключом: старый список номеров читают и пушер, и
+ *  бэкапы прежних версий. */
+const AT_KEY = "deletedTransactionsAt";
 
 interface DeletedState {
   /** Ids of transactions hidden locally. */
   deletedIds: string[];
   /** Fast membership lookups — kept in sync with `deletedIds`. */
   deletedSet: Set<string>;
+  /**
+   * Когда операция спрятана, мс. При возврате запись остаётся: вернули и
+   * снова удалили — время перезапишется, передумали возвращать — сохранится.
+   */
+  deletedAt: Record<string, number>;
   loaded: boolean;
   hydrate: () => Promise<void>;
   /** Hide a transaction. No-op if already hidden. */
   remove: (id: string) => Promise<void>;
-  /** Hide many at once — one IDB write + one store update. */
-  removeMany: (ids: string[]) => Promise<void>;
+  /**
+   * Hide many at once — one IDB write + one store update.
+   *
+   * `keepTime` — спрятать снова, не трогая время удаления: так отменяется
+   * ещё не отправленный возврат. Иначе операция, удалённая месяц назад,
+   * после «Вернуть» и «Отменить» числилась бы удалённой сегодня.
+   */
+  removeMany: (ids: string[], opts?: { keepTime?: boolean }) => Promise<void>;
   /** Un-hide a previously deleted transaction. */
   restore: (id: string) => Promise<void>;
   /** Un-hide many at once — one IDB write + one store update. */
@@ -47,28 +62,35 @@ interface DeletedState {
 export const useDeletedStore = create<DeletedState>((set, get) => ({
   deletedIds: [],
   deletedSet: new Set(),
+  deletedAt: {},
   loaded: false,
 
   hydrate: async () => {
-    const stored = await db.loadJSON<string[]>(KEY);
+    const [stored, at] = await Promise.all([
+      db.loadJSON<string[]>(KEY),
+      db.loadJSON<Record<string, number>>(AT_KEY),
+    ]);
     const ids = Array.isArray(stored) ? stored : [];
-    set({ deletedIds: ids, deletedSet: new Set(ids), loaded: true });
+    set({ deletedIds: ids, deletedSet: new Set(ids), deletedAt: at ?? {}, loaded: true });
   },
 
   remove: async (id) => {
-    if (get().deletedSet.has(id)) return;
-    const ids = [...get().deletedIds, id];
-    set({ deletedIds: ids, deletedSet: new Set(ids) });
-    await db.saveJSON(KEY, ids);
+    await get().removeMany([id]);
   },
 
-  removeMany: async (toAdd) => {
+  removeMany: async (toAdd, opts) => {
     const cur = get().deletedSet;
     const fresh = toAdd.filter((id) => !cur.has(id));
     if (fresh.length === 0) return;
     const ids = [...get().deletedIds, ...fresh];
-    set({ deletedIds: ids, deletedSet: new Set(ids) });
-    await db.saveJSON(KEY, ids);
+    const now = Date.now();
+    const deletedAt = { ...get().deletedAt };
+    for (const id of fresh) {
+      if (opts?.keepTime && id in deletedAt) continue;
+      deletedAt[id] = now;
+    }
+    set({ deletedIds: ids, deletedSet: new Set(ids), deletedAt });
+    await Promise.all([db.saveJSON(KEY, ids), db.saveJSON(AT_KEY, deletedAt)]);
   },
 
   restore: async (id) => {
@@ -88,8 +110,8 @@ export const useDeletedStore = create<DeletedState>((set, get) => ({
   },
 
   clearAll: async () => {
-    set({ deletedIds: [], deletedSet: new Set() });
-    await db.saveJSON(KEY, []);
+    set({ deletedIds: [], deletedSet: new Set(), deletedAt: {} });
+    await Promise.all([db.saveJSON(KEY, []), db.saveJSON(AT_KEY, {})]);
   },
 
   isDeleted: (id) => get().deletedSet.has(id),

@@ -29,7 +29,7 @@ import { SearchPage } from "./pages/SearchPage";
 import { GoalsPage } from "./pages/GoalsPage";
 import { DuplicatesPage } from "./pages/DuplicatesPage";
 import { UncategorizedPage } from "./pages/UncategorizedPage";
-import { TrashPage } from "./pages/TrashPage";
+import { DeletedPage } from "./pages/DeletedPage";
 import { SankeyPage } from "./pages/SankeyPage";
 import { HelpPage } from "./pages/HelpPage";
 import { RulesPage } from "./pages/RulesPage";
@@ -415,7 +415,7 @@ function App() {
             <Route path="/goals" element={<GoalsPage />} />
             <Route path="/duplicates" element={<DuplicatesPage />} />
             <Route path="/uncategorized" element={<UncategorizedPage />} />
-            <Route path="/trash" element={<TrashPage />} />
+            <Route path="/trash" element={<DeletedPage />} />
             <Route path="/help" element={<HelpPage />} />
             <Route path="/rules" element={<RulesPage />} />
             <Route path="/health" element={<HealthPage />} />

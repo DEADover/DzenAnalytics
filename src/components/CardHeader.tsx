@@ -31,6 +31,10 @@ const ICON_TONE: Record<CardHeaderTone, string> = {
  * обрезается, а кнопки остаются на своей высоте. С переносом «CSV» уезжал
  * вниз, стоило заголовку оказаться длиннее свободного места. Переносится
  * ряд только на телефоне, где иначе кнопкам не хватит места вовсе.
+ *
+ * На телефоне правый угол, уехав на свою строку, ещё и сжимается до её
+ * ширины, а его кнопки переносятся: иначе ряд из поиска и двух кнопок
+ * оставался шириной в десктопный и вылезал за экран.
  */
 export function CardHeader({
   icon: Icon,
@@ -69,7 +73,11 @@ export function CardHeader({
         </div>
         {subtitle && <div className="text-xs text-muted mt-0.5">{subtitle}</div>}
       </div>
-      {right && <div className="flex items-center gap-2 shrink-0 max-sm:flex-wrap">{right}</div>}
+      {right && (
+        <div className="flex items-center gap-2 shrink-0 max-sm:flex-wrap max-sm:shrink max-sm:min-w-0">
+          {right}
+        </div>
+      )}
     </div>
   );
 }

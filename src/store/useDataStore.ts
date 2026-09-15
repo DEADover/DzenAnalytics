@@ -24,7 +24,7 @@ import { makeCategoryChecker } from "../lib/zenmoneyPush";
 import { applyEdits } from "../lib/applyEdits";
 import { useEditsStore } from "./useEditsStore";
 import { useDeletedStore, loadDeletedSet } from "./useDeletedStore";
-import { useDeletedPayloadsStore } from "./useDeletedPayloadsStore";
+import { useDeletedPayloadsStore, loadDeletedPayloads } from "./useDeletedPayloadsStore";
 import { loadZenCache } from "../lib/zenmoneyCache";
 import type { ZenTransaction } from "../lib/zenmoney";
 import { loadDrafts, useDraftsStore } from "./useDraftsStore";
@@ -152,6 +152,16 @@ interface DataState {
   restoreTransaction: (id: string) => Promise<void>;
   /** Un-hide many at once (one recompute). */
   restoreTransactionMany: (ids: string[]) => Promise<void>;
+  /**
+   * Вернуть операции из раздела «Удалённые» — и спрятанные у нас, и удалённые
+   * прямо в Дзен-мани. Удалённую в Дзен-мани снять с удаления нельзя, поэтому
+   * её строка из кэша становится снимком и уходит в облако копией с новым
+   * номером (`buildResurrections`) — сразу, в любом режиме двусторонней
+   * синхронизации.
+   */
+  restoreDeleted: (ids: string[]) => Promise<void>;
+  /** Передумать, пока возврат не отправлен: операция снова удалена. */
+  cancelRestore: (ids: string[]) => Promise<void>;
   /** Permanently empty the local trash: drop hidden rows from storage,
    *  clear the hidden-id set and the cloud-restore snapshots. No cloud
    *  writes — irreversible locally. */
@@ -865,6 +875,39 @@ export const useDataStore = create<DataState>((set, get) => ({
     const final = await finalize(raw, rates);
     set({ transactions: final });
     void pushAfterRestore();
+  },
+
+  restoreDeleted: async (ids) => {
+    if (ids.length === 0) return;
+    const cache = await loadZenCache();
+    if (cache) {
+      // Снимок нужен только тем, у кого его нет: наши удаления сняли его сами
+      // в момент удаления, и он точнее — с правками, внесёнными до него.
+      const have = await loadDeletedPayloads();
+      const wanted = new Set(ids);
+      const snaps = cache.transactions.filter(
+        (t) => t.deleted && wanted.has(String(t.id)) && !have[String(t.id)]
+      );
+      await useDeletedPayloadsStore.getState().saveMany(snaps);
+    }
+    const hidden = useDeletedStore.getState().deletedSet;
+    const local = ids.filter((id) => hidden.has(id));
+    if (local.length > 0) {
+      await useDeletedStore.getState().restoreMany(local);
+      const { transactionsRaw: raw, rates } = get();
+      set({ transactions: await finalize(raw, rates) });
+    }
+    void pushAfterRestore();
+  },
+
+  cancelRestore: async (ids) => {
+    if (ids.length === 0) return;
+    // Спрятать снова: `buildResurrections` пропускает спрятанные, а снимок
+    // остаётся — вернуть можно будет и потом. Время удаления прежнее: человек
+    // передумал возвращать, а не удалил операцию заново.
+    await useDeletedStore.getState().removeMany(ids, { keepTime: true });
+    const { transactionsRaw: raw, rates } = get();
+    set({ transactions: await finalize(raw, rates) });
   },
 
   purgeDeleted: async () => {
