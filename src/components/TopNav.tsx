@@ -366,19 +366,20 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                   по всей ширине: на мониторе в 1800 пикселей колонка выходила по
                   539, а текста в ней на 250 — строки повисали в пустоте и
                   переставали читаться как список. */}
-              {/* Колонками, а не сеткой: групп бывает до пяти, и в сетке пятая
-                  вставала вторым рядом под самую длинную «Аналитику», оставляя
-                  под короткими группами пустоту. Колонки укладывают группы
-                  плотно друг под другом. */}
+              {/* Каждая группа — свой столбец: столбцов ровно столько, сколько
+                  групп (от трёх до пяти). Колонки CSS укладывали короткие группы
+                  друг под другом — «Планы» и «Инструменты» оказывались в одном
+                  столбце, и границы групп переставали читаться. При четырёх и
+                  пяти группах промежуток уже, чтобы столбцы не сжимались. */}
               <div
-                className="gap-x-10"
+                className={clsx("grid items-start", groups.length > 3 ? "gap-x-6" : "gap-x-10")}
                 style={{
-                  columnCount: Math.min(Math.max(groups.length, 3), 4),
-                  maxWidth: `${Math.min(Math.max(groups.length, 3), 4) * 21.5}rem`,
+                  gridTemplateColumns: `repeat(${groups.length}, minmax(0, 1fr))`,
+                  maxWidth: `${groups.length * 21.5}rem`,
                 }}
               >
                 {groups.map((group) => (
-                  <div key={group.title} className="break-inside-avoid pb-4">
+                  <div key={group.title} className="min-w-0">
                     <div className="text-[11px] uppercase tracking-[0.14em] text-muted font-medium px-2.5 pb-2">
                       {group.title}
                     </div>
@@ -398,7 +399,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                       >
                         <Icon className="w-4 h-4 shrink-0" />
                         <span className="min-w-0">
-                          <span className="block truncate leading-tight">{label}</span>
+                          <span className="block leading-tight break-words">{label}</span>
                           {hint && (
                             <span className="block truncate text-[12px] text-muted/80 leading-tight mt-0.5">
                               {hint}
