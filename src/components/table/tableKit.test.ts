@@ -23,14 +23,14 @@ describe("тип колонки → выравнивание", () => {
     expect(alignOf("number")).toBe("right");
     expect(alignOf("pct")).toBe("left");
     expect(alignOf("change")).toBe("right");
-    expect(alignOf("count")).toBe("left");
+    expect(alignOf("count")).toBe("right");
     expect(alignOf("mark")).toBe("center");
     expect(alignOf("actions")).toBe("center");
   });
 
   it("шапка выравнивается так же, как значения", () => {
     expect(headClass("money")).toContain("text-right");
-    expect(headClass("count")).toContain("text-left");
+    expect(headClass("count")).toContain("text-right");
     expect(headClass("money")).toContain("text-right");
     expect(headClass("text")).toContain("text-left");
   });

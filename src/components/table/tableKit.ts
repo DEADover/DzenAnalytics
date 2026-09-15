@@ -25,14 +25,15 @@ export type SortDir = "asc" | "desc";
  * - `number` — число, но не деньги: ставка, дни, σ, «во сколько раз». Вправо.
  * - `pct` — доля. Влево, приглушённо.
  * - `change` — изменение: знак, процент или пилюля. Вправо.
- * - `count` — счётчик. Влево, приглушённо.
+ * - `count` — счётчик: операций, совпадений, упоминаний. Вправо, приглушённо.
  * - `mark` — статус, метка, значок. По центру.
  * - `actions` — кнопки. По центру, не сортируется и не выгружается.
  *
- * Доля, счётчик и остаток прижаты влево по решению пользователя (14.09.2026):
- * по центру счётчик казался уехавшим, а прижатые вправо узкие колонки с
- * подписью и значком сортировки читались сдвинутыми относительно шапки.
- * Суммы операций и изменения остаются справа.
+ * Доля и остаток прижаты влево по решению пользователя (14.09.2026): по
+ * центру они казались уехавшими, а прижатые вправо узкие колонки с подписью и
+ * значком сортировки читались сдвинутыми относительно шапки. Счётчик сначала
+ * ушёл туда же, но 15.09.2026 пользователь вернул «Операций» вправо — к числам,
+ * как суммы.
  */
 export type ColumnType =
   | "text"
@@ -79,7 +80,7 @@ export const COLUMN_TYPES: Record<ColumnType, TypeSpec> = {
   number: { align: "right", cell: NUM, firstDir: "desc", sortable: true, exported: true },
   pct: { align: "left", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
   change: { align: "right", cell: NUM, firstDir: "desc", sortable: true, exported: true },
-  count: { align: "left", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
+  count: { align: "right", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
   mark: { align: "center", cell: "whitespace-nowrap", firstDir: "asc", sortable: true, exported: true },
   actions: { align: "center", cell: "whitespace-nowrap", firstDir: "asc", sortable: false, exported: false },
 };

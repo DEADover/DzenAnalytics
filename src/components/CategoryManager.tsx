@@ -403,7 +403,7 @@ export function CategoryManager() {
             <span className="hidden sm:block w-24 shrink-0 text-center">Расходная</span>
             <span className="hidden sm:block w-24 shrink-0 text-center">Доходная</span>
             <span className="hidden md:block w-36 shrink-0">Обязательность</span>
-            <span className="hidden lg:flex w-20 shrink-0 items-center justify-start">
+            <span className="hidden lg:flex w-20 shrink-0 items-center justify-end">
               <CountSortHeader sort={sort} onChange={setSort} />
             </span>
             <span className="w-28 shrink-0 text-center whitespace-nowrap">В аналитике</span>
@@ -467,12 +467,12 @@ export function CategoryManager() {
                       <span className="hidden md:block w-36 shrink-0 text-muted truncate">
                         {rObl ? "Обязательная" : "Необязательная"}
                       </span>
-                      <span className="hidden lg:flex w-20 shrink-0 items-center justify-start">
+                      <span className="hidden lg:flex w-20 shrink-0 items-center justify-end">
                         {rCount ? (
                           <button
                             onClick={() => openOperations(root.title)}
                             title="Показать операции категории"
-                            className="tabular-nums text-muted hover:text-accent hover:underline px-1 -ml-1 rounded"
+                            className="tabular-nums text-muted hover:text-accent hover:underline px-1 -mr-1 rounded"
                           >
                             {formatNum(rCount)}
                           </button>
@@ -603,12 +603,12 @@ export function CategoryManager() {
                               <span className="hidden md:block w-36 shrink-0 text-muted truncate">
                                 {cObl ? "Обязательная" : "Необязательная"}
                               </span>
-                              <span className="hidden lg:flex w-20 shrink-0 items-center justify-start">
+                              <span className="hidden lg:flex w-20 shrink-0 items-center justify-end">
                                 {cCount ? (
                                   <button
                                     onClick={() => openOperations(cKey)}
                                     title="Показать операции подкатегории"
-                                    className="tabular-nums text-muted hover:text-accent hover:underline px-1 -ml-1 rounded"
+                                    className="tabular-nums text-muted hover:text-accent hover:underline px-1 -mr-1 rounded"
                                   >
                                     {formatNum(cCount)}
                                   </button>
