@@ -24,8 +24,11 @@
  * (`resurrectionId`): если копия есть в кэше — живая или тоже удалённая, —
  * оригинал больше не нужен.
  *
- * Модуль без React и без хранилищ — чистая функция, проверяется тестами.
+ * Здесь же порядок ленты раздела и её разбивка на дни.
+ *
+ * Модуль без React и без хранилищ — чистые функции, проверяются тестами.
  */
+import type { Transaction } from "../types";
 import type { ZenTransaction } from "./zenmoney";
 import type { ZenCache } from "./zenmoneyCache";
 import { resurrectionId } from "./zenmoneyPush";
@@ -132,4 +135,95 @@ export function collectDeletedOperations({
   }
 
   return [...out.values()].sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
+}
+
+// ── Лента раздела: сортировка и дни ─────────────────────────────────────────
+
+/** Порядок ленты: по дате операции (как в «Операциях»), по времени удаления или по сумме. */
+export type DeletedSort =
+  | "date-desc"
+  | "date-asc"
+  | "deleted-desc"
+  | "deleted-asc"
+  | "amount-desc"
+  | "amount-asc";
+
+/** Всё, что ленте нужно от строки: сама операция и когда её удалили. */
+interface Dated {
+  tx: Transaction;
+  deletedAt: number | null;
+}
+
+/** Местный день метки времени, `YYYY-MM-DD` — в том же виде, что дата операции. */
+export function dayOfMs(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export function sortDeleted<T extends Dated>(rows: readonly T[], mode: DeletedSort): T[] {
+  // Как в ленте «Операций»: день, а внутри дня — время создания.
+  const byDate = (a: T, b: T) =>
+    a.tx.date.localeCompare(b.tx.date) || a.tx.createdAt.localeCompare(b.tx.createdAt);
+  return [...rows].sort((a, b) => {
+    switch (mode) {
+      case "date-desc":
+        return byDate(b, a);
+      case "date-asc":
+        return byDate(a, b);
+      case "deleted-desc":
+      case "deleted-asc": {
+        // Без времени удаления — в конце при любом направлении: неизвестное
+        // «когда» не свежее и не старое.
+        if (a.deletedAt === null || b.deletedAt === null) {
+          if (a.deletedAt === b.deletedAt) return byDate(b, a);
+          return a.deletedAt === null ? 1 : -1;
+        }
+        const d = mode === "deleted-desc" ? b.deletedAt - a.deletedAt : a.deletedAt - b.deletedAt;
+        return d || byDate(b, a);
+      }
+      case "amount-desc":
+        return b.tx.amountBase - a.tx.amountBase;
+      case "amount-asc":
+        return a.tx.amountBase - b.tx.amountBase;
+    }
+  });
+}
+
+export interface DeletedDay<T> {
+  /** Ключ для React: день или `unknown`. */
+  key: string;
+  /** День, `YYYY-MM-DD`; пустая строка — когда удалили, неизвестно. */
+  ymd: string;
+  rows: T[];
+  txs: Transaction[];
+}
+
+/**
+ * Разбить уже отсортированную ленту на дни: по дате операции или по дню
+ * удаления — смотря по чему отсортировано. По сумме дней нет (`null`): соседние
+ * строки там из разных дней.
+ */
+export function groupDeleted<T extends Dated>(
+  rows: readonly T[],
+  mode: DeletedSort
+): DeletedDay<T>[] | null {
+  const byDeletion = mode === "deleted-desc" || mode === "deleted-asc";
+  if (!byDeletion && mode !== "date-desc" && mode !== "date-asc") return null;
+  const days = new Map<string, DeletedDay<T>>();
+  for (const r of rows) {
+    const ymd = byDeletion
+      ? r.deletedAt === null
+        ? ""
+        : dayOfMs(r.deletedAt)
+      : r.tx.date.slice(0, 10);
+    let day = days.get(ymd);
+    if (!day) {
+      day = { key: ymd || "unknown", ymd, rows: [], txs: [] };
+      days.set(ymd, day);
+    }
+    day.rows.push(r);
+    day.txs.push(r.tx);
+  }
+  return [...days.values()];
 }

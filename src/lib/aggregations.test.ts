@@ -21,6 +21,7 @@ import {
   statsByDayOfWeek,
   statsByHourOfWeek,
   transferTotals,
+  kindTotals,
   stripFromAnalytics,
   scaleKPI,
 } from "./aggregations";
@@ -901,6 +902,22 @@ describe("statsByDayOfWeek / statsByHourOfWeek — refund-aware totals (issue #3
   it("income total is unaffected by refunds/expenses", () => {
     const total = statsByDayOfWeek(txs, "income").reduce((s, b) => s + b.total, 0);
     expect(total).toBe(500);
+  });
+});
+
+describe("kindTotals — суммы по видам для шапки дня и выделения", () => {
+  it("возврат гасит расход, переводы отдельно и в итог не входят", () => {
+    const out = kindTotals([
+      tx({ kind: "income", amount: 1000 }),
+      tx({ kind: "expense", amount: 400 }),
+      tx({ kind: "refund", amount: 100 }),
+      tx({ kind: "transfer", amount: 250 }),
+    ]);
+    expect(out).toEqual({ inc: 1000, exp: 300, xfer: 250, net: 700 });
+  });
+
+  it("пустой набор — нули", () => {
+    expect(kindTotals([])).toEqual({ inc: 0, exp: 0, xfer: 0, net: 0 });
   });
 });
 

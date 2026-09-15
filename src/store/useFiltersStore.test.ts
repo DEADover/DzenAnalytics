@@ -579,3 +579,22 @@ describe("applyFilters — фильтр по участникам общего �
     expect(applyFilters(txs, filt({ users: new Set([FILTER_NONE]) }))).toEqual([]);
   });
 });
+
+describe("applyFilters — опорная дата скользящего периода", () => {
+  // Удалённые операции старше живых: «30 дней» на их странице должны значить
+  // те же тридцать дней, что и в ленте, а не месяц до последней удалённой.
+  const deleted = [
+    tx({ id: "свежая", date: "2026-09-10" }),
+    tx({ id: "июльская", date: "2026-07-20" }),
+  ];
+
+  it("по умолчанию отсчёт — от последней операции в наборе", () => {
+    expect(ids(applyFilters(deleted, filt({ preset: "30d" })))).toEqual(["свежая"]);
+  });
+
+  it("maxDate переносит отсчёт на последнюю дату всех операций", () => {
+    expect(
+      ids(applyFilters(deleted, filt({ preset: "30d" }), 1, { maxDate: "2026-08-15" }))
+    ).toEqual(["июльская"]);
+  });
+});

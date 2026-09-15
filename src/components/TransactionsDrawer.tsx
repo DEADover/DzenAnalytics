@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   X,
-  ArrowUp,
-  ArrowDown,
-  ArrowLeftRight,
   Download,
   Sparkles,
   Tag,
@@ -11,7 +8,6 @@ import {
   ListChecks,
   Pencil,
   Trash2,
-  XSquare,
 } from "lucide-react";
 import { useDrillStore } from "../store/useDrillStore";
 import { useDataStore } from "../store/useDataStore";
@@ -32,6 +28,8 @@ import { OperationActions, OperationAmount, OperationCategory, OperationPayee } 
 import { buildCsv, csvFileName, downloadCsv, sortRows } from "./table/tableKit";
 import type { Transaction } from "../types";
 import { SearchInput } from "./SearchInput";
+import { SelectionBar } from "./SelectionBar";
+import { kindTotals } from "../lib/aggregations";
 
 
 export function TransactionsDrawer() {
@@ -276,19 +274,10 @@ export function TransactionsDrawer() {
   }, [filtered]);
 
   // Sums of the currently-selected rows, split by kind — shown in the bulk bar.
-  const selectedTotals = useMemo(() => {
-    let inc = 0;
-    let exp = 0;
-    let xfer = 0;
-    for (const t of filtered) {
-      if (!selected.has(t.id)) continue;
-      if (t.kind === "income") inc += t.amountBase;
-      else if (t.kind === "expense") exp += t.amountBase;
-      else if (t.kind === "refund") exp -= t.amountBase;
-      else if (t.kind === "transfer") xfer += t.amountBase;
-    }
-    return { inc, exp, xfer };
-  }, [filtered, selected]);
+  const selectedTotals = useMemo(
+    () => kindTotals(filtered.filter((t) => selected.has(t.id))),
+    [filtered, selected]
+  );
 
   function exportCsv() {
     const text = buildCsv(
@@ -449,61 +438,23 @@ export function TransactionsDrawer() {
         </aside>
     </div>
 
-      {/* Floating bulk-action bar — appears when ≥1 row is selected. Sits
-          above the drawer (z-50) but below the edit modal (portaled, z-60). */}
       {selected.size > 0 && (
-        <div
-          role="region"
-          aria-label="Массовые действия"
-          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[55] rounded-xl border border-border bg-panel shadow-xl max-w-[calc(100vw-1.5rem)] overflow-hidden"
+        <SelectionBar
+          count={selected.size}
+          totals={selectedTotals}
+          base={base}
+          onClear={() => setSelected(new Set())}
+          overDrawer
         >
-          {/* Row 1: count + per-kind sums of the selection. */}
-          <div className="flex items-center justify-center gap-x-4 gap-y-1 flex-wrap px-4 pt-2.5 pb-2 text-sm">
-            <span>
-              Выбрано: <strong className="tabular-nums">{formatNum(selected.size)}</strong>
-            </span>
-            {(selectedTotals.inc > 0 || selectedTotals.exp > 0 || selectedTotals.xfer > 0) && (
-              <span className="flex items-center gap-3 tabular-nums border-l border-border pl-4">
-                {selectedTotals.inc > 0 && (
-                  <span className="flex items-center gap-1 text-income">
-                    <ArrowUp className="w-3.5 h-3.5" />
-                    {formatMoney(selectedTotals.inc, base)}
-                  </span>
-                )}
-                {selectedTotals.exp > 0 && (
-                  <span className="flex items-center gap-1 text-expense">
-                    <ArrowDown className="w-3.5 h-3.5" />
-                    {formatMoney(selectedTotals.exp, base)}
-                  </span>
-                )}
-                {selectedTotals.xfer > 0 && (
-                  <span className="flex items-center gap-1 text-muted">
-                    <ArrowLeftRight className="w-3.5 h-3.5" />
-                    {formatMoney(selectedTotals.xfer, base)}
-                  </span>
-                )}
-              </span>
-            )}
-          </div>
-          {/* Row 2: actions. */}
-          <div className="flex items-center justify-center gap-2 flex-wrap px-4 pb-2.5 pt-2 border-t border-border">
-            <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
-              <Pencil className="w-4 h-4" />
-              Изменить
-            </button>
-            <button onClick={deleteBulk} className="btn-danger text-sm">
-              <Trash2 className="w-4 h-4" />
-              Удалить
-            </button>
-            <button
-              onClick={() => setSelected(new Set())}
-              className="btn-ghost text-sm text-muted"
-            >
-              <XSquare className="w-3.5 h-3.5" />
-              Снять выделение
-            </button>
-          </div>
-        </div>
+          <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
+            <Pencil className="w-4 h-4" />
+            Изменить
+          </button>
+          <button onClick={deleteBulk} className="btn-danger text-sm">
+            <Trash2 className="w-4 h-4" />
+            Удалить
+          </button>
+        </SelectionBar>
       )}
 
       {bulkOpen && (

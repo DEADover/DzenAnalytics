@@ -2666,6 +2666,32 @@ export function scaleKPI(kpi: KPI, periods: number): KPI {
  * `savingsTitles` — названия счетов с признаком «накопительный», ВКЛЮЧАЯ
  * архивные: пара «архивный ↔ активный» иначе перестала бы схлопываться в ноль.
  */
+/**
+ * Суммы набора операций по видам — для шапки дня в ленте и для панели
+ * выделения. Возврат гасит расход, как везде в сервисе; `net` — доходы минус
+ * расходы, без переводов.
+ *
+ * Раньше один и тот же цикл жил в шапке дня, в панели выделения ленты и в
+ * шторке операций.
+ */
+export function kindTotals(txs: Transaction[]): {
+  inc: number;
+  exp: number;
+  xfer: number;
+  net: number;
+} {
+  let inc = 0;
+  let exp = 0;
+  let xfer = 0;
+  for (const t of txs) {
+    if (t.kind === "income") inc += t.amountBase;
+    else if (t.kind === "expense") exp += t.amountBase;
+    else if (t.kind === "refund") exp -= t.amountBase;
+    else if (t.kind === "transfer") xfer += t.amountBase;
+  }
+  return { inc, exp, xfer, net: inc - exp };
+}
+
 export function transferTotals(
   txs: Transaction[],
   savingsTitles: Set<string>

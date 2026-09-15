@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { collectDeletedOperations, twinKey } from "./deletedOperations";
+import { collectDeletedOperations, dayOfMs, groupDeleted, sortDeleted, twinKey } from "./deletedOperations";
+import { tx as txFixture } from "../test/fixtures";
 import { resurrectionId } from "./zenmoneyPush";
 import type { ZenCache } from "./zenmoneyCache";
 import type { ZenTransaction } from "./zenmoney";
@@ -133,5 +134,59 @@ describe("collectDeletedOperations", () => {
 
   it("twinKey не зависит от регистра и пробелов получателя", () => {
     expect(twinKey(op("a", { payee: " Лента " }))).toBe(twinKey(op("b", { payee: "лента" })));
+  });
+});
+
+describe("лента «Удалённых»: порядок и дни", () => {
+  const at = (day: number, hour = 12) => new Date(2026, 8, day, hour).getTime();
+  const row = (id: string, date: string, deletedAt: number | null, amountBase = 100) => ({
+    id,
+    deletedAt,
+    tx: txFixture({ id, date, amountBase, createdAt: `${date}T10:00:00` }),
+  });
+  const rows = [
+    row("a", "2026-09-01", at(14, 9), 500),
+    row("b", "2026-09-10", at(12), 50),
+    row("c", "2026-09-10", null, 900),
+    row("d", "2026-08-20", at(14, 18), 10),
+  ];
+  const order = (list: { id: string }[]) => list.map((r) => r.id);
+
+  it("по дате операции — свежие первыми", () => {
+    expect(order(sortDeleted(rows, "date-desc"))).toEqual(["b", "c", "a", "d"]);
+    expect(order(sortDeleted(rows, "date-asc"))).toEqual(["d", "a", "b", "c"]);
+  });
+
+  it("по удалению — без времени удаления в конце при любом направлении", () => {
+    expect(order(sortDeleted(rows, "deleted-desc"))).toEqual(["d", "a", "b", "c"]);
+    expect(order(sortDeleted(rows, "deleted-asc"))).toEqual(["b", "a", "d", "c"]);
+  });
+
+  it("по сумме", () => {
+    expect(order(sortDeleted(rows, "amount-desc"))).toEqual(["c", "a", "b", "d"]);
+  });
+
+  it("дни по дате операции", () => {
+    const days = groupDeleted(sortDeleted(rows, "date-desc"), "date-desc")!;
+    expect(days.map((d) => [d.ymd, order(d.rows)])).toEqual([
+      ["2026-09-10", ["b", "c"]],
+      ["2026-09-01", ["a"]],
+      ["2026-08-20", ["d"]],
+    ]);
+    expect(days[0].txs.map((t) => t.id)).toEqual(["b", "c"]);
+  });
+
+  it("дни по удалению — местный день, неизвестные отдельным днём", () => {
+    const days = groupDeleted(sortDeleted(rows, "deleted-desc"), "deleted-desc")!;
+    expect(days.map((d) => [d.key, order(d.rows)])).toEqual([
+      ["2026-09-14", ["d", "a"]],
+      ["2026-09-12", ["b"]],
+      ["unknown", ["c"]],
+    ]);
+    expect(dayOfMs(at(14, 23))).toBe("2026-09-14");
+  });
+
+  it("по сумме дней нет", () => {
+    expect(groupDeleted(rows, "amount-asc")).toBeNull();
   });
 });

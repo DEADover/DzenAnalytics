@@ -273,9 +273,19 @@ export function presetToRange(
 export function applyFilters(
   txs: Transaction[],
   state: FiltersState,
-  monthStartDay: number = 1
+  monthStartDay: number = 1,
+  opts: {
+    /**
+     * От какой даты отсчитывать скользящие периоды («30 дней», «12 мес», «С
+     * начала года»). По умолчанию — от последней операции в `txs`. Кто
+     * фильтрует не ленту целиком, а её часть (удалённые операции), передаёт
+     * последнюю дату ВСЕХ операций: иначе «30 дней» на этой странице
+     * значили бы другие тридцать дней, чем на соседних.
+     */
+    maxDate?: string;
+  } = {}
 ): Transaction[] {
-  const maxDate = txs.reduce((m, t) => (t.date > m ? t.date : m), "");
+  const maxDate = opts.maxDate ?? txs.reduce((m, t) => (t.date > m ? t.date : m), "");
   const range =
     state.preset === "custom"
       ? { from: state.from, to: state.to }

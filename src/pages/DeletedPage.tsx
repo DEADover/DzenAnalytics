@@ -1,42 +1,104 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { Trash2, Undo2, X } from "lucide-react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, Calendar, Clock, Coins, Copy, List, Trash2, Undo2, X } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDeletedPayloadsStore } from "../store/useDeletedPayloadsStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
-import { confirm } from "../store/useConfirmStore";
+import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
+import { confirm, useConfirmStore } from "../store/useConfirmStore";
 import { pluralRu } from "../lib/plural";
 import { applyEdits } from "../lib/applyEdits";
 import { cacheToDiffResponse } from "../lib/zenmoneyCache";
 import { getZenCache, peekZenCache, subscribeZenCache } from "../lib/zenCacheMemo";
 import { mapZenmoneyDiff } from "../lib/zenmoneyMap";
-import { collectDeletedOperations, type DeletedEntry } from "../lib/deletedOperations";
-import { formatDate, formatNum, displayPayee } from "../lib/format";
-import { operationTone } from "../lib/txKindStyle";
-import { DataTable, type Column } from "../components/DataTable";
-import { scaledWidth } from "../components/table/tableKit";
+import {
+  collectDeletedOperations,
+  dayOfMs,
+  groupDeleted,
+  sortDeleted,
+  type DeletedEntry,
+  type DeletedSort,
+} from "../lib/deletedOperations";
+import { kindTotals, lastTransactionDate } from "../lib/aggregations";
+import { formatDate, formatMoney, formatNum, payeeSearchText } from "../lib/format";
+import { formatDayHeader } from "../lib/dayLabel";
+import { kindLabel, operationTone } from "../lib/txKindStyle";
+import { TONE_CLASS, buildCsv, csvFileName, downloadCsv } from "../components/table/tableKit";
+import { ExportButton } from "../components/table/TableParts";
 import { OperationAmount, OperationCategory, OperationPayee } from "../components/operations/OperationCells";
+import { DayHeader } from "../components/operations/DayHeader";
+import {
+  LazyListFooter,
+  OperationListHead,
+  OperationListRow,
+  OperationListTray,
+} from "../components/operations/OperationList";
 import { PageHeader } from "../components/PageHeader";
-import { SectionControls } from "../components/SectionControls";
-import { Segmented } from "../components/Segmented";
+import { GlobalFilters } from "../components/GlobalFilters";
 import { SearchInput } from "../components/SearchInput";
+import { SortMenu, type SortOption } from "../components/SortMenu";
+import { SelectionBar } from "../components/SelectionBar";
+import { ScrollTopButton } from "../components/ScrollTopButton";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { Callout } from "../components/Callout";
 import { Badge } from "../components/Badge";
+import { Checkbox } from "../components/Checkbox";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
+import { useLazyList } from "../hooks/useLazyList";
 import type { Transaction } from "../types";
 
 const HINT = "Верните операцию, если её удалили по ошибке";
 
-// Колонки — как в ленте «Операции»: дата, категория, счёт, контрагент,
-// комментарий, сумма, действия. Ширина у всех, кроме комментария: он берёт
-// остаток. Таблица не уже суммы колонок и 7rem на комментарий — дальше
-// прокрутка, а не комментарий в одну букву. Растёт вместе с размером текста,
-// как и сами колонки.
-const CLOUD_MIN_WIDTH = scaledWidth("82rem");
-const LOCAL_MIN_WIDTH = scaledWidth("73.5rem");
+/** Порция ленты при подгрузке — как в «Операциях». */
+const PAGE_SIZE = 100;
+
+const SORT_OPTIONS: SortOption<DeletedSort>[] = [
+  { value: "date-desc", label: "Дата ↓", icon: Calendar, dir: "desc" },
+  { value: "date-asc", label: "Дата ↑", icon: Calendar, dir: "asc" },
+  { value: "deleted-desc", label: "Удалена ↓", icon: Trash2, dir: "desc" },
+  { value: "deleted-asc", label: "Удалена ↑", icon: Trash2, dir: "asc" },
+  { value: "amount-desc", label: "Сумма ↓", icon: Coins, dir: "desc" },
+  { value: "amount-asc", label: "Сумма ↑", icon: Coins, dir: "asc" },
+];
+
+/** Строка ленты: операция, когда её удалили и что с ней сейчас. */
+type FeedRow = Pick<DeletedEntry, "id" | "deletedAt" | "status" | "hasTwin"> & { tx: Transaction };
+
+/** `cloud` — удалённые в Дзен-мани; `local` — без подключения, спрятанные у нас. */
+type Mode = "cloud" | "local";
+
+interface Columns {
+  /** Дата операции. В днях по дате операции она в шапке дня. */
+  date: boolean;
+  /** Когда удалена. В днях по удалению — в шапке дня. */
+  deleted: boolean;
+  /** Статус есть только у удалённых в Дзен-мани. */
+  status: boolean;
+}
+
+/**
+ * Сетка — та же, что у ленты «Операций», плюс «Удалена» и «Статус»; вместо
+ * четырёх кнопок действий — одна.
+ */
+function gridTemplate(cols: Columns): string {
+  return [
+    "20px",
+    cols.date && "84px",
+    "minmax(0, 1.3fr)",
+    "minmax(0, 1fr)",
+    "minmax(0, 1.3fr)",
+    "minmax(0, 2.6fr)",
+    "140px",
+    cols.deleted && "84px",
+    cols.status && "120px",
+    "72px",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 
 /**
  * «Удалённые» — операции, удалённые в Дзен-мани, и возврат их обратно.
@@ -45,6 +107,10 @@ const LOCAL_MIN_WIDTH = scaledWidth("73.5rem");
  * Дзен-мани сам хранит каждую удалённую операцию с пометкой `deleted: true` —
  * удалённую в его приложении, на сайте или у нас, — и раздел теперь про них
  * (`collectDeletedOperations`).
+ *
+ * Выглядит как лента «Операций»: общие фильтры, итоги, дни, подгрузка при
+ * прокрутке, выделение. Своего периода у раздела нет — он живёт на общем
+ * фильтре, как и лента.
  *
  * Без подключения к Дзен-мани облака нет, и раздел показывает то, что
  * спрятано у нас: иначе удалённое из CSV нечем было бы вернуть.
@@ -57,30 +123,6 @@ export function DeletedPage() {
 }
 
 // ── Удалённые в Дзен-мани ───────────────────────────────────────────────────
-
-type Period = "7d" | "30d" | "12m" | "all";
-const PERIODS: { value: Period; label: string }[] = [
-  { value: "7d", label: "7 дней" },
-  { value: "30d", label: "30 дней" },
-  { value: "12m", label: "12 мес" },
-  { value: "all", label: "Всё" },
-];
-const PERIOD_DAYS: Record<Exclude<Period, "all">, number> = { "7d": 7, "30d": 30, "12m": 365 };
-const PERIOD_NOTE: Record<Period, string> = {
-  "7d": "За 7 дней",
-  "30d": "За 30 дней",
-  "12m": "За 12 месяцев",
-  all: "За всё время",
-};
-
-type DeletedRow = DeletedEntry & { tx: Transaction };
-
-/** День удаления в формате операции — чтобы показать его тем же `formatDate`. */
-function dayOf(ms: number): string {
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 
 const accusativeOps = (n: number) => pluralRu(n, ["операцию", "операции", "операций"]);
 
@@ -95,15 +137,10 @@ function CloudDeleted() {
   const pushMode = useZenmoneyStore((s) => s.pushMode);
   const restoreDeleted = useDataStore((s) => s.restoreDeleted);
   const cancelRestore = useDataStore((s) => s.cancelRestore);
-  const [period, setPeriod] = useState<Period>("30d");
-  const [query, setQuery] = useState("");
-  // «Сейчас» — на открытие страницы: границы периода не должны ползти при
-  // каждой перерисовке, а страницу, открытую сутками, никто не держит.
-  const [now] = useState(() => Date.now());
 
   // Разбор тем же `mapZenmoneyDiff`, что и живые операции: категория,
   // получатель, счёт и сумма в списке выглядят ровно как в ленте.
-  const rows = useMemo<DeletedRow[]>(() => {
+  const rows = useMemo<FeedRow[]>(() => {
     if (!cache) return [];
     const entries = collectDeletedOperations({ cache, payloads, deletedIds, deletedAt });
     if (entries.length === 0) return [];
@@ -113,30 +150,18 @@ function CloudDeleted() {
     const byId = new Map(mapped.map((t) => [t.id, t]));
     return entries.flatMap((e) => {
       const tx = byId.get(e.id);
-      return tx ? [{ ...e, tx }] : [];
+      // Пометка «новая» у удалённой ничего не значит: открывать её незачем.
+      return tx
+        ? [{ id: e.id, deletedAt: e.deletedAt, status: e.status, hasTwin: e.hasTwin, tx: { ...tx, unseen: false } }]
+        : [];
     });
   }, [cache, payloads, deletedIds, deletedAt]);
 
-  const visible = useMemo(() => {
-    const cutoff = period === "all" ? null : now - PERIOD_DAYS[period] * 86_400_000;
-    const q = query.trim().toLowerCase();
-    return rows.filter((r) => {
-      if (cutoff !== null && (r.deletedAt === null || r.deletedAt < cutoff)) return false;
-      if (!q) return true;
-      return [displayPayee(r.tx), r.tx.comment, r.tx.categoryFull, r.tx.account].some(
-        (v) => v && v.toLowerCase().includes(q)
-      );
-    });
-  }, [rows, period, query, now]);
-
-  const twins = visible.filter((r) => r.status === "deleted" && r.hasTwin).length;
-  const pending = visible.filter((r) => r.status !== "deleted").length;
-  const restorable = visible.filter((r) => r.status !== "restore-pending");
   const restoresWaiting = rows.some((r) => r.status === "restore-pending");
 
-  async function restore(list: DeletedRow[]) {
+  async function restore(list: FeedRow[]): Promise<boolean> {
     const ids = list.filter((r) => r.status !== "restore-pending").map((r) => r.id);
-    if (ids.length === 0) return;
+    if (ids.length === 0) return false;
     const dup = list.filter((r) => r.status === "deleted" && r.hasTwin).length;
     if (dup > 0) {
       const ok = await confirm({
@@ -148,16 +173,17 @@ function CloudDeleted() {
         confirmLabel: "Всё равно вернуть",
         tone: "warning",
       });
-      if (!ok) return;
+      if (!ok) return false;
     } else if (ids.length > 1) {
       const ok = await confirm({
         title: `Вернуть ${formatNum(ids.length)} ${accusativeOps(ids.length)}?`,
         message: "Удалённые в Дзен-мани появятся там снова — копиями со всеми полями.",
         confirmLabel: "Вернуть",
       });
-      if (!ok) return;
+      if (!ok) return false;
     }
     await restoreDeleted(ids);
+    return true;
   }
 
   const header = (
@@ -174,6 +200,11 @@ function CloudDeleted() {
             В расчётах их нет.
           </p>
           <p>
+            <InfoTerm>Фильтры</InfoTerm> — общие, как в ленте «Операции»: период
+            считается по дате операции. Когда её удалили — в колонке «Удалена»;
+            по ней же можно отсортировать.
+          </p>
+          <p>
             <InfoTerm>«Вернуть»</InfoTerm> создаёт в Дзен-мани копию со всеми
             полями — датой, суммой, счётом, категорией, получателем и
             комментарием. Снять пометку с самой операции Дзен-мани не даёт, поэтому
@@ -186,8 +217,7 @@ function CloudDeleted() {
           </p>
           <p>
             <InfoTerm>«Ждёт отправки»</InfoTerm> — удаление или возврат сделаны
-            здесь и уйдут в Дзен-мани со следующей отправкой. Период считается по
-            дате удаления.
+            здесь и уйдут в Дзен-мани со следующей отправкой.
           </p>
         </InfoPopover>
       }
@@ -218,185 +248,507 @@ function CloudDeleted() {
     );
   }
 
-  const columns: Column<DeletedRow>[] = [
-    {
-      key: "deletedAt",
-      type: "date",
-      width: "7.5rem",
-      label: "Удалена",
-      headerTitle: "Когда операцию удалили",
-      sortValue: (r) => r.deletedAt ?? 0,
-      exportValue: (r) => (r.deletedAt ? dayOf(r.deletedAt) : ""),
-      render: (r) => (r.deletedAt ? formatDate(dayOf(r.deletedAt), "full") : "—"),
-    },
-    {
-      key: "date",
-      type: "date",
-      width: "7rem",
-      label: "Дата",
-      sortValue: (r) => r.tx.date,
-      render: (r) => formatDate(r.tx.date, "full"),
-    },
-    {
-      key: "category",
-      type: "text",
-      width: "13rem",
-      label: "Категория",
-      sortValue: (r) => r.tx.categoryFull,
-      cellTitle: () => "",
-      render: (r) => <OperationCategory tx={r.tx} edited={false} />,
-    },
-    {
-      key: "account",
-      type: "text",
-      muted: true,
-      width: "9rem",
-      label: "Счёт",
-      sortValue: (r) => r.tx.account,
-      render: (r) => r.tx.account,
-    },
-    {
-      key: "payee",
-      type: "text",
-      width: "12rem",
-      label: "Контрагент",
-      sortValue: (r) => displayPayee(r.tx),
-      cellTitle: () => "",
-      render: (r) => <OperationPayee tx={r.tx} />,
-    },
-    {
-      key: "comment",
-      type: "text",
-      muted: true,
-      label: "Комментарий",
-      sortValue: (r) => r.tx.comment || "",
-      render: (r) => r.tx.comment || "",
-    },
-    {
-      key: "amount",
-      type: "main",
-      tone: (r) => operationTone(r.tx),
-      width: "9rem",
-      label: "Сумма",
-      sortValue: (r) => r.tx.amountBase,
-      render: (r) => <OperationAmount tx={r.tx} />,
-    },
-    {
-      key: "status",
-      type: "mark",
-      width: "8.5rem",
-      label: "Статус",
-      sortValue: (r) => (r.status === "deleted" ? (r.hasTwin ? 1 : 0) : 2),
-      exportValue: (r) => statusText(r),
-      render: (r) => <StatusBadge row={r} />,
-    },
-    {
-      key: "action",
-      type: "actions",
-      width: "9rem",
-      label: "Действия",
-      render: (r) =>
-        r.status === "restore-pending" ? (
-          <button
-            onClick={() => cancelRestore([r.id])}
-            className="btn-ghost text-xs whitespace-nowrap -my-2"
-            title="Не возвращать: операция останется удалённой"
-          >
-            <X className="w-3.5 h-3.5" />
-            Отменить
+  return (
+    <DeletedFeed
+      mode="cloud"
+      rows={rows}
+      header={header}
+      notice={
+        pushMode === "off" &&
+        restoresWaiting && (
+          <Callout size="banner" tone="warn">
+            Отправка в Дзен-мани выключена: возвращённые операции уйдут туда, когда
+            вы включите двустороннюю синхронизацию в настройках.
+          </Callout>
+        )
+      }
+      onRestore={restore}
+      onCancel={(list) => cancelRestore(list.map((r) => r.id))}
+    />
+  );
+}
+
+// ── Без Дзен-мани: спрятанные у нас ─────────────────────────────────────────
+
+function LocalDeleted() {
+  const transactionsRaw = useDataStore((s) => s.transactionsRaw);
+  const rates = useDataStore((s) => s.rates);
+  const restoreTransactionMany = useDataStore((s) => s.restoreTransactionMany);
+  const purgeDeleted = useDataStore((s) => s.purgeDeleted);
+  const edits = useEditsStore((s) => s.edits);
+  const deletedSet = useDeletedStore((s) => s.deletedSet);
+  const deletedAt = useDeletedStore((s) => s.deletedAt);
+
+  const rows = useMemo<FeedRow[]>(() => {
+    if (deletedSet.size === 0) return [];
+    return applyEdits(transactionsRaw, edits, rates)
+      .filter((t) => deletedSet.has(t.id))
+      .map((t) => ({
+        id: t.id,
+        deletedAt: deletedAt[t.id] ?? null,
+        status: "deleted" as const,
+        hasTwin: false,
+        tx: { ...t, unseen: false },
+      }));
+  }, [transactionsRaw, edits, rates, deletedSet, deletedAt]);
+
+  async function handlePurge() {
+    const n = rows.length;
+    if (n === 0) return;
+    const ok = await confirm({
+      title: "Удалить окончательно?",
+      message: `${formatNum(n)} ${pluralRu(n, ["операция будет", "операции будут", "операций будут"])} безвозвратно удалены из локального хранилища — вернуть их будет нельзя.`,
+      confirmLabel: "Удалить окончательно",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await purgeDeleted();
+  }
+
+  const header = (
+    <PageHeader
+      icon={Trash2}
+      title="Удалённые"
+      hint={HINT}
+      right={
+        rows.length > 0 && (
+          <button onClick={handlePurge} className="btn-danger text-xs">
+            <Trash2 className="w-3.5 h-3.5" />
+            Удалить окончательно
           </button>
-        ) : (
-          <button
-            onClick={() => restore([r])}
-            className="btn-ghost text-xs whitespace-nowrap -my-2"
-            title={
-              r.status === "delete-pending"
-                ? "Не удалять: удаление ещё не отправлено в Дзен-мани"
-                : "Вернуть в Дзен-мани копией со всеми полями"
-            }
-          >
-            <Undo2 className="w-3.5 h-3.5" />
-            Вернуть
-          </button>
-        ),
-    },
-  ];
+        )
+      }
+    />
+  );
+
+  if (rows.length === 0) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <SectionEmpty icon={Trash2} title="Удалённых операций нет">
+          Удалить операцию можно в ленте «Операции» или в её карточке.
+        </SectionEmpty>
+      </div>
+    );
+  }
+
+  return (
+    <DeletedFeed
+      mode="local"
+      rows={rows}
+      header={header}
+      onRestore={async (list) => {
+        await restoreTransactionMany(list.map((r) => r.id));
+        return true;
+      }}
+    />
+  );
+}
+
+// ── Лента ───────────────────────────────────────────────────────────────────
+
+function DeletedFeed({
+  mode,
+  rows,
+  header,
+  notice,
+  onRestore,
+  onCancel,
+}: {
+  mode: Mode;
+  rows: FeedRow[];
+  header: ReactNode;
+  /** Предупреждение над итогами. */
+  notice?: ReactNode;
+  /** Вернуть строки. `false` — человек передумал в подтверждении. */
+  onRestore: (rows: FeedRow[]) => Promise<boolean>;
+  /** Передумать, пока возврат не отправлен. Только с Дзен-мани. */
+  onCancel?: (rows: FeedRow[]) => Promise<void>;
+}) {
+  const transactions = useDataStore((s) => s.transactions);
+  const base = useDataStore((s) => s.rates.base);
+  const filters = useFiltersStore();
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  const confirmOpen = useConfirmStore((s) => s.isOpen);
+  const [pageSearch, setPageSearch] = useState("");
+  const [sortMode, setSortMode] = useState<DeletedSort>("date-desc");
+  const [sortOpen, setSortOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Скользящие периоды («30 дней», «12 мес») отсчитываются от последней
+  // операции ВСЕЙ ленты: иначе здесь они значили бы другие дни, чем на
+  // соседних страницах с тем же фильтром.
+  const maxDate = useMemo(() => lastTransactionDate(transactions), [transactions]);
+  const filtered = useMemo(() => {
+    const kept = new Set(
+      applyFilters(
+        rows.map((r) => r.tx),
+        filters,
+        monthStartDay,
+        { maxDate: maxDate || undefined }
+      ).map((t) => t.id)
+    );
+    return rows.filter((r) => kept.has(r.id));
+  }, [rows, filters, monthStartDay, maxDate]);
+
+  const searched = useMemo(() => {
+    const q = pageSearch.trim().toLowerCase();
+    if (!q) return filtered;
+    return filtered.filter(({ tx: t }) =>
+      `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [filtered, pageSearch]);
+
+  const sorted = useMemo(() => sortDeleted(searched, sortMode), [searched, sortMode]);
+  const lazy = useLazyList(sorted, PAGE_SIZE);
+  const visible = useMemo(() => sorted.slice(0, lazy.shown), [sorted, lazy.shown]);
+  const days = useMemo(() => groupDeleted(visible, sortMode), [visible, sortMode]);
+
+  // Выделение считаем по тому, что сейчас в ленте: строки, скрытые фильтром
+  // или уже вернувшиеся, в счёт и в действия не попадают.
+  const selectedRows = useMemo(() => sorted.filter((r) => selected.has(r.id)), [sorted, selected]);
+  const allSelected = sorted.length > 0 && selectedRows.length === sorted.length;
+  const someSelected = selectedRows.length > 0 && !allSelected;
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(sorted.map((r) => r.id)));
+  const clearSelection = () => setSelected(new Set());
+
+  // Escape снимает выделение, если сверху ничего не открыто: иначе Escape
+  // закрывает то, что сверху, — диалог или меню.
+  const hasSelection = selectedRows.length > 0;
+  useEffect(() => {
+    if (!hasSelection || confirmOpen || sortOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hasSelection, confirmOpen, sortOpen]);
+
+  const totals = useMemo(() => kindTotals(searched.map((r) => r.tx)), [searched]);
+  const selectedTotals = useMemo(() => kindTotals(selectedRows.map((r) => r.tx)), [selectedRows]);
+  const twins = searched.filter((r) => r.status === "deleted" && r.hasTwin).length;
+  const pending = searched.filter((r) => r.status !== "deleted").length;
+  const restorable = selectedRows.filter((r) => r.status !== "restore-pending");
+  const cancellable = selectedRows.filter((r) => r.status === "restore-pending");
+
+  const byDeletion = sortMode === "deleted-desc" || sortMode === "deleted-asc";
+  const cols: Columns = {
+    date: sortMode !== "date-desc" && sortMode !== "date-asc",
+    deleted: !byDeletion,
+    status: mode === "cloud",
+  };
+  const template = gridTemplate(cols);
+
+  function exportCsv() {
+    const cloud = mode === "cloud";
+    const text = buildCsv(
+      [
+        "Дата",
+        "Тип",
+        "Категория",
+        "Получатель",
+        "Комментарий",
+        "Счёт",
+        "Сумма",
+        "Валюта",
+        "Удалена",
+        ...(cloud ? ["Статус"] : []),
+      ],
+      sorted.map((r) => [
+        r.tx.date,
+        kindLabel(r.tx.kind),
+        r.tx.categoryFull,
+        r.tx.payee || "",
+        r.tx.comment || "",
+        r.tx.account,
+        r.tx.amount,
+        r.tx.currency,
+        r.deletedAt ? dayOfMs(r.deletedAt) : "",
+        ...(cloud ? [statusText(r)] : []),
+      ])
+    );
+    downloadCsv(csvFileName("deleted"), text);
+  }
+
+  const renderRow = (r: FeedRow) => (
+    <FeedRowView
+      key={r.id}
+      row={r}
+      mode={mode}
+      cols={cols}
+      template={template}
+      selected={selected.has(r.id)}
+      onToggleSelect={() => toggleSelect(r.id)}
+      onRestore={() => void onRestore([r])}
+      onCancel={onCancel && (() => void onCancel([r]))}
+    />
+  );
 
   return (
     <div className="space-y-6">
       {header}
-
-      <SectionControls>
-        <Segmented label="Период удаления" value={period} onChange={setPeriod} options={PERIODS} />
-      </SectionControls>
-
-      {pushMode === "off" && restoresWaiting && (
-        <Callout size="banner" tone="warn">
-          Отправка в Дзен-мани выключена: возвращённые операции уйдут туда, когда
-          вы включите двустороннюю синхронизацию в настройках.
-        </Callout>
-      )}
+      <GlobalFilters />
+      {notice}
 
       <StatRow>
-        <StatCell label="Удалено" value={formatNum(visible.length)} note={PERIOD_NOTE[period]} />
         <StatCell
-          label="Есть такая же"
-          value={formatNum(twins)}
-          tone={twins > 0 ? "warn" : "default"}
-          note="Возврат задвоит операцию"
+          label="Доходы"
+          value={formatMoney(totals.inc, base)}
+          tone="income"
+          icon={<ArrowUp className="w-4 h-4" />}
         />
         <StatCell
-          label="Ждут отправки"
-          value={formatNum(pending)}
-          tone={pending > 0 ? "accent" : "default"}
-          note="Возвраты и удаления отсюда"
+          label="Расходы"
+          value={formatMoney(totals.exp, base)}
+          tone="expense"
+          icon={<ArrowDown className="w-4 h-4" />}
+        />
+        {mode === "cloud" && (
+          <StatCell
+            label="Есть такая же"
+            value={formatNum(twins)}
+            tone={twins > 0 ? "warn" : "default"}
+            icon={<Copy className="w-4 h-4" />}
+            tooltip="В Дзен-мани уже есть живая операция с той же датой, суммой, счётом и получателем — возврат задвоит"
+          />
+        )}
+        {mode === "cloud" && (
+          <StatCell
+            label="Ждут отправки"
+            value={formatNum(pending)}
+            tone={pending > 0 ? "accent" : "default"}
+            icon={<Clock className="w-4 h-4" />}
+            tooltip="Возвраты и удаления, сделанные здесь и ещё не отправленные в Дзен-мани"
+          />
+        )}
+        <StatCell
+          label="Операций"
+          value={formatNum(searched.length)}
+          icon={<List className="w-4 h-4" />}
+          note={searched.length < rows.length ? `из ${formatNum(rows.length)} удалённых` : undefined}
         />
       </StatRow>
 
-      <DataTable<DeletedRow>
-        icon={Trash2}
-        title="Удалённые операции"
-        data={visible}
-        rowKey={(r) => r.id}
-        defaultSortKey="deletedAt"
-        defaultSortDir="desc"
-        limit={50}
-        exportName="deleted"
-        fixed
-        minWidth={CLOUD_MIN_WIDTH}
-        emptyText={query ? "Ничего не нашлось" : "За этот период ничего не удаляли"}
-        actions={
+      <OperationListTray
+        toolbar={
           <>
             <SearchInput
               size="sm"
-              value={query}
-              onChange={setQuery}
+              value={pageSearch}
+              onChange={setPageSearch}
               placeholder="Быстрый поиск по таблице…"
-              title="Ищет по получателю, комментарию, категории и счёту"
-              ariaLabel="Поиск по удалённым"
-              className="w-64 max-sm:w-full"
+              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту. Не сохраняется и на другие страницы не влияет."}
+              className="flex-1 min-w-[220px]"
             />
-            {restorable.length > 1 && (
-              <button onClick={() => restore(restorable)} className="btn-ghost text-xs whitespace-nowrap">
-                <Undo2 className="w-3.5 h-3.5" />
-                Вернуть все ({formatNum(restorable.length)})
-              </button>
-            )}
+            <SortMenu
+              options={SORT_OPTIONS}
+              value={sortMode}
+              onChange={setSortMode}
+              onOpenChange={setSortOpen}
+            />
+            <ExportButton rows={sorted.length} onClick={exportCsv} />
           </>
         }
-        columns={columns}
-      />
+      >
+        {sorted.length === 0 ? (
+          <SectionEmpty variant="inline">
+            По текущим фильтрам ничего не найдено.
+            {filtered.length === 0 &&
+              ` Всего удалённых — ${formatNum(rows.length)}: выберите другой период или сбросьте фильтры.`}
+          </SectionEmpty>
+        ) : (
+          <div>
+            <OperationListHead template={template}>
+              <Checkbox
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={toggleAll}
+                title="Выбрать всё (под фильтрами)"
+                label="Выбрать все удалённые операции"
+              />
+              {cols.date && <div>Дата</div>}
+              <div>Категория</div>
+              <div>Счёт</div>
+              <div>Контрагент</div>
+              <div>Комментарий</div>
+              <div className="text-right">Сумма</div>
+              {cols.deleted && <div>Удалена</div>}
+              {cols.status && <div className="text-center">Статус</div>}
+              <div className="text-center">Действия</div>
+            </OperationListHead>
+            {days
+              ? days.map((day) => (
+                  <div key={day.key}>
+                    <DayHeader
+                      ymd={day.ymd}
+                      title={byDeletion ? deletionDayTitle(day.ymd) : undefined}
+                      txs={day.txs}
+                      base={base}
+                      showTransfers={!filters.excludeTransfers}
+                    />
+                    {day.rows.map(renderRow)}
+                  </div>
+                ))
+              : visible.map(renderRow)}
+          </div>
+        )}
+
+        {lazy.hasMore && (
+          <LazyListFooter shown={lazy.shown} total={lazy.total} sentinelRef={lazy.attachSentinel} />
+        )}
+      </OperationListTray>
+
+      {hasSelection && (
+        <SelectionBar
+          count={selectedRows.length}
+          totals={selectedTotals}
+          base={base}
+          onClear={clearSelection}
+        >
+          {restorable.length > 0 && (
+            <button
+              onClick={async () => {
+                if (await onRestore(restorable)) clearSelection();
+              }}
+              className="btn-primary text-sm"
+            >
+              <Undo2 className="w-4 h-4" />
+              Вернуть
+              {restorable.length < selectedRows.length && (
+                <span className="tabular-nums opacity-80">({formatNum(restorable.length)})</span>
+              )}
+            </button>
+          )}
+          {onCancel && cancellable.length > 0 && (
+            <button
+              onClick={async () => {
+                await onCancel(cancellable);
+                clearSelection();
+              }}
+              className="btn-ghost text-sm"
+            >
+              <X className="w-4 h-4" />
+              Отменить возврат
+              {cancellable.length < selectedRows.length && (
+                <span className="tabular-nums text-muted">({formatNum(cancellable.length)})</span>
+              )}
+            </button>
+          )}
+        </SelectionBar>
+      )}
+
+      <ScrollTopButton />
     </div>
   );
 }
 
-function statusText(r: DeletedRow): string {
+/** «Удалены вчера, 14 сентября» — шапка дня, когда лента разбита по дням удаления. */
+function deletionDayTitle(ymd: string): string {
+  if (!ymd) return "Когда удалены — неизвестно";
+  const { label } = formatDayHeader(ymd);
+  return `Удалены ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+}
+
+function FeedRowView({
+  row,
+  mode,
+  cols,
+  template,
+  selected,
+  onToggleSelect,
+  onRestore,
+  onCancel,
+}: {
+  row: FeedRow;
+  mode: Mode;
+  cols: Columns;
+  template: string;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onRestore: () => void;
+  onCancel?: () => void;
+}) {
+  const { tx } = row;
+  return (
+    <OperationListRow template={template} selected={selected} onToggleSelect={onToggleSelect}>
+      <Checkbox checked={selected} stopPropagation onChange={onToggleSelect} label="Выбрать операцию" />
+      {cols.date && (
+        <div className="text-muted tabular-nums whitespace-nowrap">{formatDate(tx.date, "full")}</div>
+      )}
+      <OperationCategory tx={tx} edited={false} />
+      <div className="truncate text-muted" title={tx.account}>
+        {tx.account}
+      </div>
+      <OperationPayee tx={tx} />
+      <div className="text-muted truncate" title={tx.comment || ""}>
+        {tx.comment || ""}
+      </div>
+      <div
+        className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
+      >
+        <OperationAmount tx={tx} />
+      </div>
+      {cols.deleted && (
+        <div className="text-muted tabular-nums whitespace-nowrap">
+          {row.deletedAt ? formatDate(dayOfMs(row.deletedAt), "full") : "—"}
+        </div>
+      )}
+      {cols.status && (
+        <div className="flex justify-center min-w-0">
+          <StatusBadge row={row} />
+        </div>
+      )}
+      <div className="flex items-center justify-center">
+        {row.status === "restore-pending" ? (
+          onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="btn-icon"
+              title="Отменить возврат — операция останется удалённой"
+              aria-label="Отменить возврат"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )
+        ) : (
+          <button
+            type="button"
+            onClick={onRestore}
+            className="btn-icon"
+            title={
+              row.status === "delete-pending"
+                ? "Вернуть — удаление ещё не отправлено в Дзен-мани"
+                : mode === "cloud"
+                  ? "Вернуть — в Дзен-мани копией со всеми полями"
+                  : "Вернуть"
+            }
+            aria-label="Вернуть операцию"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </OperationListRow>
+  );
+}
+
+function statusText(r: Pick<FeedRow, "status" | "hasTwin">): string {
   if (r.status === "restore-pending") return "Вернётся";
   if (r.status === "delete-pending") return "Удаление ждёт отправки";
   return r.hasTwin ? "Есть такая же" : "";
 }
 
-function StatusBadge({ row }: { row: DeletedRow }) {
+function StatusBadge({ row }: { row: FeedRow }) {
   if (row.status === "restore-pending") {
     return (
       <Badge tone="accent" title="Копия уйдёт в Дзен-мани со следующей отправкой">
@@ -419,153 +771,4 @@ function StatusBadge({ row }: { row: DeletedRow }) {
     );
   }
   return null;
-}
-
-// ── Без Дзен-мани: спрятанные у нас ─────────────────────────────────────────
-
-function LocalDeleted() {
-  const transactionsRaw = useDataStore((s) => s.transactionsRaw);
-  const rates = useDataStore((s) => s.rates);
-  const restoreTransaction = useDataStore((s) => s.restoreTransaction);
-  const restoreTransactionMany = useDataStore((s) => s.restoreTransactionMany);
-  const purgeDeleted = useDataStore((s) => s.purgeDeleted);
-  const edits = useEditsStore((s) => s.edits);
-  const deletedSet = useDeletedStore((s) => s.deletedSet);
-
-  const rows = useMemo(() => {
-    if (deletedSet.size === 0) return [];
-    return applyEdits(transactionsRaw, edits, rates)
-      .filter((t) => deletedSet.has(t.id))
-      .sort((a, b) => b.date.localeCompare(a.date));
-  }, [transactionsRaw, edits, rates, deletedSet]);
-
-  async function handlePurge() {
-    const n = rows.length;
-    if (n === 0) return;
-    const ok = await confirm({
-      title: "Удалить окончательно?",
-      message: `${formatNum(n)} ${pluralRu(n, ["операция будет", "операции будут", "операций будут"])} безвозвратно удалены из локального хранилища — вернуть их будет нельзя.`,
-      confirmLabel: "Удалить окончательно",
-      tone: "danger",
-    });
-    if (!ok) return;
-    await purgeDeleted();
-  }
-
-  if (rows.length === 0) {
-    return (
-      <div className="space-y-6">
-        <PageHeader icon={Trash2} title="Удалённые" hint={HINT} />
-        <SectionEmpty icon={Trash2} title="Удалённых операций нет">
-          Удалить операцию можно в ленте «Операции» или в её карточке.
-        </SectionEmpty>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={Trash2}
-        title="Удалённые"
-        hint={HINT}
-        right={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => restoreTransactionMany(rows.map((t) => t.id))}
-              className="btn-ghost text-xs"
-            >
-              <Undo2 className="w-3.5 h-3.5" />
-              Вернуть все ({formatNum(rows.length)})
-            </button>
-            <button onClick={handlePurge} className="btn-danger text-xs">
-              <Trash2 className="w-3.5 h-3.5" />
-              Удалить окончательно
-            </button>
-          </div>
-        }
-      />
-
-      <DataTable<Transaction>
-        icon={Trash2}
-        title="Удалённые операции"
-        data={rows}
-        rowKey={(t) => t.id}
-        defaultSortKey="date"
-        exportName="deleted"
-        fixed
-        minWidth={LOCAL_MIN_WIDTH}
-        columns={[
-          {
-            key: "date",
-            type: "date",
-            width: "7rem",
-            label: "Дата",
-            sortValue: (t) => t.date,
-            render: (t) => formatDate(t.date, "full"),
-          },
-          {
-            key: "category",
-            type: "text",
-            width: "16rem",
-            label: "Категория",
-            sortValue: (t) => t.categoryFull,
-            cellTitle: () => "",
-            render: (t) => <OperationCategory tx={t} edited={false} />,
-          },
-          {
-            key: "account",
-            type: "text",
-            muted: true,
-            width: "11rem",
-            label: "Счёт",
-            sortValue: (t) => t.account,
-            render: (t) => t.account,
-          },
-          {
-            key: "payee",
-            type: "text",
-            width: "14rem",
-            label: "Контрагент",
-            sortValue: (t) => displayPayee(t),
-            cellTitle: () => "",
-            render: (t) => <OperationPayee tx={t} />,
-          },
-          {
-            key: "comment",
-            type: "text",
-            muted: true,
-            label: "Комментарий",
-            sortValue: (t) => t.comment || "",
-            render: (t) => t.comment || "",
-          },
-          {
-            key: "amount",
-            type: "main",
-            tone: operationTone,
-            width: "10rem",
-            label: "Сумма",
-            sortValue: (t) => t.amountBase,
-            render: (t) => <OperationAmount tx={t} />,
-          },
-          {
-            key: "restore",
-            type: "actions",
-            width: "8.5rem",
-            label: "Действия",
-            render: (t) => (
-              <button
-                onClick={() => restoreTransaction(t.id)}
-                className="btn-ghost text-xs whitespace-nowrap -my-2"
-                title="Вернуть операцию"
-              >
-                <Undo2 className="w-3.5 h-3.5" />
-                Вернуть
-              </button>
-            ),
-          },
-        ]}
-      />
-    </div>
-  );
 }
