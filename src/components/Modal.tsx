@@ -184,7 +184,10 @@ const CHIP_TONE = {
 /**
  * Шапка окна. Два вида:
  *
- * - окно действия — плашка 28 со значком, заголовок и строка пояснения;
+ * - окно действия — значок в плашке, заголовок и строка пояснения. С
+ *   пояснением плашка 40 — ровно в высоту двух строк (заголовок 24 и подпись
+ *   16), как значок шапки раздела: блок текста не выше значка. Без пояснения —
+ *   прежняя 28 в рост одной строки;
  * - карточка сущности (правило, счёт, категория) — задан `overline`: плашка
  *   44, над названием подпись типа, шапка на `panel2/50`.
  *
@@ -219,11 +222,11 @@ export function ModalHeader({
       <span
         className={clsx(
           "shrink-0 flex items-center justify-center",
-          entity ? "w-11 h-11 rounded-xl" : "p-1.5 rounded-lg",
+          entity ? "w-11 h-11 rounded-xl" : subtitle ? "w-10 h-10 rounded-xl" : "p-1.5 rounded-lg",
           CHIP_TONE[tone]
         )}
       >
-        <Icon className={entity ? "w-5 h-5" : "w-4 h-4"} aria-hidden="true" />
+        <Icon className={entity || subtitle ? "w-5 h-5" : "w-4 h-4"} aria-hidden="true" />
       </span>
     ));
   return (
