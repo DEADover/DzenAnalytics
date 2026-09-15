@@ -252,7 +252,7 @@ export function MultiSelect({
           className
         )}
       >
-        <span className="overline truncate">
+        <span className="caps-label truncate">
           {title}
         </span>
         <button

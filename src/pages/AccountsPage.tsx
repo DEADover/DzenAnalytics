@@ -2179,7 +2179,7 @@ export function AccountsPage() {
               {/* Итог строкой таблицы, а не подписью под ней: каждое число
                   стоит под своим столбцом и читается как сумма колонки. */}
               <tfoot>
-                <tr className="table-row-group">
+                <tr className="table-group-row">
                   <td className={cellClass("text")}>Итого</td>
                   <td
                     className={cellClass("number", { muted: true, className: "font-normal" })}
@@ -2546,7 +2546,7 @@ export function AccountsPage() {
                     onClick={() => setSelectedAccount(isSel ? null : a.account)}
                     className="block text-left w-full"
                   >
-                    <div className="overline">
+                    <div className="caps-label">
                       {capitalView ? (hasReal ? "Остаток" : "Накоплено") : "Изменение"}
                     </div>
                     <div className="flex items-end justify-between gap-2">
@@ -2710,7 +2710,7 @@ export function AccountsPage() {
                 {listItems.map((item) => {
                   if (item.kind === "header") {
                     return (
-                      <tr key={item.key} className="table-row-group">
+                      <tr key={item.key} className="table-group-row">
                         <td className="table-td">
                           <span className="inline-block max-w-[240px] truncate align-bottom">
                             {item.label}

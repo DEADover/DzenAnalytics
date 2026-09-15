@@ -438,8 +438,12 @@ h2,
    * Тише `.label` — 11 px и без полужирного: это подпись к набору пунктов, а
    * не к полю. Прежде таких надписей было пять видов — 10 и 11 px, разрядка
    * 0.025 и 0.05 em.
+   *
+   * Имя — не `overline`: так называется утилита Tailwind, которая рисует черту
+   * над текстом, и она добавлялась к каждой такой надписи. Своим классам не
+   * давать имён утилит Tailwind.
    */
-  .overline {
+  .caps-label {
     @apply text-[11px] leading-4 uppercase tracking-wide text-muted font-normal;
   }
   /**
@@ -642,9 +646,10 @@ h2,
   .list-head {
     @apply head-type border-b border-border;
   }
-  /* Строка-группа: шапка блока внутри таблицы. */
-  .table-row-group > td,
-  .table-row-group > th {
+  /* Строка-группа: шапка блока внутри таблицы. Не `table-row-group`: это
+     утилита Tailwind, она делала строку группой строк (display). */
+  .table-group-row > td,
+  .table-group-row > th {
     @apply bg-panel2/60 font-semibold;
   }
 }

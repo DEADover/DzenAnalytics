@@ -310,7 +310,7 @@ export function Combobox({
                       so the user can tell at a glance "this section is
                       brands from Дзен" vs "this section is what you've
                       typed before". */}
-                  <div className="overline sticky top-0 px-3 pt-2 pb-1 bg-panel border-b border-border/40">
+                  <div className="caps-label sticky top-0 px-3 pt-2 pb-1 bg-panel border-b border-border/40">
                     {g.label}
                     <span className="ml-1.5 opacity-60">{g.items.length}</span>
                   </div>

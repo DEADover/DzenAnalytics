@@ -365,7 +365,7 @@ export function CategoryFilterPicker({
                               i > 0 && "mt-1 pt-1 border-t border-border"
                             )}
                           >
-                            <span className="overline truncate">
+                            <span className="caps-label truncate">
                               {groupLabel}
                             </span>
                             {/* Весь тип разом — иначе расходных категорий три

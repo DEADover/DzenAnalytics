@@ -2269,7 +2269,7 @@ export function ImportPage() {
                 он описывает список, и рядом с «Создать снимок» читался как
                 состояние кнопки. */}
             <div className="flex items-baseline justify-between gap-3 mb-1">
-              <span className="overline">
+              <span className="caps-label">
                 {cloudSnapshots.length === 0 ? "Снимков ещё не было" : "Сохранённые снимки"}
               </span>
               {cloudSnapshots.length > 0 && (

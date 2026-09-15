@@ -95,7 +95,7 @@ export function SliceSwitcher() {
               visibility: pos ? "visible" : "hidden",
             }}
           >
-          <div className="overline px-2 py-1">
+          <div className="caps-label px-2 py-1">
             Разрез данных
           </div>
           {slices.map((s) => (

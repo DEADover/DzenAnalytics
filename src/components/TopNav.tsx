@@ -349,7 +349,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
               </button>
             </div>
             <nav className="flex-1 overflow-y-auto py-2">
-              <div className="overline px-4 pt-2 pb-1">
+              <div className="caps-label px-4 pt-2 pb-1">
                 Основное
               </div>
               {PRIMARY.map(({ to, label, icon: Icon }) => (
@@ -373,7 +373,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
               ))}
               {SECONDARY_GROUPS.map((group) => (
                 <div key={group.title}>
-                  <div className="overline px-4 pt-3 pb-1">
+                  <div className="caps-label px-4 pt-3 pb-1">
                     {group.title}
                   </div>
                   {group.items.map(({ to, label, icon: Icon }) => (

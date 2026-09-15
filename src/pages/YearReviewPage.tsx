@@ -1006,7 +1006,7 @@ function Fact({
 }) {
   return (
     <div className="card-sunken px-3 py-2.5 min-w-0">
-      <div className="overline truncate">
+      <div className="caps-label truncate">
         {label}
       </div>
       <div className="stat-num text-xl font-bold tabular-nums leading-tight mt-1 truncate">

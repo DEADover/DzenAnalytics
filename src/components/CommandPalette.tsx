@@ -355,7 +355,7 @@ export function CommandPalette({ open, onClose }: Props) {
               return (
                 <div key={item.id}>
                   {showGroup && (
-                    <div className="overline px-4 pt-3 pb-1">
+                    <div className="caps-label px-4 pt-3 pb-1">
                       {item.group}
                     </div>
                   )}
