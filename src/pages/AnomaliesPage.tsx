@@ -89,7 +89,7 @@ export function AnomaliesPage() {
         iconTone="text-warn"
         title="Аномалии"
         hint="Что выбивается из ваших привычных трат"
-        right={
+        info={
           <InfoPopover>
             <p>
               Страница слушается общих фильтров по счетам, валютам, категориям и

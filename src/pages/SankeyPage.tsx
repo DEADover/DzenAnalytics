@@ -69,7 +69,7 @@ export function SankeyPage() {
       icon={GitFork}
       title="Потоки денег"
       hint="Весь путь денег: от источников дохода к тратам и сбережениям"
-      right={
+      info={
         <InfoPopover>
           <p>
             Слева — <InfoTerm>источники доходов</InfoTerm>, справа —{" "}

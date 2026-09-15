@@ -201,7 +201,7 @@ export function CalendarPage() {
         icon={CalendarDays}
         title="Календарь"
         hint="В какие дни вы тратили или получали больше всего"
-        right={
+        info={
           <InfoPopover>
             <p>
               Каждая клетка — день года, её цвет — сколько в этот день{" "}

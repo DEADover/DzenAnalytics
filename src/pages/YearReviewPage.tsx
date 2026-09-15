@@ -190,7 +190,7 @@ export function YearReviewPage() {
         icon={Sparkles}
         title={`Год в цифрах: ${year}`}
         hint="Как прошёл год в деньгах и чем отличался от прошлого"
-        right={
+        info={
           <InfoPopover>
             <p>
               Всё на странице считается за <InfoTerm>календарный год</InfoTerm> —

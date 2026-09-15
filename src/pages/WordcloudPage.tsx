@@ -78,7 +78,7 @@ export function WordcloudPage() {
         icon={Cloud}
         title="Облако слов"
         hint="Чем крупнее слово, тем чаще оно встречается"
-        right={
+        info={
           <InfoPopover>
             <p>
               Слова берём из комментариев к операциям за период и фильтры сверху,

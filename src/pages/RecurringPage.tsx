@@ -572,7 +572,7 @@ export function RecurringPage() {
         title="Регулярные платежи"
         icon={Repeat}
         hint="Что скоро спишется, что подорожало и сколько уходит в год"
-        right={
+        info={
           <InfoPopover label="Что на этой странице">
             <p>
               <InfoTerm>«Планы Дзен-мани»</InfoTerm> — то, что стоит в самом

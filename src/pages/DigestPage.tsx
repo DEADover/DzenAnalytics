@@ -55,7 +55,7 @@ export function DigestPage() {
         icon={Newspaper}
         title="Дайджест"
         hint="Что изменилось по сравнению с предыдущей неделей или месяцем"
-        right={
+        info={
           <InfoPopover>
             <p>
               Итоги считаются только по <InfoTerm>завершённым периодам</InfoTerm>:

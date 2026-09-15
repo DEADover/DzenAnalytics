@@ -110,7 +110,7 @@ export function WhatIfPage() {
         icon={FlaskConical}
         title="Что-если — сценарии"
         hint="Как изменятся сбережения, капитал и срок до FIRE"
-        right={
+        info={
           <InfoPopover>
             <p>
               За точку отсчёта берём ваши{" "}

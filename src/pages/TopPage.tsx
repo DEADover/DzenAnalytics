@@ -116,7 +116,7 @@ export function TopPage() {
         icon={TrendingUp}
         title="Топ"
         hint="Куда уходит и откуда приходит больше всего денег"
-        right={
+        info={
           <InfoPopover>
             <p>
               На что больше всего уходит денег и откуда они приходят — за период,

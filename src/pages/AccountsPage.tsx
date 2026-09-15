@@ -1535,7 +1535,7 @@ export function AccountsPage() {
         icon={Wallet}
         title="Счета"
         hint="Остатки, их история и обороты за период"
-        right={
+        info={
           tab === "capital" && (
             <InfoPopover label="Что делают фильтры на «Капитале»">
               <p>{CAPITAL_FILTERS_HINT}</p>
