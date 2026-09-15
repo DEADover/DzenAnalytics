@@ -73,6 +73,14 @@ const OP_TYPES: { value: string; label: string; hint?: string }[] = [
 ];
 
 
+/**
+ * Выбор в ряду данных (счета, категории, валюта, участники): на десктопе —
+ * своей ширины, на телефоне — по два в строку. Меню у них порталом и само
+ * держится в экране.
+ */
+const PICKER_PHONE =
+  "shrink-0 max-sm:w-auto max-sm:flex-1 max-sm:basis-[calc(50%-0.25rem)] max-sm:min-w-0";
+
 /** Служебные категории, которые держим наверху списка без заголовка группы. */
 const PINNED_CATEGORIES = ["Корректировка"];
 
@@ -404,9 +412,17 @@ export function GlobalFilters({
         {/* ── Row 1: saved filter · «Дополнительно» │ period │ reset ── */}
         {/* Обёртка НЕ инертна — на ней подсказка, почему фильтры погашены;
             инертен внутренний слой. Тот же приём, что у дат ниже. */}
+        {/* На телефоне (`max-sm`) панель раскладывается иначе, иначе она шире
+            экрана — 701 пиксель вместо 375: первой строкой сохранённый фильтр,
+            «Дополнительно» и сброс (порядок — через `order`); ниже дорожка
+            периодов, листающаяся внутри себя; месяц; даты; счета и категории
+            по два в строку; поиск. От `sm` и шире — всё как было. */}
         <div
           className={clsx(
             "flex items-center gap-2",
+            // `basis-0`, чтобы делить строку со сбросом; `relative` — для меню
+            // «Дополнительно», которое на телефоне открывается во всю эту ширину.
+            "max-sm:-order-2 max-sm:basis-0 max-sm:flex-1 max-sm:min-w-0 max-sm:relative",
             !showDataFilters && "opacity-45"
           )}
           title={!showDataFilters ? dataFiltersHint : undefined}
@@ -419,11 +435,11 @@ export function GlobalFilters({
         <FiltersMenu />
 
         {/* «Дополнительно» — right next to the filter button */}
-        <div className="relative">
+        <div className="relative max-sm:static max-sm:flex-1 max-sm:min-w-0">
           <button
             onClick={() => setAdditionalOpen((o) => !o)}
             className={clsx(
-              "btn-ghost text-xs w-52",
+              "btn-ghost text-xs w-52 max-sm:w-full",
               hasExtra && "border-accent text-accent"
             )}
             title="Дополнительные фильтры"
@@ -440,7 +456,9 @@ export function GlobalFilters({
           {additionalOpen && (
             <>
               <div className="fixed inset-0 z-[70]" onClick={() => setAdditionalOpen(false)} />
-              <div className="absolute z-[80] mt-1 left-0 w-72 card p-2 space-y-3 max-h-[70vh] overflow-auto">
+              {/* На телефоне кнопка во второй половине строки, и меню в 18rem
+                  от её левого края уезжало за экран — там оно во всю строку. */}
+              <div className="absolute z-[80] mt-1 left-0 w-72 max-sm:right-0 max-sm:w-auto card p-2 space-y-3 max-h-[70vh] overflow-auto">
                 <div>
                   <div className="caps-label mb-1.5">Тип операции</div>
                   {/* Сеткой 2×2, а не строкой: четвёртой кнопке в ряд уже не
@@ -548,6 +566,11 @@ export function GlobalFilters({
             <div
               className={clsx(
                 "flex items-center gap-2 flex-1 min-w-[220px]",
+                // Ниже `lg` период — своей строкой, а месяцу с датами разрешено
+                // уйти под пресеты. Иначе блок вставал рядом с «Дополнительно»
+                // шириной в 234 пикселя, пресеты вылезали за экран, а поля дат
+                // сжимались до 26 пикселей — вводить в них было нечего.
+                "max-lg:flex-wrap max-lg:basis-full max-sm:min-w-0",
                 !showDateRange && "opacity-45"
               )}
               title={!showDateRange ? dateRangeHint : undefined}
@@ -569,7 +592,7 @@ export function GlobalFilters({
             {/* Month picker + custom range. Fully live for both the global
                 filter store AND a page-local controlled period (Cash-flow,
                 Trends) — picking a month/range switches the page's period. */}
-            <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+            <div className="flex items-center gap-2 flex-1 min-w-[220px] max-lg:min-w-[22rem] max-sm:min-w-0 max-sm:flex-wrap max-sm:basis-full">
               <MonthPicker
                 value={currentMonthYM}
                 minYM={dataRange.minYM}
@@ -581,7 +604,7 @@ export function GlobalFilters({
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
               />
 
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-1 min-w-0 max-sm:basis-full">
                 <DateField
                   value={periodCtl.from || ""}
                   onChange={(e) =>
@@ -604,7 +627,7 @@ export function GlobalFilters({
 
             </div>
             </div>
-            <span className="w-px h-6 bg-border mx-1" />
+            <span className="w-px h-6 bg-border mx-1 max-sm:hidden" />
           </>
         }
 
@@ -622,7 +645,7 @@ export function GlobalFilters({
           // `ml-auto` pins it to the right edge of the row. When the inline date
           // controls are shown they already grow to fill the row (flex-1), so
           // this has no effect there and the reset stays next to the divider.
-          className="btn-ghost text-xs px-3 shrink-0 ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2"
+          className="btn-ghost text-xs px-3 shrink-0 ml-auto max-sm:-order-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2"
         >
           <FilterX className="w-4 h-4" />
         </button>
@@ -643,7 +666,7 @@ export function GlobalFilters({
           inert={!showDataFilters}
         >
         <MultiSelect
-          className="w-52 shrink-0"
+          className={clsx("w-52", PICKER_PHONE)}
           label="Счета"
           options={accounts}
           selected={f.accounts}
@@ -665,7 +688,7 @@ export function GlobalFilters({
         />
 
         <CategoryFilterPicker
-          className="w-52 shrink-0"
+          className={clsx("w-52", PICKER_PHONE)}
           nodes={categoryNodes}
           selected={f.categories}
           onChange={(s) => f.setSet("categories", s)}
@@ -684,7 +707,7 @@ export function GlobalFilters({
             // МЕНЮ по кнопке равнять нельзя: при `menuMinWidth={0}` оно
             // повторяло её ширину, и шапка «4 валюты · Выбрать все» ломалась на
             // две строки. Поэтому кнопке узко, а меню просторно.
-            className="w-[174px] shrink-0"
+            className={clsx("w-[174px]", PICKER_PHONE)}
             menuMinWidth={208}
             label="Валюта"
             options={currencies}
@@ -704,7 +727,7 @@ export function GlobalFilters({
 
         {userOptions.length > 1 && (
           <MultiSelect
-            className="w-52 shrink-0"
+            className={clsx("w-52", PICKER_PHONE)}
             menuMinWidth={0}
             label="Участники"
             options={userOptions}

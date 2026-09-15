@@ -176,11 +176,12 @@ export function FiltersMenu() {
   }
 
   return (
-    <div className="relative">
+    // На телефоне делит строку с «Дополнительно» поровну (см. GlobalFilters).
+    <div className="relative max-sm:flex-1 max-sm:min-w-0">
       <button
         onClick={() => setOpen((o) => !o)}
         className={clsx(
-          "relative btn-ghost text-xs w-52",
+          "relative btn-ghost text-xs w-52 max-sm:w-full",
           activeView && "text-accent2"
         )}
         title="Фильтры"

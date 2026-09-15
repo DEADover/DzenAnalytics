@@ -796,7 +796,7 @@ export function ImportPage() {
         label="Разделы настроек"
         value={settingsTab}
         onChange={setSettingsTab}
-        className="self-start -mt-1 overflow-x-auto max-w-full"
+        className="self-start -mt-1 scroll-soft-x max-w-full"
         options={[
           { value: "source", label: "Данные", icon: Database },
           { value: "operations", label: "Справочники", icon: ArrowLeftRight },
@@ -2416,14 +2416,11 @@ export function ImportPage() {
                   <span className="text-sm font-medium w-44 shrink-0">
                     Отправка правок в облако
                   </span>
-                  {/* Четыре режима на телефоне шире карточки: дорожка листается
-                      внутри себя, а не растягивает страницу. */}
                   <Segmented
                     size="sm"
                     label="Отправка правок в облако"
                     value={pushMode}
                     onChange={setPushMode}
-                    className="max-w-full overflow-x-auto"
                     options={[
                       { value: "off", label: "Выключена" },
                       { value: "manual", label: "Вручную" },

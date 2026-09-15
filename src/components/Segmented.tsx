@@ -79,7 +79,16 @@ export function Segmented<T extends string | number>({
     <div
       role={tabs ? "tablist" : "group"}
       aria-label={label}
-      className={clsx("seg-track", block && "flex w-full", className)}
+      className={clsx(
+        "seg-track",
+        // На телефоне дорожка не шире своего ряда и листается внутри себя без
+        // полосы: семь пресетов периода, четыре режима отправки или три разреза
+        // топа иначе растягивали страницу за экран. От `sm` — как было: там
+        // прокрутка подрезала бы свечение выбранного варианта.
+        "max-sm:max-w-full max-sm:scroll-soft-x",
+        block && "flex w-full",
+        className
+      )}
     >
       {options.map((o) => {
         const active = value === o.value;
