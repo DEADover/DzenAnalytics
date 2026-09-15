@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, AlertCircle, Pencil, Trash2, ShieldOff, XSquare } from "lucide-react";
+import { Copy, AlertCircle, Pencil, Trash2, ShieldOff } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useEditsStore } from "../store/useEditsStore";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { useDuplicateExclusionsStore } from "../store/useDuplicateExclusionsStore";
-import { detectDuplicates, type DuplicateGroup } from "../lib/aggregations";
+import { detectDuplicates, kindTotals, type DuplicateGroup } from "../lib/aggregations";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { operationTone } from "../lib/txKindStyle";
 import { pluralRu } from "../lib/plural";
@@ -22,6 +22,7 @@ import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { SectionControls } from "../components/SectionControls";
 import { Slider } from "../components/Slider";
+import { SelectionBar } from "../components/SelectionBar";
 
 export function DuplicatesPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -90,6 +91,13 @@ export function DuplicatesPage() {
     setPrevGroups(groups);
     if (selected.size > 0) setSelected(new Set());
   }
+
+  // Суммы выделенного по видам — для панели выделения, как в ленте «Операций».
+  // Операция попадает ровно в одну группу, так что сложение без повторов.
+  const selectedTotals = useMemo(
+    () => kindTotals(groups.flatMap((g) => g.txs).filter((t) => selected.has(t.id))),
+    [groups, selected]
+  );
 
   if (transactions.length === 0) return <EmptyState />;
 
@@ -234,32 +242,22 @@ export function DuplicatesPage() {
         </div>
       )}
 
-      {/* Floating bulk-action bar — appears when ≥1 row is selected. */}
       {selected.size > 0 && (
-        <div
-          role="region"
-          aria-label="Массовые действия"
-          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-3 px-4 py-2.5 rounded-xl border border-border bg-panel shadow-xl max-w-[calc(100vw-1.5rem)]"
+        <SelectionBar
+          count={selected.size}
+          totals={selectedTotals}
+          base={base}
+          onClear={() => setSelected(new Set())}
         >
-          <span className="text-sm">
-            Выбрано: <strong className="tabular-nums">{formatNum(selected.size)}</strong>
-          </span>
           <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
-            <Pencil className="w-3.5 h-3.5" />
+            <Pencil className="w-4 h-4" />
             Изменить
           </button>
           <button onClick={deleteBulk} className="btn-danger text-sm">
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-4 h-4" />
             Удалить
           </button>
-          <button
-            onClick={() => setSelected(new Set())}
-            className="btn-ghost text-sm text-muted"
-          >
-            <XSquare className="w-3.5 h-3.5" />
-            Снять выделение
-          </button>
-        </div>
+        </SelectionBar>
       )}
 
       {bulkOpen && (

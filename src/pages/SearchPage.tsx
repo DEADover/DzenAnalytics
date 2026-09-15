@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Checkbox } from "../components/Checkbox";
 import { Select } from "../components/Select";
-import { Search, Calendar, Coins, Tag, X, Pencil, Trash2, XSquare } from "lucide-react";
+import { Search, Calendar, Coins, Tag, X, Pencil, Trash2 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -15,8 +15,10 @@ import { BulkEditModal } from "../components/BulkEditModal";
 import { DataTable } from "../components/DataTable";
 import { DateField } from "../components/DateField";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
+import { kindTotals } from "../lib/aggregations";
 import type { Transaction } from "../types";
 import { SearchInput } from "../components/SearchInput";
+import { SelectionBar } from "../components/SelectionBar";
 
 
 /** Значения отбора по типу. «Возвраты» — выбор поуже, чем «Расходы»: те
@@ -143,6 +145,12 @@ export function SearchPage() {
     }
     return { inc, exp, net: inc - exp };
   }, [matches]);
+
+  // Суммы выделенного по видам — для панели выделения, как в ленте «Операций».
+  const selectedTotals = useMemo(
+    () => kindTotals(matches.filter((t) => selected.has(t.id))),
+    [matches, selected]
+  );
 
   function openOne(t: Transaction) {
     showDrill(t.payee || t.categoryFull, [t], "Операция");
@@ -384,32 +392,22 @@ export function SearchPage() {
         />
       )}
 
-      {/* Floating bulk-action bar — appears when ≥1 result is selected. */}
       {selected.size > 0 && (
-        <div
-          role="region"
-          aria-label="Массовые действия"
-          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-3 px-4 py-2.5 rounded-xl border border-border bg-panel shadow-xl max-w-[calc(100vw-1.5rem)]"
+        <SelectionBar
+          count={selected.size}
+          totals={selectedTotals}
+          base={base}
+          onClear={() => setSelected(new Set())}
         >
-          <span className="text-sm">
-            Выбрано: <strong className="tabular-nums">{formatNum(selected.size)}</strong>
-          </span>
           <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
-            <Pencil className="w-3.5 h-3.5" />
+            <Pencil className="w-4 h-4" />
             Изменить
           </button>
           <button onClick={deleteBulk} className="btn-danger text-sm">
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-4 h-4" />
             Удалить
           </button>
-          <button
-            onClick={() => setSelected(new Set())}
-            className="btn-ghost text-sm text-muted"
-          >
-            <XSquare className="w-3.5 h-3.5" />
-            Снять выделение
-          </button>
-        </div>
+        </SelectionBar>
       )}
 
       {bulkOpen && (
