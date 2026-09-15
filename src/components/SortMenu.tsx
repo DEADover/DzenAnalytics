@@ -52,12 +52,14 @@ export function SortMenu<V extends string>({
         <DirIcon className="w-3 h-3" />
         <ChevronDown className="w-3 h-3 opacity-60" />
       </button>
+      {/* Ширина — по самой длинной подписи, но не уже 7rem: при жёстких 7rem
+          «Удалена ↓» в «Удалённых» обрезалась многоточием. */}
       <Popover
         open={open}
         anchorRef={anchorRef}
         onClose={() => setOpen(false)}
         align="left"
-        className="w-28 card p-2"
+        className="w-max min-w-28 card p-2"
       >
         {options.map((o) => {
           const Icon = o.icon;
@@ -73,7 +75,7 @@ export function SortMenu<V extends string>({
               }`}
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />
-              <span className="flex-1 min-w-0 truncate">{o.label}</span>
+              <span className="flex-1 whitespace-nowrap">{o.label}</span>
             </button>
           );
         })}
