@@ -73,10 +73,6 @@ function devLogSink(): Plugin {
 // (no sibling files exist in the single-file release). Also strips the manifest
 // link since manifests cannot load from file://.
 function inlineStandaloneAssets(): Plugin {
-  const svgDataUri = (path: string): string => {
-    const content = readFileSync(resolve(path), "utf8");
-    return `data:image/svg+xml;base64,${Buffer.from(content).toString("base64")}`;
-  };
   const pngDataUri = (path: string): string => {
     const buf = readFileSync(resolve(path));
     return `data:image/png;base64,${buf.toString("base64")}`;
@@ -88,7 +84,7 @@ function inlineStandaloneAssets(): Plugin {
     transformIndexHtml(html) {
       // Each item: matcher regex in the source HTML → replacement href.
       const replacements: Array<[RegExp, string]> = [
-        [/href="\.\/favicon\.svg"/g, `href="${svgDataUri("public/favicon.svg")}"`],
+        [/href="\.\/favicon-48\.png"/g, `href="${pngDataUri("public/favicon-48.png")}"`],
         [/href="\.\/favicon-16\.png"/g, `href="${pngDataUri("public/favicon-16.png")}"`],
         [/href="\.\/favicon-32\.png"/g, `href="${pngDataUri("public/favicon-32.png")}"`],
         [

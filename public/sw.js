@@ -1,6 +1,8 @@
 // DzenAnalytics service worker
 // Cache-first для статических ассетов, network-first для HTML.
-const VERSION = "v1";
+// v2 — новый знак «DA»: иконки лежат по прежним адресам, и без смены версии
+// кэш «сначала из кэша» ещё долго отдавал бы старые.
+const VERSION = "v2";
 const STATIC_CACHE = `dzen-static-${VERSION}`;
 const RUNTIME_CACHE = `dzen-runtime-${VERSION}`;
 
@@ -8,8 +10,9 @@ const PRECACHE = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/icon.svg",
-  "/favicon.svg",
+  "/favicon-16.png",
+  "/favicon-32.png",
+  "/favicon-48.png",
 ];
 
 self.addEventListener("install", (event) => {
