@@ -27,6 +27,7 @@ import {
   dailyAllowance,
   freeSpentToday,
   freeToSpend,
+  incomeStillToCome,
   moneyBreakdown,
   planRemainder,
   savedSoFar,
@@ -136,6 +137,9 @@ export function useFreeMoney(
     let expenseToday = 0;
     const factByTag = new Map<string, number>();
     const factYesterday = new Map<string, number>();
+    // Сколько дохода по каждой категории уже пришло на счета из расчёта —
+    // вычитается из «ещё поступит» (см. `incomeStillToCome`).
+    const receivedByTag = new Map<string, number>();
     for (const t of cache.transactions) {
       if (t.deleted) continue;
       if (t.date < range.from || t.date > today) continue;
@@ -167,6 +171,7 @@ export function useFreeMoney(
         if (tag) {
           factByTag.set(tag, (factByTag.get(tag) ?? 0) - v);
           if (!isToday) factYesterday.set(tag, (factYesterday.get(tag) ?? 0) - v);
+          receivedByTag.set(tag, (receivedByTag.get(tag) ?? 0) + v);
         }
       }
     }
@@ -238,13 +243,10 @@ export function useFreeMoney(
       });
     }
 
-    // «Ещё поступит» — по каждой доходной категории БОЛЬШЕЕ из назначенного и
-    // запланированного, а не их сумма: назначенная зарплата и есть плановый
-    // доход, а не добавка к нему. Сверено на живом аккаунте: 174 600 ₽.
-    let stillToCome = 0;
-    for (const tag of new Set([...incomePlan.keys(), ...aheadIn.keys()])) {
-      stillToCome += Math.max(incomePlan.get(tag) ?? 0, aheadIn.get(tag) ?? 0);
-    }
+    // «Ещё поступит» — по каждой доходной категории большее из назначенного и
+    // запланированного МИНУС уже пришедшее (issue #100): иначе полученная
+    // зарплата считалась дважды — в балансе и в «ещё поступит».
+    const stillToCome = incomeStillToCome(incomePlan, aheadIn, receivedByTag, parents);
 
     const plan = planRemainder(planRows, aheadOut, factByTag, parents);
     const money = moneyBreakdown({ balance, stillToCome, excluded: reserve });

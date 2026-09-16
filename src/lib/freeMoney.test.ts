@@ -4,6 +4,7 @@ import {
   dailyAllowance,
   freeSpentToday,
   freeToSpend,
+  incomeStillToCome,
   moneyBreakdown,
   planRemainder,
   savedSoFar,
@@ -429,5 +430,47 @@ describe("allowanceRatio", () => {
 
   it("нулевой лимит не делится", () => {
     expect(allowanceRatio(0, 0)).toBe(0);
+  });
+});
+
+describe("incomeStillToCome — «Ещё поступит» (#100)", () => {
+  const m = (o: Record<string, number>) => new Map(Object.entries(o));
+  const roots = new Map<string, string | null>();
+
+  it("пришедший доход из «ещё поступит» уходит — иначе он считается дважды", () => {
+    // Бюджет зарплаты 100 000, зарплата уже пришла: ждать больше нечего.
+    expect(incomeStillToCome(m({ salary: 100_000 }), m({}), m({ salary: 100_000 }), roots)).toBe(0);
+    // Пришла половина — ждём вторую.
+    expect(incomeStillToCome(m({ salary: 100_000 }), m({}), m({ salary: 40_000 }), roots)).toBe(60_000);
+  });
+
+  it("пришло больше плана — остаток ноль, а не минус", () => {
+    expect(incomeStillToCome(m({ salary: 100_000 }), m({}), m({ salary: 130_000 }), roots)).toBe(0);
+  });
+
+  it("ожидаемое — большее из бюджета и назначенного, не сумма", () => {
+    expect(incomeStillToCome(m({ salary: 100_000 }), m({ salary: 120_000 }), m({}), roots)).toBe(120_000);
+    // Исполненное назначенное поступление в плане остаётся, гасит его факт.
+    expect(incomeStillToCome(m({}), m({ salary: 120_000 }), m({ salary: 120_000 }), roots)).toBe(0);
+  });
+
+  it("доход по под-категории гасит план родителя", () => {
+    const parents = new Map<string, string | null>([["advance", "salary"], ["salary", null]]);
+    expect(incomeStillToCome(m({ salary: 100_000 }), m({}), m({ advance: 30_000 }), parents)).toBe(70_000);
+  });
+
+  it("доход вне плана остаток не трогает", () => {
+    expect(incomeStillToCome(m({ salary: 100_000 }), m({}), m({ gift: 5_000 }), roots)).toBe(100_000);
+  });
+
+  it("категории считаются отдельно: перебор одной не гасит ожидание другой", () => {
+    expect(
+      incomeStillToCome(
+        m({ salary: 100_000, rent: 20_000 }),
+        m({}),
+        m({ salary: 150_000 }),
+        roots
+      )
+    ).toBe(20_000);
   });
 });

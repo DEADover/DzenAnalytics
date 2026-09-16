@@ -62,7 +62,7 @@ const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн"
   "июл", "авг", "сен", "окт", "ноя", "дек"];
 import type { DashboardModel } from "../../hooks/useDashboardModel";
 import type { FreeMoneyModel } from "../../hooks/useFreeMoney";
-import type { PlanLeft } from "../../lib/freeMoney";
+import type { BalanceMode, PlanLeft } from "../../lib/freeMoney";
 import type { PlannedOp } from "../../lib/plannedOps";
 import type { Currency } from "../../types";
 import { SectionEmpty } from "../SectionEmpty";
@@ -1321,20 +1321,39 @@ function planLines(rows: readonly PlanLeft[]): PlanLine[] {
 /**
  * Подсказка виджета. `withPlan` — стоит ли рядом список статей: у узкого
  * варианта его нет, и объяснять там вложенность под-статей не на чем.
+ *
+ * Термины — ровно те подписи, что стоят в самом виджете (issue #100): раньше
+ * подсказка объясняла «Деньги», а такой строки в виджете нет.
  */
-function freeMoneyInfo(withPlan: boolean) {
+function freeMoneyInfo(withPlan: boolean, balanceMode: BalanceMode) {
+  const opening = balanceMode === "includeOpeningBalance";
   return (
     <>
       <p>
-        Сколько можно потратить, не залезая в запланированное. Считаем как
-        Дзен-мани: <InfoTerm>деньги до конца периода</InfoTerm> минус{" "}
-        <InfoTerm>план на месяц</InfoTerm>.
+        <InfoTerm>Свободно до…</InfoTerm> — сколько можно потратить до конца
+        периода, не залезая в запланированное. Считаем как Дзен-мани:{" "}
+        {opening ? "«На счетах»" : "«Баланс периода»"} плюс «Ещё поступит»
+        минус «План на месяц».
       </p>
       <p>
-        <InfoTerm>Деньги</InfoTerm> — приход минус расход за период плюс то, что
-        ещё поступит по планам и бюджету. Остаток на счетах к началу периода не
-        считается: так настроен ваш Дзен-мани, и эту настройку мы берём у него, а
-        не заводим свою.
+        {opening ? (
+          <>
+            <InfoTerm>На счетах</InfoTerm> — сколько сейчас лежит на счетах из
+            расчёта, вместе с тем, что было к началу периода.
+          </>
+        ) : (
+          <>
+            <InfoTerm>Баланс периода</InfoTerm> — приход минус расход с начала
+            периода. Остаток на счетах к его началу не считается.
+          </>
+        )}{" "}
+        Так настроен ваш Дзен-мани, и эту настройку мы берём у него, а не
+        заводим свою.
+      </p>
+      <p>
+        <InfoTerm>Ещё поступит</InfoTerm> — доход, который ждёт бюджет и
+        назначенные поступления, за вычетом того, что уже пришло. Пришедшая
+        зарплата отсюда уходит: она уже в балансе.
       </p>
       <p>
         <InfoTerm>План на месяц</InfoTerm> — сколько ещё предстоит потратить по
@@ -1364,7 +1383,7 @@ function freeMoneyInfo(withPlan: boolean) {
         </p>
       )}
       <p>
-        <InfoTerm>Кольцо</InfoTerm> — сегодняшний день: сколько из положенного на
+        <InfoTerm>На сегодня</InfoTerm> — кольцо: сколько из положенного на
         сегодня ещё цело. Оно пустеет только от трат сверх плана, поэтому
         обычный день его не трогает. Лимит дня считается от свободных денег на
         утро: сегодняшняя трата сегодняшний же лимит не урезает.
@@ -1567,7 +1586,7 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
         title="Свободные деньги"
         to="/budgets"
         linkLabel="Бюджет"
-        info={freeMoneyInfo(true)}
+        info={freeMoneyInfo(true, f.balanceMode)}
       />
 
       {/* Две колонки: слева ответ на «сколько можно сегодня» и из чего он
@@ -1645,7 +1664,7 @@ export function FreeMoneyCompactBlock({ f, base }: { f: FreeMoneyModel; base: Cu
         title="Свободные деньги"
         to="/budgets"
         linkLabel="Бюджет"
-        info={freeMoneyInfo(false)}
+        info={freeMoneyInfo(false, f.balanceMode)}
       />
       <FreeMoneySummary f={f} base={base} />
     </>
