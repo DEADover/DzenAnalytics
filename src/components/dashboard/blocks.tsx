@@ -34,6 +34,8 @@ import {
   Area,
 } from "recharts";
 import { ArrowRight } from "lucide-react";
+import { Segmented } from "../Segmented";
+import { useFreeMoneyStore } from "../../store/useFreeMoneyStore";
 import { Link } from "react-router-dom";
 import {
   Scale, Target, TrendingUp, ArrowUpRight, ArrowUp, ArrowDown, Clock, Lightbulb, Sigma,
@@ -70,16 +72,24 @@ import { ProgressBar } from "../ProgressBar";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
 
-export function SectionLabel({ children }: { children: ReactNode }) {
+export function SectionLabel({
+  children,
+  right,
+}: {
+  children: ReactNode;
+  /** Контрол раздела в конце строки — после черты, вровень с подписью. */
+  right?: ReactNode;
+}) {
   return (
     <div className="flex items-center gap-3">
       {/* Настоящий заголовок раздела, а не просто мелкий текст: на старой
           главной не было ни одного h2–h6, и с клавиатуры страница читалась
           как одно сплошное полотно. */}
-      <h2 className="text-[11.5px] uppercase tracking-[0.12em] text-muted font-medium">
+      <h2 className="text-[11.5px] uppercase tracking-[0.12em] text-muted font-medium whitespace-nowrap">
         {children}
       </h2>
       <span className="flex-1 h-px bg-border" />
+      {right && <div className="shrink-0">{right}</div>}
     </div>
   );
 }
@@ -1415,6 +1425,37 @@ function FreeMoneyEmpty() {
  * Живёт отдельно от списка статей: в широком виджете это левая колонка, в
  * узком — всё его содержимое.
  */
+/**
+ * Как делить свободные деньги по дням — прямо в виджете. Та же настройка, что
+ * в «Настройках → Расчёты → Виджет «Свободные деньги»»: переключить метод
+ * хочется, глядя на число дня, а не уходя за ним в настройки.
+ */
+function FreeMethodSwitch() {
+  const method = useFreeMoneyStore((s) => s.method);
+  const setMethod = useFreeMoneyStore((s) => s.setMethod);
+  return (
+    <Segmented
+      size="sm"
+      tight
+      label="Как делить свободные деньги по дням"
+      value={method}
+      onChange={(v) => void setMethod(v)}
+      options={[
+        {
+          value: "cumulative",
+          label: "Накопительный",
+          title: "Лимит на день один на весь период, непотраченное копится",
+        },
+        {
+          value: "daily",
+          label: "Ежедневный",
+          title: "Остаток делится на оставшиеся дни заново каждое утро",
+        },
+      ]}
+    />
+  );
+}
+
 function FreeMoneySummary({ f, base }: { f: FreeMoneyModel; base: Currency }) {
   const { allowance, money } = f;
   // Свободных денег нет вовсе — план съел всё, что будет. Дневного лимита в
@@ -1428,7 +1469,7 @@ function FreeMoneySummary({ f, base }: { f: FreeMoneyModel; base: Currency }) {
   return (
     <div className="flex-1 flex flex-col min-h-0 divide-y divide-border">
       <div className="flex-1 flex flex-col pb-5">
-        <SectionLabel>На сегодня</SectionLabel>
+        <SectionLabel right={<FreeMethodSwitch />}>На сегодня</SectionLabel>
         <div className="flex-1 flex items-center gap-4 mt-2.5">
           <AllowanceRing ratio={noBudget ? 0 : over ? 1 : f.ratio} tone={tone} />
           <div className="min-w-0">
