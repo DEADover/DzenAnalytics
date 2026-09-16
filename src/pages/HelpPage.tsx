@@ -3686,6 +3686,13 @@ const SECTIONS: Section[] = [
               <td className="py-2 text-muted">Открыть палитру</td>
             </tr>
             <tr className="border-b border-border">
+              <td className="py-2"><kbd className="kbd">F</kbd></td>
+              <td className="py-2 text-muted">
+                Показать или спрятать панель фильтров — когда она открывается
+                по кнопке в шапке. Работает и в русской раскладке.
+              </td>
+            </tr>
+            <tr className="border-b border-border">
               <td className="py-2"><kbd className="kbd">Esc</kbd></td>
               <td className="py-2 text-muted">
                 Снять выделение · закрыть список операций / палитру

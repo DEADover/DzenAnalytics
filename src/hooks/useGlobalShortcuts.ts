@@ -1,9 +1,11 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useFiltersDockStore } from "../store/useFiltersDockStore";
 
 /**
  * Global keyboard shortcuts: ⌘/Ctrl+K and `/` open the palette; `g` followed
- * by a single key (within 1.5s) navigates to a known route.
+ * by a single key (within 1.5s) navigates to a known route; `F` shows or hides
+ * the filters panel.
  *
  * Lives in its own file (not in CommandPalette.tsx) so the component file
  * exports only React components — required for Vite/React fast-refresh.
@@ -56,6 +58,28 @@ export function useGlobalShortcuts(onOpenPalette: () => void) {
 
       const now = Date.now();
       const armed = lastG !== 0 && now - lastG < 1500;
+
+      // F — показать или спрятать панель общих фильтров (режим «По кнопке»;
+      // в режиме «На странице» панели в шапке нет, и `toggle` ничего не
+      // делает). По физической клавише (`code`), а не по букве: в русской
+      // раскладке на ней «А», и держать ради фильтра английскую незачем.
+      //
+      // Молчит с модификаторами — Ctrl/⌘+F это поиск браузера, — посреди
+      // `g`-комбинации и когда открыто окно: переключать фильтр под ним
+      // бессмысленно.
+      if (
+        e.code === "KeyF" &&
+        !armed &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !document.querySelector('[role="dialog"]')
+      ) {
+        e.preventDefault();
+        useFiltersDockStore.getState().toggle();
+        lastG = 0;
+        return;
+      }
 
       // Ждущую приставку проверяем ДО ветки «нажали g».
       //

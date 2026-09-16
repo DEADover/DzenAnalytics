@@ -428,7 +428,7 @@ export function GlobalFilters({
           // подложка, её поля, черта снизу, никаких скруглений и тени. На
           // странице — обычная карточка с двойным кантом.
           docked
-            ? "border-b border-border bg-panel/85 backdrop-blur-2xl px-4 md:px-6 py-3"
+            ? "glass border-b border-border px-4 md:px-6 py-3"
             : "card-tray p-3 md:card-pad md:p-4",
           // `inert` снимает и клики, и обход с клавиатуры, и внимание читалок —
           // одним атрибутом, без перебора всех контролов внутри.

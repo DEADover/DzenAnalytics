@@ -203,9 +203,9 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
           него, а не страницу. Под панелью оставались чёткие, лишь бледные цифры
           таблицы. На строке метка ничему не мешает — внутри строки размытия нет.
 
-          Размытие сильное, подложка почти сплошная: под шапкой должно угадываться
-          движение, но не текст. */}
-      <div className="app-header w-full px-4 md:px-6 py-3 flex items-center gap-2 sm:gap-3 md:gap-6 border-b border-border bg-panel/85 backdrop-blur-2xl">
+          Подложка — общее матовое стекло (`.glass`), та же, что у панели
+          фильтров. */}
+      <div className="app-header w-full px-4 md:px-6 py-3 flex items-center gap-2 sm:gap-3 md:gap-6 border-b border-border glass">
         {/* Знак «DA» (проба 16.09.2026). От `lg` он первым пунктом стоит в
             дорожке меню, перед «Главной», а меню прижато к левому краю. Ниже
             `lg` меню разделов в шапке нет — оно в кнопке справа, — и знак стоит
@@ -310,7 +310,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             filtersAvailable
               ? filtersOpen
                 ? "Скрыть фильтры"
-                : `Фильтры\nПериод, счета, категории и поиск${filtersActive ? " — заданы" : ""}`
+                : `Фильтры · клавиша F\nПериод, счета, категории и поиск${filtersActive ? " — заданы" : ""}`
               : "Фильтры\nНа этой странице их нет"
           }
           className={iconItem(filtersOpen && filtersAvailable)}
