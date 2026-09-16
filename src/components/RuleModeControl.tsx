@@ -415,9 +415,8 @@ export function RuleModeChip({
           aria-haspopup="dialog"
           aria-expanded={open}
           className={clsx(
-            "inline-flex items-center gap-1.5 rounded-full border pl-2 pr-1.5 py-1 text-xs whitespace-nowrap transition-colors max-w-full",
-            mode === "off" && "border-border bg-panel2 text-muted hover:text-text",
-            mode === "manual" && "border-border bg-panel2 text-text hover:border-accent/40",
+            "chip chip-sm pl-2 pr-1.5 max-w-full",
+            mode === "manual" && "text-text hover:border-accent/40",
             mode === "auto" && "border-accent/40 bg-accent/10 text-accent hover:bg-accent/15"
           )}
         >

@@ -167,7 +167,7 @@ export function ExpandChevron({
       aria-label={label}
       title={label}
       tabIndex={tabIndex}
-      className="inline-flex shrink-0 -m-0.5 p-0.5 rounded-full text-muted transition-colors hover:text-accent hover:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      className="btn-icon btn-icon-xs shrink-0 -m-0.5"
     >
       {icon}
     </button>

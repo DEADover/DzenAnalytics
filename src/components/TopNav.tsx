@@ -227,7 +227,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         {/* До `xl` у пунктов меню нет значков: при ширине 1024–1279 меню со
             значками налезало на кнопки справа. Подписи короткие и без значков
             читаются. */}
-        <nav className="seg-track seg-block hidden lg:inline-flex shrink-0">
+        <nav className="seg-track hidden lg:inline-flex shrink-0">
           <img
             src={logoDa}
             alt="DzenAnalytics"
@@ -263,7 +263,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             коробке нулевого размера, поэтому не видна, не ловит нажатий и не
             раздвигает страницу; разметка и классы — те же, что у меню. */}
         <div aria-hidden className="absolute left-0 top-0 h-0 w-0 overflow-hidden invisible pointer-events-none">
-          <div ref={measureRef} className="seg-track seg-block hidden lg:inline-flex w-max">
+          <div ref={measureRef} className="seg-track hidden lg:inline-flex w-max">
             <img src={logoDa} alt="" className="h-[26px] w-auto shrink-0 mx-2.5" />
             {headerItems.map(({ to, label, icon: Icon }) => (
               <span key={to} className={navItem(false)}>
@@ -290,7 +290,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
 
         {/* Системная дорожка. Поиск живёт здесь же: он открывает палитру
             команд, то есть тоже про приложение, а не про данные на экране. */}
-        <div className="seg-track seg-block shrink-0">
+        <div className="seg-track shrink-0">
         {/* Общие фильтры — первой кнопкой (только в режиме «По кнопке»: во
             втором режиме панель стоит на самой странице, и кнопка не нужна): панель выезжает из-под шапки поверх
             страницы с любого места прокрутки (`FiltersDock`). Точка — заданы

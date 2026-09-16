@@ -1084,7 +1084,7 @@ export function EditTransactionModal({
                     return (
                       <span
                         key={full}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-panel2 border border-border pl-1.5 pr-1 py-0.5 text-[13px] max-w-full"
+                        className="chip chip-sm pl-1.5 pr-1 py-0.5 text-[13px] text-text max-w-full"
                       >
                         {leaf ? (
                           <CategoryDot category={leaf} parent={parent} size="w-4 h-4" />
@@ -1095,7 +1095,7 @@ export function EditTransactionModal({
                         <button
                           type="button"
                           onClick={() => setExtras((list) => list.filter((e) => e !== full))}
-                          className="rounded-full p-0.5 text-muted hover:text-expense hover:bg-panel"
+                          className="btn-icon-danger btn-icon-xs"
                           aria-label={`Убрать тег ${full}`}
                         >
                           <X className="w-3.5 h-3.5" />

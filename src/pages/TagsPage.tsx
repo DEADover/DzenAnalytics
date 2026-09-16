@@ -410,7 +410,7 @@ export function TagsPage() {
               <button
                 key={t.tag}
                 onClick={() => openTag(t.tag)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-panel2 hover:border-accent hover:bg-accent/10 transition-colors"
+                className="chip py-1.5 leading-normal text-text hover:border-accent hover:bg-accent/10"
                 style={{ fontSize }}
               >
                 <TagMark tag={t.tag} mode={mode} />

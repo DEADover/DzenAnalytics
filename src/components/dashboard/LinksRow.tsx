@@ -219,10 +219,8 @@ export function LinksRow({
                 }
                 aria-label={`Убрать «${section.label}» из полоски`}
                 onClick={() => onChange(slots.map((v, j) => (j === i ? null : v)))}
-                className="absolute -top-2 right-0 w-6 h-6 rounded-full grid place-items-center
-                           bg-panel border border-border shadow-tray text-muted
-                           transition-colors duration-200
-                           hover:text-expense hover:border-expense/40
+                className="btn-icon-danger btn-icon-sm absolute -top-2 right-0 bg-panel border border-border shadow-tray
+                           hover:border-expense/40
                            disabled:opacity-40 disabled:hover:text-muted disabled:hover:border-border
                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
@@ -257,10 +255,7 @@ export function LinksRow({
                         put(picking, s.to);
                         setPicking(null);
                       }}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border
-                                 bg-panel2/60 px-3 py-1.5 text-[13px] font-medium
-                                 transition-colors duration-200
-                                 hover:border-accent/50 hover:text-accent
+                      className="pill-link text-text hover:text-accent
                                  disabled:opacity-40 disabled:hover:text-text disabled:hover:border-border
                                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                     >

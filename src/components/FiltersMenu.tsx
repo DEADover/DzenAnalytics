@@ -328,7 +328,7 @@ export function FiltersMenu() {
                       <button
                         key={v.id}
                         onClick={() => setName(v.name)}
-                        className="text-xs px-2 py-0.5 rounded-full bg-panel2 text-muted hover:text-text"
+                        className="chip chip-sm"
                         title="Перезаписать этот фильтр"
                       >
                         {v.name}

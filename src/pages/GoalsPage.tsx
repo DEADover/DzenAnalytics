@@ -637,11 +637,7 @@ function GoalCard({
             <Tooltip content="Редактировать цель">
               <button
                 onClick={() => (editing && !closing ? closeEdit() : openEdit())}
-                className={`p-1.5 rounded-full transition-colors duration-200 ${
-                  editing && !closing
-                    ? "text-accent bg-accent/10"
-                    : "text-muted hover:text-text hover:bg-panel2"
-                }`}
+                className={`btn-icon ${editing && !closing ? "text-accent bg-accent/10" : ""}`}
                 aria-label="Редактировать цель"
               >
                 <Pencil className="w-4 h-4" />

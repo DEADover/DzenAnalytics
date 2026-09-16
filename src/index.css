@@ -502,7 +502,7 @@ h2,
    * рядом с крупными числами читался как случайная сноска.
    */
   .pill-link {
-    @apply inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border
+    @apply inline-flex shrink-0 items-center gap-1.5 rounded-control-sm border border-border
            bg-panel2/60 px-3 py-1.5 text-[12.5px] font-medium text-accent
            transition-colors duration-200 hover:border-accent/50 hover:bg-panel2
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
@@ -517,8 +517,17 @@ h2,
    * же кнопка была то 36, то 38 в зависимости от соседей. Заодно кнопка теперь
    * совпадает по высоте с полем ввода: у `.input` рамка тоже есть.
    */
+  /**
+   * Скругления кнопок — углы блоков страницы, а не пилюли (16.09.2026). Шкала
+   * по высоте контрола — токены `rounded-control*` и `rounded-track*` в
+   * tailwind.config.js. Дорожки концентричны пунктам: внутренний радиус +
+   * поле 4 px.
+   *
+   * Круглыми остаются не кнопки: точки, счётчики, полоски, тумблеры, образцы
+   * цвета, аватары.
+   */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-control
            border border-transparent
            text-sm font-medium
            transition-[color,background-color,box-shadow,transform,opacity] duration-200
@@ -550,7 +559,7 @@ h2,
    * превращают столбец в рябь; на «Счетах» строк меньше, но правило одно.
    */
   .btn-icon {
-    @apply inline-flex items-center justify-center p-1.5 rounded-full text-muted
+    @apply inline-flex items-center justify-center p-1.5 rounded-control-sm text-muted
            transition-colors duration-200
            hover:text-accent hover:bg-panel2
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
@@ -567,7 +576,32 @@ h2,
    * совпадала с самим значком, и в него трудно было попасть.
    */
   .btn-icon-sm {
-    @apply p-1;
+    @apply p-1 rounded-control-xs;
+  }
+  /**
+   * Совсем мелкая, 20 × 20 со значком 16: крестик внутри чипа, кнопка в
+   * заголовке столбца — там, где даже 24 раздвинули бы строку.
+   */
+  .btn-icon-xs {
+    @apply p-0.5 rounded-control-xs;
+  }
+  /**
+   * Тихая текстовая кнопка: подпись без подложки, подложка — под курсором.
+   * Заголовок календаря («Сентябрь 2026» → выбор месяца) и подобное, где
+   * кнопка должна читаться текстом, а не контролом.
+   */
+  .btn-text {
+    @apply inline-flex items-center rounded-control-xs px-2 py-0.5 text-sm font-semibold
+           transition-colors duration-200 hover:bg-panel2
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
+  }
+  /**
+   * Крупная кнопка-призыв на главной: «Лента операций ↗», «Месячный отчёт».
+   * Разметка — в `CtaLink`; класс нужен ещё и заглушке загрузки, чтобы её
+   * силуэт совпадал с кнопкой.
+   */
+  .btn-cta {
+    @apply rounded-control-lg;
   }
 
   .btn-warn {
@@ -607,7 +641,7 @@ h2,
     height: 42px;
   }
   /**
-   * Дорожка-пилюля и её пункты — один вид на все переключатели продукта:
+   * Дорожка и её пункты — один вид на все переключатели продукта:
    * `Segmented`, меню и дорожки значков в шапке, выбор месяца.
    *
    * Прежде дорожка жила в двух десятках копий разметки по страницам и
@@ -623,18 +657,25 @@ h2,
   /* Капс и разрядку не наследует: дорожка встаёт и в шапку таблицы («Сравнение»),
      а там подпись месяца выходила «МАЙ 26 Г.». */
   .seg-track {
-    @apply inline-flex items-center gap-0.5 rounded-full p-1 bg-panel2 border border-border shadow-tray
+    @apply inline-flex items-center gap-0.5 rounded-track-sm p-1 bg-panel2 border border-border shadow-tray
            normal-case tracking-normal;
   }
+  /* Дорожка 42: пункты 32 со скруглением 12, значит сама — 16. Размер дорожки
+     задают её пункты, поэтому узнаём его по ним; `.seg-track-md` — для дорожки
+     без пунктов (`Slider`). */
+  .seg-track-md,
+  .seg-track:has(.seg-item-md, .seg-item-nav, .seg-icon-md) {
+    @apply rounded-track;
+  }
   .seg-item {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-full whitespace-nowrap font-medium
+    @apply inline-flex items-center justify-center gap-1.5 rounded-control whitespace-nowrap font-medium
            text-muted transition-colors duration-200
            hover:text-text hover:bg-panel/70
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted;
   }
   .seg-item-sm {
-    @apply px-3 py-1 text-[12.5px] leading-4;
+    @apply px-3 py-1 text-[12.5px] leading-4 rounded-control-sm;
   }
   .seg-item-md {
     @apply px-3.5 py-1.5 text-[13.5px] leading-5;
@@ -650,7 +691,7 @@ h2,
   }
   /* Значок в дорожке: 24 в дорожке 34, 32 в дорожке 42. */
   .seg-icon {
-    @apply inline-flex items-center justify-center rounded-full text-muted transition-colors duration-200
+    @apply inline-flex items-center justify-center rounded-control text-muted transition-colors duration-200
            hover:text-accent hover:bg-panel/70
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
@@ -662,28 +703,10 @@ h2,
     @apply opacity-40 cursor-not-allowed text-muted bg-transparent;
   }
   .seg-icon-sm {
-    @apply p-1;
+    @apply p-1 rounded-control-sm;
   }
   .seg-icon-md {
     @apply p-2;
-  }
-  /**
-   * Дорожка с углами блоков страницы вместо пилюли — в шапке (16.09.2026).
-   *
-   * Пара 16 / 12 повторяет поддон с карточкой (`.tray` → `.tray-core`) по
-   * концентричности: внешний радиус = внутренний + поле дорожки 4 px, и
-   * просвет между кантом и выбранным пунктом везде одинаковый. Ровно 18, как у
-   * карточек, на высоте 42 почти не отличался от пилюли — «блоком» не читался.
-   *
-   * Модификатор, а не правка `.seg-*`: переключатели разделов на страницах
-   * остаются пилюлями.
-   */
-  .seg-block {
-    @apply rounded-2xl;
-  }
-  .seg-block .seg-item,
-  .seg-block .seg-icon {
-    @apply rounded-xl;
   }
   /**
    * Выбранный пункт: заливка тоном и мягкое свечение того же цвета. Тон по
@@ -730,7 +753,7 @@ h2,
     background-color: currentColor;
   }
   .input {
-    @apply w-full bg-panel2 text-text placeholder:text-muted px-3 py-2 rounded-xl
+    @apply w-full bg-panel2 text-text placeholder:text-muted px-3 py-2 rounded-control
            border border-border transition-colors
            focus:outline-none focus:border-accent
            focus-visible:ring-2 focus-visible:ring-accent/25;
@@ -885,7 +908,7 @@ h2,
    * выбранный — то сплошной заливкой, то подложкой на 10 %.
    */
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-border bg-panel2 px-3 py-2
+    @apply inline-flex items-center gap-1.5 rounded-control border border-border bg-panel2 px-3 py-2
            text-xs leading-4 text-muted whitespace-nowrap transition-colors duration-200
            hover:text-text
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
@@ -895,7 +918,7 @@ h2,
   }
   /* Плотный — в наборе у графика («Категории по месяцам»), где чипов десятки. */
   .chip-sm {
-    @apply px-2.5 py-1;
+    @apply px-2.5 py-1 rounded-control-sm;
   }
   .chip-on,
   .chip-on:hover {

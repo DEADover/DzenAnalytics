@@ -504,10 +504,8 @@ export function GlobalFilters({
                         onClick={() => f.toggleType(t.value)}
                         title={t.hint}
                         className={clsx(
-                          "px-2 py-1 text-xs rounded-full border transition-colors duration-200",
-                          f.types.has(t.value)
-                            ? "bg-accent text-accent-fg border-accent"
-                            : "border-border text-muted hover:text-text"
+                          "chip chip-sm justify-center",
+                          f.types.has(t.value) && "chip-on"
                         )}
                       >
                         {t.label}

@@ -10,8 +10,8 @@ type Kind = "expense" | "income";
  * строке.
  */
 const SIZES = {
-  sm: { track: "p-1 text-[12.5px] leading-4", button: "w-[76px] h-6", pill: "top-1 bottom-1 left-1 w-[76px]", shift: 76 },
-  md: { track: "p-1 text-[13.5px] leading-5", button: "w-[96px] h-8", pill: "top-1 bottom-1 left-1 w-[96px]", shift: 96 },
+  sm: { track: "text-[12.5px] leading-4", button: "w-[76px] h-6 rounded-control-sm", pill: "top-1 bottom-1 left-1 w-[76px] rounded-control-sm", shift: 76 },
+  md: { track: "seg-track-md text-[13.5px] leading-5", button: "w-[96px] h-8 rounded-control", pill: "top-1 bottom-1 left-1 w-[96px] rounded-control", shift: 96 },
 } as const;
 
 /**
@@ -33,18 +33,18 @@ export function KindSwitcher({
   const dim = SIZES[size];
   return (
     <div
-      className={`relative inline-flex items-center rounded-full bg-panel2 border border-border font-medium select-none shrink-0 ${dim.track}`}
+      className={`seg-track relative gap-0 font-medium select-none shrink-0 ${dim.track}`}
     >
       <span
         aria-hidden
-        className={`absolute rounded-full bg-bg shadow border border-border transition-transform duration-200 ease-out ${dim.pill}`}
+        className={`absolute bg-bg shadow border border-border transition-transform duration-200 ease-out ${dim.pill}`}
         style={{ transform: isIncome ? `translateX(${dim.shift}px)` : "translateX(0)" }}
       />
       <button
         type="button"
         onClick={() => onChange("expense")}
         aria-pressed={!isIncome}
-        className={`relative z-10 rounded-full transition-colors ${dim.button} ${
+        className={`relative z-10 transition-colors ${dim.button} ${
           !isIncome ? "text-expense" : "text-muted hover:text-text"
         }`}
       >
@@ -54,7 +54,7 @@ export function KindSwitcher({
         type="button"
         onClick={() => onChange("income")}
         aria-pressed={isIncome}
-        className={`relative z-10 rounded-full transition-colors ${dim.button} ${
+        className={`relative z-10 transition-colors ${dim.button} ${
           isIncome ? "text-income" : "text-muted hover:text-text"
         }`}
       >

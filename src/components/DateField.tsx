@@ -248,7 +248,7 @@ function CalendarPopup({
             <button
               type="button"
               onClick={() => setMode("months")}
-              className="font-semibold text-sm px-2 py-0.5 rounded-full transition-colors hover:bg-panel2"
+              className="btn-text"
             >
               {MONTHS[view.m]} {view.y}
             </button>
@@ -319,7 +319,7 @@ function CalendarPopup({
                 setYearStart(view.y - 6);
                 setMode("years");
               }}
-              className="font-semibold text-sm px-2 py-0.5 rounded-full transition-colors hover:bg-panel2"
+              className="btn-text"
             >
               {view.y}
             </button>

@@ -126,14 +126,10 @@ export function WidgetShell({
     onShift(e.key === "ArrowRight" ? 1 : -1);
   };
 
-  const arrow =
-    "p-1 rounded-full text-muted transition-colors duration-200 " +
-    "hover:text-accent hover:bg-panel2 " +
-    "disabled:opacity-30 disabled:hover:text-muted disabled:hover:bg-transparent " +
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  const arrow = "btn-icon btn-icon-sm";
 
   const bar = (
-    <div className="pointer-events-auto flex items-center gap-1 max-w-full rounded-full bg-panel border border-border shadow-tray px-1.5 py-1.5">
+    <div className="seg-track pointer-events-auto gap-1 max-w-full bg-panel">
       {/* Ручка — только знак того, что плитку можно взять: тащится вся плитка
           целиком, и отдельная кнопка для этого не нужна. */}
       <span
@@ -456,9 +452,8 @@ function WidgetPicker({
         aria-label="Поставить сюда виджет"
         disabled={total === 0}
         className={clsx(
-          "w-10 h-10 rounded-full grid place-items-center",
-          "border border-dashed border-border text-muted bg-panel/60",
-          "transition-[color,border-color,background-color,transform] duration-200",
+          "btn btn-square-lg",
+          "border-dashed border-border text-muted bg-panel/60",
           "hover:text-accent hover:border-accent/60 hover:bg-accent/5 hover:scale-105",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
           "disabled:opacity-40 disabled:hover:scale-100 disabled:hover:text-muted",

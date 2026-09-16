@@ -113,7 +113,7 @@ export function Slider({
     <div
       className={clsx(
         "seg-track shrink-0",
-        md ? "h-[42px] gap-3 px-4 text-[13.5px] leading-5" : "h-[34px] gap-2.5 px-3 text-[12.5px] leading-4",
+        md ? "seg-track-md h-[42px] gap-3 px-4 text-[13.5px] leading-5" : "h-[34px] gap-2.5 px-3 text-[12.5px] leading-4",
         className
       )}
     >

@@ -129,12 +129,10 @@ export function InfoPopover({
         tabIndex={focusable ? undefined : -1}
         onMouseDown={focusable ? undefined : (e) => e.preventDefault()}
         className={clsx(
-          "p-1 rounded-full shrink-0",
+          "btn-icon btn-icon-sm shrink-0",
           open
             ? "text-accent bg-accent/10"
-            : tone === "expense"
-              ? "text-expense hover:bg-expense/10"
-              : "text-muted hover:text-accent hover:bg-panel2"
+            : tone === "expense" && "text-expense hover:text-expense hover:bg-expense/10"
         )}
       >
         {/* 16px, а не 20: рядом со строкой в 14px значок в 20px оказывался выше

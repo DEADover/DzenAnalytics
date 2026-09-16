@@ -188,7 +188,7 @@ export function MonthPicker({
                 <button
                   onClick={() => setViewYear((y) => y - 1)}
                   disabled={viewYear <= minY}
-                  className="p-1 rounded-full hover:text-accent hover:bg-panel/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="btn-icon btn-icon-sm"
                   title="Предыдущий год"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -197,7 +197,7 @@ export function MonthPicker({
                 <button
                   onClick={() => setViewYear((y) => y + 1)}
                   disabled={viewYear >= maxY}
-                  className="p-1 rounded-full hover:text-accent hover:bg-panel/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="btn-icon btn-icon-sm"
                   title="Следующий год"
                 >
                   <ChevronRight className="w-4 h-4" />

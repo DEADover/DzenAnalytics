@@ -17,9 +17,8 @@
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
 import clsx from "clsx";
-import { ArrowUpRight } from "lucide-react";
+import { CtaLink } from "../CtaLink";
 import {
   BlockTitle,
   CashflowBars,
@@ -279,42 +278,20 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Link
-          // Как и «Месячный отчёт» рядом: лента открывается за тот месяц,
-          // о котором весь этот экран, а не за период с прошлого раза.
-          to={`/transactions?month=${m.ym}`}
-          className={clsx(
-            "group inline-flex items-center gap-3 rounded-full bg-text text-panel font-medium",
-            sunken ? "h-[44px] pl-5 pr-2 text-[13.5px]" : "h-[52px] pl-6 pr-2.5 text-[14px]"
-          )}
-        >
+        {/* Лента и отчёт открываются за тот месяц, о котором весь этот экран,
+            а не за период с прошлого раза или всю историю. На утопленной
+            подложке вторая кнопка белая: обычная заливка там почти пропадала. */}
+        <CtaLink to={`/transactions?month=${m.ym}`} size={sunken ? "md" : "lg"}>
           Лента операций
-          <span className={clsx(
-            sunken ? "w-7 h-7" : "w-8 h-8",
-            "rounded-full bg-panel/20 grid place-items-center transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none")}>
-            <ArrowUpRight className={sunken ? "w-3.5 h-3.5" : "w-4 h-4"} aria-hidden="true" />
-          </span>
-        </Link>
-        <Link
-          // Отчёт открываем сразу за тот месяц, о котором весь этот экран:
-          // иначе с разбора августа человек попадал на всю историю и сужал
-          // период руками.
+        </CtaLink>
+        <CtaLink
           to={`/report?month=${m.ym}`}
-          // Та же высота, что у соседа: у главной кнопки её задаёт вложенный
-          // кружок, и «Месячный отчёт» рядом выглядел бы приплюснутым.
-          //
-          // Заливка и полный контраст текста — чтобы кнопка читалась как
-          // кнопка: обведённая контуром и приглушённым текстом, она
-          // сливалась с белым фоном. Второстепенной её оставляет заливка
-          // подложкой, а не чёрным, как у соседней.
-          className={clsx(
-            "inline-flex items-center rounded-full border border-border text-text font-medium transition-colors duration-200 hover:border-accent/50",
-            sunken ? "h-[44px] px-5 text-[13.5px]" : "h-[52px] px-6 text-[14px]",
-            sunken ? "bg-panel hover:bg-panel/70" : "bg-panel2 hover:bg-panel2/70"
-          )}
+          variant="secondary"
+          size={sunken ? "md" : "lg"}
+          onPlate={sunken}
         >
           Месячный отчёт
-        </Link>
+        </CtaLink>
       </div>
 
       {/* Доход и расход — двумя колонками, а не строками списка.
@@ -418,21 +395,10 @@ function HeroSplit({ m }: { m: DashboardModel }) {
           {/* Оба действия столбиком: в колонку шириной в треть карточки они
               рядом не встают, а главное из них должно остаться заметным. */}
           <div className="flex flex-col items-start gap-2.5 mt-4">
-            <Link
-              to={`/transactions?month=${m.ym}`}
-              className="group inline-flex h-[42px] items-center gap-3 rounded-full pl-5 pr-1.5 bg-text text-panel text-[13.5px] font-medium"
-            >
-              Лента операций
-              <span className="w-[30px] h-[30px] rounded-full bg-panel/20 grid place-items-center transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none">
-                <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
-              </span>
-            </Link>
-            <Link
-              to={`/report?month=${m.ym}`}
-              className="inline-flex h-[42px] items-center rounded-full px-5 bg-panel2 border border-border text-text text-[13.5px] font-medium transition-colors duration-200 hover:border-accent/50 hover:bg-panel2/70"
-            >
+            <CtaLink to={`/transactions?month=${m.ym}`}>Лента операций</CtaLink>
+            <CtaLink to={`/report?month=${m.ym}`} variant="secondary">
               Месячный отчёт
-            </Link>
+            </CtaLink>
           </div>
 
           {/* Полоса «месяц пройден» — украшение подвала колонки, и живёт она

@@ -19,8 +19,8 @@ export function DashboardSkeleton() {
           <div className="h-4 w-full max-w-[26rem] rounded bg-panel2" />
           <div className="h-4 w-3/4 rounded bg-panel2" />
           <div className="flex gap-3 pt-2">
-            <div className="h-11 w-44 rounded-full bg-panel2" />
-            <div className="h-11 w-28 rounded-full bg-panel2" />
+            <div className="btn-cta h-11 w-44 bg-panel2" />
+            <div className="btn-cta h-11 w-28 bg-panel2" />
           </div>
           <div className="mt-6 flex flex-col gap-3">
             {[0, 1, 2].map((i) => (

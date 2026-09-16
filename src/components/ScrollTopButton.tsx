@@ -20,7 +20,7 @@ export function ScrollTopButton({ threshold = 600 }: { threshold?: number }) {
   return (
     <button
       onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-      className="fixed bottom-6 right-6 z-30 w-10 h-10 rounded-full border border-border bg-panel shadow-xl flex items-center justify-center text-muted hover:text-accent transition-colors"
+      className="btn btn-square-lg fixed bottom-6 right-6 z-30 border-border bg-panel shadow-xl text-muted hover:text-accent"
       title="Наверх"
       aria-label="Вернуться к началу списка"
     >
