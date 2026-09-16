@@ -411,7 +411,10 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col">
       <TopNav onOpenPalette={() => setPaletteOpen(true)} />
-      <main className="flex-1 w-full px-4 md:px-6 py-4 md:py-6">
+      {/* Сверху воздуха меньше, чем снизу: первая строка страницы — тонкие
+          крошки раздела (PageHeader), они читаются как продолжение шапки, и
+          отбивать их наравне с остальными блоками незачем. */}
+      <main className="flex-1 w-full px-4 md:px-6 pt-3 md:pt-4 pb-4 md:pb-6">
         <Routes>
           <Route element={<PlainLayout />}>
             <Route path="/" element={<DashboardPage />} />

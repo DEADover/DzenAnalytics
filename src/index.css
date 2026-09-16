@@ -487,6 +487,9 @@ h2,
       transform: translateY(8px);
     }
   }
+  /* Метка стоит на СТРОКЕ шапки, не на `<header>`: элемент с
+     `view-transition-name` — корень размытия для потомков, и стекло панели
+     фильтров под строкой переставало размывать страницу (TopNav). */
   .app-header {
     view-transition-name: app-header;
   }

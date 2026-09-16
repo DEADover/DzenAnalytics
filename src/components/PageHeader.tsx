@@ -70,7 +70,10 @@ export function PageHeader({
   const group = sectionGroupTitle(pathname);
 
   return (
-    <div className="flex items-center flex-wrap gap-x-3 gap-y-1">
+    // `-mb-3` съедает половину шага `space-y-6`, на котором собраны все
+    // страницы: крошки — не блок содержимого, и отбивать их от первой карточки
+    // наравне с остальными блоками незачем.
+    <div className="-mb-3 flex items-center flex-wrap gap-x-3 gap-y-1">
       <div className="min-w-0 flex items-center gap-2">
         {Icon && <Icon aria-hidden className={clsx("w-4 h-4 shrink-0", iconTone)} />}
         <div className="min-w-0 flex items-center gap-1.5 text-[15px] leading-6">
