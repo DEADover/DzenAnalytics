@@ -1069,18 +1069,21 @@ h2,
   animation: donutZoomOut 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
   transform-origin: 50% 50%;
 }
-/* Панель общих фильтров вторым ярусом шапки (FiltersDock): раскрывается
-   сверху вниз, как будто шапка раздвигается, и так же складывается обратно.
-   Через `clip-path`, а не сдвиг: панель стоит на месте и просто открывается —
-   прилетающая сверху карточка читалась отдельным элементом. Уход — с заливкой,
-   после него панель прячется целиком. */
+/* Панель общих фильтров вторым ярусом шапки (FiltersDock): выезжает из-под
+   нижнего края шапки и уезжает обратно. Край задаёт контейнер с
+   `overflow: hidden` на время хода, поэтому панель не наезжает на строку шапки.
+
+   Сдвигом, а НЕ `clip-path`: `clip-path` у предка — корень размытия, и пока
+   шла анимация, матовое стекло панели ничего не размывало — под ней читался
+   текст, а в конце размытие включалось рывком. `transform` и `overflow` корнем
+   размытия не бывают. Уход — с заливкой, после него панель прячется целиком. */
 @keyframes dockIn {
-  from { clip-path: inset(0 0 100% 0); }
-  to   { clip-path: inset(0 0 0 0); }
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
 }
 @keyframes dockOut {
-  from { clip-path: inset(0 0 0 0); }
-  to   { clip-path: inset(0 0 100% 0); }
+  from { transform: translateY(0); }
+  to   { transform: translateY(-100%); }
 }
 .animate-dock-in { animation: dockIn 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
 .animate-dock-out { animation: dockOut 0.22s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
