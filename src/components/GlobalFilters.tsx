@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { Popover } from "./Popover";
 import { useFiltersDockStore } from "../store/useFiltersDockStore";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { Checkbox } from "./Checkbox";
@@ -144,6 +145,7 @@ export function GlobalFilters({
   // Period slice source: the local controller when controlled, else the store.
   // Both expose the same fields/handlers (preset/monthYM/from/to + setters).
   const periodCtl: PeriodController = controlledPeriod ? period : f;
+  const additionalRef = useRef<HTMLDivElement>(null);
   const [additionalOpen, setAdditionalOpen] = useState(false);
 
   // Archived (closed) account titles from the Zenmoney cache — used to sort the
@@ -422,11 +424,11 @@ export function GlobalFilters({
     <div className={docked ? undefined : "mb-4 md:mb-6"}>
       <div
         className={clsx(
-          // В режиме кнопки панель продолжает шапку: во всю ширину, с её же
-          // полями и чертой снизу, без скруглений и без просвета сверху. На
+          // В режиме кнопки панель — второй ярус шапки: та же подложка и то же
+          // размытие, её поля, черта снизу, никаких скруглений и тени. На
           // странице — обычная карточка с двойным кантом.
           docked
-            ? "border-b border-border bg-panel/95 backdrop-blur shadow-tray px-4 md:px-6 py-3"
+            ? "border-b border-border bg-panel/80 backdrop-blur px-4 md:px-6 py-3"
             : "card-tray p-3 md:card-pad md:p-4",
           // `inert` снимает и клики, и обход с клавиатуры, и внимание читалок —
           // одним атрибутом, без перебора всех контролов внутри.
@@ -462,7 +464,7 @@ export function GlobalFilters({
         <FiltersMenu />
 
         {/* «Дополнительно» — right next to the filter button */}
-        <div className="relative max-sm:static max-sm:flex-1 max-sm:min-w-0">
+        <div ref={additionalRef} className="relative max-sm:static max-sm:flex-1 max-sm:min-w-0">
           <button
             onClick={() => setAdditionalOpen((o) => !o)}
             className={clsx(
@@ -480,12 +482,17 @@ export function GlobalFilters({
             )}
             <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
           </button>
-          {additionalOpen && (
+          {/* Общим `Popover` в портале на body: панель фильтров живёт внутри
+              шапки, у которой размытие фона, а там `fixed` считается от самой
+              шапки — подложка «клик мимо» накрыла бы только её. Портал заодно
+              сам уводит меню в экран, если кнопка у правого края. */}
+          <Popover
+            open={additionalOpen}
+            anchorRef={additionalRef}
+            onClose={() => setAdditionalOpen(false)}
+            className="w-72 card p-2 space-y-3 max-h-[70vh] overflow-auto"
+          >
             <>
-              <div className="fixed inset-0 z-[70]" onClick={() => setAdditionalOpen(false)} />
-              {/* На телефоне кнопка во второй половине строки, и меню в 18rem
-                  от её левого края уезжало за экран — там оно во всю строку. */}
-              <div className="absolute z-[80] mt-1 left-0 w-72 max-sm:right-0 max-sm:w-auto card p-2 space-y-3 max-h-[70vh] overflow-auto">
                 <div>
                   <div className="caps-label mb-1.5">Тип операции</div>
                   {/* Сеткой 2×2, а не строкой: четвёртой кнопке в ряд уже не
@@ -571,9 +578,8 @@ export function GlobalFilters({
                     </label>
                   ))}
                 </div>
-              </div>
             </>
-          )}
+          </Popover>
         </div>
         </div>
         </div>

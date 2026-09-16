@@ -27,6 +27,7 @@ import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useSyncCommands } from "../hooks/useSyncCommands";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 import { SmoothNavLink } from "./SmoothNavLink";
+import { FiltersDock } from "./FiltersDock";
 import { fitCount, headerSections, moreGroups } from "../lib/headerNav";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
 import { useDisplayStore } from "../store/useDisplayStore";
@@ -186,9 +187,19 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   return (
     <header
       ref={headerRef}
-      className="app-header relative border-b border-border bg-panel/80 backdrop-blur sticky top-0 z-30"
+      className="app-header relative sticky top-0 z-30"
     >
-      <div className="w-full px-4 md:px-6 py-3 flex items-center gap-2 sm:gap-3 md:gap-6">
+      {/* Вторым ярусом шапки — панель общих фильтров по кнопке (FiltersDock).
+          Стоит `absolute` под нижним краем, поэтому высоту шапки не меняет и
+          страницу не сдвигает, но едет вместе с ней. */}
+      <FiltersDock />
+
+      {/* Подложка с размытием — не на самой шапке, а на её строке: панель
+          фильтров ниже такая же и должна выглядеть так же. Внутри элемента с
+          `backdrop-filter` размытие потомка берёт фоном уже его, а не страницу,
+          и панель выходила заметно прозрачнее. Заодно шапка перестала быть
+          системой отсчёта для `fixed` внутри неё. */}
+      <div className="w-full px-4 md:px-6 py-3 flex items-center gap-2 sm:gap-3 md:gap-6 border-b border-border bg-panel/80 backdrop-blur">
         {/* Знак «DA» (проба 16.09.2026). От `lg` он первым пунктом стоит в
             дорожке меню, перед «Главной», а меню прижато к левому краю. Ниже
             `lg` меню разделов в шапке нет — оно в кнопке справа, — и знак стоит

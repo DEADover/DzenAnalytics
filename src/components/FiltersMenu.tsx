@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Checkbox } from "./Checkbox";
+import { Popover } from "./Popover";
 import {
   Filter,
   ChevronDown,
@@ -40,6 +41,7 @@ export function FiltersMenu() {
   const rename = useSavedViewsStore((s) => s.rename);
   const setActiveId = useSavedViewsStore((s) => s.setActiveId);
 
+  const anchorRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [name, setName] = useState("");
@@ -177,7 +179,7 @@ export function FiltersMenu() {
 
   return (
     // На телефоне делит строку с «Дополнительно» поровну (см. GlobalFilters).
-    <div className="relative max-sm:flex-1 max-sm:min-w-0">
+    <div ref={anchorRef} className="relative max-sm:flex-1 max-sm:min-w-0">
       <button
         onClick={() => setOpen((o) => !o)}
         className={clsx(
@@ -200,10 +202,16 @@ export function FiltersMenu() {
         )}
       </button>
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-[70]" onClick={closeAll} />
-          <div className="absolute z-[80] mt-1 w-80 max-h-[70vh] overflow-auto card p-2 left-0">
+      {/* Список — общим `Popover` в портале на body: панель фильтров живёт
+          внутри шапки, у которой размытие фона, а внутри неё `fixed` считался
+          бы от самой шапки — подложка «клик мимо» накрыла бы только её. */}
+      <Popover
+        open={open}
+        anchorRef={anchorRef}
+        onClose={closeAll}
+        className="w-80 max-h-[70vh] overflow-auto card p-2"
+      >
+          <>
             {/* Без фильтрации */}
             <button
               onClick={applyDefault}
@@ -349,9 +357,8 @@ export function FiltersMenu() {
                 </div>
               </div>
             )}
-          </div>
-        </>
-      )}
+          </>
+      </Popover>
     </div>
   );
 }

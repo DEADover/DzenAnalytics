@@ -310,13 +310,20 @@ html, body, #root {
   color: rgb(var(--c-text));
 }
 
-/* Always reserve scrollbar space (both `scrollbar-gutter` for modern
-   browsers and `overflow-y: scroll` as a belt-and-braces fallback) so the
-   header/content doesn't shift left ↔ right when switching between long
-   and short pages. */
+/* Полосы прокрутки У СТРАНИЦЫ нет: на Windows и Linux она отъедала полосу
+   справа от всего содержимого, а на широких таблицах это заметно. Прокрутка
+   при этом работает как обычно — колесом, клавишами, жестом. Внутренние
+   прокручиваемые области (таблицы, списки, окна) свои полосы сохраняют: без
+   них там непонятно, что содержимое продолжается.
+   `overflow-y: scroll` оставлен, чтобы короткие и длинные страницы не прыгали
+   по ширине. */
 html {
-  scrollbar-gutter: stable;
   overflow-y: scroll;
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* Smooth in-page navigation (anchor jumps, «Наверх»), disabled for users who
@@ -1002,20 +1009,21 @@ h2,
   animation: donutZoomOut 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
   transform-origin: 50% 50%;
 }
-/* Панель общих фильтров из-под шапки (FiltersDock): выезжает вниз и
-   проявляется, уходит — вверх и гаснет. Без заливки у появления: в покое у
-   панели нет transform, иначе fixed-меню фильтров считались бы от неё. Уход —
-   с заливкой, после него панель прячется целиком. */
+/* Панель общих фильтров вторым ярусом шапки (FiltersDock): раскрывается
+   сверху вниз, как будто шапка раздвигается, и так же складывается обратно.
+   Через `clip-path`, а не сдвиг: панель стоит на месте и просто открывается —
+   прилетающая сверху карточка читалась отдельным элементом. Уход — с заливкой,
+   после него панель прячется целиком. */
 @keyframes dockIn {
-  from { opacity: 0; transform: translateY(-12px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { clip-path: inset(0 0 100% 0); }
+  to   { clip-path: inset(0 0 0 0); }
 }
 @keyframes dockOut {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(-10px); }
+  from { clip-path: inset(0 0 0 0); }
+  to   { clip-path: inset(0 0 100% 0); }
 }
-.animate-dock-in { animation: dockIn 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
-.animate-dock-out { animation: dockOut 0.18s cubic-bezier(0.4, 0, 1, 1) forwards; }
+.animate-dock-in { animation: dockIn 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
+.animate-dock-out { animation: dockOut 0.22s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
 .animate-slide { animation: drawerSlide 0.18s ease-out; }
 .animate-fade { animation: fadeIn 0.18s ease-out; }
 .animate-cat-subs { animation: catSubsIn 0.18s ease-out; }

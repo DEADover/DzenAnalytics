@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import clsx from "clsx";
 import { useFiltersDockStore } from "../store/useFiltersDockStore";
@@ -7,18 +6,23 @@ import { useFiltersDockStore } from "../store/useFiltersDockStore";
 type Phase = "hidden" | "in" | "shown" | "out";
 
 /**
- * Место под шапкой для панели общих фильтров (`useFiltersDockStore`).
+ * Полка под шапкой для панели общих фильтров (`useFiltersDockStore`).
  *
- * Лежит поверх страницы, прибитое к низу шапки, поэтому открывается с любого
- * места прокрутки и ничего не сдвигает: график, на который смотришь, остаётся
- * где был. Порталом в body — внутри шапки `fixed` считался бы от неё (у шапки
- * размытие фона).
+ * Живёт ВНУТРИ `<header>` (см. TopNav) вторым ярусом: одна подложка, одно
+ * размытие, и при упругой прокрутке вверх шапка с панелью едут вместе — раньше
+ * панель висела отдельным слоем на `body` и в этот момент уезжала под шапку,
+ * выдавая шов. Внутри шапки она стоит `absolute` под её нижним краем, поэтому
+ * высоты шапки не меняет: страница под ней не сдвигается, а `--app-header-h`
+ * остаётся прежней.
  *
- * Появление и уход — ключевыми кадрами без заливки: в покое у панели нет
- * `transform`, иначе она стала бы системой отсчёта для `fixed`-меню внутри
- * фильтров. Закрытая панель остаётся смонтированной (`hidden`): у фильтров
- * есть работа и в спрятанном виде — они подгружают сведения о счетах, без
- * которых фильтрация неполная.
+ * Разворачивается сверху вниз через `clip-path` — будто шапка раздвигается, а
+ * не прилетает отдельная карточка. Закрытая панель остаётся смонтированной
+ * (`hidden`): у фильтров есть работа и в спрятанном виде — они подгружают
+ * сведения о счетах, без которых фильтрация неполная.
+ *
+ * Внутри панели не должно быть `position: fixed`: у шапки размытие фона, и
+ * такой потомок считался бы от неё, а не от экрана. Все выпадающие списки
+ * фильтров уходят порталом на `body` (`Popover`, `MultiSelect`, даты).
  */
 export function FiltersDock() {
   const open = useFiltersDockStore((s) => s.open);
@@ -39,6 +43,16 @@ export function FiltersDock() {
     setPhase(open ? (reduce ? "shown" : "in") : reduce ? "hidden" : "out");
   }
 
+  // Страховка на случай, когда `animationend` не придёт: во вкладке в фоне
+  // анимации не идут, и панель осталась бы свёрнутой (у `dockIn` кадр «закрыто»
+  // — это полностью срезанная панель). По таймеру фаза доедет до покоя в любом
+  // случае, а если событие придёт раньше — оно же таймер и снимет.
+  useEffect(() => {
+    if (phase !== "in" && phase !== "out") return;
+    const id = window.setTimeout(() => setPhase(open ? "shown" : "hidden"), 600);
+    return () => window.clearTimeout(id);
+  }, [phase, open]);
+
   // Новый раздел — панель убираем: переход открывает страницу, а не фильтр.
   useEffect(() => {
     close();
@@ -57,16 +71,14 @@ export function FiltersDock() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, close]);
 
-  return createPortal(
+  return (
     <div
-      // Без полей по бокам: панель — продолжение шапки, во всю её ширину.
-      className="fixed inset-x-0 z-20 pointer-events-none"
-      style={{ top: "var(--app-header-h)" }}
+      // Под нижним краем шапки во всю её ширину: панель — её продолжение.
+      className="absolute left-0 right-0 top-full pointer-events-none"
       hidden={phase === "hidden"}
       inert={!open || undefined}
     >
       <div
-        ref={setDockEl}
         className={clsx(
           "pointer-events-auto",
           phase === "in" && "animate-dock-in",
@@ -76,8 +88,9 @@ export function FiltersDock() {
           if (e.target !== e.currentTarget) return;
           setPhase(open ? "shown" : "hidden");
         }}
-      />
-    </div>,
-    document.body
+      >
+        <div ref={setDockEl} />
+      </div>
+    </div>
   );
 }
