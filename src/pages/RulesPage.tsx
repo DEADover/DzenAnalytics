@@ -64,7 +64,7 @@ import { RulesExportModal } from "../components/RulesExportModal";
 import { RULES_FILE_MAX_BYTES, parseRulesFile, type RulesFileParse } from "../lib/rulesTransfer";
 
 /**
- * «Правила категоризации» — справочник правил в том же виде, что «Счета» и
+ * «Правила» — справочник правил в том же виде, что «Счета» и
  * справочники операций: карточка с панелью действий сверху и таблицей ниже,
  * иконки-действия в колонке «Действия», создание и правка — в модалке.
  *
@@ -445,7 +445,7 @@ export function RulesPage() {
     <div className="space-y-6">
       <PageHeader
         icon={Wand2}
-        title="Правила категоризации"
+        title="Правила"
       />
 
       <StatRow>

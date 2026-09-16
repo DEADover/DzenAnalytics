@@ -93,7 +93,7 @@ export const SECONDARY_GROUPS: { title: string; items: NavSection[] }[] = [
       { to: "/duplicates", label: "Дубликаты", icon: Copy, hint: "Операции, похожие на задвоенные" },
       { to: "/anomalies", label: "Аномалии", icon: Zap, hint: "Необычные траты и всплески по категориям" },
       { to: "/recurring", label: "Регулярные", icon: Repeat, hint: "Планы из Дзен-мани и найденные подписки" },
-      { to: "/rules", label: "Правила", icon: Wand2, hint: "Категории и получатели по условиям" },
+      { to: "/rules", label: "Правила", icon: Wand2, hint: "Категория, получатель, комментарий" },
       { to: "/tags", label: "Теги", icon: Hash, hint: "Операции по хэштегам и вторым категориям" },
       { to: "/wordcloud", label: "Облако слов", icon: Cloud, hint: "Частые слова в комментариях" },
       { to: "/trash", label: "Удалённые", icon: Trash2, hint: "Удалённые операции — их можно вернуть" },
