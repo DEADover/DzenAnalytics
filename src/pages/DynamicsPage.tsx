@@ -11,7 +11,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
-import { BarChart3, LineChart as LineChartIcon } from "lucide-react";
+import { Activity, BarChart3, LineChart as LineChartIcon } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters, FILTER_NONE } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -221,6 +221,7 @@ export function DynamicsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={Activity}
         title="Динамика"
         hint="Как менялись траты и доходы — в целом или у одного получателя"
       />

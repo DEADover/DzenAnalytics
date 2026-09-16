@@ -10,7 +10,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
-import { Home, ShoppingBag, PiggyBank, Info, ChevronDown, Target } from "lucide-react";
+import { PieChart as PieIcon, Home, ShoppingBag, PiggyBank, Info, ChevronDown, Target } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import {
   useFiltersStore,
@@ -113,6 +113,7 @@ export function Budget503020Page() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={PieIcon}
         title="50/30/20"
         hint="Укладываются ли ваши траты в правило 50/30/20"
       />

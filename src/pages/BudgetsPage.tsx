@@ -908,6 +908,7 @@ export function BudgetsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={Wallet}
         title="Бюджет"
         hint="Сколько ещё можно потратить по каждой статье"
       />

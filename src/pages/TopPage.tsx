@@ -113,6 +113,7 @@ export function TopPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={TrendingUp}
         title="Топ"
         hint="Куда уходит и откуда приходит больше всего денег"
         info={

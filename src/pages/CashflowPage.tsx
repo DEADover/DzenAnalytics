@@ -22,6 +22,7 @@ import {
   BarChart3,
   CalendarRange,
   Layers,
+  LineChart as LineChartIcon,
   Sparkles,
   Table as TableIcon,
 } from "lucide-react";
@@ -228,6 +229,7 @@ export function CashflowPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={LineChartIcon}
         title="Cash-flow"
         hint="Сколько остаётся после всех трат и больше ли, чем год назад"
       />

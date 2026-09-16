@@ -193,6 +193,7 @@ function CloudDeleted() {
 
   const header = (
     <PageHeader
+      icon={Trash2}
       title="Удалённые"
       hint={HINT}
       info={
@@ -311,6 +312,7 @@ function LocalDeleted() {
 
   const header = (
     <PageHeader
+      icon={Trash2}
       title="Удалённые"
       hint={HINT}
       right={

@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { useLocation } from "react-router-dom";
+import clsx from "clsx";
 import { sectionGroupTitle } from "../lib/navSections";
 
 interface Props {
@@ -7,6 +8,17 @@ interface Props {
    * Page title. Always rendered as `<h1>`.
    */
   title: string;
+  /**
+   * Optional Lucide icon (or any component that accepts `className`).
+   * When present, renders alongside the title; the icon is the
+   * page's identity-tag at-a-glance.
+   */
+  icon?: ComponentType<{ className?: string }>;
+  /**
+   * Icon colour class. Defaults to the accent; pass e.g. `text-warn` for
+   * attention pages (Аномалии, Дубликаты) so the icon keeps its semantics.
+   */
+  iconTone?: string;
   /**
    * Подпись: одной короткой строкой, что здесь можно понять или сделать.
    * Подпись раздела в меню «Ещё» (`navSections`) говорит, что внутри, — эта её
@@ -33,7 +45,8 @@ interface Props {
 /**
  * Шапка раздела — одна на все страницы.
  *
- * Одна тонкая строка: крошки «Группа / Раздел», «?» и подпись — всё в ряд. Прежде здесь стоял блок в два этажа со значком 52 в плашке, и
+ * Одна тонкая строка: значок 16, крошки «Группа / Раздел», «?» и подпись —
+ * всё в ряд. Прежде здесь стоял блок в два этажа со значком 52 в плашке, и
  * пользователи справедливо сказали, что до первых чисел остаётся полэкрана
  * (16.09.2026, выбран вариант 1 из пяти на холсте). Теперь шапка занимает
  * строку и читается как хлебные крошки, а не как обложка.
@@ -44,11 +57,15 @@ interface Props {
  *
  * Подпись на узком экране переносится второй строкой, а не прячется: она
  * короткая, и потерять её хуже, чем занять 20 px.
- *
- * Значка у названия нет (16.09.2026): в строке крошек он повторял значок
- * того же раздела в меню шапке и только сдвигал крошки от края.
  */
-export function PageHeader({ title, hint, info, right }: Props) {
+export function PageHeader({
+  title,
+  icon: Icon,
+  iconTone = "text-accent",
+  hint,
+  info,
+  right,
+}: Props) {
   const { pathname } = useLocation();
   const group = sectionGroupTitle(pathname);
 
@@ -58,10 +75,11 @@ export function PageHeader({ title, hint, info, right }: Props) {
     // наравне с остальными блоками незачем.
     //
     // `pl-1.5` — на ширину рамки поддона (`.tray` p-1.5, `.card-tray` 6 px):
-    // вровень с внешним краем карточки текст казался выдвинутым влево, глаз
+    // вровень с внешним краем карточки строка казалась выдвинутой влево, глаз
     // меряет от белой поверхности внутри рамки, а не от скруглённого канта.
     <div className="-mb-3 pl-1.5 flex items-center flex-wrap gap-x-3 gap-y-1">
       <div className="min-w-0 flex items-center gap-2">
+        {Icon && <Icon aria-hidden className={clsx("w-4 h-4 shrink-0", iconTone)} />}
         <div className="min-w-0 flex items-center gap-1.5 text-[15px] leading-6">
           {group && (
             <>

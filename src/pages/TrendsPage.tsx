@@ -17,7 +17,7 @@ import {
   Radar,
   Legend,
 } from "recharts";
-import { Calendar, Clock, Grid3x3, LineChart as LineChartIcon, Radar as RadarIcon } from "lucide-react";
+import { Activity, Calendar, Clock, Grid3x3, LineChart as LineChartIcon, Radar as RadarIcon } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { CardHeader } from "../components/CardHeader";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
@@ -173,6 +173,7 @@ export function TrendsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={Activity}
         title="Тренды"
         hint="Когда вы тратите больше всего и как это меняется"
       />

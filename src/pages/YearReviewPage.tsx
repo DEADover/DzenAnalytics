@@ -168,7 +168,7 @@ export function YearReviewPage() {
   if (!review.hasData) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Год в цифрах" hint="Как прошёл год в деньгах и чем отличался от прошлого" />
+        <PageHeader icon={Sparkles} title="Год в цифрах" hint="Как прошёл год в деньгах и чем отличался от прошлого" />
         {years.length > 0 && (
           <SectionControls>
             <YearPicker year={year} minYear={yearMin} maxYear={yearMax} onChange={setYear} size="md" />
@@ -187,6 +187,7 @@ export function YearReviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={Sparkles}
         title={`Год в цифрах: ${year}`}
         hint="Как прошёл год в деньгах и чем отличался от прошлого"
         info={

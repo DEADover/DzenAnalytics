@@ -238,6 +238,7 @@ export function GoalsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Цели"
+        icon={Target}
         hint="Успеваете ли накопить к сроку при нынешнем темпе"
         right={
           // Hidden while the add form is open — the form has its own «Отмена»,

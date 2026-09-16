@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { HeartPulse } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
@@ -51,6 +52,7 @@ export function HealthPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={HeartPulse}
         title="Финансовое здоровье"
         hint="Что в порядке, что подтянуть и далеко ли до независимости"
       />

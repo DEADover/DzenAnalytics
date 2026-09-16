@@ -432,6 +432,7 @@ export function RulesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={Wand2}
         title="Правила категоризации"
         hint="Похожие операции больше не придётся исправлять вручную"
       />

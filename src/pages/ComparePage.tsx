@@ -724,6 +724,7 @@ export function ComparePage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={GitCompare}
         title="Сравнение периодов"
         hint="Что выросло, а что сократилось по сравнению с другим периодом"
       />
