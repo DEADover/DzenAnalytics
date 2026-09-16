@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarDays,
   CalendarCheck,
   PiggyBank,
   Receipt,
@@ -198,7 +197,6 @@ export function CalendarPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={CalendarDays}
         title="Календарь"
         hint="В какие дни вы тратили или получали больше всего"
         info={

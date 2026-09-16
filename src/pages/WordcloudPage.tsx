@@ -75,7 +75,6 @@ export function WordcloudPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Cloud}
         title="Облако слов"
         hint="Чем крупнее слово, тем чаще оно встречается"
         info={

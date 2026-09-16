@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  FlaskConical,
   TrendingUp,
   TrendingDown,
   Flame,
@@ -107,7 +106,6 @@ export function WhatIfPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={FlaskConical}
         title="Что-если — сценарии"
         hint="Как изменятся сбережения, капитал и срок до FIRE"
         info={

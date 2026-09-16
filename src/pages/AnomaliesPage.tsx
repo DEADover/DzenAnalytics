@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Zap, TrendingUp } from "lucide-react";
+import { AlertTriangle, TrendingUp } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../store/useDrillStore";
@@ -85,8 +85,6 @@ export function AnomaliesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Zap}
-        iconTone="text-warn"
         title="Аномалии"
         hint="Что выбивается из ваших привычных трат"
         info={

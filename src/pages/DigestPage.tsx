@@ -52,7 +52,6 @@ export function DigestPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Newspaper}
         title="Дайджест"
         hint="Что изменилось по сравнению с предыдущей неделей или месяцем"
         info={

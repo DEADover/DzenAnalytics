@@ -66,7 +66,6 @@ export function SankeyPage() {
 
   const header = (
     <PageHeader
-      icon={GitFork}
       title="Потоки денег"
       hint="Весь путь денег: от источников дохода к тратам и сбережениям"
       info={

@@ -155,7 +155,6 @@ export function UncategorizedPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Tag}
         title="Без категории"
         hint="Примите предложенные категории или выберите свои"
       />

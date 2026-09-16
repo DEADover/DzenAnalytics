@@ -1532,7 +1532,6 @@ export function AccountsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Wallet}
         title="Счета"
         hint="Остатки, их история и обороты за период"
         info={

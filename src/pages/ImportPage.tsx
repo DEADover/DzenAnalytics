@@ -22,7 +22,6 @@ import {
   Link as LinkIcon,
   Unlink,
   Clock,
-  Settings,
   History,
   CloudDownload,
   CloudUpload,
@@ -790,7 +789,6 @@ export function ImportPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Settings}
         title="Настройки"
         hint="Данные, расчёты, оформление и бэкапы"
       />

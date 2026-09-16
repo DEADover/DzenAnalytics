@@ -6,7 +6,6 @@ import {
   Trash2,
   Eye,
   Scale,
-  ListChecks,
   List,
   ArrowUp,
   ArrowDown,
@@ -497,7 +496,6 @@ export function TransactionsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={ListChecks}
         title="Операции"
         hint="Сквозная лента операций"
       />

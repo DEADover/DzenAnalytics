@@ -537,7 +537,6 @@ export function CategoriesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={PieChartIcon}
         title="Категории"
         hint="Структура расходов и доходов по категориям"
       />

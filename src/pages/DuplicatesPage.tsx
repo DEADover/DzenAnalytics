@@ -110,8 +110,6 @@ export function DuplicatesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Copy}
-        iconTone="text-warn"
         title="Дубликаты"
         hint="Удалите лишние копии или отметьте, что операции разные"
       />

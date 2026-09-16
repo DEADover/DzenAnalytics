@@ -180,7 +180,6 @@ export function SearchPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Search}
         title="Поиск"
         hint="По получателю, комментарию, категории и счёту"
       />
