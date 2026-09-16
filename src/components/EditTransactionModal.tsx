@@ -789,6 +789,12 @@ export function EditTransactionModal({
       inAcc: inAcc.trim(),
       category: cat,
       categoryHasIncome: !!categoryMeta[cat]?.showIncome,
+      // Тип операции Дзен-мани берёт по первому тегу — под-категории, если
+      // она выбрана, иначе категории.
+      categoryExpenseOnly: (() => {
+        const m = categoryMeta[subcategory.trim()] ?? categoryMeta[cat];
+        return !!m && m.showOutcome === true && !m.showIncome;
+      })(),
     });
   }
 

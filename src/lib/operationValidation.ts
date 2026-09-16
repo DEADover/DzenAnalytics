@@ -27,6 +27,12 @@ export interface OperationInput {
   /** True when the chosen category is income-capable (tag `showIncome`) — a
    *  refund must target an EXPENSE-only category, never a dual one. */
   categoryHasIncome: boolean;
+  /**
+   * Категория известна как ТОЛЬКО расходная (у тега `showOutcome` без
+   * `showIncome`). Необязательно: без справочника Дзен-мани (CSV) это
+   * неизвестно, и проверка молчит.
+   */
+  categoryExpenseOnly?: boolean;
 }
 
 /** Synthetic local categories that have no real Zenmoney tag. */
@@ -53,6 +59,13 @@ export function validateOperation(o: OperationInput): string | null {
   }
   if (o.kind === "refund" && o.category && o.categoryHasIncome) {
     return "Возврат возможен только по расходной категории.";
+  }
+  // Зеркало правила выше. Отдельного признака «возврат» у Дзен-мани нет:
+  // приход по расходной категории он сам записывает возвратом. Сменить тип с
+  // «Возврата» на «Доход», оставив категорию, значило сохранить то же самое —
+  // и после синхронизации операция снова становилась возвратом.
+  if (o.kind === "income" && o.category && o.categoryExpenseOnly) {
+    return "Доход возможен только по доходной категории: по расходной Дзен-мани запишет его возвратом. Выберите доходную категорию или «Без категории».";
   }
   return null;
 }

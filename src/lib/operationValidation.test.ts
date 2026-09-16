@@ -66,3 +66,24 @@ describe("validateOperation", () => {
     expect(v({ kind: "expense", category: "" })).toBeNull();
   });
 });
+
+describe("validateOperation — «Возврат» → «Доход»", () => {
+  it("доход по только расходной категории не сохраняется: Дзен-мани запишет его возвратом", () => {
+    expect(v({ kind: "income", category: "Продукты", categoryExpenseOnly: true })).toMatch(
+      /доходной категории/
+    );
+  });
+  it("доход по доходной, двойной категории или без категории проходит", () => {
+    expect(v({ kind: "income", category: "Зарплата", categoryHasIncome: true })).toBeNull();
+    expect(
+      v({ kind: "income", category: "Разное", categoryHasIncome: true, categoryExpenseOnly: false })
+    ).toBeNull();
+    expect(v({ kind: "income", category: "", categoryExpenseOnly: false })).toBeNull();
+  });
+  it("без справочника (CSV) проверка молчит", () => {
+    expect(v({ kind: "income", category: "Продукты" })).toBeNull();
+  });
+  it("возврат по расходной категории по-прежнему проходит", () => {
+    expect(v({ kind: "refund", category: "Продукты", categoryExpenseOnly: true })).toBeNull();
+  });
+});
