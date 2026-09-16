@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, HashRouter } from "react-router-dom";
+import { BrowserRouter, HashRouter, MemoryRouter } from "react-router-dom";
 // Geist (Vercel) — self-hosted variable fonts, bundled so the standalone build
 // stays offline-friendly. Sans for UI, Mono for tabular numbers.
 import "@fontsource-variable/geist";
@@ -8,14 +8,29 @@ import "@fontsource-variable/geist-mono";
 import "./index.css";
 import App from "./App";
 
-// HashRouter when opened from file:// (standalone single-file release),
-// BrowserRouter when served over http(s). This is the app entry file,
-// not a hot-reloadable component module, so the fast-refresh rule
-// doesn't apply to the `Router` const here.
 const isFileProtocol =
   typeof window !== "undefined" && window.location.protocol === "file:";
+// Адреса разделов после «#» (HashRouter) — у однофайловой сборки ВСЕГДА, а не
+// только при открытии с диска. Её кладут на любой хостинг одним файлом и
+// встраивают во фрейм чужого сайта. С обычными адресами приложение переписывало
+// адрес фрейма на `/transactions` и т. п.: такого файла на сервере нет, и
+// любая перезагрузка — восстановление бэкапа, очистка данных, F5 — упиралась в
+// 404. Хэш остаётся внутри того же файла.
+// Это входной файл, а не компонент с горячей перезагрузкой, — правило
+// fast-refresh к константе `Router` не относится.
+//
+// Документ без настоящего адреса — HTML, вставленный во фрейм через `srcdoc`
+// (`about:srcdoc`) или `data:`, — не даёт собрать URL вовсе: react-router
+// падал на первом же переходе. Там разделы переключаются в памяти, без адреса.
+const hasRealUrl =
+  typeof window === "undefined" ||
+  ["http:", "https:", "file:", "blob:"].includes(window.location.protocol);
 // eslint-disable-next-line react-refresh/only-export-components
-const Router = isFileProtocol ? HashRouter : BrowserRouter;
+const Router = !hasRealUrl
+  ? MemoryRouter
+  : isFileProtocol || __STANDALONE__
+    ? HashRouter
+    : BrowserRouter;
 
 // `useTransitions={false}`: смена адреса рисуется сразу, а не в
 // `startTransition`, как по умолчанию в React Router 7. Иначе плавная смена
@@ -31,11 +46,13 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>
 );
 
-// Register service worker only when served over http(s) in production.
+// Service worker — только у обычной сборки на http(s). В однофайловой его
+// файла нет: регистрация лишь сыпала 404 в консоль хоста.
 if (
   "serviceWorker" in navigator &&
   import.meta.env.PROD &&
-  !isFileProtocol
+  !isFileProtocol &&
+  !__STANDALONE__
 ) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => {

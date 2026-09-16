@@ -105,6 +105,8 @@ export default defineConfig({
   base: standalone ? "./" : "/",
   define: {
     __APP_VERSION__: JSON.stringify(pkgVersion),
+    // Однофайловая сборка: адреса разделов — после «#», service worker не нужен.
+    __STANDALONE__: JSON.stringify(standalone),
   },
   plugins: [
     react(),
