@@ -22,9 +22,11 @@ import {
   compileRule,
   applyCategoryRules,
   describeCategoryRule,
+  planRulesImport,
   type CategoryRule,
   type StoredCategoryRule,
 } from "./useCategoryRulesStore";
+import { buildRulesFile, parseRulesFile } from "../lib/rulesTransfer";
 
 /** Правило первого поколения — то, что лежит в IndexedDB у людей. */
 function rule(p: Partial<CategoryRule>): CategoryRule {
@@ -651,5 +653,76 @@ describe("reorder — перетаскивание правил", () => {
   it("индекс за пределами списка прижимается к краю", async () => {
     await useCategoryRulesStore.getState().reorder("a", 99);
     expect(ids()).toEqual(["b", "c", "d", "a"]);
+  });
+});
+
+describe("импорт правил из файла", () => {
+  const v2 = (id: string, value: string, extra: Partial<StoredCategoryRule> = {}): StoredCategoryRule => ({
+    id,
+    enabled: true,
+    groups: [{ join: "and", conditions: [{ field: "payee", op: "contains", value, caseInsensitive: true }] }],
+    join: "and",
+    actions: [{ kind: "setCategory", value: "Еда" }],
+    createdAt: "2026-01-01",
+    ...extra,
+  });
+  const fromFile = (rules: StoredCategoryRule[]) => {
+    const parsed = parseRulesFile(JSON.stringify(buildRulesFile(rules, new Date())));
+    if (!parsed.ok) throw new Error(parsed.error);
+    return parsed.rules;
+  };
+
+  it("добавление не трогает свои правила — ни порядок, ни содержимое", async () => {
+    // На диске — смесь поколений, как у людей после долгого пользования.
+    const legacy = rule({ id: "old", value: "Пятёрочка", category: "Продукты" });
+    const mine = v2("mine", "Кофемания", { autoApply: true, title: "Кофе" });
+    disk.set("categoryRules", [legacy, mine]);
+    await useCategoryRulesStore.getState().hydrate();
+    const before = structuredClone(useCategoryRulesStore.getState().rules);
+
+    const plan = await useCategoryRulesStore
+      .getState()
+      .importRules(fromFile([v2("x", "Лента"), v2("y", "Магнит")]), "add");
+
+    const after = useCategoryRulesStore.getState().rules;
+    expect(plan).toMatchObject({ added: 2, duplicates: 0 });
+    expect(after.slice(0, 2)).toEqual(before);
+    expect(after.map((r) => r.id)).toEqual(["old", "mine", "x", "y"]);
+    expect(disk.get("categoryRules")).toEqual(JSON.parse(JSON.stringify(after)));
+  });
+
+  it("повторный импорт того же файла ничего не удваивает", async () => {
+    useCategoryRulesStore.setState({ rules: [], loaded: true });
+    const file = fromFile([v2("x", "Лента"), v2("y", "Магнит")]);
+    await useCategoryRulesStore.getState().importRules(file, "add");
+    const second = await useCategoryRulesStore.getState().importRules(file, "add");
+    expect(second).toMatchObject({ added: 0, duplicates: 2 });
+    expect(useCategoryRulesStore.getState().rules).toHaveLength(2);
+  });
+
+  it("экспорт → импорт на чистое устройство даёт те же правила", async () => {
+    const source = [v2("a", "Лента", { schedule: { every: "day", depth: "month" }, autoApply: true }), v2("b", "Магнит", { enabled: false })];
+    useCategoryRulesStore.setState({ rules: [], loaded: true });
+    await useCategoryRulesStore.getState().importRules(fromFile(source), "add");
+    expect(useCategoryRulesStore.getState().rules).toEqual(source);
+  });
+
+  it("совпадение по смыслу — дубль, даже с другим id; занятый id не перезаписывает чужое правило", () => {
+    const existing = [v2("a", "Лента")];
+    const plan = planRulesImport(existing, [v2("z", "лента"), v2("a", "Магнит")], "add");
+    expect(plan.duplicates).toBe(1);
+    expect(plan.rules[0]).toBe(existing[0]);
+    expect(plan.rules).toHaveLength(2);
+    expect(plan.rules[1].id).not.toBe("a");
+    expect(plan.rules[1].groups[0].conditions[0].value).toBe("Магнит");
+  });
+
+  it("замена оставляет только правила из файла и считает автоприменяемые", async () => {
+    useCategoryRulesStore.setState({ rules: [v2("a", "Лента")], loaded: true });
+    const plan = await useCategoryRulesStore
+      .getState()
+      .importRules(fromFile([v2("b", "Магнит", { autoApply: true }), v2("c", "Магнит")]), "replace");
+    expect(plan).toMatchObject({ added: 1, duplicates: 1, auto: 1 });
+    expect(useCategoryRulesStore.getState().rules.map((r) => r.id)).toEqual(["b"]);
   });
 });

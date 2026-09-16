@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { accountKindLabel } from "../lib/accountType";
 import { getLiveAccountsFromCache, getBrandTitlesFromCache } from "../store/useZenmoneyStore";
 import {
@@ -10,6 +10,8 @@ import {
   GripVertical,
   Pencil,
   ListChecks,
+  Download,
+  Upload,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -58,6 +60,15 @@ import { ruleModeFields, ruleModeOf, type RuleMode } from "../lib/ruleMode";
 import type { RuleSchedule } from "../lib/ruleSchedule";
 import { userEdits } from "../lib/editOrigins";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { RulesImportModal } from "../components/RulesImportModal";
+import { downloadBlob } from "../lib/downloadBlob";
+import {
+  RULES_FILE_MAX_BYTES,
+  buildRulesFile,
+  parseRulesFile,
+  rulesFileName,
+  type RulesFileParse,
+} from "../lib/rulesTransfer";
 
 /** Подпись поля, которое занимает действие, — для колонки «Что меняет». */
 const TARGET_LABELS: Record<RuleTargetField, string> = {
@@ -143,6 +154,28 @@ export function RulesPage() {
   const zenTags = token ? loadedZenTags : null;
   /** Окно «Что изменят правила» — разбор и запись за один заход. */
   const [preview, setPreview] = useState(false);
+  /** Прочитанный файл правил — пока открыто окно импорта. */
+  const [importing, setImporting] = useState<{ fileName: string; parsed: RulesFileParse } | null>(
+    null
+  );
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  function exportRules() {
+    const now = new Date();
+    const file = buildRulesFile(rules, now);
+    downloadBlob(
+      new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }),
+      rulesFileName(now)
+    );
+  }
+
+  async function openImportFile(file: File) {
+    const parsed: RulesFileParse =
+      file.size > RULES_FILE_MAX_BYTES
+        ? { ok: false, error: "Файл слишком большой для файла правил." }
+        : parseRulesFile(await file.text());
+    setImporting({ fileName: file.name, parsed });
+  }
 
   /**
    * Правила, отобранные для прогона, — по ним считается план и по ним же
@@ -568,6 +601,38 @@ export function RulesPage() {
                 <ListChecks className="w-4 h-4" aria-hidden />
                 Проверить и применить ({formatNum(plan.pending.length)})
               </button>
+              <Tooltip content="Скачать все правила файлом JSON — перенести на другое устройство или поделиться">
+                <button
+                  type="button"
+                  onClick={exportRules}
+                  disabled={rules.length === 0}
+                  className="btn-ghost btn-square shrink-0"
+                  aria-label="Экспорт правил в JSON"
+                >
+                  <Download className="w-4 h-4" aria-hidden />
+                </button>
+              </Tooltip>
+              <Tooltip content="Загрузить правила из файла JSON — перед записью покажем, что добавится">
+                <button
+                  type="button"
+                  onClick={() => importInputRef.current?.click()}
+                  className="btn-ghost btn-square shrink-0"
+                  aria-label="Импорт правил из JSON"
+                >
+                  <Upload className="w-4 h-4" aria-hidden />
+                </button>
+              </Tooltip>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void openImportFile(f);
+                  e.target.value = "";
+                }}
+              />
               <button
                 type="button"
                 onClick={() => setEditing("create")}
@@ -586,7 +651,8 @@ export function RulesPage() {
             icon={Wand2}
             title="Нет правил"
           >
-            Создайте первое правило кнопкой <strong>«Добавить»</strong> — оно
+            Создайте первое правило кнопкой <strong>«Добавить»</strong> или
+            загрузите готовые из файла JSON — правило
             будет автоматически менять категорию, получателя и комментарий
             операций по условию
           </SectionEmpty>
@@ -853,6 +919,14 @@ export function RulesPage() {
           accountGroups={accountGroups}
           onClose={() => setEditing(null)}
           onSave={saveRule}
+        />
+      )}
+
+      {importing && (
+        <RulesImportModal
+          fileName={importing.fileName}
+          parsed={importing.parsed}
+          onClose={() => setImporting(null)}
         />
       )}
 

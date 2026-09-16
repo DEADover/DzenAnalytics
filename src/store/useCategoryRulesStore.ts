@@ -112,6 +112,27 @@ interface RulesState {
   move: (id: string, dir: -1 | 1) => Promise<void>;
   /** Переставить правило на место с индексом `to` (перетаскиванием). */
   reorder: (id: string, to: number) => Promise<void>;
+  /**
+   * Правила из файла (`lib/rulesTransfer`): добавить к своим или заменить ими
+   * все. Возвращает итог — сколько записано и сколько отсеяно как дубли.
+   */
+  importRules: (
+    incoming: readonly CategoryRuleV2[],
+    mode: RulesImportMode
+  ) => Promise<RulesImportPlan>;
+}
+
+export type RulesImportMode = "add" | "replace";
+
+export interface RulesImportPlan {
+  /** Список правил после импорта — ровно то, что ляжет на диск. */
+  rules: StoredCategoryRule[];
+  /** Сколько правил из файла вошло в список. */
+  added: number;
+  /** Сколько отсеяно: такое правило уже есть или повторяется в самом файле. */
+  duplicates: number;
+  /** Сколько из вошедших применяются сами — об этом стоит сказать до записи. */
+  auto: number;
 }
 
 /** Что угодно похожее на правило: своё, из чужого бэкапа, любого поколения. */
@@ -207,6 +228,54 @@ function makeRule(r: NewRule | NewRuleV2, salt: number): StoredCategoryRule {
     id: `${Date.now()}-${salt}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: new Date().toISOString(),
   });
+}
+
+/**
+ * Что получится из импорта — без записи; этим же окно импорта считает сводку
+ * до подтверждения.
+ *
+ * При добавлении свои правила не трогаются вовсе: новые встают в конец, а
+ * совпадающие по смыслу (тот же ключ, что у `add`) пропускаются — повторный
+ * импорт того же файла ничего не удваивает. id из файла берётся, только если
+ * он свободен: правило, перенесённое файлом на второе устройство, при переносе
+ * настроек через Дзен-мани сходится с оригиналом, а не заводит копию.
+ */
+export function planRulesImport(
+  existing: readonly StoredCategoryRule[],
+  incoming: readonly CategoryRuleV2[],
+  mode: RulesImportMode,
+  now: Date = new Date()
+): RulesImportPlan {
+  const base = mode === "add" ? existing : [];
+  const keys = new Set(base.map(ruleKey));
+  const ids = new Set(base.map((r) => r.id));
+  const fresh: StoredCategoryRule[] = [];
+  let duplicates = 0;
+  let salt = 0;
+  for (const raw of incoming) {
+    const rule = normalizeRule({
+      ...raw,
+      id:
+        raw.id && !ids.has(raw.id)
+          ? raw.id
+          : `${now.getTime()}-${salt++}-${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: raw.createdAt || now.toISOString(),
+    });
+    const key = ruleKey(rule);
+    if (keys.has(key)) {
+      duplicates++;
+      continue;
+    }
+    keys.add(key);
+    ids.add(rule.id);
+    fresh.push(rule);
+  }
+  return {
+    rules: [...base, ...fresh],
+    added: fresh.length,
+    duplicates,
+    auto: fresh.filter((r) => r.autoApply).length,
+  };
 }
 
 export const useCategoryRulesStore = create<RulesState>((set, get) => ({
@@ -359,6 +428,18 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     [list[idx], list[j]] = [list[j], list[idx]];
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
+  },
+
+  importRules: async (incoming, mode) => {
+    if (!get().loaded) await get().hydrate();
+    const plan = planRulesImport(get().rules, incoming, mode);
+    // Добавлять нечего — диск не трогаем. Замена пишется всегда: «заменить на
+    // пустой список» тоже осмысленный итог, но до него окно не допустит.
+    if (mode === "add" && plan.added === 0) return plan;
+    await db.saveJSON("categoryRules", plan.rules);
+    set({ rules: plan.rules });
+    await get().reconcileRefsFromCache();
+    return plan;
   },
 
   // Перетаскивание вынимает правило и вставляет на новое место, а не меняет
