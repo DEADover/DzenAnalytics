@@ -16,6 +16,7 @@ import {
   applyDiff,
   cacheToDiffResponse,
   forceFetchFor,
+  diffChangesPlanSet,
 } from "../lib/zenmoneyCache";
 import { zenUsers, type ZenUserOption } from "../lib/zenUsers";
 import { useMembersStore } from "./useMembersStore";
@@ -780,9 +781,20 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // Перезабор планов — полный список, а не добавка: только так из кэша
       // уходят операции удалённых планов, о которых Дзен-мани сообщил
       // удалением самого плана, а не каждой операции (issue #71).
-      const nextCache = applyDiff(prevCache, diff, {
+      let nextCache = applyDiff(prevCache, diff, {
         replaceMarkers: backfill.includes("reminderMarker"),
       });
+      // Состав планов поменялся — список их операций берём целиком и заменяем
+      // им наш: только так уходит старая дата перенесённой операции, о которой
+      // сервер в diff не сообщает (issue #99). Второй запрос идёт от новой
+      // метки времени, поэтому остального почти не несёт. Упадёт — упадёт вся
+      // синхронизация, и следующая повторит оба шага с прежней метки.
+      if (!backfill.includes("reminderMarker") && diffChangesPlanSet(prevCache, diff)) {
+        const plans = await fetchDiff(token, nextCache.serverTimestamp, undefined, [
+          "reminderMarker",
+        ]);
+        nextCache = applyDiff(nextCache, plans, { replaceMarkers: true });
+      }
       await saveZenCache(nextCache);
       invalidateLiveAccounts();
       invalidateZenCache();

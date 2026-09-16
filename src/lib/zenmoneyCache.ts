@@ -212,6 +212,31 @@ function mergeReminderMarkers(
   return alive(merge(prev, inc, "reminderMarker", deletions));
 }
 
+/**
+ * Поменялся ли СОСТАВ планов — повод дозапросить их список целиком (issue #99).
+ *
+ * Перенос просроченной плановой операции на другую дату Дзен-мани делает
+ * новой операцией с новым id, а об исчезновении старой инкрементальный diff не
+ * сообщает: ни удалением, ни сменой статуса. У нас оставались обе — старая
+ * просроченная и новая будущая, — и «Запланированные операции» показывали
+ * платёж дважды. Лечила это только полная пересинхронизация.
+ *
+ * Сервер надёжно отдаёт актуальный список лишь целиком, поэтому, когда состав
+ * мог поменяться, его и просим: новая операция с незнакомым id, изменённый или
+ * удалённый план, удалённая операция. Правки уже известных операций сюда не
+ * относятся — их слияние по id и так применяет верно, и лишний запрос не
+ * нужен.
+ */
+export function diffChangesPlanSet(prev: ZenCache | null, diff: ZenDiffResponse): boolean {
+  if (!prev) return false; // полная синхронизация и так забирает список целиком
+  if ((diff.reminder?.length ?? 0) > 0) return true;
+  if ((diff.deletion ?? []).some((d) => d.object === "reminder" || d.object === "reminderMarker")) {
+    return true;
+  }
+  const known = new Set((prev.reminderMarkers ?? []).map((m) => String(m.id)));
+  return (diff.reminderMarker ?? []).some((m) => !known.has(String(m.id)));
+}
+
 export async function loadZenCache(): Promise<ZenCache | null> {
   return db.loadJSON<ZenCache>(CACHE_KEY);
 }

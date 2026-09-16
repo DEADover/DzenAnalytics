@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { applyDiff, CACHE_SCHEMA_VERSION, type ZenCache } from "./zenmoneyCache";
+import {
+  applyDiff,
+  CACHE_SCHEMA_VERSION,
+  diffChangesPlanSet,
+  type ZenCache,
+} from "./zenmoneyCache";
 import type {
   ZenAccount,
+  ZenReminderMarker,
   ZenTransaction,
   ZenDiffResponse,
 } from "./zenmoney";
@@ -202,5 +208,44 @@ describe("операции удалённого плана (#71)", () => {
       } as never
     );
     expect(next.reminders).toEqual([]);
+  });
+});
+
+describe("перенос плановой операции на другую дату (#99)", () => {
+  const marker = (id: string, date: string, reminder = "r1") =>
+    ({ id, reminder, date, state: "planned", outcome: 1000, income: 0 }) as ZenReminderMarker;
+  const overdue = marker("old", "2026-09-15");
+  const moved = marker("new", "2026-09-17");
+  const prev = cache({ reminderMarkers: [overdue] });
+
+  it("инкрементальный diff старую дату не убирает — отсюда дубль", () => {
+    const diff = { serverTimestamp: 2, reminderMarker: [moved] } as ZenDiffResponse;
+    const ids = applyDiff(prev, diff).reminderMarkers!.map((m) => m.id).sort();
+    expect(ids).toEqual(["new", "old"]);
+  });
+
+  it("полный список планов заменяет наш — дубль уходит", () => {
+    const merged = applyDiff(prev, { serverTimestamp: 2, reminderMarker: [moved] } as ZenDiffResponse);
+    const full = { serverTimestamp: 3, reminderMarker: [moved] } as ZenDiffResponse;
+    const ids = applyDiff(merged, full, { replaceMarkers: true }).reminderMarkers!.map((m) => m.id);
+    expect(ids).toEqual(["new"]);
+  });
+
+  it("список дозапрашивается, когда состав планов мог поменяться", () => {
+    // Новая операция с незнакомым id — перенос или новый план.
+    expect(diffChangesPlanSet(prev, { serverTimestamp: 2, reminderMarker: [moved] } as ZenDiffResponse)).toBe(true);
+    // Изменён или удалён сам план, удалена операция.
+    expect(diffChangesPlanSet(prev, { serverTimestamp: 2, reminder: [{ id: "r1" }] } as unknown as ZenDiffResponse)).toBe(true);
+    expect(
+      diffChangesPlanSet(prev, { serverTimestamp: 2, deletion: [del("old", "reminderMarker")] } as unknown as ZenDiffResponse)
+    ).toBe(true);
+  });
+
+  it("правка уже известной операции и чужие изменения запроса не требуют", () => {
+    const edited = { ...overdue, outcome: 1500 };
+    expect(diffChangesPlanSet(prev, { serverTimestamp: 2, reminderMarker: [edited] } as ZenDiffResponse)).toBe(false);
+    expect(diffChangesPlanSet(prev, { serverTimestamp: 2, transaction: [txn("t", "a", "a")] } as ZenDiffResponse)).toBe(false);
+    // Полная синхронизация список и так забирает целиком.
+    expect(diffChangesPlanSet(null, { serverTimestamp: 2, reminderMarker: [moved] } as ZenDiffResponse)).toBe(false);
   });
 });
