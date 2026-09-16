@@ -145,6 +145,20 @@ const newCondition = (): RuleCondition => ({
 
 const newAction = (): RuleAction => ({ id: nextId(), kind: "setCategory", value: "" });
 
+/**
+ * Применить правку строки правила и сбросить ссылку на справочник, если
+ * поменялось то, на что она указывала (значение, поле, операция, вид действия).
+ * Иначе после синхронизации старая ссылка «подтянула» бы прежнее название
+ * поверх нового, которого ещё нет в Дзен-мани (см. `lib/ruleRefs`).
+ */
+function withoutStaleRef<T extends { refId?: string }>(item: T, patch: Partial<T>): T {
+  const next = { ...item, ...patch };
+  const touched = Object.keys(patch).some((k) => k !== "caseInsensitive" && k !== "separator");
+  if (!touched || next.refId === undefined) return next;
+  const { refId: _stale, ...rest } = next;
+  return rest as T;
+}
+
 const newGroup = (): RuleConditionGroup => ({
   id: nextId(),
   join: "and",
@@ -363,7 +377,7 @@ export function RuleEditModal({
       ...d,
       groups: d.groups.map((g) => ({
         ...g,
-        conditions: g.conditions.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+        conditions: g.conditions.map((c) => (c.id === id ? withoutStaleRef(c, patch) : c)),
       })),
     }));
   }
@@ -390,7 +404,7 @@ export function RuleEditModal({
   function patchAction(id: string, patch: Partial<RuleAction>) {
     setDraft((d) => ({
       ...d,
-      actions: d.actions.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+      actions: d.actions.map((a) => (a.id === id ? withoutStaleRef(a, patch) : a)),
     }));
   }
 

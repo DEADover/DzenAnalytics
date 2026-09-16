@@ -88,6 +88,8 @@ import { formatNum } from "../lib/format";
 import { budgetCellKey } from "../lib/budgets";
 import { getZenCache, invalidateZenCache } from "../lib/zenCacheMemo";
 import { useReportPeriodStore } from "./useReportPeriodStore";
+import { useCategoryRulesStore } from "./useCategoryRulesStore";
+import { refDictionaryFromCache } from "../lib/ruleRefs";
 import type { ImportMeta } from "../types";
 
 const TOKEN_KEY = "zenmoneyToken";
@@ -809,6 +811,9 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       invalidateLiveAccounts();
       invalidateZenCache();
       useReportPeriodStore.getState().adoptZenDay(nextCache.user?.[0]?.monthStartDay);
+      // Правила — вслед за справочниками: переименованная категория, счёт или
+      // контрагент подтягивается в правила по id.
+      await useCategoryRulesStore.getState().reconcileRefs(refDictionaryFromCache(nextCache));
       const mapped = mapZenmoneyDiff(cacheToDiffResponse(nextCache));
       const isFull = fromTs === 0;
 

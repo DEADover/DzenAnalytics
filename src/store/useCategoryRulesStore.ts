@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { getZenCache } from "../lib/zenCacheMemo";
+import { reconcileRulesRefs, refDictionaryFromCache, type RefDictionary } from "../lib/ruleRefs";
 import type { Transaction } from "../types";
 import {
   allConditions,
@@ -92,6 +94,14 @@ interface RulesState {
    * Возвращает число изменённых правил.
    */
   renamePayee: (from: string, to: string) => Promise<number>;
+  /**
+   * Свести ссылки правил со справочниками Дзен-мани: подтянуть переименованные
+   * названия и проставить id там, где их ещё нет (`lib/ruleRefs`). Возвращает,
+   * было ли что переписать.
+   */
+  reconcileRefs: (dict: RefDictionary) => Promise<boolean>;
+  /** То же по кэшу синхронизации; без кэша (CSV) ничего не делает. */
+  reconcileRefsFromCache: () => Promise<boolean>;
   remove: (id: string) => Promise<void>;
   move: (id: string, dir: -1 | 1) => Promise<void>;
   /** Переставить правило на место с индексом `to` (перетаскиванием). */
@@ -204,6 +214,21 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     // диск не пишем: пересчёт идемпотентен, а лишняя запись при каждом старте
     // приложения ничего не даёт.
     set({ rules: (data || []).map((r) => normalizeRule(r)), loaded: true });
+    await get().reconcileRefsFromCache();
+  },
+
+  reconcileRefs: async (dict) => {
+    if (!get().loaded) return false;
+    const { rules, changed } = reconcileRulesRefs(get().rules, dict);
+    if (!changed) return false;
+    await db.saveJSON("categoryRules", rules);
+    set({ rules });
+    return true;
+  },
+
+  reconcileRefsFromCache: async () => {
+    const cache = await getZenCache().catch(() => null);
+    return cache ? get().reconcileRefs(refDictionaryFromCache(cache)) : false;
   },
 
   add: async (r) => {
@@ -214,6 +239,7 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     const list = [...existing, fresh];
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
+    await get().reconcileRefsFromCache();
   },
 
   addMany: async (rs) => {
@@ -233,6 +259,7 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     const list = [...existing, ...fresh];
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
+    await get().reconcileRefsFromCache();
     return fresh.length;
   },
 
@@ -296,6 +323,7 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     const list = get().rules.map((r) => (r.id === id ? normalizeRule({ ...r, ...next }) : r));
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
+    await get().reconcileRefsFromCache();
   },
 
   remove: async (id) => {
