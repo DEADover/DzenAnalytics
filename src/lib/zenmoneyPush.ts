@@ -60,7 +60,7 @@ import type {
   ZenTransaction,
 } from "./zenmoney";
 import type { ZenCache } from "./zenmoneyCache";
-import { NO_CATEGORY } from "./zenmoneyMap";
+import { NO_CATEGORY, SERVICE_CATEGORIES } from "./zenmoneyMap";
 import type { TransactionEdit } from "../store/useEditsStore";
 import type { TxKind } from "../types";
 
@@ -89,7 +89,7 @@ export interface PushBuildResult {
 
 /** Synthetic categories minted in the forward mapper. They have no
  *  real Zenmoney tag, so pushing them is impossible. */
-const SYNTHETIC_CATEGORIES = new Set(["Долг", "Перевод"]);
+const SYNTHETIC_CATEGORIES = SERVICE_CATEGORIES;
 
 /** Zenmoney account types that mark an operation as a debt/loan/credit move.
  *  Mirrors the forward mapper (`zenmoneyMap.ts`) which labels these «Долг». */
@@ -1025,10 +1025,12 @@ export function makeCategoryChecker(
     byTitle.set(t.title, list);
   }
   return (category, subcategory) => {
-    // Тег таким операциям не нужен вовсе — отправке ничего не мешает.
-    if (!category || category === NO_CATEGORY || SYNTHETIC_CATEGORIES.has(category)) {
-      return true;
-    }
+    // «Без категории» — это очистка тега, отправке ничего не мешает.
+    if (!category || category === NO_CATEGORY) return true;
+    // «Перевод» и «Долг» — ярлыки сервиса. Раньше проверка пропускала их как
+    // «тег не нужен», а отправка ту же правку отклоняла: правило записывало её,
+    // и она навсегда оставалась неотправленной.
+    if (SYNTHETIC_CATEGORIES.has(category)) return false;
     return resolveTagId(category, subcategory, byTitle, byId) !== null;
   };
 }

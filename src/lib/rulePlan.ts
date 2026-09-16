@@ -20,6 +20,7 @@ import {
 } from "./ruleEngine";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { displayPayee } from "./format";
+import { isServiceCategory } from "./zenmoneyMap";
 import type { Transaction } from "../types";
 
 /** Одно изменение поля операции: что было, что станет и нужно ли его писать. */
@@ -41,18 +42,26 @@ export interface RuleRow {
   patch: TransactionEdit;
   changes: RuleFieldChange[];
   status: "pending" | "written" | "same" | "blocked";
-  /** Категория, которой нет в справочнике Дзен-мани (для `blocked`). */
+  /** Категория, которую нельзя записать (для `blocked`), — см. `blockedReason`. */
   blockedCategory?: string;
+  /**
+   * Почему категорию нельзя записать: `missing` — её нет в справочнике
+   * Дзен-мани, `service` — это ярлык сервиса («Перевод», «Долг»), а не
+   * категория вовсе.
+   */
+  blockedReason?: CategoryBlockReason;
   /** Получатель, которого нет в справочнике Дзен-мани, — правило устарело. */
   blockedPayee?: string;
 }
+
+export type CategoryBlockReason = "missing" | "service";
 
 export interface RulePlan {
   rows: RuleRow[];
   /** Строки, которые реально изменят операцию, — только их и пишем. */
   pending: RuleRow[];
-  /** Операции, отсеянные из-за отсутствующей в Дзен-мани категории. */
-  skipped: { category: string; count: number }[];
+  /** Операции, отсеянные из-за категории, которую нельзя записать. */
+  skipped: { category: string; count: number; reason: CategoryBlockReason }[];
   skippedCount: number;
 }
 
@@ -72,6 +81,22 @@ const dash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
  * @param categoryOk «такая категория есть в Дзен-мани»; без токена — `null`.
  * @param payeeOk    «такой контрагент есть в Дзен-мани»; без токена — `null`.
  */
+/** Отсеянное по причине — окну проверки нужны разные объяснения. */
+export function skippedByReason(plan: Pick<RulePlan, "skipped">): Record<
+  CategoryBlockReason,
+  { count: number; items: RulePlan["skipped"] }
+> {
+  const out = {
+    missing: { count: 0, items: [] as RulePlan["skipped"] },
+    service: { count: 0, items: [] as RulePlan["skipped"] },
+  };
+  for (const s of plan.skipped) {
+    out[s.reason].count += s.count;
+    out[s.reason].items.push(s);
+  }
+  return out;
+}
+
 export function buildRulePlan(
   raw: Transaction[],
   rules: StoredRule[],
@@ -109,28 +134,44 @@ export function buildRulePlan(
   };
 
   const rows: RuleRow[] = [];
-  const skips = new Map<string, number>();
+  const skips = new Map<string, { category: string; count: number; reason: CategoryBlockReason }>();
+  const skip = (category: string, reason: CategoryBlockReason) => {
+    const key = `${reason}|${category}`;
+    const cur = skips.get(key);
+    if (cur) cur.count += 1;
+    else skips.set(key, { category, count: 1, reason });
+  };
 
   for (const t of raw) {
     const patch = byTx[t.id];
     if (!patch) continue;
     if (deletedSet.has(t.id)) continue;
 
-    // Категории нет в справочнике Дзен-мани — операцию пропускаем целиком.
-    // Записать получателя с комментарием, но не категорию, значило бы применить
-    // правило наполовину, и объяснить это в интерфейсе нечем.
-    if (
-      patch.categoryFull !== undefined &&
-      categoryOk &&
-      !categoryOk(patch.category ?? "", patch.subcategory ?? null)
-    ) {
-      skips.set(patch.categoryFull, (skips.get(patch.categoryFull) ?? 0) + 1);
+    // Категорию нельзя записать — операцию пропускаем целиком. Записать
+    // получателя с комментарием, но не категорию, значило бы применить правило
+    // наполовину, и объяснить это в интерфейсе нечем.
+    //
+    // «Перевод» и «Долг» отсекаем всегда, и без подключения тоже: это не
+    // категории, а ярлыки вида операции. Правило, поставившее такой ярлык
+    // расходу, превратило бы его в «перевод» только на вид, а отправка такую
+    // правку не примет никогда.
+    const categoryBlock: CategoryBlockReason | null =
+      patch.categoryFull === undefined
+        ? null
+        : isServiceCategory(patch.category)
+          ? "service"
+          : categoryOk && !categoryOk(patch.category ?? "", patch.subcategory ?? null)
+            ? "missing"
+            : null;
+    if (categoryBlock && patch.categoryFull !== undefined) {
+      skip(patch.categoryFull, categoryBlock);
       rows.push({
         tx: t,
         patch: {},
         changes: [],
         status: "blocked",
         blockedCategory: patch.categoryFull,
+        blockedReason: categoryBlock,
       });
       continue;
     }
@@ -232,7 +273,7 @@ export function buildRulePlan(
     rows.push({ tx: t, patch: toWrite, changes, status });
   }
 
-  const skipped = Array.from(skips, ([category, count]) => ({ category, count })).sort(
+  const skipped = Array.from(skips.values()).sort(
     (a, b) => b.count - a.count || a.category.localeCompare(b.category, "ru")
   );
 

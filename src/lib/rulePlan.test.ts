@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildRulePlan } from "./rulePlan";
+import { buildRulePlan, skippedByReason } from "./rulePlan";
 import type { StoredRule } from "./ruleEngine";
 import type { Transaction } from "../types";
 
@@ -194,7 +194,7 @@ describe("план применения правил", () => {
     const plan = buildRulePlan([t], [coupon], all, {}, new Set(), () => false);
     expect(plan.rows[0].status).toBe("blocked");
     expect(plan.rows[0].patch).toEqual({});
-    expect(plan.skipped).toEqual([{ category: "Доходы / Купоны", count: 1 }]);
+    expect(plan.skipped).toEqual([{ category: "Доходы / Купоны", count: 1, reason: "missing" }]);
     expect(plan.skippedCount).toBe(1);
     expect(plan.pending).toHaveLength(0);
   });
@@ -282,5 +282,75 @@ describe("устаревший получатель в правиле — issue 
     const t = tx({ id: "a", comment: "Выплата купона" });
     const plan = buildRulePlan([t], [coupon], all, {}, new Set(), null, null);
     expect(plan.rows[0].status).toBe("pending");
+  });
+});
+
+describe("«Перевод» и «Долг» в действии правила", () => {
+  /** Правило, ставящее расходу ярлык сервиса вместо категории. */
+  const toService = (label: string): StoredRule => ({
+    id: "svc",
+    enabled: true,
+    title: "Себе на карту",
+    conditions: [{ field: "comment", op: "contains", value: "себе", caseInsensitive: true }],
+    join: "and",
+    actions: [
+      { kind: "setCategory", value: label },
+      { kind: "prependComment", value: "[себе]" },
+    ],
+    createdAt: "",
+  });
+  const svc = new Set(["svc"]);
+
+  it("блокирует строку и с подключением, и без — отправка такое не примет", () => {
+    for (const label of ["Перевод", "Долг"]) {
+      for (const categoryOk of [null, anyCategory]) {
+        const t = tx({ id: "a", comment: "Перевёл себе" });
+        const plan = buildRulePlan([t], [toService(label)], svc, {}, new Set(), categoryOk);
+        expect(plan.rows).toHaveLength(1);
+        expect(plan.rows[0]).toMatchObject({
+          status: "blocked",
+          blockedCategory: label,
+          blockedReason: "service",
+        });
+        // Ни категория, ни комментарий: правило не применяется наполовину.
+        expect(plan.pending).toHaveLength(0);
+        expect(plan.skipped).toEqual([{ category: label, count: 1, reason: "service" }]);
+        const by = skippedByReason(plan);
+        expect(by.service.count).toBe(1);
+        expect(by.missing.count).toBe(0);
+      }
+    }
+  });
+
+  it("нет категории в справочнике — прежняя причина «missing»", () => {
+    const t = tx({ id: "a", comment: "Выплата купона" });
+    const plan = buildRulePlan([t], [coupon], all, {}, new Set(), () => false);
+    expect(plan.rows[0]).toMatchObject({ status: "blocked", blockedReason: "missing" });
+    expect(skippedByReason(plan).missing.count).toBe(1);
+    expect(skippedByReason(plan).service.count).toBe(0);
+  });
+
+  it("условие по «Переводу» работает как прежде", () => {
+    const byTransfer: StoredRule = {
+      id: "tr",
+      enabled: true,
+      title: "Пометить переводы",
+      conditions: [{ field: "category", op: "equals", value: "Перевод", caseInsensitive: true }],
+      join: "and",
+      actions: [{ kind: "prependComment", value: "[перевод]" }],
+      createdAt: "",
+    };
+    const t = tx({
+      id: "a",
+      kind: "transfer",
+      category: "Перевод",
+      categoryFull: "Перевод",
+      categoryFullOriginal: "Перевод",
+      comment: "между картами",
+    });
+    const plan = buildRulePlan([t], [byTransfer], new Set(["tr"]), {}, new Set(), anyCategory);
+    expect(plan.pending).toHaveLength(1);
+    expect(plan.pending[0].patch.comment).toBe("[перевод] между картами");
+    expect(plan.skippedCount).toBe(0);
   });
 });

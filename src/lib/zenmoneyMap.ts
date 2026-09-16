@@ -26,6 +26,21 @@ import { SYNTHETIC_CATEGORY_COLORS } from "./categoryColor";
  */
 export const NO_CATEGORY = "Без категории";
 
+/**
+ * Ярлыки сервиса на месте категории: «Перевод» и «Долг».
+ *
+ * Их ставит разбор по виду операции (перевод между своими счетами, движение по
+ * долговому счёту), тега с таким смыслом в Дзен-мани нет. Поэтому искать по ним
+ * можно, а записать их категорией — нельзя: отправка такую правку не примет, и
+ * она навсегда останется неотправленной.
+ */
+export const SERVICE_CATEGORIES: ReadonlySet<string> = new Set(["Перевод", "Долг"]);
+
+/** Ярлык сервиса, а не категория Дзен-мани (см. `SERVICE_CATEGORIES`). */
+export function isServiceCategory(category: string | null | undefined): boolean {
+  return !!category && SERVICE_CATEGORIES.has(category);
+}
+
 export interface CategoryMeta {
   /** CSS rgb() string or null when the tag has no colour set. */
   color: string | null;

@@ -13,6 +13,7 @@ import {
   buildTagDeletionPush,
   buildPlannedDeletions,
   detectConflicts,
+  makeCategoryChecker,
   resurrectionId,
   validateDrafts,
   type DraftFields,
@@ -1987,5 +1988,23 @@ describe("контрагенты при отправке", () => {
       1000
     );
     expect(out).toEqual([{ id: "cp-1", user: 99, title: "Ларёк у дома", changed: 1000 }]);
+  });
+});
+
+describe("makeCategoryChecker — ярлыки сервиса", () => {
+  const ok = makeCategoryChecker([
+    { id: "t-food", title: "Еда", parent: null, archive: false } as ZenTag,
+  ]);
+
+  it("«Перевод» и «Долг» записать нельзя — отправка их отклонит", () => {
+    expect(ok("Перевод", null)).toBe(false);
+    expect(ok("Долг", null)).toBe(false);
+  });
+
+  it("живая категория и очистка категории по-прежнему проходят", () => {
+    expect(ok("Еда", null)).toBe(true);
+    expect(ok("Без категории", null)).toBe(true);
+    expect(ok("", null)).toBe(true);
+    expect(ok("Нет такой", null)).toBe(false);
   });
 });

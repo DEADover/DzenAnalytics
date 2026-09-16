@@ -46,6 +46,7 @@ import { RuleModePanel } from "./RuleModeControl";
 import { ruleModeFields, ruleModeOf } from "../lib/ruleMode";
 import type { RuleSchedule } from "../lib/ruleSchedule";
 import { useDataStore } from "../store/useDataStore";
+import { isServiceCategory } from "../lib/zenmoneyMap";
 import type { Transaction } from "../types";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { InfoPopover } from "./InfoPopover";
@@ -317,6 +318,16 @@ export function RuleEditModal({
         subs: [...set].sort((x, y) => x.localeCompare(y, "ru")),
       }));
   }, [categories]);
+  /**
+   * Категории для ДЕЙСТВИЯ: живой справочник, а без подключения — история, но в
+   * обоих случаях без «Перевода» и «Долга». Это ярлыки вида операции, а не
+   * категории: отправка их не примет, и правка, записанная правилом, навсегда
+   * повисла бы неотправленной. В условиях они остаются — искать по ним можно.
+   */
+  const actionCategories = useMemo(
+    () => (liveCategories ?? categoryNodes).filter((n) => !isServiceCategory(n.name)),
+    [liveCategories, categoryNodes]
+  );
   /** Валюта отчётов — в ней считается условие по сумме. */
   const base = useDataStore((s) => s.rates.base);
   const ruleRuns = useDataStore((s) => s.ruleRuns);
@@ -829,8 +840,9 @@ export function RuleEditModal({
                           a.value.trim() ? splitCategoryFull(a.value).subcategory ?? "" : ""
                         }
                         // Записать правило может только живую категорию:
-                        // старые имена из истории отправка не примет.
-                        categories={liveCategories ?? categoryNodes}
+                        // старые имена из истории и ярлыки сервиса отправка не
+                        // примет (см. `actionCategories`).
+                        categories={actionCategories}
                         portal
                         onChange={(cat, sub) =>
                           patchAction(a.id!, { value: joinCategoryFull(cat, sub || null) })

@@ -5,7 +5,7 @@ import { useDataStore } from "../store/useDataStore";
 import { EditTransactionModal } from "./EditTransactionModal";
 import { Tooltip } from "./Tooltip";
 import clsx from "clsx";
-import { type RulePlan, type RuleRow } from "../lib/rulePlan";
+import { type RulePlan, type RuleRow, skippedByReason } from "../lib/rulePlan";
 import { formatMoney, formatNum, formatDate, displayPayee } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { CategoryDot } from "./CategoryDot";
@@ -74,6 +74,8 @@ export function RulePreviewModal({
     () => plan.pending.map((r) => r.tx.id),
     [plan]
   );
+  // Нет категории в справочнике и ярлык сервиса объясняются по-разному.
+  const { missing, service } = useMemo(() => skippedByReason(plan), [plan]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(pendingIds));
   const [applying, setApplying] = useState(false);
   // Показываем сразу то, ради чего окно чаще всего и открывают: строки к записи.
@@ -256,7 +258,9 @@ export function RulePreviewModal({
 <Badge tone={STATUS_TONE[row.status]}>
                             {STATUS_LABEL[row.status]}
                             {row.status === "blocked" && row.blockedCategory
-                              ? `: «${row.blockedCategory}»`
+                              ? row.blockedReason === "service"
+                                ? `: «${row.blockedCategory}» — ярлык сервиса`
+                                : `: «${row.blockedCategory}»`
                               : row.status === "blocked" && row.blockedPayee
                                 ? `: контрагента «${row.blockedPayee}» больше нет`
                                 : ""}
@@ -328,17 +332,29 @@ export function RulePreviewModal({
 
         {(notes.length > 0 || plan.skippedCount > 0) && (
           <div className="px-5 py-3 border-t border-border shrink-0 space-y-2">
-            {plan.skippedCount > 0 && (
+            {missing.count > 0 && (
               <Callout tone="warn">
-                {formatNum(plan.skippedCount)}{" "}
-                {pluralRu(plan.skippedCount, ["операция", "операции", "операций"])} не
+                {formatNum(missing.count)}{" "}
+                {pluralRu(missing.count, ["операция", "операции", "операций"])} не
                 записать — в справочнике Дзен-мани нет категории{" "}
-                {plan.skipped
+                {missing.items
                   .slice(0, 3)
                   .map((s) => `«${s.category}»`)
                   .join(", ")}
-                {plan.skipped.length > 3 ? ` и ещё ${plan.skipped.length - 3}` : ""}.
+                {missing.items.length > 3 ? ` и ещё ${missing.items.length - 3}` : ""}.
                 Заведите её в справочнике категорий и откройте окно снова.
+              </Callout>
+            )}
+            {/* Ярлыки сервиса заводить в справочнике бесполезно: отправка
+                отклоняет их по имени. Совет здесь другой — поправить правило. */}
+            {service.count > 0 && (
+              <Callout tone="warn">
+                {formatNum(service.count)}{" "}
+                {pluralRu(service.count, ["операция", "операции", "операций"])} не
+                записать —{" "}
+                {service.items.map((s) => `«${s.category}»`).join(" и ")} не
+                категория, а ярлык сервиса: его ставит сам вид операции. Поменяйте
+                категорию в действии правила.
               </Callout>
             )}
             {notes.length > 0 && (
