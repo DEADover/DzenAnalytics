@@ -390,6 +390,40 @@ function FieldLabel({ title, help }: { title: string; help: ReactNode }) {
  * только новое. Глубина «Всё время» подсвечена цветом предупреждения: это самая
  * дорогая настройка, и видеть её надо не открывая окно.
  */
+/**
+ * Режим правила только для чтения — тот же вид, что у `RuleModeChip`, но без
+ * окна выбора: в списках, где правило не правят, а отбирают (экспорт, импорт).
+ */
+export function RuleModeBadge({ value }: { value: RuleModeValue }) {
+  const { mode, schedule } = value;
+  const meta = MODES.find((m) => m.value === mode)!;
+  return (
+    <Tooltip content={modeSentence(value)}>
+      <span
+        className={clsx(
+          "chip chip-sm pl-2 pr-2 max-w-full cursor-default",
+          mode === "manual" && "text-text",
+          mode === "auto" && "border-accent/40 bg-accent/10 text-accent"
+        )}
+      >
+        <meta.Icon className="w-3.5 h-3.5 shrink-0" aria-hidden />
+        <span className="font-medium shrink-0">{meta.label}</span>
+        {mode === "auto" && (
+          <span
+            className={clsx(
+              "inline-flex items-center gap-1 min-w-0",
+              schedule?.depth === "all" ? "text-warn" : "opacity-70"
+            )}
+          >
+            <CalendarClock className="w-3 h-3 shrink-0" aria-hidden />
+            <span className="truncate">{scheduleShort(schedule)}</span>
+          </span>
+        )}
+      </span>
+    </Tooltip>
+  );
+}
+
 export function RuleModeChip({
   value,
   onChange,

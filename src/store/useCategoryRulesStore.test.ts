@@ -23,6 +23,7 @@ import {
   applyCategoryRules,
   describeCategoryRule,
   planRulesImport,
+  ruleImportStatuses,
   type CategoryRule,
   type StoredCategoryRule,
 } from "./useCategoryRulesStore";
@@ -724,5 +725,14 @@ describe("импорт правил из файла", () => {
       .importRules(fromFile([v2("b", "Магнит", { autoApply: true }), v2("c", "Магнит")]), "replace");
     expect(plan).toMatchObject({ added: 1, duplicates: 1, auto: 1 });
     expect(useCategoryRulesStore.getState().rules.map((r) => r.id)).toEqual(["b"]);
+  });
+
+  it("пометки для списка совпадают с тем, что импорт пропустит", () => {
+    const existing = [v2("a", "Лента")];
+    const incoming = [v2("x", "Магнит"), v2("y", "ЛЕНТА"), v2("z", "магнит")];
+    expect(ruleImportStatuses(existing, incoming, "add")).toEqual(["new", "exists", "repeat"]);
+    expect(ruleImportStatuses(existing, incoming, "replace")).toEqual(["new", "new", "repeat"]);
+    const plan = planRulesImport(existing, incoming, "add");
+    expect(plan).toMatchObject({ added: 1, duplicates: 2 });
   });
 });

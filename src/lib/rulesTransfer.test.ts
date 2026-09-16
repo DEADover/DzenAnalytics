@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   RULES_FILE_APP,
   buildRulesFile,
+  countRuleModes,
+  withRuleMode,
   parseRulesFile,
   rulesFileName,
   sanitizeImportedRule,
@@ -120,5 +122,26 @@ describe("проверка правила из файла", () => {
     const parsed = parseRulesFile(JSON.stringify([full, { id: "x" }, null]));
     expect(parsed).toMatchObject({ ok: true, invalid: 2 });
     expect(parsed.ok && parsed.rules.map((r) => r.id)).toEqual(["r1"]);
+  });
+});
+
+describe("режим правил при переносе", () => {
+  const manual = { ...full, id: "m", autoApply: undefined };
+  const off = { ...full, id: "o", enabled: false, autoApply: true };
+
+  it("«как было» ничего не меняет", () => {
+    const rules = [full, manual, off];
+    expect(withRuleMode(rules, "keep")).toEqual(rules);
+    expect(countRuleModes(rules)).toEqual({ auto: 1, manual: 1, off: 1 });
+  });
+
+  it("один режим для всех: оба поля задаются явно, расписание остаётся", () => {
+    const out = withRuleMode([full, off], "manual");
+    expect(out.map((r) => [r.enabled, r.autoApply])).toEqual([
+      [true, false],
+      [true, false],
+    ]);
+    expect(out[0].schedule).toEqual(full.schedule);
+    expect(countRuleModes(withRuleMode([full, manual], "off"))).toEqual({ auto: 0, manual: 0, off: 2 });
   });
 });

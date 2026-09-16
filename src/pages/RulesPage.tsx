@@ -19,13 +19,12 @@ import {
   type StoredCategoryRule,
 } from "../store/useCategoryRulesStore";
 import {
-  actionTarget,
+  RULE_TARGET_LABELS,
+  ruleTargets,
   compileRuleV2,
   describeRule,
   ruleHasEffect,
   ruleMatchesV2,
-  type RuleActionKind,
-  type RuleTargetField,
 } from "../lib/ruleEngine";
 import { confirm } from "../store/useConfirmStore";
 import { useDataStore } from "../store/useDataStore";
@@ -61,21 +60,8 @@ import type { RuleSchedule } from "../lib/ruleSchedule";
 import { userEdits } from "../lib/editOrigins";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { RulesImportModal } from "../components/RulesImportModal";
-import { downloadBlob } from "../lib/downloadBlob";
-import {
-  RULES_FILE_MAX_BYTES,
-  buildRulesFile,
-  parseRulesFile,
-  rulesFileName,
-  type RulesFileParse,
-} from "../lib/rulesTransfer";
-
-/** Подпись поля, которое занимает действие, — для колонки «Что меняет». */
-const TARGET_LABELS: Record<RuleTargetField, string> = {
-  category: "Категория",
-  payee: "Получатель",
-  comment: "Комментарий",
-};
+import { RulesExportModal } from "../components/RulesExportModal";
+import { RULES_FILE_MAX_BYTES, parseRulesFile, type RulesFileParse } from "../lib/rulesTransfer";
 
 /**
  * «Правила категоризации» — справочник правил в том же виде, что «Счета» и
@@ -159,15 +145,8 @@ export function RulesPage() {
     null
   );
   const importInputRef = useRef<HTMLInputElement>(null);
-
-  function exportRules() {
-    const now = new Date();
-    const file = buildRulesFile(rules, now);
-    downloadBlob(
-      new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }),
-      rulesFileName(now)
-    );
-  }
+  /** Мастер экспорта открыт. */
+  const [exporting, setExporting] = useState(false);
 
   async function openImportFile(file: File) {
     const parsed: RulesFileParse =
@@ -600,10 +579,10 @@ export function RulesPage() {
                 <ListChecks className="w-4 h-4" aria-hidden />
                 Проверить и применить ({formatNum(plan.pending.length)})
               </button>
-              <Tooltip content="Скачать все правила файлом JSON — перенести на другое устройство или поделиться">
+              <Tooltip content="Экспорт правил в файл JSON — выбрать, какие, и скачать">
                 <button
                   type="button"
-                  onClick={exportRules}
+                  onClick={() => setExporting(true)}
                   disabled={rules.length === 0}
                   className="btn-ghost btn-square shrink-0"
                   aria-label="Экспорт правил в JSON"
@@ -611,7 +590,7 @@ export function RulesPage() {
                   <Download className="w-4 h-4" aria-hidden />
                 </button>
               </Tooltip>
-              <Tooltip content="Загрузить правила из файла JSON — перед записью покажем, что добавится">
+              <Tooltip content="Импорт правил из файла JSON — выбрать, какие взять, и проверить перед записью">
                 <button
                   type="button"
                   onClick={() => importInputRef.current?.click()}
@@ -697,13 +676,7 @@ export function RulesPage() {
                 {rules.map((rule, idx) => {
                   const count = matchCounts.get(rule.id) ?? 0;
                   const checked = selectedIds.has(rule.id);
-                  const targets = Array.from(
-                    new Set(
-                      rule.actions
-                        .filter((a) => (a.value ?? "").trim())
-                        .map((a) => actionTarget(a.kind as RuleActionKind))
-                    )
-                  );
+                  const targets = ruleTargets(rule);
                   return (
                     <tr
                       key={rule.id}
@@ -834,9 +807,9 @@ export function RulesPage() {
                               <span
                                 key={t}
                                 className="pill"
-                                title={`${TARGET_LABELS[t]} изменится после кнопки «Проверить и применить»`}
+                                title={`${RULE_TARGET_LABELS[t]} изменится после кнопки «Проверить и применить»`}
                               >
-                                {TARGET_LABELS[t]}
+                                {RULE_TARGET_LABELS[t]}
                               </span>
                             ))
                           )}
@@ -920,6 +893,8 @@ export function RulesPage() {
           onSave={saveRule}
         />
       )}
+
+      {exporting && <RulesExportModal rules={rules} onClose={() => setExporting(false)} />}
 
       {importing && (
         <RulesImportModal

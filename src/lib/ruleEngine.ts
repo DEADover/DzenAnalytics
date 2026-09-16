@@ -175,6 +175,20 @@ export function actionTarget(kind: RuleActionKind): RuleTargetField {
   return "comment";
 }
 
+/** Подпись поля, которое занимает действие, — «Что меняет» в таблице и списках правил. */
+export const RULE_TARGET_LABELS: Record<RuleTargetField, string> = {
+  category: "Категория",
+  payee: "Получатель",
+  comment: "Комментарий",
+};
+
+/** Какие поля правило меняет — по заполненным действиям, без повторов, по порядку. */
+export function ruleTargets(rule: { actions: readonly RuleAction[] }): RuleTargetField[] {
+  return Array.from(
+    new Set(rule.actions.filter((a) => (a.value ?? "").trim()).map((a) => actionTarget(a.kind)))
+  );
+}
+
 /**
  * Группа условий — скобка в выражении правила.
  *

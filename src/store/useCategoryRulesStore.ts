@@ -278,6 +278,34 @@ export function planRulesImport(
   };
 }
 
+/**
+ * Пометка каждого правила из файла — для списка в мастере импорта, по порядку
+ * файла:
+ *   • `new` — такого правила нет;
+ *   • `exists` — такое же по смыслу уже есть (только при добавлении: при замене
+ *     текущие правила уходят и совпадать не с чем);
+ *   • `repeat` — повторяет правило выше в том же файле.
+ * Ключ сравнения тот же, что у импорта и `add`, — пометка не разойдётся с
+ * тем, что импорт на деле пропустит.
+ */
+export type RuleImportStatus = "new" | "exists" | "repeat";
+
+export function ruleImportStatuses(
+  existing: readonly StoredCategoryRule[],
+  incoming: readonly CategoryRuleV2[],
+  mode: RulesImportMode
+): RuleImportStatus[] {
+  const current = new Set(mode === "add" ? existing.map(ruleKey) : []);
+  const seen = new Set<string>();
+  return incoming.map((raw) => {
+    const key = ruleKey(normalizeRule({ ...raw, createdAt: raw.createdAt || "" }));
+    if (current.has(key)) return "exists";
+    if (seen.has(key)) return "repeat";
+    seen.add(key);
+    return "new";
+  });
+}
+
 export const useCategoryRulesStore = create<RulesState>((set, get) => ({
   rules: [],
   loaded: false,

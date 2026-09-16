@@ -26,6 +26,7 @@ import {
   type RuleField,
 } from "./ruleEngine";
 import type { RuleSchedule, ScheduleDepth, ScheduleEvery } from "./ruleSchedule";
+import { ruleModeFields, ruleModeOf, type RuleMode } from "./ruleMode";
 
 export const RULES_FILE_APP = "dzenanalytics";
 export const RULES_FILE_TYPE = "rules";
@@ -245,4 +246,32 @@ export function parseRulesFile(text: string): RulesFileParse {
     return { ok: false, error: "Файл правильный, но правил в нём нет." };
   }
   return { ok: true, rules, invalid };
+}
+
+/**
+ * Режим правил при переносе: как было или один для всех.
+ *
+ * Файл для другого человека удобно выгрузить «по кнопке»: его правила не
+ * начнут сами переписывать чужие операции при первой же синхронизации. Тот же
+ * выбор есть при импорте — файл мог прийти от кого угодно.
+ */
+export type RuleModeOverride = "keep" | RuleMode;
+
+/** Варианты выбора режима в мастерах экспорта и импорта. */
+export const MODE_OVERRIDE_OPTIONS: { value: RuleModeOverride; label: string }[] = [
+  { value: "keep", label: "Как в правилах" },
+  { value: "manual", label: "По кнопке" },
+  { value: "off", label: "Выключены" },
+];
+
+export function withRuleMode<R extends CategoryRuleV2>(rules: readonly R[], mode: RuleModeOverride): R[] {
+  if (mode === "keep") return [...rules];
+  return rules.map((r) => (ruleModeOf(r) === mode ? r : { ...r, ...ruleModeFields(mode) }));
+}
+
+/** Сколько правил в каждом режиме — для сводки мастера. */
+export function countRuleModes(rules: readonly CategoryRuleV2[]): Record<RuleMode, number> {
+  const out: Record<RuleMode, number> = { off: 0, manual: 0, auto: 0 };
+  for (const r of rules) out[ruleModeOf(r)]++;
+  return out;
 }

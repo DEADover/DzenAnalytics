@@ -19,6 +19,7 @@ import type { CloudSnapshotSummary } from "../lib/cloudSnapshots";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { Callout } from "./Callout";
 import { ProgressBar } from "./ProgressBar";
+import { WizardSteps } from "./WizardSteps";
 
 /**
  * Мастер восстановления из снимка (#93).
@@ -72,27 +73,7 @@ export function RestoreWizardModal({
     <Modal onClose={onClose} busy={busy} width="2xl">
       <ModalHeader icon={History} tone="accent2" title="Восстановление снимка Дзен-мани" />
 
-      <ol className="flex items-start gap-1.5 px-5 pt-4">
-        {STEPS.map((s, i) => {
-          const passed = w.phase === "done" || i < active;
-          const current = i === active && w.phase !== "done";
-          return (
-            <li key={s.id} className="flex-1 min-w-0">
-              <div
-                className={`h-1 rounded-full ${passed ? "bg-income" : current ? "bg-accent" : "bg-border"}`}
-              />
-              {/* По центру своей полоски: слева подпись «Справочники»
-                  прижималась к началу бара и казалась подписью к промежутку
-                  между ним и соседним. */}
-              <div
-                className={`text-[11px] mt-1 truncate text-center ${current || (passed && i === 4) ? "text-text font-medium" : "text-muted"}`}
-              >
-                {s.title}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+      <WizardSteps steps={STEPS} active={active} done={w.phase === "done"} />
 
       {/* Ошибка — вверху: внизу прокручиваемой области она уходила под сгиб. */}
       {w.error && (
