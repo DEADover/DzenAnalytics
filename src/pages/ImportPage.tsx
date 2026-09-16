@@ -2478,6 +2478,10 @@ export function ImportPage() {
           один, — на личном аккаунте настраивать нечего. */}
       {settingsTab === "source" && zenToken && sourceTab === "api" && <UsersSettings />}
 
+      {/* Перенос своих настроек между устройствами через Дзен-мани — перед
+          отправкой правок: это тоже про то, что уходит в Дзен-мани. */}
+      {settingsTab === "source" && zenToken && sourceTab === "api" && <CloudSettingsCard />}
+
       {/* Push в облако — Phase 1, opt-in via the toggle below.
           Only visible when an API token is connected; the safety-net
           snapshot (in the Бэкапы tab) is the prerequisite. */}
@@ -2732,9 +2736,6 @@ export function ImportPage() {
             </div>
           </div>
       )}
-
-      {/* Перенос своих настроек между устройствами через Дзен-мани. */}
-      {settingsTab === "source" && zenToken && sourceTab === "api" && <CloudSettingsCard />}
 
       {/* The log belongs to syncing, so it only lives on the API source: with a
           token it's folded into the sync card above; without one it stands
