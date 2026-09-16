@@ -86,7 +86,8 @@ import {
 } from "../lib/zenBudgets";
 import { formatNum } from "../lib/format";
 import { budgetCellKey } from "../lib/budgets";
-import { invalidateZenCache } from "../lib/zenCacheMemo";
+import { getZenCache, invalidateZenCache } from "../lib/zenCacheMemo";
+import { useReportPeriodStore } from "./useReportPeriodStore";
 import type { ImportMeta } from "../types";
 
 const TOKEN_KEY = "zenmoneyToken";
@@ -689,6 +690,13 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     // первой отрисовке ответ обычно уже есть — страница рисуется с остатками
     // сразу, без второго кадра «сначала по операциям, потом по кэшу».
     void getLiveAccountsFromCache().catch(() => {});
+    // День начала месяца при подключённом Дзен-мани — его собственный: берём
+    // из кэша сразу, не дожидаясь синхронизации.
+    if (token) {
+      void getZenCache()
+        .then((c) => useReportPeriodStore.getState().adoptZenDay(c?.user?.[0]?.monthStartDay))
+        .catch(() => {});
+    }
   },
 
   saveToken: async (token) => {
@@ -722,6 +730,8 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
 
   removeToken: async () => {
     await db.saveJSON(TOKEN_KEY, null);
+    // Без Дзен-мани снова действует свой день начала месяца.
+    useReportPeriodStore.getState().adoptZenDay(null);
     await db.saveJSON(TIMESTAMP_KEY, 0);
     await db.saveJSON(LAST_SYNC_KEY, null);
     await clearZenCache();
@@ -798,6 +808,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       await saveZenCache(nextCache);
       invalidateLiveAccounts();
       invalidateZenCache();
+      useReportPeriodStore.getState().adoptZenDay(nextCache.user?.[0]?.monthStartDay);
       const mapped = mapZenmoneyDiff(cacheToDiffResponse(nextCache));
       const isFull = fromTs === 0;
 

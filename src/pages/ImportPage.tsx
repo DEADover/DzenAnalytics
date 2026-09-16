@@ -622,6 +622,8 @@ export function ImportPage() {
   const reportPeriodLoaded = useReportPeriodStore((s) => s.loaded);
   const reportPeriodHydrate = useReportPeriodStore((s) => s.hydrate);
   const setMonthStartDay = useReportPeriodStore((s) => s.setMonthStartDay);
+  /** День из настроек Дзен-мани; при нём своя настройка не действует. */
+  const zenMonthStartDay = useReportPeriodStore((s) => s.zenDay);
   useEffect(() => {
     if (!reportPeriodLoaded) reportPeriodHydrate();
   }, [reportPeriodLoaded, reportPeriodHydrate]);
@@ -1707,9 +1709,10 @@ export function ImportPage() {
         <SettingRow
           title="Первый день отчётного месяца"
           status={
-            monthStartDay === 1
+            (zenMonthStartDay !== null ? "Как в Дзен-мани · " : "") +
+            (monthStartDay === 1
               ? "Календарный месяц"
-              : `С ${monthStartDay}-го числа по ${monthStartDay - 1}-е следующего`
+              : `С ${monthStartDay}-го числа по ${monthStartDay - 1}-е следующего`)
           }
           help={
             <>
@@ -1728,9 +1731,15 @@ export function ImportPage() {
                 Допустимы значения 1–28. Числа 29, 30 и 31 есть не в каждом
                 месяце, поэтому их не предлагаем.
               </p>
+              <p>
+                При подключённом Дзен-мани день берётся из его настроек, чтобы
+                отчёты не расходились с приложением, — поменять его можно там.
+                Своё значение здесь действует в режиме CSV.
+              </p>
             </>
           }
           control={
+            zenMonthStartDay !== null ? undefined : (
             <input
               type="number"
               min={1}
@@ -1745,6 +1754,7 @@ export function ImportPage() {
                  однозначное число не висело у левого края. */
               className="input text-sm w-16 tabular-nums text-center"
             />
+            )
           }
         />
 
