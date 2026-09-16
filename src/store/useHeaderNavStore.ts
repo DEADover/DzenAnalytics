@@ -17,6 +17,8 @@ interface State {
   reset: () => void;
   openEditor: () => void;
   closeEditor: () => void;
+  /** Заменить разделы целиком — пришедшие с другого устройства; незнакомые пути отсекаются. */
+  replaceItems: (raw: unknown) => void;
 }
 
 const KEY = "headerNav";
@@ -28,6 +30,7 @@ export const useHeaderNavStore = create<State>((set, get) => {
   };
   return {
     items: [...DEFAULT_HEADER_NAV],
+    replaceItems: (raw) => save(normalizeHeaderNav(raw)),
     loaded: false,
     editorOpen: false,
     hydrate: async () => {

@@ -89,6 +89,8 @@ import { budgetCellKey } from "../lib/budgets";
 import { getZenCache, invalidateZenCache } from "../lib/zenCacheMemo";
 import { useReportPeriodStore } from "./useReportPeriodStore";
 import { useCategoryRulesStore } from "./useCategoryRulesStore";
+import { useCloudSettingsStore } from "./useCloudSettingsStore";
+import { findCloudDocs, isServiceAccountTitle } from "../lib/cloudSettings";
 import { refDictionaryFromCache } from "../lib/ruleRefs";
 import type { ImportMeta } from "../types";
 
@@ -351,10 +353,14 @@ async function readLiveAccounts(): Promise<LiveAccount[] | null> {
   // уже скрыты (#95). Условия те же, что у операций: знаем, кто мы, и режим
   // включён. Общие счета (`role: null`) остаются всегда.
   const { ownerId, hideForeignPrivate } = useMembersStore.getState();
+  // Служебные счета — наш для переноса настроек и Zerro — не деньги
+  // пользователя: ни в списках, ни в фильтрах их быть не должно.
+  const serviceId = findCloudDocs(cache).accountId;
+  const own = cache.accounts.filter((a) => a.id !== serviceId && !isServiceAccountTitle(a.title));
   const visible =
     ownerId != null && hideForeignPrivate
-      ? cache.accounts.filter((a) => a.role == null || a.role === ownerId)
-      : cache.accounts;
+      ? own.filter((a) => a.role == null || a.role === ownerId)
+      : own;
   return visible.map((a) => ({
     id: a.id,
     title: a.title,
@@ -807,6 +813,14 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         ]);
         nextCache = applyDiff(nextCache, plans, { replaceMarkers: true });
       }
+      // Настройки и правила, перенесённые с других устройств, — и отправка
+      // своих, если облако отстало. Выключено — шаг ничего не делает; упал —
+      // синхронизация операций от этого не страдает.
+      nextCache = await useCloudSettingsStore.getState().step({
+        token,
+        cache: nextCache,
+        deletions: diff.deletion ?? [],
+      });
       await saveZenCache(nextCache);
       invalidateLiveAccounts();
       invalidateZenCache();

@@ -51,6 +51,9 @@ interface State {
   /** Задать набор кнопок дорожки. */
   setLinks: (key: string, links: readonly (string | null)[]) => Promise<void>;
   reset: () => Promise<void>;
+  /** Заменить раскладку целиком — пришедшую с другого устройства. Чужое и
+   *  незнакомое отсекает та же нормализация, что и при чтении с диска. */
+  replaceLayout: (raw: unknown) => Promise<void>;
 }
 
 export const useDashboardLayoutStore = create<State>((set, get) => {
@@ -84,5 +87,6 @@ export const useDashboardLayoutStore = create<State>((set, get) => {
     setView: (key, view) => apply(setWidgetView(get().layout, key, view)),
     setLinks: (key, links) => apply(setRowLinks(get().layout, key, links)),
     reset: () => apply(defaultLayout()),
+    replaceLayout: (raw) => apply(layoutFromStored(raw)),
   };
 });

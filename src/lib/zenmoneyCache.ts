@@ -9,6 +9,7 @@
 // For typical Zenmoney accounts (~10k transactions + a few hundred refs)
 // that's ~5 MB — well within IDB limits and trivial to read/write.
 
+import { parseEnvelope } from "./cloudSettings";
 import * as db from "./db";
 import type {
   ZenAccount,
@@ -229,7 +230,10 @@ function mergeReminderMarkers(
  */
 export function diffChangesPlanSet(prev: ZenCache | null, diff: ZenDiffResponse): boolean {
   if (!prev) return false; // полная синхронизация и так забирает список целиком
-  if ((diff.reminder?.length ?? 0) > 0) return true;
+  // Записи с настройками (перенос между устройствами, `lib/cloudSettings`) —
+  // тоже «напоминания», но плановых операций у них нет: их правка состав
+  // планов не меняет и лишнего запроса не стоит.
+  if ((diff.reminder ?? []).some((r) => !parseEnvelope(r.comment))) return true;
   if ((diff.deletion ?? []).some((d) => d.object === "reminder" || d.object === "reminderMarker")) {
     return true;
   }

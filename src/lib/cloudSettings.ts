@@ -414,3 +414,47 @@ export function stampRuleChanges<R extends Identified>(
   if (!changed && !orderChanged) return meta;
   return { itemAt, deleted, orderAt: orderChanged ? nowMs : meta.orderAt };
 }
+
+/* ─────────────────────────────  разбор пришедшего  ───────────────────────────── */
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v);
+const isTime = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
+
+/**
+ * Поля настроек из облака. Запись мог оставить другой клиент или старая версия,
+ * поэтому берём только то, что похоже на `{v, at}`; значения каждое поле
+ * проверяет само, когда применяет.
+ */
+export function sanitizeFieldMap(raw: unknown): FieldMap {
+  const out: FieldMap = {};
+  if (!isRecord(raw)) return out;
+  for (const [k, item] of Object.entries(raw)) {
+    if (!isRecord(item) || !isTime(item.at) || !("v" in item)) continue;
+    out[k] = { v: item.v, at: item.at };
+  }
+  return out;
+}
+
+/** Документ правил из облака: битые элементы отбрасываются, форма гарантирована. */
+export function sanitizeRulesDoc(raw: unknown): RulesDoc {
+  const doc: RulesDoc = { items: {}, order: { ids: [], at: 0 }, deleted: {} };
+  if (!isRecord(raw)) return doc;
+  if (isRecord(raw.items)) {
+    for (const [id, item] of Object.entries(raw.items)) {
+      if (!isRecord(item) || !isTime(item.at) || !isRecord(item.rule)) continue;
+      if (item.rule.id !== id) continue;
+      doc.items[id] = { at: item.at, rule: item.rule as Identified };
+    }
+  }
+  if (isRecord(raw.order)) {
+    if (Array.isArray(raw.order.ids)) {
+      doc.order.ids = raw.order.ids.filter((x): x is string => typeof x === "string");
+    }
+    if (isTime(raw.order.at)) doc.order.at = raw.order.at;
+  }
+  if (isRecord(raw.deleted)) {
+    for (const [id, at] of Object.entries(raw.deleted)) if (isTime(at)) doc.deleted[id] = at;
+  }
+  return doc;
+}

@@ -249,3 +249,18 @@ describe("перенос плановой операции на другую д�
     expect(diffChangesPlanSet(null, { serverTimestamp: 2, reminderMarker: [moved] } as ZenDiffResponse)).toBe(false);
   });
 });
+
+describe("записи с настройками не считаются правкой планов", () => {
+  it("своя запись с настройками лишнего запроса планов не вызывает", async () => {
+    const { envelopeComment } = await import("./cloudSettings");
+    const prev = cache({ reminderMarkers: [] });
+    const settingsDoc = { id: "doc", comment: envelopeComment("settings", { fields: {} }, 1) };
+    expect(
+      diffChangesPlanSet(prev, { serverTimestamp: 2, reminder: [settingsDoc] } as unknown as ZenDiffResponse)
+    ).toBe(false);
+    // Обычный план — по-прежнему повод.
+    expect(
+      diffChangesPlanSet(prev, { serverTimestamp: 2, reminder: [{ id: "plan", comment: "Аренда" }] } as unknown as ZenDiffResponse)
+    ).toBe(true);
+  });
+});

@@ -100,6 +100,12 @@ interface RulesState {
    * было ли что переписать.
    */
   reconcileRefs: (dict: RefDictionary) => Promise<boolean>;
+  /**
+   * Заменить правила целиком — итог слияния с облаком. Каждое проходит ту же
+   * нормализацию, что и при чтении с диска: правило любого поколения и чужой
+   * мусор разбираются мягко, без правила без id.
+   */
+  replaceAll: (raw: readonly unknown[]) => Promise<void>;
   /** То же по кэшу синхронизации; без кэша (CSV) ничего не делает. */
   reconcileRefsFromCache: () => Promise<boolean>;
   remove: (id: string) => Promise<void>;
@@ -214,6 +220,18 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     // диск не пишем: пересчёт идемпотентен, а лишняя запись при каждом старте
     // приложения ничего не даёт.
     set({ rules: (data || []).map((r) => normalizeRule(r)), loaded: true });
+    await get().reconcileRefsFromCache();
+  },
+
+  replaceAll: async (raw) => {
+    const list = raw
+      .filter(
+        (r): r is RuleLike =>
+          !!r && typeof r === "object" && typeof (r as RuleLike).id === "string"
+      )
+      .map((r) => normalizeRule({ ...r, createdAt: r.createdAt ?? "" }));
+    await db.saveJSON("categoryRules", list);
+    set({ rules: list });
     await get().reconcileRefsFromCache();
   },
 

@@ -49,6 +49,8 @@ interface MembersState {
   hydrate: () => Promise<void>;
   /** Задать имя. Пустое — снять псевдоним и вернуться к логину. */
   setAlias: (userId: number, name: string) => Promise<void>;
+  /** Заменить имена участников целиком — пришедшие с другого устройства. */
+  replaceAliases: (raw: unknown) => Promise<void>;
   setOwnerId: (userId: number | null) => Promise<void>;
   setHideForeignPrivate: (v: boolean) => Promise<void>;
   clearAll: () => Promise<void>;
@@ -95,6 +97,17 @@ export const useMembersStore = create<MembersState>((set, get) => ({
     set({ ownerId: userId });
     invalidateLiveAccounts();
     await useDataStore.getState().refresh();
+  },
+
+  replaceAliases: async (raw) => {
+    const next: UserAliases = {};
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof value === "string" && value.trim() && /^\d+$/.test(key)) next[key] = value.trim();
+      }
+    }
+    await db.saveJSON("userAliases", next);
+    set({ aliases: next });
   },
 
   setAlias: async (userId, name) => {

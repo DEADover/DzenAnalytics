@@ -15,6 +15,8 @@ import {
   parseEnvelope,
   rulesDocFromLocal,
   rulesFromDoc,
+  sanitizeFieldMap,
+  sanitizeRulesDoc,
   stableStringify,
   stampFieldChanges,
   stampRuleChanges,
@@ -205,5 +207,30 @@ describe("правила: слияние поэлементно", () => {
     expect(meta.orderAt).toBe(777);
     // Без изменений — тот же объект.
     expect(stampRuleChanges(prev, prev, EMPTY_RULES_META, 1)).toBe(EMPTY_RULES_META);
+  });
+});
+
+describe("разбор пришедшего из облака", () => {
+  it("поля: берёт только похожее на {v, at}", () => {
+    expect(
+      sanitizeFieldMap({ ok: { v: 2, at: 5 }, noAt: { v: 1 }, badAt: { v: 1, at: "x" }, junk: 3, nul: { v: null, at: 0 } })
+    ).toEqual({ ok: { v: 2, at: 5 }, nul: { v: null, at: 0 } });
+    expect(sanitizeFieldMap("мусор")).toEqual({});
+  });
+
+  it("правила: битые элементы отбрасываются, форма гарантирована", () => {
+    const d = sanitizeRulesDoc({
+      items: {
+        a: { at: 1, rule: { id: "a", createdAt: "" } },
+        wrongId: { at: 1, rule: { id: "другой" } },
+        noRule: { at: 1 },
+      },
+      order: { ids: ["a", 5, "b"], at: 3 },
+      deleted: { x: 9, y: "вчера" },
+    });
+    expect(Object.keys(d.items)).toEqual(["a"]);
+    expect(d.order).toEqual({ ids: ["a", "b"], at: 3 });
+    expect(d.deleted).toEqual({ x: 9 });
+    expect(sanitizeRulesDoc(null)).toEqual({ items: {}, order: { ids: [], at: 0 }, deleted: {} });
   });
 });

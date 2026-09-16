@@ -54,6 +54,8 @@ import { useBudgetEditsStore } from "./store/useBudgetEditsStore";
 import { installNativeTooltips } from "./lib/nativeTooltips";
 import { useDisplayStore } from "./store/useDisplayStore";
 import { useReportPeriodStore } from "./store/useReportPeriodStore";
+import { useCloudSettingsStore } from "./store/useCloudSettingsStore";
+import { useCategoryRulesStore } from "./store/useCategoryRulesStore";
 import { useOffBalanceStore } from "./store/useOffBalanceStore";
 import { useSlicesStore } from "./store/useSlicesStore";
 import { useNewCategoriesStore } from "./store/useNewCategoriesStore";
@@ -144,6 +146,11 @@ function App() {
     usePlannedDeletionsStore.getState().hydrate();
     useDashboardLayoutStore.getState().hydrate();
     useFilterMemoryStore.getState().hydrate();
+    // Правила нужны переносу настроек с первой синхронизации, а не только на
+    // страницах, где их показывают.
+    void useCategoryRulesStore.getState().hydrate();
+    // Слежка за правками сама ждёт, пока каждое хранилище прочитает своё.
+    void useCloudSettingsStore.getState().hydrate();
     useSplitGroupsStore.getState().hydrate();
     useMembersStore.getState().hydrate();
     useFreeMoneyStore.getState().hydrate();

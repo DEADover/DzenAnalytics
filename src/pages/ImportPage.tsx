@@ -40,6 +40,7 @@ import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { PendingChangesModal } from "../components/PendingChangesModal";
 import { SlicesSettings } from "../components/SlicesSettings";
 import { SettingRow } from "../components/SettingRow";
+import { CloudSettingsCard } from "../components/CloudSettingsCard";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Switch } from "../components/Switch";
 import { Segmented } from "../components/Segmented";
@@ -2732,6 +2733,9 @@ export function ImportPage() {
             </div>
           </div>
       )}
+
+      {/* Перенос своих настроек между устройствами через Дзен-мани. */}
+      {settingsTab === "source" && zenToken && sourceTab === "api" && <CloudSettingsCard />}
 
       {/* The log belongs to syncing, so it only lives on the API source: with a
           token it's folded into the sync card above; without one it stands
