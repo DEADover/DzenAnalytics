@@ -1413,40 +1413,6 @@ export function ImportPage() {
         />
 
         <SettingRow
-          title="Строка из выписки"
-          status={
-            statementLine
-              ? "Показывается под контрагентом"
-              : "Скрыта — только название контрагента"
-          }
-          help={
-            <>
-              <p>
-                Под названием контрагента можно показывать то, что напечатал
-                банк, — поле <InfoTerm>«В выписке»</InfoTerm> из редактора
-                операции. Строка появляется только у операций с заполненным{" "}
-                <InfoTerm>«Местом платежа»</InfoTerm> и только когда текст банка
-                отличается от названия контрагента.
-              </p>
-              <p>
-                Пригодится, когда банк печатает не то, что вы видите в
-                контрагенте: у магазина в выписке может стоять номер терминала
-                («MARKET 1234 MOSCOW»), а у перевода по СБП — тот, кому деньги
-                ушли на самом деле. Если это только мешает — выключите, и в
-                списках останется одно название.
-              </p>
-            </>
-          }
-          control={
-            <Switch
-              checked={statementLine}
-              label="Показывать строку из выписки"
-              onChange={(next) => setStatementLine(next)}
-            />
-          }
-        />
-
-        <SettingRow
           title="Панель фильтров"
           status={
             filtersMode === "button"
@@ -1488,6 +1454,40 @@ export function ImportPage() {
         />
 
         <SettingRow
+          title="Строка из выписки"
+          status={
+            statementLine
+              ? "Показывается под контрагентом"
+              : "Скрыта — только название контрагента"
+          }
+          help={
+            <>
+              <p>
+                Под названием контрагента можно показывать то, что напечатал
+                банк, — поле <InfoTerm>«В выписке»</InfoTerm> из редактора
+                операции. Строка появляется только у операций с заполненным{" "}
+                <InfoTerm>«Местом платежа»</InfoTerm> и только когда текст банка
+                отличается от названия контрагента.
+              </p>
+              <p>
+                Пригодится, когда банк печатает не то, что вы видите в
+                контрагенте: у магазина в выписке может стоять номер терминала
+                («MARKET 1234 MOSCOW»), а у перевода по СБП — тот, кому деньги
+                ушли на самом деле. Если это только мешает — выключите, и в
+                списках останется одно название.
+              </p>
+            </>
+          }
+          control={
+            <Switch
+              checked={statementLine}
+              label="Показывать строку из выписки"
+              onChange={(next) => setStatementLine(next)}
+            />
+          }
+        />
+
+        <SettingRow
           title="Убрать иконку благодарности"
           status={
             hideThanks
@@ -1509,54 +1509,6 @@ export function ImportPage() {
             />
           }
         />
-
-        <SettingRow
-          title="Размер текста в таблицах"
-          status={`${TABLE_FONT_LABELS[tableFontLevel]} (${tableFontLevel}/5)`}
-          help={
-            <p>
-              Размер шрифта в списках операций: лента «Операции», поиск, окно
-              операций, дубликаты, удалённые и подобные таблицы. Остальной
-              интерфейс не меняется.
-            </p>
-          }
-          control={
-            <div className="flex items-center gap-2">
-              <span className="text-muted text-[12px]" aria-hidden>
-                А
-              </span>
-              <RangeInput
-                value={tableFontLevel}
-                min={1}
-                max={5}
-                onChange={(v) => setTableFontLevel(v as TableFontLevel)}
-                ariaLabel="Размер текста в таблицах"
-                valueText={TABLE_FONT_LABELS[tableFontLevel]}
-                className="w-40"
-              />
-              <span className="text-muted text-[18px]" aria-hidden>
-                А
-              </span>
-            </div>
-          }
-        >
-          {/* Живой пример — на той же CSS-переменной, что и таблицы, поэтому
-              масштабируется прямо во время перетаскивания. */}
-          <div className="mt-3 rounded-lg border border-border bg-panel2/40 px-3 py-2 flex items-center justify-between gap-3">
-            <span
-              className="text-muted truncate"
-              style={{ fontSize: "var(--tbl-font)" }}
-            >
-              01.06.2026 · Пятёрочка · Еда дома
-            </span>
-            <span
-              className="tabular-nums font-medium text-expense whitespace-nowrap"
-              style={{ fontSize: "var(--tbl-font)" }}
-            >
-              {formatMoney(-1234, rates.base)}
-            </span>
-          </div>
-        </SettingRow>
 
         <SettingRow
           title="Запоминать фильтры"
@@ -1647,6 +1599,54 @@ export function ImportPage() {
             }
           />
         )}
+
+        <SettingRow
+          title="Размер текста в таблицах"
+          status={`${TABLE_FONT_LABELS[tableFontLevel]} (${tableFontLevel}/5)`}
+          help={
+            <p>
+              Размер шрифта в списках операций: лента «Операции», поиск, окно
+              операций, дубликаты, удалённые и подобные таблицы. Остальной
+              интерфейс не меняется.
+            </p>
+          }
+          control={
+            <div className="flex items-center gap-2">
+              <span className="text-muted text-[12px]" aria-hidden>
+                А
+              </span>
+              <RangeInput
+                value={tableFontLevel}
+                min={1}
+                max={5}
+                onChange={(v) => setTableFontLevel(v as TableFontLevel)}
+                ariaLabel="Размер текста в таблицах"
+                valueText={TABLE_FONT_LABELS[tableFontLevel]}
+                className="w-40"
+              />
+              <span className="text-muted text-[18px]" aria-hidden>
+                А
+              </span>
+            </div>
+          }
+        >
+          {/* Живой пример — на той же CSS-переменной, что и таблицы, поэтому
+              масштабируется прямо во время перетаскивания. */}
+          <div className="mt-3 rounded-lg border border-border bg-panel2/40 px-3 py-2 flex items-center justify-between gap-3">
+            <span
+              className="text-muted truncate"
+              style={{ fontSize: "var(--tbl-font)" }}
+            >
+              01.06.2026 · Пятёрочка · Еда дома
+            </span>
+            <span
+              className="tabular-nums font-medium text-expense whitespace-nowrap"
+              style={{ fontSize: "var(--tbl-font)" }}
+            >
+              {formatMoney(-1234, rates.base)}
+            </span>
+          </div>
+        </SettingRow>
       </div>
 
       </>)}
