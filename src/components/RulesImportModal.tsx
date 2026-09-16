@@ -323,7 +323,7 @@ export function RulesImportModal({
               disabled={picked.length === 0}
               onClick={() => setStep(2)}
             >
-              {picked.length === 0 ? "Отметьте правила" : `Далее · ${n(picked.length)}`}
+              {picked.length === 0 ? "Отметьте правила" : "Далее"}
             </button>
           )}
           {parsed.ok && step === 2 && (

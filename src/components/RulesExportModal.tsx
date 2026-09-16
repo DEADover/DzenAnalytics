@@ -77,8 +77,7 @@ export function RulesExportModal({
         {step === 0 && (
           <>
             <p className="text-muted">
-              Отметьте правила, которые попадут в файл. Порядок сохранится — тот же,
-              что в списке правил.
+              Отметьте правила, которые попадут в файл экспорта.
             </p>
             <RulePickList items={items} selected={selected} onChange={setSelected} />
           </>
@@ -153,7 +152,7 @@ export function RulesExportModal({
               disabled={picked.length === 0}
               onClick={() => setStep(1)}
             >
-              {picked.length === 0 ? "Отметьте правила" : `Далее · ${n(picked.length)}`}
+              {picked.length === 0 ? "Отметьте правила" : "Далее"}
             </button>
           )}
           {step === 1 && (
