@@ -106,7 +106,6 @@ export function useFreeMoney(
 
   return useMemo(() => {
     if (!cache || mine.length === 0) return EMPTY;
-    const titles = new Set(mine.map((a) => a.title));
     const me = cache.user?.[0];
     // День начала месяца берём у Дзен-мани, свой — только пока его нет.
     const startDay =
@@ -123,7 +122,14 @@ export function useFreeMoney(
     const daysLeft = daysTotal - dayIndex + 1;
 
     const conv = converter(cache, rates);
-    const ours = accountIds(cache, titles);
+    // Баланс периода и факт по статьям — по счетам «в балансе», как у
+    // Дзен-мани, вместе с накопительными. Проценты, пришедшие на
+    // накопительный счёт, в приложении входят в баланс и гасят доходный
+    // бюджет; у нас их не было вовсе, и баланс выходил меньше ровно на них.
+    // Сверено на живом аккаунте до разницы курса. Повседневные счета (`mine`)
+    // остаются для режима «с остатком на начало» — его на живых данных пока
+    // не сверяли.
+    const ours = inBalanceIds(cache);
     const tagById = new Map((cache.tags ?? []).map((t) => [t.id, t]));
     const parents = parentLinks(tagById);
 
@@ -187,6 +193,7 @@ export function useFreeMoney(
     // вычитается отдельно), просроченные — нет, прогнозы Дзена — нет.
     // Проверено на живом аккаунте: «Квартира» — 21 000 ₽ бюджета плюс
     // исполненный платёж 4 000 минус 5 309 факта = 19 691 ₽, как на экране.
+    const fulfilled = fulfilledMarkerIds(cache.transactions);
     const planned = plannedOpsByTagMonth(
       (cache.reminderMarkers ?? []).filter((m) => plannedDeletions[m.id] === undefined),
       cache.instruments,
@@ -194,7 +201,7 @@ export function useFreeMoney(
       today,
       (dateIso, code) => histDayRates[dateIso]?.[code] ?? null,
       (id) => cache.instruments.find((i) => i.id === id)?.shortTitle,
-      fulfilledMarkerIds(cache.transactions)
+      fulfilled
     );
     // СЧЁТ У ПЛАНОВОЙ ОПЕРАЦИИ НЕ СМОТРИМ. Проценты по вкладу приходят на
     // накопительный счёт, которого нет среди повседневных, — но деньги эти
@@ -243,10 +250,28 @@ export function useFreeMoney(
       });
     }
 
-    // «Ещё поступит» — по каждой доходной категории большее из назначенного и
-    // запланированного МИНУС уже пришедшее (issue #100): иначе полученная
-    // зарплата считалась дважды — в балансе и в «ещё поступит».
-    const stillToCome = incomeStillToCome(incomePlan, aheadIn, receivedByTag, parents);
+    // «Ещё поступит» — по каждой доходной категории большее из будущих
+    // назначенных поступлений и остатка бюджета после пришедшего (issue #100).
+    // Будущие — только ещё не исполненные: исполненное уже в факте.
+    const upcomingIn = new Map<string, number>();
+    const upcoming = plannedOpsByTagMonth(
+      (cache.reminderMarkers ?? []).filter(
+        (m) =>
+          m.state === "planned" &&
+          !fulfilled.has(m.id) &&
+          plannedDeletions[m.id] === undefined
+      ),
+      cache.instruments,
+      me?.currency,
+      today
+    );
+    for (const [key, ops] of upcoming) {
+      const sep = key.lastIndexOf("|");
+      if (key.slice(sep + 1) !== ym || !(ops.income > 0)) continue;
+      const tag = key.slice(0, sep);
+      upcomingIn.set(tag, (upcomingIn.get(tag) ?? 0) + ops.income);
+    }
+    const stillToCome = incomeStillToCome(incomePlan, upcomingIn, receivedByTag, parents);
 
     const plan = planRemainder(planRows, aheadOut, factByTag, parents);
     const money = moneyBreakdown({ balance, stillToCome, excluded: reserve });
@@ -346,10 +371,10 @@ function firstTag(tag: string[] | null | undefined): string {
   return tag && tag.length > 0 ? tag[0] : "";
 }
 
-/** Идентификаторы счетов, попавших в расчёт, — по названиям с главной. */
-function accountIds(cache: ZenCache, titles: ReadonlySet<string>): Set<string> {
+/** Счета «в балансе» — по ним Дзен-мани считает баланс периода и факт. */
+function inBalanceIds(cache: ZenCache): Set<string> {
   const out = new Set<string>();
-  for (const a of cache.accounts) if (titles.has(a.title)) out.add(a.id);
+  for (const a of cache.accounts) if (a.inBalance) out.add(a.id);
   return out;
 }
 
