@@ -726,7 +726,6 @@ export function ComparePage() {
       <PageHeader
         icon={GitCompare}
         title="Сравнение периодов"
-        hint="Что выросло, а что сократилось по сравнению с другим периодом"
       />
 
       {/* Фильтры режут цифры этой страницы и без панели — `applyFilters` ниже

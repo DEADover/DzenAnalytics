@@ -910,7 +910,6 @@ export function BudgetsPage() {
       <PageHeader
         icon={Wallet}
         title="Бюджет"
-        hint="Сколько ещё можно потратить по каждой статье"
       />
 
       {/* Панель: вид и период (слева), действия (справа). */}

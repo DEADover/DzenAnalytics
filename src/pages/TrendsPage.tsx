@@ -175,7 +175,6 @@ export function TrendsPage() {
       <PageHeader
         icon={Activity}
         title="Тренды"
-        hint="Когда вы тратите больше всего и как это меняется"
       />
       <GlobalFilters period={lp} />
 

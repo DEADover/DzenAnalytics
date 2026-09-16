@@ -349,7 +349,7 @@ export function TagsPage() {
   // обе ветки, пустую и полную.
   const header = (
     <>
-      <PageHeader icon={Hash} title="Теги" hint="Итоги по каждой теме: проекту, поездке, ремонту" />
+      <PageHeader icon={Hash} title="Теги" />
       <GlobalFilters />
       <SectionControls>
         <TagModeSwitch />

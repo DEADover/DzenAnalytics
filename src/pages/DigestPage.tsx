@@ -54,7 +54,6 @@ export function DigestPage() {
       <PageHeader
         icon={Newspaper}
         title="Дайджест"
-        hint="Что изменилось по сравнению с предыдущей неделей или месяцем"
         info={
           <InfoPopover>
             <p>

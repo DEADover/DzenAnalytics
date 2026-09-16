@@ -231,7 +231,6 @@ export function CashflowPage() {
       <PageHeader
         icon={LineChartIcon}
         title="Cash-flow"
-        hint="Сколько остаётся после всех трат и больше ли, чем год назад"
       />
       <GlobalFilters period={lp} />
 

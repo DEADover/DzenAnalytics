@@ -115,7 +115,6 @@ export function Budget503020Page() {
       <PageHeader
         icon={PieIcon}
         title="50/30/20"
-        hint="Укладываются ли ваши траты в правило 50/30/20"
       />
       <GlobalFilters showDateRange={false} dateRangeHint="Правило 50/30/20 считается за период, выбранный ниже" />
 

@@ -182,7 +182,6 @@ export function SearchPage() {
       <PageHeader
         icon={Search}
         title="Поиск"
-        hint="По получателю, комментарию, категории и счёту"
       />
 
       <div className="card card-pad space-y-4">

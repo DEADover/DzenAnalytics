@@ -115,7 +115,6 @@ export function TopPage() {
       <PageHeader
         icon={TrendingUp}
         title="Топ"
-        hint="Куда уходит и откуда приходит больше всего денег"
         info={
           <InfoPopover>
             <p>

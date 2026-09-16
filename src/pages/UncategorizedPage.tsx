@@ -157,7 +157,6 @@ export function UncategorizedPage() {
       <PageHeader
         icon={Tag}
         title="Без категории"
-        hint="Примите предложенные категории или выберите свои"
       />
 
       <StatRow>

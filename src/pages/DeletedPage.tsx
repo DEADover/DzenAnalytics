@@ -50,8 +50,6 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { useLazyList } from "../hooks/useLazyList";
 import type { Transaction } from "../types";
 
-const HINT = "Верните операцию, если её удалили по ошибке";
-
 /** Порция ленты при подгрузке — как в «Операциях». */
 const PAGE_SIZE = 100;
 
@@ -195,7 +193,6 @@ function CloudDeleted() {
     <PageHeader
       icon={Trash2}
       title="Удалённые"
-      hint={HINT}
       info={
         <InfoPopover>
           <p>
@@ -314,7 +311,6 @@ function LocalDeleted() {
     <PageHeader
       icon={Trash2}
       title="Удалённые"
-      hint={HINT}
       right={
         rows.length > 0 && (
           <button onClick={handlePurge} className="btn-danger text-xs">

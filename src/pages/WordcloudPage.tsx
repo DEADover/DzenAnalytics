@@ -77,7 +77,6 @@ export function WordcloudPage() {
       <PageHeader
         icon={Cloud}
         title="Облако слов"
-        hint="Чем крупнее слово, тем чаще оно встречается"
         info={
           <InfoPopover>
             <p>

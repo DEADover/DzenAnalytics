@@ -499,7 +499,6 @@ export function TransactionsPage() {
       <PageHeader
         icon={ListChecks}
         title="Операции"
-        hint="Сквозная лента операций"
       />
       <GlobalFilters />
 

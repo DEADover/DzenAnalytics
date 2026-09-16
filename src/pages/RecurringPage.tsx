@@ -576,7 +576,6 @@ export function RecurringPage() {
       <PageHeader
         title="Регулярные платежи"
         icon={Repeat}
-        hint="Что скоро спишется, что подорожало и сколько уходит в год"
         info={
           <InfoPopover label="Что на этой странице">
             <p>

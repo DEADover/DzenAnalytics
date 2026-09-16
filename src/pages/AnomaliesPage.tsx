@@ -88,7 +88,6 @@ export function AnomaliesPage() {
         icon={Zap}
         iconTone="text-warn"
         title="Аномалии"
-        hint="Что выбивается из ваших привычных трат"
         info={
           <InfoPopover>
             <p>

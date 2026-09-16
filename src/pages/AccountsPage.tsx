@@ -1534,7 +1534,6 @@ export function AccountsPage() {
       <PageHeader
         icon={Wallet}
         title="Счета"
-        hint="Остатки, их история и обороты за период"
         info={
           tab === "capital" && (
             <InfoPopover label="Что делают фильтры на «Капитале»">

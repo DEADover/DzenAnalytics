@@ -200,7 +200,6 @@ export function CalendarPage() {
       <PageHeader
         icon={CalendarDays}
         title="Календарь"
-        hint="В какие дни вы тратили или получали больше всего"
         info={
           <InfoPopover>
             <p>

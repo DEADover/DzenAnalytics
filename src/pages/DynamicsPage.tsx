@@ -223,7 +223,6 @@ export function DynamicsPage() {
       <PageHeader
         icon={Activity}
         title="Динамика"
-        hint="Как менялись траты и доходы — в целом или у одного получателя"
       />
 
       <GlobalFilters period={lp} />

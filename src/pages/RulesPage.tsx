@@ -467,7 +467,6 @@ export function RulesPage() {
       <PageHeader
         icon={Wand2}
         title="Правила категоризации"
-        hint="Похожие операции больше не придётся исправлять вручную"
       />
 
       <StatRow>

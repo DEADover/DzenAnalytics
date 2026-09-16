@@ -358,7 +358,6 @@ export function ReportPage() {
       <PageHeader
         title="Доходы и расходы"
         icon={TableIcon}
-        hint="Как менялась каждая категория от периода к периоду"
       />
 
       <GlobalFilters period={lp} />
