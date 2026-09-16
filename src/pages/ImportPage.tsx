@@ -1337,7 +1337,7 @@ export function ImportPage() {
       <div className="card-tray card-pad">
         <SettingsSectionHeader icon={Palette} title="Внешний вид" className="mb-1" />
         <p className="text-xs text-muted mb-3">
-          Как сервис выглядит и в каком виде показывает суммы.
+          Как сервис выглядит и как им удобнее пользоваться.
         </p>
 
         <SettingRow
