@@ -829,11 +829,13 @@ export function setWidgetView(
     const meta = widgetMeta(p.kind);
     if (!meta.views?.some((v) => v.id === view)) return p;
     // Вариант по умолчанию не храним: раскладка тогда остаётся стандартной.
+    // Убираем ровно `view`, остальное место виджета не трогаем. Прежде запись
+    // собиралась заново из перечисленных полей и теряла `offset`: виджет,
+    // отодвинутый пустыми клетками вправо, после возврата вида прыгал к
+    // левому краю ряда.
     if (view === meta.views[0].id) {
-      const next: WidgetPlacement = { key: p.key, kind: p.kind };
-      if (p.links) next.links = p.links;
-      if (p.hidden) next.hidden = true;
-      return next;
+      const { view: _dropped, ...rest } = p;
+      return rest;
     }
     return { ...p, view };
   });

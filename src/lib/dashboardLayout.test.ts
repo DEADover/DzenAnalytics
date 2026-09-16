@@ -603,6 +603,22 @@ describe("варианты оформления", () => {
     expect(isDefaultLayout(back)).toBe(true);
   });
 
+  it("возврат к варианту по умолчанию не трогает остальное место виджета", () => {
+    const links = ["/transactions", null, null, null, null, null];
+    const placed = DEFAULT_LAYOUT.map((p) =>
+      p.key === "month" ? { ...p, offset: 2, hidden: true, links } : p
+    );
+    const split = setWidgetView(placed, "month", "split");
+    expect(row(split, "month")).toMatchObject({ view: "split", offset: 2, hidden: true, links });
+
+    const back = row(setWidgetView(split, "month", "open"), "month");
+    expect(back.offset).toBe(2);
+    expect(back.hidden).toBe(true);
+    expect(back.links).toEqual(links);
+    // Вариант по умолчанию не хранится вовсе — даже пустым полем.
+    expect("view" in back).toBe(false);
+  });
+
   it("сохранённый вариант переживает разбор, выдуманный — нет", () => {
     const ok = normalizeLayout([{ key: "month", kind: "month", view: "split" }]);
     expect(row(ok, "month").view).toBe("split");
