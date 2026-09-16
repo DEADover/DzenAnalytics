@@ -12,6 +12,7 @@
 
 import {
   ALL_SECTIONS,
+  PRIMARY_GROUP_TITLE,
   PRIMARY_SECTIONS,
   SECONDARY_GROUPS,
   type NavSection,
@@ -61,8 +62,8 @@ export interface NavGroup {
 
 /** Группа не поместившихся — первой в «Ещё». */
 export const OVERFLOW_GROUP_TITLE = "Не поместились в меню";
-/** Основные разделы, убранные из шапки. */
-export const PRIMARY_GROUP_TITLE = "Обзор";
+/** Основные разделы, убранные из шапки. Имя группы общее с крошками. */
+export { PRIMARY_GROUP_TITLE };
 
 /**
  * Группы панели «Ещё»: сначала разделы из шапки, которым не хватило места,

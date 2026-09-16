@@ -101,6 +101,9 @@ export const SECONDARY_GROUPS: { title: string; items: NavSection[] }[] = [
   },
 ];
 
+/** Основные разделы, убранные из шапки, — этой группой в «Ещё» и в крошках. */
+export const PRIMARY_GROUP_TITLE = "Обзор";
+
 /** Те же разделы плоским списком — в порядке панели «Ещё». */
 export const SECONDARY: NavSection[] = SECONDARY_GROUPS.flatMap((g) => g.items);
 
@@ -124,4 +127,18 @@ const BY_PATH = new Map(SECONDARY.map((s) => [s.to, s]));
 /** Раздел по пути. `undefined` — путь из другой версии или просто мусор. */
 export function navSection(to: string): NavSection | undefined {
   return BY_PATH.get(to);
+}
+
+/**
+ * Группа раздела — «Обзор» у основных, своя у остальных. Ею подписана шапка
+ * раздела: «Аналитика / Календарь». Особенно нужна разделам из «Ещё» — в
+ * дорожке меню у них подсвечена только кнопка «Ещё», и по одному названию не
+ * понять, куда ты попал.
+ *
+ * `undefined` — путь не раздел вовсе (справка, настройки, поиск): крошки там
+ * не из чего собрать, остаётся одно название.
+ */
+export function sectionGroupTitle(to: string): string | undefined {
+  if (PRIMARY_SECTIONS.some((s) => s.to === to)) return PRIMARY_GROUP_TITLE;
+  return SECONDARY_GROUPS.find((g) => g.items.some((s) => s.to === to))?.title;
 }
