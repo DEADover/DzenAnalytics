@@ -84,7 +84,7 @@ const sheetRow = (active = false) =>
   );
 
 export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreOpenState, setMoreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const loc = useLocation();
   const editingLayout = useDashboardLayoutStore((s) => s.editing);
@@ -113,6 +113,9 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const headerItems = headerSections(headerNav);
   const groups = moreGroups(headerNav);
   const inMore = groups.some((g) => g.items.some((s) => s.to === loc.pathname));
+  // Все разделы переехали в меню — «Ещё» больше нет, и открытой панели тоже:
+  // пустую панель не показываем, даже если её открыли до последней правки.
+  const moreOpen = moreOpenState && groups.length > 0;
 
   const navScrollRef = useRef<HTMLDivElement>(null);
   /** Есть ли разделы за левым и правым краем полосы — для затухания краёв. */
@@ -315,33 +318,38 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                 <NavItemBody icon={icon} label={label} iconsOnly={iconsOnly} />
               </SmoothNavLink>
             ))}
-          </div>
-
-          <div className="shrink-0">
+            {/* Настройка меню — последним пунктом той же полосы: какие разделы
+                в ней стоят, решают здесь же, не заходя в «Ещё» или в настройки.
+                Закреплённой у края она лишь отнимала место у разделов. */}
             <button
-              onClick={() => setMoreOpen((o) => !o)}
-              aria-expanded={moreOpen}
-              aria-haspopup="true"
-              className={navItem(moreOpen || inMore, iconsOnly)}
-              title={iconsOnly && !moreOpen ? "Ещё" : undefined}
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                openHeaderEditor();
+              }}
+              className={clsx(navItem(false, true), "shrink-0 text-muted")}
+              title="Настроить основное меню"
+              aria-label="Настроить основное меню"
             >
-              <NavItemBody icon={MoreHorizontal} label="Ещё" iconsOnly={iconsOnly} />
+              <NavItemBody icon={Pencil} label="Настроить основное меню" iconsOnly />
             </button>
           </div>
-          {/* Настройка меню — последней в дорожке: какие разделы в ней стоят,
-              решают здесь же, не заходя в «Ещё» или в настройки. */}
-          <button
-            type="button"
-            onClick={() => {
-              setMoreOpen(false);
-              openHeaderEditor();
-            }}
-            className={clsx(navItem(false, true), "shrink-0 text-muted")}
-            title="Настроить основное меню"
-            aria-label="Настроить основное меню"
-          >
-            <NavItemBody icon={Pencil} label="Настроить основное меню" iconsOnly />
-          </button>
+
+          {/* «Ещё» — только когда в нём что-то есть: если все разделы стоят в
+              меню, кнопка открывала бы пустую панель. */}
+          {groups.length > 0 && (
+            <div className="shrink-0">
+              <button
+                onClick={() => setMoreOpen((o) => !o)}
+                aria-expanded={moreOpen}
+                aria-haspopup="true"
+                className={navItem(moreOpen || inMore, iconsOnly)}
+                title={iconsOnly && !moreOpen ? "Ещё" : undefined}
+              >
+                <NavItemBody icon={MoreHorizontal} label="Ещё" iconsOnly={iconsOnly} />
+              </button>
+            </div>
+          )}
         </nav>
         </div>
 
