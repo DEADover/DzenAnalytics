@@ -318,21 +318,23 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                 <NavItemBody icon={icon} label={label} iconsOnly={iconsOnly} />
               </SmoothNavLink>
             ))}
-            {/* Настройка меню — последним пунктом той же полосы: какие разделы
-                в ней стоят, решают здесь же, не заходя в «Ещё» или в настройки.
-                Закреплённой у края она лишь отнимала место у разделов. */}
-            <button
-              type="button"
-              onClick={() => {
-                setMoreOpen(false);
-                openHeaderEditor();
-              }}
-              className={clsx(navItem(false, true), "shrink-0 text-muted")}
-              title="Настроить основное меню"
-              aria-label="Настроить основное меню"
-            >
-              <NavItemBody icon={Pencil} label="Настроить основное меню" iconsOnly />
-            </button>
+            {/* Настройка меню — последним пунктом той же полосы, но только когда
+                «Ещё» нет: иначе карандаш уже стоит в углу панели «Ещё», и второй
+                в дорожке лишь отнимал бы место у разделов. */}
+            {groups.length === 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  openHeaderEditor();
+                }}
+                className={clsx(navItem(false, true), "shrink-0 text-muted")}
+                title="Настроить основное меню"
+                aria-label="Настроить основное меню"
+              >
+                <NavItemBody icon={Pencil} label="Настроить основное меню" iconsOnly />
+              </button>
+            )}
           </div>
 
           {/* «Ещё» — только когда в нём что-то есть: если все разделы стоят в
