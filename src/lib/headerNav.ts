@@ -76,6 +76,27 @@ export function moreGroups(items: readonly string[]): NavGroup[] {
   return groups.filter((g) => g.items.length > 0);
 }
 
+/**
+ * Ширина кнопок меню в виде «Только значки»: ступень 0 — стандартная кнопка
+ * (36 px, поля по бокам значка), дальше десять ступеней по 4 px — до 76 px.
+ * Шире значок в кнопке уже теряется, а меню из десятка разделов не влезает.
+ */
+export const ICON_WIDTH_STEPS = 10;
+export const ICON_WIDTH_BASE_PX = 36;
+export const ICON_WIDTH_STEP_PX = 4;
+
+export function normalizeIconWidth(saved: unknown): number {
+  return typeof saved === "number" && Number.isInteger(saved) && saved >= 0 && saved <= ICON_WIDTH_STEPS
+    ? saved
+    : 0;
+}
+
+/** Ширина кнопки в пикселях для ступени; `null` у стандартной — ширину задают поля. */
+export function iconButtonWidth(level: number): number | null {
+  const l = normalizeIconWidth(level);
+  return l === 0 ? null : ICON_WIDTH_BASE_PX + l * ICON_WIDTH_STEP_PX;
+}
+
 /** Переставить пункт на соседнее место. За краем списка — без изменений. */
 export function moveItem(items: readonly string[], to: string, dir: -1 | 1): string[] {
   const i = items.indexOf(to);

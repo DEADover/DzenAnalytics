@@ -205,6 +205,7 @@ export function ImportPage() {
   const showThemeModal = useThemeModalStore((s) => s.show);
   const headerNavItems = useHeaderNavStore((s) => s.items);
   const headerNavIconsOnly = useHeaderNavStore((s) => s.iconsOnly);
+  const headerNavIconWidth = useHeaderNavStore((s) => s.iconWidth);
   const openHeaderNavEditor = useHeaderNavStore((s) => s.openEditor);
   const lightSchemeName = useThemeStore((s) => schemeById(s.lightScheme)?.name ?? "");
   const darkSchemeName = useThemeStore((s) => schemeById(s.darkScheme)?.name ?? "");
@@ -1374,7 +1375,7 @@ export function ImportPage() {
           status={
             headerNavItems.length === 0
               ? "Все разделы — в «Ещё»"
-              : `${headerNavIconsOnly ? "Только значки · " : ""}${headerSections(headerNavItems)
+              : `${headerNavIconsOnly ? `Только значки${headerNavIconWidth > 0 ? `, ширина ${headerNavIconWidth} из 10` : ""} · ` : ""}${headerSections(headerNavItems)
                   .map((s) => s.label)
                   .join(", ")}`
           }

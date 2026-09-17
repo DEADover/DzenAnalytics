@@ -28,7 +28,7 @@ import { useSyncCommands } from "../hooks/useSyncCommands";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 import { SmoothNavLink } from "./SmoothNavLink";
 import { FiltersDock } from "./FiltersDock";
-import { headerSections, moreGroups } from "../lib/headerNav";
+import { headerSections, iconButtonWidth, moreGroups } from "../lib/headerNav";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { useFiltersDockStore } from "../store/useFiltersDockStore";
@@ -109,6 +109,11 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   // «Ещё» — выбранный человеком раздел должен оставаться там, куда его поставили.
   const headerNav = useHeaderNavStore((s) => s.items);
   const iconsOnly = useHeaderNavStore((s) => s.iconsOnly);
+  // Ширина кнопок-значков — своя ступень из окна настройки; у стандартной её
+  // задают поля кнопки. Одна на все кнопки дорожки, чтобы ряд был ровным.
+  const iconWidthLevel = useHeaderNavStore((s) => s.iconWidth);
+  const iconWidthPx = iconsOnly ? iconButtonWidth(iconWidthLevel) : null;
+  const iconStyle = iconWidthPx ? { width: iconWidthPx } : undefined;
   const openHeaderEditor = useHeaderNavStore((s) => s.openEditor);
   const headerItems = headerSections(headerNav);
   const groups = moreGroups(headerNav);
@@ -150,7 +155,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
       el.removeEventListener("wheel", onWheel);
       ro.disconnect();
     };
-  }, [headerNav, iconsOnly]);
+  }, [headerNav, iconsOnly, iconWidthLevel]);
 
   // Открытый раздел подъезжает в видимую часть полосы: иначе после перехода с
   // палитры или из «Ещё» подсвеченный пункт мог остаться за краем.
@@ -162,7 +167,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
     if (a < el.scrollLeft) el.scrollLeft = a - 8;
     else if (a + active.offsetWidth > el.scrollLeft + el.clientWidth)
       el.scrollLeft = a + active.offsetWidth - el.clientWidth + 8;
-  }, [loc.pathname, headerNav, iconsOnly]);
+  }, [loc.pathname, headerNav, iconsOnly, iconWidthLevel]);
 
   // ←/→ листают разделы шапки в её порядке (по умолчанию Главная → Операции →
   // Счета → Категории).
@@ -313,6 +318,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                 end={to === "/"}
                 onNavigate={() => setMoreOpen(false)}
                 className={({ isActive }) => clsx(navItem(isActive, iconsOnly), "shrink-0")}
+                style={iconStyle}
                 title={iconsOnly ? label : undefined}
               >
                 <NavItemBody icon={icon} label={label} iconsOnly={iconsOnly} />
@@ -329,6 +335,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                   openHeaderEditor();
                 }}
                 className={clsx(navItem(false, true), "shrink-0 text-muted")}
+                style={iconStyle}
                 title="Настроить основное меню"
                 aria-label="Настроить основное меню"
               >
@@ -346,6 +353,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                 aria-expanded={moreOpen}
                 aria-haspopup="true"
                 className={navItem(moreOpen || inMore, iconsOnly)}
+                style={iconStyle}
                 title={iconsOnly && !moreOpen ? "Ещё" : undefined}
               >
                 <NavItemBody icon={MoreHorizontal} label="Ещё" iconsOnly={iconsOnly} />

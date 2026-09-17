@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  ICON_WIDTH_STEPS,
+  iconButtonWidth,
+  normalizeIconWidth,
   DEFAULT_HEADER_NAV,
   PRIMARY_GROUP_TITLE,
   isDefaultHeaderNav,
@@ -44,5 +47,14 @@ describe("основное меню", () => {
     expect(moveItem(["a", "b", "c"], "b", 1)).toEqual(["a", "c", "b"]);
     expect(moveItem(["a", "b", "c"], "a", -1)).toEqual(["a", "b", "c"]);
     expect(moveItem(["a", "b", "c"], "x", 1)).toEqual(["a", "b", "c"]);
+  });
+
+  it("ширина кнопок-значков: 0 — стандартная, дальше по 4 px до 76", () => {
+    expect(iconButtonWidth(0)).toBeNull();
+    expect(iconButtonWidth(1)).toBe(40);
+    expect(iconButtonWidth(ICON_WIDTH_STEPS)).toBe(76);
+    // Мусор из сохранения или с другого устройства — стандартная ширина.
+    for (const bad of [-1, 11, 2.5, "3", null, undefined]) expect(normalizeIconWidth(bad)).toBe(0);
+    expect(iconButtonWidth(99)).toBeNull();
   });
 });

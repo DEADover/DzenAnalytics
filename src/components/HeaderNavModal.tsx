@@ -2,7 +2,15 @@ import clsx from "clsx";
 import { ArrowDown, ArrowUp, Minus, PanelTop, Plus } from "lucide-react";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { Segmented } from "./Segmented";
-import { headerSections, isDefaultHeaderNav, moreGroups } from "../lib/headerNav";
+import { Slider } from "./Slider";
+import {
+  ICON_WIDTH_BASE_PX,
+  ICON_WIDTH_STEPS,
+  headerSections,
+  iconButtonWidth,
+  isDefaultHeaderNav,
+  moreGroups,
+} from "../lib/headerNav";
 import type { NavSection } from "../lib/navSections";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
 
@@ -30,6 +38,8 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
   const reset = useHeaderNavStore((s) => s.reset);
   const iconsOnly = useHeaderNavStore((s) => s.iconsOnly);
   const setIconsOnly = useHeaderNavStore((s) => s.setIconsOnly);
+  const iconWidth = useHeaderNavStore((s) => s.iconWidth);
+  const setIconWidth = useHeaderNavStore((s) => s.setIconWidth);
 
   const inHeader = headerSections(items);
   const rest = moreGroups(items);
@@ -62,6 +72,22 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
             ]}
           />
         </div>
+        {/* Ширина кнопок — только у значков: у кнопки с названием её задаёт
+            само название. */}
+        {iconsOnly && (
+          <Slider
+            layout="stacked"
+            label="Ширина кнопок"
+            value={iconWidth}
+            min={0}
+            max={ICON_WIDTH_STEPS}
+            step={1}
+            onChange={setIconWidth}
+            format={(v) => (v === 0 ? "Стандартная" : `Ступень ${v} из ${ICON_WIDTH_STEPS}`)}
+            hint={`Сейчас ${iconButtonWidth(iconWidth) ?? ICON_WIDTH_BASE_PX} px — высота кнопок не меняется`}
+            className="mb-5 max-w-md"
+          />
+        )}
         <div className="grid gap-6 md:grid-cols-2 md:gap-8">
           <section>
             <div className="flex items-baseline justify-between gap-3 mb-2">
@@ -147,7 +173,7 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
           type="button"
           className="btn-ghost"
           onClick={reset}
-          disabled={isDefaultHeaderNav(items) && !iconsOnly}
+          disabled={isDefaultHeaderNav(items) && !iconsOnly && iconWidth === 0}
         >
           Стандартный вид
         </button>

@@ -16,7 +16,7 @@ import { DEFAULT_HEADER_NAV } from "../lib/headerNav";
 describe("основное меню: вид «только значки»", () => {
   beforeEach(() => {
     disk.clear();
-    useHeaderNavStore.setState({ items: [...DEFAULT_HEADER_NAV], iconsOnly: false, loaded: false });
+    useHeaderNavStore.setState({ items: [...DEFAULT_HEADER_NAV], iconsOnly: false, iconWidth: 0, loaded: false });
   });
 
   it("по умолчанию — с названиями, в том числе у старых сохранений без этой настройки", async () => {
@@ -35,14 +35,27 @@ describe("основное меню: вид «только значки»", () =
     expect(useHeaderNavStore.getState().iconsOnly).toBe(true);
   });
 
+  it("ширина кнопок сохраняется, лишнее обрезается до стандартной", async () => {
+    useHeaderNavStore.getState().setIconWidth(7);
+    await Promise.resolve();
+    expect(disk.get("headerNavIconWidth")).toBe(7);
+    useHeaderNavStore.setState({ iconWidth: 0 });
+    await useHeaderNavStore.getState().hydrate();
+    expect(useHeaderNavStore.getState().iconWidth).toBe(7);
+    useHeaderNavStore.getState().setIconWidth(42);
+    expect(useHeaderNavStore.getState().iconWidth).toBe(0);
+  });
+
   it("«Стандартный вид» возвращает и разделы, и названия", async () => {
     useHeaderNavStore.getState().remove("/");
+    useHeaderNavStore.getState().setIconWidth(5);
     useHeaderNavStore.getState().setIconsOnly(true);
     useHeaderNavStore.getState().reset();
     await Promise.resolve();
     expect(useHeaderNavStore.getState().items).toEqual([...DEFAULT_HEADER_NAV]);
     expect(useHeaderNavStore.getState().iconsOnly).toBe(false);
     expect(disk.get("headerNavIconsOnly")).toBe(false);
+    expect(useHeaderNavStore.getState().iconWidth).toBe(0);
   });
 
   it("мусор в сохранении не включает значки", async () => {
