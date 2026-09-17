@@ -52,15 +52,11 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
         subtitle="Какие разделы стоят в основном меню, а какие — в «Ещё»"
       />
       <ModalBody scroll gap={0}>
-        <div className="flex items-center justify-between gap-x-4 gap-y-2 flex-wrap mb-5">
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold">Вид меню</h3>
-            <p className="text-xs text-muted">
-              {iconsOnly
-                ? "Только значки — название раздела появляется при наведении"
-                : "Значки и названия разделов"}
-            </p>
-          </div>
+        {/* Вид меню — одной строкой при любом выборе: подпись, переключатель и
+            ширина кнопок. Ширина нужна только значкам, поэтому с названиями
+            бегунок погашен, а не спрятан — строка не меняет вид при переключении. */}
+        <div className="flex items-center gap-3 mb-5">
+          <h3 className="text-sm font-semibold whitespace-nowrap">Вид меню</h3>
           <Segmented
             size="sm"
             label="Вид меню"
@@ -71,29 +67,22 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
               { value: "icons", label: "Только значки" },
             ]}
           />
-        </div>
-        {/* Ширина кнопок — только у значков: у кнопки с названием её задаёт
-            само название. */}
-        {iconsOnly && (
           <Slider
-            layout="stacked"
+            size="sm"
             label="Ширина кнопок"
             value={iconWidth}
             min={0}
             max={ICON_WIDTH_STEPS}
             step={1}
             onChange={setIconWidth}
-            format={(v) => (v === 0 ? "Стандартная" : `Ступень ${v} из ${ICON_WIDTH_STEPS}`)}
-            hint={`Сейчас ${iconButtonWidth(iconWidth) ?? ICON_WIDTH_BASE_PX} px — высота кнопок не меняется`}
-            className="mb-5 max-w-md"
+            disabled={!iconsOnly}
+            format={(v) => `${iconButtonWidth(v) ?? ICON_WIDTH_BASE_PX} px`}
+            className={clsx("ml-auto", !iconsOnly && "opacity-50")}
           />
-        )}
+        </div>
         <div className="grid gap-6 md:grid-cols-2 md:gap-8">
           <section>
-            <div className="flex items-baseline justify-between gap-3 mb-2">
-              <h3 className="text-sm font-semibold">В меню</h3>
-              <span className="text-xs text-muted tabular-nums">{inHeader.length}</span>
-            </div>
+            <h3 className="text-sm font-semibold mb-2">В меню</h3>
             {inHeader.length === 0 ? (
               <p className="text-sm text-muted py-2">
                 Все разделы — в «Ещё». Добавьте нужные кнопкой «+» справа.
