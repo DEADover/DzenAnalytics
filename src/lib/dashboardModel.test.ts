@@ -55,6 +55,30 @@ describe("monthProgress — насколько месяц прожит", () => {
     expect(monthProgress("2028-02", new Date(2028, 1, 10)).days).toBe(29);
   });
 
+  // День 28: «Август» — это 28.08–27.09. По календарю 17 сентября выходило
+  // «последний день», а с ним ехали темп трат и прогноз (жалоба 17.09.2026).
+  it("отчётный месяц с 28-го числа: 17 сентября он ещё идёт", () => {
+    const p = monthProgress("2026-08", new Date(2026, 8, 17, 12), 28);
+    expect(p.days).toBe(31);
+    expect(p.day).toBe(21);
+    expect(p.left).toBe(10);
+    expect(p.running).toBe(true);
+  });
+
+  it("отчётный месяц с 28-го числа: первый и последний день", () => {
+    expect(monthProgress("2026-08", new Date(2026, 7, 28), 28)).toMatchObject({
+      day: 1,
+      running: true,
+    });
+    expect(monthProgress("2026-08", new Date(2026, 8, 27), 28)).toMatchObject({
+      day: 31,
+      left: 0,
+      running: true,
+    });
+    // 28 сентября начался следующий период — этот закрыт.
+    expect(monthProgress("2026-08", new Date(2026, 8, 28), 28).running).toBe(false);
+  });
+
   it("будущий месяц: ноль прожитых дней, а не отрицательные", () => {
     const p = monthProgress("2026-12", new Date(2026, 7, 18));
     expect(p.day).toBe(0);
@@ -192,6 +216,8 @@ describe("monthEnd", () => {
     expect(monthEnd("2026-08")).toBe("2026-08-31");
     expect(monthEnd("2026-02")).toBe("2026-02-28");
     expect(monthEnd("2028-02")).toBe("2028-02-29");
+    // Отчётный месяц с 28-го числа кончается 27-м числом следующего.
+    expect(monthEnd("2026-08", 28)).toBe("2026-09-27");
   });
 });
 

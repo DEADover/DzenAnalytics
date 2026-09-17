@@ -8,6 +8,7 @@
  */
 
 import type { Currency, CurrencyRates } from "../types";
+import { periodRange, spanDays } from "./period";
 import type { RecurringCandidate } from "./aggregations";
 import { toBase } from "./csv";
 
@@ -26,23 +27,31 @@ export interface MonthProgress {
 }
 
 /**
- * Прогресс календарного месяца `ym` относительно момента `now`.
+ * Прогресс отчётного месяца `ym` относительно момента `now`.
+ *
+ * Считаем по ОТЧЁТНОМУ периоду, а не по календарю: с первым днём 28 «Август» —
+ * это 28.08–27.09, и 17 сентября он прожит на две трети. По календарю выходило
+ * «последний день», а вместе с ним съезжали темп трат и прогноз.
  *
  * Будущий месяц — это ноль прожитых дней, а не «ещё не начался»: так вызывающей
  * стороне не нужно отдельно разбирать этот случай, доли просто выходят нулевыми.
  */
-export function monthProgress(ym: string, now: Date = new Date()): MonthProgress {
-  const year = Number(ym.slice(0, 4));
-  const month = Number(ym.slice(5, 7));
-  const days = new Date(year, month, 0).getDate();
-  const startsAt = new Date(year, month - 1, 1).getTime();
-  const endsAt = new Date(year, month, 1).getTime();
-  const t = now.getTime();
+export function monthProgress(
+  ym: string,
+  now: Date = new Date(),
+  startDay: number = 1
+): MonthProgress {
+  const { from, to } = periodRange(ym, startDay);
+  const days = spanDays(from, to);
+  const startsAt = Date.parse(`${from}T00:00:00`);
+  // Период кончается ВЕЧЕРОМ последнего дня: сравниваем с началом следующего.
+  const endsAt = Date.parse(`${to}T00:00:00`) + 86_400_000;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
-  if (t >= endsAt) return { day: days, days, progress: 1, left: 0, running: false };
-  if (t < startsAt) return { day: 0, days, progress: 0, left: days, running: false };
+  if (today >= endsAt) return { day: days, days, progress: 1, left: 0, running: false };
+  if (today < startsAt) return { day: 0, days, progress: 0, left: days, running: false };
 
-  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getDate();
+  const day = Math.round((today - startsAt) / 86_400_000) + 1;
   return { day, days, progress: day / days, left: days - day, running: true };
 }
 
@@ -188,12 +197,15 @@ export function robustCeiling(
   return { cap, clipped: true };
 }
 
-/** Последний день месяца `ym` в виде YYYY-MM-DD. */
-export function monthEnd(ym: string): string {
-  const year = Number(ym.slice(0, 4));
-  const month = Number(ym.slice(5, 7));
-  const days = new Date(year, month, 0).getDate();
-  return `${ym}-${String(days).padStart(2, "0")}`;
+/**
+ * Последний день отчётного месяца `ym` в виде YYYY-MM-DD.
+ *
+ * С первым днём 28 «Август» кончается 27 сентября, а не 31 августа: по
+ * календарному концу «ближайшие платежи до конца месяца» и сравнение с
+ * прошлым месяцем обрывались на дате, которая давно прошла.
+ */
+export function monthEnd(ym: string, startDay: number = 1): string {
+  return periodRange(ym, startDay).to;
 }
 
 /**

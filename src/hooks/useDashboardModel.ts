@@ -73,6 +73,8 @@ export interface DashboardModel {
   base: Currency;
   /** Текущий период в виде YYYY-MM. */
   ym: string;
+  /** Первый день отчётного месяца — по нему подписываются даты периода. */
+  monthStartDay: number;
   month: MonthProgress;
 
   /** Совокупный баланс и его история. */
@@ -170,7 +172,7 @@ export function useDashboardModel(): DashboardModel {
   const liveAccounts = useLiveAccounts();
 
   const ym = useMemo(() => currentPeriod(monthStartDay), [monthStartDay]);
-  const month = useMemo(() => monthProgress(ym), [ym]);
+  const month = useMemo(() => monthProgress(ym, new Date(), monthStartDay), [ym, monthStartDay]);
 
   const months = useMemo(
     () => groupByMonth(transactions, { monthStartDay }),
@@ -313,8 +315,8 @@ export function useDashboardModel(): DashboardModel {
   }, [transactions]);
 
   const upcoming = useMemo(
-    () => upcomingPayments(recurring, rates, today, monthEnd(ym), commentFor),
-    [recurring, rates, today, ym, commentFor]
+    () => upcomingPayments(recurring, rates, today, monthEnd(ym, monthStartDay), commentFor),
+    [recurring, rates, today, ym, monthStartDay, commentFor]
   );
   const upcomingTotalBase = useMemo(() => upcomingTotal(upcoming), [upcoming]);
 
@@ -375,6 +377,7 @@ export function useDashboardModel(): DashboardModel {
     ready: transactions.length > 0,
     base,
     ym,
+    monthStartDay,
     month,
     netWorth,
     netWorthSeries,

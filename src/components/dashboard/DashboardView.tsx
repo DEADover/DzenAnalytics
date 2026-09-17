@@ -52,6 +52,7 @@ import {
 import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
 import { formatMoney, monthLabel, formatDate } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
+import { periodRange } from "../../lib/period";
 import { useDashboardModel, type DashboardModel } from "../../hooks/useDashboardModel";
 import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
 import { useZenPlanned } from "../../hooks/useZenPlanned";
@@ -169,6 +170,16 @@ function PlannedTotals({ out, income, base }: { out: number; income: number; bas
 
 /* ─────────────────────────────  итоги месяца  ───────────────────────────── */
 
+/**
+ * Даты отчётного периода — подсказкой к пилюле. При первом дне не 1-м одно
+ * название обманывает: «Август» с днём 28 идёт по 27 сентября.
+ */
+function monthPillHint(m: DashboardModel): string | undefined {
+  if (m.monthStartDay === 1) return undefined;
+  const r = periodRange(m.ym, m.monthStartDay);
+  return formatDate(r.from, "full") + " — " + formatDate(r.to, "full");
+}
+
 /** Подпись пилюли месяца: название и сколько дней осталось. */
 function monthPill(m: DashboardModel): string {
   return (
@@ -212,6 +223,7 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
         className={`self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] border border-border text-text font-semibold ${
           sunken ? "bg-panel" : "bg-panel2"
         }`}
+        title={monthPillHint(m)}
       >
         {monthPill(m)}
       </h1>
@@ -350,7 +362,10 @@ function HeroSplit({ m }: { m: DashboardModel }) {
   const short = m.free.value < 0;
   return (
     <>
-      <h1 className="self-start rounded-full px-3.5 py-1 text-[11px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold">
+      <h1
+        className="self-start rounded-full px-3.5 py-1 text-[11px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold"
+        title={monthPillHint(m)}
+      >
         {monthPill(m)}
       </h1>
 
@@ -452,7 +467,7 @@ export function DashboardView() {
     [transactions]
   );
   const mom = useMemo(
-    () => monthOverMonth(transactions, m.ym, monthStartDay, lastDate || monthEnd(m.ym)),
+    () => monthOverMonth(transactions, m.ym, monthStartDay, lastDate || monthEnd(m.ym, monthStartDay)),
     [transactions, m.ym, monthStartDay, lastDate]
   );
   /**
@@ -479,7 +494,7 @@ export function DashboardView() {
   const todayIso = new Date().toISOString().slice(0, 10);
   // С просроченными: платёж, который прошляпили, — главное, что виджет обязан
   // показать (issue #87).
-  const zenPlannedAll = useZenPlanned(todayIso, monthEnd(m.ym), true);
+  const zenPlannedAll = useZenPlanned(todayIso, monthEnd(m.ym, m.monthStartDay), true);
   // Просроченные, снятые вручную и ещё не уехавшие в облако, на главной не
   // показываем вовсе: на «Регулярных» они висят зачёркнутыми, чтобы правку
   // можно было откатить, а здесь это был бы шум.
@@ -671,7 +686,7 @@ export function DashboardView() {
                 rows={zenPlanned}
                 base={m.base}
                 today={todayIso}
-                until={monthEnd(m.ym)}
+                until={monthEnd(m.ym, m.monthStartDay)}
               />
             ) : (
               <UpcomingList m={m} />
