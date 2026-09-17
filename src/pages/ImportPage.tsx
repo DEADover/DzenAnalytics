@@ -91,7 +91,6 @@ import {
 } from "../store/useCounterpartyEditsStore";
 import * as db from "../lib/db";
 import { ImportXlsxCard } from "../components/ImportXlsxCard";
-import { Callout } from "../components/Callout";
 import { RangeInput } from "../components/Slider";
 
 type Mode = "replace" | "merge";
@@ -2641,40 +2640,6 @@ export function ImportPage() {
               </div>
             </div>
 
-            {orphanEditIds.length > 0 && (
-                  <Callout tone="warn" className="mb-3">
-                    <div>
-                      <div>
-                        <strong>{orphanEditIds.length}</strong>{" "}
-                        {pluralRu(orphanEditIds.length, ["правка", "правки", "правок"])}{" "}
-                        {pluralRu(orphanEditIds.length, ["зависла", "зависли", "зависли"])}{" "}
-                        — подходящей операции в данных нет. Обычно остаётся после
-                        перехода с CSV на API (меняются id): такие правки не
-                        применяются и не уходят в облако, а ре-синк их не убирает.
-                      </div>
-                      <button
-                        onClick={async () => {
-                          const n = orphanEditIds.length;
-                          const ok = await confirm({
-                            title: "Убрать зависшие правки?",
-                            message: `${n} ${pluralRu(n, ["правка", "правки", "правок"])} без подходящей операции ${pluralRu(n, ["будет удалена", "будут удалены", "будут удалены"])} из локального оверлея. На облако не влияет.`,
-                            confirmLabel: "Убрать",
-                            tone: "danger",
-                          });
-                          if (!ok) return;
-                          await clearManyEdits(orphanEditIds);
-                          await reapplyRules();
-                        }}
-                        className="btn-danger text-xs mt-2"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Убрать {orphanEditIds.length}{" "}
-                        {pluralRu(orphanEditIds.length, ["зависшую", "зависшие", "зависших"])}{" "}
-                        {pluralRu(orphanEditIds.length, ["правку", "правки", "правок"])}
-                      </button>
-                    </div>
-                  </Callout>
-                )}
 
             {/* Sync history, merged into this card. Rendered as an inset panel
                 (the same nested-block treatment the Бэкапы tab uses) so the
@@ -2715,6 +2680,41 @@ export function ImportPage() {
                             посмотреть и откатить
                           </button>
                         </>
+                      )}
+                      {/* Зависшие правки — в этой же строке, а не плашкой над
+                          журналом: плашка появлялась и меняла высоту карточки. */}
+                      {orphanEditIds.length > 0 && (
+                        <span className="text-warn">
+                          {" · "}
+                          {formatNum(orphanEditIds.length)}{" "}
+                          {pluralRu(orphanEditIds.length, ["правка зависла", "правки зависли", "правок зависли"])}
+                          <InfoPopover label="Что такое зависшие правки">
+                            <p>
+                              Подходящей операции в данных нет. Обычно остаётся после
+                              перехода с CSV на API (меняются id): такие правки не
+                              применяются и не уходят в облако, а ре-синк их не убирает.
+                              Убрать их можно здесь — на облако это не влияет.
+                            </p>
+                          </InfoPopover>{" "}
+                          <button
+                            type="button"
+                            className="text-expense hover:underline"
+                            onClick={async () => {
+                              const n = orphanEditIds.length;
+                              const ok = await confirm({
+                                title: "Убрать зависшие правки?",
+                                message: `${n} ${pluralRu(n, ["правка", "правки", "правок"])} без подходящей операции ${pluralRu(n, ["будет удалена", "будут удалены", "будут удалены"])} из локального оверлея. На облако не влияет.`,
+                                confirmLabel: "Убрать",
+                                tone: "danger",
+                              });
+                              if (!ok) return;
+                              await clearManyEdits(orphanEditIds);
+                              await reapplyRules();
+                            }}
+                          >
+                            убрать
+                          </button>
+                        </span>
                       )}
                     </span>
                     {pushStatus === "syncing" ? (

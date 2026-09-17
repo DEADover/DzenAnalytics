@@ -1,8 +1,7 @@
-import { MonitorSmartphone, X } from "lucide-react";
+import { MonitorSmartphone } from "lucide-react";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { SettingRow } from "./SettingRow";
 import { Switch } from "./Switch";
-import { Callout } from "./Callout";
 import { InfoTerm } from "./InfoPopover";
 import { useCloudSettingsStore } from "../store/useCloudSettingsStore";
 import { SERVICE_ACCOUNT_TITLE } from "../lib/cloudSettings";
@@ -25,44 +24,47 @@ export function CloudSettingsCard() {
   const setEnabled = useCloudSettingsStore((s) => s.setEnabled);
   const dismissNotice = useCloudSettingsStore((s) => s.dismissNotice);
 
-  const status = !enabled
-    ? "Выключено — только в этом браузере"
-    : busy
-      ? "Сверяются с Дзен-мани…"
-      : error
-        ? `Не удалось сверить: ${error}`
-        : lastSyncAt
-          ? `Включено · сверено ${new Date(lastSyncAt).toLocaleString("ru-RU", {
-              day: "numeric",
-              month: "long",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}`
-          : "Включено — сверится при следующей синхронизации";
+  const status = notice
+    ? "Выключено: служебный счёт удалили в Дзен-мани"
+    : !enabled
+      ? "Выключено — только в этом браузере"
+      : busy
+        ? "Сверяются с Дзен-мани…"
+        : error
+          ? `Не удалось сверить: ${error}`
+          : lastSyncAt
+            ? `Включено · сверено ${new Date(lastSyncAt).toLocaleString("ru-RU", {
+                day: "numeric",
+                month: "long",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}`
+            : "Включено — сверится при следующей синхронизации";
 
   return (
     <div className="card-tray card-pad">
       <SettingsSectionHeader icon={MonitorSmartphone} title="Настройки на всех устройствах" />
 
-      {notice && (
-        <Callout tone="warn" className="mt-1 mb-2">
-          <div className="flex items-start gap-2">
-            <span className="flex-1">{notice}</span>
-            <button
-              type="button"
-              className="btn-icon btn-icon-sm shrink-0"
-              aria-label="Скрыть пояснение"
-              onClick={() => void dismissNotice()}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </Callout>
-      )}
-
       <SettingRow
         title="Переносить через Дзен-мани"
-        status={status}
+        status={
+          notice ? (
+            <>
+              {status}
+              {" · "}
+              <button
+                type="button"
+                className="text-accent hover:underline"
+                onClick={() => void dismissNotice()}
+              >
+                Понятно
+              </button>
+            </>
+          ) : (
+            status
+          )
+        }
+        statusTone={notice || (error && !busy && enabled) ? "warn" : undefined}
         help={
           <>
             <p>

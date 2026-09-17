@@ -13,6 +13,7 @@ import { InfoPopover } from "./InfoPopover";
 export function SettingRow({
   title,
   status,
+  statusTone,
   help,
   control,
   dense,
@@ -21,6 +22,11 @@ export function SettingRow({
   title: string;
   /** Одна строка о текущем состоянии — что сейчас происходит с этой настройкой. */
   status?: ReactNode;
+  /**
+   * Статус — предупреждение. Предупреждение в настройках идёт ЭТОЙ строкой, а
+   * не плашкой над ней: плашка появлялась и пропадала и меняла высоту карточки.
+   */
+  statusTone?: "warn" | "expense";
   /** Подробности за знаком вопроса. Без них строка идёт вовсе без кнопки. */
   help?: ReactNode;
   /** Контрол справа: поле, переключатель, пикер. */
@@ -47,7 +53,15 @@ export function SettingRow({
       >
         <div className="min-w-0">
           <SettingLabel title={title} help={help} />
-          {status && <div className="text-xs text-muted mt-0.5">{status}</div>}
+          {status && (
+            <div
+              className={`text-xs mt-0.5 ${
+                statusTone === "warn" ? "text-warn" : statusTone === "expense" ? "text-expense" : "text-muted"
+              }`}
+            >
+              {status}
+            </div>
+          )}
         </div>
         {control && <div className="shrink-0">{control}</div>}
       </div>
