@@ -28,7 +28,7 @@ export const CLOUD_APP = "dzenanalytics";
 /** Версия формата. Запись новее, чем знает приложение, только читаем. */
 export const CLOUD_FORMAT_VERSION = 1;
 /** Название служебного счёта. Счёт в архиве и вне баланса. */
-export const SERVICE_ACCOUNT_TITLE = "DzenAnalytics · настройки";
+export const SERVICE_ACCOUNT_TITLE = "DzenAnalytics Settings";
 /** Служебный счёт Zerro — тоже не деньги пользователя, у себя его прячем. */
 const ZERRO_ACCOUNT_TITLE = "🤖 [Zerro Data]";
 /** Сколько помним удалённые правила, чтобы они не воскресли с другого устройства. */
