@@ -138,9 +138,20 @@ export function CategorySunburst({
   const [hoverCenter, setHoverCenter] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  // Кольцо рисует только положительные категории — отрицательный сектор
+  // нарисовать нельзя. Но категория, где возвраты перекрыли траты, из ИТОГА не
+  // выпадает: раньше она пропадала и из заголовка, и из таблицы, и «Расходы»
+  // здесь выходили больше, чем в «Операциях», ровно на её минус.
   const cats = useMemo(() => data.filter((c) => c.total > 0), [data]);
-  const total = useMemo(() => cats.reduce((s, c) => s + c.total, 0), [cats]);
-  const totalCount = useMemo(() => cats.reduce((s, c) => s + c.count, 0), [cats]);
+  const negativeCats = useMemo(() => data.filter((c) => c.total < 0), [data]);
+  /** Сумма секторов — от неё доли и углы кольца. */
+  const ringTotal = useMemo(() => cats.reduce((s, c) => s + c.total, 0), [cats]);
+  /** Чистый итог с возвратами — тот же, что «Расходы» в «Операциях». */
+  const total = useMemo(
+    () => ringTotal + negativeCats.reduce((s, c) => s + c.total, 0),
+    [ringTotal, negativeCats]
+  );
+  const totalCount = useMemo(() => data.reduce((s, c) => s + c.count, 0), [data]);
 
   const kindWord = kind === "expense" ? "Расходы" : "Доходы";
 
@@ -152,14 +163,16 @@ export function CategorySunburst({
 
   // Список рядом с кольцом — общей таблицей категорий. В приближении — одна
   // категория с раскрытыми подкатегориями.
-  const legendRows: CategoryTableRow[] = (effectiveDrill && drillNode ? [drillNode] : cats).map((c) => {
+  const legendRows: CategoryTableRow[] = (
+    effectiveDrill && drillNode ? [drillNode] : [...cats, ...negativeCats]
+  ).map((c) => {
     const cc = color(c.name);
     return {
       key: c.name,
       name: c.name,
       value: c.total,
       count: c.count,
-      share: total > 0 ? c.total / total : 0,
+      share: ringTotal > 0 ? c.total / ringTotal : 0,
       children: c.subs
         .filter((sub) => sub.total > 0)
         .map((sub) => ({
@@ -168,7 +181,7 @@ export function CategorySunburst({
           parent: c.name,
           value: sub.total,
           count: sub.count,
-          share: total > 0 ? sub.total / total : 0,
+          share: ringTotal > 0 ? sub.total / ringTotal : 0,
           dotFallback: cc,
         })),
     };
@@ -198,7 +211,7 @@ export function CategorySunburst({
 
   const slices = useMemo<Slice[]>(() => {
     const out: Slice[] = [];
-    if (total <= 0) return out;
+    if (ringTotal <= 0) return out;
 
     if (effectiveDrill && drillNode) {
       // Drilled: outer solid band = the category itself, inner ring = its subs.
@@ -261,7 +274,7 @@ export function CategorySunburst({
     // Top level: inner ring = categories, outer ring = their subcategories.
     let a = 0;
     for (const c of cats) {
-      const span = (c.total / total) * TAU;
+      const span = (c.total / ringTotal) * TAU;
       const ca = color(c.name);
       out.push({
         key: c.name,
@@ -301,7 +314,7 @@ export function CategorySunburst({
       a += span;
     }
     return out;
-  }, [cats, total, effectiveDrill, drillNode, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cats, ringTotal, effectiveDrill, drillNode, meta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDim = (s: Slice) => {
     if (!hover) return false;
@@ -330,9 +343,9 @@ export function CategorySunburst({
         if (hover.sub) {
           const sub = cat.subs.find((s) => s.name === hover.sub);
           if (sub)
-            return { name: sub.name, value: sub.total, count: sub.count, pct: sub.total / total };
+            return { name: sub.name, value: sub.total, count: sub.count, pct: sub.total / ringTotal };
         }
-        return { name: cat.name, value: cat.total, count: cat.count, pct: cat.total / total };
+        return { name: cat.name, value: cat.total, count: cat.count, pct: cat.total / ringTotal };
       }
     }
     if (drillNode)
@@ -340,7 +353,7 @@ export function CategorySunburst({
         name: drillNode.name,
         value: drillNode.total,
         count: drillNode.count,
-        pct: drillNode.total / total,
+        pct: drillNode.total / ringTotal,
       };
     return { name: `Все ${kindWord.toLowerCase()}`, value: total, count: totalCount, pct: 1 };
   })();
@@ -551,7 +564,8 @@ export function CategorySunburst({
               }
               onRowClick={(r) => {
                 if (r.parent) onOpenSubcategory(r.key);
-                else if (effectiveDrill || !r.children?.length) onOpenCategory(r.name);
+                // Категорию в минусе в кольце не приблизить — её сектора нет.
+                else if (effectiveDrill || !r.children?.length || r.value < 0) onOpenCategory(r.name);
                 else drillInto(r.name);
               }}
             />

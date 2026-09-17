@@ -127,7 +127,9 @@ export function CategoryTable({
       width: "5.5rem",
       label: "Доля",
       sortValue: (r) => r.share,
-      render: (r) => formatPct(r.share, 1),
+      // У категории в минусе (возвраты больше трат) доли нет: она не часть
+      // кольца и не кусок итога, а поправка к нему.
+      render: (r) => (r.value < 0 ? "—" : formatPct(r.share, 1)),
     },
     {
       key: "count",
