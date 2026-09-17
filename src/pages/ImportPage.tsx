@@ -626,6 +626,12 @@ export function ImportPage() {
   const setMonthStartDay = useReportPeriodStore((s) => s.setMonthStartDay);
   /** День из настроек Дзен-мани; при нём своя настройка не действует. */
   const zenMonthStartDay = useReportPeriodStore((s) => s.zenDay);
+  const followZenDay = useReportPeriodStore((s) => s.followZenDay);
+  // День расходится с Дзен-мани — отчёты здесь и в приложении будут о разных
+  // отрезках. Не запрещаем, но говорим об этом прямо в строке настройки.
+  const dayDiffersFromZen = zenMonthStartDay !== null && zenMonthStartDay !== monthStartDay;
+  const dayWindow = (day: number) =>
+    day === 1 ? "Календарный месяц" : `С ${day}-го числа по ${day - 1}-е следующего`;
   useEffect(() => {
     if (!reportPeriodLoaded) reportPeriodHydrate();
   }, [reportPeriodLoaded, reportPeriodHydrate]);
@@ -1443,9 +1449,9 @@ export function ImportPage() {
                 переходе в другой раздел. Точка на кнопке — фильтры заданы.
               </p>
               <p className="mt-2">
-                <strong>На странице.</strong> Панель стоит первым блоком
-                каждой страницы и всегда на виду, как было раньше; кнопки в
-                шапке в этом случае нет.
+                <strong>На странице.</strong> Так работает по умолчанию:
+                панель стоит первым блоком каждой страницы и всегда на виду;
+                кнопки в шапке в этом случае нет.
               </p>
             </>
           }
@@ -1715,11 +1721,25 @@ export function ImportPage() {
         <SettingRow
           title="Первый день отчётного месяца"
           status={
-            (zenMonthStartDay !== null ? "Как в Дзен-мани · " : "") +
-            (monthStartDay === 1
-              ? "Календарный месяц"
-              : `С ${monthStartDay}-го числа по ${monthStartDay - 1}-е следующего`)
+            dayDiffersFromZen ? (
+              <>
+                {dayWindow(monthStartDay)}
+                {` · В Дзен-мани — ${
+                  zenMonthStartDay === 1 ? "календарный месяц" : `с ${zenMonthStartDay}-го числа`
+                }, отчёты могут не сойтись с приложением · `}
+                <button
+                  type="button"
+                  className="text-accent hover:underline"
+                  onClick={() => void followZenDay()}
+                >
+                  Как в Дзен-мани
+                </button>
+              </>
+            ) : (
+              (zenMonthStartDay !== null ? "Как в Дзен-мани · " : "") + dayWindow(monthStartDay)
+            )
           }
+          statusTone={dayDiffersFromZen ? "warn" : undefined}
           help={
             <>
               <p>
@@ -1738,14 +1758,16 @@ export function ImportPage() {
                 месяце, поэтому их не предлагаем.
               </p>
               <p>
-                При подключённом Дзен-мани день берётся из его настроек, чтобы
-                отчёты не расходились с приложением, — поменять его можно там.
-                Своё значение здесь действует в режиме CSV.
+                При подключённом Дзен-мани день сразу берётся из его настроек,
+                чтобы отчёты не расходились с приложением. Поставите здесь
+                другой — действовать будет он, а в строке появится
+                предупреждение: аналитика тогда считает не тот отрезок, что
+                показывает приложение Дзен-мани. «Как в Дзен-мани» возвращает
+                день из приложения.
               </p>
             </>
           }
           control={
-            zenMonthStartDay !== null ? undefined : (
             <input
               type="number"
               min={1}
@@ -1760,7 +1782,6 @@ export function ImportPage() {
                  однозначное число не висело у левого края. */
               className="input text-sm w-16 tabular-nums text-center"
             />
-            )
           }
         />
 

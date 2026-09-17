@@ -107,7 +107,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   statementLine: false,
   syncLogOpen: false,
   hideThanks: false,
-  filtersMode: "button",
+  filtersMode: "page",
   loaded: false,
 
   hydrate: async () => {
@@ -129,7 +129,8 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       statementLine: stored?.statementLine === true,
       syncLogOpen: stored?.syncLogOpen === true,
       hideThanks: stored?.hideThanks === true,
-      filtersMode: stored?.filtersMode === "page" ? "page" : "button",
+      // По умолчанию фильтры стоят на странице; панель по кнопке — выбор человека.
+      filtersMode: stored?.filtersMode === "button" ? "button" : "page",
       loaded: true,
     });
   },

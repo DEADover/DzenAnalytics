@@ -23,6 +23,7 @@ export function MonthPicker({
   maxYM,
   active,
   mode = "month",
+  hint,
   size = "sm",
   onSelect,
   onSelectYear,
@@ -36,6 +37,12 @@ export function MonthPicker({
   active: boolean;
   /** Что выбираем — месяц или год. */
   mode?: "month" | "year";
+  /**
+   * Подсказка к подписи: при отчётном месяце не с 1-го числа название месяца
+   * само по себе обманывает — «Август» с днём 28 идёт по 27 сентября. Даты
+   * отрезка показываем подсказкой, чтобы не растить кнопку.
+   */
+  hint?: string;
   /**
    * Ступень: `sm` 34 — ряд общего фильтра и шапки карточек, `md` 42 — ряд
    * контролов раздела, где рядом дорожки крупной ступени.
@@ -130,6 +137,7 @@ export function MonthPicker({
         }}
         aria-haspopup="dialog"
         aria-expanded={open}
+        title={hint}
         className={clsx(
           "seg-item",
           size === "md" ? "seg-item-md min-w-[132px]" : "seg-item-sm min-w-[118px]",

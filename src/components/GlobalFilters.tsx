@@ -34,6 +34,9 @@ import {
 } from "../store/useZenmoneyStore";
 import { accountOptions } from "../lib/accountOptions";
 import { useFiltersStore, type DatePreset } from "../store/useFiltersStore";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
+import { periodRange } from "../lib/period";
+import { formatDate } from "../lib/format";
 import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
@@ -368,6 +371,16 @@ export function GlobalFilters({
   const currentMonthYM =
     anchored && periodCtl.monthYM ? periodCtl.monthYM : dataRange.maxYM;
 
+  // Отчётный месяц не с 1-го числа: подпись «Август» идёт по 27 сентября, и
+  // без дат её читают неверно. Даты — подсказкой к кнопке месяца.
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  const monthHint = useMemo(() => {
+    if (monthStartDay === 1 || !anchored || periodCtl.preset === "year" || !currentMonthYM)
+      return undefined;
+    const r = periodRange(currentMonthYM, monthStartDay);
+    return formatDate(r.from, "full") + " — " + formatDate(r.to, "full");
+  }, [monthStartDay, anchored, periodCtl.preset, currentMonthYM]);
+
   // Default preset is now "current month"; treat anything else as user-set.
   const now = new Date();
   const defaultMonthYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -630,6 +643,7 @@ export function GlobalFilters({
                 maxYM={dataRange.maxYM}
                 active={anchored}
                 mode={periodCtl.preset === "year" ? "year" : "month"}
+                hint={monthHint}
                 onSelect={(ym) => periodCtl.setMonth(ym)}
                 onSelectYear={(y) => periodCtl.setYear(y)}
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
