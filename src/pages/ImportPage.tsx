@@ -814,10 +814,10 @@ export function ImportPage() {
         className="self-start -mt-1 scroll-soft-x max-w-full"
         options={[
           { value: "source", label: "Данные", icon: Database },
-          { value: "operations", label: "Справочники", icon: ArrowLeftRight },
-          { value: "processing", label: "Расчёты", icon: Calculator },
-          { value: "interface", label: "Оформление", icon: ALargeSmall },
           { value: "backups", label: "Бэкапы", icon: History },
+          { value: "interface", label: "Оформление", icon: ALargeSmall },
+          { value: "processing", label: "Расчёты", icon: Calculator },
+          { value: "operations", label: "Справочники", icon: ArrowLeftRight },
         ]}
       />
 
