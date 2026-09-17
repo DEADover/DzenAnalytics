@@ -413,6 +413,30 @@ export function AccountsPage() {
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  /**
+   * Выбор счёта в списке перестраивает график «Изменение по счёту», а он стоит
+   * НИЖЕ списка: без прокрутки клик ничего видимого не делал. Поэтому после
+   * выбора подъезжаем к графику — только на «Движении» (на «Капитале» выбор
+   * график не меняет) и только если он не виден целиком.
+   */
+  const flowChartRef = useRef<HTMLDivElement>(null);
+  const scrollToFlowChart = useRef(false);
+  const selectAccount = (next: string | null) => {
+    setSelectedAccount(next);
+    scrollToFlowChart.current = next !== null && tab === "flow";
+  };
+  useEffect(() => {
+    if (!scrollToFlowChart.current) return;
+    scrollToFlowChart.current = false;
+    const el = flowChartRef.current;
+    if (!el) return;
+    const headerH =
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--app-header-h")) || 0;
+    const r = el.getBoundingClientRect();
+    if (r.top >= headerH && r.bottom <= window.innerHeight) return;
+    const smooth = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "start", behavior: smooth ? "smooth" : "auto" });
+  }, [selectedAccount]);
   // Настройки показа живут в сторе и переживают уход на другую страницу —
   // раньше они были `useState` и обнулялись при каждом возврате сюда.
   const prefs = useAccountsViewStore();
@@ -2043,7 +2067,7 @@ export function AccountsPage() {
                 >
                   <div className="flex items-start justify-between mb-2 gap-2">
                     <button
-                      onClick={() => setSelectedAccount(isSel ? null : a.account)}
+                      onClick={() => selectAccount(isSel ? null : a.account)}
                       className="flex items-center gap-2 min-w-0 text-left flex-1"
                       title={a.displayTitle}
                     >
@@ -2096,7 +2120,7 @@ export function AccountsPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setSelectedAccount(isSel ? null : a.account)}
+                    onClick={() => selectAccount(isSel ? null : a.account)}
                     className="block text-left w-full"
                   >
                     <div className="caps-label">
@@ -2345,7 +2369,7 @@ export function AccountsPage() {
                   return (
                     <Fragment key={a.account}>
                     <tr
-                      onClick={() => setSelectedAccount(isSel ? null : a.account)}
+                      onClick={() => selectAccount(isSel ? null : a.account)}
                       onDoubleClick={() => openAccountEditor(a.id)}
                       className={`align-middle cursor-pointer group ${
                         isSel ? "bg-accent/10" : "hover:bg-panel2/50"
@@ -2873,7 +2897,12 @@ export function AccountsPage() {
         </div>
       </div>
 
-      <div className={tab === "flow" ? "card-tray card-pad" : "hidden"}>
+      {/* Отступ прокрутки — на высоту шапки: иначе график подъезжал под неё. */}
+      <div
+        ref={flowChartRef}
+        className={tab === "flow" ? "card-tray card-pad" : "hidden"}
+        style={{ scrollMarginTop: "calc(var(--app-header-h, 64px) + 12px)" }}
+      >
         <CardHeader
           icon={TrendingUp}
           title={selectedAccount ? `Изменение по счёту: ${selectedAccount}` : "Изменение по фильтру"}
@@ -2984,7 +3013,7 @@ export function AccountsPage() {
                     <tr
                       key={r.account.id}
                       onClick={() =>
-                        setSelectedAccount(isSel ? null : r.account.title)
+                        selectAccount(isSel ? null : r.account.title)
                       }
                       className={`cursor-pointer group ${
                         isSel ? "bg-accent/10" : "hover:bg-panel2/50"
