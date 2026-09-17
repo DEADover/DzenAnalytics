@@ -414,21 +414,22 @@ export function AccountsPage() {
 
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   /**
-   * Выбор счёта в списке перестраивает график «Изменение по счёту», а он стоит
-   * НИЖЕ списка: без прокрутки клик ничего видимого не делал. Поэтому после
-   * выбора подъезжаем к графику — только на «Движении» (на «Капитале» выбор
-   * график не меняет) и только если он не виден целиком.
+   * Выбор счёта в списке перестраивает график вкладки — «Изменение по счёту»
+   * на «Движении», остаток этого счёта на «Капитале», — а графики стоят НИЖЕ
+   * списка: без прокрутки клик ничего видимого не делал. Поэтому после выбора
+   * подъезжаем к графику, если он не виден целиком.
    */
   const flowChartRef = useRef<HTMLDivElement>(null);
-  const scrollToFlowChart = useRef(false);
+  const capitalChartRef = useRef<HTMLDivElement>(null);
+  const scrollTarget = useRef<HTMLDivElement | null>(null);
   const selectAccount = (next: string | null) => {
     setSelectedAccount(next);
-    scrollToFlowChart.current = next !== null && tab === "flow";
+    scrollTarget.current =
+      next === null ? null : tab === "flow" ? flowChartRef.current : capitalChartRef.current;
   };
   useEffect(() => {
-    if (!scrollToFlowChart.current) return;
-    scrollToFlowChart.current = false;
-    const el = flowChartRef.current;
+    const el = scrollTarget.current;
+    scrollTarget.current = null;
     if (!el) return;
     const headerH =
       parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--app-header-h")) || 0;
@@ -1210,11 +1211,19 @@ export function AccountsPage() {
    * (восемь крупнейших и «Прочие»). Пустой массив — пользователь снял все
    * галочки: рисовать нечего, и подменять это «всеми» нельзя.
    */
+  /**
+   * Счёт, выбранный в списке, на «Капитале» показывается на графике один —
+   * поверх сохранённого фильтра графика, не меняя его: сняли выбор, и график
+   * вернулся к своим счетам. Раньше выбор строки здесь не делал ничего.
+   */
+  const capitalPick = capitalView && selectedAccount ? selectedAccount : null;
+  const chartView = capitalPick ? "stacked" : view;
   const chartOnly = useMemo<string[] | null>(() => {
+    if (capitalPick) return [capitalPick];
     if (chartAccounts.size === 0) return null;
     if (chartAccounts.has(FILTER_NONE)) return [];
     return [...chartAccounts];
-  }, [chartAccounts]);
+  }, [chartAccounts, capitalPick]);
   const chartFiltered = chartOnly !== null && chartOnly.length > 0;
   const chartNothingPicked = chartOnly !== null && chartOnly.length === 0;
 
@@ -2632,36 +2641,44 @@ export function AccountsPage() {
         )}
       </div>
 
-      <div className={tab === "capital" ? "card-tray card-pad" : "hidden"}>
+      <div
+        ref={capitalChartRef}
+        className={tab === "capital" ? "card-tray card-pad" : "hidden"}
+        style={{ scrollMarginTop: "calc(var(--app-header-h, 64px) + 12px)" }}
+      >
         {/* Подпись говорит про период ровно то, что есть на деле. Раньше у
             стопки стояло «без фильтров» всегда — а она строится из того же
             набора операций, что и остальное. */}
         <CardHeader
-          icon={view === "stacked" ? Layers : LineChartIcon}
+          icon={chartView === "stacked" ? Layers : LineChartIcon}
           title={
-            view === "stacked"
-              ? hasRealBalances
-                ? "Остатки по счетам"
-                : "Накоплено по счетам"
-              : "Совокупный баланс"
+            capitalPick
+              ? `${hasRealBalances ? "Остаток по счёту" : "Накоплено по счёту"}: ${capitalPick}`
+              : chartView === "stacked"
+                ? hasRealBalances
+                  ? "Остатки по счетам"
+                  : "Накоплено по счетам"
+                : "Совокупный баланс"
           }
           subtitle={
             <>
-              {view === "stacked" && chartNothingPicked ? (
+              {chartView === "stacked" && chartNothingPicked ? (
                 // Ни одного счёта не отмечено — рисовать нечего, и рассказывать
                 // про слои и период тут значило бы описывать пустое место.
                 "Счета для показа не выбраны"
               ) : (
                 <>
-                  {view === "stacked"
-                    ? chartFiltered
-                      ? // При фильтре «Итого» — сумма выбранных счетов, а не
-                        // совокупный баланс. Промолчать об этом нельзя: рядом
-                        // стоит показатель «Совокупный баланс» с другим числом.
-                        "Только выбранные счета · «Итого» — их сумма"
-                      : hasRealBalances
-                        ? "Каждый счёт своим слоем"
-                        : "Накопление с нуля, без начальных остатков"
+                  {chartView === "stacked"
+                    ? capitalPick
+                      ? "Выбран в списке счетов"
+                      : chartFiltered
+                        ? // При фильтре «Итого» — сумма выбранных счетов, а не
+                          // совокупный баланс. Промолчать об этом нельзя: рядом
+                          // стоит показатель «Совокупный баланс» с другим числом.
+                          "Только выбранные счета · «Итого» — их сумма"
+                        : hasRealBalances
+                          ? "Каждый счёт своим слоем"
+                          : "Накопление с нуля, без начальных остатков"
                     : "Активы минус долги на каждый день"}
                   {/* Про ОТРЕЗОК, а не про способ счёта: остатки всегда из всей
                       истории, период лишь выбирает показанный кусок. */}
@@ -2669,7 +2686,8 @@ export function AccountsPage() {
                   {/* Без «Прочих» подпись молчит: слои строятся по операциям, и
                       счёт вообще без движения в стопку не попадает — сказать
                       тут «все счета» значило бы соврать. */}
-                  {view === "stacked" &&
+                  {chartView === "stacked" &&
+                    !capitalPick &&
                     (chartFiltered
                       ? ` · ${chartOnly!.length} из ${chartAccountOptions.length}`
                       : stackHasOther
@@ -2688,7 +2706,12 @@ export function AccountsPage() {
               {/* Фильтр счетов — только у стопки: «Совокупно» показывает активы
                   минус долги целиком, и выкидывать оттуда счета нельзя, конец
                   кривой прибит к сумме ВСЕХ реальных остатков. */}
-              {view === "stacked" && chartAccountOptions.length > 1 && (
+              {capitalPick && (
+                <button onClick={() => selectAccount(null)} className="btn-ghost text-xs shrink-0">
+                  Все счета
+                </button>
+              )}
+              {!capitalPick && chartView === "stacked" && chartAccountOptions.length > 1 && (
                 <MultiSelect
                   className="w-48 shrink-0"
                   label="Счета"
@@ -2715,8 +2738,12 @@ export function AccountsPage() {
               <Segmented
                 size="sm"
                 label="Вид графика"
-                value={view}
-                onChange={setView}
+                value={chartView}
+                // Выбор другого вида — выход из показа одного счёта.
+                onChange={(next) => {
+                  if (capitalPick) selectAccount(null);
+                  setView(next);
+                }}
                 className="shrink-0"
                 options={[
                   { value: "stacked", label: "По счетам", icon: Layers, title: "Разложить по счетам" },
@@ -2732,7 +2759,7 @@ export function AccountsPage() {
           }
         />
         <div className="h-96">
-          {view === "stacked" && chartNothingPicked ? (
+          {chartView === "stacked" && chartNothingPicked ? (
             <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted">
               <div>Не выбрано ни одного счёта.</div>
               <button
@@ -2742,7 +2769,7 @@ export function AccountsPage() {
                 Показать все
               </button>
             </div>
-          ) : view === "stacked" ? (
+          ) : chartView === "stacked" ? (
             <ResponsiveContainer>
               {/* `stackOffset="sign"`: активы растут вверх от нуля, долги — вниз,
                   каждый от своей стороны. Без него стопка складывается подряд, и
