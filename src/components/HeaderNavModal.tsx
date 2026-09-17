@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, Minus, PanelTop, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Minus, MoreHorizontal, PanelTop, Plus } from "lucide-react";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { Segmented } from "./Segmented";
 import { Slider } from "./Slider";
@@ -55,11 +55,12 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
         {/* Вид меню — одной строкой при любом выборе: подпись, переключатель и
             ширина кнопок. Ширина нужна только значкам, поэтому с названиями
             бегунок погашен, а не спрятан — строка не меняет вид при переключении. */}
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex flex-wrap items-center gap-3 mb-5">
           <h3 className="text-sm font-semibold whitespace-nowrap">Вид меню</h3>
           <Segmented
             size="sm"
             label="Вид меню"
+            className="shrink-0"
             value={iconsOnly ? "icons" : "labels"}
             onChange={(v) => setIconsOnly(v === "icons")}
             options={[
@@ -80,9 +81,12 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
             className={clsx("ml-auto", !iconsOnly && "opacity-50")}
           />
         </div>
-        <div className="grid gap-6 md:grid-cols-2 md:gap-8">
-          <section>
-            <h3 className="text-sm font-semibold mb-2">В меню</h3>
+        {/* Две половины — две панели: то, что уже стоит в меню, — в акцентной,
+            остальное — в нейтральной. Одним списком с заголовками они читались
+            как продолжение друг друга, и было не понять, где кончается меню. */}
+        <div className="grid gap-4 md:grid-cols-2 items-start">
+          <section className="rounded-2xl border border-accent/30 bg-accent/5 p-3">
+            <HalfHeader icon={PanelTop} title="В меню" hint="Стоят в шапке" accent />
             {inHeader.length === 0 ? (
               <p className="text-sm text-muted py-2">
                 Все разделы — в «Ещё». Добавьте нужные кнопкой «+» справа.
@@ -124,18 +128,18 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
                 ))}
               </ul>
             )}
-            <p className="text-xs text-muted mt-3">
+            <p className="text-xs text-muted mt-3 px-1">
               Порядок сверху вниз — это порядок слева направо. Если разделы не
               помещаются в шапку, меню листается вбок — колесом мыши или тачпадом.
             </p>
           </section>
 
-          <section>
-            <h3 className="text-sm font-semibold mb-2">В «Ещё»</h3>
+          <section className="rounded-2xl border border-border bg-panel2/40 p-3">
+            <HalfHeader icon={MoreHorizontal} title="В «Ещё»" hint="Открываются из «Ещё»" />
             <div className="space-y-4">
               {rest.map((group) => (
                 <div key={group.title}>
-                  <div className="caps-label mb-1">{group.title}</div>
+                  <div className="caps-label mb-1 px-1">{group.title}</div>
                   <ul className="space-y-0.5">
                     {group.items.map((s) => (
                       <SectionRow key={s.to} section={s}>
@@ -174,6 +178,27 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Шапка половины окна: значок, название и то, где эти разделы окажутся. */
+function HalfHeader({
+  icon: Icon,
+  title,
+  hint,
+  accent = false,
+}: {
+  icon: typeof PanelTop;
+  title: string;
+  hint: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-1 mb-3">
+      <Icon className={clsx("w-4 h-4 shrink-0", accent ? "text-accent" : "text-muted")} aria-hidden />
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <span className="text-xs text-muted">· {hint}</span>
+    </div>
+  );
+}
+
 /** Строка раздела: значок, название, пояснение и кнопки справа. */
 function SectionRow({
   section: { label, hint, icon: Icon },
@@ -189,7 +214,7 @@ function SectionRow({
     <li
       className={clsx(
         "flex items-center gap-3 px-2.5 py-1.5 rounded-xl",
-        framed ? "border border-border bg-panel2/40" : "hover:bg-panel2/60"
+        framed ? "border border-border bg-panel shadow-sm" : "hover:bg-panel"
       )}
     >
       <Icon className="w-4 h-4 shrink-0 text-muted" />
