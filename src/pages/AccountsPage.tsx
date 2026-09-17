@@ -1145,7 +1145,7 @@ export function AccountsPage() {
   );
 
   /**
-   * Варианты фильтра для графика — тот же перечень счетов, что и в списке под
+   * Варианты фильтра для графика — тот же перечень счетов, что и в списке над
    * ним, и с теми же группами по виду счёта, что в глобальном фильтре. Долговой
    * счёт раскрыт по контрагентам: выбранный человек получает СВОЙ слой на
    * графике — историю того, сколько он должен вам (или вы ему).
@@ -1754,459 +1754,13 @@ export function AccountsPage() {
         />
       </StatRow>
 
-      <div className={tab === "capital" ? "card-tray card-pad" : "hidden"}>
-        {/* Подпись говорит про период ровно то, что есть на деле. Раньше у
-            стопки стояло «без фильтров» всегда — а она строится из того же
-            набора операций, что и остальное. */}
-        <CardHeader
-          icon={view === "stacked" ? Layers : LineChartIcon}
-          title={
-            view === "stacked"
-              ? hasRealBalances
-                ? "Остатки по счетам"
-                : "Накоплено по счетам"
-              : "Совокупный баланс"
-          }
-          subtitle={
-            <>
-              {view === "stacked" && chartNothingPicked ? (
-                // Ни одного счёта не отмечено — рисовать нечего, и рассказывать
-                // про слои и период тут значило бы описывать пустое место.
-                "Счета для показа не выбраны"
-              ) : (
-                <>
-                  {view === "stacked"
-                    ? chartFiltered
-                      ? // При фильтре «Итого» — сумма выбранных счетов, а не
-                        // совокупный баланс. Промолчать об этом нельзя: рядом
-                        // стоит показатель «Совокупный баланс» с другим числом.
-                        "Только выбранные счета · «Итого» — их сумма"
-                      : hasRealBalances
-                        ? "Каждый счёт своим слоем"
-                        : "Накопление с нуля, без начальных остатков"
-                    : "Активы минус долги на каждый день"}
-                  {/* Про ОТРЕЗОК, а не про способ счёта: остатки всегда из всей
-                      истории, период лишь выбирает показанный кусок. */}
-                  {viewWindow ? " · выбранный период" : " · вся история"}
-                  {/* Без «Прочих» подпись молчит: слои строятся по операциям, и
-                      счёт вообще без движения в стопку не попадает — сказать
-                      тут «все счета» значило бы соврать. */}
-                  {view === "stacked" &&
-                    (chartFiltered
-                      ? ` · ${chartOnly!.length} из ${chartAccountOptions.length}`
-                      : stackHasOther
-                        ? ` · ${stackTopCount} ${pluralRu(stackTopCount, [
-                            "крупнейший счёт",
-                            "крупнейших счёта",
-                            "крупнейших счетов",
-                          ])}, остальные — в «Прочие»`
-                        : "")}
-                </>
-              )}
-            </>
-          }
-          right={
-            <>
-              {/* Фильтр счетов — только у стопки: «Совокупно» показывает активы
-                  минус долги целиком, и выкидывать оттуда счета нельзя, конец
-                  кривой прибит к сумме ВСЕХ реальных остатков. */}
-              {view === "stacked" && chartAccountOptions.length > 1 && (
-                <MultiSelect
-                  className="w-48 shrink-0"
-                  label="Счета"
-                  options={chartAccountOptions}
-                  selected={chartAccounts}
-                  onChange={setChartAccounts}
-                  renderIcon={(name) =>
-                    parseDebtKey(name) ? (
-                      <Users className="w-[18px] h-[18px] text-muted" />
-                    ) : (
-                      <AccountLogo title={name} size={18} />
-                    )
-                  }
-                  labelOf={(name) => parseDebtKey(name)?.payee ?? name}
-                  nestedOf={(name) => parseDebtKey(name) !== null}
-                  nestedUnitForms={["контрагент", "контрагента", "контрагентов"]}
-                  groupOf={chartAccountGroup}
-                  unitForms={["счёт", "счёта", "счетов"]}
-                  searchPlaceholder="Поиск счёта"
-                  archivedSet={chartArchived}
-                  compactSummary
-                />
-              )}
-              <Segmented
-                size="sm"
-                label="Вид графика"
-                value={view}
-                onChange={setView}
-                className="shrink-0"
-                options={[
-                  { value: "stacked", label: "По счетам", icon: Layers, title: "Разложить по счетам" },
-                  {
-                    value: "single",
-                    label: "Совокупно",
-                    icon: LineChartIcon,
-                    title: "Одной линией: активы минус долги",
-                  },
-                ]}
-              />
-            </>
-          }
-        />
-        <div className="h-96">
-          {view === "stacked" && chartNothingPicked ? (
-            <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted">
-              <div>Не выбрано ни одного счёта.</div>
-              <button
-                onClick={() => setChartAccounts(new Set())}
-                className="btn-ghost text-xs"
-              >
-                Показать все
-              </button>
-            </div>
-          ) : view === "stacked" ? (
-            <ResponsiveContainer>
-              {/* `stackOffset="sign"`: активы растут вверх от нуля, долги — вниз,
-                  каждый от своей стороны. Без него стопка складывается подряд, и
-                  долг, нарисованный после активов, утягивает всю ленту вниз, а
-                  следующий актив поднимает обратно: нижний край ленты
-                  оказывается не итогом, а самой глубокой точкой этого блуждания
-                  — и зависит от порядка счетов. Отсюда и брались −5 млн на оси
-                  при итоге −3,7 млн. */}
-              <ComposedChart
-                data={stacked.series}
-                // Знак разведён не смещением, а двумя стопками (см. области
-                // ниже): «sign» умеет только складывать, а нам нужно ещё и
-                // рисовать половинки по отдельности.
-                stackOffset="none"
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-                <XAxis
-                  dataKey="date"
-                  stroke={chartAxisStroke}
-                  fontSize={11}
-                  tickFormatter={(d) => formatDate(d, "short")}
-                  minTickGap={50}
-                />
-                <YAxis
-                  stroke={chartAxisStroke}
-                  fontSize={11}
-                  // У нижнего деления подпись — НАСТОЯЩАЯ сумма минусов, даже
-                  // если зона под нулём растянута: иначе растяжение молча врало
-                  // бы про масштаб.
-                  tickFormatter={(v) =>
-                    formatNum(v === stackAxis.domain[0] ? stackAxis.floor : v, {
-                      compact: true,
-                    })
-                  }
-                  // Ноль обязателен — высота слоя и есть сумма, от чего-то
-                  // другого её отмерять нельзя. Ниже нуля — зона минусов;
-                  // пустоты сверх неё ось не держит.
-                  domain={stackAxis.domain}
-                  ticks={stackAxis.ticks}
-                />
-                <Tooltip {...chartTooltipProps} content={renderStackedTooltip} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <ReferenceLine y={0} stroke={chartAxisStroke} strokeWidth={1} />
-                {/* Каждый счёт — ДВЕ области одного цвета: плюс в стопке над
-                    нулём, минус в стопке под ним. Одной областью нельзя: в день,
-                    когда счёт уходит в минус, его лента ныряет со своего места в
-                    стопке к нулю и закрашивает по дороге всё подряд — на графике
-                    это выглядело провалом на миллионы из-за перерасхода в
-                    полторы тысячи. Разведённые по знаку половинки ведут себя
-                    смирно: наверху лента просто сходит на нет, а под нулём
-                    появляется полоска ровно на величину минуса. */}
-                {stacked.accounts.map((acc, i) => (
-                  <Area
-                    key={acc}
-                    type="monotone"
-                    dataKey={(d: Record<string, number>) => Math.max(toNum(d[acc]), 0)}
-                    // Слой контрагента подписан человеком, а не служебным
-                    // ключом: в легенде и подсказке нужно имя, по которому его
-                    // и выбирали.
-                    name={parseDebtKey(acc)?.payee ?? acc}
-                    stackId="plus"
-                    stroke={STACK_COLORS[i % STACK_COLORS.length]}
-                    fill={STACK_COLORS[i % STACK_COLORS.length]}
-                    fillOpacity={0.7}
-                    isAnimationActive={false}
-                  />
-                ))}
-                {stacked.accounts.map((acc, i) => (
-                  <Area
-                    key={`${acc}\u0000minus`}
-                    type="monotone"
-                    dataKey={(d: Record<string, number>) =>
-                      Math.min(toNum(d[acc]), 0) * stackAxis.scale
-                    }
-                    // Половинка служебная: в легенде она была бы вторым таким же
-                    // названием, а в подсказке — вторым таким же числом.
-                    legendType="none"
-                    tooltipType="none"
-                    stackId="minus"
-                    stroke={STACK_COLORS[i % STACK_COLORS.length]}
-                    fill={STACK_COLORS[i % STACK_COLORS.length]}
-                    fillOpacity={0.7}
-                    isAnimationActive={false}
-                  />
-                ))}
-                {/* Итог отдельной линией: в стопке со знаками его негде увидеть —
-                    активы и долги разведены по разные стороны от нуля, а разница
-                    между ними нигде не нарисована. Раньше число из подсказки не
-                    совпадало ни с одним краем ленты, и это выглядело ошибкой. */}
-                <Line
-                  type="monotone"
-                  // Итог живёт на той же оси: если он ушёл в минус, его надо
-                  // растянуть так же, как области под нулём, иначе линия
-                  // разойдётся с лентой, из которой она и складывается.
-                  dataKey={(d: Record<string, number>) => {
-                    const v = toNum(d.total);
-                    return v < 0 ? v * stackAxis.scale : v;
-                  }}
-                  name="Итого"
-                  stroke={chartTotalStroke}
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={false}
-                  isAnimationActive={false}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          ) : (
-            <ResponsiveContainer>
-              <ComposedChart data={netWorth}>
-                <defs>
-                  <linearGradient id="netfill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={NET_STROKE} stopOpacity={0.6} />
-                    <stop offset="100%" stopColor={NET_STROKE} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-                <XAxis
-                  dataKey="date"
-                  stroke={chartAxisStroke}
-                  fontSize={11}
-                  tickFormatter={(d) => formatDate(d, "short")}
-                  minTickGap={50}
-                />
-                <YAxis
-                  stroke={chartAxisStroke}
-                  fontSize={11}
-                  // Одна линия — здесь ноль не обязателен, и держать его вредно:
-                  // на коротком окне баланс меняется на доли процента, ось от
-                  // нуля сплющивает всё движение в прямую под потолком. Ось
-                  // подстраивается под данные — видно, что происходило.
-                  // У стопки так нельзя: там высота слоя и есть сумма.
-                  domain={["auto", "auto"]}
-                  tickFormatter={(v) =>
-                    formatNum(v, {
-                      compact: true,
-                      fractionDigits: netWorthDigits,
-                    })
-                  }
-                />
-                <Tooltip {...chartTooltipProps} content={renderNetTooltip} />
-                <Area
-                  type="monotone"
-                  dataKey="net"
-                  stroke={NET_STROKE}
-                  strokeWidth={2}
-                  fill="url(#netfill)"
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      <div className={tab === "flow" ? "card-tray card-pad" : "hidden"}>
-        <CardHeader
-          icon={TrendingUp}
-          title={selectedAccount ? `Изменение по счёту: ${selectedAccount}` : "Изменение по фильтру"}
-          subtitle="Нарастающим итогом с начала периода"
-          right={
-            selectedAccount && (
-              <button onClick={() => setSelectedAccount(null)} className="btn-ghost text-xs">
-                Все счета
-              </button>
-            )
-          }
-        />
-        <div className="h-64">
-          <ResponsiveContainer>
-            <AreaChart data={series}>
-              <defs>
-                <linearGradient id="bal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={FLOW_STROKE} stopOpacity={0.5} />
-                  <stop offset="100%" stopColor={FLOW_STROKE} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-              <XAxis
-                dataKey="date"
-                stroke={chartAxisStroke}
-                fontSize={11}
-                tickFormatter={(d) => formatDate(d, "short")}
-                minTickGap={40}
-              />
-              <YAxis
-                stroke={chartAxisStroke}
-                fontSize={11}
-                tickFormatter={(v) => formatNum(v, { compact: true })}
-              />
-              {/* Линия идёт от нуля и копит изменение за период — это не
-                  остаток на счёте, и называть её «Балансом» нельзя: число
-                  расходилось бы с колонкой «Остаток» в списке под графиком. */}
-              <Tooltip {...chartTooltipProps} content={renderFlowTooltip} />
-              <Area
-                type="monotone"
-                dataKey="balance"
-                stroke={FLOW_STROKE}
-                strokeWidth={2}
-                fill="url(#bal)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Доходность вкладов. Только на «Капитале»: на «Движении» речь про обороты
-          за период, а вклад отвечает на другой вопрос — сколько он принесёт. */}
-      {capitalView && depositRows.length > 0 && (
-        <SectionCard
-          icon={PiggyBank} tone="income"
-          title="Вклады"
-          info={
-            <p>
-              Проценты считаются от <InfoTerm>текущего остатка</InfoTerm> по
-              ставке, сроку и капитализации, которые заданы у счёта в Дзен-мани.
-              Это прогноз «сколько набежит, если ничего не трогать», а не выписка
-              банка: будущие пополнения и снятия не учитываются — их никто не
-              обещал. Налог с процентов тоже не считаем: он зависит от ключевой
-              ставки и от всех ваших вкладов сразу, включая те, которых в
-              Дзен-мани нет. Вклад без ставки или без срока в список не попадает
-              — про него нечего сказать.
-            </p>
-          }
-          right={
-            <span className="text-[11px] text-muted tabular-nums">
-              {formatNum(depositRows.length)}{" "}
-              {pluralRu(depositRows.length, ["вклад", "вклада", "вкладов"])}
-            </span>
-          }
-        >
-          {/* Ширины колонок ЗАДАНЫ, а не подобраны по содержимому: иначе один
-              вклад с длинным названием сдвигал бы столбцы с деньгами у всех
-              остальных. Резиновым остаётся только название. */}
-          <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full table-fixed min-w-[50rem]">
-              <colgroup>
-                <col />
-                <col style={{ width: 84 }} />
-                <col style={{ width: 124 }} />
-                <col style={{ width: 124 }} />
-                <col style={{ width: 124 }} />
-                <col style={{ width: 152 }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <HeadCell type="text" label="Вклад" />
-                  <HeadCell type="number" label="Ставка" />
-                  <HeadCell type="number" label="До закрытия" />
-                  <HeadCell type="money" label="Сумма" />
-                  <HeadCell type="money" label="Проценты" />
-                  <HeadCell type="main" label="На конец срока" />
-                </tr>
-              </thead>
-              <tbody>
-                {depositRows.map((r) => {
-                  const p = r.projection;
-                  const done = p.daysLeft === 0;
-                  const isSel = selectedAccount === r.account.title;
-                  // Условия договора — в подсказке к названию: они объясняют
-                  // все числа строки, но строка таблицы остаётся одной.
-                  const terms = `${formatDate(r.account.startDate ?? "", "short")} — ${formatDate(p.endDate, "short")}${p.compounded ? " · С капитализацией" : ""}`;
-                  return (
-                    <tr
-                      key={r.account.id}
-                      onClick={() =>
-                        setSelectedAccount(isSel ? null : r.account.title)
-                      }
-                      className={`cursor-pointer group ${
-                        isSel ? "bg-accent/10" : "hover:bg-panel2/50"
-                      }`}
-                    >
-                      <td className={cellClass("text")} title={`${r.account.title}: ${terms}`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="flex shrink-0">
-                            <AccountLogo
-                              title={r.account.title}
-                              type={r.account.type}
-                              size={20}
-                            />
-                          </span>
-                          <span className="truncate group-hover:text-accent">
-                            {r.account.title}
-                          </span>
-                        </div>
-                      </td>
-                      <td className={cellClass("number")}>
-                        {formatPct(p.percent / 100, 1)}
-                      </td>
-                      <td className={cellClass("number", { className: done ? "text-warn" : undefined })}>
-                        {done
-                          ? "Срок вышел"
-                          : `${formatNum(p.daysLeft)} ${pluralRu(p.daysLeft, [
-                              "день",
-                              "дня",
-                              "дней",
-                            ])}`}
-                      </td>
-                      <td className={cellClass("money")}>
-                        {formatMoney(r.balance, base)}
-                      </td>
-                      <td className={cellClass("money", { muted: done })}>
-                        {done ? "—" : `+${formatMoney(p.interestLeft, base)}`}
-                      </td>
-                      <td className={cellClass("main")}>
-                        {formatMoney(p.atMaturity, base)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              {/* Итог строкой таблицы, а не подписью под ней: каждое число
-                  стоит под своим столбцом и читается как сумма колонки. */}
-              <tfoot>
-                <tr className="table-group-row">
-                  <td className={cellClass("text")}>Итого</td>
-                  <td
-                    className={cellClass("number", { muted: true, className: "font-normal" })}
-                    title="Средняя ставка, взвешенная остатком вклада"
-                  >
-                    {formatPct(depositSum.avgPercent / 100, 1)}
-                  </td>
-                  <td className="table-td" />
-                  <td className={cellClass("money")}>
-                    {formatMoney(depositSum.balance, base)}
-                  </td>
-                  <td className={cellClass("money")}>
-                    +{formatMoney(depositSum.interestLeft, base)}
-                  </td>
-                  <td className={cellClass("money")}>
-                    {formatMoney(depositSum.atMaturity, base)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </SectionCard>
-      )}
-
       {/* Список счетов виден на ОБЕИХ вкладках: это опора страницы, и прятать
           его за вкладкой — значит отвечать на вопрос «сколько у меня есть» без
           перечня счетов. Вкладка меняет не наличие списка, а его столбцы:
-          остаток и доля против оборотов за период. */}
+          остаток и доля против оборотов за период.
+
+          Стоит сразу под итогами, выше графиков (решение 17.09.2026): за
+          остатками на счета и приходят, а графики — уже разбор истории. */}
       <div className="card-tray card-pad">
         <div className="flex items-center gap-2 flex-wrap mb-3">
           {/* Два показателя строки набраны одинаково: жирная подпись — значение
@@ -3053,6 +2607,455 @@ export function AccountsPage() {
           </div>
         )}
       </div>
+
+      <div className={tab === "capital" ? "card-tray card-pad" : "hidden"}>
+        {/* Подпись говорит про период ровно то, что есть на деле. Раньше у
+            стопки стояло «без фильтров» всегда — а она строится из того же
+            набора операций, что и остальное. */}
+        <CardHeader
+          icon={view === "stacked" ? Layers : LineChartIcon}
+          title={
+            view === "stacked"
+              ? hasRealBalances
+                ? "Остатки по счетам"
+                : "Накоплено по счетам"
+              : "Совокупный баланс"
+          }
+          subtitle={
+            <>
+              {view === "stacked" && chartNothingPicked ? (
+                // Ни одного счёта не отмечено — рисовать нечего, и рассказывать
+                // про слои и период тут значило бы описывать пустое место.
+                "Счета для показа не выбраны"
+              ) : (
+                <>
+                  {view === "stacked"
+                    ? chartFiltered
+                      ? // При фильтре «Итого» — сумма выбранных счетов, а не
+                        // совокупный баланс. Промолчать об этом нельзя: рядом
+                        // стоит показатель «Совокупный баланс» с другим числом.
+                        "Только выбранные счета · «Итого» — их сумма"
+                      : hasRealBalances
+                        ? "Каждый счёт своим слоем"
+                        : "Накопление с нуля, без начальных остатков"
+                    : "Активы минус долги на каждый день"}
+                  {/* Про ОТРЕЗОК, а не про способ счёта: остатки всегда из всей
+                      истории, период лишь выбирает показанный кусок. */}
+                  {viewWindow ? " · выбранный период" : " · вся история"}
+                  {/* Без «Прочих» подпись молчит: слои строятся по операциям, и
+                      счёт вообще без движения в стопку не попадает — сказать
+                      тут «все счета» значило бы соврать. */}
+                  {view === "stacked" &&
+                    (chartFiltered
+                      ? ` · ${chartOnly!.length} из ${chartAccountOptions.length}`
+                      : stackHasOther
+                        ? ` · ${stackTopCount} ${pluralRu(stackTopCount, [
+                            "крупнейший счёт",
+                            "крупнейших счёта",
+                            "крупнейших счетов",
+                          ])}, остальные — в «Прочие»`
+                        : "")}
+                </>
+              )}
+            </>
+          }
+          right={
+            <>
+              {/* Фильтр счетов — только у стопки: «Совокупно» показывает активы
+                  минус долги целиком, и выкидывать оттуда счета нельзя, конец
+                  кривой прибит к сумме ВСЕХ реальных остатков. */}
+              {view === "stacked" && chartAccountOptions.length > 1 && (
+                <MultiSelect
+                  className="w-48 shrink-0"
+                  label="Счета"
+                  options={chartAccountOptions}
+                  selected={chartAccounts}
+                  onChange={setChartAccounts}
+                  renderIcon={(name) =>
+                    parseDebtKey(name) ? (
+                      <Users className="w-[18px] h-[18px] text-muted" />
+                    ) : (
+                      <AccountLogo title={name} size={18} />
+                    )
+                  }
+                  labelOf={(name) => parseDebtKey(name)?.payee ?? name}
+                  nestedOf={(name) => parseDebtKey(name) !== null}
+                  nestedUnitForms={["контрагент", "контрагента", "контрагентов"]}
+                  groupOf={chartAccountGroup}
+                  unitForms={["счёт", "счёта", "счетов"]}
+                  searchPlaceholder="Поиск счёта"
+                  archivedSet={chartArchived}
+                  compactSummary
+                />
+              )}
+              <Segmented
+                size="sm"
+                label="Вид графика"
+                value={view}
+                onChange={setView}
+                className="shrink-0"
+                options={[
+                  { value: "stacked", label: "По счетам", icon: Layers, title: "Разложить по счетам" },
+                  {
+                    value: "single",
+                    label: "Совокупно",
+                    icon: LineChartIcon,
+                    title: "Одной линией: активы минус долги",
+                  },
+                ]}
+              />
+            </>
+          }
+        />
+        <div className="h-96">
+          {view === "stacked" && chartNothingPicked ? (
+            <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted">
+              <div>Не выбрано ни одного счёта.</div>
+              <button
+                onClick={() => setChartAccounts(new Set())}
+                className="btn-ghost text-xs"
+              >
+                Показать все
+              </button>
+            </div>
+          ) : view === "stacked" ? (
+            <ResponsiveContainer>
+              {/* `stackOffset="sign"`: активы растут вверх от нуля, долги — вниз,
+                  каждый от своей стороны. Без него стопка складывается подряд, и
+                  долг, нарисованный после активов, утягивает всю ленту вниз, а
+                  следующий актив поднимает обратно: нижний край ленты
+                  оказывается не итогом, а самой глубокой точкой этого блуждания
+                  — и зависит от порядка счетов. Отсюда и брались −5 млн на оси
+                  при итоге −3,7 млн. */}
+              <ComposedChart
+                data={stacked.series}
+                // Знак разведён не смещением, а двумя стопками (см. области
+                // ниже): «sign» умеет только складывать, а нам нужно ещё и
+                // рисовать половинки по отдельности.
+                stackOffset="none"
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+                <XAxis
+                  dataKey="date"
+                  stroke={chartAxisStroke}
+                  fontSize={11}
+                  tickFormatter={(d) => formatDate(d, "short")}
+                  minTickGap={50}
+                />
+                <YAxis
+                  stroke={chartAxisStroke}
+                  fontSize={11}
+                  // У нижнего деления подпись — НАСТОЯЩАЯ сумма минусов, даже
+                  // если зона под нулём растянута: иначе растяжение молча врало
+                  // бы про масштаб.
+                  tickFormatter={(v) =>
+                    formatNum(v === stackAxis.domain[0] ? stackAxis.floor : v, {
+                      compact: true,
+                    })
+                  }
+                  // Ноль обязателен — высота слоя и есть сумма, от чего-то
+                  // другого её отмерять нельзя. Ниже нуля — зона минусов;
+                  // пустоты сверх неё ось не держит.
+                  domain={stackAxis.domain}
+                  ticks={stackAxis.ticks}
+                />
+                <Tooltip {...chartTooltipProps} content={renderStackedTooltip} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <ReferenceLine y={0} stroke={chartAxisStroke} strokeWidth={1} />
+                {/* Каждый счёт — ДВЕ области одного цвета: плюс в стопке над
+                    нулём, минус в стопке под ним. Одной областью нельзя: в день,
+                    когда счёт уходит в минус, его лента ныряет со своего места в
+                    стопке к нулю и закрашивает по дороге всё подряд — на графике
+                    это выглядело провалом на миллионы из-за перерасхода в
+                    полторы тысячи. Разведённые по знаку половинки ведут себя
+                    смирно: наверху лента просто сходит на нет, а под нулём
+                    появляется полоска ровно на величину минуса. */}
+                {stacked.accounts.map((acc, i) => (
+                  <Area
+                    key={acc}
+                    type="monotone"
+                    dataKey={(d: Record<string, number>) => Math.max(toNum(d[acc]), 0)}
+                    // Слой контрагента подписан человеком, а не служебным
+                    // ключом: в легенде и подсказке нужно имя, по которому его
+                    // и выбирали.
+                    name={parseDebtKey(acc)?.payee ?? acc}
+                    stackId="plus"
+                    stroke={STACK_COLORS[i % STACK_COLORS.length]}
+                    fill={STACK_COLORS[i % STACK_COLORS.length]}
+                    fillOpacity={0.7}
+                    isAnimationActive={false}
+                  />
+                ))}
+                {stacked.accounts.map((acc, i) => (
+                  <Area
+                    key={`${acc}\u0000minus`}
+                    type="monotone"
+                    dataKey={(d: Record<string, number>) =>
+                      Math.min(toNum(d[acc]), 0) * stackAxis.scale
+                    }
+                    // Половинка служебная: в легенде она была бы вторым таким же
+                    // названием, а в подсказке — вторым таким же числом.
+                    legendType="none"
+                    tooltipType="none"
+                    stackId="minus"
+                    stroke={STACK_COLORS[i % STACK_COLORS.length]}
+                    fill={STACK_COLORS[i % STACK_COLORS.length]}
+                    fillOpacity={0.7}
+                    isAnimationActive={false}
+                  />
+                ))}
+                {/* Итог отдельной линией: в стопке со знаками его негде увидеть —
+                    активы и долги разведены по разные стороны от нуля, а разница
+                    между ними нигде не нарисована. Раньше число из подсказки не
+                    совпадало ни с одним краем ленты, и это выглядело ошибкой. */}
+                <Line
+                  type="monotone"
+                  // Итог живёт на той же оси: если он ушёл в минус, его надо
+                  // растянуть так же, как области под нулём, иначе линия
+                  // разойдётся с лентой, из которой она и складывается.
+                  dataKey={(d: Record<string, number>) => {
+                    const v = toNum(d.total);
+                    return v < 0 ? v * stackAxis.scale : v;
+                  }}
+                  name="Итого"
+                  stroke={chartTotalStroke}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <ResponsiveContainer>
+              <ComposedChart data={netWorth}>
+                <defs>
+                  <linearGradient id="netfill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={NET_STROKE} stopOpacity={0.6} />
+                    <stop offset="100%" stopColor={NET_STROKE} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+                <XAxis
+                  dataKey="date"
+                  stroke={chartAxisStroke}
+                  fontSize={11}
+                  tickFormatter={(d) => formatDate(d, "short")}
+                  minTickGap={50}
+                />
+                <YAxis
+                  stroke={chartAxisStroke}
+                  fontSize={11}
+                  // Одна линия — здесь ноль не обязателен, и держать его вредно:
+                  // на коротком окне баланс меняется на доли процента, ось от
+                  // нуля сплющивает всё движение в прямую под потолком. Ось
+                  // подстраивается под данные — видно, что происходило.
+                  // У стопки так нельзя: там высота слоя и есть сумма.
+                  domain={["auto", "auto"]}
+                  tickFormatter={(v) =>
+                    formatNum(v, {
+                      compact: true,
+                      fractionDigits: netWorthDigits,
+                    })
+                  }
+                />
+                <Tooltip {...chartTooltipProps} content={renderNetTooltip} />
+                <Area
+                  type="monotone"
+                  dataKey="net"
+                  stroke={NET_STROKE}
+                  strokeWidth={2}
+                  fill="url(#netfill)"
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      <div className={tab === "flow" ? "card-tray card-pad" : "hidden"}>
+        <CardHeader
+          icon={TrendingUp}
+          title={selectedAccount ? `Изменение по счёту: ${selectedAccount}` : "Изменение по фильтру"}
+          subtitle="Нарастающим итогом с начала периода"
+          right={
+            selectedAccount && (
+              <button onClick={() => setSelectedAccount(null)} className="btn-ghost text-xs">
+                Все счета
+              </button>
+            )
+          }
+        />
+        <div className="h-64">
+          <ResponsiveContainer>
+            <AreaChart data={series}>
+              <defs>
+                <linearGradient id="bal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={FLOW_STROKE} stopOpacity={0.5} />
+                  <stop offset="100%" stopColor={FLOW_STROKE} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+              <XAxis
+                dataKey="date"
+                stroke={chartAxisStroke}
+                fontSize={11}
+                tickFormatter={(d) => formatDate(d, "short")}
+                minTickGap={40}
+              />
+              <YAxis
+                stroke={chartAxisStroke}
+                fontSize={11}
+                tickFormatter={(v) => formatNum(v, { compact: true })}
+              />
+              {/* Линия идёт от нуля и копит изменение за период — это не
+                  остаток на счёте, и называть её «Балансом» нельзя: число
+                  расходилось бы с колонкой «Остаток» в списке счетов. */}
+              <Tooltip {...chartTooltipProps} content={renderFlowTooltip} />
+              <Area
+                type="monotone"
+                dataKey="balance"
+                stroke={FLOW_STROKE}
+                strokeWidth={2}
+                fill="url(#bal)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Доходность вкладов. Только на «Капитале»: на «Движении» речь про обороты
+          за период, а вклад отвечает на другой вопрос — сколько он принесёт. */}
+      {capitalView && depositRows.length > 0 && (
+        <SectionCard
+          icon={PiggyBank} tone="income"
+          title="Вклады"
+          info={
+            <p>
+              Проценты считаются от <InfoTerm>текущего остатка</InfoTerm> по
+              ставке, сроку и капитализации, которые заданы у счёта в Дзен-мани.
+              Это прогноз «сколько набежит, если ничего не трогать», а не выписка
+              банка: будущие пополнения и снятия не учитываются — их никто не
+              обещал. Налог с процентов тоже не считаем: он зависит от ключевой
+              ставки и от всех ваших вкладов сразу, включая те, которых в
+              Дзен-мани нет. Вклад без ставки или без срока в список не попадает
+              — про него нечего сказать.
+            </p>
+          }
+          right={
+            <span className="text-[11px] text-muted tabular-nums">
+              {formatNum(depositRows.length)}{" "}
+              {pluralRu(depositRows.length, ["вклад", "вклада", "вкладов"])}
+            </span>
+          }
+        >
+          {/* Ширины колонок ЗАДАНЫ, а не подобраны по содержимому: иначе один
+              вклад с длинным названием сдвигал бы столбцы с деньгами у всех
+              остальных. Резиновым остаётся только название. */}
+          <div className="overflow-x-auto -mx-1 px-1">
+            <table className="w-full table-fixed min-w-[50rem]">
+              <colgroup>
+                <col />
+                <col style={{ width: 84 }} />
+                <col style={{ width: 124 }} />
+                <col style={{ width: 124 }} />
+                <col style={{ width: 124 }} />
+                <col style={{ width: 152 }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <HeadCell type="text" label="Вклад" />
+                  <HeadCell type="number" label="Ставка" />
+                  <HeadCell type="number" label="До закрытия" />
+                  <HeadCell type="money" label="Сумма" />
+                  <HeadCell type="money" label="Проценты" />
+                  <HeadCell type="main" label="На конец срока" />
+                </tr>
+              </thead>
+              <tbody>
+                {depositRows.map((r) => {
+                  const p = r.projection;
+                  const done = p.daysLeft === 0;
+                  const isSel = selectedAccount === r.account.title;
+                  // Условия договора — в подсказке к названию: они объясняют
+                  // все числа строки, но строка таблицы остаётся одной.
+                  const terms = `${formatDate(r.account.startDate ?? "", "short")} — ${formatDate(p.endDate, "short")}${p.compounded ? " · С капитализацией" : ""}`;
+                  return (
+                    <tr
+                      key={r.account.id}
+                      onClick={() =>
+                        setSelectedAccount(isSel ? null : r.account.title)
+                      }
+                      className={`cursor-pointer group ${
+                        isSel ? "bg-accent/10" : "hover:bg-panel2/50"
+                      }`}
+                    >
+                      <td className={cellClass("text")} title={`${r.account.title}: ${terms}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="flex shrink-0">
+                            <AccountLogo
+                              title={r.account.title}
+                              type={r.account.type}
+                              size={20}
+                            />
+                          </span>
+                          <span className="truncate group-hover:text-accent">
+                            {r.account.title}
+                          </span>
+                        </div>
+                      </td>
+                      <td className={cellClass("number")}>
+                        {formatPct(p.percent / 100, 1)}
+                      </td>
+                      <td className={cellClass("number", { className: done ? "text-warn" : undefined })}>
+                        {done
+                          ? "Срок вышел"
+                          : `${formatNum(p.daysLeft)} ${pluralRu(p.daysLeft, [
+                              "день",
+                              "дня",
+                              "дней",
+                            ])}`}
+                      </td>
+                      <td className={cellClass("money")}>
+                        {formatMoney(r.balance, base)}
+                      </td>
+                      <td className={cellClass("money", { muted: done })}>
+                        {done ? "—" : `+${formatMoney(p.interestLeft, base)}`}
+                      </td>
+                      <td className={cellClass("main")}>
+                        {formatMoney(p.atMaturity, base)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {/* Итог строкой таблицы, а не подписью под ней: каждое число
+                  стоит под своим столбцом и читается как сумма колонки. */}
+              <tfoot>
+                <tr className="table-group-row">
+                  <td className={cellClass("text")}>Итого</td>
+                  <td
+                    className={cellClass("number", { muted: true, className: "font-normal" })}
+                    title="Средняя ставка, взвешенная остатком вклада"
+                  >
+                    {formatPct(depositSum.avgPercent / 100, 1)}
+                  </td>
+                  <td className="table-td" />
+                  <td className={cellClass("money")}>
+                    {formatMoney(depositSum.balance, base)}
+                  </td>
+                  <td className={cellClass("money")}>
+                    +{formatMoney(depositSum.interestLeft, base)}
+                  </td>
+                  <td className={cellClass("money")}>
+                    {formatMoney(depositSum.atMaturity, base)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </SectionCard>
+      )}
 
       {editingAccount && (
         <AccountEditModal
