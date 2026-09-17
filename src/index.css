@@ -705,6 +705,10 @@ h2,
   .seg-item-nav {
     @apply gap-2 px-3.5 py-1.5 text-sm leading-5;
   }
+  /* Пункт меню одним значком: поля уже, высота та же, что с подписью. */
+  .seg-item-nav-icon {
+    @apply px-2.5;
+  }
   /* Значок в дорожке: 24 в дорожке 34, 32 в дорожке 42. */
   .seg-icon {
     @apply inline-flex items-center justify-center rounded-control text-muted transition-colors duration-200

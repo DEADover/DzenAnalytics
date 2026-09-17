@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { ArrowDown, ArrowUp, Minus, PanelTop, Plus } from "lucide-react";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { Segmented } from "./Segmented";
 import { headerSections, isDefaultHeaderNav, moreGroups } from "../lib/headerNav";
 import type { NavSection } from "../lib/navSections";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
@@ -10,7 +11,9 @@ import { useHeaderNavStore } from "../store/useHeaderNavStore";
  *
  * Слева — то, что в шапке, со стрелками порядка и кнопкой «убрать в „Ещё“».
  * Справа — всё остальное теми же группами, что в панели «Ещё», с кнопкой
- * «в меню». Правка применяется сразу: шапка видна над окном.
+ * «в меню». Над ними — вид меню: с названиями или одними значками (название
+ * тогда в подсказке при наведении). Правка применяется сразу: шапка видна над
+ * окном.
  */
 export function HeaderNavModal() {
   const open = useHeaderNavStore((s) => s.editorOpen);
@@ -25,6 +28,8 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
   const remove = useHeaderNavStore((s) => s.remove);
   const move = useHeaderNavStore((s) => s.move);
   const reset = useHeaderNavStore((s) => s.reset);
+  const iconsOnly = useHeaderNavStore((s) => s.iconsOnly);
+  const setIconsOnly = useHeaderNavStore((s) => s.setIconsOnly);
 
   const inHeader = headerSections(items);
   const rest = moreGroups(items);
@@ -37,6 +42,26 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
         subtitle="Какие разделы стоят в основном меню, а какие — в «Ещё»"
       />
       <ModalBody scroll gap={0}>
+        <div className="flex items-center justify-between gap-x-4 gap-y-2 flex-wrap mb-5">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold">Вид меню</h3>
+            <p className="text-xs text-muted">
+              {iconsOnly
+                ? "Только значки — название раздела появляется при наведении"
+                : "Значки и названия разделов"}
+            </p>
+          </div>
+          <Segmented
+            size="sm"
+            label="Вид меню"
+            value={iconsOnly ? "icons" : "labels"}
+            onChange={(v) => setIconsOnly(v === "icons")}
+            options={[
+              { value: "labels", label: "С названиями" },
+              { value: "icons", label: "Только значки" },
+            ]}
+          />
+        </div>
         <div className="grid gap-6 md:grid-cols-2 md:gap-8">
           <section>
             <div className="flex items-baseline justify-between gap-3 mb-2">
@@ -122,7 +147,7 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
           type="button"
           className="btn-ghost"
           onClick={reset}
-          disabled={isDefaultHeaderNav(items)}
+          disabled={isDefaultHeaderNav(items) && !iconsOnly}
         >
           Стандартный вид
         </button>

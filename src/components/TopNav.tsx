@@ -40,7 +40,41 @@ import logoDa from "../assets/logo-da.png";
  * пилюля, что у `Segmented`, и та же ступень 42, что у дорожек значков рядом.
  * Прежде меню выходило 43, а дорожка значков — 38.
  */
-const navItem = (active: boolean) => clsx("seg-item seg-item-nav", active && "seg-on");
+const navItem = (active: boolean, iconsOnly = false) =>
+  clsx("seg-item seg-item-nav", iconsOnly && "seg-item-nav-icon", active && "seg-on");
+
+/**
+ * Содержимое пункта меню. С названиями — значок и подпись (значок до `xl`
+ * прячется, иначе меню налезало на кнопки справа). Одними значками — значок в
+ * строке высотой с подпись, чтобы дорожка не стала ниже, а название уходит в
+ * подсказку и для скринридера.
+ */
+function NavItemBody({
+  icon: Icon,
+  label,
+  iconsOnly,
+}: {
+  icon: typeof MoreHorizontal;
+  label: string;
+  iconsOnly: boolean;
+}) {
+  if (iconsOnly) {
+    return (
+      <>
+        <span className="h-5 inline-flex items-center">
+          <Icon className="w-4 h-4" aria-hidden />
+        </span>
+        <span className="sr-only">{label}</span>
+      </>
+    );
+  }
+  return (
+    <>
+      <Icon className="w-4 h-4 max-xl:hidden" />
+      {label}
+    </>
+  );
+}
 const iconItem = (active = false) => clsx("seg-icon seg-icon-md group relative", active && "seg-on");
 /** Строка меню телефона — раздел или действие. */
 const sheetRow = (active = false) =>
@@ -74,6 +108,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   // меряет скрытая копия дорожки ниже: не поместившиеся уходят в «Ещё» первой
   // группой, а не распирают шапку.
   const headerNav = useHeaderNavStore((s) => s.items);
+  const iconsOnly = useHeaderNavStore((s) => s.iconsOnly);
   const openHeaderEditor = useHeaderNavStore((s) => s.openEditor);
   const headerItems = headerSections(headerNav);
   const navWrapRef = useRef<HTMLDivElement>(null);
@@ -106,7 +141,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
     ro.observe(wrap);
     ro.observe(track);
     return () => ro.disconnect();
-  }, [headerNav]);
+  }, [headerNav, iconsOnly]);
 
   // ←/→ листают разделы шапки в её порядке (по умолчанию Главная → Операции →
   // Счета → Категории).
@@ -233,16 +268,16 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             alt="DzenAnalytics"
             className="h-[26px] w-auto shrink-0 mx-2.5"
           />
-          {shownItems.map(({ to, label, icon: Icon }) => (
+          {shownItems.map(({ to, label, icon }) => (
             <SmoothNavLink
               key={to}
               to={to}
               end={to === "/"}
               onNavigate={() => setMoreOpen(false)}
-              className={({ isActive }) => navItem(isActive)}
+              className={({ isActive }) => navItem(isActive, iconsOnly)}
+              title={iconsOnly ? label : undefined}
             >
-              <Icon className="w-4 h-4 max-xl:hidden" />
-              {label}
+              <NavItemBody icon={icon} label={label} iconsOnly={iconsOnly} />
             </SmoothNavLink>
           ))}
 
@@ -251,10 +286,10 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
               onClick={() => setMoreOpen((o) => !o)}
               aria-expanded={moreOpen}
               aria-haspopup="true"
-              className={navItem(moreOpen || inMore)}
+              className={navItem(moreOpen || inMore, iconsOnly)}
+              title={iconsOnly && !moreOpen ? "Ещё" : undefined}
             >
-              <MoreHorizontal className="w-4 h-4 max-xl:hidden" />
-              Ещё
+              <NavItemBody icon={MoreHorizontal} label="Ещё" iconsOnly={iconsOnly} />
             </button>
           </div>
         </nav>
@@ -265,15 +300,13 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
         <div aria-hidden className="absolute left-0 top-0 h-0 w-0 overflow-hidden invisible pointer-events-none">
           <div ref={measureRef} className="seg-track hidden lg:inline-flex w-max">
             <img src={logoDa} alt="" className="h-[26px] w-auto shrink-0 mx-2.5" />
-            {headerItems.map(({ to, label, icon: Icon }) => (
-              <span key={to} className={navItem(false)}>
-                <Icon className="w-4 h-4 max-xl:hidden" />
-                {label}
+            {headerItems.map(({ to, label, icon }) => (
+              <span key={to} className={navItem(false, iconsOnly)}>
+                <NavItemBody icon={icon} label={label} iconsOnly={iconsOnly} />
               </span>
             ))}
-            <span className={navItem(false)}>
-              <MoreHorizontal className="w-4 h-4 max-xl:hidden" />
-              Ещё
+            <span className={navItem(false, iconsOnly)}>
+              <NavItemBody icon={MoreHorizontal} label="Ещё" iconsOnly={iconsOnly} />
             </span>
           </div>
         </div>

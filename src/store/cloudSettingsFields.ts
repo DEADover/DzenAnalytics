@@ -125,6 +125,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useHeaderNavStore, "home.headerNav", (s) => s.items, (v, s) =>
     Array.isArray(v) ? s.replaceItems(v) : undefined
   ),
+  field(useHeaderNavStore, "home.headerNavIconsOnly", (s) => s.iconsOnly, (v, s) =>
+    isBool(v) ? s.setIconsOnly(v) : undefined
+  ),
 ];
 
 export function syncedField(key: string): SyncedField | undefined {
