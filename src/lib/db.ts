@@ -71,6 +71,25 @@ export async function loadJSON<T>(key: string): Promise<T | null> {
 }
 
 /**
+ * Удалить все ключи meta, начинающиеся с `prefix`. Возвращает, сколько удалено.
+ * Нужно для чисток вроде дневного кэша курсов, который больше не ведём.
+ */
+export async function deleteByPrefix(prefix: string): Promise<number> {
+  const db = await getDB();
+  const tx = db.transaction("meta", "readwrite");
+  const keys = await tx.store.getAllKeys();
+  let removed = 0;
+  for (const k of keys) {
+    if (typeof k === "string" && k.startsWith(prefix)) {
+      await tx.store.delete(k);
+      removed++;
+    }
+  }
+  await tx.done;
+  return removed;
+}
+
+/**
  * Full local wipe: clear the transactions store and EVERY meta key except the
  * given `keepKeys` (connection + preferences). This is the «удалить локальные
  * данные» path — it must remove everything derived from / tied to the imported

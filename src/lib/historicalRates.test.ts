@@ -1,16 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// In-memory IndexedDB stand-in so the loader's day-cache works without a real DB.
+// Курсы на диск больше не пишутся: дневной кэш живёт в памяти модуля, а
+// постоянное хранилище одно — сводный индекс в useDataStore. Заглушка нужна
+// только чтобы модуль вообще импортировался.
 const store = new Map<string, unknown>();
 vi.mock("./db", () => ({
   loadJSON: async (k: string) => (store.has(k) ? store.get(k) : null),
   saveJSON: async (k: string, v: unknown) => {
     store.set(k, v);
   },
+  deleteByPrefix: async () => 0,
 }));
 
 import {
   fetchHistoricalRubRates,
+  getHistoricalRubRate,
+  resetDayCache,
+  seedDayRates,
   isWeekendUTC,
   isNoQuoteDayUTC,
   resetMirrorProbe,
@@ -73,6 +79,7 @@ const archiveCalls = () => fetchCalls.filter((u) => u !== LATEST_URL);
 
 beforeEach(() => {
   store.clear();
+  resetDayCache();
   resetMirrorProbe();
   // Боевой темп — один запрос в секунду; прогон девяноста дат с ним занял бы
   // полторы минуты. Сам темп проверяется отдельным блоком ниже.
@@ -189,6 +196,32 @@ describe("historicalRates — темп запросов", () => {
     await fetchHistoricalRubRates(["2026-03-17", "2026-03-18"]);
     expect(archiveCalls()).toHaveLength(0);
     expect(performance.now() - t0).toBeLessThan(200);
+  });
+
+  // Дневного кэша на диске больше нет: после перезапуска даты берутся из
+  // сводного индекса, и сеть для них не нужна.
+  it("даты из индекса после перезапуска не перезапрашиваются", async () => {
+    const first = await fetchHistoricalRubRates(["2026-03-17", "2026-03-18"]);
+    expect(archiveCalls()).toHaveLength(2);
+
+    // Перезапуск: память пуста, на диске — только индекс.
+    resetDayCache();
+    installFetch();
+    seedDayRates(first);
+    const again = await fetchHistoricalRubRates(["2026-03-17", "2026-03-18"]);
+    expect(archiveCalls()).toHaveLength(0);
+    expect(again).toEqual(first);
+  });
+
+  it("выходной из индекса помнит, что курс от предыдущего рабочего дня", async () => {
+    // 14.03.2021 — воскресенье, курс берётся от пятницы 12-го.
+    const warmed = await fetchHistoricalRubRates(["2021-03-14"]);
+    resetDayCache();
+    installFetch();
+    seedDayRates(warmed);
+    const hit = await getHistoricalRubRate("2021-03-14", "USD");
+    expect(archiveCalls()).toHaveLength(0);
+    expect(hit).toEqual({ rate: 90, rateDate: "2021-03-12" });
   });
 });
 

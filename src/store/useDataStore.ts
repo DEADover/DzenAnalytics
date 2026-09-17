@@ -4,6 +4,8 @@ import * as db from "../lib/db";
 import {
   baseWithHistory,
   fetchHistoricalRubRates,
+  purgeLegacyDayCache,
+  seedDayRates,
   type HistDayRates,
 } from "../lib/historicalRates";
 import { buildPayeeAliasMap } from "../lib/payeeNormalize";
@@ -597,6 +599,11 @@ export const useDataStore = create<DataState>((set, get) => ({
     const hist = savedHist || {};
     // Seed histDayRates BEFORE finalize() (which reads it from the store).
     set({ histDayRates: hist });
+    // Индекс — единственное постоянное хранилище курсов: отдаём его загрузчику
+    // вместо прежнего дневного кэша и выбрасываем сам кэш, оставшийся от
+    // старых версий (он дублировал индекс и место занимал вдвое).
+    seedDayRates(hist);
+    void purgeLegacyDayCache();
     let raw = recalcBase(txs, rates, hist);
     raw = applyPayeeGrouping(raw, grouping || false, manualAliases);
     raw = restoreRuleCategories(raw);
@@ -654,6 +661,9 @@ export const useDataStore = create<DataState>((set, get) => ({
         // и будут перезапрошены позже — но пользователю об этом надо сказать.
         unresolved += chunk.length - Object.keys(fetched).length;
         const merged = { ...get().histDayRates, ...fetched };
+        // Новые даты сразу идут и в память загрузчика: тултип курса на дату
+        // откроется без похода в сеть.
+        seedDayRates(fetched);
         await db.saveJSON(HIST_RATES_KEY, merged);
         set({ histDayRates: merged });
         done += chunk.length;

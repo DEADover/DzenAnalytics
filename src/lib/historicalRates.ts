@@ -4,9 +4,15 @@
 //     at the CBR rate of their OWN date (matching how Zenmoney values them),
 //     instead of a single sync-time snapshot. See useDataStore.recalcBase.
 //
-// Rates are "1 unit of foreign currency = N RUB" (Value / Nominal). Cached per
-// day in IndexedDB; CBR's archive is immutable for past dates so a day fetched
-// once never needs refetching.
+// Rates are "1 unit of foreign currency = N RUB" (Value / Nominal).
+//
+// ХРАНИЛИЩЕ ОДНО — сводный индекс `histDayRates` в `useDataStore` (дата
+// операции → курсы дня). Раньше каждый день лежал ВТОРОЙ раз, отдельным ключом
+// `fxRateCbr:<дата>` в IndexedDB, и одни и те же 842 байта на день занимали
+// место дважды — и в базе браузера, и в резервной копии. Теперь дневной кэш
+// живёт в памяти вкладки, а между запусками повторных запросов не возникает:
+// прогрев берёт только даты, которых в индексе ещё нет, а сам индекс
+// «засевает» память при старте (`seedDayRates`).
 
 import * as db from "./db";
 import { toBase } from "./csv";
@@ -22,7 +28,46 @@ interface CbrResponse {
 // no quote). A shorter window left every foreign-currency operation in the first
 // half of January without a historical rate at all.
 const MAX_LOOKBACK_DAYS = 16;
-const CACHE_PREFIX = "fxRateCbr:";
+/** Ключи дневного кэша, который мы больше не пишем: чистим их при старте. */
+export const LEGACY_DAY_CACHE_PREFIX = "fxRateCbr:";
+
+/**
+ * Дневной кэш в памяти: дата публикации ЦБ → курсы. Пустой объект — «в этот
+ * день курса нет» (выходной, праздник, будущая дата), его тоже помним, чтобы
+ * не спрашивать повторно.
+ */
+const dayCache = new Map<string, Record<string, number>>();
+
+/**
+ * Курсы по датам ОПЕРАЦИЙ из сводного индекса. Он уже лежит на диске и ездит в
+ * резервной копии — используем его как готовый ответ вместо запроса к ЦБ.
+ */
+const seededDays = new Map<string, Record<string, number>>();
+
+/** Отдать модулю уже известный индекс — обычно сразу после загрузки с диска. */
+export function seedDayRates(index: Record<string, Record<string, number>>): void {
+  for (const [date, rates] of Object.entries(index)) {
+    if (rates && Object.keys(rates).length > 0) seededDays.set(date, rates);
+  }
+}
+
+/** Для тестов: забыть всё, что накопилось в памяти. */
+export function resetDayCache(): void {
+  dayCache.clear();
+  seededDays.clear();
+}
+
+/**
+ * Одноразовая чистка: выкинуть из IndexedDB дневные кэши прошлых версий. Они
+ * дублируют индекс, а у валютной истории в несколько лет это лишний мегабайт.
+ */
+export async function purgeLegacyDayCache(): Promise<number> {
+  try {
+    return await db.deleteByPrefix(LEGACY_DAY_CACHE_PREFIX);
+  } catch {
+    return 0;
+  }
+}
 /**
  * Сколько дат обрабатываем параллельно.
  *
@@ -289,8 +334,7 @@ function fetchRatesForDate(date: string): Promise<DayFetch> {
 }
 
 async function fetchRatesForDateUncached(date: string): Promise<DayFetch> {
-  const cacheKey = `${CACHE_PREFIX}${date}`;
-  const cached = await db.loadJSON<Record<string, number>>(cacheKey);
+  const cached = dayCache.get(date);
   if (cached) return { rates: cached, authoritative: true };
 
   try {
@@ -308,13 +352,13 @@ async function fetchRatesForDateUncached(date: string): Promise<DayFetch> {
       const rates = Object.fromEntries(
         Object.entries(data.Valute).map(([code, v]) => [code, v.Value / v.Nominal])
       );
-      await db.saveJSON(cacheKey, rates);
+      dayCache.set(date, rates);
       return { rates, authoritative: true };
     }
     if (res.status === 404) {
       // Genuinely no rate for this date (weekend / holiday / future). Cache the
       // empty result so it isn't requested again.
-      await db.saveJSON(cacheKey, {});
+      dayCache.set(date, {});
       return { rates: {}, authoritative: true };
     }
     // 429 — мы всё-таки перебрали темп: тормозим ВСЮ очередь на столько, на
@@ -329,7 +373,7 @@ async function fetchRatesForDateUncached(date: string): Promise<DayFetch> {
     // Спрашиваем у зеркала, живо ли оно, — и только тогда решаем, можно ли
     // запомнить дату как пропуск.
     if (await mirrorIsUp()) {
-      await db.saveJSON(cacheKey, {});
+      dayCache.set(date, {});
       return { rates: {}, authoritative: true };
     }
     return { rates: {}, authoritative: false };
@@ -343,6 +387,12 @@ async function fetchRatesForDateUncached(date: string): Promise<DayFetch> {
 async function resolveDayRates(
   date: string
 ): Promise<{ rates: Record<string, number>; rateDate: string; authoritative: boolean }> {
+  // Дата уже разобрана раньше и лежит в индексе — брать её из сети незачем.
+  // Дату публикации курса индекс не хранит, но она восстанавливается тем же
+  // откатом по календарю, каким её и находили.
+  const seeded = seededDays.get(date);
+  if (seeded) return { rates: seeded, rateDate: lastQuoteDay(date), authoritative: true };
+
   let allAuthoritative = true;
   for (let back = 0; back <= MAX_LOOKBACK_DAYS; back++) {
     // Сервис лежит — откатываться дальше некуда, все запросы всё равно упадут.
@@ -359,6 +409,15 @@ async function resolveDayRates(
     if (!authoritative) allAuthoritative = false;
   }
   return { rates: {}, rateDate: date, authoritative: allAuthoritative };
+}
+
+/** Ближайший день с котировкой — сама дата либо предыдущий рабочий день. */
+function lastQuoteDay(date: string): string {
+  for (let back = 0; back <= MAX_LOOKBACK_DAYS; back++) {
+    const d = shiftDate(date, -back);
+    if (!isNoQuoteDayUTC(d)) return d;
+  }
+  return date;
 }
 
 export interface HistoricalRate {
