@@ -28,7 +28,7 @@ import { useSyncCommands } from "../hooks/useSyncCommands";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 import { SmoothNavLink } from "./SmoothNavLink";
 import { FiltersDock } from "./FiltersDock";
-import { fitCount, headerSections, moreGroups } from "../lib/headerNav";
+import { headerSections, moreGroups } from "../lib/headerNav";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { useFiltersDockStore } from "../store/useFiltersDockStore";
@@ -104,44 +104,62 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   const toggleFilters = useFiltersDockStore((s) => s.toggle);
   const { busy: syncBusy, runFull } = useSyncCommands();
 
-  // Разделы шапки — из настройки (`lib/headerNav`). Сколько из них влезает,
-  // меряет скрытая копия дорожки ниже: не поместившиеся уходят в «Ещё» первой
-  // группой, а не распирают шапку.
+  // Разделы шапки — из настройки (`lib/headerNav`). Все стоят в меню: если по
+  // ширине не помещаются, полоса разделов листается вбок, а не отдаёт лишнее в
+  // «Ещё» — выбранный человеком раздел должен оставаться там, куда его поставили.
   const headerNav = useHeaderNavStore((s) => s.items);
   const iconsOnly = useHeaderNavStore((s) => s.iconsOnly);
   const openHeaderEditor = useHeaderNavStore((s) => s.openEditor);
   const headerItems = headerSections(headerNav);
-  const navWrapRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState(headerItems.length);
-  const shownItems = headerItems.slice(0, fit);
-  const overflow = headerItems.slice(fit).map((s) => s.to);
-  const groups = moreGroups(headerNav, overflow);
+  const groups = moreGroups(headerNav);
   const inMore = groups.some((g) => g.items.some((s) => s.to === loc.pathname));
 
+  const navScrollRef = useRef<HTMLDivElement>(null);
+  /** Есть ли разделы за левым и правым краем полосы — для затухания краёв. */
+  const [navEdges, setNavEdges] = useState({ left: false, right: false });
   useLayoutEffect(() => {
-    const wrap = navWrapRef.current;
-    const track = measureRef.current;
-    if (!wrap || !track) return;
-    const measure = () => {
-      const kids = Array.from(track.children) as HTMLElement[];
-      // Копия спрятана вместе с меню ниже `lg` — там считать нечего.
-      if (kids.length < 2 || track.offsetWidth === 0) return;
-      const [logo, ...rest] = kids;
-      const more = rest.pop()!;
-      const widths = rest.map((el) => el.offsetWidth);
-      const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
-      const content = kids.reduce((sum, el) => sum + el.offsetWidth, 0) + gap * (kids.length - 1);
-      // Поля и кант дорожки + знак + «Ещё» — есть в шапке всегда.
-      const fixed = track.offsetWidth - content + logo.offsetWidth + gap + more.offsetWidth;
-      setFit(fitCount(widths, wrap.clientWidth, fixed, gap));
+    const el = navScrollRef.current;
+    if (!el) return;
+    const update = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      setNavEdges((prev) => {
+        const next = { left: el.scrollLeft > 1, right: max - el.scrollLeft > 1 };
+        return prev.left === next.left && prev.right === next.right ? prev : next;
+      });
     };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(wrap);
-    ro.observe(track);
-    return () => ro.disconnect();
+    // Колесо мыши над меню листает его вбок: у мыши горизонтального колеса нет,
+    // а Shift+колесо никто не угадает. Страница при этом не прокручивается —
+    // поэтому слушатель не пассивный. Когда листать некуда, колесо работает как
+    // обычно.
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth) return;
+      if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    el.addEventListener("wheel", onWheel, { passive: false });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      el.removeEventListener("wheel", onWheel);
+      ro.disconnect();
+    };
   }, [headerNav, iconsOnly]);
+
+  // Открытый раздел подъезжает в видимую часть полосы: иначе после перехода с
+  // палитры или из «Ещё» подсвеченный пункт мог остаться за краем.
+  useEffect(() => {
+    const el = navScrollRef.current;
+    const active = el?.querySelector<HTMLElement>("[aria-current=page]");
+    if (!el || !active) return;
+    const a = active.offsetLeft - el.offsetLeft;
+    if (a < el.scrollLeft) el.scrollLeft = a - 8;
+    else if (a + active.offsetWidth > el.scrollLeft + el.clientWidth)
+      el.scrollLeft = a + active.offsetWidth - el.clientWidth + 8;
+  }, [loc.pathname, headerNav, iconsOnly]);
 
   // ←/→ листают разделы шапки в её порядке (по умолчанию Главная → Операции →
   // Счета → Категории).
@@ -249,7 +267,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
 
         {/* Обёртка держит свободное место и на узком экране, где само меню
             спрятано: без неё кнопки справа сползались бы к знаку. */}
-        <div ref={navWrapRef} className="relative flex-1 flex justify-start min-w-0">
+        <div className="relative flex-1 flex justify-start min-w-0">
         {/* Desktop nav.
 
             Меню собрано в одну дорожку — подложка, кант, мягкая тень, — а не
@@ -258,30 +276,48 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             здесь выбирают один вариант из нескольких, значит и выглядеть должно
             одинаково. Выбранный пункт залит целиком, а не десятью процентами
             цвета, — прежнюю бледную заливку на светлой теме приходилось искать
-            глазами. */}
-        {/* До `xl` у пунктов меню нет значков: при ширине 1024–1279 меню со
-            значками налезало на кнопки справа. Подписи короткие и без значков
-            читаются. */}
-        <nav className="seg-track hidden lg:inline-flex shrink-0">
+            глазами.
+
+            Знак, «Ещё» и карандаш настройки стоят по краям дорожки всегда, а
+            разделы между ними — в полосе, которая листается вбок, если все не
+            помещаются. Края полосы, за которыми есть ещё разделы, затухают. */}
+        {/* До `xl` у пунктов меню с названиями нет значков: при ширине
+            1024–1279 меню со значками налезало на кнопки справа. Подписи
+            короткие и без значков читаются. */}
+        <nav className="seg-track hidden lg:inline-flex min-w-0 max-w-full">
           <img
             src={logoDa}
             alt="DzenAnalytics"
             className="h-[26px] w-auto shrink-0 mx-2.5"
           />
-          {shownItems.map(({ to, label, icon }) => (
-            <SmoothNavLink
-              key={to}
-              to={to}
-              end={to === "/"}
-              onNavigate={() => setMoreOpen(false)}
-              className={({ isActive }) => navItem(isActive, iconsOnly)}
-              title={iconsOnly ? label : undefined}
-            >
-              <NavItemBody icon={icon} label={label} iconsOnly={iconsOnly} />
-            </SmoothNavLink>
-          ))}
+          {/* `-my-1 py-1` — место под свечение выбранного пункта: полоса с
+              прокруткой обрезает всё, что выходит за её край. */}
+          <div
+            ref={navScrollRef}
+            className="scroll-soft-x flex items-center gap-0.5 min-w-0 -my-1 py-1"
+            style={
+              navEdges.left || navEdges.right
+                ? {
+                    maskImage: `linear-gradient(to right, ${navEdges.left ? "transparent" : "#000"}, #000 24px, #000 calc(100% - 24px), ${navEdges.right ? "transparent" : "#000"})`,
+                  }
+                : undefined
+            }
+          >
+            {headerItems.map(({ to, label, icon }) => (
+              <SmoothNavLink
+                key={to}
+                to={to}
+                end={to === "/"}
+                onNavigate={() => setMoreOpen(false)}
+                className={({ isActive }) => clsx(navItem(isActive, iconsOnly), "shrink-0")}
+                title={iconsOnly ? label : undefined}
+              >
+                <NavItemBody icon={icon} label={label} iconsOnly={iconsOnly} />
+              </SmoothNavLink>
+            ))}
+          </div>
 
-          <div>
+          <div className="shrink-0">
             <button
               onClick={() => setMoreOpen((o) => !o)}
               aria-expanded={moreOpen}
@@ -292,24 +328,21 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
               <NavItemBody icon={MoreHorizontal} label="Ещё" iconsOnly={iconsOnly} />
             </button>
           </div>
+          {/* Настройка меню — последней в дорожке: какие разделы в ней стоят,
+              решают здесь же, не заходя в «Ещё» или в настройки. */}
+          <button
+            type="button"
+            onClick={() => {
+              setMoreOpen(false);
+              openHeaderEditor();
+            }}
+            className={clsx(navItem(false, true), "shrink-0 text-muted")}
+            title="Настроить основное меню"
+            aria-label="Настроить основное меню"
+          >
+            <NavItemBody icon={Pencil} label="Настроить основное меню" iconsOnly />
+          </button>
         </nav>
-
-        {/* Копия дорожки со ВСЕМИ разделами шапки — только для замера. Лежит в
-            коробке нулевого размера, поэтому не видна, не ловит нажатий и не
-            раздвигает страницу; разметка и классы — те же, что у меню. */}
-        <div aria-hidden className="absolute left-0 top-0 h-0 w-0 overflow-hidden invisible pointer-events-none">
-          <div ref={measureRef} className="seg-track hidden lg:inline-flex w-max">
-            <img src={logoDa} alt="" className="h-[26px] w-auto shrink-0 mx-2.5" />
-            {headerItems.map(({ to, label, icon }) => (
-              <span key={to} className={navItem(false, iconsOnly)}>
-                <NavItemBody icon={icon} label={label} iconsOnly={iconsOnly} />
-              </span>
-            ))}
-            <span className={navItem(false, iconsOnly)}>
-              <NavItemBody icon={MoreHorizontal} label="Ещё" iconsOnly={iconsOnly} />
-            </span>
-          </div>
-        </div>
         </div>
 
         {/* Правая зона. Тот же вес, что и у левой, — этим и держится середина.
