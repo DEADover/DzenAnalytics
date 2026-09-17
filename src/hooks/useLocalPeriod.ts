@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFiltersStore, type DatePreset } from "../store/useFiltersStore";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { currentPeriod, shiftPeriod } from "../lib/period";
 
 /**
@@ -56,7 +57,10 @@ export function useLocalPeriod(
     pinned ? "month" : gPreset === "custom" ? "custom" : defaultPreset
   );
   const [monthYM, setMonthYM] = useState<string | null>(
-    pinned ?? (gPreset === "custom" ? gMonthYM : currentPeriod(1))
+    pinned ??
+      (gPreset === "custom"
+        ? gMonthYM
+        : currentPeriod(useReportPeriodStore.getState().monthStartDay))
   );
   const [from, setFrom] = useState<string | null>(
     pinned ? null : gPreset === "custom" ? gFrom : null
@@ -105,7 +109,9 @@ export function useLocalPeriod(
       },
       setYear: (year: number) => {
         setPreset("year");
-        setMonthYM(`${year}-${(monthYM ?? currentPeriod(1)).slice(5, 7)}`);
+        setMonthYM(
+          `${year}-${(monthYM ?? currentPeriod(useReportPeriodStore.getState().monthStartDay)).slice(5, 7)}`
+        );
       },
       stepPeriod: (delta: number, fallbackMaxYM: string) => {
         const anchored = preset === "month" || preset === "year";

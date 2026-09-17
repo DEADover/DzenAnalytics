@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { applyFilters, presetToRange, useFiltersStore, FILTER_NONE } from "./useFiltersStore";
 import { MEMBER_SHARED } from "../lib/zenUsers";
-import { periodRange } from "../lib/period";
+import { currentPeriod, periodRange } from "../lib/period";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { tx } from "../test/fixtures";
 
@@ -596,5 +596,41 @@ describe("applyFilters — опорная дата скользящего пер
     expect(
       ids(applyFilters(deleted, filt({ preset: "30d" }), 1, { maxDate: "2026-08-15" }))
     ).toEqual(["июльская"]);
+  });
+});
+
+describe("текущий месяц идёт за первым днём отчётного месяца", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // 17 сентября: при начале месяца с 20-го идёт ещё августовский период.
+    vi.setSystemTime(new Date(2026, 8, 17, 12));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("день из Дзен-мани пришёл после запуска — нетронутый «Сентябрь» становится «Августом»", () => {
+    useFiltersStore.getState().resetToCurrentPeriod(1);
+    expect(useFiltersStore.getState().monthYM).toBe("2026-09");
+    useFiltersStore.getState().followStartDay(1, 20);
+    expect(useFiltersStore.getState()).toMatchObject({ preset: "month", monthYM: "2026-08" });
+    // Отрезок — тот, в котором лежит сегодняшний день.
+    expect(periodRange("2026-08", 20)).toEqual({ from: "2026-08-20", to: "2026-09-19" });
+    expect(currentPeriod(20)).toBe("2026-08");
+  });
+
+  it("и обратно: свой день 20, в Дзен-мани — 1-е", () => {
+    useFiltersStore.getState().resetToCurrentPeriod(20);
+    useFiltersStore.getState().followStartDay(20, 1);
+    expect(useFiltersStore.getState().monthYM).toBe("2026-09");
+  });
+
+  it("пролистанный вручную месяц и другие периоды не трогаются", () => {
+    useFiltersStore.getState().setMonth("2026-05");
+    useFiltersStore.getState().followStartDay(1, 20);
+    expect(useFiltersStore.getState().monthYM).toBe("2026-05");
+
+    useFiltersStore.getState().resetToCurrentPeriod(1);
+    useFiltersStore.getState().setPreset("12m");
+    useFiltersStore.getState().followStartDay(1, 20);
+    expect(useFiltersStore.getState()).toMatchObject({ preset: "12m", monthYM: "2026-09" });
   });
 });

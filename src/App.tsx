@@ -190,13 +190,22 @@ function App() {
   // start with the correct window when startDay != 1. We do this only
   // once on first hydrate to avoid stomping over the user's manual
   // month-step navigation later in the session.
-  const reportPeriodReconciled = useRef(false);
+  //
+  // День может смениться и ПОСЛЕ первой сверки: при подключённом Дзен-мани он
+  // приходит из его настроек позже — из кэша или с синхронизацией. Раньше
+  // сверка шла один раз, по своему дню, и «Сентябрь» в фильтре оставался
+  // отрезком по старому дню: при другом начале месяца в Дзен-мани аналитика
+  // показывала пустой или соседний период, хотя операции были. Теперь текущий
+  // месяц идёт за днём — если человек сам период не листал.
+  const reconciledStartDay = useRef<number | null>(null);
+  const followStartDay = useFiltersStore((s) => s.followStartDay);
   useEffect(() => {
     if (!reportPeriodLoaded) return;
-    if (reportPeriodReconciled.current) return;
-    reportPeriodReconciled.current = true;
-    resetToCurrentPeriod(monthStartDay);
-  }, [reportPeriodLoaded, monthStartDay, resetToCurrentPeriod]);
+    const prev = reconciledStartDay.current;
+    reconciledStartDay.current = monthStartDay;
+    if (prev === null) resetToCurrentPeriod(monthStartDay);
+    else followStartDay(prev, monthStartDay);
+  }, [reportPeriodLoaded, monthStartDay, resetToCurrentPeriod, followStartDay]);
 
   // Once backup settings are loaded, check on mount + every 10 minutes.
   useEffect(() => {

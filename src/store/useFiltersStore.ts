@@ -6,6 +6,10 @@ import { hasCategory } from "../lib/operationTags";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { debtSelection, matchesDebtSelection } from "../lib/debtFilter";
 import { MEMBER_SHARED } from "../lib/zenUsers";
+import { useReportPeriodStore } from "./useReportPeriodStore";
+
+/** Текущий отчётный месяц по действующему первому дню — не календарный. */
+const currentYM = () => currentPeriod(useReportPeriodStore.getState().monthStartDay);
 
 /**
  * «year» — КАЛЕНДАРНЫЙ год, который листается стрелками, а не «последние 12
@@ -126,6 +130,14 @@ interface FiltersState {
   setExcludeOffBalance: (v: boolean) => void;
   setOffBalanceAccounts: (titles: Set<string>) => void;
   resetToCurrentPeriod: (startDay: number) => void;
+  /**
+   * Первый день отчётного месяца сменился — пришёл из Дзен-мани после запуска
+   * или его поменяли в настройках. «Текущий месяц» в фильтре переносится на
+   * новый отчётный период, но только если человек его не трогал: стоит
+   * «Месяц» и ровно текущий период по прежнему дню. Пролистанный вручную
+   * месяц и любые другие периоды остаются как были.
+   */
+  followStartDay: (prevDay: number, nextDay: number) => void;
   reset: () => void;
 }
 
@@ -173,7 +185,7 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
   setYear: (year) =>
     set((s) => ({
       preset: "year",
-      monthYM: `${year}-${(s.monthYM ?? currentPeriod(1)).slice(5, 7)}`,
+      monthYM: `${year}-${(s.monthYM ?? currentYM()).slice(5, 7)}`,
     })),
   stepPeriod: (delta, fallbackMaxYM) => {
     const { preset, monthYM } = get();
@@ -214,12 +226,18 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
   setOffBalanceAccounts: (offBalanceAccounts) => set({ offBalanceAccounts }),
   resetToCurrentPeriod: (startDay) =>
     set({ preset: "month", monthYM: currentPeriod(startDay) }),
+  followStartDay: (prevDay, nextDay) => {
+    if (prevDay === nextDay) return;
+    const { preset, monthYM } = get();
+    if (preset !== "month" || monthYM !== currentPeriod(prevDay)) return;
+    set({ monthYM: currentPeriod(nextDay) });
+  },
   // Preserve the off-balance reference set — it's loaded data, not a filter the
   // user set, so a «сбросить» shouldn't wipe it (only the toggle resets to off).
   reset: () =>
     set((s) => ({
       ...initial,
-      monthYM: currentPeriod(1),
+      monthYM: currentYM(),
       offBalanceAccounts: s.offBalanceAccounts,
     })),
 }));
