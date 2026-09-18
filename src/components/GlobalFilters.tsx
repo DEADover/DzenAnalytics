@@ -382,7 +382,9 @@ export function GlobalFilters({
     return {
       minYM: min.slice(0, 7) || "",
       maxYM: max.slice(0, 7) || "",
-      // Последняя дата целиком: от неё отсчитываются скользящие пресеты.
+      // Крайние даты целиком: от последней отсчитываются скользящие пресеты, а
+      // обе вместе — это и есть отрезок «Всё».
+      minDate: min || null,
       maxDate: max || null,
     };
   }, [transactions]);
@@ -391,6 +393,7 @@ export function GlobalFilters({
   const anchored = periodCtl.preset === "month" || periodCtl.preset === "year";
   /** Действует ручной отрезок — подсвечиваем поля дат, как пикер при месяце. */
   const rangeActive = periodCtl.preset === "custom";
+
   const currentMonthYM =
     anchored && periodCtl.monthYM ? periodCtl.monthYM : dataRange.maxYM;
 
@@ -430,6 +433,34 @@ export function GlobalFilters({
     periodCtl.preset === "ytd"
       ? [...PRESETS, { value: "ytd" as DatePreset, label: "С начала года" }]
       : PRESETS;
+
+  /**
+   * Что показывать в дорожке дат. Свои даты — как есть, у остальных пресетов —
+   * границы, которые они дают на самом деле: «Всё» это вся история, «30 дней»
+   * — конкретные тридцать. Пустые «Начало — Конец» говорили о периоде ровно
+   * ничего, хотя период всегда чем-то ограничен.
+   */
+  const shownRange = useMemo(() => {
+    if (periodCtl.preset === "custom") return { from: periodCtl.from, to: periodCtl.to };
+    const r = presetToRange(
+      periodCtl.preset,
+      dataRange.maxDate,
+      periodCtl.monthYM,
+      monthStartDay
+    );
+    return {
+      from: r.from ?? dataRange.minDate,
+      to: r.to ?? dataRange.maxDate,
+    };
+  }, [
+    periodCtl.preset,
+    periodCtl.from,
+    periodCtl.to,
+    periodCtl.monthYM,
+    dataRange.maxDate,
+    dataRange.minDate,
+    monthStartDay,
+  ]);
 
   // Default preset is now "current month"; treat anything else as user-set.
   // Месяц по умолчанию — ОТЧЁТНЫЙ, как его ставит сам стор фильтров: считая его
@@ -709,10 +740,10 @@ export function GlobalFilters({
                   было нечем. Подсветка дорожки показывает, что действует
                   именно он. */}
               <DateRangePicker
-                from={periodCtl.from}
-                to={periodCtl.to}
+                from={shownRange.from}
+                to={shownRange.to}
                 active={rangeActive}
-                dimmed={anchored}
+                dimmed={!rangeActive}
                 onChange={(from, to) => periodCtl.setRange(from, to)}
               />
             </div>
