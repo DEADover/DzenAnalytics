@@ -118,6 +118,12 @@ interface FiltersState {
     monthYM: string | null;
   }) => void;
   setRange: (from: string | null, to: string | null) => void;
+  /**
+   * Каким месяцем человек пользуется — отчётным или календарным. Помним, даже
+   * когда выбран другой период: иначе кнопка после «30 дней» забывала, что её
+   * просили считать календарные месяцы, и возвращаться приходилось через меню.
+   */
+  monthKind: "period" | "month";
   setMonth: (ym: string) => void;
   /** Отчётный месяц целиком — кнопка «Период» в чистом виде. */
   setPeriodMonth: (ym: string) => void;
@@ -158,6 +164,7 @@ const initial = {
   // Первый день приезжает позже (см. useReportPeriodStore), и период
   // пересчитывается в App.tsx, когда тот стор поднимется.
   preset: "period" as DatePreset,
+  monthKind: "period" as "period" | "month",
   from: null,
   to: null,
   monthYM: currentPeriod(1) as string | null,
@@ -188,9 +195,10 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
     set(preset === "custom" ? { preset } : { preset, from: null, to: null }),
   setPeriod: ({ preset, from, to, monthYM }) => set({ preset, from, to, monthYM }),
   setRange: (from, to) => set({ from, to, preset: "custom" }),
-  setMonth: (monthYM) => set({ preset: "month", monthYM }),
+  setMonth: (monthYM) => set({ preset: "month", monthYM, monthKind: "month" }),
   /** Отчётный месяц целиком — то же, что кнопка «Период» без правки дат. */
-  setPeriodMonth: (monthYM) => set({ preset: "period", monthYM, from: null, to: null }),
+  setPeriodMonth: (monthYM) =>
+    set({ preset: "period", monthYM, from: null, to: null, monthKind: "period" }),
   // Месяц якоря сохраняем: вернувшись потом в «Месяц», попадаешь в тот же
   // месяц выбранного года, а не в январь.
   setYear: (year) =>

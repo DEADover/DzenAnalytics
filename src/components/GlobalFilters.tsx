@@ -23,7 +23,7 @@ import { accountKindLabel, DEBT_TYPES } from "../lib/accountType";
 import { parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
 import { CategoryFilterPicker } from "./CategoryFilterPicker";
 import { MonthPicker } from "./MonthPicker";
-import { Segmented } from "./Segmented";
+import { Segmented, type SegmentedOption } from "./Segmented";
 import { currencySymbol } from "../lib/format";
 import clsx from "clsx";
 import { useDataStore } from "../store/useDataStore";
@@ -60,26 +60,15 @@ import { useMembersStore } from "../store/useMembersStore";
  * он повторял её; старые сохранённые виды с ним по-прежнему работают, и
  * кнопка для них возвращается в ряд (см. `presetOptions`).
  */
-const PRESETS: { value: DatePreset; label: string; title?: string }[] = [
+const PRESETS: SegmentedOption<DatePreset>[] = [
   { value: "30d", label: "30 дней" },
   { value: "3m", label: "3 мес" },
   { value: "6m", label: "6 мес" },
   { value: "12m", label: "12 мес" },
   {
-    value: "month",
-    label: "Месяц",
-    title: "Календарный месяц — с первого числа по последнее",
-  },
-  {
     value: "year",
     label: "Год",
-    title: "Год целиком — листается стрелками, в отличие от скользящих «12 мес»",
-  },
-  {
-    value: "period",
-    label: "Период",
-    title:
-      "Отчётный месяц — тот же отрезок, что считают главная, бюджет и Дзен-мани. Даты можно поправить",
+    title: "Календарный год целиком — листается стрелками, в отличие от скользящих «12 мес»",
   },
   { value: "all", label: "Всё" },
 ];
@@ -392,6 +381,9 @@ export function GlobalFilters({
 
   // Год якорится тем же `monthYM`, поэтому пикеру он подходит как есть.
   const anchored = periodCtl.preset === "month" || periodCtl.preset === "year";
+  /** Какой месяц человек выбирал последним — им и подписана кнопка. */
+  const monthKind = useFiltersStore((st) => st.monthKind);
+
   /** Отчётный месяц — свой или уже поправленный руками: кнопка одна. */
   const periodMode = periodCtl.preset === "period" || periodCtl.preset === "custom";
   /** Действует ручной отрезок — подсвечиваем поля дат, как пикер при месяце. */
@@ -427,12 +419,42 @@ export function GlobalFilters({
     else periodCtl.setPreset(next);
   };
 
+  /**
+   * Кнопка месяца: двух кнопок рядом ряд не выдерживал — «Календарный месяц» и
+   * «Отчётный месяц» словами длинны, а сокращать до значков значит заставлять
+   * угадывать. Одна кнопка показывает ВЫБРАННЫЙ вид (он помнится и после
+   * «30 дней»), остальные — за стрелкой.
+   */
+  const monthOption: SegmentedOption<DatePreset> = {
+    value: monthKind,
+    label: monthKind === "month" ? "Календарный месяц" : "Отчётный месяц",
+    menu: [
+      {
+        value: "period",
+        label: "Отчётный месяц",
+        title:
+          "Ваш отчётный месяц — тот же отрезок, что считают главная, бюджет и Дзен-мани. Даты можно поправить",
+      },
+      {
+        value: "month",
+        label: "Календарный месяц",
+        title: "С первого числа по последнее, каким бы ни был ваш первый день",
+      },
+    ],
+  };
+
   // Сохранённый вид мог быть снят со «С начала года» — кнопки для него в ряду
   // больше нет, но пока он действует, показываем её, иначе подсвечивать нечего.
+  // Кнопка месяца встаёт после скользящих окон, перед «Годом».
+  const withMonth: SegmentedOption<DatePreset>[] = [
+    ...PRESETS.slice(0, 4),
+    monthOption,
+    ...PRESETS.slice(4),
+  ];
   const presetOptions =
     periodCtl.preset === "ytd"
-      ? [...PRESETS, { value: "ytd" as DatePreset, label: "С начала года" }]
-      : PRESETS;
+      ? [...withMonth, { value: "ytd" as DatePreset, label: "С начала года" }]
+      : withMonth;
   /** Свои даты — то же состояние кнопки «Период»: она и светится. */
   const presetValue: DatePreset =
     periodCtl.preset === "custom" ? "period" : periodCtl.preset;

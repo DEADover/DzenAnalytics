@@ -1,6 +1,8 @@
+import { useRef, useState } from "react";
 import clsx from "clsx";
-import type { LucideIcon } from "lucide-react";
+import { ChevronDown, type LucideIcon } from "lucide-react";
 import { formatNum } from "../lib/format";
+import { Popover } from "./Popover";
 
 /** Тон выбранного варианта: цвет, когда он несёт смысл (тип операции). */
 export type SegmentedTone = "accent" | "expense" | "income" | "accent2" | "warn" | "muted";
@@ -27,6 +29,13 @@ export interface SegmentedOption<T> {
   tone?: SegmentedTone;
   /** Зелёная точка «включено» с этой подсказкой — активный источник данных. */
   dot?: string;
+  /**
+   * Несколько близких вариантов за одной кнопкой: она показывает выбранный, а
+   * остальные открываются стрелкой. Нужно там, где вариантов больше, чем места
+   * в ряду, а разница между ними требует не значка, а слов, — «Отчётный месяц»
+   * против «Календарного».
+   */
+  menu?: { value: T; label: string; title?: string }[];
 }
 
 /**
@@ -91,8 +100,23 @@ export function Segmented<T extends string | number>({
       )}
     >
       {options.map((o) => {
-        const active = value === o.value;
+        const active = o.menu
+          ? o.menu.some((m) => m.value === value)
+          : value === o.value;
         const Icon = o.icon;
+        if (o.menu) {
+          return (
+            <SegmentedMenu
+              key={String(o.value)}
+              option={o}
+              value={value}
+              active={active}
+              small={small}
+              tight={tight}
+              onChange={onChange}
+            />
+          );
+        }
         return (
           <button
             key={String(o.value)}
@@ -121,6 +145,85 @@ export function Segmented<T extends string | number>({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Пункт дорожки с выбором: подпись — выбранный вариант, стрелка открывает
+ * остальные. Меню — общий `Popover`, как у сортировки ленты.
+ */
+function SegmentedMenu<T extends string | number>({
+  option,
+  value,
+  active,
+  small,
+  tight,
+  onChange,
+}: {
+  option: SegmentedOption<T>;
+  value: T;
+  active: boolean;
+  small: boolean;
+  tight: boolean;
+  onChange: (next: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const items = option.menu ?? [];
+  const current = items.find((m) => m.value === value);
+
+  return (
+    <div ref={anchorRef} className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-pressed={active}
+        disabled={option.disabled}
+        // Показанный вид ещё не выбран — применяем его; уже выбран — открываем
+        // список, чтобы сменить. Так возврат к своему месяцу стоит одного
+        // нажатия, а не похода в меню.
+        onClick={() => (active ? setOpen((o) => !o) : onChange(option.value))}
+        title={current?.title ?? option.title}
+        className={clsx(
+          "seg-item",
+          small ? "seg-item-sm" : "seg-item-md",
+          tight && "seg-item-tight",
+          active && "seg-on"
+        )}
+      >
+        {current?.label ?? option.label}
+        <ChevronDown
+          className={clsx("w-3 h-3 opacity-60 transition-transform", open && "rotate-180")}
+          aria-hidden="true"
+        />
+      </button>
+      <Popover
+        open={open}
+        anchorRef={anchorRef}
+        onClose={() => setOpen(false)}
+        align="left"
+        className="w-max min-w-40 card p-2"
+      >
+        {items.map((m) => (
+          <button
+            key={String(m.value)}
+            type="button"
+            onClick={() => {
+              onChange(m.value);
+              setOpen(false);
+            }}
+            title={m.title}
+            className={clsx(
+              "w-full text-left text-xs px-2 py-1.5 rounded whitespace-nowrap hover:bg-panel2",
+              value === m.value && "bg-panel2 text-accent2 font-medium"
+            )}
+          >
+            {m.label}
+          </button>
+        ))}
+      </Popover>
     </div>
   );
 }
