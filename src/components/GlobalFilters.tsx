@@ -803,24 +803,15 @@ export function GlobalFilters({
           </>
         }
 
-        <button
-          onClick={f.reset}
+        {/* Сброс в конце ПЕРВОЙ строки — пока период стоит рядом с пресетами.
+            Когда период уезжает на свою строку, сброс остался бы в строке один,
+            и место ему находится рядом с поиском (ниже по разметке). */}
+        <ResetButton
+          className="max-filters:hidden"
+          onReset={f.reset}
           disabled={!hasFilters || !showDataFilters}
-          title={
-            !showDataFilters
-              ? dataFiltersHint
-              : hasFilters
-                ? "Сбросить все фильтры"
-                : "Фильтры не заданы"
-          }
-          aria-label="Сбросить все фильтры"
-          // `ml-auto` pins it to the right edge of the row. When the inline date
-          // controls are shown they already grow to fill the row (flex-1), so
-          // this has no effect there and the reset stays next to the divider.
-          className="btn-ghost text-xs px-3 shrink-0 ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2"
-        >
-          <FilterX className="w-4 h-4" />
-        </button>
+          hint={!showDataFilters ? dataFiltersHint : hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
+        />
 
         {/* Break → row 2 with the data controls, filling the full width. */}
         <div className="basis-full h-0 max-filters:order-2" />
@@ -949,6 +940,12 @@ export function GlobalFilters({
             </button>
           )}
         </div>
+        <ResetButton
+          className="filters:hidden"
+          onReset={f.reset}
+          disabled={!hasFilters || !showDataFilters}
+          hint={!showDataFilters ? dataFiltersHint : hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
+        />
         </div>
         </div>
       </div>
@@ -962,4 +959,37 @@ export function GlobalFilters({
   );
 
   return docked && dockEl ? createPortal(panel, dockEl) : panel;
+}
+
+/**
+ * Сброс всех фильтров. Стоит в ряду дважды и показывается там, где не окажется
+ * один: пока период держится в первой строке — в её конце, а когда он уезжает
+ * на свою строку — рядом с поиском. Разметка одна, различаются только классы
+ * видимости.
+ */
+function ResetButton({
+  className,
+  onReset,
+  disabled,
+  hint,
+}: {
+  className?: string;
+  onReset: () => void;
+  disabled: boolean;
+  hint?: string;
+}) {
+  return (
+    <button
+      onClick={onReset}
+      disabled={disabled}
+      title={hint}
+      aria-label="Сбросить все фильтры"
+      className={clsx(
+        "btn-ghost text-xs px-3 shrink-0 ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2",
+        className
+      )}
+    >
+      <FilterX className="w-4 h-4" />
+    </button>
+  );
 }
