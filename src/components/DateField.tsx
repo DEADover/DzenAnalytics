@@ -75,6 +75,11 @@ interface Props {
    * Russian calendar component instead of a native <input type="month">.
    */
   granularity?: "day" | "month";
+  /**
+   * Показывать значок календаря. Внутри дорожки со стрелками он лишний: там
+   * уже есть свои значки по краям, а место занимает именно дата.
+   */
+  icon?: boolean;
 }
 
 export function DateField({
@@ -85,6 +90,7 @@ export function DateField({
   placeholder,
   centered = false,
   granularity = "day",
+  icon = true,
 }: Props) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -109,7 +115,7 @@ export function DateField({
           centered ? "gap-1.5" : "gap-2"
         } text-left`}
       >
-        {centered && <span className="w-4 shrink-0" aria-hidden />}
+        {centered && icon && <span className="w-4 shrink-0" aria-hidden />}
         <span
           className={`truncate ${centered ? "flex-1 text-center" : ""} ${
             display ? "" : "text-muted"
@@ -117,7 +123,7 @@ export function DateField({
         >
           {display || ph}
         </span>
-        <Calendar className="w-4 h-4 shrink-0 text-muted" />
+        {icon && <Calendar className="w-4 h-4 shrink-0 text-muted" />}
       </button>
       {open && (
         <CalendarPopup

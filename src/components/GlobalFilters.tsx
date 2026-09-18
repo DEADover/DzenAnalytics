@@ -16,7 +16,7 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { DateField } from "./DateField";
+import { DateRangePicker } from "./DateRangePicker";
 import { MultiSelect } from "./MultiSelect";
 import { AccountLogo } from "./AccountLogo";
 import { accountKindLabel, DEBT_TYPES } from "../lib/accountType";
@@ -662,11 +662,13 @@ export function GlobalFilters({
             <div
               className={clsx(
                 "flex items-center gap-2 flex-1 min-w-[220px]",
-                // Ниже `lg` период — своей строкой, а месяцу с датами разрешено
+                // Ниже `xl` период — своей строкой, а месяцу с датами разрешено
                 // уйти под пресеты. Иначе блок вставал рядом с «Дополнительно»
                 // шириной в 234 пикселя, пресеты вылезали за экран, а поля дат
-                // сжимались до 26 пикселей — вводить в них было нечего.
-                "max-lg:flex-wrap max-lg:basis-full max-sm:min-w-0",
+                // сжимались до 26 пикселей — вводить в них было нечего. Порог
+                // подняли с `lg`, когда пресетов стало восемь, а даты собрались
+                // в дорожку со стрелками: на 1024 ряд перестал помещаться.
+                "max-xl:flex-wrap max-xl:basis-full max-sm:min-w-0",
                 !showDateRange && "opacity-45"
               )}
               title={!showDateRange ? dateRangeHint : undefined}
@@ -688,7 +690,7 @@ export function GlobalFilters({
             {/* Month picker + custom range. Fully live for both the global
                 filter store AND a page-local controlled period (Cash-flow,
                 Trends) — picking a month/range switches the page's period. */}
-            <div className="flex items-center gap-2 flex-1 min-w-[220px] max-lg:min-w-[22rem] max-sm:min-w-0 max-sm:flex-wrap max-sm:basis-full">
+            <div className="flex items-center gap-2 flex-1 min-w-[220px] max-xl:min-w-[22rem] max-sm:min-w-0 max-sm:flex-wrap max-sm:basis-full">
               <MonthPicker
                 value={currentMonthYM}
                 minYM={dataRange.minYM}
@@ -701,28 +703,16 @@ export function GlobalFilters({
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
               />
 
-              {/* Поля дат подсвечены, когда действуют именно они: у месяца и
-                  года подсвечен свой контрол, и без этого «Период» оставался
-                  единственным режимом, который ничем себя не показывал. */}
-              <div className="flex items-center gap-1.5 flex-1 min-w-0 max-sm:basis-full">
-                <DateField
-                  value={periodCtl.from || ""}
-                  onChange={(e) =>
-                    periodCtl.setRange(e.target.value || null, periodCtl.to)
-                  }
-                  className={clsx("input text-xs", rangeActive && "border-accent bg-accent/10")}
-                  wrapperClassName="flex-1 min-w-0"
-                />
-                <span className="text-muted text-xs">—</span>
-                <DateField
-                  value={periodCtl.to || ""}
-                  onChange={(e) =>
-                    periodCtl.setRange(periodCtl.from, e.target.value || null)
-                  }
-                  className={clsx("input text-xs", rangeActive && "border-accent bg-accent/10")}
-                  wrapperClassName="flex-1 min-w-0"
-                />
-              </div>
+              {/* Свой отрезок — одной дорожкой со стрелками, как месяц рядом:
+                  двумя отдельными полями он и парой не выглядел, и листать его
+                  было нечем. Подсветка дорожки показывает, что действует
+                  именно он. */}
+              <DateRangePicker
+                from={periodCtl.from}
+                to={periodCtl.to}
+                active={rangeActive}
+                onChange={(from, to) => periodCtl.setRange(from, to)}
+              />
             </div>
 
             </div>
