@@ -30,6 +30,7 @@ import {
   groupUncategorizedByDay,
   sortUncategorized,
   suggestionKey,
+  suggestionReason,
   suggestionStats,
   suggestionsById,
   type UncategorizedSort,
@@ -318,7 +319,7 @@ export function UncategorizedPage() {
           value={formatNum(stats.applicable)}
           tone={stats.confident > 0 ? "accent" : "default"}
           icon={<Sparkles className="w-4 h-4" />}
-          note={stats.confident > 0 ? `надёжных ${formatNum(stats.confident)}` : undefined}
+          note={stats.confident > 0 ? `явных ${formatNum(stats.confident)}` : undefined}
         />
       </StatRow>
 
@@ -338,10 +339,10 @@ export function UncategorizedPage() {
                 type="button"
                 onClick={selectConfident}
                 className="btn-ghost text-xs shrink-0"
-                title={`Отметить операции, где подсказка не ниже ${formatPct(CONFIDENT, 0)}\nПрименить их можно разом — кнопкой в панели выделения. Для каждой создастся правило: оно разметит и похожие операции в будущем.`}
+                title={`Отметить операции, у которых подсказка совпала на ${formatPct(CONFIDENT, 0)} и выше\nПрименить их можно разом, кнопкой в панели выделения: для каждой создастся правило, и такие же операции будут размечаться дальше сами.`}
               >
                 <Sparkles className="w-3.5 h-3.5" aria-hidden />
-                Надёжные ({formatNum(stats.confident)})
+                Явные совпадения ({formatNum(stats.confident)})
               </button>
             )}
             <SortMenu options={SORT_OPTIONS} value={sortMode} onChange={setSortMode} />
@@ -553,7 +554,7 @@ function SuggestionCell({
   return (
     <div
       className="flex items-center gap-1.5 min-w-0"
-      title={`Похоже на: ${suggestion.reasonExamples.join(", ") || "—"}`}
+      title={suggestionReason(suggestion)}
     >
       <Sparkles className="w-3.5 h-3.5 shrink-0 text-accent2" />
       <span className="truncate">{suggestion.suggested}</span>

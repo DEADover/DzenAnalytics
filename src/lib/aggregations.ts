@@ -700,7 +700,14 @@ export interface CategorySuggestion {
   date: string;
   suggested: string;
   confidence: number;
+  /**
+   * Контрагенты похожих операций, по которым и выбрана категория, — БЕЗ
+   * повторов: у пяти заказов одного магазина имя одно, и «Самокат, Самокат,
+   * Самокат» ничего не добавляло.
+   */
   reasonExamples: string[];
+  /** Сколько похожих операций проголосовало за эту категорию. */
+  matched: number;
 }
 
 function tokenize(text: string): Set<string> {
@@ -761,16 +768,19 @@ export function suggestCategoriesForUncategorized(
 
     if (scored.length === 0) continue;
 
-    const votes = new Map<string, { score: number; examples: string[] }>();
+    const votes = new Map<string, { score: number; count: number; examples: string[] }>();
     for (const s of scored) {
       const cat = s.tx.categoryFull;
       let v = votes.get(cat);
       if (!v) {
-        v = { score: 0, examples: [] };
+        v = { score: 0, count: 0, examples: [] };
         votes.set(cat, v);
       }
       v.score += s.score;
-      if (v.examples.length < 3 && s.tx.payee) v.examples.push(s.tx.payee);
+      v.count += 1;
+      if (v.examples.length < 3 && s.tx.payee && !v.examples.includes(s.tx.payee)) {
+        v.examples.push(s.tx.payee);
+      }
     }
     const winner = Array.from(votes.entries()).sort(
       (a, b) => b[1].score - a[1].score
@@ -790,6 +800,7 @@ export function suggestCategoriesForUncategorized(
       suggested: winner[0],
       confidence: conf,
       reasonExamples: winner[1].examples,
+      matched: winner[1].count,
     });
   }
 

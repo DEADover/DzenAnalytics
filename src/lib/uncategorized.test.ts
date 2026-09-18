@@ -4,6 +4,7 @@ import {
   groupUncategorizedByDay,
   sortUncategorized,
   suggestionKey,
+  suggestionReason,
   suggestionStats,
   suggestionsById,
 } from "./uncategorized";
@@ -39,6 +40,7 @@ const sug = (
   suggested: "Еда дома",
   confidence,
   reasonExamples: [],
+  matched: 3,
   ...extra,
 });
 
@@ -125,5 +127,28 @@ describe("подсказки", () => {
     const map = suggestionsById([sug("a", 0.5), sug("b", 0.6)]);
     expect(map.get("b")?.confidence).toBe(0.6);
     expect(map.has("zzz")).toBe(false);
+  });
+});
+
+describe("откуда взялась подсказка", () => {
+  it("называет категорию, число похожих операций и по кому именно", () => {
+    expect(
+      suggestionReason({ suggested: "Еда дома", matched: 3, reasonExamples: ["Самокат"] })
+    ).toBe("«Еда дома» — так размечены похожие операции (3): Самокат");
+  });
+
+  it("без примеров — только категория и счёт похожих", () => {
+    expect(suggestionReason({ suggested: "Такси", matched: 1, reasonExamples: [] })).toBe(
+      "«Такси» — так размечены похожие операции (1)"
+    );
+    expect(suggestionReason({ suggested: "Такси", matched: 0, reasonExamples: [] })).toBe(
+      "«Такси» — так размечены похожие операции"
+    );
+  });
+
+  it("перечисляет только разные имена — повтор ничего не добавляет", () => {
+    expect(
+      suggestionReason({ suggested: "Еда дома", matched: 5, reasonExamples: ["Самокат", "Пятёрочка"] })
+    ).toContain("Самокат, Пятёрочка");
   });
 });
