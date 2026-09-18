@@ -1,393 +1,572 @@
 import { useEffect, useMemo, useState } from "react";
-import { Checkbox } from "../components/Checkbox";
-import { Tag, AlertCircle, Sparkles, Wand2, CheckCircle2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Calendar,
+  CheckCircle2,
+  Coins,
+  List,
+  Pencil,
+  Sparkles,
+  Tag,
+  User,
+  Wand2,
+} from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
-import { useDrillStore } from "../store/useDrillStore";
+import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
+import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useCategoryRulesStore } from "../store/useCategoryRulesStore";
 import { confirm } from "../store/useConfirmStore";
 import {
   detectUncategorized,
+  kindTotals,
+  lastTransactionDate,
   suggestCategoriesForUncategorized,
   type CategorySuggestion,
 } from "../lib/aggregations";
-import { formatMoney, formatDate, formatNum, formatPct } from "../lib/format";
+import {
+  CONFIDENT,
+  groupUncategorizedByDay,
+  sortUncategorized,
+  suggestionKey,
+  suggestionStats,
+  suggestionsById,
+  type UncategorizedSort,
+} from "../lib/uncategorized";
+import { formatDate, formatMoney, formatNum, formatPct, payeeSearchText } from "../lib/format";
 import { pluralRu } from "../lib/plural";
-import { kindGlyphClass, kindSignGlyph, kindTone } from "../lib/txKindStyle";
+import { operationTone } from "../lib/txKindStyle";
+import { TONE_CLASS, buildCsv, csvFileName, downloadCsv } from "../components/table/tableKit";
+import { ExportButton } from "../components/table/TableParts";
+import { OperationAmount, OperationPayee } from "../components/operations/OperationCells";
+import { DayHeader } from "../components/operations/DayHeader";
+import {
+  LazyListFooter,
+  OperationListHead,
+  OperationListRow,
+  OperationListTray,
+} from "../components/operations/OperationList";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
-import { CardHeader } from "../components/CardHeader";
+import { GlobalFilters } from "../components/GlobalFilters";
+import { SearchInput } from "../components/SearchInput";
+import { SortMenu, type SortOption } from "../components/SortMenu";
+import { SelectionBar } from "../components/SelectionBar";
+import { ScrollTopButton } from "../components/ScrollTopButton";
 import { StatCell, StatRow } from "../components/SectionCard";
-import { Tooltip } from "../components/Tooltip";
-import { DataTable } from "../components/DataTable";
-import type { Transaction } from "../types";
-import type { RuleField } from "../store/useCategoryRulesStore";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { Callout } from "../components/Callout";
+import { Checkbox } from "../components/Checkbox";
+import { BulkEditModal } from "../components/BulkEditModal";
+import { EditTransactionModal } from "../components/EditTransactionModal";
+import { useLazyList } from "../hooks/useLazyList";
+import type { Transaction } from "../types";
 
-/** Build the rule key for a suggestion: by получатель when present, otherwise
- *  by the comment. Some operations (dividend payouts, bank fees) have no payee
- *  but a distinctive comment — without this they couldn't be applied at all.
- *  Returns null when there's nothing to match on. */
-function ruleKeyFor(
-  s: CategorySuggestion
-): { field: RuleField; value: string } | null {
-  const payee = (s.payee || "").trim();
-  if (payee) return { field: "payee", value: payee };
-  const comment = (s.comment || "").trim();
-  if (comment) return { field: "comment", value: comment };
-  return null;
-}
+/**
+ * «Без категории» — операции, которым категорию так и не поставили, и разметка
+ * их пачкой.
+ *
+ * Раздел переехал на общий вид ленты (19.09.2026). Прежде он показывал ВСЮ
+ * историю сразу, мимо общих фильтров, отдельной таблицей, а подсказки
+ * категорий жили над ней своим списком: одни и те же операции были
+ * нарисованы дважды, в двух разных видах, и до операции за нужный месяц
+ * приходилось долистывать.
+ *
+ * Теперь это лента «Операций» на общих фильтрах, а подсказка стоит в строке
+ * той операции, к которой относится: видно сразу, что предлагается и
+ * насколько уверенно. Применение по-прежнему создаёт правило — по получателю,
+ * а если его нет, по комментарию, — поэтому размечает и будущие операции.
+ */
+
+const PAGE_SIZE = 100;
+
+const SORT_OPTIONS: SortOption<UncategorizedSort>[] = [
+  { value: "date-desc", label: "Дата ↓", icon: Calendar, dir: "desc" },
+  { value: "date-asc", label: "Дата ↑", icon: Calendar, dir: "asc" },
+  { value: "amount-desc", label: "Сумма ↓", icon: Coins, dir: "desc" },
+  { value: "amount-asc", label: "Сумма ↑", icon: Coins, dir: "asc" },
+  { value: "payee-asc", label: "Контрагент", icon: User, dir: "asc" },
+  { value: "confidence-desc", label: "Подсказка ↓", icon: Sparkles, dir: "desc" },
+];
+
+/** Колонки ленты. Категории среди них нет — её тут нет по определению. */
+const TEMPLATE = ["20px", "84px", "minmax(0, 1fr)", "minmax(0, 1.3fr)", "minmax(0, 2fr)", "minmax(0, 1.4fr)", "140px", "72px"].join(" ");
 
 export function UncategorizedPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
-  const showDrill = useDrillStore((s) => s.show);
-
-  const list = useMemo(() => detectUncategorized(transactions), [transactions]);
-  const total = list.reduce((s, t) => s + t.amountBase, 0);
-  const allTotal = transactions
-    .filter((t) => t.kind !== "transfer")
-    .reduce((s, t) => s + t.amountBase, 0);
-  const share = allTotal > 0 ? total / allTotal : 0;
+  const reapplyRules = useDataStore((s) => s.reapplyRules);
+  const setEditMany = useEditsStore((s) => s.setEditMany);
+  const filters = useFiltersStore();
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
   const addRule = useCategoryRulesStore((s) => s.add);
   const addManyRules = useCategoryRulesStore((s) => s.addMany);
   const rulesLoaded = useCategoryRulesStore((s) => s.loaded);
   const rulesHydrate = useCategoryRulesStore((s) => s.hydrate);
-  const reapplyRules = useDataStore((s) => s.reapplyRules);
   useEffect(() => {
     if (!rulesLoaded) rulesHydrate();
   }, [rulesLoaded, rulesHydrate]);
 
-  const [showSuggestions, setShowSuggestions] = useState(true);
-  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+  const [pageSearch, setPageSearch] = useState("");
+  const [sortMode, setSortMode] = useState<UncategorizedSort>("date-desc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [applied, setApplied] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [editing, setEditing] = useState<Transaction | null>(null);
 
+  // Скользящие периоды («30 дней», «12 мес») считаются от последней операции
+  // ВСЕЙ ленты, как на соседних страницах с тем же фильтром.
+  const maxDate = useMemo(() => lastTransactionDate(transactions), [transactions]);
+  const scoped = useMemo(
+    () => applyFilters(transactions, filters, monthStartDay, { maxDate: maxDate || undefined }),
+    [transactions, filters, monthStartDay, maxDate]
+  );
+
+  /** Всё без категории — за всю историю и под фильтрами. */
+  const allUncategorized = useMemo(() => detectUncategorized(transactions), [transactions]);
+  const list = useMemo(() => detectUncategorized(scoped), [scoped]);
+
+  // Подсказки строятся по ВСЕЙ истории (корпус тем богаче, чем больше
+  // размеченных операций), а показываются для того, что сейчас в ленте.
   const suggestions = useMemo<CategorySuggestion[]>(
-    () => (showSuggestions ? suggestCategoriesForUncategorized(transactions, list, 7) : []),
-    [transactions, list, showSuggestions]
+    () => suggestCategoriesForUncategorized(transactions, list, 7),
+    [transactions, list]
+  );
+  const suggestionOf = useMemo(() => suggestionsById(suggestions), [suggestions]);
+  const stats = useMemo(() => suggestionStats(suggestions, applied), [suggestions, applied]);
+
+  const searched = useMemo(() => {
+    const q = pageSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((t) =>
+      `${payeeSearchText(t)} ${t.comment} ${t.account}`.toLowerCase().includes(q)
+    );
+  }, [list, pageSearch]);
+
+  const sorted = useMemo(
+    () => sortUncategorized(searched, sortMode, (t) => suggestionOf.get(t.id)?.confidence ?? 0),
+    [searched, sortMode, suggestionOf]
+  );
+  const lazy = useLazyList(sorted, PAGE_SIZE);
+  const visible = useMemo(() => sorted.slice(0, lazy.shown), [sorted, lazy.shown]);
+  const days = useMemo(() => groupUncategorizedByDay(visible, sortMode), [visible, sortMode]);
+
+  const totals = useMemo(() => kindTotals(list), [list]);
+  const allFlows = useMemo(
+    () => scoped.filter((t) => t.kind !== "transfer").reduce((s, t) => s + Math.abs(t.amountBase), 0),
+    [scoped]
+  );
+  const sum = list.reduce((s, t) => s + Math.abs(t.amountBase), 0);
+  const share = allFlows > 0 ? sum / allFlows : 0;
+
+  const selectedTxs = useMemo(() => sorted.filter((t) => selected.has(t.id)), [sorted, selected]);
+  const selectedTotals = useMemo(() => kindTotals(selectedTxs), [selectedTxs]);
+  /** Из выделенного — то, что можно разметить подсказкой одним нажатием. */
+  const selectedSuggestions = useMemo(
+    () =>
+      selectedTxs
+        .map((t) => suggestionOf.get(t.id))
+        .filter((s): s is CategorySuggestion => !!s && !applied.has(s.txId) && !!suggestionKey(s)),
+    [selectedTxs, suggestionOf, applied]
   );
 
-  // Suggestions that can actually be applied (have something to key a rule on
-  // — payee or comment — and aren't already applied). Selection / «выбрать
-  // все» operate on these.
-  const selectable = useMemo(
-    () => suggestions.filter((s) => ruleKeyFor(s) && !appliedIds.has(s.txId)),
-    [suggestions, appliedIds]
-  );
-  const selectedCount = selectable.filter((s) => selected.has(s.txId)).length;
-  const allSelected = selectable.length > 0 && selectedCount === selectable.length;
+  const allSelected = sorted.length > 0 && selected.size === sorted.length;
+  const someSelected = selected.size > 0 && !allSelected;
 
-  function toggleSelect(txId: string) {
+  function toggleSelect(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(txId)) next.delete(txId);
-      else next.add(txId);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
-  function toggleSelectAll() {
-    setSelected(allSelected ? new Set() : new Set(selectable.map((s) => s.txId)));
+
+  function toggleAll() {
+    setSelected((prev) => (prev.size === sorted.length ? new Set() : new Set(sorted.map((t) => t.id))));
   }
+
+  /** Выделить те, где подсказка достаточно уверенная: с них и начинают. */
   function selectConfident() {
-    setSelected(new Set(selectable.filter((s) => s.confidence >= 0.7).map((s) => s.txId)));
+    const ids = suggestions
+      .filter((s) => s.confidence >= CONFIDENT && !applied.has(s.txId) && suggestionKey(s))
+      .map((s) => s.txId)
+      .filter((id) => sorted.some((t) => t.id === id));
+    setSelected(new Set(ids));
   }
 
-  async function applyOne(s: CategorySuggestion) {
-    const key = ruleKeyFor(s);
-    if (!key) return;
-    setBusy(true);
-    await addRule({
-      enabled: true,
-      field: key.field,
-      op: "contains",
-      value: key.value,
-      caseInsensitive: true,
-      category: s.suggested,
+  async function applySuggestions(items: readonly CategorySuggestion[]) {
+    if (items.length === 0 || busy) return;
+    const rules = items.flatMap((s) => {
+      const key = suggestionKey(s);
+      return key ? [{ key, category: s.suggested, txId: s.txId }] : [];
     });
-    setAppliedIds((prev) => new Set(prev).add(s.txId));
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.delete(s.txId);
-      return next;
-    });
-    await reapplyRules();
-    setBusy(false);
-  }
+    if (rules.length === 0) return;
 
-  async function applySelected() {
-    const toApply = selectable.filter((s) => selected.has(s.txId));
-    if (toApply.length === 0) return;
     const ok = await confirm({
-      title: "Применить выбранные подсказки?",
-      message: `Будет создано ${toApply.length} ${pluralRu(toApply.length, ["правило", "правила", "правил"])} (по получателю или комментарию) — выбранные операции категоризируются.`,
+      title: rules.length === 1 ? "Применить подсказку?" : `Применить ${rules.length} ${pluralRu(rules.length, ["подсказку", "подсказки", "подсказок"])}?`,
+      message:
+        "Для каждой создастся правило — по контрагенту, а если его нет, по комментарию. Правило разметит и похожие операции, в том числе будущие; отменить можно в разделе «Правила».",
       confirmLabel: "Применить",
     });
     if (!ok) return;
+
     setBusy(true);
-    await addManyRules(
-      toApply.flatMap((s) => {
-        const key = ruleKeyFor(s);
-        return key
-          ? [{
-              enabled: true,
-              field: key.field,
-              op: "contains" as const,
-              value: key.value,
-              caseInsensitive: true,
-              category: s.suggested,
-            }]
-          : [];
+    try {
+      const newRule = (r: (typeof rules)[number]) => ({
+        enabled: true,
+        field: r.key.field,
+        op: "contains" as const,
+        value: r.key.value,
+        caseInsensitive: true,
+        category: r.category,
+      });
+      if (rules.length === 1) await addRule(newRule(rules[0]));
+      else await addManyRules(rules.map(newRule));
+      await reapplyRules();
+      setApplied((prev) => new Set([...prev, ...rules.map((r) => r.txId)]));
+      setSelected(new Set());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Массовая правка — то же окно, что в «Операциях»: категория, счёт, комментарий. */
+  async function applyBulk(patch: TransactionEdit) {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    await setEditMany(ids, patch);
+    await reapplyRules();
+    setSelected(new Set());
+    setBulkOpen(false);
+  }
+
+  function exportCsv() {
+    const text = buildCsv(
+      ["Дата", "Счёт", "Контрагент", "Комментарий", "Сумма", "Валюта", "Подсказка", "Уверенность"],
+      sorted.map((t) => {
+        const s = suggestionOf.get(t.id);
+        return [
+          t.date.slice(0, 10),
+          t.account,
+          t.payee || "",
+          t.comment || "",
+          t.amount,
+          t.currency,
+          s?.suggested ?? "",
+          s ? formatPct(s.confidence, 0) : "",
+        ];
       })
     );
-    setAppliedIds((prev) => {
-      const next = new Set(prev);
-      for (const s of toApply) next.add(s.txId);
-      return next;
-    });
-    setSelected(new Set());
-    await reapplyRules();
-    setBusy(false);
+    downloadCsv(csvFileName("uncategorized"), text);
   }
 
   if (transactions.length === 0) return <EmptyState />;
 
+  const renderRow = (t: Transaction) => (
+    <Row
+      key={t.id}
+      tx={t}
+      suggestion={suggestionOf.get(t.id)}
+      applied={applied.has(t.id)}
+      busy={busy}
+      selected={selected.has(t.id)}
+      onToggleSelect={() => toggleSelect(t.id)}
+      onOpen={() => setEditing(t)}
+      onApply={(s) => void applySuggestions([s])}
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={Tag}
-        title="Без категории"
-      />
+      <PageHeader icon={Tag} title="Без категории" />
+      <GlobalFilters />
+
+      {stats.confident > 0 && (
+        <Callout tone="accent2" icon={Sparkles}>
+          <span className="font-medium">Есть что разметить автоматически.</span> Для{" "}
+          {formatNum(stats.confident)}{" "}
+          {pluralRu(stats.confident, ["операции", "операций", "операций"])} подсказка уверенная —
+          от {formatPct(CONFIDENT, 0)}. Отметьте их одной кнопкой и примените: для каждой
+          создастся правило, которое разметит и похожие операции в будущем.
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={selectConfident} className="btn-ghost text-xs">
+              <Sparkles className="w-3.5 h-3.5" />
+              Выбрать надёжные ({formatNum(stats.confident)})
+            </button>
+            <span className="text-xs text-muted">
+              Всего с подсказкой — {formatNum(stats.applicable)}
+            </span>
+          </div>
+        </Callout>
+      )}
 
       <StatRow>
         <StatCell
-          label="Найдено"
+          label="Операций"
           value={formatNum(list.length)}
-          note={`из ${formatNum(transactions.length)} всего`}
+          icon={<List className="w-4 h-4" />}
+          note={
+            list.length < allUncategorized.length
+              ? `из ${formatNum(allUncategorized.length)} за всё время`
+              : undefined
+          }
         />
-        <StatCell label="Сумма" value={formatMoney(total, base)} tone="warn" />
-        <StatCell label="Доля от всех потоков" value={formatPct(share, 1)} />
+        <StatCell
+          label="Расходы"
+          value={formatMoney(totals.exp, base)}
+          tone="expense"
+          icon={<ArrowDown className="w-4 h-4" />}
+        />
+        <StatCell
+          label="Доходы"
+          value={formatMoney(totals.inc, base)}
+          tone="income"
+          icon={<ArrowUp className="w-4 h-4" />}
+        />
+        <StatCell
+          label="Доля от потоков"
+          value={formatPct(share, 1)}
+          tone={share > 0.1 ? "warn" : "default"}
+          tooltip="Сколько из доходов и расходов за период осталось без категории. Переводы между своими счетами не в счёт"
+        />
+        <StatCell
+          label="С подсказкой"
+          value={formatNum(stats.applicable)}
+          tone={stats.confident > 0 ? "accent" : "default"}
+          icon={<Sparkles className="w-4 h-4" />}
+          note={stats.confident > 0 ? `надёжных ${formatNum(stats.confident)}` : undefined}
+        />
       </StatRow>
 
-      {/* Smart suggestions */}
-      {list.length > 0 && suggestions.length > 0 && (
-        <div className="card card-pad bg-accent2/5 border-accent2/40">
-          <CardHeader
-            icon={Sparkles}
-            tone="accent2"
-            title={<>Подсказки категорий ({suggestions.length})</>}
-            infoLabel="Как подбираются подсказки"
-            info={
-              <p>
-                Подобраны по похожести получателя, комментария и категории. Применение
-                создаёт правило (по получателю, а если его нет — по комментарию) —
-                его можно отменить на странице «Правила».
-              </p>
-            }
-            right={
-              <>
-                <Tooltip content="Создаст правила (по получателю или комментарию) для выбранных подсказок и применит их">
-                  <button
-                    onClick={applySelected}
-                    disabled={busy || selectedCount === 0}
-                    className="btn-primary text-xs"
-                  >
-                    <Wand2 className="w-3.5 h-3.5" />
-                    Применить подсказки ({selectedCount})
-                  </button>
-                </Tooltip>
-                <Tooltip content="Скрыть подсказки">
-                  <button
-                    onClick={() => setShowSuggestions(false)}
-                    className="btn-ghost text-xs text-muted"
-                  >
-                    ×
-                  </button>
-                </Tooltip>
-              </>
-            }
-          />
-          {/* Select-all + quick presets. */}
-          {selectable.length > 0 && (
-            <div className="flex items-center gap-3 px-2 py-1.5 mb-1 text-xs border-b border-border/50">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={allSelected}
-                  onChange={toggleSelectAll}
-                  indeterminate={selectedCount > 0 && !allSelected}
-                  label="Выбрать все предложения"
-                />
-                <span className="text-muted">Выбрать все ({selectable.length})</span>
-              </label>
-              <button onClick={selectConfident} className="text-accent hover:underline">
-                только надёжные (≥70%)
-              </button>
-              <span className="ml-auto text-muted">Выбрано: {selectedCount}</span>
-            </div>
-          )}
-          <div className="max-h-96 overflow-y-auto space-y-1">
-            {suggestions.slice(0, 50).map((s) => {
-              const applied = appliedIds.has(s.txId);
-              return (
-                <div
-                  key={s.txId}
-                  className={`flex items-center gap-3 p-2 rounded text-sm ${
-                    applied ? "bg-income/10" : "bg-panel2/40 hover:bg-panel2/70"
-                  }`}
-                >
-                  <Checkbox
-                    checked={selected.has(s.txId)}
-                    disabled={applied || !ruleKeyFor(s)}
-                    onChange={() => toggleSelect(s.txId)}
-                    title={
-                      !ruleKeyFor(s)
-                        ? "Нет получателя и комментария — правило не создать"
-                        : applied
-                          ? "Уже применено"
-                          : "Выбрать для применения"
-                    }
-                    label="Выбрать для применения"
-                    className="shrink-0"
-                  />
-                  <div className="text-xs text-muted whitespace-nowrap tabular-nums w-20">
-                    {formatDate(s.date, "full")}
+      <OperationListTray
+        toolbar={
+          <>
+            <SearchInput
+              size="sm"
+              value={pageSearch}
+              onChange={setPageSearch}
+              placeholder="Быстрый поиск по таблице…"
+              title={"Быстрый поиск по этой таблице\nИщет по контрагенту, комментарию и счёту. Не сохраняется и на другие страницы не влияет."}
+              className="flex-1 min-w-[220px]"
+            />
+            <SortMenu options={SORT_OPTIONS} value={sortMode} onChange={setSortMode} />
+            <ExportButton rows={sorted.length} onClick={exportCsv} />
+          </>
+        }
+      >
+        {sorted.length === 0 ? (
+          <SectionEmpty variant="inline">
+            {allUncategorized.length === 0
+              ? "Все операции размечены — категория есть у каждой."
+              : `По текущим фильтрам ничего не найдено. Всего без категории — ${formatNum(
+                  allUncategorized.length
+                )}: выберите другой период или сбросьте фильтры.`}
+          </SectionEmpty>
+        ) : (
+          <div>
+            <OperationListHead template={TEMPLATE}>
+              <Checkbox
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={toggleAll}
+                title="Выбрать всё (под фильтрами)"
+                label="Выбрать все операции без категории"
+              />
+              <div>Дата</div>
+              <div>Счёт</div>
+              <div>Контрагент</div>
+              <div>Комментарий</div>
+              <div>Подсказка</div>
+              <div className="text-right">Сумма</div>
+              <div className="text-center">Действия</div>
+            </OperationListHead>
+            {days
+              ? days.map((day) => (
+                  <div key={day.key}>
+                    <DayHeader
+                      ymd={day.ymd}
+                      txs={day.txs}
+                      base={base}
+                      showTransfers={!filters.excludeTransfers}
+                    />
+                    {day.txs.map(renderRow)}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate font-medium">{s.payee || "—"}</div>
-                    {s.comment && (
-                      <div className="text-xs text-muted truncate">{s.comment}</div>
-                    )}
-                  </div>
-                  <div className="text-xs whitespace-nowrap text-expense font-medium tabular-nums">
-                    {formatMoney(s.amount, s.currency)}
-                  </div>
-                  <div className="text-xs text-muted">→</div>
-                  <div className="pill text-xs whitespace-nowrap" title={s.suggested}>
-                    {s.suggested.length > 28 ? s.suggested.slice(0, 28) + "…" : s.suggested}
-                  </div>
-                  <div
-                    className={`text-xs tabular-nums w-12 text-right ${
-                      s.confidence >= 0.7
-                        ? "text-income"
-                        : s.confidence >= 0.4
-                          ? "text-warn"
-                          : "text-muted"
-                    }`}
-                    title={`Похожесть на: ${s.reasonExamples.join(", ") || "—"}`}
-                  >
-                    {formatPct(s.confidence, 0)}
-                  </div>
-                  <Tooltip
-                    content={
-                      applied
-                        ? "Применено"
-                        : ruleKeyFor(s)
-                          ? `Применить как правило (по ${ruleKeyFor(s)!.field === "payee" ? "получателю" : "комментарию"})`
-                          : "Нет получателя и комментария — правило не создать"
-                    }
-                  >
-                    <button
-                      onClick={() => applyOne(s)}
-                      disabled={busy || applied || !ruleKeyFor(s)}
-                      className={`btn-icon ${
-                        applied ? "text-income hover:text-income" : ""
-                      }`}
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                    </button>
-                  </Tooltip>
-                </div>
-              );
-            })}
+                ))
+              : visible.map(renderRow)}
           </div>
-          {suggestions.length > 50 && (
-            <div className="text-xs text-muted text-center mt-2">
-              Показано 50 из {suggestions.length}
-            </div>
+        )}
+
+        {lazy.hasMore && (
+          <LazyListFooter shown={lazy.shown} total={lazy.total} sentinelRef={lazy.attachSentinel} />
+        )}
+      </OperationListTray>
+
+      {selected.size > 0 && (
+        <SelectionBar
+          count={selected.size}
+          totals={selectedTotals}
+          base={base}
+          onClear={() => setSelected(new Set())}
+        >
+          <button onClick={() => setBulkOpen(true)} className="btn-primary text-sm">
+            <Pencil className="w-4 h-4" />
+            Задать категорию
+          </button>
+          {selectedSuggestions.length > 0 && (
+            <button
+              onClick={() => void applySuggestions(selectedSuggestions)}
+              disabled={busy}
+              className="btn-ghost text-sm"
+              title="Создаст правило по контрагенту (или комментарию) и разметит похожие операции"
+            >
+              <Wand2 className="w-4 h-4" />
+              Применить подсказки
+              <span className="tabular-nums text-muted">({selectedSuggestions.length})</span>
+            </button>
           )}
-        </div>
+        </SelectionBar>
       )}
 
-      {list.length === 0 ? (
-        <SectionEmpty
-          icon={AlertCircle}
-          tone="income"
-          title="Все операции категоризированы — отлично!"
-        >
-          Не найдено операций без категории
-        </SectionEmpty>
-      ) : (
-        <DataTable<Transaction>
-          icon={Tag}
-          title={`Все без категории (${formatNum(list.length)})`}
-          actions={
-            <button
-              type="button"
-              onClick={() => showDrill("Незакатегоризованные", list, "Чистка категорий")}
-              className="btn-ghost text-xs"
-            >
-              Открыть в шторке
-            </button>
-          }
-          data={list}
-          rowKey={(t) => t.id}
-          defaultSortKey="date"
-          limit={200}
-          exportName="uncategorized"
-          fixed
-          columns={[
-            {
-              key: "date",
-              type: "date",
-              width: "8.5rem",
-              label: "Дата",
-              sortValue: (t) => t.date,
-              render: (t) => formatDate(t.date, "full"),
-            },
-            {
-              key: "category",
-              type: "text",
-              muted: true,
-              width: "12rem",
-              label: "Категория",
-              sortValue: (t) => t.categoryFull,
-              render: (t) => t.categoryFull || "—",
-            },
-            {
-              key: "payee",
-              type: "text",
-              width: "14rem",
-              label: "Получатель",
-              sortValue: (t) => t.payee || "",
-              render: (t) => t.payee || "—",
-            },
-            {
-              key: "comment",
-              type: "text",
-              muted: true,
-              label: "Комментарий",
-              sortValue: (t) => t.comment,
-              render: (t) => t.comment,
-            },
-            {
-              key: "amount",
-              type: "main",
-              tone: (t) => kindTone(t.kind),
-              width: "10rem",
-              label: "Сумма",
-              sortValue: (t) => t.amountBase,
-              cellTitle: (t) =>
-                t.kind === "refund" ? "Возврат — уменьшает расход категории" : undefined,
-              render: (t) => (
-                <>
-                  <span className={kindGlyphClass(t.kind)}>{kindSignGlyph(t.kind)}</span>
-                  {formatMoney(t.amount, t.currency)}
-                </>
-              ),
-            },
-          ]}
+      {bulkOpen && (
+        <BulkEditModal
+          count={selected.size}
+          allTransactions={transactions}
+          onApply={applyBulk}
+          onClose={() => setBulkOpen(false)}
         />
       )}
+
+      {editing && (
+        <EditTransactionModal
+          key={editing.id}
+          tx={editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      <ScrollTopButton />
+    </div>
+  );
+}
+
+/** Строка ленты: операция и подсказка к ней. */
+function Row({
+  tx,
+  suggestion,
+  applied,
+  busy,
+  selected,
+  onToggleSelect,
+  onOpen,
+  onApply,
+}: {
+  tx: Transaction;
+  suggestion?: CategorySuggestion;
+  applied: boolean;
+  busy: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onOpen: () => void;
+  onApply: (s: CategorySuggestion) => void;
+}) {
+  const key = suggestion ? suggestionKey(suggestion) : null;
+  return (
+    <OperationListRow
+      template={TEMPLATE}
+      selected={selected}
+      onToggleSelect={onToggleSelect}
+      onOpen={onOpen}
+    >
+      <Checkbox checked={selected} stopPropagation onChange={onToggleSelect} label="Выбрать операцию" />
+      <div className="text-muted tabular-nums whitespace-nowrap">{formatDate(tx.date, "full")}</div>
+      <div className="truncate text-muted" title={tx.account}>
+        {tx.account}
+      </div>
+      <OperationPayee tx={tx} />
+      <div className="text-muted truncate" title={tx.comment || ""}>
+        {tx.comment || ""}
+      </div>
+      <SuggestionCell suggestion={suggestion} applied={applied} />
+      <div
+        className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
+      >
+        <OperationAmount tx={tx} />
+      </div>
+      <div className="flex items-center justify-center gap-0.5">
+        {suggestion && !applied && key && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onApply(suggestion);
+            }}
+            disabled={busy}
+            className="btn-icon"
+            title={`Применить подсказку «${suggestion.suggested}» — правилом по ${
+              key.field === "payee" ? "контрагенту" : "комментарию"
+            }`}
+            aria-label="Применить подсказку"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+          className="btn-icon"
+          title="Открыть операцию и задать категорию"
+          aria-label="Открыть операцию"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+      </div>
+    </OperationListRow>
+  );
+}
+
+/**
+ * Подсказка в строке: категория и насколько ей можно верить.
+ *
+ * Уверенность — цветом, а не только числом: глазу нужно отличить «почти точно»
+ * от «наугад», не читая процентов в каждой строке.
+ */
+function SuggestionCell({
+  suggestion,
+  applied,
+}: {
+  suggestion?: CategorySuggestion;
+  applied: boolean;
+}) {
+  if (applied) {
+    return (
+      <div className="flex items-center gap-1.5 text-income truncate">
+        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+        <span className="truncate">Размечено</span>
+      </div>
+    );
+  }
+  if (!suggestion) return <div className="text-muted">—</div>;
+  const tone =
+    suggestion.confidence >= CONFIDENT
+      ? "text-income"
+      : suggestion.confidence >= 0.4
+        ? "text-warn"
+        : "text-muted";
+  return (
+    <div
+      className="flex items-center gap-1.5 min-w-0"
+      title={`Похоже на: ${suggestion.reasonExamples.join(", ") || "—"}`}
+    >
+      <Sparkles className="w-3.5 h-3.5 shrink-0 text-accent2" />
+      <span className="truncate">{suggestion.suggested}</span>
+      <span className={`tabular-nums shrink-0 ${tone}`}>{formatPct(suggestion.confidence, 0)}</span>
     </div>
   );
 }
