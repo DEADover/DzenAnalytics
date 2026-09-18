@@ -253,3 +253,25 @@ describe("forecastChanges", () => {
     expect(forecastChanges(same, "all").map((r) => r.category)).toEqual(["Дом"]);
   });
 });
+
+describe("buildForecast: отчётный месяц", () => {
+  const txs = [
+    tx({ date: "2026-05-10", amountBase: 1000 }),
+    tx({ date: "2026-05-20", amountBase: 2000 }),
+  ];
+
+  it("при первом дне 1 обе траты попадают в май", () => {
+    const [r] = buildForecast(txs, [], "2026-06", { months: 1, basis: "average" });
+    expect(r.suggested).toBe(3000);
+  });
+
+  it("при первом дне 15 трата 10.05 — уже апрельская", () => {
+    // Окно в один месяц перед «Июнем» — это «Май», то есть 15.05–14.06.
+    const [r] = buildForecast(txs, [], "2026-06", {
+      months: 1,
+      basis: "average",
+      monthStartDay: 15,
+    });
+    expect(r.suggested).toBe(2000);
+  });
+});

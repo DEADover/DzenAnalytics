@@ -19,6 +19,7 @@ import { InfoPopover, InfoTerm } from "./InfoPopover";
 import { Tooltip } from "./Tooltip";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
 
 /** Одна статья к применению — ровно то, что уходит в план и в Дзен-мани. */
 export interface FillItem {
@@ -85,13 +86,16 @@ export function BudgetFillModal({
   // Снятые галочки, а не отмеченные: при смене окна или охвата список строк
   // меняется, и новые статьи должны приходить уже выбранными.
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  // История берётся теми же отчётными месяцами, какими считается факт в
+  // разделе: иначе «среднее за квартал» сложилось бы из календарных месяцев.
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
   const rows = useMemo(
     () =>
       source === "prevPlan"
         ? previousPlan(lines, ym)
-        : buildForecast(transactions, lines, ym, { months, basis, scope }),
-    [source, transactions, lines, ym, months, basis, scope]
+        : buildForecast(transactions, lines, ym, { months, basis, scope, monthStartDay }),
+    [source, transactions, lines, ym, months, basis, scope, monthStartDay]
   );
   const changes = useMemo(() => forecastChanges(rows, coverage), [rows, coverage]);
   const picked = useMemo(

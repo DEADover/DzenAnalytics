@@ -2,6 +2,7 @@ import type { Transaction } from "../types";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
 import type { BudgetKind } from "./budgets";
 import { NO_CATEGORY } from "./zenmoneyMap";
+import { periodRange } from "./period";
 
 /**
  * Периметр бюджета: какие счета в него входят и что делать с переводами.
@@ -135,10 +136,18 @@ export function transactionsForCell(
   transactions: Transaction[],
   scope: BudgetScope,
   cell: BudgetCell,
-  ym?: string
+  ym?: string,
+  monthStartDay: number = 1
 ): Transaction[] {
+  // Месяц бюджета — отрезок дат, а не префикс «ГГГГ-ММ»: с первым днём 15
+  // «2026-09» это 15.09–14.10. Иначе список за ячейкой показывал бы не те
+  // операции, из которых сложилась её сумма.
+  const range = ym ? periodRange(ym, monthStartDay) : null;
   return transactions.filter((t) => {
-    if (ym && !(t.date || "").startsWith(ym)) return false;
+    if (range) {
+      const day = (t.date || "").slice(0, 10);
+      if (day < range.from || day > range.to) return false;
+    }
     return budgetHits(t, scope).some((hit) => {
       if (cell.kind && hit.kind !== cell.kind) return false;
       return hit.category === cell.category && hit.subcategory === cell.subcategory;

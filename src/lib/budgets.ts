@@ -1,6 +1,7 @@
 import type { Transaction } from "../types";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
 import { ALL_ACCOUNTS, budgetHits, type BudgetScope } from "./budgetScope";
+import { periodRange, shiftDays, spanDays, toIsoDate } from "./period";
 
 /**
  * Budget model — "plan/fact by month", richer than the old flat
@@ -207,18 +208,28 @@ export function monthlyEquivalent(line: BudgetLine): number {
  * `ownSubs` — под-категории, у которых есть СВОЯ строка бюджета. Их суммы
  * категория не забирает, иначе одни и те же деньги посчитались бы дважды: и в
  * строке «Лекарства», и в итоге «Медицины».
+ *
+ * `monthStartDay` — первый день отчётного месяца. Факт собирается по ОТЧЁТНОМУ
+ * периоду, ровно как в приложении Дзен-мани: с первым днём 15 «Сентябрь» — это
+ * 15.09–14.10, и траты 1–14 сентября в него не входят.
  */
 export function factFor(
   line: BudgetLine,
   txs: Transaction[],
   ym: string,
   scope: BudgetScope = ALL_ACCOUNTS,
-  ownSubs?: ReadonlySet<string>
+  ownSubs?: ReadonlySet<string>,
+  monthStartDay: number = 1
 ): number {
   const lineSub = line.subcategory ?? null;
+  // Границы периода считаем ОДИН раз: функция зовётся для каждой статьи и
+  // проходит по всем операциям, а сравнить две строки «ГГГГ-ММ-ДД» дешевле,
+  // чем разбирать дату на каждой из них.
+  const { from, to } = periodRange(ym, monthStartDay);
   let sum = 0;
   for (const t of txs) {
-    if (!t.date.startsWith(ym)) continue;
+    const day = (t.date || "").slice(0, 10);
+    if (day < from || day > to) continue;
     for (const hit of budgetHits(t, scope)) {
       if (hit.kind !== line.kind) continue;
       if (hit.category !== line.category) continue;
@@ -281,11 +292,12 @@ export function forecastFor(
   txs: Transaction[],
   ym: string,
   lookback = 6,
-  scope: BudgetScope = ALL_ACCOUNTS
+  scope: BudgetScope = ALL_ACCOUNTS,
+  monthStartDay: number = 1
 ): number {
   const vals: number[] = [];
   for (let i = 1; i <= lookback; i++)
-    vals.push(factFor(line, txs, addMonths(ym, -i), scope));
+    vals.push(factFor(line, txs, addMonths(ym, -i), scope, undefined, monthStartDay));
   vals.sort((a, b) => a - b);
   const mid = Math.floor(vals.length / 2);
   const median =
@@ -305,17 +317,15 @@ export function budgetTone(ratio: number, isIncome: boolean): BudgetTone {
   return ratio < 0.8 ? "income" : ratio <= 1 ? "warn" : "expense";
 }
 
-/** Days in the calendar month of a "YYYY-MM" string. */
-export function daysInMonth(ym: string): number {
-  const [y, m] = ym.split("-").map(Number);
-  return new Date(y, m, 0).getDate();
-}
-
 /** One day on the cumulative cash-flow chart. Actual values are non-null up to
  *  «today», forecast values non-null from «today» on (they share the today point
  *  so the solid and dashed segments join). */
 export interface CashflowPoint {
+  /** Номер дня ВНУТРИ отчётного периода: первый его день — 1. */
   day: number;
+  /** Календарная дата этого дня, «ГГГГ-ММ-ДД». Период может идти через стык
+   *  месяцев (15.09–14.10), и по одному номеру дату не восстановить. */
+  date: string;
   income: number | null;
   expense: number | null;
   incomeF: number | null;
@@ -324,7 +334,7 @@ export interface CashflowPoint {
 
 export interface MonthCashflow {
   points: CashflowPoint[];
-  /** Day-of-month treated as «today» (= actual/forecast split). */
+  /** Day-of-period treated as «today» (= actual/forecast split). */
   todayDay: number;
   days: number;
   factIncome: number;
@@ -350,23 +360,28 @@ export function buildMonthCashflow(
   opts?: {
     plannedIncome?: number;
     plannedExpense?: number;
-    /** Запланированные операции по дням месяца, 1-индексированные массивы. */
+    /** Запланированные операции по дням ПЕРИОДА, 1-индексированные массивы. */
     plannedIncomeByDay?: number[];
     plannedExpenseByDay?: number[];
+    /** Первый день отчётного месяца, 1–31. */
+    monthStartDay?: number;
   }
 ): MonthCashflow {
-  const days = daysInMonth(ym);
-  const today = new Date(now);
-  const curYm = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-  // Split day: current month → today's date; past month → whole month is actual;
-  // future month → nothing has happened yet.
-  const todayDay = ym === curYm ? today.getDate() : ym < curYm ? days : 0;
+  // Ось графика — отчётный период, а не календарь: с первым днём 15 «Сентябрь»
+  // идёт с 15.09 по 14.10, и день «1» на графике — это пятнадцатое сентября.
+  const { from, to } = periodRange(ym, opts?.monthStartDay ?? 1);
+  const days = spanDays(from, to);
+  const today = toIsoDate(new Date(now));
+  // Split day: current period → its day number; past period → the whole period
+  // is actual; future period → nothing has happened yet.
+  const todayDay = today > to ? days : today < from ? 0 : spanDays(from, today);
 
   const incDelta = new Array(days + 1).fill(0);
   const expDelta = new Array(days + 1).fill(0);
   for (const t of txs) {
-    if (!t.date.startsWith(ym)) continue;
-    const d = Number(t.date.slice(8, 10));
+    const date = (t.date || "").slice(0, 10);
+    if (date < from || date > to) continue;
+    const d = spanDays(from, date);
     if (!(d >= 1 && d <= days)) continue;
     if (t.kind === "income") incDelta[d] += t.amountBase;
     else if (affectsExpense(t.kind)) expDelta[d] += expenseDelta(t);
@@ -422,17 +437,19 @@ export function buildMonthCashflow(
   for (let d = 1; d <= days; d++) {
     cumInc += incDelta[d];
     cumExp += expDelta[d];
+    const date = shiftDays(from, d - 1);
     if (d < todayDay) {
-      points.push({ day: d, income: cumInc, expense: cumExp, incomeF: null, expenseF: null });
+      points.push({ day: d, date, income: cumInc, expense: cumExp, incomeF: null, expenseF: null });
     } else if (d === todayDay) {
       // The split day anchors BOTH segments so the dashed forecast joins the solid line.
-      points.push({ day: d, income: cumInc, expense: cumExp, incomeF: cumInc, expenseF: cumExp });
+      points.push({ day: d, date, income: cumInc, expense: cumExp, incomeF: cumInc, expenseF: cumExp });
     } else {
       stepInc += futInc[d];
       stepExp += futExp[d];
       const t = remaining > 0 ? (d - todayDay) / remaining : 0;
       points.push({
         day: d,
+        date,
         income: null,
         expense: null,
         incomeF: factIncome + stepInc + smoothInc * t,

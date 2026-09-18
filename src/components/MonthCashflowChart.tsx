@@ -67,12 +67,20 @@ function monthNameOf(ym: string): string {
   );
 }
 
-/** «13 августа» — подпись дня. Читается как дата, а не как номер строки. */
-function dayLabelOf(ym: string, day: number): string {
-  return new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, day).toLocaleDateString(
-    "ru-RU",
-    { day: "numeric", month: "long" }
-  );
+/**
+ * «13 августа» — подпись дня по его КАЛЕНДАРНОЙ дате.
+ *
+ * Дату берём готовой из точки графика: ось размечена номерами дней внутри
+ * отчётного периода, а он может идти через стык месяцев (15.09–14.10), и по
+ * одному номеру календарный день не восстановить.
+ */
+function dayLabelOf(date: string | undefined): string {
+  if (!date) return "";
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long",
+  });
 }
 
 function CashflowTip({
@@ -80,13 +88,14 @@ function CashflowTip({
   payload,
   label,
   base,
-  ym,
+  dateOf,
 }: {
   active?: boolean;
   payload?: { name?: string; dataKey?: string | number; value?: number | null }[];
   label?: string | number;
   base: string;
-  ym: string;
+  /** Календарная дата по номеру дня в периоде. */
+  dateOf: (day: number) => string | undefined;
 }) {
   const rows = (payload ?? []).filter((p) => p.value != null);
   if (!active || rows.length === 0) return null;
@@ -119,7 +128,7 @@ function CashflowTip({
   }
   return (
     <ChartTooltipCard>
-      <TooltipFacts title={dayLabelOf(ym, Number(label))} facts={facts} />
+      <TooltipFacts title={dayLabelOf(dateOf(Number(label)))} facts={facts} />
     </ChartTooltipCard>
   );
 }
@@ -128,6 +137,7 @@ export function MonthCashflowChart({
   transactions,
   ym,
   base,
+  monthStartDay = 1,
   onDayClick,
   plannedIncome,
   plannedExpense,
@@ -137,8 +147,11 @@ export function MonthCashflowChart({
   transactions: Transaction[];
   ym: string;
   base: string;
-  /** Click a day on the chart → drill into that day's transactions. */
-  onDayClick?: (day: number) => void;
+  /** Первый день отчётного месяца: ось графика идёт по отчётному периоду. */
+  monthStartDay?: number;
+  /** Click a day on the chart → drill into that day's transactions. Отдаём
+   *  КАЛЕНДАРНУЮ дату: период может идти через стык месяцев. */
+  onDayClick?: (date: string) => void;
   /** Month budget plans — when given, the end-of-month forecast projects to the
    *  plan (Zen-style) instead of extrapolating the current daily pace. */
   plannedIncome?: number;
@@ -160,10 +173,22 @@ export function MonthCashflowChart({
         plannedExpense,
         plannedIncomeByDay,
         plannedExpenseByDay,
+        monthStartDay,
       }),
-    [transactions, ym, now, plannedIncome, plannedExpense, plannedIncomeByDay, plannedExpenseByDay]
+    [
+      transactions,
+      ym,
+      now,
+      plannedIncome,
+      plannedExpense,
+      plannedIncomeByDay,
+      plannedExpenseByDay,
+      monthStartDay,
+    ]
   );
   const hasForecast = cf.todayDay > 0 && cf.todayDay < cf.days;
+  /** Календарная дата по номеру дня в периоде — для подписей и переходов. */
+  const dateOf = (day: number) => cf.points[day - 1]?.date;
 
   return (
     <div className="tray">
@@ -207,7 +232,8 @@ export function MonthCashflowChart({
           const plotW = rect.width - left - right;
           if (plotW <= 0) return;
           const frac = Math.min(Math.max((e.clientX - rect.left - left) / plotW, 0), 1);
-          onDayClick(Math.round(1 + frac * (cf.days - 1)));
+          const date = dateOf(Math.round(1 + frac * (cf.days - 1)));
+          if (date) onDayClick(date);
         }}
       >
         <ResponsiveContainer>
@@ -219,6 +245,12 @@ export function MonthCashflowChart({
               fontSize={11}
               tickLine={false}
               minTickGap={24}
+              // На оси — ЧИСЛО МЕСЯЦА, а не номер дня в периоде: с первым днём
+              // 15 подписи идут «15 … 30, 1 … 14», как в календаре.
+              tickFormatter={(v) => {
+                const date = dateOf(Number(v));
+                return date ? String(Number(date.slice(8, 10))) : String(v);
+              }}
             />
             <YAxis
               stroke={chartAxisStroke}
@@ -230,7 +262,7 @@ export function MonthCashflowChart({
             <ChartTooltip
               cursor={chartTooltipProps.cursor}
               wrapperStyle={chartTooltipProps.wrapperStyle}
-              content={<CashflowTip base={base} ym={ym} />}
+              content={<CashflowTip base={base} dateOf={dateOf} />}
             />
             {hasForecast && (
               <ReferenceLine

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Plus,
   Trash2,
@@ -81,15 +81,9 @@ import {
 } from "../lib/budgetExportName";
 import { InfoPopover } from "../components/InfoPopover";
 import { Badge, type BadgeTone } from "../components/Badge";
-
-function currentMonth(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-function daysInMonth(ym: string): number {
-  const [y, m] = ym.split("-").map(Number);
-  return new Date(y, m, 0).getDate();
-}
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
+import { currentPeriod, periodRange, spanDays } from "../lib/period";
+import { monthProgress as progressOf } from "../lib/dashboardModel";
 
 interface Row {
   line: BudgetLine;
@@ -125,6 +119,11 @@ export function BudgetsPage() {
   const base = useDataStore((s) => s.rates.base);
   const rates = useDataStore((s) => s.rates);
   const showDrill = useDrillStore((s) => s.show);
+  // Первый день отчётного месяца — тот же, что во всей аналитике и в Дзен-мани.
+  // Весь раздел считает по ОТЧЁТНОМУ периоду: ключ месяца («2026-09») приходит
+  // из Дзен-мани как есть, а факт под этот ключ собирается с 15.09 по 14.10.
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  const periodLoaded = useReportPeriodStore((s) => s.loaded);
   const lines = useBudgetsStore((s) => s.lines);
   const addLine = useBudgetsStore((s) => s.addLine);
   const setOverride = useBudgetsStore((s) => s.setOverride);
@@ -192,17 +191,37 @@ export function BudgetsPage() {
     };
   }, [transactions, rates]);
 
-  const cur = currentMonth();
-  const [ym, setYm] = useState(cur);
+  const cur = currentPeriod(monthStartDay);
+  const [ym, setYm] = useState(() =>
+    currentPeriod(useReportPeriodStore.getState().monthStartDay)
+  );
+  // Первый день отчётного месяца читается из базы асинхронно, и до этого
+  // «текущий период» считается по календарю — в первые его дни это промах на
+  // целый месяц. Один раз, как настройка прочитана, переставляем период на
+  // настоящий; дальше он принадлежит пользователю.
+  const periodAnchored = useRef(false);
+  useEffect(() => {
+    if (!periodLoaded || periodAnchored.current) return;
+    periodAnchored.current = true;
+    setYm(currentPeriod(useReportPeriodStore.getState().monthStartDay));
+  }, [periodLoaded]);
   const isCurrent = ym === cur;
+  /** Границы выбранного отчётного месяца — по ним отбираются все его операции. */
+  const range = useMemo(() => periodRange(ym, monthStartDay), [ym, monthStartDay]);
+  const inMonth = useCallback(
+    (date: string | undefined) => {
+      const day = (date || "").slice(0, 10);
+      return day >= range.from && day <= range.to;
+    },
+    [range]
+  );
   // Past/future months are "complete" for projection purposes (no linear
-  // extrapolation); only the current month is partially elapsed.
-  const monthProgress = isCurrent
-    ? new Date().getDate() / daysInMonth(ym)
-    : 1;
+  // extrapolation); only the current month is partially elapsed. Доля считается
+  // по ОТЧЁТНОМУ периоду — тем же расчётом, что и на главной.
+  const monthProgress = isCurrent ? progressOf(ym, new Date(), monthStartDay).progress : 1;
 
   const plannedByDay = useMemo(() => {
-    const days = daysInMonth(ym);
+    const days = spanDays(range.from, range.to);
     const income = new Array(days + 1).fill(0);
     const expense = new Array(days + 1).fill(0);
     // Периметр счетов действует и на планы: если бюджет сужен до карты, чужой
@@ -211,15 +230,18 @@ export function BudgetsPage() {
     const inScope = (account: string) =>
       scope.accounts.size === 0 || scope.accounts.has(account);
     for (const p of zenPlanned) {
-      if (p.forecast || !p.date.startsWith(ym)) continue;
+      if (p.forecast) continue;
+      const day = p.date.slice(0, 10);
+      if (day < range.from || day > range.to) continue;
       if (!inScope(p.account)) continue;
-      const d = Number(p.date.slice(8, 10));
+      // Индекс — номер дня ВНУТРИ периода, как и ось графика.
+      const d = spanDays(range.from, day);
       if (!(d >= 1 && d <= days)) continue;
       if (p.kind === "income") income[d] += p.amountBase;
       else if (p.kind === "expense") expense[d] += p.amountBase;
     }
     return { income, expense };
-  }, [zenPlanned, ym, scope]);
+  }, [zenPlanned, range, scope]);
 
   /**
    * План из НАЗНАЧЕННЫХ операций Дзен-мани.
@@ -231,8 +253,8 @@ export function BudgetsPage() {
    * нет, никуда не сохраняется и в Дзен-мани не уходит.
    */
   const plannedAsPlan = useMemo(
-    () => plannedPlans(zenPlanned, scope),
-    [zenPlanned, scope]
+    () => plannedPlans(zenPlanned, scope, undefined, monthStartDay),
+    [zenPlanned, scope, monthStartDay]
   );
 
   /**
@@ -246,7 +268,7 @@ export function BudgetsPage() {
   const aheadByTag = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     const m = new Map<string, { sum: number; ops: PlannedOp[] }>();
-    for (const p of plannedPlans(zenPlanned, scope, today)) {
+    for (const p of plannedPlans(zenPlanned, scope, today, monthStartDay)) {
       if (p.ym !== ym || p.ahead <= 0) continue;
       // Ключ тот же, что у `budgetKey` ниже; собираем его здесь, чтобы не
       // тянуть объявление функции выше по файлу.
@@ -256,7 +278,7 @@ export function BudgetsPage() {
       });
     }
     return m;
-  }, [zenPlanned, scope, ym]);
+  }, [zenPlanned, scope, ym, monthStartDay]);
 
   // ── Inline add: a draft row inside the «Расходы»/«Доходы» section ──
   const [draftKind, setDraftKind] = useState<BudgetKind | null>(null);
@@ -427,9 +449,10 @@ export function BudgetsPage() {
         scope,
         rowOrder,
         plannedAsPlan,
-        livePaths ?? undefined
+        livePaths ?? undefined,
+        monthStartDay
       ),
-    [lines, transactions, year, scope, rowOrder, plannedAsPlan, livePaths]
+    [lines, transactions, year, scope, rowOrder, plannedAsPlan, livePaths, monthStartDay]
   );
   /** Сдвиг года сохраняет месяц: вернувшись в месячный вид, попадаешь в тот же. */
   const shiftYear = (d: number) => setYm((m) => addMonths(m, d * 12));
@@ -437,8 +460,17 @@ export function BudgetsPage() {
   // ── Выгрузка годового отчёта в Excel ──
   const prevYearReport = useMemo(
     () =>
-      buildBudgetYear(lines, transactions, year - 1, scope, rowOrder, [], livePaths ?? undefined),
-    [lines, transactions, year, scope, rowOrder, livePaths]
+      buildBudgetYear(
+        lines,
+        transactions,
+        year - 1,
+        scope,
+        rowOrder,
+        [],
+        livePaths ?? undefined,
+        monthStartDay
+      ),
+    [lines, transactions, year, scope, rowOrder, livePaths, monthStartDay]
   );
   /**
    * Месяц, по которому считаются показатели «за месяц» и отрезок «с начала
@@ -556,7 +588,7 @@ export function BudgetsPage() {
             fc = zenForecasts.get(
               zenPlanKey(line.kind, line.category, line.subcategory ?? null, ym)
             ) ?? 0; // API: trust Дзен (missing = no forecast)
-          else fc = forecastFor(line, transactions, ym, 6, scope); // CSV: median estimate
+          else fc = forecastFor(line, transactions, ym, 6, scope, monthStartDay); // CSV: median estimate
           if (fc > 0) return { line, planned: fc, forecast: true };
         }
         return { line, planned, forecast: false, locked: lockedFor(line, ym) };
@@ -605,7 +637,14 @@ export function BudgetsPage() {
       .map(
         (r): Row => ({
           ...r,
-          fact: factFor(r.line, transactions, ym, scope, ownSubsFor(ownSubs, r.line)),
+          fact: factFor(
+            r.line,
+            transactions,
+            ym,
+            scope,
+            ownSubsFor(ownSubs, r.line),
+            monthStartDay
+          ),
         })
       )
       // Призрак переименования: имени в справочнике больше нет, трат за месяц
@@ -638,7 +677,18 @@ export function BudgetsPage() {
       if (!as || !bs) return as ? 1 : bs ? -1 : 0;
       return compareBudgetRows({ name: as, amount: a.fact }, { name: bs, amount: b.fact }, rowOrder);
     });
-  }, [lines, ym, transactions, zenForecasts, zenLoaded, scope, rowOrder, plannedAsPlan, livePaths]);
+  }, [
+    lines,
+    ym,
+    transactions,
+    zenForecasts,
+    zenLoaded,
+    scope,
+    rowOrder,
+    plannedAsPlan,
+    livePaths,
+    monthStartDay,
+  ]);
   /**
    * Статьи, по которым в этом месяце были деньги, но плана нет.
    *
@@ -671,7 +721,7 @@ export function BudgetsPage() {
     const inScope = (account: string | undefined) =>
       scope.accounts.size === 0 || (!!account && scope.accounts.has(account));
     for (const t of transactions) {
-      if (!(t.date || "").startsWith(ym)) continue;
+      if (!inMonth(t.date)) continue;
       // «Без категории» `budgetHits` отсеивает — планировать неразобранное
       // нечего. Но деньги-то потрачены, и без них итог месяца не сойдётся с
       // операциями. Собираем их отдельной строкой, которую нельзя планировать.
@@ -721,7 +771,7 @@ export function BudgetsPage() {
           plannable: u.category !== NO_CATEGORY,
         })
       );
-  }, [transactions, ym, rows, scope]);
+  }, [transactions, ym, inMonth, rows, scope]);
 
   /** Всё вместе — и запланированное, и нет. Сводка считается по этому списку,
    *  поэтому итог месяца сходится с лентой операций за тот же месяц. */
@@ -762,7 +812,7 @@ export function BudgetsPage() {
   const transfers = useMemo(() => {
     const agg = new Map<string, { kind: BudgetKind; account: string; sum: number }>();
     for (const t of transactions) {
-      if (!(t.date || "").startsWith(ym)) continue;
+      if (!inMonth(t.date)) continue;
       for (const hit of budgetHits(t, scope)) {
         if (!hit.transfer) continue;
         const account = hit.subcategory ?? "—";
@@ -777,7 +827,7 @@ export function BudgetsPage() {
         .filter((x) => x.kind === kind && x.sum > 0)
         .sort((a, b) => b.sum - a.sum);
     return { out: side("expense"), in: side("income") };
-  }, [transactions, ym, scope]);
+  }, [transactions, inMonth, scope]);
 
   /** Операции статьи за месяц — по умолчанию за выбранный, но годовой свод
    *  открывает свою ячейку, поэтому месяц передаётся явно. */
@@ -791,19 +841,20 @@ export function BudgetsPage() {
       transactions,
       scope,
       { kind, category: cat, subcategory: sub },
-      month
+      month,
+      monthStartDay
     );
     const label = sub ? `${cat} › ${sub}` : cat;
     showDrill(`${label} · ${month}`, txs, "Бюджет");
   }
 
   // Click a day on the cash-flow chart → drill into that day's operations.
-  function openDay(day: number) {
-    const dd = String(day).padStart(2, "0");
-    const date = `${ym}-${dd}`;
+  // График отдаёт КАЛЕНДАРНУЮ дату: отчётный период может идти через стык
+  // месяцев, и собрать её из `ym` и номера дня нельзя.
+  function openDay(date: string) {
     const txs = scopedTx.filter((t) => t.date.startsWith(date));
     if (txs.length === 0) return;
-    showDrill(`${day} · ${ym}`, txs, "День");
+    showDrill(`${Number(date.slice(8, 10))} · ${date.slice(0, 7)}`, txs, "День");
   }
 
   if (transactions.length === 0) return <EmptyState />;
@@ -829,7 +880,7 @@ export function BudgetsPage() {
   let expTransfers = 0;
   let incTransfers = 0;
   for (const t of transactions) {
-    if (!(t.date || "").startsWith(ym)) continue;
+    if (!inMonth(t.date)) continue;
     for (const hit of budgetHits(t, scope)) {
       if (!hit.transfer) continue;
       if (hit.kind === "expense") expTransfers += hit.amount;
@@ -1124,6 +1175,7 @@ export function BudgetsPage() {
         transactions={scopedTx}
         ym={ym}
         base={base}
+        monthStartDay={monthStartDay}
         onDayClick={openDay}
         plannedIncome={incPlan}
         plannedExpense={expPlan}

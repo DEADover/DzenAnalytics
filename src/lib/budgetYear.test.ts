@@ -647,3 +647,51 @@ describe("rowIsLive — одно правило для категорий и п�
     expect(rowIsLive({ fact: 0.005 })).toBe(true);
   });
 });
+
+/**
+ * Годовой свод считает факт по ОТЧЁТНЫМ месяцам.
+ *
+ * Названия колонок («Сентябрь») и ключи месяцев остаются календарными — так их
+ * нумерует и сам Дзен-мани, — а вот операции раскладываются по периодам: с
+ * первым днём 15 колонка «Сентябрь» это 15.09–14.10.
+ */
+describe("buildBudgetYear: отчётный месяц", () => {
+  const txs = [
+    tx({ date: "2026-09-10", amountBase: 1000 }),
+    tx({ date: "2026-09-18", amountBase: 2000 }),
+    tx({ date: "2026-10-05", amountBase: 4000 }),
+  ];
+  const factsOf = (day: number) => {
+    const r = buildBudgetYear([], txs, 2026, undefined, "alpha", [], undefined, day);
+    return r.expense.groups[0].total.cells.map((c) => c.fact);
+  };
+
+  it("при первом дне 15 трата 10.09 уходит в «Август», а 05.10 — в «Сентябрь»", () => {
+    const cells = factsOf(15);
+    expect(cells[7]).toBe(1000); // август: 15.08–14.09
+    expect(cells[8]).toBe(6000); // сентябрь: 15.09–14.10
+    expect(cells[9]).toBe(0); // октябрь: 15.10–14.11
+  });
+
+  it("при первом дне 1 всё по-старому — календарные месяцы", () => {
+    const cells = factsOf(1);
+    expect(cells[7]).toBe(0);
+    expect(cells[8]).toBe(3000);
+    expect(cells[9]).toBe(4000);
+  });
+
+  it("январь следующего года до первого дня попадает в декабрь этого", () => {
+    const r = buildBudgetYear(
+      [],
+      [tx({ date: "2027-01-05", amountBase: 700 })],
+      2026,
+      undefined,
+      "alpha",
+      [],
+      undefined,
+      15
+    );
+    // Период «2026-12» идёт с 15.12.2026 по 14.01.2027.
+    expect(r.expense.groups[0].total.cells[11].fact).toBe(700);
+  });
+});

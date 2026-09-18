@@ -210,3 +210,28 @@ describe("insidePerimeter", () => {
     expect(got.map((t) => t.kind)).toEqual(["expense"]);
   });
 });
+
+describe("transactionsForCell: отчётный месяц", () => {
+  const scope = perimeter(["Карта"]);
+  const txs = [
+    tx({ date: "2026-09-10", amountBase: 1 }),
+    tx({ date: "2026-09-15", amountBase: 2 }),
+    tx({ date: "2026-09-18", amountBase: 3 }),
+    tx({ date: "2026-10-05", amountBase: 4 }),
+    tx({ date: "2026-10-20", amountBase: 5 }),
+  ];
+  const cell = { category: "Еда", subcategory: null };
+
+  it("при первом дне 15 «2026-09» — это 15.09–14.10", () => {
+    const got = transactionsForCell(txs, scope, cell, "2026-09", 15);
+    expect(got.map((t) => t.date)).toEqual(["2026-09-15", "2026-09-18", "2026-10-05"]);
+  });
+
+  it("при первом дне 1 — по-прежнему календарный сентябрь", () => {
+    expect(transactionsForCell(txs, scope, cell, "2026-09").map((t) => t.date)).toEqual([
+      "2026-09-10",
+      "2026-09-15",
+      "2026-09-18",
+    ]);
+  });
+});

@@ -1,6 +1,7 @@
 import type { Transaction } from "../types";
 import { addMonths, plannedFor, type BudgetKind, type BudgetLine } from "./budgets";
 import { ALL_ACCOUNTS, budgetHit, type BudgetScope } from "./budgetScope";
+import { periodKey } from "./period";
 
 /**
  * Подсказки для «Заполнить по среднему» — постатейный план на месяц, собранный
@@ -41,6 +42,12 @@ export interface ForecastOptions {
   round?: number;
   /** Периметр бюджета: по умолчанию все счета, без переводов. */
   scope?: BudgetScope;
+  /**
+   * Первый день отчётного месяца, 1–31. История берётся по тем же периодам, по
+   * которым потом считается факт: иначе «среднее за квартал» складывалось бы из
+   * календарных месяцев, а сравнивали бы его с отчётными.
+   */
+  monthStartDay?: number;
 }
 
 /** Ключ статьи бюджета: тип + категория + под-категория. */
@@ -96,8 +103,10 @@ export function buildForecast(
   };
 
   const scope = opts.scope ?? ALL_ACCOUNTS;
+  const monthStartDay = opts.monthStartDay ?? 1;
   for (const t of transactions) {
-    const idx = slot.get((t.date || "").slice(0, 7));
+    if (!t.date) continue;
+    const idx = slot.get(periodKey(t.date, monthStartDay));
     if (idx === undefined) continue;
     const hit = budgetHit(t, scope);
     if (!hit) continue;

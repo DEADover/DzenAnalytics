@@ -110,3 +110,25 @@ describe("plannedPlans — «ещё в плане»", () => {
     expect(r[0].aheadOps).toHaveLength(3);
   });
 });
+
+describe("plannedPlans: отчётный месяц", () => {
+  const ops = [
+    op({ date: "2026-09-10", amountBase: 1000 }),
+    op({ date: "2026-09-20", amountBase: 2000 }),
+    op({ date: "2026-10-05", amountBase: 3000 }),
+  ];
+  const by = (day: number) =>
+    Object.fromEntries(
+      plannedPlans(ops, ALL_ACCOUNTS, undefined, day).map((r) => [r.ym, r.amount])
+    );
+
+  it("при первом дне 15 назначенные операции ложатся в свой период", () => {
+    // Назначенная оплата обязана попасть в тот же месяц, что и трата по ней:
+    // иначе план статьи и её факт разъехались бы по соседним колонкам.
+    expect(by(15)).toEqual({ "2026-08": 1000, "2026-09": 5000 });
+  });
+
+  it("при первом дне 1 — по календарю, как раньше", () => {
+    expect(by(1)).toEqual({ "2026-09": 3000, "2026-10": 3000 });
+  });
+});

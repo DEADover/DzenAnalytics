@@ -298,3 +298,91 @@ describe("запланированные операции на графике м
     expect(withNone.points.find((p) => p.day === 31)!.incomeF).toBeCloseTo(90000, 6);
   });
 });
+
+/**
+ * Отчётный месяц — тот же, что в приложении Дзен-мани.
+ *
+ * Ключ месяца («2026-09») приходит из Дзена как есть — это первое число
+ * КАЛЕНДАРНОГО месяца, — а факт под этот ключ приложение собирает по отчётному
+ * периоду: с первым днём 15 «Сентябрь» это 15.09–14.10, и траты 1–14 сентября
+ * в него не входят.
+ */
+describe("отчётный месяц в бюджете", () => {
+  const txs = [
+    tx({ category: "Еда", kind: "expense", amountBase: 1000, date: "2026-09-10" }),
+    tx({ category: "Еда", kind: "expense", amountBase: 2000, date: "2026-09-15" }),
+    tx({ category: "Еда", kind: "expense", amountBase: 3000, date: "2026-09-18" }),
+    tx({ category: "Еда", kind: "expense", amountBase: 4000, date: "2026-10-05" }),
+    tx({ category: "Еда", kind: "expense", amountBase: 5000, date: "2026-10-20" }),
+  ];
+  const l = line({ category: "Еда" });
+
+  it("при первом дне 15 факт «2026-09» — это 15.09–14.10", () => {
+    // 15.09 и 18.09 внутри, 10.09 — уже прошлый период, 05.10 — ещё этот.
+    expect(factFor(l, txs, "2026-09", undefined, undefined, 15)).toBe(2000 + 3000 + 4000);
+    // Операция 10.09 ушла в «Август», а 20.10 — в «Октябрь».
+    expect(factFor(l, txs, "2026-08", undefined, undefined, 15)).toBe(1000);
+    expect(factFor(l, txs, "2026-10", undefined, undefined, 15)).toBe(5000);
+  });
+
+  it("при первом дне 1 всё по-старому — календарный месяц", () => {
+    expect(factFor(l, txs, "2026-09")).toBe(1000 + 2000 + 3000);
+    expect(factFor(l, txs, "2026-09", undefined, undefined, 1)).toBe(1000 + 2000 + 3000);
+    expect(factFor(l, txs, "2026-10", undefined, undefined, 1)).toBe(4000 + 5000);
+  });
+
+  it("окно прогноза по истории тоже шагает отчётными месяцами", () => {
+    // Медиана шести предыдущих периодов: у дня 1 в окно попадает вся тройка
+    // сентябрьских трат, у дня 15 — только 10.09 (это «Август»).
+    const hist = [
+      tx({ category: "Прочее", kind: "income", amountBase: 6000, date: "2026-09-10" }),
+      tx({ category: "Прочее", kind: "income", amountBase: 6000, date: "2026-08-20" }),
+      tx({ category: "Прочее", kind: "income", amountBase: 6000, date: "2026-07-20" }),
+    ];
+    const inc = line({ category: "Прочее", kind: "income" });
+    // Календарём три предыдущих месяца дают по 6000 — медиана 6000.
+    expect(forecastFor(inc, hist, "2026-10", 3, undefined, 1)).toBe(6000);
+    // С днём 15 те же три операции ложатся иначе: 10.09 переезжает в «Август»
+    // к 20.08, а «Сентябрь» остаётся пустым — медиана [0, 6000, 12000] = 6000
+    // при совсем другом раскладе по месяцам.
+    // С днём 15 «Сентябрь» пуст, а 10.09 лежит в «Августе» вместе с 20.08.
+    expect(factFor(inc, hist, "2026-09", undefined, undefined, 15)).toBe(0);
+    expect(factFor(inc, hist, "2026-08", undefined, undefined, 15)).toBe(12000);
+  });
+});
+
+describe("график движения денег по отчётному месяцу", () => {
+  const txs = [
+    tx({ category: "Еда", kind: "expense", amountBase: 1000, date: "2026-09-10" }),
+    tx({ category: "Еда", kind: "expense", amountBase: 2000, date: "2026-09-15" }),
+    tx({ category: "Еда", kind: "expense", amountBase: 3000, date: "2026-10-05" }),
+  ];
+  // «Сегодня» — 18 сентября, четвёртый день периода 15.09–14.10.
+  const now = new Date(2026, 8, 18, 12).getTime();
+
+  it("ось идёт от первого дня периода к последнему", () => {
+    const cf = buildMonthCashflow(txs, "2026-09", now, { monthStartDay: 15 });
+    expect(cf.days).toBe(30); // 15.09–14.10
+    expect(cf.points[0].date).toBe("2026-09-15");
+    expect(cf.points[cf.points.length - 1].date).toBe("2026-10-14");
+  });
+
+  it("«сегодня» — номер дня ВНУТРИ периода, а не число месяца", () => {
+    const cf = buildMonthCashflow(txs, "2026-09", now, { monthStartDay: 15 });
+    expect(cf.todayDay).toBe(4); // 15, 16, 17, 18 сентября
+  });
+
+  it("факт периода не включает траты до его начала", () => {
+    const cf = buildMonthCashflow(txs, "2026-09", now, { monthStartDay: 15 });
+    // 1000 от 10.09 — прошлый период; 3000 от 05.10 ещё впереди «сегодня».
+    expect(cf.factExpense).toBe(2000);
+  });
+
+  it("при первом дне 1 всё по-старому", () => {
+    const cf = buildMonthCashflow(txs, "2026-09", now);
+    expect(cf.days).toBe(30);
+    expect(cf.todayDay).toBe(18);
+    expect(cf.factExpense).toBe(3000); // 10.09 + 15.09
+    expect(cf.points[0].date).toBe("2026-09-01");
+  });
+});

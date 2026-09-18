@@ -10,6 +10,7 @@ import {
 import { ALL_ACCOUNTS, budgetHits, TRANSFER_CATEGORY, type BudgetScope } from "./budgetScope";
 import type { PlannedPlan } from "./plannedPlans";
 import { nameKey, normalizeTagName } from "./budgetLines";
+import { periodKey } from "./period";
 
 /**
  * Есть ли по строке что показывать: движение за год ИЛИ назначенная операция.
@@ -196,7 +197,15 @@ export function buildBudgetYear(
    *
    * Не передали (режим CSV, где живого справочника нет) — ничего не режем.
    */
-  knownPaths?: Set<string>
+  knownPaths?: Set<string>,
+  /**
+   * Первый день отчётного месяца, 1–31.
+   *
+   * Ключи месяцев («2026-09») остаются как есть — их так же нумерует и сам
+   * Дзен-мани, — а вот ФАКТ под ключ собирается по отчётному периоду: с днём 15
+   * колонка «Сентябрь» это 15.09–14.10.
+   */
+  monthStartDay: number = 1
 ): BudgetYearReport {
   const months = Array.from(
     { length: MONTHS },
@@ -246,7 +255,8 @@ export function buildBudgetYear(
 
   // Факт — из операций.
   for (const t of transactions) {
-    const i = slot.get((t.date || "").slice(0, 7));
+    if (!t.date) continue;
+    const i = slot.get(periodKey(t.date, monthStartDay));
     if (i === undefined) continue;
     // Попаданий может быть два: у перевода списание идёт в расходы, а
     // зачисление — в доходы.
