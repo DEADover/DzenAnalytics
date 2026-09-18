@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, ChevronDown, CalendarRange } from "lucide-react";
 import clsx from "clsx";
 import { MONTHS_SHORT } from "../lib/months";
-import { monthLabel } from "../lib/format";
+import { monthLabelFull } from "../lib/format";
 
 
 /**
@@ -143,12 +143,15 @@ export function MonthPicker({
         title={hint}
         className={clsx(
           "seg-item",
-          size === "md" ? "seg-item-md min-w-[132px]" : "seg-item-sm min-w-[118px]",
+          // Ширины хватает на самый длинный месяц («Сентябрь 26 г.») целиком:
+          // сокращение «Сент.» экономило пиксели там, где их и так достаточно,
+          // а читалось хуже.
+          size === "md" ? "seg-item-md min-w-[160px]" : "seg-item-sm min-w-[148px]",
           active && "seg-on"
         )}
       >
         <CalendarRange className={size === "md" ? "w-4 h-4" : "w-3.5 h-3.5"} />
-        {isYear ? year : value ? monthLabel(value) : "Месяц"}
+        {isYear ? year : value ? monthLabelFull(value) : "Месяц"}
         <ChevronDown
           className={clsx(size === "md" ? "w-4 h-4" : "w-3.5 h-3.5", "transition-transform", open && "rotate-180")}
         />

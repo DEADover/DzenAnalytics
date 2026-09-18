@@ -42,9 +42,10 @@ export function DateRangePicker({
   return (
     <div
       className={clsx(
-        // Ширина — по содержимому: растянутая на всю свободную ширину дорожка
-        // разносила даты по краям, и между ними зияла дыра.
-        "seg-track min-w-0 max-sm:w-full",
+        // Дорожка забирает остаток строки, а даты внутри стоят по центру своих
+        // половин: прижатые к краям, они оставляли дыру посередине — растянуть
+        // мало, надо ещё и выровнять.
+        "seg-track flex-1 min-w-0 max-sm:w-full",
         active && "!border-accent",
         dimmed && "opacity-55"
       )}
@@ -59,35 +60,38 @@ export function DateRangePicker({
         <ChevronLeft className="w-4 h-4" />
       </button>
 
-      <DateField
-        value={from || ""}
-        onChange={(e) => onChange(e.target.value || null, to)}
-        className={clsx(
-          "seg-item min-w-0",
-          size === "md" ? "seg-item-md" : "seg-item-sm",
-          from && "text-text"
-        )}
-        wrapperClassName="min-w-0"
-        icon={false}
-        shortYear
-        placeholder="Начало"
-      />
-      <span className="text-muted text-xs px-0.5 shrink-0" aria-hidden="true">
-        —
-      </span>
-      <DateField
-        value={to || ""}
-        onChange={(e) => onChange(from, e.target.value || null)}
-        className={clsx(
-          "seg-item min-w-0",
-          size === "md" ? "seg-item-md" : "seg-item-sm",
-          to && "text-text"
-        )}
-        wrapperClassName="min-w-0"
-        icon={false}
-        shortYear
-        placeholder="Конец"
-      />
+      {/* Пара дат — единой группой по ЦЕНТРУ дорожки. Растянутые на половину
+          каждая, они прижимались к стрелкам, и середина зияла пустотой:
+          свободное место должно лежать по краям группы, а не внутри неё. */}
+      <div className="flex-1 flex items-center justify-center gap-1.5 min-w-0">
+        <DateField
+          value={from || ""}
+          onChange={(e) => onChange(e.target.value || null, to)}
+          className={clsx(
+            "seg-item min-w-0",
+            size === "md" ? "seg-item-md" : "seg-item-sm",
+            from && "text-text"
+          )}
+          wrapperClassName="min-w-0"
+          icon={false}
+          placeholder="Начало"
+        />
+        <span className="text-muted text-xs shrink-0" aria-hidden="true">
+          —
+        </span>
+        <DateField
+          value={to || ""}
+          onChange={(e) => onChange(from, e.target.value || null)}
+          className={clsx(
+            "seg-item min-w-0",
+            size === "md" ? "seg-item-md" : "seg-item-sm",
+            to && "text-text"
+          )}
+          wrapperClassName="min-w-0"
+          icon={false}
+          placeholder="Конец"
+        />
+      </div>
 
       <button
         type="button"
