@@ -22,6 +22,7 @@ export function MonthPicker({
   minYM,
   maxYM,
   active,
+  dimmed,
   mode = "month",
   hint,
   size = "sm",
@@ -35,6 +36,8 @@ export function MonthPicker({
   maxYM: string;
   /** Whether the month filter is the active date mode. */
   active: boolean;
+  /** Период задан не им: дорожка приглушается, чтобы рабочий контрол был виден. */
+  dimmed?: boolean;
   /** Что выбираем — месяц или год. */
   mode?: "month" | "year";
   /**
@@ -114,7 +117,7 @@ export function MonthPicker({
     <div
       // Дорожка и пункты — общие `.seg-*`: та же пилюля, что у `Segmented`
       // той же ступени, и выбранная подпись светится так же.
-      className={clsx("seg-track", active && "!border-accent")}
+      className={clsx("seg-track", active && "!border-accent", dimmed && "opacity-55")}
       title={isYear ? "Перейти к одному году" : "Перейти к одному месяцу"}
     >
       <button

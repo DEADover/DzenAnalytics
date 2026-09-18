@@ -31,9 +31,11 @@ function parseYM(s: string): { y: number; m: number } | null {
   return x ? { y: +x[1], m: +x[2] - 1 } : null;
 }
 
-function toDisplay(iso: string): string {
+function toDisplay(iso: string, shortYear = false): string {
   const p = parseISO(iso);
-  return p ? `${pad(p.d)}.${pad(p.m + 1)}.${p.y}` : "";
+  if (!p) return "";
+  const year = shortYear ? pad(p.y % 100) : String(p.y);
+  return `${pad(p.d)}.${pad(p.m + 1)}.${year}`;
 }
 
 /**
@@ -80,6 +82,11 @@ interface Props {
    * уже есть свои значки по краям, а место занимает именно дата.
    */
   icon?: boolean;
+  /**
+   * Год двумя цифрами: «02.09.26». Нужно там, где рядом стоит вторая дата и
+   * две полных записи разносят дорожку по ширине экрана.
+   */
+  shortYear?: boolean;
 }
 
 export function DateField({
@@ -91,13 +98,14 @@ export function DateField({
   centered = false,
   granularity = "day",
   icon = true,
+  shortYear = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const display = value
     ? granularity === "month"
       ? toDisplayMonth(value)
-      : toDisplay(value)
+      : toDisplay(value, shortYear)
     : "";
   const ph = placeholder || (granularity === "month" ? "месяц год" : "дд.мм.гггг");
   const emit = (v: string) => onChange?.({ target: { value: v } });

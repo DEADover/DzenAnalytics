@@ -15,6 +15,7 @@ export function DateRangePicker({
   from,
   to,
   active,
+  dimmed,
   size = "sm",
   onChange,
 }: {
@@ -22,6 +23,8 @@ export function DateRangePicker({
   to: string | null;
   /** Отрезок — действующий фильтр: дорожка подсвечивается, как у месяца. */
   active: boolean;
+  /** Действует не он: дорожка приглушается, чтобы работающий контрол был виден. */
+  dimmed?: boolean;
   /** Ступень: `sm` 34 — ряд общего фильтра, `md` 42 — ряд контролов раздела. */
   size?: "sm" | "md";
   onChange: (from: string | null, to: string | null) => void;
@@ -39,10 +42,11 @@ export function DateRangePicker({
   return (
     <div
       className={clsx(
-        // Базис — желаемая ширина, но сжиматься дорожка обязана: на узком
-        // окне она иначе выталкивала соседей за край.
-        "seg-track flex-1 basis-56 min-w-0 max-sm:w-full",
-        active && "!border-accent"
+        // Ширина — по содержимому: растянутая на всю свободную ширину дорожка
+        // разносила даты по краям, и между ними зияла дыра.
+        "seg-track min-w-0 max-sm:w-full",
+        active && "!border-accent",
+        dimmed && "opacity-55"
       )}
     >
       <button
@@ -59,13 +63,13 @@ export function DateRangePicker({
         value={from || ""}
         onChange={(e) => onChange(e.target.value || null, to)}
         className={clsx(
-          "seg-item flex-1 min-w-0",
+          "seg-item min-w-0",
           size === "md" ? "seg-item-md" : "seg-item-sm",
           from && "text-text"
         )}
-        wrapperClassName="flex-1 min-w-0"
+        wrapperClassName="min-w-0"
         icon={false}
-        centered
+        shortYear
         placeholder="Начало"
       />
       <span className="text-muted text-xs px-0.5 shrink-0" aria-hidden="true">
@@ -75,13 +79,13 @@ export function DateRangePicker({
         value={to || ""}
         onChange={(e) => onChange(from, e.target.value || null)}
         className={clsx(
-          "seg-item flex-1 min-w-0",
+          "seg-item min-w-0",
           size === "md" ? "seg-item-md" : "seg-item-sm",
           to && "text-text"
         )}
-        wrapperClassName="flex-1 min-w-0"
+        wrapperClassName="min-w-0"
         icon={false}
-        centered
+        shortYear
         placeholder="Конец"
       />
 

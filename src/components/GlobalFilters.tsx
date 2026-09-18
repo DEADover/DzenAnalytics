@@ -696,6 +696,7 @@ export function GlobalFilters({
                 minYM={dataRange.minYM}
                 maxYM={dataRange.maxYM}
                 active={anchored}
+                dimmed={rangeActive}
                 mode={periodCtl.preset === "year" ? "year" : "month"}
                 hint={monthHint}
                 onSelect={(ym) => periodCtl.setMonth(ym)}
@@ -711,6 +712,7 @@ export function GlobalFilters({
                 from={periodCtl.from}
                 to={periodCtl.to}
                 active={rangeActive}
+                dimmed={anchored}
                 onChange={(from, to) => periodCtl.setRange(from, to)}
               />
             </div>
