@@ -171,13 +171,27 @@ function PlannedTotals({ out, income, base }: { out: number; income: number; bas
 /* ─────────────────────────────  итоги месяца  ───────────────────────────── */
 
 /**
- * Даты отчётного периода — подсказкой к пилюле. При первом дне не 1-м одно
- * название обманывает: «Август» с днём 28 идёт по 27 сентября.
+ * Даты отчётного периода. При первом дне не 1-м одно название обманывает:
+ * «Сентябрь» с днём 15 идёт по 14 октября, и пока даты стояли только в
+ * подсказке, о каком отрезке речь, было не понять.
  */
 function monthPillHint(m: DashboardModel): string | undefined {
   if (m.monthStartDay === 1) return undefined;
   const r = periodRange(m.ym, m.monthStartDay);
   return formatDate(r.from, "full") + " — " + formatDate(r.to, "full");
+}
+
+/** Строка с датами под пилюлей — только когда месяц не календарный. */
+function PeriodNote({ m, size }: { m: DashboardModel; size: "sm" | "md" }) {
+  if (m.monthStartDay === 1) return null;
+  const r = periodRange(m.ym, m.monthStartDay);
+  return (
+    <div
+      className={`${size === "md" ? "text-[12.5px]" : "text-[11.5px]"} text-muted -mt-1 tabular-nums`}
+    >
+      Отчётный месяц: {formatDate(r.from, "short")} — {formatDate(r.to, "short")}
+    </div>
+  );
 }
 
 /** Подпись пилюли месяца: название и сколько дней осталось. */
@@ -227,6 +241,7 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
       >
         {monthPill(m)}
       </h1>
+      <PeriodNote m={m} size="md" />
 
       <div
         className={clsx(
@@ -368,6 +383,7 @@ function HeroSplit({ m }: { m: DashboardModel }) {
       >
         {monthPill(m)}
       </h1>
+      <PeriodNote m={m} size="sm" />
 
       {/* Разворот раскрывается только там, где колонка достаточно широка. На
           экранах до 1280 треть сетки — около 320 пикселей, и рядом с рейкой

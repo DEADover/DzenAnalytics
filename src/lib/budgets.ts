@@ -26,6 +26,37 @@ export function lockedFor(line: BudgetLine | null | undefined, ym: string): bool
 }
 
 /**
+ * План месяца по всем статьям, отдельно доход и расход.
+ *
+ * Под-статья складывается с родителем НЕ всегда: когда план родителя задан
+ * точной суммой (замок Дзен-мани), он уже включает детей, и прибавлять их
+ * значит посчитать те же деньги дважды. Правило живёт здесь, а не в разделе
+ * «Бюджет»: плитки «План» на главной считали простой суммой всех строк и
+ * показывали 319 872 ₽ там, где раздел показывал 284 875 ₽.
+ */
+export function planTotals(
+  lines: BudgetLine[],
+  ym: string
+): { income: number; expense: number } {
+  const lockedParents = new Set<string>();
+  for (const line of lines) {
+    if (!line.subcategory && lockedFor(line, ym)) {
+      lockedParents.add(`${line.kind}\u0000${line.category}`);
+    }
+  }
+  let income = 0;
+  let expense = 0;
+  for (const line of lines) {
+    if (line.subcategory && lockedParents.has(`${line.kind}\u0000${line.category}`)) continue;
+    const planned = plannedFor(line, ym);
+    if (planned <= 0) continue;
+    if (line.kind === "income") income += planned;
+    else expense += planned;
+  }
+  return { income, expense };
+}
+
+/**
  * Порядок статей в бюджете — один на все виды раздела и на выгрузки.
  *
  * «alpha» — по названию, как в справочнике категорий: у статьи всегда одно и то

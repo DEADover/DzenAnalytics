@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { monthDiff, addMonths, plannedFor, monthlyEquivalent, factFor, forecastFor, buildMonthCashflow, migrateLegacyBudgets, type BudgetLine, ownSubsIndex, ownSubsFor } from "./budgets";
+import { monthDiff, addMonths, planTotals, plannedFor, monthlyEquivalent, factFor, forecastFor, buildMonthCashflow, migrateLegacyBudgets, type BudgetLine, ownSubsIndex, ownSubsFor } from "./budgets";
 import { tx } from "../test/fixtures";
 
 const line = (over: Partial<BudgetLine> = {}): BudgetLine => ({
@@ -384,5 +384,35 @@ describe("график движения денег по отчётному ме�
     expect(cf.todayDay).toBe(18);
     expect(cf.factExpense).toBe(3000); // 10.09 + 15.09
     expect(cf.points[0].date).toBe("2026-09-01");
+  });
+});
+
+// План на главной и в разделе «Бюджет» должен быть одним числом. Раньше главная
+// складывала все строки подряд и задваивала под-статьи «запертого» родителя:
+// 319 872 ₽ против 284 875 ₽ в самом разделе.
+describe("planTotals — план месяца одним правилом", () => {
+  it("под-статьи запертого родителя в итог не идут", () => {
+    const lines = [
+      line({ id: "p", category: "Животные", amount: 36000, locks: { "2026-09": true } }),
+      line({ id: "s1", category: "Животные", subcategory: "Собака", amount: 25000 }),
+      line({ id: "s2", category: "Животные", subcategory: "Кот", amount: 10000 }),
+    ];
+    expect(planTotals(lines, "2026-09").expense).toBe(36000);
+  });
+
+  it("родитель без замка складывается с детьми", () => {
+    const lines = [
+      line({ id: "p", category: "Еда", amount: 5000 }),
+      line({ id: "s", category: "Еда", subcategory: "Алкоголь", amount: 1000 }),
+    ];
+    expect(planTotals(lines, "2026-09").expense).toBe(6000);
+  });
+
+  it("доход и расход считаются раздельно", () => {
+    const lines = [
+      line({ id: "i", category: "Работа", kind: "income", amount: 290000 }),
+      line({ id: "e", category: "Еда", amount: 5000 }),
+    ];
+    expect(planTotals(lines, "2026-09")).toEqual({ income: 290000, expense: 5000 });
   });
 });

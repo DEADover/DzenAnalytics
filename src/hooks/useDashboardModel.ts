@@ -40,7 +40,7 @@ import {
 import { buildNeedsWants, type NeedsWantsSplit } from "../lib/needsWants";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { buildNotices, type Notice } from "../lib/dashboardNotices";
-import { plannedFor } from "../lib/budgets";
+import { plannedFor, planTotals } from "../lib/budgets";
 import { currentPeriod, periodKey, yearRange } from "../lib/period";
 import {
   monthProgress,
@@ -331,17 +331,12 @@ export function useDashboardModel(): DashboardModel {
 
   const free = freeMoney({ factIncome, factExpense });
 
-  // План месяца берём из тех же строк бюджета, что и раздел «Бюджет».
+  // План месяца берём из тех же строк бюджета и по тому же правилу, что и
+  // раздел «Бюджет»: под-статья под «запертым» родителем в итог не идёт.
   const { planIncome, planExpense } = useMemo(() => {
     if (!budgetLines.length) return { planIncome: null, planExpense: null };
-    let inc = 0;
-    let exp = 0;
-    for (const line of budgetLines) {
-      const p = plannedFor(line, ym);
-      if (line.kind === "income") inc += p;
-      else exp += p;
-    }
-    return { planIncome: inc, planExpense: exp };
+    const { income, expense } = planTotals(budgetLines, ym);
+    return { planIncome: income, planExpense: expense };
   }, [budgetLines, ym]);
 
   // Факт по статьям за месяц — в том же виде, в каком его ждёт фильтр наблюдений.
