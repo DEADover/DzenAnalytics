@@ -199,13 +199,16 @@ function App() {
   // месяц идёт за днём — если человек сам период не листал.
   const reconciledStartDay = useRef<number | null>(null);
   const followStartDay = useFiltersStore((s) => s.followStartDay);
+  const displayLoaded = useDisplayStore((s) => s.loaded);
+  // Ждём и настройки отображения: в них лежит вид месяца, а «текущий период»
+  // считается по нему.
   useEffect(() => {
-    if (!reportPeriodLoaded) return;
+    if (!reportPeriodLoaded || !displayLoaded) return;
     const prev = reconciledStartDay.current;
     reconciledStartDay.current = monthStartDay;
     if (prev === null) resetToCurrentPeriod(monthStartDay);
     else followStartDay(prev, monthStartDay);
-  }, [reportPeriodLoaded, monthStartDay, resetToCurrentPeriod, followStartDay]);
+  }, [reportPeriodLoaded, displayLoaded, monthStartDay, resetToCurrentPeriod, followStartDay]);
 
   // Once backup settings are loaded, check on mount + every 10 minutes.
   useEffect(() => {

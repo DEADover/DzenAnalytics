@@ -204,7 +204,10 @@ function SegmentedMenu<T extends string | number>({
         anchorRef={anchorRef}
         onClose={() => setOpen(false)}
         align="left"
-        className="w-max min-w-40 card p-2"
+        /* Ширина — по самому длинному пункту. Колонкой, а не потоком: пункты
+           остаются строчными, и `w-max` считал ширину как если бы они стояли
+           в ОДИН ряд — меню выходило вдвое шире кнопки. */
+        className="flex flex-col w-max card p-1"
       >
         {items.map((m) => (
           <button
@@ -216,7 +219,7 @@ function SegmentedMenu<T extends string | number>({
             }}
             title={m.title}
             className={clsx(
-              "w-full text-left text-xs px-2 py-1.5 rounded whitespace-nowrap hover:bg-panel2",
+              "w-full text-left text-xs px-2 py-1.5 rounded-control-xs whitespace-nowrap hover:bg-panel2",
               value === m.value && "bg-panel2 text-accent2 font-medium"
             )}
           >

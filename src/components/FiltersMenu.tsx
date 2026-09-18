@@ -183,14 +183,14 @@ export function FiltersMenu() {
       <button
         onClick={() => setOpen((o) => !o)}
         className={clsx(
-          "relative btn-ghost text-xs w-52 max-sm:w-full",
+          "relative btn-ghost text-[12.5px] leading-4 w-52 max-sm:w-full",
           activeView && "text-accent2"
         )}
         title="Фильтры"
       >
-        <Filter className="w-3.5 h-3.5 shrink-0" />
+        <Filter className="w-3.5 h-3.5 shrink-0 text-muted" />
         <span className="flex-1 min-w-0 text-left truncate">{label}</span>
-        <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+        <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
         {/* Unsaved-changes marker — ONLY for a modified saved filter (not for
             plain ad-hoc filtering on «Без фильтрации»). Absolutely positioned so
             it never shifts the toolbar. */}

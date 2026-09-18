@@ -25,6 +25,8 @@ type FractionDigits = 0 | 2;
  * страницы, как было раньше; кнопки в шапке тогда нет вовсе.
  */
 export type FiltersMode = "button" | "page";
+/** Отчётный месяц (со своего первого дня) или календарный. */
+export type MonthKind = "period" | "month";
 
 /** 1 (smallest) … 5 (largest); 3 is the default 14px baseline. */
 export type TableFontLevel = 1 | 2 | 3 | 4 | 5;
@@ -91,6 +93,13 @@ interface DisplayState {
    */
   hideThanks: boolean;
   filtersMode: FiltersMode;
+  /**
+   * Какой месяц подставляет кнопка месяца в фильтре: отчётный (со своего
+   * первого дня) или календарный. Живёт здесь, а не в самом фильтре: это
+   * привычка человека, а не часть периода, — иначе она терялась при каждой
+   * перезагрузке и на каждом новом устройстве.
+   */
+  monthKind: MonthKind;
   loaded: boolean;
   hydrate: () => Promise<void>;
   setFractionDigits: (n: FractionDigits) => Promise<void>;
@@ -99,6 +108,7 @@ interface DisplayState {
   setSyncLogOpen: (on: boolean) => Promise<void>;
   setHideThanks: (on: boolean) => Promise<void>;
   setFiltersMode: (mode: FiltersMode) => Promise<void>;
+  setMonthKind: (kind: MonthKind) => Promise<void>;
 }
 
 export const useDisplayStore = create<DisplayState>((set, get) => ({
@@ -108,6 +118,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   syncLogOpen: false,
   hideThanks: false,
   filtersMode: "page",
+  monthKind: "period",
   loaded: false,
 
   hydrate: async () => {
@@ -118,6 +129,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       syncLogOpen?: boolean;
       hideThanks?: boolean;
       filtersMode?: string;
+      monthKind?: string;
     }>(KEY);
     const fd: FractionDigits = stored?.fractionDigits === 2 ? 2 : 0;
     const level = normalizeLevel(stored?.tableFontLevel);
@@ -131,6 +143,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       hideThanks: stored?.hideThanks === true,
       // По умолчанию фильтры стоят на странице; панель по кнопке — выбор человека.
       filtersMode: stored?.filtersMode === "button" ? "button" : "page",
+      monthKind: stored?.monthKind === "month" ? "month" : "period",
       loaded: true,
     });
   },
@@ -167,6 +180,12 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     set({ filtersMode });
     await db.saveJSON(KEY, { ...persisted(get()), filtersMode });
   },
+
+  setMonthKind: async (monthKind) => {
+    if (get().monthKind === monthKind) return;
+    set({ monthKind });
+    await db.saveJSON(KEY, { ...persisted(get()), monthKind });
+  },
 }));
 
 /** Всё, что кладём в IDB, — одним местом, чтобы сеттеры не забывали поля. */
@@ -178,5 +197,6 @@ function persisted(s: DisplayState) {
     syncLogOpen: s.syncLogOpen,
     hideThanks: s.hideThanks,
     filtersMode: s.filtersMode,
+    monthKind: s.monthKind,
   };
 }

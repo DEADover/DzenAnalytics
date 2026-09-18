@@ -10,7 +10,7 @@ import {
 import { Checkbox } from "./Checkbox";
 import { createPortal } from "react-dom";
 import { SURFACE_ATTR } from "./Popover";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
 
 // Narrow by default (just the categories + the one-line header); widens by
 // SUB_W to the right when a category is expanded.
@@ -61,10 +61,13 @@ export function CategoryFilterPicker({
   selected,
   onChange,
   className,
+  icon: Icon,
 }: {
   nodes: CategoryNode[];
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
+  /** Значок сущности на кнопке — как у соседних выборов в ряду фильтров. */
+  icon?: LucideIcon;
   /** Extra classes for the outer wrapper (e.g. `flex-1` to fill a row). */
   className?: string;
 }) {
@@ -247,12 +250,16 @@ export function CategoryFilterPicker({
           setOpen((o) => !o);
         }}
         className={clsx(
-          "btn-ghost text-xs w-full justify-between",
-          !isAll && "border-accent text-accent"
+          "btn-ghost text-[12.5px] leading-4 w-full justify-between gap-2",
+          !isAll && "border-accent"
         )}
       >
-        <span className="truncate max-w-[180px]">Категории: {summary}</span>
-        <ChevronDown className="w-4 h-4 shrink-0" />
+        {Icon && <Icon className="w-3.5 h-3.5 shrink-0 text-muted" aria-hidden="true" />}
+        <span className="truncate max-w-[180px] flex-1 text-left font-normal text-muted">
+          Категории:{" "}
+          <span className={clsx("font-medium", !isAll ? "text-accent" : "text-text")}>{summary}</span>
+        </span>
+        <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
       </button>
       {open &&
         pos &&

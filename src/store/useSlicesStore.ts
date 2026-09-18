@@ -50,6 +50,8 @@ interface State extends Persisted {
   /** Задать список исключённых счетов целиком — так работает пикер. */
   setAccounts: (sliceId: string, accounts: string[]) => Promise<void>;
   setCategories: (sliceId: string, categories: string[]) => Promise<void>;
+  /** Заменить список целиком — перенос настроек между устройствами. */
+  replaceAll: (items: readonly Slice[]) => Promise<void>;
 }
 
 const KEY = "dataSlices";
@@ -160,6 +162,24 @@ export const useSlicesStore = create<State>((set, get) => {
 
     setCategories: async (sliceId, categories) => {
       await patch(sliceId, (x) => ({ ...x, excludedCategories: [...categories] }));
+    },
+
+    replaceAll: async (items) => {
+      const slices = items
+        .filter((x) => x && typeof x.id === "string")
+        .map((x) => ({
+          id: x.id,
+          name: typeof x.name === "string" ? x.name : DEFAULT_SLICE_NAME,
+          excludedCategories: Array.isArray(x.excludedCategories) ? [...x.excludedCategories] : [],
+          excludedAccounts: Array.isArray(x.excludedAccounts) ? [...x.excludedAccounts] : [],
+        }));
+      // Без разрезов аналитике не на что опираться: пустой список заменяем
+      // разрезом по умолчанию, как при первом запуске.
+      const next = slices.length > 0 ? slices : emptyDefault().slices;
+      const activeId = next.some((x) => x.id === snapshot().activeId)
+        ? snapshot().activeId
+        : next[0].id;
+      await persist({ slices: next, activeId });
     },
   };
 });

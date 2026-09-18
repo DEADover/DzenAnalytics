@@ -12,17 +12,18 @@ import {
   Filter,
   SlidersHorizontal,
   Coins,
+  PieChart,
+  Wallet,
   Users,
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { DateRangePicker } from "./DateRangePicker";
 import { MultiSelect } from "./MultiSelect";
 import { AccountLogo } from "./AccountLogo";
 import { accountKindLabel, DEBT_TYPES } from "../lib/accountType";
 import { parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
 import { CategoryFilterPicker } from "./CategoryFilterPicker";
-import { MonthPicker } from "./MonthPicker";
+import { PeriodPicker } from "./PeriodPicker";
 import { Segmented, type SegmentedOption } from "./Segmented";
 import { currencySymbol } from "../lib/format";
 import clsx from "clsx";
@@ -382,12 +383,16 @@ export function GlobalFilters({
   // Год якорится тем же `monthYM`, поэтому пикеру он подходит как есть.
   const anchored = periodCtl.preset === "month" || periodCtl.preset === "year";
   /** Какой месяц человек выбирал последним — им и подписана кнопка. */
-  const monthKind = useFiltersStore((st) => st.monthKind);
+  const monthKind = useDisplayStore((st) => st.monthKind);
 
-  /** Отчётный месяц — свой или уже поправленный руками: кнопка одна. */
-  const periodMode = periodCtl.preset === "period" || periodCtl.preset === "custom";
-  /** Действует ручной отрезок — подсвечиваем поля дат, как пикер при месяце. */
-  const rangeActive = periodMode;
+  /**
+   * Залита та зона контрола, которая задаёт период, и ровно одна: отрезок — сам
+   * по себе, только когда даты выставлены руками. Отчётный месяц задаёт
+   * название (оно и светится), а даты у него — производные.
+   */
+  const rangeActive = periodCtl.preset === "custom";
+  /** Название задаёт период: отчётный месяц, календарный месяц или год. */
+  const monthAnchored = anchored || periodCtl.preset === "period";
 
   const currentMonthYM =
     anchored && periodCtl.monthYM ? periodCtl.monthYM : dataRange.maxYM;
@@ -455,9 +460,16 @@ export function GlobalFilters({
     periodCtl.preset === "ytd"
       ? [...withMonth, { value: "ytd" as DatePreset, label: "С начала года" }]
       : withMonth;
-  /** Свои даты — то же состояние кнопки «Период»: она и светится. */
-  const presetValue: DatePreset =
-    periodCtl.preset === "custom" ? "period" : periodCtl.preset;
+  /**
+   * Свои даты не светят ни одной кнопкой ряда: отрезок «4 сен. 2025 — 18 сен.
+   * 2026» — это не «Отчётный месяц», и подсвеченная кнопка врала про период.
+   * Показывает его сама дорожка дат — они и горят акцентом.
+   *
+   * Пока кнопка называлась «Период», подсветка была уместна: свои даты — её
+   * же состояние. С переименованием в «Отчётный месяц» это перестало быть
+   * правдой.
+   */
+  const presetValue: DatePreset = periodCtl.preset;
 
   /**
    * Что показывать в дорожке дат. Свои даты — как есть, у остальных пресетов —
@@ -590,19 +602,19 @@ export function GlobalFilters({
           <button
             onClick={() => setAdditionalOpen((o) => !o)}
             className={clsx(
-              "btn-ghost text-xs w-52 max-sm:w-full",
+              "btn-ghost text-[12.5px] leading-4 w-52 max-sm:w-full",
               hasExtra && "border-accent text-accent"
             )}
             title="Дополнительные фильтры"
           >
-            <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+            <SlidersHorizontal className="w-3.5 h-3.5 shrink-0 text-muted" />
             <span className="flex-1 min-w-0 text-left truncate">Дополнительно</span>
             {extraCount > 0 && (
               <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-accent-fg text-[11px] font-medium leading-none shrink-0">
                 {extraCount}
               </span>
             )}
-            <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+            <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
           </button>
           {/* Общим `Popover` в портале на body: панель фильтров живёт внутри
               шапки, у которой размытие фона, а там `fixed` считается от самой
@@ -755,57 +767,35 @@ export function GlobalFilters({
               options={presetOptions}
             />
 
-            {/* Month picker + custom range. Fully live for both the global
-                filter store AND a page-local controlled period (Cash-flow,
-                Trends) — picking a month/range switches the page's period. */}
-            {/* Ниже lg месяц с датами идут своей строкой: рядом с восемью
-                пресетами они не помещаются и уезжают за край карточки. */}
-            {/* Месяц и отрезок — единым блоком: с переносом ВНУТРИ они вставали
-                лесенкой (месяц в одной строке, даты под ним), и слева зияла
-                пустота. Не помещаются рядом с пресетами — уходят вниз вместе. */}
-            <div className="flex items-center gap-2 flex-1 min-w-fit max-lg:basis-full max-sm:min-w-0 max-sm:flex-col max-sm:items-stretch">
-              <MonthPicker
-                value={currentMonthYM}
+            {/* Период — ОДИН контрол: название месяца, его даты, стрелки и
+                возврат к текущему. Двумя дорожками он ломался на каждой ширине
+                по-своему — то наезжали друг на друга, то вставали лесенкой, —
+                а один блок либо помещается, либо переносится целиком. Сброс
+                идёт следом и держится его. */}
+            <div className="flex items-center gap-2 flex-1 min-w-fit max-lg:basis-full max-sm:min-w-0">
+              <PeriodPicker
+                monthYM={currentMonthYM}
                 minYM={dataRange.minYM}
                 maxYM={dataRange.maxYM}
-                active={anchored}
-                dimmed={rangeActive}
                 mode={periodCtl.preset === "year" ? "year" : "month"}
-                hint={monthHint}
-                onSelect={(ym) => periodCtl.setMonth(ym)}
-                onSelectYear={(y) => periodCtl.setYear(y)}
-                onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
-              />
-
-              {/* Отрезок и сброс — неразрывной парой: поодиночке кнопка при
-                  переносе оставалась в строке одна, полосой пустоты. */}
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-              {/* Свой отрезок — одной дорожкой со стрелками, как месяц рядом:
-                  двумя отдельными полями он и парой не выглядел, и листать его
-                  было нечем. Подсветка дорожки показывает, что действует
-                  именно он. */}
-              <DateRangePicker
+                monthActive={monthAnchored}
+                rangeActive={rangeActive}
+                stepsByWindow={periodCtl.preset === "custom"}
                 from={shownRange.from}
                 to={shownRange.to}
-                active={rangeActive}
-                dimmed={!rangeActive}
-                onChange={(from, to) => periodCtl.setRange(from, to)}
-                onStepPeriod={
-                  periodCtl.preset === "period"
-                    ? (dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)
-                    : undefined
-                }
+                monthHint={monthHint}
+                onSelectMonth={(ym) => periodCtl.setMonth(ym)}
+                onSelectYear={(y) => periodCtl.setYear(y)}
+                onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
+                onRangeChange={(from, to) => periodCtl.setRange(from, to)}
                 onCurrent={() => periodCtl.setPeriodMonth(defaultMonthYM)}
                 atCurrent={periodCtl.preset === "period" && periodCtl.monthYM === defaultMonthYM}
               />
-              {/* Сброс едет вместе с отрезком: он относится ко всей панели, но
-                  место ему — в конце ряда периода, а не отдельной строкой. */}
               <ResetButton
                 onReset={f.reset}
                 disabled={!hasFilters || !showDataFilters}
                 hint={!showDataFilters ? dataFiltersHint : hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
               />
-              </div>
             </div>
 
             </div>
@@ -833,6 +823,7 @@ export function GlobalFilters({
         >
         <MultiSelect
           className={clsx("w-52", PICKER_PHONE)}
+          icon={Wallet}
           label="Счета"
           options={accounts}
           selected={f.accounts}
@@ -855,6 +846,7 @@ export function GlobalFilters({
 
         <CategoryFilterPicker
           className={clsx("w-52", PICKER_PHONE)}
+          icon={PieChart}
           nodes={categoryNodes}
           selected={f.categories}
           onChange={(s) => f.setSet("categories", s)}
@@ -875,6 +867,7 @@ export function GlobalFilters({
             // две строки. Поэтому кнопке узко, а меню просторно.
             className={clsx("w-[174px]", PICKER_PHONE)}
             menuMinWidth={208}
+            icon={Coins}
             label="Валюта"
             options={currencies}
             selected={f.currencies}
@@ -895,6 +888,7 @@ export function GlobalFilters({
           <MultiSelect
             className={clsx("w-52", PICKER_PHONE)}
             menuMinWidth={0}
+            icon={UsersRound}
             label="Участники"
             options={userOptions}
             selected={f.users}
@@ -922,14 +916,16 @@ export function GlobalFilters({
           className="relative flex-1 min-w-[220px]"
           title="Фильтр по получателю и комментарию — входит в сохранённый фильтр и влияет на все виджеты"
         >
-          <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-accent2/70 pointer-events-none" />
+          {/* Значок поля — такой же тихий, как у соседних кнопок: фиолетовый
+              выбивался из ряда единственным цветным пятном. */}
+          <Filter className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
           <input
             value={f.search}
             onChange={(e) => f.setSearch(e.target.value)}
             placeholder="Фильтр: получатель, комментарий"
             /* Высота ступени 34, как у соседних кнопок и дорожек: с py-1.5
                поле выходило на 30 и просаживалось в ряду. */
-            className="input pl-9 pr-9 text-xs h-[34px] py-0"
+            className="input pl-9 pr-9 text-[12.5px] leading-4 h-[34px] py-0"
           />
           {f.search && (
             <button

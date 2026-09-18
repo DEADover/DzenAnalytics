@@ -20,7 +20,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { SURFACE_ATTR } from "./Popover";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
 import { FILTER_NONE } from "../store/useFiltersStore";
 import { pluralRu } from "../lib/plural";
@@ -32,6 +32,7 @@ export function MultiSelect({
   options,
   selected,
   onChange,
+  icon: Icon,
   renderIcon,
   labelOf,
   nestedOf,
@@ -49,6 +50,12 @@ export function MultiSelect({
   options: string[];
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
+  /**
+   * Значок самой кнопки — что за сущность выбирается. Без него ряд фильтров
+   * читался как несколько одинаковых серых кнопок, и «Счета» от «Валюты»
+   * отличались только подписью.
+   */
+  icon?: LucideIcon;
   /** Optional leading icon per option (e.g. account logo / category dot). */
   renderIcon?: (opt: string) => ReactNode;
   /**
@@ -373,22 +380,28 @@ export function MultiSelect({
           setQuery("");
         }}
         className={clsx(
-          "btn-ghost text-xs w-full justify-between",
-          selected.size > 0 && "border-accent text-accent"
+          "btn-ghost text-[12.5px] leading-4 w-full justify-between gap-2",
+          selected.size > 0 && "border-accent"
         )}
       >
-        <span className="truncate max-w-[180px]">
+        {Icon && <Icon className="w-3.5 h-3.5 shrink-0 text-muted" aria-hidden="true" />}
+        {/* Ярлык тише значения: в ряду из четырёх кнопок глазу нужно значение
+            («Все (31)»), а «Счета» он и так знает по значку. */}
+        <span className="truncate max-w-[180px] flex-1 text-left font-normal text-muted">
           {label}:{" "}
           {/* Ширина под самое длинное состояние: иначе кнопка прыгает, когда
               «Все» сменяется на «2 из 12», и вся строка фильтров едет вбок. */}
           <span
-            className="inline-block text-left"
+            className={clsx(
+              "inline-block text-left font-medium",
+              selected.size > 0 ? "text-accent" : "text-text"
+            )}
             style={summaryMinWidth ? { minWidth: summaryMinWidth } : undefined}
           >
             {summary}
           </span>
         </span>
-        <ChevronDown className="w-4 h-4 shrink-0" />
+        <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
       </button>
       {open &&
         pos &&

@@ -13,6 +13,7 @@ import {
   metaFromRulesDoc,
   nextChanged,
   parseEnvelope,
+  readCollectionMeta,
   rulesDocFromLocal,
   rulesFromDoc,
   sanitizeFieldMap,
@@ -232,5 +233,41 @@ describe("разбор пришедшего из облака", () => {
     expect(d.order).toEqual({ ids: ["a", "b"], at: 3 });
     expect(d.deleted).toEqual({ x: 9 });
     expect(sanitizeRulesDoc(null)).toEqual({ items: {}, order: { ids: [], at: 0 }, deleted: {} });
+  });
+});
+
+describe("readCollectionMeta", () => {
+  it("забирает метку правил из старой формы", () => {
+    const meta = readCollectionMeta({ rules: { itemAt: { a: 5 }, orderAt: 7, deleted: { b: 9 } } });
+    expect(meta.rules).toEqual({ itemAt: { a: 5 }, orderAt: 7, deleted: { b: 9 } });
+  });
+
+  it("новая форма главнее старой", () => {
+    const meta = readCollectionMeta({
+      collections: { rules: { itemAt: { a: 1 }, orderAt: 1, deleted: {} } },
+      rules: { itemAt: { a: 5 }, orderAt: 7, deleted: {} },
+    });
+    expect(meta.rules?.orderAt).toBe(1);
+  });
+
+  it("читает метки всех списков и отбрасывает незнакомые", () => {
+    const meta = readCollectionMeta({
+      collections: {
+        goals: { itemAt: { g: 2 }, orderAt: 0, deleted: {} },
+        views: { itemAt: {}, orderAt: 3, deleted: { v: 4 } },
+        slices: { itemAt: { s: 1 }, orderAt: 0, deleted: {} },
+        something: { itemAt: { x: 1 }, orderAt: 0, deleted: {} },
+      },
+    });
+    expect(meta.goals?.itemAt).toEqual({ g: 2 });
+    expect(meta.views?.deleted).toEqual({ v: 4 });
+    expect(meta.slices?.itemAt).toEqual({ s: 1 });
+    expect(Object.keys(meta)).toEqual(["goals", "views", "slices"]);
+  });
+
+  it("битую метку заменяет пустой, а не роняет чтение", () => {
+    const meta = readCollectionMeta({ collections: { goals: { itemAt: { g: "вчера" }, orderAt: "нет" } } });
+    expect(meta.goals).toEqual(EMPTY_RULES_META);
+    expect(readCollectionMeta(null)).toEqual({});
   });
 });

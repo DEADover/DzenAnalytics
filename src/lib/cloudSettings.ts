@@ -34,8 +34,16 @@ const ZERRO_ACCOUNT_TITLE = "🤖 [Zerro Data]";
 /** Сколько помним удалённые правила, чтобы они не воскресли с другого устройства. */
 export const TOMBSTONE_TTL_MS = 90 * 24 * 3600 * 1000;
 
-export type CloudDocType = "settings" | "rules";
-const DOC_TYPES: readonly CloudDocType[] = ["settings", "rules"];
+/**
+ * Типы записей в облаке: «settings» — настройки по полям, остальные —
+ * КОЛЛЕКЦИИ объектов с `id`, которые сливаются поэлементно: правила, цели,
+ * сохранённые виды, разрезы данных.
+ */
+export type CloudDocType = "settings" | "rules" | "goals" | "views" | "slices";
+const DOC_TYPES: readonly CloudDocType[] = ["settings", "rules", "goals", "views", "slices"];
+/** Записи, которые сливаются поэлементно. */
+export const COLLECTION_TYPES = ["rules", "goals", "views", "slices"] as const;
+export type CloudCollectionType = (typeof COLLECTION_TYPES)[number];
 
 export interface CloudEnvelope<T = unknown> {
   app: typeof CLOUD_APP;
@@ -103,7 +111,13 @@ export interface FoundDocs {
  * только потом по названию.
  */
 export function findCloudDocs(cache: Pick<ZenCache, "reminders" | "accounts">): FoundDocs {
-  const byType: Record<CloudDocType, FoundDoc[]> = { settings: [], rules: [] };
+  const byType: Record<CloudDocType, FoundDoc[]> = {
+    settings: [],
+    rules: [],
+    goals: [],
+    views: [],
+    slices: [],
+  };
   const accounts = new Map((cache.accounts ?? []).map((a) => [a.id, a]));
   let accountId: string | null = null;
   for (const reminder of cache.reminders ?? []) {
@@ -436,7 +450,43 @@ export function sanitizeFieldMap(raw: unknown): FieldMap {
   return out;
 }
 
-/** Документ правил из облака: битые элементы отбрасываются, форма гарантирована. */
+/**
+ * Метки списков с диска.
+ *
+ * До появления целей, сохранённых видов и разрезов переносились только
+ * правила, и их метка лежала отдельным полем `rules`. Забираем её под новое
+ * имя, иначе после обновления правила выглядели бы «никогда не правленными» и
+ * проиграли бы облаку.
+ */
+export function readCollectionMeta(
+  saved: { collections?: unknown; rules?: unknown } | null | undefined
+): Partial<Record<CloudCollectionType, RulesSyncMeta>> {
+  const out: Partial<Record<CloudCollectionType, RulesSyncMeta>> = {};
+  if (isRecord(saved?.collections)) {
+    for (const [type, meta] of Object.entries(saved.collections)) {
+      if (!(COLLECTION_TYPES as readonly string[]).includes(type)) continue;
+      out[type as CloudCollectionType] = sanitizeSyncMeta(meta);
+    }
+  }
+  if (!out.rules && saved?.rules !== undefined) out.rules = sanitizeSyncMeta(saved.rules);
+  return out;
+}
+
+/** Метка одного списка с диска: время правок, удалений и порядка. */
+function sanitizeSyncMeta(raw: unknown): RulesSyncMeta {
+  const meta: RulesSyncMeta = { itemAt: {}, orderAt: 0, deleted: {} };
+  if (!isRecord(raw)) return meta;
+  if (isRecord(raw.itemAt)) {
+    for (const [id, at] of Object.entries(raw.itemAt)) if (isTime(at)) meta.itemAt[id] = at;
+  }
+  if (isRecord(raw.deleted)) {
+    for (const [id, at] of Object.entries(raw.deleted)) if (isTime(at)) meta.deleted[id] = at;
+  }
+  if (isTime(raw.orderAt)) meta.orderAt = raw.orderAt;
+  return meta;
+}
+
+/** Документ списка из облака: битые элементы отбрасываются, форма гарантирована. */
 export function sanitizeRulesDoc(raw: unknown): RulesDoc {
   const doc: RulesDoc = { items: {}, order: { ids: [], at: 0 }, deleted: {} };
   if (!isRecord(raw)) return doc;

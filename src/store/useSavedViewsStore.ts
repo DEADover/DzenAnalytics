@@ -102,6 +102,8 @@ interface SavedViewsState {
   remove: (id: string) => Promise<void>;
   rename: (id: string, name: string) => Promise<void>;
   setActiveId: (id: string | null) => void;
+  /** Заменить список целиком — перенос настроек между устройствами. */
+  replaceAll: (items: readonly SavedView[]) => Promise<void>;
 }
 
 export const useSavedViewsStore = create<SavedViewsState>((set, get) => ({
@@ -142,4 +144,13 @@ export const useSavedViewsStore = create<SavedViewsState>((set, get) => ({
   },
 
   setActiveId: (activeId) => set({ activeId }),
+
+  replaceAll: async (items) => {
+    const list = items.filter((v) => v && typeof v.id === "string").map((v) => ({ ...v }));
+    await db.saveJSON("savedViews", list);
+    // Применённый вид могли удалить на другом устройстве — тогда снимаем
+    // пометку, иначе панель показывала бы имя несуществующего фильтра.
+    const activeId = get().activeId;
+    set({ views: list, activeId: list.some((v) => v.id === activeId) ? activeId : null });
+  },
 }));

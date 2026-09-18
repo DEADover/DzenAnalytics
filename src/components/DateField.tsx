@@ -132,7 +132,7 @@ export function DateField({
       >
         {centered && icon && <span className="w-4 shrink-0" aria-hidden />}
         <span
-          className={`truncate ${centered ? "flex-1 text-center" : ""} ${
+          className={`truncate min-w-0 ${centered ? "flex-1 text-center" : ""} ${
             display ? "" : "text-muted"
           }`}
         >

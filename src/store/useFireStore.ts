@@ -21,6 +21,8 @@ interface FireState {
   loaded: boolean;
   hydrate: () => Promise<void>;
   toggle: (title: string) => Promise<void>;
+  /** Заменить список целиком — перенос настроек между устройствами. */
+  replaceExcluded: (titles: readonly string[]) => Promise<void>;
   isExcluded: (title: string) => boolean;
 }
 
@@ -38,6 +40,11 @@ export const useFireStore = create<FireState>((set, get) => ({
     const next = cur.includes(title)
       ? cur.filter((t) => t !== title)
       : [...cur, title];
+    await db.saveJSON(KEY, next);
+    set({ excluded: next });
+  },
+  replaceExcluded: async (titles) => {
+    const next = titles.filter((t) => typeof t === "string");
     await db.saveJSON(KEY, next);
     set({ excluded: next });
   },

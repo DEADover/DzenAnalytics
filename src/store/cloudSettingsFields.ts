@@ -25,6 +25,10 @@ import { useMembersStore } from "./useMembersStore";
 import { useThemeStore } from "./useThemeStore";
 import { useDashboardLayoutStore } from "./useDashboardLayoutStore";
 import { useHeaderNavStore } from "./useHeaderNavStore";
+import { useBudgetSettingsStore } from "./useBudgetSettingsStore";
+import { useReportPeriodStore } from "./useReportPeriodStore";
+import { useFireStore } from "./useFireStore";
+import { useSlicesStore } from "./useSlicesStore";
 import { isDarkSchemeId, isLightSchemeId } from "../lib/themeSchemes";
 
 export interface SyncedField {
@@ -56,6 +60,10 @@ function field<S>(
 }
 
 const isBool = (v: unknown): v is boolean => typeof v === "boolean";
+const isStrings = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every((x) => typeof x === "string");
+const isCount = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v > 0;
 
 export const SYNCED_FIELDS: readonly SyncedField[] = [
   // ── Расчёты ──
@@ -70,6 +78,53 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   ),
   field(useFreeMoneyStore, "freeMoney.reserve", (s) => s.reserve, (v, s) =>
     typeof v === "number" && Number.isFinite(v) && v >= 0 ? s.setReserve(v) : undefined
+  ),
+  /**
+   * Свой первый день отчётного месяца. `null` — своего нет, идём за днём из
+   * настроек Дзен-мани; день в самом Дзен-мани общий и переноса не требует.
+   */
+  field(
+    useReportPeriodStore,
+    "reportPeriod.ownDay",
+    (s) => (s.ownSet ? s.ownDay : null),
+    (v, s) => {
+      if (v === null) return s.ownSet ? s.followZenDay() : undefined;
+      return typeof v === "number" && Number.isFinite(v) ? s.setMonthStartDay(v) : undefined;
+    }
+  ),
+  // Счета вне капитала FIRE — по названию, как везде в фильтрах сервиса.
+  field(useFireStore, "fire.excluded", (s) => s.excluded, (v, s) =>
+    isStrings(v) ? s.replaceExcluded(v) : undefined
+  ),
+
+  // ── Бюджет ──
+  // Периметр счетов, переводы через его границу, вид раздела и прогноз.
+  field(useBudgetSettingsStore, "budget.accounts", (s) => s.accounts, (v, s) =>
+    isStrings(v) ? s.update({ accounts: v }) : undefined
+  ),
+  field(useBudgetSettingsStore, "budget.perimeterTransfers", (s) => s.perimeterTransfers, (v, s) =>
+    isBool(v) ? s.update({ perimeterTransfers: v }) : undefined
+  ),
+  field(useBudgetSettingsStore, "budget.defaultView", (s) => s.defaultView, (v, s) =>
+    v === "month" || v === "year" || v === "dashboard" ? s.update({ defaultView: v }) : undefined
+  ),
+  field(useBudgetSettingsStore, "budget.rowOrder", (s) => s.rowOrder, (v, s) =>
+    v === "alpha" || v === "amount" ? s.update({ rowOrder: v }) : undefined
+  ),
+  field(useBudgetSettingsStore, "budget.hideEmptyRows", (s) => s.hideEmptyRows, (v, s) =>
+    isBool(v) ? s.update({ hideEmptyRows: v }) : undefined
+  ),
+  field(useBudgetSettingsStore, "budget.forecastMonths", (s) => s.forecastMonths, (v, s) =>
+    isCount(v) ? s.update({ forecastMonths: v }) : undefined
+  ),
+  field(useBudgetSettingsStore, "budget.forecastBasis", (s) => s.forecastBasis, (v, s) =>
+    v === "average" || v === "median" ? s.update({ forecastBasis: v }) : undefined
+  ),
+
+  // Какой разрез данных включён. Сами разрезы — отдельным списком
+  // (`cloudSettingsCollections`), здесь только выбор.
+  field(useSlicesStore, "slices.activeId", (s) => s.activeId, (v, s) =>
+    typeof v === "string" ? s.setActive(v) : undefined
   ),
 
   // ── Оформление ──
@@ -87,6 +142,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   ),
   field(useDisplayStore, "display.filtersMode", (s) => s.filtersMode, (v, s) =>
     v === "button" || v === "page" ? s.setFiltersMode(v) : undefined
+  ),
+  field(useDisplayStore, "display.monthKind", (s) => s.monthKind, (v, s) =>
+    v === "period" || v === "month" ? s.setMonthKind(v) : undefined
   ),
   field(useFilterMemoryStore, "filterMemory.enabled", (s) => s.enabled, (v, s) =>
     isBool(v) ? s.setEnabled(v) : undefined

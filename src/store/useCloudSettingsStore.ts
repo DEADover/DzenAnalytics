@@ -17,9 +17,11 @@ import {
   rulesDocFromLocal,
   rulesFromDoc,
   sanitizeFieldMap,
+  readCollectionMeta,
   sanitizeRulesDoc,
   stableStringify,
   stampRuleChanges,
+  type CloudCollectionType,
   type CloudDocType,
   type FieldMap,
   type FoundDoc,
@@ -27,7 +29,7 @@ import {
   type RulesSyncMeta,
 } from "../lib/cloudSettings";
 import { SYNCED_FIELDS, syncedField } from "./cloudSettingsFields";
-import { useCategoryRulesStore, type StoredCategoryRule } from "./useCategoryRulesStore";
+import { SYNCED_COLLECTIONS, type CloudItem } from "./cloudSettingsCollections";
 
 /**
  * Перенос настроек между устройствами через Дзен-мани (16.09.2026).
@@ -57,11 +59,15 @@ const META_KEY = "cloudSettings";
 /** Через сколько после правки запускать синхронизацию. */
 const PUSH_DELAY_MS = 4000;
 
+/** Что помним о каждом переносимом списке: когда правили, что удаляли. */
+type CollectionMeta = Partial<Record<CloudCollectionType, RulesSyncMeta>>;
+
 interface PersistedMeta {
   enabled: boolean;
   /** Когда какое поле меняли на этом устройстве, мс. */
   fieldAt: Record<string, number>;
-  rules: RulesSyncMeta;
+  /** Метки списков — правил, целей, сохранённых видов, разрезов. */
+  collections: CollectionMeta;
   accountId: string | null;
   lastSyncAt: string | null;
   /** Пояснение для человека: почему перенос выключился сам. */
@@ -71,7 +77,7 @@ interface PersistedMeta {
 const DEFAULT_META: PersistedMeta = {
   enabled: false,
   fieldAt: {},
-  rules: EMPTY_RULES_META,
+  collections: {},
   accountId: null,
   lastSyncAt: null,
   notice: null,
@@ -94,7 +100,7 @@ async function persist(patch: Partial<PersistedMeta>): Promise<void> {
   const meta: PersistedMeta = {
     enabled: s.enabled,
     fieldAt: s.fieldAt,
-    rules: s.rules,
+    collections: s.collections,
     accountId: s.accountId,
     lastSyncAt: s.lastSyncAt,
     notice: s.notice,
@@ -106,7 +112,8 @@ async function persist(patch: Partial<PersistedMeta>): Promise<void> {
 
 /** Последнее увиденное значение поля — чтобы отличить правку от шума подписки. */
 const baseline = new Map<string, string>();
-let rulesBaseline: readonly StoredCategoryRule[] | null = null;
+/** То же для списков: сравниваем по ссылке, хранилища меняют её только на правку. */
+const listBaseline = new Map<CloudCollectionType, readonly CloudItem[]>();
 /** Применяем пришедшее из облака — это не правка человека. */
 let applyingDepth = 0;
 let unsubscribers: (() => void)[] = [];
@@ -121,7 +128,7 @@ async function applying(fn: () => Promise<void>): Promise<void> {
     // идёт после записи на диск — даём им отработать до снятия флага.
     await Promise.resolve();
     observeFields();
-    observeRules();
+    observeCollections();
     applyingDepth -= 1;
   }
 }
@@ -146,21 +153,30 @@ function observeFields(): void {
   }
 }
 
-function observeRules(): void {
+function collectionMeta(s: PersistedMeta, type: CloudCollectionType): RulesSyncMeta {
+  return s.collections[type] ?? EMPTY_RULES_META;
+}
+
+function observeCollections(): void {
   const s = useCloudSettingsStore.getState();
-  const rs = useCategoryRulesStore.getState();
-  if (!s.loaded || !rs.loaded) return;
-  if (rulesBaseline === null) {
-    rulesBaseline = rs.rules;
-    return;
+  if (!s.loaded) return;
+  const now = Date.now();
+  let collections = s.collections;
+  for (const c of SYNCED_COLLECTIONS) {
+    if (!c.ready()) continue;
+    const items = c.read();
+    const before = listBaseline.get(c.type);
+    listBaseline.set(c.type, items);
+    // Первый проход только запоминает: сравнивать не с чем, и правкой это не
+    // является.
+    if (before === undefined || items === before || applyingDepth > 0) continue;
+    const meta = stampRuleChanges(before, items, collectionMeta(s, c.type), now);
+    if (meta === collectionMeta(s, c.type)) continue;
+    if (collections === s.collections) collections = { ...s.collections };
+    collections[c.type] = meta;
   }
-  if (rs.rules === rulesBaseline) return;
-  const before = rulesBaseline;
-  rulesBaseline = rs.rules;
-  if (applyingDepth > 0) return;
-  const meta = stampRuleChanges(before, rs.rules, s.rules, Date.now());
-  if (meta !== s.rules) {
-    void persist({ rules: meta });
+  if (collections !== s.collections) {
+    void persist({ collections });
     schedulePush();
   }
 }
@@ -169,10 +185,10 @@ function startWatching(): void {
   for (const off of unsubscribers) off();
   unsubscribers = [
     ...SYNCED_FIELDS.map((f) => f.subscribe(observeFields)),
-    useCategoryRulesStore.subscribe(observeRules),
+    ...SYNCED_COLLECTIONS.map((c) => c.subscribe(observeCollections)),
   ];
   observeFields();
-  observeRules();
+  observeCollections();
 }
 
 function schedulePush(): void {
@@ -221,7 +237,7 @@ export const useCloudSettingsStore = create<State>((set, get) => ({
     set({
       enabled: saved?.enabled === true,
       fieldAt: saved?.fieldAt && typeof saved.fieldAt === "object" ? saved.fieldAt : {},
-      rules: saved?.rules && typeof saved.rules === "object" ? { ...EMPTY_RULES_META, ...saved.rules } : EMPTY_RULES_META,
+      collections: readCollectionMeta(saved),
       accountId: typeof saved?.accountId === "string" ? saved.accountId : null,
       lastSyncAt: typeof saved?.lastSyncAt === "string" ? saved.lastSyncAt : null,
       notice: typeof saved?.notice === "string" ? saved.notice : null,
@@ -243,12 +259,12 @@ export const useCloudSettingsStore = create<State>((set, get) => ({
     if (!s.loaded || !s.enabled) return cache;
     // Пока хранилища не прочитали своё с диска, их значения стандартные: слить
     // их с облаком значило бы затереть облако. Подождём следующей синхронизации.
-    if (!SYNCED_FIELDS.every((f) => f.ready()) || !useCategoryRulesStore.getState().loaded) {
+    if (!SYNCED_FIELDS.every((f) => f.ready()) || !SYNCED_COLLECTIONS.every((c) => c.ready())) {
       return cache;
     }
     // Правки, сделанные до этой синхронизации, должны быть помечены до слияния.
     observeFields();
-    observeRules();
+    observeCollections();
 
     if (
       s.accountId &&
@@ -271,6 +287,30 @@ export const useCloudSettingsStore = create<State>((set, get) => ({
       const nowMs = Date.now();
       const nowSec = Math.floor(nowMs / 1000);
       const outgoing: { type: CloudDocType; data: unknown; docs: FoundDoc[] }[] = [];
+
+      // ── Списки: правила, цели, сохранённые виды, разрезы ──
+      const listMeta: CollectionMeta = {};
+      for (const c of SYNCED_COLLECTIONS) {
+        const docs = found.byType[c.type];
+        const newer = docs.some((d) => d.env.v > CLOUD_FORMAT_VERSION);
+        let cloudDoc: RulesDoc | null = null;
+        for (const d of docs.filter((x) => x.env.v <= CLOUD_FORMAT_VERSION)) {
+          const parsed = sanitizeRulesDoc(d.env.data);
+          cloudDoc = cloudDoc ? mergeRulesDocs(cloudDoc, parsed, nowMs).merged : parsed;
+        }
+        const local = rulesDocFromLocal(c.read(), collectionMeta(get(), c.type));
+        const res = mergeRulesDocs<CloudItem>(local, cloudDoc as RulesDoc<CloudItem> | null, nowMs);
+        if (res.localChanged) {
+          await applying(() => c.replace(rulesFromDoc(res.merged)));
+        }
+        // Замена могла нормализовать элементы (у правил — привязать ссылки к
+        // объектам Дзен-мани): метки берём с итога слияния, а не с того, что
+        // было до применения.
+        listMeta[c.type] = metaFromRulesDoc(res.merged);
+        if (!newer && (res.pushNeeded || docs.length > 1)) {
+          outgoing.push({ type: c.type, data: res.merged, docs });
+        }
+      }
 
       // ── Настройки ──
       const settingsDocs = found.byType.settings;
@@ -296,30 +336,6 @@ export const useCloudSettingsStore = create<State>((set, get) => ({
       for (const [key, value] of Object.entries(fieldsRes.merged)) fieldAt[key] = value.at;
       if (!settingsNewer && (fieldsRes.pushNeeded || settingsDocs.length > 1)) {
         outgoing.push({ type: "settings", data: { fields: fieldsRes.merged }, docs: settingsDocs });
-      }
-
-      // ── Правила ──
-      const rulesDocs = found.byType.rules;
-      const rulesNewer = rulesDocs.some((d) => d.env.v > CLOUD_FORMAT_VERSION);
-      let cloudRules: RulesDoc | null = null;
-      for (const d of rulesDocs.filter((x) => x.env.v <= CLOUD_FORMAT_VERSION)) {
-        const parsed = sanitizeRulesDoc(d.env.data);
-        cloudRules = cloudRules ? mergeRulesDocs(cloudRules, parsed, nowMs).merged : parsed;
-      }
-      const localRules = rulesDocFromLocal(useCategoryRulesStore.getState().rules, get().rules);
-      const rulesRes = mergeRulesDocs<StoredCategoryRule>(
-        localRules,
-        cloudRules as RulesDoc<StoredCategoryRule> | null,
-        nowMs
-      );
-      if (rulesRes.localChanged) {
-        await applying(() => useCategoryRulesStore.getState().replaceAll(rulesFromDoc(rulesRes.merged)));
-      }
-      // Нормализация при замене могла чуть поменять правила (ссылки на id):
-      // метаданные берём с итога, а не с того, что было до применения.
-      const rulesMeta = metaFromRulesDoc(rulesRes.merged);
-      if (!rulesNewer && (rulesRes.pushNeeded || rulesDocs.length > 1)) {
-        outgoing.push({ type: "rules", data: rulesRes.merged, docs: rulesDocs });
       }
 
       // ── Отправка ──
@@ -369,13 +385,18 @@ export const useCloudSettingsStore = create<State>((set, get) => ({
         for (const [k, v] of Object.entries(b)) out[k] = Math.max(out[k] ?? 0, v);
         return out;
       };
+      const collections: CollectionMeta = { ...now.collections };
+      for (const [type, meta] of Object.entries(listMeta) as [CloudCollectionType, RulesSyncMeta][]) {
+        const mine = now.collections[type] ?? EMPTY_RULES_META;
+        collections[type] = {
+          itemAt: keepLater(meta.itemAt, mine.itemAt),
+          deleted: keepLater(meta.deleted, mine.deleted),
+          orderAt: Math.max(meta.orderAt, mine.orderAt),
+        };
+      }
       await persist({
         fieldAt: keepLater(fieldAt, now.fieldAt),
-        rules: {
-          itemAt: keepLater(rulesMeta.itemAt, now.rules.itemAt),
-          deleted: keepLater(rulesMeta.deleted, now.rules.deleted),
-          orderAt: Math.max(rulesMeta.orderAt, now.rules.orderAt),
-        },
+        collections,
         accountId,
         lastSyncAt: new Date().toISOString(),
       });

@@ -27,6 +27,8 @@ interface GoalsState {
   add: (g: Omit<Goal, "id" | "createdAt">) => Promise<void>;
   update: (id: string, patch: Partial<Goal>) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  /** Заменить список целиком — перенос настроек между устройствами. */
+  replaceAll: (items: readonly Goal[]) => Promise<void>;
 }
 
 export const useGoalsStore = create<GoalsState>((set, get) => ({
@@ -53,6 +55,11 @@ export const useGoalsStore = create<GoalsState>((set, get) => ({
   },
   remove: async (id) => {
     const list = get().goals.filter((g) => g.id !== id);
+    await db.saveJSON("goals", list);
+    set({ goals: list });
+  },
+  replaceAll: async (items) => {
+    const list = items.filter((g) => g && typeof g.id === "string").map((g) => ({ ...g }));
     await db.saveJSON("goals", list);
     set({ goals: list });
   },

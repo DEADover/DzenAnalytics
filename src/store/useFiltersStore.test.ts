@@ -3,6 +3,7 @@ import { applyFilters, presetToRange, useFiltersStore, FILTER_NONE } from "./use
 import { MEMBER_SHARED } from "../lib/zenUsers";
 import { currentPeriod, periodRange } from "../lib/period";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
+import { useDisplayStore } from "./useDisplayStore";
 import { tx } from "../test/fixtures";
 
 // applyFilters wants a full FiltersState (with action methods). We only
@@ -620,6 +621,9 @@ describe("applyFilters — опорная дата скользящего пер
 
 describe("текущий месяц идёт за первым днём отчётного месяца", () => {
   beforeEach(() => {
+    // Вид месяца — общая настройка, и «текущий период» считается по нему:
+    // соседний тест мог оставить календарный.
+    useDisplayStore.setState({ monthKind: "period" });
     vi.useFakeTimers();
     // 17 сентября: при начале месяца с 20-го идёт ещё августовский период.
     vi.setSystemTime(new Date(2026, 8, 17, 12));
@@ -651,5 +655,35 @@ describe("текущий месяц идёт за первым днём отчё
     useFiltersStore.getState().setPreset("12m");
     useFiltersStore.getState().followStartDay(1, 20);
     expect(useFiltersStore.getState()).toMatchObject({ preset: "12m", monthYM: "2026-09" });
+  });
+});
+
+describe("вид месяца переживает перезагрузку", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 17, 12));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    useDisplayStore.setState({ monthKind: "period" });
+  });
+
+  it("выбран календарный — при запуске встаёт календарный месяц, а не отчётный", () => {
+    useDisplayStore.setState({ monthKind: "month" });
+    useFiltersStore.getState().resetToCurrentPeriod(20);
+    expect(useFiltersStore.getState()).toMatchObject({ preset: "month", monthYM: "2026-09" });
+  });
+
+  it("выбран отчётный — встаёт отчётный период по своему первому дню", () => {
+    useDisplayStore.setState({ monthKind: "period" });
+    useFiltersStore.getState().resetToCurrentPeriod(20);
+    expect(useFiltersStore.getState()).toMatchObject({ preset: "period", monthYM: "2026-08" });
+  });
+
+  it("выбор месяца запоминается в настройках", () => {
+    useFiltersStore.getState().setMonth("2026-05");
+    expect(useDisplayStore.getState().monthKind).toBe("month");
+    useFiltersStore.getState().setPeriodMonth("2026-05");
+    expect(useDisplayStore.getState().monthKind).toBe("period");
   });
 });

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useDisplayStore } from "./useDisplayStore";
 import type { Transaction } from "../types";
 import { currentPeriod, periodRange, shiftPeriod } from "../lib/period";
 import { payeeSearchText } from "../lib/format";
@@ -123,7 +124,6 @@ interface FiltersState {
    * когда выбран другой период: иначе кнопка после «30 дней» забывала, что её
    * просили считать календарные месяцы, и возвращаться приходилось через меню.
    */
-  monthKind: "period" | "month";
   setMonth: (ym: string) => void;
   /** Отчётный месяц целиком — кнопка «Период» в чистом виде. */
   setPeriodMonth: (ym: string) => void;
@@ -164,7 +164,6 @@ const initial = {
   // Первый день приезжает позже (см. useReportPeriodStore), и период
   // пересчитывается в App.tsx, когда тот стор поднимется.
   preset: "period" as DatePreset,
-  monthKind: "period" as "period" | "month",
   from: null,
   to: null,
   monthYM: currentPeriod(1) as string | null,
@@ -195,10 +194,18 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
     set(preset === "custom" ? { preset } : { preset, from: null, to: null }),
   setPeriod: ({ preset, from, to, monthYM }) => set({ preset, from, to, monthYM }),
   setRange: (from, to) => set({ from, to, preset: "custom" }),
-  setMonth: (monthYM) => set({ preset: "month", monthYM, monthKind: "month" }),
+  // Выбранный вид месяца запоминается в настройках: это привычка человека, а
+  // не часть периода. Запись на диск фильтру не важна — если она не удалась
+  // (приватное окно, тест без базы), период всё равно должен примениться.
+  setMonth: (monthYM) => {
+    void useDisplayStore.getState().setMonthKind("month").catch(() => {});
+    set({ preset: "month", monthYM });
+  },
   /** Отчётный месяц целиком — то же, что кнопка «Период» без правки дат. */
-  setPeriodMonth: (monthYM) =>
-    set({ preset: "period", monthYM, from: null, to: null, monthKind: "period" }),
+  setPeriodMonth: (monthYM) => {
+    void useDisplayStore.getState().setMonthKind("period").catch(() => {});
+    set({ preset: "period", monthYM, from: null, to: null });
+  },
   // Месяц якоря сохраняем: вернувшись потом в «Месяц», попадаешь в тот же
   // месяц выбранного года, а не в январь.
   setYear: (year) =>
@@ -247,8 +254,18 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
   setOnlyNew: (onlyNew) => set({ onlyNew }),
   setExcludeOffBalance: (excludeOffBalance) => set({ excludeOffBalance }),
   setOffBalanceAccounts: (offBalanceAccounts) => set({ offBalanceAccounts }),
-  resetToCurrentPeriod: (startDay) =>
-    set({ preset: "period", monthYM: currentPeriod(startDay), from: null, to: null }),
+  // Текущий период — того вида, который человек выбрал последним: выбрав
+  // календарный месяц, он и после перезагрузки должен увидеть календарный, а
+  // не отчётный.
+  resetToCurrentPeriod: (startDay) => {
+    const calendar = useDisplayStore.getState().monthKind === "month";
+    set({
+      preset: calendar ? "month" : "period",
+      monthYM: currentPeriod(calendar ? 1 : startDay),
+      from: null,
+      to: null,
+    });
+  },
   followStartDay: (prevDay, nextDay) => {
     if (prevDay === nextDay) return;
     const { preset, monthYM } = get();
