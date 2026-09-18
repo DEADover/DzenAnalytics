@@ -73,8 +73,10 @@ export interface DashboardModel {
   base: Currency;
   /** Текущий период в виде YYYY-MM. */
   ym: string;
-  /** Первый день отчётного месяца — по нему подписываются даты периода. */
+  /** Первый день отчётного периода — по нему подписываются его даты. */
   monthStartDay: number;
+  /** Откуда взялся этот день: подсказка к пилюле объясняет это человеку. */
+  monthStartDaySource: "zen" | "own" | "calendar";
   month: MonthProgress;
 
   /** Совокупный баланс и его история. */
@@ -150,6 +152,13 @@ export function useDashboardModel(): DashboardModel {
   const rates = useDataStore((s) => s.rates);
   const base = rates.base;
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  const ownDaySet = useReportPeriodStore((s) => s.ownSet);
+  const zenDay = useReportPeriodStore((s) => s.zenDay);
+  const monthStartDaySource: DashboardModel["monthStartDaySource"] = ownDaySet
+    ? "own"
+    : zenDay !== null
+      ? "zen"
+      : "calendar";
 
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
   const metaHydrate = useCategoryMetaStore((s) => s.hydrate);
@@ -382,6 +391,7 @@ export function useDashboardModel(): DashboardModel {
     base,
     ym,
     monthStartDay,
+    monthStartDaySource,
     month,
     netWorth,
     netWorthSeries,

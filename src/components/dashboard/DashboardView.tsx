@@ -171,56 +171,66 @@ function PlannedTotals({ out, income, base }: { out: number; income: number; bas
 /* ─────────────────────────────  итоги месяца  ───────────────────────────── */
 
 /**
- * Даты отчётного периода. При первом дне не 1-м одно название обманывает:
- * «Сентябрь» с днём 15 идёт по 14 октября, и пока даты стояли только в
- * подсказке, о каком отрезке речь, было не понять.
+ * Что это за период и откуда он взялся — подсказкой к пилюле. Первый день
+ * месяца приезжает из настроек Дзен-мани молча, и человек вправе спросить,
+ * почему «Сентябрь» начинается пятнадцатого.
  */
-function monthPillHint(m: DashboardModel): string | undefined {
-  if (m.monthStartDay === 1) return undefined;
+function monthPillHint(m: DashboardModel): string {
   const r = periodRange(m.ym, m.monthStartDay);
-  return formatDate(r.from, "full") + " — " + formatDate(r.to, "full");
+  const span = `Отчётный период: ${formatDate(r.from, "full")} — ${formatDate(r.to, "full")}.`;
+  if (m.monthStartDaySource === "calendar") {
+    return `${span} Месяц календарный; свой первый день задаётся в «Настройки → Расчёты».`;
+  }
+  const day = `Месяц начинается ${m.monthStartDay}-го числа`;
+  return m.monthStartDaySource === "zen"
+    ? `${span} ${day} — так задано в Дзен-мани.`
+    : `${span} ${day} — так задано в «Настройки → Расчёты».`;
 }
 
 /** Сколько периода осталось — хвост пилюли. */
 function monthLeft(m: DashboardModel): string {
   return m.month.left === 0
-    ? "последний день"
-    : `осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`;
+    ? "Последний день"
+    : `Осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`;
 }
 
 /**
- * Пилюля периода: название, его даты и остаток.
+ * Пилюля периода: название, его даты и остаток — через тонкие разделители.
  *
- * Даты стоят В пилюле, между названием и остатком, и набраны приглушённо:
- * «Сентябрь» с первым днём 15-го — это 15.09–14.10, и по одному названию
- * понять, о каком отрезке речь, нельзя. Когда месяц календарный, дат нет —
+ * Разделители, а не точки: тремя равноправными кусками через точку строка
+ * читалась одной длинной фразой, в которой ничего не главное. Даты и остаток
+ * набраны обычным регистром — в сплошном капсе с широким трекингом они
+ * сливались с названием. Даты показываем, только когда месяц не календарный:
  * там они ничего не добавляют.
  */
 function MonthPill({ m, size }: { m: DashboardModel; size: "sm" | "md" }) {
   const shifted = m.monthStartDay !== 1;
   const r = periodRange(m.ym, m.monthStartDay);
-  const dot = <span className="opacity-40">·</span>;
+  const sep = (
+    <span
+      aria-hidden="true"
+      className={`w-px self-center bg-border ${size === "md" ? "h-3.5" : "h-3"}`}
+    />
+  );
   return (
     <span
       className={`inline-flex flex-wrap items-baseline justify-center ${
-        size === "md" ? "gap-x-2" : "gap-x-1.5"
+        size === "md" ? "gap-x-2.5" : "gap-x-2"
       }`}
     >
       <span>{monthName(m.ym)}</span>
       {shifted && (
         <>
-          {dot}
-          {/* Даты — без разрядки и обычными цифрами: в сплошном uppercase с
-              широким трекингом они читались бы как ещё одно слово. */}
-          <span className="tabular-nums tracking-normal font-medium text-muted">
+          {sep}
+          <span className="tabular-nums tracking-normal normal-case font-medium text-muted">
             {formatDate(r.from, "short").slice(0, 5)}
-            {"–"}
+            {" – "}
             {formatDate(r.to, "short").slice(0, 5)}
           </span>
         </>
       )}
-      {dot}
-      <span className={shifted ? "text-muted" : undefined}>{monthLeft(m)}</span>
+      {sep}
+      <span className="tracking-normal normal-case text-muted">{monthLeft(m)}</span>
     </span>
   );
 }
