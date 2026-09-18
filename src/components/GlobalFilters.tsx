@@ -33,7 +33,7 @@ import {
   getZenUsersFromCache,
 } from "../store/useZenmoneyStore";
 import { accountOptions } from "../lib/accountOptions";
-import { useFiltersStore, type DatePreset } from "../store/useFiltersStore";
+import { presetToRange, useFiltersStore, type DatePreset } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { currentPeriod, periodRange } from "../lib/period";
 import { formatDate } from "../lib/format";
@@ -50,17 +50,36 @@ import {
 } from "../lib/zenUsers";
 import { useMembersStore } from "../store/useMembersStore";
 
+/**
+ * Пресеты периода.
+ *
+ * «Месяц» и «Период» стоят кнопками наравне с остальными, хотя задаются
+ * соседними контролами: без них выбор месяца или своих дат не подсвечивал
+ * ничего, и было не понять, какой фильтр сейчас действует. «С начала года»
+ * убран — при живой кнопке «Год», которая и так открывается на текущем,
+ * он повторял её; старые сохранённые виды с ним по-прежнему работают, и
+ * кнопка для них возвращается в ряд (см. `presetOptions`).
+ */
 const PRESETS: { value: DatePreset; label: string; title?: string }[] = [
   { value: "30d", label: "30 дней" },
   { value: "3m", label: "3 мес" },
   { value: "6m", label: "6 мес" },
   { value: "12m", label: "12 мес" },
   {
+    value: "month",
+    label: "Месяц",
+    title: "Один отчётный месяц — листается стрелками рядом",
+  },
+  {
     value: "year",
     label: "Год",
-    title: "Календарный год целиком — листается стрелками, в отличие от скользящих «12 мес»",
+    title: "Год целиком — листается стрелками, в отличие от скользящих «12 мес»",
   },
-  { value: "ytd", label: "С начала года" },
+  {
+    value: "custom",
+    label: "Период",
+    title: "Свои даты — задаются полями «от» и «до» рядом",
+  },
   { value: "all", label: "Всё" },
 ];
 
@@ -363,11 +382,15 @@ export function GlobalFilters({
     return {
       minYM: min.slice(0, 7) || "",
       maxYM: max.slice(0, 7) || "",
+      // Последняя дата целиком: от неё отсчитываются скользящие пресеты.
+      maxDate: max || null,
     };
   }, [transactions]);
 
   // Год якорится тем же `monthYM`, поэтому пикеру он подходит как есть.
   const anchored = periodCtl.preset === "month" || periodCtl.preset === "year";
+  /** Действует ручной отрезок — подсвечиваем поля дат, как пикер при месяце. */
+  const rangeActive = periodCtl.preset === "custom";
   const currentMonthYM =
     anchored && periodCtl.monthYM ? periodCtl.monthYM : dataRange.maxYM;
 
@@ -380,6 +403,33 @@ export function GlobalFilters({
     const r = periodRange(currentMonthYM, monthStartDay);
     return formatDate(r.from, "full") + " — " + formatDate(r.to, "full");
   }, [monthStartDay, anchored, periodCtl.preset, currentMonthYM]);
+
+  /**
+   * Кнопки пресетов. «Месяц», «Год» и «Период» задают период соседними
+   * контролами, поэтому нажатие на них не просто ставит пресет:
+   * - «Месяц» и «Год» якорятся на том, что сейчас показано;
+   * - «Период» подставляет действующие границы, чтобы данные под руками не
+   *   прыгнули: человек переходит к своим датам, чтобы их поправить, а не
+   *   чтобы внезапно увидеть всю историю.
+   */
+  const choosePreset = (next: DatePreset) => {
+    if (next === "month") periodCtl.setMonth(currentMonthYM || defaultMonthYM);
+    else if (next === "year") periodCtl.setYear(Number((currentMonthYM || defaultMonthYM).slice(0, 4)));
+    else if (next === "custom") {
+      const now =
+        periodCtl.preset === "custom"
+          ? { from: periodCtl.from, to: periodCtl.to }
+          : presetToRange(periodCtl.preset, dataRange.maxDate, periodCtl.monthYM, monthStartDay);
+      periodCtl.setRange(now.from, now.to);
+    } else periodCtl.setPreset(next);
+  };
+
+  // Сохранённый вид мог быть снят со «С начала года» — кнопки для него в ряду
+  // больше нет, но пока он действует, показываем её, иначе подсвечивать нечего.
+  const presetOptions =
+    periodCtl.preset === "ytd"
+      ? [...PRESETS, { value: "ytd" as DatePreset, label: "С начала года" }]
+      : PRESETS;
 
   // Default preset is now "current month"; treat anything else as user-set.
   // Месяц по умолчанию — ОТЧЁТНЫЙ, как его ставит сам стор фильтров: считая его
@@ -630,9 +680,9 @@ export function GlobalFilters({
               tight
               label="Период"
               value={periodCtl.preset}
-              onChange={periodCtl.setPreset}
+              onChange={choosePreset}
               className="shrink-0"
-              options={PRESETS.map((p) => ({ value: p.value, label: p.label, title: p.title }))}
+              options={presetOptions}
             />
 
             {/* Month picker + custom range. Fully live for both the global
@@ -651,13 +701,16 @@ export function GlobalFilters({
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
               />
 
+              {/* Поля дат подсвечены, когда действуют именно они: у месяца и
+                  года подсвечен свой контрол, и без этого «Период» оставался
+                  единственным режимом, который ничем себя не показывал. */}
               <div className="flex items-center gap-1.5 flex-1 min-w-0 max-sm:basis-full">
                 <DateField
                   value={periodCtl.from || ""}
                   onChange={(e) =>
                     periodCtl.setRange(e.target.value || null, periodCtl.to)
                   }
-                  className="input text-xs"
+                  className={clsx("input text-xs", rangeActive && "border-accent bg-accent/10")}
                   wrapperClassName="flex-1 min-w-0"
                 />
                 <span className="text-muted text-xs">—</span>
@@ -666,7 +719,7 @@ export function GlobalFilters({
                   onChange={(e) =>
                     periodCtl.setRange(periodCtl.from, e.target.value || null)
                   }
-                  className="input text-xs"
+                  className={clsx("input text-xs", rangeActive && "border-accent bg-accent/10")}
                   wrapperClassName="flex-1 min-w-0"
                 />
               </div>
