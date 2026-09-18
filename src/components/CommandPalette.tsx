@@ -122,7 +122,7 @@ export function CommandPalette({ open, onClose }: Props) {
   const setScheme = useThemeStore((s) => s.setScheme);
   const showThemeModal = useThemeModalStore((s) => s.show);
   const openHeaderNavEditor = useHeaderNavStore((s) => s.openEditor);
-  const setMonth = useFiltersStore((s) => s.setMonth);
+  const setPeriodMonth = useFiltersStore((s) => s.setPeriodMonth);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const views = useSavedViewsStore((s) => s.views);
   const filtersStore = useFiltersStore;
@@ -195,7 +195,8 @@ export function CommandPalette({ open, onClose }: Props) {
           title: monthLabel(ym),
           hint: ym,
           icon: CalendarDays,
-          action: () => setMonth(ym),
+          // Месяцы в списке собраны отчётными — открываем их же.
+          action: () => setPeriodMonth(ym),
         });
       }
 
@@ -264,7 +265,7 @@ export function CommandPalette({ open, onClose }: Props) {
     }
 
     return list;
-  }, [transactions, views, nav, setMode, setScheme, showThemeModal, openHeaderNavEditor, setMonth, monthStartDay, showDrill, filtersStore]);
+  }, [transactions, views, nav, setMode, setScheme, showThemeModal, openHeaderNavEditor, setPeriodMonth, monthStartDay, showDrill, filtersStore]);
 
   const filtered = useMemo(() => {
     if (!query) return items.slice(0, 80);

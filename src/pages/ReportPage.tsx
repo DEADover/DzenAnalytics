@@ -207,7 +207,8 @@ export function ReportPage() {
   useEffect(() => {
     if (prevMonthParam.current === monthParam) return;
     prevMonthParam.current = monthParam;
-    if (monthParam) lp.setMonth(monthParam);
+    // Месяц из ссылки — отчётный: «Месячный отчёт» открывают с главной.
+    if (monthParam) lp.setPeriodMonth(monthParam);
   }, [monthParam, lp]);
   const effectiveFilters = useMemo(
     () => ({ ...filters, preset: lp.preset, monthYM: lp.monthYM, from: lp.from, to: lp.to }),

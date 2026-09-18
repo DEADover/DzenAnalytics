@@ -161,7 +161,10 @@ export function TransactionsPage() {
     return q && /^\d{4}-\d{2}$/.test(q) ? q : null;
   }, [searchParams]);
 
-  const setMonth = filters.setMonth;
+  // По ссылке приходят с главной, а она считает ОТЧЁТНЫЙ месяц: открыть его
+  // календарным значило бы показать не те операции, из которых сложилась сумма
+  // в виджете.
+  const setMonth = filters.setPeriodMonth;
   const appliedMonth = useRef<string | null>(null);
   useEffect(() => {
     if (!monthParam || appliedMonth.current === monthParam) return;

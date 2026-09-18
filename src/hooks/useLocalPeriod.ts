@@ -55,7 +55,9 @@ export function useLocalPeriod(
   // page should still open on its own wide span.
   const pinned = initialMonthYM || null;
   const [preset, setPreset] = useState<DatePreset>(
-    pinned ? "month" : gPreset === "custom" ? "custom" : defaultPreset
+    // Месяц из ссылки — отчётный: страницу открывают с главной, и отрезок
+    // должен совпасть с тем, что показал её виджет.
+    pinned ? "period" : gPreset === "custom" ? "custom" : defaultPreset
   );
   const [monthYM, setMonthYM] = useState<string | null>(
     pinned ??
