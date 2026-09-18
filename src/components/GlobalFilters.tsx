@@ -718,7 +718,10 @@ export function GlobalFilters({
                 проходит наверх, к обёртке, и подсказка показывается. */}
             <div
               className={clsx(
-                "flex items-center gap-2 flex-1 min-w-[220px]",
+                // Переносить разрешено ВСЕГДА: без этого на ширинах чуть шире
+                // порога блоки не переносились, а вылезали за край — кнопка
+                // сброса наезжала на дорожку дат.
+                "flex flex-wrap items-center gap-2 flex-1 min-w-[220px]",
                 // Ниже `xl` период — своей строкой, а месяцу с датами разрешено
                 // уйти под пресеты. Иначе блок вставал рядом с «Дополнительно»
                 // шириной в 234 пикселя, пресеты вылезали за экран, а поля дат
@@ -753,7 +756,7 @@ export function GlobalFilters({
                 Trends) — picking a month/range switches the page's period. */}
             {/* Ниже lg месяц с датами идут своей строкой: рядом с восемью
                 пресетами они не помещаются и уезжают за край карточки. */}
-            <div className="flex items-center gap-2 flex-1 min-w-[220px] max-filters:min-w-[22rem] max-lg:basis-full max-sm:min-w-0 max-sm:flex-col max-sm:items-stretch">
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[220px] max-filters:min-w-[22rem] max-lg:basis-full max-sm:min-w-0 max-sm:flex-col max-sm:items-stretch">
               <MonthPicker
                 value={currentMonthYM}
                 minYM={dataRange.minYM}
