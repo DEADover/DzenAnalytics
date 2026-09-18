@@ -18,6 +18,13 @@ const currentYM = () => currentPeriod(useReportPeriodStore.getState().monthStart
  * у года — только его год. Так переключение «Месяц ↔ Год» оставляет человека
  * там же, где он был, а не бросает в текущую дату (issue #64).
  */
+/**
+ * «month» — КАЛЕНДАРНЫЙ месяц, с первого по последнее число.
+ * «period» — ОТЧЁТНЫЙ месяц: тот же отрезок, что считают главная, бюджет и сам
+ *   Дзен-мани, — с вашего первого дня месяца. Это значение по умолчанию.
+ * «custom» — свои даты: то же, что «period», после того как границы поправили
+ *   руками, поэтому в ряду кнопок оба состояния светятся как «Период».
+ */
 export type DatePreset =
   | "all"
   | "ytd"
@@ -26,6 +33,7 @@ export type DatePreset =
   | "3m"
   | "30d"
   | "month"
+  | "period"
   | "year"
   | "custom";
 
@@ -111,6 +119,8 @@ interface FiltersState {
   }) => void;
   setRange: (from: string | null, to: string | null) => void;
   setMonth: (ym: string) => void;
+  /** Отчётный месяц целиком — кнопка «Период» в чистом виде. */
+  setPeriodMonth: (ym: string) => void;
   setYear: (year: number) => void;
   /** Шагнуть на соседний период — единица берётся из пресета: месяц или год. */
   stepPeriod: (delta: number, fallbackMaxYM: string) => void;
@@ -143,12 +153,11 @@ interface FiltersState {
 
 const initial = {
   // Default to the current period — most actions are about "what's
-  // happening NOW", and 12-month view drowns the present. The actual
-  // period boundaries respect the user's `monthStartDay` setting (see
-  // useReportPeriodStore); the initial value here is the calendar month
-  // (startDay=1) and gets reconciled in App.tsx once the period store
-  // hydrates.
-  preset: "month" as DatePreset,
+  // happening NOW", and 12-month view drowns the present. Отчётный, а не
+  // календарный: так фильтр показывает тот же отрезок, что главная и бюджет.
+  // Первый день приезжает позже (см. useReportPeriodStore), и период
+  // пересчитывается в App.tsx, когда тот стор поднимется.
+  preset: "period" as DatePreset,
   from: null,
   to: null,
   monthYM: currentPeriod(1) as string | null,
@@ -180,6 +189,8 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
   setPeriod: ({ preset, from, to, monthYM }) => set({ preset, from, to, monthYM }),
   setRange: (from, to) => set({ from, to, preset: "custom" }),
   setMonth: (monthYM) => set({ preset: "month", monthYM }),
+  /** Отчётный месяц целиком — то же, что кнопка «Период» без правки дат. */
+  setPeriodMonth: (monthYM) => set({ preset: "period", monthYM, from: null, to: null }),
   // Месяц якоря сохраняем: вернувшись потом в «Месяц», попадаешь в тот же
   // месяц выбранного года, а не в январь.
   setYear: (year) =>
@@ -190,11 +201,15 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
   stepPeriod: (delta, fallbackMaxYM) => {
     const { preset, monthYM } = get();
     const unit = preset === "year" ? 12 : 1;
-    const anchored = preset === "month" || preset === "year";
+    const anchored = preset === "month" || preset === "year" || preset === "period";
     const cur = anchored && monthYM ? monthYM : fallbackMaxYM;
+    // Шаг сохраняет единицу: годы листаются годами, отчётные месяцы —
+    // отчётными, календарные — календарными.
+    const next: DatePreset = preset === "year" ? "year" : preset === "period" ? "period" : "month";
     set({
-      preset: preset === "year" ? "year" : "month",
+      preset: next,
       monthYM: shiftPeriod(cur, delta * unit),
+      ...(next === "period" ? { from: null, to: null } : null),
     });
   },
   toggleSet: (kind, value) =>
@@ -225,11 +240,12 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
   setExcludeOffBalance: (excludeOffBalance) => set({ excludeOffBalance }),
   setOffBalanceAccounts: (offBalanceAccounts) => set({ offBalanceAccounts }),
   resetToCurrentPeriod: (startDay) =>
-    set({ preset: "month", monthYM: currentPeriod(startDay) }),
+    set({ preset: "period", monthYM: currentPeriod(startDay), from: null, to: null }),
   followStartDay: (prevDay, nextDay) => {
     if (prevDay === nextDay) return;
     const { preset, monthYM } = get();
-    if (preset !== "month" || monthYM !== currentPeriod(prevDay)) return;
+    // Календарный месяц за днём не следует — он на то и календарный.
+    if (preset !== "period" || monthYM !== currentPeriod(prevDay)) return;
     set({ monthYM: currentPeriod(nextDay) });
   },
   // Preserve the off-balance reference set — it's loaded data, not a filter the
@@ -250,6 +266,12 @@ export function presetToRange(
 ): { from: string | null; to: string | null } {
   if (preset === "all" || preset === "custom") return { from: null, to: null };
   if (preset === "month") {
+    // КАЛЕНДАРНЫЙ месяц: с первого числа по последнее, чей бы ни был отчётный
+    // день. Отчётный отрезок живёт под своим пресетом «period».
+    if (!monthYM) return { from: null, to: null };
+    return periodRange(monthYM, 1);
+  }
+  if (preset === "period") {
     if (!monthYM) return { from: null, to: null };
     return periodRange(monthYM, monthStartDay);
   }

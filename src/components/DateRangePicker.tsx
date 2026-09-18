@@ -18,6 +18,7 @@ export function DateRangePicker({
   dimmed,
   size = "sm",
   onChange,
+  onStepPeriod,
 }: {
   from: string | null;
   to: string | null;
@@ -25,6 +26,12 @@ export function DateRangePicker({
   active: boolean;
   /** Действует не он: дорожка приглушается, чтобы работающий контрол был виден. */
   dimmed?: boolean;
+  /**
+   * Чем листать вместо длины окна. У отчётного месяца шаг — соседний отчётный
+   * месяц, даже когда в месяцах разное число дней; у своих дат такого якоря
+   * нет, и там шагаем самой длиной отрезка.
+   */
+  onStepPeriod?: (dir: -1 | 1) => void;
   /** Ступень: `sm` 34 — ряд общего фильтра, `md` 42 — ряд контролов раздела. */
   size?: "sm" | "md";
   onChange: (from: string | null, to: string | null) => void;
@@ -33,8 +40,18 @@ export function DateRangePicker({
   // было бы не на что.
   const step = from && to ? spanDays(from, to) : 0;
   const icon = size === "md" ? "seg-icon-md" : "seg-icon-sm";
+  const canStep = onStepPeriod ? true : step > 0;
+  const stepHint = onStepPeriod
+    ? { back: "Предыдущий отчётный месяц", fwd: "Следующий отчётный месяц" }
+    : step > 0
+      ? { back: `Предыдущие ${step} дн.`, fwd: `Следующие ${step} дн.` }
+      : { back: "Задайте обе даты, чтобы листать", fwd: "Задайте обе даты, чтобы листать" };
 
   const shift = (dir: -1 | 1) => {
+    if (onStepPeriod) {
+      onStepPeriod(dir);
+      return;
+    }
     if (!from || !to || step <= 0) return;
     onChange(shiftDays(from, dir * step), shiftDays(to, dir * step));
   };
@@ -53,9 +70,9 @@ export function DateRangePicker({
       <button
         type="button"
         onClick={() => shift(-1)}
-        disabled={step <= 0}
+        disabled={!canStep}
         className={clsx("seg-icon", icon)}
-        title={step > 0 ? `Предыдущие ${step} дн.` : "Задайте обе даты, чтобы листать"}
+        title={stepHint.back}
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
@@ -96,9 +113,9 @@ export function DateRangePicker({
       <button
         type="button"
         onClick={() => shift(1)}
-        disabled={step <= 0}
+        disabled={!canStep}
         className={clsx("seg-icon", icon)}
-        title={step > 0 ? `Следующие ${step} дн.` : "Задайте обе даты, чтобы листать"}
+        title={stepHint.fwd}
       >
         <ChevronRight className="w-4 h-4" />
       </button>

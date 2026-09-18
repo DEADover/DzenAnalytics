@@ -68,7 +68,7 @@ const PRESETS: { value: DatePreset; label: string; title?: string }[] = [
   {
     value: "month",
     label: "Месяц",
-    title: "Один отчётный месяц — листается стрелками рядом",
+    title: "Календарный месяц — с первого числа по последнее",
   },
   {
     value: "year",
@@ -76,9 +76,10 @@ const PRESETS: { value: DatePreset; label: string; title?: string }[] = [
     title: "Год целиком — листается стрелками, в отличие от скользящих «12 мес»",
   },
   {
-    value: "custom",
+    value: "period",
     label: "Период",
-    title: "Свои даты — задаются полями «от» и «до» рядом",
+    title:
+      "Отчётный месяц — тот же отрезок, что считают главная, бюджет и Дзен-мани. Даты можно поправить",
   },
   { value: "all", label: "Всё" },
 ];
@@ -391,8 +392,10 @@ export function GlobalFilters({
 
   // Год якорится тем же `monthYM`, поэтому пикеру он подходит как есть.
   const anchored = periodCtl.preset === "month" || periodCtl.preset === "year";
+  /** Отчётный месяц — свой или уже поправленный руками: кнопка одна. */
+  const periodMode = periodCtl.preset === "period" || periodCtl.preset === "custom";
   /** Действует ручной отрезок — подсвечиваем поля дат, как пикер при месяце. */
-  const rangeActive = periodCtl.preset === "custom";
+  const rangeActive = periodMode;
 
   const currentMonthYM =
     anchored && periodCtl.monthYM ? periodCtl.monthYM : dataRange.maxYM;
@@ -418,13 +421,10 @@ export function GlobalFilters({
   const choosePreset = (next: DatePreset) => {
     if (next === "month") periodCtl.setMonth(currentMonthYM || defaultMonthYM);
     else if (next === "year") periodCtl.setYear(Number((currentMonthYM || defaultMonthYM).slice(0, 4)));
-    else if (next === "custom") {
-      const now =
-        periodCtl.preset === "custom"
-          ? { from: periodCtl.from, to: periodCtl.to }
-          : presetToRange(periodCtl.preset, dataRange.maxDate, periodCtl.monthYM, monthStartDay);
-      periodCtl.setRange(now.from, now.to);
-    } else periodCtl.setPreset(next);
+    // «Период» — это отчётный месяц; свои даты появляются, только если их
+    // поправили руками, и кнопка при этом остаётся той же.
+    else if (next === "period") periodCtl.setPeriodMonth(currentMonthYM || defaultMonthYM);
+    else periodCtl.setPreset(next);
   };
 
   // Сохранённый вид мог быть снят со «С начала года» — кнопки для него в ряду
@@ -433,6 +433,9 @@ export function GlobalFilters({
     periodCtl.preset === "ytd"
       ? [...PRESETS, { value: "ytd" as DatePreset, label: "С начала года" }]
       : PRESETS;
+  /** Свои даты — то же состояние кнопки «Период»: она и светится. */
+  const presetValue: DatePreset =
+    periodCtl.preset === "custom" ? "period" : periodCtl.preset;
 
   /**
    * Что показывать в дорожке дат. Свои даты — как есть, у остальных пресетов —
@@ -442,6 +445,7 @@ export function GlobalFilters({
    */
   const shownRange = useMemo(() => {
     if (periodCtl.preset === "custom") return { from: periodCtl.from, to: periodCtl.to };
+    // «Период» без правки — границы отчётного месяца, как их считает сервис.
     const r = presetToRange(
       periodCtl.preset,
       dataRange.maxDate,
@@ -493,7 +497,7 @@ export function GlobalFilters({
     f.users.size > 0 ||
     f.search.length > 0 ||
     hasExtra ||
-    !(f.preset === "month" && f.monthYM === defaultMonthYM);
+    !(f.preset === "period" && f.monthYM === defaultMonthYM);
 
   // Где рисовать панель, решает настройка «Панель фильтров» (Оформление):
   // «По кнопке» — уходим порталом под шапку (`FiltersDock`), «На странице» —
@@ -712,7 +716,7 @@ export function GlobalFilters({
             <Segmented
               tight
               label="Период"
-              value={periodCtl.preset}
+              value={presetValue}
               onChange={choosePreset}
               className="shrink-0"
               options={presetOptions}
@@ -745,6 +749,11 @@ export function GlobalFilters({
                 active={rangeActive}
                 dimmed={!rangeActive}
                 onChange={(from, to) => periodCtl.setRange(from, to)}
+                onStepPeriod={
+                  periodCtl.preset === "period"
+                    ? (dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)
+                    : undefined
+                }
               />
             </div>
 
@@ -884,7 +893,9 @@ export function GlobalFilters({
             value={f.search}
             onChange={(e) => f.setSearch(e.target.value)}
             placeholder="Фильтр: получатель, комментарий"
-            className="input pl-9 pr-9 text-xs py-1.5"
+            /* Высота ступени 34, как у соседних кнопок и дорожек: с py-1.5
+               поле выходило на 30 и просаживалось в ряду. */
+            className="input pl-9 pr-9 text-xs h-[34px] py-0"
           />
           {f.search && (
             <button

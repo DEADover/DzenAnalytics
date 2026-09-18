@@ -137,7 +137,7 @@ describe("applyFilters — date window", () => {
     expect(ids(out)).toEqual(["mar1", "mar31"]);
   });
 
-  it("preset 'month' respects a custom reporting startDay (e.g. 11)", () => {
+  it("preset 'period' respects a custom reporting startDay (e.g. 11)", () => {
     // period 2026-03 with startDay 11 spans 2026-03-11 → 2026-04-10
     const txs = [
       tx({ id: "early-mar", date: "2026-03-05" }), // before the 11th → prev period
@@ -145,8 +145,20 @@ describe("applyFilters — date window", () => {
       tx({ id: "early-apr", date: "2026-04-05" }), // in (≤ 10 Apr)
       tx({ id: "mid-apr", date: "2026-04-15" }), // next period
     ];
-    const out = applyFilters(txs, filt({ preset: "month", monthYM: "2026-03" }), 11);
+    const out = applyFilters(txs, filt({ preset: "period", monthYM: "2026-03" }), 11);
     expect(ids(out)).toEqual(["early-apr", "mid-mar"]);
+  });
+
+  // «Месяц» — календарный, чей бы ни был отчётный день: отчётный отрезок живёт
+  // под своим пресетом «Период».
+  it("preset 'month' остаётся календарным при любом startDay", () => {
+    const txs = [
+      tx({ id: "early-mar", date: "2026-03-05" }),
+      tx({ id: "mid-mar", date: "2026-03-15" }),
+      tx({ id: "early-apr", date: "2026-04-05" }),
+    ];
+    const out = applyFilters(txs, filt({ preset: "month", monthYM: "2026-03" }), 11);
+    expect(ids(out)).toEqual(["early-mar", "mid-mar"]);
   });
 
   it("relative presets anchor to the latest transaction date, not wall-clock", () => {
@@ -258,10 +270,17 @@ describe("presetToRange", () => {
     expect(presetToRange("custom", "2026-06-15")).toEqual({ from: null, to: null });
   });
 
-  it("'month' delegates to periodRange for the given monthYM + startDay", () => {
-    expect(presetToRange("month", null, "2026-03", 11)).toEqual(
+  it("'period' delegates to periodRange for the given monthYM + startDay", () => {
+    expect(presetToRange("period", null, "2026-03", 11)).toEqual(
       periodRange("2026-03", 11)
     );
+  });
+
+  it("'month' — календарный месяц, startDay его не сдвигает", () => {
+    expect(presetToRange("month", null, "2026-03", 11)).toEqual({
+      from: "2026-03-01",
+      to: "2026-03-31",
+    });
   });
 
   it("'month' without a monthYM imposes no range", () => {
@@ -308,14 +327,14 @@ describe("useFiltersStore reducers", () => {
     expect(useFiltersStore.getState().accounts.size).toBe(0);
   });
 
-  it("reset restores the default 'month' preset and clears filters", () => {
+  it("reset restores the default 'period' preset and clears filters", () => {
     const s = useFiltersStore.getState();
     s.setRange("2026-01-01", "2026-02-01");
     s.toggleSet("categories", "Еда");
     s.setSearch("foo");
     s.reset();
     const after = useFiltersStore.getState();
-    expect(after.preset).toBe("month");
+    expect(after.preset).toBe("period");
     expect(after.categories.size).toBe(0);
     expect(after.search).toBe("");
   });
@@ -611,7 +630,7 @@ describe("текущий месяц идёт за первым днём отчё
     useFiltersStore.getState().resetToCurrentPeriod(1);
     expect(useFiltersStore.getState().monthYM).toBe("2026-09");
     useFiltersStore.getState().followStartDay(1, 20);
-    expect(useFiltersStore.getState()).toMatchObject({ preset: "month", monthYM: "2026-08" });
+    expect(useFiltersStore.getState()).toMatchObject({ preset: "period", monthYM: "2026-08" });
     // Отрезок — тот, в котором лежит сегодняшний день.
     expect(periodRange("2026-08", 20)).toEqual({ from: "2026-08-20", to: "2026-09-19" });
     expect(currentPeriod(20)).toBe("2026-08");
