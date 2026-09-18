@@ -18,6 +18,15 @@ const DELAY_MS = 120;
 
 let bubble: HTMLDivElement | null = null;
 let anchor: HTMLElement | null = null;
+/**
+ * Элемент, для которого подсказка ЖДЁТ своей задержки.
+ *
+ * Без него наведение считалось новым на каждом `mouseover`, а тот прилетает и
+ * при переходе курсора на потомка — со значка на кнопку и обратно. У кнопки
+ * одними значками потомок один и занимает её почти целиком, поэтому подсказка
+ * дёргалась от любого движения мыши: отсчёт начинался заново.
+ */
+let pending: HTMLElement | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 function isTruncationCell(el: HTMLElement): boolean {
@@ -123,6 +132,7 @@ function hide(): void {
   }
   if (bubble) bubble.style.opacity = "0";
   anchor = null;
+  pending = null;
 }
 
 /** Take the native attribute off the element so the OS bubble can't appear,
@@ -153,13 +163,17 @@ function onOver(e: Event): void {
   const target = e.target as Element | null;
   const el = target?.closest?.(`[title], [${STASH}]`) as HTMLElement | null;
   if (!el) return;
-  if (el === anchor) return; // already showing for this element
+  // Уже показываем для него или уже ждём его задержки — движение внутри того
+  // же элемента наведением заново не считается.
+  if (el === anchor || el === pending) return;
   const text = stash(el);
   if (text == null) return;
   hide();
   if (!wants(el, text)) return;
+  pending = el;
   timer = setTimeout(() => {
     timer = null;
+    pending = null;
     show(el, text);
   }, DELAY_MS);
 }
@@ -168,8 +182,12 @@ function onOut(e: Event): void {
   const target = e.target as Element | null;
   const el = target?.closest?.(`[${STASH}]`);
   if (!el) return;
+  // Курсор ушёл на СВОЕГО потомка — элемент он не покидал, и подсказку гасить
+  // не за что. Браузер шлёт `mouseout` и на такие переходы.
+  const to = (e as MouseEvent).relatedTarget;
+  if (to instanceof Node && el.contains(to)) return;
   restore(el);
-  if (el === anchor || anchor === null) hide();
+  if (el === anchor || el === pending || anchor === null) hide();
 }
 
 /** Anything that moves the page under the bubble invalidates its position. */
