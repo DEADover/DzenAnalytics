@@ -181,26 +181,47 @@ function monthPillHint(m: DashboardModel): string | undefined {
   return formatDate(r.from, "full") + " — " + formatDate(r.to, "full");
 }
 
-/** Строка с датами под пилюлей — только когда месяц не календарный. */
-function PeriodNote({ m, size }: { m: DashboardModel; size: "sm" | "md" }) {
-  if (m.monthStartDay === 1) return null;
-  const r = periodRange(m.ym, m.monthStartDay);
-  return (
-    <div
-      className={`${size === "md" ? "text-[12.5px]" : "text-[11.5px]"} text-muted -mt-1 tabular-nums`}
-    >
-      Отчётный месяц: {formatDate(r.from, "short")} — {formatDate(r.to, "short")}
-    </div>
-  );
+/** Сколько периода осталось — хвост пилюли. */
+function monthLeft(m: DashboardModel): string {
+  return m.month.left === 0
+    ? "последний день"
+    : `осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`;
 }
 
-/** Подпись пилюли месяца: название и сколько дней осталось. */
-function monthPill(m: DashboardModel): string {
+/**
+ * Пилюля периода: название, его даты и остаток.
+ *
+ * Даты стоят В пилюле, между названием и остатком, и набраны приглушённо:
+ * «Сентябрь» с первым днём 15-го — это 15.09–14.10, и по одному названию
+ * понять, о каком отрезке речь, нельзя. Когда месяц календарный, дат нет —
+ * там они ничего не добавляют.
+ */
+function MonthPill({ m, size }: { m: DashboardModel; size: "sm" | "md" }) {
+  const shifted = m.monthStartDay !== 1;
+  const r = periodRange(m.ym, m.monthStartDay);
+  const dot = <span className="opacity-40">·</span>;
   return (
-    monthName(m.ym) +
-    (m.month.left === 0
-      ? " · последний день"
-      : ` · осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`)
+    <span
+      className={`inline-flex flex-wrap items-baseline justify-center ${
+        size === "md" ? "gap-x-2" : "gap-x-1.5"
+      }`}
+    >
+      <span>{monthName(m.ym)}</span>
+      {shifted && (
+        <>
+          {dot}
+          {/* Даты — без разрядки и обычными цифрами: в сплошном uppercase с
+              широким трекингом они читались бы как ещё одно слово. */}
+          <span className="tabular-nums tracking-normal font-medium text-muted">
+            {formatDate(r.from, "short").slice(0, 5)}
+            {"–"}
+            {formatDate(r.to, "short").slice(0, 5)}
+          </span>
+        </>
+      )}
+      {dot}
+      <span className={shifted ? "text-muted" : undefined}>{monthLeft(m)}</span>
+    </span>
   );
 }
 
@@ -239,9 +260,8 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
         }`}
         title={monthPillHint(m)}
       >
-        {monthPill(m)}
+        <MonthPill m={m} size="md" />
       </h1>
-      <PeriodNote m={m} size="md" />
 
       <div
         className={clsx(
@@ -381,9 +401,8 @@ function HeroSplit({ m }: { m: DashboardModel }) {
         className="self-start rounded-full px-3.5 py-1 text-[11px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold"
         title={monthPillHint(m)}
       >
-        {monthPill(m)}
+        <MonthPill m={m} size="sm" />
       </h1>
-      <PeriodNote m={m} size="sm" />
 
       {/* Разворот раскрывается только там, где колонка достаточно широка. На
           экранах до 1280 треть сетки — около 320 пикселей, и рядом с рейкой

@@ -1005,9 +1005,9 @@ export function ActivityHeat({
                 outside
                   ? m.monthStartDay === 1
                     ? undefined
-                    : "Другой отчётный месяц"
+                    : "Другой отчётный период"
                   : startsHere
-                    ? "Начало отчётного месяца"
+                    ? "Начало отчётного периода"
                     : undefined
               }
               className={`aspect-square rounded-md flex items-center justify-center text-[13px] tabular-nums
@@ -1035,12 +1035,12 @@ export function ActivityHeat({
         })}
       </div>
 
-      {/* Отчётный месяц лёг на два календарных: сетка показывает тот, где
+      {/* Отчётный период лёг на два календарных месяца: сетка показывает тот, где
           бо́льшая его часть, а числа под календарём считают весь отрезок —
           строкой говорим, какой именно. */}
       {m.monthStartDay !== 1 && (
         <div className="text-[11.5px] text-muted max-w-[26rem]">
-          Отчётный месяц: {formatDate(period.from, "short")} — {formatDate(period.to, "short")}
+          Отчётный период: {formatDate(period.from, "short")} — {formatDate(period.to, "short")}
         </div>
       )}
 
