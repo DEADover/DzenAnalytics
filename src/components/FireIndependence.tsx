@@ -4,6 +4,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useFireStore } from "../store/useFireStore";
 import { useFireCapital } from "../hooks/useFireCapital";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { groupByMonth } from "../lib/aggregations";
 import { formatMoney } from "../lib/format";
 import { Tooltip } from "./Tooltip";
@@ -69,7 +70,13 @@ export function FireIndependence({
   const { capital, capitalAccounts } = useFireCapital();
 
   // Savings pace (income − all expense, last 6 mo) drives «лет до цели».
-  const months = useMemo(() => groupByMonth(transactions), [transactions]);
+  // Месяцы отчётные: цель приходит из `fireSeries`, а та уже считает по ним —
+  // на календаре темп накоплений не сошёлся бы с целью в том же блоке.
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  const months = useMemo(
+    () => groupByMonth(transactions, { monthStartDay }),
+    [transactions, monthStartDay]
+  );
   const recent = months.slice(-6);
   const avgIncome = recent.length
     ? recent.reduce((s, m) => s + m.income, 0) / recent.length

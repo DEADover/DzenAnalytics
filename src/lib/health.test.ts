@@ -143,3 +143,41 @@ describe("computeHealthScore — остальные метрики показы�
     expect(detailOf("fixed_load")).not.toContain("Средние за 6 месяцев");
   });
 });
+
+describe("computeHealthScore — месяц отчётный, а не календарный", () => {
+  // День 28: отчётный месяц «2026-08» это 28.08–27.09. Зарплата 28 августа и
+  // трата 5 сентября — ОДИН месяц, а по календарю это два, и все средние
+  // делились бы на два вместо одного.
+  const txs = [
+    tx({ id: "i1", date: "2026-08-28", kind: "income", amount: 10000, amountBase: 10000 }),
+    tx({ id: "e1", date: "2026-09-05", kind: "expense", amount: 6000, amountBase: 6000 }),
+  ];
+  const run = (monthStartDay?: number) =>
+    computeHealthScore({
+      transactions: txs,
+      baseCurrency: "RUB",
+      calibration: { date: "2026-09-30", amount: 0 },
+      categoryMeta: {},
+      monthStartDay,
+    });
+
+  it("«Норма сбережений» берёт отрезок 28.08–27.09 как один месяц", () => {
+    const d = run(28).components.find((c) => c.id === "savings_rate")!.detail;
+    expect(d).toMatch(/доход — 10\s000/);
+    expect(d).toMatch(/расход — 6\s000/);
+    expect(d).toMatch(/остаётся — 4\s000/);
+  });
+
+  it("по умолчанию (день 1) те же операции остаются двумя месяцами", () => {
+    const d = run().components.find((c) => c.id === "savings_rate")!.detail;
+    expect(d).toMatch(/доход — 5\s000/);
+    expect(d).toMatch(/расход — 3\s000/);
+  });
+
+  it("средние обязательные траты тоже считаются по отчётным месяцам", () => {
+    const extra = (day?: number) =>
+      run(day).components.find((c) => c.id === "emergency_fund")!.extra!.avgMonthly;
+    expect(extra(28)).toBeCloseTo(6000, 5);
+    expect(extra()).toBeCloseTo(3000, 5);
+  });
+});

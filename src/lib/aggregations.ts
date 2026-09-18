@@ -518,7 +518,8 @@ export interface StreamPoint {
 export function buildStreamData(
   txs: Transaction[],
   topCategories = 10,
-  kind: "expense" | "income" = "expense"
+  kind: "expense" | "income" = "expense",
+  monthStartDay: number = 1
 ): { data: StreamPoint[]; categories: string[] } {
   const monthsSet = new Set<string>();
   const totals = new Map<string, number>();
@@ -530,7 +531,9 @@ export function buildStreamData(
     // ribbon, matching how Zenmoney's own reports look.
     const include = kind === "expense" ? affectsExpense(t.kind) : t.kind === kind;
     if (!include) continue;
-    const ym = t.date.slice(0, 7);
+    // Тот же ключ, что у «столбцов» этого же графика: иначе переключение
+    // «столбцы ↔ поток» меняло суммы за один и тот же месяц.
+    const ym = periodKey(t.date, monthStartDay);
     if (!ym) continue;
     monthsSet.add(ym);
     const delta = kind === "expense" ? expenseDelta(t) : t.amountBase;
@@ -1666,11 +1669,12 @@ export function netWorthSeries(
 export function accountMonthlyDeltas(
   txs: Transaction[],
   account: string,
-  months = 12
+  months = 12,
+  monthStartDay: number = 1
 ): number[] {
   const map = new Map<string, number>();
   for (const t of txs) {
-    const ym = t.date.slice(0, 7);
+    const ym = periodKey(t.date, monthStartDay);
     if (!ym) continue;
     let delta = 0;
     if (t.outcomeAccount === account && (t.kind === "expense" || t.kind === "transfer")) {
@@ -2132,7 +2136,7 @@ function humanDay(iso: string): string {
   return new Date(y, m - 1, d).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 }
 
-export function buildInsights(txs: Transaction[]): Insight[] {
+export function buildInsights(txs: Transaction[], monthStartDay: number = 1): Insight[] {
   const insights: Insight[] = [];
   const expenses = txs.filter((t) => t.kind === "expense");
   if (expenses.length === 0) return insights;
@@ -2182,7 +2186,7 @@ export function buildInsights(txs: Transaction[]): Insight[] {
     });
   }
 
-  const months = groupByMonth(txs);
+  const months = groupByMonth(txs, { monthStartDay });
   if (months.length >= 2) {
     const last = months[months.length - 1];
     const prev = months[months.length - 2];
@@ -2203,8 +2207,8 @@ export function buildInsights(txs: Transaction[]): Insight[] {
 
     const cats = groupByCategory(txs, "top");
     if (cats.length > 0) {
-      const lastTxs = txs.filter((t) => t.date.slice(0, 7) === last.ym);
-      const prevTxs = txs.filter((t) => t.date.slice(0, 7) === prev.ym);
+      const lastTxs = txs.filter((t) => periodKey(t.date, monthStartDay) === last.ym);
+      const prevTxs = txs.filter((t) => periodKey(t.date, monthStartDay) === prev.ym);
       const lastByCat = groupByCategory(lastTxs, "top");
       const prevByCat = new Map(groupByCategory(prevTxs, "top").map((c) => [c.category, c.expense]));
       let bestCat = "";
@@ -2331,14 +2335,18 @@ export interface MonthSpike {
   ratio: number;
 }
 
-export function detectMonthSpikes(txs: Transaction[], minRatio = 1.5): MonthSpike[] {
+export function detectMonthSpikes(
+  txs: Transaction[],
+  minRatio = 1.5,
+  monthStartDay: number = 1
+): MonthSpike[] {
   const monthsCats = new Map<string, Map<string, number>>();
   for (const t of txs) {
     // Net refunds against the same-month/category total — otherwise
     // a "category jumped 2× this month" alert would fire even when
     // the user fully returned the purchases.
     if (!affectsExpense(t.kind)) continue;
-    const ym = t.date.slice(0, 7);
+    const ym = periodKey(t.date, monthStartDay);
     if (!ym) continue;
     let mc = monthsCats.get(ym);
     if (!mc) {
@@ -2391,7 +2399,8 @@ export function categoryMonthlySeries(
   txs: Transaction[],
   category: string,
   level: "top" | "full" = "top",
-  kind: "expense" | "income" = "expense"
+  kind: "expense" | "income" = "expense",
+  monthStartDay: number = 1
 ): CategoryMonthPoint[] {
   const map = new Map<string, CategoryMonthPoint>();
   for (const t of txs) {
@@ -2401,7 +2410,7 @@ export function categoryMonthlySeries(
     if (!include) continue;
     const matches = level === "top" ? t.category === category : t.categoryFull === category;
     if (!matches) continue;
-    const ym = t.date.slice(0, 7);
+    const ym = periodKey(t.date, monthStartDay);
     if (!ym) continue;
     let p = map.get(ym);
     if (!p) {
@@ -2413,7 +2422,8 @@ export function categoryMonthlySeries(
   }
   const allMonths = new Set<string>();
   for (const t of txs) {
-    if (t.date) allMonths.add(t.date.slice(0, 7));
+    // Ось ряда — теми же ключами, что и сами точки выше.
+    if (t.date) allMonths.add(periodKey(t.date, monthStartDay));
   }
   const sorted = Array.from(allMonths).sort();
   return sorted.map((ym) => map.get(ym) || { ym, total: 0, count: 0 });

@@ -41,7 +41,7 @@ import { buildNeedsWants, type NeedsWantsSplit } from "../lib/needsWants";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { buildNotices, type Notice } from "../lib/dashboardNotices";
 import { plannedFor } from "../lib/budgets";
-import { currentPeriod, periodKey } from "../lib/period";
+import { currentPeriod, periodKey, yearRange } from "../lib/period";
 import {
   monthProgress,
   paceRatio,
@@ -196,12 +196,21 @@ export function useDashboardModel(): DashboardModel {
   const netWorthSeries = useNetWorthSeries(transactions);
   const dayMap = useMemo(() => dailyExpenseMap(transactions), [transactions]);
   const recurring = useMemo(() => detectRecurring(transactions), [transactions]);
-  const spikes = useMemo(() => detectMonthSpikes(transactions), [transactions]);
+  const spikes = useMemo(
+    () => detectMonthSpikes(transactions, 1.5, monthStartDay),
+    [transactions, monthStartDay]
+  );
 
   const insights = useMemo(() => {
-    const year = new Date().getFullYear().toString();
-    return buildInsights(transactions.filter((t) => t.date.startsWith(year)));
-  }, [transactions]);
+    // Год — отчётный: с первым днём не 1-го числа он сдвинут так же, как месяц,
+    // иначе «в этом месяце» в наблюдениях считало бы чужой отрезок.
+    const year = new Date().getFullYear();
+    const { from, to } = yearRange(year, monthStartDay);
+    return buildInsights(
+      transactions.filter((t) => t.date >= from && t.date <= to),
+      monthStartDay
+    );
+  }, [transactions, monthStartDay]);
 
   const thisMonthTxs = useMemo(
     () => transactions.filter((t) => periodKey(t.date, monthStartDay) === ym),

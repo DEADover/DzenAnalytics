@@ -1,7 +1,7 @@
 import type { Transaction } from "../types";
 import { groupByMonth, groupByCategory } from "./aggregations";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
-import { toIsoDate } from "./period";
+import { toIsoDate, yearRange, periodKey, type DayRange } from "./period";
 
 export interface YearTopItem {
   name: string;
@@ -18,9 +18,9 @@ export interface YearTopItem {
  * этот отрезок, а не календарь.
  */
 export interface YearWindow {
-  /** 1 января — или день первой операции в истории, если она позже. */
+  /** Начало отчётного года — или день первой операции в истории, если она позже. */
   from: string;
-  /** 31 декабря — или сегодня, если год ещё идёт. */
+  /** Конец отчётного года — или сегодня, если год ещё идёт. */
   to: string;
   /** Сколько дней в отрезке. Ноль — мерить нечего. */
   days: number;
@@ -137,8 +137,10 @@ const WEEKDAY_RU_DATIVE = [
   "воскресеньям",
 ];
 
-function inYear(dateStr: string, year: number): boolean {
-  return dateStr.startsWith(`${year}-`);
+/** Попала ли дата в отрезок, обе границы включительно. */
+function inRange(dateStr: string, range: DayRange): boolean {
+  const d = dateStr.slice(0, 10);
+  return d >= range.from && d <= range.to;
 }
 
 function weekdayMonFirst(d: Date): number {
@@ -166,33 +168,43 @@ function dayList(from: string, to: string): string[] {
 /**
  * Отрезок года, по которому есть чем мерить.
  *
- * Слева — 1 января или день первой операции в истории: до неё не «не тратили»,
- * а «не вели учёт». Справа — 31 декабря или сегодня: в идущем году впереди
- * будущее, и оно не серия без трат, а просто ещё не наступило. Без правой
- * границы «самая длинная серия без трат» в августе показывала 128 дней —
+ * Слева — начало года или день первой операции в истории: до неё не «не
+ * тратили», а «не вели учёт». Справа — конец года или сегодня: в идущем году
+ * впереди будущее, и оно не серия без трат, а просто ещё не наступило. Без
+ * правой границы «самая длинная серия без трат» в августе показывала 128 дней —
  * ровно столько оставалось до Нового года.
+ *
+ * Границы года — отчётные: с первым днём месяца 11-го числа год идёт с 11
+ * января по 10 января следующего, ровно как на странице «Сравнение».
  */
 export function yearWindow(
   transactions: Transaction[],
   year: number,
-  today: string
+  today: string,
+  startDay: number = 1
 ): YearWindow {
+  const span = yearRange(year, startDay);
   let firstEver = "";
   for (const t of transactions) {
     if (!firstEver || t.date < firstEver) firstEver = t.date.slice(0, 10);
   }
-  const from =
-    firstEver && firstEver > `${year}-01-01` ? firstEver : `${year}-01-01`;
-  const yearEnd = `${year}-12-31`;
-  const to = today < yearEnd ? today : yearEnd;
+  const from = firstEver && firstEver > span.from ? firstEver : span.from;
+  const to = today < span.to ? today : span.to;
   if (!from || !to || from > to) return { from, to, days: 0 };
   return { from, to, days: dayList(from, to).length };
 }
 
-export function availableYears(transactions: Transaction[]): number[] {
+export function availableYears(
+  transactions: Transaction[],
+  startDay: number = 1
+): number[] {
   const set = new Set<number>();
   for (const t of transactions) {
-    const y = Number(t.date.slice(0, 4));
+    // Год отчётный, а не календарный: с первым днём месяца 28-го операция от
+    // 5 января относится к прошлому году, и пункт «2026» в выборе года открывал
+    // бы страницу, на которой этих операций нет.
+    const key = startDay === 1 ? t.date : periodKey(t.date, startDay);
+    const y = Number(key.slice(0, 4));
     if (Number.isFinite(y)) set.add(y);
   }
   return Array.from(set).sort((a, b) => b - a);
@@ -202,11 +214,16 @@ export function buildYearReview(
   transactions: Transaction[],
   year: number,
   /** Сегодня, ISO. Параметром — чтобы «идущий год» можно было проверить тестом. */
-  today: string = toIsoDate(new Date())
+  today: string = toIsoDate(new Date()),
+  /** Первый день отчётного месяца: вместе с месяцем сдвигается и год. */
+  startDay: number = 1
 ): YearReview {
-  const thisYear = transactions.filter((t) => inYear(t.date, year));
-  const prevYear = transactions.filter((t) => inYear(t.date, year - 1));
-  const window = yearWindow(transactions, year, today);
+  const span = yearRange(year, startDay);
+  const thisYear = transactions.filter((t) => inRange(t.date, span));
+  const prevYear = transactions.filter((t) =>
+    inRange(t.date, yearRange(year - 1, startDay))
+  );
+  const window = yearWindow(transactions, year, today, startDay);
 
   const empty: YearReview = {
     year,
@@ -278,7 +295,9 @@ export function buildYearReview(
     Math.abs(prev) > 0.01 ? (cur - prev) / Math.abs(prev) : 0;
 
   // Monthly aggregates
-  const monthly: YearMonthlyPoint[] = groupByMonth(thisYear).map((m) => ({
+  const monthly: YearMonthlyPoint[] = groupByMonth(thisYear, {
+    monthStartDay: startDay,
+  }).map((m) => ({
     ym: m.ym,
     income: m.income,
     expense: m.expense,

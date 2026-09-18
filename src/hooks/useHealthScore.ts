@@ -3,6 +3,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { useLiveAccounts } from "./useLiveAccounts";
 import { computeHealthScore, type HealthScore } from "../lib/health";
@@ -28,6 +29,9 @@ export function useHealthScore(): HealthScore | null {
   const metaLoaded = useCategoryMetaStore((s) => s.loaded);
   const hydrateMeta = useCategoryMetaStore((s) => s.hydrate);
   const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
+  // Месяцы балла — отчётные: иначе на странице «Здоровье» он расходился бы с
+  // блоком FIRE, который свой первый день месяца уже уважает.
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const slices = useSlicesStore((s) => s.slices);
   const activeId = useSlicesStore((s) => s.activeId);
   const exclLoaded = useSlicesStore((s) => s.loaded);
@@ -71,6 +75,7 @@ export function useHealthScore(): HealthScore | null {
       calibration,
       categoryMeta,
       extraLiquid,
+      monthStartDay,
     });
   }, [
     transactions,
@@ -81,5 +86,6 @@ export function useHealthScore(): HealthScore | null {
     includeOffBalance,
     liveAccounts,
     slice,
+    monthStartDay,
   ]);
 }

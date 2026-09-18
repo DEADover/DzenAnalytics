@@ -2157,7 +2157,7 @@ export function AccountsPage() {
                           )}
                       </div>
                       <Sparkline
-                        data={accountMonthlyDeltas(transactions, a.account, 12)}
+                        data={accountMonthlyDeltas(transactions, a.account, 12, monthStartDay)}
                         color={sparkColor}
                         width={70}
                         height={20}

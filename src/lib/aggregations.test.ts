@@ -24,6 +24,11 @@ import {
   kindTotals,
   stripFromAnalytics,
   scaleKPI,
+  buildStreamData,
+  categoryMonthlySeries,
+  detectMonthSpikes,
+  buildInsights,
+  accountMonthlyDeltas,
 } from "./aggregations";
 import { tx } from "../test/fixtures";
 import type { CurrencyRates, Transaction } from "../types";
@@ -1539,5 +1544,65 @@ describe("buildSankey: узлы без ленты", () => {
       tx("expense", "Мелочь", 0.3),
     ]);
     expect(d.nodes.map((x) => x.name)).not.toContain("Мелочь");
+  });
+});
+
+// Отчётный месяц может не совпадать с календарным: при первом дне 28 «Август» —
+// это 28.08–27.09. Раньше эти четыре расчёта раскладывали операции по
+// КАЛЕНДАРНЫМ месяцам, и один и тот же экран показывал разные суммы в разных
+// видах (например, «столбцы» против «потока» на «Денежном потоке»).
+describe("разложение по месяцам уважает первый день отчётного месяца", () => {
+  const DAY = 28;
+  // 30 августа и 5 сентября — один отчётный месяц «2026-08»; 20 августа — прошлый.
+  const txs = [
+    tx({ kind: "expense", category: "Еда", amount: 100, amountBase: 100, date: "2026-08-20" }),
+    tx({ kind: "expense", category: "Еда", amount: 200, amountBase: 200, date: "2026-08-30" }),
+    tx({ kind: "expense", category: "Еда", amount: 300, amountBase: 300, date: "2026-09-05" }),
+  ];
+
+  it("поток по категориям кладёт сентябрьскую трату в отчётный август", () => {
+    const { data } = buildStreamData(txs, 10, "expense", DAY);
+    const aug = data.find((d) => d.ym === "2026-08");
+    expect(aug?.["Еда"]).toBe(500);
+    expect(data.find((d) => d.ym === "2026-07")?.["Еда"]).toBe(100);
+    // Без настройки поведение прежнее — календарные месяцы.
+    const plain = buildStreamData(txs, 10, "expense");
+    expect(plain.data.find((d) => d.ym === "2026-08")?.["Еда"]).toBe(300);
+  });
+
+  it("ряд категории по месяцам считает тот же отрезок", () => {
+    const series = categoryMonthlySeries(txs, "Еда", "top", "expense", DAY);
+    expect(series.find((p) => p.ym === "2026-08")).toMatchObject({ total: 500, count: 2 });
+  });
+
+  it("всплески категорий сравнивают отчётные месяцы", () => {
+    const base = [
+      tx({ kind: "expense", category: "Кафе", amount: 2000, amountBase: 2000, date: "2026-06-05" }),
+      tx({ kind: "expense", category: "Кафе", amount: 2000, amountBase: 2000, date: "2026-07-05" }),
+      // Всплеск: втрое больше обычного, и он в отчётном августе, хотя дата сентябрьская.
+      tx({ kind: "expense", category: "Кафе", amount: 6000, amountBase: 6000, date: "2026-09-10" }),
+    ];
+    const spikes = detectMonthSpikes(base, 1.5, DAY);
+    expect(spikes.map((s) => s.ym)).toContain("2026-08");
+  });
+
+  it("наблюдения сравнивают отчётные месяцы, а не календарные", () => {
+    const grow = [
+      tx({ kind: "expense", category: "Еда", amount: 100, amountBase: 100, date: "2026-08-01" }),
+      tx({ kind: "expense", category: "Еда", amount: 400, amountBase: 400, date: "2026-09-10" }),
+    ];
+    const insights = buildInsights(grow, DAY);
+    const row = insights.find((i) => i.title === "Расходы к прошлому месяцу");
+    // Прошлый отчётный месяц — 28.07–27.08 (100), текущий — 28.08–27.09 (400).
+    expect(row?.value).toBeCloseTo(3, 5);
+  });
+
+  it("спарклайн счёта складывает те же месяцы", () => {
+    const acc = [
+      tx({ kind: "expense", category: "Еда", amount: 100, amountBase: 100, date: "2026-09-05", outcomeAccount: "Карта" }),
+    ];
+    const deltas = accountMonthlyDeltas(acc, "Карта", 12, DAY);
+    // Последний столбик — отчётный август, а не пустой сентябрь.
+    expect(deltas[deltas.length - 1]).toBe(-100);
   });
 });

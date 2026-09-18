@@ -8,6 +8,7 @@ import {
   type CalibrationInput,
   type ObligationMeta,
 } from "./aggregations";
+import { periodKey } from "./period";
 
 export type HealthStatus = "good" | "fair" | "poor" | "na";
 
@@ -52,6 +53,22 @@ interface ComputeOptions {
    *  savings kept off-balance ARE the cushion. Pass the sum NOT already counted
    *  by the net-worth calibration (i.e. when «include off-balance» is off). */
   extraLiquid?: number;
+  /** Первый день отчётного месяца (1–31). По умолчанию 1 — календарный месяц. */
+  monthStartDay?: number;
+}
+
+/**
+ * «Последние N месяцев» здесь — отчётные, а не календарные: балл считается по
+ * тем же отрезкам, что и FIRE на соседнем блоке той же страницы. Помощник, чтобы
+ * ни одна из пяти составляющих не осталась на календаре по недосмотру.
+ */
+function monthsOf(opts: ComputeOptions) {
+  return groupByMonth(opts.transactions, { monthStartDay: opts.monthStartDay ?? 1 });
+}
+
+/** Попадает ли операция в один из отчётных месяцев `set`. */
+function inPeriods(t: Transaction, set: Set<string>, startDay: number): boolean {
+  return set.has(periodKey(t.date, startDay));
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -90,7 +107,7 @@ function gradeFor(overall: number): string {
 // ─── individual components ────────────────────────────────────────────────────
 
 function computeSavingsRate(opts: ComputeOptions): HealthComponent {
-  const months = groupByMonth(opts.transactions);
+  const months = monthsOf(opts);
   const recent = months.slice(-6);
   const avgIncome = mean(recent.map((m) => m.income));
   const avgExpense = mean(recent.map((m) => m.expense));
@@ -135,7 +152,7 @@ function computeEmergencyFund(opts: ComputeOptions): HealthComponent {
   // Off-balance savings count toward the cushion even when they're excluded
   // from the headline net worth.
   const liquid = netWorth + (opts.extraLiquid ?? 0);
-  const months = groupByMonth(opts.transactions);
+  const months = monthsOf(opts);
   const recent = months.slice(-6);
   const avgExpense = mean(recent.map((m) => m.expense));
   const coverage = avgExpense > 0 ? liquid / avgExpense : 0;
@@ -148,7 +165,7 @@ function computeEmergencyFund(opts: ComputeOptions): HealthComponent {
   const last12 = months.slice(-12);
   const last12Set = new Set(last12.map((m) => m.ym));
   const last12Txs = opts.transactions.filter((t) =>
-    last12Set.has(t.date.slice(0, 7))
+    inPeriods(t, last12Set, opts.monthStartDay ?? 1)
   );
   const obligatory12 = splitByObligation(last12Txs, opts.categoryMeta).obligatory;
   const avgMonthlyObligatory =
@@ -229,7 +246,7 @@ function computeUncategorized(opts: ComputeOptions): HealthComponent {
 }
 
 function computeStability(opts: ComputeOptions): HealthComponent {
-  const months = groupByMonth(opts.transactions);
+  const months = monthsOf(opts);
   const recent = months.slice(-12);
   if (recent.length < 3) {
     return {
@@ -291,14 +308,14 @@ function computeStability(opts: ComputeOptions): HealthComponent {
 }
 
 function computeFixedLoad(opts: ComputeOptions): HealthComponent {
-  const months = groupByMonth(opts.transactions);
+  const months = monthsOf(opts);
   const recent = months.slice(-6);
   const avgIncome = mean(recent.map((m) => m.income));
 
   // Берём расходы последних 6 месяцев и считаем долю обязательных.
   const recentSet = new Set(recent.map((r) => r.ym));
   const recentTxs = opts.transactions.filter((t) =>
-    recentSet.has(t.date.slice(0, 7))
+    inPeriods(t, recentSet, opts.monthStartDay ?? 1)
   );
   const split = splitByObligation(recentTxs, opts.categoryMeta);
   const monthlyObligatory =

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildYearReview, counterpartyOf, yearWindow } from "./yearReview";
+import { availableYears, buildYearReview, counterpartyOf, yearWindow } from "./yearReview";
 import type { Transaction } from "../types";
 
 let seq = 0;
@@ -174,5 +174,43 @@ describe("топы", () => {
     const r = buildYearReview([tx({ date: "2026-08-22", amountBase: 500 })], 2026, "2026-08-25");
     expect(r.favoriteWeekday.name).toBe("Сб");
     expect(r.favoriteWeekday.dative).toBe("субботам");
+  });
+});
+
+describe("отчётный год: первый день месяца сдвигает и год", () => {
+  it("с днём 11 год 2026 идёт с 11.01.2026 по 10.01.2027", () => {
+    const w = yearWindow([tx({ date: "2024-06-01" })], 2026, "2027-06-01", 11);
+    expect(w.from).toBe("2026-01-11");
+    expect(w.to).toBe("2027-01-10");
+  });
+
+  it("десятое января берётся в прошлый год, одиннадцатое — в новый", () => {
+    const txs = [
+      tx({ date: "2026-01-10", amountBase: 100 }), // ещё декабрь 2025-го
+      tx({ date: "2026-01-11", amountBase: 200 }), // уже январь 2026-го
+      tx({ date: "2027-01-10", amountBase: 400 }), // последний день года 2026
+      tx({ date: "2027-01-11", amountBase: 800 }), // уже год 2027
+    ];
+    const r = buildYearReview(txs, 2026, "2027-06-01", 11);
+    expect(r.totalExpense).toBe(200 + 400);
+    expect(r.txCount).toBe(2);
+    // Прошлый год — тот же отрезок, сдвинутый на год назад.
+    expect(r.prev.expense).toBe(100);
+  });
+
+  it("помесячный разрез идёт отчётными месяцами", () => {
+    const txs = [
+      tx({ date: "2026-02-10", amountBase: 100 }), // отчётный январь
+      tx({ date: "2026-02-11", amountBase: 900 }), // отчётный февраль
+    ];
+    const r = buildYearReview(txs, 2026, "2027-06-01", 11);
+    expect(r.monthly.map((m) => m.ym)).toEqual(["2026-01", "2026-02"]);
+    expect(r.recordMonths.biggestExpense?.ym).toBe("2026-02");
+  });
+
+  it("выбор года перечисляет отчётные годы, а не календарные", () => {
+    // Единственная операция — 5 января 2026-го, но с днём 11 это ещё 2025-й.
+    expect(availableYears([tx({ date: "2026-01-05" })], 11)).toEqual([2025]);
+    expect(availableYears([tx({ date: "2026-01-05" })])).toEqual([2026]);
   });
 });

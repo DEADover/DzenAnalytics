@@ -32,7 +32,10 @@ import {
   type YearReview,
 } from "../lib/yearReview";
 import { affectsExpense } from "../lib/txKindStyle";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
+import { periodKey, periodRange, yearRange, type DayRange } from "../lib/period";
 import {
+  formatDate,
   formatMoney,
   formatNum,
   formatPct,
@@ -64,6 +67,12 @@ import { Badge } from "../components/Badge";
 const INCOME = chartColor.income;
 const EXPENSE = chartColor.expense;
 
+/** Попала ли дата операции в отрезок, обе границы включительно. */
+function inSpan(date: string, range: DayRange): boolean {
+  const d = date.slice(0, 10);
+  return d >= range.from && d <= range.to;
+}
+
 /** «14 марта» — дата без года: год и так в заголовке страницы. */
 function dayLabel(iso: string): string {
   if (!iso) return "";
@@ -91,7 +100,15 @@ export function YearReviewPage() {
   const baseCurrency = useDataStore((s) => s.rates.base);
   const showDrill = useDrillStore((s) => s.show);
 
-  const years = useMemo(() => availableYears(transactions), [transactions]);
+  // Год на этой странице — отчётный: он сдвигается вместе с первым днём
+  // отчётного месяца, как на «Сравнении». Иначе декабрьская зарплата, пришедшая
+  // 28-го, попадала бы в один год, а месяц с ней — в другой.
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+
+  const years = useMemo(
+    () => availableYears(transactions, monthStartDay),
+    [transactions, monthStartDay]
+  );
   const [year, setYear] = useState<number>(() => years[0] || new Date().getFullYear());
   // `years` отсортированы по убыванию: первый — самый свежий.
   const yearMax = years[0] ?? year;
@@ -105,18 +122,29 @@ export function YearReviewPage() {
   }, [years, year]);
 
   const review = useMemo<YearReview>(
-    () => buildYearReview(analyticsTx, year),
-    [analyticsTx, year]
+    () => buildYearReview(analyticsTx, year, undefined, monthStartDay),
+    [analyticsTx, year, monthStartDay]
+  );
+
+  /** Календарные границы отчётного года — по ним режется всё на странице. */
+  const yearSpan = useMemo(
+    () => yearRange(year, monthStartDay),
+    [year, monthStartDay]
   );
 
   /** Операции года — основа всех проваливаний со страницы. */
   const yearTx = useMemo(
-    () => analyticsTx.filter((t) => t.date.startsWith(`${year}-`)),
-    [analyticsTx, year]
+    () => analyticsTx.filter((t) => inSpan(t.date, yearSpan)),
+    [analyticsTx, yearSpan]
   );
 
   function drillMonth(ym: string) {
-    showDrill(monthLabelFull(ym), yearTx.filter((t) => t.date.startsWith(ym)), "Год в цифрах");
+    const r = periodRange(ym, monthStartDay);
+    showDrill(
+      monthLabelFull(ym),
+      yearTx.filter((t) => inSpan(t.date, r)),
+      "Год в цифрах"
+    );
   }
 
   function drillCategory(name: string) {
@@ -131,14 +159,16 @@ export function YearReviewPage() {
 
   /** Квартал целиком — три месяца, а не первый из них. */
   function drillQuarter(q: number) {
-    const from = `${year}-${String((q - 1) * 3 + 1).padStart(2, "0")}`;
-    const to = `${year}-${String(q * 3).padStart(2, "0")}`;
+    // Квартал — это три отчётных месяца подряд, поэтому границы берём у первого
+    // и последнего из них, а не по номеру календарного месяца в дате.
+    const span = {
+      from: periodRange(`${year}-${String((q - 1) * 3 + 1).padStart(2, "0")}`, monthStartDay)
+        .from,
+      to: periodRange(`${year}-${String(q * 3).padStart(2, "0")}`, monthStartDay).to,
+    };
     showDrill(
       `${q} квартал ${year}`,
-      yearTx.filter((t) => {
-        const ym = t.date.slice(0, 7);
-        return ym >= from && ym <= to;
-      }),
+      yearTx.filter((t) => inSpan(t.date, span)),
       "Год в цифрах"
     );
   }
@@ -182,7 +212,7 @@ export function YearReviewPage() {
   const incomeDelta = deltaPill(review.prev.incomeDelta);
   const expenseDelta = deltaPill(review.prev.expenseDelta, true);
   const netDelta = deltaPill(review.prev.netDelta);
-  const partial = review.window.to < `${year}-12-31`;
+  const partial = review.window.to < yearSpan.to;
 
   return (
     <div className="space-y-6">
@@ -192,11 +222,13 @@ export function YearReviewPage() {
         info={
           <InfoPopover>
             <p>
-              Всё на странице считается за <InfoTerm>календарный год</InfoTerm> —
-              с 1 января по 31 декабря, независимо от того, с какого числа у вас
-              начинается месяц в других отчётах. Проценты рядом с суммами —
-              сравнение с тем же периодом прошлого года; если данных за прошлый
-              год нет, их и не показываем.
+              Всё на странице считается за{" "}
+              <InfoTerm>
+                {formatDate(yearSpan.from, "full")} — {formatDate(yearSpan.to, "full")}
+              </InfoTerm>
+              : год идёт от первого дня отчётного месяца, как и месяцы в других
+              отчётах. Проценты рядом с суммами — сравнение с тем же периодом
+              прошлого года; если данных за прошлый год нет, их и не показываем.
             </p>
             <p>
               Переводы между своими счетами в доход и расход не идут. Операции,
@@ -286,7 +318,12 @@ export function YearReviewPage() {
       {/* Год по месяцам и профиль недели — половина ширины каждому: на широком
           мониторе двенадцать столбцов растягивались в пустое поле. */}
       <div className="grid lg:grid-cols-2 gap-4">
-        <YearBars review={review} base={baseCurrency} onMonth={drillMonth} />
+        <YearBars
+          review={review}
+          base={baseCurrency}
+          monthStartDay={monthStartDay}
+          onMonth={drillMonth}
+        />
         <WeekProfile review={review} base={baseCurrency} onDay={drillWeekday} />
       </div>
 
@@ -508,16 +545,21 @@ export function YearReviewPage() {
 function YearBars({
   review,
   base,
+  monthStartDay,
   onMonth,
 }: {
   review: YearReview;
   base: string;
+  monthStartDay: number;
   onMonth: (ym: string) => void;
 }) {
   const data = useMemo(() => {
     const byYm = new Map(review.monthly.map((m) => [m.ym, m]));
-    const lastMonth = Number(review.window.to.slice(5, 7));
-    const upTo = review.window.to.startsWith(`${review.year}-`) ? lastMonth : 12;
+    // Докуда рисовать столбцы, решает отчётный месяц последнего дня с данными:
+    // у сдвинутого года этот день может лежать уже в январе следующего, и
+    // календарный номер месяца дал бы один столбец вместо двенадцати.
+    const lastKey = periodKey(review.window.to, monthStartDay);
+    const upTo = lastKey.startsWith(`${review.year}-`) ? Number(lastKey.slice(5, 7)) : 12;
     const out: { ym: string; label: string; income: number; expense: number }[] = [];
     for (let m = 1; m <= upTo; m++) {
       const ym = `${review.year}-${String(m).padStart(2, "0")}`;
@@ -530,7 +572,7 @@ function YearBars({
       });
     }
     return out;
-  }, [review]);
+  }, [review, monthStartDay]);
 
   if (data.length === 0) return null;
 

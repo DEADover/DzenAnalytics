@@ -15,6 +15,7 @@ import {
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useGoalsStore, type Goal } from "../store/useGoalsStore";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
 import { groupByMonth } from "../lib/aggregations";
@@ -140,8 +141,14 @@ export function GoalsPage() {
     if (!loaded) hydrate();
   }, [loaded, hydrate]);
 
-  // Household savings pace drives the default (fallback) forecast.
-  const months = useMemo(() => groupByMonth(transactions), [transactions]);
+  // Household savings pace drives the default (fallback) forecast. Месяц здесь
+  // отчётный: прогноз «когда накопится» опирается на тот же месяц, что и
+  // остальная аналитика.
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  const months = useMemo(
+    () => groupByMonth(transactions, { monthStartDay }),
+    [transactions, monthStartDay]
+  );
   const recent = months.slice(-6);
   const avgIncome = recent.length
     ? recent.reduce((s, m) => s + m.income, 0) / recent.length

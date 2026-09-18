@@ -1,5 +1,6 @@
 import type { Transaction } from "../types";
 import { groupByMonth } from "./aggregations";
+import { periodKey } from "./period";
 
 export interface WhatIfBase {
   avgIncome: number;       // base monthly income, last 6 months
@@ -41,8 +42,11 @@ export interface WhatIfOutputs {
   yearsSavedOnFire: number;
 }
 
-export function computeWhatIfBase(transactions: Transaction[]): WhatIfBase {
-  const months = groupByMonth(transactions);
+export function computeWhatIfBase(
+  transactions: Transaction[],
+  monthStartDay = 1
+): WhatIfBase {
+  const months = groupByMonth(transactions, { monthStartDay });
   const recent = months.slice(-6);
   const avgIncome =
     recent.length > 0
@@ -77,9 +81,10 @@ export interface CategoryAverage {
 
 export function avgMonthlyByCategory(
   transactions: Transaction[],
-  topN = 8
+  topN = 8,
+  monthStartDay = 1
 ): CategoryAverage[] {
-  const months = groupByMonth(transactions);
+  const months = groupByMonth(transactions, { monthStartDay });
   const recent = months.slice(-6);
   const recentSet = new Set(recent.map((r) => r.ym));
   const recentMonths = recent.length || 1;
@@ -87,7 +92,7 @@ export function avgMonthlyByCategory(
   const sums = new Map<string, number>();
   for (const t of transactions) {
     if (t.kind !== "expense") continue;
-    if (!recentSet.has(t.date.slice(0, 7))) continue;
+    if (!recentSet.has(periodKey(t.date, monthStartDay))) continue;
     sums.set(t.category, (sums.get(t.category) || 0) + t.amountBase);
   }
 

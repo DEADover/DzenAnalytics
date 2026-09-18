@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { periodKey } from "../lib/period";
 import {
   ResponsiveContainer,
   LineChart,
@@ -100,19 +101,20 @@ export function TrendsPage() {
   const series = useMemo(() => {
     const allMonths = new Set<string>();
     for (const t of filtered) {
-      if (t.date) allMonths.add(t.date.slice(0, 7));
+      // Ось X — отчётные месяцы, теми же ключами, что и сами ряды.
+      if (t.date) allMonths.add(periodKey(t.date, monthStartDay));
     }
     const sorted = Array.from(allMonths).sort();
     const data: Record<string, number | string>[] = sorted.map((ym) => ({ ym, label: monthLabel(ym) }));
     for (const cat of activeCategories) {
-      const s = categoryMonthlySeries(filtered, cat, level, kind);
+      const s = categoryMonthlySeries(filtered, cat, level, kind, monthStartDay);
       const byYm = new Map(s.map((p) => [p.ym, p.total]));
       for (const point of data) {
         point[cat] = Math.round(byYm.get(point.ym as string) || 0);
       }
     }
     return data;
-  }, [filtered, activeCategories, level, kind]);
+  }, [filtered, activeCategories, level, kind, monthStartDay]);
 
   const dowStats = useMemo(() => statsByDayOfWeek(filtered, kind), [filtered, kind]);
   const howCells = useMemo(() => statsByHourOfWeek(filtered, kind), [filtered, kind]);
@@ -157,7 +159,7 @@ export function TrendsPage() {
       (t) =>
         matchesKind(t.kind) &&
         (level === "top" ? t.category === cat : t.categoryFull === cat) &&
-        t.date.slice(0, 7) === ym
+        periodKey(t.date, monthStartDay) === ym
     );
     showDrill(`${cat} · ${monthLabel(ym)}`, txs, "Тренд категории");
   }

@@ -94,11 +94,11 @@ export function Budget503020Page() {
   );
   const trend = useMemo(
     () =>
-      savingsRateSeries(trendFiltered, 12).map((p) => ({
+      savingsRateSeries(trendFiltered, 12, monthStartDay).map((p) => ({
         month: monthLabel(p.ym),
         rate: Math.round(p.rate * 1000) / 10,
       })),
-    [trendFiltered]
+    [trendFiltered, monthStartDay]
   );
 
   if (transactions.length === 0) return <EmptyState />;

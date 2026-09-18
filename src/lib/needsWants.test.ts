@@ -89,3 +89,23 @@ describe("savingsRateSeries", () => {
     expect(s).toEqual([{ ym: "2026-04", rate: 0 }]);
   });
 });
+
+describe("savingsRateSeries — отчётный месяц", () => {
+  // День 28: «2026-08» это 28.08–27.09, поэтому зарплата 28 августа и трата
+  // 10 сентября дают ОДНУ точку графика, а не две календарные.
+  const txs = [
+    tx({ kind: "income", amount: 100000, date: "2026-08-28" }),
+    tx({ kind: "expense", amount: 60000, date: "2026-09-10" }),
+  ];
+
+  it("склеивает отрезок 28.08–27.09 в одну точку", () => {
+    expect(savingsRateSeries(txs, 12, 28)).toEqual([{ ym: "2026-08", rate: 0.4 }]);
+  });
+
+  it("по умолчанию (день 1) остаются два календарных месяца", () => {
+    expect(savingsRateSeries(txs, 12)).toEqual([
+      { ym: "2026-08", rate: 1 },
+      { ym: "2026-09", rate: 0 },
+    ]);
+  });
+});

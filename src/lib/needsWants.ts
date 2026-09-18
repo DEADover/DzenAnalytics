@@ -64,9 +64,10 @@ export interface SavingsRatePoint {
  *  per-month rate used by the health score's savings/stability components. */
 export function savingsRateSeries(
   txs: Transaction[],
-  months = 12
+  months = 12,
+  monthStartDay = 1
 ): SavingsRatePoint[] {
-  const buckets = groupByMonth(txs);
+  const buckets = groupByMonth(txs, { monthStartDay });
   const recent = months > 0 ? buckets.slice(-months) : buckets;
   return recent.map((m) => ({
     ym: m.ym,

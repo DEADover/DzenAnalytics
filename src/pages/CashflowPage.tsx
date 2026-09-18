@@ -110,7 +110,7 @@ export function CashflowPage() {
     [filtered, monthStartDay]
   );
   const kpi = useMemo(() => computeKPI(filtered), [filtered]);
-  const insights = useMemo(() => buildInsights(filtered), [filtered]);
+  const insights = useMemo(() => buildInsights(filtered, monthStartDay), [filtered, monthStartDay]);
   const vsAvg = useMemo(
     () => vsAverageStats(filtered, { monthStartDay }),
     [filtered, monthStartDay]
@@ -173,7 +173,10 @@ export function CashflowPage() {
 
   // Cash-flow visualization mode: bars (по умолчанию) или stream graph
   const [vizMode, setVizMode] = useState<"bars" | "stream">("bars");
-  const stream = useMemo(() => buildStreamData(filtered, 10, "expense"), [filtered]);
+  const stream = useMemo(
+    () => buildStreamData(filtered, 10, "expense", monthStartDay),
+    [filtered, monthStartDay]
+  );
 
   // Seasonality
   const seasonality = useMemo(() => detectSeasonality(dimensionFiltered), [dimensionFiltered]);

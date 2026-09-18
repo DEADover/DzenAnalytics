@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { periodKey } from "../lib/period";
 import { AlertTriangle, Zap, TrendingUp } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
@@ -47,7 +48,10 @@ export function AnomaliesPage() {
 
   const anomalies = useMemo(() => detectAnomalies(filtered, threshold), [filtered, threshold]);
 
-  const allSpikes = useMemo(() => detectMonthSpikes(spikesInput), [spikesInput]);
+  const allSpikes = useMemo(
+    () => detectMonthSpikes(spikesInput, 1.5, monthStartDay),
+    [spikesInput, monthStartDay]
+  );
   const spikes = useMemo(() => {
     const dateActive = filters.preset !== "all" || !!filters.from || !!filters.to;
     if (!dateActive) return allSpikes;
@@ -55,12 +59,12 @@ export function AnomaliesPage() {
     let minYM = "9999-99";
     let maxYM = "0000-00";
     for (const t of filtered) {
-      const ym = t.date.slice(0, 7);
+      const ym = periodKey(t.date, monthStartDay);
       if (ym < minYM) minYM = ym;
       if (ym > maxYM) maxYM = ym;
     }
     return allSpikes.filter((s) => s.ym >= minYM && s.ym <= maxYM);
-  }, [allSpikes, filtered, filters.preset, filters.from, filters.to]);
+  }, [allSpikes, filtered, filters.preset, filters.from, filters.to, monthStartDay]);
 
   if (transactions.length === 0) return <EmptyState />;
 
@@ -74,7 +78,7 @@ export function AnomaliesPage() {
     // Include refunds for the same category — they offset the spike
     // total shown in the row, so they belong in the drilldown list.
     const txs = spikesInput.filter(
-      (t) => affectsExpense(t.kind) && t.category === cat && t.date.startsWith(ym)
+      (t) => affectsExpense(t.kind) && t.category === cat && periodKey(t.date, monthStartDay) === ym
     );
     showDrill(`${cat} · ${monthLabel(ym)}`, txs, "Всплеск трат");
   }

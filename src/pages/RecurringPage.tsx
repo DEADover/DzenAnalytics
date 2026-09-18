@@ -19,6 +19,8 @@ import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
 import { plannedOps, ownPlannedOps, type PlannedOp } from "../lib/plannedOps";
 
 import { useMembersStore } from "../store/useMembersStore";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
+import { currentPeriod, periodRange } from "../lib/period";
 import { formatMoney, formatDate, formatNum, formatPct } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
@@ -73,14 +75,17 @@ function isoLocal(d: Date): string {
 }
 
 /** Inclusive upper date bound for a period, or null for «Все». */
-function plannedPeriodEnd(period: PlannedPeriod): string | null {
+function plannedPeriodEnd(period: PlannedPeriod, monthStartDay: number = 1): string | null {
   const n = new Date();
   const y = n.getFullYear();
   const m = n.getMonth();
   const d = n.getDate();
   switch (period) {
     case "month":
-      return isoLocal(new Date(y, m + 1, 0)); // last day of current month
+      // Конец ОТЧЁТНОГО месяца, а не календарного: главная режет тот же список
+      // по нему, и с первым днём месяца 28-го два экрана показывали разное
+      // число ближайших платежей.
+      return periodRange(currentPeriod(monthStartDay), monthStartDay).to;
     case "30d":
       return isoLocal(new Date(y, m, d + 30));
     case "3m":
@@ -156,6 +161,7 @@ export function RecurringPage() {
   const [pageTab, setPageTab] = useState<PageTab>("zen");
   const [plannedTab, setPlannedTab] = useState<"all" | "plan" | "forecast">("all");
   const [plannedPeriod, setPlannedPeriod] = useState<PlannedPeriod>("month");
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const todayIso = isoLocal(new Date());
 
   // Overdue = a plan the user scheduled that nobody carried out. Forecast rows
@@ -176,9 +182,9 @@ export function RecurringPage() {
   /** Upcoming within the selected date window (before the tab split), so the tab
    *  counts always match what the chosen period actually contains. */
   const plannedInPeriod = useMemo(() => {
-    const end = plannedPeriodEnd(plannedPeriod);
+    const end = plannedPeriodEnd(plannedPeriod, monthStartDay);
     return end ? plannedUpcoming.filter((p) => p.date <= end) : plannedUpcoming;
-  }, [plannedUpcoming, plannedPeriod]);
+  }, [plannedUpcoming, plannedPeriod, monthStartDay]);
   const plannedCounts = useMemo(
     () => ({
       all: plannedInPeriod.length,

@@ -35,7 +35,7 @@ import {
 import { accountOptions } from "../lib/accountOptions";
 import { useFiltersStore, type DatePreset } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { periodRange } from "../lib/period";
+import { currentPeriod, periodRange } from "../lib/period";
 import { formatDate } from "../lib/format";
 import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
@@ -382,8 +382,10 @@ export function GlobalFilters({
   }, [monthStartDay, anchored, periodCtl.preset, currentMonthYM]);
 
   // Default preset is now "current month"; treat anything else as user-set.
-  const now = new Date();
-  const defaultMonthYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  // Месяц по умолчанию — ОТЧЁТНЫЙ, как его ставит сам стор фильтров: считая его
+  // календарно, мы с первым днём месяца 28-го всегда видели «фильтры заданы» и
+  // держали «Сбросить» активной на чистых фильтрах.
+  const defaultMonthYM = currentPeriod(monthStartDay);
   const hasExtra =
     f.excludeTransfers ||
     f.minAmount != null ||

@@ -11,6 +11,7 @@ import {
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useCalibrationStore } from "../store/useCalibrationStore";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import {
   computeWhatIfBase,
   computeWhatIf,
@@ -52,6 +53,7 @@ export function WhatIfPage() {
   const analyticsTx = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
   const calibration = useCalibrationStore((s) => s.calibration);
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const calibLoaded = useCalibrationStore((s) => s.loaded);
   const hydrateCalibration = useCalibrationStore((s) => s.hydrate);
 
@@ -59,8 +61,14 @@ export function WhatIfPage() {
     if (!calibLoaded) hydrateCalibration();
   }, [calibLoaded, hydrateCalibration]);
 
-  const baseScenario = useMemo(() => computeWhatIfBase(analyticsTx), [analyticsTx]);
-  const categories = useMemo(() => avgMonthlyByCategory(analyticsTx, 8), [analyticsTx]);
+  const baseScenario = useMemo(
+    () => computeWhatIfBase(analyticsTx, monthStartDay),
+    [analyticsTx, monthStartDay]
+  );
+  const categories = useMemo(
+    () => avgMonthlyByCategory(analyticsTx, 8, monthStartDay),
+    [analyticsTx, monthStartDay]
+  );
 
   const currentNetWorth = useMemo(() => {
     const series = netWorthSeries(transactions, calibration);
