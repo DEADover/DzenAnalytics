@@ -276,15 +276,11 @@ export function presetToRange(
     return periodRange(monthYM, monthStartDay);
   }
   if (preset === "year") {
-    // Год — это двенадцать отчётных месяцев подряд, а не «1 января — 31
-    // декабря»: при отчётном периоде с 11-го числа год честно идёт с 11 января
-    // по 10 января следующего, так же как считается каждый его месяц.
+    // Год — КАЛЕНДАРНЫЙ, с 1 января по 31 декабря, как и «Месяц» рядом: кнопки
+    // фильтра говорят о календаре, а свой отсчёт живёт под кнопкой «Период».
     const y = (monthYM ?? "").slice(0, 4);
     if (!y) return { from: null, to: null };
-    return {
-      from: periodRange(`${y}-01`, monthStartDay).from,
-      to: periodRange(`${y}-12`, monthStartDay).to,
-    };
+    return { from: `${y}-01-01`, to: `${y}-12-31` };
   }
   const today = maxDate ? new Date(maxDate) : new Date();
   const to = today.toISOString().slice(0, 10);

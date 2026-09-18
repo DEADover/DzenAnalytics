@@ -2,6 +2,39 @@ import { CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { DateField } from "./DateField";
 import { shiftDays, spanDays } from "../lib/period";
+import { MONTHS, MONTHS_SHORT } from "../lib/months";
+
+/**
+ * «15 авг. 2026» — дата словами. В широкой дорожке она читается лучше цифр, а
+ * год у второй границы печатается всегда: у первой его прячем, когда обе даты
+ * в одном году, — «15 авг. — 14 сент. 2026» короче и понятнее.
+ *
+ * У мая точки нет: это слово целиком, а не сокращение.
+ */
+function textDate(iso: string, withYear: boolean): string {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const short = MONTHS_SHORT[m - 1];
+  const dot = short === MONTHS[m - 1] ? "" : ".";
+  return `${d} ${short.toLowerCase()}${dot}${withYear ? ` ${y}` : ""}`;
+}
+
+/** Подпись поля: словами на широком экране, числами на узком. */
+function dateLabel(iso: string | null, withYear: boolean) {
+  if (!iso) return undefined;
+  return (
+    <>
+      <span className="hidden 2xl:inline">{textDate(iso, withYear)}</span>
+      <span className="2xl:hidden">{numericDate(iso)}</span>
+    </>
+  );
+}
+
+/** «15.08.26» — компактная запись для узких окон. */
+function numericDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return `${d}.${m}.${y.slice(2)}`;
+}
 
 /**
  * Свой отрезок дат — одной дорожкой со стрелками, как месяц и год рядом.
@@ -47,6 +80,7 @@ export function DateRangePicker({
 }) {
   // Листать можно только заданный отрезок: у половинки длины нет, и шагать ей
   // было бы не на что.
+  const sameYear = !!from && !!to && from.slice(0, 4) === to.slice(0, 4);
   const step = from && to ? spanDays(from, to) : 0;
   const icon = size === "md" ? "seg-icon-md" : "seg-icon-sm";
   const canStep = onStepPeriod ? true : step > 0;
@@ -103,6 +137,7 @@ export function DateRangePicker({
           wrapperClassName="min-w-0"
           icon={false}
           shortYear
+          display={dateLabel(from, !sameYear)}
           placeholder="Начало"
         />
         <span className="text-muted text-xs shrink-0" aria-hidden="true">
@@ -119,6 +154,7 @@ export function DateRangePicker({
           wrapperClassName="min-w-0"
           icon={false}
           shortYear
+          display={dateLabel(to, true)}
           placeholder="Конец"
         />
       </div>

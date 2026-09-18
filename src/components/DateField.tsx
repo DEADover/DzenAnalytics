@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { MONTHS, MONTHS_SHORT } from "../lib/months";
@@ -87,6 +87,12 @@ interface Props {
    * две полных записи разносят дорожку по ширине экрана.
    */
   shortYear?: boolean;
+  /**
+   * Своя подпись вместо разобранной даты — когда соседний контрол знает о дате
+   * больше поля: например, что год у обеих границ один и печатать его дважды
+   * незачем.
+   */
+  display?: ReactNode;
 }
 
 export function DateField({
@@ -99,6 +105,7 @@ export function DateField({
   granularity = "day",
   icon = true,
   shortYear = false,
+  display: displayOverride,
 }: Props) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -129,7 +136,7 @@ export function DateField({
             display ? "" : "text-muted"
           }`}
         >
-          {display || ph}
+          {display ? (displayOverride ?? display) : ph}
         </span>
         {icon && <Calendar className="w-4 h-4 shrink-0 text-muted" />}
       </button>
