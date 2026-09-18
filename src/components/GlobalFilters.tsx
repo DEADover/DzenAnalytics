@@ -754,6 +754,8 @@ export function GlobalFilters({
                     ? (dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)
                     : undefined
                 }
+                onCurrent={() => periodCtl.setPeriodMonth(defaultMonthYM)}
+                atCurrent={periodCtl.preset === "period" && periodCtl.monthYM === defaultMonthYM}
               />
             </div>
 

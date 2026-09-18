@@ -117,7 +117,7 @@ export function MonthPicker({
     <div
       // Дорожка и пункты — общие `.seg-*`: та же пилюля, что у `Segmented`
       // той же ступени, и выбранная подпись светится так же.
-      className={clsx("seg-track", active && "!border-accent", dimmed && "opacity-55")}
+      className={clsx("seg-track", active && "!border-accent bg-accent/5", dimmed && "opacity-55")}
       title={isYear ? "Перейти к одному году" : "Перейти к одному месяцу"}
     >
       <button

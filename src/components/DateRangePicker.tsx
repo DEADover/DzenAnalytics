@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { DateField } from "./DateField";
 import { shiftDays, spanDays } from "../lib/period";
@@ -19,6 +19,8 @@ export function DateRangePicker({
   size = "sm",
   onChange,
   onStepPeriod,
+  onCurrent,
+  atCurrent,
 }: {
   from: string | null;
   to: string | null;
@@ -32,6 +34,13 @@ export function DateRangePicker({
    * нет, и там шагаем самой длиной отрезка.
    */
   onStepPeriod?: (dir: -1 | 1) => void;
+  /**
+   * Вернуться к периоду, который идёт сейчас. Кнопка гаснет, когда мы и так в
+   * нём: после пары шагов назад дорога обратно была только через пресеты.
+   */
+  onCurrent?: () => void;
+  /** Мы уже в текущем периоде — возвращаться некуда. */
+  atCurrent?: boolean;
   /** Ступень: `sm` 34 — ряд общего фильтра, `md` 42 — ряд контролов раздела. */
   size?: "sm" | "md";
   onChange: (from: string | null, to: string | null) => void;
@@ -63,7 +72,9 @@ export function DateRangePicker({
         // половин: прижатые к краям, они оставляли дыру посередине — растянуть
         // мало, надо ещё и выровнять.
         "seg-track flex-1 min-w-0 max-sm:w-full",
-        active && "!border-accent",
+        // Действующий отрезок не только обведён, но и залит: рамка одна на
+        // светлом фоне читалась слабо, особенно рядом с такой же дорожкой.
+        active && "!border-accent bg-accent/5",
         dimmed && "opacity-55"
       )}
     >
@@ -87,10 +98,11 @@ export function DateRangePicker({
           className={clsx(
             "seg-item min-w-0",
             size === "md" ? "seg-item-md" : "seg-item-sm",
-            from && "text-text"
+            from && (active ? "text-accent" : "text-text")
           )}
           wrapperClassName="min-w-0"
           icon={false}
+          shortYear
           placeholder="Начало"
         />
         <span className="text-muted text-xs shrink-0" aria-hidden="true">
@@ -102,10 +114,11 @@ export function DateRangePicker({
           className={clsx(
             "seg-item min-w-0",
             size === "md" ? "seg-item-md" : "seg-item-sm",
-            to && "text-text"
+            to && (active ? "text-accent" : "text-text")
           )}
           wrapperClassName="min-w-0"
           icon={false}
+          shortYear
           placeholder="Конец"
         />
       </div>
@@ -119,6 +132,18 @@ export function DateRangePicker({
       >
         <ChevronRight className="w-4 h-4" />
       </button>
+
+      {onCurrent && (
+        <button
+          type="button"
+          onClick={onCurrent}
+          disabled={atCurrent}
+          className={clsx("seg-icon", icon)}
+          title={atCurrent ? "Это текущий отчётный период" : "Вернуться к текущему отчётному периоду"}
+        >
+          <CalendarCheck className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 }
