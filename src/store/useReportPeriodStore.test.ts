@@ -72,9 +72,13 @@ describe("первый день месяца: свой или из Дзен-ма
     expect(useReportPeriodStore.getState().zenDay).toBeNull();
   });
 
-  it("день Дзен-мани 29–31 прижимается к 28, мусор — «не подключён»", () => {
+  // Дзен-мани разрешает 29, 30 и 31 — берём как есть. Раньше такой день молча
+  // превращался в 28-й, и отчёты расходились с приложением на три дня.
+  it("день Дзен-мани 29–31 сохраняется, мусор — «не подключён»", () => {
     useReportPeriodStore.getState().adoptZenDay(31);
-    expect(useReportPeriodStore.getState().monthStartDay).toBe(28);
+    expect(useReportPeriodStore.getState().monthStartDay).toBe(31);
+    useReportPeriodStore.getState().adoptZenDay(40);
+    expect(useReportPeriodStore.getState().monthStartDay).toBe(31);
     useReportPeriodStore.getState().adoptZenDay(undefined);
     expect(useReportPeriodStore.getState().zenDay).toBeNull();
   });

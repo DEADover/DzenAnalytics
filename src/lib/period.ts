@@ -4,7 +4,7 @@
  * Many people don't think of a "month" as 1st–31st but as a billing
  * window — e.g. salary on the 11th, so 11th → 10th of the next month
  * is their reporting period. These helpers let aggregations and filters
- * speak in terms of a configurable `startDay` (1–28).
+ * speak in terms of a configurable `startDay` (1–31).
  *
  * Convention: a period is identified by the `YYYY-MM` string of its
  * START month. So period `2026-05` with `startDay=11` spans
@@ -13,10 +13,28 @@
  * the same result as the old calendar-month code path, so callers that
  * don't pass `startDay` keep working unchanged.
  *
- * Reasoning behind 28-day max: 29/30/31 don't exist in every month and
- * would make some periods ambiguous. The UI also caps the picker at 28
- * for the same reason.
+ * ДНИ 29–31. Их разрешает и приложение Дзен-мани, поэтому разрешаем и мы:
+ * запретить день, который человек уже выбрал там, значило бы разойтись с
+ * приложением в цифрах. В месяце, где такого числа нет, период начинается в
+ * ПОСЛЕДНИЙ день месяца — то же правило, по которому живёт платёж «31-го
+ * числа». С днём 31 период «2026-01» это 31.01–27.02, а «2026-02» — 28.02–30.03.
  */
+
+/** Сколько дней в календарном месяце `m` (1–12) года `y`. */
+function daysInMonth(y: number, m: number): number {
+  return new Date(y, m, 0).getDate();
+}
+
+/**
+ * Какого числа отчётный месяц начинается ИМЕННО в этом календарном месяце.
+ *
+ * Обычно это сам `startDay`, но в коротком месяце 29, 30 и 31 съезжают на его
+ * последний день: 31-го февраля не бывает, а отчётный период есть всегда.
+ */
+export function startDayIn(y: number, m: number, startDay: number = 1): number {
+  const wanted = Math.min(Math.max(1, Math.round(startDay || 1)), 31);
+  return Math.min(wanted, daysInMonth(y, m));
+}
 
 /**
  * Which billing period does this date fall into?
@@ -35,7 +53,7 @@ export function periodKey(isoDate: string, startDay: number = 1): string {
   const y = Number(yStr);
   const m = Number(mStr);
   const d = Number(dStr);
-  if (d >= startDay) {
+  if (d >= startDayIn(y, m, startDay)) {
     return `${y}-${String(m).padStart(2, "0")}`;
   }
   const prev = new Date(y, m - 2, 1);
@@ -56,9 +74,15 @@ export function periodRange(
   const [yStr, mStr] = ym.split("-");
   const y = Number(yStr);
   const m = Number(mStr);
-  const start = new Date(y, m - 1, startDay);
-  // Day before the next period starts = last day of this period.
-  const end = new Date(y, m, startDay - 1);
+  const start = new Date(y, m - 1, startDayIn(y, m, startDay));
+  // Конец периода — день перед началом СЛЕДУЮЩЕГО, а тот в коротком месяце
+  // может съехать: с днём 31 период января кончается 27 февраля.
+  const nextMonth = new Date(y, m, 1);
+  const end = new Date(
+    y,
+    m,
+    startDayIn(nextMonth.getFullYear(), nextMonth.getMonth() + 1, startDay) - 1
+  );
   const fmt = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   return { from: fmt(start), to: fmt(end) };
@@ -95,7 +119,7 @@ export function currentPeriod(
   const y = today.getFullYear();
   const m = today.getMonth() + 1;
   const d = today.getDate();
-  if (d >= startDay) {
+  if (d >= startDayIn(y, m, startDay)) {
     return `${y}-${String(m).padStart(2, "0")}`;
   }
   const prev = new Date(y, m - 2, 1);

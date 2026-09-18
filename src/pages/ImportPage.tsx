@@ -631,7 +631,11 @@ export function ImportPage() {
   // отрезках. Не запрещаем, но говорим об этом прямо в строке настройки.
   const dayDiffersFromZen = zenMonthStartDay !== null && zenMonthStartDay !== monthStartDay;
   const dayWindow = (day: number) =>
-    day === 1 ? "Календарный месяц" : `С ${day}-го числа по ${day - 1}-е следующего`;
+    day === 1
+      ? "Календарный месяц"
+      : day >= 29
+        ? `С ${day}-го числа по предыдущее следующего; в коротком месяце — с последнего дня`
+        : `С ${day}-го числа по ${day - 1}-е следующего`;
   useEffect(() => {
     if (!reportPeriodLoaded) reportPeriodHydrate();
   }, [reportPeriodLoaded, reportPeriodHydrate]);
@@ -1754,8 +1758,9 @@ export function ImportPage() {
                 смысл только как календарный.
               </p>
               <p>
-                Допустимы значения 1–28. Числа 29, 30 и 31 есть не в каждом
-                месяце, поэтому их не предлагаем.
+                Допустимы значения 1–31, как и в Дзен-мани. В месяце, где
+                такого числа нет, месяц начинается в его последний день: с днём
+                31 февральский период идёт с 28 февраля (29-го в високосный год).
               </p>
               <p>
                 При подключённом Дзен-мани день сразу берётся из его настроек,
@@ -1771,7 +1776,7 @@ export function ImportPage() {
             <input
               type="number"
               min={1}
-              max={28}
+              max={31}
               value={monthStartDay}
               onChange={(e) => {
                 const n = Number(e.target.value);

@@ -3,8 +3,9 @@ import * as db from "../lib/db";
 
 /**
  * "Отчётный период" — the day of the calendar month on which the user's
- * personal accounting month begins. Default 1 (calendar month). Values
- * are clamped to 1..28 in the UI (29–31 don't exist in every month).
+ * personal accounting month begins. Default 1 (calendar month). Значения
+ * 1–31, как и в приложении Дзен-мани: в месяце, где такого числа нет, период
+ * начинается в его последний день (см. `startDayIn` в lib/period).
  *
  * This store is consulted by:
  *   - useFiltersStore — "Месяц" preset range + month-step chevrons
@@ -79,10 +80,12 @@ export const useReportPeriodStore = create<ReportPeriodState>((set) => ({
 }));
 
 /**
- * 1–28. Дзен-мани позволяет и 29–31, но их нет в каждом месяце — такой день
- * прижимаем к 28, как и свой.
+ * 1–31. Столько же разрешает приложение Дзен-мани, а короткие месяцы
+ * разбираются при расчёте периода, а не обрезанием настройки: раньше день 31
+ * из Дзен-мани молча превращался у нас в 28, и отчёты расходились с
+ * приложением на три дня.
  */
 function clamp(n: number): number {
   if (!Number.isFinite(n)) return 1;
-  return Math.max(1, Math.min(28, Math.round(n)));
+  return Math.max(1, Math.min(31, Math.round(n)));
 }

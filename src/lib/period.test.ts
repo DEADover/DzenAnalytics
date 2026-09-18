@@ -1,12 +1,16 @@
 import { describe, it, expect } from "vitest";
 import {
   alignWindows,
+  currentPeriod,
+  periodKey,
+  startDayIn,
   comparableRanges,
   endAfterDays,
   isRunningPeriod,
   parseIsoDate,
   periodRange,
   previousWindows,
+  shiftPeriod,
   shiftDays,
   spanDays,
   toIsoDate,
@@ -338,5 +342,54 @@ describe("yearRange", () => {
     const whole = comparableRanges(b, yearRange(2024), "2026-03-15", true);
     expect(whole.a).toEqual(b);
     expect(whole.b).toEqual(yearRange(2024));
+  });
+});
+
+// Приложение Дзен-мани разрешает и 29, 30, 31 — значит и мы обязаны их считать.
+describe("первый день месяца 29–31", () => {
+  it("в коротком месяце период начинается в последний день", () => {
+    expect(startDayIn(2026, 2, 31)).toBe(28);
+    expect(startDayIn(2028, 2, 31)).toBe(29); // високосный
+    expect(startDayIn(2026, 4, 31)).toBe(30);
+    expect(startDayIn(2026, 1, 31)).toBe(31);
+  });
+
+  it("границы периодов с днём 31", () => {
+    expect(periodRange("2026-01", 31)).toEqual({ from: "2026-01-31", to: "2026-02-27" });
+    expect(periodRange("2026-02", 31)).toEqual({ from: "2026-02-28", to: "2026-03-30" });
+    expect(periodRange("2026-03", 31)).toEqual({ from: "2026-03-31", to: "2026-04-29" });
+  });
+
+  it("день 29 в високосном феврале не съезжает", () => {
+    expect(periodRange("2028-02", 29)).toEqual({ from: "2028-02-29", to: "2028-03-28" });
+  });
+
+  it("операции попадают в тот же период, что и границы", () => {
+    expect(periodKey("2026-02-28", 31)).toBe("2026-02");
+    expect(periodKey("2026-02-27", 31)).toBe("2026-01");
+    expect(periodKey("2026-03-30", 31)).toBe("2026-02");
+    expect(periodKey("2026-03-31", 31)).toBe("2026-03");
+  });
+
+  it("текущий период считается по тому же правилу", () => {
+    expect(currentPeriod(31, new Date(2026, 1, 27))).toBe("2026-01");
+    expect(currentPeriod(31, new Date(2026, 1, 28))).toBe("2026-02");
+  });
+
+  // Главный инвариант: сколько бы ни было в месяце дней, периоды идут встык —
+  // ни один день не выпадает и не попадает в два периода сразу.
+  it("для любого дня 1–31 периоды идут встык два года подряд", () => {
+    for (let day = 1; day <= 31; day++) {
+      for (let i = 0; i < 24; i++) {
+        const y = 2026 + Math.floor(i / 12);
+        const ym = `${y}-${String((i % 12) + 1).padStart(2, "0")}`;
+        const cur = periodRange(ym, day);
+        const next = periodRange(shiftPeriod(ym, 1), day);
+        expect(shiftDays(cur.to, 1)).toBe(next.from);
+        // И каждая дата внутри периода относится именно к нему.
+        expect(periodKey(cur.from, day)).toBe(ym);
+        expect(periodKey(cur.to, day)).toBe(ym);
+      }
+    }
   });
 });
