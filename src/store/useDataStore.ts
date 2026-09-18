@@ -12,6 +12,7 @@ import { buildPayeeAliasMap } from "../lib/payeeNormalize";
 import { migrateRule, restoreRuleCategories, type StoredRule } from "../lib/ruleEngine";
 import { autoApplyPatches } from "../lib/ruleAutoApply";
 import { rulesView } from "../lib/rulesView";
+import { buildRulePlan } from "../lib/rulePlan";
 import { userEdits } from "../lib/editOrigins";
 import {
   depthCount,
@@ -24,7 +25,7 @@ import {
 import { makeCategoryChecker } from "../lib/zenmoneyPush";
 
 import { applyEdits } from "../lib/applyEdits";
-import { useEditsStore } from "./useEditsStore";
+import { useEditsStore, type TransactionEdit } from "./useEditsStore";
 import { useDeletedStore, loadDeletedSet } from "./useDeletedStore";
 import { useDeletedPayloadsStore, loadDeletedPayloads } from "./useDeletedPayloadsStore";
 import { loadZenCache } from "../lib/zenmoneyCache";
@@ -133,6 +134,18 @@ interface DataState {
   loadRuleRuns: () => Promise<void>;
   /** Прогнать правило прямо сейчас; возвращает число правок. */
   runRuleNow: (ruleId: string) => Promise<number>;
+  /**
+   * Применить правила ко ВСЕЙ истории — то же, что кнопка «Проверить и
+   * применить» в разделе «Правила», но без окна со списком.
+   *
+   * Отдельно от `runRuleNow`: тот считается заходом ПО РАСПИСАНИЮ и потому
+   * берёт только правила с автоприменением, а свежесозданное правило таким не
+   * является. Нужно там, где человек просит разметить прямо сейчас, — например,
+   * применяя подсказку в «Без категории».
+   *
+   * Возвращает число изменённых операций.
+   */
+  applyRulesNow: (ruleIds: readonly string[]) => Promise<number>;
   /**
    * Прогнать все правила, которым подошёл срок.
    *
@@ -492,6 +505,47 @@ async function runRuleNow(ruleId: string): Promise<number> {
   return changed;
 }
 
+/**
+ * Применить правила ко всей истории — сейчас, по просьбе человека.
+ *
+ * Отбор совпадений тот же, что показывает окно «Проверить и применить»
+ * (`buildRulePlan`): правки, сделанные руками, правило не перебивает, а
+ * несуществующие категории и контрагенты отсеиваются по справочникам
+ * Дзен-мани.
+ */
+async function applyRulesNow(ruleIds: readonly string[]): Promise<number> {
+  const ids = new Set(ruleIds);
+  const raw = useDataStore.getState().transactionsRaw;
+  if (ids.size === 0 || raw.length === 0) return 0;
+  const stored = await db.loadJSON<StoredRule[]>(RULES_KEY);
+  const rules = (stored ?? []).map((r) => migrateRule(r)).filter((r) => ids.has(r.id));
+  if (rules.length === 0) return 0;
+
+  await ensureEditsLoaded();
+  const cache = await loadZenCache();
+  const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
+  const payeeOk = cache?.merchants
+    ? (() => {
+        const set = new Set(cache.merchants.map((m) => (m.title ?? "").trim().toLowerCase()));
+        return (title: string) => set.has(title.trim().toLowerCase());
+      })()
+    : null;
+  const edits = await loadEditsFromStore();
+  const origins = useEditsStore.getState().origins;
+  const deleted = await loadDeletedSet();
+  const view = rulesView(raw, userEdits(edits, origins));
+  const plan = buildRulePlan(view, rules, ids, edits, deleted, categoryOk, payeeOk);
+  if (plan.rows.length === 0) return 0;
+
+  const patches: Record<string, TransactionEdit> = {};
+  for (const row of plan.rows) patches[row.tx.id] = row.patch;
+  // «rule» — чтобы автоприменение потом не спорило с человеком: записанное
+  // правилом остаётся его, правленное руками неприкосновенно.
+  await useEditsStore.getState().setEditEach(patches, "rule");
+  await useDataStore.getState().reapplyRules();
+  return plan.rows.length;
+}
+
 /** Журнал заходов с диска — для подписей «работало / сколько изменило». */
 async function loadRuleRuns(): Promise<Record<string, RuleRun>> {
   const raw = (await db.loadJSON<Record<string, unknown>>(RUNS_KEY)) ?? {};
@@ -809,6 +863,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   },
 
   runRuleNow,
+  applyRulesNow,
 
   runDueRules: async () => {
     await runScheduledRules(get().transactionsRaw);

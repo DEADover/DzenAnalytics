@@ -96,6 +96,7 @@ const TEMPLATE = ["20px", "84px", "minmax(0, 1fr)", "minmax(0, 1.3fr)", "minmax(
 export function UncategorizedPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
+  const applyRulesNow = useDataStore((s) => s.applyRulesNow);
   const reapplyRules = useDataStore((s) => s.reapplyRules);
   const setEditMany = useEditsStore((s) => s.setEditMany);
   const filters = useFiltersStore();
@@ -224,9 +225,15 @@ export function UncategorizedPage() {
         caseInsensitive: true,
         category: r.category,
       });
-      if (rules.length === 1) await addRule(newRule(rules[0]));
-      else await addManyRules(rules.map(newRule));
-      await reapplyRules();
+      const ids =
+        rules.length === 1
+          ? [await addRule(newRule(rules[0]))]
+          : await addManyRules(rules.map(newRule));
+      // Созданное правило само по себе историю не трогает — оно размечает
+      // только то, что придёт потом. Здесь человек просит разметить именно эти
+      // операции, поэтому применяем правила сразу, как кнопка «Проверить и
+      // применить» в разделе «Правила».
+      await applyRulesNow(ids);
       setApplied((prev) => new Set([...prev, ...rules.map((r) => r.txId)]));
       setSelected(new Set());
     } finally {

@@ -438,7 +438,9 @@ describe("правила — хранилище", () => {
       draft,
       { ...draft, value: "окей" },
     ]);
-    expect(added).toBe(2);
+    // Два разных правила: повтор в пачке отдаёт id первого, а не заводит копию.
+    expect(useCategoryRulesStore.getState().rules).toHaveLength(2);
+    expect(new Set(added).size).toBe(2);
   });
 
   it("правка правила, пришедшего из первого поколения, работает по условиям", async () => {

@@ -77,8 +77,14 @@ interface RulesState {
   rules: StoredCategoryRule[];
   loaded: boolean;
   hydrate: () => Promise<void>;
-  add: (r: NewRule | NewRuleV2) => Promise<void>;
-  addMany: (rs: (NewRule | NewRuleV2)[]) => Promise<number>;
+  /**
+   * Добавить правило. Возвращает его id — и когда правило создано, и когда
+   * такое же уже было: вызвавшему обычно нужно тут же прогнать правило по
+   * операциям, а прогонять надо и совпавшее.
+   */
+  add: (r: NewRule | NewRuleV2) => Promise<string>;
+  /** То же пачкой: id по каждому правилу, без повторов. */
+  addMany: (rs: (NewRule | NewRuleV2)[]) => Promise<string[]>;
   update: (id: string, patch: Partial<NewRuleV2>) => Promise<void>;
   /**
    * Переписать в правилах имя контрагента: старое → новое.
@@ -350,32 +356,40 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     const existing = get().rules;
     const fresh = makeRule(r, 0);
     const key = ruleKey(fresh);
-    if (existing.some((x) => ruleKey(x) === key)) return;
+    const twin = existing.find((x) => ruleKey(x) === key);
+    if (twin) return twin.id;
     const list = [...existing, fresh];
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
     await get().reconcileRefsFromCache();
+    return fresh.id;
   },
 
   addMany: async (rs) => {
-    if (rs.length === 0) return 0;
+    if (rs.length === 0) return [];
     const existing = get().rules;
-    const existingKeys = new Set(existing.map(ruleKey));
+    const byKey = new Map(existing.map((x) => [ruleKey(x), x.id]));
     const fresh: StoredCategoryRule[] = [];
+    const ids: string[] = [];
     let salt = 0;
     for (const r of rs) {
       const made = makeRule(r, salt++);
       const k = ruleKey(made);
-      if (existingKeys.has(k)) continue;
-      existingKeys.add(k);
+      const twin = byKey.get(k);
+      if (twin) {
+        if (!ids.includes(twin)) ids.push(twin);
+        continue;
+      }
+      byKey.set(k, made.id);
+      ids.push(made.id);
       fresh.push(made);
     }
-    if (fresh.length === 0) return 0;
+    if (fresh.length === 0) return ids;
     const list = [...existing, ...fresh];
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
     await get().reconcileRefsFromCache();
-    return fresh.length;
+    return ids;
   },
 
   renamePayee: async (from, to) => {
