@@ -799,19 +799,8 @@ export function GlobalFilters({
 
             </div>
             </div>
-            <span className="w-px h-6 bg-border mx-1 max-filters:hidden" />
           </>
         }
-
-        {/* Сброс в конце ПЕРВОЙ строки — пока период стоит рядом с пресетами.
-            Когда период уезжает на свою строку, сброс остался бы в строке один,
-            и место ему находится рядом с поиском (ниже по разметке). */}
-        <ResetButton
-          className="max-filters:hidden"
-          onReset={f.reset}
-          disabled={!hasFilters || !showDataFilters}
-          hint={!showDataFilters ? dataFiltersHint : hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
-        />
 
         {/* Break → row 2 with the data controls, filling the full width. */}
         <div className="basis-full h-0 max-filters:order-2" />
@@ -940,8 +929,10 @@ export function GlobalFilters({
             </button>
           )}
         </div>
+        {/* Сброс живёт в строке с поиском: в ряду периода он при любом переносе
+            рано или поздно оставался в строке один — полосой пустоты с
+            единственной кнопкой у правого края. */}
         <ResetButton
-          className="filters:hidden"
           onReset={f.reset}
           disabled={!hasFilters || !showDataFilters}
           hint={!showDataFilters ? dataFiltersHint : hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
