@@ -207,7 +207,20 @@ export function MonthPicker({
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-sm font-semibold tabular-nums">{viewYear}</span>
+                {/* Год в шапке — кнопка: из списка месяцев часто нужен «весь
+                    этот год», а дорога к нему шла через кнопку «Год» в ряду
+                    пресетов и возврат к нужному году стрелками. */}
+                <button
+                  onClick={() => {
+                    onSelectYear?.(viewYear);
+                    setOpen(false);
+                  }}
+                  disabled={!onSelectYear}
+                  className="px-2 py-0.5 rounded-md text-sm font-semibold tabular-nums transition-colors hover:bg-panel2 disabled:hover:bg-transparent"
+                  title={onSelectYear ? `Показать весь ${viewYear} год` : undefined}
+                >
+                  {viewYear}
+                </button>
                 <button
                   onClick={() => setViewYear((y) => y + 1)}
                   disabled={viewYear >= maxY}
