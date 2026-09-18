@@ -777,6 +777,9 @@ export function GlobalFilters({
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
               />
 
+              {/* Отрезок и сброс — неразрывной парой: поодиночке кнопка при
+                  переносе оставалась в строке одна, полосой пустоты. */}
+              <div className="flex items-center gap-2 flex-1 min-w-0">
               {/* Свой отрезок — одной дорожкой со стрелками, как месяц рядом:
                   двумя отдельными полями он и парой не выглядел, и листать его
                   было нечем. Подсветка дорожки показывает, что действует
@@ -795,6 +798,14 @@ export function GlobalFilters({
                 onCurrent={() => periodCtl.setPeriodMonth(defaultMonthYM)}
                 atCurrent={periodCtl.preset === "period" && periodCtl.monthYM === defaultMonthYM}
               />
+              {/* Сброс едет вместе с отрезком: он относится ко всей панели, но
+                  место ему — в конце ряда периода, а не отдельной строкой. */}
+              <ResetButton
+                onReset={f.reset}
+                disabled={!hasFilters || !showDataFilters}
+                hint={!showDataFilters ? dataFiltersHint : hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
+              />
+              </div>
             </div>
 
             </div>
@@ -929,14 +940,6 @@ export function GlobalFilters({
             </button>
           )}
         </div>
-        {/* Сброс живёт в строке с поиском: в ряду периода он при любом переносе
-            рано или поздно оставался в строке один — полосой пустоты с
-            единственной кнопкой у правого края. */}
-        <ResetButton
-          onReset={f.reset}
-          disabled={!hasFilters || !showDataFilters}
-          hint={!showDataFilters ? dataFiltersHint : hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
-        />
         </div>
         </div>
       </div>
