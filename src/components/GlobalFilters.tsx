@@ -723,9 +723,13 @@ export function GlobalFilters({
                 // уйти под пресеты. Иначе блок вставал рядом с «Дополнительно»
                 // шириной в 234 пикселя, пресеты вылезали за экран, а поля дат
                 // сжимались до 26 пикселей — вводить в них было нечего. Порог
-                // подняли с `lg`, когда пресетов стало восемь, а даты собрались
+                // подняли до своего порога 1400, когда пресетов стало восемь, а даты собрались
                 // в дорожку со стрелками: на 1024 ряд перестал помещаться.
-                "max-xl:flex-wrap max-xl:basis-full max-sm:min-w-0",
+                //
+                // `order-1` уводит период в конец ряда: иначе на своей строке он
+                // утаскивал за собой кнопку сброса, и та висела в пустой строке
+                // одна, вместе с осиротевшим разделителем.
+                "max-filters:flex-wrap max-filters:basis-full max-filters:order-1 max-sm:min-w-0",
                 !showDateRange && "opacity-45"
               )}
               title={!showDateRange ? dateRangeHint : undefined}
@@ -747,7 +751,9 @@ export function GlobalFilters({
             {/* Month picker + custom range. Fully live for both the global
                 filter store AND a page-local controlled period (Cash-flow,
                 Trends) — picking a month/range switches the page's period. */}
-            <div className="flex items-center gap-2 flex-1 min-w-[220px] max-xl:min-w-[22rem] max-sm:min-w-0 max-sm:flex-wrap max-sm:basis-full">
+            {/* Ниже lg месяц с датами идут своей строкой: рядом с восемью
+                пресетами они не помещаются и уезжают за край карточки. */}
+            <div className="flex items-center gap-2 flex-1 min-w-[220px] max-filters:min-w-[22rem] max-lg:basis-full max-sm:min-w-0 max-sm:flex-col max-sm:items-stretch">
               <MonthPicker
                 value={currentMonthYM}
                 minYM={dataRange.minYM}
@@ -783,7 +789,7 @@ export function GlobalFilters({
 
             </div>
             </div>
-            <span className="w-px h-6 bg-border mx-1 max-sm:hidden" />
+            <span className="w-px h-6 bg-border mx-1 max-filters:hidden" />
           </>
         }
 
@@ -801,17 +807,20 @@ export function GlobalFilters({
           // `ml-auto` pins it to the right edge of the row. When the inline date
           // controls are shown they already grow to fill the row (flex-1), so
           // this has no effect there and the reset stays next to the divider.
-          className="btn-ghost text-xs px-3 shrink-0 ml-auto max-sm:-order-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2"
+          className="btn-ghost text-xs px-3 shrink-0 ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2"
         >
           <FilterX className="w-4 h-4" />
         </button>
 
         {/* Break → row 2 with the data controls, filling the full width. */}
-        <div className="basis-full h-0" />
+        <div className="basis-full h-0 max-filters:order-2" />
 
         <div
           className={clsx(
-            "basis-full flex flex-wrap items-center gap-2",
+            // Ниже `xl` период уходит в конец первой группы (`order-1`), поэтому
+            // строке данных нужен свой порядок: иначе счета с категориями
+            // вставали ВЫШЕ периода, хотя период — главное в этом ряду.
+            "basis-full flex flex-wrap items-center gap-2 max-filters:order-3",
             !showDataFilters && "opacity-45"
           )}
           title={!showDataFilters ? dataFiltersHint : undefined}
