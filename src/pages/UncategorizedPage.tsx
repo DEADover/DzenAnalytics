@@ -56,7 +56,6 @@ import { SelectionBar } from "../components/SelectionBar";
 import { ScrollTopButton } from "../components/ScrollTopButton";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
-import { Callout } from "../components/Callout";
 import { Checkbox } from "../components/Checkbox";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { EditTransactionModal } from "../components/EditTransactionModal";
@@ -285,25 +284,6 @@ export function UncategorizedPage() {
       <PageHeader icon={Tag} title="Без категории" />
       <GlobalFilters />
 
-      {stats.confident > 0 && (
-        <Callout tone="accent2" icon={Sparkles}>
-          <span className="font-medium">Есть что разметить автоматически.</span> Для{" "}
-          {formatNum(stats.confident)}{" "}
-          {pluralRu(stats.confident, ["операции", "операций", "операций"])} подсказка уверенная —
-          от {formatPct(CONFIDENT, 0)}. Отметьте их одной кнопкой и примените: для каждой
-          создастся правило, которое разметит и похожие операции в будущем.
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" onClick={selectConfident} className="btn-ghost text-xs">
-              <Sparkles className="w-3.5 h-3.5" />
-              Выбрать надёжные ({formatNum(stats.confident)})
-            </button>
-            <span className="text-xs text-muted">
-              Всего с подсказкой — {formatNum(stats.applicable)}
-            </span>
-          </div>
-        </Callout>
-      )}
-
       <StatRow>
         <StatCell
           label="Операций"
@@ -353,6 +333,17 @@ export function UncategorizedPage() {
               title={"Быстрый поиск по этой таблице\nИщет по контрагенту, комментарию и счёту. Не сохраняется и на другие страницы не влияет."}
               className="flex-1 min-w-[220px]"
             />
+            {stats.confident > 0 && (
+              <button
+                type="button"
+                onClick={selectConfident}
+                className="btn-ghost text-xs shrink-0"
+                title={`Отметить операции, где подсказка не ниже ${formatPct(CONFIDENT, 0)}\nПрименить их можно разом — кнопкой в панели выделения. Для каждой создастся правило: оно разметит и похожие операции в будущем.`}
+              >
+                <Sparkles className="w-3.5 h-3.5" aria-hidden />
+                Надёжные ({formatNum(stats.confident)})
+              </button>
+            )}
             <SortMenu options={SORT_OPTIONS} value={sortMode} onChange={setSortMode} />
             <ExportButton rows={sorted.length} onClick={exportCsv} />
           </>
