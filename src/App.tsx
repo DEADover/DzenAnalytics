@@ -3,7 +3,6 @@ import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { isViewTransitionUpdate } from "./lib/viewTransition";
 import { TopNav } from "./components/TopNav";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { AppFooter } from "./components/AppFooter";
 import { TransactionsDrawer } from "./components/TransactionsDrawer";
 import { CommandPalette } from "./components/CommandPalette";
 import { ThemeModal } from "./components/ThemeModal";
@@ -483,7 +482,6 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      <AppFooter />
       <TransactionsDrawer />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ThemeModal />
