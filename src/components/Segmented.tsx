@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 import { formatNum } from "../lib/format";
 import { Popover } from "./Popover";
+import { StableWidth } from "./StableWidth";
 
 /** Тон выбранного варианта: цвет, когда он несёт смысл (тип операции). */
 export type SegmentedTone = "accent" | "expense" | "income" | "accent2" | "warn" | "muted";
@@ -193,7 +194,10 @@ function SegmentedMenu<T extends string | number>({
           active && "seg-on"
         )}
       >
-        {current?.label ?? option.label}
+        <StableWidth
+          value={current?.label ?? option.label}
+          candidates={items.map((m) => m.label)}
+        />
         <ChevronDown
           className={clsx("w-3 h-3 opacity-60 transition-transform", open && "rotate-180")}
           aria-hidden="true"

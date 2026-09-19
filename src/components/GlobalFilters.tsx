@@ -394,18 +394,21 @@ export function GlobalFilters({
   /** Название задаёт период: отчётный месяц, календарный месяц или год. */
   const monthAnchored = anchored || periodCtl.preset === "period";
 
+  // Подпись кнопки — тот месяц, который сейчас показан, включая отчётный:
+  // прежде при нём брался последний месяц данных, и листание меняло даты, а
+  // название оставалось прежним.
   const currentMonthYM =
-    anchored && periodCtl.monthYM ? periodCtl.monthYM : dataRange.maxYM;
+    monthAnchored && periodCtl.monthYM ? periodCtl.monthYM : dataRange.maxYM;
 
   // Отчётный месяц не с 1-го числа: подпись «Август» идёт по 27 сентября, и
   // без дат её читают неверно. Даты — подсказкой к кнопке месяца.
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const monthHint = useMemo(() => {
-    if (monthStartDay === 1 || !anchored || periodCtl.preset === "year" || !currentMonthYM)
+    if (monthStartDay === 1 || !monthAnchored || periodCtl.preset === "year" || !currentMonthYM)
       return undefined;
     const r = periodRange(currentMonthYM, monthStartDay);
     return formatDate(r.from, "full") + " — " + formatDate(r.to, "full");
-  }, [monthStartDay, anchored, periodCtl.preset, currentMonthYM]);
+  }, [monthStartDay, monthAnchored, periodCtl.preset, currentMonthYM]);
 
   /**
    * Кнопки пресетов. «Месяц», «Год» и «Период» задают период соседними

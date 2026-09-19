@@ -6,6 +6,16 @@ import { MonthMenu } from "./MonthMenu";
 import { monthLabelFull } from "../lib/format";
 import { shiftDays, spanDays } from "../lib/period";
 import { MONTHS, MONTHS_SHORT } from "../lib/months";
+import { StableWidth } from "./StableWidth";
+
+/**
+ * Все двенадцать подписей месяцев этого года — по ним кнопка берёт ширину.
+ * Считать «самый длинный» по числу букв нельзя: шрифт пропорциональный, и
+ * «Февраль» шире «Сентября» в одних начертаниях и уже в других.
+ */
+function monthLabels(year: number): string[] {
+  return MONTHS.map((_, i) => monthLabelFull(`${year}-${String(i + 1).padStart(2, "0")}`));
+}
 
 /** «15 авг. 2026» — дата словами; год прячем, когда обе границы в одном году. */
 function textDate(iso: string, withYear: boolean): string {
@@ -156,7 +166,12 @@ export function PeriodPicker({
         className={clsx("seg-item shrink-0", item, monthActive && "seg-on")}
       >
         <CalendarRange className={size === "md" ? "w-4 h-4" : "w-3.5 h-3.5"} />
-        {isYear ? year : monthLabelFull(monthYM)}
+        {/* Ширина держится по месяцам даже в режиме года: «2026» вдвое уже
+            «Сентября», и переключение «Месяц ↔ Год» дёргало бы весь ряд. */}
+        <StableWidth
+          value={isYear ? year : monthLabelFull(monthYM)}
+          candidates={monthLabels(year)}
+        />
         <ChevronDown className="w-3 h-3 opacity-60" aria-hidden="true" />
       </button>
 
