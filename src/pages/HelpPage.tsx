@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { SearchInput } from "../components/SearchInput";
@@ -4171,23 +4171,34 @@ export function HelpPage() {
   const [collapsed, setCollapsed] = useState<Set<Group>>(new Set());
   const release = parseRelease(changelogRaw, __APP_VERSION__);
 
-  /** С какого раздела начинается лента — его и выбрали в дереве. */
-  const startId = params.get("p") ?? ABOUT_ID;
-  const startIndex = Math.max(0, FLAT.findIndex((s) => s.id === startId));
-  /** Какой раздел человек читает СЕЙЧАС: он подсвечен в дереве. */
-  const [reading, setReading] = useState(startId);
+  const urlId = params.get("p") ?? ABOUT_ID;
 
   // Лента: от выбранного раздела и дальше, по мере прокрутки. Справка читается
   // подряд — прежде каждый раздел открывался отдельной страницей, и дочитав
   // один, приходилось возвращаться к дереву за следующим.
+  //
+  // ВАЖНО: начало ленты — своё состояние, а не то, что стоит в адресе. Адрес
+  // идёт за чтением и меняется на каждой прокрутке; если бы лента строилась от
+  // него, она пересобиралась бы с текущего раздела прямо под руками — страница
+  // схлопывалась, прокрутка прыгала, а вверх становилось нечего листать.
+  const [anchor, setAnchor] = useState(urlId);
   const [count, setCount] = useState(PAGE);
-  const [shownFor, setShownFor] = useState(startId);
-  if (shownFor !== startId) {
-    setShownFor(startId);
-    setCount(PAGE);
-    setReading(startId);
-  }
+  /** Какой раздел человек читает СЕЙЧАС: он подсвечен в дереве. */
+  const [reading, setReading] = useState(urlId);
+  /** Адрес, который записали мы сами, — чтобы отличить его от чужого. */
+  const [ownUrl, setOwnUrl] = useState(urlId);
   const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
+
+  // Адрес сменили снаружи — «назад», ссылка или пункт дерева: начинаем ленту
+  // заново с этого раздела.
+  if (urlId !== ownUrl) {
+    setOwnUrl(urlId);
+    setAnchor(urlId);
+    setCount(PAGE);
+    setReading(urlId);
+  }
+
+  const startIndex = Math.max(0, FLAT.findIndex((s) => s.id === anchor));
   const shown = useMemo(
     () => FLAT.slice(startIndex, startIndex + count),
     [startIndex, count]
@@ -4213,7 +4224,12 @@ export function HelpPage() {
   /** Раздел в адресе и подсветка в дереве идут за тем, что сейчас на экране. */
   const onReading = useCallback(
     (id: string) => {
-      setReading(id);
+      // Наблюдатель зовёт нас на каждом пересечении, в том числе повторно для
+      // того же раздела: лишняя правка адреса перерисовывала бы всю ленту.
+      setReading((prev) => (prev === id ? prev : id));
+      // Помечаем адрес своим ДО записи: иначе следующая отрисовка примет его за
+      // чужой и пересоберёт ленту с этого раздела.
+      setOwnUrl(id);
       // `replace`, чтобы прокрутка не набивала историю браузера: «назад» должно
       // возвращать на прошлую страницу, а не на прошлый абзац справки.
       setParams(id === ABOUT_ID ? {} : { p: id }, { replace: true });
@@ -4223,6 +4239,10 @@ export function HelpPage() {
 
   function openSection(id: string) {
     setNavOpen(false);
+    setOwnUrl(id);
+    setAnchor(id);
+    setCount(PAGE);
+    setReading(id);
     setParams(id === ABOUT_ID ? {} : { p: id }, { replace: false });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -4286,7 +4306,7 @@ export function HelpPage() {
         </div>
 
         <div className="flex-1 min-w-0 space-y-4">
-          {startId === ABOUT_ID && (
+          {anchor === ABOUT_ID && (
             <article className="card card-pad">
               <AboutSection release={release} onChangelog={() => setChangelogOpen(true)} />
             </article>
@@ -4324,7 +4344,7 @@ export function HelpPage() {
  * Раздел в ленте. Сообщает наверх, когда оказывается под шапкой: по этому
  * дерево слева подсвечивает то, что человек читает сейчас.
  */
-function HelpArticle({
+const HelpArticle = memo(function HelpArticle({
   section,
   onReading,
 }: {
@@ -4362,7 +4382,7 @@ function HelpArticle({
       <div className="text-sm text-text leading-relaxed">{section.body}</div>
     </article>
   );
-}
+});
 
 /** Дерево разделов с поиском: то же и слева на широком экране, и в выпадающем
  *  списке на узком. */
@@ -4386,7 +4406,10 @@ function HelpTree({
 }) {
   const total = found?.size ?? 0;
   return (
-    <div className="card p-2 space-y-2 max-h-[calc(100vh-var(--app-header-h)-2.5rem)] overflow-y-auto">
+    <div
+      data-help-tree=""
+      className="card p-2 space-y-2 max-h-[calc(100vh-var(--app-header-h)-2.5rem)] overflow-y-auto"
+    >
       <SearchInput
         size="sm"
         value={query}
@@ -4469,10 +4492,23 @@ function HelpLink({
   const [node, setNode] = useState<HTMLButtonElement | null>(null);
 
   // Читая ленту, человек уходит вниз на десятки разделов — подсвеченный пункт
-  // уезжал за край дерева, и было не видно, где ты. Подтягиваем его в вид, но
-  // только если он уже за краем: `nearest` не дёргает список попусту.
+  // уезжал за край дерева, и было не видно, где ты.
+  //
+   // Прокручиваем САМО дерево, а не зовём `scrollIntoView`: тот подтягивает
+   // элемент во всех прокручиваемых предках сразу, включая страницу. Из-за
+   // этого лента дёргалась на каждой смене раздела, а у конца справки прокрутка
+   // вверх тут же отбрасывала обратно вниз — страница ехала за деревом.
   useEffect(() => {
-    if (active && node) node.scrollIntoView({ block: "nearest" });
+    if (!active || !node) return;
+    const box = node.closest("[data-help-tree]");
+    if (!(box instanceof HTMLElement)) return;
+    const top = node.offsetTop;
+    const bottom = top + node.offsetHeight;
+    const pad = 8;
+    if (top < box.scrollTop) box.scrollTop = Math.max(0, top - pad);
+    else if (bottom > box.scrollTop + box.clientHeight) {
+      box.scrollTop = bottom - box.clientHeight + pad;
+    }
   }, [active, node]);
 
   return (
