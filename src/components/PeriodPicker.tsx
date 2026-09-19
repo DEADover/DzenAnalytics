@@ -33,6 +33,18 @@ function numericDate(iso: string): string {
 }
 
 /**
+ * Варианты подписи даты — по ним поле берёт ширину.
+ *
+ * Даты в дорожке меняются чаще всего, и каждая смена двигала контрол: «2 янв.
+ * 2023» заметно уже «18 сент. 2025», и от переключения пресета весь ряд
+ * фильтров перекладывался. Берём самый широкий случай: двузначный день, любой
+ * месяц, четырёхзначный год — он же и есть максимум для этого поля.
+ */
+const DATE_CANDIDATES = MONTHS_SHORT.map(
+  (short, i) => `30 ${short.toLowerCase()}${short === MONTHS[i] ? "" : "."} 2026`
+);
+
+/**
  * Подпись поля: словами везде, кроме телефона.
  *
  * Прежде словами печаталось только от 1536 — и на обычном ноутбуке дата всегда
@@ -44,8 +56,11 @@ function dateLabel(iso: string | null, withYear: boolean) {
   if (!iso) return undefined;
   return (
     <>
-      <span className="hidden sm:inline">{textDate(iso, withYear)}</span>
-      <span className="sm:hidden">{numericDate(iso)}</span>
+      <span className="hidden sm:inline">
+        <StableWidth value={textDate(iso, withYear)} candidates={DATE_CANDIDATES} />
+      </span>
+      {/* Цифры — моноширинные: «11.11.26» и «30.09.26» иначе разной ширины. */}
+      <span className="sm:hidden tabular-nums">{numericDate(iso)}</span>
     </>
   );
 }
