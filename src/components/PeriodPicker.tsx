@@ -17,13 +17,20 @@ function monthLabels(year: number): string[] {
   return MONTHS.map((_, i) => monthLabelFull(`${year}-${String(i + 1).padStart(2, "0")}`));
 }
 
-/** «15 авг. 2026» — дата словами; год прячем, когда обе границы в одном году. */
-function textDate(iso: string, withYear: boolean): string {
+/**
+ * «01 авг. 2026» — дата словами, всегда одной длины.
+ *
+ * День с ведущим нулём и год у обеих границ — не для красоты: короткая запись
+ * («1 сен.» против «30 сент. 2026») оставляла в поле пустое место, и между
+ * месяцем и датами зияла дыра. Одинаковая длина заполняет отведённое место и
+ * заодно держит контрол неподвижным при листании.
+ */
+function textDate(iso: string): string {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
   if (!y || !m || !d) return "";
   const short = MONTHS_SHORT[m - 1];
   const dot = short === MONTHS[m - 1] ? "" : ".";
-  return `${d} ${short.toLowerCase()}${dot}${withYear ? ` ${y}` : ""}`;
+  return `${String(d).padStart(2, "0")} ${short.toLowerCase()}${dot} ${y}`;
 }
 
 /** «15.08.26» — компактная запись для узких окон. */
@@ -41,7 +48,7 @@ function numericDate(iso: string): string {
  * месяц, четырёхзначный год — он же и есть максимум для этого поля.
  */
 const DATE_CANDIDATES = MONTHS_SHORT.map(
-  (short, i) => `30 ${short.toLowerCase()}${short === MONTHS[i] ? "" : "."} 2026`
+  (short, i) => `00 ${short.toLowerCase()}${short === MONTHS[i] ? "" : "."} 2026`
 );
 
 /**
@@ -52,12 +59,12 @@ const DATE_CANDIDATES = MONTHS_SHORT.map(
  * 14.10.26» всего пара десятков пикселей, а дорожка и так тянется на остаток
  * строки.
  */
-function dateLabel(iso: string | null, withYear: boolean) {
+function dateLabel(iso: string | null) {
   if (!iso) return undefined;
   return (
     <>
       <span className="hidden sm:inline">
-        <StableWidth value={textDate(iso, withYear)} candidates={DATE_CANDIDATES} />
+        <StableWidth value={textDate(iso)} candidates={DATE_CANDIDATES} />
       </span>
       {/* Цифры — моноширинные: «11.11.26» и «30.09.26» иначе разной ширины. */}
       <span className="sm:hidden tabular-nums">{numericDate(iso)}</span>
@@ -137,7 +144,6 @@ export function PeriodPicker({
   const item = size === "md" ? "seg-item-md" : "seg-item-sm";
   const isYear = mode === "year";
   const year = Number(monthYM?.slice(0, 4)) || new Date().getFullYear();
-  const sameYear = !!from && !!to && from.slice(0, 4) === to.slice(0, 4);
 
   const windowStep = from && to ? spanDays(from, to) : 0;
   const canStep = stepsByWindow ? windowStep > 0 : true;
@@ -219,7 +225,7 @@ export function PeriodPicker({
           )}
           wrapperClassName="min-w-0"
           icon={false}
-          display={dateLabel(from, !sameYear)}
+          display={dateLabel(from)}
           placeholder="Начало"
         />
         <span
@@ -238,7 +244,7 @@ export function PeriodPicker({
           )}
           wrapperClassName="min-w-0"
           icon={false}
-          display={dateLabel(to, true)}
+          display={dateLabel(to)}
           placeholder="Конец"
         />
       </div>

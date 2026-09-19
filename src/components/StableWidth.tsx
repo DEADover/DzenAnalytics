@@ -18,16 +18,29 @@ import type { ReactNode } from "react";
 export function StableWidth({
   value,
   candidates,
+  align = "center",
   className,
 }: {
   /** Что показывать сейчас. */
   value: ReactNode;
   /** Все варианты подписи, включая текущий. */
   candidates: readonly string[];
+  /**
+   * Куда прижимать подпись в зарезервированном месте. По умолчанию по центру;
+   * пара дат вокруг тире равняется К НЕМУ — иначе короткая дата уплывала от
+   * тире, и просветы вокруг него выходили разной ширины.
+   */
+  align?: "center" | "start" | "end";
   className?: string;
 }) {
   return (
-    <span className={clsx("grid justify-items-center", className)}>
+    <span
+      className={clsx(
+        "grid",
+        align === "start" ? "justify-items-start" : align === "end" ? "justify-items-end" : "justify-items-center",
+        className
+      )}
+    >
       {candidates.map((text, i) => (
         <span
           key={`${text}-${i}`}
