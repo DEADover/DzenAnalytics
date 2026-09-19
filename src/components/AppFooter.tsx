@@ -27,17 +27,14 @@ export function AppFooter() {
   return (
     <footer className="w-full px-4 md:px-6 pb-4 md:pb-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs text-muted">
+        {/* Одной строкой: версия и дата выпуска — это одна мысль, а не два
+            факта через разделитель. */}
         <span className="font-medium text-text/80">
-          DzenAnalytics <span className="tabular-nums">v{__APP_VERSION__}</span>
+          DzenAnalytics <span className="tabular-nums">V{__APP_VERSION__}</span>
+          {release?.date && (
+            <span className="font-normal text-muted"> ({formatReleaseDate(release.date)})</span>
+          )}
         </span>
-        {release?.date && (
-          <>
-            <span aria-hidden="true" className="opacity-50">
-              ·
-            </span>
-            <span>Обновлено {formatReleaseDate(release.date)}</span>
-          </>
-        )}
 
         <div className="ml-auto flex items-center gap-0.5">
           <button

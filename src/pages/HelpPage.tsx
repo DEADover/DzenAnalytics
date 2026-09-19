@@ -4300,7 +4300,16 @@ export function HelpPage() {
             <div ref={setSentinel} className="h-8" aria-hidden="true" />
           ) : (
             <div className="text-center text-xs text-muted py-4">
-              Это конец справки. Не нашли ответа — напишите в {CHANNEL_TITLE}.
+              Это конец справки. Не нашли ответа —{" "}
+              <a
+                href={CHANNEL_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent hover:underline"
+              >
+                спросите в Telegram-канале
+              </a>
+              .
             </div>
           )}
         </div>
@@ -4507,15 +4516,13 @@ function AboutSection({
       </header>
 
       <div className="text-sm text-text leading-relaxed space-y-4">
-        <div>
-          <div className="text-base font-semibold">
-            DzenAnalytics <span className="tabular-nums">v{__APP_VERSION__}</span>
-          </div>
-          <div className="text-sm text-muted">
+        <div className="text-base font-semibold">
+          DzenAnalytics <span className="tabular-nums">V{__APP_VERSION__}</span>
+          <span className="font-normal text-muted">
             {release?.date
-              ? `Обновлено ${formatReleaseDate(release.date)}`
-              : "Рабочая сборка — запись о выпуске ещё не готова"}
-          </div>
+              ? ` (${formatReleaseDate(release.date)})`
+              : " — рабочая сборка, записи о выпуске ещё нет"}
+          </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
