@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { CalendarCheck, CalendarRange, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarCheck, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { DateField } from "./DateField";
 import { MonthMenu } from "./MonthMenu";
@@ -63,11 +63,11 @@ function dateLabel(iso: string | null) {
   if (!iso) return undefined;
   return (
     <>
-      <span className="hidden sm:inline">
+      <span className="hidden dates:inline">
         <StableWidth value={textDate(iso)} candidates={DATE_CANDIDATES} />
       </span>
       {/* Цифры — моноширинные: «11.11.26» и «30.09.26» иначе разной ширины. */}
-      <span className="sm:hidden tabular-nums">{numericDate(iso)}</span>
+      <span className="dates:hidden tabular-nums">{numericDate(iso)}</span>
     </>
   );
 }
@@ -191,7 +191,6 @@ export function PeriodPicker({
         title={monthHint ?? (isYear ? "Выбрать год" : "Выбрать месяц")}
         className={clsx("seg-item shrink-0", item, monthActive && "seg-on")}
       >
-        <CalendarRange className={size === "md" ? "w-4 h-4" : "w-3.5 h-3.5"} />
         {/* Ширина держится по месяцам даже в режиме года: «2026» вдвое уже
             «Сентября», и переключение «Месяц ↔ Год» дёргало бы весь ряд. */}
         <StableWidth
@@ -207,7 +206,7 @@ export function PeriodPicker({
           половину каждая, они прижимались к стрелкам, и середина зияла. */}
       <div
         className={clsx(
-          "flex items-center justify-center gap-1.5 min-w-0 rounded-control-sm",
+          "flex items-center justify-center gap-1 min-w-0 rounded-control-sm",
           "max-sm:basis-full max-sm:order-last",
           rangeActive && "seg-on px-1"
         )}
@@ -216,7 +215,7 @@ export function PeriodPicker({
           value={from || ""}
           onChange={(e) => onRangeChange(e.target.value || null, to)}
           className={clsx(
-            "seg-item min-w-0",
+            "seg-item min-w-0 !px-2",
             item,
             // Внутри залитой зоны подпись берёт её цвет, а наведение
             // подсвечивается по самой заливке: общий `hover:bg-panel` выбелил бы
@@ -238,7 +237,7 @@ export function PeriodPicker({
           value={to || ""}
           onChange={(e) => onRangeChange(from, e.target.value || null)}
           className={clsx(
-            "seg-item min-w-0",
+            "seg-item min-w-0 !px-2",
             item,
             rangeActive ? "text-inherit hover:bg-black/10 hover:text-inherit" : "text-accent"
           )}
