@@ -978,7 +978,9 @@ function ResetButton({
       title={hint}
       aria-label="Сбросить все фильтры"
       className={clsx(
-        "btn-ghost text-xs px-3 shrink-0 ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2",
+        // Без `ml-auto`: сброс держится периода, а не улетает к правому краю
+        // панели — оторванная кнопка у края читалась как чужая.
+        "btn-ghost text-xs px-3 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2",
         className
       )}
     >

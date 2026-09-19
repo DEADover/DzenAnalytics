@@ -139,10 +139,15 @@ export function PeriodPicker({
   return (
     <div
       className={clsx(
-        // На телефоне дорожка переносит даты на свою строку: в 390 пикселей
-        // месяц, две даты и четыре значка в один ряд не встают — даты
-        // сжимались до нуля и печатались одна поверх другой.
-        "seg-track flex-1 min-w-fit max-sm:w-full max-sm:min-w-0 max-sm:flex-wrap",
+        // Дорожка — по содержимому, а не во всю строку: растянутая, она
+        // разносила месяц и даты по разным концам, и между ними зияла дыра в
+        // пол-экрана — заметнее всего на «12 мес» и «Всё», где ряд пресетов
+        // короткий и свободного места много.
+        //
+        // На телефоне даты переносятся на свою строку: в 390 пикселей месяц,
+        // две даты и четыре значка в один ряд не встают — даты сжимались до
+        // нуля и печатались одна поверх другой.
+        "seg-track min-w-fit max-sm:w-full max-sm:min-w-0 max-sm:flex-wrap",
         (monthActive || rangeActive) && "!border-accent bg-accent/5"
       )}
     >
@@ -181,7 +186,7 @@ export function PeriodPicker({
           половину каждая, они прижимались к стрелкам, и середина зияла. */}
       <div
         className={clsx(
-          "flex-1 flex items-center justify-center gap-1.5 min-w-0 rounded-control-sm",
+          "flex items-center justify-center gap-1.5 min-w-0 rounded-control-sm",
           "max-sm:basis-full max-sm:order-last",
           rangeActive && "seg-on px-1"
         )}
