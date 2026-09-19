@@ -1,4 +1,10 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import clsx from "clsx";
+import { SearchInput } from "../components/SearchInput";
+import { matchesQuery, nodeText } from "../lib/nodeText";
+import { formatNum } from "../lib/format";
+import { pluralRu } from "../lib/plural";
 import { PageHeader } from "../components/PageHeader";
 import {
   HelpCircle,
@@ -8,6 +14,8 @@ import {
   Table as TableIcon,
   ChevronDown,
   ChevronRight,
+  Info,
+  ListTree,
   Settings2,
   PanelTop,
   CalendarRange,
@@ -67,6 +75,13 @@ interface Section {
   group: Group;
   icon: typeof HelpCircle;
   title: string;
+  /**
+   * Короткое имя для дерева слева. Названия разделов писались как заголовки
+   * статей и в колонку шириной с пункт меню не помещаются: «Обязательность
+   * расходов: один параметр для всей аналитики» обрезалось на трети. В статье
+   * остаётся полное — там оно и объясняет, о чём речь.
+   */
+  short?: string;
   body: React.ReactNode;
 }
 
@@ -1966,6 +1981,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: CalendarRange,
     title: "Отчётный период (первый день периода)",
+    short: "Отчётный период",
     body: (
       <>
         <p>
@@ -2043,6 +2059,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Lock,
     title: "Получение и подключение токена Дзен-мани",
+    short: "Токен Дзен-мани",
     body: (
       <>
         <p>
@@ -2135,6 +2152,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: CloudIcon,
     title: "Источник данных: CSV или Дзен-мани API",
+    short: "Источник данных",
     body: (
       <>
         <p>
@@ -2456,6 +2474,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Layers,
     title: "Массовое редактирование операций",
+    short: "Массовое изменение",
     body: (
       <>
         <p>
@@ -2536,6 +2555,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Tag,
     title: "Иконки и цвета категорий из API",
+    short: "Иконки и цвета категорий",
     body: (
       <>
         <p>
@@ -2617,6 +2637,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Users,
     title: "Общий аккаунт: несколько человек",
+    short: "Общий аккаунт",
     body: (
       <>
         <p>
@@ -2669,6 +2690,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Repeat,
     title: "Авто-синхронизация Дзен-мани API",
+    short: "Авто-синхронизация",
     body: (
       <>
         <p>
@@ -2709,6 +2731,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: CloudIcon,
     title: "Двусторонняя синхронизация (отправка правок в облако)",
+    short: "Двусторонняя синхронизация",
     body: (
       <>
         <p>
@@ -3048,6 +3071,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: ListChecks,
     title: "Автодополнение категорий и подкатегорий",
+    short: "Автодополнение категорий",
     body: (
       <>
         <p>
@@ -3096,6 +3120,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Database,
     title: "Хочу попробовать без своих данных",
+    short: "Демо без своих данных",
     body: (
       <>
         <p>
@@ -3127,6 +3152,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Settings2,
     title: "Калибровка совокупного баланса",
+    short: "Калибровка баланса",
     body: (
       <>
         <p>
@@ -3191,6 +3217,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: CalendarDays,
     title: "Курс на дату операции (курс ЦБ)",
+    short: "Курс на дату операции",
     body: (
       <>
         <p>
@@ -3236,6 +3263,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Flame,
     title: "FIRE — финансовая независимость",
+    short: "FIRE",
     body: (
       <>
         <p>
@@ -3276,6 +3304,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Repeat,
     title: "Авто-детект регулярных платежей",
+    short: "Регулярные платежи",
     body: (
       <>
         <p>
@@ -3314,6 +3343,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Lock,
     title: "Обязательность расходов: один параметр для всей аналитики",
+    short: "Обязательность расходов",
     body: (
       <>
         <p>
@@ -3893,6 +3923,7 @@ const SECTIONS: Section[] = [
     group: "concepts",
     icon: Keyboard,
     title: "Командная палитра и горячие клавиши",
+    short: "Палитра и клавиши",
     body: (
       <>
         <p>
@@ -4116,122 +4147,407 @@ const SECTIONS: Section[] = [
   },
 ];
 
+/* ─────────────────────────────  каркас справки  ───────────────────────────── */
+
+/** Порядок групп в дереве. «О сервисе» — своим первым пунктом, вне групп. */
+const GROUP_ORDER: Group[] = ["main", "more", "concepts"];
+
+const ABOUT_ID = "about";
+
+/** Текст раздела целиком — по нему ищет поле над деревом. Считается один раз. */
+const SECTION_TEXT = new Map(SECTIONS.map((s) => [s.id, `${s.title} ${nodeText(s.body)}`]));
+
+/** Плоский порядок разделов — в нём справка и читается сверху вниз. */
+const FLAT: Section[] = GROUP_ORDER.flatMap((g) => SECTIONS.filter((s) => s.group === g));
+
+/** Сколько разделов добавлять за раз, когда лента дочитана до низа. */
+const PAGE = 3;
+
 export function HelpPage() {
-  const [open, setOpen] = useState<Set<string>>(new Set([SECTIONS[0].id]));
+  const [params, setParams] = useSearchParams();
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [navOpen, setNavOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<Group>>(new Set());
   const release = parseRelease(changelogRaw, __APP_VERSION__);
 
-  function toggle(id: string) {
-    setOpen((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  /** С какого раздела начинается лента — его и выбрали в дереве. */
+  const startId = params.get("p") ?? ABOUT_ID;
+  const startIndex = Math.max(0, FLAT.findIndex((s) => s.id === startId));
+  /** Какой раздел человек читает СЕЙЧАС: он подсвечен в дереве. */
+  const [reading, setReading] = useState(startId);
+
+  // Лента: от выбранного раздела и дальше, по мере прокрутки. Справка читается
+  // подряд — прежде каждый раздел открывался отдельной страницей, и дочитав
+  // один, приходилось возвращаться к дереву за следующим.
+  const [count, setCount] = useState(PAGE);
+  const [shownFor, setShownFor] = useState(startId);
+  if (shownFor !== startId) {
+    setShownFor(startId);
+    setCount(PAGE);
+    setReading(startId);
+  }
+  const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
+  const shown = useMemo(
+    () => FLAT.slice(startIndex, startIndex + count),
+    [startIndex, count]
+  );
+  const hasMore = startIndex + count < FLAT.length;
+
+
+  // Подгрузка следующих разделов, когда низ ленты показался на экране.
+  useEffect(() => {
+    if (!sentinel || !hasMore) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setCount((c) => Math.min(c + PAGE, FLAT.length - startIndex));
+        }
+      },
+      { rootMargin: "600px 0px" }
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [sentinel, hasMore, startIndex]);
+
+  /** Раздел в адресе и подсветка в дереве идут за тем, что сейчас на экране. */
+  const onReading = useCallback(
+    (id: string) => {
+      setReading(id);
+      // `replace`, чтобы прокрутка не набивала историю браузера: «назад» должно
+      // возвращать на прошлую страницу, а не на прошлый абзац справки.
+      setParams(id === ABOUT_ID ? {} : { p: id }, { replace: true });
+    },
+    [setParams]
+  );
+
+  function openSection(id: string) {
+    setNavOpen(false);
+    setParams(id === ABOUT_ID ? {} : { p: id }, { replace: false });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const groups: Group[] = ["main", "more", "concepts"];
+  const found = useMemo(() => {
+    const q = query.trim();
+    if (!q) return null;
+    return new Set(
+      SECTIONS.filter((s) => matchesQuery(SECTION_TEXT.get(s.id) ?? s.title, q)).map((s) => s.id)
+    );
+  }, [query]);
+
+  const tree = (
+    <HelpTree
+      current={reading}
+      found={found}
+      query={query}
+      onQuery={setQuery}
+      collapsed={collapsed}
+      onToggleGroup={(g) =>
+        setCollapsed((prev) => {
+          const nextSet = new Set(prev);
+          if (nextSet.has(g)) nextSet.delete(g);
+          else nextSet.add(g);
+          return nextSet;
+        })
+      }
+      onOpen={openSection}
+    />
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Общий заголовок страницы: своя вёрстка тут осталась с тех времён,
-          когда его ещё не было. Подпись заодно укорочена — прежняя занимала три
-          строки и перечисляла внутри себя содержание, которое и так ниже
-          списком. */}
-      <PageHeader
-        icon={HelpCircle}
-        title="Справка"
-      />
+    <div className="space-y-4">
+      <PageHeader icon={HelpCircle} title="Справка" />
 
-      {/* О сервисе — первым блоком: версия, когда вышла, что нового и где код.
-          Прежде версия и «Что нового» жили в подвале каждой страницы, где их
-          никто не искал, а справка — место, куда приходят разбираться, в том
-          числе в том, что поменялось. Дата выпуска — из самого CHANGELOG.md
-          (`lib/releaseInfo`), чтобы не расходиться с ним. Знака здесь нет: он
-          и так всегда виден в шапке. */}
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted px-1">
-          О сервисе
-        </h2>
-        <div className="card-tray card-pad flex flex-wrap items-center gap-x-5 gap-y-4">
-          <div className="min-w-0 flex-1">
-            <div className="text-base font-semibold">
-              DzenAnalytics <span className="tabular-nums">v{__APP_VERSION__}</span>
+      {/* Дерево слева, лента разделов справа. На узком экране дерево
+          сворачивается в одну кнопку: полоса из шестидесяти разделов над
+          каждой статьёй прокручивалась бы каждый раз заново. */}
+      <div className="flex items-start gap-4 max-lg:flex-col">
+        <nav className="w-72 shrink-0 max-lg:hidden sticky top-[calc(var(--app-header-h)+0.75rem)]">
+          {tree}
+        </nav>
+
+        <div className="hidden max-lg:block w-full">
+          <button
+            type="button"
+            onClick={() => setNavOpen((o) => !o)}
+            className="btn-ghost w-full justify-between"
+          >
+            <span className="flex items-center gap-2 min-w-0">
+              <ListTree className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                {FLAT.find((s) => s.id === reading)?.short ??
+                  FLAT.find((s) => s.id === reading)?.title ??
+                  "О сервисе"}
+              </span>
+            </span>
+            <ChevronDown className={clsx("w-4 h-4 shrink-0 transition-transform", navOpen && "rotate-180")} />
+          </button>
+          {navOpen && <div className="mt-2">{tree}</div>}
+        </div>
+
+        <div className="flex-1 min-w-0 space-y-4">
+          {startId === ABOUT_ID && (
+            <article className="card card-pad">
+              <AboutSection release={release} onChangelog={() => setChangelogOpen(true)} />
+            </article>
+          )}
+
+          {shown.map((s) => (
+            <HelpArticle key={s.id} section={s} onReading={onReading} />
+          ))}
+
+          {hasMore ? (
+            <div ref={setSentinel} className="h-8" aria-hidden="true" />
+          ) : (
+            <div className="text-center text-xs text-muted py-4">
+              Это конец справки. Не нашли ответа — напишите в {CHANNEL_TITLE}.
             </div>
-            <div className="text-sm text-muted">
-              {release?.date
-                ? `Обновлено ${formatReleaseDate(release.date)}`
-                : "Рабочая сборка — запись о выпуске ещё не готова"}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="btn-ghost" onClick={() => setChangelogOpen(true)}>
-              <History className="w-4 h-4" />
-              Что нового
-            </button>
-            <a href={PROJECT_URL} target="_blank" rel="noreferrer" className="btn-ghost">
-              <GithubMark className="w-4 h-4" />
-              GitHub
-            </a>
-            <a
-              href={CHANNEL_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-ghost"
-            >
-              <Send className="w-4 h-4" />
-              {CHANNEL_TITLE}
-            </a>
-            {/* Здесь — всегда, даже если сердечко в шапке убрано: настройка
-                прячет значок, который на виду на каждой странице, а в справку
-                приходят сами. */}
-            <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="btn-ghost">
-              <Heart className="w-4 h-4 text-expense" />
-              {SUPPORT_TITLE}
-            </a>
-          </div>
+          )}
         </div>
       </div>
-      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
 
-      {groups.map((g) => {
-        const items = SECTIONS.filter((s) => s.group === g);
+      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+    </div>
+  );
+}
+
+/**
+ * Раздел в ленте. Сообщает наверх, когда оказывается под шапкой: по этому
+ * дерево слева подсвечивает то, что человек читает сейчас.
+ */
+function HelpArticle({
+  section,
+  onReading,
+}: {
+  section: Section;
+  onReading: (id: string) => void;
+}) {
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  const Icon = section.icon;
+
+  useEffect(() => {
+    if (!node) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        // Верхняя треть окна — «то, что читают»: раздел считается текущим,
+        // когда его заголовок ушёл под шапку, а следующий ещё не пришёл.
+        if (entries.some((e) => e.isIntersecting)) onReading(section.id);
+      },
+      { rootMargin: "-20% 0px -70% 0px" }
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [node, onReading, section.id]);
+
+  return (
+    <article ref={setNode} id={`help-${section.id}`} className="card card-pad scroll-mt-24">
+      <header className="flex items-center gap-3 pb-3 mb-4 border-b border-border/70">
+        <span className="grid place-items-center w-9 h-9 rounded-control bg-panel2 text-muted shrink-0">
+          <Icon className="w-[18px] h-[18px]" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold leading-tight truncate">{section.title}</h2>
+          <div className="text-xs text-muted">{GROUP_LABEL[section.group]}</div>
+        </div>
+      </header>
+      <div className="text-sm text-text leading-relaxed">{section.body}</div>
+    </article>
+  );
+}
+
+/** Дерево разделов с поиском: то же и слева на широком экране, и в выпадающем
+ *  списке на узком. */
+function HelpTree({
+  current,
+  found,
+  query,
+  onQuery,
+  collapsed,
+  onToggleGroup,
+  onOpen,
+}: {
+  current: string;
+  /** Что нашёл поиск; `null` — поиска нет и показываем всё. */
+  found: Set<string> | null;
+  query: string;
+  onQuery: (next: string) => void;
+  collapsed: Set<Group>;
+  onToggleGroup: (g: Group) => void;
+  onOpen: (id: string) => void;
+}) {
+  const total = found?.size ?? 0;
+  return (
+    <div className="card p-2 space-y-2 max-h-[calc(100vh-var(--app-header-h)-2.5rem)] overflow-y-auto">
+      <SearchInput
+        size="sm"
+        value={query}
+        onChange={onQuery}
+        placeholder="Поиск по справке…"
+        ariaLabel="Поиск по справке"
+        title={"Поиск по справке\nИщет по названиям разделов и по их тексту: достаточно слова, которое вы запомнили."}
+      />
+
+      {found && (
+        <div className="px-2 text-xs text-muted">
+          {total > 0
+            ? `Нашлось ${formatNum(total)} ${pluralRu(total, ["раздел", "раздела", "разделов"])}`
+            : "Ничего не нашлось — попробуйте другое слово"}
+        </div>
+      )}
+
+      <HelpLink
+        icon={Info}
+        title="О сервисе"
+        active={current === ABOUT_ID}
+        onClick={() => onOpen(ABOUT_ID)}
+      />
+
+      {GROUP_ORDER.map((g) => {
+        const items = SECTIONS.filter((s) => s.group === g && (!found || found.has(s.id)));
         if (items.length === 0) return null;
+        // При поиске группы раскрыты всегда: свёрнутая группа прятала бы то,
+        // что человек только что нашёл.
+        const isOpen = !!found || !collapsed.has(g);
         return (
-          <div key={g} className="space-y-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted px-1">
-              {GROUP_LABEL[g]}
-            </h2>
-            <div className="card-tray card-pad space-y-1">
-              {items.map((s) => {
-                const isOpen = open.has(s.id);
-                const Icon = s.icon;
-                return (
-                  <div key={s.id} className="border-b border-border last:border-b-0">
-                    <button
-                      onClick={() => toggle(s.id)}
-                      className="w-full flex items-center gap-3 py-3 text-left hover:bg-panel2/40 px-2 -mx-2 rounded-lg transition-colors duration-200"
-                    >
-                      {isOpen ? (
-                        <ChevronDown className="w-4 h-4 text-muted shrink-0" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-muted shrink-0" />
-                      )}
-                      <Icon className="w-4 h-4 text-accent2 shrink-0" />
-                      <span className="font-medium">{s.title}</span>
-                    </button>
-                    {isOpen && (
-                      <div className="pb-4 pl-9 pr-2 text-sm text-text leading-relaxed">
-                        {s.body}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+          <div key={g}>
+            <button
+              type="button"
+              onClick={() => onToggleGroup(g)}
+              className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-control-sm text-[11px] font-semibold uppercase tracking-wider text-muted hover:bg-panel2 transition-colors"
+            >
+              <ChevronRight
+                className={clsx("w-3.5 h-3.5 transition-transform", isOpen && "rotate-90")}
+                aria-hidden="true"
+              />
+              <span className="truncate">{GROUP_LABEL[g]}</span>
+              <span className="ml-auto tabular-nums opacity-70">{items.length}</span>
+            </button>
+            {isOpen && (
+              <div className="space-y-0.5 mt-0.5">
+                {items.map((s) => (
+                  <HelpLink
+                    key={s.id}
+                    icon={s.icon}
+                    title={s.short ?? s.title}
+                    active={current === s.id}
+                    nested
+                    onClick={() => onOpen(s.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         );
       })}
     </div>
+  );
+}
+
+/** Пункт дерева. Открытый раздел отмечен заливкой и полоской слева. */
+function HelpLink({
+  icon: Icon,
+  title,
+  active,
+  nested,
+  onClick,
+}: {
+  icon: typeof HelpCircle;
+  title: string;
+  active: boolean;
+  nested?: boolean;
+  onClick: () => void;
+}) {
+  const [node, setNode] = useState<HTMLButtonElement | null>(null);
+
+  // Читая ленту, человек уходит вниз на десятки разделов — подсвеченный пункт
+  // уезжал за край дерева, и было не видно, где ты. Подтягиваем его в вид, но
+  // только если он уже за краем: `nearest` не дёргает список попусту.
+  useEffect(() => {
+    if (active && node) node.scrollIntoView({ block: "nearest" });
+  }, [active, node]);
+
+  return (
+    <button
+      ref={setNode}
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      className={clsx(
+        "w-full flex items-center gap-2 py-1.5 pr-2 rounded-control-sm text-left text-[13px] transition-colors",
+        nested ? "pl-7" : "pl-2",
+        active
+          ? "bg-accent/10 text-accent font-medium shadow-[inset_2px_0_0_0_rgb(var(--c-accent))]"
+          : "text-text hover:bg-panel2"
+      )}
+    >
+      <Icon className={clsx("w-4 h-4 shrink-0", active ? "text-accent" : "text-muted")} />
+      <span className="truncate">{title}</span>
+    </button>
+  );
+}
+
+/** «О сервисе»: версия, дата выпуска и ссылки. */
+function AboutSection({
+  release,
+  onChangelog,
+}: {
+  release: ReturnType<typeof parseRelease>;
+  onChangelog: () => void;
+}) {
+  return (
+    <>
+      <header className="flex items-center gap-3 pb-3 mb-4 border-b border-border/70">
+        <span className="grid place-items-center w-9 h-9 rounded-control bg-panel2 text-muted shrink-0">
+          <Info className="w-[18px] h-[18px]" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold leading-tight">О сервисе</h2>
+          <div className="text-xs text-muted">Версия, что нового и где задать вопрос</div>
+        </div>
+      </header>
+
+      <div className="text-sm text-text leading-relaxed space-y-4">
+        <div>
+          <div className="text-base font-semibold">
+            DzenAnalytics <span className="tabular-nums">v{__APP_VERSION__}</span>
+          </div>
+          <div className="text-sm text-muted">
+            {release?.date
+              ? `Обновлено ${formatReleaseDate(release.date)}`
+              : "Рабочая сборка — запись о выпуске ещё не готова"}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="btn-ghost" onClick={onChangelog}>
+            <History className="w-4 h-4" />
+            Что нового
+          </button>
+          <a href={PROJECT_URL} target="_blank" rel="noreferrer" className="btn-ghost">
+            <GithubMark className="w-4 h-4" />
+            GitHub
+          </a>
+          <a href={CHANNEL_URL} target="_blank" rel="noopener noreferrer" className="btn-ghost">
+            <Send className="w-4 h-4" />
+            {CHANNEL_TITLE}
+          </a>
+          {/* Здесь — всегда, даже если сердечко в шапке убрано: настройка прячет
+              значок, который на виду на каждой странице, а в справку приходят
+              сами. */}
+          <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="btn-ghost">
+            <Heart className="w-4 h-4 text-expense" />
+            {SUPPORT_TITLE}
+          </a>
+        </div>
+
+        <p className="text-muted">
+          Слева — разделы справки: как устроены страницы сервиса, что считает каждая
+          цифра и чем помогут правила, разрезы и бюджеты. Поиск наверху ищет не только
+          по названиям, но и по тексту разделов — достаточно слова, которое вы
+          запомнили. Дальше справка читается подряд: следующий раздел подгружается
+          сам, когда лента дочитана до низа.
+        </p>
+      </div>
+    </>
   );
 }
