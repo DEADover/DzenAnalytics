@@ -286,8 +286,10 @@ export function GoalsPage() {
         icon={Target}
         right={
           // Hidden while the add form is open — the form has its own «Отмена»,
-          // so a second one in the header would just be redundant.
-          !adding && (
+          // so a second one in the header would just be redundant. Без целей
+          // её тоже нет: в центре пустой страницы уже стоит «Создать первую
+          // цель», и две одинаковые кнопки на экране спорят друг с другом.
+          !adding && goals.length > 0 && (
             <button onClick={() => setAdding(true)} className="btn-primary text-xs">
               <Plus className="w-3.5 h-3.5" />
               Новая цель

@@ -348,8 +348,18 @@ export function MultiSelect({
       // хвостом. Раскрыли ветку — прикидка пересчитается, и меню подрастёт.
       const estH = Math.min(visible.length * 32 + 44 + (showSearch ? 40 : 0), 360);
       const below = window.innerHeight - r.bottom - 8;
-      const above = r.top - 8;
-      const flipUp = above > below && above >= Math.min(estH, 48);
+      // Сверху место кончается не у края окна, а у липкой шапки: меню,
+      // раскрытое поверх неё, закрывало навигацию и выглядело оторванным от
+      // страницы (выбор счетов в карточке цели).
+      const headerBottom = Math.max(
+        document.querySelector("header")?.getBoundingClientRect().bottom ?? 0,
+        0
+      );
+      const above = r.top - headerBottom - 8;
+      // Вниз — по умолчанию: так меню читается продолжением кнопки. Вверх
+      // только когда внизу не помещается даже короткий список, а сверху места
+      // больше.
+      const flipUp = below < Math.min(estH, 240) && above > below && above >= Math.min(estH, 48);
       // Меню шире кнопки, и по левому краю кнопки оно уезжало за правый край
       // экрана — например у кнопки счетов в настройках бюджета: то окно само
       // прижато к правому краю. Прижимаем меню в видимую область, оставляя
@@ -372,9 +382,40 @@ export function MultiSelect({
     setPos(next);
   }, [open, visible.length, showSearch, MENU_W]);
 
+  /**
+   * Подкрутить страницу, чтобы меню раскрылось ВНИЗ, под кнопкой.
+   *
+   * У кнопки внизу экрана (выбор счетов в карточке цели) меню уходило вверх и
+   * висело над чужими блоками, а сама кнопка оставалась за краем окна — было
+   * непонятно, к чему оно относится. Крутим ровно на недостающее, но так,
+   * чтобы кнопка не заехала под липкую шапку. Меню ещё закрыто, поэтому его
+   * «закрыть при прокрутке» не срабатывает.
+   */
+  const ownScrollUntil = useRef(0);
+  const makeRoomBelow = () => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const want = Math.min(visible.length * 32 + 44 + (showSearch ? 40 : 0), 360);
+    const lack = r.bottom + 4 + want + 8 - window.innerHeight;
+    if (lack <= 0) return;
+    const headerBottom = Math.max(
+      document.querySelector("header")?.getBoundingClientRect().bottom ?? 0,
+      0
+    );
+    const delta = Math.min(lack, r.top - headerBottom - 8);
+    if (delta > 0) {
+      ownScrollUntil.current = performance.now() + 300;
+      window.scrollBy({ top: delta, behavior: "instant" });
+    }
+  };
+
   useEffect(() => {
     if (!open) return;
     const onScroll = (e: Event) => {
+      // Событие прокрутки приходит кадром позже — это наша же подкрутка из
+      // `makeRoomBelow`, закрывать из-за неё меню нельзя.
+      if (performance.now() < ownScrollUntil.current) return;
       const t = e.target;
       if (menuRef.current && t instanceof Node && menuRef.current.contains(t)) {
         return;
@@ -397,7 +438,10 @@ export function MultiSelect({
         onClick={() => {
           // Открываем — раскрываем ветки, в которых что-то уже отмечено:
           // спрятанный выбор ни увидеть, ни снять.
-          if (!open) setExpanded(pickedBranches());
+          if (!open) {
+            setExpanded(pickedBranches());
+            makeRoomBelow();
+          }
           setOpen((o) => !o);
           setQuery("");
         }}
