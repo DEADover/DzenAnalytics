@@ -19,7 +19,7 @@ import {
   type StoredRule,
 } from "../lib/ruleEngine";
 
-export type RuleField = "payee" | "comment" | "category" | "account" | "amount";
+export type RuleField = "payee" | "comment" | "category" | "account" | "amount" | "kind";
 
 /**
  * Операция условия. Раньше их было четыре — теперь это тот же список, что у

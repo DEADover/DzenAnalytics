@@ -48,7 +48,38 @@ export const FIELD_LABELS: Record<RuleField, string> = {
   category: "Текущая категория",
   account: "Счёт",
   amount: "Сумма",
+  kind: "Тип операции",
 };
+
+/**
+ * Тип операции в правилах (#98) — то, что видит человек: «Долг» отдельно от
+ * перевода. В данных долг — это перевод на счёт «Долги» с ярлыком «Долг», но
+ * правило «если перевод» не должно ловить долги, а правило «если долг» —
+ * обычные переводы.
+ */
+export type RuleKindValue = "expense" | "income" | "refund" | "transfer" | "debt";
+
+export const KIND_VALUE_LABELS: Record<RuleKindValue, string> = {
+  expense: "Расход",
+  income: "Доход",
+  refund: "Возврат",
+  transfer: "Перевод",
+  debt: "Долг",
+};
+
+/** Во что правило умеет превратить операцию сменой типа (без второго счёта). */
+export const SET_KIND_VALUES = ["expense", "income", "refund"] as const;
+export type SetKindValue = (typeof SET_KIND_VALUES)[number];
+
+export function isSetKindValue(v: string): v is SetKindValue {
+  return (SET_KIND_VALUES as readonly string[]).includes(v);
+}
+
+/** Тип операции для правила: долг отдельно от перевода. */
+export function ruleKindOf(t: Pick<Transaction, "kind" | "category">): RuleKindValue {
+  if (t.kind === "transfer" && t.category === "Долг") return "debt";
+  return t.kind;
+}
 
 /**
  * Числовые поля: сравниваются как числа, а не как текст.
@@ -102,8 +133,12 @@ export const NUMERIC_OPS: readonly ConditionOp[] = ["equals", "gt", "gte", "lt",
 
 /** Какие операции предлагать для поля. */
 export function opsForField(field: RuleField): readonly ConditionOp[] {
+  if (field === "kind") return KIND_OPS;
   return NUMERIC_FIELDS.has(field) ? NUMERIC_OPS : TEXT_OPS;
 }
+
+/** У типа значение — один из пяти, поэтому и сравнение одно: «равно». */
+export const KIND_OPS: readonly ConditionOp[] = ["equals"];
 
 /** Операции, которым значение не нужно, — у них поле ввода прячется. */
 export const VALUELESS_OPS: ReadonlySet<ConditionOp> = new Set(["empty", "not_empty"]);
@@ -133,7 +168,16 @@ export type RuleActionKind =
   | "setPayee"
   | "setComment"
   | "prependComment"
-  | "appendComment";
+  | "appendComment"
+  /** Сменить тип на расход, доход или возврат (#98). `value` — `SetKindValue`. */
+  | "setKind"
+  /**
+   * Сделать переводом (#98). `value` — второй счёт: для расхода это счёт
+   * зачисления, для дохода и возврата — счёт списания. Отдельным видом, а не
+   * значением `setKind`: счёт — имя из справочника и переименовывается вместе
+   * с ним (`lib/ruleRefs`).
+   */
+  | "setTransfer";
 
 export const ACTION_LABELS: Record<RuleActionKind, string> = {
   setCategory: "Категория",
@@ -141,6 +185,8 @@ export const ACTION_LABELS: Record<RuleActionKind, string> = {
   setComment: "Комментарий",
   prependComment: "Дописать в начало комментария",
   appendComment: "Дописать в конец комментария",
+  setKind: "Тип операции",
+  setTransfer: "Перевод, второй счёт",
 };
 
 /** Что вставляем между старым и дописанным текстом, если правило не задало своё. */
@@ -161,17 +207,19 @@ export interface RuleAction {
 
 /** Поле операции, которое занимает действие. Нужно, чтобы понимать, кто из
  *  правил уже высказался про это поле, — см. `collectRuleHits`. */
-export type RuleTargetField = "category" | "payee" | "comment";
+export type RuleTargetField = "category" | "payee" | "comment" | "kind";
 
 export const ALL_TARGET_FIELDS: readonly RuleTargetField[] = [
   "category",
   "payee",
   "comment",
+  "kind",
 ];
 
 export function actionTarget(kind: RuleActionKind): RuleTargetField {
   if (kind === "setCategory") return "category";
   if (kind === "setPayee") return "payee";
+  if (kind === "setKind" || kind === "setTransfer") return "kind";
   return "comment";
 }
 
@@ -180,6 +228,7 @@ export const RULE_TARGET_LABELS: Record<RuleTargetField, string> = {
   category: "Категория",
   payee: "Получатель",
   comment: "Комментарий",
+  kind: "Тип операции",
 };
 
 /** Какие поля правило меняет — по заполненным действиям, без повторов, по порядку. */
@@ -362,6 +411,8 @@ export function conditionValues(t: Transaction, field: RuleField): string[] {
     // НА карту — а человек его ждёт.
     case "account":
       return [t.account ?? "", t.outcomeAccount ?? "", t.incomeAccount ?? ""];
+    case "kind":
+      return [ruleKindOf(t)];
     // Поле не из нашего списка — правило приехало из чужого бэкапа или из
     // будущей версии. Проверять нечего.
     default:
@@ -599,9 +650,61 @@ export function ruleActionsToEdit(
         patch.comment = cur ? `${cur}${a.separator ?? DEFAULT_SEPARATOR}${value}` : value;
         break;
       }
+      case "setKind":
+      case "setTransfer":
+        Object.assign(patch, kindPatch(t, a.kind, value));
+        break;
     }
   }
+  // Перевод стал расходом или доходом, а категорию правило не задало: у
+  // перевода её нет вовсе, ярлык «Перевод» отправка не примет. Ставим «Без
+  // категории» — как сделал бы человек, не выбрав её в окне операции.
+  if (
+    patch.kind !== undefined &&
+    patch.kind !== "transfer" &&
+    t.kind === "transfer" &&
+    patch.categoryFull === undefined &&
+    !taken?.has("category")
+  ) {
+    patch.category = NO_CATEGORY;
+    patch.subcategory = null;
+    patch.categoryFull = NO_CATEGORY;
+  }
   return patch;
+}
+
+/**
+ * Правка, меняющая тип операции, — та же, что пишет окно операции при смене
+ * типа руками: отправка в Дзен-мани разбирает её теми же ветками.
+ *
+ * Пустой объект — менять нечего: тип уже такой, у долга тип правилом не
+ * меняется (у него своё устройство, отправка такую смену не примет), перевод на
+ * тот же счёт невозможен, а у уже готового перевода «второй счёт» неоднозначен.
+ * Проверки, которым нужны справочники (валюта счёта, категория), делает план
+ * (`lib/rulePlan`) — там видно, почему строка не записывается.
+ */
+export function kindPatch(
+  t: Transaction,
+  kind: "setKind" | "setTransfer",
+  value: string
+): TransactionEdit {
+  if (ruleKindOf(t) === "debt") return {};
+  if (kind === "setKind") {
+    if (!isSetKindValue(value) || value === t.kind) return {};
+    if (t.kind !== "transfer") return { kind: value };
+    // Перевод → одна нога: расход остаётся на счёте списания, доход и возврат —
+    // на счёте зачисления. Поля ног — как у обычной операции этого типа.
+    const keep = value === "expense" ? t.outcomeAccount || t.account : t.incomeAccount;
+    if (!keep) return {};
+    return value === "expense"
+      ? { kind: value, account: keep, outcomeAccount: keep, incomeAccount: "" }
+      : { kind: value, account: keep, incomeAccount: keep, outcomeAccount: "" };
+  }
+  const other = value.trim();
+  if (!other || t.kind === "transfer" || other === t.account) return {};
+  const from = t.kind === "expense" ? t.account : other;
+  const to = t.kind === "expense" ? other : t.account;
+  return { kind: "transfer", outcomeAccount: from, incomeAccount: to, account: from };
 }
 
 /** «Еда / Кафе» → категория и подкатегория. */
@@ -662,6 +765,7 @@ export function collectRuleHits(
     if (patch.categoryFull !== undefined) taken.add("category");
     if (patch.brand !== undefined) taken.add("payee");
     if (patch.comment !== undefined) taken.add("comment");
+    if (patch.kind !== undefined) taken.add("kind");
     hits.push({ txId: t.id, ruleId: rule.id, patch });
   }
   return hits;
@@ -806,6 +910,10 @@ export function describeRule(rule: CategoryRuleV2): string {
   const word = (j: ConditionJoin) => (j === "or" ? " ИЛИ " : " И ");
   const describeOne = (c: RuleCondition) => {
     const f = FIELD_LABELS[c.field];
+    if (c.field === "kind") {
+      const label = KIND_VALUE_LABELS[c.value as RuleKindValue] ?? c.value;
+      return `${f} ${CONDITION_OP_LABELS[c.op]} «${label}»`;
+    }
     if (VALUELESS_OPS.has(c.op)) return `${f} ${CONDITION_OP_LABELS[c.op]}`;
     // В списке операций «регулярное выражение» — название приёма, а во фразе
     // на его месте нужен предлог, иначе выходит «Получатель регулярное
@@ -832,7 +940,13 @@ export function describeRule(rule: CategoryRuleV2): string {
           .join(word(rule.join))
       : (parts[0] ?? "");
   const acts = rule.actions
-    .map((a) => `${ACTION_LABELS[a.kind]} = «${a.value}»`)
+    .map((a) =>
+      a.kind === "setKind"
+        ? `${ACTION_LABELS[a.kind]} = «${KIND_VALUE_LABELS[a.value as RuleKindValue] ?? a.value}»`
+        : a.kind === "setTransfer"
+          ? `Перевод, второй счёт «${a.value}»`
+          : `${ACTION_LABELS[a.kind] ?? a.kind} = «${a.value}»`
+    )
     .join(", ");
   return conds && acts ? `${conds} → ${acts}` : conds || acts;
 }

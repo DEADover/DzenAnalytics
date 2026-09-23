@@ -1,7 +1,14 @@
 import type { Transaction } from "../types";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { migrateRule, type StoredRule } from "./ruleEngine";
-import { buildRulePlan } from "./rulePlan";
+import { buildRulePlan, type KindChecks } from "./rulePlan";
+
+/**
+ * Поля смены типа — одно целое: тип без счетов (или счета без типа) дали бы
+ * операцию, которой не бывает. Если человек правил руками хоть одно из них,
+ * автоприменение не трогает ни одного.
+ */
+const KIND_FIELDS: readonly string[] = ["kind", "account", "outcomeAccount", "incomeAccount"];
 import { handEditedFields, type EditOrigins } from "./editOrigins";
 
 /**
@@ -26,7 +33,8 @@ export function autoApplyPatches(
   categoryOk: ((category: string, subcategory: string | null) => boolean) | null,
   payeeOk: ((title: string) => boolean) | null = null,
   /** Чем записано то, что уже лежит в правках, — см. `editOrigins`. */
-  origins: EditOrigins = {}
+  origins: EditOrigins = {},
+  kindChecks: KindChecks | null = null
 ): Record<string, TransactionEdit> {
   if (fresh.length === 0) return {};
   const auto = rules.filter((r) => {
@@ -42,7 +50,8 @@ export function autoApplyPatches(
     edits,
     deletedSet,
     categoryOk,
-    payeeOk
+    payeeOk,
+    kindChecks
   );
 
   const patches: Record<string, TransactionEdit> = {};
@@ -55,8 +64,11 @@ export function autoApplyPatches(
       patches[row.tx.id] = row.patch;
       continue;
     }
+    const kindTouched = KIND_FIELDS.some((f) => hand.has(f));
     const kept = Object.fromEntries(
-      Object.entries(row.patch).filter(([field]) => !hand.has(field))
+      Object.entries(row.patch).filter(
+        ([field]) => !hand.has(field) && !(kindTouched && KIND_FIELDS.includes(field))
+      )
     ) as TransactionEdit;
     if (Object.keys(kept).length > 0) patches[row.tx.id] = kept;
   }

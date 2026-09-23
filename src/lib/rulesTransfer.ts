@@ -24,6 +24,8 @@ import {
   type RuleCondition,
   type RuleConditionGroup,
   type RuleField,
+  KIND_VALUE_LABELS,
+  isSetKindValue,
 } from "./ruleEngine";
 import type { RuleSchedule, ScheduleDepth, ScheduleEvery } from "./ruleSchedule";
 import { ruleModeFields, ruleModeOf, type RuleMode } from "./ruleMode";
@@ -67,6 +69,7 @@ const FIELDS: ReadonlySet<string> = new Set<RuleField>([
   "category",
   "account",
   "amount",
+  "kind",
 ]);
 const ACTION_KINDS: ReadonlySet<string> = new Set<RuleActionKind>([
   "setCategory",
@@ -74,6 +77,8 @@ const ACTION_KINDS: ReadonlySet<string> = new Set<RuleActionKind>([
   "setComment",
   "prependComment",
   "appendComment",
+  "setKind",
+  "setTransfer",
 ]);
 const EVERY: ReadonlySet<string> = new Set<ScheduleEvery>(["minute", "hour", "day", "month"]);
 const DEPTH: ReadonlySet<string> = new Set<ScheduleDepth>(["day", "month", "year", "all"]);
@@ -101,6 +106,9 @@ function condition(raw: unknown): RuleCondition | null {
           ? ""
           : null;
   if (value === null) return null;
+  // Тип — только из известного списка: иначе условие не совпадёт ни с чем, а
+  // человек не поймёт почему.
+  if (field === "kind" && !(value in KIND_VALUE_LABELS)) return null;
   const refId = optString(raw.refId);
   return {
     field,
@@ -114,6 +122,7 @@ function condition(raw: unknown): RuleCondition | null {
 function action(raw: unknown): RuleAction | null {
   if (!isObj(raw) || typeof raw.kind !== "string" || !ACTION_KINDS.has(raw.kind)) return null;
   if (typeof raw.value !== "string") return null;
+  if (raw.kind === "setKind" && !isSetKindValue(raw.value)) return null;
   const refId = optString(raw.refId);
   return {
     kind: raw.kind as RuleActionKind,

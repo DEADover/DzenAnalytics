@@ -32,7 +32,7 @@ import { useDrillStore } from "../store/useDrillStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
-import { makeCategoryChecker } from "../lib/zenmoneyPush";
+import { makeCategoryChecker, makeKindChecks } from "../lib/zenmoneyPush";
 import { loadZenCache } from "../lib/zenmoneyCache";
 import { liveCategoryNodes } from "../lib/categoryTree";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
@@ -51,7 +51,7 @@ import { cellClass } from "../components/table/tableKit";
 import { CardHeader } from "../components/CardHeader";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
-import { buildRulePlan, type RuleRow } from "../lib/rulePlan";
+import { buildRulePlan, type KindChecks, type RuleRow } from "../lib/rulePlan";
 import { AlertTriangle } from "lucide-react";
 import { rulesView } from "../lib/rulesView";
 import { RuleModeChip } from "../components/RuleModeControl";
@@ -133,11 +133,14 @@ export function RulesPage() {
   /** null — окно закрыто, «create» — новое правило, иначе редактируем. */
   const [editing, setEditing] = useState<StoredCategoryRule | "create" | null>(null);
   const [loadedZenTags, setZenTags] = useState<ZenTag[] | null>(null);
+  /** Проверки смены типа: долговые счета, валюты, категории (#98). */
+  const [loadedKindChecks, setKindChecks] = useState<KindChecks | null>(null);
   // Отключились от Дзен-мани — справочника нет, и это видно прямо здесь.
   // Раньше состояние обнулял эффект: он срабатывал уже после отрисовки, и
   // один кадр список категорий показывался по справочнику, которого больше
   // нет.
   const zenTags = token ? loadedZenTags : null;
+  const kindChecks = token ? loadedKindChecks : null;
   /** Окно «Что изменят правила» — разбор и запись за один заход. */
   const [preview, setPreview] = useState(false);
   /** Прочитанный файл правил — пока открыто окно импорта. */
@@ -294,7 +297,9 @@ export function RulesPage() {
     if (!token) return;
     let cancelled = false;
     void loadZenCache().then((cache) => {
-      if (!cancelled) setZenTags(cache?.tags ?? []);
+      if (cancelled) return;
+      setZenTags(cache?.tags ?? []);
+      setKindChecks(cache ? makeKindChecks(cache) : null);
     });
     return () => {
       cancelled = true;
@@ -369,9 +374,10 @@ export function RulesPage() {
         edits,
         deletedSet,
         categoryOk,
-        payeeOk
+        payeeOk,
+        kindChecks
       ),
-    [matchable, rules, selectedIds, edits, deletedSet, categoryOk, payeeOk]
+    [matchable, rules, selectedIds, edits, deletedSet, categoryOk, payeeOk, kindChecks]
   );
 
   function openMatches(rule: StoredCategoryRule) {

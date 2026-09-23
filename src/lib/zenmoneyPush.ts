@@ -1036,6 +1036,49 @@ export function makeCategoryChecker(
 }
 
 /**
+ * Справочники для правил, меняющих тип операции (#98): долговые счета, валюты
+ * счетов и то, куда годится категория. По тем же данным, по которым отправка
+ * решает, примет ли она правку.
+ */
+export function makeKindChecks(cache: Pick<ZenCache, "accounts" | "instruments" | "tags">): {
+  isDebtAccount: (title: string) => boolean;
+  accountCurrency: (title: string) => string | null;
+  categorySides: (
+    category: string,
+    subcategory: string | null
+  ) => { income: boolean; outcome: boolean } | null;
+} {
+  const instruments = new Map((cache.instruments ?? []).map((i) => [i.id, i.shortTitle]));
+  const accounts = new Map<string, ZenAccount>();
+  for (const a of cache.accounts ?? []) {
+    // Живой счёт важнее архивного с тем же именем — как у отправки.
+    if (!accounts.has(a.title) || accounts.get(a.title)!.archive) accounts.set(a.title, a);
+  }
+  const byTitle = new Map<string, ZenTag[]>();
+  const byId = new Map<string, ZenTag>();
+  for (const t of cache.tags ?? []) {
+    byId.set(t.id, t);
+    if (t.archive) continue;
+    const list = byTitle.get(t.title) ?? [];
+    list.push(t);
+    byTitle.set(t.title, list);
+  }
+  return {
+    isDebtAccount: (title) => DEBT_ACCOUNT_TYPES.has(accounts.get(title)?.type || ""),
+    accountCurrency: (title) => {
+      const a = accounts.get(title);
+      return a ? instruments.get(a.instrument) ?? null : null;
+    },
+    categorySides: (category, subcategory) => {
+      if (!category || category === NO_CATEGORY || SYNTHETIC_CATEGORIES.has(category)) return null;
+      const id = resolveTagId(category, subcategory, byTitle, byId);
+      const tag = id ? byId.get(id) : undefined;
+      return tag ? { income: !!tag.showIncome, outcome: !!tag.showOutcome } : null;
+    },
+  };
+}
+
+/**
  * Look up a tag id by category name (and optional subcategory).
  *
  *   • no subcategory       → exact title match (top-level or any depth)

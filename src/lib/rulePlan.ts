@@ -12,15 +12,17 @@
  */
 
 import {
+  KIND_VALUE_LABELS,
   describeRule,
   mergeHits,
+  ruleKindOf,
   migrateRule,
   previewRules,
   type StoredRule,
 } from "./ruleEngine";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { displayPayee } from "./format";
-import { isServiceCategory } from "./zenmoneyMap";
+import { NO_CATEGORY, isServiceCategory } from "./zenmoneyMap";
 import type { Transaction } from "../types";
 
 /** Одно изменение поля операции: что было, что станет и нужно ли его писать. */
@@ -52,6 +54,88 @@ export interface RuleRow {
   blockedReason?: CategoryBlockReason;
   /** Получатель, которого нет в справочнике Дзен-мани, — правило устарело. */
   blockedPayee?: string;
+  /** Почему нельзя сменить тип операции (#98) — готовой фразой для окна. */
+  blockedKind?: string;
+}
+
+/**
+ * Справочники для проверки смены типа (#98). Без подключения к Дзен-мани их
+ * нет — тогда проверяем только то, что видно по самим операциям.
+ */
+export interface KindChecks {
+  /** Счёт долговой (кредит, заём, «Долги») — перевод на него стал бы долгом. */
+  isDebtAccount: (title: string) => boolean;
+  /** Валюта счёта; `null` — счёта нет в справочнике. */
+  accountCurrency: (title: string) => string | null;
+  /**
+   * Куда годится категория: в доходы, в расходы. `null` — категории нет или
+   * это «Без категории». Для подкатегории — её собственные флаги, как их
+   * читает Дзен-мани (тип операции он берёт по первому тегу).
+   */
+  categorySides: (
+    category: string,
+    subcategory: string | null
+  ) => { income: boolean; outcome: boolean } | null;
+}
+
+/**
+ * Почему смену типа нельзя записать. Зеркало проверок окна операции
+ * (`operationValidation`) и отказов отправки (`zenmoneyPush`): правка, которую
+ * отправка не примет, повисла бы неотправленной навсегда.
+ */
+export function kindBlockReason(
+  t: Transaction,
+  patch: TransactionEdit,
+  checks: KindChecks | null,
+  currencyOf: (title: string) => string | null
+): string | null {
+  if (patch.kind === undefined) return null;
+  const target = patch.kind;
+  const accountCurrency = (title: string) => checks?.accountCurrency(title) ?? currencyOf(title);
+  if (target === "transfer") {
+    const other = t.kind === "expense" ? patch.incomeAccount : patch.outcomeAccount;
+    if (!other) return null;
+    if (checks && checks.accountCurrency(other) === null) {
+      return `счёта «${other}» нет в Дзен-мани`;
+    }
+    if (checks?.isDebtAccount(other)) {
+      return `«${other}» — долговой счёт: такой перевод стал бы долгом, его заводят вручную`;
+    }
+    const mine = accountCurrency(t.account);
+    const theirs = accountCurrency(other);
+    if (mine && theirs && mine !== theirs) {
+      return `«${other}» в другой валюте — для перевода нужна сумма зачисления, укажите её вручную`;
+    }
+    return null;
+  }
+  if (t.kind === "transfer" && t.incomeCurrency && t.currency !== t.incomeCurrency) {
+    return "перевод между валютами правилом в расход или доход не превращается";
+  }
+  const full = patch.categoryFull ?? (t.categoryFullOriginal || t.categoryFull || NO_CATEGORY);
+  const category = patch.category ?? t.categoryOriginal ?? t.category;
+  const sub = patch.subcategory !== undefined ? patch.subcategory : (t.subcategoryOriginal ?? t.subcategory ?? null);
+  const blank = !full || full === NO_CATEGORY;
+  if (target === "refund") {
+    if (blank) return "возврату нужна расходная категория — добавьте её в правило";
+    if (checks?.categorySides(category, sub)?.income) {
+      return `«${full}» — доходная категория, а возврат бывает только по расходной`;
+    }
+  }
+  if (target === "income" && !blank) {
+    const sides = checks?.categorySides(category, sub);
+    if (sides && sides.outcome && !sides.income) {
+      return `по расходной «${full}» Дзен-мани запишет доход возвратом — добавьте в правило доходную категорию`;
+    }
+  }
+  return null;
+}
+
+/** Подпись типа для списка изменений: у перевода — куда или откуда. */
+function kindLabel(kind: Transaction["kind"], t: Pick<Transaction, "kind" | "category">, other?: string): string {
+  if (kind === "transfer" && other) {
+    return t.kind === "expense" ? `Перевод на «${other}»` : `Перевод с «${other}»`;
+  }
+  return KIND_VALUE_LABELS[kind];
 }
 
 export type CategoryBlockReason = "missing" | "service";
@@ -104,7 +188,8 @@ export function buildRulePlan(
   edits: Record<string, TransactionEdit>,
   deletedSet: Set<string>,
   categoryOk: ((category: string, subcategory: string | null) => boolean) | null,
-  payeeOk: ((title: string) => boolean) | null = null
+  payeeOk: ((title: string) => boolean) | null = null,
+  kindChecks: KindChecks | null = null
 ): RulePlan {
   if (ruleIds.size === 0)
     return { rows: [], pending: [], skipped: [], skippedCount: 0 };
@@ -132,6 +217,16 @@ export function buildRulePlan(
     const id = ownerOf.get(txId)?.get(field);
     return id ? ruleName.get(id) : undefined;
   };
+
+  // Валюта счёта по самим операциям — на случай работы без справочника
+  // Дзен-мани (CSV). Берём обычные операции: у них валюта — валюта счёта.
+  const currencyByAccount = new Map<string, string>();
+  for (const t of raw) {
+    if (t.kind !== "transfer" && t.account && !currencyByAccount.has(t.account)) {
+      currencyByAccount.set(t.account, t.currency);
+    }
+  }
+  const currencyOf = (title: string) => currencyByAccount.get(title) ?? null;
 
   const rows: RuleRow[] = [];
   const skips = new Map<string, { category: string; count: number; reason: CategoryBlockReason }>();
@@ -198,6 +293,12 @@ export function buildRulePlan(
       continue;
     }
 
+    const kindBlock = kindBlockReason(t, patch, kindChecks, currencyOf);
+    if (kindBlock) {
+      rows.push({ tx: t, patch: {}, changes: [], status: "blocked", blockedKind: kindBlock });
+      continue;
+    }
+
     const written = edits[t.id];
     const changes: RuleFieldChange[] = [];
     const toWrite: TransactionEdit = {};
@@ -223,6 +324,31 @@ export function buildRulePlan(
       apply();
     };
 
+    // Тип — первым: он меняет операцию сильнее всего, и категория ниже
+    // читается уже в его свете («стал доходом — категория доходная»).
+    if (patch.kind !== undefined) {
+      const other =
+        patch.kind === "transfer"
+          ? t.kind === "expense"
+            ? patch.incomeAccount
+            : patch.outcomeAccount
+          : undefined;
+      add(
+        "Тип",
+        "kind",
+        ruleKindOf(t) === "debt" ? KIND_VALUE_LABELS.debt : KIND_VALUE_LABELS[t.kind],
+        kindLabel(patch.kind, t, other),
+        written?.kind === patch.kind &&
+          written?.outcomeAccount === patch.outcomeAccount &&
+          written?.incomeAccount === patch.incomeAccount,
+        () => {
+          toWrite.kind = patch.kind;
+          for (const k of ["account", "outcomeAccount", "incomeAccount"] as const) {
+            if (patch[k] !== undefined) toWrite[k] = patch[k];
+          }
+        }
+      );
+    }
     if (patch.categoryFull !== undefined) {
       // «Было» — категория от Дзен-мани: в `raw` правило её уже переписало.
       const from = t.categoryFullOriginal || t.categoryFull;

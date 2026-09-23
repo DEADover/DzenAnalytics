@@ -254,7 +254,11 @@ export function RulePreviewModal({
                         {showRule && oneRule && (
                           <Badge className="max-w-[14rem] truncate">{oneRule}</Badge>
                         )}
-                        {STATUS_LABEL[row.status] && (
+                        {row.status === "blocked" && row.blockedKind ? (
+                          <Badge tone={STATUS_TONE.blocked}>
+                            Тип не сменить: {row.blockedKind}
+                          </Badge>
+                        ) : STATUS_LABEL[row.status] && (
 <Badge tone={STATUS_TONE[row.status]}>
                             {STATUS_LABEL[row.status]}
                             {row.status === "blocked" && row.blockedCategory

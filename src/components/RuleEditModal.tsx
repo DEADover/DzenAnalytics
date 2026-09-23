@@ -10,6 +10,8 @@ import clsx from "clsx";
 import {
   CONDITION_OP_LABELS,
   FIELD_LABELS,
+  KIND_VALUE_LABELS,
+  SET_KIND_VALUES,
   NUMERIC_FIELDS,
   opsForField,
   VALUELESS_OPS,
@@ -29,6 +31,7 @@ import {
   type RuleCondition,
   type RuleConditionGroup,
   type RuleField,
+  type RuleKindValue,
   type RuleTargetField,
 } from "../lib/ruleEngine";
 import { displayPayee, formatDate, formatMoney, formatNum } from "../lib/format";
@@ -72,7 +75,50 @@ const ACTION_TARGETS: { value: RuleTargetField; label: string }[] = [
   { value: "category", label: "Категория" },
   { value: "payee", label: "Получатель" },
   { value: "comment", label: "Комментарий" },
+  { value: "kind", label: "Тип операции" },
 ];
+
+/** Типы для условия «Тип операции равно …». */
+const KIND_CONDITION_OPTIONS: { value: RuleKindValue; label: string }[] = (
+  Object.keys(KIND_VALUE_LABELS) as RuleKindValue[]
+).map((value) => ({ value, label: KIND_VALUE_LABELS[value] }));
+
+/**
+ * Во что превратить операцию. «Перевод» — отдельный вид действия: ему нужен
+ * второй счёт, и выбирается он рядом, как категория у действия «Категория».
+ */
+type KindChoice = (typeof SET_KIND_VALUES)[number] | "transfer";
+const KIND_ACTION_OPTIONS: { value: KindChoice; label: string }[] = [
+  ...SET_KIND_VALUES.map((value) => ({ value, label: KIND_VALUE_LABELS[value] })),
+  { value: "transfer", label: "Перевод" },
+];
+
+/** Что сейчас выбрано в действии «Тип операции». */
+function kindChoiceOf(a: RuleAction): KindChoice {
+  if (a.kind === "setTransfer") return "transfer";
+  return (SET_KIND_VALUES as readonly string[]).includes(a.value)
+    ? (a.value as KindChoice)
+    : "expense";
+}
+
+const KIND_HINT = (
+  <div className="space-y-2">
+    <div>
+      Тип меняется так же, как в окне операции, и уезжает в Дзен-мани при
+      отправке.
+    </div>
+    <div>
+      <strong>Доход</strong> — по доходной категории: по расходной Дзен-мани
+      запишет его возвратом. <strong>Возврат</strong> — только по расходной.
+      Нужную категорию задайте в этом же правиле.
+    </div>
+    <div>
+      <strong>Перевод</strong>: для расхода второй счёт — куда ушли деньги, для
+      дохода — откуда пришли. Счета должны быть в одной валюте.
+    </div>
+    <div>Долги правилом не меняются — у них своё устройство.</div>
+  </div>
+);
 
 /** Способ записи комментария. Внутри правила это по-прежнему три вида действия. */
 const COMMENT_MODES: { value: RuleActionKind; label: string }[] = [
@@ -86,6 +132,7 @@ const DEFAULT_KIND: Record<RuleTargetField, RuleActionKind> = {
   category: "setCategory",
   payee: "setPayee",
   comment: "setComment",
+  kind: "setKind",
 };
 
 /** Черновик правила — то, что редактируется в окне. */
@@ -646,7 +693,9 @@ export function RuleEditModal({
                         // смене вида поля берём первую операцию из его списка.
                         patchCondition(c.id!, {
                           field: v,
-                          value: "",
+                          // У типа пустого значения не бывает — сразу первый
+                          // из списка, иначе условие висело бы недописанным.
+                          value: v === "kind" ? "expense" : "",
                           op: opsForField(v).includes(c.op) ? c.op : opsForField(v)[0],
                         })
                       }
@@ -680,7 +729,16 @@ export function RuleEditModal({
                           и «Кафе» вместо «Еда / Кафе» молча не совпадёт ни с
                           чем. Для «содержит» и регулярных выражений поле
                           остаётся текстовым — там как раз нужен кусок строки. */}
-                      {c.field === "account" && c.op === "equals" ? (
+                      {c.field === "kind" ? (
+                        <Select
+                          className="flex-1 min-w-0"
+                          ariaLabel="Тип операции"
+                          portal
+                          value={(c.value || "expense") as RuleKindValue}
+                          options={KIND_CONDITION_OPTIONS}
+                          onChange={(v) => patchCondition(c.id!, { value: v })}
+                        />
+                      ) : c.field === "account" && c.op === "equals" ? (
                         <div className="flex-1 min-w-0">
                           <Combobox
                             value={c.value}
@@ -749,7 +807,7 @@ export function RuleEditModal({
                           отвечать не на что. Вместо неё подпись о том, в чём
                           сумма считается: правило по счёту в долларах иначе
                           выглядит загадкой. */}
-                      {NUMERIC_FIELDS.has(c.field) ? (
+                      {c.field === "kind" ? null : NUMERIC_FIELDS.has(c.field) ? (
                         <Tooltip content="Сумма берётся в валюте отчётов и без знака: «больше 1000» поймает и трату, и поступление">
                           <span className="text-xs text-muted shrink-0 whitespace-nowrap border-b border-dotted border-border cursor-help">
                             {base}
@@ -831,11 +889,29 @@ export function RuleEditModal({
                       patchAction(a.id!, {
                         kind: DEFAULT_KIND[v],
                         // Значение осмысленно только внутри своей цели:
-                        // категория в поле комментария — мусор.
-                        value: "",
+                        // категория в поле комментария — мусор. У типа пустого
+                        // значения нет — сразу первый из списка.
+                        value: v === "kind" ? "income" : "",
                       })
                     }
                   />
+                  {target === "kind" && (
+                    <Select
+                      className={a.kind === "setTransfer" ? "w-36 shrink-0" : "flex-1 min-w-0"}
+                      ariaLabel="Во что превратить операцию"
+                      portal
+                      value={kindChoiceOf(a)}
+                      options={KIND_ACTION_OPTIONS}
+                      onChange={(v) =>
+                        patchAction(
+                          a.id!,
+                          v === "transfer"
+                            ? { kind: "setTransfer", value: "" }
+                            : { kind: "setKind", value: v }
+                        )
+                      }
+                    />
+                  )}
                   {target === "comment" && (
                     <Select
                       className="w-52 shrink-0"
@@ -846,8 +922,21 @@ export function RuleEditModal({
                       onChange={(v) => patchAction(a.id!, { kind: v })}
                     />
                   )}
+                  {target === "kind" && a.kind === "setKind" ? null : (
                   <div className="flex-1 min-w-0">
-                    {target === "category" ? (
+                    {target === "kind" ? (
+                      <Combobox
+                        value={a.value}
+                        options={accounts}
+                        groups={accountGroups}
+                        renderIcon={(title) => <AccountLogo title={title} size={18} />}
+                        allowCustom={false}
+                        searchable
+                        portal
+                        onChange={(v) => patchAction(a.id!, { value: v })}
+                        placeholder="Второй счёт"
+                      />
+                    ) : target === "category" ? (
                       <CategoryCascadePicker
                         category={a.value.trim() ? splitCategoryFull(a.value).category : ""}
                         subcategory={
@@ -882,6 +971,10 @@ export function RuleEditModal({
                       />
                     )}
                   </div>
+                  )}
+                  {target === "kind" && (
+                    <InfoPopover label="Как правило меняет тип операции">{KIND_HINT}</InfoPopover>
+                  )}
                   <button
                     type="button"
                     onClick={() =>
@@ -921,7 +1014,7 @@ export function RuleEditModal({
             className="btn-ghost text-xs mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
             title={
               freeTargets.length === 0
-                ? "Все поля уже заданы: категория, получатель и комментарий"
+                ? "Все поля уже заданы: категория, получатель, комментарий и тип"
                 : "Добавить действие"
             }
           >

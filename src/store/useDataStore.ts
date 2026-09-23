@@ -22,7 +22,7 @@ import {
   withinDepth,
   type RuleRun,
 } from "../lib/ruleSchedule";
-import { makeCategoryChecker } from "../lib/zenmoneyPush";
+import { makeCategoryChecker, makeKindChecks } from "../lib/zenmoneyPush";
 
 import { applyEdits } from "../lib/applyEdits";
 import { useEditsStore, type TransactionEdit } from "./useEditsStore";
@@ -351,6 +351,7 @@ async function autoApplyToNew(
   // которой в облаке нет, и правка навсегда зависнет неотправленной.
   const cache = await loadZenCache();
   const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
+  const kindChecks = cache ? makeKindChecks(cache) : null;
   const payeeOk = cache?.merchants
     ? (() => {
         const set = new Set(
@@ -371,7 +372,8 @@ async function autoApplyToNew(
     await loadDeletedSet(),
     categoryOk,
     payeeOk,
-    origins
+    origins,
+    kindChecks
   );
   if (Object.keys(patches).length === 0) return;
   await useEditsStore.getState().setEditEach(patches, "rule");
@@ -406,6 +408,7 @@ async function runScheduledRules(raw: Transaction[]): Promise<void> {
 
   const cache = await loadZenCache();
   const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
+  const kindChecks = cache ? makeKindChecks(cache) : null;
   const payeeOk = cache?.merchants
     ? (() => {
         const set = new Set(
@@ -432,7 +435,8 @@ async function runScheduledRules(raw: Transaction[]): Promise<void> {
       deleted,
       categoryOk,
       payeeOk,
-      origins
+      origins,
+      kindChecks
     );
     for (const [id, patch] of Object.entries(found)) {
       patches[id] = { ...patches[id], ...patch };
@@ -464,6 +468,7 @@ async function runRuleNow(ruleId: string): Promise<number> {
   await ensureEditsLoaded();
   const cache = await loadZenCache();
   const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
+  const kindChecks = cache ? makeKindChecks(cache) : null;
   const payeeOk = cache?.merchants
     ? (() => {
         const set = new Set(
@@ -488,7 +493,8 @@ async function runRuleNow(ruleId: string): Promise<number> {
     deleted,
     categoryOk,
     payeeOk,
-    origins
+    origins,
+    kindChecks
   );
   const changed = Object.keys(found).length;
 
@@ -524,6 +530,7 @@ async function applyRulesNow(ruleIds: readonly string[]): Promise<number> {
   await ensureEditsLoaded();
   const cache = await loadZenCache();
   const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
+  const kindChecks = cache ? makeKindChecks(cache) : null;
   const payeeOk = cache?.merchants
     ? (() => {
         const set = new Set(cache.merchants.map((m) => (m.title ?? "").trim().toLowerCase()));
@@ -534,7 +541,7 @@ async function applyRulesNow(ruleIds: readonly string[]): Promise<number> {
   const origins = useEditsStore.getState().origins;
   const deleted = await loadDeletedSet();
   const view = rulesView(raw, userEdits(edits, origins));
-  const plan = buildRulePlan(view, rules, ids, edits, deleted, categoryOk, payeeOk);
+  const plan = buildRulePlan(view, rules, ids, edits, deleted, categoryOk, payeeOk, kindChecks);
   if (plan.rows.length === 0) return 0;
 
   const patches: Record<string, TransactionEdit> = {};
