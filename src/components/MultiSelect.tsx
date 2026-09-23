@@ -47,6 +47,8 @@ export function MultiSelect({
   summaryMinWidth,
   noneSummary,
   namesInSummary,
+  variant = "filter",
+  id,
 }: {
   label: string;
   options: string[];
@@ -120,6 +122,14 @@ export function MultiSelect({
    * имена не влезают, кнопка обрежет их многоточием.
    */
   namesInSummary?: boolean;
+  /**
+   * Как выглядит кнопка. `filter` — кнопка ряда фильтров: ярлык и значение
+   * одной строкой. `field` — поле формы в окне: та же рамка и высота, что у
+   * `.input` и `Select`, ярлык стоит над полем, а не в нём.
+   */
+  variant?: "filter" | "field";
+  /** id кнопки — чтобы `<label htmlFor>` над полем формы указывал на неё. */
+  id?: string;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -435,6 +445,8 @@ export function MultiSelect({
     <div className={clsx("relative", className)}>
       <button
         ref={btnRef}
+        id={id}
+        type="button"
         onClick={() => {
           // Открываем — раскрываем ветки, в которых что-то уже отмечено:
           // спрятанный выбор ни увидеть, ни снять.
@@ -446,13 +458,21 @@ export function MultiSelect({
           setQuery("");
         }}
         className={clsx(
-          "btn-ghost text-[12.5px] leading-4 w-full justify-between gap-2",
-          highlighted && "border-accent"
+          variant === "field"
+            ? "input h-[38px] flex items-center justify-between gap-2 text-left text-sm"
+            : "btn-ghost text-[12.5px] leading-4 w-full justify-between gap-2",
+          variant === "filter" && highlighted && "border-accent",
+          variant === "field" && open && "border-accent"
         )}
       >
         {Icon && <Icon className="w-3.5 h-3.5 shrink-0 text-muted" aria-hidden="true" />}
         {/* Ярлык тише значения: в ряду из четырёх кнопок глазу нужно значение
             («Все (31)»), а «Счета» он и так знает по значку. */}
+        {variant === "field" ? (
+          <span className={clsx("truncate flex-1", isNone && noneSummary && "text-muted")}>
+            {summary}
+          </span>
+        ) : (
         <span className="truncate max-w-[180px] flex-1 text-left font-normal text-muted">
           {label && <>{label}:{" "}</>}
           {/* Ширина под самое длинное состояние: иначе кнопка прыгает, когда
@@ -467,7 +487,14 @@ export function MultiSelect({
             {summary}
           </span>
         </span>
-        <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
+        )}
+        <ChevronDown
+          className={clsx(
+            "shrink-0",
+            variant === "field" ? "w-4 h-4 text-muted transition-transform" : "w-3.5 h-3.5 opacity-60",
+            variant === "field" && open && "rotate-180"
+          )}
+        />
       </button>
       {open &&
         pos &&

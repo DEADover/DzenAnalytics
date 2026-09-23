@@ -24,23 +24,18 @@ import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
-import { MultiSelect } from "../components/MultiSelect";
-import { AccountLogo } from "../components/AccountLogo";
-import { FILTER_NONE } from "../store/useFiltersStore";
 import { getHistoricalRubRate } from "../lib/historicalRates";
 import {
   currenciesToQuote,
   goalProgress,
-  goalSources,
   type GoalAccount,
   type RubRates,
 } from "../lib/goals";
 import type { CurrencyRates } from "../types";
 import { Tooltip } from "../components/Tooltip";
-import { DateField } from "../components/DateField";
-import { CardHeader } from "../components/CardHeader";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { ProgressBar } from "../components/ProgressBar";
+import { GoalEditModal } from "../components/GoalEditModal";
 
 function monthsBetween(fromIso: string, toIso: string): number {
   const a = new Date(fromIso);
@@ -173,13 +168,8 @@ export function GoalsPage() {
     : 0;
   const avgSavings = avgIncome - avgExpense;
 
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [target, setTarget] = useState("");
-  const [current, setCurrent] = useState("");
-  const [deadline, setDeadline] = useState("");
-  const [sources, setSources] = useState<string[]>([]);
-  const [monthly, setMonthly] = useState("");
+  /** Открытое окно цели: «new» — новая, иначе правим эту. */
+  const [editing, setEditing] = useState<Goal | "new" | null>(null);
 
   // Живые счета — цель может копиться на них вместо ручной суммы (#45, #103).
   // Накопительные первыми: цель обычно ставят на них.
@@ -249,35 +239,7 @@ export function GoalsPage() {
     return { saved, remaining, done };
   }, [goals, money, avgSavings]);
 
-  function resetForm() {
-    setName("");
-    setTarget("");
-    setCurrent("");
-    setDeadline("");
-    setSources([]);
-    setMonthly("");
-  }
-
-  function submit() {
-    const t = Number(target);
-    const c = Number(current) || 0;
-    if (!name.trim() || !Number.isFinite(t) || t <= 0) return;
-    addGoal({
-      name: name.trim(),
-      target: t,
-      current: c,
-      deadline: deadline || null,
-      accountTitle: sources[0] ?? null,
-      accountTitles: sources,
-      monthlyContribution: Number(monthly) > 0 ? Number(monthly) : null,
-    });
-    resetForm();
-    setAdding(false);
-  }
-
   if (transactions.length === 0) return <EmptyState />;
-
-  const formValid = name.trim().length > 0 && Number(target) > 0;
 
   return (
     <div className="space-y-6">
@@ -285,12 +247,10 @@ export function GoalsPage() {
         title="Цели"
         icon={Target}
         right={
-          // Hidden while the add form is open — the form has its own «Отмена»,
-          // so a second one in the header would just be redundant. Без целей
-          // её тоже нет: в центре пустой страницы уже стоит «Создать первую
-          // цель», и две одинаковые кнопки на экране спорят друг с другом.
-          !adding && goals.length > 0 && (
-            <button onClick={() => setAdding(true)} className="btn-primary text-xs">
+          // Без целей кнопки нет: в центре пустой страницы уже стоит «Создать
+          // первую цель», и две одинаковые кнопки на экране спорят друг с другом.
+          goals.length > 0 && (
+            <button onClick={() => setEditing("new")} className="btn-primary text-xs">
               <Plus className="w-3.5 h-3.5" />
               Новая цель
             </button>
@@ -333,51 +293,12 @@ export function GoalsPage() {
         </StatRow>
       )}
 
-      {adding && (
-        <div className="card card-pad bg-accent/5 border-accent/40">
-          <CardHeader icon={Plus} title="Новая цель" />
-          <GoalForm
-            name={name}
-            setName={setName}
-            target={target}
-            setTarget={setTarget}
-            sources={sources}
-            setSources={setSources}
-            current={current}
-            setCurrent={setCurrent}
-            monthly={monthly}
-            setMonthly={setMonthly}
-            deadline={deadline}
-            setDeadline={setDeadline}
-            accountTitles={accountTitles}
-            balanceOf={balanceOf}
-            base={base}
-            autoFocus
-          />
-          <div className="flex gap-2 mt-5">
-            <button onClick={submit} disabled={!formValid} className="btn-primary text-sm">
-              Сохранить
-            </button>
-            <button
-              onClick={() => {
-                resetForm();
-                setAdding(false);
-              }}
-              className="btn-ghost text-sm"
-            >
-              Отмена
-            </button>
-          </div>
-        </div>
-      )}
-
       {goals.length === 0 ? (
-        !adding && (
           <SectionEmpty
             icon={Target}
             title="Пока нет целей"
             action={
-              <button onClick={() => setAdding(true)} className="btn-primary text-sm">
+              <button onClick={() => setEditing("new")} className="btn-primary text-sm">
                 <Plus className="w-4 h-4" />
                 Создать первую цель
               </button>
@@ -386,7 +307,6 @@ export function GoalsPage() {
             Создайте цель — и увидите прогресс, расчётный срок достижения и статус по
             дедлайну.
           </SectionEmpty>
-        )
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
           {goals.map((g) => (
@@ -396,188 +316,25 @@ export function GoalsPage() {
               base={base}
               avgSavings={avgSavings}
               money={money}
-              accountTitles={accountTitles}
-              balanceOf={balanceOf}
-              onUpdate={updateGoal}
+              onEdit={() => setEditing(g)}
               onRemove={removeGoal}
             />
           ))}
         </div>
       )}
-    </div>
-  );
-}
 
-/** Label + control wrapper — one consistent field shape across the forms. */
-function Field({
-  label,
-  hint,
-  className,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={`min-w-0 ${className ?? ""}`}>
-      {/* Smaller, single-line label (`whitespace-nowrap`) so even a long one like
-          «Ежемесячные отчисления» stays on ONE row — every input in a row then
-          starts at the same y, with a tight, uniform gap to its label. */}
-      <div className="label mb-1.5 flex items-center gap-1 whitespace-nowrap">
-        <span>{label}</span>
-        {hint && (
-          <Tooltip content={hint}>
-            <span className="text-muted/70 cursor-help normal-case tracking-normal">ⓘ</span>
-          </Tooltip>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-/**
- * Источники цели ↔ выбор в `MultiSelect`. У списка соглашение фильтров:
- * пусто = все, {FILTER_NONE} = ничего. У цели «ничего» — ручная сумма, а «все»
- * — это просто все счета поимённо.
- */
-function sourcesToSet(sources: readonly string[], all: readonly string[]): Set<string> {
-  const known = sources.filter((t) => all.includes(t));
-  if (known.length === 0) return new Set([FILTER_NONE]);
-  if (known.length >= all.length) return new Set();
-  return new Set(known);
-}
-
-function setToSources(next: Set<string>, all: readonly string[]): string[] {
-  if (next.has(FILTER_NONE)) return [];
-  if (next.size === 0) return [...all];
-  return all.filter((t) => next.has(t));
-}
-
-/** Shared add / edit field grid — identical layout in both places. */
-function GoalForm({
-  name,
-  setName,
-  target,
-  setTarget,
-  sources,
-  setSources,
-  current,
-  setCurrent,
-  monthly,
-  setMonthly,
-  deadline,
-  setDeadline,
-  accountTitles,
-  balanceOf,
-  base,
-  autoFocus,
-  stagger,
-}: {
-  name: string;
-  setName: (v: string) => void;
-  target: string;
-  setTarget: (v: string) => void;
-  sources: string[];
-  setSources: (v: string[]) => void;
-  current: string;
-  setCurrent: (v: string) => void;
-  monthly: string;
-  setMonthly: (v: string) => void;
-  deadline: string;
-  setDeadline: (v: string) => void;
-  accountTitles: string[];
-  balanceOf: (titles: readonly string[]) => ReturnType<typeof goalProgress> | null;
-  base: string;
-  autoFocus?: boolean;
-  /** Stagger the fields' entrance (used by the card's edit overlay). */
-  stagger?: boolean;
-}) {
-  return (
-    <div
-      className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 ${
-        stagger ? "goal-edit-fields" : ""
-      }`}
-    >
-      <Field label="Название">
-        <input
-          placeholder="Например, Машина"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="input text-sm"
-          autoFocus={autoFocus}
+      {editing && (
+        <GoalEditModal
+          goal={editing === "new" ? undefined : editing}
+          accountTitles={accountTitles}
+          progressOf={balanceOf}
+          base={base}
+          onSave={(draft) =>
+            editing === "new" ? addGoal(draft) : updateGoal(editing.id, draft)
+          }
+          onClose={() => setEditing(null)}
         />
-      </Field>
-      <Field label="Сумма цели">
-        <input
-          type="number"
-          inputMode="decimal"
-          placeholder="0"
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          className="input text-sm tabular-nums"
-        />
-      </Field>
-      <Field
-        label="Источники прогресса"
-        hint="Откуда брать текущий прогресс. Ничего не выбрано — «Сумма вручную»: накопленное вводите сами в поле рядом. Выберите один или несколько счетов — прогресс сложится из их балансов и будет обновляться на каждой синхронизации. Счета в другой валюте пересчитываются в базовую по курсу ЦБ на сегодня."
-      >
-        <MultiSelect
-          className="w-full"
-          label=""
-          options={accountTitles}
-          selected={sourcesToSet(sources, accountTitles)}
-          onChange={(next) => setSources(setToSources(next, accountTitles))}
-          renderIcon={(title) => <AccountLogo title={title} size={18} />}
-          unitForms={["счёт", "счёта", "счетов"]}
-          searchPlaceholder="Поиск счёта"
-          noneSummary="Сумма вручную"
-          namesInSummary
-        />
-      </Field>
-      {sources.length > 0 ? (
-        <Field label="Уже накоплено">
-          <div className="input text-sm flex items-center text-muted bg-panel2/60 cursor-not-allowed tabular-nums">
-            {balanceOf(sources)?.bound
-              ? formatMoney(balanceOf(sources)!.current, base)
-              : "по балансу счетов"}
-          </div>
-        </Field>
-      ) : (
-        <Field label="Уже накоплено" hint="Необязательно">
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="0"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-            className="input text-sm tabular-nums"
-          />
-        </Field>
       )}
-      <Field
-        label="Ежемесячные отчисления"
-        hint="Сколько планируете откладывать на эту цель в месяц. Если задать — построим отдельный прогноз достижения именно по этим отчислениям, независимо от общего темпа сбережений."
-      >
-        <input
-          type="number"
-          inputMode="decimal"
-          placeholder="Необязательно"
-          value={monthly}
-          onChange={(e) => setMonthly(e.target.value)}
-          className="input text-sm tabular-nums"
-        />
-      </Field>
-      <Field label="Дедлайн" hint="Необязательно">
-        <DateField
-          placeholder="дд.мм.гггг"
-          value={deadline}
-          onChange={(e) => setDeadline(e.target.value)}
-          className="input text-sm"
-        />
-      </Field>
     </div>
   );
 }
@@ -611,70 +368,18 @@ function GoalCard({
   base,
   avgSavings,
   money,
-  accountTitles,
-  balanceOf,
-  onUpdate,
+  onEdit,
   onRemove,
 }: {
   goal: Goal;
   base: string;
   avgSavings: number;
   money: Money;
-  accountTitles: string[];
-  balanceOf: (titles: readonly string[]) => ReturnType<typeof goalProgress> | null;
-  onUpdate: (id: string, patch: Partial<Goal>) => void;
+  onEdit: () => void;
   onRemove: (id: string) => void;
 }) {
   const m = goalMetrics(g, money, avgSavings);
   const pct = Math.round(m.ratio * 100);
-
-  // `editing` = the edit overlay is in the DOM; `closing` plays the fade-out
-  // before it unmounts. The view content stays in flow the whole time (only its
-  // opacity changes), so the card never changes size between the two modes.
-  const [editing, setEditing] = useState(false);
-  const [closing, setClosing] = useState(false);
-  const [name, setName] = useState(g.name);
-  const [target, setTarget] = useState(String(g.target));
-  const [current, setCurrent] = useState(String(g.current));
-  const [deadline, setDeadline] = useState(g.deadline ?? "");
-  const [sources, setSources] = useState<string[]>(() => goalSources(g));
-  const [monthly, setMonthly] = useState(
-    g.monthlyContribution ? String(g.monthlyContribution) : ""
-  );
-
-  function openEdit() {
-    setName(g.name);
-    setTarget(String(g.target));
-    setCurrent(String(g.current));
-    setDeadline(g.deadline ?? "");
-    setSources(goalSources(g));
-    setMonthly(g.monthlyContribution ? String(g.monthlyContribution) : "");
-    setClosing(false);
-    setEditing(true);
-  }
-
-  function closeEdit() {
-    setClosing(true);
-    window.setTimeout(() => {
-      setEditing(false);
-      setClosing(false);
-    }, 160);
-  }
-
-  function saveEdit() {
-    const t = Number(target);
-    if (!name.trim() || !(t > 0)) return;
-    onUpdate(g.id, {
-      name: name.trim(),
-      target: t,
-      current: sources.length > 0 ? g.current : Number(current) || 0,
-      deadline: deadline || null,
-      accountTitle: sources[0] ?? null,
-      accountTitles: sources,
-      monthlyContribution: Number(monthly) > 0 ? Number(monthly) : null,
-    });
-    closeEdit();
-  }
 
   return (
     <div className="card-tray card-pad flex flex-col gap-4">
@@ -705,8 +410,8 @@ function GoalCard({
           <div className="flex items-center gap-0.5">
             <Tooltip content="Редактировать цель">
               <button
-                onClick={() => (editing && !closing ? closeEdit() : openEdit())}
-                className={`btn-icon ${editing && !closing ? "text-accent bg-accent/10" : ""}`}
+                onClick={onEdit}
+                className="btn-icon"
                 aria-label="Редактировать цель"
               >
                 <Pencil className="w-4 h-4" />
@@ -736,16 +441,7 @@ function GoalCard({
       {/* Progress bar */}
       <ProgressBar value={m.ratio} tone={m.done ? "income" : "accent"} label="Прогресс цели" />
 
-      {/* Body: the view content ALWAYS stays in flow (only its opacity changes),
-          so the card keeps the exact same size when the edit overlay opens on
-          top of it. */}
-      <div className="relative">
-        <div
-          className={`space-y-4 transition-opacity duration-150 ${
-            editing && !closing ? "opacity-0 pointer-events-none" : "opacity-100"
-          }`}
-          aria-hidden={editing && !closing}
-        >
+      <div className="space-y-4">
           {/* Projection chart — trajectory to target vs. the deadline. */}
           <GoalChart
             current={m.current}
@@ -797,47 +493,6 @@ function GoalCard({
             )}
             <SourcesChip progress={m.progress} base={base} />
           </div>
-        </div>
-
-        {/* Edit overlay — absolutely positioned so it doesn't change the card
-            size; fields stagger in, and the whole panel fades out on close. */}
-        {editing && (
-          <div className={`absolute inset-0 ${closing ? "goal-edit-out" : ""}`}>
-            <GoalForm
-              name={name}
-              setName={setName}
-              target={target}
-              setTarget={setTarget}
-              sources={sources}
-              setSources={setSources}
-              current={current}
-              setCurrent={setCurrent}
-              monthly={monthly}
-              setMonthly={setMonthly}
-              deadline={deadline}
-              setDeadline={setDeadline}
-              accountTitles={accountTitles}
-              balanceOf={balanceOf}
-              base={base}
-              stagger
-            />
-            <div
-              className="flex gap-2 mt-4 animate-menu-item"
-              style={{ animationDelay: "0.24s" }}
-            >
-              <button
-                onClick={saveEdit}
-                disabled={!name.trim() || !(Number(target) > 0)}
-                className="btn-primary text-sm"
-              >
-                Сохранить
-              </button>
-              <button onClick={closeEdit} className="btn-ghost text-sm">
-                Отмена
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
