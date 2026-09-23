@@ -93,8 +93,6 @@ interface Props {
    * незачем.
    */
   display?: ReactNode;
-  /** id кнопки — чтобы `<label htmlFor>` над полем указывал на неё. */
-  id?: string;
 }
 
 export function DateField({
@@ -108,7 +106,6 @@ export function DateField({
   icon = true,
   shortYear = false,
   display: displayOverride,
-  id,
 }: Props) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -124,7 +121,6 @@ export function DateField({
     <div className={`relative ${wrapperClassName}`}>
       <button
         ref={btnRef}
-        id={id}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={placeholder || "Дата"}
