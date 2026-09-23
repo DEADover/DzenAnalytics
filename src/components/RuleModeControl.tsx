@@ -123,7 +123,10 @@ export function RuleModePanel({
   className?: string;
 }) {
   const [running, setRunning] = useState(false);
-  const push = pushNote(useZenmoneyStore((s) => s.pushMode));
+  const push = pushNote(
+    useZenmoneyStore((s) => s.pushMode),
+    !!useZenmoneyStore((s) => s.token)
+  );
   const { mode, schedule } = value;
   const every: ScheduleEvery | "off" = schedule?.every ?? "off";
   const everyN = everyCount(schedule);

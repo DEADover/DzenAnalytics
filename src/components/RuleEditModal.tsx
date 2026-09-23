@@ -807,7 +807,10 @@ export function RuleEditModal({
                           отвечать не на что. Вместо неё подпись о том, в чём
                           сумма считается: правило по счёту в долларах иначе
                           выглядит загадкой. */}
-                      {c.field === "kind" ? null : NUMERIC_FIELDS.has(c.field) ? (
+                      {/* У значения из списка (тип, счёт или категория «равно»)
+                          регистра нет — его выбирают, а не набирают. */}
+                      {c.field === "kind" ||
+                      (c.op === "equals" && (c.field === "account" || c.field === "category")) ? null : NUMERIC_FIELDS.has(c.field) ? (
                         <Tooltip content="Сумма берётся в валюте отчётов и без знака: «больше 1000» поймает и трату, и поступление">
                           <span className="text-xs text-muted shrink-0 whitespace-nowrap border-b border-dotted border-border cursor-help">
                             {base}
@@ -864,7 +867,14 @@ export function RuleEditModal({
 
         {/* --- Действия -------------------------------------------------- */}
         <div>
-          <div className="label mb-2">То</div>
+          {/* Подсказка про тип — у заголовка, а не в строке действия: в строке
+              она укорачивала поле, и его край не совпадал с полями выше. */}
+          <div className="label mb-2 flex items-center gap-1.5">
+            То
+            {draft.actions.some((a) => actionTarget(a.kind) === "kind") && (
+              <InfoPopover label="Как правило меняет тип операции">{KIND_HINT}</InfoPopover>
+            )}
+          </div>
           <div className="space-y-2">
             {draft.actions.map((a) => {
               const target = actionTarget(a.kind);
@@ -972,9 +982,7 @@ export function RuleEditModal({
                     )}
                   </div>
                   )}
-                  {target === "kind" && (
-                    <InfoPopover label="Как правило меняет тип операции">{KIND_HINT}</InfoPopover>
-                  )}
+
                   <button
                     type="button"
                     onClick={() =>

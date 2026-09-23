@@ -36,7 +36,14 @@ export function ruleModeFields(mode: RuleMode): { enabled: boolean; autoApply: b
  * облако в ту же секунду — и ответ должен стоять там же, где переключатель, а
  * не в другом разделе настроек.
  */
-export function pushNote(mode: PushMode): { text: string; tone?: "warn" } {
+export function pushNote(
+  mode: PushMode,
+  /** Дзен-мани подключён. Без подключения отправлять некуда — это не «выключено». */
+  connected = true
+): { text: string; tone?: "warn" } {
+  if (!connected) {
+    return { text: "Останется на устройстве: Дзен-мани не подключён." };
+  }
   if (mode === "auto") {
     return {
       text: "Уедет в Дзен-мани само — отправка на «Авто».",

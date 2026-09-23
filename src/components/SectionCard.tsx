@@ -221,8 +221,15 @@ export function StatRow({ children, className }: { children: ReactNode; classNam
           <div
             className={clsx(
               "grid grid-cols-2 gap-x-4 gap-y-4 divide-border",
-              ROW_COLS[Math.min(Math.max(count, 1), 6)],
-              wide ? "xl:divide-x xl:[&>*+*]:pl-4" : "lg:divide-x lg:[&>*+*]:pl-4"
+              // Три ячейки в сетке по две ложились «две и одна»: последняя
+              // оставалась одна во второй строке. Трём место в одной строке
+              // находится уже с планшетной ширины.
+              count === 3
+                ? "sm:grid-cols-3 sm:divide-x sm:[&>*+*]:pl-4"
+                : clsx(
+                    ROW_COLS[Math.min(Math.max(count, 1), 6)],
+                    wide ? "xl:divide-x xl:[&>*+*]:pl-4" : "lg:divide-x lg:[&>*+*]:pl-4"
+                  )
             )}
           >
             {children}

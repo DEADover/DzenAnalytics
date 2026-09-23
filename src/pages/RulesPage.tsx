@@ -431,8 +431,12 @@ export function RulesPage() {
 
   // Дешёвые O(n) проходы — живут после раннего return, поэтому без useMemo.
   const enabledCount = rules.filter((r) => r.enabled).length;
-  const totalAffected = transactions.filter(
-    (t) => t.categoryFullOriginal && t.categoryFullOriginal !== t.categoryFull
+  // Операции, в которых правила что-то записали, — по отметкам «записано
+  // правилом» в слое правок. Раньше считались только операции со сменённой
+  // категорией, и правила про комментарий, получателя или тип в плитку не
+  // попадали вовсе: записали 599 — плитка показывала 59.
+  const totalAffected = Object.keys(edits).filter(
+    (id) => (editOrigins[id]?.length ?? 0) > 0
   ).length;
   // Всё, что показано числом на этой странице, считается из одного `plan` —
   // иначе плитка и кнопка разошлись бы, и объяснить разницу было бы нечем.
@@ -636,9 +640,9 @@ export function RulesPage() {
             title="Нет правил"
           >
             Создайте первое правило кнопкой <strong>«Добавить»</strong> или
-            загрузите готовые из файла JSON — правило
-            будет автоматически менять категорию, получателя и комментарий
-            операций по условию
+            загрузите готовые из файла JSON. Правило отбирает операции по
+            условиям и меняет у них категорию, получателя, комментарий или тип —
+            по кнопке «Проверить и применить» или само, в режиме «Авто»
           </SectionEmpty>
         ) : (
           <div className="overflow-x-auto -mx-1 px-1">
@@ -647,8 +651,11 @@ export function RulesPage() {
                 <tr>
                   {/* Сначала СУТЬ правила, потом переключатели: читают строку
                       слева направо, и «что это за правило» важнее, чем его
-                      состояние. Ширина «Что меняет» фиксирована по трём
-                      возможным ярлыкам — больше полей у правила не бывает. */}
+                      состояние. Ярлыков в «Что меняет» бывает до четырёх
+                      (категория, получатель, комментарий, тип) — лишние
+                      переносятся. Уже `xl` шесть колонок не помещаются, и
+                      «Правило» сжималось до пары слов: там колонка прячется, а
+                      ярлыки встают под названием правила. */}
                   {/* Ширина у всех колонок своя, а `w-full` у «Правила» —
                       приём для авторазметки таблицы: колонка забирает ВЕСЬ
                       остаток. Название правила бывает длинной фразой из его же
@@ -670,11 +677,16 @@ export function RulesPage() {
                   </th>
                   {/* Порядок правил — это порядок, в котором они срабатывают:
                       его задают перетаскиванием, поэтому сортировки у таблицы нет. */}
-                  <HeadCell type="mark" label="№" width="7rem" />
+                  <HeadCell type="mark" label="№" width="6rem" />
                   <HeadCell type="text" label="Правило" className="w-full" />
-                  <HeadCell type="text" label="Что меняет" width="18rem" />
+                  <HeadCell
+                    type="text"
+                    label="Что меняет"
+                    width="18rem"
+                    className="hidden xl:table-cell"
+                  />
                   <HeadCell type="mark" label="Режим" width="13rem" />
-                  <HeadCell type="count" label="Совпадений" width="7rem" />
+                  <HeadCell type="count" label="Совпадений" width="6.5rem" />
                   <HeadCell type="actions" label="Действия" width="6rem" />
                 </tr>
               </thead>
@@ -683,6 +695,19 @@ export function RulesPage() {
                   const count = matchCounts.get(rule.id) ?? 0;
                   const checked = selectedIds.has(rule.id);
                   const targets = ruleTargets(rule);
+                  // Раньше получатель с комментарием выделялись
+                  // предупреждающим цветом: они, в отличие от категории,
+                  // менялись только после записи. Теперь так работают все
+                  // поля — выделять нечего.
+                  const targetPills = targets.map((t) => (
+                    <span
+                      key={t}
+                      className="pill whitespace-nowrap"
+                      title={`${RULE_TARGET_LABELS[t]} изменится после кнопки «Проверить и применить»`}
+                    >
+                      {RULE_TARGET_LABELS[t]}
+                    </span>
+                  ));
                   return (
                     <tr
                       key={rule.id}
@@ -799,25 +824,22 @@ export function RulesPage() {
                             {describeRule(rule) || "Правило не дописано"}
                           </span>
                         </div>
+                        {targets.length > 0 && (
+                          <div className="xl:hidden flex flex-wrap items-center gap-1 mt-1">
+                            {targetPills}
+                          </div>
+                        )}
                       </td>
-                      <td className={cellClass("text")}>
-                        <div className="flex items-center gap-1">
+                      <td className={cellClass("text", { className: "hidden xl:table-cell" })}>
+                        {/* Минимальная ширина — на два ярлыка в строке. У
+                            «Правила» ширина 100%, и таблица ужимает остальные
+                            колонки до минимума содержимого: без неё ярлыки
+                            вставали столбиком по одному. */}
+                        <div className="flex flex-wrap items-center gap-1 min-w-[12rem]">
                           {targets.length === 0 ? (
                             <span className="text-muted">—</span>
                           ) : (
-                            // Раньше получатель с комментарием выделялись
-                            // предупреждающим цветом: они, в отличие от
-                            // категории, менялись только после записи. Теперь
-                            // так работают все три поля — выделять нечего.
-                            targets.map((t) => (
-                              <span
-                                key={t}
-                                className="pill"
-                                title={`${RULE_TARGET_LABELS[t]} изменится после кнопки «Проверить и применить»`}
-                              >
-                                {RULE_TARGET_LABELS[t]}
-                              </span>
-                            ))
+                            targetPills
                           )}
                         </div>
                       </td>
