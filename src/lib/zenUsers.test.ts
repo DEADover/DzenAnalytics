@@ -13,11 +13,11 @@ const u = (id: number, login: string | null = null, parent: number | null = null
 
 describe("userLabel", () => {
   it("псевдоним важнее логина", () => {
-    expect(userLabel(7, [u(7, "kilometrix")], { "7": "Жена" })).toBe("Жена");
+    expect(userLabel(7, [u(7, "user7")], { "7": "Партнёр" })).toBe("Партнёр");
   });
 
   it("без псевдонима берёт логин", () => {
-    expect(userLabel(7, [u(7, "kilometrix")])).toBe("kilometrix");
+    expect(userLabel(7, [u(7, "user7")])).toBe("user7");
   });
 
   it("без логина показывает номер — это лучше пустоты", () => {
@@ -26,11 +26,11 @@ describe("userLabel", () => {
   });
 
   it("пробельный псевдоним не считается заданным", () => {
-    expect(userLabel(7, [u(7, "kilometrix")], { "7": "   " })).toBe("kilometrix");
+    expect(userLabel(7, [u(7, "user7")], { "7": "   " })).toBe("user7");
   });
 
   it("незнакомый номер не роняет подпись", () => {
-    expect(userLabel(99, [u(7, "kilometrix")])).toBe("Пользователь 99");
+    expect(userLabel(99, [u(7, "user7")])).toBe("Пользователь 99");
   });
 });
 

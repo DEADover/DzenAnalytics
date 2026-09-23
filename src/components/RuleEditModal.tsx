@@ -178,7 +178,7 @@ const EMPTY: RuleDraft = {
 
 /** Единый вид поля в окне: `Select` рисует себя как `.input h-10` с текстом
  *  `text-sm`, поэтому обычные поля должны задавать то же самое — иначе соседние
- *  «Получатель» и «Магнит» набраны разным кеглем и разной высоты. */
+ *  «Получатель» и «Ёлочка» набраны разным кеглем и разной высоты. */
 const FIELD = "input h-10 text-sm";
 
 /** Синтаксис регулярных выражений — за знаком вопроса, а не абзацем в форме:
@@ -724,8 +724,8 @@ export function RuleEditModal({
                           NUMERIC_FIELDS.has(c.field)
                             ? "1000"
                             : c.op === "regex"
-                              ? "^(яндекс|ozon)"
-                              : "магнит"
+                              ? "^(такси|кафе)"
+                              : "ёлочка"
                         }
                         inputMode={NUMERIC_FIELDS.has(c.field) ? "decimal" : undefined}
                         className={clsx(
@@ -758,7 +758,7 @@ export function RuleEditModal({
                       ) : (
                       <label
                         className="flex items-center gap-1.5 text-xs text-muted cursor-pointer shrink-0 whitespace-nowrap"
-                        title="Считать «магнит» и «МАГНИТ» одним и тем же"
+                        title="Считать «ёлочка» и «ЁЛОЧКА» одним и тем же"
                       >
                         <Checkbox
                           checked={c.caseInsensitive}
@@ -868,7 +868,7 @@ export function RuleEditModal({
                         options={payees}
                         portal
                         onChange={(v) => patchAction(a.id!, { value: v })}
-                        placeholder="Сбербанк"
+                        placeholder="Брокер"
                       />
                     ) : (
                       <input

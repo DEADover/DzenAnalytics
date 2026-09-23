@@ -321,7 +321,7 @@ export function EditTransactionModal({
   // user can tell at a glance which bucket a suggestion comes from:
   //   1) "Получатели Дзен-мани" — everything that's been through
   //      Zenmoney's merchant dictionary. Includes both global-catalog
-  //      brands (Wildberries, Магнит) AND user-created entries
+  //      brands (Ёлочка, Колосок) AND user-created entries
   //      ("Сосед Сёма"). The API gives no flag to distinguish the two,
   //      so we don't try. The label says "получатели", not "бренды",
   //      to avoid implying the list is the global brand catalog only.
@@ -477,7 +477,7 @@ export function EditTransactionModal({
   // Заводить нового контрагента вправе только СОЗДАНИЕ операции — своё и
   // осознанное. Правка чужой операции этого не делает: там в поле часто
   // стоит строка из выписки, и справочник быстро зарос бы мусором вроде
-  // «MAGNIT 7712 MOSCOW» (для них есть отдельный разбор в «Справочниках»).
+  // «YOLOCHKA 7712 MOSCOW» (для них есть отдельный разбор в «Справочниках»).
   const mintsCounterparty = isCreate || isDraftEdit;
 
   const payeeStatus = useMemo<"existing" | "new" | null>(() => {
@@ -1320,7 +1320,7 @@ export function EditTransactionModal({
                 // операция сохранится СВЯЗЬЮ с ней. Плюс — записи нет, но мы
                 // заведём её вместе с операцией (только при СОЗДАНии: правка
                 // чужой операции не должна плодить записи из банковских
-                // строк вроде «MAGNIT 7712 MOSCOW» — там по-прежнему ✗ и
+                // строк вроде «YOLOCHKA 7712 MOSCOW» — там по-прежнему ✗ и
                 // свободный текст). Значок повторяет ту же логику, что и
                 // отправка, поэтому он не врёт. Молчит, пока справочник
                 // грузится или поле пусто.

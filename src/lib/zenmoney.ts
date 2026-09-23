@@ -66,7 +66,7 @@ export type ZenTermUnit = "day" | "week" | "month" | "year";
  * us, maintained on their side (~1700 entries). `Account.company` points here.
  *
  * We keep it because the account's own title is not a reliable bank marker:
- * «И_Альфа_…» and «Альфа-ба» are the same bank to a human and two different
+ * «Кредитка» and «Зарплатная» are the same bank to a human and two different
  * strings to a computer, so grouping accounts by bank has to go through this
  * id — exactly how Дзен groups them on its own «Счета» screen.
  */

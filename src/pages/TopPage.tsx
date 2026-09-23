@@ -58,8 +58,8 @@ export function TopPage() {
   const filtered = useMemo(() => applyFilters(transactions, filters, monthStartDay), [transactions, filters, monthStartDay]);
 
   const cats = useMemo(() => groupByCategory(filtered, "full"), [filtered]);
-  // По контрагентам справочника, а не по строкам банка: иначе одна «Пятёрочка»
-  // делится на «DOSTAVKA PYATEROCHKA» и «DOSTAVKA IZ PYATEROCHK», обе строки
+  // По контрагентам справочника, а не по строкам банка: иначе одна «Ёлочка»
+  // делится на «DOSTAVKA YOLOCHKA» и «DOSTAVKA IZ YOLOCHKI», обе строки
   // получают половину суммы и обе проваливаются вниз списка.
   const payees = useMemo(() => topPayees(filtered, kind, 30, true), [filtered, kind]);
   const txs = useMemo(() => topTransactions(filtered, kind, 50), [filtered, kind]);
@@ -138,8 +138,8 @@ export function TopPage() {
               На стороне расходов <InfoTerm>возвраты вычитаются</InfoTerm> из
               своей категории и своего контрагента: «заказал и вернул» — это ноль,
               а не расход и доход по отдельности. Контрагент берётся из
-              справочника, а не из банковской строки: «DOSTAVKA PYATEROCHKA» и
-              «DOSTAVKA IZ PYATEROCHK» — это одна «Пятёрочка».
+              справочника, а не из банковской строки: «DOSTAVKA YOLOCHKA» и
+              «DOSTAVKA IZ YOLOCHKI» — это одна «Ёлочка».
             </p>
           </InfoPopover>
         }

@@ -554,9 +554,9 @@ describe("cumulativeNetAt", () => {
 
 describe("extractHashtags", () => {
   it("pulls multiple hashtags out of a comment", () => {
-    expect(extractHashtags("Бензин #Mazda3 и мойка #Катя")).toEqual([
-      "Mazda3",
-      "Катя",
+    expect(extractHashtags("Бензин #дача и мойка #отпуск")).toEqual([
+      "дача",
+      "отпуск",
     ]);
   });
 
@@ -635,7 +635,7 @@ describe("detectDuplicates: одна строка в разных полях", (
 
   it("разные получатели по-прежнему не дубли", () => {
     const groups = detectDuplicates([
-      tx({ id: "a", ...same, payee: "Пятёрочка" }),
+      tx({ id: "a", ...same, payee: "Ёлочка" }),
       tx({ id: "b", ...same, payee: "Магнит" }),
     ]);
     expect(groups).toEqual([]);
@@ -651,8 +651,8 @@ describe("detectDuplicates: одна строка в разных полях", (
 
   it("разные комментарии при одном получателе остаются разными покупками", () => {
     const groups = detectDuplicates([
-      tx({ id: "a", ...same, payee: "Пятёрочка", comment: "Кешью" }),
-      tx({ id: "b", ...same, payee: "Пятёрочка", comment: "Томаты" }),
+      tx({ id: "a", ...same, payee: "Ёлочка", comment: "Кешью" }),
+      tx({ id: "b", ...same, payee: "Ёлочка", comment: "Томаты" }),
     ]);
     expect(groups).toEqual([]);
   });

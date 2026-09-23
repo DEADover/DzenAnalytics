@@ -1656,7 +1656,7 @@ export function ImportPage() {
               className="text-muted truncate"
               style={{ fontSize: "var(--tbl-font)" }}
             >
-              01.06.2026 · Пятёрочка · Еда дома
+              01.06.2026 · Ёлочка · Еда дома
             </span>
             <span
               className="tabular-nums font-medium text-expense whitespace-nowrap"
@@ -2079,8 +2079,8 @@ export function ImportPage() {
           <p className="text-xs text-muted mb-4">
             Объединяет варианты одного и того же получателя.
             Авто-нормализация работает по умолчанию (удаление номеров,
-            пробелов, форм. суффиксов, лидирующих банков — «Магнит #1234»
-            и «MAGNIT-MOSCOW» → один payee). Ручные правила применяются
+            пробелов, форм. суффиксов, лидирующих банков — «Ёлочка #1234»
+            и «YOLOCHKA-MOSCOW» → один payee). Ручные правила применяются
             <em> поверх</em> авто-группировки и работают независимо от
             её переключателя.
           </p>
@@ -2180,7 +2180,7 @@ export function ImportPage() {
               <div className="text-xs text-muted">
                 Пока нет ручных правил. Используйте поля выше, чтобы добавить
                 первое — например, <code className="pill">Pyaterochka</code> →{" "}
-                <code className="pill">Пятёрочка</code>.
+                <code className="pill">Ёлочка</code>.
               </div>
             ) : (
               <div className="max-h-60 overflow-y-auto text-xs space-y-1 -mx-1 px-1">
