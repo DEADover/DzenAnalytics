@@ -45,6 +45,8 @@ export function MultiSelect({
   menuMinWidth,
   compactSummary,
   summaryMinWidth,
+  noneSummary,
+  namesInSummary,
 }: {
   label: string;
   options: string[];
@@ -104,6 +106,20 @@ export function MultiSelect({
   /** Ширина, зарезервированная под текст состояния (CSS-длина, напр. "4.5rem").
    *  Нужна в плотных панелях, где кнопка не должна менять размер при выборе. */
   summaryMinWidth?: string;
+  /**
+   * Подпись пустого выбора вместо «Ничего».
+   *
+   * Там, где список — не фильтр, а выбор источников, «ничего не выбрано» —
+   * обычное состояние со своим смыслом: у цели это «Сумма вручную».
+   */
+  noneSummary?: string;
+  /**
+   * Показывать выбранное по именам, а не «2 из 12».
+   *
+   * Годится для коротких выборов в формах: имена говорят больше числа. Если
+   * имена не влезают, кнопка обрежет их многоточием.
+   */
+  namesInSummary?: boolean;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -293,13 +309,19 @@ export function MultiSelect({
     return n;
   }, [selected, nestedOf]);
 
+  // Выделяем кнопку, когда выбор сужен. Пустой выбор со своей подписью —
+  // обычное состояние, а не фильтр, и акцент ему ни к чему.
+  const highlighted = selected.size > 0 && !(isNone && noneSummary);
+
   const summary = isNone
-    ? "Ничего"
+    ? noneSummary ?? "Ничего"
     : isAll
       ? compactSummary
         ? "Все"
         : `Все (${totalCount})`
-      : `${selectedCount} из ${totalCount}`;
+      : namesInSummary
+        ? [...selected].map(text).join(", ")
+        : `${selectedCount} из ${totalCount}`;
 
   // The menu renders in a portal (position: fixed) so it floats above the
   // table below — `absolute` left it under a later stacking context. Its
@@ -381,20 +403,20 @@ export function MultiSelect({
         }}
         className={clsx(
           "btn-ghost text-[12.5px] leading-4 w-full justify-between gap-2",
-          selected.size > 0 && "border-accent"
+          highlighted && "border-accent"
         )}
       >
         {Icon && <Icon className="w-3.5 h-3.5 shrink-0 text-muted" aria-hidden="true" />}
         {/* Ярлык тише значения: в ряду из четырёх кнопок глазу нужно значение
             («Все (31)»), а «Счета» он и так знает по значку. */}
         <span className="truncate max-w-[180px] flex-1 text-left font-normal text-muted">
-          {label}:{" "}
+          {label && <>{label}:{" "}</>}
           {/* Ширина под самое длинное состояние: иначе кнопка прыгает, когда
               «Все» сменяется на «2 из 12», и вся строка фильтров едет вбок. */}
           <span
             className={clsx(
               "inline-block text-left font-medium",
-              selected.size > 0 ? "text-accent" : "text-text"
+              highlighted ? "text-accent" : "text-text"
             )}
             style={summaryMinWidth ? { minWidth: summaryMinWidth } : undefined}
           >

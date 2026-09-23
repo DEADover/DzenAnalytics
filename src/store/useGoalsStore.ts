@@ -5,13 +5,20 @@ export interface Goal {
   id: string;
   name: string;
   target: number;
-  /** Manually entered progress. Ignored while `accountTitle` is set — then the
-   *  bound account's balance is the live progress (issue #45). */
+  /** Manually entered progress. Ignored while the goal is bound to accounts —
+   *  then their balances are the live progress (issues #45, #103). */
   current: number;
   deadline: string | null;
   /** Optional Zenmoney account this goal tracks: progress = its balance, so it
    *  updates by itself on every sync. `null` / absent = manual amount. */
   accountTitle?: string | null;
+  /**
+   * Счета, на которых копится цель (#103): прогресс — сумма их балансов в
+   * базовой валюте по курсу ЦБ на сегодня. Пустой список или отсутствие поля —
+   * смотрим на `accountTitle` (цели прежних версий). Первый счёт дублируется в
+   * `accountTitle`, чтобы устройство на старой версии видело хоть его.
+   */
+  accountTitles?: string[] | null;
   /** Optional planned monthly contribution to THIS goal. When set (> 0) it
    *  drives a per-goal forecast independent of the household savings pace, so
    *  the user can model «если откладывать N в месяц». `null` / absent = only

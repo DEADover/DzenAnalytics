@@ -20,10 +20,22 @@ import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
 import { groupByMonth } from "../lib/aggregations";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
+import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
-import { Combobox } from "../components/Combobox";
+import { MultiSelect } from "../components/MultiSelect";
+import { AccountLogo } from "../components/AccountLogo";
+import { FILTER_NONE } from "../store/useFiltersStore";
+import { getHistoricalRubRate } from "../lib/historicalRates";
+import {
+  currenciesToQuote,
+  goalProgress,
+  goalSources,
+  type GoalAccount,
+  type RubRates,
+} from "../lib/goals";
+import type { CurrencyRates } from "../types";
 import { Tooltip } from "../components/Tooltip";
 import { DateField } from "../components/DateField";
 import { CardHeader } from "../components/CardHeader";
@@ -63,10 +75,17 @@ function forecastLabel(f: Forecast, done: boolean): string {
   return `${f.months} мес · ${monthYear(f.finish)}`;
 }
 
-interface AccountBalance {
-  title: string;
-  balanceBase: number;
-  savings: boolean;
+/** Всё, чем цель пересчитывает счета в базовую валюту. */
+interface Money {
+  accounts: GoalAccount[];
+  rates: CurrencyRates;
+  cbr: RubRates;
+}
+
+/** Сегодня по местному времени, yyyy-mm-dd — дата курса ЦБ. */
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 /** One forecast: months left at a given monthly pace, and the finish date. */
@@ -77,15 +96,11 @@ interface Forecast {
 
 /** All derived numbers for one goal. Single source of truth for the summary
  *  tiles, the cards and the projection chart, so they can't drift apart. */
-function goalMetrics(g: Goal, accounts: AccountBalance[], avgSavings: number) {
-  // Bound to an account → progress is its live balance; otherwise the
-  // hand-entered amount (issue #45). A bound account that vanished (renamed /
-  // archived) falls back to the manual value so the goal never reads as empty.
-  const boundBalance = g.accountTitle
-    ? accounts.find((a) => a.title === g.accountTitle)?.balanceBase ?? null
-    : null;
-  const boundMissing = !!g.accountTitle && boundBalance == null;
-  const current = boundBalance ?? g.current;
+function goalMetrics(g: Goal, money: Money, avgSavings: number) {
+  // Привязана к счетам → прогресс = сумма их балансов по курсу ЦБ на сегодня;
+  // иначе введённое вручную (#45, #103). Пропавший счёт не обнуляет цель.
+  const progress = goalProgress(g, money.accounts, money.rates, money.cbr);
+  const current = progress.current;
   const ratio = g.target > 0 ? Math.min(current / g.target, 1) : 0;
   const done = ratio >= 1;
   const remaining = Math.max(g.target - current, 0);
@@ -121,7 +136,7 @@ function goalMetrics(g: Goal, accounts: AccountBalance[], avgSavings: number) {
     effective,
     deadlineMonths,
     onTrack,
-    boundMissing,
+    progress,
   };
 }
 
@@ -163,25 +178,23 @@ export function GoalsPage() {
   const [target, setTarget] = useState("");
   const [current, setCurrent] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [accountTitle, setAccountTitle] = useState("");
+  const [sources, setSources] = useState<string[]>([]);
   const [monthly, setMonthly] = useState("");
 
-  // Live accounts with balances in the base currency — a goal can track one of
-  // them instead of a hand-entered amount (issue #45). Savings accounts first:
-  // that's what people usually put a goal on.
-  const [accounts, setAccounts] = useState<AccountBalance[]>([]);
+  // Живые счета — цель может копиться на них вместо ручной суммы (#45, #103).
+  // Накопительные первыми: цель обычно ставят на них.
+  const [accounts, setAccounts] = useState<GoalAccount[]>([]);
   useEffect(() => {
     let cancelled = false;
     getLiveAccountsFromCache().then((live) => {
       if (cancelled || !live) return;
-      const toBase = (amount: number, currency: string) =>
-        currency === rates.base ? amount : amount * (rates.rates[currency] || 1);
       setAccounts(
         live
           .filter((a) => !a.archive)
           .map((a) => ({
             title: a.title,
-            balanceBase: toBase(a.balance, a.currency),
+            balance: a.balance,
+            currency: a.currency,
             savings: a.savings,
           }))
           .sort(
@@ -192,11 +205,35 @@ export function GoalsPage() {
     return () => {
       cancelled = true;
     };
-  }, [transactions, rates]);
+  }, [transactions]);
 
+  // Курсы ЦБ на сегодня для валют счетов: цель — про то, сколько денег есть
+  // сейчас, поэтому доллары на вкладе считаются по сегодняшнему курсу. Пока
+  // курсы не пришли (или нет сети), пересчёт идёт по курсам из настроек.
+  const quoteKey = currenciesToQuote(accounts, rates.base).join(",");
+  const [cbr, setCbr] = useState<RubRates>({});
+  useEffect(() => {
+    if (!quoteKey) return;
+    let cancelled = false;
+    const date = todayIso();
+    Promise.all(
+      quoteKey.split(",").map(async (c) => [c, (await getHistoricalRubRate(date, c))?.rate] as const)
+    ).then((pairs) => {
+      if (cancelled) return;
+      const next: RubRates = {};
+      for (const [c, r] of pairs) if (r != null) next[c] = r;
+      setCbr(next);
+    }, () => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [quoteKey]);
+
+  const money = useMemo<Money>(() => ({ accounts, rates, cbr }), [accounts, rates, cbr]);
   const accountTitles = useMemo(() => accounts.map((a) => a.title), [accounts]);
-  const balanceOf = (title: string | null | undefined) =>
-    title ? accounts.find((a) => a.title === title)?.balanceBase ?? null : null;
+  /** Сколько сейчас на выбранных счетах в базовой валюте; `null` — ни одного. */
+  const balanceOf = (titles: readonly string[]) =>
+    titles.length > 0 ? goalProgress({ current: 0, accountTitles: titles }, accounts, rates, cbr) : null;
 
   // Summary across all goals (bound-aware) for the tiles.
   const summary = useMemo(() => {
@@ -204,20 +241,20 @@ export function GoalsPage() {
     let remaining = 0;
     let done = 0;
     for (const g of goals) {
-      const m = goalMetrics(g, accounts, avgSavings);
+      const m = goalMetrics(g, money, avgSavings);
       saved += m.current;
       remaining += m.remaining;
       if (m.done) done += 1;
     }
     return { saved, remaining, done };
-  }, [goals, accounts, avgSavings]);
+  }, [goals, money, avgSavings]);
 
   function resetForm() {
     setName("");
     setTarget("");
     setCurrent("");
     setDeadline("");
-    setAccountTitle("");
+    setSources([]);
     setMonthly("");
   }
 
@@ -230,7 +267,8 @@ export function GoalsPage() {
       target: t,
       current: c,
       deadline: deadline || null,
-      accountTitle: accountTitle || null,
+      accountTitle: sources[0] ?? null,
+      accountTitles: sources,
       monthlyContribution: Number(monthly) > 0 ? Number(monthly) : null,
     });
     resetForm();
@@ -275,7 +313,7 @@ export function GoalsPage() {
             value={formatMoney(summary.saved, base)}
             tone="income"
             icon={<Landmark className="w-4 h-4" />}
-            tooltip="Сумма прогресса по всем целям: для привязанных к счёту — их текущий баланс, для остальных — введённое вручную."
+            tooltip="Сумма прогресса по всем целям: для привязанных к счетам — их текущий баланс по курсу ЦБ на сегодня, для остальных — введённое вручную."
           />
           <StatCell
             label="Осталось"
@@ -301,8 +339,8 @@ export function GoalsPage() {
             setName={setName}
             target={target}
             setTarget={setTarget}
-            accountTitle={accountTitle}
-            setAccountTitle={setAccountTitle}
+            sources={sources}
+            setSources={setSources}
             current={current}
             setCurrent={setCurrent}
             monthly={monthly}
@@ -355,7 +393,7 @@ export function GoalsPage() {
               goal={g}
               base={base}
               avgSavings={avgSavings}
-              accounts={accounts}
+              money={money}
               accountTitles={accountTitles}
               balanceOf={balanceOf}
               onUpdate={updateGoal}
@@ -398,14 +436,32 @@ function Field({
   );
 }
 
+/**
+ * Источники цели ↔ выбор в `MultiSelect`. У списка соглашение фильтров:
+ * пусто = все, {FILTER_NONE} = ничего. У цели «ничего» — ручная сумма, а «все»
+ * — это просто все счета поимённо.
+ */
+function sourcesToSet(sources: readonly string[], all: readonly string[]): Set<string> {
+  const known = sources.filter((t) => all.includes(t));
+  if (known.length === 0) return new Set([FILTER_NONE]);
+  if (known.length >= all.length) return new Set();
+  return new Set(known);
+}
+
+function setToSources(next: Set<string>, all: readonly string[]): string[] {
+  if (next.has(FILTER_NONE)) return [];
+  if (next.size === 0) return [...all];
+  return all.filter((t) => next.has(t));
+}
+
 /** Shared add / edit field grid — identical layout in both places. */
 function GoalForm({
   name,
   setName,
   target,
   setTarget,
-  accountTitle,
-  setAccountTitle,
+  sources,
+  setSources,
   current,
   setCurrent,
   monthly,
@@ -422,8 +478,8 @@ function GoalForm({
   setName: (v: string) => void;
   target: string;
   setTarget: (v: string) => void;
-  accountTitle: string;
-  setAccountTitle: (v: string) => void;
+  sources: string[];
+  setSources: (v: string[]) => void;
   current: string;
   setCurrent: (v: string) => void;
   monthly: string;
@@ -431,7 +487,7 @@ function GoalForm({
   deadline: string;
   setDeadline: (v: string) => void;
   accountTitles: string[];
-  balanceOf: (t: string | null | undefined) => number | null;
+  balanceOf: (titles: readonly string[]) => ReturnType<typeof goalProgress> | null;
   base: string;
   autoFocus?: boolean;
   /** Stagger the fields' entrance (used by the card's edit overlay). */
@@ -463,24 +519,28 @@ function GoalForm({
         />
       </Field>
       <Field
-        label="Источник прогресса"
-        hint="Откуда брать текущий прогресс: «Сумма вручную» — вы вводите накопленное сами в поле рядом; либо выберите накопительный счёт — прогресс будет обновляться по его балансу автоматически на каждой синхронизации."
+        label="Источники прогресса"
+        hint="Откуда брать текущий прогресс. Ничего не выбрано — «Сумма вручную»: накопленное вводите сами в поле рядом. Выберите один или несколько счетов — прогресс сложится из их балансов и будет обновляться на каждой синхронизации. Счета в другой валюте пересчитываются в базовую по курсу ЦБ на сегодня."
       >
-        <Combobox
-          value={accountTitle}
+        <MultiSelect
+          className="w-full"
+          label=""
           options={accountTitles}
-          onChange={setAccountTitle}
-          placeholder="Сумма вручную"
-          allowCustom={false}
-          clearable
+          selected={sourcesToSet(sources, accountTitles)}
+          onChange={(next) => setSources(setToSources(next, accountTitles))}
+          renderIcon={(title) => <AccountLogo title={title} size={18} />}
+          unitForms={["счёт", "счёта", "счетов"]}
+          searchPlaceholder="Поиск счёта"
+          noneSummary="Сумма вручную"
+          namesInSummary
         />
       </Field>
-      {accountTitle ? (
+      {sources.length > 0 ? (
         <Field label="Уже накоплено">
-          <div className="input text-sm flex items-center text-muted bg-panel2/60 cursor-not-allowed">
-            {balanceOf(accountTitle) != null
-              ? formatMoney(balanceOf(accountTitle)!, base)
-              : "по балансу счёта"}
+          <div className="input text-sm flex items-center text-muted bg-panel2/60 cursor-not-allowed tabular-nums">
+            {balanceOf(sources)?.bound
+              ? formatMoney(balanceOf(sources)!.current, base)
+              : "по балансу счетов"}
           </div>
         </Field>
       ) : (
@@ -548,7 +608,7 @@ function GoalCard({
   goal: g,
   base,
   avgSavings,
-  accounts,
+  money,
   accountTitles,
   balanceOf,
   onUpdate,
@@ -557,13 +617,13 @@ function GoalCard({
   goal: Goal;
   base: string;
   avgSavings: number;
-  accounts: AccountBalance[];
+  money: Money;
   accountTitles: string[];
-  balanceOf: (t: string | null | undefined) => number | null;
+  balanceOf: (titles: readonly string[]) => ReturnType<typeof goalProgress> | null;
   onUpdate: (id: string, patch: Partial<Goal>) => void;
   onRemove: (id: string) => void;
 }) {
-  const m = goalMetrics(g, accounts, avgSavings);
+  const m = goalMetrics(g, money, avgSavings);
   const pct = Math.round(m.ratio * 100);
 
   // `editing` = the edit overlay is in the DOM; `closing` plays the fade-out
@@ -575,7 +635,7 @@ function GoalCard({
   const [target, setTarget] = useState(String(g.target));
   const [current, setCurrent] = useState(String(g.current));
   const [deadline, setDeadline] = useState(g.deadline ?? "");
-  const [accountTitle, setAccountTitle] = useState(g.accountTitle ?? "");
+  const [sources, setSources] = useState<string[]>(() => goalSources(g));
   const [monthly, setMonthly] = useState(
     g.monthlyContribution ? String(g.monthlyContribution) : ""
   );
@@ -585,7 +645,7 @@ function GoalCard({
     setTarget(String(g.target));
     setCurrent(String(g.current));
     setDeadline(g.deadline ?? "");
-    setAccountTitle(g.accountTitle ?? "");
+    setSources(goalSources(g));
     setMonthly(g.monthlyContribution ? String(g.monthlyContribution) : "");
     setClosing(false);
     setEditing(true);
@@ -605,9 +665,10 @@ function GoalCard({
     onUpdate(g.id, {
       name: name.trim(),
       target: t,
-      current: accountTitle ? g.current : Number(current) || 0,
+      current: sources.length > 0 ? g.current : Number(current) || 0,
       deadline: deadline || null,
-      accountTitle: accountTitle || null,
+      accountTitle: sources[0] ?? null,
+      accountTitles: sources,
       monthlyContribution: Number(monthly) > 0 ? Number(monthly) : null,
     });
     closeEdit();
@@ -732,15 +793,7 @@ function GoalCard({
             ) : (
               <Chip icon={CalendarClock}>Дедлайн не задан</Chip>
             )}
-            {g.accountTitle ? (
-              <Chip icon={Landmark} tone={m.boundMissing ? "expense" : "muted"}>
-                {m.boundMissing
-                  ? `Счёт «${g.accountTitle}» не найден`
-                  : `По счёту «${g.accountTitle}»`}
-              </Chip>
-            ) : (
-              <Chip icon={Calendar}>Сумма вводится вручную</Chip>
-            )}
+            <SourcesChip progress={m.progress} base={base} />
           </div>
         </div>
 
@@ -753,8 +806,8 @@ function GoalCard({
               setName={setName}
               target={target}
               setTarget={setTarget}
-              accountTitle={accountTitle}
-              setAccountTitle={setAccountTitle}
+              sources={sources}
+              setSources={setSources}
               current={current}
               setCurrent={setCurrent}
               monthly={monthly}
@@ -785,6 +838,62 @@ function GoalCard({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Откуда прогресс: вручную, один счёт или несколько. У нескольких счетов в
+ * подсказке — вклад каждого, в валюте счёта и в базовой, чтобы сумма цели
+ * сверялась с балансами глазами.
+ */
+function SourcesChip({
+  progress: p,
+  base,
+}: {
+  progress: ReturnType<typeof goalProgress>;
+  base: string;
+}) {
+  if (p.sources.length === 0) return <Chip icon={Calendar}>Сумма вводится вручную</Chip>;
+
+  const missingText =
+    p.missing.length === 1
+      ? `Счёт «${p.missing[0]}» не найден`
+      : `Не найдено счетов: ${p.missing.length}`;
+  const label =
+    p.missing.length > 0 && !p.bound
+      ? missingText
+      : p.sources.length === 1
+        ? `По счёту «${p.sources[0].title}»`
+        : `По ${p.sources.length} ${pluralRu(p.sources.length, ["счёту", "счетам", "счетам"])}`;
+  const chip = (
+    <Chip icon={Landmark} tone={p.missing.length > 0 ? "expense" : "muted"}>
+      {label}
+    </Chip>
+  );
+  if (p.sources.length === 1 && p.missing.length === 0) return chip;
+
+  return (
+    <Tooltip
+      content={
+        <div className="space-y-0.5 tabular-nums">
+          {p.sources.map((s) => (
+            <div key={s.title} className="flex justify-between gap-4">
+              <span className="truncate">{s.title}</span>
+              <span className={s.balance == null ? "text-expense" : undefined}>
+                {s.balance == null
+                  ? "не найден"
+                  : s.currency === base
+                    ? formatMoney(s.balanceBase, base)
+                    : `${formatMoney(s.balance, s.currency!)} ≈ ${formatMoney(s.balanceBase, base)}`}
+              </span>
+            </div>
+          ))}
+          <div className="pt-1 text-muted">Валюта пересчитана по курсу ЦБ на сегодня</div>
+        </div>
+      }
+    >
+      <span className="min-w-0">{chip}</span>
+    </Tooltip>
   );
 }
 
