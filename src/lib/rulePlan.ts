@@ -65,6 +65,12 @@ export interface RuleRow {
 export interface KindChecks {
   /** Счёт долговой (кредит, заём, «Долги») — перевод на него стал бы долгом. */
   isDebtAccount: (title: string) => boolean;
+  /**
+   * У операции есть сумма в валюте, отличной от валют счетов (на любой из
+   * ног). Необязательно: без справочника Дзен-мани смотрим только на
+   * `opAmount` самой операции — а там лишь сторона списания.
+   */
+  hasOperationAmounts?: (id: string) => boolean;
   /** Валюта счёта; `null` — счёта нет в справочнике. */
   accountCurrency: (title: string) => string | null;
   /**
@@ -110,6 +116,9 @@ export function kindBlockReason(
   }
   if (t.kind === "transfer" && t.incomeCurrency && t.currency !== t.incomeCurrency) {
     return "перевод между валютами правилом в расход или доход не превращается";
+  }
+  if (t.kind === "transfer" && (t.opAmount != null || checks?.hasOperationAmounts?.(t.id))) {
+    return "у перевода сумма в другой валюте — правилом в расход или доход не превращается";
   }
   const full = patch.categoryFull ?? (t.categoryFullOriginal || t.categoryFull || NO_CATEGORY);
   const category = patch.category ?? t.categoryOriginal ?? t.category;

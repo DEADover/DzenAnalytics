@@ -245,6 +245,13 @@ describe("план: что можно записать", () => {
     expect(p.pending[0].changes[0].to).toBe("Перевод на «Сейф»");
   });
 
+  it("перевод с суммой в третьей валюте не превращается в расход", () => {
+    const t = transfer({ id: "fx", comment: "кешбэк" });
+    const withOp: KindChecks = { ...checks, hasOperationAmounts: (id) => id === "fx" };
+    const p = plan(t, [{ kind: "setKind", value: "expense" }], withOp);
+    expect(p.rows[0].blockedKind).toMatch(/сумма в другой валюте/);
+  });
+
   it("без справочника валюту берём по операциям счёта", () => {
     const usd = tx({ id: "u", account: "Доллары", currency: "USD" });
     const p = buildRulePlan(

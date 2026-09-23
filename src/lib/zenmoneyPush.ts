@@ -1040,8 +1040,11 @@ export function makeCategoryChecker(
  * счетов и то, куда годится категория. По тем же данным, по которым отправка
  * решает, примет ли она правку.
  */
-export function makeKindChecks(cache: Pick<ZenCache, "accounts" | "instruments" | "tags">): {
+export function makeKindChecks(
+  cache: Pick<ZenCache, "accounts" | "instruments" | "tags"> & Partial<Pick<ZenCache, "transactions">>
+): {
   isDebtAccount: (title: string) => boolean;
+  hasOperationAmounts: (id: string) => boolean;
   accountCurrency: (title: string) => string | null;
   categorySides: (
     category: string,
@@ -1063,8 +1066,16 @@ export function makeKindChecks(cache: Pick<ZenCache, "accounts" | "instruments" 
     list.push(t);
     byTitle.set(t.title, list);
   }
+  // Операции с суммой в валюте, отличной от валюты счёта, — на любой из ног.
+  // Перевод с такой суммой отправка в расход или доход не превращает.
+  const withOp = new Set(
+    (cache.transactions ?? [])
+      .filter((t) => (t.opIncome || 0) > 0 || (t.opOutcome || 0) > 0)
+      .map((t) => t.id)
+  );
   return {
     isDebtAccount: (title) => DEBT_ACCOUNT_TYPES.has(accounts.get(title)?.type || ""),
+    hasOperationAmounts: (id) => withOp.has(id),
     accountCurrency: (title) => {
       const a = accounts.get(title);
       return a ? instruments.get(a.instrument) ?? null : null;
