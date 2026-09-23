@@ -47,7 +47,10 @@ export function Select<T extends string>({
   const popupRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{
     left: number;
-    top: number;
+    /** Список раскрыт вниз — привязан верхом к полю. */
+    top?: number;
+    /** Раскрыт вверх — привязан НИЗОМ к полю, какой бы короткой ни была его высота. */
+    bottom?: number;
     /** Не уже поля — иначе список выглядит оторванным от него. */
     minWidth: number;
     /** Но и не шире свободного места справа: за край экрана не лезем. */
@@ -93,14 +96,17 @@ export function Select<T extends string>({
       // за край: свободных 60 px, а высота всё равно 120. Не поместившееся
       // прокручивается внутри списка — он и так `overflow-y-auto`.
       const maxHeight = Math.max(0, Math.min(320, dropUp ? above : below));
-      // Верх и низ прижаты к окну с обеих сторон: даже если якорь съехал между
-      // замером и отрисовкой, список останется внутри экрана.
-      const top = dropUp
-        ? Math.max(edge, r.top - gap - maxHeight)
-        : Math.min(r.bottom + gap, window.innerHeight - edge - maxHeight);
+      // Вверх список привязан НИЗОМ к полю. Раньше считался верх — от полной
+      // высоты свободного места, и короткий список из пары пунктов вставал у
+      // самой шапки окна, далеко над полем, которое его открыло. Внизу верх
+      // прижат к окну: даже если якорь съехал между замером и отрисовкой,
+      // список останется внутри экрана.
+      const anchor = dropUp
+        ? { bottom: window.innerHeight - (r.top - gap) }
+        : { top: Math.max(edge, Math.min(r.bottom + gap, window.innerHeight - edge - maxHeight)) };
       setPos({
         left: r.left,
-        top: Math.max(edge, top),
+        ...anchor,
         minWidth: r.width,
         // Список ШИРЕ поля, если так помещается подпись. Раньше ширина была
         // ровно по полю, и «Только новые» в семисантиметровом поле ломалось на
@@ -137,6 +143,7 @@ export function Select<T extends string>({
           ? {
               left: pos.left,
               top: pos.top,
+              bottom: pos.bottom,
               minWidth: pos.minWidth,
               maxWidth: pos.maxWidth,
               maxHeight: pos.maxHeight,
