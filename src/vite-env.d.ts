@@ -7,4 +7,5 @@ declare const __STANDALONE__: boolean;
 
 interface ImportMetaEnv {
   readonly VITE_OAUTH_PROVIDER_URL?: string;
+  readonly VITE_OAUTH_CALLBACK_PATH?: string;
 }

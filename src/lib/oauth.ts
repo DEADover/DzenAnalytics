@@ -1,8 +1,9 @@
 const providerUrl = import.meta.env.VITE_OAUTH_PROVIDER_URL;
+const callbackPath = import.meta.env.VITE_OAUTH_CALLBACK_PATH;
 const attemptKey = "dzenanalyticsOAuthAttempt";
 
 export function isOAuthConfigured(): boolean {
-  return !!providerUrl && !__STANDALONE__;
+  return !!providerUrl && !!callbackPath && !__STANDALONE__;
 }
 
 export function startOAuth(): void {
@@ -17,7 +18,7 @@ export function startOAuth(): void {
 }
 
 export function consumeOAuthCallback(): { code: string } | { error: true } | null {
-  if (location.pathname !== "/oauth/callback") return null;
+  if (location.pathname !== callbackPath) return null;
   const params = new URLSearchParams(location.search);
   history.replaceState(null, "", "/settings?source=api");
   const pending = sessionStorage.getItem(attemptKey);
