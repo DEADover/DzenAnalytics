@@ -1,0 +1,16 @@
+name: Notify velios deployment
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deployment
+        env:
+          GH_TOKEN: ${{ secrets.VELIOS_DZENANALYTICS_ACTIONS_TOKEN }}
+        run: gh api -X POST repos/velios/DzenAnalytics/actions/workflows/deploy.yml/dispatches -f ref=main
