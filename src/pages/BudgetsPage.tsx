@@ -1118,6 +1118,7 @@ export function BudgetsPage() {
           base={base}
           hideEmpty={settings.hideEmptyRows}
           currentYm={cur}
+          yearFirst={settings.yearTotalPlace === "start"}
           onOpenCell={openCategory}
         />
       )}

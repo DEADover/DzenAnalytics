@@ -40,6 +40,7 @@ describe("реестр переносимых настроек", () => {
       "budget.hideEmptyRows",
       "budget.perimeterTransfers",
       "budget.rowOrder",
+      "budget.yearTotalPlace",
     ]);
   });
 });

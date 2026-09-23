@@ -57,6 +57,7 @@ export function BudgetYearTable({
   base,
   hideEmpty,
   currentYm,
+  yearFirst = true,
   onOpenCell,
 }: {
   report: BudgetYearReport;
@@ -66,6 +67,9 @@ export function BudgetYearTable({
   /** Текущий отчётный месяц (`YYYY-MM`) — к нему таблица прокручивается при
    *  открытии, и он выделен в шапке. */
   currentYm?: string;
+  /** «За год» сразу за статьёй (и закреплена на широком экране) — или после
+   *  декабря. Настройка бюджета «Колонка „За год“». */
+  yearFirst?: boolean;
   /** Клик по факту — операции этой статьи за этот месяц. */
   onOpenCell: (
     category: string,
@@ -290,6 +294,9 @@ export function BudgetYearTable({
    */
   const pinProps = (slot: Slot | undefined, i: number) => {
     if (slot !== "year") return { className: "", style: undefined };
+    // В конце таблицы колонка просто выделена фоном: закреплять её справа
+    // значило бы отнять у месяцев ширину ради того, что и так видно в конце.
+    if (!yearFirst) return { className: "year-col", style: undefined };
     const left =
       colWidths.length > i ? colWidths.slice(0, i + 1).reduce((s, w) => s + w, 0) : undefined;
     return {
@@ -298,6 +305,18 @@ export function BudgetYearTable({
     };
   };
 
+  /** Первый месяц сразу за закреплённым годом — без своей черты слева. */
+  const firstSlot = (i: number): Slot | undefined =>
+    yearFirst && i === 0 ? "first" : undefined;
+  /** Итог года — до месяцев или после, по настройке. */
+  const withYear = (year: React.ReactNode, months: React.ReactNode) => (
+    <>
+      {yearFirst && year}
+      {months}
+      {!yearFirst && year}
+    </>
+  );
+
   /**
    * Прокрутка к текущему месяцу — один раз на год (issue #106). У левого края
    * встаёт ПРОШЛЫЙ месяц, текущий — вторым: в начале месяца он почти пуст, а
@@ -305,21 +324,27 @@ export function BudgetYearTable({
    * января. Обновление данных год не меняет — и то, что человек пролистал
    * руками, никуда не прыгает.
    */
-  const autoScrolledFor = useRef<number | null>(null);
+  const autoScrolledFor = useRef<string | null>(null);
   useLayoutEffect(() => {
     const table = tableRef.current;
     const scroller = scrollerRef.current;
     if (!table || !scroller || colWidths.length === 0) return;
-    if (autoScrolledFor.current === report.year) return;
-    autoScrolledFor.current = report.year;
+    // Смена места «За год» двигает месяцы — прокручиваем заново.
+    const scrollKey = `${report.year} ${yearFirst}`;
+    if (autoScrolledFor.current === scrollKey) return;
+    autoScrolledFor.current = scrollKey;
     const idx = currentYm ? report.months.indexOf(currentYm) : -1;
     const heads = table.querySelectorAll<HTMLElement>("thead tr:first-child > th");
-    const target = heads[2 + Math.max(0, idx - 1)];
+    // Меряем от нулевой прокрутки: закреплённая колонка, уже сдвинутая
+    // прокруткой, дала бы свой `offsetLeft` вместе со сдвигом.
+    scroller.scrollLeft = 0;
+    const firstMonth = yearFirst ? 2 : 1;
+    const target = heads[firstMonth + Math.max(0, idx - 1)];
     if (idx <= 0 || !target) {
       scroller.scrollLeft = 0;
     } else {
       // Закреплённое слева закрывает часть прокрутки — отступаем на его ширину.
-      const yearHead = heads[1];
+      const yearHead = yearFirst ? heads[1] : undefined;
       const pinned =
         yearHead && getComputedStyle(yearHead).position === "sticky"
           ? yearHead.offsetLeft + yearHead.offsetWidth
@@ -328,7 +353,7 @@ export function BudgetYearTable({
     }
     syncScroll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colWidths, report.year, currentYm]);
+  }, [colWidths, report.year, currentYm, yearFirst]);
 
   /**
    * Тройка ячеек одного месяца. Клик живёт на ФАКТЕ: за ним стоят операции, а
@@ -425,7 +450,16 @@ export function BudgetYearTable({
   const dataRow = (
     row: YearRow,
     opts: { nested?: boolean; last?: boolean; group?: string; own?: YearRow }
-  ) => (
+  ) => {
+    const rowYear = monthCells(
+      { plan: row.plan, fact: row.fact },
+      row.kind,
+      `${row.subcategory ?? row.category} · за год`,
+      "год",
+      null,
+      { strong: true, slot: "year" }
+    );
+    return (
     // Подсветка всей строки под курсором: у таблицы под сорок колонок, и вести
     // глаз от названия статьи до нужного месяца без опоры не получалось.
     // Закреплённый первый столбец красится отдельно и НЕПРОЗРАЧНЫМ цветом:
@@ -464,14 +498,7 @@ export function BudgetYearTable({
           <span className="truncate">{row.subcategory ?? row.category}</span>
         </div>
       </th>
-      {monthCells(
-        { plan: row.plan, fact: row.fact },
-        row.kind,
-        `${row.subcategory ?? row.category} · за год`,
-        "год",
-        null,
-        { strong: true, slot: "year" }
-      )}
+      {yearFirst && rowYear}
       {row.cells.map((c, i) => {
         // Своё у категории — только в подсказке. Отдельной строкой оно было
         // дублем названия (так же сделано в самом Дзен-мани), но объяснять
@@ -488,11 +515,13 @@ export function BudgetYearTable({
           `${row.subcategory ?? row.category} · ${monthLabel(report.months[i])}`,
           report.months[i],
           () => onOpenCell(row.category, row.subcategory, report.months[i], row.kind),
-          { note, slot: i === 0 ? "first" : undefined }
+          { note, slot: firstSlot(i) }
         );
       })}
+      {!yearFirst && rowYear}
     </tr>
-  );
+    );
+  };
 
   /**
    * Статьи с движением за год и статьи без него — в списке они идут порознь.
@@ -566,6 +595,11 @@ export function BudgetYearTable({
         >
           {first}
         </th>
+        {!yearFirst && (
+          <td colSpan={COLS - 1 - SUB_COLUMNS.length} className={`${pad} px-2`}>
+            {opts.rest}
+          </td>
+        )}
         {SUB_COLUMNS.map((s, i) => {
           const pin = pinProps("year", i);
           return (
@@ -580,9 +614,11 @@ export function BudgetYearTable({
             </td>
           );
         })}
-        <td colSpan={COLS - 1 - SUB_COLUMNS.length} className={`${pad} px-2`}>
-          {opts.rest}
-        </td>
+        {yearFirst && (
+          <td colSpan={COLS - 1 - SUB_COLUMNS.length} className={`${pad} px-2`}>
+            {opts.rest}
+          </td>
+        )}
       </tr>
     );
   };
@@ -673,22 +709,24 @@ export function BudgetYearTable({
         <th scope="row" className="sticky left-0 bg-panel text-left px-2 py-1.5">
           Итого {heading.toLowerCase()}
         </th>
-        {monthCells(
-          { plan: section.plan, fact: section.fact },
-          section.kind,
-          "Итого за год",
-          "год",
-          null,
-          { strong: true, slot: "year" }
-        )}
-        {section.totals.map((c, i) =>
+        {withYear(
           monthCells(
-            c,
+            { plan: section.plan, fact: section.fact },
             section.kind,
-            `Итого · ${monthLabel(report.months[i])}`,
-            report.months[i],
+            "Итого за год",
+            "год",
             null,
-            { strong: true, slot: i === 0 ? "first" : undefined }
+            { strong: true, slot: "year" }
+          ),
+          section.totals.map((c, i) =>
+            monthCells(
+              c,
+              section.kind,
+              `Итого · ${monthLabel(report.months[i])}`,
+              report.months[i],
+              null,
+              { strong: true, slot: firstSlot(i) }
+            )
           )
         )}
       </tr>
@@ -699,22 +737,24 @@ export function BudgetYearTable({
           <th scope="row" className="sticky left-0 bg-panel text-left px-2 py-1.5 font-medium">
             {section.kind === "expense" ? "Расход" : "Доход"}, включая переводы
           </th>
-          {monthCells(
-            { plan: section.planAll, fact: section.factAll },
-            section.kind,
-            "Включая переводы, за год",
-            "год",
-            null,
-            { strong: true, slot: "year" }
-          )}
-          {section.totalsAll.map((c, i) =>
+          {withYear(
             monthCells(
-              c,
+              { plan: section.planAll, fact: section.factAll },
               section.kind,
-              `Включая переводы · ${monthLabel(report.months[i])}`,
-              report.months[i],
+              "Включая переводы, за год",
+              "год",
               null,
-              { strong: true, slot: i === 0 ? "first" : undefined }
+              { strong: true, slot: "year" }
+            ),
+            section.totalsAll.map((c, i) =>
+              monthCells(
+                c,
+                section.kind,
+                `Включая переводы · ${monthLabel(report.months[i])}`,
+                report.months[i],
+                null,
+                { strong: true, slot: firstSlot(i) }
+              )
             )
           )}
         </tr>
@@ -762,6 +802,19 @@ export function BudgetYearTable({
    * (`aria-hidden` на всей обёртке): для них есть настоящая шапка, а два
    * одинаковых заголовка подряд только запутали бы.
    */
+  /** Шапка «За год» на три колонки. В начале — с краем закреплённого блока. */
+  const yearHead = (
+    <th
+      colSpan={SUB_COLUMNS.length}
+      style={{ ...pinProps("year", 0).style, zIndex: 14 }}
+      className={`head-type px-1 pt-2 pb-0.5 text-center !font-semibold !text-text border-l border-border ${
+        yearFirst ? "year-edge" : ""
+      } ${pinProps("year", 0).className}`}
+    >
+      За год
+    </th>
+  );
+
   const headerRows = (forClone: boolean) => (
     <>
       <tr>
@@ -792,21 +845,13 @@ export function BudgetYearTable({
         {/* «За год» — сразу за статьёй, а не после декабря: итог года читается
             рядом с названием, а на широком экране ещё и не уезжает при
             прокрутке месяцев (issue #106). */}
-        <th
-          colSpan={SUB_COLUMNS.length}
-          style={{ ...pinProps("year", 0).style, zIndex: 14 }}
-          className={`head-type px-1 pt-2 pb-0.5 text-center !font-semibold !text-text border-l border-border year-edge ${
-            pinProps("year", 0).className
-          }`}
-        >
-          За год
-        </th>
+        {yearFirst && yearHead}
         {report.months.map((m, i) => (
           <th
             key={m}
             colSpan={SUB_COLUMNS.length}
             className={`head-type bg-panel px-1 pt-2 pb-0.5 text-center ${
-              i === 0 ? "" : "border-l border-border/60"
+              firstSlot(i) === "first" ? "" : "border-l border-border/60"
             } ${m === currentYm ? "!text-accent !font-semibold" : ""}`}
           >
             {/* Полное название: тройка колонок под ним всё равно шире
@@ -815,11 +860,13 @@ export function BudgetYearTable({
             {monthLabelFull(m).replace(/\s\d+ г\.$/, "")}
           </th>
         ))}
+        {!yearFirst && yearHead}
       </tr>
       <tr className="text-muted">
-        {["год", ...report.months].map((m, mi) =>
+        {(yearFirst ? ["год", ...report.months] : [...report.months, "год"]).map((m) =>
           SUB_COLUMNS.map((s, i) => {
-            const slot: Slot | undefined = mi === 0 ? "year" : mi === 1 ? "first" : undefined;
+            const slot: Slot | undefined =
+              m === "год" ? "year" : firstSlot(report.months.indexOf(m));
             const pin = pinProps(slot, i);
             return (
               <th
@@ -911,9 +958,9 @@ export function BudgetYearTable({
               <span ref={endMark} aria-hidden className="block h-0" />
               Доходы − расходы
             </th>
-            {deltaCells({ plan: deltaPlan, fact: deltaFact }, "год", "year")}
-            {report.delta.map((c, i) =>
-              deltaCells(c, report.months[i], i === 0 ? "first" : undefined)
+            {withYear(
+              deltaCells({ plan: deltaPlan, fact: deltaFact }, "год", "year"),
+              report.delta.map((c, i) => deltaCells(c, report.months[i], firstSlot(i)))
             )}
           </tr>
         </tfoot>

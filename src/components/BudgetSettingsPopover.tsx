@@ -61,7 +61,7 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
         anchorRef={anchorRef}
         onClose={() => setOpen(false)}
         align="right"
-        // Уже и плотнее обычной карточки: настроек осталось пять, и окно в
+        // Уже и плотнее обычной карточки: настроек немного, и окно в
         // 30rem с полем в 20 пикселей вокруг выглядело полупустым.
         className="w-[26rem] card p-3.5 shadow-lg"
       >
@@ -193,6 +193,38 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
               options={[
                 { value: "hide" as const, label: "Скрывать" },
                 { value: "show" as const, label: "Показывать" },
+              ]}
+            />
+          }
+        />
+
+        <SettingRow
+          dense
+          title="Колонка «За год»"
+          help={
+            <>
+              <p>
+                Где в <InfoTerm>годовом своде</InfoTerm> стоят итоги года.{" "}
+                <InfoTerm>В начале</InfoTerm> — сразу за названием статьи, а на
+                широком экране ещё и закреплены: месяцы листаются под ними, и
+                итог года всегда рядом с названием.
+              </p>
+              <p>
+                <InfoTerm>В конце</InfoTerm> — после декабря, как в обычных
+                таблицах бюджета.
+              </p>
+              <p>Выгрузка в Excel от настройки не зависит: там итог всегда в конце.</p>
+            </>
+          }
+          control={
+            <Segmented
+              size="sm"
+              label="Колонка «За год»"
+              value={s.yearTotalPlace}
+              onChange={(v) => void s.update({ yearTotalPlace: v })}
+              options={[
+                { value: "start" as const, label: "В начале" },
+                { value: "end" as const, label: "В конце" },
               ]}
             />
           }

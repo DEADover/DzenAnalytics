@@ -13,6 +13,8 @@ import type { BudgetRowOrder } from "../lib/budgets";
 /** Три вида раздела: месяц, годовой свод и сводка по году. */
 export type BudgetView = "month" | "year" | "dashboard";
 
+export type BudgetYearTotalPlace = "start" | "end";
+
 export interface BudgetSettings {
   /** Счета в бюджете. Пустой список = все (соглашение фильтров сервиса). */
   accounts: string[];
@@ -24,6 +26,9 @@ export interface BudgetSettings {
   rowOrder: BudgetRowOrder;
   /** Прятать статьи, по которым за период не было ни одной операции. */
   hideEmptyRows: boolean;
+  /** Где в годовом своде колонка «За год»: сразу за статьёй (и закреплена на
+   *  широком экране) или после декабря, как в таблицах. */
+  yearTotalPlace: BudgetYearTotalPlace;
   /** Окно прогноза по умолчанию в окне «Заполнить по среднему». */
   forecastMonths: number;
   forecastBasis: ForecastBasis;
@@ -35,6 +40,7 @@ export const DEFAULT_BUDGET_SETTINGS: BudgetSettings = {
   defaultView: "month",
   rowOrder: "alpha",
   hideEmptyRows: true,
+  yearTotalPlace: "start",
   forecastMonths: 3,
   forecastBasis: "average",
 };
@@ -73,6 +79,7 @@ function pick(s: BudgetSettings): BudgetSettings {
     defaultView: s.defaultView,
     rowOrder: s.rowOrder,
     hideEmptyRows: s.hideEmptyRows,
+    yearTotalPlace: s.yearTotalPlace,
     forecastMonths: s.forecastMonths,
     forecastBasis: s.forecastBasis,
   };
