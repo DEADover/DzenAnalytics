@@ -11,6 +11,7 @@ import {
   Landmark,
   CheckCircle2,
   CircleDashed,
+  X,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
@@ -334,9 +335,31 @@ export function GoalsPage() {
       )}
 
       {adding && (
-        <div className="card card-pad bg-accent/5 border-accent/40">
-          <CardHeader icon={Plus} title="Новая цель" />
+        // Та же поверхность, что у карточек целей ниже: новая цель — будущая
+        // такая же карточка, а не подкрашенная плашка с другим видом.
+        <div className="card-tray card-pad">
+          <CardHeader
+            icon={Target}
+            title="Новая цель"
+            subtitle="Прогресс, срок достижения и статус по дедлайну появятся сразу после создания"
+            right={
+              <Tooltip content="Закрыть">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetForm();
+                    setAdding(false);
+                  }}
+                  className="btn-icon"
+                  aria-label="Закрыть"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </Tooltip>
+            }
+          />
           <GoalForm
+            fieldPicker
             name={name}
             setName={setName}
             target={target}
@@ -354,10 +377,7 @@ export function GoalsPage() {
             base={base}
             autoFocus
           />
-          <div className="flex gap-2 mt-5">
-            <button onClick={submit} disabled={!formValid} className="btn-primary text-sm">
-              Сохранить
-            </button>
+          <div className="flex items-center justify-end gap-2 mt-5 pt-4 border-t border-border/60">
             <button
               onClick={() => {
                 resetForm();
@@ -366,6 +386,10 @@ export function GoalsPage() {
               className="btn-ghost text-sm"
             >
               Отмена
+            </button>
+            <button onClick={submit} disabled={!formValid} className="btn-primary text-sm">
+              <Plus className="w-4 h-4" />
+              Создать цель
             </button>
           </div>
         </div>
@@ -458,6 +482,7 @@ function setToSources(next: Set<string>, all: readonly string[]): string[] {
 
 /** Shared add / edit field grid — identical layout in both places. */
 function GoalForm({
+  fieldPicker,
   name,
   setName,
   target,
@@ -494,6 +519,11 @@ function GoalForm({
   autoFocus?: boolean;
   /** Stagger the fields' entrance (used by the card's edit overlay). */
   stagger?: boolean;
+  /**
+   * Выбор счетов — полем формы, той же высоты и рамки, что соседние поля.
+   * Пока только в карточке новой цели.
+   */
+  fieldPicker?: boolean;
 }) {
   return (
     <div
@@ -526,6 +556,7 @@ function GoalForm({
       >
         <MultiSelect
           className="w-full"
+          variant={fieldPicker ? "field" : "filter"}
           label=""
           options={accountTitles}
           selected={sourcesToSet(sources, accountTitles)}
