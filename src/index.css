@@ -398,6 +398,30 @@ h2,
   }
 
   /**
+   * Колонка «За год» в годовом своде бюджета (issue #106): своим фоном на всю
+   * высоту, а не одним жирным шрифтом. Заливка НЕПРОЗРАЧНАЯ — на широком экране
+   * колонка закреплена, и под ней уезжают месяцы; полупрозрачная показала бы
+   * их насквозь. Под курсором строка темнеет так же, как остальные ячейки.
+   */
+  .year-col {
+    background-color: color-mix(in srgb, rgb(var(--c-accent)) 6%, rgb(var(--c-panel)));
+  }
+  .group:hover .year-col {
+    background-color: color-mix(in srgb, rgb(var(--c-accent)) 8%, rgb(var(--c-panel2)));
+  }
+  /* Правый край закреплённого блока: черта всегда, тень — когда под ним уже
+     прокручены месяцы. */
+  .year-edge {
+    border-right: 1px solid rgb(var(--c-border));
+    transition: box-shadow 150ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  @media (min-width: 1024px) {
+    [data-scrolled="true"] .year-edge {
+      box-shadow: 6px 0 8px -6px rgb(var(--c-text) / 0.18);
+    }
+  }
+
+  /**
    * Утопленная плоскость: одна коробка вместо поддона.
    *
    * Двойной кант тут не годится: обойма поддона залита тем же серым, что и

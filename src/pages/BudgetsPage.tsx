@@ -1117,6 +1117,7 @@ export function BudgetsPage() {
           report={yearReport}
           base={base}
           hideEmpty={settings.hideEmptyRows}
+          currentYm={cur}
           onOpenCell={openCategory}
         />
       )}
