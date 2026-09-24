@@ -9,6 +9,7 @@ import "./index.css";
 import App from "./App";
 import { consumeOAuthCallback, exchangeCode } from "./lib/oauth";
 import { useZenmoneyStore } from "./store/useZenmoneyStore";
+import { useDataStore } from "./store/useDataStore";
 
 const isFileProtocol =
   typeof window !== "undefined" && window.location.protocol === "file:";
@@ -51,6 +52,9 @@ async function mount() {
       if ("error" in callback) throw new Error("Invalid OAuth callback");
       const token = await exchangeCode(callback.code);
       syncAfterLogin = await useZenmoneyStore.getState().validateAndSaveToken(token);
+      // CSV стираем только теперь, с проверенным токеном на руках: согласие
+      // на замену дано до ухода к провайдеру, но вход мог и не состояться.
+      if (syncAfterLogin && callback.replaceCsv) await useDataStore.getState().clearAll();
     } catch {
       useZenmoneyStore.setState({ status: "error", error: "Не удалось завершить вход. Попробуйте снова." });
     }

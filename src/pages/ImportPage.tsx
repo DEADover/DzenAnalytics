@@ -478,17 +478,27 @@ export function ImportPage() {
     return `Синхронизировано: ${parts.join(", ")}. Всего ${formatNum(r.count)} операций.`;
   }
 
+  /**
+   * Спросить, можно ли заменить CSV-данные на API.
+   * `false` — CSV нет, спрашивать не о чем; `true` — согласились; `null` —
+   * отказались.
+   */
+  async function confirmReplaceCsv(): Promise<boolean | null> {
+    if (!(meta?.source === "csv" && transactions.length > 0)) return false;
+    const ok = await confirm({
+      title: "Заменить CSV-данные на API?",
+      message: `У вас сейчас ${formatNum(transactions.length)} операций из CSV (${meta.fileName}). API-синк заменит их данными из Дзен-мани. Бюджеты, цели и правила сохранятся.`,
+      confirmLabel: "Заменить",
+      tone: "warning",
+    });
+    return ok ? true : null;
+  }
+
+  /** Подготовить подключение по токену: при согласии CSV стирается сразу. */
   async function prepareApiSource(): Promise<boolean> {
-    if (meta?.source === "csv" && transactions.length > 0) {
-      const ok = await confirm({
-        title: "Заменить CSV-данные на API?",
-        message: `У вас сейчас ${formatNum(transactions.length)} операций из CSV (${meta.fileName}). API-синк заменит их данными из Дзен-мани. Бюджеты, цели и правила сохранятся.`,
-        confirmLabel: "Заменить",
-        tone: "warning",
-      });
-      if (!ok) return false;
-      await clearAll();
-    }
+    const replace = await confirmReplaceCsv();
+    if (replace === null) return false;
+    if (replace) await clearAll();
     return true;
   }
 
@@ -509,7 +519,12 @@ export function ImportPage() {
 
   async function connectProvider() {
     setSyncSuccess(null);
-    if (await prepareApiSource()) startOAuth();
+    // Только спрашиваем: стирать CSV здесь нельзя — вход у провайдера может
+    // сорваться. Согласие уходит вместе с попыткой входа, а данные стираются
+    // после возврата с проверенным токеном (`main.tsx`).
+    const replace = await confirmReplaceCsv();
+    if (replace === null) return;
+    startOAuth({ replaceCsv: replace });
   }
 
   async function runSync() {
