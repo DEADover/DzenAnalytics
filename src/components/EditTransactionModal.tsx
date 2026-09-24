@@ -1207,7 +1207,10 @@ export function EditTransactionModal({
         <div
           className={`grid gap-3 ${
             !isDebt && kind !== "transfer"
-              ? "grid-cols-[minmax(0,1fr)_5.5rem] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_5.5rem]"
+              ? // «Счёт» — ровно прежней ширины (1,35 доли из 2,35 при валюте
+                // 6,5rem и двух зазорах по 0,75rem): место, отданное валютой,
+                // целиком уходит «Сумме», а не делится со счётом.
+                "grid-cols-[minmax(0,1fr)_5.5rem] sm:grid-cols-[minmax(0,calc((100%_-_8rem)*1.35/2.35))_minmax(0,1fr)_5.5rem]"
               : // Сумма забирает остаток, валюте хватает трёх букв и стрелки:
                 // поле суммы теперь считает выражения, и ему нужна ширина.
                 "grid-cols-[minmax(0,1fr)_5.5rem]"
