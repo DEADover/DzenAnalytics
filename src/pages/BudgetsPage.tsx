@@ -1132,6 +1132,7 @@ export function BudgetsPage() {
           hideEmpty={settings.hideEmptyRows}
           currentYm={cur}
           yearFirst={settings.yearTotalPlace === "start"}
+          yearPinned={settings.yearTotalPinned}
           editableFrom={cur}
           onSavePlans={savePlans}
           onCopyMonth={(from, targets) => savePlans(copyMonthPlans(lines, from, targets))}

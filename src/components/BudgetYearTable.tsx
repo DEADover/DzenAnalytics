@@ -61,6 +61,7 @@ export function BudgetYearTable({
   hideEmpty,
   currentYm,
   yearFirst = true,
+  yearPinned = true,
   editableFrom,
   onSavePlans,
   onCopyMonth,
@@ -76,6 +77,8 @@ export function BudgetYearTable({
   /** «За год» сразу за статьёй (и закреплена на широком экране) — или после
    *  декабря. Настройка бюджета «Колонка „За год“». */
   yearFirst?: boolean;
+  /** Закреплять «За год» на широком экране — у левого края или у правого. */
+  yearPinned?: boolean;
   /** Первый месяц (`YYYY-MM`), план которого можно править: текущий. Прошлые
    *  месяцы закрыты — их план уже сравнён с фактом. Не задан — правки нет. */
   editableFrom?: string;
@@ -263,8 +266,12 @@ export function BudgetYearTable({
     // прокрученное. Атрибутом, а не состоянием: прокрутка не должна будить
     // перерисовку таблицы в сорок колонок.
     const root = rootRef.current;
-    const scrolled = String((scrollerRef.current?.scrollLeft ?? 0) > 0);
+    const sc = scrollerRef.current;
+    const scrolled = String((sc?.scrollLeft ?? 0) > 0);
     if (root && root.dataset.scrolled !== scrolled) root.dataset.scrolled = scrolled;
+    // …и у закреплённой справа — пока правее неё ещё есть непролистанные месяцы.
+    const beforeEnd = String(!!sc && sc.scrollLeft < sc.scrollWidth - sc.clientWidth - 1);
+    if (root && root.dataset.beforeEnd !== beforeEnd) root.dataset.beforeEnd = beforeEnd;
   };
   const syncBack = () => copyScroll(cloneClipRef.current, scrollerRef.current);
 
@@ -336,14 +343,27 @@ export function BudgetYearTable({
    */
   const pinProps = (slot: Slot | undefined, i: number) => {
     if (slot !== "year") return { className: "", style: undefined };
-    // В конце таблицы колонка просто выделена фоном: закреплять её справа
-    // значило бы отнять у месяцев ширину ради того, что и так видно в конце.
-    if (!yearFirst) return { className: "year-col", style: undefined };
-    const left =
-      colWidths.length > i ? colWidths.slice(0, i + 1).reduce((s, w) => s + w, 0) : undefined;
+    // Край блока у первого месяца — чертой всегда, когда год в начале: иначе
+    // между ним и январём не было бы границы (у января своей черты нет).
+    const startEdge = yearFirst && i === SUB_COLUMNS.length - 1;
+    const edge = startEdge ? "year-edge" : "";
+    if (!yearPinned) return { className: `year-col ${edge}`, style: undefined };
+    const sum = (ws: number[]) => ws.reduce((s, w) => s + w, 0);
+    const n = colWidths.length;
+    if (yearFirst) {
+      const left = n > i ? sum(colWidths.slice(0, i + 1)) : undefined;
+      return {
+        className: `year-col lg:sticky lg:z-[1] ${edge} ${startEdge ? "year-pin-start" : ""}`,
+        style: left !== undefined ? { left: `${left}px` } : undefined,
+      };
+    }
+    // В конце — липнет к правому краю: отступ справа — сумма ширин тех
+    // колонок года, что правее этой (год — три последних колонки таблицы).
+    const right =
+      n >= SUB_COLUMNS.length ? sum(colWidths.slice(n - SUB_COLUMNS.length + i + 1)) : undefined;
     return {
-      className: `year-col lg:sticky lg:z-[1] ${i === SUB_COLUMNS.length - 1 ? "year-edge" : ""}`,
-      style: left !== undefined ? { left: `${left}px` } : undefined,
+      className: `year-col lg:sticky lg:z-[1] ${i === 0 ? "year-edge-end year-pin-end" : ""}`,
+      style: right !== undefined ? { right: `${right}px` } : undefined,
     };
   };
 
@@ -874,10 +894,15 @@ export function BudgetYearTable({
   const yearHead = (
     <th
       colSpan={SUB_COLUMNS.length}
-      style={{ ...pinProps("year", 0).style, zIndex: 14 }}
+      // Ячейка на все три колонки: справа она липнет вплотную к краю, а не
+      // с отступом первой из своих колонок.
+      style={{
+        ...(yearFirst || !yearPinned ? pinProps("year", 0).style : { right: "0px" }),
+        zIndex: 14,
+      }}
       className={`head-type px-1 pt-2 pb-0.5 text-center !font-semibold !text-text border-l border-border ${
         yearFirst ? "year-edge" : ""
-      } ${pinProps("year", 0).className}`}
+      } ${yearFirst && yearPinned ? "year-pin-start" : ""} ${pinProps("year", 0).className}`}
     >
       За год
     </th>

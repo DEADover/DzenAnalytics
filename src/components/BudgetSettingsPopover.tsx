@@ -205,9 +205,7 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
             <>
               <p>
                 Где в <InfoTerm>годовом своде</InfoTerm> стоят итоги года.{" "}
-                <InfoTerm>В начале</InfoTerm> — сразу за названием статьи, а на
-                широком экране ещё и закреплены: месяцы листаются под ними, и
-                итог года всегда рядом с названием.
+                <InfoTerm>В начале</InfoTerm> — сразу за названием статьи.
               </p>
               <p>
                 <InfoTerm>В конце</InfoTerm> — после декабря, как в обычных
@@ -226,6 +224,26 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
                 { value: "start" as const, label: "В начале" },
                 { value: "end" as const, label: "В конце" },
               ]}
+            />
+          }
+        />
+
+        <SettingRow
+          dense
+          title="Закреплять «За год»"
+          help={
+            <p>
+              На широком экране колонка не уезжает при прокрутке месяцев: в
+              начале держится у левого края, в конце — у правого, а месяцы
+              листаются под ней. На узком окне не закрепляется — статья и год
+              вместе заняли бы полэкрана.
+            </p>
+          }
+          control={
+            <Switch
+              checked={s.yearTotalPinned}
+              onChange={(v) => void s.update({ yearTotalPinned: v })}
+              label="Закреплять «За год»"
             />
           }
         />

@@ -29,6 +29,9 @@ export interface BudgetSettings {
   /** Где в годовом своде колонка «За год»: сразу за статьёй (и закреплена на
    *  широком экране) или после декабря, как в таблицах. */
   yearTotalPlace: BudgetYearTotalPlace;
+  /** Закреплять «За год» на широком экране: в начале — у левого края, в
+   *  конце — у правого; месяцы листаются под ней. */
+  yearTotalPinned: boolean;
   /** Окно прогноза по умолчанию в окне «Заполнить по среднему». */
   forecastMonths: number;
   forecastBasis: ForecastBasis;
@@ -41,6 +44,7 @@ export const DEFAULT_BUDGET_SETTINGS: BudgetSettings = {
   rowOrder: "alpha",
   hideEmptyRows: true,
   yearTotalPlace: "start",
+  yearTotalPinned: true,
   forecastMonths: 3,
   forecastBasis: "average",
 };
@@ -80,6 +84,7 @@ function pick(s: BudgetSettings): BudgetSettings {
     rowOrder: s.rowOrder,
     hideEmptyRows: s.hideEmptyRows,
     yearTotalPlace: s.yearTotalPlace,
+    yearTotalPinned: s.yearTotalPinned,
     forecastMonths: s.forecastMonths,
     forecastBasis: s.forecastBasis,
   };

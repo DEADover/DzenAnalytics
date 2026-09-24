@@ -88,6 +88,12 @@ export function Popover({
       // настройки.
       const target = e?.target;
       if (target instanceof Element && target.closest(`[${SURFACE_ATTR}]`)) return;
+      // Прокрутка, которая якорь не двигает, — тоже не повод закрываться:
+      // таблица бюджета, пролистанная вбок к текущему месяцу после смены
+      // настройки, захлопывала окно настроек, хотя его кнопка стояла на месте.
+      // Двигают якорь только прокрутка документа и его собственных предков.
+      const anchor = anchorRef.current;
+      if (target instanceof Element && anchor && !target.contains(anchor)) return;
       onClose();
     };
     // Изменился размер окна — якорь наверняка переехал, тут закрываем без
@@ -104,7 +110,7 @@ export function Popover({
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose]);
+  }, [open, onClose, anchorRef]);
 
   if (!open) return null;
   return createPortal(

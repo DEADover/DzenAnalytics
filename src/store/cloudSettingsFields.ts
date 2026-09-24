@@ -117,6 +117,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useBudgetSettingsStore, "budget.yearTotalPlace", (s) => s.yearTotalPlace, (v, s) =>
     v === "start" || v === "end" ? s.update({ yearTotalPlace: v }) : undefined
   ),
+  field(useBudgetSettingsStore, "budget.yearTotalPinned", (s) => s.yearTotalPinned, (v, s) =>
+    isBool(v) ? s.update({ yearTotalPinned: v }) : undefined
+  ),
   field(useBudgetSettingsStore, "budget.forecastMonths", (s) => s.forecastMonths, (v, s) =>
     isCount(v) ? s.update({ forecastMonths: v }) : undefined
   ),
