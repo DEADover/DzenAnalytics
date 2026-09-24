@@ -34,6 +34,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { parseCsv } from "../lib/csv";
+import { isOAuthConfigured, startOAuth } from "../lib/oauth";
 import { SyncLog } from "../components/SyncLog";
 import { OperationsSettings } from "../components/OperationsSettings";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
@@ -477,9 +478,7 @@ export function ImportPage() {
     return `Синхронизировано: ${parts.join(", ")}. Всего ${formatNum(r.count)} операций.`;
   }
 
-  async function connectToken() {
-    setSyncSuccess(null);
-    // Guard: existing CSV data will be replaced by API sync.
+  async function prepareApiSource(): Promise<boolean> {
     if (meta?.source === "csv" && transactions.length > 0) {
       const ok = await confirm({
         title: "Заменить CSV-данные на API?",
@@ -487,9 +486,15 @@ export function ImportPage() {
         confirmLabel: "Заменить",
         tone: "warning",
       });
-      if (!ok) return;
+      if (!ok) return false;
       await clearAll();
     }
+    return true;
+  }
+
+  async function connectToken() {
+    setSyncSuccess(null);
+    if (!(await prepareApiSource())) return;
     const ok = await zenValidateAndSave(tokenDraft);
     if (ok) {
       setTokenDraft("");
@@ -500,6 +505,11 @@ export function ImportPage() {
         /* error already in store */
       }
     }
+  }
+
+  async function connectProvider() {
+    setSyncSuccess(null);
+    if (await prepareApiSource()) startOAuth();
   }
 
   async function runSync() {
@@ -954,6 +964,11 @@ export function ImportPage() {
 
         {!zenToken ? (
           <div className="space-y-3">
+            {isOAuthConfigured() && (
+              <button onClick={connectProvider} className="btn-primary text-sm">
+                Войти через Дзен-мани
+              </button>
+            )}
             <div className="text-xs text-muted">
               <KeyRound className="w-3.5 h-3.5 inline align-text-bottom mr-1" />
               Личный токен получите в{" "}
@@ -2783,4 +2798,3 @@ export function ImportPage() {
     </div>
   );
 }
-
