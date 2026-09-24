@@ -931,16 +931,19 @@ export function BudgetYearTable({
                   постоянных значков в шапке читались бы рябью. Сбоку от
                   названия и вне потока, чтобы название не сдвигалось. */}
               {copyTargets(m).length > 0 && (
-                <button
-                  type="button"
-                  onClick={(e) => openCopy(m, e.currentTarget)}
-                  tabIndex={forClone ? -1 : undefined}
-                  aria-label={`Копировать план месяца: ${monthLabelFull(m)}`}
-                  title="Копировать план месяца на другие месяцы"
-                  className="btn-icon btn-icon-xs absolute left-full ml-1 opacity-0 group-hover/month:opacity-100 focus-visible:opacity-100"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
+                <span className="absolute left-full ml-1 opacity-0 group-hover/month:opacity-100 focus-within:opacity-100">
+                  <Tooltip content="Копировать план месяца на другие месяцы">
+                    <button
+                      type="button"
+                      onClick={(e) => openCopy(m, e.currentTarget)}
+                      tabIndex={forClone ? -1 : undefined}
+                      aria-label={`Копировать план месяца: ${monthLabelFull(m)}`}
+                      className="btn-icon btn-icon-xs"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
+                </span>
               )}
             </span>
           </th>
