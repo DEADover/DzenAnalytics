@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Copy } from "lucide-react";
+import { Check, Copy } from "lucide-react";
+import { Tooltip } from "./Tooltip";
 import { Popover } from "./Popover";
 import { MONTHS, MONTHS_SHORT } from "../lib/months";
 import { formatMoney } from "../lib/format";
@@ -38,25 +39,7 @@ function MonthTargets({
   };
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="text-muted whitespace-nowrap">Копировать на месяцы</span>
-        {following.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              const next = new Set(picked);
-              for (const m of following) {
-                if (allFollowing) next.delete(m);
-                else next.add(m);
-              }
-              onChange(next);
-            }}
-            className="text-accent hover:underline whitespace-nowrap"
-          >
-            {allFollowing ? "Снять следующие" : "Все следующие"}
-          </button>
-        )}
-      </div>
+      <div className="text-xs text-muted">Копировать на месяцы</div>
       {/* Плотные чипы в строку: месяцев до одиннадцати, и сеткой по четыре
           они растягивали окно на высоту самой суммы. */}
       <div className="flex flex-wrap gap-1">
@@ -72,6 +55,22 @@ function MonthTargets({
           </button>
         ))}
       </div>
+      {following.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            const next = new Set(picked);
+            for (const m of following) {
+              if (allFollowing) next.delete(m);
+              else next.add(m);
+            }
+            onChange(next);
+          }}
+          className="text-xs text-accent hover:underline whitespace-nowrap"
+        >
+          {allFollowing ? "Снять выбор" : "До конца года"}
+        </button>
+      )}
     </div>
   );
 }
@@ -138,9 +137,9 @@ export function PlanCellPopover({
         }}
         className="space-y-2.5"
       >
-        <div className="flex items-baseline gap-1.5 text-sm min-w-0">
-          <span className="font-medium truncate">{title}</span>
-          <span className="text-muted whitespace-nowrap">· {monthName(ym).toLowerCase()}</span>
+        <div className="min-w-0">
+          <div className="text-sm font-medium truncate">{title}</div>
+          <div className="text-xs text-muted">{monthName(ym)}</div>
         </div>
         <div>
           <div className="flex gap-1.5">
@@ -155,13 +154,22 @@ export function PlanCellPopover({
               onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
               className="input !py-1.5 text-sm text-right tabular-nums min-w-0"
             />
-            <button type="submit" className="btn-primary !px-3 !py-1.5 text-sm shrink-0">
-              Сохранить
-            </button>
+            {/* Значком: слово «Сохранить» было шире самой суммы. Высота —
+                с поле (34), квадратом. */}
+            <Tooltip content="Сохранить · Enter">
+              <button
+                type="submit"
+                aria-label="Сохранить"
+                className="btn-primary !p-0 w-[34px] h-[34px] shrink-0"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </div>
           {subsPlan > 0 && (
             <p className="text-xs text-muted mt-1">
-              Вместе с подкатегориями: у них {formatMoney(subsPlan, base)}
+              Вместе с подкатегориями: у них{" "}
+              <span className="whitespace-nowrap">{formatMoney(subsPlan, base)}</span>
             </p>
           )}
         </div>
