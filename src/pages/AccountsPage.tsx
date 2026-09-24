@@ -8,7 +8,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Legend,
   ComposedChart,
   Line,
   ReferenceLine,
@@ -2814,7 +2813,9 @@ export function AccountsPage() {
                   ticks={stackAxis.ticks}
                 />
                 <Tooltip {...chartTooltipProps} content={renderStackedTooltip} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {/* Легенды нет: счёт, цвет и сумма на этот день — в подсказке,
+                    а строка из десятка названий под графиком их только
+                    повторяла, вместе с архивными. */}
                 <ReferenceLine y={0} stroke={chartAxisStroke} strokeWidth={1} />
                 {/* Каждый счёт — ДВЕ области одного цвета: плюс в стопке над
                     нулём, минус в стопке под ним. Одной областью нельзя: в день,
