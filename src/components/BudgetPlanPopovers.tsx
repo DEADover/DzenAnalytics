@@ -37,9 +37,9 @@ function MonthTargets({
     onChange(next);
   };
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="label whitespace-nowrap">Копировать на месяцы</span>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="text-muted whitespace-nowrap">Копировать на месяцы</span>
         {following.length > 0 && (
           <button
             type="button"
@@ -51,20 +51,22 @@ function MonthTargets({
               }
               onChange(next);
             }}
-            className="text-xs text-accent hover:underline whitespace-nowrap"
+            className="text-accent hover:underline whitespace-nowrap"
           >
             {allFollowing ? "Снять следующие" : "Все следующие"}
           </button>
         )}
       </div>
-      <div className="grid grid-cols-4 gap-1.5">
+      {/* Плотные чипы в строку: месяцев до одиннадцати, и сеткой по четыре
+          они растягивали окно на высоту самой суммы. */}
+      <div className="flex flex-wrap gap-1">
         {months.map((m) => (
           <button
             key={m}
             type="button"
             aria-pressed={picked.has(m)}
             onClick={() => toggle(m)}
-            className={`chip chip-sm justify-center ${picked.has(m) ? "chip-on" : ""}`}
+            className={`chip chip-sm !px-2 justify-center ${picked.has(m) ? "chip-on" : ""}`}
           >
             {monthName(m, true)}
           </button>
@@ -126,51 +128,46 @@ export function PlanCellPopover({
   };
 
   return (
-    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-80 card p-3.5 shadow-lg">
+    // Компактно: заголовок строкой, сумма и «Сохранить» в одном ряду. Отмены
+    // нет — окно закрывается по Esc и щелчку мимо, как любое всплывающее.
+    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-64 card p-3 shadow-lg">
       <form
         onSubmit={(e) => {
           e.preventDefault();
           save();
         }}
-        className="space-y-3"
+        className="space-y-2.5"
       >
-        <div>
-          <div className="label">План · {monthName(ym)}</div>
-          <div className="text-sm font-medium truncate mt-0.5">{title}</div>
+        <div className="flex items-baseline gap-1.5 text-sm min-w-0">
+          <span className="font-medium truncate">{title}</span>
+          <span className="text-muted whitespace-nowrap">· {monthName(ym).toLowerCase()}</span>
         </div>
         <div>
-          <input
-            type="text"
-            inputMode="numeric"
-            ref={inputRef}
-            aria-label={`План на ${monthName(ym).toLowerCase()}, ${base}`}
-            value={value}
-            placeholder="0"
-            onFocus={(e) => e.target.select()}
-            onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
-            className="input text-right tabular-nums"
-          />
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              inputMode="numeric"
+              ref={inputRef}
+              aria-label={`План на ${monthName(ym).toLowerCase()}, ${base}`}
+              value={value}
+              placeholder="0"
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
+              className="input !py-1.5 text-sm text-right tabular-nums min-w-0"
+            />
+            <button type="submit" className="btn-primary !px-3 !py-1.5 text-sm shrink-0">
+              Сохранить
+            </button>
+          </div>
           {subsPlan > 0 && (
-            <p className="text-xs text-muted mt-1.5">
-              Сумма на всю категорию, вместе с подкатегориями: у них в этом месяце{" "}
-              {formatMoney(subsPlan, base)}.
+            <p className="text-xs text-muted mt-1">
+              Вместе с подкатегориями: у них {formatMoney(subsPlan, base)}
             </p>
           )}
         </div>
         {targets.length > 0 && (
           <MonthTargets source={ym} months={targets} picked={picked} onChange={setPicked} />
         )}
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="btn-ghost text-sm">
-            Отмена
-          </button>
-          <button type="submit" className="btn-primary text-sm whitespace-nowrap">
-            {copyTo.length > 0
-              ? // От двух до двенадцати — всегда «месяцах».
-                `Сохранить в ${copyTo.length + 1} месяцах`
-              : "Сохранить"}
-          </button>
-        </div>
       </form>
     </Popover>
   );
@@ -200,22 +197,18 @@ export function MonthCopyPopover({
   );
   const copyTo = targets.filter((m) => picked.has(m));
   return (
-    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-80 card p-3.5 shadow-lg">
-      <div className="space-y-3">
-        <div>
-          <div className="label">Копировать план месяца</div>
-          <div className="text-sm font-medium mt-0.5">{monthName(source)}</div>
+    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-64 card p-3 shadow-lg">
+      <div className="space-y-2.5">
+        <div className="text-sm">
+          <span className="font-medium">План на {monthName(source).toLowerCase()}</span>
+          <span className="text-muted"> — копия</span>
         </div>
         <MonthTargets source={source} months={targets} picked={picked} onChange={setPicked} />
         <p className="text-xs text-muted">
-          У каждой статьи в выбранных месяцах будет тот же план. Где в исходном
-          месяце плана нет, он снимается. Суммы назначенных операций не
-          копируются — у каждого месяца они свои.
+          Месяцы станут копией: где в исходном плана нет, он снимается.
+          Назначенные операции не копируются.
         </p>
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="btn-ghost text-sm">
-            Отмена
-          </button>
+        <div className="flex justify-end">
           <button
             type="button"
             disabled={copyTo.length === 0}
@@ -223,7 +216,7 @@ export function MonthCopyPopover({
               onCopy(copyTo);
               onClose();
             }}
-            className="btn-primary text-sm whitespace-nowrap"
+            className="btn-primary !px-3 !py-1.5 text-sm whitespace-nowrap"
           >
             <Copy className="w-4 h-4" aria-hidden />
             {copyTo.length > 0
