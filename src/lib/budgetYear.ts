@@ -382,3 +382,74 @@ export function buildBudgetYear(
 
   return { year, months, expense, income, delta };
 }
+
+/** Правка плана одной статьи за один месяц — то, что уходит в хранилище и в
+ *  очередь отправки в Дзен-мани. */
+export interface PlanCellEdit {
+  kind: BudgetKind;
+  category: string;
+  subcategory: string | null;
+  ym: string;
+  amount: number;
+}
+
+/**
+ * Правки плана строки свода: сумма `amount` в каждом из месяцев `targets`
+ * (индексы 0…11).
+ *
+ * Строка категории показывает СВОЙ план плюс планы под-категорий — как в
+ * месячном виде и в самом Дзен-мани. Правится при этом свой план: из
+ * введённого числа вычитается то, что в этом месяце дают под-категории, и в
+ * строке оказывается ровно введённое. Считается помесячно — у под-категорий в
+ * разные месяцы разный план, а в месяцах с замком их доля и вовсе ноль.
+ */
+export function rowPlanEdits(
+  report: BudgetYearReport,
+  group: YearGroup,
+  row: YearRow,
+  amount: number,
+  targets: number[]
+): PlanCellEdit[] {
+  const isTotal = row === group.total;
+  return targets.map((i) => {
+    const subs = isTotal ? group.total.cells[i].plan - group.parent.cells[i].plan : 0;
+    return {
+      kind: row.kind,
+      category: row.category,
+      subcategory: isTotal ? null : row.subcategory,
+      ym: report.months[i],
+      amount: Math.max(0, amount - subs),
+    };
+  });
+}
+
+/**
+ * Скопировать план месяца `from` на месяцы `targets`: в каждом из них у
+ * каждой статьи становится тот же СВОЙ план, что в `from`. Статья без плана в
+ * `from` в целевом месяце план теряет — иначе месяц не стал бы копией.
+ *
+ * Суммы назначенных операций не копируются: своего плана за ними нет, а сами
+ * операции у каждого месяца свои. Клетки, где план уже совпадает, в правки не
+ * попадают — нечего и отправлять.
+ */
+export function copyMonthPlans(
+  lines: BudgetLine[],
+  from: string,
+  targets: string[]
+): PlanCellEdit[] {
+  const edits: PlanCellEdit[] = [];
+  for (const line of lines) {
+    const amount = plannedFor(line, from);
+    for (const ym of targets) {
+      if (ym === from || plannedFor(line, ym) === amount) continue;
+      edits.push({
+        kind: line.kind,
+        category: line.category,
+        subcategory: line.subcategory ?? null,
+        ym,
+        amount,
+      });
+    }
+  }
+  return edits;
+}

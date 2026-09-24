@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildBudgetYear, categoryPathKey, rowIsLive, yearDiff } from "./budgetYear";
+import {
+  buildBudgetYear,
+  categoryPathKey,
+  copyMonthPlans,
+  rowIsLive,
+  rowPlanEdits,
+  yearDiff,
+} from "./budgetYear";
 import type { BudgetLine } from "./budgets";
 import type { Transaction } from "../types";
 
@@ -693,5 +700,73 @@ describe("buildBudgetYear: отчётный месяц", () => {
     );
     // Период «2026-12» идёт с 15.12.2026 по 14.01.2027.
     expect(r.expense.groups[0].total.cells[11].fact).toBe(700);
+  });
+});
+
+describe("правка плана в режиме «Год» (#106)", () => {
+  const year = (lines: BudgetLine[]) => buildBudgetYear(lines, [], 2026);
+  const food = (lines: BudgetLine[]) => year(lines).expense.groups.find((g) => g.category === "Еда")!;
+
+  it("строка под-категории правит свой план в каждом выбранном месяце", () => {
+    const report = year([line({ subcategory: "Кафе", amount: 5000 })]);
+    const group = report.expense.groups[0];
+    const edits = rowPlanEdits(report, group, group.subs[0], 7000, [9, 10, 11]);
+    expect(edits.map((e) => [e.subcategory, e.ym, e.amount])).toEqual([
+      ["Кафе", "2026-10", 7000],
+      ["Кафе", "2026-11", 7000],
+      ["Кафе", "2026-12", 7000],
+    ]);
+  });
+
+  it("у категории введённое — это итог строки: план под-категорий вычитается помесячно", () => {
+    const lines = [
+      line({ amount: 20_000 }),
+      line({ subcategory: "Кафе", amount: 0, overrides: { "2026-10": 5000, "2026-11": 8000 } }),
+    ];
+    const report = year(lines);
+    const group = food(lines);
+    const edits = rowPlanEdits(report, group, group.total, 30_000, [9, 10, 11]);
+    expect(edits.map((e) => [e.subcategory, e.ym, e.amount])).toEqual([
+      [null, "2026-10", 25_000],
+      [null, "2026-11", 22_000],
+      [null, "2026-12", 30_000],
+    ]);
+  });
+
+  it("в месяце с замком под-категории уже внутри плана категории — ничего не вычитается", () => {
+    const lines = [
+      line({ amount: 0, overrides: { "2026-10": 36_000 }, locks: { "2026-10": true } }),
+      line({ subcategory: "Кафе", amount: 0, overrides: { "2026-10": 10_000 } }),
+    ];
+    const report = year(lines);
+    const group = food(lines);
+    expect(rowPlanEdits(report, group, group.total, 40_000, [9])[0].amount).toBe(40_000);
+  });
+
+  it("свой план не уходит в минус, если под-категории дают больше введённого", () => {
+    const lines = [line({ amount: 0 }), line({ subcategory: "Кафе", amount: 8000 })];
+    const report = year(lines);
+    const group = food(lines);
+    expect(rowPlanEdits(report, group, group.total, 5000, [9])[0].amount).toBe(0);
+  });
+
+  it("копия месяца повторяет свои планы всех статей и снимает лишние", () => {
+    const lines = [
+      line({ amount: 0, overrides: { "2026-09": 20_000, "2026-10": 15_000 } }),
+      line({ category: "Дом", amount: 0, overrides: { "2026-11": 3000 } }),
+      line({ category: "Зарплата", kind: "income", amount: 100_000 }),
+    ];
+    const edits = copyMonthPlans(lines, "2026-09", ["2026-10", "2026-11"]);
+    expect(edits.map((e) => [e.category, e.ym, e.amount])).toEqual([
+      ["Еда", "2026-10", 20_000],
+      ["Еда", "2026-11", 20_000],
+      // В сентябре у «Дома» плана нет — в ноябре его не остаётся.
+      ["Дом", "2026-11", 0],
+      // Зарплата и так одинакова во всех месяцах — править нечего.
+    ]);
+  });
+
+  it("копия на тот же месяц ничего не делает", () => {
+    expect(copyMonthPlans([line({ amount: 1000 })], "2026-09", ["2026-09"])).toEqual([]);
   });
 });

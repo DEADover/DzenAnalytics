@@ -71,6 +71,36 @@ describe("applyPlans", () => {
     expect(stored("Еда", null, "2026-08")).toBe(3000);
   });
 
+  it("одна статья на несколько месяцев доезжает во всех (копия плана, #106)", async () => {
+    await useBudgetsStore.getState().applyPlans([
+      upsert({ ym: "2026-10", amount: 1000 }),
+      upsert({ ym: "2026-11", amount: 1000 }),
+      upsert({ ym: "2026-12", amount: 1000 }),
+    ]);
+    expect(useBudgetsStore.getState().lines).toHaveLength(1);
+    expect(stored("Еда", null, "2026-09")).toBe(0);
+    for (const ym of ["2026-10", "2026-11", "2026-12"]) expect(stored("Еда", null, ym)).toBe(1000);
+
+    await useBudgetsStore.getState().applyPlans([
+      upsert({ ym: "2026-11", amount: 0 }),
+      upsert({ ym: "2026-12", amount: 2000 }),
+    ]);
+    expect(stored("Еда", null, "2026-10")).toBe(1000);
+    expect(stored("Еда", null, "2026-11")).toBe(0);
+    expect(stored("Еда", null, "2026-12")).toBe(2000);
+  });
+
+  it("новая строка начинается с первого месяца с планом, нули не заводит", async () => {
+    await useBudgetsStore.getState().applyPlans([
+      upsert({ ym: "2026-12", amount: 500 }),
+      upsert({ ym: "2026-10", amount: 0 }),
+      upsert({ ym: "2026-11", amount: 300 }),
+    ]);
+    const [l] = useBudgetsStore.getState().lines;
+    expect(l.startMonth).toBe("2026-11");
+    expect(l.overrides).toEqual({ "2026-11": 300, "2026-12": 500 });
+  });
+
   it("не трогает планы других месяцев", async () => {
     await useBudgetsStore.getState().applyPlans([upsert({ ym: "2026-07", amount: 900 })]);
     await useBudgetsStore.getState().applyPlans([upsert({ ym: "2026-08", amount: 1000 })]);

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronDown, Coins, Scale, Target } from "lucide-react";
+import { ChevronDown, Coins, Copy, Scale, Target } from "lucide-react";
 import {
   hasTransfers,
   yearDiff,
@@ -9,6 +9,8 @@ import {
   type YearRow,
   type YearSection,
   rowIsLive,
+  rowPlanEdits,
+  type PlanCellEdit,
 } from "../lib/budgetYear";
 import type { BudgetKind } from "../lib/budgets";
 import { formatMoney, formatNum, monthLabel, monthLabelFull } from "../lib/format";
@@ -21,6 +23,7 @@ import { treeIndent } from "./table/tableKit";
 import { TooltipFacts } from "./TooltipFacts";
 import { InfoPopover } from "./InfoPopover";
 import { Badge } from "./Badge";
+import { MonthCopyPopover, PlanCellPopover } from "./BudgetPlanPopovers";
 
 /** Три колонки на месяц плюс столько же на год — их и заполняем. */
 const SUB_COLUMNS = ["План", "Факт", "Разница"] as const;
@@ -58,6 +61,9 @@ export function BudgetYearTable({
   hideEmpty,
   currentYm,
   yearFirst = true,
+  editableFrom,
+  onSavePlans,
+  onCopyMonth,
   onOpenCell,
 }: {
   report: BudgetYearReport;
@@ -70,6 +76,13 @@ export function BudgetYearTable({
   /** «За год» сразу за статьёй (и закреплена на широком экране) — или после
    *  декабря. Настройка бюджета «Колонка „За год“». */
   yearFirst?: boolean;
+  /** Первый месяц (`YYYY-MM`), план которого можно править: текущий. Прошлые
+   *  месяцы закрыты — их план уже сравнён с фактом. Не задан — правки нет. */
+  editableFrom?: string;
+  /** Записать правки плана (и поставить их в очередь отправки в Дзен-мани). */
+  onSavePlans?: (edits: PlanCellEdit[]) => void;
+  /** Скопировать план месяца `from` целиком на месяцы `targets`. */
+  onCopyMonth?: (from: string, targets: string[]) => void;
   /** Клик по факту — операции этой статьи за этот месяц. */
   onOpenCell: (
     category: string,
@@ -128,6 +141,35 @@ export function BudgetYearTable({
   const emptyShown = (kind: BudgetKind) => emptyOpen[kind] ?? !hideEmpty;
   const toggleEmpty = (kind: BudgetKind) =>
     setEmptyOpen((prev) => ({ ...prev, [kind]: !(prev[kind] ?? !hideEmpty) }));
+
+  /**
+   * Правка плана (issue #106): в текущем месяце и дальше план ячейки
+   * открывается окном с суммой и копированием на другие месяцы, а шапка
+   * месяца копирует план всего месяца.
+   *
+   * Якорь окна — сама нажатая ячейка, а не ref на каждую из сотен: окно одно,
+   * и при открытии достаточно запомнить, от чего его рисовать. Для шапки это
+   * важно вдвойне: нажимают её двойника, а не настоящую.
+   */
+  const editableMonths =
+    editableFrom && onSavePlans ? report.months.filter((m) => m >= editableFrom) : [];
+  const [popoverAnchor, setPopoverAnchor] = useState<HTMLElement | null>(null);
+  const [editing, setEditing] = useState<{ group: YearGroup; row: YearRow; month: number } | null>(
+    null
+  );
+  const [copying, setCopying] = useState<string | null>(null);
+  const planEditor = (group: YearGroup, row: YearRow, month: number) =>
+    group.transfer || !editableMonths.includes(report.months[month])
+      ? undefined
+      : (anchor: HTMLElement) => {
+          setPopoverAnchor(anchor);
+          setEditing({ group, row, month });
+        };
+  const openCopy = (ym: string, anchor: HTMLElement) => {
+    setPopoverAnchor(anchor);
+    setCopying(ym);
+  };
+  const copyTargets = (ym: string) => (onCopyMonth ? editableMonths.filter((m) => m !== ym) : []);
 
   /** Всего колонок — для заголовков разделов на всю ширину. */
   const COLS = 1 + (report.months.length + 1) * SUB_COLUMNS.length;
@@ -370,9 +412,11 @@ export function BudgetYearTable({
       /** Дописка к подсказке — например, сколько в этой сумме своего у категории. */
       note?: string;
       slot?: Slot;
+      /** План этой ячейки можно править — открыть окно от нажатой кнопки. */
+      onEditPlan?: (anchor: HTMLElement) => void;
     } = {}
   ) => {
-    const { strong = false, note, slot } = opts;
+    const { strong = false, note, slot, onEditPlan } = opts;
     const diff = yearDiff(c, kind);
     const empty = c.plan === 0 && c.fact === 0;
     const cls = `py-1.5 text-right tabular-nums whitespace-nowrap ${
@@ -385,7 +429,21 @@ export function BudgetYearTable({
             так она читается сплошной линией. Отступы у крайних колонок больше
             обычных: без них черта прилипала к соседней «Разнице». */}
         <td {...pin(0)} className={`${cls} ${edgeOf(slot)} text-muted ${pin(0).className}`}>
-          {num(c.plan)}
+          {onEditPlan ? (
+            // Подложка под курсором — как у факта: видно, что число нажимается.
+            // На всю ширину колонки: пустой план — это один прочерк, и в него
+            // одного попасть мышью трудно.
+            <button
+              type="button"
+              onClick={(e) => onEditPlan(e.currentTarget)}
+              aria-label={`Изменить план: ${label}`}
+              className="w-full text-right rounded px-1 -mx-1 hover:bg-panel2/60 hover:text-accent"
+            >
+              {num(c.plan)}
+            </button>
+          ) : (
+            num(c.plan)
+          )}
         </td>
         <td {...pin(1)} className={`${cls} px-2 ${pin(1).className}`}>
           {empty || !onClick ? (
@@ -449,7 +507,14 @@ export function BudgetYearTable({
 
   const dataRow = (
     row: YearRow,
-    opts: { nested?: boolean; last?: boolean; group?: string; own?: YearRow }
+    opts: {
+      nested?: boolean;
+      last?: boolean;
+      group?: string;
+      own?: YearRow;
+      /** Категория, к которой относится строка, — для правки плана. */
+      owner: YearGroup;
+    }
   ) => {
     const rowYear = monthCells(
       { plan: row.plan, fact: row.fact },
@@ -515,7 +580,7 @@ export function BudgetYearTable({
           `${row.subcategory ?? row.category} · ${monthLabel(report.months[i])}`,
           report.months[i],
           () => onOpenCell(row.category, row.subcategory, report.months[i], row.kind),
-          { note, slot: firstSlot(i) }
+          { note, slot: firstSlot(i), onEditPlan: planEditor(opts.owner, row, i) }
         );
       })}
       {!yearFirst && rowYear}
@@ -562,10 +627,13 @@ export function BudgetYearTable({
         {dataRow(g.total, {
           group: subs.length > 0 ? `${g.total.kind} ${g.category}` : undefined,
           own: subs.length > 0 ? g.parent : undefined,
+          owner: g,
         })}
         {subs.length > 0 &&
           expanded.has(`${g.total.kind} ${g.category}`) &&
-          subs.map((s, i) => dataRow(s, { nested: true, last: i === subs.length - 1 }))}
+          subs.map((s, i) =>
+            dataRow(s, { nested: true, last: i === subs.length - 1, owner: g })
+          )}
       </Fragment>
     );
   };
@@ -850,14 +918,31 @@ export function BudgetYearTable({
           <th
             key={m}
             colSpan={SUB_COLUMNS.length}
-            className={`head-type bg-panel px-1 pt-2 pb-0.5 text-center ${
+            className={`group/month head-type bg-panel px-1 pt-2 pb-0.5 text-center ${
               firstSlot(i) === "first" ? "" : "border-l border-border/60"
             } ${m === currentYm ? "!text-accent !font-semibold" : ""}`}
           >
-            {/* Полное название: тройка колонок под ним всё равно шире
-                любого месяца, и сокращать было незачем. Год убираем — он
-                один на всю таблицу и назван в шапке страницы. */}
-            {monthLabelFull(m).replace(/\s\d+ г\.$/, "")}
+            <span className="relative inline-flex items-center">
+              {/* Полное название: тройка колонок под ним всё равно шире
+                  любого месяца, и сокращать было незачем. Год убираем — он
+                  один на всю таблицу и назван в шапке страницы. */}
+              {monthLabelFull(m).replace(/\s\d+ г\.$/, "")}
+              {/* Копия плана месяца — значком под курсором: двенадцать
+                  постоянных значков в шапке читались бы рябью. Сбоку от
+                  названия и вне потока, чтобы название не сдвигалось. */}
+              {copyTargets(m).length > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => openCopy(m, e.currentTarget)}
+                  tabIndex={forClone ? -1 : undefined}
+                  aria-label={`Копировать план месяца: ${monthLabelFull(m)}`}
+                  title="Копировать план месяца на другие месяцы"
+                  className="btn-icon btn-icon-xs absolute left-full ml-1 opacity-0 group-hover/month:opacity-100 focus-visible:opacity-100"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </span>
           </th>
         ))}
         {!yearFirst && yearHead}
@@ -966,6 +1051,44 @@ export function BudgetYearTable({
         </tfoot>
       </table>
       </div>
+      {editing && onSavePlans && (
+        <PlanCellPopover
+          anchorRef={{ current: popoverAnchor }}
+          title={
+            editing.row.subcategory
+              ? `${editing.row.category} › ${editing.row.subcategory}`
+              : editing.row.category
+          }
+          ym={report.months[editing.month]}
+          initial={editing.row.cells[editing.month].plan}
+          subsPlan={
+            editing.row === editing.group.total
+              ? editing.group.total.cells[editing.month].plan -
+                editing.group.parent.cells[editing.month].plan
+              : 0
+          }
+          base={base}
+          targets={editableMonths.filter((m) => m !== report.months[editing.month])}
+          onSave={(amount, copyTo) =>
+            onSavePlans(
+              rowPlanEdits(report, editing.group, editing.row, amount, [
+                editing.month,
+                ...copyTo.map((m) => report.months.indexOf(m)),
+              ])
+            )
+          }
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {copying && onCopyMonth && (
+        <MonthCopyPopover
+          anchorRef={{ current: popoverAnchor }}
+          source={copying}
+          targets={copyTargets(copying)}
+          onCopy={(copyTo) => onCopyMonth(copying, copyTo)}
+          onClose={() => setCopying(null)}
+        />
+      )}
     </div>
   );
 }

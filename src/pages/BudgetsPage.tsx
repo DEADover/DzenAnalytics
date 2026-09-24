@@ -37,7 +37,12 @@ import { MonthCashflowChart } from "../components/MonthCashflowChart";
 import { BudgetFillModal, type FillItem } from "../components/BudgetFillModal";
 import { BudgetYearTable } from "../components/BudgetYearTable";
 import { BudgetSettingsPopover } from "../components/BudgetSettingsPopover";
-import { buildBudgetYear, categoryPathKey } from "../lib/budgetYear";
+import {
+  buildBudgetYear,
+  categoryPathKey,
+  copyMonthPlans,
+  type PlanCellEdit,
+} from "../lib/budgetYear";
 import { useLiveCategoryPaths } from "../hooks/useDictionaries";
 import { nameKey } from "../lib/budgetLines";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
@@ -133,6 +138,7 @@ export function BudgetsPage() {
   // Plan changes queue here and flush via the normal Push flow (Settings push
   // mode). `pendingBudget` lets a row show «ждёт отправки в Дзен».
   const queueBudget = useBudgetEditsStore((s) => s.queue);
+  const queueBudgets = useBudgetEditsStore((s) => s.queueMany);
   const budgetEdits = useBudgetEditsStore((s) => s.edits);
 
   // Настройки бюджета: периметр счетов, переводы, вид и прогноз по умолчанию.
@@ -553,16 +559,23 @@ export function BudgetsPage() {
    *  (иначе шесть параллельных записей затирают друг друга), а в очередь
    *  отправки в Дзен-мани каждая статья идёт своей строкой. */
   function applyFill(items: FillItem[]) {
-    void applyPlans(items.map((it) => ({ ...it, ym })));
-    for (const it of items) {
-      void queueBudget({
+    savePlans(
+      items.map((it) => ({
         kind: it.kind,
         category: it.category,
         subcategory: it.subcategory,
         ym,
         amount: it.amount,
-      });
-    }
+      }))
+    );
+  }
+
+  /** Записать правки плана и поставить их в очередь отправки — обе одной
+   *  записью: поштучно из многих правок доезжала последняя. */
+  function savePlans(edits: PlanCellEdit[]) {
+    if (edits.length === 0) return;
+    void applyPlans(edits);
+    void queueBudgets(edits);
   }
 
   const rows = useMemo<Row[]>(() => {
@@ -1119,6 +1132,9 @@ export function BudgetsPage() {
           hideEmpty={settings.hideEmptyRows}
           currentYm={cur}
           yearFirst={settings.yearTotalPlace === "start"}
+          editableFrom={cur}
+          onSavePlans={savePlans}
+          onCopyMonth={(from, targets) => savePlans(copyMonthPlans(lines, from, targets))}
           onOpenCell={openCategory}
         />
       )}

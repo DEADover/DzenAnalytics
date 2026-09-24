@@ -152,33 +152,48 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
     // невидим на экране, а строку разводил на две (см. `budgetLines`).
     const idOf = (kind: string, category: string, sub: string | null) =>
       nameKey(kind as BudgetKind, category, sub);
-    // Одна правка на статью: если одна и та же статья пришла дважды, побеждает
-    // последняя — как и при обычном редактировании.
-    const wanted = new Map<string, PlanUpsert>();
-    for (const it of items) wanted.set(idOf(it.kind, it.category, it.subcategory), it);
+    // Правки собираются по статье, а внутри неё — по месяцу: копирование плана
+    // на несколько месяцев приносит одну статью несколько раз, и доехать
+    // должен каждый месяц. Если одна и та же клетка (статья и месяц) пришла
+    // дважды, побеждает последняя — как и при обычном редактировании.
+    const wanted = new Map<string, { item: PlanUpsert; months: Map<string, number> }>();
+    for (const it of items) {
+      const key = idOf(it.kind, it.category, it.subcategory);
+      const entry = wanted.get(key) ?? { item: it, months: new Map<string, number>() };
+      entry.months.set(it.ym, it.amount);
+      wanted.set(key, entry);
+    }
 
     const seen = new Set<string>();
     const updated = get().lines.map((l) => {
       const key = idOf(l.kind, l.category, l.subcategory ?? null);
-      const it = wanted.get(key);
-      if (!it) return l;
+      const entry = wanted.get(key);
+      if (!entry) return l;
       seen.add(key);
-      return { ...l, overrides: { ...(l.overrides ?? {}), [it.ym]: it.amount } };
+      return {
+        ...l,
+        overrides: { ...(l.overrides ?? {}), ...Object.fromEntries(entry.months) },
+      };
     });
 
     const additions: BudgetLine[] = [];
-    for (const [key, it] of wanted) {
-      if (seen.has(key) || it.amount <= 0) continue;
+    for (const [key, { item, months }] of wanted) {
+      if (seen.has(key)) continue;
+      // Новой строке нули не нужны: плана в этих месяцах у неё и так нет.
+      const planned = [...months]
+        .filter(([, amount]) => amount > 0)
+        .sort(([a], [b]) => a.localeCompare(b));
+      if (planned.length === 0) continue;
       additions.push({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        category: it.category,
-        subcategory: it.subcategory,
-        kind: it.kind,
+        category: item.category,
+        subcategory: item.subcategory,
+        kind: item.kind,
         amount: 0,
         recurrence: "monthly",
-        startMonth: it.ym,
+        startMonth: planned[0][0],
         endMonth: null,
-        overrides: { [it.ym]: it.amount },
+        overrides: Object.fromEntries(planned),
         createdAt: new Date().toISOString(),
       });
     }

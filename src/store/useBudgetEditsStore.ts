@@ -20,6 +20,9 @@ interface State {
   hydrate: () => Promise<void>;
   /** Queue (or replace) a pending plan change for one (tag, month). */
   queue: (edit: BudgetEdit) => Promise<void>;
+  /** Queue several at ONE write. `queue` in a loop loses all but the last: each
+   *  call reads the list before its neighbour has written it back. */
+  queueMany: (edits: BudgetEdit[]) => Promise<void>;
   clearMany: (ids: string[]) => Promise<void>;
   /** Increment the skip counter on each id; DROP any that reach `max` retries.
    *  Returns the dropped ids (for logging). Used to purge edits whose tag no
@@ -39,6 +42,14 @@ export const useBudgetEditsStore = create<State>((set, get) => ({
 
   queue: async (edit) => {
     const next = { ...get().edits, [budgetEditId(edit)]: edit };
+    await db.saveJSON(KEY, next);
+    set({ edits: next });
+  },
+
+  queueMany: async (edits) => {
+    if (edits.length === 0) return;
+    const next = { ...get().edits };
+    for (const edit of edits) next[budgetEditId(edit)] = edit;
     await db.saveJSON(KEY, next);
     set({ edits: next });
   },
