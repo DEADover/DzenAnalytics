@@ -127,9 +127,11 @@ export function PlanCellPopover({
   };
 
   return (
-    // Компактно: заголовок строкой, сумма и «Сохранить» в одном ряду. Отмены
-    // нет — окно закрывается по Esc и щелчку мимо, как любое всплывающее.
-    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-64 card p-3 shadow-lg">
+    // Ширина — по содержимому, а не «как у окна»: сумма в девять знаков и
+    // кнопка-значок, ряд чипов месяцев по четыре. Шире — поле становится
+    // пустой полосой, а окно закрывает соседние месяцы, с которыми план и
+    // сверяют. Отмены нет — окно закрывается по Esc и щелчку мимо.
+    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-52 card p-3 shadow-lg">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -168,7 +170,7 @@ export function PlanCellPopover({
           </div>
           {subsPlan > 0 && (
             <p className="text-xs text-muted mt-1">
-              Вместе с подкатегориями: у них{" "}
+              Из них подкатегории:{" "}
               <span className="whitespace-nowrap">{formatMoney(subsPlan, base)}</span>
             </p>
           )}
@@ -205,7 +207,7 @@ export function MonthCopyPopover({
   );
   const copyTo = targets.filter((m) => picked.has(m));
   return (
-    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-64 card p-3 shadow-lg">
+    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-56 card p-3 shadow-lg">
       <div className="space-y-2.5">
         <div className="text-sm">
           <span className="font-medium">План на {monthName(source).toLowerCase()}</span>
