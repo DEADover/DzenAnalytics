@@ -140,11 +140,13 @@ export function PlanCellPopover({
           save();
         }}
       >
-        <div className="flex items-baseline gap-1 text-xs min-w-0 mb-2">
-          <span className="font-medium text-text truncate">{title}</span>
-          <span className="text-muted whitespace-nowrap">· {monthName(ym)}</span>
+        {/* Месяц — своей строкой: название статьи бывает длинным, и в одну
+            строку с ним месяц уезжал за край. */}
+        <div className="mb-2 min-w-0">
+          <div className="text-sm font-medium truncate">{title}</div>
+          <div className="text-xs text-muted">{monthName(ym)}</div>
         </div>
-        <div className="relative">
+        <div>
           <input
             type="text"
             inputMode="numeric"
@@ -154,28 +156,8 @@ export function PlanCellPopover({
             placeholder="0"
             onFocus={(e) => e.target.select()}
             onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
-            className={`input !py-1.5 text-sm text-right tabular-nums ${
-              targets.length > 0 ? "!pr-9" : ""
-            }`}
+            className="input !py-1.5 text-sm text-right tabular-nums"
           />
-          {targets.length > 0 && (
-            <Tooltip content={copyOpen ? "Не копировать" : "Копировать на другие месяцы"}>
-              <button
-                type="button"
-                aria-label="Копировать на другие месяцы"
-                aria-expanded={copyOpen}
-                onClick={() => {
-                  if (copyOpen) setPicked(new Set());
-                  setCopyOpen((o) => !o);
-                }}
-                className={`absolute right-1 top-1/2 -translate-y-1/2 btn-icon !p-1 ${
-                  copyOpen ? "!text-accent bg-accent/10" : ""
-                }`}
-              >
-                <Copy className="w-4 h-4" />
-              </button>
-            </Tooltip>
-          )}
         </div>
         {subsPlan > 0 && (
           <p className="text-xs text-muted mt-1.5">
@@ -204,12 +186,33 @@ export function PlanCellPopover({
             </div>
           </div>
         )}
-        <button type="submit" className="btn-primary w-full !py-1.5 text-sm mt-2.5">
-          {copyTo.length > 0
-            ? // От двух до двенадцати — всегда «месяцах».
-              `Сохранить в ${copyTo.length + 1} месяцах`
-            : "Сохранить"}
-        </button>
+        {/* Копия и сохранение — рядом, вместе на всю ширину поля: копия
+            квадратом слева, «Сохранить» забирает остальное. */}
+        <div className="flex gap-1.5 mt-2.5">
+          {targets.length > 0 && (
+            <Tooltip content={copyOpen ? "Не копировать" : "Копировать на другие месяцы"}>
+              <button
+                type="button"
+                aria-label="Копировать на другие месяцы"
+                aria-expanded={copyOpen}
+                onClick={() => {
+                  if (copyOpen) setPicked(new Set());
+                  setCopyOpen((o) => !o);
+                }}
+                className={`btn-ghost !p-0 w-[34px] h-[34px] shrink-0 ${
+                  copyOpen ? "!border-accent/60 !bg-accent/10 text-accent" : ""
+                }`}
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </Tooltip>
+          )}
+          <button type="submit" className="btn-primary flex-1 min-w-0 !px-1.5 !py-1.5 text-sm whitespace-nowrap">
+            {/* Сколько месяцев получат сумму — коротко: рядом с копией кнопке
+                остаётся около 130 px, «в 12 месяцах» туда не входило. */}
+            {copyTo.length > 0 ? `Сохранить · ${copyTo.length + 1} мес.` : "Сохранить"}
+          </button>
+        </div>
       </form>
     </Popover>
   );
