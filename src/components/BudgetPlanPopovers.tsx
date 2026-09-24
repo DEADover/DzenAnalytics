@@ -144,7 +144,7 @@ export function PlanCellPopover({
         {/* Месяц — своей строкой: название статьи бывает длинным, и в одну
             строку с ним месяц уезжал за край. */}
         <div className="mb-2 min-w-0">
-          <div className="text-sm font-medium truncate">{title}</div>
+          <div className="text-xs font-medium truncate">{title}</div>
           <div className="text-xs text-muted">{monthName(ym)}</div>
         </div>
         <div>
