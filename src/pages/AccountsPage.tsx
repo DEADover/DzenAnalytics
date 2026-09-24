@@ -453,7 +453,7 @@ export function AccountsPage() {
   const view = prefs.chartView;
   const setView = (next: typeof view) => void patchPrefs({ chartView: next });
   const accountsView = prefs.listView;
-  const hideArchived = prefs.hideArchived;
+  const showArchived = prefs.showArchived;
   const balanceScope = prefs.balanceScope;
   const onlySavings = prefs.onlySavings;
   const sortBy = prefs.sortBy;
@@ -848,11 +848,11 @@ export function AccountsPage() {
   // иначе непонятно, почему список короче ожидаемого.
   const effectiveScope = balanceScope;
   const effectiveSavings = onlySavings;
-  const effectiveHideArchived = hideArchived;
+  const effectiveHideArchived = !showArchived;
   const flagsActive =
     (effectiveScope === "all" ? 0 : 1) +
     (effectiveSavings ? 1 : 0) +
-    (effectiveHideArchived ? 1 : 0);
+    (showArchived ? 1 : 0);
 
   /** Пояснение к колонкам. Раньше висело абзацем над списком и занимало место
    *  каждый раз, хотя нужно один раз при первом знакомстве. */
@@ -1893,12 +1893,10 @@ export function AccountsPage() {
                     label="Только накопительные"
                   />
                   <CheckItem
-                    checked={effectiveHideArchived}
-                    onChange={() =>
-                      void patchPrefs({ hideArchived: !hideArchived })
-                    }
+                    checked={showArchived}
+                    onChange={() => void patchPrefs({ showArchived: !showArchived })}
                     icon={Archive}
-                    label="Скрыть архивные"
+                    label="Показать архивные"
                   />
                 </>
               )}
@@ -1996,7 +1994,10 @@ export function AccountsPage() {
                     bankFilter: [],
                     balanceScope: "all",
                     onlySavings: false,
-                    hideArchived: false,
+                    // Сброс открывает всё, включая архив: кнопка стоит под
+                    // «ни один счёт не подошёл», и оставить скрытым хоть что-то
+                    // значило бы снова показать пустоту.
+                    showArchived: true,
                   })
                 }
                 className="btn-ghost text-sm"

@@ -56,7 +56,11 @@ export interface AccountsViewPrefs {
   bankFilter: string[];
   balanceScope: AccountsBalanceScope;
   onlySavings: boolean;
-  hideArchived: boolean;
+  /** Показывать архивные счета. По умолчанию нет: архив — то, что закрыто,
+   *  и в списке рабочих счетов он только мешает. Прежнее «Скрыть архивные»
+   *  (`hideArchived`) не переносим: оно почти у всех стояло выключенным по
+   *  умолчанию, и перенос вернул бы архив на экран вопреки новому правилу. */
+  showArchived: boolean;
   sortBy: AccountsSortBy;
   sortDir: AccountsSortDir;
   groupBy: AccountsGroupBy;
@@ -71,7 +75,7 @@ export const ACCOUNTS_VIEW_DEFAULTS: AccountsViewPrefs = {
   bankFilter: [],
   balanceScope: "all",
   onlySavings: false,
-  hideArchived: false,
+  showArchived: false,
   sortBy: "balance",
   sortDir: "desc",
   groupBy: "none",
@@ -128,7 +132,7 @@ function normalize(raw: Partial<AccountsViewPrefs> | null): AccountsViewPrefs {
     bankFilter: strings(raw.bankFilter),
     balanceScope: oneOf(raw.balanceScope, ["all", "in", "out"] as const, d.balanceScope),
     onlySavings: raw.onlySavings === true,
-    hideArchived: raw.hideArchived === true,
+    showArchived: raw.showArchived === true,
     sortBy,
     sortDir: oneOf(raw.sortDir, ["asc", "desc"] as const, d.sortDir),
     groupBy: oneOf(raw.groupBy, ["none", "type", "bank"] as const, d.groupBy),
@@ -146,7 +150,7 @@ function persisted(s: AccountsViewPrefs): AccountsViewPrefs {
     bankFilter: s.bankFilter,
     balanceScope: s.balanceScope,
     onlySavings: s.onlySavings,
-    hideArchived: s.hideArchived,
+    showArchived: s.showArchived,
     sortBy: s.sortBy,
     sortDir: s.sortDir,
     groupBy: s.groupBy,

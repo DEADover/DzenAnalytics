@@ -22,7 +22,7 @@ describe("настройки страницы «Счета» — чтение и
       bankFilter: ["Т-Банк"],
       balanceScope: "in",
       onlySavings: true,
-      hideArchived: true,
+      showArchived: true,
       sortBy: "alpha",
       sortDir: "asc",
       groupBy: "bank",
