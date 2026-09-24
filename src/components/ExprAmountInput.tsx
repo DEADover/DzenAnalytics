@@ -26,6 +26,9 @@ export function ExprAmountInput({
   const result = isExpr ? evalAmount(value) : null;
   const preview = result !== null && result >= 0 ? result : null;
 
+  const previewText =
+    preview !== null ? `= ${preview.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}` : "";
+
   const commit = () => {
     if (preview !== null) onChange(String(preview));
   };
@@ -46,11 +49,14 @@ export function ExprAmountInput({
           rest.onKeyDown?.(e);
         }}
         inputMode="decimal"
-        className={`${className} ${preview !== null ? "pr-24" : ""}`}
+        className={className}
+        // Отступ справа — по длине результата, а не с запасом на миллионы:
+        // иначе в узком поле под само выражение оставалось полполя.
+        style={previewText ? { paddingRight: `calc(${previewText.length}ch + 1rem)` } : undefined}
       />
-      {preview !== null && (
+      {previewText && (
         <span className="absolute right-3 inset-y-0 grid place-items-center text-sm text-muted tabular-nums pointer-events-none">
-          = {preview.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}
+          {previewText}
         </span>
       )}
     </div>
