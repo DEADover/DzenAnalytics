@@ -109,6 +109,7 @@ export function PlanCellPopover({
 }) {
   const [value, setValue] = useState(initial > 0 ? String(Math.round(initial)) : "");
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [copyOpen, setCopyOpen] = useState(false);
   // Фокус — кадром позже, а не `autoFocus`: окно сначала рисуется невидимым,
   // чтобы измерить себя, и скрытое поле фокус не принимает.
   const inputRef = useRef<HTMLInputElement>(null);
@@ -127,24 +128,25 @@ export function PlanCellPopover({
   };
 
   return (
-    // Ширина — по содержимому, а не «как у окна»: сумма в девять знаков и
-    // кнопка-значок, ряд чипов месяцев по четыре. Шире — поле становится
-    // пустой полосой, а окно закрывает соседние месяцы, с которыми план и
-    // сверяют. Отмены нет — окно закрывается по Esc и щелчку мимо.
-    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-52 card p-3 shadow-lg">
+    // Вариант «одна строка»: сумма с сохранением внутри поля и значок копии
+    // рядом. Месяцы для копии раскрываются по значку — нужны они редко, и
+    // держать их открытыми значило растить окно ради исключения. Ширина — по
+    // содержимому: сумма в девять знаков и два значка. Отмены нет — окно
+    // закрывается по Esc и щелчку мимо.
+    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-52 card p-2.5 shadow-lg">
       <form
         onSubmit={(e) => {
           e.preventDefault();
           save();
         }}
-        className="space-y-2.5"
+        className="space-y-2"
       >
-        <div className="min-w-0">
-          <div className="text-sm font-medium truncate">{title}</div>
-          <div className="text-xs text-muted">{monthName(ym)}</div>
+        <div className="flex items-baseline gap-1 text-xs min-w-0">
+          <span className="font-medium text-text truncate">{title}</span>
+          <span className="text-muted whitespace-nowrap">· {monthName(ym)}</span>
         </div>
-        <div>
-          <div className="flex gap-1.5">
+        <div className="flex gap-1.5">
+          <div className="relative flex-1 min-w-0">
             <input
               type="text"
               inputMode="numeric"
@@ -154,28 +156,48 @@ export function PlanCellPopover({
               placeholder="0"
               onFocus={(e) => e.target.select()}
               onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
-              className="input !py-1.5 text-sm text-right tabular-nums min-w-0"
+              className="input !py-1.5 !pr-9 text-sm text-right tabular-nums"
             />
-            {/* Значком: слово «Сохранить» было шире самой суммы. Высота —
-                с поле (34), квадратом. */}
+            {/* Сохранение — тихим значком внутри поля: главное действие тут
+                Enter, а кнопка лишь подсказывает, что так можно. */}
             <Tooltip content="Сохранить · Enter">
               <button
                 type="submit"
                 aria-label="Сохранить"
-                className="btn-primary !p-0 w-[34px] h-[34px] shrink-0"
+                className="absolute right-1 top-1/2 -translate-y-1/2 btn-icon !p-1 text-muted hover:text-accent"
               >
                 <Check className="w-4 h-4" />
               </button>
             </Tooltip>
           </div>
-          {subsPlan > 0 && (
-            <p className="text-xs text-muted mt-1">
-              Из них подкатегории:{" "}
-              <span className="whitespace-nowrap">{formatMoney(subsPlan, base)}</span>
-            </p>
+          {targets.length > 0 && (
+            <Tooltip content={copyOpen ? "Не копировать" : "Копировать на другие месяцы"}>
+              <button
+                type="button"
+                aria-label="Копировать на другие месяцы"
+                aria-expanded={copyOpen}
+                onClick={() => {
+                  if (copyOpen) setPicked(new Set());
+                  setCopyOpen((o) => !o);
+                }}
+                className={`btn-icon w-[34px] h-[34px] shrink-0 border ${
+                  copyOpen || copyTo.length > 0
+                    ? "border-accent/60 bg-accent/10 text-accent"
+                    : "border-border"
+                }`}
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </Tooltip>
           )}
         </div>
-        {targets.length > 0 && (
+        {subsPlan > 0 && (
+          <p className="text-xs text-muted">
+            Из них подкатегории:{" "}
+            <span className="whitespace-nowrap">{formatMoney(subsPlan, base)}</span>
+          </p>
+        )}
+        {copyOpen && targets.length > 0 && (
           <MonthTargets source={ym} months={targets} picked={picked} onChange={setPicked} />
         )}
       </form>
