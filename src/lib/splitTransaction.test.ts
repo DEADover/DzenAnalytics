@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   evalAmount,
+  parseAmountInput,
   splitProblem,
   splitRemainder,
   spreadRemainder,
@@ -212,5 +213,24 @@ describe("evalAmount", () => {
     expect(evalAmount("alert(1)")).toBeNull();
     expect(evalAmount("1;alert(1)")).toBeNull();
     expect(evalAmount("process.exit")).toBeNull();
+  });
+});
+
+describe("parseAmountInput — поле суммы в окне операции", () => {
+  it("число и выражение", () => {
+    expect(parseAmountInput("1500")).toBe(1500);
+    expect(parseAmountInput("1200+300")).toBe(1500);
+    expect(parseAmountInput("10,5*2")).toBe(21);
+  });
+
+  it("пусто — ноль, как раньше", () => {
+    expect(parseAmountInput("")).toBe(0);
+    expect(parseAmountInput("  ")).toBe(0);
+  });
+
+  it("мусор и минус — NaN: проверка суммы их отбросит", () => {
+    expect(parseAmountInput("abc")).toBeNaN();
+    expect(parseAmountInput("100-150")).toBeNaN();
+    expect(parseAmountInput("5/0")).toBeNaN();
   });
 });

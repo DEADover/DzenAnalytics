@@ -34,6 +34,8 @@ import { CategoryDot } from "./CategoryDot";
 import { useTagModeStore } from "../store/useTagModeStore";
 import { getHistoricalRubRate, type HistoricalRate } from "../lib/historicalRates";
 import { formatDate } from "../lib/format";
+import { ExprAmountInput } from "./ExprAmountInput";
+import { parseAmountInput } from "../lib/splitTransaction";
 import type { Transaction, TxKind } from "../types";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 
@@ -549,7 +551,7 @@ export function EditTransactionModal({
 
   // Auto-convert the received amount using the rates that came with the last
   // sync (rates.rates[cur] = units of `cur` per 1 base). sent·r_src/r_dst.
-  const sentNum = Number(amount.replace(",", "."));
+  const sentNum = parseAmountInput(amount);
   const rSrc = rates.rates[currency.trim()];
   const rDst = inAccCurrency ? rates.rates[inAccCurrency] : undefined;
   const suggestedIn =
@@ -615,7 +617,7 @@ export function EditTransactionModal({
     hasOpConversion && tx.opAmount && tx.opAmount > 0 ? tx.amount / tx.opAmount : null;
   let fxTooltip: string | null = null;
   if (isForeignCurrency) {
-    const amtNum = parseFloat(amount.replace(",", ".")) || tx.amount;
+    const amtNum = parseAmountInput(amount) || tx.amount;
     if (histRate) {
       const baseAmount = amtNum * histRate.rate;
       const dateNote =
@@ -679,7 +681,7 @@ export function EditTransactionModal({
       createdSeconds: /^\d{2}:\d{2}$/.test(time)
         ? Math.floor(dateTimeToDate(date, time).getTime() / 1000)
         : undefined,
-      amount: Number(amount.replace(",", ".")),
+      amount: parseAmountInput(amount),
       account: isDebt ? debtSrc : kind === "transfer" ? outAcc.trim() : account.trim(),
       incomeAccount: isDebt
         ? debtDst
@@ -688,7 +690,7 @@ export function EditTransactionModal({
           : undefined,
       incomeAmount:
         !isDebt && kind === "transfer" && isCrossCurrencyTransfer
-          ? Number(inAmountValue.replace(",", "."))
+          ? parseAmountInput(inAmountValue)
           : undefined,
       category: isDebt || kind === "transfer" ? undefined : category.trim(),
       subcategory: isDebt || kind === "transfer" ? null : subcategory.trim() || null,
@@ -782,7 +784,7 @@ export function EditTransactionModal({
     return validateOperation({
       kind,
       isDebt,
-      amount: Number(amount.replace(",", ".")),
+      amount: parseAmountInput(amount),
       payee: payee.trim(),
       realAcc: realAcc.trim(),
       outAcc: outAcc.trim(),
@@ -815,7 +817,7 @@ export function EditTransactionModal({
         await saveDraftEdit();
         return;
       }
-      const amtNum = Number(amount.replace(",", "."));
+      const amtNum = parseAmountInput(amount);
       const safeAmount =
         Number.isFinite(amtNum) && amtNum >= 0 ? amtNum : tx.amount;
       const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : tx.date;
@@ -921,7 +923,7 @@ export function EditTransactionModal({
         // when it actually changed, or the row just became a transfer / its
         // accounts moved — a no-op edit must stay a no-op.
         if (isCrossCurrencyTransfer) {
-          const inNum = Number(inAmountValue.replace(",", "."));
+          const inNum = parseAmountInput(inAmountValue);
           const safeIn =
             Number.isFinite(inNum) && inNum > 0 ? inNum : tx.incomeAmount;
           if (
@@ -1239,10 +1241,12 @@ export function EditTransactionModal({
               ) : undefined
             }
           >
-            <input
+            {/* Считает, как поле суммы в разделении операции: «1200+300»,
+                «2400/2» — чек редко приходит одним числом. */}
+            <ExprAmountInput
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              inputMode="decimal"
+              onChange={setAmount}
+              aria-label="Сумма"
               className="input text-sm w-full font-mono tabular-nums"
             />
           </Field>
@@ -1264,13 +1268,12 @@ export function EditTransactionModal({
             the user can override it (they may have exchanged at another rate). */}
         {isCrossCurrencyTransfer && (
           <Field label={`Получено (${inAccCurrency})`}>
-            <input
+            <ExprAmountInput
               value={inAmountValue}
-              onChange={(e) => {
-                setInAmount(e.target.value);
+              onChange={(v) => {
+                setInAmount(v);
                 setManualIn(true);
               }}
-              inputMode="decimal"
               placeholder={`Сколько пришло на счёт в ${inAccCurrency}`}
               className="input text-sm w-full font-mono tabular-nums"
             />
