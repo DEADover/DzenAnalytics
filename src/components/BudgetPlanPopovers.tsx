@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Check, Copy } from "lucide-react";
+import { Copy } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 import { Popover } from "./Popover";
 import { MONTHS, MONTHS_SHORT } from "../lib/months";
@@ -128,48 +128,36 @@ export function PlanCellPopover({
   };
 
   return (
-    // Вариант «одна строка»: сумма с сохранением внутри поля и значок копии
-    // рядом. Месяцы для копии раскрываются по значку — нужны они редко, и
-    // держать их открытыми значило растить окно ради исключения. Ширина — по
-    // содержимому: сумма в девять знаков и два значка. Отмены нет — окно
-    // закрывается по Esc и щелчку мимо.
+    // Сумма с копией внутри поля, «Сохранить» — под полем на всю ширину и
+    // всегда внизу окна. Месяцы для копии раскрываются по значку между полем и
+    // кнопкой, плавно раздвигая окно: нужны они редко, и держать их открытыми
+    // значило растить окно ради исключения. Ширина — по содержимому. Отмены
+    // нет — окно закрывается по Esc и щелчку мимо.
     <Popover open anchorRef={anchorRef} onClose={onClose} className="w-52 card p-2.5 shadow-lg">
       <form
         onSubmit={(e) => {
           e.preventDefault();
           save();
         }}
-        className="space-y-2"
       >
-        <div className="flex items-baseline gap-1 text-xs min-w-0">
+        <div className="flex items-baseline gap-1 text-xs min-w-0 mb-2">
           <span className="font-medium text-text truncate">{title}</span>
           <span className="text-muted whitespace-nowrap">· {monthName(ym)}</span>
         </div>
-        <div className="flex gap-1.5">
-          <div className="relative flex-1 min-w-0">
-            <input
-              type="text"
-              inputMode="numeric"
-              ref={inputRef}
-              aria-label={`План на ${monthName(ym).toLowerCase()}, ${base}`}
-              value={value}
-              placeholder="0"
-              onFocus={(e) => e.target.select()}
-              onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
-              className="input !py-1.5 !pr-9 text-sm text-right tabular-nums"
-            />
-            {/* Сохранение — тихим значком внутри поля: главное действие тут
-                Enter, а кнопка лишь подсказывает, что так можно. */}
-            <Tooltip content="Сохранить · Enter">
-              <button
-                type="submit"
-                aria-label="Сохранить"
-                className="absolute right-1 top-1/2 -translate-y-1/2 btn-icon !p-1 text-muted hover:text-accent"
-              >
-                <Check className="w-4 h-4" />
-              </button>
-            </Tooltip>
-          </div>
+        <div className="relative">
+          <input
+            type="text"
+            inputMode="numeric"
+            ref={inputRef}
+            aria-label={`План на ${monthName(ym).toLowerCase()}, ${base}`}
+            value={value}
+            placeholder="0"
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
+            className={`input !py-1.5 text-sm text-right tabular-nums ${
+              targets.length > 0 ? "!pr-9" : ""
+            }`}
+          />
           {targets.length > 0 && (
             <Tooltip content={copyOpen ? "Не копировать" : "Копировать на другие месяцы"}>
               <button
@@ -180,10 +168,8 @@ export function PlanCellPopover({
                   if (copyOpen) setPicked(new Set());
                   setCopyOpen((o) => !o);
                 }}
-                className={`btn-icon w-[34px] h-[34px] shrink-0 border ${
-                  copyOpen || copyTo.length > 0
-                    ? "border-accent/60 bg-accent/10 text-accent"
-                    : "border-border"
+                className={`absolute right-1 top-1/2 -translate-y-1/2 btn-icon !p-1 ${
+                  copyOpen ? "!text-accent bg-accent/10" : ""
                 }`}
               >
                 <Copy className="w-4 h-4" />
@@ -192,14 +178,38 @@ export function PlanCellPopover({
           )}
         </div>
         {subsPlan > 0 && (
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted mt-1.5">
             Из них подкатегории:{" "}
             <span className="whitespace-nowrap">{formatMoney(subsPlan, base)}</span>
           </p>
         )}
-        {copyOpen && targets.length > 0 && (
-          <MonthTargets source={ym} months={targets} picked={picked} onChange={setPicked} />
+        {targets.length > 0 && (
+          // Раскрытие высотой строки сетки (0fr → 1fr) — тот же приём, что у
+          // журнала синхронизаций: высоту заранее знать не нужно. Свёрнутые
+          // чипы выключены из обхода с клавиатуры (`inert`).
+          <div
+            className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none ${
+              copyOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+            }`}
+          >
+            <div
+              inert={!copyOpen}
+              className={`min-h-0 overflow-hidden transition-opacity duration-300 motion-reduce:transition-none ${
+                copyOpen ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              <div className="pt-2.5">
+                <MonthTargets source={ym} months={targets} picked={picked} onChange={setPicked} />
+              </div>
+            </div>
+          </div>
         )}
+        <button type="submit" className="btn-primary w-full !py-1.5 text-sm mt-2.5">
+          {copyTo.length > 0
+            ? // От двух до двенадцати — всегда «месяцах».
+              `Сохранить в ${copyTo.length + 1} месяцах`
+            : "Сохранить"}
+        </button>
       </form>
     </Popover>
   );
