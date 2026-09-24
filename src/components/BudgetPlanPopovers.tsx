@@ -2,15 +2,14 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { Copy } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 import { Popover } from "./Popover";
-import { MONTHS, MONTHS_SHORT } from "../lib/months";
+import { MONTHS, MONTHS_IN, MONTHS_SHORT } from "../lib/months";
 import { formatMoney } from "../lib/format";
-import { pluralRu } from "../lib/plural";
 
 /** Название месяца по ключу `YYYY-MM`: полное или короткое. */
 const monthName = (ym: string, short = false) =>
   (short ? MONTHS_SHORT : MONTHS)[Number(ym.slice(5, 7)) - 1];
 
-const monthsWord = (n: number) => pluralRu(n, ["месяц", "месяца", "месяцев"]);
+const monthNameIn = (ym: string) => MONTHS_IN[Number(ym.slice(5, 7)) - 1];
 
 /**
  * Выбор месяцев, на которые копируется план: чип на каждый месяц, куда план
@@ -22,12 +21,14 @@ function MonthTargets({
   months,
   picked,
   onChange,
+  label = "Копировать на месяцы",
 }: {
   source: string;
   /** Месяцы, куда можно копировать, — без исходного. */
   months: string[];
   picked: Set<string>;
   onChange: (next: Set<string>) => void;
+  label?: string;
 }) {
   const following = months.filter((m) => m > source);
   const allFollowing = following.length > 0 && following.every((m) => picked.has(m));
@@ -39,7 +40,7 @@ function MonthTargets({
   };
   return (
     <div className="space-y-1.5">
-      <div className="text-xs text-muted">Копировать на месяцы</div>
+      <div className="text-xs text-muted">{label}</div>
       {/* Сеткой по три: все названия в три буквы, но разной ширины («Май» уже
           «Фев»), и переносом по ширине правый край выходил рваным. В сетке
           чипы одинаковые и вместе ровно в ширину поля — до четырёх рядов
@@ -244,34 +245,35 @@ export function MonthCopyPopover({
   );
   const copyTo = targets.filter((m) => picked.has(m));
   return (
-    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-56 card p-3 shadow-lg">
-      <div className="space-y-2.5">
-        <div className="text-sm">
-          <span className="font-medium">План на {monthName(source).toLowerCase()}</span>
-          <span className="text-muted"> — копия</span>
-        </div>
-        <MonthTargets source={source} months={targets} picked={picked} onChange={setPicked} />
-        <p className="text-xs text-muted">
-          Месяцы станут копией: где в исходном плана нет, он снимается.
-          Назначенные операции не копируются.
-        </p>
-        <div className="flex justify-end">
-          <button
-            type="button"
-            disabled={copyTo.length === 0}
-            onClick={() => {
-              onCopy(copyTo);
-              onClose();
-            }}
-            className="btn-primary !px-3 !py-1.5 text-sm whitespace-nowrap"
-          >
-            <Copy className="w-4 h-4" aria-hidden />
-            {copyTo.length > 0
-              ? `Копировать на ${copyTo.length} ${monthsWord(copyTo.length)}`
-              : "Копировать"}
-          </button>
-        </div>
+    // Тем же видом, что окно плана ячейки: подпись и месяц двумя строками,
+    // чипы сеткой по три, кнопка на всю ширину. Пояснение — одной фразой о
+    // результате: что станет с планом, а не как это устроено.
+    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-40 card p-2.5 shadow-lg">
+      <div className="mb-2">
+        <div className="text-xs font-medium">Копировать план</div>
+        <div className="text-xs text-muted">{monthName(source)}</div>
       </div>
+      <MonthTargets
+        source={source}
+        months={targets}
+        picked={picked}
+        onChange={setPicked}
+        label="На месяцы"
+      />
+      <p className="text-xs text-muted mt-2">
+        План всех статей станет как в {monthNameIn(source)}.
+      </p>
+      <button
+        type="button"
+        disabled={copyTo.length === 0}
+        onClick={() => {
+          onCopy(copyTo);
+          onClose();
+        }}
+        className="btn-primary w-full !px-2 !py-1.5 text-sm mt-2.5"
+      >
+        Копировать
+      </button>
     </Popover>
   );
 }
