@@ -156,7 +156,7 @@ export function PlanCellPopover({
             placeholder="0"
             onFocus={(e) => e.target.select()}
             onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
-            className="input !py-1.5 text-sm text-right tabular-nums"
+            className="input !py-1.5 text-sm tabular-nums"
           />
         </div>
         {subsPlan > 0 && (
@@ -186,9 +186,9 @@ export function PlanCellPopover({
             </div>
           </div>
         )}
-        {/* Копия и сохранение — рядом, вместе на всю ширину поля: копия
-            квадратом слева, «Сохранить» забирает остальное. */}
-        <div className="flex gap-1.5 mt-2.5">
+        {/* Копия и сохранение — рядом, у правого края: кнопка по подписи, а не
+            на всю ширину — окно из одного поля не должно кричать кнопкой. */}
+        <div className="flex justify-end gap-1.5 mt-2.5">
           {targets.length > 0 && (
             <Tooltip content={copyOpen ? "Не копировать" : "Копировать на другие месяцы"}>
               <button
@@ -207,10 +207,10 @@ export function PlanCellPopover({
               </button>
             </Tooltip>
           )}
-          <button type="submit" className="btn-primary flex-1 min-w-0 !px-1.5 !py-1.5 text-sm whitespace-nowrap">
-            {/* Сколько месяцев получат сумму — коротко: рядом с копией кнопке
-                остаётся около 130 px, «в 12 месяцах» туда не входило. */}
-            {copyTo.length > 0 ? `Сохранить · ${copyTo.length + 1} мес.` : "Сохранить"}
+          <button type="submit" className="btn-primary !px-3 !py-1.5 text-sm whitespace-nowrap">
+            {/* Без счётчика месяцев: какие получат сумму, видно по чипам, а
+                «· 12 мес.» раздувал кнопку шире окна. */}
+            Сохранить
           </button>
         </div>
       </form>
