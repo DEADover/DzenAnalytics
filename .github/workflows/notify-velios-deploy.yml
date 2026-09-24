@@ -1,8 +1,11 @@
 name: Notify velios deployment
 
+# Выкладка на VPS velios — только по опубликованному релизу, а не на каждый
+# пуш в main: в main бывают и промежуточные коммиты. `GITHUB_SHA` у события
+# `release` — коммит тега релиза, его и собирают на той стороне.
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
 
 permissions: {}
 
@@ -13,4 +16,11 @@ jobs:
       - name: Trigger deployment
         env:
           GH_TOKEN: ${{ secrets.VELIOS_DZENANALYTICS_ACTIONS_TOKEN }}
-        run: gh api -X POST repos/velios/dzenanalytics-deploy/actions/workflows/deploy.yml/dispatches -f ref=main -f "inputs[source_sha]=$GITHUB_SHA"
+        run: |
+          # Токен отозвали или не задали — тихо выходим, а не валим релиз.
+          if [ -z "$GH_TOKEN" ]; then
+            echo "VELIOS_DZENANALYTICS_ACTIONS_TOKEN не задан — пропускаю уведомление"
+            exit 0
+          fi
+          gh api -X POST repos/velios/dzenanalytics-deploy/actions/workflows/deploy.yml/dispatches \
+            -f ref=main -f "inputs[source_sha]=$GITHUB_SHA"
