@@ -1365,25 +1365,27 @@ export function AccountsPage() {
     const datum = (payload[0]?.payload ?? {}) as Record<string, number | undefined>;
     // Крупное — сверху: в стопке десяток слоёв, и порядок отрисовки в подсказке
     // читается как случайный. Сортировка по величине НА ЭТОТ ДЕНЬ ставит первым
-    // то, из чего в этот день и состоят деньги, а нулевые слои (счёта тогда ещё
-    // не было) сами опускаются вниз, ничего при этом не пряча.
-    const rows = stacked.accounts
+    // то, из чего в этот день и состоят деньги.
+    //
+    // Нулевые слои в подсказку не идут: это счета, которых в этот день ещё не
+    // было или уже нет (закрытые, архивные), — строка «0 ₽» у каждого из них
+    // только удлиняла список. «Итого» считается по всем, нули его не меняют.
+    const allRows = stacked.accounts
       .map((acc, i) => ({
         acc,
         value: toNum(datum[acc]),
         color: STACK_COLORS[i % STACK_COLORS.length],
       }))
       .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+    const rows = allRows.filter((r) => Math.round(r.value) !== 0);
     const total =
-      datum.total ?? rows.reduce((s, r) => s + r.value, 0);
+      datum.total ?? allRows.reduce((s, r) => s + r.value, 0);
     const facts: TooltipFact[] = rows.map((r) => ({
       label: parseDebtKey(r.acc)?.payee ?? r.acc,
       value: formatMoney(r.value, base, { signed: true }),
       swatchColor: r.color,
-      // Пустой слой — это «счёта тогда ещё не было»: он в списке нужен, но
-      // тянуть на себя взгляд наравне с деньгами не должен.
-      tone: r.value === 0 ? "muted" : r.value < 0 ? "expense" : undefined,
-      strong: r.value !== 0,
+      tone: r.value < 0 ? "expense" : undefined,
+      strong: true,
     }));
     facts.push({
       label: "Итого",
