@@ -483,8 +483,9 @@ export function WhatIfPage() {
                 layout="stacked"
                 label="Доход в месяц"
                 value={active.incomeMul}
-                min={0.5}
-                max={2.0}
+                // Ноль — ровно посередине: от −100% до +100%, как у категорий.
+                min={0}
+                max={2}
                 step={0.05}
                 format={mulText}
                 control={
@@ -503,8 +504,8 @@ export function WhatIfPage() {
                 layout="stacked"
                 label="Расход в месяц"
                 value={active.expenseMul}
-                min={0.5}
-                max={1.5}
+                min={0}
+                max={2}
                 step={0.05}
                 format={mulText}
                 control={
