@@ -21,7 +21,8 @@ export function monthYear(ym: string): string {
 
 /** Процент без лишних нулей: «7,5», «4», «0,25». */
 export function pctText(v: number): string {
-  return v.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+  // Минус — типографский: дефис в «-1,96» читается как тире.
+  return v.toLocaleString("ru-RU", { maximumFractionDigits: 2 }).replace("-", "−");
 }
 
 /** «20 лет», «1 год 6 мес», «8 мес» — срок словами. */

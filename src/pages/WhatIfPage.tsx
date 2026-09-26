@@ -566,9 +566,10 @@ export function WhatIfPage() {
             title="Допущения"
             subtitle="Общие для всех сценариев"
           >
-            <div className="grid gap-x-6 gap-y-4 md:grid-cols-2 2xl:grid-cols-4">
+            <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               <Slider
                 layout="stacked"
+                hintLines={2}
                 label="Доходность капитала"
                 value={assumptions.returnPct}
                 min={0}
@@ -580,6 +581,7 @@ export function WhatIfPage() {
               />
               <Slider
                 layout="stacked"
+                hintLines={2}
                 label="Инфляция"
                 value={assumptions.inflationPct}
                 min={0}
@@ -588,13 +590,14 @@ export function WhatIfPage() {
                 format={(v) => `${pctText(v)}% в год`}
                 hint={
                   assumptions.returnPct || assumptions.inflationPct
-                    ? `Реальная доходность ${pctText(realPct)}% в год — на столько капитал растёт в сегодняшних деньгах.`
+                    ? `Реальная доходность ${pctText(realPct)}% в год — так растёт капитал в сегодняшних деньгах.`
                     : "Суммы — в сегодняшних деньгах: инфляция вычитается из доходности."
                 }
                 onChange={(v) => void store.updateAssumptions({ inflationPct: v })}
               />
               <Slider
                 layout="stacked"
+                hintLines={2}
                 label="Доля изъятия для FIRE"
                 value={assumptions.withdrawalPct}
                 min={2.5}
@@ -629,7 +632,7 @@ export function WhatIfPage() {
                     ]}
                   />
                 </div>
-                <div className="text-xs text-muted">
+                <div className="text-xs text-muted min-h-8">
                   {baseSpan[0].toUpperCase() + baseSpan.slice(1)}: доход {formatMoney(baseScenario.avgIncome, base)}, расход{" "}
                   {formatMoney(baseScenario.avgExpense, base)} в месяц.
                 </div>

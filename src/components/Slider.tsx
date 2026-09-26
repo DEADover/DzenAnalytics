@@ -72,6 +72,7 @@ export function Slider({
   hint,
   layout = "row",
   size = "md",
+  hintLines,
   className,
   ...range
 }: RangeProps & {
@@ -82,6 +83,12 @@ export function Slider({
   display?: ReactNode;
   /** Строка под дорожкой — только в `stacked`. */
   hint?: ReactNode;
+  /**
+   * Сколько строк держать под пояснение, даже если текст короче. Нужно, когда
+   * пояснение меняется от значения: перенос на вторую строку иначе толкал
+   * вниз всё, что ниже, и соседние бегунки в ряду вставали вразнобой.
+   */
+  hintLines?: 1 | 2;
   layout?: "row" | "stacked";
   /** Ступень капсулы в `row`: `md` 42 — ряд контролов раздела, `sm` 34. */
   size?: "sm" | "md";
@@ -100,7 +107,9 @@ export function Slider({
           </output>
         </div>
         <RangeInput {...range} id={id} valueText={text} className="block w-full" />
-        {hint && <div className="text-xs text-muted mt-1">{hint}</div>}
+        {(hint || hintLines) && (
+          <div className={clsx("text-xs text-muted mt-1", hintLines === 2 && "min-h-8")}>{hint}</div>
+        )}
       </div>
     );
   }
