@@ -356,6 +356,53 @@ export function WhatIfPage() {
             смотрите, а под ней не остаётся пустоты. Отступы по краям — чтобы
             прокрутка не срезала тени карточек. */}
         <div className="space-y-4 lg:sticky lg:top-[calc(var(--app-header-h)+0.75rem)] lg:max-h-[calc(100vh-var(--app-header-h)-1.5rem)] lg:overflow-y-auto lg:-m-2 lg:p-2">
+          {/* Капитал первым: от него считается всё остальное. */}
+          <SectionCard icon={Wallet} title="Стартовый капитал">
+            <div className="space-y-2">
+              {accountTitles.length > 0 && (
+                <MultiSelect
+                  className="w-full"
+                  variant="field"
+                  label=""
+                  options={accountTitles}
+                  selected={excludedToSet(excluded, accountTitles)}
+                  onChange={(next) =>
+                    void replaceExcluded(setToExcluded(next, accountTitles, excluded))
+                  }
+                  renderIcon={(title) => <AccountLogo title={title} size={18} />}
+                  unitForms={["счёт", "счёта", "счетов"]}
+                  searchPlaceholder="Поиск счёта"
+                  noneSummary="Сумма вручную"
+                  namesInSummary
+                />
+              )}
+              {byAccounts ? (
+                <div className="input text-sm flex items-center text-muted bg-panel2/60 cursor-not-allowed tabular-nums">
+                  {formatMoney(startingCapital, base)}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="1000"
+                    aria-label="Стартовый капитал"
+                    value={startingCapital}
+                    onChange={(e) => void store.setManualCapital(Number(e.target.value) || 0)}
+                    className="input text-sm flex-1 tabular-nums"
+                  />
+                  <span className="text-xs text-muted">{base}</span>
+                </div>
+              )}
+              <div className="text-xs text-muted">
+                {accountTitles.length === 0
+                  ? `По умолчанию — остаток по всем операциям (${formatMoney(currentNetWorth, base)}).`
+                  : byAccounts
+                    ? "Балансы выбранных счетов по текущему курсу. Выбор общий с FIRE в «Здоровье»."
+                    : "Счета не выбраны — введите капитал сами."}
+              </div>
+            </div>
+          </SectionCard>
+
           <SectionCard
             icon={Coins}
             title="Доход и расходы"
@@ -424,52 +471,6 @@ export function WhatIfPage() {
             startYm={startYm}
             onChange={(events) => void update({ events })}
           />
-
-          <SectionCard icon={Wallet} title="Стартовый капитал">
-            <div className="space-y-2">
-              {accountTitles.length > 0 && (
-                <MultiSelect
-                  className="w-full"
-                  variant="field"
-                  label=""
-                  options={accountTitles}
-                  selected={excludedToSet(excluded, accountTitles)}
-                  onChange={(next) =>
-                    void replaceExcluded(setToExcluded(next, accountTitles, excluded))
-                  }
-                  renderIcon={(title) => <AccountLogo title={title} size={18} />}
-                  unitForms={["счёт", "счёта", "счетов"]}
-                  searchPlaceholder="Поиск счёта"
-                  noneSummary="Сумма вручную"
-                  namesInSummary
-                />
-              )}
-              {byAccounts ? (
-                <div className="input text-sm flex items-center text-muted bg-panel2/60 cursor-not-allowed tabular-nums">
-                  {formatMoney(startingCapital, base)}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    step="1000"
-                    aria-label="Стартовый капитал"
-                    value={startingCapital}
-                    onChange={(e) => void store.setManualCapital(Number(e.target.value) || 0)}
-                    className="input text-sm flex-1 tabular-nums"
-                  />
-                  <span className="text-xs text-muted">{base}</span>
-                </div>
-              )}
-              <div className="text-xs text-muted">
-                {accountTitles.length === 0
-                  ? `По умолчанию — остаток по всем операциям (${formatMoney(currentNetWorth, base)}).`
-                  : byAccounts
-                    ? "Балансы выбранных счетов по текущему курсу. Выбор общий с FIRE в «Здоровье»."
-                    : "Счета не выбраны — введите капитал сами."}
-              </div>
-            </div>
-          </SectionCard>
         </div>
 
         {/* Результат и допущения — прокручиваются вместе со страницей. */}
