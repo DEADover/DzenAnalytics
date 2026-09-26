@@ -19,6 +19,7 @@ import {
   NEUTRAL_LEVERS,
   project,
   realMonthlyRate,
+  autoHorizonYears,
   type Projection,
   type ScenarioLevers,
   type WhatIfBase,
@@ -209,19 +210,30 @@ export function WhatIfPage() {
   const resultRef = useRef<HTMLDivElement>(null);
   const resultFits = useFitsViewport(resultRef);
   const projections = useMemo(() => {
-    const run = (levers: ScenarioLevers) =>
-      project(baseScenario, levers, categories, assumptions, startingCapital, startYm);
+    const run = (levers: ScenarioLevers, horizonYears: number) =>
+      project(baseScenario, levers, categories, { ...assumptions, horizonYears }, startingCapital, startYm);
+    const all = [NEUTRAL_LEVERS, active, ...(compare ? [compare] : [])];
+    // «До FIRE»: сначала узнаём, когда он наступает у каждого сценария (поиск
+    // FIRE от горизонта не зависит), потом строим график ровно до него.
+    const horizon =
+      assumptions.horizonYears > 0
+        ? assumptions.horizonYears
+        : autoHorizonYears(all.map((l) => run(l, 1).yearsToFire));
     return {
-      now: run(NEUTRAL_LEVERS),
-      active: run(active),
-      compare: compare ? run(compare) : null,
+      horizon,
+      now: run(NEUTRAL_LEVERS, horizon),
+      active: run(active, horizon),
+      compare: compare ? run(compare, horizon) : null,
     };
   }, [baseScenario, categories, assumptions, startingCapital, startYm, active, compare]);
 
   if (transactions.length === 0) return <EmptyState />;
 
-  const { now: nowProj, active: actProj, compare: cmpProj } = projections;
-  const horizon = assumptions.horizonYears;
+  const { now: nowProj, active: actProj, compare: cmpProj, horizon } = projections;
+  const autoHorizon = assumptions.horizonYears === 0;
+  // FIRE сценария за краем графика — скажем об этом прямо на графике и
+  // предложим дотянуть его до FIRE.
+  const fireBeyond = !autoHorizon && actProj.fireYm !== null && actProj.yearsToFire > horizon;
   const update = store.updateActive;
   const changed = isScenarioChanged(active);
   const realPct = (Math.pow(1 + realMonthlyRate(assumptions), 12) - 1) * 100;
@@ -457,78 +469,6 @@ export function WhatIfPage() {
               </div>
             </div>
           </SectionCard>
-
-          <SectionCard icon={SlidersHorizontal} title="Допущения" subtitle="Общие для всех сценариев">
-            <div className="space-y-4">
-              <Slider
-                layout="stacked"
-                label="Доходность капитала"
-                value={assumptions.returnPct}
-                min={0}
-                max={20}
-                step={0.5}
-                format={(v) => `${pctText(v)}% в год`}
-                hint="Сколько приносят накопления: вклад, облигации, акции. 0 — деньги просто лежат."
-                onChange={(v) => void store.updateAssumptions({ returnPct: v })}
-              />
-              <Slider
-                layout="stacked"
-                label="Инфляция"
-                value={assumptions.inflationPct}
-                min={0}
-                max={15}
-                step={0.5}
-                format={(v) => `${pctText(v)}% в год`}
-                hint={
-                  assumptions.returnPct || assumptions.inflationPct
-                    ? `Реальная доходность ${pctText(realPct)}% в год — на столько капитал растёт в сегодняшних деньгах.`
-                    : "Суммы — в сегодняшних деньгах: инфляция вычитается из доходности."
-                }
-                onChange={(v) => void store.updateAssumptions({ inflationPct: v })}
-              />
-              <Slider
-                layout="stacked"
-                label="Доля изъятия для FIRE"
-                value={assumptions.withdrawalPct}
-                min={2.5}
-                max={6}
-                step={0.25}
-                format={(v) => `${pctText(v)}% в год`}
-                hint={`Сколько капитала можно тратить в год. Цель FIRE — ${pctText(Math.round(1000 / assumptions.withdrawalPct) / 10)} годовых трат.`}
-                onChange={(v) => void store.updateAssumptions({ withdrawalPct: v })}
-              />
-              <div className="space-y-2">
-                <div className="text-sm">База расчёта</div>
-                <div className="flex flex-wrap gap-2">
-                  <Segmented
-                    size="sm"
-                    label="Сколько месяцев брать"
-                    value={assumptions.baseMonths}
-                    onChange={(v) => void store.updateAssumptions({ baseMonths: v })}
-                    options={[3, 6, 12].map((m) => ({ value: m, label: `${m} мес` }))}
-                  />
-                  <Segmented
-                    size="sm"
-                    label="Как усреднять"
-                    value={assumptions.basis}
-                    onChange={(v) => void store.updateAssumptions({ basis: v })}
-                    options={[
-                      { value: "average", label: "Среднее", title: "Среднее арифметическое за месяцы" },
-                      {
-                        value: "median",
-                        label: "Медиана",
-                        title: "Типичный месяц: разовые крупные суммы не тянут его вверх",
-                      },
-                    ]}
-                  />
-                </div>
-                <div className="text-xs text-muted">
-                  {baseSpan[0].toUpperCase() + baseSpan.slice(1)}: доход {formatMoney(baseScenario.avgIncome, base)}, расход{" "}
-                  {formatMoney(baseScenario.avgExpense, base)} в месяц.
-                </div>
-              </div>
-            </div>
-          </SectionCard>
         </div>
 
         {/* Результат остаётся на виду, пока двигаете бегунки слева, — если
@@ -543,7 +483,24 @@ export function WhatIfPage() {
           <SectionCard
             icon={LineChartIcon}
             title="Капитал"
-            subtitle={`На ${yearsLabel(horizon)} вперёд, в сегодняшних деньгах`}
+            subtitle={
+              fireBeyond ? (
+                <>
+                  FIRE — {monthYear(actProj.fireYm!).toLowerCase()}, за краем графика.{" "}
+                  <button
+                    type="button"
+                    className="text-accent hover:underline"
+                    onClick={() => void store.updateAssumptions({ horizonYears: 0 })}
+                  >
+                    Показать до FIRE
+                  </button>
+                </>
+              ) : autoHorizon ? (
+                `До FIRE — ${yearsLabel(horizon)}, в сегодняшних деньгах`
+              ) : (
+                `На ${yearsLabel(horizon)} вперёд, в сегодняшних деньгах`
+              )
+            }
             right={
               <div className="flex items-center gap-3 text-xs text-muted flex-wrap justify-end">
                 {columns.map((c) => (
@@ -610,6 +567,85 @@ export function WhatIfPage() {
           </SectionCard>
         </div>
       </div>
+
+      {/* Допущения меняют редко — они отдельным рядом под сценарием: в левой
+          колонке делали её вдвое длиннее правой, и под графиком с таблицей
+          оставалась пустота на пол-экрана. */}
+      <SectionCard
+        icon={SlidersHorizontal}
+        title="Допущения"
+        subtitle="Общие для всех сценариев"
+      >
+        <div className="grid gap-x-6 gap-y-4 md:grid-cols-2 xl:grid-cols-4">
+          <Slider
+            layout="stacked"
+            label="Доходность капитала"
+            value={assumptions.returnPct}
+            min={0}
+            max={20}
+            step={0.5}
+            format={(v) => `${pctText(v)}% в год`}
+            hint="Сколько приносят накопления: вклад, облигации, акции. 0 — деньги просто лежат."
+            onChange={(v) => void store.updateAssumptions({ returnPct: v })}
+          />
+          <Slider
+            layout="stacked"
+            label="Инфляция"
+            value={assumptions.inflationPct}
+            min={0}
+            max={15}
+            step={0.5}
+            format={(v) => `${pctText(v)}% в год`}
+            hint={
+              assumptions.returnPct || assumptions.inflationPct
+                ? `Реальная доходность ${pctText(realPct)}% в год — на столько капитал растёт в сегодняшних деньгах.`
+                : "Суммы — в сегодняшних деньгах: инфляция вычитается из доходности."
+            }
+            onChange={(v) => void store.updateAssumptions({ inflationPct: v })}
+          />
+          <Slider
+            layout="stacked"
+            label="Доля изъятия для FIRE"
+            value={assumptions.withdrawalPct}
+            min={2.5}
+            max={6}
+            step={0.25}
+            format={(v) => `${pctText(v)}% в год`}
+            hint={`Сколько капитала можно тратить в год. Цель FIRE — ${pctText(Math.round(1000 / assumptions.withdrawalPct) / 10)} годовых трат.`}
+            onChange={(v) => void store.updateAssumptions({ withdrawalPct: v })}
+          />
+          <div className="space-y-2">
+            <div className="text-sm">База расчёта</div>
+            <div className="flex flex-wrap gap-2">
+              <Segmented
+                size="sm"
+                label="Сколько месяцев брать"
+                value={assumptions.baseMonths}
+                onChange={(v) => void store.updateAssumptions({ baseMonths: v })}
+                options={[3, 6, 12].map((m) => ({ value: m, label: `${m} мес` }))}
+              />
+              <Segmented
+                size="sm"
+                label="Как усреднять"
+                value={assumptions.basis}
+                onChange={(v) => void store.updateAssumptions({ basis: v })}
+                options={[
+                  { value: "average", label: "Среднее", title: "Среднее арифметическое за месяцы" },
+                  {
+                    value: "median",
+                    label: "Медиана",
+                    title: "Типичный месяц: разовые крупные суммы не тянут его вверх",
+                  },
+                ]}
+              />
+            </div>
+            <div className="text-xs text-muted">
+              {baseSpan[0].toUpperCase() + baseSpan.slice(1)}: доход {formatMoney(baseScenario.avgIncome, base)}, расход{" "}
+              {formatMoney(baseScenario.avgExpense, base)} в месяц.
+            </div>
+          </div>
+        </div>
+      </SectionCard>
     </div>
   );
 }

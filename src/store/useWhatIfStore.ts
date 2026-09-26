@@ -92,7 +92,7 @@ function parseAssumptions(v: unknown): WhatIfAssumptions {
   return {
     returnPct: inRange(v.returnPct, -50, 100, d.returnPct),
     inflationPct: inRange(v.inflationPct, -50, 100, d.inflationPct),
-    horizonYears: inRange(v.horizonYears, 1, 50, d.horizonYears),
+    horizonYears: inRange(v.horizonYears, 0, 100, d.horizonYears),
     baseMonths: inRange(v.baseMonths, 1, 36, d.baseMonths),
     basis: v.basis === "median" ? "median" : "average",
     withdrawalPct: inRange(v.withdrawalPct, 1, 10, d.withdrawalPct),

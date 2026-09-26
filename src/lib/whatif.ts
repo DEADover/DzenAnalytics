@@ -190,7 +190,7 @@ export interface WhatIfAssumptions {
   returnPct: number;
   /** Инфляция, % годовых. */
   inflationPct: number;
-  /** На сколько лет вперёд смотреть. */
+  /** На сколько лет вперёд смотреть; 0 — «До FIRE», см. `autoHorizonYears`. */
   horizonYears: number;
   /** По скольким законченным месяцам считать базу. */
   baseMonths: number;
@@ -202,7 +202,7 @@ export interface WhatIfAssumptions {
 export const DEFAULT_ASSUMPTIONS: WhatIfAssumptions = {
   returnPct: 0,
   inflationPct: 0,
-  horizonYears: 10,
+  horizonYears: 0,
   baseMonths: 6,
   basis: "average",
   withdrawalPct: 4,
@@ -331,4 +331,19 @@ export function project(
     capitalAtHorizon: points[points.length - 1].capital,
     eventsByYm,
   };
+}
+
+/** Самый длинный горизонт графика — столько же, сколько ищем FIRE. */
+export const MAX_HORIZON_YEARS = 100;
+
+/**
+ * Горизонт «До FIRE»: до самого позднего FIRE среди сценариев на графике и
+ * ещё год, чтобы точка не стояла на краю. FIRE не наступает ни у одного —
+ * 30 лет; наступает уже сейчас — 5, чтобы было на что смотреть.
+ */
+export function autoHorizonYears(fireYears: readonly number[]): number {
+  const finite = fireYears.filter((y) => Number.isFinite(y));
+  if (finite.length === 0) return 30;
+  const far = Math.ceil(Math.max(...finite)) + 1;
+  return Math.min(MAX_HORIZON_YEARS, Math.max(5, far));
 }

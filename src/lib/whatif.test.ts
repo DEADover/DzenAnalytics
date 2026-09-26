@@ -5,6 +5,7 @@ import {
   project,
   eventAmountIn,
   realMonthlyRate,
+  autoHorizonYears,
   NEUTRAL_LEVERS,
   DEFAULT_ASSUMPTIONS,
   type ScenarioEvent,
@@ -200,5 +201,22 @@ describe("project — траектория капитала", () => {
   it("доходность равна инфляции — реальный рост ноль", () => {
     expect(realMonthlyRate({ returnPct: 8, inflationPct: 8 })).toBeCloseTo(0, 10);
     expect(Math.pow(1 + realMonthlyRate({ returnPct: 10, inflationPct: 0 }), 12)).toBeCloseTo(1.1, 10);
+  });
+});
+
+describe("горизонт «До FIRE»", () => {
+  it("до самого позднего FIRE и ещё год", () => {
+    expect(autoHorizonYears([12.3, 20.1])).toBe(22);
+  });
+  it("FIRE не наступает ни у кого — 30 лет", () => {
+    expect(autoHorizonYears([Infinity, Infinity])).toBe(30);
+  });
+  it("у одного не наступает — смотрим на тех, у кого наступает", () => {
+    expect(autoHorizonYears([Infinity, 40])).toBe(41);
+  });
+  it("не короче 5 и не длиннее 100 лет", () => {
+    expect(autoHorizonYears([0])).toBe(5);
+    expect(autoHorizonYears([95])).toBe(96);
+    expect(autoHorizonYears([120])).toBe(100);
   });
 });

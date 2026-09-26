@@ -10,7 +10,8 @@ import { Tooltip } from "../Tooltip";
 
 const NO_COMPARE = "__none__";
 
-const HORIZONS = [1, 3, 5, 10, 15, 20, 30];
+/** 0 — «До FIRE»: горизонт сам тянется до точки FIRE. */
+const HORIZONS = [0, 1, 3, 5, 10, 15, 20, 30];
 
 /**
  * Ряд контролов раздела: сохранённые сценарии вкладками, действия с открытым,
@@ -146,10 +147,10 @@ export function ScenarioBar({ horizonLabel }: { horizonLabel: (y: number) => str
         <label className="inline-flex items-center gap-2 text-sm text-muted">
           Горизонт
           <Select
-            className="w-28"
+            className="w-32"
             value={String(s.assumptions.horizonYears)}
             onChange={(v) => void s.updateAssumptions({ horizonYears: Number(v) })}
-            options={HORIZONS.map((y) => ({ value: String(y), label: horizonLabel(y) }))}
+            options={HORIZONS.map((y) => ({ value: String(y), label: y === 0 ? "До FIRE" : horizonLabel(y) }))}
             ariaLabel="На сколько лет вперёд"
           />
         </label>
