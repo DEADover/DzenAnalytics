@@ -39,7 +39,7 @@ export function WhatIfEvents({
     <SectionCard
       icon={CalendarClock}
       title="События"
-      info="Разовые и ежемесячные траты и поступления с датой: покупка машины, ипотека, премия, сдача квартиры. Суммы — в сегодняшних деньгах."
+      info="Крупные траты и поступления с датой: покупка машины, ипотека, премия, доход от сдачи квартиры. Бывают разовыми или ежемесячными. Суммы указывайте в сегодняшних ценах."
       right={
         <button type="button" className="btn-ghost text-xs" onClick={() => setEditing("new")}>
           <Plus className="w-3.5 h-3.5" />
@@ -49,8 +49,8 @@ export function WhatIfEvents({
     >
       {sorted.length === 0 ? (
         <div className="text-sm text-muted">
-          Покупка, кредит, премия или новый доход с датой — добавьте, и график покажет, как оно
-          сдвинет капитал.
+          Добавьте покупку, кредит, премию или новый доход с датой — график покажет, как
+          изменится капитал.
         </div>
       ) : (
         <ul className="divide-y divide-border -my-1">
@@ -262,7 +262,7 @@ function EventModal({
                 </div>
               ) : (
                 <div className="text-xs text-muted">
-                  Трата без срока войдёт и в цель FIRE: на неё тоже придётся жить с капитала.
+                  Трата без срока увеличит и цель FIRE: её придётся оплачивать с капитала.
                 </div>
               )}
             </div>

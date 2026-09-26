@@ -34,7 +34,7 @@ export function ScenarioBar({ horizonLabel }: { horizonLabel: (y: number) => str
     close();
     const ok = await confirm({
       title: `Удалить сценарий «${active.name}»?`,
-      message: "Его бегунки и события пропадут на всех устройствах.",
+      message: "Настройки и события этого сценария удалятся на всех устройствах.",
       confirmLabel: "Удалить",
       tone: "danger",
     });
@@ -54,7 +54,7 @@ export function ScenarioBar({ horizonLabel }: { horizonLabel: (y: number) => str
           options={s.scenarios.map((x) => ({ value: x.id, label: x.name }))}
         />
         <div ref={anchorRef} className="relative">
-          <Tooltip content="Сценарий: новый, копия, переименовать, удалить">
+          <Tooltip content="Создать, скопировать, переименовать или удалить сценарий">
             <button
               type="button"
               className="btn-ghost btn-square-lg"
