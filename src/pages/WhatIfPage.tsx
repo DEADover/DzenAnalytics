@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Coins,
   FlaskConical,
@@ -144,17 +144,6 @@ function BaseBreakdown({
         выключены в настройках. Сколько месяцев брать — в «Допущениях».
       </p>
     </div>
-  );
-}
-
-/** Строка под бегунком: «Сейчас X →» [поле] «₽/мес». */
-function AmountHint({ now, field, unit }: { now?: string; field: ReactNode; unit: string }) {
-  return (
-    <span className="flex items-center gap-2 flex-wrap">
-      {now && <span>{now}</span>}
-      {field}
-      <span>{unit}</span>
-    </span>
   );
 }
 
@@ -398,17 +387,13 @@ export function WhatIfPage() {
                   {formatMoney(startingCapital, base)}
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    step="1000"
-                    aria-label="Стартовый капитал"
-                    value={startingCapital}
-                    onChange={(e) => void store.setManualCapital(Number(e.target.value) || 0)}
-                    className="input text-sm flex-1 tabular-nums"
-                  />
-                  <span className="text-xs text-muted">{base}</span>
-                </div>
+                <MoneyField
+                  ariaLabel="Стартовый капитал"
+                  suffix={currencySign}
+                  value={startingCapital}
+                  onCommit={(v) => void store.setManualCapital(v)}
+                  wide
+                />
               )}
               <div className="text-xs text-muted">
                 {accountTitles.length === 0
@@ -441,52 +426,44 @@ export function WhatIfPage() {
             <div className="space-y-4">
               <Slider
                 layout="stacked"
-                label="Доход"
+                label="Доход в месяц"
                 value={active.incomeMul}
                 min={0.5}
                 max={2.0}
                 step={0.05}
                 format={mulText}
-                hint={
-                  <AmountHint
-                    now={`Сейчас ${formatMoney(baseScenario.avgIncome, base)}/мес →`}
-                    field={
-                      <MoneyField
-                        ariaLabel="Доход в месяц по сценарию"
-                        value={actProj.income}
-                        disabled={baseScenario.avgIncome <= 0}
-                        onCommit={(v) => void update({ incomeMul: v / baseScenario.avgIncome })}
-                      />
-                    }
-                    unit={`${currencySign}/мес`}
+                control={
+                  <MoneyField
+                    ariaLabel="Доход в месяц по сценарию"
+                    suffix={currencySign}
+                    value={actProj.income}
+                    disabled={baseScenario.avgIncome <= 0}
+                    onCommit={(v) => void update({ incomeMul: v / baseScenario.avgIncome })}
                   />
                 }
+                hint={`Сейчас ${formatMoney(baseScenario.avgIncome, base)} · ${mulText(active.incomeMul)}`}
                 onChange={(v) => void update({ incomeMul: v })}
               />
               <Slider
                 layout="stacked"
-                label="Расход"
+                label="Расход в месяц"
                 value={active.expenseMul}
                 min={0.5}
                 max={1.5}
                 step={0.05}
                 format={mulText}
-                hint={
-                  <AmountHint
-                    now={`Сейчас ${formatMoney(baseScenario.avgExpense, base)}/мес →`}
-                    field={
-                      <MoneyField
-                        ariaLabel="Расход в месяц по сценарию"
-                        value={actProj.expense}
-                        disabled={expenseBeforeMul <= 0}
-                        // Общий множитель ложится ПОСЛЕ категорий — вписанная
-                        // сумма делится на расход уже с ними.
-                        onCommit={(v) => void update({ expenseMul: v / expenseBeforeMul })}
-                      />
-                    }
-                    unit={`${currencySign}/мес`}
+                control={
+                  <MoneyField
+                    ariaLabel="Расход в месяц по сценарию"
+                    suffix={currencySign}
+                    value={actProj.expense}
+                    disabled={expenseBeforeMul <= 0}
+                    // Общий множитель ложится ПОСЛЕ категорий — вписанная
+                    // сумма делится на расход уже с ними.
+                    onCommit={(v) => void update({ expenseMul: v / expenseBeforeMul })}
                   />
                 }
+                hint={`Сейчас ${formatMoney(baseScenario.avgExpense, base)} · ${mulText(active.expenseMul)}`}
                 onChange={(v) => void update({ expenseMul: v })}
               />
               <Slider
@@ -497,18 +474,15 @@ export function WhatIfPage() {
                 max={Math.max(50000, Math.round((baseScenario.avgIncome * 0.5) / 1000) * 1000)}
                 step={500}
                 format={(v) => `+${formatMoney(v, base)}`}
-                hint={
-                  <AmountHint
-                    field={
-                      <MoneyField
-                        ariaLabel="Откладывать сверх того в месяц"
-                        value={active.extraMonthlySave}
-                        onCommit={(v) => void update({ extraMonthlySave: v })}
-                      />
-                    }
-                    unit={`${currencySign} в месяц поверх «доход − расход»`}
+                control={
+                  <MoneyField
+                    ariaLabel="Откладывать сверх того в месяц"
+                    suffix={currencySign}
+                    value={active.extraMonthlySave}
+                    onCommit={(v) => void update({ extraMonthlySave: v })}
                   />
                 }
+                hint="В месяц поверх «доход − расход»"
                 onChange={(v) => void update({ extraMonthlySave: v })}
               />
             </div>

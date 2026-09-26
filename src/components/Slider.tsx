@@ -73,6 +73,7 @@ export function Slider({
   layout = "row",
   size = "md",
   hintLines,
+  control,
   className,
   ...range
 }: RangeProps & {
@@ -89,6 +90,12 @@ export function Slider({
    * вниз всё, что ниже, и соседние бегунки в ряду вставали вразнобой.
    */
   hintLines?: 1 | 2;
+  /**
+   * Поле ввода на месте значения — только в `stacked`. Для бегунков, где
+   * число удобнее вписать, чем ловить мышкой: поле стоит справа в строке
+   * подписи, и у соседних бегунков такие поля встают ровной колонкой.
+   */
+  control?: ReactNode;
   layout?: "row" | "stacked";
   /** Ступень капсулы в `row`: `md` 42 — ряд контролов раздела, `sm` 34. */
   size?: "sm" | "md";
@@ -100,11 +107,18 @@ export function Slider({
   if (layout === "stacked") {
     return (
       <div className={className}>
-        <div className="flex items-baseline justify-between gap-3 text-sm mb-2">
+        <div
+          className={clsx(
+            "flex justify-between gap-3 text-sm mb-2",
+            control ? "items-center" : "items-baseline"
+          )}
+        >
           <label htmlFor={id}>{label}</label>
-          <output htmlFor={id} className="font-semibold tabular-nums text-right">
-            {display ?? text}
-          </output>
+          {control ?? (
+            <output htmlFor={id} className="font-semibold tabular-nums text-right">
+              {display ?? text}
+            </output>
+          )}
         </div>
         <RangeInput {...range} id={id} valueText={text} className="block w-full" />
         {(hint || hintLines) && (
