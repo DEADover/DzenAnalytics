@@ -1,9 +1,9 @@
-import { useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Copy, Pencil, Plus, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import clsx from "clsx";
+import { Copy, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { MAX_SCENARIOS, useWhatIfStore } from "../../store/useWhatIfStore";
 import { confirm } from "../../store/useConfirmStore";
 import { SectionControls } from "../SectionControls";
-import { Segmented } from "../Segmented";
 import { Select } from "../Select";
 import { Popover } from "../Popover";
 import { Tooltip } from "../Tooltip";
@@ -19,99 +19,31 @@ const HORIZONS = [0, 1, 3, 5, 10, 15, 20, 30];
  */
 export function ScenarioBar({ horizonLabel }: { horizonLabel: (y: number) => string }) {
   const s = useWhatIfStore();
-  const active = s.scenarios.find((x) => x.id === s.activeId)!;
-  const [renaming, setRenaming] = useState<string | null>(null);
   const full = s.scenarios.length >= MAX_SCENARIOS;
-
-  async function remove() {
-    const ok = await confirm({
-      title: `Удалить сценарий «${active.name}»?`,
-      message: "Настройки и события этого сценария удалятся на всех устройствах.",
-      confirmLabel: "Удалить",
-      tone: "danger",
-    });
-    if (ok) await s.removeScenario(active.id);
-  }
-
   const others = s.scenarios.filter((x) => x.id !== s.activeId);
 
-  // Действия — двумя подписанными кнопками, а не «⋯»: по трём точкам было
-  // не догадаться, что там создаются и правятся сценарии.
   return (
     <SectionControls>
       <div className="flex items-center gap-2 min-w-0 flex-wrap">
-        <Segmented
-          tabs
-          label="Сценарий"
-          value={s.activeId}
-          onChange={(id) => void s.setActive(id)}
-          options={s.scenarios.map((x) => ({ value: x.id, label: x.name }))}
-        />
-        <MenuButton icon={Plus} label="Новый" disabled={full} title={full ? `Сценариев не больше ${MAX_SCENARIOS}` : undefined}>
-          {(close) => (
-            <>
-              <MenuItem
-                icon={Plus}
-                label="Пустой сценарий"
-                onClick={() => {
-                  close();
-                  void s.addScenario(false);
-                }}
-              />
-              <MenuItem
-                icon={Copy}
-                label={`Копия «${active.name}»`}
-                onClick={() => {
-                  close();
-                  void s.addScenario(true);
-                }}
-              />
-            </>
-          )}
-        </MenuButton>
-        <MenuButton icon={Pencil} label="Изменить" onClose={() => setRenaming(null)}>
-          {(close) =>
-            renaming !== null ? (
-              <form
-                className="space-y-2 p-1"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void s.renameScenario(active.id, renaming);
-                  close();
-                }}
-              >
-                <label className="label block" htmlFor="whatif-rename">
-                  Название сценария
-                </label>
-                <input
-                  id="whatif-rename"
-                  autoFocus
-                  maxLength={40}
-                  className="input text-sm w-full"
-                  value={renaming}
-                  onChange={(e) => setRenaming(e.target.value)}
-                />
-                <button type="submit" className="btn-primary w-full text-sm" disabled={!renaming.trim()}>
-                  Сохранить
-                </button>
-              </form>
-            ) : (
-              <>
-                <MenuItem icon={Pencil} label="Переименовать" onClick={() => setRenaming(active.name)} />
-                <MenuItem
-                  icon={Trash2}
-                  label="Удалить"
-                  danger
-                  disabled={s.scenarios.length <= 1}
-                  onClick={() => {
-                    close();
-                    void remove();
-                  }}
-                />
-              </>
-            )
-          }
-        </MenuButton>
+        {/* Вкладки сценариев. У каждой справа своё меню «⋮» — действия с ЭТИМ
+            сценарием стоят на нём самом, а не отдельной кнопкой, по которой
+            не понять, к какой вкладке она относится. */}
+        <div role="tablist" aria-label="Сценарий" className="seg-track max-sm:max-w-full max-sm:scroll-soft-x">
+          {s.scenarios.map((x) => (
+            <ScenarioTab key={x.id} id={x.id} name={x.name} active={x.id === s.activeId} single={s.scenarios.length <= 1} full={full} />
+          ))}
+        </div>
+        <Tooltip content={full ? `Сценариев не больше ${MAX_SCENARIOS}` : "Новый сценарий"}>
+          <button
+            type="button"
+            className="btn-ghost btn-square-lg"
+            aria-label="Новый сценарий"
+            disabled={full}
+            onClick={() => void s.addScenario(false)}
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </Tooltip>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -145,46 +77,120 @@ export function ScenarioBar({ horizonLabel }: { horizonLabel: (y: number) => str
   );
 }
 
-/** Подписанная кнопка ряда контролов со своим меню. */
-function MenuButton({
-  icon: Icon,
-  label,
-  title,
-  disabled,
-  onClose,
-  children,
+/** Вкладка сценария: название и меню «⋮» с действиями над ним. */
+function ScenarioTab({
+  id,
+  name,
+  active,
+  single,
+  full,
 }: {
-  icon: typeof Plus;
-  label: string;
-  title?: string;
-  disabled?: boolean;
-  onClose?: () => void;
-  children: (close: () => void) => ReactNode;
+  id: string;
+  name: string;
+  active: boolean;
+  single: boolean;
+  full: boolean;
 }) {
-  const anchorRef = useRef<HTMLDivElement>(null);
+  const s = useWhatIfStore();
+  const anchorRef = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const close = () => {
     setOpen(false);
-    onClose?.();
+    setRenaming(null);
   };
-  const button = (
-    <button
-      type="button"
-      className="btn-ghost btn-lg text-sm"
-      disabled={disabled}
-      aria-expanded={open}
-      onClick={() => (open ? close() : setOpen(true))}
-    >
-      <Icon className="w-4 h-4" />
-      {label}
-      <ChevronDown className={`w-3.5 h-3.5 opacity-60 transition-transform ${open ? "rotate-180" : ""}`} />
-    </button>
-  );
+
+  async function remove() {
+    close();
+    const ok = await confirm({
+      title: `Удалить сценарий «${name}»?`,
+      message: "Настройки и события этого сценария удалятся на всех устройствах.",
+      confirmLabel: "Удалить",
+      tone: "danger",
+    });
+    if (ok) await s.removeScenario(id);
+  }
+
   return (
-    <div ref={anchorRef} className="relative">
-      {title ? <Tooltip content={title}>{button}</Tooltip> : button}
+    <div
+      role="tab"
+      tabIndex={0}
+      aria-selected={active}
+      onClick={() => void s.setActive(id)}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          void s.setActive(id);
+        }
+      }}
+      className={clsx("seg-item seg-item-md !pr-1 cursor-pointer", active && "seg-on")}
+    >
+      {name}
+      <span ref={anchorRef} className="inline-flex">
+        <button
+          type="button"
+          aria-label={`Действия со сценарием «${name}»`}
+          aria-expanded={open}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (open) close();
+            else setOpen(true);
+          }}
+          className="w-6 h-6 grid place-items-center rounded-md opacity-60 hover:opacity-100 hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+      </span>
       <Popover open={open} anchorRef={anchorRef} onClose={close} className="w-64 card p-2 shadow-lg">
-        <div className="flex flex-col">{children(close)}</div>
+        {/* Щелчок внутри меню не должен переключать вкладку под ним. */}
+        <div className="flex flex-col text-text font-normal" onClick={(e) => e.stopPropagation()}>
+          {renaming !== null ? (
+            <form
+              className="space-y-2 p-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void s.renameScenario(id, renaming);
+                close();
+              }}
+            >
+              <label className="label block" htmlFor={`whatif-rename-${id}`}>
+                Название сценария
+              </label>
+              <input
+                id={`whatif-rename-${id}`}
+                autoFocus
+                // Имя выделено сразу: набор заменяет его, как при
+                // переименовании файла.
+                onFocus={(e) => e.target.select()}
+                maxLength={40}
+                className="input text-sm w-full"
+                value={renaming}
+                onChange={(e) => setRenaming(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+              />
+              <button type="submit" className="btn-primary w-full text-sm" disabled={!renaming.trim()}>
+                Сохранить
+              </button>
+            </form>
+          ) : (
+            <>
+              <MenuItem icon={Pencil} label="Переименовать" onClick={() => setRenaming(name)} />
+              <MenuItem
+                icon={Copy}
+                label="Сделать копию"
+                disabled={full}
+                onClick={async () => {
+                  close();
+                  // Копируется открытый сценарий — сначала открываем этот.
+                  await s.setActive(id);
+                  await s.addScenario(true);
+                }}
+              />
+              <MenuItem icon={Trash2} label="Удалить" danger disabled={single} onClick={() => void remove()} />
+            </>
+          )}
+        </div>
       </Popover>
     </div>
   );
