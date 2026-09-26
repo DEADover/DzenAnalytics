@@ -417,18 +417,28 @@ export function WhatIfPage() {
             title="Доходы и расходы"
             info={<BaseBreakdown base={baseScenario} currency={base} median={assumptions.basis === "median"} />}
             right={
-              flowsChanged && (
-                <Tooltip content="Вернуть доход, расход и «сверх того» как сейчас">
+              // Значок стоит всегда, а не появляется при первом сдвиге:
+              // исчезающая кнопка выглядела пропавшей. Сбрасывать нечего —
+              // приглушён.
+              <Tooltip
+                content={
+                  flowsChanged
+                    ? "Вернуть доход, расход и «сверх того» как сейчас"
+                    : "Сбрасывать нечего: доход, расход и «сверх того» как сейчас"
+                }
+              >
+                <span className="inline-flex">
                   <button
                     type="button"
+                    disabled={!flowsChanged}
                     onClick={() => void store.resetActive()}
-                    className="btn-ghost btn-square"
+                    className="btn-ghost btn-square disabled:opacity-40 disabled:pointer-events-none"
                     aria-label="Сбросить доход, расход и «сверх того»"
                   >
                     <RotateCcw className="w-4 h-4" />
                   </button>
-                </Tooltip>
-              )
+                </span>
+              </Tooltip>
             }
           >
             <div className="space-y-4">
