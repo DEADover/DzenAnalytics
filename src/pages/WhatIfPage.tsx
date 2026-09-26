@@ -482,7 +482,7 @@ export function WhatIfPage() {
                     onCommit={(v) => void update({ extraMonthlySave: v })}
                   />
                 }
-                hint="В месяц поверх «доход − расход»"
+                hint="Сверх того, что остаётся от дохода после расходов"
                 onChange={(v) => void update({ extraMonthlySave: v })}
               />
             </div>
@@ -521,9 +521,9 @@ export function WhatIfPage() {
                   </button>
                 </>
               ) : autoHorizon ? (
-                `До FIRE — ${yearsLabel(horizon)}, в сегодняшних деньгах`
+                `До FIRE — ${yearsLabel(horizon)}, в сегодняшних ценах`
               ) : (
-                `На ${yearsLabel(horizon)} вперёд, в сегодняшних деньгах`
+                `На ${yearsLabel(horizon)} вперёд, в сегодняшних ценах`
               )
             }
             right={
