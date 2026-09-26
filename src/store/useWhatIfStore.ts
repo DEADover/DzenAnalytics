@@ -74,8 +74,8 @@ function parseLevers(o: Record<string, unknown>): ScenarioLevers {
     for (const [k, m] of Object.entries(o.categoryMul)) if (isNum(m) && m >= 0) categoryMul[k] = m;
   }
   return {
-    incomeMul: isNum(o.incomeMul) && o.incomeMul > 0 ? o.incomeMul : 1,
-    expenseMul: isNum(o.expenseMul) && o.expenseMul > 0 ? o.expenseMul : 1,
+    incomeMul: isNum(o.incomeMul) && o.incomeMul >= 0 ? o.incomeMul : 1,
+    expenseMul: isNum(o.expenseMul) && o.expenseMul >= 0 ? o.expenseMul : 1,
     extraMonthlySave: isNum(o.extraMonthlySave) && o.extraMonthlySave >= 0 ? o.extraMonthlySave : 0,
     categoryMul,
     events: Array.isArray(o.events)

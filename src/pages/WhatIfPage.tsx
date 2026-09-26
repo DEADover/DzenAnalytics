@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import {
   Coins,
   FlaskConical,
@@ -18,6 +18,7 @@ import {
   NEUTRAL_LEVERS,
   project,
   realMonthlyRate,
+  steadyFlows,
   autoHorizonYears,
   type Projection,
   type ScenarioLevers,
@@ -45,6 +46,7 @@ import { ScenarioBar } from "../components/whatif/ScenarioBar";
 import { WhatIfChart } from "../components/whatif/WhatIfChart";
 import { WhatIfCategories } from "../components/whatif/WhatIfCategories";
 import { WhatIfEvents } from "../components/whatif/WhatIfEvents";
+import { MoneyField } from "../components/whatif/MoneyField";
 import { SERIES_COLOR, durationText, monthYear, pctText } from "../lib/whatifView";
 
 const NOW_NAME = "Как сейчас";
@@ -142,6 +144,17 @@ function BaseBreakdown({
         выключены в настройках. Сколько месяцев брать — в «Допущениях».
       </p>
     </div>
+  );
+}
+
+/** Строка под бегунком: «Сейчас X →» [поле] «₽/мес». */
+function AmountHint({ now, field, unit }: { now?: string; field: ReactNode; unit: string }) {
+  return (
+    <span className="flex items-center gap-2 flex-wrap">
+      {now && <span>{now}</span>}
+      {field}
+      <span>{unit}</span>
+    </span>
   );
 }
 
@@ -281,6 +294,10 @@ export function WhatIfPage() {
       lowerIsBetter: true,
     },
   ];
+
+  // Расход сценария до общего множителя — с изменениями по категориям.
+  const expenseBeforeMul = steadyFlows(baseScenario, { ...active, expenseMul: 1 }, categories).expense;
+  const currencySign = formatMoney(0, base).replace(/[\d\s,.\u00a0-]/g, "") || base;
 
   const deltaHorizon = actProj.capitalAtHorizon - nowProj.capitalAtHorizon;
 
@@ -430,7 +447,20 @@ export function WhatIfPage() {
                 max={2.0}
                 step={0.05}
                 format={mulText}
-                hint={`Сейчас ${formatMoney(baseScenario.avgIncome, base)}/мес → ${formatMoney(actProj.income, base)}/мес`}
+                hint={
+                  <AmountHint
+                    now={`Сейчас ${formatMoney(baseScenario.avgIncome, base)}/мес →`}
+                    field={
+                      <MoneyField
+                        ariaLabel="Доход в месяц по сценарию"
+                        value={actProj.income}
+                        disabled={baseScenario.avgIncome <= 0}
+                        onCommit={(v) => void update({ incomeMul: v / baseScenario.avgIncome })}
+                      />
+                    }
+                    unit={`${currencySign}/мес`}
+                  />
+                }
                 onChange={(v) => void update({ incomeMul: v })}
               />
               <Slider
@@ -441,7 +471,22 @@ export function WhatIfPage() {
                 max={1.5}
                 step={0.05}
                 format={mulText}
-                hint={`Сейчас ${formatMoney(baseScenario.avgExpense, base)}/мес → ${formatMoney(actProj.expense, base)}/мес`}
+                hint={
+                  <AmountHint
+                    now={`Сейчас ${formatMoney(baseScenario.avgExpense, base)}/мес →`}
+                    field={
+                      <MoneyField
+                        ariaLabel="Расход в месяц по сценарию"
+                        value={actProj.expense}
+                        disabled={expenseBeforeMul <= 0}
+                        // Общий множитель ложится ПОСЛЕ категорий — вписанная
+                        // сумма делится на расход уже с ними.
+                        onCommit={(v) => void update({ expenseMul: v / expenseBeforeMul })}
+                      />
+                    }
+                    unit={`${currencySign}/мес`}
+                  />
+                }
                 onChange={(v) => void update({ expenseMul: v })}
               />
               <Slider
@@ -452,7 +497,18 @@ export function WhatIfPage() {
                 max={Math.max(50000, Math.round((baseScenario.avgIncome * 0.5) / 1000) * 1000)}
                 step={500}
                 format={(v) => `+${formatMoney(v, base)}`}
-                hint="Своя сумма в месяц поверх «доход − расход»"
+                hint={
+                  <AmountHint
+                    field={
+                      <MoneyField
+                        ariaLabel="Откладывать сверх того в месяц"
+                        value={active.extraMonthlySave}
+                        onCommit={(v) => void update({ extraMonthlySave: v })}
+                      />
+                    }
+                    unit={`${currencySign} в месяц поверх «доход − расход»`}
+                  />
+                }
                 onChange={(v) => void update({ extraMonthlySave: v })}
               />
             </div>

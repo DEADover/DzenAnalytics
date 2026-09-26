@@ -49,6 +49,11 @@ describe("состояние «Что-если» из хранилища и об
     expect(s.assumptions.horizonYears).toBe(20);
   });
 
+  it("нулевой доход — законный сценарий «потеряю работу», не сбрасывается", () => {
+    const s = parseWhatIfState({ scenarios: [{ id: "a", name: "Без работы", incomeMul: 0 }] });
+    expect(s?.scenarios[0].incomeMul).toBe(0);
+  });
+
   it("пустой список — один сценарий по умолчанию", () => {
     expect(parseWhatIfState({ scenarios: [] })?.scenarios).toEqual(DEFAULT_WHATIF.scenarios);
   });
