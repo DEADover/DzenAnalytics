@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Copy, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { ChevronDown, Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import { MAX_SCENARIOS, useWhatIfStore } from "../../store/useWhatIfStore";
 import { confirm } from "../../store/useConfirmStore";
 import { SectionControls } from "../SectionControls";
@@ -20,18 +20,10 @@ const HORIZONS = [0, 1, 3, 5, 10, 15, 20, 30];
 export function ScenarioBar({ horizonLabel }: { horizonLabel: (y: number) => string }) {
   const s = useWhatIfStore();
   const active = s.scenarios.find((x) => x.id === s.activeId)!;
-  const anchorRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const full = s.scenarios.length >= MAX_SCENARIOS;
 
-  function close() {
-    setOpen(false);
-    setRenaming(null);
-  }
-
   async function remove() {
-    close();
     const ok = await confirm({
       title: `Удалить сценарий «${active.name}»?`,
       message: "Настройки и события этого сценария удалятся на всех устройствах.",
@@ -43,6 +35,8 @@ export function ScenarioBar({ horizonLabel }: { horizonLabel: (y: number) => str
 
   const others = s.scenarios.filter((x) => x.id !== s.activeId);
 
+  // Действия — двумя подписанными кнопками, а не «⋯»: по трём точкам было
+  // не догадаться, что там создаются и правятся сценарии.
   return (
     <SectionControls>
       <div className="flex items-center gap-2 min-w-0 flex-wrap">
@@ -53,19 +47,31 @@ export function ScenarioBar({ horizonLabel }: { horizonLabel: (y: number) => str
           onChange={(id) => void s.setActive(id)}
           options={s.scenarios.map((x) => ({ value: x.id, label: x.name }))}
         />
-        <div ref={anchorRef} className="relative">
-          <Tooltip content="Создать, скопировать, переименовать или удалить сценарий">
-            <button
-              type="button"
-              className="btn-ghost btn-square-lg"
-              aria-label="Действия со сценарием"
-              onClick={() => (open ? close() : setOpen(true))}
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
-          </Tooltip>
-          <Popover open={open} anchorRef={anchorRef} onClose={close} className="w-64 card p-2 shadow-lg">
-            {renaming !== null ? (
+        <MenuButton icon={Plus} label="Новый" disabled={full} title={full ? `Сценариев не больше ${MAX_SCENARIOS}` : undefined}>
+          {(close) => (
+            <>
+              <MenuItem
+                icon={Plus}
+                label="Пустой сценарий"
+                onClick={() => {
+                  close();
+                  void s.addScenario(false);
+                }}
+              />
+              <MenuItem
+                icon={Copy}
+                label={`Копия «${active.name}»`}
+                onClick={() => {
+                  close();
+                  void s.addScenario(true);
+                }}
+              />
+            </>
+          )}
+        </MenuButton>
+        <MenuButton icon={Pencil} label="Изменить" onClose={() => setRenaming(null)}>
+          {(close) =>
+            renaming !== null ? (
               <form
                 className="space-y-2 p-1"
                 onSubmit={(e) => {
@@ -90,42 +96,22 @@ export function ScenarioBar({ horizonLabel }: { horizonLabel: (y: number) => str
                 </button>
               </form>
             ) : (
-              <div className="flex flex-col">
-                <MenuItem
-                  icon={Plus}
-                  label="Новый сценарий"
-                  disabled={full}
-                  onClick={() => {
-                    close();
-                    void s.addScenario(false);
-                  }}
-                />
-                <MenuItem
-                  icon={Copy}
-                  label="Копия этого"
-                  disabled={full}
-                  onClick={() => {
-                    close();
-                    void s.addScenario(true);
-                  }}
-                />
+              <>
                 <MenuItem icon={Pencil} label="Переименовать" onClick={() => setRenaming(active.name)} />
                 <MenuItem
                   icon={Trash2}
                   label="Удалить"
                   danger
                   disabled={s.scenarios.length <= 1}
-                  onClick={() => void remove()}
+                  onClick={() => {
+                    close();
+                    void remove();
+                  }}
                 />
-                {full && (
-                  <div className="text-xs text-muted px-2 pt-1.5">
-                    Сценариев не больше {MAX_SCENARIOS}.
-                  </div>
-                )}
-              </div>
-            )}
-          </Popover>
-        </div>
+              </>
+            )
+          }
+        </MenuButton>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -156,6 +142,51 @@ export function ScenarioBar({ horizonLabel }: { horizonLabel: (y: number) => str
         </label>
       </div>
     </SectionControls>
+  );
+}
+
+/** Подписанная кнопка ряда контролов со своим меню. */
+function MenuButton({
+  icon: Icon,
+  label,
+  title,
+  disabled,
+  onClose,
+  children,
+}: {
+  icon: typeof Plus;
+  label: string;
+  title?: string;
+  disabled?: boolean;
+  onClose?: () => void;
+  children: (close: () => void) => ReactNode;
+}) {
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const close = () => {
+    setOpen(false);
+    onClose?.();
+  };
+  const button = (
+    <button
+      type="button"
+      className="btn-ghost btn-lg text-sm"
+      disabled={disabled}
+      aria-expanded={open}
+      onClick={() => (open ? close() : setOpen(true))}
+    >
+      <Icon className="w-4 h-4" />
+      {label}
+      <ChevronDown className={`w-3.5 h-3.5 opacity-60 transition-transform ${open ? "rotate-180" : ""}`} />
+    </button>
+  );
+  return (
+    <div ref={anchorRef} className="relative">
+      {title ? <Tooltip content={title}>{button}</Tooltip> : button}
+      <Popover open={open} anchorRef={anchorRef} onClose={close} className="w-64 card p-2 shadow-lg">
+        <div className="flex flex-col">{children(close)}</div>
+      </Popover>
+    </div>
   );
 }
 
