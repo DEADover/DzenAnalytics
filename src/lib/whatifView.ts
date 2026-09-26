@@ -1,6 +1,6 @@
 import type { ScenarioEvent } from "./whatif";
 import { chartColor } from "./format";
-import { MONTHS } from "./months";
+import { MONTHS, MONTHS_SHORT } from "./months";
 import { pluralRu } from "./plural";
 
 /** Цвета серий «Что-если» — одни на графике, в легенде и в таблице. */
@@ -40,4 +40,36 @@ export function eventWhen(e: ScenarioEvent): string {
   if (e.kind === "once") return `Разово · ${start}`;
   if (e.months == null) return `Каждый месяц с ${start}, без срока`;
   return `Каждый месяц с ${start} · ${durationText(e.months)}`;
+}
+
+export interface AxisTicks {
+  /** Месяцы делений, `YYYY-MM`. */
+  ticks: string[];
+  /** Подпись деления. */
+  label: (ym: string) => string;
+}
+
+/**
+ * Деления оси времени — на круглых датах и не гуще восьми.
+ *
+ * Прежде шаг считался от начала графика: деления падали на сентябри, а
+ * последнюю подпись библиотека дорисовывала сама и ставила вплотную к
+ * соседней («2086 2096»). Теперь деления — январи круглых лет (2030, 2040…),
+ * а на коротком горизонте — месяцы с круглым шагом.
+ */
+export function axisTicks(months: readonly string[]): AxisTicks {
+  const span = months.length - 1;
+  if (span <= 36) {
+    const step = [1, 2, 3, 6].find((s) => span / s <= 8) ?? 12;
+    return {
+      ticks: months.filter((ym) => (Number(ym.slice(5)) - 1) % step === 0),
+      label: (ym) => `${MONTHS_SHORT[Number(ym.slice(5)) - 1]} ${ym.slice(2, 4)}`,
+    };
+  }
+  const years = span / 12;
+  const step = [1, 2, 5, 10, 20].find((s) => years / s <= 8) ?? 25;
+  return {
+    ticks: months.filter((ym) => ym.endsWith("-01") && Number(ym.slice(0, 4)) % step === 0),
+    label: (ym) => ym.slice(0, 4),
+  };
 }

@@ -19,7 +19,7 @@ import {
   formatMoney,
   formatNum,
 } from "../../lib/format";
-import { SERIES_COLOR, monthYear } from "../../lib/whatifView";
+import { SERIES_COLOR, axisTicks, monthYear } from "../../lib/whatifView";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
 
 export interface ChartSeries {
@@ -57,10 +57,7 @@ export function WhatIfChart({
     [now, active, compare]
   );
 
-  // Деления оси — по годам: подпись каждого месяца на 10 лет — это 120 подписей.
-  const years = Math.max(1, Math.round((data.length - 1) / 12));
-  const step = years <= 3 ? 3 : years <= 10 ? 12 : years <= 20 ? 24 : 60;
-  const ticks = data.filter((_, i) => i % step === 0).map((d) => d.ym);
+  const axis = useMemo(() => axisTicks(data.map((d) => d.ym)), [data]);
 
   const target = active.projection.fireTarget;
   const max = Math.max(...data.map((d) => Math.max(d.now, d.active, d.compare ?? 0)));
@@ -73,7 +70,7 @@ export function WhatIfChart({
   return (
     <div className="h-80">
       <ResponsiveContainer>
-        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <ComposedChart data={data} margin={{ top: 8, right: 20, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="whatIfFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={SERIES_COLOR.active} stopOpacity={0.35} />
@@ -83,10 +80,13 @@ export function WhatIfChart({
           <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
           <XAxis
             dataKey="ym"
-            ticks={ticks}
+            ticks={axis.ticks}
+            // Ровно наши деления: сама библиотека прореживает их по-своему и
+            // дорисовывает последнюю точку вплотную к соседней.
+            interval={0}
             stroke={chartAxisStroke}
             fontSize={11}
-            tickFormatter={(ym: string) => (step >= 12 ? ym.slice(0, 4) : monthYear(ym))}
+            tickFormatter={axis.label}
           />
           <YAxis
             stroke={chartAxisStroke}
