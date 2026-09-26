@@ -71,6 +71,7 @@ export const BACKUP_META_KEYS = [
   "goals",
   "calibration",
   "fireExcludedAccounts",
+  "whatIfScenario", // сценарии «Что-если» и их допущения
   "includeOffBalance",
   "savedViews",
   "annotations", // legacy — feature archived (see archive/annotations); data preserved

@@ -1,93 +1,137 @@
 import type { Transaction } from "../types";
 import { groupByMonth } from "./aggregations";
-import { periodKey } from "./period";
+import { currentPeriod, periodKey, periodRange, shiftPeriod, spanDays } from "./period";
 
+/**
+ * Сценарии «Что-если»: как изменится капитал, если поменять доходы, расходы
+ * или случится крупное событие.
+ *
+ * Всё считается в СЕГОДНЯШНИХ деньгах. Инфляция не раздувает суммы, а
+ * уменьшает доходность: капитал растёт на реальную доходность
+ * `(1 + доходность) / (1 + инфляция) − 1`. Так «через 10 лет 5 млн» значит
+ * 5 млн нынешними, и его можно сравнивать с тем, что есть сейчас, и с целью
+ * FIRE, которая тоже в нынешних деньгах.
+ */
+
+export type WhatIfBasis = "average" | "median";
+
+/** Точка отсчёта — ваши доход и расход за последние законченные месяцы. */
 export interface WhatIfBase {
-  avgIncome: number;       // base monthly income, last 6 months
-  avgExpense: number;      // base monthly expense, last 6 months
+  avgIncome: number;
+  avgExpense: number;
   avgSavings: number;
   savingsRate: number;
-  annualExpense: number;
-  fireTarget: number;       // expense * 12 * 25
-  yearsToFireBase: number;  // years to FIRE at current rate, from zero
+  /** Месяцы, по которым посчитано, по возрастанию. */
+  months: string[];
+  /** Доход и расход каждого из этих месяцев — чтобы среднее можно было проверить. */
+  monthly: { ym: string; income: number; expense: number }[];
 }
 
-export interface WhatIfInputs {
-  /** Multiplier on income, 1 = unchanged, 1.2 = +20% raise */
-  incomeMul: number;
-  /** Multiplier on expense, 1 = unchanged, 0.9 = −10% */
-  expenseMul: number;
-  /** Extra monthly amount to save (forced delta) */
-  extraMonthlySave: number;
-  /** Current capital (starting balance for projections), in base currency */
-  startingCapital: number;
-  /** Per-category expense multipliers (e.g. { "Кафе": 0.5 }) */
-  categoryMul?: Record<string, number>;
+export interface BaseOptions {
+  monthStartDay?: number;
+  /** Сколько последних законченных месяцев брать. */
+  months?: number;
+  basis?: WhatIfBasis;
+  today?: Date;
 }
 
-export interface WhatIfOutputs {
-  newIncome: number;
-  newExpense: number;
-  newSavings: number;
-  newRate: number;
-  /** Years to FIRE under new conditions */
-  yearsToFire: number;
-  /** Capital projected at +1, +5, +10 years */
-  projected1y: number;
-  projected5y: number;
-  projected10y: number;
-  /** Per-year savings delta vs base scenario */
-  annualSavingsDelta: number;
-  /** Years saved on FIRE timeline vs base */
-  yearsSavedOnFire: number;
+/**
+ * Законченные месяцы с операциями — последние `count`.
+ *
+ * Идущий месяц не берём: к середине месяца в нём половина трат и почти вся
+ * зарплата, и средние по нему врут в обе стороны. Так же — последний месяц
+ * данных, если они обрываются задолго до его конца: выгрузка CSV, сделанная
+ * в середине мая, даёт май без зарплаты, и среднее проседает на шестую часть.
+ * Если законченных нет совсем (данных на один месяц), считаем по тому, что есть.
+ */
+function recentMonths(
+  transactions: Transaction[],
+  count: number,
+  monthStartDay: number,
+  today: Date
+) {
+  const all = groupByMonth(transactions, { monthStartDay });
+  const running = currentPeriod(monthStartDay, today);
+  let lastDate = "";
+  for (const t of transactions) if (t.kind !== "transfer" && t.date > lastDate) lastDate = t.date;
+  const cut = lastDate ? cutMonth(lastDate, monthStartDay) : null;
+  const done = all.filter((m) => m.ym < running && m.ym !== cut);
+  return (done.length > 0 ? done : all).slice(-count);
 }
+
+/** Сколько дней тишины в конце месяца считаем обрывом данных, а не затишьем. */
+const CUT_GAP_DAYS = 7;
+
+/**
+ * Месяц, на котором данные обрываются, — или `null`, если последний месяц
+ * данных дошёл почти до конца. Неделя без операций в конце месяца бывает и
+ * у живых данных; обрыв — это когда месяц кончается сильно позже последней
+ * операции.
+ */
+function cutMonth(lastDate: string, monthStartDay: number): string | null {
+  const ym = periodKey(lastDate, monthStartDay);
+  const gap = spanDays(lastDate, periodRange(ym, monthStartDay).to) - 1;
+  return gap > CUT_GAP_DAYS ? ym : null;
+}
+
+function median(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
 export function computeWhatIfBase(
   transactions: Transaction[],
-  monthStartDay = 1
+  opts: BaseOptions = {}
 ): WhatIfBase {
-  const months = groupByMonth(transactions, { monthStartDay });
-  const recent = months.slice(-6);
-  const avgIncome =
-    recent.length > 0
-      ? recent.reduce((s, m) => s + m.income, 0) / recent.length
-      : 0;
-  const avgExpense =
-    recent.length > 0
-      ? recent.reduce((s, m) => s + m.expense, 0) / recent.length
-      : 0;
+  const recent = recentMonths(
+    transactions,
+    opts.months ?? 6,
+    opts.monthStartDay ?? 1,
+    opts.today ?? new Date()
+  );
+  const pick = opts.basis === "median" ? median : mean;
+  const avgIncome = pick(recent.map((m) => m.income));
+  const avgExpense = pick(recent.map((m) => m.expense));
   const avgSavings = avgIncome - avgExpense;
-  const savingsRate = avgIncome > 0 ? avgSavings / avgIncome : 0;
-  const annualExpense = avgExpense * 12;
-  const fireTarget = annualExpense * 25;
-  const yearsToFireBase =
-    avgSavings > 0 ? fireTarget / (avgSavings * 12) : Infinity;
-
   return {
     avgIncome,
     avgExpense,
     avgSavings,
-    savingsRate,
-    annualExpense,
-    fireTarget,
-    yearsToFireBase,
+    savingsRate: avgIncome > 0 ? avgSavings / avgIncome : 0,
+    months: recent.map((m) => m.ym),
+    monthly: recent.map((m) => ({ ym: m.ym, income: m.income, expense: m.expense })),
   };
 }
 
 export interface CategoryAverage {
   category: string;
-  monthly: number; // average monthly expense in base currency
+  /** Средний расход в месяц, в базовой валюте. */
+  monthly: number;
 }
 
+/**
+ * Средний расход по каждой категории за те же месяцы, что и база, — все
+ * категории, от больших к меньшим. Делим на число месяцев базы, а не на
+ * месяцы, где категория встречалась: страховка раз в полгода — это шестая
+ * часть в месяц, а не вся сумма.
+ */
 export function avgMonthlyByCategory(
   transactions: Transaction[],
-  topN = 8,
-  monthStartDay = 1
+  opts: Omit<BaseOptions, "basis"> = {}
 ): CategoryAverage[] {
-  const months = groupByMonth(transactions, { monthStartDay });
-  const recent = months.slice(-6);
+  const monthStartDay = opts.monthStartDay ?? 1;
+  const recent = recentMonths(
+    transactions,
+    opts.months ?? 6,
+    monthStartDay,
+    opts.today ?? new Date()
+  );
   const recentSet = new Set(recent.map((r) => r.ym));
-  const recentMonths = recent.length || 1;
+  const count = recent.length || 1;
 
   const sums = new Map<string, number>();
   for (const t of transactions) {
@@ -97,64 +141,194 @@ export function avgMonthlyByCategory(
   }
 
   return Array.from(sums.entries())
-    .map(([category, total]) => ({ category, monthly: total / recentMonths }))
-    .sort((a, b) => b.monthly - a.monthly)
-    .slice(0, topN);
+    .map(([category, total]) => ({ category, monthly: total / count }))
+    .filter((c) => c.monthly > 0)
+    .sort((a, b) => b.monthly - a.monthly);
 }
 
-export function computeWhatIf(
+/**
+ * Событие сценария: разовое («машина в марте 2027») или ежемесячное
+ * («ипотека 60 000 с января, 20 лет»). Суммы — в сегодняшних деньгах.
+ */
+export interface ScenarioEvent {
+  id: string;
+  title: string;
+  kind: "once" | "monthly";
+  /** Трата или поступление. */
+  sign: "expense" | "income";
+  amount: number;
+  /** Месяц начала, `YYYY-MM`. */
+  start: string;
+  /** Сколько месяцев длится ежемесячное; `null` — без конца. */
+  months: number | null;
+}
+
+/** Рычаги одного сценария. */
+export interface ScenarioLevers {
+  /** Множитель дохода: 1 — без изменений, 1.2 — +20%. */
+  incomeMul: number;
+  /** Множитель расхода: 0.9 — −10%. Применяется ПОСЛЕ категорий. */
+  expenseMul: number;
+  /** Сколько откладывать сверх нынешнего «доход − расход». */
+  extraMonthlySave: number;
+  /** Множители по категориям: `{ Кафе: 0.5 }` — вдвое меньше. */
+  categoryMul: Record<string, number>;
+  events: ScenarioEvent[];
+}
+
+export const NEUTRAL_LEVERS: ScenarioLevers = {
+  incomeMul: 1,
+  expenseMul: 1,
+  extraMonthlySave: 0,
+  categoryMul: {},
+  events: [],
+};
+
+/** Допущения — общие для всех сценариев. */
+export interface WhatIfAssumptions {
+  /** Доходность капитала, % годовых. */
+  returnPct: number;
+  /** Инфляция, % годовых. */
+  inflationPct: number;
+  /** На сколько лет вперёд смотреть. */
+  horizonYears: number;
+  /** По скольким законченным месяцам считать базу. */
+  baseMonths: number;
+  basis: WhatIfBasis;
+  /** Доля капитала, которую можно тратить в год на FIRE: 4% — правило 4%. */
+  withdrawalPct: number;
+}
+
+export const DEFAULT_ASSUMPTIONS: WhatIfAssumptions = {
+  returnPct: 0,
+  inflationPct: 0,
+  horizonYears: 10,
+  baseMonths: 6,
+  basis: "average",
+  withdrawalPct: 4,
+};
+
+export interface ProjectionPoint {
+  /** Месяц, `YYYY-MM`; первая точка — сегодняшний капитал. */
+  ym: string;
+  capital: number;
+}
+
+export interface Projection {
+  income: number;
+  expense: number;
+  /** Откладывается в обычный месяц — без событий. */
+  savings: number;
+  rate: number;
+  /** Капитал для FIRE: годовые траты ÷ доля изъятия. */
+  fireTarget: number;
+  /** Месяц, когда капитал дорастёт до цели; `null` — не дорастёт за 100 лет. */
+  fireYm: string | null;
+  /** Лет до FIRE; `Infinity` — не дорастёт. */
+  yearsToFire: number;
+  /** Траектория на горизонт, по месяцам. */
+  points: ProjectionPoint[];
+  /** Капитал на конец горизонта. */
+  capitalAtHorizon: number;
+  /** Сумма событий по месяцам горизонта (для подсказки графика). */
+  eventsByYm: Record<string, number>;
+}
+
+/** Реальная месячная доходность: доходность за вычетом инфляции. */
+export function realMonthlyRate(a: Pick<WhatIfAssumptions, "returnPct" | "inflationPct">): number {
+  const real = (1 + a.returnPct / 100) / (1 + a.inflationPct / 100) - 1;
+  return Math.pow(1 + real, 1 / 12) - 1;
+}
+
+/** Сколько месяцев от `from` до `to`: «2026-09» → «2027-01» = 4. */
+export function monthsBetween(from: string, to: string): number {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+
+/** Сколько даёт событие в месяце `ym`: трата — минус, поступление — плюс. */
+export function eventAmountIn(e: ScenarioEvent, ym: string): number {
+  const k = monthsBetween(e.start, ym);
+  if (k < 0) return 0;
+  const on = e.kind === "once" ? k === 0 : e.months == null || k < e.months;
+  if (!on) return 0;
+  return e.sign === "income" ? e.amount : -e.amount;
+}
+
+/** Доход и расход сценария в обычный месяц — без событий. */
+export function steadyFlows(
   base: WhatIfBase,
-  inputs: WhatIfInputs,
-  categoryAverages: CategoryAverage[]
-): WhatIfOutputs {
-  const newIncome = base.avgIncome * inputs.incomeMul;
-
-  // Recompute expense: start from baseline, apply per-category multipliers,
-  // then apply global expense multiplier.
-  let categoryAdjustedExpense = base.avgExpense;
-  if (inputs.categoryMul) {
-    let delta = 0;
-    for (const ca of categoryAverages) {
-      const mul = inputs.categoryMul[ca.category];
-      if (mul === undefined) continue;
-      delta += ca.monthly * (mul - 1);
-    }
-    categoryAdjustedExpense = base.avgExpense + delta;
+  levers: ScenarioLevers,
+  categories: CategoryAverage[]
+) {
+  const income = base.avgIncome * levers.incomeMul;
+  let delta = 0;
+  for (const c of categories) {
+    const mul = levers.categoryMul[c.category];
+    if (mul !== undefined) delta += c.monthly * (mul - 1);
   }
-  const newExpense = Math.max(0, categoryAdjustedExpense * inputs.expenseMul);
+  const expense = Math.max(0, (base.avgExpense + delta) * levers.expenseMul);
+  const savings = income - expense + levers.extraMonthlySave;
+  return { income, expense, savings, rate: income > 0 ? savings / income : 0 };
+}
 
-  const newSavings = newIncome - newExpense + inputs.extraMonthlySave;
-  const newRate = newIncome > 0 ? newSavings / newIncome : 0;
+const FIRE_SEARCH_MONTHS = 100 * 12;
 
-  // FIRE under new conditions: target = newExpense * 12 * 25.
-  const newFireTarget = newExpense * 12 * 25;
-  const startingCapital = Math.max(0, inputs.startingCapital);
+/**
+ * Траектория капитала по месяцам.
+ *
+ * Каждый месяц капитал растёт на реальную доходность, к нему прибавляется то,
+ * что откладывается, и события этого месяца. Капитал может уйти в минус —
+ * покупка больше накоплений — и мы это показываем, а не прячем за нулём.
+ *
+ * Цель FIRE — годовые траты сценария, делённые на долю изъятия. Бессрочные
+ * ежемесячные траты (ипотека без конца, аренда) входят в траты: на них тоже
+ * придётся жить с капитала. Траты со сроком — нет: к FIRE они закончатся.
+ */
+export function project(
+  base: WhatIfBase,
+  levers: ScenarioLevers,
+  categories: CategoryAverage[],
+  assumptions: WhatIfAssumptions,
+  startingCapital: number,
+  startYm: string
+): Projection {
+  const flows = steadyFlows(base, levers, categories);
+  const forever = levers.events
+    .filter((e) => e.kind === "monthly" && e.months == null && e.sign === "expense")
+    .reduce((s, e) => s + e.amount, 0);
+  const withdrawal = Math.max(0.1, assumptions.withdrawalPct) / 100;
+  const fireTarget = ((flows.expense + forever) * 12) / withdrawal;
+  const r = realMonthlyRate(assumptions);
+  const horizon = Math.max(1, Math.round(assumptions.horizonYears)) * 12;
 
-  const yearsToFire =
-    newSavings > 0
-      ? Math.max(0, (newFireTarget - startingCapital) / (newSavings * 12))
-      : Infinity;
-
-  const projected = (years: number) =>
-    startingCapital + newSavings * 12 * years;
-
-  const annualSavingsDelta = (newSavings - base.avgSavings) * 12;
-
-  const yearsSavedOnFire =
-    Number.isFinite(base.yearsToFireBase) && Number.isFinite(yearsToFire)
-      ? base.yearsToFireBase - yearsToFire
-      : 0;
+  const points: ProjectionPoint[] = [{ ym: startYm, capital: startingCapital }];
+  const eventsByYm: Record<string, number> = {};
+  let capital = startingCapital;
+  let fireMonth: number | null = capital >= fireTarget && fireTarget > 0 ? 0 : null;
+  const last = Math.max(horizon, fireMonth === null ? FIRE_SEARCH_MONTHS : 0);
+  for (let k = 1; k <= last; k++) {
+    // Событие месяца `startYm` — это уже этот месяц; траектория начинается
+    // с капитала на сегодня и шагает на месяц вперёд.
+    const ym = shiftPeriod(startYm, k);
+    const ev = levers.events.reduce((s, e) => s + eventAmountIn(e, ym), 0);
+    capital = capital * (1 + r) + flows.savings + ev;
+    if (k <= horizon) {
+      points.push({ ym, capital });
+      if (ev !== 0) eventsByYm[ym] = ev;
+    }
+    if (fireMonth === null && fireTarget > 0 && capital >= fireTarget) fireMonth = k;
+    if (k >= horizon && fireMonth !== null) break;
+  }
 
   return {
-    newIncome,
-    newExpense,
-    newSavings,
-    newRate,
-    yearsToFire,
-    projected1y: projected(1),
-    projected5y: projected(5),
-    projected10y: projected(10),
-    annualSavingsDelta,
-    yearsSavedOnFire,
+    ...flows,
+    fireTarget,
+    fireYm: fireMonth === null ? null : shiftPeriod(startYm, fireMonth),
+    yearsToFire: fireMonth === null ? Infinity : fireMonth / 12,
+    points,
+    capitalAtHorizon: points[points.length - 1].capital,
+    eventsByYm,
   };
 }

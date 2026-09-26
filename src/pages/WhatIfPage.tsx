@@ -1,44 +1,60 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import clsx from "clsx";
 import {
-  FlaskConical,
-  TrendingUp,
-  TrendingDown,
-  Flame,
-  RotateCcw,
   Coins,
-  PiggyBank,
+  FlaskConical,
+  LineChart as LineChartIcon,
+  RotateCcw,
+  SlidersHorizontal,
+  Table2,
+  Wallet,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import {
-  computeWhatIfBase,
-  computeWhatIf,
   avgMonthlyByCategory,
-  type WhatIfInputs,
+  computeWhatIfBase,
+  NEUTRAL_LEVERS,
+  project,
+  realMonthlyRate,
+  type Projection,
+  type ScenarioLevers,
+  type WhatIfBase,
 } from "../lib/whatif";
 import { netWorthSeries } from "../lib/aggregations";
+import { currentPeriod } from "../lib/period";
+import { pluralRu } from "../lib/plural";
 import { useFireCapital } from "../hooks/useFireCapital";
+import { useFitsViewport } from "../hooks/useFitsViewport";
 import { useFireStore } from "../store/useFireStore";
 import { isScenarioChanged, useWhatIfStore } from "../store/useWhatIfStore";
 import { FILTER_NONE } from "../store/useFiltersStore";
 import { MultiSelect } from "../components/MultiSelect";
 import { AccountLogo } from "../components/AccountLogo";
-import { CardHeader } from "../components/CardHeader";
+import { SectionCard, StatCell, StatRow, type StatTone } from "../components/SectionCard";
 import { Slider } from "../components/Slider";
+import { Segmented } from "../components/Segmented";
 import { HeadCell } from "../components/table/TableParts";
 import { cellClass } from "../components/table/tableKit";
-import { formatMoney, formatPct, formatFixed } from "../lib/format";
+import { formatMoney, formatPct } from "../lib/format";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
-import { Callout } from "../components/Callout";
+import { ScenarioBar } from "../components/whatif/ScenarioBar";
+import { WhatIfChart } from "../components/whatif/WhatIfChart";
+import { WhatIfCategories } from "../components/whatif/WhatIfCategories";
+import { WhatIfEvents } from "../components/whatif/WhatIfEvents";
+import { SERIES_COLOR, durationText, monthYear, pctText } from "../lib/whatifView";
+
+const NOW_NAME = "Как сейчас";
+
+const yearsLabel = (y: number) => `${y} ${pluralRu(y, ["год", "года", "лет"])}`;
 
 /**
- * Счета капитала ↔ выбор в `MultiSelect`. Хранится список ИСКЛЮЧЁННЫХ (общий с
- * FIRE: новый счёт сам попадает в капитал), а у списка соглашение фильтров:
- * пусто = все, {FILTER_NONE} = ничего. «Ничего» здесь — своя сумма.
+ * Счета капитала ↔ выбор в `MultiSelect`. У списка соглашение фильтров:
+ * пусто = все, {FILTER_NONE} = ничего; «ничего» здесь — своя сумма.
  */
 function excludedToSet(excluded: readonly string[], all: readonly string[]): Set<string> {
   const on = all.filter((t) => !excluded.includes(t));
@@ -47,28 +63,100 @@ function excludedToSet(excluded: readonly string[], all: readonly string[]): Set
   return new Set(on);
 }
 
+/**
+ * Обратно из выбора в список исключённых. Хранится именно он (общий с FIRE):
+ * новый счёт сам попадает в капитал. Исключённые счета, которых сейчас нет в
+ * списке (архивные, переименованные), оставляем — FIRE их помнит.
+ */
 function setToExcluded(next: Set<string>, all: readonly string[], prev: readonly string[]): string[] {
-  // Исключённые счета, которых сейчас нет в списке (архивные, переименованные),
-  // оставляем как были — выбор общий с FIRE, и терять его там нельзя.
   const foreign = prev.filter((t) => !all.includes(t));
   if (next.has(FILTER_NONE)) return [...foreign, ...all];
   if (next.size === 0) return foreign;
   return [...foreign, ...all.filter((t) => !next.has(t))];
 }
 
-function years(v: number): string {
-  if (!Number.isFinite(v)) return "∞";
-  if (v < 0) return "0";
-  if (v < 1) return `${(v * 12).toFixed(0)} мес`;
-  if (v >= 100) return "100+";
-  return formatFixed(v);
+/** «12 лет 5 мес», «Уже сейчас», «Не наступит». */
+function fireWhen(p: Projection): string {
+  if (p.fireYm === null) return "Не наступит";
+  if (p.yearsToFire === 0) return "Уже сейчас";
+  return durationText(Math.round(p.yearsToFire * 12));
+}
+
+/** Лучше или хуже «как сейчас»: денег больше — лучше, срок меньше — лучше. */
+function toneOf(value: number, now: number, lowerIsBetter = false): StatTone {
+  if (value === now) return "default";
+  if (!Number.isFinite(value) || !Number.isFinite(now)) {
+    // «Не наступит» против срока — хуже; срок против «не наступит» — лучше.
+    const worse = lowerIsBetter ? !Number.isFinite(value) : !Number.isFinite(now);
+    return worse ? "expense" : "income";
+  }
+  const d = lowerIsBetter ? now - value : value - now;
+  if (Math.abs(d) < 0.5) return "default";
+  return d > 0 ? "income" : "expense";
+}
+
+const mulText = (v: number) => `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`;
+
+/**
+ * Откуда «сейчас»: доход и расход каждого месяца базы и итог. Без этого
+ * среднее не с чем сверить — а расходится оно с ожиданием чаще всего из-за
+ * того, какие месяцы и какие операции в него вошли.
+ */
+function BaseBreakdown({
+  base,
+  currency,
+  median,
+}: {
+  base: WhatIfBase;
+  currency: string;
+  median: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <table className="w-full text-xs tabular-nums">
+        <thead>
+          <tr className="text-muted">
+            <th className="text-left font-normal pb-1">Месяц</th>
+            <th className="text-right font-normal pb-1">Доход</th>
+            <th className="text-right font-normal pb-1">Расход</th>
+          </tr>
+        </thead>
+        <tbody>
+          {base.monthly.map((m) => (
+            <tr key={m.ym}>
+              <td className="py-0.5">{monthYear(m.ym)}</td>
+              <td className="text-right py-0.5">{formatMoney(m.income, currency)}</td>
+              <td className="text-right py-0.5">{formatMoney(m.expense, currency)}</td>
+            </tr>
+          ))}
+          <tr className="font-semibold border-t border-border">
+            <td className="pt-1">{median ? "Медиана" : "Среднее"}</td>
+            <td className="text-right pt-1">{formatMoney(base.avgIncome, currency)}</td>
+            <td className="text-right pt-1">{formatMoney(base.avgExpense, currency)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="text-muted">
+        Берутся последние законченные отчётные месяцы с операциями; идущий месяц не входит.
+        Переводы между своими счетами не считаются, возвраты уменьшают расход. Не входят
+        категории и счета, исключённые в разрезе данных, и внебалансовые счета, пока они
+        выключены в настройках. Сколько месяцев брать — в «Допущениях».
+      </p>
+    </div>
+  );
+}
+
+interface Row {
+  label: string;
+  value: (p: Projection) => string;
+  num: (p: Projection) => number;
+  lowerIsBetter?: boolean;
 }
 
 export function WhatIfPage() {
   const transactions = useDataStore((s) => s.transactions);
-  // Income/expense scenario base excludes turnover / off-balance flows (#14);
-  // the net-worth baseline below stays on raw transactions (it's a balance, and
-  // excluded reimbursements are still real money that moved).
+  // Доходы и расходы — без оборотов и внебалансовых движений (#14); капитал
+  // по операциям — по всем, это остаток.
   const analyticsTx = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
   const calibration = useCalibrationStore((s) => s.calibration);
@@ -80,23 +168,29 @@ export function WhatIfPage() {
     if (!calibLoaded) hydrateCalibration();
   }, [calibLoaded, hydrateCalibration]);
 
+  const store = useWhatIfStore();
+  const { assumptions } = store;
+  const active = store.scenarios.find((s) => s.id === store.activeId) ?? store.scenarios[0];
+  const compare = store.scenarios.find((s) => s.id === store.compareId) ?? null;
+
   const baseScenario = useMemo(
-    () => computeWhatIfBase(analyticsTx, monthStartDay),
-    [analyticsTx, monthStartDay]
+    () =>
+      computeWhatIfBase(analyticsTx, {
+        monthStartDay,
+        months: assumptions.baseMonths,
+        basis: assumptions.basis,
+      }),
+    [analyticsTx, monthStartDay, assumptions.baseMonths, assumptions.basis]
   );
   const categories = useMemo(
-    () => avgMonthlyByCategory(analyticsTx, 8, monthStartDay),
-    [analyticsTx, monthStartDay]
+    () => avgMonthlyByCategory(analyticsTx, { monthStartDay, months: assumptions.baseMonths }),
+    [analyticsTx, monthStartDay, assumptions.baseMonths]
   );
 
   const currentNetWorth = useMemo(() => {
     const series = netWorthSeries(transactions, calibration);
     return series.length > 0 ? series[series.length - 1].net : 0;
   }, [transactions, calibration]);
-
-  // Сценарий сохраняется и переносится между устройствами (#107).
-  const scenario = useWhatIfStore();
-  const update = scenario.update;
 
   // Счета капитала — общий с FIRE выбор: капитал везде считается одинаково.
   const { capital, capitalAccounts } = useFireCapital();
@@ -105,123 +199,221 @@ export function WhatIfPage() {
   const accountTitles = useMemo(() => capitalAccounts.map((a) => a.title), [capitalAccounts]);
   const pickedCount = accountTitles.filter((t) => !excluded.includes(t)).length;
   // Счета есть и хоть один выбран — капитал по их балансам; иначе своя сумма,
-  // а без своей — чистый капитал по операциям, как было до выбора счетов.
+  // а без своей — остаток по всем операциям.
   const byAccounts = pickedCount > 0;
-  const autoCapital = Math.max(0, Math.round(currentNetWorth));
   const startingCapital = byAccounts
-    ? Math.max(0, Math.round(capital))
-    : (scenario.manualCapital ?? autoCapital);
+    ? Math.round(capital)
+    : (store.manualCapital ?? Math.max(0, Math.round(currentNetWorth)));
 
-  const inputs: WhatIfInputs = useMemo(
-    () => ({
-      incomeMul: scenario.incomeMul,
-      expenseMul: scenario.expenseMul,
-      extraMonthlySave: scenario.extraMonthlySave,
-      categoryMul: scenario.categoryMul,
-      startingCapital,
-    }),
-    [scenario.incomeMul, scenario.expenseMul, scenario.extraMonthlySave, scenario.categoryMul, startingCapital]
-  );
-
-  const out = useMemo(
-    () => computeWhatIf(baseScenario, inputs, categories),
-    [baseScenario, inputs, categories]
-  );
+  const startYm = currentPeriod(monthStartDay);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const resultFits = useFitsViewport(resultRef);
+  const projections = useMemo(() => {
+    const run = (levers: ScenarioLevers) =>
+      project(baseScenario, levers, categories, assumptions, startingCapital, startYm);
+    return {
+      now: run(NEUTRAL_LEVERS),
+      active: run(active),
+      compare: compare ? run(compare) : null,
+    };
+  }, [baseScenario, categories, assumptions, startingCapital, startYm, active, compare]);
 
   if (transactions.length === 0) return <EmptyState />;
 
-  // Своя сумма капитала — тоже часть сценария: «Сбросить» возвращает и её.
-  const dirty =
-    isScenarioChanged(scenario) || (!byAccounts && scenario.manualCapital !== null);
+  const { now: nowProj, active: actProj, compare: cmpProj } = projections;
+  const horizon = assumptions.horizonYears;
+  const update = store.updateActive;
+  const changed = isScenarioChanged(active);
+  const realPct = (Math.pow(1 + realMonthlyRate(assumptions), 12) - 1) * 100;
+  const months = baseScenario.months;
+  const baseSpan =
+    months.length === 0
+      ? "нет законченных месяцев"
+      : months.length === 1
+        ? monthYear(months[0]).toLowerCase()
+        : `${monthYear(months[0]).toLowerCase()} – ${monthYear(months[months.length - 1]).toLowerCase()} (${months.length} мес)`;
+
+  const capitalAt = (p: Projection, years: number) =>
+    p.points[Math.min(years * 12, p.points.length - 1)].capital;
+  const checkpoints = [...new Set([1, 5, horizon].filter((y) => y <= horizon))];
+
+  const columns = [
+    { key: "now", name: NOW_NAME, color: SERIES_COLOR.now, p: nowProj },
+    { key: "active", name: active.name, color: SERIES_COLOR.active, p: actProj },
+    ...(cmpProj && compare
+      ? [{ key: "compare", name: compare.name, color: SERIES_COLOR.compare, p: cmpProj }]
+      : []),
+  ];
+
+  const rows: Row[] = [
+    { label: "Доход / мес", value: (p) => formatMoney(p.income, base), num: (p) => p.income },
+    {
+      label: "Расход / мес",
+      value: (p) => formatMoney(p.expense, base),
+      num: (p) => p.expense,
+      lowerIsBetter: true,
+    },
+    { label: "Откладываете / мес", value: (p) => formatMoney(p.savings, base), num: (p) => p.savings },
+    { label: "Норма сбережений", value: (p) => formatPct(p.rate, 0), num: (p) => p.rate * 100 },
+    ...checkpoints.map((y) => ({
+      label: `Капитал через ${yearsLabel(y)}`,
+      value: (p: Projection) => formatMoney(capitalAt(p, y), base),
+      num: (p: Projection) => capitalAt(p, y),
+    })),
+    {
+      label: "Цель FIRE",
+      value: (p) => formatMoney(p.fireTarget, base),
+      num: (p) => p.fireTarget,
+      lowerIsBetter: true,
+    },
+    {
+      label: "FIRE наступит",
+      value: (p) => (p.fireYm ? monthYear(p.fireYm) : "Не наступит"),
+      num: (p) => p.yearsToFire,
+      lowerIsBetter: true,
+    },
+  ];
+
+  const deltaHorizon = actProj.capitalAtHorizon - nowProj.capitalAtHorizon;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         icon={FlaskConical}
-        title="Что-если — сценарии"
+        title="Что-если"
         info={
           <InfoPopover>
             <p>
               За точку отсчёта берём ваши{" "}
-              <InfoTerm>средние доход и расход за 6 месяцев</InfoTerm>.
-              Слайдеры меняют именно их: «расходы −10%» — это десять процентов
-              от среднего месячного расхода, а не от какой-то одной покупки.
+              <InfoTerm>доход и расход за последние законченные месяцы</InfoTerm>: сколько
+              месяцев и среднее или медиану, выбираете в «Допущениях». Идущий месяц не берём —
+              в нём ещё не все траты.
             </p>
             <p>
-              Дальше всё считается в лоб, без процентов на остаток:{" "}
-              <InfoTerm>откладываете в месяц = доход − расход + «отложить
-              дополнительно»</InfoTerm>, а капитал через год — это стартовый
-              капитал плюс двенадцать таких месяцев. Инвестиционной доходности
-              здесь нет намеренно: это прикидка «что будет, если жить так же»,
-              а не прогноз портфеля.
+              Сценарий меняет обычный месяц — бегунками и категориями — и добавляет{" "}
+              <InfoTerm>события</InfoTerm> с датой: покупку, кредит, премию. «Как сейчас» — тот
+              же расчёт без изменений, с ним сценарий и сравнивается.
             </p>
             <p>
-              <InfoTerm>Срок до FIRE</InfoTerm> — сколько лет копить до суммы,
-              на проценты с которой можно жить: годовые расходы{" "}
-              <InfoTerm>× 25</InfoTerm> (это правило 4%). Обратите внимание:
-              цель считается от НОВЫХ расходов, поэтому урезание трат
-              приближает FIRE дважды — и копится больше, и цель становится
-              меньше.
+              Все суммы — в <InfoTerm>сегодняшних деньгах</InfoTerm>: инфляция не раздувает
+              числа, а вычитается из доходности. <InfoTerm>FIRE</InfoTerm> — капитал, с которого
+              можно жить: годовые траты, делённые на долю изъятия (4% — это 25 годовых трат).
             </p>
           </InfoPopover>
         }
       />
 
-      <div className="grid md:grid-cols-2 gap-4">
-        {/* Inputs */}
-        <div className="card-tray card-pad space-y-5">
-          <div>
-            {/* «Сбросить» — в шапке карточки с бегунками, которые он
-                возвращает: в шапке раздела он появлялся через экран от них. */}
-            <CardHeader
-              icon={Coins}
-              title="Основные параметры"
-              right={
-                dirty && (
-                  <button onClick={() => void scenario.reset()} className="btn-ghost text-xs">
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Сбросить
-                  </button>
-                )
-              }
-            />
+      <ScenarioBar horizonLabel={yearsLabel} />
+
+      <StatRow>
+        <StatCell
+          label="Откладываете в месяц"
+          value={formatMoney(actProj.savings, base)}
+          tone={toneOf(actProj.savings, nowProj.savings)}
+          note={changed ? `Сейчас ${formatMoney(nowProj.savings, base)}` : "Как сейчас"}
+        />
+        <StatCell
+          label="Норма сбережений"
+          value={formatPct(actProj.rate, 0)}
+          tone={toneOf(actProj.rate * 100, nowProj.rate * 100)}
+          note={changed ? `Сейчас ${formatPct(nowProj.rate, 0)}` : "Доля дохода, что остаётся"}
+        />
+        <StatCell
+          label={`Капитал через ${yearsLabel(horizon)}`}
+          value={formatMoney(actProj.capitalAtHorizon, base)}
+          tone={toneOf(actProj.capitalAtHorizon, nowProj.capitalAtHorizon)}
+          note={
+            Math.round(deltaHorizon) !== 0
+              ? `${formatMoney(deltaHorizon, base, { signed: true })} к «Как сейчас»`
+              : `Сейчас ${formatMoney(startingCapital, base)}`
+          }
+        />
+        <StatCell
+          label="До FIRE"
+          value={fireWhen(actProj)}
+          tone={toneOf(actProj.yearsToFire, nowProj.yearsToFire, true)}
+          note={
+            actProj.fireYm
+              ? `${monthYear(actProj.fireYm)} · цель ${formatMoney(actProj.fireTarget, base, { compact: true })}`
+              : `Цель ${formatMoney(actProj.fireTarget, base, { compact: true })}`
+          }
+        />
+      </StatRow>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] items-start">
+        {/* Рычаги сценария */}
+        <div className="space-y-4">
+          <SectionCard
+            icon={Coins}
+            title="Доход и расходы"
+            subtitle={`«Сейчас» — ${assumptions.basis === "median" ? "медиана" : "среднее"} за ${baseSpan}`}
+            info={<BaseBreakdown base={baseScenario} currency={base} median={assumptions.basis === "median"} />}
+            right={
+              changed && (
+                <button
+                  type="button"
+                  onClick={() => void store.resetActive()}
+                  className="btn-ghost text-xs"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Сбросить
+                </button>
+              )
+            }
+          >
             <div className="space-y-4">
               <Slider
                 layout="stacked"
-                label="Изменение дохода"
-                value={inputs.incomeMul}
+                label="Доход"
+                value={active.incomeMul}
                 min={0.5}
                 max={2.0}
                 step={0.05}
-                format={(v) => `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`}
-                hint={`Текущий: ${formatMoney(baseScenario.avgIncome, base)}/мес → ${formatMoney(out.newIncome, base)}/мес`}
+                format={mulText}
+                hint={`Сейчас ${formatMoney(baseScenario.avgIncome, base)}/мес → ${formatMoney(actProj.income, base)}/мес`}
                 onChange={(v) => void update({ incomeMul: v })}
               />
               <Slider
                 layout="stacked"
-                label="Изменение расхода"
-                value={inputs.expenseMul}
+                label="Расход"
+                value={active.expenseMul}
                 min={0.5}
                 max={1.5}
                 step={0.05}
-                format={(v) => `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`}
-                hint={`Текущий: ${formatMoney(baseScenario.avgExpense, base)}/мес → ${formatMoney(out.newExpense, base)}/мес`}
+                format={mulText}
+                hint={`Сейчас ${formatMoney(baseScenario.avgExpense, base)}/мес → ${formatMoney(actProj.expense, base)}/мес`}
                 onChange={(v) => void update({ expenseMul: v })}
               />
               <Slider
                 layout="stacked"
-                label="Дополнительно отложить в месяц"
-                value={inputs.extraMonthlySave}
+                label="Откладывать сверх того"
+                value={active.extraMonthlySave}
                 min={0}
-                max={Math.max(50000, baseScenario.avgIncome * 0.5)}
+                max={Math.max(50000, Math.round((baseScenario.avgIncome * 0.5) / 1000) * 1000)}
                 step={500}
                 format={(v) => `+${formatMoney(v, base)}`}
-                hint="Фиксированная сумма поверх нынешнего баланса доход−расход"
+                hint="Своя сумма в месяц поверх «доход − расход»"
                 onChange={(v) => void update({ extraMonthlySave: v })}
               />
             </div>
-            <div className="mt-4 space-y-2">
-              <label className="label block">Стартовый капитал</label>
+          </SectionCard>
+
+          <WhatIfCategories
+            categories={categories}
+            categoryMul={active.categoryMul}
+            base={base}
+            onChange={(categoryMul) => void update({ categoryMul })}
+          />
+
+          <WhatIfEvents
+            events={active.events}
+            base={base}
+            startYm={startYm}
+            onChange={(events) => void update({ events })}
+          />
+
+          <SectionCard icon={Wallet} title="Стартовый капитал">
+            <div className="space-y-2">
               {accountTitles.length > 0 && (
                 <MultiSelect
                   className="w-full"
@@ -229,7 +421,9 @@ export function WhatIfPage() {
                   label=""
                   options={accountTitles}
                   selected={excludedToSet(excluded, accountTitles)}
-                  onChange={(next) => void replaceExcluded(setToExcluded(next, accountTitles, excluded))}
+                  onChange={(next) =>
+                    void replaceExcluded(setToExcluded(next, accountTitles, excluded))
+                  }
                   renderIcon={(title) => <AccountLogo title={title} size={18} />}
                   unitForms={["счёт", "счёта", "счетов"]}
                   searchPlaceholder="Поиск счёта"
@@ -246,187 +440,176 @@ export function WhatIfPage() {
                   <input
                     type="number"
                     step="1000"
+                    aria-label="Стартовый капитал"
                     value={startingCapital}
-                    onChange={(e) => void update({ manualCapital: Number(e.target.value) || 0 })}
+                    onChange={(e) => void store.setManualCapital(Number(e.target.value) || 0)}
                     className="input text-sm flex-1 tabular-nums"
                   />
                   <span className="text-xs text-muted">{base}</span>
                 </div>
               )}
-              <div className="text-[11px] text-muted">
+              <div className="text-xs text-muted">
                 {accountTitles.length === 0
-                  ? `По умолчанию — текущий совокупный баланс (${formatMoney(currentNetWorth, base)}).`
+                  ? `По умолчанию — остаток по всем операциям (${formatMoney(currentNetWorth, base)}).`
                   : byAccounts
-                    ? `Сумма балансов выбранных счетов по текущему курсу. Выбор общий с FIRE в «Здоровье».`
-                    : `Счета не выбраны — введите капитал сами.`}
+                    ? "Балансы выбранных счетов по текущему курсу. Выбор общий с FIRE в «Здоровье»."
+                    : "Счета не выбраны — введите капитал сами."}
               </div>
             </div>
-          </div>
+          </SectionCard>
 
-          {categories.length > 0 && (
-            <div>
-              <CardHeader icon={TrendingDown} title={`Категории расходов (топ-${categories.length})`} />
-              <div className="space-y-3">
-                {categories.map((c) => {
-                  const mul = inputs.categoryMul?.[c.category] ?? 1;
-                  return (
-                    <Slider
-                      key={c.category}
-                      layout="stacked"
-                      label={c.category}
-                      value={mul}
-                      min={0}
-                      max={2}
-                      step={0.05}
-                      format={(v) => (v === 0 ? "−100%" : `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`)}
-                      hint={`Сейчас ${formatMoney(c.monthly, base)}/мес → ${formatMoney(c.monthly * mul, base)}/мес`}
-                      onChange={(v) =>
-                        void update({ categoryMul: { ...scenario.categoryMul, [c.category]: v } })
-                      }
-                    />
-                  );
-                })}
-              </div>
-              <div className="text-[11px] text-muted mt-2">
-                Категории применяются ПЕРЕД общим множителем расхода.
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Outputs */}
-        <div className="space-y-4">
-          {/* Compare scenarios */}
-          <div className="card-tray px-4 py-3">
-            <CardHeader title="Сравнение" />
-            {/* Две строки сценария — порядок метрик и есть смысл, сортировать нечего. */}
-            <table className="w-full table-fixed">
-              <thead>
-                <tr>
-                  <HeadCell type="text" label="Метрика" />
-                  <HeadCell type="money" label="Сейчас" width="9.5rem" />
-                  <HeadCell type="main" label="Если так" width="9.5rem" />
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className={cellClass("text")}>Доход / мес</td>
-                  <td className={cellClass("money", { muted: true })}>
-                    {formatMoney(baseScenario.avgIncome, base)}
-                  </td>
-                  <td className={cellClass("main")}>{formatMoney(out.newIncome, base)}</td>
-                </tr>
-                <tr>
-                  <td className={cellClass("text")}>Расход / мес</td>
-                  <td className={cellClass("money", { muted: true })}>
-                    {formatMoney(baseScenario.avgExpense, base)}
-                  </td>
-                  <td className={cellClass("main")}>{formatMoney(out.newExpense, base)}</td>
-                </tr>
-                <tr>
-                  <td className={cellClass("text")}>Сбережения / мес</td>
-                  <td className={cellClass("money", { muted: true })}>
-                    {formatMoney(baseScenario.avgSavings, base)}
-                  </td>
-                  {/* Цвет — только у итога сценария: стало лучше или хуже, чем сейчас. */}
-                  <td
-                    className={cellClass("main", {
-                      tone:
-                        out.newSavings > baseScenario.avgSavings
-                          ? "income"
-                          : out.newSavings < baseScenario.avgSavings
-                            ? "expense"
-                            : "neutral",
-                    })}
-                  >
-                    {formatMoney(out.newSavings, base)}
-                  </td>
-                </tr>
-                <tr>
-                  <td className={cellClass("text")}>Норма сбережений</td>
-                  {/* Процент в колонке сумм — тем же выравниванием, что суммы над ним. */}
-                  <td className={cellClass("money", { muted: true })}>{formatPct(baseScenario.savingsRate, 0)}</td>
-                  <td className={cellClass("main")}>{formatPct(out.newRate, 0)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* FIRE */}
-          <div className="card-tray card-pad">
-            <CardHeader icon={Flame} tone="warn" title="FIRE" />
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="label">Лет до FIRE сейчас</div>
-                <div className="stat-num">{years(baseScenario.yearsToFireBase)}</div>
-              </div>
-              <div>
-                <div className="label">При этом сценарии</div>
-                <div
-                  className={`stat-num ${out.yearsToFire < baseScenario.yearsToFireBase ? "text-income" : out.yearsToFire > baseScenario.yearsToFireBase ? "text-expense" : ""}`}
-                >
-                  {years(out.yearsToFire)}
+          <SectionCard icon={SlidersHorizontal} title="Допущения" subtitle="Общие для всех сценариев">
+            <div className="space-y-4">
+              <Slider
+                layout="stacked"
+                label="Доходность капитала"
+                value={assumptions.returnPct}
+                min={0}
+                max={20}
+                step={0.5}
+                format={(v) => `${pctText(v)}% в год`}
+                hint="Сколько приносят накопления: вклад, облигации, акции. 0 — деньги просто лежат."
+                onChange={(v) => void store.updateAssumptions({ returnPct: v })}
+              />
+              <Slider
+                layout="stacked"
+                label="Инфляция"
+                value={assumptions.inflationPct}
+                min={0}
+                max={15}
+                step={0.5}
+                format={(v) => `${pctText(v)}% в год`}
+                hint={
+                  assumptions.returnPct || assumptions.inflationPct
+                    ? `Реальная доходность ${pctText(realPct)}% в год — на столько капитал растёт в сегодняшних деньгах.`
+                    : "Суммы — в сегодняшних деньгах: инфляция вычитается из доходности."
+                }
+                onChange={(v) => void store.updateAssumptions({ inflationPct: v })}
+              />
+              <Slider
+                layout="stacked"
+                label="Доля изъятия для FIRE"
+                value={assumptions.withdrawalPct}
+                min={2.5}
+                max={6}
+                step={0.25}
+                format={(v) => `${pctText(v)}% в год`}
+                hint={`Сколько капитала можно тратить в год. Цель FIRE — ${pctText(Math.round(1000 / assumptions.withdrawalPct) / 10)} годовых трат.`}
+                onChange={(v) => void store.updateAssumptions({ withdrawalPct: v })}
+              />
+              <div className="space-y-2">
+                <div className="text-sm">База расчёта</div>
+                <div className="flex flex-wrap gap-2">
+                  <Segmented
+                    size="sm"
+                    label="Сколько месяцев брать"
+                    value={assumptions.baseMonths}
+                    onChange={(v) => void store.updateAssumptions({ baseMonths: v })}
+                    options={[3, 6, 12].map((m) => ({ value: m, label: `${m} мес` }))}
+                  />
+                  <Segmented
+                    size="sm"
+                    label="Как усреднять"
+                    value={assumptions.basis}
+                    onChange={(v) => void store.updateAssumptions({ basis: v })}
+                    options={[
+                      { value: "average", label: "Среднее", title: "Среднее арифметическое за месяцы" },
+                      {
+                        value: "median",
+                        label: "Медиана",
+                        title: "Типичный месяц: разовые крупные суммы не тянут его вверх",
+                      },
+                    ]}
+                  />
+                </div>
+                <div className="text-xs text-muted">
+                  {baseSpan[0].toUpperCase() + baseSpan.slice(1)}: доход {formatMoney(baseScenario.avgIncome, base)}, расход{" "}
+                  {formatMoney(baseScenario.avgExpense, base)} в месяц.
                 </div>
               </div>
             </div>
-            {Math.abs(out.yearsSavedOnFire) > 0.1 && Number.isFinite(out.yearsSavedOnFire) && (
-              <div className="mt-3 text-sm">
-                {out.yearsSavedOnFire > 0 ? (
-                  <span className="text-income">
-                    Сэкономлено {formatFixed(out.yearsSavedOnFire)} лет до финансовой
-                    свободы
-                  </span>
-                ) : (
-                  <span className="text-expense">
-                    Срок отодвинется на {formatFixed(Math.abs(out.yearsSavedOnFire))} лет
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          </SectionCard>
+        </div>
 
-          {/* Projected capital */}
-          <div className="card-tray card-pad">
-            <CardHeader icon={PiggyBank} tone="accent2" title="Прогноз капитала" />
-            <div className="grid grid-cols-3 gap-3">
-              <MoneyStat label="Через 1 год" value={out.projected1y} base={base} />
-              <MoneyStat label="Через 5 лет" value={out.projected5y} base={base} />
-              <MoneyStat label="Через 10 лет" value={out.projected10y} base={base} />
-            </div>
-            <div className="text-[11px] text-muted mt-3">
-              Линейный прогноз без учёта доходности инвестиций. Реальные суммы при
-              разумной доходности будут больше за счёт сложного процента.
-            </div>
-          </div>
-
-          {/* Annual delta */}
-          {Math.abs(out.annualSavingsDelta) > 100 && (
-            <Callout
-              size="banner"
-              tone={out.annualSavingsDelta > 0 ? "income" : "expense"}
-              icon={out.annualSavingsDelta > 0 ? TrendingUp : TrendingDown}
-            >
-              За год это{" "}
-              <strong className={out.annualSavingsDelta > 0 ? "text-income" : "text-expense"}>
-                {out.annualSavingsDelta > 0 ? "+" : ""}
-                {formatMoney(out.annualSavingsDelta, base)}
-              </strong>{" "}
-              к текущей траектории.
-            </Callout>
+        {/* Результат остаётся на виду, пока двигаете бегунки слева, — если
+            помещается в окно целиком; иначе низ таблицы был бы не виден. */}
+        <div
+          ref={resultRef}
+          className={clsx(
+            "space-y-4",
+            resultFits && "lg:sticky lg:top-[calc(var(--app-header-h)+0.75rem)]"
           )}
+        >
+          <SectionCard
+            icon={LineChartIcon}
+            title="Капитал"
+            subtitle={`На ${yearsLabel(horizon)} вперёд, в сегодняшних деньгах`}
+            right={
+              <div className="flex items-center gap-3 text-xs text-muted flex-wrap justify-end">
+                {columns.map((c) => (
+                  <span key={c.key} className="inline-flex items-center gap-1.5">
+                    <span
+                      className="inline-block w-3 h-0.5 rounded"
+                      style={{ background: c.color }}
+                      aria-hidden="true"
+                    />
+                    {c.name}
+                  </span>
+                ))}
+              </div>
+            }
+          >
+            <WhatIfChart
+              now={{ name: NOW_NAME, projection: nowProj }}
+              active={{ name: active.name, projection: actProj }}
+              compare={compare && cmpProj ? { name: compare.name, projection: cmpProj } : null}
+              base={base}
+            />
+          </SectionCard>
+
+          <SectionCard icon={Table2} title="Сравнение">
+            <table className="w-full table-fixed">
+              <thead>
+                <tr>
+                  <HeadCell type="text" label="Показатель" />
+                  {columns.map((c) => (
+                    <HeadCell
+                      key={c.key}
+                      type={c.key === "active" ? "main" : "money"}
+                      label={c.name}
+                      width="9.5rem"
+                    />
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const nowNum = r.num(nowProj);
+                  return (
+                    <tr key={r.label}>
+                      <td className={cellClass("text")}>{r.label}</td>
+                      {columns.map((c) => {
+                        const t = c.key === "now" ? "default" : toneOf(r.num(c.p), nowNum, r.lowerIsBetter);
+                        return (
+                          <td
+                            key={c.key}
+                            className={cellClass(c.key === "active" ? "main" : "money", {
+                              muted: c.key === "now",
+                              tone: t === "income" ? "income" : t === "expense" ? "expense" : "neutral",
+                            })}
+                          >
+                            {r.value(c.p)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </SectionCard>
         </div>
       </div>
-    </div>
-  );
-}
-
-// Inline label/value pair used INSIDE a card, so it deliberately is not a
-// `StatRow` cell (the row renders its own card).
-function MoneyStat({ label, value, base }: { label: string; value: number; base: string }) {
-  return (
-    <div>
-      <div className="label">{label}</div>
-      <div className="stat-num text-base">{formatMoney(value, base)}</div>
     </div>
   );
 }
