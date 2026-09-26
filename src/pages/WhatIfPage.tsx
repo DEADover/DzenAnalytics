@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import {
   FlaskConical,
   TrendingUp,
@@ -19,6 +19,12 @@ import {
   type WhatIfInputs,
 } from "../lib/whatif";
 import { netWorthSeries } from "../lib/aggregations";
+import { useFireCapital } from "../hooks/useFireCapital";
+import { useFireStore } from "../store/useFireStore";
+import { isScenarioChanged, useWhatIfStore } from "../store/useWhatIfStore";
+import { FILTER_NONE } from "../store/useFiltersStore";
+import { MultiSelect } from "../components/MultiSelect";
+import { AccountLogo } from "../components/AccountLogo";
 import { CardHeader } from "../components/CardHeader";
 import { Slider } from "../components/Slider";
 import { HeadCell } from "../components/table/TableParts";
@@ -29,13 +35,26 @@ import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Callout } from "../components/Callout";
 
-const INITIAL: WhatIfInputs = {
-  incomeMul: 1,
-  expenseMul: 1,
-  extraMonthlySave: 0,
-  startingCapital: 0,
-  categoryMul: {},
-};
+/**
+ * Счета капитала ↔ выбор в `MultiSelect`. Хранится список ИСКЛЮЧЁННЫХ (общий с
+ * FIRE: новый счёт сам попадает в капитал), а у списка соглашение фильтров:
+ * пусто = все, {FILTER_NONE} = ничего. «Ничего» здесь — своя сумма.
+ */
+function excludedToSet(excluded: readonly string[], all: readonly string[]): Set<string> {
+  const on = all.filter((t) => !excluded.includes(t));
+  if (on.length === 0) return new Set([FILTER_NONE]);
+  if (on.length === all.length) return new Set();
+  return new Set(on);
+}
+
+function setToExcluded(next: Set<string>, all: readonly string[], prev: readonly string[]): string[] {
+  // Исключённые счета, которых сейчас нет в списке (архивные, переименованные),
+  // оставляем как были — выбор общий с FIRE, и терять его там нельзя.
+  const foreign = prev.filter((t) => !all.includes(t));
+  if (next.has(FILTER_NONE)) return [...foreign, ...all];
+  if (next.size === 0) return foreign;
+  return [...foreign, ...all.filter((t) => !next.has(t))];
+}
 
 function years(v: number): string {
   if (!Number.isFinite(v)) return "∞";
@@ -75,42 +94,45 @@ export function WhatIfPage() {
     return series.length > 0 ? series[series.length - 1].net : 0;
   }, [transactions, calibration]);
 
-  const [inputs, setInputs] = useState<WhatIfInputs>(() => ({
-    ...INITIAL,
-    startingCapital: Math.max(0, Math.round(currentNetWorth)),
-  }));
+  // Сценарий сохраняется и переносится между устройствами (#107).
+  const scenario = useWhatIfStore();
+  const update = scenario.update;
 
-  // Sync starting capital when calibration changes — but only until the
-  // user edits it (capitalTouched). This is a deliberate "seed an
-  // editable field from external data" effect, not derivable in render.
-  const [capitalTouched, setCapitalTouched] = useState(false);
-  useEffect(() => {
-    if (!capitalTouched) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setInputs((prev) => ({
-        ...prev,
-        startingCapital: Math.max(0, Math.round(currentNetWorth)),
-      }));
-    }
-  }, [currentNetWorth, capitalTouched]);
+  // Счета капитала — общий с FIRE выбор: капитал везде считается одинаково.
+  const { capital, capitalAccounts } = useFireCapital();
+  const excluded = useFireStore((s) => s.excluded);
+  const replaceExcluded = useFireStore((s) => s.replaceExcluded);
+  const accountTitles = useMemo(() => capitalAccounts.map((a) => a.title), [capitalAccounts]);
+  const pickedCount = accountTitles.filter((t) => !excluded.includes(t)).length;
+  // Счета есть и хоть один выбран — капитал по их балансам; иначе своя сумма,
+  // а без своей — чистый капитал по операциям, как было до выбора счетов.
+  const byAccounts = pickedCount > 0;
+  const autoCapital = Math.max(0, Math.round(currentNetWorth));
+  const startingCapital = byAccounts
+    ? Math.max(0, Math.round(capital))
+    : (scenario.manualCapital ?? autoCapital);
+
+  const inputs: WhatIfInputs = useMemo(
+    () => ({
+      incomeMul: scenario.incomeMul,
+      expenseMul: scenario.expenseMul,
+      extraMonthlySave: scenario.extraMonthlySave,
+      categoryMul: scenario.categoryMul,
+      startingCapital,
+    }),
+    [scenario.incomeMul, scenario.expenseMul, scenario.extraMonthlySave, scenario.categoryMul, startingCapital]
+  );
 
   const out = useMemo(
     () => computeWhatIf(baseScenario, inputs, categories),
     [baseScenario, inputs, categories]
   );
 
-  function reset() {
-    setInputs({ ...INITIAL, startingCapital: Math.max(0, Math.round(currentNetWorth)) });
-    setCapitalTouched(false);
-  }
-
   if (transactions.length === 0) return <EmptyState />;
 
+  // Своя сумма капитала — тоже часть сценария: «Сбросить» возвращает и её.
   const dirty =
-    inputs.incomeMul !== 1 ||
-    inputs.expenseMul !== 1 ||
-    inputs.extraMonthlySave !== 0 ||
-    Object.values(inputs.categoryMul || {}).some((v) => v !== 1);
+    isScenarioChanged(scenario) || (!byAccounts && scenario.manualCapital !== null);
 
   return (
     <div className="space-y-6">
@@ -156,7 +178,7 @@ export function WhatIfPage() {
               title="Основные параметры"
               right={
                 dirty && (
-                  <button onClick={reset} className="btn-ghost text-xs">
+                  <button onClick={() => void scenario.reset()} className="btn-ghost text-xs">
                     <RotateCcw className="w-3.5 h-3.5" />
                     Сбросить
                   </button>
@@ -173,7 +195,7 @@ export function WhatIfPage() {
                 step={0.05}
                 format={(v) => `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`}
                 hint={`Текущий: ${formatMoney(baseScenario.avgIncome, base)}/мес → ${formatMoney(out.newIncome, base)}/мес`}
-                onChange={(v) => setInputs((prev) => ({ ...prev, incomeMul: v }))}
+                onChange={(v) => void update({ incomeMul: v })}
               />
               <Slider
                 layout="stacked"
@@ -184,7 +206,7 @@ export function WhatIfPage() {
                 step={0.05}
                 format={(v) => `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`}
                 hint={`Текущий: ${formatMoney(baseScenario.avgExpense, base)}/мес → ${formatMoney(out.newExpense, base)}/мес`}
-                onChange={(v) => setInputs((prev) => ({ ...prev, expenseMul: v }))}
+                onChange={(v) => void update({ expenseMul: v })}
               />
               <Slider
                 layout="stacked"
@@ -195,30 +217,48 @@ export function WhatIfPage() {
                 step={500}
                 format={(v) => `+${formatMoney(v, base)}`}
                 hint="Фиксированная сумма поверх нынешнего баланса доход−расход"
-                onChange={(v) => setInputs((prev) => ({ ...prev, extraMonthlySave: v }))}
+                onChange={(v) => void update({ extraMonthlySave: v })}
               />
             </div>
-            <div className="mt-4">
-              <label className="label block mb-1">Стартовый капитал</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  step="1000"
-                  value={inputs.startingCapital}
-                  onChange={(e) => {
-                    setCapitalTouched(true);
-                    setInputs((prev) => ({
-                      ...prev,
-                      startingCapital: Number(e.target.value) || 0,
-                    }));
-                  }}
-                  className="input text-sm flex-1"
+            <div className="mt-4 space-y-2">
+              <label className="label block">Стартовый капитал</label>
+              {accountTitles.length > 0 && (
+                <MultiSelect
+                  className="w-full"
+                  variant="field"
+                  label=""
+                  options={accountTitles}
+                  selected={excludedToSet(excluded, accountTitles)}
+                  onChange={(next) => void replaceExcluded(setToExcluded(next, accountTitles, excluded))}
+                  renderIcon={(title) => <AccountLogo title={title} size={18} />}
+                  unitForms={["счёт", "счёта", "счетов"]}
+                  searchPlaceholder="Поиск счёта"
+                  noneSummary="Сумма вручную"
+                  namesInSummary
                 />
-                <span className="text-xs text-muted">{base}</span>
-              </div>
-              <div className="text-[11px] text-muted mt-1">
-                По умолчанию — текущий совокупный баланс (
-                {formatMoney(currentNetWorth, base)}).
+              )}
+              {byAccounts ? (
+                <div className="input text-sm flex items-center text-muted bg-panel2/60 cursor-not-allowed tabular-nums">
+                  {formatMoney(startingCapital, base)}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="1000"
+                    value={startingCapital}
+                    onChange={(e) => void update({ manualCapital: Number(e.target.value) || 0 })}
+                    className="input text-sm flex-1 tabular-nums"
+                  />
+                  <span className="text-xs text-muted">{base}</span>
+                </div>
+              )}
+              <div className="text-[11px] text-muted">
+                {accountTitles.length === 0
+                  ? `По умолчанию — текущий совокупный баланс (${formatMoney(currentNetWorth, base)}).`
+                  : byAccounts
+                    ? `Сумма балансов выбранных счетов по текущему курсу. Выбор общий с FIRE в «Здоровье».`
+                    : `Счета не выбраны — введите капитал сами.`}
               </div>
             </div>
           </div>
@@ -241,10 +281,7 @@ export function WhatIfPage() {
                       format={(v) => (v === 0 ? "−100%" : `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`)}
                       hint={`Сейчас ${formatMoney(c.monthly, base)}/мес → ${formatMoney(c.monthly * mul, base)}/мес`}
                       onChange={(v) =>
-                        setInputs((prev) => ({
-                          ...prev,
-                          categoryMul: { ...prev.categoryMul, [c.category]: v },
-                        }))
+                        void update({ categoryMul: { ...scenario.categoryMul, [c.category]: v } })
                       }
                     />
                   );

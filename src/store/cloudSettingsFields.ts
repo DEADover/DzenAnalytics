@@ -28,6 +28,7 @@ import { useHeaderNavStore } from "./useHeaderNavStore";
 import { useBudgetSettingsStore } from "./useBudgetSettingsStore";
 import { useReportPeriodStore } from "./useReportPeriodStore";
 import { useFireStore } from "./useFireStore";
+import { parseWhatIfScenario, pick as pickWhatIf, useWhatIfStore } from "./useWhatIfStore";
 import { useSlicesStore } from "./useSlicesStore";
 import { isDarkSchemeId, isLightSchemeId } from "../lib/themeSchemes";
 
@@ -96,6 +97,12 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useFireStore, "fire.excluded", (s) => s.excluded, (v, s) =>
     isStrings(v) ? s.replaceExcluded(v) : undefined
   ),
+  // Сценарий «Что-если»: бегунки и своя сумма капитала (#107). Счета капитала
+  // у него общие с FIRE — это поле выше.
+  field(useWhatIfStore, "whatIf.scenario", (s) => pickWhatIf(s), (v, s) => {
+    const next = parseWhatIfScenario(v);
+    return next ? s.update(next) : undefined;
+  }),
 
   // ── Бюджет ──
   // Периметр счетов, переводы через его границу, вид раздела и прогноз.

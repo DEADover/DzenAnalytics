@@ -71,6 +71,11 @@ import { useMembersStore } from "./store/useMembersStore";
 import { useFreeMoneyStore } from "./store/useFreeMoneyStore";
 import { useTagModeStore } from "./store/useTagModeStore";
 import { useHeaderNavStore } from "./store/useHeaderNavStore";
+import { useBudgetSettingsStore } from "./store/useBudgetSettingsStore";
+import { useGoalsStore } from "./store/useGoalsStore";
+import { useSavedViewsStore } from "./store/useSavedViewsStore";
+import { useFireStore } from "./store/useFireStore";
+import { useWhatIfStore } from "./store/useWhatIfStore";
 import { useDashboardLayoutStore } from "./store/useDashboardLayoutStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 import { useImportBatchesStore } from "./store/useImportBatchesStore";
@@ -156,6 +161,14 @@ function App() {
     useFreeMoneyStore.getState().hydrate();
     useTagModeStore.getState().hydrate();
     useHeaderNavStore.getState().hydrate();
+    // Перенос настроек ждёт, пока КАЖДОЕ переносимое хранилище прочитает своё.
+    // Эти раньше читались только на своих страницах — и пока человек не
+    // открывал «Бюджет», «Цели» и «Здоровье», настройки не переносились вовсе.
+    useBudgetSettingsStore.getState().hydrate();
+    useGoalsStore.getState().hydrate();
+    useSavedViewsStore.getState().hydrate();
+    useFireStore.getState().hydrate();
+    useWhatIfStore.getState().hydrate();
     hydrate();
     backupHydrate();
     reportPeriodHydrate();

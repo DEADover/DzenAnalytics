@@ -44,4 +44,10 @@ describe("реестр переносимых настроек", () => {
       "budget.yearTotalPlace",
     ]);
   });
+
+  it("сценарий «Что-если» переносится, а счета капитала у него общие с FIRE", () => {
+    const keys = SYNCED_FIELDS.map((f) => f.key);
+    expect(keys).toContain("whatIf.scenario");
+    expect(keys).toContain("fire.excluded");
+  });
 });
