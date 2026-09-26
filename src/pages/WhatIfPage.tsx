@@ -35,7 +35,7 @@ import { MultiSelect } from "../components/MultiSelect";
 import { AccountLogo } from "../components/AccountLogo";
 import { SectionCard, StatCell, StatRow, type StatTone } from "../components/SectionCard";
 import { Slider } from "../components/Slider";
-import { Segmented } from "../components/Segmented";
+import { Select } from "../components/Select";
 import { HeadCell } from "../components/table/TableParts";
 import { cellClass } from "../components/table/tableKit";
 import { formatMoney, formatPct } from "../lib/format";
@@ -249,12 +249,6 @@ export function WhatIfPage() {
     active.incomeMul !== 1 || active.expenseMul !== 1 || active.extraMonthlySave !== 0;
   const realPct = (Math.pow(1 + realMonthlyRate(assumptions), 12) - 1) * 100;
   const months = baseScenario.months;
-  const baseSpan =
-    months.length === 0
-      ? "нет законченных месяцев"
-      : months.length === 1
-        ? monthYear(months[0]).toLowerCase()
-        : `${monthYear(months[0]).toLowerCase()} – ${monthYear(months[months.length - 1]).toLowerCase()} (${months.length} мес)`;
 
   const capitalAt = (p: Projection, years: number) =>
     p.points[Math.min(years * 12, p.points.length - 1)].capital;
@@ -421,7 +415,6 @@ export function WhatIfPage() {
           <SectionCard
             icon={Coins}
             title="Доходы и расходы"
-            subtitle={`«Сейчас» — ${assumptions.basis === "median" ? "медиана" : "среднее"} за ${baseSpan}`}
             info={<BaseBreakdown base={baseScenario} currency={base} median={assumptions.basis === "median"} />}
             right={
               flowsChanged && (
@@ -439,31 +432,41 @@ export function WhatIfPage() {
             }
           >
             <div className="space-y-4">
-              {/* База — первой: от неё считается «Сейчас» у всех бегунков ниже. */}
-              <div>
-                <div className="text-sm mb-2">Как считать «Сейчас»</div>
-                <div className="flex flex-wrap gap-2">
-                  <Segmented
-                    tight
-                    label="Сколько месяцев брать"
-                    value={assumptions.baseMonths}
-                    onChange={(v) => void store.updateAssumptions({ baseMonths: v })}
-                    options={[3, 6, 12].map((m) => ({ value: m, label: `${m} мес` }))}
-                  />
-                  <Segmented
-                    tight
-                    label="Как усреднять"
+              {/* Откуда «Сейчас» — одной фразой с выбором прямо в ней. Раньше
+                  это были подпись под заголовком и отдельно две дорожки под
+                  ней: одно и то же сказано дважды, а связь не видна. */}
+              <div className="rounded-control bg-panel2/60 border border-border px-3 py-2.5">
+                <div className="flex items-center gap-2 text-sm flex-wrap">
+                  <span>«Сейчас» —</span>
+                  <Select
+                    size="sm"
+                    portal
+                    className="w-[6.75rem]"
+                    ariaLabel="Как усреднять"
                     value={assumptions.basis}
                     onChange={(v) => void store.updateAssumptions({ basis: v })}
                     options={[
-                      { value: "average", label: "Среднее", title: "Среднее арифметическое за месяцы" },
-                      {
-                        value: "median",
-                        label: "Медиана",
-                        title: "Типичный месяц: разовые крупные суммы на него не влияют",
-                      },
+                      { value: "average", label: "среднее" },
+                      { value: "median", label: "медиана" },
                     ]}
                   />
+                  <span>за</span>
+                  <Select
+                    size="sm"
+                    portal
+                    className="w-[5.75rem]"
+                    ariaLabel="Сколько месяцев брать"
+                    value={String(assumptions.baseMonths)}
+                    onChange={(v) => void store.updateAssumptions({ baseMonths: Number(v) })}
+                    options={["3", "6", "12"].map((m) => ({ value: m, label: `${m} мес` }))}
+                  />
+                </div>
+                <div className="text-xs text-muted mt-1.5">
+                  {months.length === 0
+                    ? "Нет полностью прошедших месяцев"
+                    : `${monthYear(months[0])}${months.length > 1 ? ` – ${monthYear(months[months.length - 1]).toLowerCase()}` : ""}${
+                        assumptions.basis === "median" ? " · типичный месяц, без разовых всплесков" : ""
+                      }`}
                 </div>
               </div>
               <Slider
