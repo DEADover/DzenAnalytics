@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
-import clsx from "clsx";
+import { useEffect, useMemo } from "react";
 import {
   Coins,
   FlaskConical,
@@ -28,7 +27,6 @@ import { netWorthSeries } from "../lib/aggregations";
 import { currentPeriod } from "../lib/period";
 import { pluralRu } from "../lib/plural";
 import { useFireCapital } from "../hooks/useFireCapital";
-import { useFitsViewport } from "../hooks/useFitsViewport";
 import { useFireStore } from "../store/useFireStore";
 import { isScenarioChanged, useWhatIfStore } from "../store/useWhatIfStore";
 import { FILTER_NONE } from "../store/useFiltersStore";
@@ -207,8 +205,6 @@ export function WhatIfPage() {
     : (store.manualCapital ?? Math.max(0, Math.round(currentNetWorth)));
 
   const startYm = currentPeriod(monthStartDay);
-  const resultRef = useRef<HTMLDivElement>(null);
-  const resultFits = useFitsViewport(resultRef);
   const projections = useMemo(() => {
     const run = (levers: ScenarioLevers, horizonYears: number) =>
       project(baseScenario, levers, categories, { ...assumptions, horizonYears }, startingCapital, startYm);
@@ -353,8 +349,13 @@ export function WhatIfPage() {
       </StatRow>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] items-start">
-        {/* Рычаги сценария */}
-        <div className="space-y-4">
+        {/* Рычаги сценария — боковой панелью высотой в окно, со своей
+            прокруткой. Колонки здесь разные по природе: рычаги растут с
+            каждым событием и категорией, результат — нет. Подогнать их по
+            высоте нельзя, поэтому панель просто стоит рядом с тем, что вы
+            смотрите, а под ней не остаётся пустоты. Отступы по краям — чтобы
+            прокрутка не срезала тени карточек. */}
+        <div className="space-y-4 lg:sticky lg:top-[calc(var(--app-header-h)+0.75rem)] lg:max-h-[calc(100vh-var(--app-header-h)-1.5rem)] lg:overflow-y-auto lg:-m-2 lg:p-2">
           <SectionCard
             icon={Coins}
             title="Доход и расходы"
@@ -471,15 +472,8 @@ export function WhatIfPage() {
           </SectionCard>
         </div>
 
-        {/* Результат остаётся на виду, пока двигаете бегунки слева, — если
-            помещается в окно целиком; иначе низ таблицы был бы не виден. */}
-        <div
-          ref={resultRef}
-          className={clsx(
-            "space-y-4",
-            resultFits && "lg:sticky lg:top-[calc(var(--app-header-h)+0.75rem)]"
-          )}
-        >
+        {/* Результат и допущения — прокручиваются вместе со страницей. */}
+        <div className="space-y-4">
           <SectionCard
             icon={LineChartIcon}
             title="Капитал"
@@ -565,87 +559,84 @@ export function WhatIfPage() {
               </tbody>
             </table>
           </SectionCard>
+
+          <SectionCard
+            icon={SlidersHorizontal}
+            title="Допущения"
+            subtitle="Общие для всех сценариев"
+          >
+            <div className="grid gap-x-6 gap-y-4 md:grid-cols-2 2xl:grid-cols-4">
+              <Slider
+                layout="stacked"
+                label="Доходность капитала"
+                value={assumptions.returnPct}
+                min={0}
+                max={20}
+                step={0.5}
+                format={(v) => `${pctText(v)}% в год`}
+                hint="Сколько приносят накопления: вклад, облигации, акции. 0 — деньги просто лежат."
+                onChange={(v) => void store.updateAssumptions({ returnPct: v })}
+              />
+              <Slider
+                layout="stacked"
+                label="Инфляция"
+                value={assumptions.inflationPct}
+                min={0}
+                max={15}
+                step={0.5}
+                format={(v) => `${pctText(v)}% в год`}
+                hint={
+                  assumptions.returnPct || assumptions.inflationPct
+                    ? `Реальная доходность ${pctText(realPct)}% в год — на столько капитал растёт в сегодняшних деньгах.`
+                    : "Суммы — в сегодняшних деньгах: инфляция вычитается из доходности."
+                }
+                onChange={(v) => void store.updateAssumptions({ inflationPct: v })}
+              />
+              <Slider
+                layout="stacked"
+                label="Доля изъятия для FIRE"
+                value={assumptions.withdrawalPct}
+                min={2.5}
+                max={6}
+                step={0.25}
+                format={(v) => `${pctText(v)}% в год`}
+                hint={`Сколько капитала можно тратить в год. Цель FIRE — ${pctText(Math.round(1000 / assumptions.withdrawalPct) / 10)} годовых трат.`}
+                onChange={(v) => void store.updateAssumptions({ withdrawalPct: v })}
+              />
+              <div className="space-y-2">
+                <div className="text-sm">База расчёта</div>
+                <div className="flex flex-wrap gap-2">
+                  <Segmented
+                    size="sm"
+                    label="Сколько месяцев брать"
+                    value={assumptions.baseMonths}
+                    onChange={(v) => void store.updateAssumptions({ baseMonths: v })}
+                    options={[3, 6, 12].map((m) => ({ value: m, label: `${m} мес` }))}
+                  />
+                  <Segmented
+                    size="sm"
+                    label="Как усреднять"
+                    value={assumptions.basis}
+                    onChange={(v) => void store.updateAssumptions({ basis: v })}
+                    options={[
+                      { value: "average", label: "Среднее", title: "Среднее арифметическое за месяцы" },
+                      {
+                        value: "median",
+                        label: "Медиана",
+                        title: "Типичный месяц: разовые крупные суммы не тянут его вверх",
+                      },
+                    ]}
+                  />
+                </div>
+                <div className="text-xs text-muted">
+                  {baseSpan[0].toUpperCase() + baseSpan.slice(1)}: доход {formatMoney(baseScenario.avgIncome, base)}, расход{" "}
+                  {formatMoney(baseScenario.avgExpense, base)} в месяц.
+                </div>
+              </div>
+            </div>
+          </SectionCard>
         </div>
       </div>
-
-      {/* Допущения меняют редко — они отдельным рядом под сценарием: в левой
-          колонке делали её вдвое длиннее правой, и под графиком с таблицей
-          оставалась пустота на пол-экрана. */}
-      <SectionCard
-        icon={SlidersHorizontal}
-        title="Допущения"
-        subtitle="Общие для всех сценариев"
-      >
-        <div className="grid gap-x-6 gap-y-4 md:grid-cols-2 xl:grid-cols-4">
-          <Slider
-            layout="stacked"
-            label="Доходность капитала"
-            value={assumptions.returnPct}
-            min={0}
-            max={20}
-            step={0.5}
-            format={(v) => `${pctText(v)}% в год`}
-            hint="Сколько приносят накопления: вклад, облигации, акции. 0 — деньги просто лежат."
-            onChange={(v) => void store.updateAssumptions({ returnPct: v })}
-          />
-          <Slider
-            layout="stacked"
-            label="Инфляция"
-            value={assumptions.inflationPct}
-            min={0}
-            max={15}
-            step={0.5}
-            format={(v) => `${pctText(v)}% в год`}
-            hint={
-              assumptions.returnPct || assumptions.inflationPct
-                ? `Реальная доходность ${pctText(realPct)}% в год — на столько капитал растёт в сегодняшних деньгах.`
-                : "Суммы — в сегодняшних деньгах: инфляция вычитается из доходности."
-            }
-            onChange={(v) => void store.updateAssumptions({ inflationPct: v })}
-          />
-          <Slider
-            layout="stacked"
-            label="Доля изъятия для FIRE"
-            value={assumptions.withdrawalPct}
-            min={2.5}
-            max={6}
-            step={0.25}
-            format={(v) => `${pctText(v)}% в год`}
-            hint={`Сколько капитала можно тратить в год. Цель FIRE — ${pctText(Math.round(1000 / assumptions.withdrawalPct) / 10)} годовых трат.`}
-            onChange={(v) => void store.updateAssumptions({ withdrawalPct: v })}
-          />
-          <div className="space-y-2">
-            <div className="text-sm">База расчёта</div>
-            <div className="flex flex-wrap gap-2">
-              <Segmented
-                size="sm"
-                label="Сколько месяцев брать"
-                value={assumptions.baseMonths}
-                onChange={(v) => void store.updateAssumptions({ baseMonths: v })}
-                options={[3, 6, 12].map((m) => ({ value: m, label: `${m} мес` }))}
-              />
-              <Segmented
-                size="sm"
-                label="Как усреднять"
-                value={assumptions.basis}
-                onChange={(v) => void store.updateAssumptions({ basis: v })}
-                options={[
-                  { value: "average", label: "Среднее", title: "Среднее арифметическое за месяцы" },
-                  {
-                    value: "median",
-                    label: "Медиана",
-                    title: "Типичный месяц: разовые крупные суммы не тянут его вверх",
-                  },
-                ]}
-              />
-            </div>
-            <div className="text-xs text-muted">
-              {baseSpan[0].toUpperCase() + baseSpan.slice(1)}: доход {formatMoney(baseScenario.avgIncome, base)}, расход{" "}
-              {formatMoney(baseScenario.avgExpense, base)} в месяц.
-            </div>
-          </div>
-        </div>
-      </SectionCard>
     </div>
   );
 }
