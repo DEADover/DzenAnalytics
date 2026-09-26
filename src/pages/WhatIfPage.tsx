@@ -47,6 +47,7 @@ import { WhatIfChart } from "../components/whatif/WhatIfChart";
 import { WhatIfCategories } from "../components/whatif/WhatIfCategories";
 import { WhatIfEvents } from "../components/whatif/WhatIfEvents";
 import { MoneyField } from "../components/whatif/MoneyField";
+import { Tooltip } from "../components/Tooltip";
 import { SERIES_COLOR, durationText, monthYear, pctText } from "../lib/whatifView";
 
 const NOW_NAME = "Как сейчас";
@@ -424,41 +425,46 @@ export function WhatIfPage() {
             info={<BaseBreakdown base={baseScenario} currency={base} median={assumptions.basis === "median"} />}
             right={
               flowsChanged && (
-                <button
-                  type="button"
-                  onClick={() => void store.resetActive()}
-                  className="btn-ghost text-xs"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Сбросить
-                </button>
+                <Tooltip content="Вернуть доход, расход и «сверх того» как сейчас">
+                  <button
+                    type="button"
+                    onClick={() => void store.resetActive()}
+                    className="btn-ghost btn-square"
+                    aria-label="Сбросить доход, расход и «сверх того»"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               )
             }
           >
             <div className="space-y-4">
               {/* База — первой: от неё считается «Сейчас» у всех бегунков ниже. */}
-              <div className="flex flex-wrap gap-2">
-                <Segmented
-                  tight
-                  label="Сколько месяцев брать"
-                  value={assumptions.baseMonths}
-                  onChange={(v) => void store.updateAssumptions({ baseMonths: v })}
-                  options={[3, 6, 12].map((m) => ({ value: m, label: `${m} мес` }))}
-                />
-                <Segmented
-                  tight
-                  label="Как усреднять"
-                  value={assumptions.basis}
-                  onChange={(v) => void store.updateAssumptions({ basis: v })}
-                  options={[
-                    { value: "average", label: "Среднее", title: "Среднее арифметическое за месяцы" },
-                    {
-                      value: "median",
-                      label: "Медиана",
-                      title: "Типичный месяц: разовые крупные суммы на него не влияют",
-                    },
-                  ]}
-                />
+              <div>
+                <div className="text-sm mb-2">Как считать «Сейчас»</div>
+                <div className="flex flex-wrap gap-2">
+                  <Segmented
+                    tight
+                    label="Сколько месяцев брать"
+                    value={assumptions.baseMonths}
+                    onChange={(v) => void store.updateAssumptions({ baseMonths: v })}
+                    options={[3, 6, 12].map((m) => ({ value: m, label: `${m} мес` }))}
+                  />
+                  <Segmented
+                    tight
+                    label="Как усреднять"
+                    value={assumptions.basis}
+                    onChange={(v) => void store.updateAssumptions({ basis: v })}
+                    options={[
+                      { value: "average", label: "Среднее", title: "Среднее арифметическое за месяцы" },
+                      {
+                        value: "median",
+                        label: "Медиана",
+                        title: "Типичный месяц: разовые крупные суммы на него не влияют",
+                      },
+                    ]}
+                  />
+                </div>
               </div>
               <Slider
                 layout="stacked"
