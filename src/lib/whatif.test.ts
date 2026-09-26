@@ -90,6 +90,13 @@ describe("avgMonthlyByCategory — месяц отчётный", () => {
     ]);
   });
 
+  it("возврат уменьшает расход своей категории", () => {
+    const withRefund = [...spend, tx({ kind: "refund", amount: 1000, category: "Кафе", date: "2026-09-27" })];
+    expect(avgMonthlyByCategory(withRefund, { monthStartDay: 28, today: TODAY })).toEqual([
+      { category: "Кафе", monthly: 5000 },
+    ]);
+  });
+
   it("по умолчанию (день 1) месяцев два", () => {
     expect(avgMonthlyByCategory(spend, { today: TODAY })).toEqual([
       { category: "Кафе", monthly: 3000 },
@@ -167,6 +174,31 @@ describe("project — траектория капитала", () => {
     expect(p.eventsByYm).toEqual({ "2026-11": -300_000 });
   });
 
+  it("событие текущего месяца попадает в первый шаг, а не пропадает", () => {
+    const p = project(
+      BASE,
+      { ...NEUTRAL_LEVERS, events: [ev({ amount: 100_000, start: "2026-09" })] },
+      [],
+      A0,
+      0,
+      "2026-09"
+    );
+    expect(p.points[1].capital).toBe(40_000 - 100_000);
+  });
+
+  it("ежемесячное с текущего месяца — ровно столько месяцев, сколько задано", () => {
+    const p = project(
+      BASE,
+      { ...NEUTRAL_LEVERS, events: [ev({ kind: "monthly", amount: 1_000, start: "2026-09", months: 3 })] },
+      [],
+      A0,
+      0,
+      "2026-09"
+    );
+    // Сентябрь и октябрь — в первом шаге, ноябрь — во втором, дальше ничего.
+    expect(p.points[3].capital).toBe(40_000 * 3 - 3_000);
+  });
+
   it("бессрочная трата входит в цель FIRE, срочная — нет", () => {
     const forever = project(BASE, { ...NEUTRAL_LEVERS, events: [ev({ kind: "monthly", amount: 10_000 })] }, [], A0, 0, "2026-09");
     const limited = project(BASE, { ...NEUTRAL_LEVERS, events: [ev({ kind: "monthly", amount: 10_000, months: 12 })] }, [], A0, 0, "2026-09");
@@ -196,6 +228,21 @@ describe("project — траектория капитала", () => {
     const p = project({ ...BASE, avgIncome: 60_000 }, NEUTRAL_LEVERS, [], A0, 0, "2026-09");
     expect(p.fireYm).toBeNull();
     expect(p.yearsToFire).toBe(Infinity);
+  });
+
+  it("рост дохода: через год доход выше ровно на заданный процент", () => {
+    const A = { ...A0, horizonYears: 2, incomeGrowthPct: 12 };
+    const p = project(BASE, NEUTRAL_LEVERS, [], A, 0, "2026-09");
+    // Шаг 13 — первый месяц второго года: доход 112 000, траты те же.
+    expect(p.points[13].capital - p.points[12].capital).toBeCloseTo(112_000 - 60_000, 5);
+    // Траты не растут — цель FIRE та же.
+    expect(p.fireTarget).toBe(60_000 * 12 * 25);
+  });
+
+  it("минус под доходность не растёт", () => {
+    const A = { ...A0, returnPct: 12 };
+    const p = project({ ...BASE, avgIncome: 60_000 }, NEUTRAL_LEVERS, [], A, -100_000, "2026-09");
+    expect(p.points[12].capital).toBe(-100_000);
   });
 
   it("доходность равна инфляции — реальный рост ноль", () => {

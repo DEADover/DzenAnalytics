@@ -96,6 +96,7 @@ function parseAssumptions(v: unknown): WhatIfAssumptions {
     baseMonths: inRange(v.baseMonths, 1, 36, d.baseMonths),
     basis: v.basis === "median" ? "median" : "average",
     withdrawalPct: inRange(v.withdrawalPct, 1, 10, d.withdrawalPct),
+    incomeGrowthPct: inRange(v.incomeGrowthPct, 0, 20, d.incomeGrowthPct),
   };
 }
 
@@ -159,7 +160,11 @@ interface Store extends WhatIfState {
   replace: (next: WhatIfState) => Promise<void>;
   /** Поменять рычаги открытого сценария. */
   updateActive: (patch: Partial<ScenarioLevers>) => Promise<void>;
-  /** Вернуть рычаги открытого сценария к «как сейчас». */
+  /**
+   * Вернуть к «как сейчас» доход, расход и «сверх того» открытого сценария.
+   * Категории и события не трогает: они в своих карточках, и у каждой
+   * строки там своя кнопка удаления.
+   */
   resetActive: () => Promise<void>;
   setActive: (id: string) => Promise<void>;
   setCompare: (id: string | null) => Promise<void>;
@@ -206,7 +211,15 @@ export const useWhatIfStore = create<Store>((set, get) => {
 
     updateActive: (patch) => commit({ scenarios: mapActive((s) => ({ ...s, ...patch })) }),
 
-    resetActive: () => commit({ scenarios: mapActive((s) => ({ ...s, ...NEUTRAL_LEVERS })) }),
+    resetActive: () =>
+      commit({
+        scenarios: mapActive((s) => ({
+          ...s,
+          incomeMul: NEUTRAL_LEVERS.incomeMul,
+          expenseMul: NEUTRAL_LEVERS.expenseMul,
+          extraMonthlySave: NEUTRAL_LEVERS.extraMonthlySave,
+        })),
+      }),
 
     setActive: (id) => {
       const { scenarios, compareId } = get();

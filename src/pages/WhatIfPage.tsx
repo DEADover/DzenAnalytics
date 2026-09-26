@@ -96,6 +96,9 @@ function toneOf(value: number, now: number, lowerIsBetter = false): StatTone {
   return d > 0 ? "income" : "expense";
 }
 
+/** Норма сбережений; без дохода считать её не от чего — прочерк, а не «0%». */
+const rateText = (p: Projection) => (p.income > 0 ? formatPct(p.rate, 0) : "—");
+
 const mulText = (v: number) => `${v >= 1 ? "+" : ""}${formatPct(v - 1, 0)}`;
 
 /**
@@ -141,7 +144,7 @@ function BaseBreakdown({
         Считаются последние полностью прошедшие месяцы, текущий не входит. Переводы между
         своими счетами не учитываются, возвраты уменьшают расход. Не входят категории и
         счета, которые вы исключили в разрезе данных, и внебалансовые счета, если они
-        выключены в настройках. Число месяцев меняется в «Допущениях».
+        выключены в настройках. Число месяцев и способ меняются в этой же карточке.
       </p>
     </div>
   );
@@ -210,15 +213,21 @@ export function WhatIfPage() {
   const projections = useMemo(() => {
     const run = (levers: ScenarioLevers, horizonYears: number) =>
       project(baseScenario, levers, categories, { ...assumptions, horizonYears }, startingCapital, startYm);
-    const all = [NEUTRAL_LEVERS, active, ...(compare ? [compare] : [])];
+    const all = [active, ...(compare ? [compare] : [])];
     // «До FIRE»: сначала узнаём, когда он наступает у каждого сценария (поиск
     // FIRE от горизонта не зависит), потом строим график ровно до него.
+    // По сценариям, а не по «Как сейчас»: его FIRE бывает на полвека
+    // дальше, и график сжимал бы сценарий в точку у края. Не наступает ни у
+    // одного сценария — тогда уже по «Как сейчас».
+    const fires = all.map((l) => run(l, 1).yearsToFire);
+    const byNow = !fires.some(Number.isFinite);
     const horizon =
       assumptions.horizonYears > 0
         ? assumptions.horizonYears
-        : autoHorizonYears(all.map((l) => run(l, 1).yearsToFire));
+        : autoHorizonYears(byNow ? [run(NEUTRAL_LEVERS, 1).yearsToFire] : fires);
     return {
       horizon,
+      horizonByNow: byNow,
       now: run(NEUTRAL_LEVERS, horizon),
       active: run(active, horizon),
       compare: compare ? run(compare, horizon) : null,
@@ -227,13 +236,16 @@ export function WhatIfPage() {
 
   if (transactions.length === 0) return <EmptyState />;
 
-  const { now: nowProj, active: actProj, compare: cmpProj, horizon } = projections;
+  const { now: nowProj, active: actProj, compare: cmpProj, horizon, horizonByNow } = projections;
   const autoHorizon = assumptions.horizonYears === 0;
   // FIRE сценария за краем графика — скажем об этом прямо на графике и
   // предложим дотянуть его до FIRE.
   const fireBeyond = !autoHorizon && actProj.fireYm !== null && actProj.yearsToFire > horizon;
   const update = store.updateActive;
   const changed = isScenarioChanged(active);
+  // «Сбросить» в карточке трёх бегунков — только когда сдвинут один из них.
+  const flowsChanged =
+    active.incomeMul !== 1 || active.expenseMul !== 1 || active.extraMonthlySave !== 0;
   const realPct = (Math.pow(1 + realMonthlyRate(assumptions), 12) - 1) * 100;
   const months = baseScenario.months;
   const baseSpan =
@@ -264,7 +276,7 @@ export function WhatIfPage() {
       lowerIsBetter: true,
     },
     { label: "Откладываете / мес", value: (p) => formatMoney(p.savings, base), num: (p) => p.savings },
-    { label: "Норма сбережений", value: (p) => formatPct(p.rate, 0), num: (p) => p.rate * 100 },
+    { label: "Норма сбережений", value: rateText, num: (p) => p.rate * 100 },
     ...checkpoints.map((y) => ({
       label: `Капитал через ${yearsLabel(y)}`,
       value: (p: Projection) => formatMoney(capitalAt(p, y), base),
@@ -300,7 +312,7 @@ export function WhatIfPage() {
             <p>
               Расчёт начинается с ваших{" "}
               <InfoTerm>дохода и расхода за последние прошедшие месяцы</InfoTerm>. Сколько
-              месяцев брать и считать среднее или медиану — выбирается в «Допущениях». Текущий
+              месяцев брать и считать среднее или медиану — выбирается в «Доходах и расходах». Текущий
               месяц не учитывается: в нём ещё не все траты.
             </p>
             <p>
@@ -328,9 +340,9 @@ export function WhatIfPage() {
         />
         <StatCell
           label="Норма сбережений"
-          value={formatPct(actProj.rate, 0)}
+          value={rateText(actProj)}
           tone={toneOf(actProj.rate * 100, nowProj.rate * 100)}
-          note={changed ? `Сейчас ${formatPct(nowProj.rate, 0)}` : "Доля дохода, что остаётся"}
+          note={changed ? `Сейчас ${rateText(nowProj)}` : "Доля дохода, что остаётся"}
         />
         <StatCell
           label={`Капитал через ${yearsLabel(horizon)}`}
@@ -407,11 +419,11 @@ export function WhatIfPage() {
 
           <SectionCard
             icon={Coins}
-            title="Доход и расходы"
+            title="Доходы и расходы"
             subtitle={`«Сейчас» — ${assumptions.basis === "median" ? "медиана" : "среднее"} за ${baseSpan}`}
             info={<BaseBreakdown base={baseScenario} currency={base} median={assumptions.basis === "median"} />}
             right={
-              changed && (
+              flowsChanged && (
                 <button
                   type="button"
                   onClick={() => void store.resetActive()}
@@ -424,6 +436,30 @@ export function WhatIfPage() {
             }
           >
             <div className="space-y-4">
+              {/* База — первой: от неё считается «Сейчас» у всех бегунков ниже. */}
+              <div className="flex flex-wrap gap-2">
+                <Segmented
+                  tight
+                  label="Сколько месяцев брать"
+                  value={assumptions.baseMonths}
+                  onChange={(v) => void store.updateAssumptions({ baseMonths: v })}
+                  options={[3, 6, 12].map((m) => ({ value: m, label: `${m} мес` }))}
+                />
+                <Segmented
+                  tight
+                  label="Как усреднять"
+                  value={assumptions.basis}
+                  onChange={(v) => void store.updateAssumptions({ basis: v })}
+                  options={[
+                    { value: "average", label: "Среднее", title: "Среднее арифметическое за месяцы" },
+                    {
+                      value: "median",
+                      label: "Медиана",
+                      title: "Типичный месяц: разовые крупные суммы на него не влияют",
+                    },
+                  ]}
+                />
+              </div>
               <Slider
                 layout="stacked"
                 label="Доход в месяц"
@@ -521,7 +557,13 @@ export function WhatIfPage() {
                   </button>
                 </>
               ) : autoHorizon ? (
-                `До FIRE — ${yearsLabel(horizon)}, в сегодняшних ценах`
+                horizonByNow && Number.isFinite(nowProj.yearsToFire) ? (
+                  `До FIRE «Как сейчас» — ${yearsLabel(horizon)}: в сценарии FIRE не наступает`
+                ) : horizonByNow ? (
+                  `FIRE не наступает — ${yearsLabel(horizon)} вперёд, в сегодняшних ценах`
+                ) : (
+                  `До FIRE — ${yearsLabel(horizon)}, в сегодняшних ценах`
+                )
               ) : (
                 `На ${yearsLabel(horizon)} вперёд, в сегодняшних ценах`
               )
@@ -637,36 +679,18 @@ export function WhatIfPage() {
                 hint={`Сколько капитала можно тратить в год. Цель FIRE — ${pctText(Math.round(1000 / assumptions.withdrawalPct) / 10)} годовых трат.`}
                 onChange={(v) => void store.updateAssumptions({ withdrawalPct: v })}
               />
-              <div className="space-y-2">
-                <div className="text-sm">База расчёта</div>
-                <div className="flex flex-wrap gap-2">
-                  <Segmented
-                    size="sm"
-                    label="Сколько месяцев брать"
-                    value={assumptions.baseMonths}
-                    onChange={(v) => void store.updateAssumptions({ baseMonths: v })}
-                    options={[3, 6, 12].map((m) => ({ value: m, label: `${m} мес` }))}
-                  />
-                  <Segmented
-                    size="sm"
-                    label="Как усреднять"
-                    value={assumptions.basis}
-                    onChange={(v) => void store.updateAssumptions({ basis: v })}
-                    options={[
-                      { value: "average", label: "Среднее", title: "Среднее арифметическое за месяцы" },
-                      {
-                        value: "median",
-                        label: "Медиана",
-                        title: "Типичный месяц: разовые крупные суммы на него не влияют",
-                      },
-                    ]}
-                  />
-                </div>
-                <div className="text-xs text-muted min-h-8">
-                  {baseSpan[0].toUpperCase() + baseSpan.slice(1)}: доход {formatMoney(baseScenario.avgIncome, base)}, расход{" "}
-                  {formatMoney(baseScenario.avgExpense, base)} в месяц.
-                </div>
-              </div>
+              <Slider
+                layout="stacked"
+                hintLines={2}
+                label="Рост дохода"
+                value={assumptions.incomeGrowthPct}
+                min={0}
+                max={10}
+                step={0.5}
+                format={(v) => `${pctText(v)}% в год`}
+                hint="Насколько доход растёт каждый год сверх инфляции: повышения, опыт. Траты те же — разница копится."
+                onChange={(v) => void store.updateAssumptions({ incomeGrowthPct: v })}
+              />
             </div>
           </SectionCard>
         </div>

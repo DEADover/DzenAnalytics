@@ -13,6 +13,12 @@ import { MonthPicker } from "../MonthPicker";
 import { ExprAmountInput } from "../ExprAmountInput";
 import { Tooltip } from "../Tooltip";
 
+/** Событие целиком в прошлом: разовое раньше этого месяца или кончившееся. */
+function isPast(e: ScenarioEvent, nowYm: string): boolean {
+  if (e.kind === "once") return e.start < nowYm;
+  return e.months != null && shiftPeriod(e.start, e.months) <= nowYm;
+}
+
 /**
  * События сценария: крупная покупка, кредит, премия, новая аренда.
  *
@@ -60,7 +66,10 @@ export function WhatIfEvents({
                 <div className="text-sm truncate">
                   {e.title || (e.sign === "income" ? "Поступление" : "Трата")}
                 </div>
-                <div className="text-xs text-muted truncate">{eventWhen(e)}</div>
+                <div className="text-xs text-muted truncate">
+                  {eventWhen(e)}
+                  {isPast(e, startYm) && <span className="text-warn"> · Прошло, не учитывается</span>}
+                </div>
               </div>
               <div
                 className={`text-sm tabular-nums shrink-0 ${e.sign === "income" ? "text-income" : "text-expense"}`}

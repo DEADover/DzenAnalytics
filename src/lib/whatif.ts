@@ -135,9 +135,12 @@ export function avgMonthlyByCategory(
 
   const sums = new Map<string, number>();
   for (const t of transactions) {
-    if (t.kind !== "expense") continue;
+    // Возврат уменьшает расход своей категории — так же, как общий расход
+    // базы. Без этого категория выходила дороже, чем в итогах.
+    if (t.kind !== "expense" && t.kind !== "refund") continue;
     if (!recentSet.has(periodKey(t.date, monthStartDay))) continue;
-    sums.set(t.category, (sums.get(t.category) || 0) + t.amountBase);
+    const sign = t.kind === "refund" ? -1 : 1;
+    sums.set(t.category, (sums.get(t.category) || 0) + sign * t.amountBase);
   }
 
   return Array.from(sums.entries())
@@ -197,6 +200,11 @@ export interface WhatIfAssumptions {
   basis: WhatIfBasis;
   /** Доля капитала, которую можно тратить в год на FIRE: 4% — правило 4%. */
   withdrawalPct: number;
+  /**
+   * Рост дохода, % в год сверх инфляции: повышения, опыт, карьера. Траты при
+   * этом те же — разница уходит в накопления.
+   */
+  incomeGrowthPct: number;
 }
 
 export const DEFAULT_ASSUMPTIONS: WhatIfAssumptions = {
@@ -206,6 +214,7 @@ export const DEFAULT_ASSUMPTIONS: WhatIfAssumptions = {
   baseMonths: 6,
   basis: "average",
   withdrawalPct: 4,
+  incomeGrowthPct: 0,
 };
 
 export interface ProjectionPoint {
@@ -301,6 +310,8 @@ export function project(
   const withdrawal = Math.max(0.1, assumptions.withdrawalPct) / 100;
   const fireTarget = ((flows.expense + forever) * 12) / withdrawal;
   const r = realMonthlyRate(assumptions);
+  // Рост дохода — помесячно, сложным процентом: за год ровно заданный процент.
+  const g = Math.pow(1 + (assumptions.incomeGrowthPct ?? 0) / 100, 1 / 12) - 1;
   const horizon = Math.max(1, Math.round(assumptions.horizonYears)) * 12;
 
   const points: ProjectionPoint[] = [{ ym: startYm, capital: startingCapital }];
@@ -309,11 +320,17 @@ export function project(
   let fireMonth: number | null = capital >= fireTarget && fireTarget > 0 ? 0 : null;
   const last = Math.max(horizon, fireMonth === null ? FIRE_SEARCH_MONTHS : 0);
   for (let k = 1; k <= last; k++) {
-    // Событие месяца `startYm` — это уже этот месяц; траектория начинается
-    // с капитала на сегодня и шагает на месяц вперёд.
+    // Траектория начинается с капитала на сегодня и шагает на месяц вперёд.
+    // События ТЕКУЩЕГО месяца ложатся в первый шаг: иначе трата, назначенная
+    // на этот месяц, не попадала в расчёт вовсе.
     const ym = shiftPeriod(startYm, k);
-    const ev = levers.events.reduce((s, e) => s + eventAmountIn(e, ym), 0);
-    capital = capital * (1 + r) + flows.savings + ev;
+    let ev = levers.events.reduce((s, e) => s + eventAmountIn(e, ym), 0);
+    if (k === 1) ev += levers.events.reduce((s, e) => s + eventAmountIn(e, startYm), 0);
+    // Доходность — только на то, что есть: ушедший в минус капитал (покупка
+    // больше накоплений) под процент вклада не «растёт», а ставку по долгу
+    // мы не знаем.
+    const raise = flows.income * (Math.pow(1 + g, k - 1) - 1);
+    capital = capital + Math.max(0, capital) * r + flows.savings + raise + ev;
     if (k <= horizon) {
       points.push({ ym, capital });
       if (ev !== 0) eventsByYm[ym] = ev;
