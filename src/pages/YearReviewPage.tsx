@@ -436,9 +436,9 @@ export function YearReviewPage() {
                     showDrill(counterpartyOf(t) || t.categoryFull, [t], `${year} год`)
                   }
                   title="Показать операцию"
-                  className="w-full flex items-start gap-2 text-sm rounded-md px-2 py-1.5 text-left hover:bg-panel2/50"
+                  className="meter-list w-full flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-panel2/50"
                 >
-                  <span className="text-[11px] text-muted tabular-nums w-4 shrink-0 leading-5">
+                  <span className="text-muted tabular-nums w-5 shrink-0">
                     {i + 1}
                   </span>
                   {/* Имя и комментарий — одной колонкой, сумма соседней: раньше
@@ -460,7 +460,10 @@ export function YearReviewPage() {
                         : ""}
                     </span>
                   </span>
-                  <span className="text-expense font-semibold tabular-nums shrink-0 leading-5">
+                  {/* Размер и вес — как у сумм в списках выше (`meter-list`): здесь
+                      стояли свои 14 px жирным, и суммы соседних блоков
+                      читались разным кеглем. */}
+                  <span className="text-expense font-medium tabular-nums shrink-0">
                     {formatMoney(t.amountBase, baseCurrency)}
                   </span>
                 </button>
