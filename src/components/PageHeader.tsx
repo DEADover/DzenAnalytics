@@ -1,6 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
 import { useLocation } from "react-router-dom";
-import clsx from "clsx";
 import { sectionGroupTitle } from "../lib/navSections";
 
 interface Props {
@@ -14,11 +13,6 @@ interface Props {
    * page's identity-tag at-a-glance.
    */
   icon?: ComponentType<{ className?: string }>;
-  /**
-   * Icon colour class. Defaults to the accent; pass e.g. `text-warn` for
-   * attention pages (Аномалии, Дубликаты) so the icon keeps its semantics.
-   */
-  iconTone?: string;
   /**
    * «?» о разделе — `InfoPopover`. Стоит сразу за названием: пояснение
    * относится к названию, а у правого края оно оказывалось в другом конце
@@ -56,7 +50,6 @@ interface Props {
 export function PageHeader({
   title,
   icon: Icon,
-  iconTone = "text-accent",
   info,
   right,
 }: Props) {
@@ -73,7 +66,7 @@ export function PageHeader({
     // меряет от белой поверхности внутри рамки, а не от скруглённого канта.
     <div className="-mb-3 pl-1.5 flex items-center flex-wrap gap-x-3 gap-y-1">
       <div className="min-w-0 flex items-center gap-2">
-        {Icon && <Icon aria-hidden className={clsx("w-4 h-4 shrink-0", iconTone)} />}
+        {Icon && <Icon aria-hidden className="w-4 h-4 shrink-0 text-accent" />}
         <div className="min-w-0 flex items-center gap-1.5 text-[15px] leading-6">
           {group && (
             <>

@@ -111,7 +111,6 @@ export function DuplicatesPage() {
     <div className="space-y-6">
       <PageHeader
         icon={Copy}
-        iconTone="text-warn"
         title="Дубликаты"
       />
 
