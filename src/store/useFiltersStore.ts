@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { useDisplayStore } from "./useDisplayStore";
 import type { Transaction } from "../types";
-import { currentPeriod, periodRange, shiftPeriod } from "../lib/period";
+import { currentPeriod, periodRange, quarterRange, shiftPeriod } from "../lib/period";
 import { payeeSearchText } from "../lib/format";
 import { categoryFilter, categoryKeysOf } from "../lib/operationTags";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
@@ -35,6 +35,7 @@ export type DatePreset =
   | "30d"
   | "month"
   | "period"
+  | "quarter"
   | "year"
   | "custom";
 
@@ -127,6 +128,8 @@ interface FiltersState {
   setMonth: (ym: string) => void;
   /** Отчётный месяц целиком — кнопка «Период» в чистом виде. */
   setPeriodMonth: (ym: string) => void;
+  /** Календарный квартал, в который попадает месяц «YYYY-MM». */
+  setQuarter: (monthYM: string) => void;
   setYear: (year: number) => void;
   /** Шагнуть на соседний период — единица берётся из пресета: месяц или год. */
   stepPeriod: (delta: number, fallbackMaxYM: string) => void;
@@ -208,6 +211,9 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
   },
   // Месяц якоря сохраняем: вернувшись потом в «Месяц», попадаешь в тот же
   // месяц выбранного года, а не в январь.
+  // Якорь — любой месяц квартала: подпись и границы берутся у квартала, а
+  // вернувшись в «Месяц», попадаешь в тот же месяц.
+  setQuarter: (monthYM) => set({ preset: "quarter", monthYM }),
   setYear: (year) =>
     set((s) => ({
       preset: "year",
@@ -215,12 +221,14 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
     })),
   stepPeriod: (delta, fallbackMaxYM) => {
     const { preset, monthYM } = get();
-    const unit = preset === "year" ? 12 : 1;
-    const anchored = preset === "month" || preset === "year" || preset === "period";
+    const unit = preset === "year" ? 12 : preset === "quarter" ? 3 : 1;
+    const anchored =
+      preset === "month" || preset === "quarter" || preset === "year" || preset === "period";
     const cur = anchored && monthYM ? monthYM : fallbackMaxYM;
     // Шаг сохраняет единицу: годы листаются годами, отчётные месяцы —
     // отчётными, календарные — календарными.
-    const next: DatePreset = preset === "year" ? "year" : preset === "period" ? "period" : "month";
+    const next: DatePreset =
+      preset === "year" || preset === "quarter" || preset === "period" ? preset : "month";
     set({
       preset: next,
       monthYM: shiftPeriod(cur, delta * unit),
@@ -299,6 +307,11 @@ export function presetToRange(
   if (preset === "period") {
     if (!monthYM) return { from: null, to: null };
     return periodRange(monthYM, monthStartDay);
+  }
+  if (preset === "quarter") {
+    // Квартал — календарный, как и «Год» рядом (#109).
+    if (!monthYM) return { from: null, to: null };
+    return quarterRange(monthYM);
   }
   if (preset === "year") {
     // Год — КАЛЕНДАРНЫЙ, с 1 января по 31 декабря, как и «Месяц» рядом: кнопки

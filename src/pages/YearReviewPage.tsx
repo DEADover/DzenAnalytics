@@ -757,6 +757,16 @@ function WeekProfile({
 }
 
 /**
+ * Сумма квартала: полностью, а сокращаем («1,2 млн») только от миллиона (#108).
+ *
+ * Раньше сокращалось всё — «+3,5 тыс. $» у квартала в долларах терял всю
+ * точность: в валюте с дорогой единицей тысяча — это заметные деньги.
+ */
+function quarterMoney(value: number, base: string, signed = false): string {
+  return formatMoney(value, base, { compact: Math.abs(value) >= 1_000_000, signed });
+}
+
+/**
  * Кварталы: год четырьмя числами и одной полосой на каждое.
  *
  * Двенадцать столбцов графика отвечают «когда именно», но чтобы понять, какая
@@ -832,7 +842,7 @@ function Quarters({
                       q.net >= 0 ? "text-income" : "text-expense"
                     }`}
                   >
-                    {formatMoney(q.net, base, { compact: true, signed: true })}
+                    {quarterMoney(q.net, base, true)}
                   </div>
                   {/* Легенды сверху больше нет: у каждой полосы своя сумма тем
                       же цветом, и что зелёное, а что красное, объяснять не
@@ -843,14 +853,14 @@ function Quarters({
                       value={q.income}
                       scale={scale}
                       cls="bg-income"
-                      label={formatMoney(q.income, base, { compact: true })}
+                      label={quarterMoney(q.income, base)}
                       tone="text-income"
                     />
                     <QuarterBar
                       value={q.expense}
                       scale={scale}
                       cls="bg-expense"
-                      label={formatMoney(q.expense, base, { compact: true })}
+                      label={quarterMoney(q.expense, base)}
                       tone="text-expense"
                     />
                   </div>

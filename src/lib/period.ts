@@ -300,3 +300,31 @@ export function comparableRanges(
     b: { from: cb.from, to: endAfterDays(cb.from, n) },
   };
 }
+
+const ROMAN_QUARTER = ["I", "II", "III", "IV"];
+
+/** Номер календарного квартала месяца «YYYY-MM»: 1…4. */
+export function quarterOf(ym: string): number {
+  return Math.floor((Number(ym.slice(5, 7)) - 1) / 3) + 1;
+}
+
+/**
+ * Календарный квартал целиком — с первого числа первого месяца по последнее
+ * третьего. Как и «Год» рядом в фильтре, квартал календарный: кнопки периода
+ * говорят о календаре, а свой отсчёт живёт под «Отчётным месяцем».
+ */
+export function quarterRange(ym: string): DayRange {
+  const y = Number(ym.slice(0, 4));
+  const q = quarterOf(ym);
+  const first = (q - 1) * 3 + 1;
+  const lastDay = new Date(y, first + 2, 0).getDate();
+  return {
+    from: `${y}-${String(first).padStart(2, "0")}-01`,
+    to: `${y}-${String(first + 2).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
+/** «III кв. 2026». */
+export function quarterLabel(ym: string): string {
+  return `${ROMAN_QUARTER[quarterOf(ym) - 1]} кв. ${ym.slice(0, 4)}`;
+}

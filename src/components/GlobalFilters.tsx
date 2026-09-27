@@ -67,6 +67,11 @@ const PRESETS: SegmentedOption<DatePreset>[] = [
   { value: "6m", label: "6 мес" },
   { value: "12m", label: "12 мес" },
   {
+    value: "quarter",
+    label: "Квартал",
+    title: "Календарный квартал целиком — листается стрелками по кварталам",
+  },
+  {
     value: "year",
     label: "Год",
     title: "Календарный год целиком — листается стрелками, в отличие от скользящих «12 мес»",
@@ -381,7 +386,8 @@ export function GlobalFilters({
   }, [transactions]);
 
   // Год якорится тем же `monthYM`, поэтому пикеру он подходит как есть.
-  const anchored = periodCtl.preset === "month" || periodCtl.preset === "year";
+  const anchored =
+    periodCtl.preset === "month" || periodCtl.preset === "quarter" || periodCtl.preset === "year";
   /** Какой месяц человек выбирал последним — им и подписана кнопка. */
   const monthKind = useDisplayStore((st) => st.monthKind);
 
@@ -404,7 +410,13 @@ export function GlobalFilters({
   // без дат её читают неверно. Даты — подсказкой к кнопке месяца.
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const monthHint = useMemo(() => {
-    if (monthStartDay === 1 || !monthAnchored || periodCtl.preset === "year" || !currentMonthYM)
+    if (
+      monthStartDay === 1 ||
+      !monthAnchored ||
+      periodCtl.preset === "year" ||
+      periodCtl.preset === "quarter" ||
+      !currentMonthYM
+    )
       return undefined;
     const r = periodRange(currentMonthYM, monthStartDay);
     return formatDate(r.from, "full") + " — " + formatDate(r.to, "full");
@@ -420,6 +432,7 @@ export function GlobalFilters({
    */
   const choosePreset = (next: DatePreset) => {
     if (next === "month") periodCtl.setMonth(currentMonthYM || defaultMonthYM);
+    else if (next === "quarter") periodCtl.setQuarter(currentMonthYM || defaultMonthYM);
     else if (next === "year") periodCtl.setYear(Number((currentMonthYM || defaultMonthYM).slice(0, 4)));
     // «Период» — это отчётный месяц; свои даты появляются, только если их
     // поправили руками, и кнопка при этом остаётся той же.
@@ -780,7 +793,13 @@ export function GlobalFilters({
                 monthYM={currentMonthYM}
                 minYM={dataRange.minYM}
                 maxYM={dataRange.maxYM}
-                mode={periodCtl.preset === "year" ? "year" : "month"}
+                mode={
+                  periodCtl.preset === "year"
+                    ? "year"
+                    : periodCtl.preset === "quarter"
+                      ? "quarter"
+                      : "month"
+                }
                 monthActive={monthAnchored}
                 rangeActive={rangeActive}
                 stepsByWindow={periodCtl.preset === "custom"}
@@ -789,6 +808,7 @@ export function GlobalFilters({
                 monthHint={monthHint}
                 onSelectMonth={(ym) => periodCtl.setMonth(ym)}
                 onSelectYear={(y) => periodCtl.setYear(y)}
+                onSelectQuarter={(ym) => periodCtl.setQuarter(ym)}
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
                 onRangeChange={(from, to) => periodCtl.setRange(from, to)}
                 onCurrent={() => periodCtl.setPeriodMonth(defaultMonthYM)}

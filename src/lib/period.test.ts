@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   alignWindows,
   currentPeriod,
+  quarterLabel,
+  quarterOf,
+  quarterRange,
   periodKey,
   startDayIn,
   comparableRanges,
@@ -391,5 +394,20 @@ describe("первый день месяца 29–31", () => {
         expect(periodKey(cur.to, day)).toBe(ym);
       }
     }
+  });
+});
+
+describe("календарный квартал (#109)", () => {
+  it("границы квартала — с первого числа по последнее, с учётом длины месяца", () => {
+    expect(quarterRange("2026-08")).toEqual({ from: "2026-07-01", to: "2026-09-30" });
+    expect(quarterRange("2026-01")).toEqual({ from: "2026-01-01", to: "2026-03-31" });
+    expect(quarterRange("2026-12")).toEqual({ from: "2026-10-01", to: "2026-12-31" });
+    expect(quarterRange("2024-02")).toEqual({ from: "2024-01-01", to: "2024-03-31" });
+  });
+
+  it("номер и подпись", () => {
+    expect(quarterOf("2026-03")).toBe(1);
+    expect(quarterOf("2026-04")).toBe(2);
+    expect(quarterLabel("2026-09")).toBe("III кв. 2026");
   });
 });

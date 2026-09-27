@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { DateField } from "./DateField";
 import { MonthMenu } from "./MonthMenu";
 import { monthLabelFull } from "../lib/format";
-import { shiftDays, spanDays } from "../lib/period";
+import { quarterLabel, shiftDays, spanDays } from "../lib/period";
 import { MONTHS, MONTHS_SHORT } from "../lib/months";
 import { StableWidth } from "./StableWidth";
 
@@ -103,6 +103,7 @@ export function PeriodPicker({
   size = "sm",
   onSelectMonth,
   onSelectYear,
+  onSelectQuarter,
   onStep,
   onRangeChange,
   onCurrent,
@@ -112,8 +113,11 @@ export function PeriodPicker({
   monthYM: string;
   minYM: string;
   maxYM: string;
-  /** В режиме года подпись — «2026», а список открывается сразу годами. */
-  mode?: "month" | "year";
+  /**
+   * В режиме года подпись — «2026», а список открывается сразу годами; в
+   * режиме квартала — «III кв. 2026», в списке кварталы.
+   */
+  mode?: "month" | "quarter" | "year";
   /** Период задаёт название (месяц или год). */
   monthActive: boolean;
   /** Период задаёт отрезок дат. */
@@ -131,6 +135,7 @@ export function PeriodPicker({
   size?: "sm" | "md";
   onSelectMonth: (ym: string) => void;
   onSelectYear: (year: number) => void;
+  onSelectQuarter?: (ym: string) => void;
   /** Листнуть период: месяц, год или отчётный месяц — смотря что выбрано. */
   onStep: (dir: -1 | 1) => void;
   onRangeChange: (from: string | null, to: string | null) => void;
@@ -143,6 +148,8 @@ export function PeriodPicker({
   const icon = size === "md" ? "seg-icon-md" : "seg-icon-sm";
   const item = size === "md" ? "seg-item-md" : "seg-item-sm";
   const isYear = mode === "year";
+  const isQuarter = mode === "quarter";
+  const unitTitle = isYear ? "год" : isQuarter ? "квартал" : "период";
   const year = Number(monthYM?.slice(0, 4)) || new Date().getFullYear();
 
   const windowStep = from && to ? spanDays(from, to) : 0;
@@ -178,7 +185,7 @@ export function PeriodPicker({
         onClick={() => shift(-1)}
         disabled={!canStep}
         className={clsx("seg-icon", icon)}
-        title={stepsByWindow ? `Предыдущие ${windowStep} дн.` : isYear ? "Предыдущий год" : "Предыдущий период"}
+        title={stepsByWindow ? `Предыдущие ${windowStep} дн.` : `Предыдущий ${unitTitle}`}
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
@@ -189,13 +196,13 @@ export function PeriodPicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        title={monthHint ?? (isYear ? "Выбрать год" : "Выбрать месяц")}
+        title={monthHint ?? (isYear ? "Выбрать год" : isQuarter ? "Выбрать квартал" : "Выбрать месяц")}
         className={clsx("seg-item shrink-0", item, monthActive && "seg-on")}
       >
         {/* Ширина держится по месяцам даже в режиме года: «2026» вдвое уже
             «Сентября», и переключение «Месяц ↔ Год» дёргало бы весь ряд. */}
         <StableWidth
-          value={isYear ? year : monthLabelFull(monthYM)}
+          value={isYear ? year : isQuarter ? quarterLabel(monthYM) : monthLabelFull(monthYM)}
           candidates={monthLabels(year)}
         />
         <ChevronDown className="w-3 h-3 opacity-60" aria-hidden="true" />
@@ -254,7 +261,7 @@ export function PeriodPicker({
         onClick={() => shift(1)}
         disabled={!canStep}
         className={clsx("seg-icon", icon)}
-        title={stepsByWindow ? `Следующие ${windowStep} дн.` : isYear ? "Следующий год" : "Следующий период"}
+        title={stepsByWindow ? `Следующие ${windowStep} дн.` : `Следующий ${unitTitle}`}
       >
         <ChevronRight className="w-4 h-4" />
       </button>
@@ -280,7 +287,7 @@ export function PeriodPicker({
         minYM={minYM}
         maxYM={maxYM}
         mode={mode}
-        onSelect={onSelectMonth}
+        onSelect={isQuarter && onSelectQuarter ? onSelectQuarter : onSelectMonth}
         onSelectYear={onSelectYear}
       />
     </div>

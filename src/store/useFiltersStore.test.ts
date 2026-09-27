@@ -30,6 +30,26 @@ function filt(p: Partial<FiltersState> = {}): FiltersState {
 
 const ids = (txs: { id: string }[]) => txs.map((t) => t.id).sort();
 
+describe("квартал в фильтре периода (#109)", () => {
+  it("presetToRange даёт календарный квартал якорного месяца", () => {
+    expect(presetToRange("quarter", "2026-09-26", "2026-08")).toEqual({
+      from: "2026-07-01",
+      to: "2026-09-30",
+    });
+  });
+
+  it("стрелки листают по кварталу и остаются в квартале", () => {
+    useFiltersStore.getState().setQuarter("2026-08");
+    useFiltersStore.getState().stepPeriod(1, "2026-09");
+    const s = useFiltersStore.getState();
+    expect(s.preset).toBe("quarter");
+    expect(presetToRange(s.preset, "", s.monthYM)).toEqual({ from: "2026-10-01", to: "2026-12-31" });
+    useFiltersStore.getState().stepPeriod(-2, "2026-09");
+    const b = useFiltersStore.getState();
+    expect(presetToRange(b.preset, "", b.monthYM)).toEqual({ from: "2026-04-01", to: "2026-06-30" });
+  });
+});
+
 describe("applyFilters — вторые категории", () => {
   // «Отпуск» стоит только второй категорией — так его используют как тег.
   const txs = [

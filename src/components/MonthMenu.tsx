@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { MONTHS_SHORT } from "../lib/months";
+import { quarterOf } from "../lib/period";
 
 /**
  * Всплывающий выбор месяца (и года) — общий для дорожки месяца и для единого
@@ -32,8 +33,11 @@ export function MonthMenu({
   value: string;
   minYM: string;
   maxYM: string;
-  /** В режиме года панель сразу показывает список лет. */
-  mode?: "month" | "year";
+  /**
+   * В режиме года панель сразу показывает список лет; в режиме квартала — год
+   * со стрелками и четыре квартала, выбор отдаёт первый месяц квартала.
+   */
+  mode?: "month" | "quarter" | "year";
   onSelect: (ym: string) => void;
   onSelectYear?: (year: number) => void;
 }) {
@@ -147,6 +151,34 @@ export function MonthMenu({
               </button>
             </div>
 
+            {mode === "quarter" ? (
+              <div className="grid grid-cols-2 gap-1">
+                {[1, 2, 3, 4].map((q) => {
+                  const first = `${viewYear}-${String((q - 1) * 3 + 1).padStart(2, "0")}`;
+                  const last = `${viewYear}-${String(q * 3).padStart(2, "0")}`;
+                  // Квартал доступен, если в нём есть хоть один месяц с данными.
+                  const disabled = (!!minYM && last < minYM) || (!!maxYM && first > maxYM);
+                  const isSel = quarterOf(value) === q && value.slice(0, 4) === String(viewYear);
+                  return (
+                    <button
+                      key={q}
+                      disabled={disabled}
+                      onClick={() => {
+                        onSelect(first);
+                        onClose();
+                      }}
+                      className={clsx(
+                        "px-2 py-2 rounded-md text-sm transition-colors",
+                        isSel ? "bg-accent text-accent-fg font-medium" : "text-text hover:bg-panel2",
+                        disabled && "opacity-30 cursor-not-allowed hover:bg-transparent"
+                      )}
+                    >
+                      {["I", "II", "III", "IV"][q - 1]} квартал
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
             <div className="grid grid-cols-3 gap-1">
               {MONTHS_SHORT.map((m, i) => {
                 const ym = `${viewYear}-${String(i + 1).padStart(2, "0")}`;
@@ -171,6 +203,7 @@ export function MonthMenu({
                 );
               })}
             </div>
+            )}
           </>
         )}
       </div>
