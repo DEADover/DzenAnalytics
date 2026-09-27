@@ -15,6 +15,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useFiltersStore, applyFilters, presetToRange } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
+import { periodKey, periodRange, shiftPeriod } from "../lib/period";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { buildNeedsWants, savingsRateSeries } from "../lib/needsWants";
@@ -79,20 +80,44 @@ export function Budget503020Page() {
 
   // Динамика — всегда последние 12 месяцев: норма одного месяца скачет, и
   // смысл графика в тренде. Фильтры счетов и категорий она учитывает.
+  const lastDate = useMemo(() => all.reduce((m, t) => (t.date > m ? t.date : m), ""), [all]);
+  const range = useMemo(
+    () =>
+      filters.preset === "custom"
+        ? { from: filters.from, to: filters.to }
+        : presetToRange(filters.preset, lastDate, filters.monthYM, monthStartDay),
+    [filters.preset, filters.from, filters.to, filters.monthYM, lastDate, monthStartDay]
+  );
+
+  // Динамика — по периоду фильтра, если в нём хотя бы три месяца. Короче —
+  // график из одной-двух точек ничего не показывает, и тогда берём 12 месяцев,
+  // которые кончаются выбранным: видно, как к нему пришли.
   const trend = useMemo(() => {
-    const trendFiltered = applyFilters(
-      transactions,
-      { ...filters, preset: "12m", from: null, to: null },
-      monthStartDay
-    );
-    return savingsRateSeries(trendFiltered, 12, monthStartDay).map((p) => ({
-      month: monthLabel(p.ym),
-      rate: Math.round(p.rate * 1000) / 10,
-    }));
-  }, [transactions, filters, monthStartDay]);
+    const own = savingsRateSeries(filtered, 0, monthStartDay);
+    let series = own;
+    let byFilter = true;
+    const endIso = range.to ?? lastDate;
+    if (own.length < 3 && endIso) {
+      byFilter = false;
+      const endYm = periodKey(endIso, monthStartDay);
+      const from = periodRange(shiftPeriod(endYm, -11), monthStartDay).from;
+      const to = periodRange(endYm, monthStartDay).to;
+      series = savingsRateSeries(
+        applyFilters(transactions, { ...filters, preset: "custom", from, to }, monthStartDay),
+        12,
+        monthStartDay
+      );
+    }
+    return {
+      byFilter,
+      points: series.map((p) => ({
+        month: monthLabel(p.ym),
+        rate: Math.round(p.rate * 1000) / 10,
+      })),
+    };
+  }, [filtered, transactions, filters, range.to, lastDate, monthStartDay]);
 
   if (all.length === 0) return <EmptyState />;
-  const lastDate = all.reduce((m, t) => (t.date > m ? t.date : m), "");
 
   // Ширина отрезков — доля дохода. Сбережения при перерасходе прижаты к нулю,
   // чтобы полоса не ломалась; настоящий процент — в итогах.
@@ -102,10 +127,6 @@ export function Budget503020Page() {
   const noIncome = split.income <= 0;
   // За какой период посчитано — даты из общего фильтра: при фильтре «по
   // кнопке» его на странице не видно, а доли без периода не прочитать.
-  const range =
-    filters.preset === "custom"
-      ? { from: filters.from, to: filters.to }
-      : presetToRange(filters.preset, lastDate, filters.monthYM, monthStartDay);
   const periodText =
     range.from && range.to
       ? `${formatDate(range.from, "full")} — ${formatDate(range.to, "full")}`
@@ -169,8 +190,9 @@ export function Budget503020Page() {
               <InfoTerm>Нужды</InfoTerm> — траты в обязательных категориях,{" "}
               <InfoTerm>желания</InfoTerm> — в необязательных, <InfoTerm>сбережения</InfoTerm>{" "}
               — доход минус все расходы. Доли считаются от дохода за период из общего
-              фильтра; возвраты уменьшают расход своей категории. График внизу — всегда
-              последние 12 месяцев.
+              фильтра; возвраты уменьшают расход своей категории. График внизу — по
+              месяцам того же периода, а если в нём меньше трёх месяцев — за 12 месяцев
+              до его конца.
             </p>
             <p>
               Что считать нуждой, а что желанием, задаёт{" "}
@@ -305,12 +327,16 @@ export function Budget503020Page() {
       <div className="card-tray card-pad">
         <CardHeader
           icon={PiggyBank}
-          title="Норма сбережений за 12 месяцев"
-          subtitle="Какая доля дохода оставалась каждый месяц. Пунктир — ориентир 20%."
+          title="Норма сбережений по месяцам"
+          subtitle={
+            trend.byFilter
+              ? "Какая доля дохода оставалась каждый месяц периода. Пунктир — ориентир 20%."
+              : "12 месяцев до конца выбранного периода — в нём самом меньше трёх месяцев. Пунктир — ориентир 20%."
+          }
         />
         <div className="h-72">
           <ResponsiveContainer>
-            <AreaChart data={trend}>
+            <AreaChart data={trend.points}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
               <XAxis dataKey="month" stroke={chartAxisStroke} fontSize={11} />
               <YAxis stroke={chartAxisStroke} fontSize={11} tickFormatter={(v) => `${v}%`} />
