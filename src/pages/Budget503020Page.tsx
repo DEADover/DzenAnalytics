@@ -10,10 +10,10 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
-import { PieChart as PieIcon, Home, ShoppingBag, PiggyBank, Target, Settings2 } from "lucide-react";
+import { PieChart as PieIcon, Home, ShoppingBag, PiggyBank, Target } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
-import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
+import { useFiltersStore, applyFilters, presetToRange } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
@@ -26,10 +26,10 @@ import { SeriesTooltip, TooltipFacts } from "../components/TooltipFacts";
 import { Tooltip } from "../components/Tooltip";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
-import { Callout } from "../components/Callout";
 import {
   formatMoney,
   monthLabel,
+  formatDate,
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
@@ -92,6 +92,7 @@ export function Budget503020Page() {
   }, [transactions, filters, monthStartDay]);
 
   if (all.length === 0) return <EmptyState />;
+  const lastDate = all.reduce((m, t) => (t.date > m ? t.date : m), "");
 
   // Ширина отрезков — доля дохода. Сбережения при перерасходе прижаты к нулю,
   // чтобы полоса не ломалась; настоящий процент — в итогах.
@@ -99,6 +100,16 @@ export function Budget503020Page() {
   const w = (x: number) => (denom > 0 ? (x / denom) * 100 : 0);
   const overspent = split.savings < 0;
   const noIncome = split.income <= 0;
+  // За какой период посчитано — даты из общего фильтра: при фильтре «по
+  // кнопке» его на странице не видно, а доли без периода не прочитать.
+  const range =
+    filters.preset === "custom"
+      ? { from: filters.from, to: filters.to }
+      : presetToRange(filters.preset, lastDate, filters.monthYM, monthStartDay);
+  const periodText =
+    range.from && range.to
+      ? `${formatDate(range.from, "full")} — ${formatDate(range.to, "full")}`
+      : "всю историю";
 
   const segments = [
     {
@@ -151,19 +162,39 @@ export function Budget503020Page() {
           <InfoPopover>
             <p>
               <InfoTerm>50/30/20</InfoTerm> — простой ориентир для бюджета: 50% дохода
-              уходит на <InfoTerm>нужды</InfoTerm>, 30% — на <InfoTerm>желания</InfoTerm>,
-              20% остаётся в <InfoTerm>сбережениях</InfoTerm>. Это не закон, а удобная
-              точка отсчёта.
+              уходит на обязательное, 30% — на то, без чего можно обойтись, 20%
+              откладывается. Это не закон, а удобная точка отсчёта.
             </p>
             <p>
               <InfoTerm>Нужды</InfoTerm> — траты в обязательных категориях,{" "}
               <InfoTerm>желания</InfoTerm> — в необязательных, <InfoTerm>сбережения</InfoTerm>{" "}
-              — доход минус все расходы. Доли считаются от дохода за период из фильтра;
-              возвраты уменьшают расход своей категории.
+              — доход минус все расходы. Доли считаются от дохода за период из общего
+              фильтра; возвраты уменьшают расход своей категории. График внизу — всегда
+              последние 12 месяцев.
             </p>
             <p>
-              По умолчанию обязательны все категории расходов — так их хранит Дзен-мани.
-              Желанием становится только то, что вы отметили необязательным.
+              Что считать нуждой, а что желанием, задаёт{" "}
+              <InfoTerm>обязательность категории</InfoTerm> в Дзен-мани. По умолчанию
+              обязательны все категории расходов; желанием становится только то, что
+              отмечено необязательным.{" "}
+              {zenConnected ? (
+                <>
+                  Поменять можно в{" "}
+                  <Link to={SETTINGS_LINK} className="text-accent hover:underline">
+                    Настройки → Справочники → Категории
+                  </Link>
+                  , колонка «Обязательность»: изменение сразу видно здесь и уходит в
+                  Дзен-мани.
+                </>
+              ) : (
+                <>
+                  Настроить её можно после{" "}
+                  <Link to="/settings" className="text-accent hover:underline">
+                    подключения Дзен-мани
+                  </Link>
+                  : в выгрузке CSV её нет, поэтому все траты считаются нуждами.
+                </>
+              )}
             </p>
           </InfoPopover>
         }
@@ -171,35 +202,6 @@ export function Budget503020Page() {
 
       <GlobalFilters />
 
-      {/* Где настраивается деление — на виду, а не в свёрнутом блоке: без этого
-          все траты оказываются «нуждами», и непонятно, что с этим делать. */}
-      <Callout icon={Settings2}>
-        {zenConnected ? (
-          <>
-            Что считать нуждой, а что желанием, задаёт обязательность категории:{" "}
-            <Link to={SETTINGS_LINK} className="text-accent hover:underline">
-              Настройки → Справочники → Категории
-            </Link>
-            , колонка «Обязательность». Изменение сразу видно здесь и уходит в Дзен-мани.
-          </>
-        ) : (
-          <>
-            Что считать нуждой, а что желанием, задаёт обязательность категории в
-            Дзен-мани. Настроить её здесь можно после{" "}
-            <Link to="/settings" className="text-accent hover:underline">
-              подключения Дзен-мани
-            </Link>
-            ; в выгрузке CSV её нет, поэтому все траты считаются нуждами.
-          </>
-        )}
-        {zenConnected && split.needs > 0 && split.wants === 0 && (
-          <>
-            {" "}
-            <strong>Сейчас все траты — нужды:</strong> ни одна категория не отмечена
-            необязательной.
-          </>
-        )}
-      </Callout>
 
       <StatRow>
         {segments.map((s) => (
@@ -231,9 +233,15 @@ export function Budget503020Page() {
                 <PiggyBank className="w-4 h-4" />
               )
             }
-            note={`${formatMoney(s.key === "savings" ? split.savings : s.value, base, {
-              signed: s.key === "savings",
-            })} · ориентир ${s.target}`}
+            note={
+              // Ни одной необязательной категории — главное, что нужно знать
+              // про «Желания»: без этого 0% выглядит как успех.
+              s.key === "wants" && split.wants === 0 && split.needs > 0
+                ? "Нет необязательных категорий — см. «?»"
+                : `${formatMoney(s.key === "savings" ? split.savings : s.value, base, {
+                    signed: s.key === "savings",
+                  })} · ориентир ${s.target}`
+            }
             tooltip={cellTip(s)}
           />
         ))}
@@ -243,7 +251,7 @@ export function Budget503020Page() {
         <CardHeader
           icon={Target}
           title="Факт против ориентира"
-          subtitle="Доли от дохода за период. Пунктир — границы 50 и 80%."
+          subtitle={`Доли от дохода за ${periodText}. Пунктир — границы 50 и 80%.`}
         />
         {noIncome ? (
           <div className="text-sm text-muted">
