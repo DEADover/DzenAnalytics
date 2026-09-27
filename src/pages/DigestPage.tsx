@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { pluralRu } from "../lib/plural";
 import {
   Newspaper,
   TrendingUp,
@@ -91,7 +92,7 @@ export function DigestPage() {
         />
         <span className="text-xs text-muted">
           {formatNum(filtered.length)}{" "}
-          {filtered.length % 10 === 1 && filtered.length % 100 !== 11 ? "период" : "периодов"}
+          {pluralRu(filtered.length, ["период", "периода", "периодов"])}
         </span>
       </div>
 

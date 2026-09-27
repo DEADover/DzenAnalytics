@@ -5,6 +5,7 @@
 // backup/restore JSON path.
 
 import { create } from "zustand";
+import { pluralRu } from "../lib/plural";
 import * as db from "../lib/db";
 import { fetchDiff, checkToken, ZenApiError } from "../lib/zenmoney";
 import type { ZenTermUnit } from "../lib/zenmoney";
@@ -835,7 +836,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // already runs payee grouping + category rules + recomputes amountBase.
       const meta: ImportMeta = {
         importedAt: new Date().toISOString(),
-        fileName: `Дзен-мани API · ${mapped.accountsActive} счетов · ${mapped.tagsTotal} тегов`,
+        fileName: `Дзен-мани API · ${mapped.accountsActive} ${pluralRu(mapped.accountsActive, ["счёт", "счёта", "счетов"])} · ${mapped.tagsTotal} ${pluralRu(mapped.tagsTotal, ["тег", "тега", "тегов"])}`,
         totalRows: nextCache.transactions.length,
         parsed: mapped.transactions.length,
         skipped: nextCache.transactions.length - mapped.transactions.length,
@@ -946,7 +947,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       const deltaTx = diff.transaction?.length || 0;
       const deltaDel = diff.deletion?.length || 0;
       const summary = isFull
-        ? `Полная синхронизация: ${formatNum(mapped.transactions.length)} операций`
+        ? `Полная синхронизация: ${formatNum(mapped.transactions.length)} ${pluralRu(mapped.transactions.length, ["операция", "операции", "операций"])}`
         : deltaTx === 0 && deltaDel === 0
           ? `Без изменений (всего ${formatNum(mapped.transactions.length)})`
           : `+${formatNum(deltaTx)} новых/изменённых${deltaDel > 0 ? `, ${formatNum(deltaDel)} удалено` : ""}`;
@@ -1523,7 +1524,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       //    calibration (push doesn't move account balances locally).
       const importMeta: ImportMeta = {
         importedAt: new Date().toISOString(),
-        fileName: `Дзен-мани API · ${mapped.accountsActive} счетов · ${mapped.tagsTotal} тегов`,
+        fileName: `Дзен-мани API · ${mapped.accountsActive} ${pluralRu(mapped.accountsActive, ["счёт", "счёта", "счетов"])} · ${mapped.tagsTotal} ${pluralRu(mapped.tagsTotal, ["тег", "тега", "тегов"])}`,
         totalRows: nextCache.transactions.length,
         parsed: mapped.transactions.length,
         skipped: nextCache.transactions.length - mapped.transactions.length,

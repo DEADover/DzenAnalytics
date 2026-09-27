@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { pluralRu } from "../lib/plural";
 import { AlertTriangle, ArrowRight, Hash } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import {
@@ -307,7 +308,7 @@ export function HashtagRenameModal({
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 <span>
                   Тег «#{hashtag}» упоминается в{" "}
-                  {riskyRules.length === 1 ? "правиле" : "правилах"}:{" "}
+                  {pluralRu(riskyRules.length, ["правиле", "правилах", "правилах"])}:{" "}
                   {riskyRules.join(", ")}. Если правило дописывает его в
                   комментарий, старый тег вернётся при следующем применении
                   правил — поправьте правило.

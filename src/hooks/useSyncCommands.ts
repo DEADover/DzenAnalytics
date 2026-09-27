@@ -1,18 +1,19 @@
 import { useZenmoneyStore, type SyncResult } from "../store/useZenmoneyStore";
+import { pluralRu } from "../lib/plural";
 import { useSyncFlashStore } from "../store/useSyncFlashStore";
 import { confirm } from "../store/useConfirmStore";
 import { formatNum } from "../lib/format";
 
 /** Итог синхронизации одной фразой — для плашки под кнопками шапки. */
 export function formatSyncResult(r: SyncResult): string {
-  if (r.full) return `Полный синк: ${formatNum(r.count)} операций.`;
+  if (r.full) return `Полный синк: ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
   if (r.delta.transactions === 0 && r.delta.deletions === 0) {
-    return `Без изменений. Всего ${formatNum(r.count)} операций.`;
+    return `Без изменений. Всего ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
   }
   const parts: string[] = [];
-  if (r.delta.transactions > 0) parts.push(`+${formatNum(r.delta.transactions)} новых/изменённых`);
-  if (r.delta.deletions > 0) parts.push(`${formatNum(r.delta.deletions)} удалено`);
-  return `${parts.join(", ")}. Всего ${formatNum(r.count)} операций.`;
+  if (r.delta.transactions > 0) parts.push(`+${formatNum(r.delta.transactions)} ${pluralRu(r.delta.transactions, ["новая/изменённая", "новые/изменённые", "новых/изменённых"])}`);
+  if (r.delta.deletions > 0) parts.push(`${formatNum(r.delta.deletions)} ${pluralRu(r.delta.deletions, ["удалена", "удалены", "удалено"])}`);
+  return `${parts.join(", ")}. Всего ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
 }
 
 /**

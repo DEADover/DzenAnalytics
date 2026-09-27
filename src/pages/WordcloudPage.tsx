@@ -152,7 +152,7 @@ export function WordcloudPage() {
                   fontWeight: fontSize(w.count) > 30 ? 700 : fontSize(w.count) > 20 ? 600 : 500,
                   lineHeight: 1.1,
                 }}
-                title={`«${w.text}» · ${w.count} раз · ${formatMoney(w.totalAmount, base)}`}
+                title={`«${w.text}» · ${w.count} ${pluralRu(w.count, ["раз", "раза", "раз"])} · ${formatMoney(w.totalAmount, base)}`}
               >
                 {w.text}
               </button>

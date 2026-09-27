@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { pluralRu } from "../lib/plural";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import { GitFork, TrendingUp, TrendingDown, Trophy, PiggyBank } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
@@ -125,7 +126,7 @@ export function SankeyPage() {
           value={formatMoney(totals.income, base)}
           icon={<TrendingUp className="w-4 h-4" />}
           tone="income"
-          note={`${totals.count} ${totals.count % 10 === 1 && totals.count % 100 !== 11 ? "операция" : "операций"} в фильтре`}
+          note={`${totals.count} ${pluralRu(totals.count, ["операция", "операции", "операций"])} в фильтре`}
         />
         <StatCell
           label="Расход"

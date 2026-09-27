@@ -14,6 +14,7 @@
  */
 
 import { addRowOutline, type XlsxNumberStyle } from "./categoryReportXlsx";
+import { pluralRu } from "./plural";
 import {
   achievement,
   atMonth,
@@ -772,7 +773,7 @@ export function buildDashboardSheet(
   rows.push([]);
   rows.push([
     text(
-      `На диаграммах — все статьи расходов с под-категориями (${d.rows.length} строк). Смените месяц в ячейке справа сверху — показатели и диаграммы пересчитаются.`,
+      `На диаграммах — все статьи расходов с под-категориями (${d.rows.length} ${pluralRu(d.rows.length, ["строка", "строки", "строк"])}). Смените месяц в ячейке справа сверху — показатели и диаграммы пересчитаются.`,
       { textColor: TEXT_MUTED }
     ),
   ]);

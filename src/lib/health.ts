@@ -1,4 +1,5 @@
 import type { Transaction } from "../types";
+import { pluralRu } from "./plural";
 import { formatMoney, formatNum } from "./format";
 import {
   groupByMonth,
@@ -233,7 +234,7 @@ function computeUncategorized(opts: ComputeOptions): HealthComponent {
       "Доля операций, которым присвоена категория. Чем больше — тем точнее вся аналитика. Хорошо — от 95%." +
       (total > 0
         ? "\n\nОткуда цифра:\n" +
-          `· без категории — ${formatNum(uncategorized)} из ${formatNum(total)} операций\n` +
+          `· без категории — ${formatNum(uncategorized)} из ${formatNum(total)} ${pluralRu(total, ["операции", "операций", "операций"])}\n` +
           `· это ${(pct * 100).toFixed(1)}% — переводы между своими счетами не считаем`
         : ""),
     hint:

@@ -1,4 +1,5 @@
 import { DataTable } from "./DataTable";
+import { pluralRu } from "../lib/plural";
 import { useMemo, useState } from "react";
 import { ShieldOff, X, Trash2 } from "lucide-react";
 import { useDuplicateExclusionsStore } from "../store/useDuplicateExclusionsStore";
@@ -39,7 +40,7 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
   async function handleClearAll() {
     const ok = await confirm({
       title: "Удалить все исключения?",
-      message: `Все ${total} правил «не дубликаты» будут удалены — отмеченные группы снова начнут проверяться.`,
+      message: `Все ${total} ${pluralRu(total, ["правило", "правила", "правил"])} «не дубликаты» будут удалены — отмеченные группы снова начнут проверяться.`,
       confirmLabel: "Удалить все",
       tone: "danger",
     });

@@ -466,16 +466,16 @@ export function ImportPage() {
     full: boolean;
     delta: { transactions: number; deletions: number };
   }): string {
-    if (r.full) return `Полный синк: ${formatNum(r.count)} операций.`;
+    if (r.full) return `Полный синк: ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
     if (r.delta.transactions === 0 && r.delta.deletions === 0) {
-      return `Свежее: ничего нового. Всего ${formatNum(r.count)} операций.`;
+      return `Свежее: ничего нового. Всего ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
     }
     const parts: string[] = [];
     if (r.delta.transactions > 0)
-      parts.push(`+${formatNum(r.delta.transactions)} новых/изменённых`);
+      parts.push(`+${formatNum(r.delta.transactions)} ${pluralRu(r.delta.transactions, ["новая/изменённая", "новые/изменённые", "новых/изменённых"])}`);
     if (r.delta.deletions > 0)
-      parts.push(`${formatNum(r.delta.deletions)} удалено`);
-    return `Синхронизировано: ${parts.join(", ")}. Всего ${formatNum(r.count)} операций.`;
+      parts.push(`${formatNum(r.delta.deletions)} ${pluralRu(r.delta.deletions, ["удалена", "удалены", "удалено"])}`);
+    return `Синхронизировано: ${parts.join(", ")}. Всего ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
   }
 
   /**
@@ -487,7 +487,7 @@ export function ImportPage() {
     if (!(meta?.source === "csv" && transactions.length > 0)) return false;
     const ok = await confirm({
       title: "Заменить CSV-данные на API?",
-      message: `У вас сейчас ${formatNum(transactions.length)} операций из CSV (${meta.fileName}). API-синк заменит их данными из Дзен-мани. Бюджеты, цели и правила сохранятся.`,
+      message: `У вас сейчас ${formatNum(transactions.length)} ${pluralRu(transactions.length, ["операция", "операции", "операций"])} из CSV (${meta.fileName}). API-синк заменит их данными из Дзен-мани. Бюджеты, цели и правила сохранятся.`,
       confirmLabel: "Заменить",
       tone: "warning",
     });
@@ -732,7 +732,7 @@ export function ImportPage() {
     const count = Array.isArray(dump.transactions) ? dump.transactions.length : 0;
     const ok = await confirm({
       title: "Восстановить из копии?",
-      message: `Текущие данные будут заменены. В файле ${formatNum(count)} операций.`,
+      message: `Текущие данные будут заменены. В файле ${formatNum(count)} ${pluralRu(count, ["операция", "операции", "операций"])}.`,
       confirmLabel: "Восстановить",
       tone: "warning",
     });
@@ -747,7 +747,7 @@ export function ImportPage() {
         ? dump.transactions.length
         : 0;
       setBackupMsg(
-        `Восстановлено: ${formatNum(restoredCount)} операций. Обновляем страницу…`
+        `Восстановлено: ${formatNum(restoredCount)} ${pluralRu(restoredCount, ["операция", "операции", "операций"])}. Обновляем страницу…`
       );
       // Перезагрузка, а не поимённое пере-чтение сторов.
       //
@@ -800,7 +800,7 @@ export function ImportPage() {
         );
       } else {
         await setTransactions(result.transactions, importMeta);
-        setSuccess(`Загружено ${formatNum(result.parsed)} операций.`);
+        setSuccess(`Загружено ${formatNum(result.parsed)} ${pluralRu(result.parsed, ["операция", "операции", "операций"])}.`);
       }
       setTimeout(() => nav("/"), 1500);
     } catch (e) {
