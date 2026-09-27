@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { DateField } from "./DateField";
 import { MonthMenu } from "./MonthMenu";
 import { monthLabelFull } from "../lib/format";
-import { quarterLabel, shiftDays, spanDays } from "../lib/period";
+import { quarterLabel, quarterOf, shiftDays, shiftPeriod, spanDays } from "../lib/period";
 import { MONTHS, MONTHS_SHORT } from "../lib/months";
 import { StableWidth } from "./StableWidth";
 
@@ -101,6 +101,8 @@ export function PeriodPicker({
   onSelectQuarter,
   blank = false,
   rangeFixed = false,
+  minDate = null,
+  maxDate = null,
   onStep,
   onRangeChange,
   onCurrent,
@@ -137,6 +139,12 @@ export function PeriodPicker({
    * Иначе они шагали на длину всей истории — на пять лет за раз.
    */
   rangeFixed?: boolean;
+  /**
+   * Границы истории по дням — дальше них отрезок не сдвигается: окно, целиком
+   * ушедшее за первую операцию или за сегодняшний день, показывало бы пустоту.
+   */
+  minDate?: string | null;
+  maxDate?: string | null;
   /** Листнуть период: месяц, год или отчётный месяц — смотря что выбрано. */
   onStep: (dir: -1 | 1) => void;
   onRangeChange: (from: string | null, to: string | null) => void;
@@ -154,6 +162,22 @@ export function PeriodPicker({
   const year = Number(monthYM?.slice(0, 4)) || new Date().getFullYear();
 
   const windowStep = from && to && !rangeFixed ? spanDays(from, to) : 0;
+
+  // Названия листаются только в пределах истории: от первого месяца с
+  // операциями до последнего (или текущего, если он позже — см. `maxYM`).
+  const unitMonths = isYear ? 12 : isQuarter ? 3 : 1;
+  const unitStart = isYear
+    ? `${year}-01`
+    : isQuarter
+      ? `${year}-${String((quarterOf(monthYM) - 1) * 3 + 1).padStart(2, "0")}`
+      : monthYM;
+  const canPrevUnit = !blank && (!minYM || shiftPeriod(unitStart, -1) >= minYM);
+  const canNextUnit = !blank && (!maxYM || shiftPeriod(unitStart, unitMonths) <= maxYM);
+  // Отрезок — пока сдвинутое окно хоть краем задевает историю.
+  const canPrevWindow =
+    windowStep > 0 && (!minDate || !to || shiftDays(to, -windowStep) >= minDate);
+  const canNextWindow =
+    windowStep > 0 && (!maxDate || !from || shiftDays(from, windowStep) <= maxDate);
   const rangeTitle = rangeFixed
     ? "Выбрана вся история — сдвигать отрезок некуда"
     : "Задайте даты, чтобы листать отрезок";
@@ -173,9 +197,9 @@ export function PeriodPicker({
         <button
           type="button"
           onClick={() => onStep(-1)}
-          disabled={blank}
+          disabled={!canPrevUnit}
           className={clsx("seg-icon", icon)}
-          title={`Предыдущий ${unitTitle}`}
+          title={canPrevUnit || blank ? `Предыдущий ${unitTitle}` : "Раньше операций нет"}
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -201,9 +225,9 @@ export function PeriodPicker({
         <button
           type="button"
           onClick={() => onStep(1)}
-          disabled={blank}
+          disabled={!canNextUnit}
           className={clsx("seg-icon", icon)}
-          title={`Следующий ${unitTitle}`}
+          title={canNextUnit || blank ? `Следующий ${unitTitle}` : "Дальше операций нет"}
         >
           <ChevronRight className="w-4 h-4" />
         </button>
@@ -232,9 +256,9 @@ export function PeriodPicker({
         <button
           type="button"
           onClick={() => shiftWindow(-1)}
-          disabled={windowStep <= 0}
+          disabled={!canPrevWindow}
           className={clsx("seg-icon", icon)}
-          title={windowStep > 0 ? `Предыдущие ${windowStep} дн.` : rangeTitle}
+          title={canPrevWindow ? `Предыдущие ${windowStep} дн.` : windowStep > 0 ? "Раньше операций нет" : rangeTitle}
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -283,9 +307,9 @@ export function PeriodPicker({
         <button
           type="button"
           onClick={() => shiftWindow(1)}
-          disabled={windowStep <= 0}
+          disabled={!canNextWindow}
           className={clsx("seg-icon", icon)}
-          title={windowStep > 0 ? `Следующие ${windowStep} дн.` : rangeTitle}
+          title={canNextWindow ? `Следующие ${windowStep} дн.` : windowStep > 0 ? "Дальше операций нет" : rangeTitle}
         >
           <ChevronRight className="w-4 h-4" />
         </button>

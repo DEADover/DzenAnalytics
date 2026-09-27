@@ -553,6 +553,22 @@ export function GlobalFilters({
    * отчётный месяц, и из «Года» уводила в месяц.
    */
   const calendarNow = currentPeriod(1);
+  /**
+   * Границы истории для листания и выбора. Сверху — последняя операция или
+   * сегодня, если позже: текущий месяц смотрят и до первой траты в нём.
+   */
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const boundMaxYM =
+    dataRange.maxYM && dataRange.maxYM > calendarNow ? dataRange.maxYM : calendarNow;
+  const boundMaxDate =
+    dataRange.maxDate && dataRange.maxDate > todayIso ? dataRange.maxDate : todayIso;
+  /** Дата руками — не раньше первой операции и не позже сегодняшнего дня. */
+  const clampDate = (d: string | null) => {
+    if (!d) return d;
+    if (dataRange.minDate && d < dataRange.minDate) return dataRange.minDate;
+    if (d > boundMaxDate) return boundMaxDate;
+    return d;
+  };
   const goCurrent = () => {
     const p = periodCtl.preset;
     if (p === "quarter") periodCtl.setQuarter(calendarNow);
@@ -841,7 +857,9 @@ export function GlobalFilters({
               <PeriodPicker
                 monthYM={currentMonthYM}
                 minYM={dataRange.minYM}
-                maxYM={dataRange.maxYM}
+                maxYM={boundMaxYM}
+                minDate={dataRange.minDate}
+                maxDate={boundMaxDate}
                 mode={
                   periodCtl.preset === "year"
                     ? "year"
@@ -866,7 +884,7 @@ export function GlobalFilters({
                 blank={!monthAnchored && periodCtl.preset !== "custom"}
                 rangeFixed={periodCtl.preset === "all"}
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
-                onRangeChange={(from, to) => periodCtl.setRange(from, to)}
+                onRangeChange={(from, to) => periodCtl.setRange(clampDate(from), clampDate(to))}
                 onCurrent={goCurrent}
                 atCurrent={atCurrent}
               />
