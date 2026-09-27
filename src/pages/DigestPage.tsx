@@ -4,8 +4,6 @@ import {
   Newspaper,
   TrendingUp,
   TrendingDown,
-  ArrowUp,
-  ArrowDown,
   Trophy,
   Coins,
   ChevronRight,
@@ -34,6 +32,7 @@ import {
 import { SeriesTooltip, TooltipFacts } from "../components/TooltipFacts";
 import { Callout } from "../components/Callout";
 import { EmptyState } from "../components/EmptyState";
+import { CategoryDot } from "../components/CategoryDot";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Segmented } from "../components/Segmented";
@@ -344,14 +343,14 @@ function DigestDetail({
               Статьи с самым большим изменением суммы против прошлого такого же
               периода — в рублях, а не в процентах: рост на 200 % у статьи в
               триста рублей не так важен, как рост на 20 % у статьи в сто тысяч.
-              Полоса показывает величину изменения, стрелка — сторону. Нажатие
+              Полоса показывает величину изменения, её цвет — сторону. Нажатие
               открывает операции статьи за этот период.
             </p>
           }
         >
           <MeterHead
             columns={MOVER_COLUMNS}
-            lead=""
+            lead="w-7"
             bar="track"
             nameLabel="Статья"
             sort={sort.key ? { key: sort.key, dir: sort.dir } : undefined}
@@ -365,13 +364,10 @@ function DigestDetail({
                 <MeterRow
                   key={m.category}
                   bar="track"
-                  icon={
-                    up ? (
-                      <ArrowUp className="w-3.5 h-3.5 text-expense" />
-                    ) : (
-                      <ArrowDown className="w-3.5 h-3.5 text-income" />
-                    )
-                  }
+                  // Значок категории — крупно слева, как в «Расходах по
+                  // категориям» на главной; куда изменилось — видно по цвету
+                  // полосы и знаку в «Разнице».
+                  leadIcon={<CategoryDot category={m.category} size="w-7 h-7" />}
                   label={m.category}
                   share={diff / maxMove}
                   barCls={up ? "bg-expense" : "bg-income"}
@@ -410,18 +406,22 @@ function DigestDetail({
           info={<p>Пять самых крупных расходов периода с комментарием к операции.</p>}
         >
           <div className="space-y-0.5">
-            {entry.topTransactions.map((t, i) => (
+            {entry.topTransactions.map((t) => (
               <button
                 key={t.id}
                 onClick={() =>
                   onOpenTx([t], counterpartyOf(t) || t.categoryFull || "Операция")
                 }
                 title="Показать операцию"
-                className="w-full flex items-start gap-2 text-sm rounded-md px-2 py-1.5 text-left hover:bg-panel2/50"
+                className="w-full flex items-center gap-3 text-sm rounded-md px-2 py-1.5 text-left hover:bg-panel2/50"
               >
-                <span className="text-[11px] text-muted tabular-nums w-4 shrink-0 leading-5">
-                  {i + 1}
-                </span>
+                {/* Значок категории, как в списках операций; порядок и так от
+                    дорогого к дешёвому. */}
+                <CategoryDot
+                  category={t.subcategory || t.category}
+                  parent={t.subcategory ? t.category : undefined}
+                  size="w-7 h-7"
+                />
                 {/* Имя и комментарий одной колонкой, сумма соседней: комментарий
                     не заезжает под сумму и обрывается там же, где она начинается. */}
                 <span className="flex-1 min-w-0">

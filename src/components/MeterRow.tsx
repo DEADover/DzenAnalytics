@@ -50,6 +50,7 @@ const HEAD_ALIGN = { left: "justify-start", right: "justify-end", center: "justi
 export function MeterRow({
   rank,
   icon,
+  leadIcon,
   label,
   share,
   cells,
@@ -63,6 +64,12 @@ export function MeterRow({
   rank?: number;
   /** Значок вместо номера: направление, тип, цвет категории. */
   icon?: React.ReactNode;
+  /**
+   * Крупный значок слева — на высоту имени и полосы, как в «Расходах по
+   * категориям» на главной. Только у `track`: полоса начинается от одного края
+   * с именем, а значок стоит перед обоими.
+   */
+  leadIcon?: React.ReactNode;
   label: string;
   /** Доля от 0 до 1 — ширина полосы. */
   share: number;
@@ -102,6 +109,7 @@ export function MeterRow({
   const inner =
     bar === "track" ? (
       <>
+        {leadIcon && <span className="shrink-0 flex items-center">{leadIcon}</span>}
         <span className="flex-1 min-w-0 flex flex-col gap-1.5">
           <span className="flex items-center gap-1.5 min-w-0">
             {icon && <span className="shrink-0 flex items-center">{icon}</span>}
