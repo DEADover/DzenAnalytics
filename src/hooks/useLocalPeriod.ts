@@ -130,7 +130,9 @@ export function useLocalPeriod(
       stepPeriod: (delta: number, fallbackMaxYM: string) => {
         const anchored =
           preset === "month" || preset === "quarter" || preset === "year" || preset === "period";
-        const cur = anchored && monthYM ? monthYM : fallbackMaxYM;
+        // После своего отрезка — от месяца его начала (как в общем фильтре).
+        const cur =
+          anchored && monthYM ? monthYM : preset === "custom" && from ? from.slice(0, 7) : fallbackMaxYM;
         // Единица шага сохраняется: отчётный месяц листается отчётными.
         const keep = preset === "year" || preset === "quarter" || preset === "period";
         setPreset(keep ? preset : "month");

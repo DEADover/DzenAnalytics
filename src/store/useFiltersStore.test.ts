@@ -50,6 +50,16 @@ describe("квартал в фильтре периода (#109)", () => {
   });
 });
 
+describe("стрелки после своего отрезка", () => {
+  it("листают от месяца начала отрезка, а не от последней операции", () => {
+    useFiltersStore.getState().setRange("2026-08-02", "2026-08-31");
+    useFiltersStore.getState().stepPeriod(1, "2026-05");
+    const s = useFiltersStore.getState();
+    expect(s.preset).toBe("month");
+    expect(s.monthYM).toBe("2026-09");
+  });
+});
+
 describe("applyFilters — вторые категории", () => {
   // «Отпуск» стоит только второй категорией — так его используют как тег.
   const txs = [

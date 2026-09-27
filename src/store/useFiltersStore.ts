@@ -220,11 +220,14 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
       monthYM: `${year}-${(s.monthYM ?? currentYM()).slice(5, 7)}`,
     })),
   stepPeriod: (delta, fallbackMaxYM) => {
-    const { preset, monthYM } = get();
+    const { preset, monthYM, from } = get();
     const unit = preset === "year" ? 12 : preset === "quarter" ? 3 : 1;
     const anchored =
       preset === "month" || preset === "quarter" || preset === "year" || preset === "period";
-    const cur = anchored && monthYM ? monthYM : fallbackMaxYM;
+    // После своего отрезка листаем от месяца его начала, а не от последней
+    // операции: иначе с отрезка в августе стрелка уводила куда-нибудь в июнь.
+    const cur =
+      anchored && monthYM ? monthYM : preset === "custom" && from ? from.slice(0, 7) : fallbackMaxYM;
     // Шаг сохраняет единицу: годы листаются годами, отчётные месяцы —
     // отчётными, календарные — календарными.
     const next: DatePreset =

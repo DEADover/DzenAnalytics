@@ -414,8 +414,13 @@ export function GlobalFilters({
   // Подпись кнопки — тот месяц, который сейчас показан, включая отчётный:
   // прежде при нём брался последний месяц данных, и листание меняло даты, а
   // название оставалось прежним.
+  // При своём отрезке — месяц его начала: от него и листают стрелки названия.
   const currentMonthYM =
-    monthAnchored && periodCtl.monthYM ? periodCtl.monthYM : dataRange.maxYM;
+    monthAnchored && periodCtl.monthYM
+      ? periodCtl.monthYM
+      : periodCtl.preset === "custom" && periodCtl.from
+        ? periodCtl.from.slice(0, 7)
+        : dataRange.maxYM;
 
   // Отчётный месяц не с 1-го числа: подпись «Август» идёт по 27 сентября, и
   // без дат её читают неверно. Даты — подсказкой к кнопке месяца.
