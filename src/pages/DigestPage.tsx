@@ -124,7 +124,7 @@ export function DigestPage() {
           <div className="relative min-h-[16rem]">
           <div className="card p-1.5 max-h-[60vh] overflow-y-auto md:max-h-none md:absolute md:inset-0">
             {/* Сколько периодов — в начале самого списка, к которому оно относится. */}
-            <div className="px-3 pt-1.5 pb-2 text-xs text-muted">
+            <div className="label px-3 pt-2 pb-2.5 mb-1.5 border-b border-border">
               {formatNum(filtered.length)}{" "}
               {pluralRu(filtered.length, ["период", "периода", "периодов"])}
             </div>
@@ -247,11 +247,6 @@ function DigestDetail({
 
   return (
     <div className="space-y-6">
-      {/* Главное — одной фразой: ради неё дайджест и открывают. */}
-      <Callout size="banner" icon={Newspaper}>
-        {headline(entry, baseCurrency)}
-      </Callout>
-
       <StatRow>
         <StatCell
           label="Доход"
@@ -292,12 +287,26 @@ function DigestDetail({
             уточнении. */}
         <StatCell
           label="Норма сбережений"
-          value={entry.income > 0 ? formatPct(entry.savingsRate, 0) : "—"}
+          // Когда трат вдвое больше дохода, процент вроде «−1 549%» ничего не
+          // говорит — прочерк и объяснение словами.
+          value={entry.income > 0 && entry.savingsRate >= -1 ? formatPct(entry.savingsRate, 0) : "—"}
           icon={<PiggyBank className="w-4 h-4" />}
           tone={entry.income > 0 && entry.savingsRate >= 0.2 ? "income" : entry.savingsRate < 0 ? "expense" : "default"}
-          note={`${formatNum(entry.txCount)} ${pluralRu(entry.txCount, ["операция", "операции", "операций"])}`}
+          note={
+            entry.income > 0 && entry.savingsRate < -1
+              ? "Расход больше дохода"
+              : entry.income <= 0
+                ? "Доходов не было"
+                : `${formatNum(entry.txCount)} ${pluralRu(entry.txCount, ["операция", "операции", "операций"])}`
+          }
         />
       </StatRow>
+
+      {/* Главное одной фразой — под итогами: сверху, как на остальных
+          страницах, ряд больших чисел. */}
+      <Callout size="banner" icon={Newspaper}>
+        {headline(entry, baseCurrency)}
+      </Callout>
 
       <SectionCard
         icon={CalendarDays}
