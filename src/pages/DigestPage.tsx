@@ -164,6 +164,15 @@ export function DigestPage() {
               entry={current}
               baseCurrency={baseCurrency}
               onOpenTx={(txs, title) => showDrill(title, txs, "Дайджест")}
+              onOpenDay={(date) =>
+                showDrill(
+                  formatDate(date, "full"),
+                  transactions.filter(
+                    (t) => t.date.slice(0, 10) === date && (t.kind === "expense" || t.kind === "refund")
+                  ),
+                  current.label
+                )
+              }
               onOpenCategory={(category) =>
                 showDrill(
                   category,
@@ -200,6 +209,7 @@ function DigestDetail({
   entry,
   baseCurrency,
   onOpenTx,
+  onOpenDay,
   onOpenCategory,
 }: {
   entry: DigestEntry;
@@ -207,6 +217,8 @@ function DigestDetail({
   onOpenTx: (txs: Transaction[], title: string) => void;
   /** Операции одной статьи за этот период. */
   onOpenCategory: (category: string) => void;
+  /** Траты одного дня — по клику на столбик графика. */
+  onOpenDay: (date: string) => void;
 }) {
   const expCls =
     entry.expenseDelta > 0.05
@@ -319,7 +331,13 @@ function DigestDetail({
         title="Траты по дням"
         subtitle={daysSubtitle(entry, baseCurrency)}
       >
-        <DaysChart days={entry.days} biggest={entry.biggestDay?.date} base={baseCurrency} week={entry.period === "week"} />
+        <DaysChart
+          days={entry.days}
+          biggest={entry.biggestDay?.date}
+          base={baseCurrency}
+          week={entry.period === "week"}
+          onDay={onOpenDay}
+        />
       </SectionCard>
 
       {(entry.topPayees.length > 0 || entry.newPayees.length > 0) && (
@@ -530,11 +548,13 @@ function DaysChart({
   biggest,
   base,
   week,
+  onDay,
 }: {
   days: DigestDay[];
   biggest?: string;
   base: string;
   week: boolean;
+  onDay: (date: string) => void;
 }) {
   const data = days.map((d) => ({ ...d, label: dayLabel(d.date, week) }));
   return (
@@ -554,7 +574,18 @@ function DaysChart({
               />
             }
           />
-          <Bar dataKey="expense" name="Расход" radius={[3, 3, 0, 0]}>
+          <Bar
+            dataKey="expense"
+            name="Расход"
+            radius={[3, 3, 0, 0]}
+            className="cursor-pointer"
+            // Клик по столбику — траты этого дня в боковой панели, как по
+            // категории ниже. День без трат открывать незачем.
+            onClick={(d: { payload?: DigestDay }) => {
+              const day = d?.payload;
+              if (day && day.expense > 0) onDay(day.date);
+            }}
+          >
             {data.map((d) => (
               <Cell key={d.date} fill={d.date === biggest ? chartColor.expense : chartColor.accent} fillOpacity={d.date === biggest ? 1 : 0.7} />
             ))}
