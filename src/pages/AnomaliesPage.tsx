@@ -263,7 +263,9 @@ export function AnomaliesPage() {
               {
                 key: "zScore",
                 type: "number",
-                width: "7.5rem",
+                // Под подпись «Отклонение» со значком сортировки — при любом
+                // размере текста таблиц (7,5 rem резали её многоточием).
+                width: "8.75rem",
                 label: "Отклонение",
                 headerTitle: "Во сколько раз трата дальше от обычной, чем привычный разброс",
                 sortValue: (a) => a.zScore,

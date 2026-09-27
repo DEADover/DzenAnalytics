@@ -340,7 +340,7 @@ export function SearchPage() {
             {
               key: "category",
               type: "text",
-              width: "13rem",
+              width: "11.5rem",
               label: "Категория",
               sortValue: (t) => t.categoryFull,
               render: (t) => t.categoryFull,
@@ -348,12 +348,14 @@ export function SearchPage() {
             {
               key: "payee",
               type: "text",
-              width: "13rem",
+              width: "11.5rem",
               label: "Получатель",
               sortValue: (t) => t.payee || "",
               render: (t) => t.payee || "—",
             },
             {
+              // Комментарию — остаток строки; категория и получатель уже
+              // (11,5 rem), иначе на 1280 при крупном тексте его подпись резалась.
               key: "comment",
               type: "text",
               muted: true,

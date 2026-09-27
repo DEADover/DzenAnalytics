@@ -2249,7 +2249,9 @@ export function AccountsPage() {
                     <col style={{ width: scaledWidth("8.75rem") }} />
                     <col style={{ width: scaledWidth("8.75rem") }} />
                     <col style={{ width: scaledWidth("8rem") }} />
-                    <col style={{ width: scaledWidth("7rem") }} />
+                    {/* «Операции» со значком сортировки: 7 rem резали её при
+                        мелком тексте таблиц. */}
+                    <col style={{ width: scaledWidth("7.75rem") }} />
                   </>
                 )}
                 <col style={{ width: scaledWidth("7.5rem") }} />
