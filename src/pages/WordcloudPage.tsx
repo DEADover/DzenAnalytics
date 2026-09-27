@@ -17,6 +17,7 @@ import { SectionControls } from "../components/SectionControls";
 import { Slider } from "../components/Slider";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { WordCloud } from "../components/WordCloud";
+import { CardHeader } from "../components/CardHeader";
 
 export function WordcloudPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -119,6 +120,19 @@ export function WordcloudPage() {
         </SectionEmpty>
       ) : (
         <div className="card-tray card-pad">
+          {/* Шапка — как у «Облака тегов»: без неё облако было единственным
+              блоком раздела без названия. */}
+          <CardHeader
+            icon={Cloud}
+            title="Облако слов"
+            subtitle={
+              <>
+                {formatNum(words.length)} {pluralRu(words.length, ["слово", "слова", "слов"])} из
+                комментариев к {formatNum(totalCommentTxs)}{" "}
+                {pluralRu(totalCommentTxs, ["операции", "операциям", "операциям"])}
+              </>
+            }
+          />
           <WordCloud
             items={words.map((w) => ({
               key: w.text,

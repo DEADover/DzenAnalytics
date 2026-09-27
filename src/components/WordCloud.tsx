@@ -47,7 +47,10 @@ export function WordCloud({ items }: { items: WordCloudItem[] }) {
   };
 
   return (
-    <div className="flex flex-wrap gap-2 justify-center items-center py-6">
+    // По левому краю, как текст карточки и её заголовок: облако по центру
+    // висело отдельно от шапки блока, с рваными краями с обеих сторон.
+    // Минус-поле равно полю слова — первое слово ряда стоит вровень с заголовком.
+    <div className="flex flex-wrap gap-2 justify-start items-center -mx-1.5 pt-2 pb-1">
       {items.map((it, i) => {
         const fs = size(it.weight);
         const word = (
