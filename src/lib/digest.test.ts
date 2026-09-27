@@ -228,3 +228,51 @@ describe("длинные пробелы не заполняются пустым
     expect(months).toEqual(["Май 2026"]);
   });
 });
+
+describe("подробности периода", () => {
+  const txs = [
+    tx({ date: "2026-06-03", amount: 1000, kind: "expense", payee: "Ёлочка" }),
+    tx({ date: "2026-06-10", amount: 3000, kind: "expense", payee: "Ёлочка" }),
+    tx({ date: "2026-07-02", amount: 500, kind: "expense", payee: "Ёлочка" }),
+    tx({ date: "2026-07-02", amount: 2000, kind: "expense", payee: "Новый магазин" }),
+    tx({ date: "2026-07-15", amount: 10000, kind: "income" }),
+  ];
+  const july = () =>
+    buildDigestHistory(txs, new Date(2026, 7, 7)).find((e) => e.id === "month-2026-07")!;
+
+  it("траты по дням: все дни месяца, самый дорогой и дни без трат", () => {
+    const e = july();
+    expect(e.days).toHaveLength(31);
+    expect(e.biggestDay).toEqual({ date: "2026-07-02", expense: 2500 });
+    expect(e.noSpendDays).toBe(30);
+  });
+
+  it("впервые — только те, кому раньше не платили", () => {
+    expect(july().newPayees.map((p) => p.name)).toEqual(["Новый магазин"]);
+  });
+
+  it("где тратили — по сумме за период", () => {
+    expect(july().topPayees.map((p) => [p.name, p.expense])).toEqual([
+      ["Новый магазин", 2000],
+      ["Ёлочка", 500],
+    ]);
+  });
+
+  it("норма сбережений и обычный период — среднее предыдущих", () => {
+    const e = july();
+    expect(e.savingsRate).toBeCloseTo((10000 - 2500) / 10000, 5);
+    expect(e.typical).toEqual({ income: 0, expense: 4000, net: -4000, periods: 1 });
+  });
+
+  it("у самого первого периода обычного нет", () => {
+    const june = buildDigestHistory(txs, new Date(2026, 7, 7)).find((e) => e.id === "month-2026-06")!;
+    expect(june.typical).toBeNull();
+  });
+});
+
+describe("название недели", () => {
+  it("месяц в родительном падеже: «3 мая», а не «3 май»", () => {
+    const hist = buildDigestHistory([tx({ date: "2026-04-28", amount: 1, kind: "expense" })], new Date(2026, 4, 10));
+    expect(hist.find((e) => e.period === "week")?.label).toBe("Неделя 27 апр–3 мая");
+  });
+});

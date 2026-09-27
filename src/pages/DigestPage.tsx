@@ -9,13 +9,30 @@ import {
   Trophy,
   Coins,
   ChevronRight,
+  PiggyBank,
+  CalendarDays,
+  Store,
+  Sparkles,
 } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip } from "recharts";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../store/useDrillStore";
-import { buildDigestHistory, type DigestEntry } from "../lib/digest";
+import { buildDigestHistory, type DigestDay, type DigestEntry, type DigestPayee } from "../lib/digest";
 import { counterpartyOf } from "../lib/yearReview";
-import { formatMoney, formatNum, formatPct, formatDate, truncateWords } from "../lib/format";
+import {
+  formatMoney,
+  formatNum,
+  formatPct,
+  formatDate,
+  truncateWords,
+  chartAxisStroke,
+  chartColor,
+  chartGridStroke,
+  chartTooltipProps,
+} from "../lib/format";
+import { SeriesTooltip, TooltipFacts } from "../components/TooltipFacts";
+import { Callout } from "../components/Callout";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
@@ -25,6 +42,7 @@ import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 import { nextSort, sortRows, type SortState } from "../components/table/tableKit";
 import type { Transaction } from "../types";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { useLazyList } from "../hooks/useLazyList";
 
 
 type Tab = "week" | "month";
@@ -44,6 +62,10 @@ export function DigestPage() {
     () => all.filter((e) => e.period === tab),
     [all, tab]
   );
+
+  // Недель бывает под три сотни — список рисуется порциями по мере прокрутки.
+  const { shown: lazyShown, hasMore: lazyMore, attachSentinel } = useLazyList(filtered, 60);
+  const lazyVisible = useMemo(() => filtered.slice(0, lazyShown), [filtered, lazyShown]);
 
   const currentId = selected || filtered[0]?.id || null;
   const current = filtered.find((e) => e.id === currentId) || filtered[0] || null;
@@ -80,21 +102,15 @@ export function DigestPage() {
 
       {/* Переключатель — общий контрол продукта, а не свои пилюли: те же две
           кнопки на других страницах выглядели иначе. */}
-      <div className="flex items-center gap-3">
-        <Segmented
-          value={tab}
-          onChange={setTab}
-          label="Период дайджеста"
-          options={[
-            { value: "month" as Tab, label: "По месяцам" },
-            { value: "week" as Tab, label: "По неделям" },
-          ]}
-        />
-        <span className="text-xs text-muted">
-          {formatNum(filtered.length)}{" "}
-          {pluralRu(filtered.length, ["период", "периода", "периодов"])}
-        </span>
-      </div>
+      <Segmented
+        value={tab}
+        onChange={setTab}
+        label="Период дайджеста"
+        options={[
+          { value: "month" as Tab, label: "По месяцам" },
+          { value: "week" as Tab, label: "По неделям" },
+        ]}
+      />
 
       {filtered.length === 0 ? (
         <SectionEmpty icon={Newspaper} title="Нет завершённых периодов для дайджеста" />
@@ -107,7 +123,12 @@ export function DigestPage() {
               справа, и низ страницы оставался пустым. */}
           <div className="relative min-h-[16rem]">
           <div className="card p-1.5 max-h-[60vh] overflow-y-auto md:max-h-none md:absolute md:inset-0">
-            {filtered.map((e) => {
+            {/* Сколько периодов — в начале самого списка, к которому оно относится. */}
+            <div className="px-3 pt-1.5 pb-2 text-xs text-muted">
+              {formatNum(filtered.length)}{" "}
+              {pluralRu(filtered.length, ["период", "периода", "периодов"])}
+            </div>
+            {lazyVisible.map((e) => {
               const isActive = e.id === current?.id;
               return (
                 <button
@@ -129,6 +150,7 @@ export function DigestPage() {
                 </button>
               );
             })}
+            {lazyMore && <div ref={attachSentinel} className="h-8" aria-hidden="true" />}
           </div>
           </div>
 
@@ -225,44 +247,84 @@ function DigestDetail({
 
   return (
     <div className="space-y-6">
+      {/* Главное — одной фразой: ради неё дайджест и открывают. */}
+      <Callout size="banner" icon={Newspaper}>
+        {headline(entry, baseCurrency)}
+      </Callout>
+
       <StatRow>
         <StatCell
           label="Доход"
           value={formatMoney(entry.income, baseCurrency)}
           icon={<TrendingUp className="w-4 h-4" />}
           tone="income"
-          note={deltaNote(entry.incomeDelta)}
+          note={compareNote(entry.income, entry.typical?.income, entry.incomeDelta)}
           noteCls={incCls}
+          tooltip={compareTip(entry, "income", baseCurrency)}
         />
         <StatCell
           label="Расход"
           value={formatMoney(entry.expense, baseCurrency)}
           icon={<TrendingDown className="w-4 h-4" />}
           tone="expense"
-          note={deltaNote(entry.expenseDelta)}
+          note={compareNote(entry.expense, entry.typical?.expense, entry.expenseDelta)}
           noteCls={expCls}
+          tooltip={compareTip(entry, "expense", baseCurrency)}
         />
         <StatCell
           label="Чистый поток"
           value={formatMoney(entry.net, baseCurrency, { signed: true })}
           icon={<Trophy className="w-4 h-4" />}
           tone={entry.net >= 0 ? "income" : "expense"}
-          note={deltaNote(
-            Math.abs(entry.prevNet) > 0.01
-              ? (entry.net - entry.prevNet) / Math.abs(entry.prevNet)
-              : 0
-          )}
+          note={
+            entry.typical
+              ? `Обычно ${formatMoney(entry.typical.net, baseCurrency, { signed: true })}`
+              : deltaNote(
+                  Math.abs(entry.prevNet) > 0.01
+                    ? (entry.net - entry.prevNet) / Math.abs(entry.prevNet)
+                    : 0
+                )
+          }
           noteCls={netCls}
         />
-        {/* Число операций было мелкой служебной строчкой над числами —
-            такой же итог периода, просто не в рублях. */}
+        {/* Норма сбережений вместо числа операций: «сколько осталось» говорит
+            о периоде больше, чем «сколько раз платили». Число операций — в
+            уточнении. */}
         <StatCell
-          label="Операций"
-          value={formatNum(entry.txCount)}
-          icon={<Coins className="w-4 h-4" />}
-          note={entry.label}
+          label="Норма сбережений"
+          value={entry.income > 0 ? formatPct(entry.savingsRate, 0) : "—"}
+          icon={<PiggyBank className="w-4 h-4" />}
+          tone={entry.income > 0 && entry.savingsRate >= 0.2 ? "income" : entry.savingsRate < 0 ? "expense" : "default"}
+          note={`${formatNum(entry.txCount)} ${pluralRu(entry.txCount, ["операция", "операции", "операций"])}`}
         />
       </StatRow>
+
+      <SectionCard
+        icon={CalendarDays}
+        title="Траты по дням"
+        subtitle={daysSubtitle(entry, baseCurrency)}
+      >
+        <DaysChart days={entry.days} biggest={entry.biggestDay?.date} base={baseCurrency} week={entry.period === "week"} />
+      </SectionCard>
+
+      {(entry.topPayees.length > 0 || entry.newPayees.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <SectionCard
+            icon={Store}
+            title="Где тратили"
+            info={<p>Получатели с самыми большими тратами за период — по бренду, если он известен. Возвраты уменьшают сумму.</p>}
+          >
+            <PayeeList payees={entry.topPayees} base={baseCurrency} empty="Трат с получателем не было" />
+          </SectionCard>
+          <SectionCard
+            icon={Sparkles}
+            title="Впервые"
+            info={<p>Получатели, которым в этом периоде заплатили впервые за всю историю операций: новый магазин, сервис, подписка.</p>}
+          >
+            <PayeeList payees={entry.newPayees} base={baseCurrency} empty="Новых получателей не было" />
+          </SectionCard>
+        </div>
+      )}
 
       {entry.movers.length > 0 && (
         <SectionCard
@@ -378,4 +440,143 @@ function DigestDetail({
 function deltaNote(delta: number): string | undefined {
   if (Math.abs(delta) <= 0.01) return "≈ как в прошлый раз";
   return `${delta > 0 ? "+" : ""}${formatPct(delta, 0)} к прошлому периоду`;
+}
+
+/** Сравнение с обычным периодом, а без него — с прошлым. */
+function compareNote(value: number, typical: number | undefined, prevDelta: number): string | undefined {
+  if (typical == null) return deltaNote(prevDelta);
+  if (Math.abs(typical) < 0.01) return undefined;
+  const rel = (value - typical) / Math.abs(typical);
+  if (Math.abs(rel) <= 0.03) return "Как обычно";
+  return `${rel > 0 ? "+" : ""}${formatPct(rel, 0)} к обычному`;
+}
+
+/** Подсказка итога: с чем именно сравнили. */
+function compareTip(entry: DigestEntry, key: "income" | "expense", base: string) {
+  const prev = key === "income" ? entry.prevIncome : entry.prevExpense;
+  const facts = [
+    { label: "За период", value: formatMoney(entry[key], base), strong: true },
+    { label: entry.period === "month" ? "Прошлый месяц" : "Прошлая неделя", value: formatMoney(prev, base) },
+  ];
+  if (entry.typical)
+    facts.push({
+      label: `Обычно — среднее за ${entry.typical.periods} ${
+        entry.period === "month"
+          ? pluralRu(entry.typical.periods, ["месяц", "месяца", "месяцев"])
+          : pluralRu(entry.typical.periods, ["неделю", "недели", "недель"])
+      }`,
+      value: formatMoney(entry.typical[key], base),
+      strong: false,
+    });
+  return <TooltipFacts title={key === "income" ? "Доход" : "Расход"} facts={facts} />;
+}
+
+/**
+ * Главное о периоде одной фразой: сколько потратили против обычного, сколько
+ * отложили и что выросло сильнее всего.
+ */
+function headline(entry: DigestEntry, base: string): string {
+  const parts: string[] = [];
+  const spent = `${entry.label}: потратили ${formatMoney(entry.expense, base)}`;
+  const typ = entry.typical?.expense;
+  if (typ && Math.abs(typ) > 0.01) {
+    const rel = (entry.expense - typ) / typ;
+    parts.push(
+      Math.abs(rel) <= 0.03
+        ? `${spent} — как обычно`
+        : `${spent} — на ${formatPct(Math.abs(rel), 0)} ${rel > 0 ? "больше" : "меньше"} обычного`
+    );
+  } else parts.push(spent);
+  if (entry.income > 0) {
+    parts.push(
+      entry.net >= 0
+        ? `Отложили ${formatPct(entry.savingsRate, 0)} дохода`
+        : `Расходы превысили доход на ${formatMoney(-entry.net, base)}`
+    );
+  }
+  const up = entry.movers.find((m) => m.current > m.previous);
+  if (up) parts.push(`Сильнее всего выросли траты в категории «${up.category}»: +${formatMoney(up.current - up.previous, base)}`);
+  return parts.join(". ") + ".";
+}
+
+function daysSubtitle(entry: DigestEntry, base: string): string {
+  const parts = [
+    `Без трат — ${formatNum(entry.noSpendDays)} ${pluralRu(entry.noSpendDays, ["день", "дня", "дней"])} из ${formatNum(entry.days.length)}`,
+  ];
+  if (entry.biggestDay)
+    parts.push(`Самый дорогой — ${formatDate(entry.biggestDay.date, "full")}, ${formatMoney(entry.biggestDay.expense, base)}`);
+  return parts.join(" · ");
+}
+
+function DaysChart({
+  days,
+  biggest,
+  base,
+  week,
+}: {
+  days: DigestDay[];
+  biggest?: string;
+  base: string;
+  week: boolean;
+}) {
+  const data = days.map((d) => ({ ...d, label: dayLabel(d.date, week) }));
+  return (
+    <div className="h-40">
+      <ResponsiveContainer>
+        <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
+          <XAxis dataKey="label" stroke={chartAxisStroke} fontSize={11} interval={week ? 0 : 4} />
+          <YAxis stroke={chartAxisStroke} fontSize={11} width={48} tickFormatter={(v: number) => formatNum(v, { compact: true })} />
+          <RTooltip
+            {...chartTooltipProps}
+            cursor={{ fill: "rgb(var(--c-border) / 0.35)" }}
+            content={
+              <SeriesTooltip
+                formatValue={(v) => formatMoney(v, base)}
+                formatLabel={(_, rows) => formatDate(String(rows[0]?.payload?.date ?? ""), "full")}
+              />
+            }
+          />
+          <Bar dataKey="expense" name="Расход" radius={[3, 3, 0, 0]}>
+            {data.map((d) => (
+              <Cell key={d.date} fill={d.date === biggest ? chartColor.expense : chartColor.accent} fillOpacity={d.date === biggest ? 1 : 0.7} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+
+function dayLabel(iso: string, week: boolean): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return week ? WEEKDAYS[new Date(y, m - 1, d).getDay()] : String(d);
+}
+
+function PayeeList({ payees, base, empty }: { payees: DigestPayee[]; base: string; empty: string }) {
+  if (payees.length === 0) return <div className="text-sm text-muted">{empty}</div>;
+  const max = Math.max(...payees.map((p) => p.expense), 1);
+  return (
+    <div className="space-y-0.5">
+      {payees.map((p) => (
+        <MeterRow
+          key={p.name}
+          bar="track"
+          label={p.name}
+          share={p.expense / max}
+          barCls="bg-accent"
+          cells={[
+            {
+              text: `${formatNum(p.count)} ${pluralRu(p.count, ["покупка", "покупки", "покупок"])}`,
+              width: "6.5rem",
+              muted: true,
+            },
+            { text: formatMoney(p.expense, base), width: "7.5rem" },
+          ]}
+        />
+      ))}
+    </div>
+  );
 }

@@ -1,5 +1,6 @@
 import type { Transaction } from "../types";
 import { groupByCategory } from "./aggregations";
+import { counterpartyOf } from "./yearReview";
 import { expenseDelta } from "./txKindStyle";
 
 export type DigestPeriod = "week" | "month";
@@ -33,7 +34,41 @@ export interface DigestEntry {
   movers: DigestCategoryDelta[];
   // Biggest transactions in the period
   topTransactions: Transaction[];
+  /** Доля дохода, что осталась: (доход − расход) / доход; 0 без дохода. */
+  savingsRate: number;
+  /** Расход по дням периода — для графика; дни без трат тоже есть, с нулём. */
+  days: DigestDay[];
+  /** Сколько дней периода прошли без единой траты. */
+  noSpendDays: number;
+  /** Самый дорогой день периода; `null`, если трат не было. */
+  biggestDay: DigestDay | null;
+  /** Где тратили больше всего — по получателям (бренду, если он есть). */
+  topPayees: DigestPayee[];
+  /** Получатели, которым в этом периоде заплатили впервые за всю историю. */
+  newPayees: DigestPayee[];
+  /**
+   * Обычный такой же период — среднее за предыдущие (до шести) месяцев или
+   * недель. Прошлый период бывает нетипичным, со средним сравнивать честнее.
+   * `null` — предыдущих периодов нет.
+   */
+  typical: { income: number; expense: number; net: number; periods: number } | null;
 }
+
+export interface DigestDay {
+  date: string;
+  expense: number;
+}
+
+export interface DigestPayee {
+  name: string;
+  expense: number;
+  count: number;
+}
+
+/** Сколько предыдущих периодов берём в «обычное». */
+const TYPICAL_PERIODS = 6;
+/** Сколько строк в «Где тратили» и «Новое». */
+const PAYEES_TOP = 5;
 
 const RU_MONTHS = [
   "Январь",
@@ -51,7 +86,8 @@ const RU_MONTHS = [
 ];
 
 const RU_MONTHS_SHORT = [
-  "янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек",
+  // Родительный падеж: «3 мая», а не «3 май». Остальные — сокращения.
+  "янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек",
 ];
 
 function pad2(n: number): string {
@@ -183,6 +219,75 @@ function categoryMovers(
 
 // ─── public API ───────────────────────────────────────────────────────────────
 
+/** Все дни отрезка по порядку, «ГГГГ-ММ-ДД». */
+function daysBetween(startIso: string, endIso: string): string[] {
+  const out: string[] = [];
+  const d = ymdToLocalDate(startIso);
+  const end = ymdToLocalDate(endIso);
+  while (d <= end) {
+    out.push(ymdLocal(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+/**
+ * Первая операция у каждого получателя — чтобы найти «новых». Считается один
+ * раз на всю историю: по периоду его не восстановить.
+ */
+export function firstSeenByPayee(transactions: Transaction[]): Map<string, string> {
+  const first = new Map<string, string>();
+  for (const t of transactions) {
+    const name = counterpartyOf(t);
+    if (!name || typeof t.date !== "string") continue;
+    const seen = first.get(name);
+    if (!seen || t.date < seen) first.set(name, t.date);
+  }
+  return first;
+}
+
+/** Всё, что считается по операциям самого периода. */
+function periodDetails(
+  cur: Transaction[],
+  startIso: string,
+  endIso: string,
+  firstSeen: Map<string, string>
+) {
+  const byDay = new Map<string, number>();
+  const payees = new Map<string, DigestPayee>();
+  for (const t of cur) {
+    if (t.kind !== "expense" && t.kind !== "refund") continue;
+    const d = expenseDelta(t);
+    const day = t.date.slice(0, 10);
+    byDay.set(day, (byDay.get(day) ?? 0) + d);
+    const name = counterpartyOf(t);
+    if (!name) continue;
+    const p = payees.get(name) ?? { name, expense: 0, count: 0 };
+    p.expense += d;
+    if (t.kind === "expense") p.count++;
+    payees.set(name, p);
+  }
+  const days = daysBetween(startIso, endIso).map((date) => ({
+    date,
+    expense: Math.max(0, byDay.get(date) ?? 0),
+  }));
+  const biggestDay = days.reduce<DigestDay | null>(
+    (best, d) => (d.expense > 0 && (!best || d.expense > best.expense) ? d : best),
+    null
+  );
+  const spent = [...payees.values()].filter((p) => p.expense > 0);
+  return {
+    days,
+    noSpendDays: days.filter((d) => d.expense <= 0).length,
+    biggestDay,
+    topPayees: [...spent].sort((a, b) => b.expense - a.expense).slice(0, PAYEES_TOP),
+    newPayees: spent
+      .filter((p) => (firstSeen.get(p.name) ?? "") >= startIso)
+      .sort((a, b) => b.expense - a.expense)
+      .slice(0, PAYEES_TOP),
+  };
+}
+
 export function lastCompleteWeekDigest(
   transactions: Transaction[],
   today = new Date()
@@ -201,7 +306,9 @@ export function buildWeekDigest(
   start: Date,
   end: Date,
   /** Массив уже отсортирован по дате — тогда отрезок берётся двоичным поиском. */
-  sorted = false
+  sorted = false,
+  /** Первые операции получателей — считается один раз на всю ленту. */
+  firstSeen?: Map<string, string>
 ): DigestEntry | null {
   const startIso = ymdLocal(start);
   const endIso = ymdLocal(end);
@@ -241,6 +348,9 @@ export function buildWeekDigest(
     expenseDelta: relDelta(curAgg.expense, prevAgg.expense),
     movers: categoryMovers(cur, prev, 5),
     topTransactions: top,
+    savingsRate: curAgg.income > 0 ? curAgg.net / curAgg.income : 0,
+    ...periodDetails(cur, startIso, endIso, firstSeen ?? firstSeenByPayee(transactions)),
+    typical: null,
   };
 }
 
@@ -259,13 +369,15 @@ export function buildMonthDigest(
   start: Date,
   end: Date,
   /** Массив уже отсортирован по дате — тогда отрезок берётся двоичным поиском. */
-  sorted = false
+  sorted = false,
+  /** Первые операции получателей — считается один раз на всю ленту. */
+  firstSeen?: Map<string, string>
 ): DigestEntry | null {
   const cur = txsInRange(transactions, ymdLocal(start), ymdLocal(end), sorted);
   // Месяца без операций для одиночного вызова нет: карточке «прошлый месяц» на
   // Главной нечего показывать. В ленте это решается иначе — см. monthEntry.
   if (cur.length === 0) return null;
-  return monthEntry(transactions, start, end, sorted);
+  return monthEntry(transactions, start, end, sorted, firstSeen);
 }
 
 /**
@@ -280,7 +392,8 @@ function monthEntry(
   transactions: Transaction[],
   start: Date,
   end: Date,
-  sorted: boolean
+  sorted: boolean,
+  firstSeen?: Map<string, string>
 ): DigestEntry {
   const startIso = ymdLocal(start);
   const endIso = ymdLocal(end);
@@ -316,6 +429,9 @@ function monthEntry(
     expenseDelta: relDelta(curAgg.expense, prevAgg.expense),
     movers: categoryMovers(cur, prev, 5),
     topTransactions: top,
+    savingsRate: curAgg.income > 0 ? curAgg.net / curAgg.income : 0,
+    ...periodDetails(cur, startIso, endIso, firstSeen ?? firstSeenByPayee(transactions)),
+    typical: null,
   };
 }
 
@@ -348,6 +464,7 @@ export function buildDigestHistory(
   // Границы истории берём из уже отсортированного массива — с датами из него же
   // работают и все отрезки ниже.
   const minD = ymdToLocalDate(byDate[0].date);
+  const firstSeen = firstSeenByPayee(byDate);
 
   const out: DigestEntry[] = [];
 
@@ -371,7 +488,7 @@ export function buildDigestHistory(
   for (let i = startIndex; i <= lastIndex; i++) {
     const y = Math.floor(i / 12);
     const mo = i % 12;
-    const entry = buildMonthDigest(byDate, new Date(y, mo, 1), new Date(y, mo + 1, 0), true);
+    const entry = buildMonthDigest(byDate, new Date(y, mo, 1), new Date(y, mo + 1, 0), true, firstSeen);
     if (entry) out.push(entry);
   }
 
@@ -390,10 +507,31 @@ export function buildDigestHistory(
     const wEnd = new Date(wStart);
     wEnd.setDate(wEnd.getDate() + 6);
     if (wEnd < minD) break;
-    const entry = buildWeekDigest(byDate, wStart, wEnd, true);
+    const entry = buildWeekDigest(byDate, wStart, wEnd, true, firstSeen);
     if (entry) out.push(entry);
   }
 
   // Sort newest first.
-  return out.sort((a, b) => b.end.localeCompare(a.end));
+  out.sort((a, b) => b.end.localeCompare(a.end));
+  attachTypical(out.filter((e) => e.period === "month"));
+  attachTypical(out.filter((e) => e.period === "week"));
+  return out;
+}
+
+/**
+ * «Обычный» период — среднее за предыдущие (до шести) периоды того же вида.
+ * Список идёт от свежего к старому, поэтому предыдущие — дальше по списку.
+ */
+function attachTypical(entries: DigestEntry[]): void {
+  entries.forEach((e, i) => {
+    const prev = entries.slice(i + 1, i + 1 + TYPICAL_PERIODS);
+    if (prev.length === 0) return;
+    const avg = (f: (x: DigestEntry) => number) => prev.reduce((s, x) => s + f(x), 0) / prev.length;
+    e.typical = {
+      income: avg((x) => x.income),
+      expense: avg((x) => x.expense),
+      net: avg((x) => x.net),
+      periods: prev.length,
+    };
+  });
 }
