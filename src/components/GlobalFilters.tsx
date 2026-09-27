@@ -61,11 +61,20 @@ import { useMembersStore } from "../store/useMembersStore";
  * он повторял её; старые сохранённые виды с ним по-прежнему работают, и
  * кнопка для них возвращается в ряд (см. `presetOptions`).
  */
-const PRESETS: SegmentedOption<DatePreset>[] = [
+/**
+ * Скользящие окна — одной кнопкой со стрелкой, как и вид месяца: четыре
+ * кнопки «30 дней · 3 мес · 6 мес · 12 мес» с «Кварталом» не давали ряду
+ * встать рядом с «Дополнительно», и дорожка дат уезжала третьей строкой.
+ * Кнопка подписана выбранным окном, остальные — в меню.
+ */
+const WINDOWS: { value: DatePreset; label: string }[] = [
   { value: "30d", label: "30 дней" },
   { value: "3m", label: "3 мес" },
   { value: "6m", label: "6 мес" },
   { value: "12m", label: "12 мес" },
+];
+
+const PRESETS: SegmentedOption<DatePreset>[] = [
   {
     value: "quarter",
     label: "Квартал",
@@ -390,6 +399,8 @@ export function GlobalFilters({
     periodCtl.preset === "month" || periodCtl.preset === "quarter" || periodCtl.preset === "year";
   /** Какой месяц человек выбирал последним — им и подписана кнопка. */
   const monthKind = useDisplayStore((st) => st.monthKind);
+  /** Какое скользящее окно выбирали последним — им подписана его кнопка. */
+  const [lastWindow, setLastWindow] = useState<DatePreset>("12m");
 
   /**
    * Залита та зона контрола, которая задаёт период, и ровно одна: отрезок — сам
@@ -431,6 +442,7 @@ export function GlobalFilters({
    *   чтобы внезапно увидеть всю историю.
    */
   const choosePreset = (next: DatePreset) => {
+    if (WINDOWS.some((w) => w.value === next)) setLastWindow(next);
     if (next === "month") periodCtl.setMonth(currentMonthYM || defaultMonthYM);
     else if (next === "quarter") periodCtl.setQuarter(currentMonthYM || defaultMonthYM);
     else if (next === "year") periodCtl.setYear(Number((currentMonthYM || defaultMonthYM).slice(0, 4)));
@@ -446,6 +458,16 @@ export function GlobalFilters({
    * угадывать. Одна кнопка показывает ВЫБРАННЫЙ вид (он помнится и после
    * «30 дней»), остальные — за стрелкой.
    */
+  const windowValue = WINDOWS.some((w) => w.value === periodCtl.preset)
+    ? periodCtl.preset
+    : lastWindow;
+  const windowOption: SegmentedOption<DatePreset> = {
+    value: windowValue,
+    label: WINDOWS.find((w) => w.value === windowValue)!.label,
+    title: "Скользящее окно до последней операции",
+    menu: WINDOWS.map((w) => ({ value: w.value, label: w.label })),
+  };
+
   const monthOption: SegmentedOption<DatePreset> = {
     value: monthKind,
     label: monthKind === "month" ? "Календарный месяц" : "Отчётный месяц",
@@ -467,11 +489,7 @@ export function GlobalFilters({
   // Сохранённый вид мог быть снят со «С начала года» — кнопки для него в ряду
   // больше нет, но пока он действует, показываем её, иначе подсвечивать нечего.
   // Кнопка месяца встаёт после скользящих окон, перед «Годом».
-  const withMonth: SegmentedOption<DatePreset>[] = [
-    ...PRESETS.slice(0, 4),
-    monthOption,
-    ...PRESETS.slice(4),
-  ];
+  const withMonth: SegmentedOption<DatePreset>[] = [windowOption, monthOption, ...PRESETS];
   const presetOptions =
     periodCtl.preset === "ytd"
       ? [...withMonth, { value: "ytd" as DatePreset, label: "С начала года" }]
