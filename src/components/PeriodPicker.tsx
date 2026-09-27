@@ -73,21 +73,17 @@ function dateLabel(iso: string | null) {
 }
 
 /**
- * Период одним контролом: название месяца (или года), его даты, стрелки и
- * возврат к текущему.
+ * Период — двумя контролами, у каждого свои стрелки.
  *
- * Залита та зона, которая СЕЙЧАС задаёт период, — ровно одна из двух: название,
- * когда выбран месяц или год, и пара дат, когда отрезок задан руками. Заливка,
- * а не цвет цифр: у названия она такая же, и два разных способа показать одно и
- * то же состояние читались как разные состояния.
+ *   • Выбранный период: ‹ «III кв. 2026 ▾» › и возврат к текущему. Стрелки
+ *     листают его единицей — месяц, квартал или год.
+ *   • Свободный отрезок: ‹ «01.07.26 — 30.09.26» ›. Стрелки сдвигают отрезок
+ *     на его же длину, даты правятся руками.
  *
- * Раньше это были две отдельные дорожки — месяц и отрезок дат, — и каждая
- * ширина окна ломала их по-своему: то они наезжали друг на друга, то
- * разъезжались лесенкой, то кнопка сброса оставалась в строке одна. Один блок
- * либо помещается целиком, либо целиком переносится, и чинить больше нечего.
- *
- * Внутри две зоны, и подсвечена та, которая СЕЙЧАС задаёт период: название —
- * когда выбран месяц или год, даты — когда отрезок свой.
+ * Одной дорожкой (стрелки общие) было не понять, что листается: у названия
+ * и у дат разный шаг, а стрелки делали то одно, то другое в зависимости от
+ * того, что выбрано. Две дорожки стоят рядом одной группой и переносятся
+ * вместе; подсвечена та, что СЕЙЧАС задаёт период.
  */
 export function PeriodPicker({
   monthYM,
@@ -96,7 +92,6 @@ export function PeriodPicker({
   mode = "month",
   monthActive,
   rangeActive,
-  stepsByWindow,
   from,
   to,
   monthHint,
@@ -122,12 +117,6 @@ export function PeriodPicker({
   monthActive: boolean;
   /** Период задаёт отрезок дат. */
   rangeActive: boolean;
-  /**
-   * Чем листать: своим отрезком (по его длине) или периодом (месяц, год,
-   * отчётный месяц). У отчётного месяца длина не постоянна, и шагать ею
-   * нельзя — «Сентябрь» с днём 15 ушёл бы на 16.08, а не на 15.08.
-   */
-  stepsByWindow: boolean;
   from: string | null;
   to: string | null;
   /** Подсказка к названию — даты отчётного месяца, когда он не календарный. */
@@ -153,128 +142,131 @@ export function PeriodPicker({
   const year = Number(monthYM?.slice(0, 4)) || new Date().getFullYear();
 
   const windowStep = from && to ? spanDays(from, to) : 0;
-  const canStep = stepsByWindow ? windowStep > 0 : true;
 
-  const shift = (dir: -1 | 1) => {
-    if (!stepsByWindow) {
-      onStep(dir);
-      return;
-    }
+  /** Сдвинуть свободный отрезок на его же длину. */
+  const shiftWindow = (dir: -1 | 1) => {
     if (!from || !to || windowStep <= 0) return;
     onRangeChange(shiftDays(from, dir * windowStep), shiftDays(to, dir * windowStep));
   };
 
+  const activeTrack = "!border-accent bg-accent/5";
+
   return (
-    <div
-      className={clsx(
-        // Дорожка забирает остаток строки, но не больше разумного: на широком
-        // экране (и при уменьшенном масштабе) она иначе оставляла перед кнопкой
-        // сброса дыру в пол-экрана. Запас забирают ДАТЫ: у названия своя
-        // заливка, и растянутое, оно читается как половина контрола, а не как
-        // выбранный месяц.
-        //
-        // На телефоне даты переносятся на свою строку: в 390 пикселей месяц,
-        // две даты и четыре значка в один ряд не встают — даты сжимались до
-        // нуля и печатались одна поверх другой.
-        "seg-track flex-1 min-w-fit max-sm:w-full max-sm:min-w-0 max-sm:flex-wrap",
-        (monthActive || rangeActive) && "!border-accent bg-accent/5"
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => shift(-1)}
-        disabled={!canStep}
-        className={clsx("seg-icon", icon)}
-        title={stepsByWindow ? `Предыдущие ${windowStep} дн.` : `Предыдущий ${unitTitle}`}
-      >
-        <ChevronLeft className="w-4 h-4" />
-      </button>
-
-      <button
-        ref={monthBtnRef}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        title={monthHint ?? (isYear ? "Выбрать год" : isQuarter ? "Выбрать квартал" : "Выбрать месяц")}
-        className={clsx("seg-item shrink-0", item, monthActive && "seg-on")}
-      >
-        {/* Ширина держится по месяцам даже в режиме года: «2026» вдвое уже
-            «Сентября», и переключение «Месяц ↔ Год» дёргало бы весь ряд. */}
-        <StableWidth
-          value={isYear ? year : isQuarter ? quarterLabel(monthYM) : monthLabelFull(monthYM)}
-          candidates={monthLabels(year)}
-        />
-        <ChevronDown className="w-3 h-3 opacity-60" aria-hidden="true" />
-      </button>
-
-      <span className="w-px self-center h-4 bg-border shrink-0" aria-hidden="true" />
-
-      {/* Даты — единой группой по центру свободного места: растянутые на
-          половину каждая, они прижимались к стрелкам, и середина зияла. */}
-      <div
-        className={clsx(
-          "flex-1 flex items-center justify-center gap-1 min-w-0 rounded-control-sm",
-          "max-sm:basis-full max-sm:order-last",
-          rangeActive && "seg-on px-1"
-        )}
-      >
-        <DateField
-          value={from || ""}
-          onChange={(e) => onRangeChange(e.target.value || null, to)}
-          className={clsx(
-            "seg-item min-w-0 !px-2",
-            item,
-            // Внутри залитой зоны подпись берёт её цвет, а наведение
-            // подсвечивается по самой заливке: общий `hover:bg-panel` выбелил бы
-            // поле пятном посреди акцента.
-            rangeActive ? "text-inherit hover:bg-black/10 hover:text-inherit" : "text-accent"
-          )}
-          wrapperClassName="min-w-0"
-          icon={false}
-          display={dateLabel(from)}
-          placeholder="Начало"
-        />
-        <span
-          className={clsx("text-xs shrink-0", rangeActive ? "text-inherit opacity-70" : "text-muted")}
-          aria-hidden="true"
+    <div className="flex items-center gap-2 flex-1 min-w-fit max-sm:w-full max-sm:flex-wrap max-sm:min-w-0">
+      {/* Выбранный период */}
+      <div className={clsx("seg-track shrink-0", monthActive && activeTrack)}>
+        <button
+          type="button"
+          onClick={() => onStep(-1)}
+          className={clsx("seg-icon", icon)}
+          title={`Предыдущий ${unitTitle}`}
         >
-          —
-        </span>
-        <DateField
-          value={to || ""}
-          onChange={(e) => onRangeChange(from, e.target.value || null)}
-          className={clsx(
-            "seg-item min-w-0 !px-2",
-            item,
-            rangeActive ? "text-inherit hover:bg-black/10 hover:text-inherit" : "text-accent"
-          )}
-          wrapperClassName="min-w-0"
-          icon={false}
-          display={dateLabel(to)}
-          placeholder="Конец"
-        />
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <button
+          ref={monthBtnRef}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          title={monthHint ?? (isYear ? "Выбрать год" : isQuarter ? "Выбрать квартал" : "Выбрать месяц")}
+          className={clsx("seg-item shrink-0", item, monthActive && "seg-on")}
+        >
+          {/* Ширина держится по месяцам даже в режиме года и квартала:
+              «2026» вдвое уже «Сентября», и переключение дёргало бы ряд. */}
+          <StableWidth
+            value={isYear ? year : isQuarter ? quarterLabel(monthYM) : monthLabelFull(monthYM)}
+            candidates={monthLabels(year)}
+          />
+          <ChevronDown className="w-3 h-3 opacity-60" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onStep(1)}
+          className={clsx("seg-icon", icon)}
+          title={`Следующий ${unitTitle}`}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onCurrent}
+          disabled={atCurrent}
+          className={clsx("seg-icon", icon)}
+          title={atCurrent ? "Это текущий отчётный период" : "Вернуться к текущему отчётному периоду"}
+        >
+          <CalendarCheck className="w-4 h-4" />
+        </button>
       </div>
 
-      <button
-        type="button"
-        onClick={() => shift(1)}
-        disabled={!canStep}
-        className={clsx("seg-icon", icon)}
-        title={stepsByWindow ? `Следующие ${windowStep} дн.` : `Следующий ${unitTitle}`}
+      {/* Свободный отрезок */}
+      <div
+        className={clsx(
+          "seg-track flex-1 min-w-fit max-sm:w-full max-sm:min-w-0",
+          rangeActive && activeTrack
+        )}
       >
-        <ChevronRight className="w-4 h-4" />
-      </button>
-
-      <button
-        type="button"
-        onClick={onCurrent}
-        disabled={atCurrent}
-        className={clsx("seg-icon", icon)}
-        title={atCurrent ? "Это текущий отчётный период" : "Вернуться к текущему отчётному периоду"}
-      >
-        <CalendarCheck className="w-4 h-4" />
-      </button>
+        <button
+          type="button"
+          onClick={() => shiftWindow(-1)}
+          disabled={windowStep <= 0}
+          className={clsx("seg-icon", icon)}
+          title={windowStep > 0 ? `Предыдущие ${windowStep} дн.` : "Задайте даты, чтобы листать отрезок"}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        {/* Даты — единой группой по центру свободного места. */}
+        <div
+          className={clsx(
+            "flex-1 flex items-center justify-center gap-1 min-w-0 rounded-control-sm",
+            rangeActive && "seg-on px-1"
+          )}
+        >
+          <DateField
+            value={from || ""}
+            onChange={(e) => onRangeChange(e.target.value || null, to)}
+            className={clsx(
+              "seg-item min-w-0 !px-2",
+              item,
+              // Внутри залитой зоны подпись берёт её цвет, а наведение
+              // подсвечивается по самой заливке.
+              rangeActive ? "text-inherit hover:bg-black/10 hover:text-inherit" : "text-accent"
+            )}
+            wrapperClassName="min-w-0"
+            icon={false}
+            display={dateLabel(from)}
+            placeholder="Начало"
+          />
+          <span
+            className={clsx("text-xs shrink-0", rangeActive ? "text-inherit opacity-70" : "text-muted")}
+            aria-hidden="true"
+          >
+            —
+          </span>
+          <DateField
+            value={to || ""}
+            onChange={(e) => onRangeChange(from, e.target.value || null)}
+            className={clsx(
+              "seg-item min-w-0 !px-2",
+              item,
+              rangeActive ? "text-inherit hover:bg-black/10 hover:text-inherit" : "text-accent"
+            )}
+            wrapperClassName="min-w-0"
+            icon={false}
+            display={dateLabel(to)}
+            placeholder="Конец"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => shiftWindow(1)}
+          disabled={windowStep <= 0}
+          className={clsx("seg-icon", icon)}
+          title={windowStep > 0 ? `Следующие ${windowStep} дн.` : "Задайте даты, чтобы листать отрезок"}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
 
       <MonthMenu
         // Новый ключ на каждое открытие: панель начинает с года выбранного

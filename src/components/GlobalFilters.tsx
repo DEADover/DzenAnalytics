@@ -820,7 +820,6 @@ export function GlobalFilters({
                 }
                 monthActive={monthAnchored}
                 rangeActive={rangeActive}
-                stepsByWindow={periodCtl.preset === "custom"}
                 from={shownRange.from}
                 to={shownRange.to}
                 monthHint={monthHint}
