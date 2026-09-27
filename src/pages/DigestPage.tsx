@@ -16,7 +16,13 @@ import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, 
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../store/useDrillStore";
-import { buildDigestHistory, type DigestDay, type DigestEntry, type DigestPayee } from "../lib/digest";
+import {
+  buildDigestHistory,
+  periodTitle,
+  type DigestDay,
+  type DigestEntry,
+  type DigestPayee,
+} from "../lib/digest";
 import { counterpartyOf } from "../lib/yearReview";
 import {
   formatMoney,
@@ -304,7 +310,7 @@ function DigestDetail({
           страницах, ряд больших чисел. */}
       {/* Обычной карточкой, как соседние блоки: цветная плашка выбивалась
           из страницы и читалась как предупреждение. */}
-      <SectionCard icon={Newspaper} title="Главное">
+      <SectionCard icon={Newspaper} title={`Главное за ${periodTitle(entry)}`}>
         <p className="text-sm leading-relaxed">{headline(entry, baseCurrency)}</p>
       </SectionCard>
 
@@ -487,7 +493,8 @@ function compareTip(entry: DigestEntry, key: "income" | "expense", base: string)
  */
 function headline(entry: DigestEntry, base: string): string {
   const parts: string[] = [];
-  const spent = `${entry.label}: потратили ${formatMoney(entry.expense, base)}`;
+  // Период — в заголовке карточки, фраза начинается сразу с дела.
+  const spent = `Потратили ${formatMoney(entry.expense, base)}`;
   const typ = entry.typical?.expense;
   if (typ && Math.abs(typ) > 0.01) {
     const rel = (entry.expense - typ) / typ;

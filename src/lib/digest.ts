@@ -535,3 +535,21 @@ function attachTypical(entries: DigestEntry[]): void {
     };
   });
 }
+
+const MONTHS_GEN = [
+  "января", "февраля", "марта", "апреля", "мая", "июня",
+  "июля", "августа", "сентября", "октября", "ноября", "декабря",
+];
+
+/**
+ * «Август 2026» или «неделю 14–20 сентября 2026» — для заголовка «Главное за …».
+ * У недели на стыке месяцев или лет — обе даты целиком.
+ */
+export function periodTitle(entry: Pick<DigestEntry, "period" | "label" | "start" | "end">): string {
+  if (entry.period === "month") return entry.label;
+  const [y1, m1, d1] = entry.start.split("-").map(Number);
+  const [y2, m2, d2] = entry.end.split("-").map(Number);
+  if (y1 !== y2) return `неделю ${d1} ${MONTHS_GEN[m1 - 1]} ${y1} – ${d2} ${MONTHS_GEN[m2 - 1]} ${y2}`;
+  if (m1 !== m2) return `неделю ${d1} ${MONTHS_GEN[m1 - 1]} – ${d2} ${MONTHS_GEN[m2 - 1]} ${y2}`;
+  return `неделю ${d1}–${d2} ${MONTHS_GEN[m2 - 1]} ${y2}`;
+}

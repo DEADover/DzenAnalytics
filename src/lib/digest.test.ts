@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildDigestHistory, buildMonthDigest } from "./digest";
+import { buildDigestHistory, buildMonthDigest, periodTitle } from "./digest";
 import { tx } from "../test/fixtures";
 import type { Transaction } from "../types";
 
@@ -274,5 +274,19 @@ describe("название недели", () => {
   it("месяц в родительном падеже: «3 мая», а не «3 май»", () => {
     const hist = buildDigestHistory([tx({ date: "2026-04-28", amount: 1, kind: "expense" })], new Date(2026, 4, 10));
     expect(hist.find((e) => e.period === "week")?.label).toBe("Неделя 27 апр–3 мая");
+  });
+});
+
+describe("заголовок «Главное за …»", () => {
+  const w = (start: string, end: string) => periodTitle({ period: "week", label: "", start, end });
+  it("месяц — его названием", () => {
+    expect(periodTitle({ period: "month", label: "Август 2026", start: "2026-08-01", end: "2026-08-31" })).toBe("Август 2026");
+  });
+  it("неделя внутри месяца", () => {
+    expect(w("2026-09-14", "2026-09-20")).toBe("неделю 14–20 сентября 2026");
+  });
+  it("неделя на стыке месяцев и лет", () => {
+    expect(w("2026-08-31", "2026-09-06")).toBe("неделю 31 августа – 6 сентября 2026");
+    expect(w("2025-12-29", "2026-01-04")).toBe("неделю 29 декабря 2025 – 4 января 2026");
   });
 });
