@@ -400,7 +400,7 @@ export function GlobalFilters({
   /** Какой месяц человек выбирал последним — им и подписана кнопка. */
   const monthKind = useDisplayStore((st) => st.monthKind);
   /** Какое скользящее окно выбирали последним — им подписана его кнопка. */
-  const [lastWindow, setLastWindow] = useState<DatePreset>("12m");
+  const [lastWindow, setLastWindow] = useState<DatePreset>("30d");
 
   /**
    * Залита та зона контрола, которая задаёт период, и ровно одна: отрезок — сам
@@ -494,7 +494,8 @@ export function GlobalFilters({
   // Сохранённый вид мог быть снят со «С начала года» — кнопки для него в ряду
   // больше нет, но пока он действует, показываем её, иначе подсвечивать нечего.
   // Кнопка месяца встаёт после скользящих окон, перед «Годом».
-  const withMonth: SegmentedOption<DatePreset>[] = [windowOption, monthOption, ...PRESETS];
+  // Месяц — первым: это основной способ задать период; окна — следом.
+  const withMonth: SegmentedOption<DatePreset>[] = [monthOption, windowOption, ...PRESETS];
   const presetOptions =
     periodCtl.preset === "ytd"
       ? [...withMonth, { value: "ytd" as DatePreset, label: "С начала года" }]
@@ -831,6 +832,7 @@ export function GlobalFilters({
                 onSelectMonth={(ym) => periodCtl.setMonth(ym)}
                 onSelectYear={(y) => periodCtl.setYear(y)}
                 onSelectQuarter={(ym) => periodCtl.setQuarter(ym)}
+                blank={periodCtl.preset === "all"}
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
                 onRangeChange={(from, to) => periodCtl.setRange(from, to)}
                 onCurrent={() => periodCtl.setPeriodMonth(defaultMonthYM)}

@@ -99,6 +99,7 @@ export function PeriodPicker({
   onSelectMonth,
   onSelectYear,
   onSelectQuarter,
+  blank = false,
   onStep,
   onRangeChange,
   onCurrent,
@@ -125,6 +126,11 @@ export function PeriodPicker({
   onSelectMonth: (ym: string) => void;
   onSelectYear: (year: number) => void;
   onSelectQuarter?: (ym: string) => void;
+  /**
+   * Названия у периода нет — выбрано «Всё». Вместо месяца прочерк: подпись
+   * «Сентябрь 26 г.» при «Всём» выдавала себя за действующий период.
+   */
+  blank?: boolean;
   /** Листнуть период: месяц, год или отчётный месяц — смотря что выбрано. */
   onStep: (dir: -1 | 1) => void;
   onRangeChange: (from: string | null, to: string | null) => void;
@@ -175,7 +181,9 @@ export function PeriodPicker({
           {/* Ширина держится по месяцам даже в режиме года и квартала:
               «2026» вдвое уже «Сентября», и переключение дёргало бы ряд. */}
           <StableWidth
-            value={isYear ? year : isQuarter ? quarterLabel(monthYM) : monthLabelFull(monthYM)}
+            value={
+              blank ? "—" : isYear ? year : isQuarter ? quarterLabel(monthYM) : monthLabelFull(monthYM)
+            }
             candidates={monthLabels(year)}
           />
           <ChevronDown className="w-3 h-3 opacity-60" aria-hidden="true" />
