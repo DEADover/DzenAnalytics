@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   type ReactNode,
 } from "react";
@@ -40,6 +41,15 @@ const WIDTH = {
 
 /** Открытые окна снизу вверх: Escape достаётся только последнему. */
 const stack: string[] = [];
+
+/**
+ * Когда закрылось последнее окно. Окно, открытое в ТОМ ЖЕ кадре, — это смена
+ * одного окна другим (листание операций стрелками: карточка пересоздаётся с
+ * ключом новой операции), и подложка у него не проявляется заново.
+ */
+let lastClosed = { id: "", at: -Infinity };
+/** Окно открылось не позже стольких мс после закрытия другого — это замена. */
+const SWAP_MS = 50;
 
 interface ModalCtx {
   titleId: string;
@@ -91,6 +101,21 @@ export function Modal({
   const titleId = `${id}-title`;
   const panelRef = useRef<HTMLDivElement>(null);
   const downOnBackdrop = useRef(false);
+  // Подложка проявляется при открытии окна, но не при его замене: иначе
+  // листание операций стрелками гасило экран до прозрачного и снова
+  // затемняло на каждой операции — экран моргал. Решается до отрисовки
+  // кадра: закрытие старого окна в этом же обновлении уже учтено.
+  const backdropRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    // Своё же закрытие не в счёт: в разработке React монтирует эффекты
+    // дважды, и окно «закрывалось» перед собственным открытием.
+    if (lastClosed.id !== id && performance.now() - lastClosed.at < SWAP_MS) {
+      backdropRef.current?.classList.remove("animate-fade");
+    }
+    return () => {
+      lastClosed = { id, at: performance.now() };
+    };
+  }, [id]);
   // Свежие значения для слушателя, который вешается один раз.
   const latest = useRef({ onClose, busy, closeOnEscape });
   useEffect(() => {
@@ -131,6 +156,7 @@ export function Modal({
 
   return createPortal(
     <div
+      ref={backdropRef}
       className={clsx(
         // Подложка — ровное затемнение без размытия: `backdrop-blur` на весь
         // экран поверх графиков заставлял Chromium на кадр показывать белый
