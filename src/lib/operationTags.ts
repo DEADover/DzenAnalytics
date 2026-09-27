@@ -46,6 +46,40 @@ export function hasCategory(
   return t.categoryFull === key || (t.extraCategories?.includes(key) ?? false);
 }
 
+/**
+ * Проверка операции по фильтру категорий — с учётом вторых категорий.
+ *
+ * Галочки в фильтре бывают двумя разными действиями, и у операции с двумя
+ * категориями («Еда» + «Отпуск») они требуют разного:
+ *
+ *   • «всё, кроме Отпуска» — сняли немногие. Снятая категория должна УБИРАТЬ
+ *     операцию, где бы она ни стояла. Раньше операция проходила по основной
+ *     «Еде», и снятый «Отпуск» ничего не менял в цифрах;
+ *   • «только Отпуск» — отметили немногие. Отмеченная должна НАХОДИТЬ
+ *     операцию, где бы она ни стояла, — так ищет и приложение Дзен-мани.
+ *
+ * Что сделал человек, видно по тому, чего меньше: снятых или отмеченных (из
+ * категорий, которые вообще встречаются). Поровну — считаем, что отмечали.
+ *
+ * `selected` — отмеченные категории фильтра (полными названиями), `known` —
+ * все категории, что есть у операций.
+ */
+export function categoryFilter(
+  selected: ReadonlySet<string>,
+  known: Iterable<string>
+): (t: Pick<Transaction, "categoryFull" | "extraCategories">) => boolean {
+  const unselected = new Set<string>();
+  let selectedKnown = 0;
+  for (const key of new Set(known)) {
+    if (selected.has(key)) selectedKnown++;
+    else unselected.add(key);
+  }
+  if (unselected.size < selectedKnown) {
+    return (t) => !categoryKeysOf(t).some((key) => unselected.has(key));
+  }
+  return (t) => categoryKeysOf(t).some((key) => selected.has(key));
+}
+
 /** Теги операции в выбранном режиме. Без повторов, в порядке появления. */
 export function tagsOf(
   t: Pick<Transaction, "comment" | "extraCategories">,

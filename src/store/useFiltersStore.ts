@@ -3,7 +3,7 @@ import { useDisplayStore } from "./useDisplayStore";
 import type { Transaction } from "../types";
 import { currentPeriod, periodRange, shiftPeriod } from "../lib/period";
 import { payeeSearchText } from "../lib/format";
-import { hasCategory } from "../lib/operationTags";
+import { categoryFilter, categoryKeysOf } from "../lib/operationTags";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { debtSelection, matchesDebtSelection } from "../lib/debtFilter";
 import { MEMBER_SHARED } from "../lib/zenUsers";
@@ -355,6 +355,15 @@ export function applyFilters(
   // Пары «долговой счёт → контрагент» разбираем один раз на прогон, а не на
   // каждую операцию.
   const debtPicks = debtSelection(state.accounts);
+  // Полный список категорий — чтобы понять, какие СНЯТЫ, а не только какие
+  // отмечены. Считаем один раз на прогон.
+  const byCategory =
+    state.categories.size && !state.categories.has(FILTER_NONE)
+      ? categoryFilter(
+          state.categories,
+          txs.flatMap((t) => (t.category ? categoryKeysOf(t) : []))
+        )
+      : null;
   return txs.filter((t) => {
     // «Без переводов» прячет только настоящие переводы между своими счетами.
     // Долговые операции тоже kind=transfer, но это не перевод — оставляем их.
@@ -389,16 +398,11 @@ export function applyFilters(
     // ВТОРЫЕ КАТЕГОРИИ ТОЖЕ СЧИТАЮТСЯ (#69). «Отпуск», поставленный второй,
     // находит операцию так же, как в мобильном приложении Дзен-мани. Суммы по
     // категориям это не задваивает: там операция по-прежнему идёт под основной.
+    // Снятая галочка убирает операцию, отмеченная — находит; какое из двух
+    // действий сделал человек, решает `categoryFilter` (см. там).
     if (state.categories.size) {
       if (state.categories.has(FILTER_NONE)) return false;
-      let picked = false;
-      for (const key of state.categories) {
-        if (hasCategory(t, key)) {
-          picked = true;
-          break;
-        }
-      }
-      if (!picked) return false;
+      if (!byCategory!(t)) return false;
     }
     if (state.currencies.size && (state.currencies.has(FILTER_NONE) || !state.currencies.has(t.currency)))
       return false;

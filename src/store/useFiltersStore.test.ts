@@ -30,6 +30,38 @@ function filt(p: Partial<FiltersState> = {}): FiltersState {
 
 const ids = (txs: { id: string }[]) => txs.map((t) => t.id).sort();
 
+describe("applyFilters — вторые категории", () => {
+  // «Отпуск» стоит только второй категорией — так его используют как тег.
+  const txs = [
+    tx({ id: "edaOtpusk", category: "Еда", categoryFull: "Еда", extraCategories: ["Отпуск"] }),
+    tx({ id: "eda", category: "Еда", categoryFull: "Еда" }),
+    tx({ id: "taxi", category: "Транспорт", categoryFull: "Транспорт" }),
+    tx({ id: "home", category: "Дом", categoryFull: "Дом" }),
+  ];
+
+  it("сняли галочку со второй категории — операции с ней уходят", () => {
+    // Всё, кроме «Отпуска». Раньше операция проходила по основной «Еде», и
+    // цифры не менялись.
+    const out = applyFilters(txs, filt({ categories: new Set(["Еда", "Транспорт", "Дом"]) }));
+    expect(ids(out)).toEqual(["eda", "home", "taxi"]);
+  });
+
+  it("оставили только вторую категорию — операции с ней находятся", () => {
+    const out = applyFilters(txs, filt({ categories: new Set(["Отпуск"]) }));
+    expect(ids(out)).toEqual(["edaOtpusk"]);
+  });
+
+  it("оставили только основную — находится и операция, где «Отпуск» вторым", () => {
+    const out = applyFilters(txs, filt({ categories: new Set(["Еда"]) }));
+    expect(ids(out)).toEqual(["eda", "edaOtpusk"]);
+  });
+
+  it("сняли основную — уходит и операция со второй категорией", () => {
+    const out = applyFilters(txs, filt({ categories: new Set(["Отпуск", "Транспорт", "Дом"]) }));
+    expect(ids(out)).toEqual(["home", "taxi"]);
+  });
+});
+
 describe("applyFilters — category leaf matching (issue #9)", () => {
   const txs = [
     tx({ id: "kafe", category: "Еда", subcategory: "Кафе", categoryFull: "Еда / Кафе" }),
