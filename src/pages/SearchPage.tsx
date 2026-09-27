@@ -326,7 +326,6 @@ export function SearchPage() {
             onChange: setSelected,
             label: "Выбрать все найденные операции",
           }}
-          limit={200}
           exportName="search"
           fixed
           columns={[

@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { LucideIcon } from "lucide-react";
 import clsx from "clsx";
+import { useLazyList } from "../hooks/useLazyList";
+import { LazyListFooter } from "./operations/OperationList";
 import { CardHeader } from "./CardHeader";
 import { Checkbox } from "./Checkbox";
 import { Cell, ExpandChevron, ExportButton, HeadCell, ShowMore, TreeElbow } from "./table/TableParts";
@@ -78,7 +80,11 @@ interface Props<T> {
   onRowHover?: (row: T | null) => void;
   rowClassName?: (row: T) => string | undefined;
   emptyText?: ReactNode;
-  /** Первая порция строк; дальше — «Показать ещё» и «Показать все». */
+  /**
+   * Первая порция строк; дальше — кнопки «Показать ещё» и «Показать все».
+   * Для коротких свёрнутых списков, где кнопка — часть замысла. Без `limit`
+   * длинная таблица подгружается сама по мере прокрутки.
+   */
   limit?: number;
 
   /** Шапка карточки: значок, заголовок, «?», свои кнопки и выгрузка справа. */
@@ -143,6 +149,9 @@ interface FlatRow<T> {
   hasChildren: boolean;
   index: number;
 }
+
+/** Порция ленивой подгрузки длинной таблицы. */
+const LAZY_PAGE = 100;
 
 export function DataTable<T>({
   data,
@@ -213,7 +222,18 @@ export function DataTable<T>({
     setSeenData(data);
     setShown(limit ?? 0);
   }
-  const visible = limit ? sorted.slice(0, Math.max(shown, limit)) : sorted;
+  // Без `limit` длинная таблица рисуется порциями по мере прокрутки: тысячи
+  // строк разом (поиск, облако слов, операции в панели) заметно тормозили.
+  const {
+    shown: lazyShown,
+    total: lazyTotal,
+    hasMore: lazyMore,
+    attachSentinel,
+  } = useLazyList(sorted, LAZY_PAGE);
+  const visible = useMemo(
+    () => (limit ? sorted.slice(0, Math.max(shown, limit)) : sorted.slice(0, lazyShown)),
+    [limit, sorted, shown, lazyShown]
+  );
 
   const flat = useMemo(() => {
     const out: FlatRow<T>[] = [];
@@ -465,6 +485,9 @@ export function DataTable<T>({
       {showExport &&
         exportSlot &&
         createPortal(<ExportButton rows={sorted.length} onClick={exportCsv} />, exportSlot)}
+      {limit === undefined && lazyMore && (
+        <LazyListFooter shown={lazyShown} total={lazyTotal} sentinelRef={attachSentinel} />
+      )}
       {limit !== undefined && (
         <ShowMore
           shown={visible.length}

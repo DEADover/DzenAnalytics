@@ -2268,8 +2268,12 @@ export interface Anomaly {
   tx: Transaction;
   reason: "outlier-category" | "outlier-payee" | "spike-month";
   zScore: number;
+  /** Обычная сумма — средняя по категории или у получателя, в базовой валюте. */
   baseline: number;
-  context: string;
+  /** С чем сравнивали: название категории или получателя. */
+  scope: string;
+  /** Во сколько раз операция больше обычной. */
+  ratio: number;
 }
 
 export function detectAnomalies(txs: Transaction[], threshold = 2.5): Anomaly[] {
@@ -2297,7 +2301,8 @@ export function detectAnomalies(txs: Transaction[], threshold = 2.5): Anomaly[] 
           reason: "outlier-category",
           zScore: z,
           baseline: mean,
-          context: `средний по категории «${cat}» — ${Math.round(mean).toLocaleString("ru-RU")}, эта в ${(t.amountBase / mean).toFixed(1)}× больше`,
+          scope: cat,
+          ratio: t.amountBase / mean,
         });
       }
     }
@@ -2327,7 +2332,8 @@ export function detectAnomalies(txs: Transaction[], threshold = 2.5): Anomaly[] 
             reason: "outlier-payee",
             zScore: z,
             baseline: mean,
-            context: `обычный чек у «${payee}» — ${Math.round(mean).toLocaleString("ru-RU")}, эта в ${(t.amountBase / mean).toFixed(1)}× больше`,
+            scope: payee,
+            ratio: t.amountBase / mean,
           });
         }
       }

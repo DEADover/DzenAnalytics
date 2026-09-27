@@ -15,10 +15,29 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { formatMoney, formatDate, formatNum, monthLabel, formatFixed } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
+import { pluralRu } from "../lib/plural";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { SectionControls } from "../components/SectionControls";
 import { Slider } from "../components/Slider";
+
+/** «4,2 раза», «5 раз», «2 раза» — во сколько раз больше обычного. */
+function timesText(ratio: number): string {
+  const r = Math.round(ratio * 10) / 10;
+  if (!Number.isInteger(r)) return `${formatNum(r, { fractionDigits: 1 })} раза`;
+  return `${formatNum(r)} ${pluralRu(r, ["раз", "раза", "раз"])}`;
+}
+
+/**
+ * С чем сравнили операцию — одной фразой, с заглавной буквы и в валюте.
+ * Раньше текст собирался в расчёте без валюты («— 900») и со строчной.
+ */
+function anomalyContext(a: Anomaly, base: string): string {
+  const usual = formatMoney(a.baseline, base);
+  return a.reason === "outlier-payee"
+    ? `Обычный чек у «${a.scope}» — ${usual}, этот в ${timesText(a.ratio)} больше`
+    : `Обычная трата в категории «${a.scope}» — ${usual}, эта в ${timesText(a.ratio)} больше`;
+}
 
 export function AnomaliesPage() {
   // Обороты и взаимозачёты не аномалии, а шум: категории, помеченные «не
@@ -84,13 +103,15 @@ export function AnomaliesPage() {
   }
 
   const totalAnomalyAmount = anomalies.reduce((s, a) => s + a.tx.amountBase, 0);
+  // Сколько сверх обычного: подпись у суммы обещала именно это, а показывала
+  // полную сумму операций.
+  const totalOverUsual = anomalies.reduce((s, a) => s + Math.max(0, a.tx.amountBase - a.baseline), 0);
   const totalSpikesDelta = spikes.reduce((s, sp) => s + sp.delta, 0);
 
   return (
     <div className="space-y-6">
       <PageHeader
         icon={Zap}
-        iconTone="text-warn"
         title="Аномалии"
         info={
           <InfoPopover>
@@ -113,7 +134,7 @@ export function AnomaliesPage() {
               Считаем только расходы. Категория или получатель участвуют,
               начиная с <InfoTerm>5 операций</InfoTerm>: на трёх покупках
               «обычная сумма» — это ещё не статистика. В строке видно, с чем
-              сравнивали: «обычный чек у «Ёлочки» — 900 ₽, эта в 4,2× больше».
+              сравнивали: «Обычный чек у «Ёлочки» — 900 ₽, этот в 4,2 раза больше».
             </p>
             <p>
               <InfoTerm>Всплески по категориям</InfoTerm> — про месяцы, а не про
@@ -121,11 +142,6 @@ export function AnomaliesPage() {
               за <InfoTerm>три предыдущих месяца</InfoTerm> и показываем те, где
               стало больше хотя бы в полтора раза. Возвраты вычитаются, поэтому
               месяц с полностью возвращённой покупкой всплеском не считается.
-            </p>
-            <p>
-              Обе вкладки учитывают фильтры сверху. Единственное исключение —
-              база для всплесков: она берётся по всей истории, иначе сравнивать
-              текущий месяц было бы не с чем.
             </p>
           </InfoPopover>
         }
@@ -175,13 +191,13 @@ export function AnomaliesPage() {
           label="Их сумма"
           value={formatMoney(totalAnomalyAmount, base)}
           tone="expense"
-          note="Сверх обычного для своей категории"
+          note={`Сверх обычного — ${formatMoney(totalOverUsual, base)}`}
         />
         <StatCell
           label="Всплески по категориям"
           value={formatNum(spikes.length)}
           tone="warn"
-          note={<>Превышение {formatMoney(totalSpikesDelta, base)}</>}
+          note={`Больше обычного на ${formatMoney(totalSpikesDelta, base)}`}
         />
       </StatRow>
 
@@ -191,7 +207,7 @@ export function AnomaliesPage() {
             icon={AlertTriangle}
             title="Аномалий не обнаружено"
           >
-            Снизьте порог отклонения выше — попадут и менее заметные выбросы
+            Снизьте порог отклонения — попадут и менее заметные выбросы
           </SectionEmpty>
         ) : (
           <DataTable<Anomaly>
@@ -203,7 +219,6 @@ export function AnomaliesPage() {
             rowKey={(a) => a.tx.id}
             defaultSortKey="zScore"
             onRowClick={(a) => openTx(a.tx.id)}
-            limit={100}
             exportName="anomalies"
             fixed
             columns={[
@@ -238,17 +253,18 @@ export function AnomaliesPage() {
                 muted: true,
                 label: "Контекст",
                 sortable: false,
-                exportValue: (a) => a.context,
+                exportValue: (a) => anomalyContext(a, base),
                 // Одна строка, как во всех таблицах: полный текст и комментарий
                 // операции — в подсказке при наведении.
-                cellTitle: (a) => (a.tx.comment ? `${a.context}\n${a.tx.comment}` : a.context),
-                render: (a) => a.context,
+                cellTitle: (a) =>
+                  a.tx.comment ? `${anomalyContext(a, base)}\n${a.tx.comment}` : anomalyContext(a, base),
+                render: (a) => anomalyContext(a, base),
               },
               {
                 key: "zScore",
                 type: "number",
-                width: "5.5rem",
-                label: "σ",
+                width: "7.5rem",
+                label: "Отклонение",
                 headerTitle: "Во сколько раз трата дальше от обычной, чем привычный разброс",
                 sortValue: (a) => a.zScore,
                 render: (a) => `${formatNum(a.zScore, { fractionDigits: 1 })}σ`,
@@ -302,14 +318,15 @@ export function AnomaliesPage() {
                 key: "baseline",
                 type: "money",
                 muted: true,
-                label: "База (3 мес ср.)",
+                label: "Обычно",
+                headerTitle: "Средний расход категории за три предыдущих месяца",
                 sortValue: (sp) => sp.baseline,
                 render: (sp) => formatMoney(sp.baseline, base),
               },
               {
                 key: "current",
                 type: "money",
-                label: "Факт",
+                label: "В этом месяце",
                 sortValue: (sp) => sp.current,
                 render: (sp) => formatMoney(sp.current, base),
               },
@@ -317,7 +334,7 @@ export function AnomaliesPage() {
                 key: "delta",
                 type: "main",
                 tone: "expense",
-                label: "Превышение",
+                label: "Больше обычного",
                 sortValue: (sp) => sp.delta,
                 render: (sp) => `+${formatMoney(sp.delta, base)}`,
               },
