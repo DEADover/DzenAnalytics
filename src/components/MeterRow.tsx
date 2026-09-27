@@ -131,8 +131,10 @@ export function MeterRow({
             полоса раньше уходила ПОД суммы, и число читалось на цветной
             заливке, а сама мера будто продолжалась за край. Растянута на всю
             высоту строки отрицательными полями — чтобы заливка по-прежнему
-            смотрелась подложкой строки, а не полоской внутри неё. */}
-        <span className="relative flex-1 min-w-0 flex items-center gap-2 self-stretch -my-1.5 py-1.5 rounded-md overflow-hidden">
+            смотрелась подложкой строки, а не полоской внутри неё. Текст
+            отступает от края заливки: вплотную к нему подпись липла к
+            скруглению и читалась обрезанной. */}
+        <span className="relative flex-1 min-w-0 flex items-center gap-2 self-stretch -my-1.5 py-1.5 px-2 rounded-md overflow-hidden">
           <span
             aria-hidden
             className={`absolute inset-y-0 left-0 rounded-md ${barCls} ${
@@ -196,7 +198,13 @@ export function MeterHead({
       : undefined;
   return (
     // Поля 6 и 5 с чертой снизу — 32 px, как строка списка.
-    <div className={`list-head flex items-center ${METER_GAP[bar]} px-2 pt-1.5 pb-[5px] mb-1`}>
+    <div
+      className={`list-head flex items-center ${METER_GAP[bar]} pr-2 ${
+        // У заливки текст отступает от её края — шапка отступает так же,
+        // чтобы подпись имени стояла над именем.
+        bar === "underlay" ? "pl-4" : "pl-2"
+      } pt-1.5 pb-[5px] mb-1`}
+    >
       {lead !== "" && <span className={`shrink-0 ${lead ?? "w-5"}`} />}
       <span className="flex-1 min-w-0 flex">
         {nameLabel &&

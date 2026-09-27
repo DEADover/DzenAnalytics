@@ -172,7 +172,7 @@ describe("топы", () => {
   it("день недели подписан для фразы «тратили по …»", () => {
     // 2026-08-22 — суббота.
     const r = buildYearReview([tx({ date: "2026-08-22", amountBase: 500 })], 2026, "2026-08-25");
-    expect(r.favoriteWeekday.name).toBe("Сб");
+    expect(r.favoriteWeekday.name).toBe("Суббота");
     expect(r.favoriteWeekday.dative).toBe("субботам");
   });
 });
