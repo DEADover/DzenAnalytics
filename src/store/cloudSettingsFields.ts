@@ -19,7 +19,7 @@ import type { StoreApi, UseBoundStore } from "zustand";
 import { useTagModeStore } from "./useTagModeStore";
 import { useOffBalanceStore } from "./useOffBalanceStore";
 import { useFreeMoneyStore } from "./useFreeMoneyStore";
-import { useDisplayStore } from "./useDisplayStore";
+import { isWindowKind, useDisplayStore } from "./useDisplayStore";
 import { useFilterMemoryStore } from "./useFilterMemoryStore";
 import { useMembersStore } from "./useMembersStore";
 import { useThemeStore } from "./useThemeStore";
@@ -158,6 +158,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   ),
   field(useDisplayStore, "display.monthKind", (s) => s.monthKind, (v, s) =>
     v === "period" || v === "month" ? s.setMonthKind(v) : undefined
+  ),
+  field(useDisplayStore, "display.windowKind", (s) => s.windowKind, (v, s) =>
+    isWindowKind(v) ? s.setWindowKind(v) : undefined
   ),
   field(useFilterMemoryStore, "filterMemory.enabled", (s) => s.enabled, (v, s) =>
     isBool(v) ? s.setEnabled(v) : undefined

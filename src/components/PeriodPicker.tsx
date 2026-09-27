@@ -100,6 +100,7 @@ export function PeriodPicker({
   onSelectYear,
   onSelectQuarter,
   blank = false,
+  rangeFixed = false,
   onStep,
   onRangeChange,
   onCurrent,
@@ -131,6 +132,11 @@ export function PeriodPicker({
    * месяца прочерк: подпись «Сентябрь 26 г.» выдавала себя за выбранный период.
    */
   blank?: boolean;
+  /**
+   * Отрезок — вся история («Всё»): сдвигать его некуда, стрелки дат гаснут.
+   * Иначе они шагали на длину всей истории — на пять лет за раз.
+   */
+  rangeFixed?: boolean;
   /** Листнуть период: месяц, год или отчётный месяц — смотря что выбрано. */
   onStep: (dir: -1 | 1) => void;
   onRangeChange: (from: string | null, to: string | null) => void;
@@ -147,7 +153,10 @@ export function PeriodPicker({
   const unitTitle = isYear ? "год" : isQuarter ? "квартал" : "период";
   const year = Number(monthYM?.slice(0, 4)) || new Date().getFullYear();
 
-  const windowStep = from && to ? spanDays(from, to) : 0;
+  const windowStep = from && to && !rangeFixed ? spanDays(from, to) : 0;
+  const rangeTitle = rangeFixed
+    ? "Выбрана вся история — сдвигать отрезок некуда"
+    : "Задайте даты, чтобы листать отрезок";
 
   /** Сдвинуть свободный отрезок на его же длину. */
   const shiftWindow = (dir: -1 | 1) => {
@@ -225,7 +234,7 @@ export function PeriodPicker({
           onClick={() => shiftWindow(-1)}
           disabled={windowStep <= 0}
           className={clsx("seg-icon", icon)}
-          title={windowStep > 0 ? `Предыдущие ${windowStep} дн.` : "Задайте даты, чтобы листать отрезок"}
+          title={windowStep > 0 ? `Предыдущие ${windowStep} дн.` : rangeTitle}
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -276,7 +285,7 @@ export function PeriodPicker({
           onClick={() => shiftWindow(1)}
           disabled={windowStep <= 0}
           className={clsx("seg-icon", icon)}
-          title={windowStep > 0 ? `Следующие ${windowStep} дн.` : "Задайте даты, чтобы листать отрезок"}
+          title={windowStep > 0 ? `Следующие ${windowStep} дн.` : rangeTitle}
         >
           <ChevronRight className="w-4 h-4" />
         </button>

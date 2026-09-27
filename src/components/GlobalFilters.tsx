@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Popover } from "./Popover";
 import { useFiltersDockStore } from "../store/useFiltersDockStore";
-import { useDisplayStore } from "../store/useDisplayStore";
+import { isWindowKind, useDisplayStore } from "../store/useDisplayStore";
 import { Checkbox } from "./Checkbox";
 import type { Transaction } from "../types";
 import {
@@ -400,7 +400,7 @@ export function GlobalFilters({
   /** Какой месяц человек выбирал последним — им и подписана кнопка. */
   const monthKind = useDisplayStore((st) => st.monthKind);
   /** Какое скользящее окно выбирали последним — им подписана его кнопка. */
-  const [lastWindow, setLastWindow] = useState<DatePreset>("30d");
+  const lastWindow = useDisplayStore((st) => st.windowKind);
 
   /**
    * Залита та зона контрола, которая задаёт период, и ровно одна: отрезок — сам
@@ -447,7 +447,8 @@ export function GlobalFilters({
    *   чтобы внезапно увидеть всю историю.
    */
   const choosePreset = (next: DatePreset) => {
-    if (WINDOWS.some((w) => w.value === next)) setLastWindow(next);
+    // Запись на диск фильтру не важна — период применяется и без неё.
+    if (isWindowKind(next)) void useDisplayStore.getState().setWindowKind(next).catch(() => {});
     if (next === "month") periodCtl.setMonth(currentMonthYM || defaultMonthYM);
     else if (next === "quarter") periodCtl.setQuarter(currentMonthYM || defaultMonthYM);
     else if (next === "year") periodCtl.setYear(Number((currentMonthYM || defaultMonthYM).slice(0, 4)));
@@ -863,6 +864,7 @@ export function GlobalFilters({
                 // У «Всё» и скользящих окон названия нет: «Май» при окне
                 // «30 дней» выдавал себя за выбранный месяц.
                 blank={!monthAnchored && periodCtl.preset !== "custom"}
+                rangeFixed={periodCtl.preset === "all"}
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
                 onRangeChange={(from, to) => periodCtl.setRange(from, to)}
                 onCurrent={goCurrent}
