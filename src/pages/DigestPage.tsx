@@ -30,7 +30,6 @@ import {
   chartTooltipProps,
 } from "../lib/format";
 import { SeriesTooltip, TooltipFacts } from "../components/TooltipFacts";
-import { Callout } from "../components/Callout";
 import { EmptyState } from "../components/EmptyState";
 import { CategoryDot } from "../components/CategoryDot";
 import { PageHeader } from "../components/PageHeader";
@@ -303,9 +302,11 @@ function DigestDetail({
 
       {/* Главное одной фразой — под итогами: сверху, как на остальных
           страницах, ряд больших чисел. */}
-      <Callout size="banner" icon={Newspaper}>
-        {headline(entry, baseCurrency)}
-      </Callout>
+      {/* Обычной карточкой, как соседние блоки: цветная плашка выбивалась
+          из страницы и читалась как предупреждение. */}
+      <SectionCard icon={Newspaper} title="Главное">
+        <p className="text-sm leading-relaxed">{headline(entry, baseCurrency)}</p>
+      </SectionCard>
 
       <SectionCard
         icon={CalendarDays}
