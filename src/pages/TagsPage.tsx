@@ -247,6 +247,7 @@ export function TagsPage() {
     },
     {
       key: "expense",
+      width: "8.5rem",
       type: "money",
       label: "Расход",
       sortValue: (r) => r.expense,
@@ -254,6 +255,7 @@ export function TagsPage() {
     },
     {
       key: "income",
+      width: "8.5rem",
       type: "money",
       label: "Доход",
       sortValue: (r) => r.income,
@@ -261,6 +263,7 @@ export function TagsPage() {
     },
     {
       key: "net",
+      width: "9.5rem",
       type: "main",
       tone: (r) => {
         const net = tagReturn(r).net;
@@ -272,6 +275,7 @@ export function TagsPage() {
     },
     {
       key: "rate",
+      width: "7.5rem",
       type: "change",
       label: "Доходность",
       // Тег без расхода в сортировке уходит вниз, а не притворяется нулевой
@@ -281,6 +285,7 @@ export function TagsPage() {
     },
     {
       key: "total",
+      width: "9rem",
       type: "pct",
       label: "Доля от расходов",
       sortValue: (r) => (periodExpense > 0 ? r.expense / periodExpense : 0),
@@ -289,6 +294,7 @@ export function TagsPage() {
     },
     {
       key: "incomeShare",
+      width: "9rem",
       type: "pct",
       label: "Доля от дохода",
       sortValue: (r) => (periodIncome > 0 ? r.income / periodIncome : 0),
@@ -297,6 +303,7 @@ export function TagsPage() {
     },
     {
       key: "count",
+      width: "6.5rem",
       type: "count",
       label: "Операций",
       sortValue: (r) => r.count,
@@ -442,6 +449,9 @@ export function TagsPage() {
         subRows={(r) => r.children}
         defaultSortKey="total"
         exportName={mode === "hashtags" ? "hashtags" : "tags"}
+        // Числа — своей шириной, остаток — названию тега: без этого место
+        // делилось поровну, и в каждой колонке зияла пустота.
+        fixed
         columns={tagColumns}
       />
 
