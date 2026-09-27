@@ -6,7 +6,8 @@ WORKDIR /app/
 
 COPY package*.json /app/
 
-RUN npm install
+# Строго по lock-файлу: образ собирается одинаково раз от раза.
+RUN npm ci
 
 COPY . /app/
 

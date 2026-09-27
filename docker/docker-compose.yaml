@@ -1,6 +1,9 @@
 name: dzenanalytics
 services:
   dzenanalitics:
+    # `up -d` берёт готовый образ из релиза, `up -d --build` собирает его из
+    # исходников по `build` ниже.
+    image: ghcr.io/deadover/dzenanalytics:latest
     build:
       context: ..
       dockerfile: docker/Dockerfile

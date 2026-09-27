@@ -54,15 +54,23 @@
   npm run build    # сборка в dist/
   ```
 
-- **В Docker** — собственный хостинг одной командой. Соберёт приложение и поднимет его в nginx (по умолчанию на порту `8000`).
+- **В Docker** — собственный хостинг одной командой. Готовый образ выходит с каждым релизом (amd64 и arm64) и поднимает приложение в nginx на порту `8000`:
+
+  ```bash
+  docker run -d -p 8000:8000 --restart unless-stopped ghcr.io/deadover/dzenanalytics:latest
+  # затем откройте http://localhost:8000
+  ```
+
+  Вместо `latest` можно закрепить версию: `ghcr.io/deadover/dzenanalytics:1.9.7`. Собрать образ из исходников:
 
   ```bash
   git clone https://github.com/DEADover/DzenAnalytics
   cd DzenAnalytics
-  docker compose -f docker/docker-compose.yaml up -d
-  # затем откройте http://localhost:8000
-  # свой порт: LISTEN_PORT=3000 docker compose -f docker/docker-compose.yaml up -d
+  docker compose -f docker/docker-compose.yaml up -d --build
+  # свой порт: LISTEN_PORT=3000 docker compose -f docker/docker-compose.yaml up -d --build
   ```
+
+  Вход через OAuth в готовом образе выключен — адрес провайдера задаётся при сборке. Вход по токену и загрузка CSV работают.
 
 Токен Zenmoney подключается в самом приложении: **Настройки → Данные → Дзен-мани API**.
 Нет токена? Загрузите CSV-выгрузку из Дзен-мани — всё работает офлайн.

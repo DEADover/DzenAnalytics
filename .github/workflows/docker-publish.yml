@@ -1,0 +1,68 @@
+name: Docker image
+
+# Готовый образ в GitHub Container Registry на каждый опубликованный релиз:
+# развернуть сервис у себя — одна команда `docker run`, без клона и сборки.
+#
+# Запускается тем же событием, что и выкладка у velios (`release: published`),
+# а не любым тегом: образ всегда совпадает с версией на странице релиза.
+# Для открытого репозитория сборка и хранение образа бесплатны; токен —
+# встроенный GITHUB_TOKEN, отдельных секретов не нужно.
+#
+# Метки: `1.9.7`, `1.9` и `latest`. Архитектуры: amd64 и arm64 (Raspberry Pi,
+# Mac на Apple Silicon, ARM-серверы).
+
+on:
+  release:
+    types: [published]
+  # Ручной запуск — перевыпустить образ для уже опубликованного тега.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Тег релиза, например v1.9.7"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # Имя образа в реестре — только строчными.
+          images: ghcr.io/deadover/dzenanalytics
+          tags: |
+            type=semver,pattern={{version}},value=${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=DzenAnalytics
+            org.opencontainers.image.description=Аналитика личных финансов для Дзен-мани
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
