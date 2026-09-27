@@ -16,19 +16,7 @@ import { SectionEmpty } from "../components/SectionEmpty";
 import { SectionControls } from "../components/SectionControls";
 import { Slider } from "../components/Slider";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
-
-const PALETTE = [
-  "#22D3EE",
-  "#A78BFA",
-  "#F59E0B",
-  "#10B981",
-  "#EF4444",
-  "#EC4899",
-  "#3B82F6",
-  "#84CC16",
-  "#F97316",
-  "#14B8A6",
-];
+import { WordCloud } from "../components/WordCloud";
 
 export function WordcloudPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -53,15 +41,6 @@ export function WordcloudPage() {
   );
 
   if (transactions.length === 0) return <EmptyState />;
-
-  const maxCount = words[0]?.count || 1;
-  const minCount = words[words.length - 1]?.count || 1;
-
-  function fontSize(count: number): number {
-    if (maxCount === minCount) return 18;
-    const t = (count - minCount) / (maxCount - minCount);
-    return Math.round(12 + t * 38);
-  }
 
   function openWord(w: WordcloudWord) {
     const escaped = w.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -140,24 +119,15 @@ export function WordcloudPage() {
         </SectionEmpty>
       ) : (
         <div className="card-tray card-pad">
-          <div className="flex flex-wrap gap-2 justify-center items-center py-6">
-            {words.map((w, i) => (
-              <button
-                key={w.text}
-                onClick={() => openWord(w)}
-                className="hover:bg-panel2/60 px-1.5 py-0.5 rounded transition-colors"
-                style={{
-                  fontSize: `${fontSize(w.count)}px`,
-                  color: PALETTE[i % PALETTE.length],
-                  fontWeight: fontSize(w.count) > 30 ? 700 : fontSize(w.count) > 20 ? 600 : 500,
-                  lineHeight: 1.1,
-                }}
-                title={`«${w.text}» · ${w.count} ${pluralRu(w.count, ["раз", "раза", "раз"])} · ${formatMoney(w.totalAmount, base)}`}
-              >
-                {w.text}
-              </button>
-            ))}
-          </div>
+          <WordCloud
+            items={words.map((w) => ({
+              key: w.text,
+              text: w.text,
+              weight: w.count,
+              tip: `«${w.text}» · ${w.count} ${pluralRu(w.count, ["раз", "раза", "раз"])} · ${formatMoney(w.totalAmount, base)}`,
+              onClick: () => openWord(w),
+            }))}
+          />
         </div>
       )}
 

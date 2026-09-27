@@ -11,7 +11,7 @@ import {
   tagReturn,
 } from "../lib/aggregations";
 import { formatMoney, formatNum, formatPct } from "../lib/format";
-import { pluralOps, pluralRu } from "../lib/plural";
+import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { CategoryDot } from "../components/CategoryDot";
 import { GlobalFilters } from "../components/GlobalFilters";
@@ -24,6 +24,8 @@ import { useTagModeStore } from "../store/useTagModeStore";
 import { tagLabel, tagsOf, type TagMode } from "../lib/operationTags";
 import type { Transaction } from "../types";
 import { CardHeader } from "../components/CardHeader";
+import { TooltipFacts } from "../components/TooltipFacts";
+import { WordCloud } from "../components/WordCloud";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { SectionControls } from "../components/SectionControls";
 
@@ -130,12 +132,12 @@ export function TagsPage() {
     [filtered, getTags]
   );
 
-  const maxTotal = tags[0] ? tags[0].expense + tags[0].income : 1;
 
   // Tag cloud ordering: by total flow (default) or alphabetically (issue #20).
   const [cloudAlpha, setCloudAlpha] = useState(false);
   const cloudTags = useMemo(() => {
-    if (!cloudAlpha) return tags; // already total-desc from groupByHashtag
+    // По сумме — от крупных к мелким, как в «Облаке слов».
+    if (!cloudAlpha) return tags;
     return [...tags].sort((a, b) => a.tag.localeCompare(b.tag, "ru"));
   }, [tags, cloudAlpha]);
 
@@ -406,26 +408,30 @@ export function TagsPage() {
             />
           }
         />
-        <div className="flex flex-wrap gap-2">
-          {cloudTags.map((t) => {
-            const score = (t.expense + t.income) / maxTotal;
-            const fontSize = 12 + Math.round(score * 16);
-            return (
-              <button
-                key={t.tag}
-                onClick={() => openTag(t.tag)}
-                className="chip py-1.5 leading-normal text-text hover:border-accent hover:bg-accent/10"
-                style={{ fontSize }}
-              >
-                <TagMark tag={t.tag} mode={mode} />
-                <span className="font-medium">{t.tag}</span>
-                <span className="text-muted text-xs tabular-nums">
-                  {formatNum(t.count)} {pluralOps(t.count)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {/* То же облако, что в «Облаке слов»: размер — сумма по тегу, числа —
+            в подсказке. Раньше здесь был ряд плашек, на облако не похожий. */}
+        <WordCloud
+          items={cloudTags.map((t) => ({
+            key: t.tag,
+            text: label(t.tag),
+            weight: t.expense + t.income,
+            tip: (
+              <TooltipFacts
+                title={label(t.tag)}
+                facts={[
+                  ...(t.expense > 0
+                    ? [{ label: "Расход", value: formatMoney(t.expense, base), tone: "expense" as const }]
+                    : []),
+                  ...(t.income > 0
+                    ? [{ label: "Доход", value: formatMoney(t.income, base), tone: "income" as const }]
+                    : []),
+                  { label: "Операций", value: formatNum(t.count) },
+                ]}
+              />
+            ),
+            onClick: () => openTag(t.tag),
+          }))}
+        />
       </div>
 
       <DataTable<TagRow>
