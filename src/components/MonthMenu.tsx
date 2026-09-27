@@ -24,6 +24,7 @@ export function MonthMenu({
   mode = "month",
   onSelect,
   onSelectYear,
+  onSelectQuarter,
 }: {
   open: boolean;
   onClose: () => void;
@@ -40,6 +41,8 @@ export function MonthMenu({
   mode?: "month" | "quarter" | "year";
   onSelect: (ym: string) => void;
   onSelectYear?: (year: number) => void;
+  /** Есть — в панели строка кварталов. */
+  onSelectQuarter?: (ym: string) => void;
 }) {
   // Открытая панель показывает год выбранного месяца. Синхронизировать это
   // эффектом не нужно: потребитель пересоздаёт панель на каждое открытие
@@ -54,8 +57,6 @@ export function MonthMenu({
   const minY = Number(minYM?.slice(0, 4)) || 1970;
   const maxY = Number(maxYM?.slice(0, 4)) || 3000;
   const isYear = mode === "year";
-  const years: number[] = [];
-  for (let y = maxY; y >= minY; y--) years.push(y);
 
   useLayoutEffect(() => {
     const el = anchorRef.current;
@@ -99,113 +100,97 @@ export function MonthMenu({
         className="fixed z-[80] card p-3 w-64"
         style={{ left: pos.left, top: pos.top, bottom: pos.bottom }}
       >
-        {isYear ? (
-          <div className="grid grid-cols-3 gap-1 max-h-64 overflow-y-auto">
-            {years.map((y) => (
+        {/* Одна панель на все три режима: год в шапке, под ним кварталы,
+            ниже месяцы. Выделено то, что выбрано сейчас, а нажатие на любое
+            переключает режим. Прежде у года была своя сетка лет, и из «Года»
+            в месяц через панель было не попасть — только из месяца в год. */}
+        <div className="flex items-center justify-between mb-2">
+          <button
+            onClick={() => setViewYear((y) => y - 1)}
+            disabled={viewYear <= minY}
+            className="btn-icon btn-icon-sm"
+            title="Предыдущий год"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
+              onSelectYear?.(viewYear);
+              onClose();
+            }}
+            disabled={!onSelectYear}
+            className={clsx(
+              "px-2 py-0.5 rounded-md text-sm font-semibold tabular-nums transition-colors disabled:hover:bg-transparent",
+              isYear && viewYear === year ? "bg-accent text-accent-fg" : "hover:bg-panel2"
+            )}
+            title={onSelectYear ? `Показать весь ${viewYear} год` : undefined}
+          >
+            {viewYear}
+          </button>
+          <button
+            onClick={() => setViewYear((y) => y + 1)}
+            disabled={viewYear >= maxY}
+            className="btn-icon btn-icon-sm"
+            title="Следующий год"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {onSelectQuarter && (
+          <div className="grid grid-cols-4 gap-1 mb-2 pb-2 border-b border-border">
+            {[1, 2, 3, 4].map((q) => {
+              const first = `${viewYear}-${String((q - 1) * 3 + 1).padStart(2, "0")}`;
+              const last = `${viewYear}-${String(q * 3).padStart(2, "0")}`;
+              // Квартал доступен, если в нём есть хоть один месяц с данными.
+              const disabled = (!!minYM && last < minYM) || (!!maxYM && first > maxYM);
+              const isSel = mode === "quarter" && quarterOf(value) === q && viewYear === year;
+              return (
+                <button
+                  key={q}
+                  disabled={disabled}
+                  onClick={() => {
+                    onSelectQuarter(first);
+                    onClose();
+                  }}
+                  title={`${["I", "II", "III", "IV"][q - 1]} квартал ${viewYear}`}
+                  className={clsx(
+                    "px-1 py-1.5 rounded-md text-sm transition-colors",
+                    isSel ? "bg-accent text-accent-fg font-medium" : "text-text hover:bg-panel2",
+                    disabled && "opacity-30 cursor-not-allowed hover:bg-transparent"
+                  )}
+                >
+                  {["I", "II", "III", "IV"][q - 1]} кв.
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-1">
+          {MONTHS_SHORT.map((m, i) => {
+            const ym = `${viewYear}-${String(i + 1).padStart(2, "0")}`;
+            const disabled = (!!minYM && ym < minYM) || (!!maxYM && ym > maxYM);
+            const isSel = mode === "month" && ym === value;
+            return (
               <button
-                key={y}
+                key={m}
+                disabled={disabled}
                 onClick={() => {
-                  onSelectYear?.(y);
+                  onSelect(ym);
                   onClose();
                 }}
                 className={clsx(
-                  "px-2 py-2 rounded-md text-sm tabular-nums transition-colors",
-                  y === year ? "bg-accent text-accent-fg font-medium" : "text-text hover:bg-panel2"
+                  "px-2 py-2 rounded-md text-sm transition-colors",
+                  isSel ? "bg-accent text-accent-fg font-medium" : "text-text hover:bg-panel2",
+                  disabled && "opacity-30 cursor-not-allowed hover:bg-transparent"
                 )}
               >
-                {y}
+                {m}
               </button>
-            ))}
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between mb-2">
-              <button
-                onClick={() => setViewYear((y) => y - 1)}
-                disabled={viewYear <= minY}
-                className="btn-icon btn-icon-sm"
-                title="Предыдущий год"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {/* Год в шапке — кнопка: из списка месяцев часто нужен «весь этот
-                  год», а дорога к нему шла через отдельный пресет. */}
-              <button
-                onClick={() => {
-                  onSelectYear?.(viewYear);
-                  onClose();
-                }}
-                disabled={!onSelectYear}
-                className="px-2 py-0.5 rounded-md text-sm font-semibold tabular-nums transition-colors hover:bg-panel2 disabled:hover:bg-transparent"
-                title={onSelectYear ? `Показать весь ${viewYear} год` : undefined}
-              >
-                {viewYear}
-              </button>
-              <button
-                onClick={() => setViewYear((y) => y + 1)}
-                disabled={viewYear >= maxY}
-                className="btn-icon btn-icon-sm"
-                title="Следующий год"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {mode === "quarter" ? (
-              <div className="grid grid-cols-2 gap-1">
-                {[1, 2, 3, 4].map((q) => {
-                  const first = `${viewYear}-${String((q - 1) * 3 + 1).padStart(2, "0")}`;
-                  const last = `${viewYear}-${String(q * 3).padStart(2, "0")}`;
-                  // Квартал доступен, если в нём есть хоть один месяц с данными.
-                  const disabled = (!!minYM && last < minYM) || (!!maxYM && first > maxYM);
-                  const isSel = quarterOf(value) === q && value.slice(0, 4) === String(viewYear);
-                  return (
-                    <button
-                      key={q}
-                      disabled={disabled}
-                      onClick={() => {
-                        onSelect(first);
-                        onClose();
-                      }}
-                      className={clsx(
-                        "px-2 py-2 rounded-md text-sm transition-colors",
-                        isSel ? "bg-accent text-accent-fg font-medium" : "text-text hover:bg-panel2",
-                        disabled && "opacity-30 cursor-not-allowed hover:bg-transparent"
-                      )}
-                    >
-                      {["I", "II", "III", "IV"][q - 1]} квартал
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-            <div className="grid grid-cols-3 gap-1">
-              {MONTHS_SHORT.map((m, i) => {
-                const ym = `${viewYear}-${String(i + 1).padStart(2, "0")}`;
-                const disabled = (!!minYM && ym < minYM) || (!!maxYM && ym > maxYM);
-                const isSel = ym === value;
-                return (
-                  <button
-                    key={m}
-                    disabled={disabled}
-                    onClick={() => {
-                      onSelect(ym);
-                      onClose();
-                    }}
-                    className={clsx(
-                      "px-2 py-2 rounded-md text-sm transition-colors",
-                      isSel ? "bg-accent text-accent-fg font-medium" : "text-text hover:bg-panel2",
-                      disabled && "opacity-30 cursor-not-allowed hover:bg-transparent"
-                    )}
-                  >
-                    {m}
-                  </button>
-                );
-              })}
-            </div>
-            )}
-          </>
-        )}
+            );
+          })}
+        </div>
       </div>
     </>,
     document.body

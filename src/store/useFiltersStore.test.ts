@@ -55,7 +55,8 @@ describe("стрелки после своего отрезка", () => {
     useFiltersStore.getState().setRange("2026-08-02", "2026-08-31");
     useFiltersStore.getState().stepPeriod(1, "2026-05");
     const s = useFiltersStore.getState();
-    expect(s.preset).toBe("month");
+    // Вид месяца — тот, что выбран у кнопки (по умолчанию отчётный).
+    expect(s.preset).toBe(useDisplayStore.getState().monthKind === "month" ? "month" : "period");
     expect(s.monthYM).toBe("2026-09");
   });
 });

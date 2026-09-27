@@ -36,7 +36,7 @@ import {
 import { accountOptions } from "../lib/accountOptions";
 import { presetToRange, useFiltersStore, type DatePreset } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { currentPeriod, periodRange } from "../lib/period";
+import { currentPeriod, periodRange, quarterOf } from "../lib/period";
 import { formatDate } from "../lib/format";
 import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
@@ -545,6 +545,30 @@ export function GlobalFilters({
   // календарно, мы с первым днём месяца 28-го всегда видели «фильтры заданы» и
   // держали «Сбросить» активной на чистых фильтрах.
   const defaultMonthYM = currentPeriod(monthStartDay);
+
+  /**
+   * «К текущему» — текущий период того же вида: квартал к кварталу, год к
+   * году, календарный месяц к календарному. Раньше кнопка всегда включала
+   * отчётный месяц, и из «Года» уводила в месяц.
+   */
+  const calendarNow = currentPeriod(1);
+  const goCurrent = () => {
+    const p = periodCtl.preset;
+    if (p === "quarter") periodCtl.setQuarter(calendarNow);
+    else if (p === "year") periodCtl.setYear(Number(calendarNow.slice(0, 4)));
+    else if (p === "month") periodCtl.setMonth(calendarNow);
+    else periodCtl.setPeriodMonth(defaultMonthYM);
+  };
+  const atCurrent = (() => {
+    const p = periodCtl.preset;
+    const ym = periodCtl.monthYM;
+    if (!ym) return false;
+    if (p === "quarter")
+      return ym.slice(0, 4) === calendarNow.slice(0, 4) && quarterOf(ym) === quarterOf(calendarNow);
+    if (p === "year") return ym.slice(0, 4) === calendarNow.slice(0, 4);
+    if (p === "month") return ym === calendarNow;
+    return p === "period" && ym === defaultMonthYM;
+  })();
   const hasExtra =
     f.excludeTransfers ||
     f.minAmount != null ||
@@ -829,14 +853,20 @@ export function GlobalFilters({
                 from={shownRange.from}
                 to={shownRange.to}
                 monthHint={monthHint}
-                onSelectMonth={(ym) => periodCtl.setMonth(ym)}
+                // Месяц из панели — того вида, каким вы пользуетесь: раньше выбор
+                // всегда включал календарный, даже при отчётном.
+                onSelectMonth={(ym) =>
+                  monthKind === "period" ? periodCtl.setPeriodMonth(ym) : periodCtl.setMonth(ym)
+                }
                 onSelectYear={(y) => periodCtl.setYear(y)}
                 onSelectQuarter={(ym) => periodCtl.setQuarter(ym)}
-                blank={periodCtl.preset === "all"}
+                // У «Всё» и скользящих окон названия нет: «Май» при окне
+                // «30 дней» выдавал себя за выбранный месяц.
+                blank={!monthAnchored && periodCtl.preset !== "custom"}
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
                 onRangeChange={(from, to) => periodCtl.setRange(from, to)}
-                onCurrent={() => periodCtl.setPeriodMonth(defaultMonthYM)}
-                atCurrent={periodCtl.preset === "period" && periodCtl.monthYM === defaultMonthYM}
+                onCurrent={goCurrent}
+                atCurrent={atCurrent}
               />
               <ResetButton
                 onReset={f.reset}

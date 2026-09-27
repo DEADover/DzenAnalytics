@@ -127,8 +127,8 @@ export function PeriodPicker({
   onSelectYear: (year: number) => void;
   onSelectQuarter?: (ym: string) => void;
   /**
-   * Названия у периода нет — выбрано «Всё». Вместо месяца прочерк: подпись
-   * «Сентябрь 26 г.» при «Всём» выдавала себя за действующий период.
+   * Названия у периода нет — выбрано «Всё» или скользящее окно. Вместо
+   * месяца прочерк: подпись «Сентябрь 26 г.» выдавала себя за выбранный период.
    */
   blank?: boolean;
   /** Листнуть период: месяц, год или отчётный месяц — смотря что выбрано. */
@@ -164,6 +164,7 @@ export function PeriodPicker({
         <button
           type="button"
           onClick={() => onStep(-1)}
+          disabled={blank}
           className={clsx("seg-icon", icon)}
           title={`Предыдущий ${unitTitle}`}
         >
@@ -191,6 +192,7 @@ export function PeriodPicker({
         <button
           type="button"
           onClick={() => onStep(1)}
+          disabled={blank}
           className={clsx("seg-icon", icon)}
           title={`Следующий ${unitTitle}`}
         >
@@ -201,7 +203,11 @@ export function PeriodPicker({
           onClick={onCurrent}
           disabled={atCurrent}
           className={clsx("seg-icon", icon)}
-          title={atCurrent ? "Это текущий отчётный период" : "Вернуться к текущему отчётному периоду"}
+          title={
+            atCurrent
+              ? `Это текущий ${isYear ? "год" : isQuarter ? "квартал" : "месяц"}`
+              : `Вернуться к текущему ${isYear ? "году" : isQuarter ? "кварталу" : "месяцу"}`
+          }
         >
           <CalendarCheck className="w-4 h-4" />
         </button>
@@ -287,8 +293,9 @@ export function PeriodPicker({
         minYM={minYM}
         maxYM={maxYM}
         mode={mode}
-        onSelect={isQuarter && onSelectQuarter ? onSelectQuarter : onSelectMonth}
+        onSelect={onSelectMonth}
         onSelectYear={onSelectYear}
+        onSelectQuarter={onSelectQuarter}
       />
     </div>
   );

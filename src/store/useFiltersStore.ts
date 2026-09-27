@@ -230,8 +230,14 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
       anchored && monthYM ? monthYM : preset === "custom" && from ? from.slice(0, 7) : fallbackMaxYM;
     // Шаг сохраняет единицу: годы листаются годами, отчётные месяцы —
     // отчётными, календарные — календарными.
+    // Не из названия (окно, «Всё», свой отрезок) — в тот вид месяца, что
+    // выбран у кнопки: раньше всегда включался календарный, а кнопка
+    // оставалась подписана «Отчётный месяц».
+    const kind = useDisplayStore.getState().monthKind === "month" ? "month" : "period";
     const next: DatePreset =
-      preset === "year" || preset === "quarter" || preset === "period" ? preset : "month";
+      preset === "year" || preset === "quarter" || preset === "period" || preset === "month"
+        ? preset
+        : kind;
     set({
       preset: next,
       monthYM: shiftPeriod(cur, delta * unit),
