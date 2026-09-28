@@ -8,7 +8,7 @@ import {
   freeMoney,
   monthEnd,
   heatStep,
-  robustCeiling,
+  robustCeiling, robustBounds,
   forecastMonths,
 } from "./dashboardModel";
 import type { RecurringCandidate } from "./aggregations";
@@ -363,5 +363,19 @@ describe("forecastMonths — прогноз на несколько месяце
 
   it("пустая история — пустой прогноз, а не выдуманные нули", () => {
     expect(forecastMonths([], 3, 6)).toEqual([]);
+  });
+});
+
+describe("robustBounds", () => {
+  it("режет одиночный выброс вниз, обычный размах оставляет", () => {
+    const v = [20, 25, -10, 30, 15, -900, 22, 18, -5, 28, 12, 24];
+    const b = robustBounds(v, 100);
+    expect(b.clipped).toBe(true);
+    expect(b.lo).toBe(-100);
+    expect(b.hi).toBe(30);
+  });
+  it("без выбросов границы — настоящие минимум и максимум", () => {
+    const b = robustBounds([20, -10, 30, 15], 100);
+    expect(b).toEqual({ lo: -10, hi: 30, clipped: false });
   });
 });

@@ -19,6 +19,7 @@ import { periodKey, periodRange, shiftPeriod } from "../lib/period";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { buildNeedsWants, savingsRateSeries } from "../lib/needsWants";
+import { robustBounds } from "../lib/dashboardModel";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { CardHeader } from "../components/CardHeader";
@@ -108,11 +109,30 @@ export function Budget503020Page() {
         monthStartDay
       );
     }
+    // Месяц почти без дохода даёт норму в −900 %, и обычные ±30 % сжимаются в
+    // линию у нуля. Шкала — по типичному размаху (как у столбцов главной),
+    // но не уже ±100 %: обычные месяцы не режутся никогда. Точка за шкалой
+    // рисуется на её краю с настоящим числом рядом, в подсказке — тоже оно.
+    const real = series.map((p) => Math.round(p.rate * 1000) / 10);
+    const { lo, hi, clipped } = robustBounds(real, 100);
+    // Деления круглые и с нулём: по голым границам Recharts ставил −60 и 54.
+    const bottom = Math.min(lo, 0);
+    const top = Math.max(hi, 25);
+    const step = top - bottom <= 150 ? 25 : top - bottom <= 300 ? 50 : 100;
+    const from = Math.floor(bottom / step) * step;
+    const to = Math.ceil(top / step) * step;
+    const ticks: number[] = [];
+    for (let v = from; v <= to; v += step) ticks.push(v);
     return {
       byFilter,
-      points: series.map((p) => ({
+      clipped,
+      domain: [from, to] as [number, number],
+      ticks,
+      points: series.map((p, i) => ({
         month: monthLabel(p.ym),
-        rate: Math.round(p.rate * 1000) / 10,
+        rate: Math.min(Math.max(real[i], lo), hi),
+        rateReal: real[i],
+        cut: real[i] < lo || real[i] > hi,
       })),
     };
   }, [filtered, transactions, filters, range.to, lastDate, monthStartDay]);
@@ -330,8 +350,8 @@ export function Budget503020Page() {
           title="Норма сбережений по месяцам"
           subtitle={
             trend.byFilter
-              ? "Какая доля дохода оставалась каждый месяц периода. Пунктир — ориентир 20%."
-              : "12 месяцев до конца выбранного периода — в нём самом меньше трёх месяцев. Пунктир — ориентир 20%."
+              ? `Какая доля дохода оставалась каждый месяц периода. Пунктир — ориентир 20%.${trend.clipped ? CUT_NOTE : ""}`
+              : `12 месяцев до конца выбранного периода — в нём самом меньше трёх месяцев. Пунктир — ориентир 20%.${trend.clipped ? CUT_NOTE : ""}`
           }
         />
         <div className="h-72">
@@ -339,10 +359,29 @@ export function Budget503020Page() {
             <AreaChart data={trend.points}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
               <XAxis dataKey="month" stroke={chartAxisStroke} fontSize={11} />
-              <YAxis stroke={chartAxisStroke} fontSize={11} tickFormatter={(v) => `${v}%`} />
+              <YAxis
+                stroke={chartAxisStroke}
+                fontSize={11}
+                domain={trend.domain}
+                ticks={trend.ticks}
+                allowDataOverflow
+                tickFormatter={(v) => pctLabel(v)}
+              />
               <RTooltip
                 {...chartTooltipProps}
-                content={<SeriesTooltip formatValue={(v) => `${Math.round(v)}%`} />}
+                content={(props) => (
+                  <SeriesTooltip
+                    {...props}
+                    // Настоящее значение, а не высота точки на срезанной шкале.
+                    payload={props.payload?.map((p) => ({
+                      name: String(p.name ?? ""),
+                      color: p.color,
+                      dataKey: String(p.dataKey ?? ""),
+                      value: (p.payload as { rateReal?: number } | undefined)?.rateReal ?? p.value,
+                    }))}
+                    formatValue={(v) => pctLabel(v)}
+                  />
+                )}
               />
               <ReferenceLine
                 y={20}
@@ -358,7 +397,7 @@ export function Budget503020Page() {
                 fill={SAVINGS_COLOR}
                 fillOpacity={0.12}
                 strokeWidth={2}
-                dot={{ r: 3 }}
+                dot={(props: CutDotProps) => <CutDot key={props.index} {...props} />}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -366,4 +405,48 @@ export function Budget503020Page() {
       </div>
     </div>
   );
+}
+
+/** Пояснение под заголовком, когда на графике есть срезанные точки. */
+const CUT_NOTE = " Редкие выбросы прижаты к краю шкалы, их настоящее значение подписано.";
+
+interface CutDotProps {
+  cx?: number;
+  cy?: number;
+  index?: number;
+  payload?: { rateReal: number; cut: boolean };
+}
+
+/**
+ * Точка графика нормы сбережений. Обычная — как у `Area` по умолчанию;
+ * срезанная — полая, цветом расхода, с настоящим процентом рядом: высота
+ * такой точки ничего не значит, значит только число.
+ */
+function CutDot({ cx, cy, payload }: CutDotProps) {
+  if (cx === undefined || cy === undefined || !payload) return null;
+  if (!payload.cut) {
+    return <circle cx={cx} cy={cy} r={3} stroke={SAVINGS_COLOR} strokeWidth={2} fill="rgb(var(--c-panel))" />;
+  }
+  const below = payload.rateReal < 0;
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={4} stroke="rgb(var(--c-expense))" strokeWidth={2} fill="rgb(var(--c-panel))" />
+      <text
+        x={cx}
+        y={below ? cy - 9 : cy + 16}
+        textAnchor="middle"
+        fontSize={11}
+        fontWeight={600}
+        fill="rgb(var(--c-expense))"
+      >
+        {pctLabel(payload.rateReal)}
+      </text>
+    </g>
+  );
+}
+
+/** «−293%» — с типографским минусом, как в остальных процентах сервиса. */
+function pctLabel(v: number): string {
+  const r = Math.round(v);
+  return r < 0 ? `−${-r}%` : `${r}%`;
 }

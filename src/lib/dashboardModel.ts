@@ -198,6 +198,30 @@ export function robustCeiling(
 }
 
 /**
+ * Границы шкалы для ряда, который уходит и в минус, — устойчивые к выбросам.
+ *
+ * Тот же приём, что `robustCeiling`, но по модулю: норма сбережений в месяц без
+ * дохода выходит в −900 %, и обычные ±30 % сжимаются в ровную линию у нуля.
+ * Шкала строится по типичному размаху, а точки за ним рисуются на краю — с
+ * настоящим числом рядом. `floor` — меньше этого размаха шкала не бывает
+ * никогда: обычный диапазон (для доли — ±100 %) не режется.
+ */
+export function robustBounds(
+  values: number[],
+  floor = 0
+): { lo: number; hi: number; clipped: boolean } {
+  const finite = values.filter((v) => Number.isFinite(v));
+  if (finite.length === 0) return { lo: 0, hi: 0, clipped: false };
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  const { cap } = robustCeiling(finite.map(Math.abs));
+  const span = Math.max(cap, floor);
+  const lo = Math.max(min, -span);
+  const hi = Math.min(max, span);
+  return { lo, hi, clipped: lo > min || hi < max };
+}
+
+/**
  * Последний день отчётного месяца `ym` в виде YYYY-MM-DD.
  *
  * С первым днём 28 «Август» кончается 27 сентября, а не 31 августа: по
