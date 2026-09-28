@@ -9,6 +9,7 @@ import {
   Tooltip as RTooltip,
   CartesianGrid,
   ReferenceLine,
+  ReferenceDot,
 } from "recharts";
 import { PieChart as PieIcon, Home, ShoppingBag, PiggyBank, Target } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
@@ -111,8 +112,8 @@ export function Budget503020Page() {
     }
     // Месяц почти без дохода даёт норму в −900 %, и обычные ±30 % сжимаются в
     // линию у нуля. Шкала — по типичному размаху (как у столбцов главной),
-    // но не уже ±100 %: обычные месяцы не режутся никогда. Точка за шкалой
-    // рисуется на её краю с настоящим числом рядом, в подсказке — тоже оно.
+    // но не уже ±100 %: обычные месяцы не режутся никогда. Линия к выбросу
+    // уходит за край, на краю — метка, значение — в подсказке.
     const real = series.map((p) => Math.round(p.rate * 1000) / 10);
     const { lo, hi, clipped } = robustBounds(real, 100);
     // Деления круглые и с нулём: по голым границам Recharts ставил −60 и 54.
@@ -130,8 +131,10 @@ export function Budget503020Page() {
       ticks,
       points: series.map((p, i) => ({
         month: monthLabel(p.ym),
-        rate: Math.min(Math.max(real[i], lo), hi),
-        rateReal: real[i],
+        // Линия идёт по настоящему значению и уходит за край графика — он её
+        // и обрезает. Прижатая к краю точка давала плоскую полосу по оси и
+        // подписи, налезавшие друг на друга; уход за край читается сам.
+        rate: real[i],
         cut: real[i] < lo || real[i] > hi,
       })),
     };
@@ -369,19 +372,7 @@ export function Budget503020Page() {
               />
               <RTooltip
                 {...chartTooltipProps}
-                content={(props) => (
-                  <SeriesTooltip
-                    {...props}
-                    // Настоящее значение, а не высота точки на срезанной шкале.
-                    payload={props.payload?.map((p) => ({
-                      name: String(p.name ?? ""),
-                      color: p.color,
-                      dataKey: String(p.dataKey ?? ""),
-                      value: (p.payload as { rateReal?: number } | undefined)?.rateReal ?? p.value,
-                    }))}
-                    formatValue={(v) => pctLabel(v)}
-                  />
-                )}
+                content={<SeriesTooltip formatValue={(v) => pctLabel(v)} />}
               />
               <ReferenceLine
                 y={20}
@@ -397,8 +388,21 @@ export function Budget503020Page() {
                 fill={SAVINGS_COLOR}
                 fillOpacity={0.12}
                 strokeWidth={2}
-                dot={(props: CutDotProps) => <CutDot key={props.index} {...props} />}
+                dot={{ r: 3 }}
               />
+              {/* Месяц за краем шкалы — метка на краю, куда ушла линия.
+                  Значение — в подсказке при наведении: подписи у соседних
+                  выбросов налезали друг на друга. */}
+              {trend.points
+                .filter((p) => p.cut)
+                .map((p) => (
+                  <ReferenceDot
+                    key={p.month}
+                    x={p.month}
+                    y={p.rate < 0 ? trend.domain[0] : trend.domain[1]}
+                    shape={(props: EdgeMarkProps) => <EdgeMark {...props} down={p.rate < 0} />}
+                  />
+                ))}
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -408,41 +412,23 @@ export function Budget503020Page() {
 }
 
 /** Пояснение под заголовком, когда на графике есть срезанные точки. */
-const CUT_NOTE = " Редкие выбросы прижаты к краю шкалы, их настоящее значение подписано.";
+const CUT_NOTE = " Редкие выбросы уходят за край шкалы — они отмечены треугольником, значение в подсказке.";
 
-interface CutDotProps {
+interface EdgeMarkProps {
   cx?: number;
   cy?: number;
-  index?: number;
-  payload?: { rateReal: number; cut: boolean };
 }
 
 /**
- * Точка графика нормы сбережений. Обычная — как у `Area` по умолчанию;
- * срезанная — полая, цветом расхода, с настоящим процентом рядом: высота
- * такой точки ничего не значит, значит только число.
+ * Метка выброса на краю шкалы: треугольник остриём наружу, в сторону, куда
+ * ушла линия, — цветом расхода внизу и дохода вверху.
  */
-function CutDot({ cx, cy, payload }: CutDotProps) {
-  if (cx === undefined || cy === undefined || !payload) return null;
-  if (!payload.cut) {
-    return <circle cx={cx} cy={cy} r={3} stroke={SAVINGS_COLOR} strokeWidth={2} fill="rgb(var(--c-panel))" />;
-  }
-  const below = payload.rateReal < 0;
-  return (
-    <g>
-      <circle cx={cx} cy={cy} r={4} stroke="rgb(var(--c-expense))" strokeWidth={2} fill="rgb(var(--c-panel))" />
-      <text
-        x={cx}
-        y={below ? cy - 9 : cy + 16}
-        textAnchor="middle"
-        fontSize={11}
-        fontWeight={600}
-        fill="rgb(var(--c-expense))"
-      >
-        {pctLabel(payload.rateReal)}
-      </text>
-    </g>
-  );
+function EdgeMark({ cx, cy, down }: EdgeMarkProps & { down: boolean }) {
+  if (cx === undefined || cy === undefined) return <g />;
+  const d = down
+    ? `M ${cx - 5} ${cy - 9} L ${cx + 5} ${cy - 9} L ${cx} ${cy - 2} Z`
+    : `M ${cx - 5} ${cy + 9} L ${cx + 5} ${cy + 9} L ${cx} ${cy + 2} Z`;
+  return <path d={d} fill={down ? "rgb(var(--c-expense))" : "rgb(var(--c-income))"} />;
 }
 
 /** «−293%» — с типографским минусом, как в остальных процентах сервиса. */
