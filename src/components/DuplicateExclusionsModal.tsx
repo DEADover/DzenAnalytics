@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ShieldOff, X, Trash2 } from "lucide-react";
 import { useDuplicateExclusionsStore } from "../store/useDuplicateExclusionsStore";
 import { confirm } from "../store/useConfirmStore";
-import { formatMoney } from "../lib/format";
+import { formatDate, formatMoney } from "../lib/format";
 import { kindLabel } from "../lib/txKindStyle";
 import { Modal, ModalBody, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
@@ -48,7 +48,7 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal onClose={onClose} width="2xl">
+    <Modal onClose={onClose} width="3xl">
       <ModalHeader
         icon={ShieldOff}
         tone="muted"
@@ -85,15 +85,19 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
         ) : (
           <DataTable<(typeof list)[number]>
             bare
-            fixed
             exportable={false}
             data={list}
             rowKey={(r) => r.signature}
-            defaultSortKey="payee"
+            defaultSortKey="created"
+            defaultSortDir="desc"
             columns={[
               {
                 key: "payee",
                 type: "text",
+                // Свободное место — имени: остальные колонки по содержимому.
+                // Прежде таблица была с жёсткими ширинами в окне 2xl, и на
+                // имя оставалось около ста пикселей — «Московский ме…».
+                width: "100%",
                 label: "Получатель",
                 sortValue: (r) => r.payee || "",
                 render: (r) => r.payee || "Без получателя",
@@ -102,7 +106,6 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
                 key: "kind",
                 type: "text",
                 muted: true,
-                width: "7rem",
                 label: "Тип",
                 sortValue: (r) => kindLabel(r.kind),
                 render: (r) => capitalizeFirst(kindLabel(r.kind)),
@@ -111,7 +114,6 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
                 key: "category",
                 type: "text",
                 muted: true,
-                width: "12rem",
                 label: "Категория",
                 sortValue: (r) => r.category || "",
                 render: (r) => r.category || "—",
@@ -119,10 +121,18 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
               {
                 key: "amount",
                 type: "money",
-                width: "8rem",
                 label: "Сумма",
                 sortValue: (r) => r.amount,
                 render: (r) => formatMoney(r.amount, r.currency),
+              },
+              {
+                key: "created",
+                type: "date",
+                muted: true,
+                label: "Отмечено",
+                headerTitle: "Когда группу отметили «Не дубликаты»",
+                sortValue: (r) => r.createdAt,
+                render: (r) => formatDate(r.createdAt, "full"),
               },
               {
                 key: "actions",
