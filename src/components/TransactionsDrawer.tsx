@@ -24,7 +24,7 @@ import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { formatMoney, formatDate, formatNum, displayPayee, payeeSearchText, transferCounterparty } from "../lib/format";
 import { kindLabel, operationTone } from "../lib/txKindStyle";
 import { DataTable, type Column, type SortState } from "./DataTable";
-import { OperationActions, OperationAmount, OperationCategory, OperationPayee } from "./operations/OperationCells";
+import { OperationActions, OperationAmount, OperationCategory, OperationPayee, OperationComment } from "./operations/OperationCells";
 import { buildCsv, csvFileName, downloadCsv, sortRows } from "./table/tableKit";
 import type { Transaction } from "../types";
 import { SearchInput } from "./SearchInput";
@@ -225,7 +225,7 @@ export function TransactionsDrawer() {
       muted: true,
       label: "Комментарий",
       sortValue: (t) => t.comment || "",
-      render: (t) => t.comment || "",
+      render: (t) => <OperationComment text={t.comment} />,
     },
     {
       key: "amount",

@@ -30,7 +30,7 @@ import { confirm, useConfirmStore } from "../store/useConfirmStore";
 import { pluralRu } from "../lib/plural";
 import { EditTransactionModal } from "../components/EditTransactionModal";
 import { Checkbox } from "../components/Checkbox";
-import { OperationActions, OperationAmount, OperationCategory, OperationPayee } from "../components/operations/OperationCells";
+import { OperationActions, OperationAmount, OperationCategory, OperationPayee, OperationComment } from "../components/operations/OperationCells";
 import { TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
@@ -984,9 +984,7 @@ function Row({
         {tx.account}
       </div>
       <OperationPayee tx={tx} />
-      <div className="text-muted truncate" title={tx.comment || ""}>
-        {tx.comment || ""}
-      </div>
+      <OperationComment text={tx.comment} />
       <div
         className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
       >

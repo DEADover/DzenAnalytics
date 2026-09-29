@@ -81,6 +81,12 @@ interface DisplayState {
    */
   statementLine: boolean;
   /**
+   * Длинный комментарий в лентах операций — до двух строк с переносом по
+   * словам, а не одной строкой с многоточием. По умолчанию включено: в одну
+   * строку обрезалось как раз то, ради чего комментарий пишут.
+   */
+  commentWrap: boolean;
+  /**
    * Раскрыт ли журнал синхронизаций.
    *
    * По умолчанию свёрнут: это отладочная история, её открывают, когда что-то
@@ -116,6 +122,7 @@ interface DisplayState {
   setFractionDigits: (n: FractionDigits) => Promise<void>;
   setTableFontLevel: (level: TableFontLevel) => Promise<void>;
   setStatementLine: (on: boolean) => Promise<void>;
+  setCommentWrap: (on: boolean) => Promise<void>;
   setSyncLogOpen: (on: boolean) => Promise<void>;
   setHideThanks: (on: boolean) => Promise<void>;
   setFiltersMode: (mode: FiltersMode) => Promise<void>;
@@ -127,6 +134,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   fractionDigits: 0,
   tableFontLevel: DEFAULT_TABLE_FONT_LEVEL,
   statementLine: false,
+  commentWrap: true,
   syncLogOpen: false,
   hideThanks: false,
   filtersMode: "page",
@@ -139,6 +147,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       fractionDigits?: number;
       tableFontLevel?: number;
       statementLine?: boolean;
+      commentWrap?: boolean;
       syncLogOpen?: boolean;
       hideThanks?: boolean;
       filtersMode?: string;
@@ -153,6 +162,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       fractionDigits: fd,
       tableFontLevel: level,
       statementLine: stored?.statementLine === true,
+      commentWrap: stored?.commentWrap !== false,
       syncLogOpen: stored?.syncLogOpen === true,
       hideThanks: stored?.hideThanks === true,
       // По умолчанию фильтры стоят на странице; панель по кнопке — выбор человека.
@@ -179,6 +189,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   setStatementLine: async (on) => {
     set({ statementLine: on });
     await db.saveJSON(KEY, { ...persisted(get()), statementLine: on });
+  },
+
+  setCommentWrap: async (on) => {
+    set({ commentWrap: on });
+    await db.saveJSON(KEY, { ...persisted(get()), commentWrap: on });
   },
 
   setSyncLogOpen: async (on) => {
@@ -215,6 +230,7 @@ function persisted(s: DisplayState) {
     fractionDigits: s.fractionDigits,
     tableFontLevel: s.tableFontLevel,
     statementLine: s.statementLine,
+    commentWrap: s.commentWrap,
     syncLogOpen: s.syncLogOpen,
     hideThanks: s.hideThanks,
     filtersMode: s.filtersMode,

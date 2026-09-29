@@ -99,6 +99,25 @@ export function OperationPayee({ tx }: { tx: Transaction }) {
   );
 }
 
+/**
+ * Комментарий операции — одной строкой с многоточием или до двух строк с
+ * переносом по словам, как выбрано в «Оформлении». Полный текст — в подсказке.
+ * Одна на все ленты и шторку: в каждой была своя копия с `truncate`.
+ */
+export function OperationComment({ text, className = "" }: { text: string; className?: string }) {
+  const wrap = useDisplayStore((s) => s.commentWrap);
+  return (
+    <div
+      className={`text-muted min-w-0 ${
+        wrap ? "whitespace-normal line-clamp-2 break-words" : "truncate"
+      } ${className}`}
+      title={text || ""}
+    >
+      {text || ""}
+    </div>
+  );
+}
+
 /** Сумма: знак или значок вида, сумма в валюте операции, полученное в другой валюте — строкой ниже. */
 export function OperationAmount({ tx }: { tx: Transaction }) {
   const received = crossCurrencyReceived(tx);

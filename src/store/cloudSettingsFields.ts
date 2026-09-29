@@ -150,6 +150,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useDisplayStore, "display.statementLine", (s) => s.statementLine, (v, s) =>
     isBool(v) ? s.setStatementLine(v) : undefined
   ),
+  field(useDisplayStore, "display.commentWrap", (s) => s.commentWrap, (v, s) =>
+    isBool(v) ? s.setCommentWrap(v) : undefined
+  ),
   field(useDisplayStore, "display.hideThanks", (s) => s.hideThanks, (v, s) =>
     isBool(v) ? s.setHideThanks(v) : undefined
   ),

@@ -40,7 +40,7 @@ import { pluralRu } from "../lib/plural";
 import { operationTone } from "../lib/txKindStyle";
 import { TONE_CLASS, buildCsv, csvFileName, downloadCsv } from "../components/table/tableKit";
 import { ExportButton } from "../components/table/TableParts";
-import { OperationAmount, OperationPayee } from "../components/operations/OperationCells";
+import { OperationAmount, OperationPayee, OperationComment } from "../components/operations/OperationCells";
 import { DayHeader } from "../components/operations/DayHeader";
 import {
   LazyListFooter,
@@ -486,9 +486,7 @@ function Row({
         {tx.account}
       </div>
       <OperationPayee tx={tx} />
-      <div className="text-muted truncate" title={tx.comment || ""}>
-        {tx.comment || ""}
-      </div>
+      <OperationComment text={tx.comment} />
       <SuggestionCell suggestion={suggestion} applied={applied} />
       <div
         className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}

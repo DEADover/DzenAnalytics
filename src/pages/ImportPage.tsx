@@ -215,6 +215,8 @@ export function ImportPage() {
   const rememberFilters = useFilterMemoryStore((s) => s.enabled);
   const setRememberFilters = useFilterMemoryStore((s) => s.setEnabled);
   const setStatementLine = useDisplayStore((s) => s.setStatementLine);
+  const commentWrap = useDisplayStore((s) => s.commentWrap);
+  const setCommentWrap = useDisplayStore((s) => s.setCommentWrap);
   const filtersMode = useDisplayStore((s) => s.filtersMode);
   const setFiltersMode = useDisplayStore((s) => s.setFiltersMode);
   const hideThanks = useDisplayStore((s) => s.hideThanks);
@@ -1532,6 +1534,31 @@ export function ImportPage() {
               checked={statementLine}
               label="Показывать строку из выписки"
               onChange={(next) => setStatementLine(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Длинные комментарии"
+          status={
+            commentWrap
+              ? "До двух строк, с переносом по словам"
+              : "В одну строку — остальное в подсказке"
+          }
+          help={
+            <p>
+              В лентах «Операций», «Без категории», «Удалённых», «Дубликатов» и в
+              списке операций сбоку длинный комментарий можно показывать в две
+              строки — тогда видно, что в нём написано, но строки ленты
+              получаются разной высоты. В одну строку лента ровнее, а полный
+              текст — в подсказке при наведении.
+            </p>
+          }
+          control={
+            <Switch
+              checked={commentWrap}
+              label="Переносить длинные комментарии на вторую строку"
+              onChange={(next) => setCommentWrap(next)}
             />
           }
         />

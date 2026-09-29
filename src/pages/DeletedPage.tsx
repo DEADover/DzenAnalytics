@@ -27,7 +27,7 @@ import { formatDayHeader } from "../lib/dayLabel";
 import { kindLabel, operationTone } from "../lib/txKindStyle";
 import { TONE_CLASS, buildCsv, csvFileName, downloadCsv } from "../components/table/tableKit";
 import { ExportButton } from "../components/table/TableParts";
-import { OperationAmount, OperationCategory, OperationPayee } from "../components/operations/OperationCells";
+import { OperationAmount, OperationCategory, OperationPayee, OperationComment } from "../components/operations/OperationCells";
 import { DayHeader } from "../components/operations/DayHeader";
 import {
   LazyListFooter,
@@ -692,9 +692,7 @@ function FeedRowView({
         {tx.account}
       </div>
       <OperationPayee tx={tx} />
-      <div className="text-muted truncate" title={tx.comment || ""}>
-        {tx.comment || ""}
-      </div>
+      <OperationComment text={tx.comment} />
       {cols.status && (
         <div className="flex justify-center min-w-0">
           <StatusBadge row={row} />

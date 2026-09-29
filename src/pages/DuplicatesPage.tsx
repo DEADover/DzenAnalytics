@@ -14,6 +14,7 @@ import {
   OperationActions,
   OperationAmount,
   OperationCategory,
+  OperationComment,
 } from "../components/operations/OperationCells";
 import {
   LazyListFooter,
@@ -316,9 +317,7 @@ export function DuplicatesPage() {
                         Исходная
                       </span>
                     )}
-                    <span className="text-muted truncate" title={t.comment || ""}>
-                      {t.comment || ""}
-                    </span>
+                    <OperationComment text={t.comment} className="flex-1" />
                   </div>
                   <div
                     className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(t)]}`}
