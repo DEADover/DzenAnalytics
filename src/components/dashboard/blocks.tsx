@@ -15,7 +15,8 @@
  *     запрещены и недоступны с тача.
  */
 
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { clickedRow } from "../../lib/chartClick";
 import { pluralRu } from "../../lib/plural";
 import {
   isImprovement,
@@ -307,9 +308,14 @@ export function CashflowBars({
   m: DashboardModel;
   height?: number;
   window?: number;
-  onMonth?: (ym: string) => void;
+  /** Щелчок по месяцу. `kind` — если попали в столбец: доходы или расходы. */
+  onMonth?: (ym: string, kind?: "income" | "expense") => void;
 }) {
   const tail = m.forecast.slice(-(window + 3));
+  // Щелчок по столбцу доходит и до самого графика; столбец успевает первым и
+  // помечает, что щелчок уже разобран, — иначе поверх шторки доходов тут же
+  // открылась бы шторка всего месяца.
+  const barClicked = useRef(false);
   const { cap, clipped } = robustCeiling(
     tail.flatMap((p) => [p.income, p.expense]).map((v) => Math.round(v))
   );
@@ -347,10 +353,12 @@ export function CashflowBars({
             barCategoryGap="14%"
             barGap={3}
             onClick={(e: unknown) => {
-              const ev = e as { activePayload?: { payload?: { ym?: string } }[] } | undefined;
-              const ym = ev?.activePayload?.[0]?.payload?.ym;
-              const isF = tail.find((p) => p.ym === ym)?.isForecast;
-              if (ym && !isF && onMonth) onMonth(ym);
+              if (barClicked.current) {
+                barClicked.current = false;
+                return;
+              }
+              const row = clickedRow(e, data);
+              if (row && !row.isForecast && onMonth) onMonth(row.ym);
             }}
             style={{ cursor: onMonth ? "pointer" : undefined }}
           >
@@ -385,6 +393,12 @@ export function CashflowBars({
             <Bar
               dataKey="income"
               name="Доход +"
+              onClick={(bar: { payload?: { ym?: string; isForecast?: boolean } }) => {
+                const row = bar?.payload;
+                if (!row?.ym || row.isForecast || !onMonth) return;
+                barClicked.current = true;
+                onMonth(row.ym, "income");
+              }}
               fill="rgb(var(--c-income))"
               maxBarSize={30}
               activeBar={false}
@@ -396,6 +410,12 @@ export function CashflowBars({
             <Bar
               dataKey="expense"
               name="Расход −"
+              onClick={(bar: { payload?: { ym?: string; isForecast?: boolean } }) => {
+                const row = bar?.payload;
+                if (!row?.ym || row.isForecast || !onMonth) return;
+                barClicked.current = true;
+                onMonth(row.ym, "expense");
+              }}
               fill="rgb(var(--c-expense))"
               maxBarSize={30}
               activeBar={false}

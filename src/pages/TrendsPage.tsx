@@ -53,6 +53,7 @@ import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
 import { useEffect } from "react";
 import { SectionControls } from "../components/SectionControls";
+import { clickedRow, clickedDataKey } from "../lib/chartClick";
 
 export function TrendsPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -164,6 +165,17 @@ export function TrendsPage() {
     showDrill(`${cat} · ${monthLabel(ym)}`, txs, "Тренд категории");
   }
 
+  function openCategoriesMonth(cats: string[], ym: string) {
+    const set = new Set(cats);
+    const txs = filtered.filter(
+      (t) =>
+        matchesKind(t.kind) &&
+        set.has(level === "top" ? t.category : t.categoryFull) &&
+        periodKey(t.date, monthStartDay) === ym
+    );
+    showDrill(monthLabel(ym), txs, "Тренд категорий");
+  }
+
   function openDay(dow: number) {
     const txs = filtered.filter((t) => matchesKind(t.kind) && new Date(t.date).getDay() === dow);
     const name = ["воскресеньям", "понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам"][dow];
@@ -233,12 +245,13 @@ export function TrendsPage() {
             <LineChart
               data={series}
               onClick={(e: unknown) => {
-                const ev = e as
-                  | { activePayload?: { payload?: { ym?: string }; dataKey?: string }[] }
-                  | undefined;
-                const ym = ev?.activePayload?.[0]?.payload?.ym;
-                const cat = ev?.activePayload?.[0]?.dataKey;
-                if (ym && cat && typeof cat === "string") openCategoryMonth(cat, ym);
+                const ym = (clickedRow(e, series) as { ym?: string } | undefined)?.ym;
+                if (!ym) return;
+                // Щёлкнули по точке линии — её категория; мимо линий — все
+                // показанные категории этого месяца.
+                const cat = clickedDataKey(e);
+                if (cat && activeCategories.includes(cat)) openCategoryMonth(cat, ym);
+                else openCategoriesMonth(activeCategories, ym);
               }}
               style={{ cursor: "pointer" }}
             >
@@ -281,8 +294,7 @@ export function TrendsPage() {
               <BarChart
                 data={dowChart}
                 onClick={(e: unknown) => {
-                  const ev = e as { activePayload?: { payload?: { fullName?: string } }[] } | undefined;
-                  const name = ev?.activePayload?.[0]?.payload?.fullName;
+                  const name = (clickedRow(e, dowChart) as { fullName?: string } | undefined)?.fullName;
                   const idx = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"].indexOf(name || "");
                   if (idx >= 0) openDay(idx);
                 }}

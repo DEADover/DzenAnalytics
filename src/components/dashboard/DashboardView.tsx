@@ -624,12 +624,15 @@ export function DashboardView() {
 
   const { onMonth, onCategory, onAccount, onDay } = useMemo(
     () => ({
-      onMonth: (ym: string) =>
-        showDrill(
-          monthLabel(ym),
-          transactions.filter((t) => periodKey(t.date, monthStartDay) === ym),
-          "Месяц"
-        ),
+      // По столбцу — только доходы или только расходы месяца (расходы — с
+      // возвратами: они уменьшили высоту столбца); мимо столбцов — весь месяц.
+      onMonth: (ym: string, kind?: "income" | "expense") => {
+        const inMonth = transactions.filter((t) => periodKey(t.date, monthStartDay) === ym);
+        if (!kind) return showDrill(monthLabel(ym), inMonth, "Месяц");
+        return kind === "income"
+          ? showDrill(`Доходы · ${monthLabel(ym)}`, inMonth.filter((t) => t.kind === "income"), "Доходы месяца")
+          : showDrill(`Расходы · ${monthLabel(ym)}`, inMonth.filter((t) => affectsExpense(t.kind)), "Расходы месяца");
+      },
       // Возвраты тоже берём: именно они уменьшили ту сумму, по которой кликнули.
       // Тоже за текущий месяц: проценты в виджете считаны по нему.
       onCategory: (name: string) =>

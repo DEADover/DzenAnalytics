@@ -49,6 +49,7 @@ import { ChartTooltipCard, TooltipFacts } from "../components/TooltipFacts";
 import { MultiSelect } from "../components/MultiSelect";
 import { InfoPopover } from "../components/InfoPopover";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { clickedRow } from "../lib/chartClick";
 
 const METRICS: DynamicsMetric[] = ["expense", "income", "net", "balance"];
 const GRANULARITIES: Granularity[] = ["day", "week", "month", "year"];
@@ -325,10 +326,7 @@ export function DynamicsPage() {
                 <ComposedChart
                   data={series.points}
                   onClick={(e: unknown) => {
-                    const ev = e as
-                      | { activePayload?: { payload?: { key?: string } }[] }
-                      | undefined;
-                    const key = ev?.activePayload?.[0]?.payload?.key;
+                    const key = (clickedRow(e, series.points) as { key?: string } | undefined)?.key;
                     if (key) openBucket(key);
                   }}
                   style={{ cursor: "pointer" }}

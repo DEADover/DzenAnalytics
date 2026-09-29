@@ -63,6 +63,7 @@ import { SectionEmpty } from "../components/SectionEmpty";
 import { SectionControls } from "../components/SectionControls";
 import { ProgressBar } from "../components/ProgressBar";
 import { Badge } from "../components/Badge";
+import { clickedRow } from "../lib/chartClick";
 
 const INCOME = chartColor.income;
 const EXPENSE = chartColor.expense;
@@ -603,8 +604,7 @@ function YearBars({
             maxBarSize={22}
             style={{ cursor: "pointer" }}
             onClick={(e) => {
-              const ev = e as { activePayload?: { payload?: { ym?: string } }[] } | undefined;
-              const ym = ev?.activePayload?.[0]?.payload?.ym;
+              const ym = (clickedRow(e, data) as { ym?: string } | undefined)?.ym;
               if (ym) onMonth(ym);
             }}
           >

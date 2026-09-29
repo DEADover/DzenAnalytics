@@ -70,6 +70,7 @@ import { ChartTooltipCard, TooltipFacts, SeriesTooltip } from "../components/Too
 import { DataTable } from "../components/DataTable";
 import { toneOfSigned } from "../components/table/tableKit";
 import type { MonthBucket } from "../lib/aggregations";
+import { clickedRow } from "../lib/chartClick";
 
 export function CashflowPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -318,8 +319,7 @@ export function CashflowPage() {
               barGap={0}
               maxBarSize={15}
               onClick={(e: unknown) => {
-                const ev = e as { activePayload?: { payload?: { ym?: string } }[] } | undefined;
-                const ym = ev?.activePayload?.[0]?.payload?.ym;
+                const ym = clickedRow(e, chartData)?.ym;
                 if (ym) openMonth(ym);
               }}
               style={{ cursor: "pointer" }}
@@ -451,8 +451,7 @@ export function CashflowPage() {
                 data={stream.data}
                 stackOffset="silhouette"
                 onClick={(e: unknown) => {
-                  const ev = e as { activePayload?: { payload?: { ym?: string } }[] } | undefined;
-                  const ym = ev?.activePayload?.[0]?.payload?.ym;
+                  const ym = (clickedRow(e, stream.data) as { ym?: string } | undefined)?.ym;
                   if (ym) openMonth(ym);
                 }}
                 style={{ cursor: "pointer" }}
