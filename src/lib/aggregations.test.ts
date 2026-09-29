@@ -1312,6 +1312,62 @@ describe("дубли: копейки", () => {
 });
 
 describe("привязка кривой к реальным остаткам", () => {
+  it("поправка позднего счёта не уводит раннюю историю в минус", () => {
+    const basis = netWorthBasis(
+      [
+        {
+          title: "Старый",
+          currency: "RUB",
+          startBalance: 100,
+          startDate: "2020-01-01",
+          archive: false,
+          inBalance: true,
+          balance: 100,
+        },
+        {
+          title: "Поздний",
+          currency: "RUB",
+          startBalance: 1000,
+          startDate: "2022-01-01",
+          archive: true,
+          inBalance: true,
+          balance: 0,
+        },
+      ],
+      [],
+      { base: "RUB", rates: { RUB: 1 } },
+      false
+    );
+    const s = netWorthSeries([], null, basis);
+
+    expect(s).toEqual([
+      { date: "2020-01-01", net: 100 },
+      { date: "2022-01-01", net: 100 },
+    ]);
+  });
+
+  it("черновик меняет конец линии, но не её начальную базу", () => {
+    const draft = tx({
+      id: "draft-income",
+      kind: "income",
+      incomeAccount: "A",
+      amountBase: 500,
+      date: "2022-01-01",
+    });
+    const s = netWorthSeries([draft], null, {
+      accounts: new Set(["A"]),
+      accountAnchors: [
+        { account: "A", date: "2020-01-01", opening: 100, current: 100 },
+      ],
+      unsyncedIds: new Set(["draft-income"]),
+    });
+
+    expect(s).toEqual([
+      { date: "2020-01-01", net: 100 },
+      { date: "2022-01-01", net: 600 },
+    ]);
+  });
+
   it("конец кривой садится ровно на сумму остатков, форма не меняется", () => {
     // Операции объясняют только 300 из 500: остальное — курсовая переоценка и
     // прочее, чего в потоках нет. Раньше кривая на этом и заканчивалась.

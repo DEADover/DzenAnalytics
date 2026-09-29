@@ -1532,6 +1532,26 @@ export interface NetWorthOptions {
    * кривую на постоянную величину: форма — из операций, конец — из правды.
    */
   anchorTo?: number | null;
+  /**
+   * Посчётные якоря для API-режима.
+   *
+   * Общий `anchorTo` нельзя безопасно размазывать по всей истории: поправка
+   * счёта, открытого в 2024-м, тогда меняет и баланс 2020 года. Эти якоря
+   * позволяют восстановить каждый счёт отдельно и включить его поправку только
+   * с даты появления счёта.
+   */
+  accountAnchors?: NetWorthAccountAnchor[];
+  /** Локальные черновики уже есть в `allTxs`, но ещё не входят в API-баланс. */
+  unsyncedIds?: Set<string> | null;
+}
+
+export interface NetWorthAccountAnchor {
+  account: string;
+  date: string;
+  /** Начальный остаток из Дзен-мани, в базовой валюте. */
+  opening: number;
+  /** Текущий остаток из Дзен-мани, в базовой валюте. */
+  current: number;
 }
 
 /** Subset of `LiveAccount` (avoids a store→lib import) needed to seed openings. */
@@ -1548,8 +1568,9 @@ export interface NetWorthAccount {
 
 /**
  * Build the net-worth reconstruction basis from live accounts: which accounts
- * count, and a dated opening-balance event per account (its `startBalance` in
- * base currency, placed at `startDate` → first transaction → global earliest).
+ * count, their dated opening-balance events, and per-account current-balance
+ * anchors. Account-scoped anchors keep a later account from changing earlier
+ * years when its API balance and reconstructed flow differ.
  */
 export function netWorthBasis(
   liveAccounts: NetWorthAccount[],
@@ -1559,6 +1580,8 @@ export function netWorthBasis(
 ): {
   accounts: Set<string>;
   openings: { date: string; amount: number }[];
+  /** Посчётные данные для привязки без обратного сдвига чужой истории. */
+  accountAnchors: NetWorthAccountAnchor[];
   /** Сумма текущих остатков включённых счетов, в базовой валюте. */
   total: number;
 } {
@@ -1578,6 +1601,7 @@ export function netWorthBasis(
     currency === rates.base ? amount : amount * (rates.rates[currency] || 1);
   const accounts = new Set<string>();
   const openings: { date: string; amount: number }[] = [];
+  const anchors = new Map<string, NetWorthAccountAnchor>();
   let total = 0;
   for (const a of liveAccounts) {
     // Архивные счета УЧАСТВУЮТ. Раньше они выбрасывались целиком — и вместе с
@@ -1591,7 +1615,31 @@ export function netWorthBasis(
     // показывает.
     if (!a.inBalance && !includeOffBalance) continue;
     accounts.add(a.title);
-    total += toBaseAmt(a.balance, a.currency);
+    const current = toBaseAmt(a.balance, a.currency);
+    const opening = toBaseAmt(a.startBalance, a.currency);
+    total += current;
+    const plausibleStart =
+      a.startDate && a.startDate >= "2000-01-01" ? a.startDate : null;
+    const firstTx = earliest.get(a.title) || "";
+    const openingDate = plausibleStart || firstTx || globalEarliest;
+    // Дата открытия иногда оказывается позже уже существующих операций. Не
+    // оставляем их до появления счёта: такой поток нельзя корректно привязать.
+    const anchorDate =
+      plausibleStart && firstTx
+        ? plausibleStart < firstTx
+          ? plausibleStart
+          : firstTx
+        : openingDate;
+    if (anchorDate) {
+      const prev = anchors.get(a.title);
+      if (prev) {
+        prev.opening += opening;
+        prev.current += current;
+        if (anchorDate < prev.date) prev.date = anchorDate;
+      } else {
+        anchors.set(a.title, { account: a.title, date: anchorDate, opening, current });
+      }
+    }
     if (a.startBalance) {
       // Zenmoney occasionally hands back an epoch/1970 `startDate` (legacy or
       // import artifact). Such a date would plant a phantom opening balance «at
@@ -1599,13 +1647,95 @@ export function netWorthBasis(
       // implausibly-old startDate as absent and fall back to the account's
       // first transaction (or the global earliest). Legitimate early dates
       // (an account opened before the first visible transaction) are kept.
-      const plausibleStart =
-        a.startDate && a.startDate >= "2000-01-01" ? a.startDate : null;
-      const date = plausibleStart || earliest.get(a.title) || globalEarliest;
-      if (date) openings.push({ date, amount: toBaseAmt(a.startBalance, a.currency) });
+      if (openingDate) openings.push({ date: openingDate, amount: opening });
     }
   }
-  return { accounts, openings, total };
+  return { accounts, openings, accountAnchors: [...anchors.values()], total };
+}
+
+/**
+ * API-режим: восстанавливаем баланс каждого счёта отдельно и лишь потом
+ * складываем линии.
+ *
+ * Для счёта известны текущий остаток и весь видимый поток. Их разница — его
+ * фактическая начальная база. Важно применять её только начиная с даты этого
+ * счёта. Прежняя общая поправка применялась и к более ранним годам, поэтому
+ * поздний закрытый счёт мог увести начало совокупного графика в минус.
+ */
+function accountAnchoredNetWorthSeries(
+  allTxs: Transaction[],
+  opts: NetWorthOptions
+): { date: string; net: number }[] {
+  const anchors = opts.accountAnchors ?? [];
+  const set = opts.accounts ?? new Set(anchors.map((a) => a.account));
+  const byAccount = new Map(anchors.map((a) => [a.account, a]));
+  const days = new Map<string, Map<string, number>>();
+  const starts = new Map<string, NetWorthAccountAnchor[]>();
+  const flow = new Map<string, number>();
+  const unsyncedFlow = new Map<string, number>();
+
+  const ensureDay = (date: string) => {
+    let day = days.get(date);
+    if (!day) {
+      day = new Map();
+      days.set(date, day);
+    }
+    return day;
+  };
+  const addFlow = (date: string, account: string, delta: number, unsynced: boolean) => {
+    if (!account || !set.has(account) || delta === 0) return;
+    const day = ensureDay(date);
+    day.set(account, (day.get(account) || 0) + delta);
+    flow.set(account, (flow.get(account) || 0) + delta);
+    if (unsynced) {
+      unsyncedFlow.set(account, (unsyncedFlow.get(account) || 0) + delta);
+    }
+  };
+
+  for (const a of anchors) {
+    const date = ymdKey(a.date);
+    if (!date) continue;
+    ensureDay(date);
+    const list = starts.get(date);
+    if (list) list.push(a);
+    else starts.set(date, [a]);
+  }
+  for (const t of allTxs) {
+    const date = ymdKey(t.date);
+    if (!date) continue;
+    const unsynced = opts.unsyncedIds?.has(t.id) ?? false;
+    if (t.kind === "income" || t.kind === "refund") {
+      addFlow(date, t.incomeAccount, t.amountBase, unsynced);
+    } else if (t.kind === "expense") {
+      addFlow(date, t.outcomeAccount, -t.amountBase, unsynced);
+    } else if (t.kind === "transfer") {
+      addFlow(date, t.outcomeAccount, -t.amountBase, unsynced);
+      addFlow(date, t.incomeAccount, t.amountBase, unsynced);
+    }
+  }
+
+  const seed = new Map<string, number>();
+  for (const [account, a] of byAccount) {
+    // API balance contains only synced operations. A draft stays in the shape
+    // and in the projected final value, but must not drag the historical base.
+    const syncedFlow = (flow.get(account) || 0) - (unsyncedFlow.get(account) || 0);
+    const correction = a.current - a.opening - syncedFlow;
+    seed.set(account, a.opening + correction);
+  }
+
+  const running = new Map<string, number>();
+  const sorted = [...days.keys()].sort();
+  return sorted.map((date) => {
+    for (const a of starts.get(date) ?? []) {
+      running.set(a.account, (running.get(a.account) || 0) + (seed.get(a.account) || 0));
+    }
+    for (const [account, delta] of days.get(date)!) {
+      running.set(account, (running.get(account) || 0) + delta);
+    }
+    let net = 0;
+    for (const amount of running.values()) net += amount;
+    return { date, net };
+  });
 }
 
 export function netWorthSeries(
@@ -1613,6 +1743,9 @@ export function netWorthSeries(
   calibration?: CalibrationInput | null,
   opts?: NetWorthOptions
 ): { date: string; net: number }[] {
+  if (!calibration && opts?.accountAnchors) {
+    return accountAnchoredNetWorthSeries(allTxs, opts);
+  }
   const set = opts?.accounts ?? null;
   const inSet = (a: string | null | undefined) => !!a && set!.has(a);
   const days = new Map<string, number>();
