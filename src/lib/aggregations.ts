@@ -226,6 +226,9 @@ export function stackedBalanceByAccount(
   return assembleStack(built.lines, built.dates, built.layers, topN, only);
 }
 
+/** Дата «позже всех»: по ней `rateAt` отдаёт курс синхронизации. */
+const LATEST_RATE_DATE = "9999-12-31";
+
 /** Разделитель в ключе «счёт + валюта»: в названиях счетов его не бывает. */
 const BALANCE_KEY_SEP = "\u0001";
 
@@ -410,7 +413,12 @@ function valuedLines(
       running += days.get(date)!.get(sub) || 0;
       if (!known && start !== undefined && date < start) continue;
       if (running === 0) continue;
-      out[i] += running * valuation.rateAt(currency, date);
+      // Последняя точка — это остатки из Дзен-мани, то есть состояние на
+      // момент синхронизации, и оцениваются они по её курсу, даже если
+      // последняя операция была несколько дней назад: иначе «Совокупный
+      // баланс» расходился бы с суммой остатков в списке на курсовую разницу.
+      const rateDate = i === dates.length - 1 ? LATEST_RATE_DATE : date;
+      out[i] += running * valuation.rateAt(currency, rateDate);
     }
   }
   return { dates, layers, lines };

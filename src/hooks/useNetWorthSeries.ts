@@ -16,9 +16,13 @@ import { useBalanceValuation } from "./useBalanceValuation";
  * всё, чего она не объясняла (вклады, валюта), ложилось на всю историю разом.
  *
  * Без Дзен-мани (CSV) остатков нет — кривая от нуля с ручной калибровкой.
+ *
+ * `accounts` — свой набор счетов вместо «в балансе» (капитал FIRE на
+ * «Здоровье»). Без Дзен-мани он не действует: счетов тогда нет вовсе.
  */
 export function useNetWorthSeries(
-  txs: Transaction[]
+  txs: Transaction[],
+  accounts?: readonly string[] | null
 ): { date: string; net: number }[] {
   const calibration = useCalibrationStore((s) => s.calibration);
   const drafts = useDraftsStore((s) => s.drafts);
@@ -26,7 +30,7 @@ export function useNetWorthSeries(
 
   return useMemo(() => {
     if (valuation) {
-      const titles = [...(valuation.universe ?? [])];
+      const titles = accounts ? [...accounts] : [...(valuation.universe ?? [])];
       if (titles.length === 0) return [];
       const { series } = stackedBalanceByAccount(
         txs,
@@ -40,5 +44,5 @@ export function useNetWorthSeries(
       return series.map((p) => ({ date: p.date, net: p.total }));
     }
     return netWorthSeries(txs, calibration);
-  }, [txs, valuation, drafts, calibration]);
+  }, [txs, accounts, valuation, drafts, calibration]);
 }

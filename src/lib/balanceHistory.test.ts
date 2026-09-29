@@ -91,6 +91,7 @@ describe("остатки по правилам Дзен-мани", () => {
       tx({ kind: "income", amount: 10, currency: "USD", incomeAccount: "Доллары", date: "2023-01-01" }),
       tx({ kind: "income", amount: 10, currency: "USD", incomeAccount: "Доллары", date: "2024-01-01" }),
     ];
+    // Последняя точка — по курсу синхронизации (самая поздняя дата), прошлые — по курсу дня.
     const rateAt = (c: string, d: string) => (c !== "USD" ? 1 : d < "2024-01-01" ? 70 : 90);
     const { series } = stackedBalanceByAccount(
       txs, 9, null, null, null, null,
@@ -98,6 +99,18 @@ describe("остатки по правилам Дзен-мани", () => {
     );
     expect(at(series, "2023-01-01")["Доллары"]).toBe(700); // 10 $ × 70
     expect(at(series, "2024-01-01")["Доллары"]).toBe(1800); // 20 $ × 90
+  });
+
+  it("последняя точка — по курсу синхронизации, даже если операция была раньше", () => {
+    const txs = [
+      tx({ kind: "income", amount: 10, currency: "USD", incomeAccount: "Доллары", date: "2026-09-01" }),
+    ];
+    const rateAt = (c: string, d: string) => (c !== "USD" ? 1 : d >= "2026-09-29" ? 95 : 80);
+    const { series } = stackedBalanceByAccount(
+      txs, 9, null, null, null, null,
+      valuation({ "Доллары|USD": 10 }, { rateAt })
+    );
+    expect(series.at(-1)!.total).toBe(950);
   });
 
   it("одноимённые счета в разных валютах («Долги») не складываются без пересчёта", () => {

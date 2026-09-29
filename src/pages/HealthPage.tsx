@@ -7,6 +7,8 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useHealthScore } from "../hooks/useHealthScore";
 import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
 import { useFireCapital } from "../hooks/useFireCapital";
+import { useLiveAccounts } from "../hooks/useLiveAccounts";
+import { useFireStore } from "../store/useFireStore";
 import { fireSeries } from "../lib/aggregations";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -24,24 +26,33 @@ export function HealthPage() {
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const score = useHealthScore();
-  const netWorth = useNetWorthSeries(transactions);
-  const { capital, capitalAccounts } = useFireCapital();
+  const { capitalAccounts } = useFireCapital();
+  const excluded = useFireStore((s) => s.excluded);
+  const liveAccounts = useLiveAccounts();
 
-  // Anchor the net-worth series so its LAST point equals the curated FIRE
-  // capital — then «месяцы жизни» on the chart use the same capital the
-  // independence block does, and the two headline numbers agree. The offset
-  // shifts the whole history (we have no per-account balance history), which
-  // preserves the shape while making today's point exact. Skipped in CSV mode
-  // (no live accounts) where the net-worth series already carries calibration.
-  const anchoredNet = useMemo(() => {
-    if (capitalAccounts.length === 0 || netWorth.length === 0) return netWorth;
-    const offset = capital - netWorth[netWorth.length - 1].net;
-    return netWorth.map((p) => ({ date: p.date, net: p.net + offset }));
-  }, [netWorth, capital, capitalAccounts.length]);
+  /**
+   * Счета капитала FIRE — те же, что в блоке независимости, плюс закрытые.
+   *
+   * Прежде кривая строилась по всем счетам «в балансе» и целиком сдвигалась
+   * так, чтобы её конец совпал с капиталом: разница — исключённые счета —
+   * ложилась на всю историю одной суммой. Теперь кривая — остатки ровно этих
+   * счетов на каждый день. Закрытые идут в неё тоже: в блоке их нет, потому
+   * что сегодня на них ноль, а в прошлом там лежали настоящие деньги, и без
+   * них перевод с закрытого вклада выглядел бы ростом капитала.
+   */
+  const fireAccounts = useMemo(() => {
+    if (!liveAccounts || capitalAccounts.length === 0) return null;
+    return liveAccounts
+      .filter((a) => a.archive || !excluded.includes(a.title))
+      .map((a) => a.title);
+  }, [liveAccounts, capitalAccounts.length, excluded]);
+  // Последняя точка — по курсу синхронизации, как и капитал в блоке, так что
+  // «месяцы жизни» на графике и «% до FIRE» считаются из одного числа.
+  const fireNet = useNetWorthSeries(transactions, fireAccounts);
 
   const fire = useMemo(
-    () => fireSeries(anchoredNet, analyticsTx, categoryMeta, 12, monthStartDay),
-    [anchoredNet, analyticsTx, categoryMeta, monthStartDay]
+    () => fireSeries(fireNet, analyticsTx, categoryMeta, 12, monthStartDay),
+    [fireNet, analyticsTx, categoryMeta, monthStartDay]
   );
   const avgObligatoryMonthly = fire.length
     ? fire[fire.length - 1].avgObligatory
