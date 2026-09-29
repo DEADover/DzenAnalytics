@@ -74,7 +74,16 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
     };
   }, [flash, startClosing, clearFlash]);
 
-  if (!loaded || !token) return null;
+  // Без Дзен-мани обмениваться с облаком нечем, но слот в начале дорожки —
+  // переключатель аккаунта и разреза — остаётся: из пустого нового аккаунта
+  // иначе нельзя было бы вернуться в прежний прямо из шапки.
+  if (!loaded || !token) {
+    return leading ? (
+      <div className="relative inline-flex items-center shrink-0">
+        <div className="seg-track">{leading}</div>
+      </div>
+    ) : null;
+  }
 
   const lastSyncHuman = lastSyncAt
     ? `Последняя синхронизация: ${new Date(lastSyncAt).toLocaleString("ru-RU")}`

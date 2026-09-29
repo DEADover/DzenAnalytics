@@ -1,14 +1,20 @@
 import { openDB, type IDBPDatabase } from "idb";
 import type { Transaction, CurrencyRates, ImportMeta } from "../types";
 
-const DB_NAME = "dzenanalytics";
+import { activeProfileId, dbNameFor } from "./profiles";
+
 const DB_VERSION = 1;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
+/**
+ * База выбранного аккаунта. Имя читается один раз, при первом открытии:
+ * переключение аккаунта перезагружает страницу, и в пределах одной загрузки
+ * база не меняется (см. `lib/profiles`).
+ */
 function getDB(): Promise<IDBPDatabase> {
   if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, DB_VERSION, {
+    dbPromise = openDB(dbNameFor(activeProfileId()), DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("transactions")) {
           db.createObjectStore("transactions", { keyPath: "id" });

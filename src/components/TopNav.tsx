@@ -21,6 +21,8 @@ import { useThemeStore } from "../store/useThemeStore";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { HeaderSyncActions } from "./HeaderSyncActions";
 import { SliceSwitcher } from "./SliceSwitcher";
+import { AccountSwitcher } from "./AccountSwitcher";
+import { useProfileLoginSync, useProfiles } from "../hooks/useProfiles";
 import { useSlicesStore } from "../store/useSlicesStore";
 import { useDashboardLayoutStore } from "../store/useDashboardLayoutStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
@@ -93,6 +95,12 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   // Переключатель разреза появляется только со второго разреза — от этого
   // зависит, нужен ли разделитель внутри панели.
   const hasSlices = useSlicesStore((s) => s.slices.length) > 1;
+  // Аккаунтов больше одного — в дорожке данных появляется их переключатель.
+  const multiProfile = useProfiles().profiles.length > 1;
+  // Логин Дзен-мани выбранного аккаунта — его подпись в списке аккаунтов.
+  // Здесь, а не в самом переключателе: тот виден только от двух аккаунтов, а
+  // запомнить логин нужно и у единственного — к моменту, когда заведут второй.
+  useProfileLoginSync();
   const theme = useThemeStore((s) => s.resolved);
   const setThemeMode = useThemeStore((s) => s.setMode);
   const zenToken = useZenmoneyStore((s) => s.token);
@@ -370,7 +378,16 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             со скруглением 8, обойма-пилюля, пилюля темы и два голых значка, —
             и правый край читался собранным из разных наборов. */}
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
-        <HeaderSyncActions leading={hasSlices ? <SliceSwitcher /> : undefined} />
+        <HeaderSyncActions
+          leading={
+            hasSlices || multiProfile ? (
+              <>
+                <AccountSwitcher />
+                <SliceSwitcher />
+              </>
+            ) : undefined
+          }
+        />
 
         {/* Системная дорожка. Поиск живёт здесь же: он открывает палитру
             команд, то есть тоже про приложение, а не про данные на экране. */}

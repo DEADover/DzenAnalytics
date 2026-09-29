@@ -37,6 +37,7 @@ import { formatDate, formatMoney } from "../lib/format";
 import { ExprAmountInput } from "./ExprAmountInput";
 import { rankPayees } from "../lib/payeeSuggest";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
+import { activeProfileId } from "../lib/profiles";
 import { parseAmountInput } from "../lib/splitTransaction";
 import type { Transaction, TxKind } from "../types";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
@@ -129,10 +130,11 @@ function dateTimeToDate(dateIso: string, time: string): Date {
  * его приходилось менять раз за разом. Удобство этого устройства — поэтому
  * в браузере, а не в общих настройках.
  */
-const LAST_ACCOUNT_KEY = "lastOperationAccount";
+// У каждого аккаунта свои счета — и последний счёт свой.
+const lastAccountKey = () => `lastOperationAccount:${activeProfileId()}`;
 function loadLastAccount(): string | null {
   try {
-    return localStorage.getItem(LAST_ACCOUNT_KEY);
+    return localStorage.getItem(lastAccountKey());
   } catch {
     return null;
   }
@@ -140,7 +142,7 @@ function loadLastAccount(): string | null {
 function saveLastAccount(title: string) {
   if (!title) return;
   try {
-    localStorage.setItem(LAST_ACCOUNT_KEY, title);
+    localStorage.setItem(lastAccountKey(), title);
   } catch {
     // Хранилище недоступно (приватное окно) — просто не запоминаем.
   }

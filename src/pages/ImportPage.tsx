@@ -38,6 +38,7 @@ import { isOAuthConfigured, startOAuth } from "../lib/oauth";
 import { SyncLog } from "../components/SyncLog";
 import { OperationsSettings } from "../components/OperationsSettings";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
+import { AccountsSettings } from "../components/AccountsSettings";
 import { PendingChangesModal } from "../components/PendingChangesModal";
 import { SlicesSettings } from "../components/SlicesSettings";
 import { SettingRow } from "../components/SettingRow";
@@ -1369,6 +1370,10 @@ export function ImportPage() {
           </div>
         )}
       </section>
+
+      {/* Аккаунты — сразу под источником данных: это тот же вопрос «чьи
+          данные на экране», только на уровень выше. */}
+      <AccountsSettings />
 
       </>)}
 
