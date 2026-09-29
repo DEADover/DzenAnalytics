@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { categoryKeysOf, hasCategory, tagLabel, tagsOf } from "./operationTags";
+import { categoryKeysOf, categoryRootsOf, hasCategory, tagLabel, tagsOf } from "./operationTags";
 
 const op = (p: { categoryFull?: string; extraCategories?: string[]; comment?: string }) => ({
   categoryFull: p.categoryFull ?? "Еда",
@@ -56,5 +56,17 @@ describe("tagLabel", () => {
   it("хэштег — с решёткой, категория — без", () => {
     expect(tagLabel("отпуск", "hashtags")).toBe("#отпуск");
     expect(tagLabel("Путешествия / Отпуск", "categories")).toBe("Путешествия / Отпуск");
+  });
+});
+
+describe("categoryRootsOf", () => {
+  it("корень — один раз, даже если в ветке и основная, и вторая категория", () => {
+    expect(
+      categoryRootsOf({ categoryFull: "Еда / Кафе", extraCategories: ["Еда", "Отпуск / Билеты"] })
+    ).toEqual(["Еда", "Отпуск"]);
+  });
+
+  it("операция без подкатегории относится к своему корню", () => {
+    expect(categoryRootsOf({ categoryFull: "Транспорт" })).toEqual(["Транспорт"]);
   });
 });

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { ChevronDown, X } from "lucide-react";
+import { textMatches } from "../lib/keyboardLayout";
 
 /**
  * Optional grouped variant of the dropdown — items split into named
@@ -177,7 +178,7 @@ export function Combobox({
     if (!filtering) return options;
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter((o) => o.toLowerCase().includes(q));
+    return options.filter((o) => textMatches(o, q));
   }, [filtering, query, options]);
 
   // Grouped variant: filter each group's items individually, then drop
@@ -189,7 +190,7 @@ export function Combobox({
     return groups
       .map((g) => ({
         label: g.label,
-        items: q ? g.items.filter((i) => i.toLowerCase().includes(q)) : g.items,
+        items: q ? g.items.filter((i) => textMatches(i, q)) : g.items,
       }))
       .filter((g) => g.items.length > 0);
   }, [groups, filtering, query]);

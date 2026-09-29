@@ -9,6 +9,7 @@ import type { Transaction } from "../types";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { Segmented } from "./Segmented";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { DateField } from "./DateField";
 
 /**
  * Bulk-edit modal. Lets the user change Категория (+подкатегория),
@@ -44,6 +45,9 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
   const [subcategory, setSubcategory] = useState("");
   const [payee, setPayee] = useState("");
   const [comment, setComment] = useState("");
+  // Дата — всем выбранным одна. Удобно, когда операции внесли «сегодня» по
+  // привычке, а были они на неделе. Время у каждой остаётся своим.
+  const [date, setDate] = useState("");
   // «Заменить» overwrites the comment; «Дополнить» appends to the existing one.
   const [commentMode, setCommentMode] = useState<"replace" | "append">("replace");
 
@@ -85,7 +89,7 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
   }, [allTransactions, dict]);
 
   const canApply =
-    category.trim() !== "" || payee.trim() !== "" || comment.trim() !== "";
+    category.trim() !== "" || payee.trim() !== "" || comment.trim() !== "" || date !== "";
 
   async function apply() {
     const patch: TransactionEdit = {};
@@ -96,6 +100,9 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
     }
     if (payee.trim()) {
       patch.brand = payee.trim();
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      patch.date = date;
     }
     // In «Заменить» the comment rides in the patch. In «Дополнить» it doesn't —
     // it's handed to the caller as `commentAppend` so each row keeps its own
@@ -169,6 +176,18 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
             onChange={setPayee}
             placeholder="Получатель без изменений"
             maxHeight="200px"
+          />
+        </div>
+
+        {/* Date */}
+        <div>
+          <label className="label block mb-1">Дата</label>
+          <DateField
+            typeable
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            placeholder="Дата без изменений"
+            className="input text-sm w-full"
           />
         </div>
 

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { MONTHS, MONTHS_SHORT } from "../lib/months";
+import { parseTypedDate } from "../lib/dateInput";
 
 /**
  * A fully Russian date field. The native <input type="date"> and its
@@ -93,6 +94,13 @@ interface Props {
    * незачем.
    */
   display?: ReactNode;
+  /**
+   * Дату можно набрать с клавиатуры: «28.03.2026», «280326», «2803», «вчера».
+   * Поле — текстовое, календарь открывается значком справа. Только для дней
+   * и только там, где дату вносят руками (окно операции): в дорожках
+   * фильтров поле работает как счётчик между стрелками.
+   */
+  typeable?: boolean;
 }
 
 export function DateField({
@@ -106,9 +114,13 @@ export function DateField({
   icon = true,
   shortYear = false,
   display: displayOverride,
+  typeable = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  /** Набираемый текст; `null` — не редактируется, в поле видна сама дата. */
+  const [typed, setTyped] = useState<string | null>(null);
   const display = value
     ? granularity === "month"
       ? toDisplayMonth(value)
@@ -116,6 +128,85 @@ export function DateField({
     : "";
   const ph = placeholder || (granularity === "month" ? "месяц год" : "дд.мм.гггг");
   const emit = (v: string) => onChange?.({ target: { value: v } });
+
+  if (typeable && granularity === "day") {
+    const today = new Date();
+    const todayIso = toISO(today.getFullYear(), today.getMonth(), today.getDate());
+    const parsed = typed === null ? null : parseTypedDate(typed, todayIso);
+    const invalid = typed !== null && typed.trim() !== "" && parsed === null;
+    // Разобралось — уходит; нет — поле возвращается к прежней дате: полу-
+    // набранный мусор не должен ни сохраниться, ни стереть дату.
+    const commit = () => {
+      if (parsed && parsed !== value) emit(parsed);
+      setTyped(null);
+    };
+    return (
+      <div className={`relative ${wrapperClassName}`}>
+        <div
+          ref={boxRef}
+          className={`${className} flex items-center gap-2 ${invalid ? "!border-expense" : ""}`}
+        >
+          <input
+            value={typed ?? display}
+            placeholder={ph}
+            inputMode="numeric"
+            aria-label={placeholder || "Дата"}
+            aria-invalid={invalid || undefined}
+            title="Можно набрать: 28.03.2026, 280326, 2803, 28 или «вчера»"
+            onFocus={(e) => {
+              setTyped(display);
+              e.target.select();
+            }}
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+                e.currentTarget.blur();
+              } else if (e.key === "Escape" && typed !== null) {
+                // Escape отменяет набор, но окно вокруг не закрывает.
+                e.stopPropagation();
+                setTyped(null);
+                e.currentTarget.blur();
+              } else if (e.key === "ArrowDown" && e.altKey) {
+                setOpen(true);
+              }
+            }}
+            onBlur={commit}
+            className="flex-1 min-w-0 bg-transparent outline-none tabular-nums"
+          />
+          {icon && (
+            <button
+              ref={btnRef}
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              className="shrink-0 text-muted hover:text-text"
+              aria-label="Открыть календарь"
+              tabIndex={-1}
+            >
+              <Calendar className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        {open && (
+          <CalendarPopup
+            anchorRef={boxRef}
+            value={value}
+            granularity="day"
+            onSelect={(v) => {
+              emit(v);
+              setOpen(false);
+            }}
+            onClear={() => {
+              emit("");
+              setOpen(false);
+            }}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`relative ${wrapperClassName}`}>
@@ -182,7 +273,7 @@ function CalendarPopup({
   onClear,
   onClose,
 }: {
-  anchorRef: RefObject<HTMLButtonElement | null>;
+  anchorRef: RefObject<HTMLElement | null>;
   value: string;
   granularity?: "day" | "month";
   onSelect: (iso: string) => void;

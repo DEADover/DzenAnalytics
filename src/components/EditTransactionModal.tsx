@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
-import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info } from "lucide-react";
+import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info, Check, ListPlus } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -33,8 +33,9 @@ import { HashtagTextarea } from "./HashtagTextarea";
 import { CategoryDot } from "./CategoryDot";
 import { useTagModeStore } from "../store/useTagModeStore";
 import { getHistoricalRubRate, type HistoricalRate } from "../lib/historicalRates";
-import { formatDate } from "../lib/format";
+import { formatDate, formatMoney } from "../lib/format";
 import { ExprAmountInput } from "./ExprAmountInput";
+import { rankPayees } from "../lib/payeeSuggest";
 import { parseAmountInput } from "../lib/splitTransaction";
 import type { Transaction, TxKind } from "../types";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
@@ -119,6 +120,31 @@ function dateTimeToDate(dateIso: string, time: string): Date {
  * away and is sent to Zenmoney on the next push. API mode only (the caller
  * only offers the button when a token is present).
  */
+/**
+ * Последний счёт, на который заводили операцию, — им заполняется новая.
+ *
+ * Операции обычно вносят пачкой по одному счёту: сначала все с карты, потом
+ * все наличные. Прежде каждая новая открывалась на первом активном счёте, и
+ * его приходилось менять раз за разом. Удобство этого устройства — поэтому
+ * в браузере, а не в общих настройках.
+ */
+const LAST_ACCOUNT_KEY = "lastOperationAccount";
+function loadLastAccount(): string | null {
+  try {
+    return localStorage.getItem(LAST_ACCOUNT_KEY);
+  } catch {
+    return null;
+  }
+}
+function saveLastAccount(title: string) {
+  if (!title) return;
+  try {
+    localStorage.setItem(LAST_ACCOUNT_KEY, title);
+  } catch {
+    // Хранилище недоступно (приватное окно) — просто не запоминаем.
+  }
+}
+
 export function EditTransactionModal({
   tx: txProp,
   template,
@@ -356,50 +382,17 @@ export function EditTransactionModal({
       if (cancelled || !list) return;
       setAccountCurrency(new Map(list.map((a) => [a.title, a.currency])));
       setArchivedAccounts(new Set(list.filter((a) => a.archive).map((a) => a.title)));
-      // Remember the first non-archived account so create mode can seed
-      // the account fields (applied in a dedicated effect below).
-      const firstActive = list.find((a) => !a.archive) ?? list[0];
+      // Новая операция открывается на последнем использованном счёте, если он
+      // ещё жив; иначе — на первом активном (эффект ниже подставит его).
+      const last = loadLastAccount();
+      const lastLive = last ? list.find((a) => a.title === last && !a.archive) : undefined;
+      const firstActive = lastLive ?? list.find((a) => !a.archive) ?? list[0];
       if (firstActive) setDefaultAccount(firstActive.title);
     });
     return () => {
       cancelled = true;
     };
   }, []);
-  const payeeGroups = useMemo(() => {
-    const brandSet = new Set<string>();
-    if (cachedBrands) for (const b of cachedBrands) brandSet.add(b);
-    for (const t of allTransactions) {
-      const b = t.brand?.trim();
-      if (b) brandSet.add(b);
-    }
-    const payeeSet = new Set<string>();
-    for (const t of allTransactions) {
-      const p = t.payee?.trim();
-      if (p && !brandSet.has(p)) payeeSet.add(p);
-    }
-    const cmp = (a: string, b: string) => a.localeCompare(b, "ru");
-    const groups = [];
-    if (brandSet.size > 0) {
-      groups.push({
-        label: "Получатели Дзен-мани",
-        items: Array.from(brandSet).sort(cmp),
-      });
-    }
-    if (payeeSet.size > 0) {
-      groups.push({
-        label: "Из выписок банка",
-        items: Array.from(payeeSet).sort(cmp),
-      });
-    }
-    return groups;
-  }, [cachedBrands, allTransactions]);
-  // Flat fallback — used by Combobox only when `groups` is empty
-  // (rare: no cache and no transactions yet).
-  const payeeOptions = useMemo(
-    () => payeeGroups.flatMap((g) => g.items),
-    [payeeGroups]
-  );
-
   // All account names ever used in the dataset (debit / cash / credit /
   // debt — anything that's appeared either as `account`, `outcomeAccount`
   // or `incomeAccount`), PLUS every live account from the Zenmoney cache.
@@ -454,6 +447,46 @@ export function EditTransactionModal({
   );
   const [category, setCategory] = useState(tx.category);
   const [subcategory, setSubcategory] = useState(tx.subcategory ?? "");
+  const payeeGroups = useMemo(() => {
+    const brandSet = new Set<string>();
+    if (cachedBrands) for (const b of cachedBrands) brandSet.add(b);
+    for (const t of allTransactions) {
+      const b = t.brand?.trim();
+      if (b) brandSet.add(b);
+    }
+    const payeeSet = new Set<string>();
+    for (const t of allTransactions) {
+      const p = t.payee?.trim();
+      if (p && !brandSet.has(p)) payeeSet.add(p);
+    }
+    const cmp = (a: string, b: string) => a.localeCompare(b, "ru");
+    const groups = [];
+    // Сначала — вероятные: частые и свежие, с учётом выбранной категории.
+    // Как у счетов: отдельной группой, только когда список длинный, и без
+    // повторов ниже.
+    const top =
+      brandSet.size + payeeSet.size > 10
+        ? rankPayees(allTransactions, { category: category.trim(), today: todayIso() })
+        : [];
+    const topSet = new Set(top);
+    if (top.length > 0) groups.push({ label: "Часто используемые", items: top });
+    const brands = Array.from(brandSet).filter((b) => !topSet.has(b));
+    const payees = Array.from(payeeSet).filter((p) => !topSet.has(p));
+    if (brands.length > 0) {
+      groups.push({ label: "Получатели Дзен-мани", items: brands.sort(cmp) });
+    }
+    if (payees.length > 0) {
+      groups.push({ label: "Из выписок банка", items: payees.sort(cmp) });
+    }
+    return groups;
+  }, [cachedBrands, allTransactions, category]);
+  // Flat fallback — used by Combobox only when `groups` is empty
+  // (rare: no cache and no transactions yet).
+  const payeeOptions = useMemo(
+    () => payeeGroups.flatMap((g) => g.items),
+    [payeeGroups]
+  );
+
   // Вторые категории (#69). Держим всегда, а не только в режиме тегов-категорий:
   // у копии операции они должны переехать вместе с остальным, даже если поля
   // тегов человек не видит.
@@ -538,6 +571,9 @@ export function EditTransactionModal({
   // their own rate). The «↻ по курсу» link flips it back to auto.
   const [manualIn, setManualIn] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** Подтверждение после «Создать и продолжить» — окно ведь не закрылось. */
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
 
   // Cross-currency transfer: both accounts known and in different currencies.
   // Only then do we need (and show) a separate destination amount/currency.
@@ -717,7 +753,13 @@ export function EditTransactionModal({
     return [...created, { id: hit.id, title: hit.title }];
   }
 
-  async function saveDraft() {
+  /**
+   * `keepOpen` — «Создать и продолжить»: операция уходит в черновики, а окно
+   * остаётся для следующей. Дата, тип, счёт и категория сохраняются —
+   * операции обычно вносят пачкой из одного чека или одного дня; сумма,
+   * получатель и комментарий очищаются, и курсор снова в сумме.
+   */
+  async function saveDraft(keepOpen = false) {
     const cache = await loadZenCache();
     if (!cache) {
       setError("Создание операций доступно только при синхронизации с Дзен-мани.");
@@ -738,6 +780,21 @@ export function EditTransactionModal({
     }
     await addDraft(built.zen);
     await refresh();
+    saveLastAccount(isDebt ? realAcc.trim() : kind === "transfer" ? outAcc.trim() : account.trim());
+    if (keepOpen) {
+      const sum = parseAmountInput(amount);
+      setSavedNote(
+        `Создано: ${Number.isFinite(sum) ? formatMoney(sum, currency) : amount}` +
+          (payee.trim() ? ` · ${payee.trim()}` : "")
+      );
+      setAmount("");
+      setInAmount("");
+      setManualIn(false);
+      setPayee("");
+      setComment("");
+      amountRef.current?.focus();
+      return;
+    }
     onClose();
   }
 
@@ -800,7 +857,7 @@ export function EditTransactionModal({
     });
   }
 
-  async function save() {
+  async function save(keepOpen = false) {
     const err = validate();
     if (err) {
       setError(err);
@@ -810,7 +867,7 @@ export function EditTransactionModal({
     setError(null);
     try {
       if (isCreate) {
-        await saveDraft();
+        await saveDraft(keepOpen);
         return;
       }
       if (isDraftEdit) {
@@ -1046,6 +1103,7 @@ export function EditTransactionModal({
         <div className="grid grid-cols-[3fr_2fr] gap-3">
           <Field label="Дата">
             <DateField
+              typeable
               value={date}
               onChange={(e) => setDate(e.target.value)}
               className="input text-sm w-full"
@@ -1249,8 +1307,12 @@ export function EditTransactionModal({
             {/* Считает, как поле суммы в разделении операции: «1200+300»,
                 «2400/2» — чек редко приходит одним числом. */}
             <ExprAmountInput
+              ref={amountRef}
               value={amount}
-              onChange={setAmount}
+              onChange={(v) => {
+                setAmount(v);
+                setSavedNote(null);
+              }}
               aria-label="Сумма"
               className="input text-sm w-full font-mono tabular-nums"
             />
@@ -1410,12 +1472,30 @@ export function EditTransactionModal({
           />
         </Field>
       </ModalBody>
-      {error && (
+      {error ? (
         <div className="shrink-0 px-5 pt-2 pb-1 text-xs text-expense">{error}</div>
+      ) : (
+        savedNote && (
+          <div className="shrink-0 px-5 pt-2 pb-1 text-xs text-income flex items-center gap-1.5">
+            <Check className="w-3.5 h-3.5" aria-hidden />
+            {savedNote}. Можно вносить следующую.
+          </div>
+        )
       )}
       <ModalFooter justify="between">
         {isCreate ? (
-          <span />
+          // Вторая кнопка создания — слева, подальше от основной: «Создать»
+          // по привычке жмут справа, и перепутать их не должно получаться.
+          <Tooltip content="Создать и сразу вносить следующую — дата, счёт и категория останутся">
+            <button
+              onClick={() => void save(true)}
+              disabled={saving}
+              className="btn-ghost text-sm"
+            >
+              <ListPlus className="w-3.5 h-3.5" />
+              Создать и продолжить
+            </button>
+          </Tooltip>
         ) : (
           // Четыре подписи в ряд перестали помещаться в карточку шириной
           // 512 пикселей, и кнопки поехали к самым краям. Удаление осталось
@@ -1474,7 +1554,7 @@ export function EditTransactionModal({
             Отмена
           </button>
           <button
-            onClick={save}
+            onClick={() => void save()}
             disabled={saving}
             className="btn-primary text-sm"
           >

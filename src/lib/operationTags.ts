@@ -33,6 +33,24 @@ export function categoryKeysOf(
 }
 
 /**
+ * Корневые категории операции — основной и вторых, без повторов.
+ *
+ * Нужны для счёта «по ветке»: у родителя, которым почти не пользуются
+ * напрямую, операций на деле много — все они в подкатегориях. Операция с
+ * «Еда / Кафе» и второй «Еда» относится к ветке «Еда» один раз.
+ */
+export function categoryRootsOf(
+  t: Pick<Transaction, "categoryFull" | "extraCategories">
+): string[] {
+  const roots = new Set<string>();
+  for (const key of categoryKeysOf(t)) {
+    const root = key.split(" / ")[0];
+    if (root) roots.add(root);
+  }
+  return [...roots];
+}
+
+/**
  * Есть ли у операции эта категория — основной или второй.
  *
  * Так фильтрует и мобильное приложение Дзен-мани: операция с основной «Еда»

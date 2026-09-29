@@ -46,6 +46,7 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { SectionEmpty } from "./SectionEmpty";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 import { ALL_SCHEMES } from "../lib/themeSchemes";
+import { swapLayout } from "../lib/keyboardLayout";
 
 interface Item {
   id: string;
@@ -95,8 +96,20 @@ const PAGE_ITEMS: { path: string; title: string; icon: React.ComponentType<{ cla
   },
 ];
 
+/**
+ * Лучшая оценка из двух раскладок: набрали «yfcnhjqrb» вместо «настройки» —
+ * палитра всё равно находит.
+ */
 function score(query: string, text: string, aliases: string[] = []): number {
   if (!query) return 1;
+  const direct = scoreOne(query, text, aliases);
+  const swapped = swapLayout(query.toLowerCase());
+  return swapped === query.toLowerCase()
+    ? direct
+    : Math.max(direct, scoreOne(swapped, text, aliases));
+}
+
+function scoreOne(query: string, text: string, aliases: string[]): number {
   const q = query.toLowerCase();
   const t = text.toLowerCase();
   if (t === q) return 100;

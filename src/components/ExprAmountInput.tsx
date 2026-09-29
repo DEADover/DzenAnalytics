@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes } from "react";
+import type { InputHTMLAttributes, Ref } from "react";
 import { evalAmount } from "../lib/splitTransaction";
 
 /** Есть ли в строке действие — отличает «1200+300» от просто «1200». */
@@ -21,6 +21,7 @@ export function ExprAmountInput({
 }: {
   value: string;
   onChange: (next: string) => void;
+  ref?: Ref<HTMLInputElement>;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">) {
   const isExpr = hasOperator(value);
   const result = isExpr ? evalAmount(value) : null;

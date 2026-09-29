@@ -26,6 +26,7 @@ import { FILTER_NONE } from "../store/useFiltersStore";
 import { pluralRu } from "../lib/plural";
 import { nestedBranches, visibleOptions } from "../lib/nestedOptions";
 import { SearchInput } from "./SearchInput";
+import { textMatches } from "../lib/keyboardLayout";
 
 export function MultiSelect({
   label,
@@ -151,7 +152,7 @@ export function MultiSelect({
   // Ищем по ПОДПИСИ: у составного ключа в значении лежит ещё и имя счёта, и
   // поиск по «Иван» иначе находил бы всех контрагентов этого счёта.
   const filteredOptions = q
-    ? options.filter((o) => text(o).toLowerCase().includes(q))
+    ? options.filter((o) => textMatches(text(o), q))
     : options;
   // Рисуем не всё найденное: у свёрнутого счёта ветки спрятаны. При поиске
   // свёрнутость отменяется — ищут как раз то, что внутри, и прятать найденное

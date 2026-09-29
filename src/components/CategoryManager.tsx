@@ -10,7 +10,7 @@
 // treats `required !== false` as a need.
 
 import { useEffect, useMemo, useState } from "react";
-import { categoryKeysOf, hasCategory } from "../lib/operationTags";
+import { categoryKeysOf, categoryRootsOf, hasCategory } from "../lib/operationTags";
 import { useLazyList } from "../hooks/useLazyList";
 import { Link } from "react-router-dom";
 import {
@@ -100,6 +100,19 @@ export function CategoryManager() {
     }
     return m;
   }, [transactions]);
+  /**
+   * Операций во всей ветке родителя — его собственные и всех подкатегорий,
+   * каждая один раз. По нему у родителя и число, и сортировка «по числу
+   * операций»: прежде считались только операции, где родитель стоит сам, и
+   * ветка, где всё разнесено по подкатегориям, уезжала в конец списка с нулём.
+   */
+  const countByRoot = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of transactions) {
+      for (const root of categoryRootsOf(t)) m.set(root, (m.get(root) ?? 0) + 1);
+    }
+    return m;
+  }, [transactions]);
   // «Не учитывать в аналитике» set (#14). Keyed the same way as categoryMeta:
   // root by title, sub by «Родитель / Подкатегория».
   // Галочка правит АКТИВНЫЙ разрез — в шапке колонки написано, какой именно.
@@ -182,8 +195,11 @@ export function CategoryManager() {
           cmp(`${g.root.title} / ${a.title}`, a.title, `${g.root.title} / ${b.title}`, b.title)
         ),
       }))
-      .sort((a, b) => cmp(a.root.title, a.root.title, b.root.title, b.root.title));
-  }, [tags, allTags, query, sort, countByFull]);
+      .sort((a, b) => {
+        const d = (countByRoot.get(a.root.title) ?? 0) - (countByRoot.get(b.root.title) ?? 0);
+        return d !== 0 ? d * dir : a.root.title.localeCompare(b.root.title, "ru");
+      });
+  }, [tags, allTags, query, sort, countByFull, countByRoot]);
 
   // Показываем порциями по мере прокрутки страницы: режем ВЕРХНИЙ уровень,
   // подкатегории едут вместе со своим родителем — иначе группа разорвалась бы
@@ -280,6 +296,13 @@ export function CategoryManager() {
   /** Open the operations of a category leaf in the shared drill drawer. The key
    *  is the same `categoryFull` the count is built from, so what opens matches
    *  the number exactly (a root shows only its own ops, not its subs'). */
+  /** Операции всей ветки родителя — его и подкатегорий: столько, сколько в числе. */
+  function openBranch(root: string) {
+    const txs = transactions.filter((t) => categoryRootsOf(t).includes(root));
+    if (txs.length === 0) return;
+    showDrill(root, txs, "Категория");
+  }
+
   function openOperations(fullKey: string) {
     const txs = transactions.filter((t) => hasCategory(t, fullKey));
     if (txs.length === 0) return;
@@ -424,7 +447,7 @@ export function CategoryManager() {
                   rEdit?.required !== undefined ? rEdit.required : root.required ?? null
                 );
                 const rExcluded = excluded.has(root.title);
-                const rCount = countByFull.get(root.title) ?? 0;
+                const rCount = countByRoot.get(root.title) ?? 0;
                 const rOutcome = rEdit?.showOutcome ?? root.showOutcome;
                 const rIncome = rEdit?.showIncome ?? root.showIncome;
                 const rIsNew = newIds.has(root.id);
@@ -470,8 +493,12 @@ export function CategoryManager() {
                       <span className="hidden lg:flex w-20 shrink-0 items-center justify-end">
                         {rCount ? (
                           <button
-                            onClick={() => openOperations(root.title)}
-                            title="Показать операции категории"
+                            onClick={() => openBranch(root.title)}
+                            title={
+                              hasKids
+                                ? "Показать операции категории и её подкатегорий"
+                                : "Показать операции категории"
+                            }
                             className="tabular-nums text-muted hover:text-accent hover:underline px-1 -mr-1 rounded"
                           >
                             {formatNum(rCount)}

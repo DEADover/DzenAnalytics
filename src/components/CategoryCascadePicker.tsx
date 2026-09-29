@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { CategoryDot } from "./CategoryDot";
 import { SearchInput } from "./SearchInput";
+import { textMatches } from "../lib/keyboardLayout";
 
 export interface CategoryNode {
   name: string;
@@ -127,8 +128,8 @@ export function CategoryCascadePicker({
     if (!q) return categories;
     return categories.filter(
       (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.subs.some((s) => s.toLowerCase().includes(q))
+        textMatches(c.name, q) ||
+        c.subs.some((s) => textMatches(s, q))
     );
   }, [categories, q]);
 
@@ -140,8 +141,8 @@ export function CategoryCascadePicker({
     if (!active) return [];
     // If the query matched the parent name, show all its subs; otherwise narrow
     // to subs that match so search inside a big category still works.
-    if (!q || active.name.toLowerCase().includes(q)) return active.subs;
-    return active.subs.filter((s) => s.toLowerCase().includes(q));
+    if (!q || textMatches(active.name, q)) return active.subs;
+    return active.subs.filter((s) => textMatches(s, q));
   }, [active, q]);
 
   // While searching, collapse the cascade into ONE flat, directly-selectable
@@ -155,10 +156,10 @@ export function CategoryCascadePicker({
     if (!q) return null;
     const items: SearchLeaf[] = [];
     for (const c of categories) {
-      if (c.name.toLowerCase().includes(q) && !hideParentOption?.(c.name))
+      if (textMatches(c.name, q) && !hideParentOption?.(c.name))
         items.push({ kind: "cat", cat: c.name });
       for (const s of c.subs) {
-        if (s.toLowerCase().includes(q)) items.push({ kind: "sub", cat: c.name, sub: s });
+        if (textMatches(s, q)) items.push({ kind: "sub", cat: c.name, sub: s });
       }
     }
     return items;
