@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { ZEN_ICON_IDS } from "../lib/zenIconLucide";
 import { ZenIcon } from "./ZenIcon";
 import { SearchInput } from "./SearchInput";
+import { queryMatcher } from "../lib/keyboardLayout";
 
 interface Props {
   /** Current Zenmoney icon id, or null. */
@@ -30,9 +31,8 @@ export function IconPicker({ value, color, onChange }: Props) {
     if (!q) return ZEN_ICON_IDS;
     // Ids look like «5001_food» — strip the numeric prefix so a search for
     // "food"/"car" matches the human-readable slug part.
-    return ZEN_ICON_IDS.filter((id) =>
-      id.toLowerCase().replace(/^\d+_/, "").includes(q)
-    );
+    const match = queryMatcher(q);
+    return ZEN_ICON_IDS.filter((id) => match(id.replace(/^\d+_/, "")));
   }, [query]);
 
   return (

@@ -40,6 +40,8 @@ import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
 import { SearchInput } from "./SearchInput";
 import { Badge } from "./Badge";
+import { queryMatcher } from "../lib/keyboardLayout";
+import { scaledWidth } from "./table/tableKit";
 
 /** A row as rendered: cached merchant or unpushed draft, with overlay applied. */
 interface Row {
@@ -169,7 +171,9 @@ export function CounterpartyManager() {
 
   const rows = useMemo<Row[]>(() => {
     const q = query.trim().toLowerCase();
-    return q ? allRows.filter((r) => r.title.toLowerCase().includes(q)) : allRows;
+    if (!q) return allRows;
+    const match = queryMatcher(q);
+    return allRows.filter((r) => match(r.title));
   }, [allRows, query]);
 
   // Duplicate groups, computed over the FULL list (a search must not change
@@ -617,8 +621,8 @@ export function CounterpartyManager() {
                 below keep them (and the buttons) on one grid. */}
             <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
               <span className="flex-1 min-w-0">Контрагент</span>
-              <span className="w-20 shrink-0 text-right">Операций</span>
-              <span className="w-36 shrink-0 text-right">Действия</span>
+              <span className="shrink-0 text-right" style={{ width: scaledWidth("6rem") }}>Операций</span>
+              <span className="shrink-0 text-right" style={{ width: scaledWidth("9rem") }}>Действия</span>
             </div>
             <div className="divide-y divide-border/60">
             {visibleDups.map((g) => (
@@ -644,7 +648,7 @@ export function CounterpartyManager() {
                           </Badge>
                         )}
                         <span className="flex-1 min-w-2" />
-                        <span className="w-20 shrink-0 text-right">
+                        <span className="shrink-0 text-right" style={{ width: scaledWidth("6rem") }}>
                           {row.count ? (
                             <button
                               onClick={() => openOperations(row)}
@@ -661,7 +665,7 @@ export function CounterpartyManager() {
                     );
                   })}
                 </div>
-                <span className="w-36 shrink-0 flex justify-end">
+                <span className="shrink-0 flex justify-end" style={{ width: scaledWidth("9rem") }}>
                   <button
                     onClick={() => mergeGroup(g)}
                     title="Объединить в одного контрагента"
@@ -748,8 +752,8 @@ export function CounterpartyManager() {
                 />
               </span>
               <span className="flex-1 min-w-0">Получатель</span>
-              <span className="w-20 shrink-0 text-right">Операций</span>
-              <span className="w-28 shrink-0 text-center whitespace-nowrap">Действия</span>
+              <span className="shrink-0 text-right" style={{ width: scaledWidth("6rem") }}>Операций</span>
+              <span className="shrink-0 text-center whitespace-nowrap" style={{ width: scaledWidth("7rem") }}>Действия</span>
             </div>
             <div className="divide-y divide-border/60">
               {visibleOrphans.map((o) => {
@@ -780,7 +784,7 @@ export function CounterpartyManager() {
                         </Badge>
                       )}
                     </span>
-                    <span className="w-20 shrink-0 text-right">
+                    <span className="shrink-0 text-right" style={{ width: scaledWidth("6rem") }}>
                       <button
                         onClick={() => {
                           const ids = new Set(o.txIds);
@@ -799,7 +803,7 @@ export function CounterpartyManager() {
                     {/* Два действия, как и в основной таблице: под своим именем
                         и «как есть». Банковскую строку почти всегда хочется
                         переименовать, поэтому карандаш стоит первым. */}
-                    <span className="w-28 shrink-0 flex items-center justify-center gap-0.5">
+                    <span className="shrink-0 flex items-center justify-center gap-0.5" style={{ width: scaledWidth("7rem") }}>
                       <button
                         onClick={() => setModal({ kind: "adopt", payee: o })}
                         title={`Привязать под другим именем — например, к уже заведённому контрагенту`}
@@ -854,10 +858,10 @@ export function CounterpartyManager() {
               />
             </span>
             <span className="flex-1 min-w-0">Название</span>
-            <span className="w-24 shrink-0 flex items-center justify-end">
+            <span className="shrink-0 flex items-center justify-end" style={{ width: scaledWidth("6rem") }}>
               <CountSortHeader sort={sort} onChange={setSort} />
             </span>
-            <span className="w-20 shrink-0 text-center whitespace-nowrap">Действия</span>
+            <span className="shrink-0 text-center whitespace-nowrap" style={{ width: scaledWidth("5rem") }}>Действия</span>
           </div>
 
           {rows.length === 0 ? (
@@ -912,7 +916,7 @@ export function CounterpartyManager() {
                       </Badge>
                     )}
                   </span>
-                  <span className="w-24 shrink-0 flex items-center justify-end">
+                  <span className="shrink-0 flex items-center justify-end" style={{ width: scaledWidth("6rem") }}>
                     {row.count ? (
                       <button
                         onClick={() => openOperations(row)}
@@ -927,7 +931,7 @@ export function CounterpartyManager() {
                   </span>
                   {/* Both actions in ONE cell — keeps them together under the
                       «Действия» header instead of drifting a gap apart. */}
-                  <span className="w-20 shrink-0 flex items-center justify-center gap-0.5">
+                  <span className="shrink-0 flex items-center justify-center gap-0.5" style={{ width: scaledWidth("5rem") }}>
                     <button
                       onClick={() => setModal({ kind: "rename", row })}
                       disabled={gone}

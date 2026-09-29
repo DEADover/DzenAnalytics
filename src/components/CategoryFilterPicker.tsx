@@ -28,6 +28,7 @@ import { FILTER_NONE } from "../store/useFiltersStore";
 import { pluralRu } from "../lib/plural";
 import { CategoryDot } from "./CategoryDot";
 import { SearchInput } from "./SearchInput";
+import { queryMatcher } from "../lib/keyboardLayout";
 
 export interface CategoryNode {
   name: string;
@@ -164,12 +165,13 @@ export function CategoryFilterPicker({
     | { key: string; kind: "sub"; node: CategoryNode; sub: string };
   const searchResults = useMemo<SearchItem[] | null>(() => {
     if (!q) return null;
+    const match = queryMatcher(q);
     const items: SearchItem[] = [];
     for (const n of nodes) {
-      if (n.name.toLowerCase().includes(q))
+      if (match(n.name))
         items.push({ key: `c:${n.name}`, kind: "cat", node: n });
       for (const s of n.subs) {
-        if (s.toLowerCase().includes(q))
+        if (match(s))
           items.push({ key: `s:${n.name}/${s}`, kind: "sub", node: n, sub: s });
       }
     }

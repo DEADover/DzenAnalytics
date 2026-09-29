@@ -28,6 +28,7 @@ import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { queryMatcher } from "../lib/keyboardLayout";
 
 /** A counterparty offered as the new home for the deleted one's operations. */
 export interface TransferTarget {
@@ -203,7 +204,8 @@ function TransferSelect({
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = q ? options.filter((o) => o.title.toLowerCase().includes(q)) : options;
+    const match = queryMatcher(q);
+    const list = q ? options.filter((o) => match(o.title)) : options;
     return list.slice(0, 200); // the dropdown is a picker, not a directory
   }, [options, query]);
 

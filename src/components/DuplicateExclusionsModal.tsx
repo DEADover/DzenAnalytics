@@ -9,6 +9,7 @@ import { kindLabel } from "../lib/txKindStyle";
 import { Modal, ModalBody, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
 import { SearchInput } from "./SearchInput";
+import { queryMatcher } from "../lib/keyboardLayout";
 
 /**
  * Manage the «не дубликаты» exclusion rules. A modal (not an inline list) so a
@@ -27,10 +28,11 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
       b.createdAt.localeCompare(a.createdAt)
     );
     if (!q) return arr;
+    const match = queryMatcher(q);
     return arr.filter(
       (r) =>
-        (r.payee || "без получателя").toLowerCase().includes(q) ||
-        (r.category || "").toLowerCase().includes(q) ||
+        match(r.payee || "без получателя") ||
+        match(r.category || "") ||
         String(Math.round(r.amount)).includes(q)
     );
   }, [rules, search]);

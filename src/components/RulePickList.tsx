@@ -12,6 +12,7 @@ import {
 } from "../lib/ruleEngine";
 import { ruleModeOf } from "../lib/ruleMode";
 import { formatNum } from "../lib/format";
+import { queryMatcher } from "../lib/keyboardLayout";
 
 export interface RulePickItem {
   /** Ключ строки. У правил из файла id может повторяться, поэтому не всегда id. */
@@ -52,7 +53,7 @@ export function RulePickList({
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q
-      ? described.filter((it) => it.text.toLowerCase().includes(q))
+      ? described.filter((it) => queryMatcher(q)(it.text))
       : described;
   }, [described, query]);
 

@@ -62,6 +62,7 @@ import { BulkEditModal } from "../components/BulkEditModal";
 import { EditTransactionModal } from "../components/EditTransactionModal";
 import { useLazyList } from "../hooks/useLazyList";
 import type { Transaction } from "../types";
+import { queryMatcher } from "../lib/keyboardLayout";
 
 /**
  * «Без категории» — операции, которым категорию так и не поставили, и разметка
@@ -140,11 +141,10 @@ export function UncategorizedPage() {
   const stats = useMemo(() => suggestionStats(suggestions, applied), [suggestions, applied]);
 
   const searched = useMemo(() => {
-    const q = pageSearch.trim().toLowerCase();
+    const q = pageSearch.trim();
     if (!q) return list;
-    return list.filter((t) =>
-      `${payeeSearchText(t)} ${t.comment} ${t.account}`.toLowerCase().includes(q)
-    );
+    const match = queryMatcher(q);
+    return list.filter((t) => match(`${payeeSearchText(t)} ${t.comment} ${t.account}`));
   }, [list, pageSearch]);
 
   const sorted = useMemo(

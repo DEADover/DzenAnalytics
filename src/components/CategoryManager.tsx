@@ -50,6 +50,8 @@ import { CountSortHeader, type SortMode } from "./CountSortHeader";
 import { SectionEmpty } from "./SectionEmpty";
 import { SearchInput } from "./SearchInput";
 import { Badge } from "./Badge";
+import { queryMatcher } from "../lib/keyboardLayout";
+import { scaledWidth } from "./table/tableKit";
 
 /** What the edit/create modal is currently doing. */
 type ModalState =
@@ -159,7 +161,8 @@ export function CategoryManager() {
   const groups = useMemo(() => {
     if (!Array.isArray(tags)) return [];
     const q = query.trim().toLowerCase();
-    const hit = (t: CategoryTag) => t.title.toLowerCase().includes(q);
+    const match = queryMatcher(q);
+    const hit = (t: CategoryTag) => match(t.title);
     const roots = allTags.filter((t) => !t.parent);
     const kids = new Map<string, CategoryTag[]>();
     for (const t of allTags) {
@@ -423,14 +426,14 @@ export function CategoryManager() {
         >
           <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
             <span className="flex-1 min-w-0">Категория</span>
-            <span className="hidden sm:block w-24 shrink-0 text-center">Расходная</span>
-            <span className="hidden sm:block w-24 shrink-0 text-center">Доходная</span>
-            <span className="hidden md:block w-36 shrink-0">Обязательность</span>
-            <span className="hidden lg:flex w-20 shrink-0 items-center justify-end">
+            <span className="hidden sm:block shrink-0 text-center" style={{ width: scaledWidth("6rem") }}>Расходная</span>
+            <span className="hidden sm:block shrink-0 text-center" style={{ width: scaledWidth("6rem") }}>Доходная</span>
+            <span className="hidden md:block shrink-0" style={{ width: scaledWidth("9rem") }}>Обязательность</span>
+            <span className="hidden lg:flex shrink-0 items-center justify-end" style={{ width: scaledWidth("7rem") }}>
               <CountSortHeader sort={sort} onChange={setSort} />
             </span>
-            <span className="w-28 shrink-0 text-center whitespace-nowrap">В аналитике</span>
-            <span className="w-20 shrink-0 text-center whitespace-nowrap">Действия</span>
+            <span className="shrink-0 text-center whitespace-nowrap" style={{ width: scaledWidth("7rem") }}>В аналитике</span>
+            <span className="shrink-0 text-center whitespace-nowrap" style={{ width: scaledWidth("5rem") }}>Действия</span>
           </div>
 
           {groups.length === 0 ? (
@@ -481,16 +484,16 @@ export function CategoryManager() {
                           </Badge>
                         )}
                       </span>
-                      <span className="hidden sm:flex w-24 shrink-0 items-center justify-center">
+                      <span className="hidden sm:flex shrink-0 items-center justify-center" style={{ width: scaledWidth("6rem") }}>
                         {rOutcome && <Check className="w-4 h-4 text-muted" />}
                       </span>
-                      <span className="hidden sm:flex w-24 shrink-0 items-center justify-center">
+                      <span className="hidden sm:flex shrink-0 items-center justify-center" style={{ width: scaledWidth("6rem") }}>
                         {rIncome && <Check className="w-4 h-4 text-muted" />}
                       </span>
-                      <span className="hidden md:block w-36 shrink-0 text-muted truncate">
+                      <span className="hidden md:block shrink-0 text-muted truncate" style={{ width: scaledWidth("9rem") }}>
                         {rObl ? "Обязательная" : "Необязательная"}
                       </span>
-                      <span className="hidden lg:flex w-20 shrink-0 items-center justify-end">
+                      <span className="hidden lg:flex shrink-0 items-center justify-end" style={{ width: scaledWidth("7rem") }}>
                         {rCount ? (
                           <button
                             onClick={() => openBranch(root.title)}
@@ -507,7 +510,7 @@ export function CategoryManager() {
                           <span className="text-muted tabular-nums">—</span>
                         )}
                       </span>
-                      <span className="w-28 shrink-0 flex items-center justify-center">
+                      <span className="shrink-0 flex items-center justify-center" style={{ width: scaledWidth("7rem") }}>
                         <button
                           onClick={() => toggleExcluded(root.title)}
                           aria-pressed={rExcluded}
@@ -531,7 +534,7 @@ export function CategoryManager() {
                       {/* Both row actions share ONE cell so the pair sits under
                           the «Действия» header as a block and the two icons stay
                           next to each other instead of drifting apart. */}
-                      <span className="w-20 shrink-0 flex items-center justify-center gap-0.5">
+                      <span className="shrink-0 flex items-center justify-center gap-0.5" style={{ width: scaledWidth("5rem") }}>
                         <button
                           onClick={() => openEdit(root)}
                           disabled={rDeleted}
@@ -621,16 +624,16 @@ export function CategoryManager() {
                                   </Badge>
                                 )}
                               </span>
-                              <span className="hidden sm:flex w-24 shrink-0 items-center justify-center">
+                              <span className="hidden sm:flex shrink-0 items-center justify-center" style={{ width: scaledWidth("6rem") }}>
                                 {cOutcome && <Check className="w-4 h-4 text-muted" />}
                               </span>
-                              <span className="hidden sm:flex w-24 shrink-0 items-center justify-center">
+                              <span className="hidden sm:flex shrink-0 items-center justify-center" style={{ width: scaledWidth("6rem") }}>
                                 {cIncome && <Check className="w-4 h-4 text-muted" />}
                               </span>
-                              <span className="hidden md:block w-36 shrink-0 text-muted truncate">
+                              <span className="hidden md:block shrink-0 text-muted truncate" style={{ width: scaledWidth("9rem") }}>
                                 {cObl ? "Обязательная" : "Необязательная"}
                               </span>
-                              <span className="hidden lg:flex w-20 shrink-0 items-center justify-end">
+                              <span className="hidden lg:flex shrink-0 items-center justify-end" style={{ width: scaledWidth("7rem") }}>
                                 {cCount ? (
                                   <button
                                     onClick={() => openOperations(cKey)}
@@ -643,7 +646,7 @@ export function CategoryManager() {
                                   <span className="text-muted tabular-nums">—</span>
                                 )}
                               </span>
-                              <span className="w-28 shrink-0 flex items-center justify-center">
+                              <span className="shrink-0 flex items-center justify-center" style={{ width: scaledWidth("7rem") }}>
                                 <button
                                   onClick={() => toggleExcluded(cKey)}
                                   disabled={rExcluded}
@@ -673,7 +676,7 @@ export function CategoryManager() {
                                   )}
                                 </button>
                               </span>
-                              <span className="w-20 shrink-0 flex items-center justify-center gap-0.5">
+                              <span className="shrink-0 flex items-center justify-center gap-0.5" style={{ width: scaledWidth("5rem") }}>
                                 <button
                                   onClick={() => openEdit(c)}
                                   disabled={cDeleted}

@@ -30,6 +30,7 @@ import type { Transaction } from "../types";
 import { SearchInput } from "./SearchInput";
 import { SelectionBar } from "./SelectionBar";
 import { kindTotals } from "../lib/aggregations";
+import { queryMatcher } from "../lib/keyboardLayout";
 
 
 export function TransactionsDrawer() {
@@ -172,14 +173,14 @@ export function TransactionsDrawer() {
   }, [transactions, allTransactions]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return q
-      ? liveTransactions.filter((t) =>
-          `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
-            .toLowerCase()
-            .includes(q)
-        )
-      : liveTransactions;
+    const q = search.trim();
+    if (!q) return liveTransactions;
+    const match = queryMatcher(q);
+    return liveTransactions.filter((t) =>
+      match(
+        `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
+      )
+    );
   }, [liveTransactions, search]);
 
   const columns: Column<Transaction>[] = [

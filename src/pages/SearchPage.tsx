@@ -19,6 +19,7 @@ import { kindTotals } from "../lib/aggregations";
 import type { Transaction } from "../types";
 import { SearchInput } from "../components/SearchInput";
 import { SelectionBar } from "../components/SelectionBar";
+import { queryMatcher } from "../lib/keyboardLayout";
 
 
 /** Значения отбора по типу. «Возвраты» — выбор поуже, чем «Расходы»: те
@@ -106,8 +107,9 @@ export function SearchPage() {
         if (regex) {
           if (!regex.test(haystack)) return false;
         } else {
-          const terms = q.split(/\s+/).filter(Boolean);
-          if (!terms.every((term) => haystack.includes(term))) return false;
+          // Каждое слово — в любой раскладке.
+          const terms = q.split(/\s+/).filter(Boolean).map(queryMatcher);
+          if (!terms.every((match) => match(haystack))) return false;
         }
       }
 
@@ -115,8 +117,8 @@ export function SearchPage() {
         if (excludeRegex) {
           if (excludeRegex.test(haystack)) return false;
         } else {
-          const terms = ex.split(/\s+/).filter(Boolean);
-          if (terms.some((term) => haystack.includes(term))) return false;
+          const terms = ex.split(/\s+/).filter(Boolean).map(queryMatcher);
+          if (terms.some((match) => match(haystack))) return false;
         }
       }
 

@@ -57,6 +57,7 @@ import {
   OperationListRow,
   OperationListTray,
 } from "../components/operations/OperationList";
+import { queryMatcher } from "../lib/keyboardLayout";
 
 type SortMode = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
 
@@ -304,12 +305,14 @@ export function TransactionsPage() {
   );
 
   const searched = useMemo(() => {
-    const q = pageSearch.trim().toLowerCase();
+    const q = pageSearch.trim();
     if (!q) return filtered;
+    // Раскладка не важна — как в общем фильтре и списках.
+    const match = queryMatcher(q);
     return filtered.filter((t) =>
-      `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
-        .toLowerCase()
-        .includes(q)
+      match(
+        `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
+      )
     );
   }, [filtered, pageSearch]);
 

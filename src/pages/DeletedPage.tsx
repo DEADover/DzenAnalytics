@@ -49,6 +49,7 @@ import { Checkbox } from "../components/Checkbox";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { useLazyList } from "../hooks/useLazyList";
 import type { Transaction } from "../types";
+import { queryMatcher } from "../lib/keyboardLayout";
 
 /** Порция ленты при подгрузке — как в «Операциях». */
 const PAGE_SIZE = 100;
@@ -393,12 +394,13 @@ function DeletedFeed({
   }, [rows, filters, monthStartDay, maxDate]);
 
   const searched = useMemo(() => {
-    const q = pageSearch.trim().toLowerCase();
+    const q = pageSearch.trim();
     if (!q) return filtered;
+    const match = queryMatcher(q);
     return filtered.filter(({ tx: t }) =>
-      `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
-        .toLowerCase()
-        .includes(q)
+      match(
+        `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
+      )
     );
   }, [filtered, pageSearch]);
 
