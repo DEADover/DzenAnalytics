@@ -1359,6 +1359,28 @@ export function AccountsPage() {
     };
   }, [stackFloor]);
 
+  /**
+   * Сравнение двух дат в стопке — по «Итого»: сумме показанных счетов. Своё
+   * выделение, а не общее с «Совокупно»: у видов разные ряды точек, и при
+   * переключении выделение одного вида не должно всплывать на другом.
+   */
+  const stackDates = useMemo(() => stacked.series.map((p) => p.date), [stacked]);
+  const stackRange = useChartRangeSelect(stackDates);
+  const stackChange = useMemo(
+    () =>
+      stackRange.active
+        ? rangeChange(stacked.series, stackRange.active[0], stackRange.active[1], (p) => p.total)
+        : null,
+    [stacked, stackRange.active]
+  );
+  const stackRangeColor = !stackChange
+    ? chartTotalStroke
+    : stackChange.delta >= 0
+      ? chartColor.income
+      : chartColor.expense;
+  /** Высота точки «Итого» на оси стопки: минусы на ней растянуты. */
+  const stackY = (v: number) => (v < 0 ? v * stackAxis.scale : v);
+
   // Stacked-chart tooltip: per-account rows + a bold «Итого» — the day's net
   // worth, which the chart already carries on each datum as `total` (issue #27).
   const renderStackedTooltip = ({ active, payload, label }: TooltipContentProps) => {
@@ -2752,6 +2774,14 @@ export function AccountsPage() {
                   onClear={netRange.clear}
                 />
               )}
+              {chartView === "stacked" && !chartNothingPicked && stacked.series.length > 1 && (
+                <RangeCompareCard
+                  change={stackChange}
+                  base={base}
+                  hint="Проведите мышью по графику — сравним «Итого» на двух датах"
+                  onClear={stackRange.clear}
+                />
+              )}
               <Segmented
                 size="sm"
                 label="Вид графика"
@@ -2801,6 +2831,9 @@ export function AccountsPage() {
                 // ниже): «sign» умеет только складывать, а нам нужно ещё и
                 // рисовать половинки по отдельности.
                 stackOffset="none"
+                {...stackRange.handlers}
+                className="select-none"
+                style={{ cursor: "crosshair" }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
@@ -2894,6 +2927,44 @@ export function AccountsPage() {
                   activeDot={false}
                   isAnimationActive={false}
                 />
+                {stackChange && (
+                  <>
+                    <ReferenceArea
+                      x1={stackChange.from.date}
+                      x2={stackChange.to.date}
+                      fill={stackRangeColor}
+                      fillOpacity={0.08}
+                      ifOverflow="hidden"
+                    />
+                    {[stackChange.from, stackChange.to].map((p, i) => {
+                      const at = stackDates.indexOf(p.date) / Math.max(1, stackDates.length - 1);
+                      const side: "left" | "right" =
+                        i === 0 ? (at < 0.12 ? "right" : "left") : at > 0.88 ? "left" : "right";
+                      return (
+                        <ReferenceLine
+                          key={`sl-${p.date}`}
+                          x={p.date}
+                          stroke={chartAxisStroke}
+                          strokeDasharray="4 3"
+                          label={(props: { viewBox?: { x?: number; y?: number } }) => (
+                            <RangeDatePill viewBox={props.viewBox} date={p.date} side={side} />
+                          )}
+                        />
+                      );
+                    })}
+                    {[stackChange.from, stackChange.to].map((p) => (
+                      <ReferenceDot
+                        key={`sd-${p.date}`}
+                        x={p.date}
+                        y={stackY(p.value)}
+                        r={5}
+                        fill={stackRangeColor}
+                        stroke="rgb(var(--c-panel))"
+                        strokeWidth={2}
+                      />
+                    ))}
+                  </>
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           ) : (

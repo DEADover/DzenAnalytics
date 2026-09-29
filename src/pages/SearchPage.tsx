@@ -6,7 +6,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useEditsStore } from "../store/useEditsStore";
 import type { TransactionEdit } from "../store/useEditsStore";
-import { formatMoney, formatDate, formatNum } from "../lib/format";
+import { formatMoney, formatDate, formatNum, payeeSearchText } from "../lib/format";
 import { kindGlyphClass, kindSignGlyph, kindTone } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -26,6 +26,37 @@ import { queryMatcher } from "../lib/keyboardLayout";
  *  показывают траты вместе с возвратами. */
 type KindFilter = "all" | "expense" | "income" | "refund";
 
+/**
+ * Где искать слова. «Везде» ищет по всему сразу, и «Метро» находит и магазин
+ * «Метро», и поездки с комментарием «на метро»; выбрав поле, ищут ровно в нём.
+ */
+type SearchField = "all" | "payee" | "comment" | "category" | "account";
+const FIELD_OPTIONS: { value: SearchField; label: string }[] = [
+  { value: "all", label: "Везде" },
+  { value: "payee", label: "Получатель" },
+  { value: "comment", label: "Комментарий" },
+  { value: "category", label: "Категория" },
+  { value: "account", label: "Счёт" },
+];
+
+/** Текст операции, в котором ищем, — по выбранному полю. */
+function searchText(t: Transaction, field: SearchField): string {
+  const payee = payeeSearchText(t);
+  const category = `${t.categoryFull} ${(t.extraCategories ?? []).join(" ")}`;
+  switch (field) {
+    case "payee":
+      return payee;
+    case "comment":
+      return t.comment;
+    case "category":
+      return category;
+    case "account":
+      return [t.account, t.outcomeAccount, t.incomeAccount].filter(Boolean).join(" ");
+    default:
+      return `${payee} ${t.comment} ${category} ${t.account}`;
+  }
+}
+
 export function SearchPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
@@ -42,6 +73,7 @@ export function SearchPage() {
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
+  const [field, setField] = useState<SearchField>("all");
 
   // ── Bulk selection + edit ──────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -101,7 +133,7 @@ export function SearchPage() {
       if (to && t.date > to) return false;
       if (t.amount < minA || t.amount > maxA) return false;
 
-      const haystack = `${t.payee} ${t.comment} ${t.categoryFull} ${t.account}`.toLowerCase();
+      const haystack = searchText(t, field).toLowerCase();
 
       if (q) {
         if (regex) {
@@ -124,7 +156,7 @@ export function SearchPage() {
 
       return true;
     });
-  }, [transactions, query, exclude, useRegex, from, to, minAmount, maxAmount, kind]);
+  }, [transactions, query, exclude, useRegex, from, to, minAmount, maxAmount, kind, field]);
 
   // Выбор сбрасывается, когда меняется набор найденного: иначе массовая правка
   // задела бы операции, которых на экране уже нет. Смена порядка его не трогает.
@@ -172,12 +204,13 @@ export function SearchPage() {
     setMinAmount("");
     setMaxAmount("");
     setKind("all");
+    setField("all");
   }
 
   if (transactions.length === 0) return <EmptyState />;
 
   const hasFilters =
-    query || exclude || from || to || minAmount || maxAmount || kind !== "all";
+    query || exclude || from || to || minAmount || maxAmount || kind !== "all" || field !== "all";
 
   return (
     <div className="space-y-6">
@@ -187,7 +220,11 @@ export function SearchPage() {
       />
 
       <div className="card card-pad space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-[11rem_1fr_1fr] gap-3">
+          <div>
+            <label className="label block mb-1.5">Где искать</label>
+            <Select value={field} onChange={setField} options={FIELD_OPTIONS} ariaLabel="Где искать" />
+          </div>
           <div>
             <label className="label block mb-1.5">Содержит</label>
             <SearchInput
@@ -218,6 +255,7 @@ export function SearchPage() {
               <Calendar className="w-3 h-3" />C
             </label>
             <DateField
+              typeable
               value={from}
               onChange={(e) => setFrom(e.target.value)}
               className="input text-xs"
@@ -226,6 +264,7 @@ export function SearchPage() {
           <div>
             <label className="label block mb-1.5">По</label>
             <DateField
+              typeable
               value={to}
               onChange={(e) => setTo(e.target.value)}
               className="input text-xs"

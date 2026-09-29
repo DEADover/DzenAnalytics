@@ -20,6 +20,13 @@ import { parseTypedDate } from "../lib/dateInput";
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 const pad = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * Сегодняшний день (месяц, год) — заливкой, а не тонкой рамкой: рамку в сетке
+ * из тридцати чисел глаз находил не сразу. Выбранная дата остаётся сплошным
+ * акцентом, сегодняшняя — его бледной подложкой.
+ */
+const TODAY_CELL = "bg-accent/15 text-accent font-semibold hover:bg-accent/25";
 const toISO = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
 
 function parseISO(iso: string): { y: number; m: number; d: number } | null {
@@ -409,7 +416,7 @@ function CalendarPopup({
                         isSel
                           ? "bg-accent text-accent-fg font-semibold"
                           : isToday
-                            ? "border border-accent/60 text-text"
+                            ? TODAY_CELL
                             : "text-text hover:bg-panel2"
                       }`}
                     >
@@ -475,7 +482,7 @@ function CalendarPopup({
                     isSel
                       ? "bg-accent text-accent-fg font-semibold"
                       : isCur
-                        ? "border border-accent/60 text-text"
+                        ? TODAY_CELL
                         : "text-text hover:bg-panel2"
                   }`}
                 >
@@ -527,7 +534,7 @@ function CalendarPopup({
                     isSel
                       ? "bg-accent text-accent-fg font-semibold"
                       : isCur
-                        ? "border border-accent/60 text-text"
+                        ? TODAY_CELL
                         : "text-text hover:bg-panel2"
                   }`}
                 >
