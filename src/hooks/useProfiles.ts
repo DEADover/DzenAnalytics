@@ -3,6 +3,7 @@ import {
   activeProfileId,
   addProfile,
   dbNameFor,
+  profileLabel,
   readProfiles,
   removeProfile,
   setActiveProfileId,
@@ -11,6 +12,7 @@ import {
   type Profile,
 } from "../lib/profiles";
 import { loadZenCache } from "../lib/zenmoneyCache";
+import { beginSwitch } from "../lib/switchOverlay";
 import { zenUsers } from "../lib/zenUsers";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 
@@ -35,8 +37,13 @@ export function useProfiles(): { profiles: Profile[]; activeId: string } {
  */
 export function switchProfile(id: string): void {
   if (id === activeProfileId()) return;
-  setActiveProfileId(id);
-  window.location.reload();
+  const target = readProfiles().find((p) => p.id === id);
+  // Перезагрузка — под плавной заглушкой (`lib/switchOverlay`): страница гаснет,
+  // новая стартует с той же заглушки и проявляется, когда данные прочитаны.
+  beginSwitch(target ? profileLabel(target) : "аккаунт", () => {
+    setActiveProfileId(id);
+    window.location.reload();
+  });
 }
 
 /** Завести аккаунт и сразу перейти в него — там пустой экран подключения. */

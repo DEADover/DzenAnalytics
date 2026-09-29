@@ -10,6 +10,7 @@ import App from "./App";
 import { consumeOAuthCallback, exchangeCode } from "./lib/oauth";
 import { useZenmoneyStore } from "./store/useZenmoneyStore";
 import { useDataStore } from "./store/useDataStore";
+import { resumeSwitch } from "./lib/switchOverlay";
 
 const isFileProtocol =
   typeof window !== "undefined" && window.location.protocol === "file:";
@@ -41,6 +42,9 @@ const Router = !hasRealUrl
 // нарисовать новую страницу: анимация шла от старой страницы к ней же, а потом
 // страница подменялась ещё раз — рывком, будто открывалась дважды. Отложенная
 // отрисовка нам ничего не даёт: ленивых разделов и `Suspense` в приложении нет.
+// Продолжение перехода между аккаунтами — заглушка до первого кадра React.
+resumeSwitch();
+
 const callback = consumeOAuthCallback();
 if (callback) document.getElementById("root")!.textContent = "Завершаем вход…";
 

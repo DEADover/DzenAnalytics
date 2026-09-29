@@ -79,6 +79,7 @@ import { useWhatIfStore } from "./store/useWhatIfStore";
 import { useDashboardLayoutStore } from "./store/useDashboardLayoutStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 import { useImportBatchesStore } from "./store/useImportBatchesStore";
+import { endSwitch } from "./lib/switchOverlay";
 
 /**
  * All routes use the same outer layout now. Pages that need global filters
@@ -126,6 +127,11 @@ function App() {
   // toggle flips, so every formatMoney call re-evaluates with the new
   // fraction setting (which lives as a module variable in lib/format).
   useDisplayStore((s) => s.fractionDigits);
+
+  // Данные прочитаны — заглушка перехода между аккаунтами растворяется.
+  useEffect(() => {
+    if (loaded) endSwitch();
+  }, [loaded]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   useGlobalShortcuts(() => setPaletteOpen(true));
