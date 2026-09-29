@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
-import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info, Check, ListPlus } from "lucide-react";
+import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info, Check, ListPlus, ArrowUpToLine } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -36,6 +36,7 @@ import { getHistoricalRubRate, type HistoricalRate } from "../lib/historicalRate
 import { formatDate, formatMoney } from "../lib/format";
 import { ExprAmountInput } from "./ExprAmountInput";
 import { rankPayees } from "../lib/payeeSuggest";
+import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { parseAmountInput } from "../lib/splitTransaction";
 import type { Transaction, TxKind } from "../types";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
@@ -491,6 +492,25 @@ export function EditTransactionModal({
   // у копии операции они должны переехать вместе с остальным, даже если поля
   // тегов человек не видит.
   const [extras, setExtras] = useState<string[]>(tx.extraCategories ?? []);
+  /**
+   * Поменять местами тег и основную категорию. Бывает, что тег поставили
+   * основным по ошибке — «Отпуск» вместо «Кафе». Прежде приходилось удалять
+   * тег, выбирать категорию заново и ставить старую основную тегом руками.
+   * Прежняя основная встаёт на место тега, если это настоящая категория.
+   */
+  const promoteTag = (full: string) => {
+    const [cat, ...rest] = full.split(/\s*\/\s*/);
+    const oldMain = subcategory.trim()
+      ? `${category.trim()} / ${subcategory.trim()}`
+      : category.trim();
+    setCategory(cat);
+    setSubcategory(rest.join(" / "));
+    setExtras((list) =>
+      list.flatMap((e) =>
+        e !== full ? [e] : oldMain && oldMain !== NO_CATEGORY ? [oldMain] : []
+      )
+    );
+  };
   const tagMode = useTagModeStore((s) => s.mode);
   // Single "Получатель" field — saves into `brand`, which is the
   // displayed counterparty name. Falls back to `tx.payee` for
@@ -1158,6 +1178,16 @@ export function EditTransactionModal({
                           <CategoryDot category={parent} size="w-4 h-4" />
                         )}
                         <span className="truncate">{full}</span>
+                        <Tooltip content="Сделать основной категорией — нынешняя основная станет тегом">
+                          <button
+                            type="button"
+                            onClick={() => promoteTag(full)}
+                            className="btn-icon btn-icon-xs"
+                            aria-label={`Сделать «${full}» основной категорией`}
+                          >
+                            <ArrowUpToLine className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
                         <button
                           type="button"
                           onClick={() => setExtras((list) => list.filter((e) => e !== full))}
