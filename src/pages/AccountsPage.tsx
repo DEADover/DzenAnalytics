@@ -92,7 +92,7 @@ import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
 import { useBalanceValuation } from "../hooks/useBalanceValuation";
 import { useChartRangeSelect } from "../hooks/useChartRangeSelect";
 import { rangeChange } from "../lib/rangeCompare";
-import { RangeCompareLine } from "../components/RangeCompareLine";
+import { RangeCompareCard, RangeDatePill } from "../components/RangeCompareCard";
 import {
   formatMoney,
   formatPct,
@@ -2744,6 +2744,14 @@ export function AccountsPage() {
                   compactSummary
                 />
               )}
+              {chartView !== "stacked" && netWorth.length > 1 && (
+                <RangeCompareCard
+                  change={netChange}
+                  base={base}
+                  hint="Проведите мышью по графику — сравним две даты"
+                  onClear={netRange.clear}
+                />
+              )}
               <Segmented
                 size="sm"
                 label="Вид графика"
@@ -2767,14 +2775,6 @@ export function AccountsPage() {
             </>
           }
         />
-        {chartView !== "stacked" && netWorth.length > 1 && (
-          <RangeCompareLine
-            change={netChange}
-            base={base}
-            hint="Зажмите мышь на графике и проведите до другой даты — покажем, как изменился баланс"
-            onClear={netRange.clear}
-          />
-        )}
         <div className="h-96">
           {chartView === "stacked" && chartNothingPicked ? (
             <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted">
@@ -2969,9 +2969,24 @@ export function AccountsPage() {
                       legendType="none"
                       tooltipType="none"
                     />
-                    {[netChange.from, netChange.to].map((p) => (
-                      <ReferenceLine key={`l-${p.date}`} x={p.date} stroke={chartAxisStroke} />
-                    ))}
+                    {[netChange.from, netChange.to].map((p, i) => {
+                      // Начало подписано слева от линии, конец — справа; у
+                      // края графика плашка уходит внутрь, чтобы не обрезаться.
+                      const at = netDates.indexOf(p.date) / Math.max(1, netDates.length - 1);
+                      const side: "left" | "right" =
+                        i === 0 ? (at < 0.12 ? "right" : "left") : at > 0.88 ? "left" : "right";
+                      return (
+                        <ReferenceLine
+                          key={`l-${p.date}`}
+                          x={p.date}
+                          stroke={chartAxisStroke}
+                          strokeDasharray="4 3"
+                          label={(props: { viewBox?: { x?: number; y?: number } }) => (
+                            <RangeDatePill viewBox={props.viewBox} date={p.date} side={side} />
+                          )}
+                        />
+                      );
+                    })}
                     {[netChange.from, netChange.to].map((p) => (
                       <ReferenceDot
                         key={`d-${p.date}`}
