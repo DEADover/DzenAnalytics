@@ -11,6 +11,8 @@ import {
   ComposedChart,
   Line,
   ReferenceLine,
+  ReferenceDot,
+  ReferenceArea,
   type TooltipContentProps,
 } from "recharts";
 import clsx from "clsx";
@@ -88,6 +90,9 @@ import {
 } from "../lib/aggregations";
 import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
 import { useBalanceValuation } from "../hooks/useBalanceValuation";
+import { useChartRangeSelect } from "../hooks/useChartRangeSelect";
+import { rangeChange } from "../lib/rangeCompare";
+import { RangeCompareLine } from "../components/RangeCompareLine";
 import {
   formatMoney,
   formatPct,
@@ -1259,6 +1264,34 @@ export function AccountsPage() {
   );
   const netWorthAll = useNetWorthSeries(transactions);
   const netWorth = useMemo(() => clip(netWorthAll), [netWorthAll, clip]);
+
+  /**
+   * Сравнение двух точек «Совокупного баланса»: протянули мышью по графику —
+   * над ним изменение в деньгах и процентах, отрезок окрашен по знаку.
+   */
+  const netDates = useMemo(() => netWorth.map((p) => p.date), [netWorth]);
+  const netRange = useChartRangeSelect(netDates);
+  const netChange = useMemo(
+    () =>
+      netRange.active
+        ? rangeChange(netWorth, netRange.active[0], netRange.active[1], (p) => p.net)
+        : null,
+    [netWorth, netRange.active]
+  );
+  /** Точки с отдельной серией `sel` — значение только внутри отрезка. */
+  const netData = useMemo(() => {
+    if (!netChange) return netWorth;
+    const { from, to } = netChange;
+    return netWorth.map((p) => ({
+      ...p,
+      sel: p.date >= from.date && p.date <= to.date ? p.net : null,
+    }));
+  }, [netWorth, netChange]);
+  const netRangeColor = !netChange
+    ? NET_STROKE
+    : netChange.delta >= 0
+      ? chartColor.income
+      : chartColor.expense;
 
   /**
    * Нижняя граница оси у стопки — ровно сумма отрицательных слоёв (ноль, если
@@ -2734,6 +2767,14 @@ export function AccountsPage() {
             </>
           }
         />
+        {chartView !== "stacked" && netWorth.length > 1 && (
+          <RangeCompareLine
+            change={netChange}
+            base={base}
+            hint="Зажмите мышь на графике и проведите до другой даты — покажем, как изменился баланс"
+            onClear={netRange.clear}
+          />
+        )}
         <div className="h-96">
           {chartView === "stacked" && chartNothingPicked ? (
             <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted">
@@ -2857,7 +2898,12 @@ export function AccountsPage() {
             </ResponsiveContainer>
           ) : (
             <ResponsiveContainer>
-              <ComposedChart data={netWorth}>
+              <ComposedChart
+                data={netData}
+                {...netRange.handlers}
+                className="select-none"
+                style={{ cursor: "crosshair" }}
+              >
                 <defs>
                   <linearGradient id="netfill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={NET_STROKE} stopOpacity={0.6} />
@@ -2889,13 +2935,56 @@ export function AccountsPage() {
                   }
                 />
                 <Tooltip {...chartTooltipProps} content={renderNetTooltip} />
+                {netChange && (
+                  <ReferenceArea
+                    x1={netChange.from.date}
+                    x2={netChange.to.date}
+                    fill={netRangeColor}
+                    fillOpacity={0.06}
+                    ifOverflow="hidden"
+                  />
+                )}
                 <Area
                   type="monotone"
                   dataKey="net"
+                  // С выделением линия вне отрезка гаснет, чтобы глаз шёл за
+                  // окрашенным куском — как у брокеров.
                   stroke={NET_STROKE}
+                  strokeOpacity={netChange ? 0.35 : 1}
                   strokeWidth={2}
                   fill="url(#netfill)"
+                  fillOpacity={netChange ? 0.4 : 1}
+                  isAnimationActive={!netChange}
                 />
+                {netChange && (
+                  <>
+                    <Line
+                      type="monotone"
+                      dataKey="sel"
+                      stroke={netRangeColor}
+                      strokeWidth={2.5}
+                      dot={false}
+                      activeDot={false}
+                      isAnimationActive={false}
+                      legendType="none"
+                      tooltipType="none"
+                    />
+                    {[netChange.from, netChange.to].map((p) => (
+                      <ReferenceLine key={`l-${p.date}`} x={p.date} stroke={chartAxisStroke} />
+                    ))}
+                    {[netChange.from, netChange.to].map((p) => (
+                      <ReferenceDot
+                        key={`d-${p.date}`}
+                        x={p.date}
+                        y={p.value}
+                        r={5}
+                        fill={netRangeColor}
+                        stroke="rgb(var(--c-panel))"
+                        strokeWidth={2}
+                      />
+                    ))}
+                  </>
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           )}
