@@ -53,7 +53,9 @@ export function HeaderSwitcher({
       if (!a) return;
       const vw = window.innerWidth || 320;
       const width = Math.min(256, vw - 16);
-      setPos({ left: Math.min(Math.max(a.right - width, 8), vw - width - 8), top: a.bottom + 8 });
+      // Раскрывается вправо от кнопки — поверх свободной правой части шапки,
+      // а не влево на фильтры и меню разделов. У края экрана прижимается внутрь.
+      setPos({ left: Math.min(Math.max(a.left, 8), vw - width - 8), top: a.bottom + 8 });
     };
     place();
     window.addEventListener("scroll", place, true);
