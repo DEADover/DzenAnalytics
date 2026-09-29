@@ -1,5 +1,4 @@
-import { Link } from "react-router-dom";
-import { Settings2, UserRound } from "lucide-react";
+import { UserRound } from "lucide-react";
 import { profileLabel } from "../lib/profiles";
 import { switchProfile, useProfiles } from "../hooks/useProfiles";
 import { HeaderSwitcher } from "./HeaderSwitcher";
@@ -31,16 +30,7 @@ export function AccountSwitcher() {
       }))}
       activeId={current.id}
       onPick={switchProfile}
-      footer={(close) => (
-        <Link
-          to="/settings?tab=source#accounts"
-          onClick={close}
-          className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted hover:bg-panel2 hover:text-text"
-        >
-          <Settings2 className="w-3.5 h-3.5" />
-          Управлять аккаунтами
-        </Link>
-      )}
+      settings={{ to: "/settings?tab=source#accounts", label: "Управлять аккаунтами" }}
     />
   );
 }

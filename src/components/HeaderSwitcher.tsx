@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, type LucideIcon } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Check, Settings2, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
 
 export interface HeaderSwitcherItem {
@@ -24,7 +25,7 @@ export function HeaderSwitcher({
   items,
   activeId,
   onPick,
-  footer,
+  settings,
 }: {
   icon: LucideIcon;
   current: string;
@@ -34,8 +35,11 @@ export function HeaderSwitcher({
   items: HeaderSwitcherItem[];
   activeId: string;
   onPick: (id: string) => void;
-  /** Пункты под списком; `close` закрывает меню. */
-  footer?: (close: () => void) => ReactNode;
+  /**
+   * Где этим управляют — значком в строке заголовка. Отдельной строкой под
+   * списком ссылка занимала место и читалась ещё одним вариантом выбора.
+   */
+  settings?: { to: string; label: string };
 }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -52,7 +56,9 @@ export function HeaderSwitcher({
       const a = btnRef.current?.getBoundingClientRect();
       if (!a) return;
       const vw = window.innerWidth || 320;
-      const width = Math.min(256, vw - 16);
+      // Ширина — по содержимому, поэтому меряем само меню (до показа оно уже
+      // нарисовано невидимым).
+      const width = Math.min(menuRef.current?.offsetWidth ?? 224, vw - 16);
       // Раскрывается вправо от кнопки — поверх свободной правой части шапки,
       // а не влево на фильтры и меню разделов. У края экрана прижимается внутрь.
       setPos({ left: Math.min(Math.max(a.left, 8), vw - width - 8), top: a.bottom + 8 });
@@ -106,14 +112,27 @@ export function HeaderSwitcher({
         createPortal(
           <div
             ref={menuRef}
-            className="fixed z-[95] w-64 max-w-[calc(100vw-1rem)] border border-border rounded-xl bg-panel p-1.5 shadow-xl"
+            className="fixed z-[95] w-max min-w-[11rem] max-w-[min(16rem,calc(100vw-1rem))] border border-border rounded-xl bg-panel p-1 shadow-xl"
             style={{
               left: pos?.left ?? -9999,
               top: pos?.top ?? -9999,
               visibility: pos ? "visible" : "hidden",
             }}
           >
-            <div className="caps-label px-2 py-1">{heading}</div>
+            <div className="flex items-center justify-between gap-2 pl-2 pr-0.5 py-0.5">
+              <span className="caps-label">{heading}</span>
+              {settings && (
+                <Link
+                  to={settings.to}
+                  onClick={close}
+                  title={settings.label}
+                  aria-label={settings.label}
+                  className="btn-icon btn-icon-xs"
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                </Link>
+              )}
+            </div>
             {items.map((it) => (
               <button
                 key={it.id}
@@ -123,18 +142,19 @@ export function HeaderSwitcher({
                   onPick(it.id);
                 }}
                 className={clsx(
-                  "w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-sm text-left",
+                  "w-full flex items-center justify-between gap-3 px-2 py-1 rounded-md text-sm text-left",
                   it.id === activeId ? "bg-accent/10 text-accent" : "text-text hover:bg-panel2"
                 )}
               >
                 <span className="min-w-0">
                   <span className="block truncate">{it.label}</span>
-                  {it.hint && <span className="block truncate text-xs text-muted">{it.hint}</span>}
+                  {it.hint && (
+                    <span className="block truncate text-[11px] leading-4 text-muted">{it.hint}</span>
+                  )}
                 </span>
                 {it.id === activeId && <Check className="w-3.5 h-3.5 shrink-0" />}
               </button>
             ))}
-            {footer && <div className="border-t border-border/60 mt-1 pt-1">{footer(close)}</div>}
           </div>,
           document.body
         )}

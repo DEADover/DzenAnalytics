@@ -1,5 +1,4 @@
-import { Link } from "react-router-dom";
-import { Layers, SlidersHorizontal } from "lucide-react";
+import { Layers } from "lucide-react";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { HeaderSwitcher } from "./HeaderSwitcher";
 
@@ -26,16 +25,7 @@ export function SliceSwitcher() {
       items={slices.map((s) => ({ id: s.id, label: s.name }))}
       activeId={current.id}
       onPick={(id) => void setActive(id)}
-      footer={(close) => (
-        <Link
-          to="/settings?tab=processing"
-          onClick={close}
-          className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted hover:bg-panel2 hover:text-text"
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          Настроить
-        </Link>
-      )}
+      settings={{ to: "/settings?tab=processing", label: "Настроить разрезы" }}
     />
   );
 }
