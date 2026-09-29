@@ -49,7 +49,7 @@ function build(label: string, visible: boolean): HTMLDivElement {
     transition: reduceMotion() ? "none" : `opacity ${FADE_IN_MS}ms ease-out`,
   } satisfies Partial<CSSStyleDeclaration>);
   const text = document.createElement("div");
-  text.textContent = `Открываю профиль ${label}`;
+  text.textContent = `Переключаюсь на аккаунт ${label}`;
   el.appendChild(text);
   return el;
 }
