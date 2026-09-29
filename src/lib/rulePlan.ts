@@ -18,6 +18,7 @@ import {
   ruleKindOf,
   migrateRule,
   previewRules,
+  splitCategoryFull,
   type StoredRule,
 } from "./ruleEngine";
 import type { TransactionEdit } from "../store/useEditsStore";
@@ -280,6 +281,31 @@ export function buildRulePlan(
       continue;
     }
 
+    // Вторая категория, которой нет в Дзен-мани или которая — ярлык сервиса,
+    // записана не будет: отсеиваем операцию так же, как с основной категорией.
+    const addedTags = (patch.extraCategories ?? []).filter(
+      (x) => !(t.extraCategories ?? []).includes(x)
+    );
+    const badTag = addedTags.find((full) => {
+      const { category, subcategory } = splitCategoryFull(full);
+      return isServiceCategory(category) || (categoryOk ? !categoryOk(category, subcategory) : false);
+    });
+    if (badTag) {
+      const reason: CategoryBlockReason = isServiceCategory(splitCategoryFull(badTag).category)
+        ? "service"
+        : "missing";
+      skip(badTag, reason);
+      rows.push({
+        tx: t,
+        patch: {},
+        changes: [],
+        status: "blocked",
+        blockedCategory: badTag,
+        blockedReason: reason,
+      });
+      continue;
+    }
+
     // Получателя нет в справочнике — правило ссылается на имя, которого больше
     // не существует: контрагента переименовали или удалили. Записывать такое
     // бессмысленно: отправка положит имя свободным текстом, при возврате из
@@ -397,6 +423,29 @@ export function buildRulePlan(
           toWrite.comment = patch.comment;
         }
       );
+    }
+
+    if (addedTags.length > 0) {
+      // Дописываем к тому, что стоит сейчас, с учётом ручных правок: правило
+      // не должно стирать тег, который человек поставил сам.
+      const base = written?.extraCategories ?? t.extraCategories ?? [];
+      const next = [...base, ...addedTags.filter((x) => !base.includes(x))];
+      add(
+        "Вторая категория",
+        "extraCategories",
+        dash(base.join(", ")),
+        dash(next.join(", ")),
+        false,
+        () => {
+          toWrite.extraCategories = next;
+        }
+      );
+    }
+    if (patch.unseen === false) {
+      const seenAlready = written?.unseen === false || !t.unseen;
+      add("Просмотр", "unseen", seenAlready ? "Просмотрена" : "Новая", "Просмотрена", false, () => {
+        toWrite.unseen = false;
+      });
     }
 
     const status: RuleRow["status"] = changes.some((c) => c.state === "pending")

@@ -354,3 +354,52 @@ describe("«Перевод» и «Долг» в действии правила"
     expect(plan.skippedCount).toBe(0);
   });
 });
+
+describe("действия «Вторая категория» и «Отметить просмотренной»", () => {
+  const rule: StoredRule = {
+    id: "tidy",
+    enabled: true,
+    title: "Разбор такси",
+    conditions: [{ field: "payee", op: "contains", value: "такси", caseInsensitive: true }],
+    join: "and",
+    actions: [
+      { kind: "setCategory", value: "Транспорт" },
+      { kind: "addTag", value: "Отпуск" },
+      { kind: "markSeen", value: "1" },
+    ],
+    createdAt: "",
+  };
+  const ok = () => true;
+
+  it("дописывает вторую категорию и снимает пометку «новая»", () => {
+    const t = tx({ id: "a", payee: "Яндекс Такси", unseen: true, extraCategories: ["Работа"] });
+    const plan = buildRulePlan([t], [rule], new Set(["tidy"]), {}, new Set(), ok);
+    expect(plan.pending).toHaveLength(1);
+    expect(plan.pending[0].patch.extraCategories).toEqual(["Работа", "Отпуск"]);
+    expect(plan.pending[0].patch.unseen).toBe(false);
+  });
+
+  it("не стирает тег, поставленный руками, и не дублирует уже стоящий", () => {
+    const t = tx({ id: "b", payee: "Такси", extraCategories: ["Отпуск"] });
+    const edits = { b: { extraCategories: ["Отпуск", "Семья"] } };
+    const plan = buildRulePlan([t], [rule], new Set(["tidy"]), edits, new Set(), ok);
+    const row = plan.rows[0];
+    expect(row.changes.find((c) => c.label === "Вторая категория")).toBeUndefined();
+  });
+
+  it("у перевода вторую категорию не ставит", () => {
+    const t = tx({ id: "c", payee: "Такси", kind: "transfer", incomeAccount: "Наличные" });
+    const plan = buildRulePlan([t], [rule], new Set(["tidy"]), {}, new Set(), ok);
+    expect(plan.rows[0]?.patch.extraCategories).toBeUndefined();
+  });
+
+  it("тег, которого нет в Дзен-мани, блокирует операцию, а не пишется наполовину", () => {
+    const t = tx({ id: "d", payee: "Такси" });
+    const plan = buildRulePlan(
+      [t], [rule], new Set(["tidy"]), {}, new Set(),
+      (category) => category !== "Отпуск"
+    );
+    expect(plan.rows[0].status).toBe("blocked");
+    expect(plan.rows[0].blockedCategory).toBe("Отпуск");
+  });
+});

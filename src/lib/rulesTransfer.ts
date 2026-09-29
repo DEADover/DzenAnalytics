@@ -79,6 +79,8 @@ const ACTION_KINDS: ReadonlySet<string> = new Set<RuleActionKind>([
   "appendComment",
   "setKind",
   "setTransfer",
+  "addTag",
+  "markSeen",
 ]);
 const EVERY: ReadonlySet<string> = new Set<ScheduleEvery>(["minute", "hour", "day", "month"]);
 const DEPTH: ReadonlySet<string> = new Set<ScheduleDepth>(["day", "month", "year", "all"]);

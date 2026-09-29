@@ -177,7 +177,14 @@ export type RuleActionKind =
    * значением `setKind`: счёт — имя из справочника и переименовывается вместе
    * с ним (`lib/ruleRefs`).
    */
-  | "setTransfer";
+  | "setTransfer"
+  /**
+   * Добавить вторую категорию (тег). `value` — полное имя категории. Не
+   * заменяет уже стоящие — дописывает, если такой ещё нет.
+   */
+  | "addTag"
+  /** Снять пометку «новая» — операция считается просмотренной. `value` — «1». */
+  | "markSeen";
 
 export const ACTION_LABELS: Record<RuleActionKind, string> = {
   setCategory: "Категория",
@@ -187,6 +194,8 @@ export const ACTION_LABELS: Record<RuleActionKind, string> = {
   appendComment: "Дописать в конец комментария",
   setKind: "Тип операции",
   setTransfer: "Перевод, второй счёт",
+  addTag: "Вторая категория",
+  markSeen: "Отметить просмотренной",
 };
 
 /** Что вставляем между старым и дописанным текстом, если правило не задало своё. */
@@ -207,19 +216,23 @@ export interface RuleAction {
 
 /** Поле операции, которое занимает действие. Нужно, чтобы понимать, кто из
  *  правил уже высказался про это поле, — см. `collectRuleHits`. */
-export type RuleTargetField = "category" | "payee" | "comment" | "kind";
+export type RuleTargetField = "category" | "payee" | "comment" | "kind" | "tags" | "seen";
 
 export const ALL_TARGET_FIELDS: readonly RuleTargetField[] = [
   "category",
   "payee",
   "comment",
   "kind",
+  "tags",
+  "seen",
 ];
 
 export function actionTarget(kind: RuleActionKind): RuleTargetField {
   if (kind === "setCategory") return "category";
   if (kind === "setPayee") return "payee";
   if (kind === "setKind" || kind === "setTransfer") return "kind";
+  if (kind === "addTag") return "tags";
+  if (kind === "markSeen") return "seen";
   return "comment";
 }
 
@@ -229,6 +242,8 @@ export const RULE_TARGET_LABELS: Record<RuleTargetField, string> = {
   payee: "Получатель",
   comment: "Комментарий",
   kind: "Тип операции",
+  tags: "Вторая категория",
+  seen: "Просмотр",
 };
 
 /** Какие поля правило меняет — по заполненным действиям, без повторов, по порядку. */
@@ -654,6 +669,18 @@ export function ruleActionsToEdit(
       case "setTransfer":
         Object.assign(patch, kindPatch(t, a.kind, value));
         break;
+      case "addTag": {
+        // У перевода и долга категорий нет — и вторых тоже.
+        if ((patch.kind ?? t.kind) === "transfer" || ruleKindOf(t) === "debt") break;
+        const main = patch.categoryFull ?? t.categoryFull;
+        const cur = patch.extraCategories ?? t.extraCategories ?? [];
+        if (value === main || cur.includes(value)) break;
+        patch.extraCategories = [...cur, value];
+        break;
+      }
+      case "markSeen":
+        if (t.unseen) patch.unseen = false;
+        break;
     }
   }
   // Перевод стал расходом или доходом, а категорию правило не задало: у
@@ -766,6 +793,8 @@ export function collectRuleHits(
     if (patch.brand !== undefined) taken.add("payee");
     if (patch.comment !== undefined) taken.add("comment");
     if (patch.kind !== undefined) taken.add("kind");
+    if (patch.extraCategories !== undefined) taken.add("tags");
+    if (patch.unseen !== undefined) taken.add("seen");
     hits.push({ txId: t.id, ruleId: rule.id, patch });
   }
   return hits;
@@ -941,7 +970,9 @@ export function describeRule(rule: CategoryRuleV2): string {
       : (parts[0] ?? "");
   const acts = rule.actions
     .map((a) =>
-      a.kind === "setKind"
+      a.kind === "markSeen"
+        ? ACTION_LABELS.markSeen
+        : a.kind === "setKind"
         ? `${ACTION_LABELS[a.kind]} = «${KIND_VALUE_LABELS[a.value as RuleKindValue] ?? a.value}»`
         : a.kind === "setTransfer"
           ? `Перевод, второй счёт «${a.value}»`

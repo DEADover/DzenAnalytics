@@ -52,7 +52,7 @@ function conditionKind(c: RuleCondition): RefKind | null {
 }
 
 function actionKind(a: RuleAction): RefKind | null {
-  if (a.kind === "setCategory") return "tag";
+  if (a.kind === "setCategory" || a.kind === "addTag") return "tag";
   if (a.kind === "setPayee") return "merchant";
   if (a.kind === "setTransfer") return "account";
   return null;

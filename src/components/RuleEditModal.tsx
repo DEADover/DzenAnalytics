@@ -76,6 +76,8 @@ const ACTION_TARGETS: { value: RuleTargetField; label: string }[] = [
   { value: "payee", label: "Получатель" },
   { value: "comment", label: "Комментарий" },
   { value: "kind", label: "Тип операции" },
+  { value: "tags", label: "Вторая категория" },
+  { value: "seen", label: "Просмотр" },
 ];
 
 /** Типы для условия «Тип операции равно …». */
@@ -133,7 +135,20 @@ const DEFAULT_KIND: Record<RuleTargetField, RuleActionKind> = {
   payee: "setPayee",
   comment: "setComment",
   kind: "setKind",
+  tags: "addTag",
+  seen: "markSeen",
 };
+
+/**
+ * Значение, с которым действие появляется. У типа пустого значения нет —
+ * сразу первый из списка; у «Просмотр» значения нет вовсе, но пустое действие
+ * движок считает незаполненным, поэтому стоит условная единица.
+ */
+function defaultValue(target: RuleTargetField): string {
+  if (target === "kind") return "income";
+  if (target === "seen") return "1";
+  return "";
+}
 
 /** Черновик правила — то, что редактируется в окне. */
 export interface RuleDraft {
@@ -899,9 +914,8 @@ export function RuleEditModal({
                       patchAction(a.id!, {
                         kind: DEFAULT_KIND[v],
                         // Значение осмысленно только внутри своей цели:
-                        // категория в поле комментария — мусор. У типа пустого
-                        // значения нет — сразу первый из списка.
-                        value: v === "kind" ? "income" : "",
+                        // категория в поле комментария — мусор.
+                        value: defaultValue(v),
                       })
                     }
                   />
@@ -946,7 +960,11 @@ export function RuleEditModal({
                         onChange={(v) => patchAction(a.id!, { value: v })}
                         placeholder="Второй счёт"
                       />
-                    ) : target === "category" ? (
+                    ) : target === "seen" ? (
+                      <div className="text-sm text-muted truncate px-1">
+                        Операция перестанет быть новой — как если бы её открыли
+                      </div>
+                    ) : target === "category" || target === "tags" ? (
                       <CategoryCascadePicker
                         category={a.value.trim() ? splitCategoryFull(a.value).category : ""}
                         subcategory={
@@ -1014,7 +1032,7 @@ export function RuleEditModal({
                   ...d,
                   actions: [
                     ...d.actions,
-                    { id: nextId(), kind: DEFAULT_KIND[next.value], value: "" },
+                    { id: nextId(), kind: DEFAULT_KIND[next.value], value: defaultValue(next.value) },
                   ],
                 };
               })
@@ -1022,7 +1040,7 @@ export function RuleEditModal({
             className="btn-ghost text-xs mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
             title={
               freeTargets.length === 0
-                ? "Все поля уже заданы: категория, получатель, комментарий и тип"
+                ? "Все действия уже добавлены — каждое поле правило задаёт один раз"
                 : "Добавить действие"
             }
           >
