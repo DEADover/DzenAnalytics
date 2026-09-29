@@ -348,6 +348,28 @@ export function presetToRange(
 }
 
 /**
+ * Относится ли операция к выбранным счетам — то же правило, что у общего
+ * фильтра: у перевода — любой стороной (issue #41), долговой счёт — целиком или
+ * по выбранному человеку. Вынесено, чтобы им же суживать список категорий в
+ * фильтре: разойдись правила, в списке оставались бы категории, операций
+ * которых фильтр не покажет.
+ */
+export function onPickedAccounts(
+  t: Transaction,
+  accounts: ReadonlySet<string>,
+  debtPicks: ReturnType<typeof debtSelection> = debtSelection(accounts as Set<string>)
+): boolean {
+  return (
+    accounts.has(t.account) ||
+    (t.kind === "transfer" && (accounts.has(t.outcomeAccount) || accounts.has(t.incomeAccount))) ||
+    // Долговой счёт можно отобрать не целиком, а по конкретному человеку:
+    // в Дзен-мани все долги лежат на одном счёте, и «все долги сразу» —
+    // редко то, что нужно.
+    matchesDebtSelection(t, debtPicks)
+  );
+}
+
+/**
  * Compute the date window for the current filter state.
  *
  * Pass `monthStartDay` when the caller respects the user's reporting
@@ -403,16 +425,7 @@ export function applyFilters(
     // matching on `account` alone.
     if (state.accounts.size) {
       if (state.accounts.has(FILTER_NONE)) return false;
-      const onPickedAccount =
-        state.accounts.has(t.account) ||
-        (t.kind === "transfer" &&
-          (state.accounts.has(t.outcomeAccount) ||
-            state.accounts.has(t.incomeAccount))) ||
-        // Долговой счёт можно отобрать не целиком, а по конкретному человеку:
-        // в Дзен-мани все долги лежат на одном счёте, и «все долги сразу» —
-        // редко то, что нужно.
-        matchesDebtSelection(t, debtPicks);
-      if (!onPickedAccount) return false;
+      if (!onPickedAccounts(t, state.accounts, debtPicks)) return false;
     }
     // The category filter holds leaf keys equal to `categoryFull`: a bare
     // category «Еда» (a transaction tagged with just the parent) or a full

@@ -21,7 +21,7 @@ import {
 import { MultiSelect } from "./MultiSelect";
 import { AccountLogo } from "./AccountLogo";
 import { accountKindLabel, DEBT_TYPES } from "../lib/accountType";
-import { parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
+import { debtSelection, parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
 import { CategoryFilterPicker } from "./CategoryFilterPicker";
 import { PeriodPicker } from "./PeriodPicker";
 import { Segmented, type SegmentedOption } from "./Segmented";
@@ -34,7 +34,14 @@ import {
   getZenUsersFromCache,
 } from "../store/useZenmoneyStore";
 import { accountOptions } from "../lib/accountOptions";
-import { presetToRange, useFiltersStore, type DatePreset } from "../store/useFiltersStore";
+import {
+  FILTER_NONE,
+  onPickedAccounts,
+  presetToRange,
+  useFiltersStore,
+  type DatePreset,
+} from "../store/useFiltersStore";
+import { categoryKeysOf } from "../lib/operationTags";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { currentPeriod, periodRange, quarterOf } from "../lib/period";
 import { formatDate } from "../lib/format";
@@ -269,6 +276,22 @@ export function GlobalFilters({
     (value: string) => parseDebtKey(value)?.payee ?? value,
     []
   );
+
+  /**
+   * Категории, которые встречаются на выбранных счетах, — список в фильтре
+   * категорий сужается до них: выбран счёт «С», а по нему не было ни «А», ни
+   * «Б» — их и незачем предлагать. Счета не выбраны — `null`, список полный.
+   */
+  const categoriesOnAccounts = useMemo(() => {
+    if (f.accounts.size === 0 || f.accounts.has(FILTER_NONE)) return null;
+    const debtPicks = debtSelection(f.accounts);
+    const out = new Set<string>();
+    for (const t of transactions) {
+      if (!t.category || !onPickedAccounts(t, f.accounts, debtPicks)) continue;
+      for (const key of categoryKeysOf(t)) out.add(key);
+    }
+    return out;
+  }, [transactions, f.accounts]);
 
   // Parent categories each with their observed sub-categories — for the cascade
   // category filter (parent on the left, subs on the right).
@@ -945,6 +968,7 @@ export function GlobalFilters({
           className={clsx("w-52", PICKER_PHONE)}
           icon={PieChart}
           nodes={categoryNodes}
+          available={categoriesOnAccounts}
           selected={f.categories}
           onChange={(s) => f.setSet("categories", s)}
         />

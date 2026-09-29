@@ -63,10 +63,23 @@ export function CategoryFilterPicker({
   onChange,
   className,
   icon: Icon,
+  available,
+  availableLabel = "Только категории выбранных счетов",
 }: {
   nodes: CategoryNode[];
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
+  /**
+   * Листья, которые есть в текущем контексте (например, на выбранных счетах).
+   * Задано — список сужается до них: остальные категории у этих счетов не
+   * встречаются, и выбирать их незачем. Сужается только ПОКАЗ: «все», «снять
+   * одну» и прочее считаются по полному списку — иначе после снятия отбора по
+   * счёту скрытые категории оказались бы молча выключенными. Отмеченные
+   * показываются всегда — их должно быть можно снять.
+   */
+  available?: ReadonlySet<string> | null;
+  /** Подпись строки о сужении. */
+  availableLabel?: string;
   /** Значок сущности на кнопке — как у соседних выборов в ряду фильтров. */
   icon?: LucideIcon;
   /** Extra classes for the outer wrapper (e.g. `flex-1` to fill a row). */
@@ -92,6 +105,24 @@ export function CategoryFilterPicker({
   ];
   // eslint-disable-next-line react-hooks/exhaustive-deps -- leavesOf is pure of nodes
   const allLeaves = useMemo(() => nodes.flatMap(leavesOf), [nodes]);
+
+  // Что показать: полный список или суженный до контекста. Логика выбора
+  // ниже по-прежнему опирается на `nodes` и `allLeaves`.
+  const [showAll, setShowAll] = useState(false);
+  const narrowing = !!available && !showAll;
+  const shown = useMemo(() => {
+    if (!available || showAll) return nodes;
+    const visible = (leaf: string) =>
+      available.has(leaf) || (!selected.has(FILTER_NONE) && selected.has(leaf));
+    return nodes
+      .map((n) => ({
+        ...n,
+        hasBare: n.hasBare && visible(n.name),
+        subs: n.subs.filter((sub) => visible(`${n.name} / ${sub}`)),
+      }))
+      .filter((n) => n.hasBare || n.subs.length > 0);
+  }, [nodes, available, showAll, selected]);
+  const hiddenCount = nodes.length - shown.length;
 
   const leafChecked = (leaf: string) =>
     isAll || (!isNone && selected.has(leaf));
@@ -167,7 +198,7 @@ export function CategoryFilterPicker({
     if (!q) return null;
     const match = queryMatcher(q);
     const items: SearchItem[] = [];
-    for (const n of nodes) {
+    for (const n of shown) {
       if (match(n.name))
         items.push({ key: `c:${n.name}`, kind: "cat", node: n });
       for (const s of n.subs) {
@@ -176,11 +207,11 @@ export function CategoryFilterPicker({
       }
     }
     return items;
-  }, [q, nodes]);
+  }, [q, shown]);
 
   const activeNode = useMemo(
-    () => nodes.find((n) => n.name === active) ?? null,
-    [nodes, active]
+    () => shown.find((n) => n.name === active) ?? null,
+    [shown, active]
   );
 
   // Portal positioning — anchored to the button. Recomputed on scroll/resize so
@@ -291,6 +322,20 @@ export function CategoryFilterPicker({
                 placeholder="Поиск категории и подкатегории"
                 autoFocus
               />
+              {available && (hiddenCount > 0 || showAll) && (
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-border/60 text-[11px] text-muted">
+                  <span className="truncate">
+                    {narrowing ? availableLabel : "Все категории"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAll((v) => !v)}
+                    className="text-accent hover:underline shrink-0"
+                  >
+                    {narrowing ? `Показать все (+${hiddenCount})` : "Только по выбранным счетам"}
+                  </button>
+                </div>
+              )}
               {searchResults ? (
                 /* Search — flat, directly-toggleable list with full paths. */
                 <div className="overflow-y-auto min-h-0 flex-1">
@@ -347,21 +392,21 @@ export function CategoryFilterPicker({
                     className="shrink-0 overflow-y-auto"
                     style={{ width: pos.width - (active ? SUB_W : 0) }}
                   >
-                    {nodes.map((n, i) => {
+                    {shown.map((n, i) => {
                       const st = catState(n);
                       const isActive = n.name === active;
                       // Заголовок над первой категорией каждого типа. Список уже
                       // отсортирован по типу, поэтому достаточно сравнить с
                       // предыдущей строкой.
                       const groupLabel =
-                        n.kind && n.kind !== nodes[i - 1]?.kind
+                        n.kind && n.kind !== shown[i - 1]?.kind
                           ? KIND_LABELS[n.kind]
                           : null;
                       // Листья всего типа — на них действует кнопка в его
                       // заголовке. Считаем один раз на заголовок, а не на
                       // каждую строку списка.
                       const kindLeaves = groupLabel
-                        ? nodes.filter((x) => x.kind === n.kind).flatMap(leavesOf)
+                        ? shown.filter((x) => x.kind === n.kind).flatMap(leavesOf)
                         : [];
                       const kindAllOn =
                         kindLeaves.length > 0 && kindLeaves.every(leafChecked);
