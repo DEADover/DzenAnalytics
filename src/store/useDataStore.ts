@@ -692,10 +692,33 @@ export const useDataStore = create<DataState>((set, get) => ({
     // Don't run two warms at once (e.g. hydrate + a fast re-sync).
     if (histWarming) return;
     // Every foreign-currency op date we don't already have a resolved entry for.
+    // Валютной считается операция, у которой валютная ЛЮБАЯ сторона: при
+    // покупке долларов главная сторона рублёвая, а курс нужен долларовому
+    // счёту, чтобы оценить его остаток в этот день.
     const missing = new Set<string>();
+    let first = "";
+    let anyForeign = false;
     for (const t of transactionsRaw) {
-      if (t.currency !== "RUB" && t.date && !(t.date in histDayRates)) {
-        missing.add(t.date);
+      if (!t.date) continue;
+      const foreign =
+        t.currency !== "RUB" ||
+        (!!t.outcomeCurrency && t.outcomeCurrency !== "RUB") ||
+        (!!t.incomeCurrency && t.incomeCurrency !== "RUB");
+      if (!foreign) continue;
+      anyForeign = true;
+      if (!first || t.date < first) first = t.date;
+      if (!(t.date in histDayRates)) missing.add(t.date);
+    }
+    // И первые числа месяцев: остаток валютного счёта оценивается по курсу
+    // своего дня, а операций на нём может не быть месяцами — без этих точек
+    // доллары, пролежавшие год, весь год стояли бы по курсу одного дня.
+    if (anyForeign && first >= "2000-01-01") {
+      const today = new Date().toISOString().slice(0, 10);
+      let ym = first.slice(0, 7);
+      while (`${ym}-01` <= today) {
+        if (!(`${ym}-01` in histDayRates)) missing.add(`${ym}-01`);
+        const [y, m] = ym.split("-").map(Number);
+        ym = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
       }
     }
     if (missing.size === 0) return;

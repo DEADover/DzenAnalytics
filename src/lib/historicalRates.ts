@@ -507,3 +507,63 @@ export function baseWithHistory(
   }
   return toBase(amount, currency, rates);
 }
+
+/**
+ * Курс для оценки ОСТАТКА на дату: сколько базовой валюты стоит единица
+ * `currency` в день `date`.
+ *
+ * Так считает сам Дзен-мани: остаток валютного счёта на прошлую дату — это
+ * валюта на счёте в тот день по курсу того дня (сверено на живом аккаунте:
+ * 24,21 $ на 01.01.2023 — 1 785 ₽, по 73,75). Операции у нас оцениваются так
+ * же (`baseWithHistory`), а остаток прежде — нет: он брался по сегодняшнему
+ * курсу за вычетом операций по их курсам, и прошлое выходило смесью курсов.
+ *
+ * Курс берётся за ближайший известный день не позже `date` — котировки есть на
+ * дни валютных операций и на первые числа месяцев (их прогревает стор). С
+ * `today` и дальше — курс синхронизации: так последняя точка совпадает с
+ * текущими остатками. Небазовая валюта, не рублёвая база или день раньше
+ * первой котировки — тоже курс синхронизации, чтобы число не пропадало.
+ */
+export function makeRateAt(
+  rates: CurrencyRates,
+  hist: HistDayRates,
+  today: string
+): (currency: string, date: string) => number {
+  const sync = (currency: string) => toBase(1, currency, rates);
+  if (rates.base !== "RUB") {
+    return (currency) => (!currency || currency === rates.base ? 1 : sync(currency));
+  }
+  const days = Object.keys(hist).sort();
+  /** Для каждой валюты — дни, где у неё есть котировка, и сами котировки. */
+  const byCurrency = new Map<string, { dates: string[]; values: number[] }>();
+  const indexOf = (currency: string) => {
+    let idx = byCurrency.get(currency);
+    if (!idx) {
+      idx = { dates: [], values: [] };
+      for (const d of days) {
+        const v = hist[d]?.[currency];
+        if (v != null && v > 0) {
+          idx.dates.push(d);
+          idx.values.push(v);
+        }
+      }
+      byCurrency.set(currency, idx);
+    }
+    return idx;
+  };
+  return (currency, date) => {
+    if (!currency || currency === "RUB") return 1;
+    if (date >= today) return sync(currency);
+    const { dates, values } = indexOf(currency);
+    if (dates.length === 0 || date < dates[0]) return sync(currency);
+    // Последний день с котировкой не позже `date` — бинарным поиском.
+    let lo = 0;
+    let hi = dates.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (dates[mid] <= date) lo = mid;
+      else hi = mid - 1;
+    }
+    return values[lo];
+  };
+}

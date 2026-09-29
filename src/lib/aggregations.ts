@@ -1,4 +1,4 @@
-import type { Transaction, CurrencyRates } from "../types";
+import type { Transaction } from "../types";
 import { ymKey, ymdKey } from "./format";
 import { periodKey } from "./period";
 import { MONTHS } from "./months";
@@ -207,11 +207,226 @@ export function stackedBalanceByAccount(
    * Якорь такому слою — его собственный итог по контрагенту (см. `debts`), и
    * передавать его надо в `realBalances` тем же составным ключом.
    */
-  debtSplit?: ReadonlyMap<string, ReadonlySet<string>> | null
+  debtSplit?: ReadonlyMap<string, ReadonlySet<string>> | null,
+  /**
+   * Остатки по правилам Дзен-мани (режим с подключённым Дзен-мани).
+   *
+   * Задано — каждая линия считается в ВАЛЮТЕ СЧЁТА и пересчитывается по курсу
+   * своего дня, начальный остаток выводится из текущего и действует с начала
+   * истории, а `realBalances` не нужен. Не задано — прежний режим: поток в
+   * базовой валюте от нуля, со сдвигом к `realBalances`, если они есть (CSV).
+   */
+  valuation?: BalanceValuation | null
 ): { series: StackedBalancePoint[]; accounts: string[] } {
   const only =
     onlyAccounts && onlyAccounts.length > 0 ? new Set(onlyAccounts) : null;
+  const built = valuation
+    ? valuedLines(allTxs, valuation, unsyncedIds ?? null, only, debtSplit ?? null)
+    : flowLines(allTxs, realBalances ?? null, unsyncedIds ?? null, only, debtSplit ?? null);
+  return assembleStack(built.lines, built.dates, built.layers, topN, only);
+}
 
+/** Разделитель в ключе «счёт + валюта»: в названиях счетов его не бывает. */
+const BALANCE_KEY_SEP = "\u0001";
+
+/**
+ * Ключ остатка «счёт + валюта». У Дзен-мани долговых счетов столько, сколько
+ * валют, и все они называются «Долги»: по одному названию рубли и доллары
+ * сложились бы в одно число без пересчёта.
+ */
+export function balanceKey(title: string, currency: string): string {
+  return `${title}${BALANCE_KEY_SEP}${currency}`;
+}
+
+/** Оценка остатков по правилам Дзен-мани — см. `stackedBalanceByAccount`. */
+export interface BalanceValuation {
+  /** Текущий остаток каждого счёта в его валюте, по ключу `balanceKey`. */
+  balances: Record<string, number>;
+  /** Сколько базовой валюты стоит единица `currency` в день `date`. */
+  rateAt: (currency: string, date: string) => number;
+  /**
+   * Счета, которые вообще участвуют без ручного выбора, — те, что «в
+   * балансе». Без этого «Итого» стопки включало счета вне баланса и
+   * расходилось с «Совокупным балансом». `null` — все счета.
+   */
+  universe?: ReadonlySet<string> | null;
+}
+
+/**
+ * Движение денег по счетам операции: каждая сторона — в СВОЕЙ валюте и своей
+ * суммой.
+ *
+ * Прежде обе стороны перевода брали одну `amountBase` — сумму списания по
+ * курсу ЦБ. При покупке долларов на долларовый счёт приходили рубли по курсу
+ * ЦБ, а не то, что реально зачислено, и остаток валютного счёта уплывал.
+ *
+ * Главная сторона берёт `amount` — в нём уже учтена локальная правка суммы.
+ * Вторая сторона перевода пересчитывается в той же пропорции: без правки это
+ * ровно `incomeAmount`, а правка суммы меняет обе стороны вместе.
+ */
+export function transactionLegs(
+  t: Transaction
+): { account: string; currency: string; amount: number }[] {
+  if (t.kind === "expense") {
+    return [{ account: t.outcomeAccount, currency: t.currency, amount: -t.amount }];
+  }
+  if (t.kind === "income" || t.kind === "refund") {
+    return [{ account: t.incomeAccount, currency: t.currency, amount: t.amount }];
+  }
+  if (t.kind === "transfer") {
+    const scale = t.outcomeAmount > 0 ? t.amount / t.outcomeAmount : 1;
+    const incoming =
+      t.incomeAmount > 0 && t.incomeCurrency
+        ? { currency: t.incomeCurrency, amount: t.incomeAmount * scale }
+        : { currency: t.currency, amount: t.amount };
+    return [
+      { account: t.outcomeAccount, currency: t.currency, amount: -t.amount },
+      { account: t.incomeAccount, ...incoming },
+    ];
+  }
+  return [];
+}
+
+/**
+ * Слой, в который ложится сторона операции по счёту `acc`, или `null`, если
+ * счёт не показывается. Операция долгового счёта с выделенным контрагентом
+ * уходит в слой контрагента целиком — так стопка не считает деньги дважды.
+ */
+function layerOf(
+  t: Transaction,
+  acc: string,
+  only: ReadonlySet<string> | null,
+  debtSplit: ReadonlyMap<string, ReadonlySet<string>> | null
+): string | null {
+  const split = debtSplit?.get(acc);
+  const payee = split ? counterpartyOf(t) : null;
+  const layer = payee !== null && split!.has(payee) ? debtKey(acc, payee) : acc;
+  return !only ? layer : only.has(layer) ? layer : only.has(acc) ? acc : null;
+}
+
+interface BuiltLines {
+  dates: string[];
+  layers: string[];
+  lines: Map<string, number[]>;
+}
+
+/**
+ * Остатки по правилам Дзен-мани: остаток счёта на дату — начальный остаток
+ * плюс все операции до неё, в валюте счёта, и по курсу этого дня.
+ *
+ * Начальный остаток выводится из текущего: `остаток − все операции`. Брать
+ * `startBalance` из API нельзя — у вклада там сумма по договору, а не деньги
+ * на счёте (у «Озон — Нак.счёт» 100 000 при нулевом остатке без операций), и
+ * она вычиталась из всей ранней истории. Выведенный остаток к тому же сам
+ * сходится с текущим — сдвигать линию к правде задним числом не нужно.
+ *
+ * Действует он с начала истории, как в Дзен-мани: на 01.01.2023 у «ИИС» там
+ * уже 1 200 000, хотя первая операция по нему — в марте. Прежде до первой
+ * операции счёт считался пустым, и ранняя история выходила ниже на сумму всех
+ * начальных остатков.
+ */
+function valuedLines(
+  allTxs: Transaction[],
+  valuation: BalanceValuation,
+  unsyncedIds: Set<string> | null,
+  only: ReadonlySet<string> | null,
+  debtSplit: ReadonlyMap<string, ReadonlySet<string>> | null
+): BuiltLines {
+  const universe = !only ? valuation.universe ?? null : null;
+  const days = new Map<string, Map<string, number>>();
+  /** Поток «эпоховых» операций (1970 год): в линию входит, точки на оси не даёт. */
+  const epoch = new Map<string, number>();
+  /** Весь поток счёта в его валюте — без неотправленных черновиков. */
+  const synced = new Map<string, number>();
+  const firstDay = new Map<string, string>();
+  const seen = new Set<string>();
+
+  for (const t of allTxs) {
+    const d = ymdKey(t.date);
+    if (!d) continue;
+    const tooOld = d < EARLIEST_PLAUSIBLE_DATE;
+    if (!tooOld && !days.has(d)) days.set(d, new Map());
+    const unsynced = unsyncedIds ? unsyncedIds.has(t.id) : false;
+    for (const leg of transactionLegs(t)) {
+      if (!leg.account || !leg.amount) continue;
+      // Остаток в API не знает о неотправленных черновиках — их поток не
+      // участвует в выводе начального остатка, иначе линия съехала бы на
+      // сумму черновика (issue #18). В форме линии он остаётся.
+      const accKey = balanceKey(leg.account, leg.currency);
+      if (!unsynced) synced.set(accKey, (synced.get(accKey) || 0) + leg.amount);
+      if (universe && !universe.has(leg.account)) continue;
+      const layer = layerOf(t, leg.account, only, debtSplit);
+      if (layer === null) continue;
+      seen.add(layer);
+      const sub = balanceKey(layer, leg.currency);
+      if (tooOld) {
+        epoch.set(sub, (epoch.get(sub) || 0) + leg.amount);
+      } else {
+        const dayMap = days.get(d)!;
+        dayMap.set(sub, (dayMap.get(sub) || 0) + leg.amount);
+        const first = firstDay.get(sub);
+        if (first === undefined || d < first) firstDay.set(sub, d);
+      }
+    }
+  }
+
+  // Начальный остаток — счёту, а не выделенным из него контрагентам: долг
+  // каждого из них складывается из его операций целиком.
+  const opening = new Map<string, number>();
+  const withBalance = new Set<string>();
+  for (const [accKey, balance] of Object.entries(valuation.balances)) {
+    const sep = accKey.indexOf(BALANCE_KEY_SEP);
+    const title = accKey.slice(0, sep);
+    const currency = accKey.slice(sep + 1);
+    if (universe && !universe.has(title)) continue;
+    const layer = !only ? title : only.has(title) ? title : null;
+    if (layer === null) continue;
+    const sub = balanceKey(layer, currency);
+    opening.set(sub, (opening.get(sub) || 0) + balance - (synced.get(accKey) || 0));
+    if (Math.abs(balance) > 0.005) withBalance.add(layer);
+  }
+
+  const layers = only ? [...only] : [...new Set([...seen, ...withBalance])];
+  const layerSet = new Set(layers);
+  const subs = new Set<string>([...epoch.keys(), ...opening.keys(), ...firstDay.keys()]);
+  const dates = Array.from(days.keys()).sort();
+  const lines = new Map<string, number[]>();
+  for (const a of layers) lines.set(a, new Array(dates.length).fill(0));
+
+  for (const sub of subs) {
+    const sep = sub.indexOf(BALANCE_KEY_SEP);
+    const layer = sub.slice(0, sep);
+    const currency = sub.slice(sep + 1);
+    if (!layerSet.has(layer)) continue;
+    const out = lines.get(layer)!;
+    // Счёт с известным остатком существует с начала истории. Без него (счёта
+    // нет среди живых — удалён) остаток неизвестен, и линия — поток с первой
+    // операции, как раньше.
+    const known = opening.has(sub) || epoch.has(sub);
+    const start = firstDay.get(sub);
+    let running = (opening.get(sub) || 0) + (epoch.get(sub) || 0);
+    for (let i = 0; i < dates.length; i++) {
+      const date = dates[i];
+      running += days.get(date)!.get(sub) || 0;
+      if (!known && start !== undefined && date < start) continue;
+      if (running === 0) continue;
+      out[i] += running * valuation.rateAt(currency, date);
+    }
+  }
+  return { dates, layers, lines };
+}
+
+/**
+ * Прежний режим — без остатков Дзен-мани (CSV): поток в базовой валюте от нуля,
+ * со сдвигом к `realBalances`, если они переданы.
+ */
+function flowLines(
+  allTxs: Transaction[],
+  realBalances: Record<string, number | null> | null,
+  unsyncedIds: Set<string> | null,
+  only: ReadonlySet<string> | null,
+  debtSplit: ReadonlyMap<string, ReadonlySet<string>> | null
+): BuiltLines {
   const days = new Map<string, Map<string, number>>();
   // Поток «эпоховых» операций (1970 год). Он НЕ выбрасывается — иначе поедут
   // остатки, — а складывается в стартовое значение линии. Точки на оси такая
@@ -242,16 +457,10 @@ export function stackedBalanceByAccount(
     const unsynced = unsyncedIds ? unsyncedIds.has(t.id) : false;
     const apply = (acc: string, delta: number) => {
       if (!acc) return;
-      // Операция долгового счёта, у которого контрагент выделен в свой слой,
-      // уходит туда целиком. На самом счёте остаётся всё прочее — так стопка
-      // не считает одни и те же деньги дважды.
-      const split = debtSplit?.get(acc);
-      const payee = split ? counterpartyOf(t) : null;
-      const layer = payee !== null && split!.has(payee) ? debtKey(acc, payee) : acc;
       // Слой считаем для КАЖДОГО счёта, а не только для отобранных: кто из них
       // крупный, а кто мелочь, видно лишь после того, как посчитаны линии.
       // Фильтр пользователя — единственное, что отсекает операцию сразу.
-      const key = !only ? layer : only.has(layer) ? layer : only.has(acc) ? acc : null;
+      const key = layerOf(t, acc, only, debtSplit);
       // День остаётся на оси, даже если операция прошла по невыбранному счёту:
       // иначе при фильтре пары счетов ось теряла бы почти все точки, а линии
       // рвались на длинные прямые между редкими днями.
@@ -350,6 +559,17 @@ export function stackedBalanceByAccount(
     }
   }
 
+  return { dates: sortedDates, layers, lines: line };
+}
+
+/** Отбор слоёв и сборка точек стопки — общие для обоих режимов. */
+function assembleStack(
+  line: Map<string, number[]>,
+  sortedDates: string[],
+  layers: string[],
+  topN: number,
+  only: ReadonlySet<string> | null
+): { series: StackedBalancePoint[]; accounts: string[] } {
   /**
    * «Вес» слоя — САМОЕ БОЛЬШОЕ, чем он был на графике, а не то, сколько на нём
    * денег сегодня. Крупные счета идут своими слоями, а в «Прочие» сваливается
@@ -1512,143 +1732,26 @@ export function lastTransactionDate(txs: Transaction[]): string {
   return max;
 }
 
-export interface NetWorthOptions {
-  /** Dated opening-balance events (base currency) — each account's startBalance
-   *  placed at its opening date. Seeds initial capital so the curve reflects it
-   *  from the right moment instead of as a flat offset across all of history. */
-  openings?: { date: string; amount: number }[];
-  /** When set, only flows touching these accounts count, and transfers are
-   *  scored by membership: a transfer crossing the set boundary is a real
-   *  in/outflow, one within the set nets to zero. Together with `openings` this
-   *  makes the series end exactly at the real total of these accounts. */
-  accounts?: Set<string> | null;
-  /**
-   * Куда обязан прийти КОНЕЦ кривой — сумма реальных остатков этих счетов.
-   *
-   * Без привязки кривая складывается из стартовых остатков и операций, и любая
-   * мелочь, которую эта сумма не объясняет, копится: стартовые остатки
-   * переводятся в рубли по сегодняшнему курсу, а операции — по курсу ЦБ на
-   * дату, так что валютная переоценка на кривую не попадает вовсе. Сдвигаем всю
-   * кривую на постоянную величину: форма — из операций, конец — из правды.
-   */
-  anchorTo?: number | null;
-}
-
-/** Subset of `LiveAccount` (avoids a store→lib import) needed to seed openings. */
-export interface NetWorthAccount {
-  title: string;
-  currency: string;
-  startBalance: number;
-  startDate: string | null;
-  archive: boolean;
-  inBalance: boolean;
-  /** Текущий остаток в валюте счёта — им кривая привязывается к правде. */
-  balance: number;
-}
-
 /**
- * Build the net-worth reconstruction basis from live accounts: which accounts
- * count, and a dated opening-balance event per account (its `startBalance` in
- * base currency, placed at `startDate` → first transaction → global earliest).
+ * Капитал от нуля: накопленный поток доходов и расходов, со сдвигом к ручной
+ * калибровке («на эту дату у меня было столько»).
+ *
+ * Это режим без остатков Дзен-мани (CSV). С подключённым Дзен-мани кривая
+ * строится из остатков счетов — `stackedBalanceByAccount` с оценкой.
  */
-export function netWorthBasis(
-  liveAccounts: NetWorthAccount[],
-  txs: Transaction[],
-  rates: CurrencyRates,
-  includeOffBalance: boolean
-): {
-  accounts: Set<string>;
-  openings: { date: string; amount: number }[];
-  /** Сумма текущих остатков включённых счетов, в базовой валюте. */
-  total: number;
-} {
-  const earliest = new Map<string, string>();
-  let globalEarliest = "";
-  for (const t of txs) {
-    const d = t.date;
-    if (!d) continue;
-    if (!globalEarliest || d < globalEarliest) globalEarliest = d;
-    for (const a of [t.outcomeAccount, t.incomeAccount, t.account]) {
-      if (!a) continue;
-      const cur = earliest.get(a);
-      if (!cur || d < cur) earliest.set(a, d);
-    }
-  }
-  const toBaseAmt = (amount: number, currency: string) =>
-    currency === rates.base ? amount : amount * (rates.rates[currency] || 1);
-  const accounts = new Set<string>();
-  const openings: { date: string; amount: number }[] = [];
-  let total = 0;
-  for (const a of liveAccounts) {
-    // Архивные счета УЧАСТВУЮТ. Раньше они выбрасывались целиком — и вместе с
-    // ними исчезала вся их история: счёт, закрытый в этом году, в прошлые годы
-    // держал настоящие деньги, и на кривой совокупного баланса они были. У
-    // одного пользователя из 32 счетов в расчёт попадали 12, а максимум за всю
-    // историю выходил 5,87 млн против 6,57 млн в самом Дзен-мани.
-    //
-    // Сегодняшнему итогу это почти не мешает: закрытый счёт обычно с нулём, а
-    // если на нём что-то осталось, Дзен-мани эти деньги в своём балансе тоже
-    // показывает.
-    if (!a.inBalance && !includeOffBalance) continue;
-    accounts.add(a.title);
-    total += toBaseAmt(a.balance, a.currency);
-    if (a.startBalance) {
-      // Zenmoney occasionally hands back an epoch/1970 `startDate` (legacy or
-      // import artifact). Such a date would plant a phantom opening balance «at
-      // the dawn of time» (01.01.1970) and inflate/skew the curve. Treat an
-      // implausibly-old startDate as absent and fall back to the account's
-      // first transaction (or the global earliest). Legitimate early dates
-      // (an account opened before the first visible transaction) are kept.
-      const plausibleStart =
-        a.startDate && a.startDate >= "2000-01-01" ? a.startDate : null;
-      const date = plausibleStart || earliest.get(a.title) || globalEarliest;
-      if (date) openings.push({ date, amount: toBaseAmt(a.startBalance, a.currency) });
-    }
-  }
-  return { accounts, openings, total };
-}
-
 export function netWorthSeries(
   allTxs: Transaction[],
-  calibration?: CalibrationInput | null,
-  opts?: NetWorthOptions
+  calibration?: CalibrationInput | null
 ): { date: string; net: number }[] {
-  const set = opts?.accounts ?? null;
-  const inSet = (a: string | null | undefined) => !!a && set!.has(a);
   const days = new Map<string, number>();
-  const add = (d: string, v: number) => {
-    if (v !== 0) days.set(d, (days.get(d) || 0) + v);
-  };
   for (const t of allTxs) {
     const d = ymdKey(t.date);
     if (!d) continue;
+    // Refund increments net worth on the day, like income.
     let delta = 0;
-    if (set) {
-      // Account-aware: a flow only moves net worth if its account is in the set;
-      // transfers count only when they cross the set boundary.
-      if (t.kind === "income" || t.kind === "refund") {
-        if (inSet(t.incomeAccount)) delta += t.amountBase;
-      } else if (t.kind === "expense") {
-        if (inSet(t.outcomeAccount)) delta -= t.amountBase;
-      } else if (t.kind === "transfer") {
-        const out = inSet(t.outcomeAccount);
-        const inc = inSet(t.incomeAccount);
-        if (out && !inc) delta -= t.amountBase;
-        else if (inc && !out) delta += t.amountBase;
-      }
-    } else {
-      // Refund increments net worth on the day, like income.
-      if (t.kind === "income" || t.kind === "refund") delta += t.amountBase;
-      else if (t.kind === "expense") delta -= t.amountBase;
-    }
-    add(d, delta);
-  }
-  // Seed dated opening balances (account creation capital).
-  if (opts?.openings) {
-    for (const o of opts.openings) {
-      const d = ymdKey(o.date);
-      if (d) add(d, o.amount);
-    }
+    if (t.kind === "income" || t.kind === "refund") delta += t.amountBase;
+    else if (t.kind === "expense") delta -= t.amountBase;
+    if (delta !== 0) days.set(d, (days.get(d) || 0) + delta);
   }
   const sorted = Array.from(days.keys()).sort();
   let net = 0;
@@ -1656,17 +1759,7 @@ export function netWorthSeries(
     net += days.get(d)!;
     return { date: d, net };
   });
-  if (!calibration) {
-    // Привязка к реальным остаткам: сдвигаем всю кривую так, чтобы её конец
-    // совпал с суммой остатков. Ручная калибровка сильнее — она и есть заявление
-    // человека «на эту дату у меня было столько», и спорить с ней нечем.
-    const anchor = opts?.anchorTo;
-    if (anchor != null && raw.length > 0) {
-      const shift = anchor - raw[raw.length - 1].net;
-      if (shift !== 0) return raw.map((p) => ({ date: p.date, net: p.net + shift }));
-    }
-    return raw;
-  }
+  if (!calibration) return raw;
 
   let rawAtCal = 0;
   for (const p of raw) {

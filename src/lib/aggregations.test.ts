@@ -12,8 +12,6 @@ import {
   stackedBalanceByAccount,
   type StackedBalancePoint,
   buildScenarioForecast,
-  netWorthSeries,
-  netWorthBasis,
   buildSankey,
   splitByObligation,
   isObligatoryTx,
@@ -31,7 +29,7 @@ import {
   accountMonthlyDeltas,
 } from "./aggregations";
 import { tx } from "../test/fixtures";
-import type { CurrencyRates, Transaction } from "../types";
+import type { Transaction } from "../types";
 
 describe("splitByObligation / isObligatoryTx — default obligatory, sub-aware", () => {
   const txs = [
@@ -322,100 +320,6 @@ describe("buildScenarioForecast — robust center + tightened band (issue #28)",
     const bandWithout = without.optimistic - without.realistic;
     expect(bandWith).toBeLessThan(bandWithout); // fixed variance excluded → tighter
     expect(bandWith).toBeCloseTo(0); // «Кафе» constant → variable part has no variance
-  });
-});
-
-describe("netWorthSeries — openings & account membership (issue #3)", () => {
-  it("seeds opening balances so the curve never dips artificially negative", () => {
-    const txs = [
-      tx({ kind: "expense", amountBase: 30000, outcomeAccount: "A", account: "A", date: "2020-02-01" }),
-      tx({ kind: "expense", amountBase: 40000, outcomeAccount: "A", account: "A", date: "2020-03-01" }),
-    ];
-    // Without the opening, the cumulative flow goes negative early.
-    const noOpening = netWorthSeries(txs);
-    expect(Math.min(...noOpening.map((p) => p.net))).toBeLessThan(0);
-    // With the opening seeded at the account's start, it stays positive.
-    const withOpening = netWorthSeries(txs, null, {
-      accounts: new Set(["A"]),
-      openings: [{ date: "2020-01-01", amount: 100000 }],
-    });
-    expect(Math.min(...withOpening.map((p) => p.net))).toBeGreaterThan(0);
-    // End = startBalance + flows = real balance.
-    expect(withOpening[withOpening.length - 1].net).toBe(30000); // 100k − 30k − 40k
-  });
-
-  it("counts only in-set flows; a transfer scores only when it crosses the boundary", () => {
-    const txs = [
-      tx({ kind: "income", amountBase: 1000, incomeAccount: "A", account: "A", date: "2026-01-01" }),
-      tx({ kind: "expense", amountBase: 200, outcomeAccount: "Out", account: "Out", date: "2026-01-02" }), // outside set
-      tx({ kind: "transfer", amountBase: 300, outcomeAccount: "A", incomeAccount: "B", date: "2026-01-03" }), // within set → 0
-      tx({ kind: "transfer", amountBase: 500, outcomeAccount: "A", incomeAccount: "Out", date: "2026-01-04" }), // leaves set → −500
-    ];
-    const series = netWorthSeries(txs, null, { accounts: new Set(["A", "B"]) });
-    expect(series[series.length - 1].net).toBe(500); // +1000 (in-set income) − 500 (transfer out), «Out» expense ignored
-  });
-});
-
-describe("netWorthBasis (issue #3)", () => {
-  const RUB: CurrencyRates = { base: "RUB", rates: { RUB: 1 } };
-  const acc = (over: Partial<Parameters<typeof netWorthBasis>[0][number]>) => ({
-    title: "X", currency: "RUB", startBalance: 0, startDate: null, archive: false, inBalance: true, balance: 0, ...over,
-  });
-
-  it("берёт счета в балансе, включая закрытые, и датирует стартовые остатки", () => {
-    const live = [
-      acc({ title: "A", startBalance: 100000, startDate: "2020-01-01" }),
-      acc({ title: "B", startBalance: 5000, startDate: null }), // no startDate → earliest tx
-      acc({ title: "Old", startBalance: 9, archive: true }),
-      acc({ title: "Off", startBalance: 9, inBalance: false }),
-    ];
-    const txs = [tx({ account: "B", outcomeAccount: "B", date: "2021-03-01" })];
-    const { accounts, openings } = netWorthBasis(live, txs, RUB, false);
-    // Закрытый счёт остаётся: в прошлом на нём лежали настоящие деньги, и без
-    // него кривая совокупного баланса занижала всю историю.
-    expect([...accounts].sort()).toEqual(["A", "B", "Old"]);
-    expect(accounts.has("Off")).toBe(false);
-    expect(openings).toContainEqual({ date: "2020-01-01", amount: 100000 });
-    expect(openings).toContainEqual({ date: "2021-03-01", amount: 5000 }); // fell back to first tx
-  });
-
-  it("сумма остатков возвращается вместе с базисом", () => {
-    const live = [
-      acc({ title: "A", balance: 100 }),
-      acc({ title: "Б", balance: 250 }),
-      acc({ title: "Вне", balance: 999, inBalance: false }),
-    ];
-    expect(netWorthBasis(live, [], RUB, false).total).toBe(350);
-    expect(netWorthBasis(live, [], RUB, true).total).toBe(1349);
-  });
-
-  it("история закрытого счёта не пропадает из совокупного баланса", () => {
-    // Тот самый случай: счёт закрыли в этом году, но в прошлые годы на нём
-    // были деньги. Раньше из 32 счетов в расчёт попадали 12, и максимум за всю
-    // историю выходил на миллион меньше, чем в самом Дзен-мани.
-    const live = [
-      acc({ title: "Живой", startBalance: 1000, startDate: "2020-01-01" }),
-      acc({ title: "Закрытый", startBalance: 500000, startDate: "2020-01-01", archive: true }),
-    ];
-    const { accounts, openings } = netWorthBasis(live, [], RUB, false);
-    expect(accounts.has("Закрытый")).toBe(true);
-    expect(openings).toContainEqual({ date: "2020-01-01", amount: 500000 });
-  });
-
-  it("includes off-balance accounts when the toggle is on", () => {
-    const live = [acc({ title: "Off", startBalance: 7, inBalance: false, startDate: "2024-01-01" })];
-    const { accounts } = netWorthBasis(live, [], RUB, true);
-    expect(accounts.has("Off")).toBe(true);
-  });
-
-  it("ignores an epoch/1970 startDate and falls back to the first transaction", () => {
-    // Zenmoney sometimes returns a bogus 1970 startDate — it must NOT seed a
-    // phantom «01.01.1970» opening (that inflated net worth for a user).
-    const live = [acc({ title: "Legacy", startBalance: 100000, startDate: "1970-01-01" })];
-    const txs = [tx({ account: "Legacy", outcomeAccount: "Legacy", date: "2021-03-01" })];
-    const { openings } = netWorthBasis(live, txs, RUB, false);
-    expect(openings).toContainEqual({ date: "2021-03-01", amount: 100000 });
-    expect(openings.some((o) => o.date === "1970-01-01")).toBe(false);
   });
 });
 
@@ -1310,46 +1214,6 @@ describe("дубли: копейки", () => {
     expect(detectDuplicates([fee(100.4), fee(99.6)])).toHaveLength(0);
   });
 });
-
-describe("привязка кривой к реальным остаткам", () => {
-  it("конец кривой садится ровно на сумму остатков, форма не меняется", () => {
-    // Операции объясняют только 300 из 500: остальное — курсовая переоценка и
-    // прочее, чего в потоках нет. Раньше кривая на этом и заканчивалась.
-    const txs = [
-      tx({ kind: "income", incomeAccount: "A", amountBase: 100, date: "2024-01-01" }),
-      tx({ kind: "income", incomeAccount: "A", amountBase: 200, date: "2024-02-01" }),
-    ];
-    const opts = { accounts: new Set(["A"]), anchorTo: 500 };
-    const s = netWorthSeries(txs, null, opts);
-    expect(s[s.length - 1].net).toBe(500);
-    // Сдвиг общий, поэтому расстояние между точками осталось прежним.
-    expect(s[1].net - s[0].net).toBe(200);
-  });
-
-  it("без привязки всё как было", () => {
-    const txs = [tx({ kind: "income", incomeAccount: "A", amountBase: 100, date: "2024-01-01" })];
-    const s = netWorthSeries(txs, null, { accounts: new Set(["A"]) });
-    expect(s[s.length - 1].net).toBe(100);
-  });
-
-  it("ручная калибровка сильнее привязки", () => {
-    // Калибровка — заявление человека «на эту дату у меня было столько».
-    const txs = [
-      tx({ kind: "income", incomeAccount: "A", amountBase: 100, date: "2024-01-01" }),
-      tx({ kind: "income", incomeAccount: "A", amountBase: 100, date: "2024-02-01" }),
-    ];
-    const s = netWorthSeries(txs, { date: "2024-02-01", amount: 1000 }, {
-      accounts: new Set(["A"]),
-      anchorTo: 999999,
-    });
-    expect(s[s.length - 1].net).toBe(1000);
-  });
-
-  it("пустая история не падает и не выдумывает точку", () => {
-    expect(netWorthSeries([], null, { accounts: new Set(["A"]), anchorTo: 500 })).toEqual([]);
-  });
-});
-
 
 describe("stackedBalanceByAccount — долговой счёт по контрагентам", () => {
   // В Дзен-мани все долги лежат на одном счёте, и «сколько должен Иван» из

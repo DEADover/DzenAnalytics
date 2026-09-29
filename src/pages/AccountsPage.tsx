@@ -87,6 +87,7 @@ import {
   lastTransactionDate,
 } from "../lib/aggregations";
 import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
+import { useBalanceValuation } from "../hooks/useBalanceValuation";
 import {
   formatMoney,
   formatPct,
@@ -123,7 +124,7 @@ import { Popover } from "../components/Popover";
 import { DateField } from "../components/DateField";
 import { ACCOUNT_KINDS, accountKindLabel, DEBT_TYPES } from "../lib/accountType";
 import { accountOptions } from "../lib/accountOptions";
-import { debtKey, parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
+import { parseDebtKey, withDebtCounterparties } from "../lib/debtFilter";
 import { pluralRu } from "../lib/plural";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { Badge } from "../components/Badge";
@@ -1093,19 +1094,12 @@ export function AccountsPage() {
     }
     return out;
   }, [visibleRows, groupBy, rowHeadline]);
-  // Real current balance per account (base currency) — only in API mode. Lets
-  // the stacked chart show actual balances instead of cumulative-flow-from-zero.
-  const realBalancesByAccount = useMemo(() => {
-    const m: Record<string, number> = {};
-    // Именно по живым счетам, а НЕ по строкам таблицы. Строки — это список, из
-    // которого намеренно выброшены спящие счета с нулевым остатком и без
-    // операций в окне фильтра. Стопка же строится по всей истории, и такой
-    // выброшенный счёт оставался без якоря: вместо ровного нуля линия
-    // показывала накопленный поток, а «Итого» расходилось с совокупным
-    // балансом ровно на эту величину (issue #59).
-    for (const a of liveList) m[a.title] = toBase(a.balance, a.currency);
-    return m;
-  }, [liveList, toBase]);
+  /**
+   * Оценка остатков по правилам Дзен-мани — по ВСЕМ живым счетам, а не по
+   * строкам таблицы: из строк намеренно выброшены спящие счета с нулём и без
+   * операций в окне, и такой счёт оставался бы без остатка (issue #59).
+   */
+  const valuation = useBalanceValuation(liveAccounts ? liveList : null);
   const series = useMemo(
     () => dailyBalanceSeries(filtered, selectedAccount ?? undefined),
     [filtered, selectedAccount]
@@ -1244,29 +1238,6 @@ export function AccountsPage() {
     return m.size > 0 ? m : null;
   }, [chartOnly]);
 
-  /**
-   * Якоря для слоёв: у контрагента это его собственный итог по долгу, а у
-   * самого долгового счёта — остаток за вычетом выделенных контрагентов.
-   *
-   * Итоги по контрагентам в сумме дают остаток счёта (см. `debtsByCounterparty`),
-   * поэтому «Итого» на графике от разбивки не меняется.
-   */
-  const chartRealBalances = useMemo(() => {
-    if (!hasRealBalances || !chartDebtSplit) return realBalancesByAccount;
-    const out: Record<string, number> = { ...realBalancesByAccount };
-    for (const [account, payees] of chartDebtSplit) {
-      const { rows } = debtsByCounterparty(transactions, new Set([account]));
-      let moved = 0;
-      for (const row of rows) {
-        if (!payees.has(row.payee)) continue;
-        out[debtKey(account, row.payee)] = row.amount;
-        moved += row.amount;
-      }
-      if (out[account] != null) out[account] -= moved;
-    }
-    return out;
-  }, [hasRealBalances, chartDebtSplit, realBalancesByAccount, transactions]);
-
   const stackedAll = useMemo(
     () =>
       stackedBalanceByAccount(
@@ -1274,12 +1245,13 @@ export function AccountsPage() {
         // Девять слоёв плюс «Прочие» — ровно столько цветов в палитре, так что
         // повторов не будет. Счетов меньше — слоёв меньше.
         9,
-        hasRealBalances ? chartRealBalances : null,
+        null,
         unsyncedIds,
         chartOnly,
-        chartDebtSplit
+        chartDebtSplit,
+        hasRealBalances ? valuation : null
       ),
-    [transactions, hasRealBalances, chartRealBalances, unsyncedIds, chartOnly, chartDebtSplit]
+    [transactions, hasRealBalances, valuation, unsyncedIds, chartOnly, chartDebtSplit]
   );
   const stacked = useMemo(
     () => ({ ...stackedAll, series: clip(stackedAll.series) }),
