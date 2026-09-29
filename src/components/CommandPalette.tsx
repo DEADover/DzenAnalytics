@@ -31,6 +31,7 @@ import {
   Trash2,
   Palette,
   PanelTop,
+  User,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
@@ -46,7 +47,9 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { SectionEmpty } from "./SectionEmpty";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 import { ALL_SCHEMES } from "../lib/themeSchemes";
-import { swapLayout } from "../lib/keyboardLayout";
+import { queryMatcher, swapLayout } from "../lib/keyboardLayout";
+import { payeeSearchText } from "../lib/format";
+import { categoryKeysOf } from "../lib/operationTags";
 
 interface Item {
   id: string;
@@ -280,9 +283,86 @@ export function CommandPalette({ open, onClose }: Props) {
     return list;
   }, [transactions, views, nav, setMode, setScheme, showThemeModal, openHeaderNavEditor, setPeriodMonth, monthStartDay, showDrill, filtersStore]);
 
+  /**
+   * Поиск по самим данным — только когда что-то набрано.
+   *
+   * Прежде палитра искала лишь среди заготовленного списка: 25 получателей с
+   * самыми большими расходами (строками из выписки) и 25 корневых категорий.
+   * «Пятёрочка», не вошедшая в эту выборку или записанная в выписке иначе, не
+   * находилась вовсе, а по операциям палитра не искала совсем. Теперь — по
+   * всем получателям (именем из справочника), всем категориям с
+   * подкатегориями и тегами и по тексту операций. Раскладка и «ё» не важны.
+   */
+  const dataItems = useMemo<Item[]>(() => {
+    const q = query.trim();
+    if (q.length < 2 || transactions.length === 0) return [];
+    const match = queryMatcher(q);
+    const out: Item[] = [];
+
+    const hits = transactions.filter((t) =>
+      match(
+        `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
+      )
+    );
+    if (hits.length > 0) {
+      out.push({
+        id: "search:ops",
+        group: "Операции",
+        title: `Найти в операциях: «${q}»`,
+        hint: `${hits.length} оп.`,
+        icon: SearchIcon,
+        action: () => showDrill(`Поиск: ${q}`, hits, "Поиск"),
+      });
+    }
+
+    const payees = new Map<string, number>();
+    for (const t of transactions) {
+      const name = t.brand?.trim() || t.payee?.trim();
+      if (name && match(name)) payees.set(name, (payees.get(name) ?? 0) + 1);
+    }
+    for (const [name, count] of [...payees.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)) {
+      out.push({
+        id: `payee-q:${name}`,
+        group: "Получатели",
+        title: name,
+        hint: `${count} оп.`,
+        icon: User,
+        action: () => {
+          const txs = transactions.filter((t) => (t.brand?.trim() || t.payee?.trim()) === name);
+          showDrill(name, txs, "Получатель");
+        },
+      });
+    }
+
+    const cats = new Map<string, number>();
+    for (const t of transactions) {
+      for (const key of categoryKeysOf(t)) {
+        if (match(key)) cats.set(key, (cats.get(key) ?? 0) + 1);
+      }
+    }
+    for (const [name, count] of [...cats.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)) {
+      out.push({
+        id: `cat-q:${name}`,
+        group: "Категории",
+        title: name,
+        hint: `${count} оп.`,
+        icon: Tag,
+        action: () => {
+          const txs = transactions.filter((t) => categoryKeysOf(t).includes(name));
+          showDrill(name, txs, "Категория");
+        },
+      });
+    }
+    return out;
+  }, [query, transactions, showDrill]);
+
   const filtered = useMemo(() => {
     if (!query) return items.slice(0, 80);
+    // Получатели и категории при поиске берутся из данных (выше) — готовые
+    // списки из тех же групп только повторили бы их.
+    const fromData = new Set(dataItems.map((i) => i.group));
     const scored = items
+      .filter((i) => !fromData.has(i.group))
       .map((i) => ({
         item: i,
         s:
@@ -293,8 +373,8 @@ export function CommandPalette({ open, onClose }: Props) {
       .filter((x) => x.s > 0)
       .sort((a, b) => b.s - a.s)
       .slice(0, 50);
-    return scored.map((x) => x.item);
-  }, [items, query]);
+    return [...dataItems, ...scored.map((x) => x.item)];
+  }, [items, query, dataItems]);
 
   // Reset query+activeIdx every time the palette re-opens, and reset activeIdx
   // when the query changes. Both done during render via the "adjust state on
