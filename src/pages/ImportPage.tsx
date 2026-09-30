@@ -44,7 +44,6 @@ import { AccountsSettings } from "../components/AccountsSettings";
 import { PendingChangesModal } from "../components/PendingChangesModal";
 import { SlicesSettings } from "../components/SlicesSettings";
 import { SettingRow } from "../components/SettingRow";
-import { Badge } from "../components/Badge";
 import { CloudSettingsCard } from "../components/CloudSettingsCard";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Switch } from "../components/Switch";
@@ -1691,11 +1690,6 @@ export function ImportPage() {
 
         <SettingRow
           title="Своя ширина столбцов"
-          badge={
-            <Badge tone="accent" title="Пробная функция: может измениться">
-              Бета
-            </Badge>
-          }
           status={
             !columnResize
               ? "Выключено — ширины колонок подбираются сами"
@@ -1710,7 +1704,7 @@ export function ImportPage() {
           help={
             <>
               <p>
-                Пробная функция. Когда она включена, между колонками в шапке
+                Когда настройка включена, между колонками в шапке
                 таблиц и лент операций видны тонкие границы. Потяните границу
                 мышью — две колонки по её сторонам поделят место между собой,
                 остальные останутся на месте. Таблица всегда во всю ширину,
