@@ -14,6 +14,7 @@ import { pluralRu } from "../../lib/plural";
 import { plannedAsTransaction, type PlannedOp } from "../../lib/plannedOps";
 import { usePlannedFeed, type PlannedFeedCounts } from "../../hooks/usePlannedFeed";
 import { useDisplayStore } from "../../store/useDisplayStore";
+import { useDataStore } from "../../store/useDataStore";
 import { usePlannedDeletionsStore } from "../../store/usePlannedDeletionsStore";
 import { confirm } from "../../store/useConfirmStore";
 import { operationTone } from "../../lib/txKindStyle";
@@ -22,20 +23,19 @@ import { EditTransactionModal } from "../EditTransactionModal";
 import { MenuItem } from "../MenuItem";
 import { Popover } from "../Popover";
 import { OperationListRow } from "./OperationList";
+import { DayHeader } from "./DayHeader";
 import { OperationAmount, OperationCategory, OperationComment, OperationPayee } from "./OperationCells";
 import { PlanLinkModal } from "./PlanLinkModal";
 import { PlanEditModal } from "./PlanEditModal";
 
-/** «6 октября, через 6 дней» / «28 сентября, просрочено на 2 дня» — как у Дзен-мани. */
-function dayTitle(ymd: string, today: string): string {
-  const d = new Date(`${ymd}T00:00:00`);
-  const label = d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+/** «через 6 дней» / «просрочено на 2 дня» — как у Дзен-мани; сегодня — без пометки. */
+function dayNote(ymd: string, today: string): string | null {
   const days = Math.round((Date.parse(ymd) - Date.parse(today)) / 86_400_000);
-  if (days === 0) return `${label}, сегодня`;
-  if (days === 1) return `${label}, завтра`;
-  if (days > 0) return `${label}, через ${days} ${pluralRu(days, ["день", "дня", "дней"])}`;
+  if (days === 0) return null;
+  if (days === 1) return "завтра";
+  if (days > 0) return `через ${days} ${pluralRu(days, ["день", "дня", "дней"])}`;
   const late = -days;
-  return `${label}, просрочено на ${late} ${pluralRu(late, ["день", "дня", "дней"])}`;
+  return `просрочено на ${late} ${pluralRu(late, ["день", "дня", "дней"])}`;
 }
 
 /** Подпись плана для списка изменений и подтверждений. */
@@ -127,6 +127,7 @@ export function PlannedFeedList({
   query: string;
 }) {
   const { ops, today } = usePlannedFeed(query);
+  const base = useDataStore((s) => s.rates.base);
   const [menu, setMenu] = useState<{ op: PlannedOp; anchor: HTMLElement } | null>(null);
   const [fact, setFact] = useState<PlannedOp | null>(null);
   const [link, setLink] = useState<PlannedOp | null>(null);
@@ -253,14 +254,21 @@ export function PlannedFeedList({
       {(grouped
           ? byDay.map(([ymd, list]) => (
               <div key={ymd}>
-                <div
-                  className={clsx(
-                    "px-4 py-1.5 border-b border-border/60 text-[13px]",
-                    ymd < today ? "text-expense" : "text-muted"
-                  )}
-                >
-                  {dayTitle(ymd, today)}
-                </div>
+                {/* Та же шапка дня, что у проведённых операций: дата, день
+                    недели и суммы дня — плюс пометка, когда платёж. */}
+                <DayHeader
+                  ymd={ymd}
+                  txs={list.map(plannedAsTransaction)}
+                  base={base}
+                  showTransfers
+                  note={
+                    dayNote(ymd, today) && (
+                      <span className={clsx("text-[13px]", ymd < today ? "text-expense" : "text-muted")}>
+                        · {dayNote(ymd, today)}
+                      </span>
+                    )
+                  }
+                />
                 {list.map(renderRow)}
               </div>
             ))

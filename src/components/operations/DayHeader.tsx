@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { ArrowDown, ArrowLeftRight, ArrowUp, List } from "lucide-react";
 import type { Transaction } from "../../types";
 import { kindTotals } from "../../lib/aggregations";
@@ -10,7 +10,7 @@ import { formatDayHeader } from "../../lib/dayLabel";
  * Шапка дня в ленте: «Сегодня, 15 сентября» с днём недели и суммы дня — число
  * операций, переводы, поступления, траты и итог.
  *
- * Одна на ленту «Операций» и «Удалённые».
+ * Одна на ленту «Операций», «Удалённые» и ленту запланированных.
  */
 export function DayHeader({
   ymd,
@@ -18,6 +18,7 @@ export function DayHeader({
   txs,
   base,
   showTransfers,
+  note,
 }: {
   /** День группы, `YYYY-MM-DD`. Пустая строка — день неизвестен. */
   ymd: string;
@@ -26,6 +27,8 @@ export function DayHeader({
   txs: Transaction[];
   base: string;
   showTransfers: boolean;
+  /** Пометка после дня недели — у планов «через 6 дней» / «просрочено на 2 дня». */
+  note?: ReactNode;
 }) {
   const { label, weekday } = useMemo(() => formatDayHeader(ymd), [ymd]);
   const totals = useMemo(() => kindTotals(txs), [txs]);
@@ -35,6 +38,7 @@ export function DayHeader({
       <div className="flex items-baseline gap-2 min-w-0">
         <span className="font-semibold truncate">{title ?? label}</span>
         {weekday && <span className="text-[13px] text-muted capitalize">{weekday}</span>}
+        {note}
       </div>
       <div className="ml-auto flex items-center gap-3 sm:gap-4 text-sm tabular-nums">
         <span
