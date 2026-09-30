@@ -6,17 +6,24 @@ import {
   liveVarName,
   pxToRem,
   remWidth,
-  tableWidthOf,
+  tableLayout,
+  widthToRem,
 } from "./columnResize";
 
 describe("clampWidth", () => {
   it("идёт за мышью", () => {
-    expect(clampWidth(100, 30, 60)).toBe(130);
-    expect(clampWidth(100, -30, 60)).toBe(70);
+    expect(clampWidth(100, 30, 60, 50)).toBe(130);
+    expect(clampWidth(100, -30, 60, 0)).toBe(70);
   });
 
   it("не уже подписи", () => {
-    expect(clampWidth(100, -500, 60)).toBe(60);
+    expect(clampWidth(100, -500, 60, 0)).toBe(60);
+  });
+
+  it("шире — только на свободное место справа", () => {
+    expect(clampWidth(100, 300, 60, 40)).toBe(140);
+    // Свободного места нет — таблица во всю ширину, расширять некуда.
+    expect(clampWidth(100, 30, 60, 0)).toBe(100);
   });
 });
 
@@ -40,23 +47,34 @@ describe("hasWidthsFor", () => {
   });
 });
 
-describe("tableWidthOf", () => {
-  it("сумма своих ширин и ширин по умолчанию", () => {
-    expect(
-      tableWidthOf(
-        [
-          { key: "name" },
-          { key: "sum", fallback: "calc(8rem * var(--tbl-scale, 1))" },
-          { key: "actions", fallback: "calc(6rem * var(--tbl-scale, 1))" },
-        ],
-        { name: 20, sum: 10 },
-        ["2.5rem"]
-      )
-    ).toBe("calc(30rem * var(--tbl-scale, 1) + 2.5rem + calc(6rem * var(--tbl-scale, 1)))");
+describe("widthToRem", () => {
+  it("rem и пиксели", () => {
+    expect(widthToRem("8rem")).toBe(8);
+    expect(widthToRem("84px")).toBe(5.25);
+    expect(widthToRem("100%")).toBeUndefined();
+    expect(widthToRem(undefined)).toBeUndefined();
+  });
+});
+
+describe("tableLayout", () => {
+  it("колонки — доли суммы, таблица — сумма", () => {
+    const l = tableLayout(
+      [
+        { key: "name" },
+        { key: "sum", width: "8rem" },
+      ],
+      { name: 30 },
+      ["2rem"]
+    );
+    expect(l).toEqual({
+      total: "calc(40rem * var(--tbl-scale, 1))",
+      cols: { name: "75%", sum: "20%" },
+      lead: ["5%"],
+    });
   });
 
-  it("у колонки нет ни своей ширины, ни ширины по умолчанию — суммы нет", () => {
-    expect(tableWidthOf([{ key: "name" }, { key: "sum" }], { sum: 10 })).toBeNull();
+  it("у колонки нет ни своей ширины, ни ширины по умолчанию — раскладки нет", () => {
+    expect(tableLayout([{ key: "name" }, { key: "sum" }], { sum: 10 })).toBeNull();
   });
 });
 
@@ -72,9 +90,9 @@ describe("gridTemplateWith", () => {
     expect(gridTemplateWith(tracks, undefined)).toBe("20px 84px minmax(0, 2.6fr) 140px");
   });
 
-  it("свои ширины — у тех колонок, что их получили", () => {
+  it("свои ширины сжимаются на узком окне", () => {
     expect(gridTemplateWith(tracks, { date: 6, comment: 30 })).toBe(
-      "20px calc(6rem * var(--tbl-scale, 1)) calc(30rem * var(--tbl-scale, 1)) 140px"
+      "20px minmax(0, calc(6rem * var(--tbl-scale, 1))) minmax(0, calc(30rem * var(--tbl-scale, 1))) 140px"
     );
   });
 });

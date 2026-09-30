@@ -237,13 +237,11 @@ export function DataTable<T>({
     { lead: selection ? SELECTION_LEAD : undefined }
   );
   const fixed = fixedProp || resize.custom;
-  // Свои ширины: таблица шириной в сумму колонок — уже карточки или шире неё
-  // (тогда обёртка прокручивается вбок). Иначе — во всю ширину, как была.
-  const tableStyle = resize.tableWidth
-    ? { width: resize.tableWidth }
-    : minWidth
-      ? { minWidth: scaledWidth(minWidth) }
-      : undefined;
+  // Свои ширины: таблица шириной в сумму колонок, но не шире карточки.
+  // Иначе — во всю ширину, как была.
+  const tableStyle =
+    resize.tableStyle(minWidth ? scaledWidth(minWidth) : undefined) ??
+    (minWidth ? { minWidth: scaledWidth(minWidth) } : undefined);
 
   const sortCol = columns.find((c) => c.key === sort.key);
   const order = useCallback(
@@ -347,7 +345,7 @@ export function DataTable<T>({
         >
           {fixed && (
             <colgroup>
-              {selection && <col style={{ width: "2.5rem" }} />}
+              {selection && <col style={{ width: resize.leadWidth(0) ?? SELECTION_LEAD[0] }} />}
               {columns.map((c) => {
                 const w = resize.custom ? resize.widthOf(c.key) : scaledWidth(c.width);
                 return <col key={c.key} data-col={c.key} style={w ? { width: w } : undefined} />;

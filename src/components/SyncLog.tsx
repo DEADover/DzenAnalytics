@@ -241,10 +241,10 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
         </p>
       ) : (
         <>
-          <div className={resize.custom ? "overflow-x-auto" : undefined}>
+          <div>
             <table
               className={resize.custom ? "w-full table-fixed" : "w-full"}
-              style={resize.tableWidth ? { width: resize.tableWidth } : undefined}
+              style={resize.tableStyle()}
             >
               {resize.colgroup({ className: LOG_MD_ONLY })}
               <thead>

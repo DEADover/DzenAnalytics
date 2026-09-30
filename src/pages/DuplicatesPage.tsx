@@ -261,7 +261,6 @@ export function DuplicatesPage() {
         </SectionEmpty>
       ) : (
         <OperationListTray
-          scrollX={resize.custom}
           toolbar={
             <>
               <SortMenu options={SORT_OPTIONS} value={sortMode} onChange={setSortMode} />

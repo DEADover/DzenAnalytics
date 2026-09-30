@@ -1082,6 +1082,10 @@ h2,
   .col-resize-handle:focus-visible {
     outline: none;
   }
+  /* Упёрлись: справа нет свободного места, шире колонку не сделать. */
+  .col-resize-handle[data-limit]::after {
+    background: rgb(var(--c-warn));
+  }
   .col-resize-handle:focus-visible::after {
     top: 0;
     bottom: 0;

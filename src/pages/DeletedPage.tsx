@@ -548,7 +548,6 @@ function DeletedFeed({
       </StatRow>
 
       <OperationListTray
-        scrollX={resize.custom}
         toolbar={
           <>
             <SearchInput

@@ -347,7 +347,6 @@ export function UncategorizedPage() {
       </StatRow>
 
       <OperationListTray
-        scrollX={resize.custom}
         toolbar={
           <>
             <SearchInput

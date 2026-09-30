@@ -571,7 +571,6 @@ export function TransactionsPage() {
       </StatRow>
 
       <OperationListTray
-        scrollX={resize.custom}
         toolbar={
           <>
             <SearchInput
