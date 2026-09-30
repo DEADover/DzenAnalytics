@@ -469,10 +469,13 @@ export function CapitalBlock({
   series,
   base,
   today,
+  accounts,
 }: {
   series: CapitalPoint[];
   base: string;
   today: string;
+  /** Счета главной — из них складывается разбивка «Из чего состоит». */
+  accounts: { balanceBase: number; savings: boolean; archive: boolean }[];
 }) {
   const [period, setPeriod] = useState<CapitalPeriod>("1y");
   const points = useMemo(
@@ -482,6 +485,21 @@ export function CapitalBlock({
   const summary = useMemo(() => capitalSummary(points), [points]);
   const chart = useMemo(() => thinCapital(points), [points]);
   const periodLabel = CAPITAL_PERIODS.find((p) => p.id === period)?.label ?? "";
+  // Из чего капитал состоит сегодня: деньги на обычных счетах, накопления и
+  // долги (кредитки, кредиты — всё, что в минусе).
+  const parts = useMemo(() => {
+    let cash = 0;
+    let saved = 0;
+    let debt = 0;
+    for (const a of accounts) {
+      if (a.archive) continue;
+      if (a.balanceBase < 0) debt += a.balanceBase;
+      else if (a.savings) saved += a.balanceBase;
+      else cash += a.balanceBase;
+    }
+    return { cash, saved, debt };
+  }, [accounts]);
+  const partsTotal = parts.cash + parts.saved + Math.abs(parts.debt);
 
   return (
     <>
@@ -578,6 +596,44 @@ export function CapitalBlock({
                 </>
               )}
             </dl>
+            {/* Низ колонки — из чего капитал состоит сегодня. Карточка выше
+                своего содержимого (высоту ряда задают соседи), и здесь было
+                пусто; разбивка отвечает на следующий вопрос после «сколько». */}
+            {partsTotal > 0 && (
+              <div className="mt-auto pt-3 border-t border-border">
+                <div className="label mb-2">Из чего состоит</div>
+                <div className="flex h-2 rounded-full overflow-hidden bg-border/60 mb-2">
+                  {[
+                    { v: parts.cash, c: "rgb(var(--c-accent))" },
+                    { v: parts.saved, c: "rgb(var(--c-income))" },
+                    { v: Math.abs(parts.debt), c: "rgb(var(--c-expense))" },
+                  ]
+                    .filter((x) => x.v > 0)
+                    .map((x, i) => (
+                      <div key={i} style={{ width: `${(x.v / partsTotal) * 100}%`, background: x.c }} />
+                    ))}
+                </div>
+                <div className="flex flex-col gap-1 text-sm">
+                  {[
+                    { label: "На счетах", v: parts.cash, c: "bg-accent" },
+                    { label: "Накопления", v: parts.saved, c: "bg-income" },
+                    { label: "Долги и кредиты", v: parts.debt, c: "bg-expense" },
+                  ]
+                    .filter((x) => x.v !== 0)
+                    .map((x) => (
+                      <div key={x.label} className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-2 text-muted">
+                          <span className={`w-2 h-2 rounded-full ${x.c}`} aria-hidden />
+                          {x.label}
+                        </span>
+                        <span className={`tabular-nums ${x.v < 0 ? "text-expense" : ""}`}>
+                          {formatMoney(x.v, base)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="min-w-0 min-h-[220px]">
             <ResponsiveContainer>
@@ -602,7 +658,9 @@ export function CapitalBlock({
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
-                  width={48}
+                  // «600 тыс.» и «4,8 млн» в 48 px не влезали — подписи
+                  // обрезались по краю.
+                  width={68}
                   tickFormatter={(v) => formatNum(v, { compact: true })}
                   domain={["auto", "auto"]}
                 />

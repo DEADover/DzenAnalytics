@@ -94,8 +94,22 @@ export function OperationListTray({
  * Шапка колонок. Сетка та же, что у строк. С закреплённой шапкой ленты липнет
  * под строкой инструментов (см. `OperationListTray`).
  */
-export function OperationListHead({ template, children }: { template: string; children: ReactNode }) {
-  const sticky = useDisplayStore((s) => s.feedHeadSticky);
+export function OperationListHead({
+  template,
+  children,
+  pinnable = true,
+}: {
+  template: string;
+  children: ReactNode;
+  /**
+   * Липнуть ли вместе с закреплённой шапкой ленты. Нет — там, где над
+   * заголовками нет строки инструментов ленты (таблица планов на
+   * «Регулярных»): отсчитывать закрепление там не от чего, и заголовок уезжал
+   * поверх строк.
+   */
+  pinnable?: boolean;
+}) {
+  const sticky = useDisplayStore((s) => s.feedHeadSticky) && pinnable;
   return (
     <div
       className={clsx("list-head grid items-center gap-3 px-3 py-2 bg-panel", sticky && "sticky z-10")}

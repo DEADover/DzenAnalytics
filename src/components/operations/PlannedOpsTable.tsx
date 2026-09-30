@@ -32,7 +32,7 @@ export function PlannedOpsTable({ ops, emptyText }: { ops: PlannedOp[]; emptyTex
   const resize = useColumnResize("recurring-plans", PLAN_COLUMNS, { mode: "grid" });
   return (
     <div className="rounded-xl border border-border overflow-hidden">
-      <OperationListHead template={resize.template}>
+      <OperationListHead template={resize.template} pinnable={false}>
         <span />
         {PLAN_COLUMNS.filter((c) => c.label).map((c) => (
           <ListHeadCell
