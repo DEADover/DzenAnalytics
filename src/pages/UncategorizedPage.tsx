@@ -55,7 +55,6 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { SearchInput } from "../components/SearchInput";
 import { SortMenu, type SortOption } from "../components/SortMenu";
 import { SelectionBar } from "../components/SelectionBar";
-import { ScrollTopButton } from "../components/ScrollTopButton";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { Checkbox } from "../components/Checkbox";
@@ -475,7 +474,6 @@ export function UncategorizedPage() {
         />
       )}
 
-      <ScrollTopButton />
     </div>
   );
 }

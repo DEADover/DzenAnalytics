@@ -50,7 +50,6 @@ import { SectionEmpty } from "../components/SectionEmpty";
 import { SearchInput } from "../components/SearchInput";
 import { SortMenu, type SortOption } from "../components/SortMenu";
 import { SelectionBar } from "../components/SelectionBar";
-import { ScrollTopButton } from "../components/ScrollTopButton";
 import { DayHeader } from "../components/operations/DayHeader";
 import {
   LazyListFooter,
@@ -870,7 +869,6 @@ export function TransactionsPage() {
         />
       )}
 
-      <ScrollTopButton />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   X,
   Download,
@@ -10,6 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useDrillStore } from "../store/useDrillStore";
+import { ScrollTopButton } from "./ScrollTopButton";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
 import type { TransactionEdit } from "../store/useEditsStore";
@@ -35,6 +36,7 @@ import { queryMatcher } from "../lib/keyboardLayout";
 
 export function TransactionsDrawer() {
   const { open, title, subtitle, transactions, close, show } = useDrillStore();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const base = useDataStore((s) => s.rates.base);
   const allTransactions = useDataStore((s) => s.transactions);
   const deleteTransaction = useDataStore((s) => s.deleteTransaction);
@@ -418,7 +420,9 @@ export function TransactionsDrawer() {
             Здесь она была голой: заголовки и строки прямо на подложке окна, без
             канта, хотя это ровно такая же таблица операций. */}
         <div className="flex-1 min-h-0 px-5 md:px-6 pt-3 pb-5">
-        <div className="card-tray h-full overflow-y-auto">
+        <div ref={scrollRef} className="card-tray h-full overflow-y-auto">
+          {/* Список прокручивается внутри шторки — и «Наверх» у него свой. */}
+          <ScrollTopButton container={scrollRef} threshold={400} />
           <DataTable<Transaction>
             bare
             stickyHead

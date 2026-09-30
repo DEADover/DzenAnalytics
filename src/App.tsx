@@ -68,6 +68,7 @@ import { useTagDeletionsStore } from "./store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "./store/usePlannedDeletionsStore";
 import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
 import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
+import { ScrollTopButton } from "./components/ScrollTopButton";
 import { useDuplicateExclusionsStore } from "./store/useDuplicateExclusionsStore";
 import { useAccountsViewStore } from "./store/useAccountsViewStore";
 import { useMembersStore } from "./store/useMembersStore";
@@ -516,6 +517,9 @@ function App() {
       <HeaderNavModal />
       <ConfirmDialog />
       <HistRatesProgress />
+      {/* «Наверх» — одна на всё приложение: появляется на любой странице,
+          прокрученной дальше первого экрана. */}
+      <ScrollTopButton />
     </div>
   );
 }

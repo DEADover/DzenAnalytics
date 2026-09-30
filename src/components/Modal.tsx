@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { X, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
+import { ScrollTopButton } from "./ScrollTopButton";
 
 /**
  * Модальное окно — одна оболочка на весь сервис.
@@ -313,8 +314,10 @@ export function ModalBody({
   className?: string;
   children: ReactNode;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   return (
     <div
+      ref={scroll ? scrollRef : undefined}
       className={clsx(
         "px-5",
         list ? "py-2" : "py-4",
@@ -324,6 +327,10 @@ export function ModalBody({
       )}
     >
       {children}
+      {/* Длинный список в окне («Исключения», превью импорта, журнал
+          изменений) — «Наверх» в углу окна. Коротким окнам она не видна:
+          появляется, только если тело прокрутили дальше 400 px. */}
+      {scroll && <ScrollTopButton container={scrollRef} threshold={400} />}
     </div>
   );
 }

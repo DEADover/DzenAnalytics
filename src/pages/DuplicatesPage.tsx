@@ -37,7 +37,6 @@ import { Slider } from "../components/Slider";
 import { SelectionBar } from "../components/SelectionBar";
 import { SortMenu, type SortOption } from "../components/SortMenu";
 import { Checkbox } from "../components/Checkbox";
-import { ScrollTopButton } from "../components/ScrollTopButton";
 import { useLazyList } from "../hooks/useLazyList";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 
@@ -390,7 +389,6 @@ export function DuplicatesPage() {
         <DuplicateExclusionsModal onClose={() => setExclusionsModalOpen(false)} />
       )}
 
-      <ScrollTopButton />
     </div>
   );
 }

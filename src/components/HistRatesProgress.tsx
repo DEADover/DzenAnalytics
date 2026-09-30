@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { Loader2, TriangleAlert, X } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { resetMirrorProbe } from "../lib/historicalRates";
@@ -79,8 +80,24 @@ export function HistRatesProgress() {
 }
 
 function Chip({ children }: { children: React.ReactNode }) {
+  // Пока плашка в углу, кнопка «Наверх» встаёт над ней, а не под неё.
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const apply = () => root.style.setProperty("--corner-stack", `${16 + el.offsetHeight + 12}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--corner-stack");
+    };
+  }, []);
   return (
     <div
+      ref={ref}
       className="fixed bottom-4 right-4 z-50 flex items-start gap-2.5 rounded-lg border border-border bg-panel shadow-lg px-3 py-2 text-xs text-text max-w-xs"
       role="status"
       aria-live="polite"
