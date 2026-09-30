@@ -2297,19 +2297,14 @@ export function AccountsPage() {
                 // Плюс запас на пилюлю с именем участника, когда она есть:
                 // колонка названия забирает остаток ширины, и без запаса
                 // пилюля вылезала бы на соседний столбец.
-                // Со своими ширинами столбцов таблица шириной в их сумму, но
-                // не шире карточки; прежний минимум — не больше этой суммы.
-                ...(() => {
-                  const px =
-                    (capitalView
-                      ? hasForeignCurrency
-                        ? 760
-                        : 670
-                      : hasForeignCurrency
-                        ? 1212
-                        : 1122) + (hasMemberPills ? 130 : 0);
-                  return accountsResize.tableStyle(`${px}px`) ?? { minWidth: px };
-                })(),
+                minWidth:
+                  (capitalView
+                    ? hasForeignCurrency
+                      ? 760
+                      : 670
+                    : hasForeignCurrency
+                      ? 1212
+                      : 1122) + (hasMemberPills ? 130 : 0),
               }}
             >
               <colgroup>
@@ -3197,10 +3192,7 @@ export function AccountsPage() {
               вклад с длинным названием сдвигал бы столбцы с деньгами у всех
               остальных. Резиновым остаётся только название. */}
           <div className="overflow-x-auto -mx-1 px-1">
-            <table
-              className={depositsResize.custom ? "table-fixed" : "w-full table-fixed min-w-[50rem]"}
-              style={depositsResize.tableStyle("50rem")}
-            >
+            <table className="w-full table-fixed min-w-[50rem]">
               <colgroup>
                 {DEPOSIT_COLUMNS.map((c) => {
                   const w = depositsResize.custom ? depositsResize.widthOf(c.key) : c.width;

@@ -662,10 +662,7 @@ export function RulesPage() {
           </SectionEmpty>
         ) : (
           <div className="overflow-x-auto -mx-1 px-1">
-            <table
-              className={resize.custom ? "w-full table-fixed" : "w-full"}
-              style={resize.tableStyle()}
-            >
+            <table className={resize.custom ? "w-full table-fixed" : "w-full"}>
               {resize.colgroup({ className: { targets: "hidden xl:table-column" } })}
               <thead>
                 <tr>

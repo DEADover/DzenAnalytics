@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  clampWidth,
+  splitWidths,
   gridTemplateWith,
   hasWidthsFor,
   liveVarName,
@@ -10,20 +10,20 @@ import {
   widthToRem,
 } from "./columnResize";
 
-describe("clampWidth", () => {
-  it("идёт за мышью", () => {
-    expect(clampWidth(100, 30, 60, 50)).toBe(130);
-    expect(clampWidth(100, -30, 60, 0)).toBe(70);
+describe("splitWidths", () => {
+  it("граница как перегородка: левая растёт, правая сужается на столько же", () => {
+    expect(splitWidths(200, 400, 80, 60, 60)).toEqual({ left: 280, right: 320, clamped: false });
+    expect(splitWidths(200, 400, -50, 60, 60)).toEqual({ left: 150, right: 450, clamped: false });
   });
 
-  it("не уже подписи", () => {
-    expect(clampWidth(100, -500, 60, 0)).toBe(60);
+  it("ни одна колонка не уже своей подписи", () => {
+    expect(splitWidths(200, 400, 1000, 60, 100)).toEqual({ left: 500, right: 100, clamped: true });
+    expect(splitWidths(200, 400, -1000, 60, 100)).toEqual({ left: 60, right: 540, clamped: true });
   });
 
-  it("шире — только на свободное место справа", () => {
-    expect(clampWidth(100, 300, 60, 40)).toBe(140);
-    // Свободного места нет — таблица во всю ширину, расширять некуда.
-    expect(clampWidth(100, 30, 60, 0)).toBe(100);
+  it("колонка уже своей подписи — дальше не сжимается, но расшириться может", () => {
+    expect(splitWidths(50, 400, -10, 60, 60)).toEqual({ left: 50, right: 400, clamped: true });
+    expect(splitWidths(50, 400, 30, 60, 60)).toEqual({ left: 80, right: 370, clamped: false });
   });
 });
 
@@ -90,9 +90,9 @@ describe("gridTemplateWith", () => {
     expect(gridTemplateWith(tracks, undefined)).toBe("20px 84px minmax(0, 2.6fr) 140px");
   });
 
-  it("свои ширины сжимаются на узком окне", () => {
+  it("свои ширины — доли места, остальное как было", () => {
     expect(gridTemplateWith(tracks, { date: 6, comment: 30 })).toBe(
-      "20px minmax(0, calc(6rem * var(--tbl-scale, 1))) minmax(0, calc(30rem * var(--tbl-scale, 1))) 140px"
+      "20px minmax(0, 6fr) minmax(0, 30fr) 140px"
     );
   });
 });

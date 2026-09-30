@@ -3,14 +3,12 @@
  *
  * Включается в «Оформлении» («Своя ширина столбцов»). Пока ширины никто не
  * трогал, таблица выглядит ровно как без настройки: в шапке появляются только
- * границы, за которые можно тянуть. Первое же движение снимает текущие ширины
- * всех колонок, и дальше таблица живёт по ним: тянешь правый край колонки —
- * меняется только она, остальные сдвигаются. Шире карточки таблица не
- * становится: расширять можно за счёт свободного места справа (модель — в
- * `lib/columnResize.ts`).
+ * границы, за которые можно тянуть. Граница двигается как перегородка: две
+ * колонки по её сторонам делят место между собой, остальные стоят на месте,
+ * таблица всегда во всю ширину (модель — в `lib/columnResize.ts`).
  *
  * Во время перетаскивания React не перерисовывает строки: ширина меняется
- * прямо в DOM — у `<col>` и самой таблицы или CSS-переменной сетки ленты. В
+ * прямо в DOM — у `<col>` таблицы или CSS-переменной сетки ленты. В
  * хранилище уходит только итог, когда кнопку мыши отпустили.
  */
 import { useCallback, useMemo, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
@@ -18,11 +16,11 @@ import { useDisplayStore } from "../store/useDisplayStore";
 import { useColumnWidthsStore } from "../store/useColumnWidthsStore";
 import { scaledWidth } from "../components/table/tableKit";
 import {
-  clampWidth,
   gridTemplateWith,
   hasWidthsFor,
   liveVarName,
   pxToRem,
+  splitWidths,
   tableLayout,
   type ColumnWidthMap,
   type TableLayout,
@@ -56,16 +54,11 @@ export interface ColumnResize {
   custom: boolean;
   /** CSS-ширина колонки таблицы: своя (доля таблицы) или по умолчанию; `undefined` — без ширины. */
   widthOf: (key: string) => string | undefined;
+  /** Ширина колонки перед колонками хука (`lead`): доля при своих ширинах, иначе как задана. */
+  leadWidth: (index: number) => string | undefined;
   /** Шаблон сетки ленты (в режиме `grid`). */
   template: string;
-  /**
-   * Стиль таблицы при своих ширинах: шириной в сумму колонок, но не шире
-   * карточки. `minWidth` — прежний минимум таблицы (CSS): он остаётся, но не
-   * больше суммы колонок, иначе сузить колонку было бы нельзя. `undefined` —
-   * своих ширин нет: таблица как была.
-   */
-  tableStyle: (minWidth?: string) => { width: string; minWidth?: string } | undefined;
-  /** Граница у правого края колонки — ставится внутрь её ячейки шапки. */
+  /** Граница справа от колонки — ставится внутрь её ячейки шапки. */
   handle: (key: string) => ReactNode;
   /**
    * `<colgroup>` для таблицы со своей разметкой — только при своих ширинах
@@ -74,8 +67,6 @@ export interface ColumnResize {
    * `hidden xl:table-column`, иначе ячейки строк съедут на её место.
    */
   colgroup: (opts?: { className?: Record<string, string> }) => ReactNode;
-  /** Ширина колонки перед колонками хука (`lead`): доля при своих ширинах, иначе как задана. */
-  leadWidth: (index: number) => string | undefined;
 }
 
 /** Шаг стрелки на клавиатуре; с Shift — втрое больше. */
@@ -164,16 +155,6 @@ export function useColumnResize(
     [layout, columns]
   );
   const leadWidth = useCallback((i: number) => layout?.lead[i] ?? lead?.[i], [layout, lead]);
-  const tableStyle = useCallback(
-    (minWidth?: string) =>
-      layout
-        ? {
-            width: `min(${layout.total}, 100%)`,
-            ...(minWidth ? { minWidth: `min(${minWidth}, ${layout.total})` } : {}),
-          }
-        : undefined,
-    [layout]
-  );
 
   const tracks = useMemo(
     () => columns.map((c) => ({ key: c.key, size: c.size ?? "auto" })),
@@ -185,73 +166,61 @@ export function useColumnResize(
     return enabled && id ? `var(${liveVarName(id)}, ${committed})` : committed;
   }, [mode, tracks, map, enabled, id]);
 
-
   /**
-   * Начать правку колонки `key`: снять ширины, если своих ещё нет, и вернуть
-   * сессию — сдвинуть, записать или отменить.
+   * Начать правку границы справа от колонки `key`: снять ширины всех колонок
+   * как они есть на этом окне и вернуть сессию — сдвинуть, записать или
+   * отменить.
    */
   const begin = useCallback(
     (handleEl: HTMLElement, key: string) => {
       if (!id) return null;
-      const targetEl = handleEl.closest<HTMLElement>("[data-col]");
-      const row = targetEl?.parentElement;
-      if (!targetEl || !row) return null;
+      const leftKey = key;
+      const rightKey = keys[keys.indexOf(key) + 1];
+      const leftEl = handleEl.closest<HTMLElement>("[data-col]");
+      const row = leftEl?.parentElement;
+      if (!rightKey || !leftEl || !row) return null;
       const cells = new Map<string, HTMLElement>();
       row.querySelectorAll<HTMLElement>(":scope > [data-col]").forEach((el) => {
         if (el.dataset.col) cells.set(el.dataset.col, el);
       });
+      const rightEl = cells.get(rightKey);
+      if (!rightEl) return null;
 
       const { remPx, scale } = units();
       const px = (el: Element) => el.getBoundingClientRect().width;
-      const table = handleEl.closest("table");
-      const tableStart = table ? px(table) : 0;
+      const toRem = (w: number) => pxToRem(w, remPx, scale);
 
-      // Свободное место справа: у таблицы — между её краем и краем
-      // обёртки, у ленты — между последней колонкой и краем строки. Пока
-      // своих ширин нет, таблица во всю ширину и свободного места нет.
-      let free = 0;
-      if (map) {
-        const box = table ? table.parentElement : row;
-        if (box) {
-          const cs = getComputedStyle(box);
-          const inner = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-          let used = tableStart;
-          if (!table) {
-            const sizes = cs.gridTemplateColumns.split(" ").map(parseFloat);
-            const gap = parseFloat(cs.columnGap) || 0;
-            used = sizes.reduce((s, v) => s + (v || 0), 0) + gap * Math.max(0, sizes.length - 1);
-          }
-          free = Math.max(0, Math.floor(inner - used));
-        }
+      // Ширины снимаем каждый раз заново, а не берём сохранённые: сохранены
+      // доли, и на другом окне в пикселях они другие. Колонки без права
+      // тянуть (чекбокс, кнопки) остаются своей шириной, если она задана.
+      // Прежние ширины колонок, которых сейчас не видно (дата в ленте по
+      // дням), не теряем.
+      const base: ColumnWidthMap = { ...(map ?? {}) };
+      for (const c of columns) {
+        const locked = c.resizable === false && (mode === "grid" || !!c.width);
+        if (locked) continue;
+        const el = cells.get(c.key);
+        const w = el ? px(el) : 0;
+        if (w > 0) base[c.key] = toRem(w);
       }
-
       const before = map;
-      let base: ColumnWidthMap;
-      if (map) {
-        base = { ...map };
-      } else {
-        // Первый раз: запоминаем ширины всех колонок как есть, чтобы ничего
-        // не прыгнуло. Колонки без права тянуть (чекбокс, кнопки) остаются
-        // своей шириной, если она у них задана.
-        base = {};
-        for (const c of columns) {
-          const locked = c.resizable === false && (mode === "grid" || !!c.width);
-          if (locked) continue;
-          const el = cells.get(c.key);
-          const w = el ? px(el) : 0;
-          if (w > 0) base[c.key] = pxToRem(w, remPx, scale);
-        }
-        setTable(id, base);
-      }
+      if (!map) setTable(id, base);
 
-      const start = px(targetEl);
-      const min = naturalWidth(targetEl);
-      let current = start;
+      const leftStart = px(leftEl);
+      const rightStart = px(rightEl);
+      const minLeft = naturalWidth(leftEl);
+      const minRight = naturalWidth(rightEl);
+      let left = leftStart;
+      let right = rightStart;
+      const table = handleEl.closest("table");
       const varName = liveVarName(id);
       const colEls = () => (table ? [...table.querySelectorAll<HTMLElement>(":scope > colgroup > col")] : []);
-      // У таблицы колонки — доли её ширины. На время перетаскивания
-      // переводим их в пиксели: иначе с шириной таблицы менялись бы все.
-      // Делаем это при первом движении — к нему `<colgroup>` уже нарисован.
+      const colOf = (k: string) =>
+        table?.querySelector<HTMLElement>(`:scope > colgroup > col[data-col="${CSS.escape(k)}"]`);
+
+      // У таблицы колонки — доли. На время перетаскивания переводим их в
+      // пиксели, как они есть сейчас. Делаем это при первом движении — к
+      // нему `<colgroup>` уже нарисован.
       let frozen = false;
       const freeze = () => {
         if (frozen || !table) return;
@@ -259,18 +228,18 @@ export function useColumnResize(
         const heads = [...row.children] as HTMLElement[];
         const cols = colEls();
         if (cols.length === heads.length) cols.forEach((c, i) => (c.style.width = `${px(heads[i])}px`));
-        table.style.width = `${tableStart}px`;
       };
 
-      const apply = (w: number) => {
+      const apply = () => {
         if (mode === "grid") {
-          const live = { ...base, [key]: w / (remPx * scale) };
+          const live = { ...base, [leftKey]: left / (remPx * scale), [rightKey]: right / (remPx * scale) };
           document.documentElement.style.setProperty(varName, gridTemplateWith(tracks, live));
         } else {
           freeze();
-          const col = table?.querySelector<HTMLElement>(`:scope > colgroup > col[data-col="${CSS.escape(key)}"]`);
-          if (col) col.style.width = `${w}px`;
-          if (table) table.style.width = `${tableStart + (w - start)}px`;
+          const l = colOf(leftKey);
+          const r = colOf(rightKey);
+          if (l) l.style.width = `${left}px`;
+          if (r) r.style.width = `${right}px`;
         }
       };
       const settle = (next: ColumnWidthMap | undefined) => {
@@ -282,33 +251,29 @@ export function useColumnResize(
           setTimeout(() => document.documentElement.style.removeProperty(varName), 0);
           return;
         }
-        if (!frozen || !table) return;
+        if (!frozen) return;
         // Пиксели, поставленные на время перетаскивания, меняем на те же
         // доли, что рисует React: он перепишет только то, что изменилось у
-        // него самого, и оставшиеся пиксели не сжимались бы с окном.
+        // него самого, а оставшиеся пиксели не тянулись бы с окном.
         const next_ = next ? tableLayout(columns, next, lead) : null;
-        if (!next_) {
-          colEls().forEach((c) => (c.style.width = ""));
-          table.style.width = "";
-          return;
-        }
         let li = 0;
         colEls().forEach((c) => {
           const k = c.dataset.col;
-          c.style.width = (k ? next_.cols[k] : next_.lead[li++]) ?? "";
+          c.style.width = next_ ? ((k ? next_.cols[k] : next_.lead[li++]) ?? "") : "";
         });
-        table.style.width = `min(${next_.total}, 100%)`;
       };
 
       return {
-        /** Сдвинуть край на `delta` пикселей. `true` — упёрлись: места справа больше нет. */
+        /** Сдвинуть границу на `delta` пикселей. `true` — упёрлись в подпись колонки. */
         update(delta: number): boolean {
-          current = clampWidth(start, delta, min, free);
-          apply(current);
-          return delta > 0 && current < start + delta;
+          const s = splitWidths(leftStart, rightStart, delta, minLeft, minRight);
+          left = s.left;
+          right = s.right;
+          apply();
+          return s.clamped;
         },
         commit() {
-          const next = { ...base, [key]: pxToRem(current, remPx, scale) };
+          const next = { ...base, [leftKey]: toRem(left), [rightKey]: toRem(right) };
           setTable(id, next);
           settle(next);
         },
@@ -318,17 +283,19 @@ export function useColumnResize(
         },
       };
     },
-    [id, map, columns, mode, setTable, tracks, lead]
+    [id, keys, map, columns, mode, setTable, tracks, lead]
   );
 
   const handle = useCallback(
     (key: string): ReactNode => {
       if (!enabled || !id) return null;
       const index = keys.indexOf(key);
-      const col = columns[index];
-      if (!col || col.resizable === false) return null;
-      const label = col.label ?? col.key;
-      const last = index === keys.length - 1;
+      const leftCol = columns[index];
+      const rightCol = columns[index + 1];
+      // Граница — между двумя колонками, и обе должны уметь меняться. У
+      // правого края таблицы границы нет: таблица всегда во всю ширину.
+      if (!leftCol || !rightCol || leftCol.resizable === false || rightCol.resizable === false) return null;
+      const label = `${leftCol.label ?? leftCol.key} и ${rightCol.label ?? rightCol.key}`;
 
       const onPointerDown = (e: PointerEvent<HTMLElement>) => {
         if (e.button !== 0) return;
@@ -356,8 +323,7 @@ export function useColumnResize(
           if (ok) session.commit();
           else session.cancel();
         };
-        // Упёрлись в край — черта границы краснеет: шире некуда, пока не
-        // сузить другую колонку.
+        // Упёрлись в подпись соседней колонки — черта границы подсвечивается.
         const onMove = (ev: globalThis.PointerEvent) =>
           el.toggleAttribute("data-limit", session.update(ev.clientX - startX));
         const onUp = () => finish(true);
@@ -388,14 +354,11 @@ export function useColumnResize(
       return (
         <span
           data-col-handle
-          data-last={last ? "" : undefined}
           role="separator"
           aria-orientation="vertical"
-          aria-label={`Ширина столбца «${label}»`}
+          aria-label={`Граница между столбцами «${label}»`}
           tabIndex={0}
-          title={
-            "Потяните, чтобы изменить ширину. Шире можно за счёт свободного места справа — его даёт сужение другой колонки.\nДвойной щелчок — вернуть как было"
-          }
+          title="Потяните, чтобы поделить место между соседними столбцами. Двойной щелчок — вернуть как было"
           className="col-resize-handle"
           onPointerDown={onPointerDown}
           onKeyDown={onKeyDown}
@@ -428,5 +391,5 @@ export function useColumnResize(
     [custom, keys, widthOf, lead, leadWidth]
   );
 
-  return { enabled, custom, widthOf, template, tableStyle, handle, colgroup, leadWidth };
+  return { enabled, custom, widthOf, leadWidth, template, handle, colgroup };
 }
