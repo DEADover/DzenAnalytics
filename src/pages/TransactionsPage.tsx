@@ -33,6 +33,7 @@ import { Checkbox } from "../components/Checkbox";
 import { OperationActions, OperationAmount, OperationCategory, OperationPayee, OperationComment } from "../components/operations/OperationCells";
 import { TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
+import { MergeSelectionAction } from "../components/operations/MergeSelectionAction";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { BulkEditModal } from "../components/BulkEditModal";
@@ -236,6 +237,8 @@ export function TransactionsPage() {
   const [copying, setCopying] = useState<Transaction | null>(null);
   const [splitting, setSplitting] = useState<Transaction | null>(null);
   const { applySplit } = useSplitTransaction();
+  // Окно объединения выделенных открыто — Escape принадлежит ему.
+  const [mergeOpen, setMergeOpen] = useState(false);
 
 
   // ── «Добавить» dropdown: pick which kind of operation to create. ─────
@@ -259,6 +262,7 @@ export function TransactionsPage() {
     Boolean(creating) ||
     Boolean(copying) ||
     bulkOpen ||
+    mergeOpen ||
     trashOpen ||
     addMenuOpen ||
     sortOpen ||
@@ -443,6 +447,11 @@ export function TransactionsPage() {
   const selectedTotals = useMemo(
     () => kindTotals(searched.filter((t) => selected.has(t.id))),
     [searched, selected]
+  );
+
+  const selectedTxs = useMemo(
+    () => transactions.filter((t) => selected.has(t.id)),
+    [transactions, selected]
   );
 
   const visible = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
@@ -846,6 +855,11 @@ export function TransactionsPage() {
             <Pencil className="w-4 h-4" />
             Изменить
           </button>
+          <MergeSelectionAction
+            txs={selectedTxs}
+            onMerged={() => setSelected(new Set())}
+            onOpenChange={setMergeOpen}
+          />
           {selectedUnseen > 0 && (
             <button onClick={markSeenBulk} className="btn-ghost text-sm">
               <Eye className="w-4 h-4" />

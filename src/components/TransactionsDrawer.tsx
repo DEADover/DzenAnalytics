@@ -30,6 +30,7 @@ import { buildCsv, csvFileName, downloadCsv, sortRows } from "./table/tableKit";
 import type { Transaction } from "../types";
 import { SearchInput } from "./SearchInput";
 import { SelectionBar } from "./SelectionBar";
+import { MergeSelectionAction } from "./operations/MergeSelectionAction";
 import { kindTotals } from "../lib/aggregations";
 import { queryMatcher } from "../lib/keyboardLayout";
 
@@ -69,6 +70,7 @@ export function TransactionsDrawer() {
   // ── Bulk selection + edit ──────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   async function applyBulk(patch: TransactionEdit) {
     const ids = Array.from(selected);
@@ -108,7 +110,7 @@ export function TransactionsDrawer() {
   // Живёт это отдельным эффектом от блокировки прокрутки ниже: у него свои
   // поводы перезапускаться (выделение меняется на каждый клик), а перезапускать
   // из-за них блокировку прокрутки незачем.
-  const escOnTop = Boolean(editing) || Boolean(copying) || bulkOpen;
+  const escOnTop = Boolean(editing) || Boolean(copying) || bulkOpen || mergeOpen;
   useEffect(() => {
     if (!open || escOnTop) return;
     const onKey = (e: KeyboardEvent) => {
@@ -280,6 +282,10 @@ export function TransactionsDrawer() {
   const selectedTotals = useMemo(
     () => kindTotals(filtered.filter((t) => selected.has(t.id))),
     [filtered, selected]
+  );
+  const selectedTxs = useMemo(
+    () => allTransactions.filter((t) => selected.has(t.id)),
+    [allTransactions, selected]
   );
 
   function exportCsv() {
@@ -457,6 +463,11 @@ export function TransactionsDrawer() {
             <Pencil className="w-4 h-4" />
             Изменить
           </button>
+          <MergeSelectionAction
+            txs={selectedTxs}
+            onMerged={() => setSelected(new Set())}
+            onOpenChange={setMergeOpen}
+          />
           <button onClick={deleteBulk} className="btn-danger text-sm">
             <Trash2 className="w-4 h-4" />
             Удалить
