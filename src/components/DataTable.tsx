@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useLocation } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import clsx from "clsx";
 import { useLazyList } from "../hooks/useLazyList";
+import { useColumnResize } from "../hooks/useColumnResize";
 import { LazyListFooter } from "./operations/OperationList";
 import { CardHeader } from "./CardHeader";
 import { Checkbox } from "./Checkbox";
@@ -107,6 +109,13 @@ interface Props<T> {
 
   /** Ширины из колонок, а не из содержимого: колонки не прыгают при смене данных. */
   fixed?: boolean;
+  /**
+   * Под каким именем помнить свои ширины столбцов. По умолчанию — адрес
+   * страницы и набор колонок; своё имя нужно таблице, которая открывается на
+   * разных страницах (шторка операций), или двум таблицам, которые должны
+   * делить ширины.
+   */
+  widthsId?: string;
   density?: Density;
   stickyHead?: boolean;
   /**
@@ -176,7 +185,8 @@ export function DataTable<T>({
   exportSlot,
   bare = false,
   className,
-  fixed = false,
+  fixed: fixedProp = false,
+  widthsId,
   density = "regular",
   stickyHead = false,
   minWidth,
@@ -203,6 +213,31 @@ export function DataTable<T>({
     if (!controlledExpanded) setOwnExpanded(next);
     onExpandedChange?.(next);
   };
+
+  // Своя ширина столбцов: пока ширины не трогали — таблица как есть; стоит
+  // потянуть границу — фиксированная раскладка по сохранённым ширинам.
+  const { pathname } = useLocation();
+  const resizeCols = useMemo(
+    () =>
+      columns.map((c) => ({
+        key: c.key,
+        label: c.label,
+        type: c.type,
+        width: c.width,
+        resizable: c.type !== "actions",
+      })),
+    [columns]
+  );
+  const resize = useColumnResize(
+    widthsId ?? `${pathname}#${columns.map((c) => c.key).join(",")}`,
+    resizeCols
+  );
+  const fixed = fixedProp || resize.custom;
+  const resizeMin = resize.minWidth(selection ? 2.5 : 0);
+  const tableMinWidth =
+    minWidth && resizeMin
+      ? `max(${scaledWidth(minWidth)}, ${resizeMin})`
+      : resizeMin ?? (minWidth ? scaledWidth(minWidth) : undefined);
 
   const sortCol = columns.find((c) => c.key === sort.key);
   const order = useCallback(
@@ -302,14 +337,15 @@ export function DataTable<T>({
       <div className={stickyHead ? undefined : "overflow-x-auto"}>
         <table
           className={clsx("w-full", fixed && "table-fixed", density === "compact" && "table-compact")}
-          style={minWidth ? { minWidth: scaledWidth(minWidth) } : undefined}
+          style={tableMinWidth ? { minWidth: tableMinWidth } : undefined}
         >
           {fixed && (
             <colgroup>
               {selection && <col style={{ width: "2.5rem" }} />}
-              {columns.map((c) => (
-                <col key={c.key} style={c.width ? { width: scaledWidth(c.width) } : undefined} />
-              ))}
+              {columns.map((c) => {
+                const w = resize.custom ? resize.widthOf(c.key) : scaledWidth(c.width);
+                return <col key={c.key} data-col={c.key} style={w ? { width: w } : undefined} />;
+              })}
             </colgroup>
           )}
           <thead className={stickyHead ? "sticky top-0 z-10 bg-panel" : undefined}>
@@ -339,6 +375,8 @@ export function DataTable<T>({
                   type={c.type}
                   label={c.label}
                   width={fixed ? undefined : c.width}
+                  colKey={c.key}
+                  resize={resize.handle(c.key)}
                   title={c.headerTitle}
                   lead={
                     ci === 0 && expandableKeys.length > 0 ? (

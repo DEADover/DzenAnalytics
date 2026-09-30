@@ -91,6 +91,7 @@ import {
 import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
 import { useBalanceValuation } from "../hooks/useBalanceValuation";
 import { useChartRangeSelect } from "../hooks/useChartRangeSelect";
+import { useColumnResize, type ColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { rangeChange } from "../lib/rangeCompare";
 import { RangeCompareCard, RangeDatePill } from "../components/RangeCompareCard";
 import {
@@ -118,7 +119,7 @@ import { depositTotals, projectDeposit, type DepositRow } from "../lib/deposits"
 import { SectionCard } from "../components/SectionCard";
 import { CardHeader } from "../components/CardHeader";
 import { HeadCell, TreeElbow } from "../components/table/TableParts";
-import { cellClass, scaledWidth, toneOfSigned, treeIndent, type ColumnType, type Tone } from "../components/table/tableKit";
+import { cellClass, toneOfSigned, treeIndent, type ColumnType, type Tone } from "../components/table/tableKit";
 import { toIsoDate } from "../lib/period";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { Sparkline } from "../components/Sparkline";
@@ -349,6 +350,8 @@ function SortTh({
   active,
   dir,
   onSort,
+  col,
+  resize,
   children,
 }: {
   sortKey: SortBy;
@@ -356,12 +359,17 @@ function SortTh({
   active: SortBy;
   dir: SortDir;
   onSort: (key: SortBy) => void;
+  /** Ключ колонки и своя ширина столбцов. */
+  col?: string;
+  resize?: ColumnResize;
   children: ReactNode;
 }) {
   return (
     <HeadCell
       type={type}
       label={children}
+      colKey={col}
+      resize={col && resize ? resize.handle(col) : undefined}
       sort={{ active: active === sortKey, dir, onToggle: () => onSort(sortKey) }}
     />
   );
@@ -410,6 +418,16 @@ const CAPITAL_FILTERS_HINT =
   "На «Капитале» работает только период: остаток на дату складывается из всей истории до неё. Какие счета показать на графике — в его карточке. Фильтры по счетам, категориям и суммам живут на вкладке «Движение».";
 
 /** Колонки свода вкладов: ставка, остаток срока, сумма, что ещё набежит. */
+/** Колонки таблицы вкладов. Ширины по умолчанию — прежние, в пикселях. */
+const DEPOSIT_COLUMNS: ResizeColumn[] = [
+  { key: "name", label: "Вклад", type: "text" },
+  { key: "rate", label: "Ставка", type: "number", width: "84px" },
+  { key: "left", label: "До закрытия", type: "number", width: "124px" },
+  { key: "amount", label: "Сумма", type: "money", width: "124px" },
+  { key: "interest", label: "Проценты", type: "money", width: "124px" },
+  { key: "total", label: "На конец срока", type: "main", width: "152px" },
+];
+
 export function AccountsPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
@@ -849,6 +867,38 @@ export function AccountsPage() {
   // таблицы фиксированные: без запаса имя наезжало бы на соседний столбец.
   // Запас нужен только на общем аккаунте — на личном пилюль нет ни одной.
   const hasMemberPills = accountRows.some((r) => memberLabelOf(r.member) != null);
+  // Своя ширина столбцов — у каждой вкладки свой набор колонок и свои ширины.
+  const accountColumns = useMemo<ResizeColumn[]>(
+    () => [
+      { key: "name", label: "Счёт", type: "text" },
+      // 10.75rem = самая длинная подпись вида счёта («Накопительный счёт»,
+      // замер 140px) плюс отступы ячейки: иначе она режется многоточием у
+      // большинства счетов. Ширины — в rem и растут с размером текста таблиц,
+      // как у остальных таблиц: в пикселях «Поступления» и «Операции» на
+      // «Движении» резались многоточием.
+      { key: "type", label: "Тип", type: "text", width: "10.75rem" },
+      ...(capitalView
+        ? [
+            { key: "balance", label: "Остаток", type: "balance", width: hasForeignCurrency ? "14.5rem" : "8.75rem" },
+            { key: "share", label: "Доля", type: "pct", width: "7rem" },
+          ]
+        : [
+            { key: "income", label: "Поступления", type: "money", width: "8.75rem" },
+            { key: "expense", label: "Списания", type: "money", width: "8.75rem" },
+            { key: "delta", label: "Изменение", type: "main", width: "8rem" },
+            // «Операции» со значком сортировки: 7 rem резали её при мелком
+            // тексте таблиц.
+            { key: "count", label: "Операции", type: "count", width: "7.75rem" },
+          ]),
+      { key: "actions", label: "Действия", type: "actions", width: "7.5rem", resizable: false },
+    ],
+    [capitalView, hasForeignCurrency]
+  );
+  const accountsResize = useColumnResize(
+    capitalView ? "accounts-capital" : "accounts-movement",
+    accountColumns
+  );
+  const depositsResize = useColumnResize("deposits", DEPOSIT_COLUMNS);
   // Признаки спрятаны в меню, поэтому включённые надо показать снаружи —
   // иначе непонятно, почему список короче ожидаемого.
   const effectiveScope = balanceScope;
@@ -2247,48 +2297,32 @@ export function AccountsPage() {
                 // Плюс запас на пилюлю с именем участника, когда она есть:
                 // колонка названия забирает остаток ширины, и без запаса
                 // пилюля вылезала бы на соседний столбец.
-                minWidth:
-                  (capitalView
-                    ? hasForeignCurrency
-                      ? 760
-                      : 670
-                    : hasForeignCurrency
-                      ? 1212
-                      : 1122) + (hasMemberPills ? 130 : 0),
+                minWidth: (() => {
+                  const px =
+                    (capitalView
+                      ? hasForeignCurrency
+                        ? 760
+                        : 670
+                      : hasForeignCurrency
+                        ? 1212
+                        : 1122) + (hasMemberPills ? 130 : 0);
+                  const own = accountsResize.minWidth();
+                  return own ? `max(${px}px, ${own})` : px;
+                })(),
               }}
             >
               <colgroup>
-                <col />
-                {/* 10.75rem = самая длинная подпись вида счёта («Накопительный
-                    счёт», замер 140px) плюс отступы ячейки: иначе она режется
-                    многоточием у большинства счетов. Ширины — в rem и растут
-                    с размером текста таблиц, как у остальных таблиц: в
-                    пикселях «Поступления» и «Операции» на «Движении»
-                    резались многоточием. */}
-                <col style={{ width: scaledWidth("10.75rem") }} />
-                {capitalView ? (
-                  <>
-                    <col style={{ width: scaledWidth(hasForeignCurrency ? "14.5rem" : "8.75rem") }} />
-                    <col style={{ width: scaledWidth("7rem") }} />
-                  </>
-                ) : (
-                  <>
-                    <col style={{ width: scaledWidth("8.75rem") }} />
-                    <col style={{ width: scaledWidth("8.75rem") }} />
-                    <col style={{ width: scaledWidth("8rem") }} />
-                    {/* «Операции» со значком сортировки: 7 rem резали её при
-                        мелком тексте таблиц. */}
-                    <col style={{ width: scaledWidth("7.75rem") }} />
-                  </>
-                )}
-                <col style={{ width: scaledWidth("7.5rem") }} />
+                {accountColumns.map((c) => {
+                  const w = accountsResize.widthOf(c.key);
+                  return <col key={c.key} data-col={c.key} style={w ? { width: w } : undefined} />;
+                })}
               </colgroup>
               <thead>
                 <tr>
-                  <SortTh sortKey="alpha" {...sortHead}>
+                  <SortTh sortKey="alpha" col="name" resize={accountsResize} {...sortHead}>
                     Счёт
                   </SortTh>
-                  <SortTh sortKey="type" {...sortHead}>
+                  <SortTh sortKey="type" col="type" resize={accountsResize} {...sortHead}>
                     Тип
                   </SortTh>
                   {/* Столбцы по вкладке: на «Капитале» — сколько лежит и какая
@@ -2297,30 +2331,30 @@ export function AccountsPage() {
                       отвечала сразу на два разных вопроса. */}
                   {capitalView ? (
                     <>
-                      <SortTh sortKey="balance" type="balance" {...sortHead}>
+                      <SortTh sortKey="balance" type="balance" col="balance" resize={accountsResize} {...sortHead}>
                         {hasRealBalances ? "Остаток" : "Накоплено"}
                       </SortTh>
-                      <SortTh sortKey="balance" type="pct" {...sortHead}>
+                      <SortTh sortKey="balance" type="pct" col="share" resize={accountsResize} {...sortHead}>
                         Доля
                       </SortTh>
                     </>
                   ) : (
                     <>
-                      <SortTh sortKey="income" type="money" {...sortHead}>
+                      <SortTh sortKey="income" type="money" col="income" resize={accountsResize} {...sortHead}>
                         Поступления
                       </SortTh>
-                      <SortTh sortKey="expense" type="money" {...sortHead}>
+                      <SortTh sortKey="expense" type="money" col="expense" resize={accountsResize} {...sortHead}>
                         Списания
                       </SortTh>
-                      <SortTh sortKey="delta" type="main" {...sortHead}>
+                      <SortTh sortKey="delta" type="main" col="delta" resize={accountsResize} {...sortHead}>
                         Изменение
                       </SortTh>
-                      <SortTh sortKey="count" type="count" {...sortHead}>
+                      <SortTh sortKey="count" type="count" col="count" resize={accountsResize} {...sortHead}>
                         Операции
                       </SortTh>
                     </>
                   )}
-                  <HeadCell type="actions" label="Действия" />
+                  <HeadCell type="actions" label="Действия" colKey="actions" />
                 </tr>
               </thead>
               <tbody>
@@ -3162,23 +3196,27 @@ export function AccountsPage() {
               вклад с длинным названием сдвигал бы столбцы с деньгами у всех
               остальных. Резиновым остаётся только название. */}
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full table-fixed min-w-[50rem]">
+            <table
+              className="w-full table-fixed min-w-[50rem]"
+              style={depositsResize.custom ? { minWidth: `max(50rem, ${depositsResize.minWidth()})` } : undefined}
+            >
               <colgroup>
-                <col />
-                <col style={{ width: 84 }} />
-                <col style={{ width: 124 }} />
-                <col style={{ width: 124 }} />
-                <col style={{ width: 124 }} />
-                <col style={{ width: 152 }} />
+                {DEPOSIT_COLUMNS.map((c) => {
+                  const w = depositsResize.custom ? depositsResize.widthOf(c.key) : c.width;
+                  return <col key={c.key} data-col={c.key} style={w ? { width: w } : undefined} />;
+                })}
               </colgroup>
               <thead>
                 <tr>
-                  <HeadCell type="text" label="Вклад" />
-                  <HeadCell type="number" label="Ставка" />
-                  <HeadCell type="number" label="До закрытия" />
-                  <HeadCell type="money" label="Сумма" />
-                  <HeadCell type="money" label="Проценты" />
-                  <HeadCell type="main" label="На конец срока" />
+                  {DEPOSIT_COLUMNS.map((c) => (
+                    <HeadCell
+                      key={c.key}
+                      type={c.type as ColumnType}
+                      label={c.label}
+                      colKey={c.key}
+                      resize={depositsResize.handle(c.key)}
+                    />
+                  ))}
                 </tr>
               </thead>
               <tbody>

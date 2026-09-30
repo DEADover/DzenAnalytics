@@ -42,6 +42,29 @@ export function OperationListHead({ template, children }: { template: string; ch
   );
 }
 
+/**
+ * Ячейка шапки ленты. `col` — ключ колонки: по нему своя ширина столбца
+ * находит ячейку; `resize` — граница справа (`useColumnResize().handle`).
+ */
+export function ListHeadCell({
+  col,
+  resize,
+  className,
+  children,
+}: {
+  col: string;
+  resize?: ReactNode;
+  className?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div data-col={col} className={resize ? `relative ${className ?? ""}` : className}>
+      {children}
+      {resize}
+    </div>
+  );
+}
+
 /** Порог двойного клика: на столько откладывается выделение строки, чтобы
  *  двойной клик успел его отменить. Меньше — двойной клик начинает мигать
  *  выделением, больше — выделение ощущается вялым. */

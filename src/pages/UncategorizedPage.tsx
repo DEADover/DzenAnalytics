@@ -44,6 +44,7 @@ import { OperationAmount, OperationPayee, OperationComment } from "../components
 import { DayHeader } from "../components/operations/DayHeader";
 import {
   LazyListFooter,
+  ListHeadCell,
   OperationListHead,
   OperationListRow,
   OperationListTray,
@@ -61,6 +62,7 @@ import { Checkbox } from "../components/Checkbox";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { EditTransactionModal } from "../components/EditTransactionModal";
 import { useLazyList } from "../hooks/useLazyList";
+import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import type { Transaction } from "../types";
 import { queryMatcher } from "../lib/keyboardLayout";
 
@@ -92,7 +94,17 @@ const SORT_OPTIONS: SortOption<UncategorizedSort>[] = [
 ];
 
 /** Колонки ленты. Категории среди них нет — её тут нет по определению. */
-const TEMPLATE = ["20px", "84px", "minmax(0, 1fr)", "minmax(0, 1.3fr)", "minmax(0, 2fr)", "minmax(0, 1.4fr)", "140px", "72px"].join(" ");
+/** Колонки ленты; сетку из них строит `useColumnResize` (своя ширина столбцов). */
+const COLUMNS: ResizeColumn[] = [
+  { key: "select", size: "20px", resizable: false },
+  { key: "date", label: "Дата", size: "84px" },
+  { key: "account", label: "Счёт", size: "minmax(0, 1fr)" },
+  { key: "payee", label: "Контрагент", size: "minmax(0, 1.3fr)" },
+  { key: "comment", label: "Комментарий", size: "minmax(0, 2fr)" },
+  { key: "hint", label: "Подсказка", size: "minmax(0, 1.4fr)" },
+  { key: "amount", label: "Сумма", size: "140px" },
+  { key: "actions", size: "72px", resizable: false },
+];
 
 export function UncategorizedPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -271,12 +283,16 @@ export function UncategorizedPage() {
     downloadCsv(csvFileName("uncategorized"), text);
   }
 
+  const resize = useColumnResize("uncategorized", COLUMNS, { mode: "grid", flexKey: "comment" });
+  const template = resize.template;
+
   if (transactions.length === 0) return <EmptyState />;
 
   const renderRow = (t: Transaction) => (
     <Row
       key={t.id}
       tx={t}
+      template={template}
       suggestion={suggestionOf.get(t.id)}
       applied={applied.has(t.id)}
       busy={busy}
@@ -367,7 +383,7 @@ export function UncategorizedPage() {
           </SectionEmpty>
         ) : (
           <div>
-            <OperationListHead template={TEMPLATE}>
+            <OperationListHead template={template}>
               <Checkbox
                 checked={allSelected}
                 indeterminate={someSelected}
@@ -375,12 +391,24 @@ export function UncategorizedPage() {
                 title="Выбрать всё (под фильтрами)"
                 label="Выбрать все операции без категории"
               />
-              <div>Дата</div>
-              <div>Счёт</div>
-              <div>Контрагент</div>
-              <div>Комментарий</div>
-              <div>Подсказка</div>
-              <div className="text-right">Сумма</div>
+              <ListHeadCell col="date" resize={resize.handle("date")}>
+                Дата
+              </ListHeadCell>
+              <ListHeadCell col="account" resize={resize.handle("account")}>
+                Счёт
+              </ListHeadCell>
+              <ListHeadCell col="payee" resize={resize.handle("payee")}>
+                Контрагент
+              </ListHeadCell>
+              <ListHeadCell col="comment" resize={resize.handle("comment")}>
+                Комментарий
+              </ListHeadCell>
+              <ListHeadCell col="hint" resize={resize.handle("hint")}>
+                Подсказка
+              </ListHeadCell>
+              <ListHeadCell col="amount" className="text-right">
+                Сумма
+              </ListHeadCell>
               <div className="text-center">Действия</div>
             </OperationListHead>
             {days
@@ -455,6 +483,7 @@ export function UncategorizedPage() {
 /** Строка ленты: операция и подсказка к ней. */
 function Row({
   tx,
+  template,
   suggestion,
   applied,
   busy,
@@ -464,6 +493,7 @@ function Row({
   onApply,
 }: {
   tx: Transaction;
+  template: string;
   suggestion?: CategorySuggestion;
   applied: boolean;
   busy: boolean;
@@ -475,7 +505,7 @@ function Row({
   const key = suggestion ? suggestionKey(suggestion) : null;
   return (
     <OperationListRow
-      template={TEMPLATE}
+      template={template}
       selected={selected}
       onToggleSelect={onToggleSelect}
       onOpen={onOpen}

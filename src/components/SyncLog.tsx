@@ -20,6 +20,7 @@ import { InfoPopover } from "./InfoPopover";
 import { ExpandChevron, HeadCell } from "./table/TableParts";
 import { cellClass } from "./table/tableKit";
 import { useDisplayStore } from "../store/useDisplayStore";
+import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { pluralRu } from "../lib/plural";
 import { Callout } from "./Callout";
 import { Badge } from "./Badge";
@@ -60,6 +61,17 @@ interface SyncLogProps {
    *  in a fixed-height slot so the row doesn't jump as the text changes. */
   status?: ReactNode;
 }
+
+/** Колонки журнала — для своей ширины столбцов. «Тип» резиновый. */
+const LOG_COLUMNS: ResizeColumn[] = [
+  { key: "kind", label: "Тип", type: "text" },
+  { key: "at", label: "Дата и время", type: "date", width: "10rem" },
+  { key: "fresh", label: "Новых операций", type: "count", width: "10rem" },
+  { key: "total", label: "Всего операций", type: "count", width: "10rem" },
+  { key: "duration", label: "Длительность", type: "number", width: "8rem" },
+  { key: "status", label: "Статус", type: "mark", width: "6rem" },
+];
+const LOG_MD_ONLY = { fresh: "hidden md:table-column", total: "hidden md:table-column", duration: "hidden md:table-column" };
 
 export function SyncLog({ embedded, status }: SyncLogProps = {}) {
   const entries = useSyncLogStore((s) => s.entries);
@@ -105,6 +117,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
       ),
     [visible]
   );
+  const resize = useColumnResize("sync-log", LOG_COLUMNS);
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -229,15 +242,34 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
       ) : (
         <>
           <div>
-            <table className="w-full">
+            <table
+              className={resize.custom ? "w-full table-fixed" : "w-full"}
+              style={resize.custom ? { minWidth: resize.minWidth() } : undefined}
+            >
+              {resize.colgroup({ className: LOG_MD_ONLY })}
               <thead>
                 <tr>
                   {/* «Тип» забирает остаток ширины, остальные колонки — по
-                      содержимому: числа и статус остаются справа плотной группой. */}
-                  <HeadCell type="text" label="Тип" className="w-full" />
-                  <HeadCell type="date" label="Дата и время" className="w-px" />
+                      содержимому: числа и статус остаются справа плотной группой.
+                      Со своими ширинами столбцов ширины задаёт `<colgroup>`. */}
+                  <HeadCell
+                    type="text"
+                    label="Тип"
+                    className={resize.custom ? undefined : "w-full"}
+                    colKey="kind"
+                    resize={resize.handle("kind")}
+                  />
+                  <HeadCell
+                    type="date"
+                    label="Дата и время"
+                    className="w-px"
+                    colKey="at"
+                    resize={resize.handle("at")}
+                  />
                   <HeadCell
                     type="count"
+                    colKey="fresh"
+                    resize={resize.handle("fresh")}
                     className="w-px hidden md:table-cell"
                     label={
                       <span className="inline-flex items-center gap-1">
@@ -256,6 +288,8 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
                   />
                   <HeadCell
                     type="count"
+                    colKey="total"
+                    resize={resize.handle("total")}
                     className="w-px hidden md:table-cell"
                     label={
                       <span className="inline-flex items-center gap-1">
@@ -271,8 +305,14 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
                       </span>
                     }
                   />
-                  <HeadCell type="number" label="Длительность" className="w-px hidden md:table-cell" />
-                  <HeadCell type="mark" label="Статус" className="w-px" />
+                  <HeadCell
+                    type="number"
+                    label="Длительность"
+                    className="w-px hidden md:table-cell"
+                    colKey="duration"
+                    resize={resize.handle("duration")}
+                  />
+                  <HeadCell type="mark" label="Статус" className="w-px" colKey="status" />
                 </tr>
               </thead>
               <tbody>

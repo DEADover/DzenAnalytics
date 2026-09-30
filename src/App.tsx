@@ -52,6 +52,7 @@ import { useTagEditsStore } from "./store/useTagEditsStore";
 import { useAccountEditsStore } from "./store/useAccountEditsStore";
 import { useBudgetEditsStore } from "./store/useBudgetEditsStore";
 import { installNativeTooltips } from "./lib/nativeTooltips";
+import { useColumnWidthsStore } from "./store/useColumnWidthsStore";
 import { useDisplayStore } from "./store/useDisplayStore";
 import { useReportPeriodStore } from "./store/useReportPeriodStore";
 import { useCloudSettingsStore } from "./store/useCloudSettingsStore";
@@ -149,6 +150,7 @@ function App() {
     useAccountEditsStore.getState().hydrate();
     useBudgetEditsStore.getState().hydrate();
     useDisplayStore.getState().hydrate();
+    useColumnWidthsStore.getState().hydrate();
     useOffBalanceStore.getState().hydrate();
     useSlicesStore.getState().hydrate();
     useNewCategoriesStore.getState().hydrate();

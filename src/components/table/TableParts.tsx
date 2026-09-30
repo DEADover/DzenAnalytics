@@ -66,6 +66,8 @@ export function HeadCell({
   className,
   colSpan,
   lead,
+  colKey,
+  resize,
 }: {
   type?: ColumnType;
   label: ReactNode;
@@ -76,6 +78,10 @@ export function HeadCell({
   colSpan?: number;
   /** Кнопка перед подписью — например, «раскрыть все». */
   lead?: ReactNode;
+  /** Ключ колонки — по нему своя ширина столбца находит ячейку шапки. */
+  colKey?: string;
+  /** Граница для своей ширины столбца (`useColumnResize().handle`). */
+  resize?: ReactNode;
 }) {
   const align = alignOf(type);
   const right = align === "right";
@@ -85,7 +91,8 @@ export function HeadCell({
       colSpan={colSpan}
       title={title}
       aria-sort={sort ? (sort.active ? (sort.dir === "asc" ? "ascending" : "descending") : "none") : undefined}
-      className={headClass(type, clsx("whitespace-nowrap", className))}
+      data-col={colKey}
+      className={headClass(type, clsx("whitespace-nowrap", resize ? "relative" : undefined, className))}
       style={width ? { width: scaledWidth(width) } : undefined}
     >
       {/* Блочный flex, а не inline: строчный добавлял снизу место под
@@ -103,6 +110,7 @@ export function HeadCell({
           <span className="truncate">{label}</span>
         )}
       </span>
+      {resize}
     </th>
   );
 }

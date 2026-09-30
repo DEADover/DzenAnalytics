@@ -87,6 +87,12 @@ interface DisplayState {
    */
   commentWrap: boolean;
   /**
+   * Своя ширина столбцов: границы в шапках таблиц и лент можно тянуть мышью,
+   * ширины запоминаются по таблицам (`useColumnWidthsStore`). Пока опыт —
+   * по умолчанию выключено.
+   */
+  columnResize: boolean;
+  /**
    * Раскрыт ли журнал синхронизаций.
    *
    * По умолчанию свёрнут: это отладочная история, её открывают, когда что-то
@@ -123,6 +129,7 @@ interface DisplayState {
   setTableFontLevel: (level: TableFontLevel) => Promise<void>;
   setStatementLine: (on: boolean) => Promise<void>;
   setCommentWrap: (on: boolean) => Promise<void>;
+  setColumnResize: (on: boolean) => Promise<void>;
   setSyncLogOpen: (on: boolean) => Promise<void>;
   setHideThanks: (on: boolean) => Promise<void>;
   setFiltersMode: (mode: FiltersMode) => Promise<void>;
@@ -135,6 +142,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   tableFontLevel: DEFAULT_TABLE_FONT_LEVEL,
   statementLine: false,
   commentWrap: true,
+  columnResize: false,
   syncLogOpen: false,
   hideThanks: false,
   filtersMode: "page",
@@ -148,6 +156,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       tableFontLevel?: number;
       statementLine?: boolean;
       commentWrap?: boolean;
+      columnResize?: boolean;
       syncLogOpen?: boolean;
       hideThanks?: boolean;
       filtersMode?: string;
@@ -163,6 +172,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       tableFontLevel: level,
       statementLine: stored?.statementLine === true,
       commentWrap: stored?.commentWrap !== false,
+      columnResize: stored?.columnResize === true,
       syncLogOpen: stored?.syncLogOpen === true,
       hideThanks: stored?.hideThanks === true,
       // По умолчанию фильтры стоят на странице; панель по кнопке — выбор человека.
@@ -194,6 +204,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   setCommentWrap: async (on) => {
     set({ commentWrap: on });
     await db.saveJSON(KEY, { ...persisted(get()), commentWrap: on });
+  },
+
+  setColumnResize: async (on) => {
+    set({ columnResize: on });
+    await db.saveJSON(KEY, { ...persisted(get()), columnResize: on });
   },
 
   setSyncLogOpen: async (on) => {
@@ -231,6 +246,7 @@ function persisted(s: DisplayState) {
     tableFontLevel: s.tableFontLevel,
     statementLine: s.statementLine,
     commentWrap: s.commentWrap,
+    columnResize: s.columnResize,
     syncLogOpen: s.syncLogOpen,
     hideThanks: s.hideThanks,
     filtersMode: s.filtersMode,

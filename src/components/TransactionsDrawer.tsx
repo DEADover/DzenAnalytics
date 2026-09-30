@@ -423,6 +423,8 @@ export function TransactionsDrawer() {
             bare
             stickyHead
             fixed
+            // Шторка открывается с любой страницы — ширины одни на все.
+            widthsId="drawer-operations"
             minWidth="64rem"
             data={filtered}
             columns={columns}

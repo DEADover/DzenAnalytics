@@ -31,6 +31,7 @@ import { OperationAmount, OperationCategory, OperationPayee, OperationComment } 
 import { DayHeader } from "../components/operations/DayHeader";
 import {
   LazyListFooter,
+  ListHeadCell,
   OperationListHead,
   OperationListRow,
   OperationListTray,
@@ -48,6 +49,7 @@ import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { useLazyList } from "../hooks/useLazyList";
+import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import type { Transaction } from "../types";
 import { queryMatcher } from "../lib/keyboardLayout";
 
@@ -87,21 +89,20 @@ interface Columns {
  * кнопкой возврата, к которой относится, а статус — продолжением описания
  * операции.
  */
-function gridTemplate(cols: Columns): string {
-  return [
-    "20px",
-    cols.date && "84px",
-    "minmax(0, 1.3fr)",
-    "minmax(0, 1fr)",
-    "minmax(0, 1.3fr)",
-    "minmax(0, 2.6fr)",
-    cols.status && "120px",
-    cols.deleted && "84px",
-    "140px",
-    "72px",
-  ]
-    .filter(Boolean)
-    .join(" ");
+function feedColumns(cols: Columns): ResizeColumn[] {
+  const all: (ResizeColumn | false)[] = [
+    { key: "select", size: "20px", resizable: false },
+    cols.date && { key: "date", label: "Дата", size: "84px" },
+    { key: "category", label: "Категория", size: "minmax(0, 1.3fr)" },
+    { key: "account", label: "Счёт", size: "minmax(0, 1fr)" },
+    { key: "payee", label: "Контрагент", size: "minmax(0, 1.3fr)" },
+    { key: "comment", label: "Комментарий", size: "minmax(0, 2.6fr)" },
+    cols.status && { key: "status", label: "Статус", size: "120px" },
+    cols.deleted && { key: "deleted", label: "Удалена", size: "84px" },
+    { key: "amount", label: "Сумма", size: "140px" },
+    { key: "actions", size: "72px", resizable: false },
+  ];
+  return all.filter((c): c is ResizeColumn => !!c);
 }
 
 /**
@@ -449,7 +450,12 @@ function DeletedFeed({
     deleted: !byDeletion,
     status: mode === "cloud",
   };
-  const template = gridTemplate(cols);
+  const columns = useMemo(
+    () => feedColumns({ date: cols.date, deleted: cols.deleted, status: cols.status }),
+    [cols.date, cols.deleted, cols.status]
+  );
+  const resize = useColumnResize(`deleted-${mode}`, columns, { mode: "grid", flexKey: "comment" });
+  const template = resize.template;
 
   function exportCsv() {
     const cloud = mode === "cloud";
@@ -578,14 +584,36 @@ function DeletedFeed({
                 title="Выбрать всё (под фильтрами)"
                 label="Выбрать все удалённые операции"
               />
-              {cols.date && <div>Дата</div>}
-              <div>Категория</div>
-              <div>Счёт</div>
-              <div>Контрагент</div>
-              <div>Комментарий</div>
-              {cols.status && <div className="text-center">Статус</div>}
-              {cols.deleted && <div>Удалена</div>}
-              <div className="text-right">Сумма</div>
+              {cols.date && (
+                <ListHeadCell col="date" resize={resize.handle("date")}>
+                  Дата
+                </ListHeadCell>
+              )}
+              <ListHeadCell col="category" resize={resize.handle("category")}>
+                Категория
+              </ListHeadCell>
+              <ListHeadCell col="account" resize={resize.handle("account")}>
+                Счёт
+              </ListHeadCell>
+              <ListHeadCell col="payee" resize={resize.handle("payee")}>
+                Контрагент
+              </ListHeadCell>
+              <ListHeadCell col="comment" resize={resize.handle("comment")}>
+                Комментарий
+              </ListHeadCell>
+              {cols.status && (
+                <ListHeadCell col="status" className="text-center" resize={resize.handle("status")}>
+                  Статус
+                </ListHeadCell>
+              )}
+              {cols.deleted && (
+                <ListHeadCell col="deleted" resize={resize.handle("deleted")}>
+                  Удалена
+                </ListHeadCell>
+              )}
+              <ListHeadCell col="amount" className="text-right" resize={resize.handle("amount")}>
+                Сумма
+              </ListHeadCell>
               <div className="text-center">Действия</div>
             </OperationListHead>
             {days

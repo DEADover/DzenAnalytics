@@ -32,12 +32,14 @@ import {
   ALargeSmall,
   ArrowLeftRight,
   ArrowRight,
+  RotateCcw,
 } from "lucide-react";
 import { parseCsv } from "../lib/csv";
 import { isOAuthConfigured, startOAuth } from "../lib/oauth";
 import { SyncLog } from "../components/SyncLog";
 import { OperationsSettings } from "../components/OperationsSettings";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
+import { useColumnWidthsStore } from "../store/useColumnWidthsStore";
 import { AccountsSettings } from "../components/AccountsSettings";
 import { PendingChangesModal } from "../components/PendingChangesModal";
 import { SlicesSettings } from "../components/SlicesSettings";
@@ -225,6 +227,10 @@ export function ImportPage() {
   const setFractionDigits = useDisplayStore((s) => s.setFractionDigits);
   const tableFontLevel = useDisplayStore((s) => s.tableFontLevel);
   const setTableFontLevel = useDisplayStore((s) => s.setTableFontLevel);
+  const columnResize = useDisplayStore((s) => s.columnResize);
+  const setColumnResize = useDisplayStore((s) => s.setColumnResize);
+  const customWidthTables = useColumnWidthsStore((s) => Object.keys(s.tables).length);
+  const resetColumnWidths = useColumnWidthsStore((s) => s.resetAll);
   const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
   const setIncludeOffBalance = useOffBalanceStore((s) => s.setIncludeOffBalance);
 
@@ -1346,6 +1352,7 @@ export function ImportPage() {
                     "zenmoneyAutoSyncValue",
                     "zenmoneyAutoSyncUnit",
                     "displaySettings",
+                    "columnWidths",
                     "dashboardLayout",
                     "reportPeriod",
                     "includeOffBalance",
@@ -1728,6 +1735,55 @@ export function ImportPage() {
             </span>
           </div>
         </SettingRow>
+
+        <SettingRow
+          title="Своя ширина столбцов"
+          status={
+            !columnResize
+              ? "Выключено — ширины колонок подбираются сами"
+              : customWidthTables > 0
+                ? `Своя ширина — в ${formatNum(customWidthTables)} ${pluralRu(customWidthTables, [
+                    "таблице",
+                    "таблицах",
+                    "таблицах",
+                  ])}`
+                : "Потяните границу между колонками в шапке любой таблицы"
+          }
+          help={
+            <>
+              <p>
+                Пробная функция. Когда она включена, между колонками в шапке
+                таблиц и лент операций видны тонкие границы. Потяните границу
+                мышью — колонка станет шире или уже, а самая широкая колонка
+                (название или комментарий) заберёт или отдаст разницу, так что
+                таблица по-прежнему во всю ширину.
+              </p>
+              <p className="mt-2">
+                Ширины запоминаются для каждой таблицы отдельно и растут вместе
+                с размером текста. Уже подписи колонки не сжать — заголовки не
+                обрезаются. Двойной щелчок по границе возвращает таблице ширины
+                по умолчанию, а кнопка здесь — всем таблицам сразу. Границу
+                можно двигать и с клавиатуры: Tab до неё, затем стрелки влево и
+                вправо.
+              </p>
+            </>
+          }
+          control={
+            <div className="flex items-center gap-3">
+              {columnResize && customWidthTables > 0 && (
+                <button type="button" className="btn-ghost text-xs" onClick={resetColumnWidths}>
+                  <RotateCcw className="w-3.5 h-3.5" aria-hidden />
+                  Сбросить ширины
+                </button>
+              )}
+              <Switch
+                checked={columnResize}
+                label="Своя ширина столбцов"
+                onChange={(next) => setColumnResize(next)}
+              />
+            </div>
+          }
+        />
       </div>
 
       </>)}

@@ -47,6 +47,7 @@ import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
 import { Checkbox } from "../components/Checkbox";
 import { HeadCell } from "../components/table/TableParts";
+import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { cellClass } from "../components/table/tableKit";
 import { CardHeader } from "../components/CardHeader";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
@@ -95,6 +96,16 @@ const PICK_HELP = (
 );
 
 
+
+/** Колонки таблицы правил — для своей ширины столбцов. «Правило» резиновое. */
+const RULE_COLUMNS: ResizeColumn[] = [
+  { key: "num", label: "№", type: "mark", width: "6rem" },
+  { key: "rule", label: "Правило", type: "text" },
+  { key: "targets", label: "Что меняет", type: "text", width: "18rem" },
+  { key: "mode", label: "Режим", type: "mark", width: "13rem" },
+  { key: "count", label: "Совпадений", type: "count", width: "6.5rem" },
+  { key: "actions", label: "Действия", type: "actions", width: "6rem", resizable: false },
+];
 
 export function RulesPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -427,6 +438,8 @@ export function RulesPage() {
     await reapplyRules();
   }
 
+  const resize = useColumnResize("rules", RULE_COLUMNS);
+
   if (transactions.length === 0) return <EmptyState />;
 
   // Дешёвые O(n) проходы — живут после раннего return, поэтому без useMemo.
@@ -646,7 +659,11 @@ export function RulesPage() {
           </SectionEmpty>
         ) : (
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full">
+            <table
+              className={resize.custom ? "w-full table-fixed" : "w-full"}
+              style={resize.custom ? { minWidth: resize.minWidth(3) } : undefined}
+            >
+              {resize.colgroup({ leading: ["3rem"], className: { targets: "hidden xl:table-column" } })}
               <thead>
                 <tr>
                   {/* Сначала СУТЬ правила, потом переключатели: читают строку
@@ -677,17 +694,48 @@ export function RulesPage() {
                   </th>
                   {/* Порядок правил — это порядок, в котором они срабатывают:
                       его задают перетаскиванием, поэтому сортировки у таблицы нет. */}
-                  <HeadCell type="mark" label="№" width="6rem" />
-                  <HeadCell type="text" label="Правило" className="w-full" />
+                  <HeadCell
+                    type="mark"
+                    label="№"
+                    width={resize.custom ? undefined : "6rem"}
+                    colKey="num"
+                    resize={resize.handle("num")}
+                  />
+                  <HeadCell
+                    type="text"
+                    label="Правило"
+                    className={resize.custom ? undefined : "w-full"}
+                    colKey="rule"
+                    resize={resize.handle("rule")}
+                  />
                   <HeadCell
                     type="text"
                     label="Что меняет"
-                    width="18rem"
+                    width={resize.custom ? undefined : "18rem"}
                     className="hidden xl:table-cell"
+                    colKey="targets"
+                    resize={resize.handle("targets")}
                   />
-                  <HeadCell type="mark" label="Режим" width="13rem" />
-                  <HeadCell type="count" label="Совпадений" width="6.5rem" />
-                  <HeadCell type="actions" label="Действия" width="6rem" />
+                  <HeadCell
+                    type="mark"
+                    label="Режим"
+                    width={resize.custom ? undefined : "13rem"}
+                    colKey="mode"
+                    resize={resize.handle("mode")}
+                  />
+                  <HeadCell
+                    type="count"
+                    label="Совпадений"
+                    width={resize.custom ? undefined : "6.5rem"}
+                    colKey="count"
+                    resize={resize.handle("count")}
+                  />
+                  <HeadCell
+                    type="actions"
+                    label="Действия"
+                    width={resize.custom ? undefined : "6rem"}
+                    colKey="actions"
+                  />
                 </tr>
               </thead>
               <tbody>

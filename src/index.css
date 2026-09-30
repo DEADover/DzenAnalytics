@@ -1036,6 +1036,59 @@ h2,
   .list-head {
     @apply head-type border-b border-border;
   }
+  /* Граница столбца, за которую тянут ширину («Своя ширина столбцов» в
+     «Оформлении»). В покое — тонкая черта на половину высоты шапки, чтобы
+     было видно, что границы подвижны; под мышью и при перетаскивании —
+     акцентная во всю высоту. Зона захвата шире черты: 10 px. */
+  .col-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -5px;
+    width: 10px;
+    z-index: 2;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .col-resize-handle::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 25%;
+    bottom: 25%;
+    width: 1px;
+    transform: translateX(-50%);
+    background: rgb(var(--c-muted) / 0.3);
+    transition: background-color 150ms, top 150ms, bottom 150ms;
+  }
+  .col-resize-handle:hover::after,
+  .col-resize-handle[data-active]::after {
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgb(var(--c-accent));
+  }
+  /* В шапке ленты между колонками зазор сетки (12 px): черта — посреди него. */
+  .list-head .col-resize-handle {
+    right: calc(-0.375rem - 5px);
+    top: -0.5rem;
+    bottom: -0.5rem;
+  }
+  .col-resize-handle:focus-visible {
+    outline: none;
+  }
+  .col-resize-handle:focus-visible::after {
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgb(var(--c-accent));
+  }
+  /* Пока тянут границу, курсор не мигает над ячейками и текст не выделяется. */
+  .col-resizing,
+  .col-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
   /* Строка-группа: шапка блока внутри таблицы. Не `table-row-group`: это
      утилита Tailwind, она делала строку группой строк (display). */
   .table-group-row > td,

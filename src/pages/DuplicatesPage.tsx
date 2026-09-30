@@ -18,6 +18,7 @@ import {
 } from "../components/operations/OperationCells";
 import {
   LazyListFooter,
+  ListHeadCell,
   OperationListHead,
   OperationListRow,
   OperationListTray,
@@ -38,6 +39,7 @@ import { SortMenu, type SortOption } from "../components/SortMenu";
 import { Checkbox } from "../components/Checkbox";
 import { ScrollTopButton } from "../components/ScrollTopButton";
 import { useLazyList } from "../hooks/useLazyList";
+import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 
 /**
  * «Дубликаты» — похожие операции, сложенные в группы, и чистка их пачкой.
@@ -69,7 +71,14 @@ const PAGE_SIZE = 40;
  * Колонки строки. Счёта и контрагента нет — они одни на всю группу (это и есть
  * примета копии) и стоят в её шапке; повторять их в каждой строке незачем.
  */
-const TEMPLATE = ["20px", "84px", "minmax(0, 1.2fr)", "minmax(0, 2.4fr)", "140px", "112px"].join(" ");
+const COLUMNS: ResizeColumn[] = [
+  { key: "select", size: "20px", resizable: false },
+  { key: "date", label: "Дата", size: "84px" },
+  { key: "category", label: "Категория", size: "minmax(0, 1.2fr)" },
+  { key: "comment", label: "Комментарий", size: "minmax(0, 2.4fr)" },
+  { key: "amount", label: "Сумма", size: "140px" },
+  { key: "actions", size: "112px", resizable: false },
+];
 
 /** Лишнее в группе — всё, кроме одной операции: её сумма и есть «лишняя». */
 function extraOf(g: DuplicateGroup): number {
@@ -197,6 +206,9 @@ export function DuplicatesPage() {
     [allOps, selected]
   );
 
+  const resize = useColumnResize("duplicates", COLUMNS, { mode: "grid", flexKey: "comment" });
+  const template = resize.template;
+
   if (transactions.length === 0) return <EmptyState />;
 
   const totalDuplicateAmount = groups.reduce((s, g) => s + extraOf(g), 0);
@@ -265,7 +277,7 @@ export function DuplicatesPage() {
             </>
           }
         >
-          <OperationListHead template={TEMPLATE}>
+          <OperationListHead template={template}>
             <Checkbox
               checked={allSelected}
               indeterminate={someSelected}
@@ -273,10 +285,18 @@ export function DuplicatesPage() {
               title="Выбрать все операции во всех группах"
               label="Выбрать все операции во всех группах"
             />
-            <div>Дата</div>
-            <div>Категория</div>
-            <div>Комментарий</div>
-            <div className="text-right">Сумма</div>
+            <ListHeadCell col="date" resize={resize.handle("date")}>
+              Дата
+            </ListHeadCell>
+            <ListHeadCell col="category" resize={resize.handle("category")}>
+              Категория
+            </ListHeadCell>
+            <ListHeadCell col="comment" resize={resize.handle("comment")}>
+              Комментарий
+            </ListHeadCell>
+            <ListHeadCell col="amount" className="text-right">
+              Сумма
+            </ListHeadCell>
             <div className="text-center">Действия</div>
           </OperationListHead>
           {lazy.visible.map((g) => (
@@ -291,7 +311,7 @@ export function DuplicatesPage() {
               {g.txs.map((t, i) => (
                 <OperationListRow
                   key={t.id}
-                  template={TEMPLATE}
+                  template={template}
                   selected={selected.has(t.id)}
                   onToggleSelect={() => toggleOne(t.id)}
                   onOpen={() => setEditing(t)}

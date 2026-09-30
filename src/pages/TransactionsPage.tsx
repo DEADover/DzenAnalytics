@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Download,
   Plus,
@@ -34,6 +34,7 @@ import { OperationActions, OperationAmount, OperationCategory, OperationPayee, O
 import { TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
+import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { kindTotals, transferTotals } from "../lib/aggregations";
@@ -53,6 +54,7 @@ import { ScrollTopButton } from "../components/ScrollTopButton";
 import { DayHeader } from "../components/operations/DayHeader";
 import {
   LazyListFooter,
+  ListHeadCell,
   OperationListHead,
   OperationListRow,
   OperationListTray,
@@ -106,10 +108,21 @@ const ADD_OPTIONS: {
 // 32, и за ней стояла ещё одна, 10-пиксельная, под точку «новая операция» — со
 // своими зазорами это давало 66 пикселей от края до категории при 16 пикселях
 // видимого содержимого. Точка переехала на значок категории, полоса убрана.
-const GRID_COLS_FULL =
-  "20px 84px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 112px";
-const GRID_COLS_NODATE =
-  "20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 140px 112px";
+//
+// Колонки — списком, а сетку из них строит `useColumnResize`: при «Своей
+// ширине столбцов» дорожки, которые потянули, берут сохранённую ширину, а
+// комментарий остаётся резиновым и забирает остальное.
+const OPS_COLUMNS: ResizeColumn[] = [
+  { key: "select", size: "20px", resizable: false },
+  { key: "date", label: "Дата", size: "84px" },
+  { key: "category", label: "Категория", size: "minmax(0, 1.3fr)" },
+  { key: "account", label: "Счёт", size: "minmax(0, 1fr)" },
+  { key: "payee", label: "Контрагент", size: "minmax(0, 1.3fr)" },
+  { key: "comment", label: "Комментарий", size: "minmax(0, 2.6fr)" },
+  { key: "amount", label: "Сумма", size: "140px" },
+  { key: "actions", size: "112px", resizable: false },
+];
+const OPS_COLUMNS_NODATE = OPS_COLUMNS.filter((c) => c.key !== "date");
 
 const PAGE_SIZE = 100;
 
@@ -453,10 +466,17 @@ export function TransactionsPage() {
     return () => observer.disconnect();
   }, [visibleCount, sorted.length]);
 
+  // Лента по дням — без колонки даты: дата стоит в шапке дня.
+  const byDate = sortMode === "date-desc" || sortMode === "date-asc";
+  const resize = useColumnResize("operations", byDate ? OPS_COLUMNS_NODATE : OPS_COLUMNS, {
+    mode: "grid",
+    flexKey: "comment",
+  });
+
   // Group by day only when sorted by date. Apply lazy slicing FIRST so groups
   // appear/grow incrementally as the user scrolls.
   const groupedByDay = useMemo(() => {
-    if (sortMode !== "date-desc" && sortMode !== "date-asc") return null;
+    if (!byDate) return null;
     const groups = new Map<string, Transaction[]>();
     for (const t of visible) {
       const ymd = t.date.slice(0, 10);
@@ -468,7 +488,7 @@ export function TransactionsPage() {
       bucket.push(t);
     }
     return Array.from(groups.entries());
-  }, [visible, sortMode]);
+  }, [visible, byDate]);
 
   function exportCsv() {
     const header = ["Дата", "Тип", "Категория", "Получатель", "Комментарий", "Счёт", "Сумма", "Валюта"];
@@ -694,6 +714,8 @@ export function TransactionsPage() {
           <div>
             <HeaderRow
               grouped
+              template={resize.template}
+              handle={resize.handle}
               allSelected={allSelected}
               someSelected={someSelected}
               onToggleAll={toggleSelectAll}
@@ -704,6 +726,7 @@ export function TransactionsPage() {
                 ymd={ymd}
                 txs={txs}
                 base={base}
+                template={resize.template}
                 showTransfers={!filters.excludeTransfers}
                 edits={edits}
                 drafts={drafts}
@@ -720,6 +743,8 @@ export function TransactionsPage() {
           <div>
             <HeaderRow
               grouped={false}
+              template={resize.template}
+              handle={resize.handle}
               allSelected={allSelected}
               someSelected={someSelected}
               onToggleAll={toggleSelectAll}
@@ -728,6 +753,7 @@ export function TransactionsPage() {
               <Row
                 key={t.id}
                 tx={t}
+                template={resize.template}
                 edited={!!edits[t.id]}
                 draft={!!drafts[t.id]}
                 onEdit={() => openEditor(t)}
@@ -852,16 +878,20 @@ export function TransactionsPage() {
 /** Колоночные заголовки. Сетка та же, что и у строк. */
 function HeaderRow({
   grouped,
+  template,
+  handle,
   allSelected,
   someSelected,
   onToggleAll,
 }: {
   grouped: boolean;
+  template: string;
+  /** Границы своей ширины столбцов. */
+  handle: (key: string) => ReactNode;
   allSelected: boolean;
   someSelected: boolean;
   onToggleAll: () => void;
 }) {
-  const template = grouped ? GRID_COLS_NODATE : GRID_COLS_FULL;
   return (
     <OperationListHead template={template}>
       <Checkbox
@@ -871,12 +901,26 @@ function HeaderRow({
         title="Выбрать всё (под фильтрами)"
         label="Выбрать все операции"
       />
-      {!grouped && <div>Дата</div>}
-      <div>Категория</div>
-      <div>Счёт</div>
-      <div>Контрагент</div>
-      <div>Комментарий</div>
-      <div className="text-right">Сумма</div>
+      {!grouped && (
+        <ListHeadCell col="date" resize={handle("date")}>
+          Дата
+        </ListHeadCell>
+      )}
+      <ListHeadCell col="category" resize={handle("category")}>
+        Категория
+      </ListHeadCell>
+      <ListHeadCell col="account" resize={handle("account")}>
+        Счёт
+      </ListHeadCell>
+      <ListHeadCell col="payee" resize={handle("payee")}>
+        Контрагент
+      </ListHeadCell>
+      <ListHeadCell col="comment" resize={handle("comment")}>
+        Комментарий
+      </ListHeadCell>
+      <ListHeadCell col="amount" className="text-right">
+        Сумма
+      </ListHeadCell>
       <div className="text-center">Действия</div>
     </OperationListHead>
   );
@@ -886,6 +930,7 @@ function DayGroup({
   ymd,
   txs,
   base,
+  template,
   showTransfers,
   edits,
   drafts,
@@ -899,6 +944,7 @@ function DayGroup({
   ymd: string;
   txs: Transaction[];
   base: string;
+  template: string;
   showTransfers: boolean;
   edits: Record<string, unknown>;
   drafts: Record<string, unknown>;
@@ -919,6 +965,7 @@ function DayGroup({
         <Row
           key={t.id}
           tx={t}
+          template={template}
           edited={!!edits[t.id]}
           draft={!!drafts[t.id]}
           onEdit={() => onEdit(t)}
@@ -936,6 +983,7 @@ function DayGroup({
 
 function Row({
   tx,
+  template,
   edited,
   draft = false,
   onEdit,
@@ -947,6 +995,7 @@ function Row({
   hideDate = false,
 }: {
   tx: Transaction;
+  template: string;
   edited: boolean;
   draft?: boolean;
   onEdit: () => void;
@@ -958,8 +1007,6 @@ function Row({
   onToggleSelect: () => void;
   hideDate?: boolean;
 }) {
-  const template = hideDate ? GRID_COLS_NODATE : GRID_COLS_FULL;
-
   return (
     <OperationListRow
       template={template}
