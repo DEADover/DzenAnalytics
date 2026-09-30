@@ -156,6 +156,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useDisplayStore, "display.columnResize", (s) => s.columnResize, (v, s) =>
     isBool(v) ? s.setColumnResize(v) : undefined
   ),
+  field(useDisplayStore, "display.feedHeadSticky", (s) => s.feedHeadSticky, (v, s) =>
+    isBool(v) ? s.setFeedHeadSticky(v) : undefined
+  ),
   field(useDisplayStore, "display.hideThanks", (s) => s.hideThanks, (v, s) =>
     isBool(v) ? s.setHideThanks(v) : undefined
   ),

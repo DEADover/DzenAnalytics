@@ -93,6 +93,13 @@ interface DisplayState {
    */
   columnResize: boolean;
   /**
+   * Закреплённая шапка лент операций: панель с поиском и кнопками и строка
+   * названий колонок остаются вверху экрана при прокрутке. Включается
+   * кнопкой-булавкой в самой ленте; по умолчанию выключено — шапка уезжает
+   * вместе с лентой, как раньше.
+   */
+  feedHeadSticky: boolean;
+  /**
    * Раскрыт ли журнал синхронизаций.
    *
    * По умолчанию свёрнут: это отладочная история, её открывают, когда что-то
@@ -130,6 +137,7 @@ interface DisplayState {
   setStatementLine: (on: boolean) => Promise<void>;
   setCommentWrap: (on: boolean) => Promise<void>;
   setColumnResize: (on: boolean) => Promise<void>;
+  setFeedHeadSticky: (on: boolean) => Promise<void>;
   setSyncLogOpen: (on: boolean) => Promise<void>;
   setHideThanks: (on: boolean) => Promise<void>;
   setFiltersMode: (mode: FiltersMode) => Promise<void>;
@@ -143,6 +151,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   statementLine: false,
   commentWrap: true,
   columnResize: false,
+  feedHeadSticky: false,
   syncLogOpen: false,
   hideThanks: false,
   filtersMode: "page",
@@ -157,6 +166,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       statementLine?: boolean;
       commentWrap?: boolean;
       columnResize?: boolean;
+      feedHeadSticky?: boolean;
       syncLogOpen?: boolean;
       hideThanks?: boolean;
       filtersMode?: string;
@@ -173,6 +183,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       statementLine: stored?.statementLine === true,
       commentWrap: stored?.commentWrap !== false,
       columnResize: stored?.columnResize === true,
+      feedHeadSticky: stored?.feedHeadSticky === true,
       syncLogOpen: stored?.syncLogOpen === true,
       hideThanks: stored?.hideThanks === true,
       // По умолчанию фильтры стоят на странице; панель по кнопке — выбор человека.
@@ -211,6 +222,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     await db.saveJSON(KEY, { ...persisted(get()), columnResize: on });
   },
 
+  setFeedHeadSticky: async (on) => {
+    set({ feedHeadSticky: on });
+    await db.saveJSON(KEY, { ...persisted(get()), feedHeadSticky: on });
+  },
+
   setSyncLogOpen: async (on) => {
     set({ syncLogOpen: on });
     await db.saveJSON(KEY, { ...persisted(get()), syncLogOpen: on });
@@ -247,6 +263,7 @@ function persisted(s: DisplayState) {
     statementLine: s.statementLine,
     commentWrap: s.commentWrap,
     columnResize: s.columnResize,
+    feedHeadSticky: s.feedHeadSticky,
     syncLogOpen: s.syncLogOpen,
     hideThanks: s.hideThanks,
     filtersMode: s.filtersMode,

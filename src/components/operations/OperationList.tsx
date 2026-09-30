@@ -7,10 +7,27 @@
  * строкой и шапке, и строкам, чтобы ширины не разъезжались. Содержимое ячеек —
  * в `OperationCells`.
  */
-import { useEffect, useRef, type ReactNode, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
+import { Pin, PinOff } from "lucide-react";
+import clsx from "clsx";
 import { formatNum } from "../../lib/format";
+import { useDisplayStore } from "../../store/useDisplayStore";
 
-/** Двойной кант вокруг ленты — как у карточек главной — и строка инструментов сверху. */
+/**
+ * Двойной кант вокруг ленты — как у карточек главной — и строка инструментов
+ * сверху.
+ *
+ * Последняя кнопка строки — булавка: закрепляет строку инструментов и шапку
+ * колонок под шапкой приложения, чтобы при прокрутке длинной ленты поиск,
+ * «Добавить» и названия колонок оставались на виду. Настройка одна на все
+ * ленты и запоминается.
+ *
+ * Закреплять мешал сам поддон: `overflow: hidden`, которым он скругляет углы,
+ * делает его «прокручиваемым предком», и липкие строки липли к нему, а не к
+ * окну, — то есть не липли вовсе. С закреплением поддон режет углы через
+ * `overflow: clip`: скругление то же, а прокручиваемым предком он не
+ * становится.
+ */
 export function OperationListTray({
   toolbar,
   children,
@@ -18,11 +35,54 @@ export function OperationListTray({
   toolbar: ReactNode;
   children: ReactNode;
 }) {
+  const sticky = useDisplayStore((s) => s.feedHeadSticky);
+  const setSticky = useDisplayStore((s) => s.setFeedHeadSticky);
+  const coreRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  // Шапка колонок липнет сразу под строкой инструментов, а та бывает в одну
+  // строку и в две (на узком окне кнопки переносятся) — высоту меряем.
+  useLayoutEffect(() => {
+    const core = coreRef.current;
+    const bar = barRef.current;
+    if (!core || !bar) return;
+    if (!sticky) {
+      core.style.removeProperty("--feed-toolbar-h");
+      return;
+    }
+    const apply = () => core.style.setProperty("--feed-toolbar-h", `${bar.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, [sticky]);
+
   return (
     <div className="tray">
-      <div className="tray-core overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-3 flex-wrap">
+      <div ref={coreRef} className={clsx("tray-core", sticky ? "overflow-clip" : "overflow-hidden")}>
+        <div
+          ref={barRef}
+          className={clsx(
+            "px-4 py-3 border-b border-border flex items-center gap-3 flex-wrap",
+            sticky && "sticky z-20 bg-panel"
+          )}
+          style={sticky ? { top: "var(--app-header-h)" } : undefined}
+        >
           {toolbar}
+          <button
+            type="button"
+            onClick={() => void setSticky(!sticky)}
+            aria-pressed={sticky}
+            aria-label={sticky ? "Открепить шапку ленты" : "Закрепить шапку ленты"}
+            title={
+              sticky
+                ? "Открепить: поиск и названия колонок уедут вместе с лентой"
+                : "Закрепить поиск и названия колонок вверху при прокрутке"
+            }
+            className={clsx("btn-ghost text-xs !px-2 shrink-0", sticky && "!text-accent !bg-accent/10")}
+          >
+            {sticky ? <Pin className="w-4 h-4" aria-hidden /> : <PinOff className="w-4 h-4" aria-hidden />}
+          </button>
         </div>
         {children}
       </div>
@@ -30,12 +90,19 @@ export function OperationListTray({
   );
 }
 
-/** Шапка колонок. Сетка та же, что у строк. */
+/**
+ * Шапка колонок. Сетка та же, что у строк. С закреплённой шапкой ленты липнет
+ * под строкой инструментов (см. `OperationListTray`).
+ */
 export function OperationListHead({ template, children }: { template: string; children: ReactNode }) {
+  const sticky = useDisplayStore((s) => s.feedHeadSticky);
   return (
     <div
-      className="list-head grid items-center gap-3 px-3 py-2 bg-panel sticky top-0 z-20"
-      style={{ gridTemplateColumns: template }}
+      className={clsx("list-head grid items-center gap-3 px-3 py-2 bg-panel", sticky && "sticky z-10")}
+      style={{
+        gridTemplateColumns: template,
+        ...(sticky ? { top: "calc(var(--app-header-h) + var(--feed-toolbar-h, 0px))" } : {}),
+      }}
     >
       {children}
     </div>
