@@ -175,6 +175,59 @@ export function previousPlan(
   return out.sort((a, b) => b.suggested - a.suggested);
 }
 
+/**
+ * План = факту: по каждой статье — сколько по ней прошло в самом месяце `ym`
+ * (Budgera: «= факту», «сбросить все остатки»). Остаток после этого у статьи
+ * ровно ноль — удобно подвести месяц, когда он кончился, или зафиксировать
+ * сложившиеся траты как план. Сумма точная, без округления до сотни: иначе
+ * «остаток ноль» не получился бы. Статьи с нулём и с перевесом возвратов
+ * (факт меньше нуля) пропускаются — планировать там нечего.
+ */
+export function monthFact(
+  transactions: Transaction[],
+  lines: BudgetLine[],
+  ym: string,
+  opts: { scope?: BudgetScope; monthStartDay?: number } = {}
+): ForecastSuggestion[] {
+  const scope = opts.scope ?? ALL_ACCOUNTS;
+  const monthStartDay = opts.monthStartDay ?? 1;
+  const buckets = new Map<
+    string,
+    { kind: BudgetKind; category: string; subcategory: string | null; sum: number }
+  >();
+  for (const t of transactions) {
+    if (!t.date || periodKey(t.date, monthStartDay) !== ym) continue;
+    const hit = budgetHit(t, scope);
+    if (!hit) continue;
+    const key = tagKey(hit.kind, hit.category, hit.subcategory);
+    const b = buckets.get(key);
+    if (b) b.sum += hit.amount;
+    else buckets.set(key, { kind: hit.kind, category: hit.category, subcategory: hit.subcategory, sum: hit.amount });
+  }
+  const out: ForecastSuggestion[] = [];
+  for (const [key, b] of buckets) {
+    const suggested = Math.round(b.sum * 100) / 100;
+    if (suggested <= 0) continue;
+    const line = lines.find(
+      (l) =>
+        l.kind === b.kind &&
+        l.category === b.category &&
+        (l.subcategory ?? null) === b.subcategory
+    );
+    out.push({
+      key,
+      kind: b.kind,
+      category: b.category,
+      subcategory: b.subcategory,
+      history: [suggested],
+      monthsUsed: 1,
+      current: line ? plannedFor(line, ym) : 0,
+      suggested,
+    });
+  }
+  return out.sort((a, b) => b.suggested - a.suggested);
+}
+
 /** Строки, которые реально что-то меняют, с учётом выбранного охвата. */
 export function forecastChanges(
   rows: ForecastSuggestion[],

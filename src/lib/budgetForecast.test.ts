@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildForecast,
   forecastChanges,
+  monthFact,
   previousPlan,
   tagKey,
 } from "./budgetForecast";
@@ -226,6 +227,39 @@ describe("previousPlan", () => {
     const rows = previousPlan(lines, "2026-06");
     expect(forecastChanges(rows, "empty")).toEqual([]);
     expect(forecastChanges(rows, "all")).toEqual([]);
+  });
+});
+
+describe("monthFact — план = факту", () => {
+  it("берёт факт самого месяца, точной суммой, без округления до сотни", () => {
+    const txs = [
+      tx({ date: "2026-06-03", amountBase: 1234.5 }),
+      tx({ date: "2026-06-20", amountBase: 100 }),
+      tx({ date: "2026-05-20", amountBase: 9999 }),
+    ];
+    const [r] = monthFact(txs, [], "2026-06");
+    expect(r.suggested).toBe(1334.5);
+    expect(r.current).toBe(0);
+  });
+
+  it("родитель и подкатегория — отдельными статьями, текущий план виден", () => {
+    const txs = [
+      tx({ date: "2026-06-03", amountBase: 500 }),
+      tx({ date: "2026-06-04", subcategory: "Кафе", amountBase: 300 }),
+    ];
+    const lines = [line({ overrides: { "2026-06": 400 } })];
+    expect(monthFact(txs, lines, "2026-06").map((r) => [r.subcategory, r.suggested, r.current])).toEqual([
+      [null, 500, 400],
+      ["Кафе", 300, 0],
+    ]);
+  });
+
+  it("статьи, где возвраты перевесили траты, не предлагает", () => {
+    const txs = [
+      tx({ date: "2026-06-03", amountBase: 100 }),
+      tx({ date: "2026-06-05", kind: "refund", amountBase: 300 }),
+    ];
+    expect(monthFact(txs, [], "2026-06")).toEqual([]);
   });
 });
 

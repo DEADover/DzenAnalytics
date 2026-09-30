@@ -26,6 +26,12 @@ export interface BudgetSettings {
   rowOrder: BudgetRowOrder;
   /** Прятать статьи, по которым за период не было ни одной операции. */
   hideEmptyRows: boolean;
+  /**
+   * Все категории в месячном виде — и без плана, и без операций: им сразу
+   * можно задать план, не ища через «+». По умолчанию выключено — в списке
+   * только то, что запланировано или двигалось.
+   */
+  allCategories: boolean;
   /** Где в годовом своде колонка «За год»: сразу за статьёй (и закреплена на
    *  широком экране) или после декабря, как в таблицах. */
   yearTotalPlace: BudgetYearTotalPlace;
@@ -43,6 +49,7 @@ export const DEFAULT_BUDGET_SETTINGS: BudgetSettings = {
   defaultView: "month",
   rowOrder: "alpha",
   hideEmptyRows: true,
+  allCategories: false,
   yearTotalPlace: "start",
   yearTotalPinned: true,
   forecastMonths: 3,
@@ -83,6 +90,7 @@ function pick(s: BudgetSettings): BudgetSettings {
     defaultView: s.defaultView,
     rowOrder: s.rowOrder,
     hideEmptyRows: s.hideEmptyRows,
+    allCategories: s.allCategories,
     yearTotalPlace: s.yearTotalPlace,
     yearTotalPinned: s.yearTotalPinned,
     forecastMonths: s.forecastMonths,

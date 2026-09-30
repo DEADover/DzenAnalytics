@@ -5,6 +5,7 @@ import type { Transaction } from "../types";
 import type { BudgetKind, BudgetLine } from "../lib/budgets";
 import {
   buildForecast,
+  monthFact,
   previousPlan,
   forecastChanges,
   type ForecastBasis,
@@ -82,7 +83,9 @@ export function BudgetFillModal({
   // Третий способ занести бюджет из issue #25, рядом с «вручную» и «по
   // прогнозу»: скопировать план прошлого месяца как есть. Окно и период при
   // нём не нужны — прячем, чтобы не спрашивать то, что не учитывается.
-  const [source, setSource] = useState<"fact" | "prevPlan">("fact");
+  // Четвёртый — «= факту» (Budgera): план каждой статьи равен тому, что по
+  // ней уже прошло в этом месяце, остаток ноль.
+  const [source, setSource] = useState<"fact" | "prevPlan" | "monthFact">("fact");
   // Снятые галочки, а не отмеченные: при смене окна или охвата список строк
   // меняется, и новые статьи должны приходить уже выбранными.
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
@@ -94,7 +97,9 @@ export function BudgetFillModal({
     () =>
       source === "prevPlan"
         ? previousPlan(lines, ym)
-        : buildForecast(transactions, lines, ym, { months, basis, scope, monthStartDay }),
+        : source === "monthFact"
+          ? monthFact(transactions, lines, ym, { scope, monthStartDay })
+          : buildForecast(transactions, lines, ym, { months, basis, scope, monthStartDay }),
     [source, transactions, lines, ym, months, basis, scope, monthStartDay]
   );
   const changes = useMemo(() => forecastChanges(rows, coverage), [rows, coverage]);
@@ -186,7 +191,11 @@ export function BudgetFillModal({
                   </Tooltip>
                 ) : (
                   <span className="text-xs text-muted shrink-0 whitespace-nowrap">
-                    было в плане
+                    {source === "monthFact"
+                      ? r.kind === "income"
+                        ? "получено"
+                        : "потрачено"
+                      : "было в плане"}
                   </span>
                 )}
                 <span className="tabular-nums shrink-0 whitespace-nowrap flex items-center gap-1.5">
@@ -230,6 +239,11 @@ export function BudgetFillModal({
                 value: "prevPlan" as const,
                 label: "План прошлого месяца",
                 title: "Скопировать суммы, запланированные на прошлый месяц",
+              },
+              {
+                value: "monthFact" as const,
+                label: "Факт месяца",
+                title: "План каждой статьи — сколько по ней уже прошло в этом месяце",
               },
             ]}
           />
@@ -296,6 +310,12 @@ export function BudgetFillModal({
               что «по истории» за месяц: копируется сумма, которую вы
               запланировали, а не та, что потратили.
             </p>
+            <p>
+              <InfoTerm>Факт месяца</InfoTerm> — план каждой статьи становится
+              ровно тем, что по ней уже прошло в этом месяце, до копейки:
+              остаток у статей — ноль. Удобно подвести итог закончившегося
+              месяца или зафиксировать сложившиеся траты как план.
+            </p>
           </InfoPopover>
         </div>
 
@@ -304,7 +324,9 @@ export function BudgetFillModal({
             {rows.length === 0
               ? source === "prevPlan"
                 ? "В прошлом месяце планов не было — копировать нечего."
-                : "За выбранный период операций не нашлось — заполнять нечего."
+                : source === "monthFact"
+                  ? "В этом месяце по статьям ещё ничего не прошло — ставить нечего."
+                  : "За выбранный период операций не нашлось — заполнять нечего."
               : "Все статьи уже спланированы. Выберите «Все статьи», чтобы пересчитать суммы."}
           </SectionEmpty>
         ) : (

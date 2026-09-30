@@ -168,6 +168,37 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
 
         <SettingRow
           dense
+          title="Категории в месяце"
+          help={
+            <>
+              <p>
+                <InfoTerm>Нужные</InfoTerm> — в списке месяца только статьи с
+                планом, с назначенной операцией или с тратами и поступлениями.
+              </p>
+              <p>
+                <InfoTerm>Все</InfoTerm> — ещё и все остальные категории из
+                справочника, даже без плана и без операций: им сразу можно
+                задать план карандашом, не ища через «+». Они стоят под
+                разделителем «Без трат в этом месяце», и он открыт.
+              </p>
+            </>
+          }
+          control={
+            <Segmented
+              size="sm"
+              label="Категории в месяце"
+              value={s.allCategories ? "all" : "used"}
+              onChange={(v) => void s.update({ allCategories: v === "all" })}
+              options={[
+                { value: "used" as const, label: "Нужные" },
+                { value: "all" as const, label: "Все" },
+              ]}
+            />
+          }
+        />
+
+        <SettingRow
+          dense
           title="Статьи без операций"
           help={
             <>

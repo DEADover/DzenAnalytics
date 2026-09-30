@@ -17,6 +17,9 @@ import {
   Target,
   Scale,
   TrendingUp,
+  History,
+  Equal,
+  Sigma,
   type LucideIcon,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
@@ -28,6 +31,7 @@ import { plannedPlans } from "../lib/plannedPlans";
 import { zenPlanKey } from "../lib/zenBudgets";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
+import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { budgetEditId } from "../lib/zenmoneyPush";
 import { CategoryDot } from "../components/CategoryDot";
 import { AccountLogo } from "../components/AccountLogo";
@@ -786,10 +790,99 @@ export function BudgetsPage() {
       );
   }, [transactions, ym, inMonth, rows, scope]);
 
+  /**
+   * «Все категории» (настройка бюджета): остальные категории справочника —
+   * без плана и без операций за месяц, чтобы им сразу можно было задать план
+   * карандашом, не ища через «+». Только пустые: статья с тратами уже стоит
+   * наверху — своей строкой или внутри плана родителя, — и вторая строка с
+   * нулём соврала бы. Справочник — категории Дзен-мани с их признаками «для
+   * расходов» и «для доходов»; без подключения — категории из истории.
+   */
+  const categoryMeta = useCategoryMetaStore((s) => s.meta);
+  const catalogRows = useMemo<Row[]>(() => {
+    if (!settings.allCategories) return [];
+    const present = new Set(
+      [...rows, ...unplannedRows].map((r) =>
+        budgetKey(r.line.kind, r.line.category, r.line.subcategory ?? null)
+      )
+    );
+    // Статьи, по которым в месяце что-то прошло, — даже если своей строки у
+    // них нет (траты подкатегории внутри плана родителя).
+    const moved = new Set<string>();
+    for (const t of transactions) {
+      if (!inMonth(t.date)) continue;
+      for (const hit of budgetHits(t, scope)) moved.add(budgetKey(hit.kind, hit.category, hit.subcategory));
+    }
+    const out: Row[] = [];
+    const add = (kind: BudgetKind, category: string, subcategory: string | null) => {
+      if (!category || category === NO_CATEGORY || category === TRANSFER_CATEGORY) return;
+      const key = budgetKey(kind, category, subcategory);
+      if (present.has(key) || moved.has(key)) return;
+      present.add(key);
+      out.push({
+        line: {
+          id: `catalog:${key}`,
+          kind,
+          category,
+          subcategory,
+          amount: 0,
+          recurrence: "monthly",
+          startMonth: ym,
+          endMonth: null,
+          createdAt: "",
+        },
+        planned: 0,
+        fact: 0,
+        forecast: false,
+        unplanned: true,
+        plannable: true,
+      });
+    };
+    const metaKeys = Object.keys(categoryMeta);
+    if (metaKeys.length > 0) {
+      for (const key of metaKeys) {
+        const m = categoryMeta[key];
+        const cut = key.indexOf(" / ");
+        const category = cut >= 0 ? key.slice(0, cut) : key;
+        const sub = cut >= 0 ? key.slice(cut + 3) : null;
+        if (m.showOutcome) add("expense", category, sub);
+        if (m.showIncome) add("income", category, sub);
+      }
+    } else {
+      for (const kind of ["expense", "income"] as const)
+        for (const c of catsByKind[kind]) {
+          add(kind, c, null);
+          for (const sub of subsByCat.get(c) ?? []) add(kind, c, sub);
+        }
+    }
+    return out;
+  }, [settings.allCategories, rows, unplannedRows, transactions, inMonth, scope, categoryMeta, catsByKind, subsByCat, ym]);
+
+  /**
+   * План статьи в прошлом месяце — тем же итогом, что показывает строка:
+   * у категории с подкатегориями это свой план плюс планы подкатегорий, если
+   * свой не закреплён итогом (как в Дзен-мани). Для «Как в прошлом месяце» в
+   * меню строки.
+   */
+  const prevYm = addMonths(ym, -1);
+  const prevTotalOf = useCallback(
+    (tag: { kind: BudgetKind; category: string; subcategory: string | null }, withSubs: boolean) => {
+      const same = (l: BudgetLine) => l.kind === tag.kind && l.category === tag.category;
+      const own = lines.find((l) => same(l) && (l.subcategory ?? null) === tag.subcategory);
+      const ownPlan = own ? plannedFor(own, prevYm) : 0;
+      if (tag.subcategory !== null || !withSubs || lockedFor(own, prevYm)) return ownPlan;
+      return (
+        ownPlan +
+        lines.filter((l) => same(l) && !!l.subcategory).reduce((sum, l) => sum + plannedFor(l, prevYm), 0)
+      );
+    },
+    [lines, prevYm]
+  );
+
   /** Всё вместе — и запланированное, и нет. Сводка считается по этому списку,
    *  поэтому итог месяца сходится с лентой операций за тот же месяц. */
   const allRows = useMemo(() => {
-    const merged = [...rows, ...unplannedRows];
+    const merged = [...rows, ...unplannedRows, ...catalogRows];
     const catFact = new Map<string, number>();
     const catKey = (r: Row) => `${r.line.kind}\u0000${r.line.category}`;
     for (const r of merged) catFact.set(catKey(r), (catFact.get(catKey(r)) ?? 0) + r.fact);
@@ -805,7 +898,7 @@ export function BudgetsPage() {
       if (!as || !bs) return as ? 1 : bs ? -1 : 0;
       return compareBudgetRows({ name: as, amount: a.fact }, { name: bs, amount: b.fact }, rowOrder);
     });
-  }, [rows, unplannedRows, rowOrder]);
+  }, [rows, unplannedRows, catalogRows, rowOrder]);
 
   const expenseRows = allRows.filter((r) => r.line.kind === "expense");
   const incomeRows = allRows.filter((r) => r.line.kind === "income");
@@ -1085,10 +1178,10 @@ export function BudgetsPage() {
               вопрос, которого быть не должно. На дашборде то же самое: это
               отчёт, а не место, где правят планы. */}
           {view === "month" && (
-            <Tooltip content="Подставить суммы по истории операций">
+            <Tooltip content="Подставить план сразу по всем статьям: по истории операций, как в прошлом месяце или по факту месяца">
               <button onClick={() => setFillOpen(true)} className="btn-ghost btn-lg text-sm">
                 <Wand2 className="w-4 h-4" />
-                Заполнить по среднему
+                Заполнить план
               </button>
             </Tooltip>
           )}
@@ -1215,6 +1308,8 @@ export function BudgetsPage() {
           budgetEdits={budgetEdits}
           aheadByTag={aheadByTag}
           hideEmpty={settings.hideEmptyRows}
+          showAll={settings.allCategories}
+          prevTotalOf={prevTotalOf}
           headerAction={addButton("expense")}
           prepend={draftKind === "expense" ? draftRow : undefined}
         />
@@ -1230,6 +1325,8 @@ export function BudgetsPage() {
           budgetEdits={budgetEdits}
           aheadByTag={aheadByTag}
           hideEmpty={settings.hideEmptyRows}
+          showAll={settings.allCategories}
+          prevTotalOf={prevTotalOf}
           headerAction={addButton("income")}
           prepend={draftKind === "income" ? draftRow : undefined}
         />
@@ -1357,6 +1454,13 @@ interface SectionProps {
   aheadByTag: Map<string, { sum: number; ops: PlannedOp[] }>;
   /** Прятать ли категории без движения за месяц (настройка раздела). */
   hideEmpty: boolean;
+  /** «Все категории» — разделитель пустых статей открыт сразу. */
+  showAll?: boolean;
+  /** Итог статьи в прошлом месяце — для «Как в прошлом месяце» в меню строки. */
+  prevTotalOf?: (
+    tag: { kind: BudgetKind; category: string; subcategory: string | null },
+    withSubs: boolean
+  ) => number;
   /** «+» button next to the heading. */
   headerAction?: ReactNode;
   /** Inline draft row, rendered at the TOP of the list (new categories first). */
@@ -1368,6 +1472,7 @@ function Section({
   rows,
   base,
   hideEmpty,
+  showAll,
   aheadByTag,
   headerAction,
   prepend,
@@ -1416,7 +1521,9 @@ function Section({
   // начальное состояние: щелчок по разделителю важнее, но и переключение
   // настройки при открытой странице не должно проходить мимо.
   const [emptyPicked, setEmptyPicked] = useState<boolean | null>(null);
-  const emptyOpen = emptyPicked ?? !hideEmpty;
+  // С «Всеми категориями» разделитель открыт сразу: их включают ровно затем,
+  // чтобы видеть и планировать пустые статьи.
+  const emptyOpen = emptyPicked ?? (showAll || !hideEmpty);
   const setEmptyOpen = (next: boolean) => setEmptyPicked(next);
 
   // Split categories into those WITH movement this month and those without; the
@@ -1497,6 +1604,7 @@ function Section({
                 : parent.planned + g.subs.reduce((s, r) => s + r.planned, 0)
               : undefined
           }
+          subsPlanned={hasSubs ? g.subs.reduce((s, r) => s + r.planned, 0) : undefined}
           {...rest}
         />
         {hasSubs && (
@@ -1816,6 +1924,8 @@ interface RowProps
    *  pencil still edits the parent's OWN plan (`row.planned`). */
   rollupFact?: number;
   rollupPlanned?: number;
+  /** Сумма планов подкатегорий — для «Сумма подкатегорий» у категории. */
+  subsPlanned?: number;
 }
 
 function BudgetRow({
@@ -1834,6 +1944,8 @@ function BudgetRow({
   onOpen,
   setPlan,
   budgetEdits,
+  prevTotalOf,
+  subsPlanned,
 }: RowProps) {
   const { line, planned, fact } = row;
   // Parent rows display the rolled-up total (own + sub-tags), like Zenmoney
@@ -1949,6 +2061,29 @@ function BudgetRow({
     }
     setEditing(false);
   }
+  /**
+   * Поставить ВИДИМЫЙ итог строки — так же, как его ставит карандаш: у
+   * категории с подкатегориями из итога вычитаются их планы, и меняется свой
+   * план категории. Общий путь для «Как в прошлом месяце», «Как по факту» и
+   * «Сумма подкатегорий».
+   */
+  function setVisibleTotal(total: number) {
+    const newOwn = Math.max(0, Math.round((total - subsTotal) * 100) / 100);
+    if (newOwn !== planned) setThisMonth(newOwn);
+  }
+  // Быстрые суммы для меню (Budgera: «как в прошлом месяце», «= факту»,
+  // «сумма подкатегорий»). Пункт есть, только если он что-то меняет.
+  const plannable = row.plannable !== false;
+  const prevTotal = plannable ? (prevTotalOf?.(tag, !!hasSubs) ?? 0) : 0;
+  const factTotal = plannable ? Math.max(0, Math.round(dispFact * 100) / 100) : 0;
+  const quick: { key: string; icon: LucideIcon; label: string; amount: number }[] = [];
+  if (prevTotal > 0 && prevTotal !== dispPlanned)
+    quick.push({ key: "prev", icon: History, label: "Как в прошлом месяце", amount: prevTotal });
+  if (factTotal > 0 && factTotal !== dispPlanned)
+    quick.push({ key: "fact", icon: Equal, label: "Как по факту", amount: factTotal });
+  if (plannable && hasSubs && subsPlanned !== undefined && subsPlanned > 0 && subsPlanned !== dispPlanned)
+    quick.push({ key: "subs", icon: Sigma, label: "Сумма подкатегорий", amount: subsPlanned });
+
   // «Убрать план на месяц»: zero this month's plan and push 0 to Zenmoney
   // (which clears the «План» for that tag/month). The category then drops out of
   // the list (group-plan filter), mirroring «нет плана» in Дзен.
@@ -2096,11 +2231,24 @@ function BudgetRow({
           anchorRef={menuAnchorRef}
           onClose={close}
           align="right"
-          className="w-60 card !p-1 text-sm shadow-lg"
+          className="w-72 card !p-1 text-sm shadow-lg"
         >
           <MenuItem icon={Pencil} onClick={() => { close(); startEdit(); }}>
             Изменить план
           </MenuItem>
+          {quick.map((q) => (
+            <MenuItem
+              key={q.key}
+              icon={q.icon}
+              hint={formatMoney(q.amount, base)}
+              onClick={() => {
+                close();
+                setVisibleTotal(q.amount);
+              }}
+            >
+              {q.label}
+            </MenuItem>
+          ))}
           {planned > 0 && (
             <>
               <div className="border-t border-border my-1" />
@@ -2118,11 +2266,14 @@ function BudgetRow({
 function MenuItem({
   icon: Icon,
   danger,
+  hint,
   onClick,
   children,
 }: {
   icon: LucideIcon;
   danger?: boolean;
+  /** Сумма справа — во что превратится план. */
+  hint?: ReactNode;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -2134,7 +2285,8 @@ function MenuItem({
       }`}
     >
       <Icon className="w-4 h-4 shrink-0" />
-      {children}
+      <span className="flex-1 min-w-0 truncate">{children}</span>
+      {hint && <span className="shrink-0 text-muted tabular-nums">{hint}</span>}
     </button>
   );
 }

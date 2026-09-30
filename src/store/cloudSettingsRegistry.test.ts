@@ -35,6 +35,7 @@ describe("реестр переносимых настроек", () => {
     const budget = SYNCED_FIELDS.map((f) => f.key).filter((k) => k.startsWith("budget."));
     expect(budget.sort()).toEqual([
       "budget.accounts",
+      "budget.allCategories",
       "budget.defaultView",
       "budget.forecastBasis",
       "budget.forecastMonths",
