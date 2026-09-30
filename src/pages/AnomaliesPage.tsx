@@ -12,7 +12,14 @@ import { PageHeader } from "../components/PageHeader";
 import { Segmented } from "../components/Segmented";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { GlobalFilters } from "../components/GlobalFilters";
-import { formatMoney, formatDate, formatNum, monthLabel, formatFixed } from "../lib/format";
+import {
+  formatMoney,
+  formatDate,
+  formatNum,
+  monthLabel,
+  formatFixed,
+  monthTitle,
+} from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
 import { EmptyState } from "../components/EmptyState";
 import { pluralRu } from "../lib/plural";
@@ -99,7 +106,7 @@ export function AnomaliesPage() {
     const txs = spikesInput.filter(
       (t) => affectsExpense(t.kind) && t.category === cat && periodKey(t.date, monthStartDay) === ym
     );
-    showDrill(`${cat} · ${monthLabel(ym)}`, txs, "Всплеск трат");
+    showDrill(`${cat} · ${monthTitle(ym)}`, txs, "Всплеск трат");
   }
 
   const totalAnomalyAmount = anomalies.reduce((s, a) => s + a.tx.amountBase, 0);

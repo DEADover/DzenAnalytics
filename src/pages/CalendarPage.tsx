@@ -16,7 +16,13 @@ import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
 import clsx from "clsx";
 import { plannedOps, plannedBreakdown } from "../lib/plannedOps";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
-import { formatMoney, formatDate, formatNum, ymdKey } from "../lib/format";
+import {
+  formatMoney,
+  formatDate,
+  formatNum,
+  ymdKey,
+  dayTitle,
+} from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
@@ -188,7 +194,7 @@ export function CalendarPage() {
 
   function openDay(date: string) {
     const txs = filtered.filter((t) => t.date === date);
-    showDrill(formatDate(date), txs, "Операции за день");
+    showDrill(dayTitle(date), txs, "Операции за день");
   }
 
   if (transactions.length === 0) return <EmptyState />;

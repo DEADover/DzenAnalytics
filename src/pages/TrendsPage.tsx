@@ -39,6 +39,7 @@ import {
   chartGridStroke,
   chartAxisStroke,
   chartColor,
+  monthTitle,
 } from "../lib/format";
 import { affectsExpense } from "../lib/txKindStyle";
 import type { Transaction } from "../types";
@@ -162,7 +163,7 @@ export function TrendsPage() {
         (level === "top" ? t.category === cat : t.categoryFull === cat) &&
         periodKey(t.date, monthStartDay) === ym
     );
-    showDrill(`${cat} · ${monthLabel(ym)}`, txs, "Тренд категории");
+    showDrill(`${cat} · ${monthTitle(ym)}`, txs, "Тренд категории");
   }
 
   function openCategoriesMonth(cats: string[], ym: string) {
@@ -173,7 +174,7 @@ export function TrendsPage() {
         set.has(level === "top" ? t.category : t.categoryFull) &&
         periodKey(t.date, monthStartDay) === ym
     );
-    showDrill(monthLabel(ym), txs, "Тренд категорий");
+    showDrill(monthTitle(ym), txs, "Тренд категорий");
   }
 
   function openDay(dow: number) {

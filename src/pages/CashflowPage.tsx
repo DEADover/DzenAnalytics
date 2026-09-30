@@ -56,6 +56,7 @@ import {
   chartGridStroke,
   chartAxisStroke,
   chartColor,
+  monthTitle,
 } from "../lib/format";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
@@ -188,7 +189,7 @@ export function CashflowPage() {
         (monthStartDay === 1 ? ymKey(t.date) : periodKey(t.date, monthStartDay)) ===
         ym
     );
-    showDrill(monthLabel(ym), txs, "Месяц");
+    showDrill(monthTitle(ym), txs, "Месяц");
   }
   function openAll() {
     showDrill("Все операции (с фильтрами)", filtered, "Период");

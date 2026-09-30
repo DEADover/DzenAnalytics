@@ -50,7 +50,12 @@ import {
   type WidgetPlacement,
 } from "../../lib/dashboardLayout";
 import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
-import { formatMoney, monthLabel, formatDate } from "../../lib/format";
+import {
+  formatMoney,
+  formatDate,
+  monthTitle,
+  dayTitle,
+} from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
 import { periodRange } from "../../lib/period";
 import { useDashboardModel, type DashboardModel } from "../../hooks/useDashboardModel";
@@ -593,7 +598,7 @@ export function DashboardView() {
       kind === "expense" ? affectsExpense(t.kind) : t.kind === "income";
     return (kind: "expense" | "income", name: string, full = false) =>
       showDrill(
-        `${name} · ${monthLabel(m.ym)}`,
+        `${name} · ${monthTitle(m.ym)}`,
         monthTx.filter(
           (t) => match(kind, t) && (full ? t.categoryFull === name : t.category === name)
         ),
@@ -628,22 +633,22 @@ export function DashboardView() {
       // возвратами: они уменьшили высоту столбца); мимо столбцов — весь месяц.
       onMonth: (ym: string, kind?: "income" | "expense") => {
         const inMonth = transactions.filter((t) => periodKey(t.date, monthStartDay) === ym);
-        if (!kind) return showDrill(monthLabel(ym), inMonth, "Месяц");
+        if (!kind) return showDrill(monthTitle(ym), inMonth, "Месяц");
         return kind === "income"
-          ? showDrill(`Доходы · ${monthLabel(ym)}`, inMonth.filter((t) => t.kind === "income"), "Доходы месяца")
-          : showDrill(`Расходы · ${monthLabel(ym)}`, inMonth.filter((t) => affectsExpense(t.kind)), "Расходы месяца");
+          ? showDrill(`Доходы · ${monthTitle(ym)}`, inMonth.filter((t) => t.kind === "income"), "Доходы месяца")
+          : showDrill(`Расходы · ${monthTitle(ym)}`, inMonth.filter((t) => affectsExpense(t.kind)), "Расходы месяца");
       },
       // Возвраты тоже берём: именно они уменьшили ту сумму, по которой кликнули.
       // Тоже за текущий месяц: проценты в виджете считаны по нему.
       onCategory: (name: string) =>
         showDrill(
-          `${name} · ${monthLabel(m.ym)}`,
+          `${name} · ${monthTitle(m.ym)}`,
           monthTx.filter((t) => affectsExpense(t.kind) && t.category === name),
           "Расходы по категории"
         ),
       onDay: (date: string) =>
         showDrill(
-          formatDate(date),
+          dayTitle(date),
           transactions.filter((t) => t.date.slice(0, 10) === date),
           "Операции за день"
         ),

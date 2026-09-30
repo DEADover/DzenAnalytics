@@ -291,6 +291,25 @@ export function monthLabelFull(ym: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/**
+ * Месяц для заголовка — полностью, без сокращений: «Ноябрь 2025». Заголовок
+ * шторки операций читают, а не расшифровывают: «Нояб. 25 г.» там выглядело
+ * как обрывок.
+ */
+export function monthTitle(ym: string): string {
+  const [y, m] = ym.split("-");
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  const name = d.toLocaleDateString("ru-RU", { month: "long" });
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${y}`;
+}
+
+/** День для заголовка — полностью: «23 ноября 2025». */
+export function dayTitle(iso: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" }).replace(" г.", "");
+}
+
 export function toNum(v: unknown): number {
   if (typeof v === "number") return v;
   if (typeof v === "string") return Number(v) || 0;

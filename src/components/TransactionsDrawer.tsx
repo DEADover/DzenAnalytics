@@ -349,6 +349,30 @@ export function TransactionsDrawer() {
             )}
           </div>
         </div>
+        <div className="ml-auto flex items-center gap-4 text-sm tabular-nums whitespace-nowrap min-w-0 overflow-hidden">
+          <span className="text-muted">
+            Операций{" "}
+            <span className="font-semibold text-text">
+              {filtered.length === transactions.length
+                ? formatNum(transactions.length)
+                : `${formatNum(filtered.length)} из ${formatNum(transactions.length)}`}
+            </span>
+          </span>
+          <span className="flex items-center gap-4 border-l border-border pl-4">
+            <span className="text-muted">
+              Доходы <span className="font-semibold text-income">{formatMoney(totals.inc, base)}</span>
+            </span>
+            <span className="text-muted">
+              Расходы <span className="font-semibold text-expense">{formatMoney(totals.exp, base)}</span>
+            </span>
+            <span className="text-muted">
+              Прибыль{" "}
+              <span className={`font-semibold ${totals.net >= 0 ? "text-income" : "text-expense"}`}>
+                {formatMoney(totals.net, base, { signed: true })}
+              </span>
+            </span>
+          </span>
+        </div>
         <Tooltip content="Закрыть (Esc)">
           <button onClick={close} className="btn-icon shrink-0" aria-label="Закрыть (Esc)">
             <X className="w-4 h-4" />
@@ -393,37 +417,20 @@ export function TransactionsDrawer() {
           </div>
         )}
 
-        {/* Поиск, выгрузка и итоги — одним рядом. Итоги раньше стояли
-            отдельным блоком крупных карточек и забирали у списка полторы
-            сотни пикселей; здесь они справка к списку, а не главное. */}
-        <div className="px-5 md:px-6 py-3 border-b border-border flex items-center gap-3 flex-wrap">
+        {/* Поиск — на всю ширину, выгрузка справа. Число операций и
+            итоги — в шапке, рядом с названием: это сводка по списку, а не
+            инструмент. */}
+        <div className="px-5 md:px-6 py-3 border-b border-border flex items-center gap-3">
           <SearchInput
             value={search}
             onChange={setSearch}
             placeholder="Поиск по получателю, комментарию, категории и счёту"
-            className="flex-1 min-w-[16rem]"
+            className="flex-1"
           />
           <button onClick={exportCsv} className="btn-ghost whitespace-nowrap">
             <Download className="w-4 h-4" />
             CSV
           </button>
-          <div className="text-xs text-muted whitespace-nowrap">
-            {formatNum(filtered.length)} из {formatNum(transactions.length)}
-          </div>
-          <div className="flex items-center gap-4 text-sm tabular-nums whitespace-nowrap border-l border-border pl-4">
-            <span className="text-muted">
-              Доходы <span className="font-semibold text-income">{formatMoney(totals.inc, base)}</span>
-            </span>
-            <span className="text-muted">
-              Расходы <span className="font-semibold text-expense">{formatMoney(totals.exp, base)}</span>
-            </span>
-            <span className="text-muted">
-              Прибыль{" "}
-              <span className={`font-semibold ${totals.net >= 0 ? "text-income" : "text-expense"}`}>
-                {formatMoney(totals.net, base, { signed: true })}
-              </span>
-            </span>
-          </div>
         </div>
 
         {/* Таблица лежит в поддоне — так же, как на «Операциях» и в «Отчёте».

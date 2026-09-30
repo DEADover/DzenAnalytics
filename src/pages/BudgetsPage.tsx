@@ -79,7 +79,10 @@ import {
   type BudgetKind,
   type BudgetLine,
 } from "../lib/budgets";
-import { formatMoney } from "../lib/format";
+import {
+  formatMoney,
+  monthTitle,
+} from "../lib/format";
 import { StatCell, StatRow, type StatTone } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -961,7 +964,7 @@ export function BudgetsPage() {
       monthStartDay
     );
     const label = sub ? `${cat} › ${sub}` : cat;
-    showDrill(`${label} · ${month}`, txs, "Бюджет");
+    showDrill(`${label} · ${monthTitle(month)}`, txs, "Бюджет");
   }
 
   // Click a day on the cash-flow chart → drill into that day's operations.

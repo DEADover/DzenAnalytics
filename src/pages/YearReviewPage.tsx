@@ -47,6 +47,7 @@ import {
   chartGridStroke,
   chartAxisStroke,
   chartColor,
+  monthTitle,
 } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
@@ -142,7 +143,7 @@ export function YearReviewPage() {
   function drillMonth(ym: string) {
     const r = periodRange(ym, monthStartDay);
     showDrill(
-      monthLabelFull(ym),
+      monthTitle(ym),
       yearTx.filter((t) => inSpan(t.date, r)),
       "Год в цифрах"
     );
