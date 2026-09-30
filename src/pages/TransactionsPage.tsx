@@ -34,7 +34,7 @@ import { OperationActions, OperationAmount, OperationCategory, OperationPayee, O
 import { TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { MergeSelectionAction } from "../components/operations/MergeSelectionAction";
-import { PlannedFeedList, PlannedSummaryRow } from "../components/operations/PlannedFeedSection";
+import { PlannedFeedList, PlannedModeBar, PlannedSummaryRow } from "../components/operations/PlannedFeedSection";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { BulkEditModal } from "../components/BulkEditModal";
@@ -540,8 +540,6 @@ export function TransactionsPage() {
       />
       <GlobalFilters />
 
-      {/* Итоги — по операциям; в ленте одних планов они сбивали бы с толку. */}
-      {!plannedMode && (
       <StatRow>
         <StatCell
           label="Доходы"
@@ -585,7 +583,6 @@ export function TransactionsPage() {
           note={pageSearch ? `из ${filtered.length} в фильтре` : undefined}
         />
       </StatRow>
-      )}
 
       <OperationListTray
         toolbar={
@@ -721,6 +718,14 @@ export function TransactionsPage() {
           </>
         }
       >
+        {/* Строка «Запланировано» (или шапка ленты одних планов) — над
+            заголовками колонок: она про всю ленту, а не про одну колонку. */}
+        {apiConnected &&
+          (plannedMode ? (
+            <PlannedModeBar query={pageSearch} onBack={() => setPlannedMode(false)} />
+          ) : (
+            <PlannedSummaryRow onOpen={() => setPlannedMode(true)} />
+          ))}
         {apiConnected && plannedMode ? (
           <div>
             <HeaderRow
@@ -736,7 +741,6 @@ export function TransactionsPage() {
               template={resize.template}
               grouped={byDate}
               query={pageSearch}
-              onBack={() => setPlannedMode(false)}
             />
           </div>
         ) : sorted.length === 0 ? (
@@ -753,7 +757,6 @@ export function TransactionsPage() {
               someSelected={someSelected}
               onToggleAll={toggleSelectAll}
             />
-            {apiConnected && <PlannedSummaryRow onOpen={() => setPlannedMode(true)} />}
             {groupedByDay.map(([ymd, txs]) => (
               <DayGroup
                 key={ymd}
@@ -783,7 +786,6 @@ export function TransactionsPage() {
               someSelected={someSelected}
               onToggleAll={toggleSelectAll}
             />
-            {apiConnected && <PlannedSummaryRow onOpen={() => setPlannedMode(true)} />}
             {visible.map((t) => (
               <Row
                 key={t.id}

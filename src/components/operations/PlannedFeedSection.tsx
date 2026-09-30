@@ -89,9 +89,37 @@ export function PlannedSummaryRow({ onOpen }: { onOpen: () => void }) {
 }
 
 /**
+ * Шапка ленты одних запланированных: кнопка назад (значком), те же счётчики
+ * и последняя дата, до которой есть планы. Стоит там же, где в обычной ленте
+ * строка «Запланировано», — над заголовками колонок.
+ */
+export function PlannedModeBar({ query, onBack }: { query: string; onBack: () => void }) {
+  const { counts } = usePlannedFeed(query);
+  return (
+    <div className="px-4 py-2 border-b border-border bg-panel2/60 flex items-center gap-3 text-sm flex-wrap">
+      <button
+        type="button"
+        onClick={onBack}
+        className="btn-icon -ml-1"
+        title="Все операции"
+        aria-label="Вернуться ко всем операциям"
+      >
+        <ArrowLeft className="w-4 h-4" aria-hidden />
+      </button>
+      <CalendarClock className="w-4 h-4 text-accent shrink-0" aria-hidden />
+      <span className="font-semibold">Запланированные</span>
+      <CountsLine counts={counts} />
+      {counts.last && (
+        <span className="ml-auto text-muted whitespace-nowrap">по {formatDate(counts.last, "full")}</span>
+      )}
+    </div>
+  );
+}
+
+/**
  * Лента в режиме «только запланированные»: все планы Дзен-мани — просроченные
  * и будущие до последней даты, что есть (примерно год вперёд), по дням, от
- * ближайших. По щелчку — те же действия, что в приложении.
+ * ближайших. По «⋯» — те же действия, что в приложении.
  *
  * Строки — те же ячейки и та же сетка, что у ленты: план должен читаться
  * «операцией, которой ещё нет», а не отдельной таблицей. Прогнозы Дзен-мани
@@ -102,16 +130,14 @@ export function PlannedFeedList({
   template,
   grouped,
   query,
-  onBack,
 }: {
   template: string;
   /** Лента разбита по дням — тогда и планы идут с заголовками дней, без колонки даты. */
   grouped: boolean;
   /** Быстрый поиск ленты — ищет и по планам. */
   query: string;
-  onBack: () => void;
 }) {
-  const { ops, today, counts } = usePlannedFeed(query);
+  const { ops, today } = usePlannedFeed(query);
   const [menu, setMenu] = useState<{ op: PlannedOp; anchor: HTMLElement } | null>(null);
   const [fact, setFact] = useState<PlannedOp | null>(null);
   const [link, setLink] = useState<PlannedOp | null>(null);
@@ -164,13 +190,8 @@ export function PlannedFeedList({
         key={p.id}
         template={template}
         selected={menu?.op.id === p.id}
-        // Щелчок по строке открывает то же меню, что и «⋯» — как касание в
-        // приложении Дзен-мани. Выделять план незачем: массовых действий у
-        // планов нет.
-        onToggleSelect={() => {
-          const btn = document.querySelector<HTMLElement>(`[data-plan-menu="${p.id}"]`);
-          if (btn) setMenu({ op: p, anchor: btn });
-        }}
+        // Действия — только по «⋯»: щелчок по строке ничего не делает, чтобы
+        // случайное касание не открывало меню.
         className="[&_.op-muted]:opacity-60"
       >
         <span className="grid place-items-center" aria-hidden>
@@ -232,18 +253,6 @@ export function PlannedFeedList({
 
   return (
     <div className="border-b border-border">
-      <div className="px-4 py-2 border-b border-border bg-panel2/60 flex items-center gap-3 text-sm flex-wrap">
-        <button type="button" onClick={onBack} className="btn-ghost text-sm !px-2 -ml-2">
-          <ArrowLeft className="w-4 h-4" aria-hidden />
-          Все операции
-        </button>
-        <CalendarClock className="w-4 h-4 text-accent shrink-0" aria-hidden />
-        <span className="font-semibold">Запланированные</span>
-        <CountsLine counts={counts} />
-        {counts.last && (
-          <span className="ml-auto text-muted whitespace-nowrap">по {formatDate(counts.last, "full")}</span>
-        )}
-      </div>
       {ops.length === 0 && (
         <p className="px-4 py-6 text-sm text-muted text-center">
           {query.trim() ? "Среди запланированных ничего не найдено" : "Запланированных операций нет"}

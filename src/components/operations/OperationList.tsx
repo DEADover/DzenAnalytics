@@ -155,7 +155,8 @@ export function OperationListRow({
   /** Дополнительные классы строки — например, приглушить плановую. */
   className?: string;
   selected: boolean;
-  onToggleSelect: () => void;
+  /** Щелчок по строке. Нет — строка не откликается на щелчок (план в ленте). */
+  onToggleSelect?: () => void;
   /** Двойной клик. Нет — открывать нечего, и выделение не ждёт второго клика. */
   onOpen?: () => void;
   children: ReactNode;
@@ -175,6 +176,7 @@ export function OperationListRow({
   return (
     <div
       onClick={(e) => {
+        if (!onToggleSelect) return;
         // Второй клик двойного — гасим отложенное выделение и уходим.
         if (e.detail > 1) {
           cancelPendingSelect();
@@ -193,7 +195,7 @@ export function OperationListRow({
         }
         clickTimer.current = setTimeout(() => {
           clickTimer.current = null;
-          onToggleSelect();
+          onToggleSelect?.();
         }, DOUBLE_CLICK_MS);
       }}
       onDoubleClick={
@@ -204,7 +206,8 @@ export function OperationListRow({
         })
       }
       className={clsx(
-        "grid items-center gap-3 px-3 py-2 border-b border-border/40 cursor-pointer group text-[length:var(--tbl-font)]",
+        "grid items-center gap-3 px-3 py-2 border-b border-border/40 group text-[length:var(--tbl-font)]",
+        (onToggleSelect || onOpen) && "cursor-pointer",
         selected ? "bg-accent/5" : "hover:bg-panel2/40",
         className
       )}
