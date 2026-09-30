@@ -21,8 +21,6 @@ export interface PlannedFeedCounts {
   year: number;
   /** Все будущие. */
   total: number;
-  /** Последняя дата, до которой есть планы. */
-  last: string | null;
 }
 
 /** Все планы, которые показывает лента: свои, не удалённые, под фильтром счетов и поиском. */
@@ -56,7 +54,6 @@ export function usePlannedFeed(query = "") {
       month: upcoming.filter((p) => p.date <= monthEnd).length,
       year: upcoming.filter((p) => p.date <= yearEnd).length,
       total: upcoming.length,
-      last: upcoming.length ? upcoming[upcoming.length - 1].date : null,
     };
   }, [ops, today, monthEnd, yearEnd]) satisfies PlannedFeedCounts;
   return { ops, today, counts };

@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import type { Transaction } from "../../types";
-import { formatDate } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
 import { plannedAsTransaction, type PlannedOp } from "../../lib/plannedOps";
 import { usePlannedFeed, type PlannedFeedCounts } from "../../hooks/usePlannedFeed";
@@ -55,7 +54,7 @@ function CountsLine({ counts }: { counts: Counts }) {
   );
   return (
     // Одной строкой: перенос менял бы высоту строки «Запланировано».
-    <span className="flex items-center gap-x-3 min-w-0 overflow-hidden whitespace-nowrap text-muted">
+    <span className="flex items-center gap-x-3 min-w-0 overflow-hidden whitespace-nowrap text-muted text-xs">
       {counts.overdue > 0 && part("Просрочено", counts.overdue, "text-expense")}
       {part("До конца месяца", counts.month)}
       {part("До конца года", counts.year)}
@@ -67,8 +66,7 @@ function CountsLine({ counts }: { counts: Counts }) {
 /**
  * Строка «Запланировано» над заголовками колонок — одна на оба состояния
  * ленты, чтобы при переключении ничего не прыгало: та же высота, те же
- * отступы, тот же текст слева. Справа — последняя дата, до которой есть
- * планы, и шеврон: вниз — показать одни запланированные (как «Будущие» в
+ * отступы, тот же текст слева. Справа — шеврон: вниз — показать одни запланированные (как «Будущие» в
  * Дзен-мани), вверх — вернуться к операциям.
  */
 export function PlannedBar({
@@ -95,11 +93,6 @@ export function PlannedBar({
       <span className="font-semibold shrink-0">Запланировано</span>
       <CountsLine counts={counts} />
       <span className="ml-auto flex items-center gap-3 shrink-0">
-        {counts.last && (
-          <span className="text-muted whitespace-nowrap hidden sm:inline">
-            по {formatDate(counts.last, "full")}
-          </span>
-        )}
         <ChevronDown
           className={clsx(
             "w-4 h-4 text-muted transition-transform duration-200",
