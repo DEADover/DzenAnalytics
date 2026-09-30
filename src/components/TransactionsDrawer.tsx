@@ -323,33 +323,29 @@ export function TransactionsDrawer() {
         aria-hidden
       />
       <aside className="relative w-[96vw] max-w-[1800px] h-[94vh] card overflow-hidden flex flex-col animate-fade">
-      <div className="px-5 md:px-6 py-4 border-b border-border flex items-center justify-between gap-4 bg-panel">
-        <div className="min-w-0 flex items-center gap-3">
-          {/* Значок в плашке — как в заголовке страницы: один приём на весь
-              продукт. */}
-          <span className="shrink-0 w-9 h-9 rounded-xl bg-panel2 border border-border grid place-items-center">
-            <ListChecks className="w-[18px] h-[18px] text-accent" />
+      {/* Шапка — одной строкой: название и, мелко, откуда список открыт
+          («Категория», «Получатель»). Пояснение, которое повторяет название
+          («Расходы месяца» при «Расходы · Нояб. 25 г.»), не пишем — раньше
+          одно и то же стояло двумя строками. */}
+      <div className="px-4 md:px-5 py-2.5 border-b border-border flex items-center justify-between gap-3 bg-panel">
+        <div className="min-w-0 flex items-center gap-2.5">
+          <span className="shrink-0 w-7 h-7 rounded-lg bg-panel2 border border-border grid place-items-center">
+            <ListChecks className="w-4 h-4 text-accent" />
           </span>
-          <div className="min-w-0">
-            <div className="text-[12px] uppercase tracking-[0.14em] text-muted font-medium">
-              {subtitle || "Операции"}
-            </div>
-            <div className="text-[19px] font-semibold tracking-tight truncate" title={title}>
+          <div className="min-w-0 flex items-baseline gap-2">
+            <span className="text-base font-semibold tracking-tight truncate" title={title}>
               {title}
-            </div>
+            </span>
+            {drawerContext(title, subtitle) && (
+              <span className="text-[13px] text-muted whitespace-nowrap">
+                · {drawerContext(title, subtitle)}
+              </span>
+            )}
           </div>
         </div>
         <Tooltip content="Закрыть (Esc)">
-          <button
-            onClick={close}
-            className="btn-ghost text-sm shrink-0"
-            aria-label="Закрыть (Esc)"
-          >
+          <button onClick={close} className="btn-icon shrink-0" aria-label="Закрыть (Esc)">
             <X className="w-4 h-4" />
-            <span>Закрыть</span>
-            <kbd className="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-panel2 border border-border font-mono">
-              Esc
-            </kbd>
           </button>
         </Tooltip>
       </div>
@@ -516,3 +512,14 @@ export function TransactionsDrawer() {
   );
 }
 
+/**
+ * Пояснение к названию шторки — откуда список открыт. Пусто, если оно
+ * повторяет название: «Расходы месяца» при «Расходы · Нояб. 25 г.»
+ * (совпадает первое слово).
+ */
+function drawerContext(title: string, subtitle?: string): string | null {
+  const sub = subtitle?.trim();
+  if (!sub) return null;
+  const first = sub.split(/\s+/)[0].toLowerCase();
+  return title.toLowerCase().includes(first) ? null : sub;
+}
