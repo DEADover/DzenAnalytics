@@ -159,6 +159,9 @@ interface FlatRow<T> {
   index: number;
 }
 
+/** Ширина колонки чекбоксов выбора — для суммы ширин таблицы. */
+const SELECTION_LEAD = ["2.5rem"] as const;
+
 /** Порция ленивой подгрузки длинной таблицы. */
 const LAZY_PAGE = 100;
 
@@ -230,14 +233,17 @@ export function DataTable<T>({
   );
   const resize = useColumnResize(
     widthsId ?? `${pathname}#${columns.map((c) => c.key).join(",")}`,
-    resizeCols
+    resizeCols,
+    { lead: selection ? SELECTION_LEAD : undefined }
   );
   const fixed = fixedProp || resize.custom;
-  const resizeMin = resize.minWidth(selection ? 2.5 : 0);
-  const tableMinWidth =
-    minWidth && resizeMin
-      ? `max(${scaledWidth(minWidth)}, ${resizeMin})`
-      : resizeMin ?? (minWidth ? scaledWidth(minWidth) : undefined);
+  // Свои ширины: таблица шириной в сумму колонок — уже карточки или шире неё
+  // (тогда обёртка прокручивается вбок). Иначе — во всю ширину, как была.
+  const tableStyle = resize.tableWidth
+    ? { width: resize.tableWidth }
+    : minWidth
+      ? { minWidth: scaledWidth(minWidth) }
+      : undefined;
 
   const sortCol = columns.find((c) => c.key === sort.key);
   const order = useCallback(
@@ -337,7 +343,7 @@ export function DataTable<T>({
       <div className={stickyHead ? undefined : "overflow-x-auto"}>
         <table
           className={clsx("w-full", fixed && "table-fixed", density === "compact" && "table-compact")}
-          style={tableMinWidth ? { minWidth: tableMinWidth } : undefined}
+          style={tableStyle}
         >
           {fixed && (
             <colgroup>

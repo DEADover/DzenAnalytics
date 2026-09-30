@@ -454,7 +454,7 @@ function DeletedFeed({
     () => feedColumns({ date: cols.date, deleted: cols.deleted, status: cols.status }),
     [cols.date, cols.deleted, cols.status]
   );
-  const resize = useColumnResize(`deleted-${mode}`, columns, { mode: "grid", flexKey: "comment" });
+  const resize = useColumnResize(`deleted-${mode}`, columns, { mode: "grid" });
   const template = resize.template;
 
   function exportCsv() {
@@ -548,6 +548,7 @@ function DeletedFeed({
       </StatRow>
 
       <OperationListTray
+        scrollX={resize.custom}
         toolbar={
           <>
             <SearchInput

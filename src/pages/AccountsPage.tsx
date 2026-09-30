@@ -2297,18 +2297,19 @@ export function AccountsPage() {
                 // Плюс запас на пилюлю с именем участника, когда она есть:
                 // колонка названия забирает остаток ширины, и без запаса
                 // пилюля вылезала бы на соседний столбец.
-                minWidth: (() => {
-                  const px =
-                    (capitalView
-                      ? hasForeignCurrency
-                        ? 760
-                        : 670
-                      : hasForeignCurrency
-                        ? 1212
-                        : 1122) + (hasMemberPills ? 130 : 0);
-                  const own = accountsResize.minWidth();
-                  return own ? `max(${px}px, ${own})` : px;
-                })(),
+                // Со своими ширинами столбцов таблица шириной в их сумму.
+                ...(accountsResize.tableWidth
+                  ? { width: accountsResize.tableWidth }
+                  : {
+                      minWidth:
+                        (capitalView
+                          ? hasForeignCurrency
+                            ? 760
+                            : 670
+                          : hasForeignCurrency
+                            ? 1212
+                            : 1122) + (hasMemberPills ? 130 : 0),
+                    }),
               }}
             >
               <colgroup>
@@ -3197,8 +3198,8 @@ export function AccountsPage() {
               остальных. Резиновым остаётся только название. */}
           <div className="overflow-x-auto -mx-1 px-1">
             <table
-              className="w-full table-fixed min-w-[50rem]"
-              style={depositsResize.custom ? { minWidth: `max(50rem, ${depositsResize.minWidth()})` } : undefined}
+              className={depositsResize.tableWidth ? "table-fixed" : "w-full table-fixed min-w-[50rem]"}
+              style={depositsResize.tableWidth ? { width: depositsResize.tableWidth } : undefined}
             >
               <colgroup>
                 {DEPOSIT_COLUMNS.map((c) => {

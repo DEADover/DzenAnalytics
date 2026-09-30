@@ -206,7 +206,7 @@ export function DuplicatesPage() {
     [allOps, selected]
   );
 
-  const resize = useColumnResize("duplicates", COLUMNS, { mode: "grid", flexKey: "comment" });
+  const resize = useColumnResize("duplicates", COLUMNS, { mode: "grid" });
   const template = resize.template;
 
   if (transactions.length === 0) return <EmptyState />;
@@ -261,6 +261,7 @@ export function DuplicatesPage() {
         </SectionEmpty>
       ) : (
         <OperationListTray
+          scrollX={resize.custom}
           toolbar={
             <>
               <SortMenu options={SORT_OPTIONS} value={sortMode} onChange={setSortMode} />

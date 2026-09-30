@@ -13,9 +13,16 @@ import { formatNum } from "../../lib/format";
 /** Двойной кант вокруг ленты — как у карточек главной — и строка инструментов сверху. */
 export function OperationListTray({
   toolbar,
+  scrollX = false,
   children,
 }: {
   toolbar: ReactNode;
+  /**
+   * Лента шире поддона — своя ширина столбцов: колонки сложились шире экрана.
+   * Тогда лента прокручивается вбок, а строки и шапки дней тянутся на всю
+   * её ширину. Панель инструментов остаётся на месте.
+   */
+  scrollX?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -24,7 +31,13 @@ export function OperationListTray({
         <div className="px-4 py-3 border-b border-border flex items-center gap-3 flex-wrap">
           {toolbar}
         </div>
-        {children}
+        {scrollX ? (
+          <div className="overflow-x-auto">
+            <div className="w-max min-w-full">{children}</div>
+          </div>
+        ) : (
+          children
+        )}
       </div>
     </div>
   );

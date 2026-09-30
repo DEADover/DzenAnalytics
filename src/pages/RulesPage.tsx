@@ -97,7 +97,10 @@ const PICK_HELP = (
 
 
 
-/** Колонки таблицы правил — для своей ширины столбцов. «Правило» резиновое. */
+/** Колонка галочек перед колонками правил — для суммы ширин таблицы. */
+const RULE_LEAD = ["3rem"] as const;
+
+/** Колонки таблицы правил — для своей ширины столбцов. */
 const RULE_COLUMNS: ResizeColumn[] = [
   { key: "num", label: "№", type: "mark", width: "6rem" },
   { key: "rule", label: "Правило", type: "text" },
@@ -438,7 +441,7 @@ export function RulesPage() {
     await reapplyRules();
   }
 
-  const resize = useColumnResize("rules", RULE_COLUMNS);
+  const resize = useColumnResize("rules", RULE_COLUMNS, { lead: RULE_LEAD });
 
   if (transactions.length === 0) return <EmptyState />;
 
@@ -661,9 +664,9 @@ export function RulesPage() {
           <div className="overflow-x-auto -mx-1 px-1">
             <table
               className={resize.custom ? "w-full table-fixed" : "w-full"}
-              style={resize.custom ? { minWidth: resize.minWidth(3) } : undefined}
+              style={resize.tableWidth ? { width: resize.tableWidth } : undefined}
             >
-              {resize.colgroup({ leading: ["3rem"], className: { targets: "hidden xl:table-column" } })}
+              {resize.colgroup({ className: { targets: "hidden xl:table-column" } })}
               <thead>
                 <tr>
                   {/* Сначала СУТЬ правила, потом переключатели: читают строку

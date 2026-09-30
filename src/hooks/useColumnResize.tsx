@@ -4,25 +4,26 @@
  * Включается в «Оформлении» («Своя ширина столбцов»). Пока ширины никто не
  * трогал, таблица выглядит ровно как без настройки: в шапке появляются только
  * границы, за которые можно тянуть. Первое же движение снимает текущие ширины
- * колонок и дальше таблица живёт по ним (модель — в `lib/columnResize.ts`).
+ * всех колонок, и дальше таблица живёт по ним: тянешь правый край колонки —
+ * меняется только она, остальные сдвигаются, а таблица становится шире или
+ * уже (модель — в `lib/columnResize.ts`).
  *
  * Во время перетаскивания React не перерисовывает строки: ширина меняется
- * прямо в DOM — у `<col>` таблицы или CSS-переменной сетки ленты. В хранилище
- * уходит только итог, когда кнопку мыши отпустили.
+ * прямо в DOM — у `<col>` и самой таблицы или CSS-переменной сетки ленты. В
+ * хранилище уходит только итог, когда кнопку мыши отпустили.
  */
 import { useCallback, useMemo, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { useColumnWidthsStore } from "../store/useColumnWidthsStore";
 import { scaledWidth } from "../components/table/tableKit";
 import {
+  clampWidth,
   gridTemplateWith,
   hasWidthsFor,
   liveVarName,
-  nextWidth,
-  pickFlexIndex,
   pxToRem,
   remWidth,
-  resizeTarget,
+  tableWidthOf,
   type ColumnWidthMap,
 } from "../lib/columnResize";
 
@@ -30,7 +31,7 @@ export interface ResizeColumn {
   key: string;
   /** Подпись — для скринридера у границы. */
   label?: string;
-  /** Тип колонки таблицы: по нему выбирается резиновая колонка. */
+  /** Тип колонки таблицы (для справки; ширину не определяет). */
   type?: string;
   /** Ширина по умолчанию (CSS) — у таблицы. */
   width?: string;
@@ -43,8 +44,8 @@ export interface ResizeColumn {
 interface Options {
   /** `grid` — лента на CSS-сетке (`size` у колонок), иначе таблица. */
   mode?: "table" | "grid";
-  /** Резиновая колонка, если выбор по типам не годится. */
-  flexKey?: string;
+  /** Ширины колонок таблицы перед колонками хука — чекбокс выбора. */
+  lead?: readonly string[];
 }
 
 export interface ColumnResize {
@@ -52,26 +53,27 @@ export interface ColumnResize {
   enabled: boolean;
   /** Действуют свои ширины — таблице нужна фиксированная раскладка. */
   custom: boolean;
-  /** CSS-ширина колонки таблицы при своих ширинах; `undefined` — без ширины. */
+  /** CSS-ширина колонки таблицы: своя или по умолчанию; `undefined` — без ширины. */
   widthOf: (key: string) => string | undefined;
   /** Шаблон сетки ленты (в режиме `grid`). */
   template: string;
-  /** Не уже этого таблица сжиматься не должна — дальше прокрутка вбок. */
-  minWidth: (extraRem?: number) => string | undefined;
-  /** Граница справа от колонки — ставится внутрь её ячейки шапки. */
+  /**
+   * Ширина таблицы при своих ширинах — сумма колонок: таблица бывает и уже,
+   * и шире карточки (тогда её обёртка прокручивается вбок). `undefined` —
+   * своих ширин нет или сумму не сложить: таблица во всю ширину, как была.
+   */
+  tableWidth: string | undefined;
+  /** Граница у правого края колонки — ставится внутрь её ячейки шапки. */
   handle: (key: string) => ReactNode;
   /**
    * `<colgroup>` для таблицы со своей разметкой — только при своих ширинах
-   * (иначе `null`, и таблица размечается как раньше). `leading` — ширины
-   * колонок перед колонками хука (чекбокс выбора); `className` — классы
+   * (иначе `null`, и таблица размечается как раньше). `className` — классы
    * `<col>`: колонке, которая прячется на узком экране, нужен тот же
    * `hidden xl:table-column`, иначе ячейки строк съедут на её место.
    */
-  colgroup: (opts?: { leading?: readonly string[]; className?: Record<string, string> }) => ReactNode;
+  colgroup: (opts?: { className?: Record<string, string> }) => ReactNode;
 }
 
-/** Минимум резиновой колонки, когда подпись у неё короткая. */
-const FLEX_MIN_PX = 64;
 /** Шаг стрелки на клавиатуре; с Shift — втрое больше. */
 const KEY_STEP_PX = 16;
 
@@ -136,7 +138,7 @@ const RESIZING_CLASS = "col-resizing";
 export function useColumnResize(
   id: string | null | undefined,
   columns: readonly ResizeColumn[],
-  { mode = "table", flexKey: flexKeyOpt }: Options = {}
+  { mode = "table", lead }: Options = {}
 ): ColumnResize {
   const option = useDisplayStore((s) => s.columnResize);
   const enabled = option && !!id;
@@ -144,22 +146,16 @@ export function useColumnResize(
   const setTable = useColumnWidthsStore((s) => s.setTable);
 
   const keys = useMemo(() => columns.map((c) => c.key), [columns]);
-  const flexIndex = useMemo(() => {
-    const i = flexKeyOpt ? keys.indexOf(flexKeyOpt) : -1;
-    return i >= 0 ? i : pickFlexIndex(columns);
-  }, [flexKeyOpt, keys, columns]);
-  const flexKey = keys[flexIndex];
   const custom = enabled && hasWidthsFor(saved, keys);
   const map = custom ? saved : undefined;
 
   const widthOf = useCallback(
     (key: string) => {
-      if (key === flexKey) return undefined;
       const rem = map?.[key];
       if (rem) return remWidth(rem);
       return scaledWidth(columns.find((c) => c.key === key)?.width);
     },
-    [flexKey, map, columns]
+    [map, columns]
   );
 
   const tracks = useMemo(
@@ -168,52 +164,53 @@ export function useColumnResize(
   );
   const template = useMemo(() => {
     if (mode !== "grid") return "";
-    const committed = gridTemplateWith(tracks, map, flexKey);
+    const committed = gridTemplateWith(tracks, map);
     return enabled && id ? `var(${liveVarName(id)}, ${committed})` : committed;
-  }, [mode, tracks, map, flexKey, enabled, id]);
+  }, [mode, tracks, map, enabled, id]);
 
-  const minWidth = useCallback(
-    (extraRem = 0) => {
-      if (!map) return undefined;
-      const sum = keys.reduce((s, k) => s + (k !== flexKey && map[k] ? map[k] : 0), 0);
-      const flexRem = FLEX_MIN_PX / 16;
-      return remWidth(Math.round((sum + flexRem + extraRem) * 100) / 100);
-    },
-    [map, keys, flexKey]
+  /** Ширина таблицы по набору ширин — одна формула для рендера и для DOM после перетаскивания. */
+  const widthFor = useCallback(
+    (m: ColumnWidthMap | undefined) =>
+      m
+        ? tableWidthOf(
+            columns.map((c) => ({ key: c.key, fallback: scaledWidth(c.width) })),
+            m,
+            lead
+          ) ?? undefined
+        : undefined,
+    [columns, lead]
   );
+  const tableWidth = mode === "table" ? widthFor(map) : undefined;
 
   /**
-   * Начать правку границы `border`: снять ширины, если своих ещё нет, и
-   * вернуть сессию — сдвинуть, записать или отменить.
+   * Начать правку колонки `key`: снять ширины, если своих ещё нет, и вернуть
+   * сессию — сдвинуть, записать или отменить.
    */
   const begin = useCallback(
-    (handleEl: HTMLElement, border: number) => {
+    (handleEl: HTMLElement, key: string) => {
       if (!id) return null;
-      const row = handleEl.closest("[data-col]")?.parentElement;
-      if (!row) return null;
+      const targetEl = handleEl.closest<HTMLElement>("[data-col]");
+      const row = targetEl?.parentElement;
+      if (!targetEl || !row) return null;
       const cells = new Map<string, HTMLElement>();
       row.querySelectorAll<HTMLElement>(":scope > [data-col]").forEach((el) => {
         if (el.dataset.col) cells.set(el.dataset.col, el);
       });
-      const { index: target, sign } = resizeTarget(border, flexIndex);
-      const targetKey = keys[target];
-      const targetEl = cells.get(targetKey);
-      const flexEl = cells.get(flexKey);
-      if (!targetKey || !targetEl || !flexEl) return null;
 
       const { remPx, scale } = units();
       const px = (el: HTMLElement) => el.getBoundingClientRect().width;
+      const table = handleEl.closest("table");
+      const tableStart = table ? px(table) : 0;
       const before = map;
       let base: ColumnWidthMap;
       if (map) {
         base = { ...map };
       } else {
-        // Первый раз: запоминаем ширины как есть, чтобы ничего не прыгнуло.
-        // У ленты колонки без права тянуть (чекбокс, кнопки) остаются своей
-        // дорожкой; у таблицы — если своя ширина у них есть.
+        // Первый раз: запоминаем ширины всех колонок как есть, чтобы ничего
+        // не прыгнуло. Колонки без права тянуть (чекбокс, кнопки) остаются
+        // своей шириной, если она у них задана.
         base = {};
         for (const c of columns) {
-          if (c.key === flexKey) continue;
           const locked = c.resizable === false && (mode === "grid" || !!c.width);
           if (locked) continue;
           const el = cells.get(c.key);
@@ -224,23 +221,22 @@ export function useColumnResize(
       }
 
       const start = px(targetEl);
-      const flexWidth = px(flexEl);
       const min = naturalWidth(targetEl);
-      const flexMin = Math.max(naturalWidth(flexEl), FLEX_MIN_PX);
       let current = start;
-      const table = handleEl.closest("table");
       const varName = liveVarName(id);
+      const colOf = () => table?.querySelector<HTMLElement>(`col[data-col="${CSS.escape(key)}"]`);
 
       const apply = (w: number) => {
         if (mode === "grid") {
-          const live = { ...base, [targetKey]: w / (remPx * scale) };
-          document.documentElement.style.setProperty(varName, gridTemplateWith(tracks, live, flexKey));
+          const live = { ...base, [key]: w / (remPx * scale) };
+          document.documentElement.style.setProperty(varName, gridTemplateWith(tracks, live));
         } else {
-          const col = table?.querySelector<HTMLElement>(`col[data-col="${CSS.escape(targetKey)}"]`);
+          const col = colOf();
           if (col) col.style.width = `${w}px`;
+          if (table) table.style.width = `${tableStart + (w - start)}px`;
         }
       };
-      const settle = (next: ColumnWidthMap | null | undefined) => {
+      const settle = (next: ColumnWidthMap | undefined) => {
         if (mode === "grid") {
           // Сетка возвращается к сохранённому шаблону уже после перерисовки
           // (React применяет её в микрозадаче), иначе на кадр мелькнули бы
@@ -248,19 +244,23 @@ export function useColumnResize(
           // кадров нет, и переменная висела бы до возвращения на неё.
           setTimeout(() => document.documentElement.style.removeProperty(varName), 0);
         } else {
-          const col = table?.querySelector<HTMLElement>(`col[data-col="${CSS.escape(targetKey)}"]`);
-          const rem = next?.[targetKey];
+          // Пиксели, поставленные во время перетаскивания, меняем на те же
+          // строки, что рисует React: иначе при смене размера текста эта
+          // колонка и таблица остались бы в пикселях.
+          const col = colOf();
+          const rem = next?.[key];
           if (col) col.style.width = rem ? remWidth(rem) : "";
+          if (table) table.style.width = widthFor(next) ?? "";
         }
       };
 
       return {
         update(delta: number) {
-          current = nextWidth({ start, delta, sign, min, flexWidth, flexMin });
+          current = clampWidth(start, delta, min);
           apply(current);
         },
         commit() {
-          const next = { ...base, [targetKey]: pxToRem(current, remPx, scale) };
+          const next = { ...base, [key]: pxToRem(current, remPx, scale) };
           setTable(id, next);
           settle(next);
         },
@@ -270,25 +270,24 @@ export function useColumnResize(
         },
       };
     },
-    [id, flexIndex, keys, flexKey, map, columns, mode, setTable, tracks]
+    [id, map, columns, mode, setTable, tracks, widthFor]
   );
 
   const handle = useCallback(
     (key: string): ReactNode => {
       if (!enabled || !id) return null;
-      const border = keys.indexOf(key);
-      if (border < 0 || border >= keys.length - 1) return null;
-      const { index: target } = resizeTarget(border, flexIndex);
-      const col = columns[target];
+      const index = keys.indexOf(key);
+      const col = columns[index];
       if (!col || col.resizable === false) return null;
       const label = col.label ?? col.key;
+      const last = index === keys.length - 1;
 
       const onPointerDown = (e: PointerEvent<HTMLElement>) => {
         if (e.button !== 0) return;
         e.preventDefault();
         e.stopPropagation();
         const el = e.currentTarget;
-        const session = begin(el, border);
+        const session = begin(el, key);
         if (!session) return;
         const startX = e.clientX;
         try {
@@ -327,7 +326,7 @@ export function useColumnResize(
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
         e.preventDefault();
         e.stopPropagation();
-        const session = begin(e.currentTarget, border);
+        const session = begin(e.currentTarget, key);
         if (!session) return;
         const step = (e.shiftKey ? 3 : 1) * KEY_STEP_PX;
         session.update(e.key === "ArrowRight" ? step : -step);
@@ -337,6 +336,7 @@ export function useColumnResize(
       return (
         <span
           data-col-handle
+          data-last={last ? "" : undefined}
           role="separator"
           aria-orientation="vertical"
           aria-label={`Ширина столбца «${label}»`}
@@ -353,15 +353,15 @@ export function useColumnResize(
         />
       );
     },
-    [enabled, id, keys, flexIndex, columns, begin, setTable]
+    [enabled, id, keys, columns, begin, setTable]
   );
 
   const colgroup = useCallback(
-    (opts: { leading?: readonly string[]; className?: Record<string, string> } = {}) => {
+    (opts: { className?: Record<string, string> } = {}) => {
       if (!custom) return null;
       return (
         <colgroup>
-          {opts.leading?.map((w, i) => <col key={`lead-${i}`} style={{ width: w }} />)}
+          {lead?.map((w, i) => <col key={`lead-${i}`} style={{ width: w }} />)}
           {keys.map((k) => {
             const w = widthOf(k);
             return (
@@ -371,8 +371,8 @@ export function useColumnResize(
         </colgroup>
       );
     },
-    [custom, keys, widthOf]
+    [custom, keys, widthOf, lead]
   );
 
-  return { enabled, custom, widthOf, template, minWidth, handle, colgroup };
+  return { enabled, custom, widthOf, template, tableWidth, handle, colgroup };
 }

@@ -283,7 +283,7 @@ export function UncategorizedPage() {
     downloadCsv(csvFileName("uncategorized"), text);
   }
 
-  const resize = useColumnResize("uncategorized", COLUMNS, { mode: "grid", flexKey: "comment" });
+  const resize = useColumnResize("uncategorized", COLUMNS, { mode: "grid" });
   const template = resize.template;
 
   if (transactions.length === 0) return <EmptyState />;
@@ -347,6 +347,7 @@ export function UncategorizedPage() {
       </StatRow>
 
       <OperationListTray
+        scrollX={resize.custom}
         toolbar={
           <>
             <SearchInput

@@ -110,8 +110,7 @@ const ADD_OPTIONS: {
 // видимого содержимого. Точка переехала на значок категории, полоса убрана.
 //
 // Колонки — списком, а сетку из них строит `useColumnResize`: при «Своей
-// ширине столбцов» дорожки, которые потянули, берут сохранённую ширину, а
-// комментарий остаётся резиновым и забирает остальное.
+// ширине столбцов» дорожки берут сохранённые ширины.
 const OPS_COLUMNS: ResizeColumn[] = [
   { key: "select", size: "20px", resizable: false },
   { key: "date", label: "Дата", size: "84px" },
@@ -470,7 +469,6 @@ export function TransactionsPage() {
   const byDate = sortMode === "date-desc" || sortMode === "date-asc";
   const resize = useColumnResize("operations", byDate ? OPS_COLUMNS_NODATE : OPS_COLUMNS, {
     mode: "grid",
-    flexKey: "comment",
   });
 
   // Group by day only when sorted by date. Apply lazy slicing FIRST so groups
@@ -573,6 +571,7 @@ export function TransactionsPage() {
       </StatRow>
 
       <OperationListTray
+        scrollX={resize.custom}
         toolbar={
           <>
             <SearchInput

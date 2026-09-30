@@ -1,85 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  clampWidth,
   gridTemplateWith,
   hasWidthsFor,
   liveVarName,
-  nextWidth,
-  pickFlexIndex,
   pxToRem,
   remWidth,
-  resizeTarget,
+  tableWidthOf,
 } from "./columnResize";
 
-describe("pickFlexIndex", () => {
-  it("берёт колонку, которая и так забирает всю ширину", () => {
-    expect(
-      pickFlexIndex([
-        { key: "a", type: "text" },
-        { key: "b", type: "text", width: "100%" },
-      ])
-    ).toBe(1);
-  });
-
-  it("иначе — первую текстовую без ширины", () => {
-    expect(
-      pickFlexIndex([
-        { key: "date", type: "date" },
-        { key: "name", type: "text" },
-        { key: "sum", type: "money", width: "8rem" },
-      ])
-    ).toBe(1);
-  });
-
-  it("кнопки действий резиновыми не бывают", () => {
-    expect(
-      pickFlexIndex([
-        { key: "actions", type: "actions" },
-        { key: "sum", type: "money" },
-      ])
-    ).toBe(1);
-  });
-
-  it("у всех колонок ширина — первая текстовая", () => {
-    expect(
-      pickFlexIndex([
-        { key: "sum", type: "money", width: "8rem" },
-        { key: "name", type: "text", width: "10rem" },
-      ])
-    ).toBe(1);
-  });
-});
-
-describe("resizeTarget", () => {
-  it("левее резиновой граница меняет колонку слева", () => {
-    expect(resizeTarget(0, 2)).toEqual({ index: 0, sign: 1 });
-    expect(resizeTarget(1, 2)).toEqual({ index: 1, sign: 1 });
-  });
-
-  it("правее — колонку справа, и она растёт, когда граница идёт влево", () => {
-    expect(resizeTarget(2, 2)).toEqual({ index: 3, sign: -1 });
-    expect(resizeTarget(0, 0)).toEqual({ index: 1, sign: -1 });
-  });
-});
-
-describe("nextWidth", () => {
-  const base = { start: 100, min: 60, flexWidth: 300, flexMin: 80 };
-
+describe("clampWidth", () => {
   it("идёт за мышью", () => {
-    expect(nextWidth({ ...base, delta: 30, sign: 1 })).toBe(130);
-    expect(nextWidth({ ...base, delta: 30, sign: -1 })).toBe(70);
+    expect(clampWidth(100, 30, 60)).toBe(130);
+    expect(clampWidth(100, -30, 60)).toBe(70);
   });
 
   it("не уже подписи", () => {
-    expect(nextWidth({ ...base, delta: -500, sign: 1 })).toBe(60);
-  });
-
-  it("не шире, чем может отдать резиновая колонка", () => {
-    expect(nextWidth({ ...base, delta: 1000, sign: 1 })).toBe(100 + 220);
-  });
-
-  it("резиновая уже у своего минимума — колонка может только сужаться", () => {
-    expect(nextWidth({ ...base, flexWidth: 70, delta: 50, sign: 1 })).toBe(100);
-    expect(nextWidth({ ...base, flexWidth: 70, delta: -20, sign: 1 })).toBe(80);
+    expect(clampWidth(100, -500, 60)).toBe(60);
   });
 });
 
@@ -103,6 +40,26 @@ describe("hasWidthsFor", () => {
   });
 });
 
+describe("tableWidthOf", () => {
+  it("сумма своих ширин и ширин по умолчанию", () => {
+    expect(
+      tableWidthOf(
+        [
+          { key: "name" },
+          { key: "sum", fallback: "calc(8rem * var(--tbl-scale, 1))" },
+          { key: "actions", fallback: "calc(6rem * var(--tbl-scale, 1))" },
+        ],
+        { name: 20, sum: 10 },
+        ["2.5rem"]
+      )
+    ).toBe("calc(30rem * var(--tbl-scale, 1) + 2.5rem + calc(6rem * var(--tbl-scale, 1)))");
+  });
+
+  it("у колонки нет ни своей ширины, ни ширины по умолчанию — суммы нет", () => {
+    expect(tableWidthOf([{ key: "name" }, { key: "sum" }], { sum: 10 })).toBeNull();
+  });
+});
+
 describe("gridTemplateWith", () => {
   const tracks = [
     { key: "select", size: "20px" },
@@ -112,12 +69,12 @@ describe("gridTemplateWith", () => {
   ];
 
   it("без своих ширин — шаблон как был", () => {
-    expect(gridTemplateWith(tracks, undefined, "comment")).toBe("20px 84px minmax(0, 2.6fr) 140px");
+    expect(gridTemplateWith(tracks, undefined)).toBe("20px 84px minmax(0, 2.6fr) 140px");
   });
 
-  it("свои ширины сжимаются на узком окне, резиновая остаётся", () => {
-    expect(gridTemplateWith(tracks, { date: 6, comment: 99, amount: 10 }, "comment")).toBe(
-      "20px minmax(0, calc(6rem * var(--tbl-scale, 1))) minmax(0, 2.6fr) minmax(0, calc(10rem * var(--tbl-scale, 1)))"
+  it("свои ширины — у тех колонок, что их получили", () => {
+    expect(gridTemplateWith(tracks, { date: 6, comment: 30 })).toBe(
+      "20px calc(6rem * var(--tbl-scale, 1)) calc(30rem * var(--tbl-scale, 1)) 140px"
     );
   });
 });
