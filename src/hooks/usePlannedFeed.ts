@@ -15,6 +15,8 @@ function localToday(): string {
 export interface PlannedFeedCounts {
   /** Просроченные (не прогнозы) — раньше сегодняшнего дня. */
   overdue: number;
+  /** Их итог в основной валюте: поступления плюсом, траты минусом, переводы не в счёт. */
+  overdueNet: number;
   /** С сегодня до конца отчётного месяца. */
   month: number;
   /** С сегодня до 31 декабря. */
@@ -49,8 +51,12 @@ export function usePlannedFeed(query = "") {
   const yearEnd = `${today.slice(0, 4)}-12-31`;
   const counts = useMemo(() => {
     const upcoming = ops.filter((p) => p.date >= today);
+    const overdueNet = ops
+      .filter((p) => p.date < today)
+      .reduce((s, p) => s + (p.kind === "income" ? p.amountBase : p.kind === "expense" ? -p.amountBase : 0), 0);
     return {
       overdue: ops.length - upcoming.length,
+      overdueNet,
       month: upcoming.filter((p) => p.date <= monthEnd).length,
       year: upcoming.filter((p) => p.date <= yearEnd).length,
       total: upcoming.length,

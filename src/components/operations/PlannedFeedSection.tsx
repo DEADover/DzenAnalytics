@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  AlertCircle,
   CalendarCheck,
   CalendarClock,
   ChevronDown,
@@ -11,6 +12,7 @@ import {
 import clsx from "clsx";
 import type { Transaction } from "../../types";
 import { pluralRu } from "../../lib/plural";
+import { formatMoney } from "../../lib/format";
 import { plannedAsTransaction, type PlannedOp } from "../../lib/plannedOps";
 import { usePlannedFeed, type PlannedFeedCounts } from "../../hooks/usePlannedFeed";
 import { useDisplayStore } from "../../store/useDisplayStore";
@@ -46,7 +48,7 @@ function planTitle(p: PlannedOp): string {
 type Counts = PlannedFeedCounts;
 
 /** «Просрочено 4 · до конца месяца 3 · до конца года 25 · всего 34». */
-function CountsLine({ counts }: { counts: Counts }) {
+function CountsLine({ counts, base }: { counts: Counts; base: string }) {
   const part = (label: string, n: number, tone?: string) => (
     <span className={clsx("whitespace-nowrap", tone)}>
       {label} <span className="tabular-nums font-medium">{n}</span>
@@ -55,7 +57,19 @@ function CountsLine({ counts }: { counts: Counts }) {
   return (
     // Одной строкой: перенос менял бы высоту строки «Запланировано».
     <span className="flex items-center gap-x-3 min-w-0 overflow-hidden whitespace-nowrap text-muted text-xs">
-      {counts.overdue > 0 && part("Просрочено", counts.overdue, "text-expense")}
+      {/* Просроченные — плашкой и первыми: это то, с чем надо что-то
+          сделать, остальные числа — просто справка. */}
+      {counts.overdue > 0 && (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-expense/10 text-expense font-medium whitespace-nowrap">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden />
+          Просрочено <span className="tabular-nums">{counts.overdue}</span>
+          {counts.overdueNet !== 0 && (
+            <span className="tabular-nums font-normal">
+              · {formatMoney(counts.overdueNet, base, { signed: true })}
+            </span>
+          )}
+        </span>
+      )}
       {part("До конца месяца", counts.month)}
       {part("До конца года", counts.year)}
       {part("Всего", counts.total)}
@@ -81,6 +95,7 @@ export function PlannedBar({
 }) {
   const enabled = useDisplayStore((s) => s.feedPlanned);
   const { ops, counts } = usePlannedFeed(open ? query : "");
+  const base = useDataStore((s) => s.rates.base);
   if (!open && (!enabled || ops.length === 0)) return null;
   return (
     <button
@@ -91,7 +106,7 @@ export function PlannedBar({
       className="w-full h-10 px-4 border-b border-border bg-panel2/60 flex items-center gap-3 text-sm text-left hover:bg-panel2 transition-colors"
     >
       <span className="font-semibold shrink-0">Запланировано</span>
-      <CountsLine counts={counts} />
+      <CountsLine counts={counts} base={base} />
       <span className="ml-auto flex items-center gap-3 shrink-0">
         <ChevronDown
           className={clsx(
@@ -133,15 +148,14 @@ export function PlannedFeedList({
   const [link, setLink] = useState<PlannedOp | null>(null);
   const [edit, setEdit] = useState<PlannedOp | null>(null);
 
-  const byDay = useMemo(() => {
-    const m = new Map<string, PlannedOp[]>();
-    for (const p of ops) {
-      const list = m.get(p.date) ?? [];
-      list.push(p);
-      m.set(p.date, list);
-    }
-    return [...m.entries()];
-  }, [ops]);
+  const overdueOps = useMemo(() => ops.filter((p) => p.date < today), [ops, today]);
+  const sections = useMemo(() => {
+    const upcoming = ops.filter((p) => p.date >= today);
+    return [
+      { key: "overdue", title: "Просрочено", ops: overdueOps },
+      { key: "upcoming", title: "Предстоящие", ops: upcoming },
+    ].filter((sec) => sec.ops.length > 0);
+  }, [ops, overdueOps, today]);
 
   async function removeDate(p: PlannedOp) {
     const oneOff = p.repeating === false;
@@ -182,7 +196,14 @@ export function PlannedFeedList({
         selected={menu?.op.id === p.id}
         // Действия — только по «⋯»: щелчок по строке ничего не делает, чтобы
         // случайное касание не открывало меню.
-        className="[&_.op-muted]:opacity-60"
+        // Будущие — приглушены: их время ещё не пришло. Просроченные — в
+        // полную силу, с красной полосой слева и лёгкой заливкой: с ними надо
+        // что-то сделать — провести, связать или удалить.
+        className={
+          late
+            ? "bg-expense/[0.04] shadow-[inset_3px_0_0_rgb(var(--c-expense))]"
+            : "[&_.op-muted]:opacity-60"
+        }
       >
         <span className="grid place-items-center" aria-hidden>
           <CalendarClock className={clsx("w-4 h-4", late ? "text-expense" : "text-muted")} />
@@ -251,28 +272,41 @@ export function PlannedFeedList({
       {/* Дни появляются по очереди сверху вниз — лента «раскрывается»
           из строки «Запланировано», а не подменяется рывком. */}
       <div className="planned-in">
-      {(grouped
-          ? byDay.map(([ymd, list]) => (
-              <div key={ymd}>
-                {/* Та же шапка дня, что у проведённых операций: дата, день
-                    недели и суммы дня — плюс пометка, когда платёж. */}
-                <DayHeader
-                  ymd={ymd}
-                  txs={list.map(plannedAsTransaction)}
-                  base={base}
-                  showTransfers
-                  note={
-                    dayNote(ymd, today) && (
-                      <span className={clsx("text-[13px]", ymd < today ? "text-expense" : "text-muted")}>
-                        · {dayNote(ymd, today)}
-                      </span>
-                    )
-                  }
-                />
-                {list.map(renderRow)}
-              </div>
-            ))
-          : ops.map(renderRow))}
+        {sections.map((sec) => [
+          // Разделы — только если есть просроченные: иначе заголовок
+          // «Предстоящие» над единственным разделом был бы лишним.
+          overdueOps.length > 0 && (
+            <SectionHead
+              key={`h-${sec.key}`}
+              title={sec.title}
+              ops={sec.ops}
+              base={base}
+              tone={sec.key === "overdue" ? "danger" : "muted"}
+            />
+          ),
+          ...(grouped
+            ? dayGroups(sec.ops).map(([ymd, list]) => (
+                <div key={ymd}>
+                  {/* Та же шапка дня, что у проведённых операций: дата, день
+                      недели и суммы дня — плюс пометка, когда платёж. */}
+                  <DayHeader
+                    ymd={ymd}
+                    txs={list.map(plannedAsTransaction)}
+                    base={base}
+                    showTransfers
+                    note={
+                      dayNote(ymd, today) && (
+                        <span className={clsx("text-[13px]", ymd < today ? "text-expense" : "text-muted")}>
+                          · {dayNote(ymd, today)}
+                        </span>
+                      )
+                    }
+                  />
+                  {list.map(renderRow)}
+                </div>
+              ))
+            : [<div key={`rows-${sec.key}`}>{sec.ops.map(renderRow)}</div>]),
+        ])}
       </div>
 
       <Popover
@@ -348,6 +382,60 @@ export function PlannedFeedList({
       )}
       {link && <PlanLinkModal plan={link} title={planTitle(link)} onClose={() => setLink(null)} />}
       {edit && <PlanEditModal plan={edit} title={planTitle(edit)} onClose={() => setEdit(null)} />}
+    </div>
+  );
+}
+
+/** Планы по дням, в порядке дат. */
+function dayGroups(ops: PlannedOp[]): [string, PlannedOp[]][] {
+  const m = new Map<string, PlannedOp[]>();
+  for (const p of ops) {
+    const list = m.get(p.date) ?? [];
+    list.push(p);
+    m.set(p.date, list);
+  }
+  return [...m.entries()];
+}
+
+/**
+ * Заголовок раздела ленты планов — «Просрочено» и «Предстоящие»: сколько
+ * операций и их итог. Просроченный — красным, чтобы раздел, с которым надо
+ * что-то делать, читался с первого взгляда.
+ */
+function SectionHead({
+  title,
+  ops,
+  base,
+  tone,
+}: {
+  title: string;
+  ops: PlannedOp[];
+  base: string;
+  tone: "danger" | "muted";
+}) {
+  const net = ops.reduce(
+    (s, p) => s + (p.kind === "income" ? p.amountBase : p.kind === "expense" ? -p.amountBase : 0),
+    0
+  );
+  return (
+    <div
+      className={clsx(
+        "px-4 h-9 flex items-center gap-2 border-b text-xs font-semibold uppercase tracking-wide",
+        tone === "danger"
+          ? "bg-expense/10 text-expense border-expense/20"
+          : "bg-panel text-muted border-border"
+      )}
+    >
+      {tone === "danger" && <AlertCircle className="w-3.5 h-3.5" aria-hidden />}
+      {title}
+      <span className="font-normal normal-case tracking-normal tabular-nums">
+        · {ops.length} {pluralRu(ops.length, ["операция", "операции", "операций"])}
+      </span>
+      {net !== 0 && (
+        <span className="ml-auto font-medium normal-case tracking-normal tabular-nums">
+          {formatMoney(net, base, { signed: true })}
+        </span>
+      )}
     </div>
   );
 }
