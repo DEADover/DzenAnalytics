@@ -461,6 +461,20 @@ h2,
   .glass {
     @apply bg-panel/50 backdrop-blur-2xl backdrop-saturate-[1.8];
   }
+  /* Открыто модальное окно — размытие под затемнением выключаем. Слои с
+     `backdrop-filter` Chromium перерисовывает при каждой перерисовке окна над
+     ними (ввод, прокрутка списка), и на кадр сквозь затемнение проступал
+     белый фон корня — «моргание». Под затемнением стекло всё равно не видно,
+     сплошной фон ничем не хуже. Класс ставит `Modal`. */
+  html.modal-open .glass {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background-color: rgb(var(--c-panel));
+  }
+  html.modal-open .drawer-backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
   .card-sunken {
     @apply rounded-[18px] shadow-tray;
     background: color-mix(in srgb, rgb(var(--c-panel2)) 60%, rgb(var(--c-border)));

@@ -24,10 +24,9 @@ function localToday(): string {
  * «Связать план с фактом»: запланированная операция уже случилась — её привёз
  * банк или внесли руками, — и план надо закрыть ею, а не заводить второй факт.
  *
- * Сверху — сам план, ниже — похожие проведённые операции, как у Дзен-мани:
- * того же вида, ещё не связанные ни с каким планом, от месяца до плана и до
- * сегодня; ближе всего — та же категория, сумма и день. Поиск — по всему
- * этому окну, если нужной операции нет среди первых.
+ * Сверху — сам план, ниже — похожие проведённые операции (что считается
+ * похожим — `linkCandidates`). Поиск — по всем операциям того же окна дат,
+ * если нужной среди похожих нет.
  */
 export function PlanLinkModal({
   plan,
@@ -56,6 +55,7 @@ export function PlanLinkModal({
       amount: Math.abs(t.amount),
       category: t.categoryFull,
       account: t.account,
+      payee: displayPayee(t),
       linked: linked.has(t.id),
       tx: t,
     }));
@@ -65,9 +65,11 @@ export function PlanLinkModal({
       amount: plan.amount,
       category: plan.category,
       account: plan.account,
+      payee: plan.payee,
     };
     const q = query.trim();
-    const pool = linkCandidates(planForMatch, input, localToday(), q ? 1000 : 40);
+    // С поиском — все операции окна: человек сам знает, что ищет.
+    const pool = linkCandidates(planForMatch, input, localToday(), q ? 1000 : 40, !!q);
     if (!q) return pool.map((c) => c.tx);
     const match = queryMatcher(q);
     return pool
@@ -133,8 +135,8 @@ export function PlanLinkModal({
       <ModalBody scroll list className="max-h-[50vh]">
         {candidates.length === 0 ? (
           <p className="text-sm text-muted py-6 text-center">
-            Похожих операций не нашлось — за месяц до плана и до сегодня нет
-            несвязанных операций того же вида.
+            Похожих операций не нашлось. Найдите нужную поиском — он ищет
+            по всем операциям за две недели до плана и до сегодня.
           </p>
         ) : (
           <ul className="divide-y divide-border/60">

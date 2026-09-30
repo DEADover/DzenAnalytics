@@ -257,7 +257,6 @@ describe("linkCandidates", () => {
     const list = linkCandidates(
       plan,
       [
-        tx({ id: "far", amount: 5000, category: "Еда" }),
         tx({ id: "best" }),
         tx({ id: "linked", linked: true }),
         tx({ id: "income", kind: "income" }),
@@ -265,13 +264,55 @@ describe("linkCandidates", () => {
       ],
       "2026-10-07"
     );
-    expect(list.map((t) => t.id)).toEqual(["best", "close", "far"]);
+    expect(list.map((t) => t.id)).toEqual(["best", "close"]);
   });
 
-  it("окно — месяц до плана и до сегодня", () => {
+  it("непохожее не показывается: чужая категория, та же категория с далёкой суммой", () => {
     const list = linkCandidates(
       plan,
-      [tx({ id: "old", date: "2026-08-01" }), tx({ id: "future", date: "2026-10-20" }), tx({ id: "ok" })],
+      [
+        tx({ id: "paper", amount: 200, category: "Товары для дома", account: "Сбер" }),
+        tx({ id: "year", amount: 4700 }),
+        tx({ id: "usd", amount: 1, account: "FFin $" }),
+        tx({ id: "ok", amount: 699 }),
+      ],
+      "2026-10-07"
+    );
+    expect(list.map((t) => t.id)).toEqual(["ok"]);
+  });
+
+  it("похоже по контрагенту или по счёту с суммой ±10%", () => {
+    const list = linkCandidates(
+      { ...plan, payee: "Google" },
+      [
+        tx({ id: "payee", amount: 5000, category: "Прочее", account: "Сбер", payee: "google" }),
+        tx({ id: "acc", amount: 720, category: "Прочее" }),
+        tx({ id: "no", amount: 900, category: "Прочее" }),
+      ],
+      "2026-10-07"
+    );
+    expect(list.map((t) => t.id).sort()).toEqual(["acc", "payee"]);
+  });
+
+  it("с поиском признаки не нужны — всё окно", () => {
+    const list = linkCandidates(
+      plan,
+      [tx({ id: "paper", amount: 200, category: "Товары для дома", account: "Сбер" })],
+      "2026-10-07",
+      40,
+      true
+    );
+    expect(list.map((t) => t.id)).toEqual(["paper"]);
+  });
+
+  it("окно — две недели до плана и до сегодня", () => {
+    const list = linkCandidates(
+      plan,
+      [
+        tx({ id: "old", date: "2026-09-20" }),
+        tx({ id: "future", date: "2026-10-20" }),
+        tx({ id: "ok", date: "2026-09-25" }),
+      ],
       "2026-10-07"
     );
     expect(list.map((t) => t.id)).toEqual(["ok"]);

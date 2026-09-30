@@ -322,9 +322,18 @@ export function buildPlanPush(
 /**
  * Похожие на план операции — кандидаты для «Связать план с фактом».
  *
- * Как у Дзен-мани: того же вида, не связанные ни с каким планом, в окне от
- * месяца до даты плана и до сегодня. Ближе всего — та же категория, сумма
- * около плановой и день рядом с плановым.
+ * Того же вида, ещё не связанные ни с каким планом, от двух недель до плана и
+ * до сегодня. Из них — только правда похожие, хотя бы по одному признаку:
+ *
+ *   • тот же контрагент;
+ *   • та же категория (или её родитель) и сумма не дальше чем вполовину от
+ *     плановой — подписка на 199 ₽ не спутается с годовой за 4 700 ₽;
+ *   • тот же счёт и сумма в пределах ±10 % — если категорию у факта не
+ *     поставили или поставили другую.
+ *
+ * Раньше в список шло всё того же вида за месяц, и рядом с подпиской стояли
+ * туалетная бумага и пополнение телефона (30.09.2026). С поиском (`loose`)
+ * признаки не нужны: человек сам ищет нужную операцию.
  */
 export interface LinkCandidateInput {
   id: string;
@@ -333,36 +342,48 @@ export interface LinkCandidateInput {
   amount: number;
   category: string;
   account: string;
+  payee?: string;
   linked: boolean;
 }
 
 export function linkCandidates<T extends LinkCandidateInput>(
-  plan: { date: string; kind: string; amount: number; category: string; account: string },
+  plan: { date: string; kind: string; amount: number; category: string; account: string; payee?: string },
   txs: T[],
   today: string,
-  limit = 40
+  limit = 40,
+  loose = false
 ): T[] {
   const dayMs = 86_400_000;
   const planT = Date.parse(plan.date);
-  const from = new Date(planT - 31 * dayMs).toISOString().slice(0, 10);
+  const from = new Date(planT - 14 * dayMs).toISOString().slice(0, 10);
   const to = plan.date > today ? plan.date : today;
   const planKind = plan.kind === "income" ? ["income", "refund"] : [plan.kind];
+  const parent = (c: string) => c.split(" / ")[0];
+  const norm = (s?: string) => (s ?? "").trim().toLowerCase();
   const scored: { t: T; score: number }[] = [];
   for (const t of txs) {
     if (t.linked || !planKind.includes(t.kind)) continue;
     if (t.date < from || t.date > to) continue;
     const days = Math.abs(Date.parse(t.date) - planT) / dayMs;
     const diff = plan.amount > 0 ? Math.abs(t.amount - plan.amount) / plan.amount : 1;
+    const samePayee = !!norm(plan.payee) && norm(t.payee) === norm(plan.payee);
+    const sameCat = !!plan.category && t.category === plan.category;
+    const sameParent = !!plan.category && parent(t.category) === parent(plan.category);
+    const sameAccount = t.account === plan.account;
+    const similar =
+      samePayee || ((sameCat || sameParent) && diff <= 0.5) || (sameAccount && diff <= 0.1);
+    if (!loose && !similar) continue;
     let score = 0;
-    if (plan.category && t.category === plan.category) score += 3;
-    else if (plan.category && t.category.split(" / ")[0] === plan.category.split(" / ")[0]) score += 1.5;
-    if (t.account === plan.account) score += 1;
+    if (samePayee) score += 3;
+    if (sameCat) score += 3;
+    else if (sameParent) score += 1.5;
+    if (sameAccount) score += 1;
     score += Math.max(0, 2 - diff * 4); // ±10% ≈ +1,6; вдвое больше — 0
     score += Math.max(0, 1.5 - days / 7); // неделя разницы — почти ноль
     scored.push({ t, score });
   }
   return scored
-    .sort((a, b) => b.score - a.score || b.t.date.localeCompare(a.t.date))
+    .sort((x, y) => y.score - x.score || y.t.date.localeCompare(x.t.date))
     .slice(0, limit)
-    .map((s) => s.t);
+    .map((x) => x.t);
 }

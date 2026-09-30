@@ -125,6 +125,10 @@ export function Modal({
 
   useEffect(() => {
     stack.push(id);
+    // Пока открыто хоть одно окно, размытие под ним выключено (см.
+    // `.modal-open` в index.css): иначе Chromium на действиях и прокрутке в
+    // окне перерисовывал стекло шапки под затемнением и моргал белым.
+    document.documentElement.classList.add("modal-open");
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || stack[stack.length - 1] !== id) return;
       const { busy: isBusy, closeOnEscape: canEscape, onClose: close } = latest.current;
@@ -135,6 +139,7 @@ export function Modal({
       window.removeEventListener("keydown", onKey);
       const i = stack.lastIndexOf(id);
       if (i >= 0) stack.splice(i, 1);
+      if (stack.length === 0) document.documentElement.classList.remove("modal-open");
     };
   }, [id]);
 

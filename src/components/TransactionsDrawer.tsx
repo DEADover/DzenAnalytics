@@ -318,7 +318,7 @@ export function TransactionsDrawer() {
         кант, мягкая тень. */}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade"
+        className="drawer-backdrop absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade"
         onClick={close}
         aria-hidden
       />
