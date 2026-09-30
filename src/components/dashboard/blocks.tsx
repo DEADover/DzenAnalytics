@@ -31,8 +31,10 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  AreaChart,
   Area,
+  Line,
+  ReferenceArea,
+  ReferenceDot,
   ReferenceLine,
 } from "recharts";
 import { ArrowRight } from "lucide-react";
@@ -45,6 +47,9 @@ import {
 import { CategoryDot } from "../CategoryDot";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
 import { InfoPopover, InfoTerm } from "../InfoPopover";
+import { RangeCompareCard, RangeDatePill } from "../RangeCompareCard";
+import { useChartRangeSelect } from "../../hooks/useChartRangeSelect";
+import { rangeChange } from "../../lib/rangeCompare";
 import { AccountLogo } from "../AccountLogo";
 import { accountKindLabel } from "../../lib/accountType";
 import {
@@ -55,6 +60,7 @@ import {
   monthLabel,
   dayTitle,
   chartTooltipProps,
+  chartColor,
   chartGridStroke,
   chartAxisStroke,
 } from "../../lib/format";
@@ -484,6 +490,24 @@ export function CapitalBlock({
   );
   const summary = useMemo(() => capitalSummary(points), [points]);
   const chart = useMemo(() => thinCapital(points), [points]);
+  // Сравнение двух дат протяжкой по графику — то же, что у «Совокупного
+  // баланса» на «Счетах»: общий хук, общий расчёт и общая карточка итога.
+  const chartDates = useMemo(() => chart.map((p) => p.date), [chart]);
+  const range = useChartRangeSelect(chartDates);
+  const change = useMemo(
+    () => (range.active ? rangeChange(chart, range.active[0], range.active[1], (p) => p.net) : null),
+    [chart, range.active]
+  );
+  const chartData = useMemo(() => {
+    if (!change) return chart;
+    const { from, to } = change;
+    return chart.map((p) => ({ ...p, sel: p.date >= from.date && p.date <= to.date ? p.net : null }));
+  }, [chart, change]);
+  const rangeColor = !change
+    ? "rgb(var(--c-accent))"
+    : change.delta >= 0
+      ? chartColor.income
+      : chartColor.expense;
   const periodLabel = CAPITAL_PERIODS.find((p) => p.id === period)?.label ?? "";
   // Из чего капитал состоит сегодня: деньги на обычных счетах, накопления и
   // долги (кредитки, кредиты — всё, что в минусе).
@@ -517,6 +541,11 @@ export function CapitalBlock({
               Пунктир на графике — уровень на начало периода. Процент не
               пишется, если на старте капитал был нулевым или отрицательным:
               от такой базы он ничего не значит.
+            </p>
+            <p>
+              Проведите мышью по графику — сравним две даты: насколько изменился
+              капитал между ними, в деньгах, процентах и в среднем за месяц.
+              Снять выделение — щелчком или Esc.
             </p>
           </>
         }
@@ -635,9 +664,26 @@ export function CapitalBlock({
               </div>
             )}
           </div>
-          <div className="min-w-0 min-h-[220px]">
+          <div className="min-w-0 flex flex-col gap-2">
+            {chart.length > 1 && (
+              <div className="flex justify-end min-h-10">
+                <RangeCompareCard
+                  change={change}
+                  base={base}
+                  hint="Проведите мышью по графику — сравним две даты"
+                  onClear={range.clear}
+                />
+              </div>
+            )}
+            <div className="flex-1 min-h-[200px]">
             <ResponsiveContainer>
-              <AreaChart data={chart} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
+              <ComposedChart
+                data={chartData}
+                margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
+                {...range.handlers}
+                className="select-none"
+                style={{ cursor: "crosshair" }}
+              >
                 <defs>
                   <linearGradient id="dashCapital" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="rgb(var(--c-accent))" stopOpacity={0.35} />
@@ -675,16 +721,74 @@ export function CapitalBlock({
                   wrapperStyle={chartTooltipProps.wrapperStyle}
                   content={<CapitalTip base={base} start={summary.start} />}
                 />
+                {change && (
+                  <ReferenceArea
+                    x1={change.from.date}
+                    x2={change.to.date}
+                    fill={rangeColor}
+                    fillOpacity={0.06}
+                    ifOverflow="hidden"
+                  />
+                )}
                 <Area
                   type="monotone"
                   dataKey="net"
+                  // С выделением линия вне отрезка гаснет — глаз идёт за
+                  // окрашенным куском, как на «Счетах».
                   stroke="rgb(var(--c-accent))"
+                  strokeOpacity={change ? 0.35 : 1}
                   strokeWidth={2}
                   fill="url(#dashCapital)"
+                  fillOpacity={change ? 0.4 : 1}
                   isAnimationActive={false}
                 />
-              </AreaChart>
+                {change && (
+                  <>
+                    <Line
+                      type="monotone"
+                      dataKey="sel"
+                      stroke={rangeColor}
+                      strokeWidth={2.5}
+                      dot={false}
+                      activeDot={false}
+                      isAnimationActive={false}
+                      legendType="none"
+                      tooltipType="none"
+                    />
+                    {[change.from, change.to].map((p, i) => {
+                      // Начало подписано слева от линии, конец — справа; у края
+                      // графика плашка уходит внутрь, чтобы не обрезаться.
+                      const at = chartDates.indexOf(p.date) / Math.max(1, chartDates.length - 1);
+                      const side: "left" | "right" =
+                        i === 0 ? (at < 0.15 ? "right" : "left") : at > 0.85 ? "left" : "right";
+                      return (
+                        <ReferenceLine
+                          key={`l-${p.date}`}
+                          x={p.date}
+                          stroke={chartAxisStroke}
+                          strokeDasharray="4 3"
+                          label={(props: { viewBox?: { x?: number; y?: number } }) => (
+                            <RangeDatePill viewBox={props.viewBox} date={p.date} side={side} />
+                          )}
+                        />
+                      );
+                    })}
+                    {[change.from, change.to].map((p) => (
+                      <ReferenceDot
+                        key={`d-${p.date}`}
+                        x={p.date}
+                        y={p.value}
+                        r={5}
+                        fill={rangeColor}
+                        stroke="rgb(var(--c-panel))"
+                        strokeWidth={2}
+                      />
+                    ))}
+                  </>
+                )}
+              </ComposedChart>
             </ResponsiveContainer>
+            </div>
           </div>
         </div>
       )}
