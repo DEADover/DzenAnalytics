@@ -40,7 +40,7 @@ import { Segmented } from "../Segmented";
 import { useFreeMoneyStore } from "../../store/useFreeMoneyStore";
 import { Link } from "react-router-dom";
 import {
-  Scale, Target, TrendingUp, ArrowUpRight, ArrowUp, ArrowDown, Clock, Lightbulb, Sigma,
+  Scale, Target, TrendingUp, ArrowUpRight, ArrowUp, ArrowDown, Clock, Lightbulb, Sigma, CalendarDays,
 } from "lucide-react";
 import { CategoryDot } from "../CategoryDot";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../TooltipFacts";
@@ -1282,6 +1282,32 @@ export function ActivityHeat({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Трат в периоде ещё нет — правая половина не остаётся пустой: говорим,
+          почему пусто и что здесь появится. Чаще всего это первые дни месяца. */}
+      {topDays.length === 0 && (
+        <div className="flex-1 min-w-0 self-stretch flex items-center justify-center xl:border-l xl:border-border xl:pl-5">
+          <SectionEmpty
+            variant="compact"
+            icon={CalendarDays}
+            title={past.length <= 1 ? "Месяц только начался" : "Трат пока нет"}
+          >
+            {past.length <= 1 ? (
+              <>
+                Отчётный период начался {dayTitle(period.from)}, и трат в нём ещё
+                нет. Как только они появятся, здесь будут самые дорогие дни и
+                итоги месяца.
+              </>
+            ) : (
+              <>
+                За {past.length} {pluralRu(past.length, ["день", "дня", "дней"])} этого
+                периода трат не было. Как только они появятся, здесь будут самые
+                дорогие дни и итоги месяца.
+              </>
+            )}
+          </SectionEmpty>
         </div>
       )}
       </div>
