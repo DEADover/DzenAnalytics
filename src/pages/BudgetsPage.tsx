@@ -35,6 +35,7 @@ import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { budgetEditId } from "../lib/zenmoneyPush";
 import { CategoryDot } from "../components/CategoryDot";
 import { AccountLogo } from "../components/AccountLogo";
+import { MenuItem } from "../components/MenuItem";
 import { Popover } from "../components/Popover";
 import { CategoryCascadePicker, type CategoryNode } from "../components/CategoryCascadePicker";
 import { MonthCashflowChart } from "../components/MonthCashflowChart";
@@ -2341,30 +2342,3 @@ function BudgetRow({
   );
 }
 
-function MenuItem({
-  icon: Icon,
-  danger,
-  hint,
-  onClick,
-  children,
-}: {
-  icon: LucideIcon;
-  danger?: boolean;
-  /** Сумма справа — во что превратится план. */
-  hint?: ReactNode;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-2.5 py-1.5 rounded-md flex items-center gap-2 hover:bg-panel2 ${
-        danger ? "text-expense" : ""
-      }`}
-    >
-      <Icon className="w-4 h-4 shrink-0" />
-      <span className="flex-1 min-w-0 truncate">{children}</span>
-      {hint && <span className="shrink-0 text-muted tabular-nums">{hint}</span>}
-    </button>
-  );
-}

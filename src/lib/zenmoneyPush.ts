@@ -55,6 +55,7 @@ import type {
   ZenDeletion,
   ZenDiffResponse,
   ZenMerchant,
+  ZenReminder,
   ZenReminderMarker,
   ZenTag,
   ZenTransaction,
@@ -1228,6 +1229,12 @@ export interface DraftFields {
   source?: string | null;
   /** Название получателя из банка — у частей разделения его переносим с исходной. */
   originalPayee?: string | null;
+  /**
+   * Дата плана (`reminderMarker`), которую закрывает эта операция, — у факта,
+   * сохранённого из запланированной. Сама дата уходит `processed` тем же
+   * запросом (`lib/planActions`).
+   */
+  reminderMarker?: string | null;
 }
 
 export type DraftBuildResult =
@@ -1316,7 +1323,7 @@ export function buildDraftTransaction(
     merchant: null,
     incomeBankID: null,
     outcomeBankID: null,
-    reminderMarker: null,
+    reminderMarker: fields.reminderMarker ?? null,
   };
 
   if (fields.kind === "transfer") {
@@ -1525,7 +1532,9 @@ export async function sendPush(
   tags: ZenTag[] = [],
   budgets: ZenBudget[] = [],
   merchants: ZenMerchant[] = [],
-  accounts: ZenAccount[] = []
+  accounts: ZenAccount[] = [],
+  reminders: ZenReminder[] = [],
+  reminderMarkers: ZenReminderMarker[] = []
 ): Promise<ZenDiffResponse> {
   const payload: PushPayload = {
     transaction: [...items.map((i) => i.zen), ...resurrections],
@@ -1534,6 +1543,8 @@ export async function sendPush(
     ...(budgets.length > 0 ? { budget: budgets } : {}),
     ...(merchants.length > 0 ? { merchant: merchants } : {}),
     ...(accounts.length > 0 ? { account: accounts } : {}),
+    ...(reminders.length > 0 ? { reminder: reminders } : {}),
+    ...(reminderMarkers.length > 0 ? { reminderMarker: reminderMarkers } : {}),
   };
   // Debug aid: surface the full payload in DevTools so it's easy to
   // verify which fields actually landed in the request body. Disabled

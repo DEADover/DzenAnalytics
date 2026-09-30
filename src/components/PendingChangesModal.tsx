@@ -27,6 +27,7 @@ import { useAccountEditsStore } from "../store/useAccountEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
+import { usePlanActionsStore } from "../store/usePlanActionsStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import {
   getCategoryTagsFromCache,
@@ -169,6 +170,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
   const newCats = useNewCategoriesStore((s) => s.items);
   const tagDeletions = useTagDeletionsStore((s) => s.deletions);
   const plannedDeletions = usePlannedDeletionsStore((s) => s.deletions);
+  const planActions = usePlanActionsStore((s) => s.actions);
   const cpRenames = useCounterpartyEditsStore((s) => s.renames);
   const cpCreated = useCounterpartyEditsStore((s) => s.created);
   const cpDeleted = useCounterpartyEditsStore((s) => s.deleted);
@@ -461,7 +463,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
   // а строка должна оставаться читаемой до самого конца.
   const plannedItems = useMemo<DictItem[]>(
     () =>
-      Object.values(plannedDeletions).map((p) => ({
+      Object.values(plannedDeletions).map((p): DictItem => ({
         key: `plan:${p.id}`,
         action: "delete" as const,
         title: p.title,
@@ -469,8 +471,25 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
           ? `Разовый план от ${formatDate(p.date, "short")} · Удаление в Дзен-мани`
           : `Операция от ${formatDate(p.date, "short")} · Сам план останется`,
         revert: () => usePlannedDeletionsStore.getState().restore(p.id),
-      })),
-    [plannedDeletions]
+      })).concat(
+        // «Сохранить как факт» здесь не повторяем: факт виден новой операцией,
+        // и её отмена снимает и закрытие плана.
+        Object.values(planActions)
+          .filter((a) => a.kind !== "fact")
+          .map((a): DictItem => ({
+            key: `planact:${a.markerId}`,
+            action: "edit" as const,
+            title: a.title,
+            note:
+              a.kind === "link"
+                ? `План от ${formatDate(a.date, "short")} · Связь с операцией`
+                : a.scope === "chain"
+                  ? `План с ${formatDate(a.date, "short")} · Правка всей цепочки`
+                  : `План от ${formatDate(a.date, "short")} · Правка этой даты`,
+            revert: () => usePlanActionsStore.getState().revert(a.markerId),
+          }))
+      ),
+    [plannedDeletions, planActions]
   );
 
   const total =

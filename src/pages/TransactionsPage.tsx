@@ -34,6 +34,7 @@ import { OperationActions, OperationAmount, OperationCategory, OperationPayee, O
 import { TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { MergeSelectionAction } from "../components/operations/MergeSelectionAction";
+import { PlannedFeedSection } from "../components/operations/PlannedFeedSection";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { BulkEditModal } from "../components/BulkEditModal";
@@ -728,6 +729,7 @@ export function TransactionsPage() {
               someSelected={someSelected}
               onToggleAll={toggleSelectAll}
             />
+            {apiConnected && <PlannedFeedSection template={resize.template} grouped base={base} />}
             {groupedByDay.map(([ymd, txs]) => (
               <DayGroup
                 key={ymd}
@@ -757,6 +759,9 @@ export function TransactionsPage() {
               someSelected={someSelected}
               onToggleAll={toggleSelectAll}
             />
+            {apiConnected && (
+              <PlannedFeedSection template={resize.template} grouped={false} base={base} />
+            )}
             {visible.map((t) => (
               <Row
                 key={t.id}

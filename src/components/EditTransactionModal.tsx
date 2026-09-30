@@ -5,6 +5,7 @@ import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
+import { usePlanActionsStore } from "../store/usePlanActionsStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import {
@@ -61,6 +62,13 @@ interface Props {
   template?: Transaction | null;
   /** Open a freshly created operation as a «Долг» (create mode only). */
   initialDebt?: boolean;
+  /**
+   * «Сохранить как факт» у запланированной операции: форма заполнена по плану
+   * (`template`), а созданная операция закрывает эту дату плана — ссылкой
+   * `reminderMarker`, как это делает Дзен-мани. Одна операция на одну дату,
+   * поэтому «Создать и продолжить» здесь нет.
+   */
+  planMarker?: { id: string; date: string; title: string };
   onClose: () => void;
   /**
    * Снять копию с открытой операции (issue #78). Задан — в подвале появляется
@@ -153,6 +161,7 @@ export function EditTransactionModal({
   template,
   initialKind,
   initialDebt,
+  planMarker,
   onClose,
   onCopy,
   onSplit,
@@ -788,7 +797,7 @@ export function EditTransactionModal({
       return;
     }
     const built = buildDraftTransaction(
-      currentDraftFields(newDraftId()),
+      { ...currentDraftFields(newDraftId()), reminderMarker: planMarker?.id ?? null },
       cache,
       Math.floor(Date.now() / 1000),
       // Контрагент, заведённый локально и ещё не уехавший в облако, для
@@ -801,6 +810,15 @@ export function EditTransactionModal({
       return;
     }
     await addDraft(built.zen);
+    if (planMarker) {
+      await usePlanActionsStore.getState().put({
+        kind: "fact",
+        markerId: planMarker.id,
+        txId: built.zen.id,
+        date: planMarker.date,
+        title: planMarker.title,
+      });
+    }
     await refresh();
     saveLastAccount(isDebt ? realAcc.trim() : kind === "transfer" ? outAcc.trim() : account.trim());
     if (keepOpen) {
@@ -1074,7 +1092,7 @@ export function EditTransactionModal({
       <ModalHeader
         icon={isCreate ? Plus : Pencil}
         tone="accent2"
-        title={isCopy ? "Копия операции" : isCreate ? "Новая операция" : "Редактирование операции"}
+        title={planMarker ? "Сохранить как факт" : isCopy ? "Копия операции" : isCreate ? "Новая операция" : "Редактирование операции"}
         actions={
           !isCreate && onNavigate ? (
             <span
@@ -1515,7 +1533,9 @@ export function EditTransactionModal({
         )
       )}
       <ModalFooter justify="between">
-        {isCreate ? (
+        {isCreate && planMarker ? (
+          <span />
+        ) : isCreate ? (
           // Вторая кнопка создания — слева, подальше от основной: «Создать»
           // по привычке жмут справа, и перепутать их не должно получаться.
           <Tooltip content="Создать и сразу вносить следующую — дата, счёт и категория останутся">

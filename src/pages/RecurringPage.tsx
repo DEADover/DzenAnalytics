@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Repeat,
   Calendar,
@@ -15,7 +15,7 @@ import {
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { detectRecurring, type RecurringCandidate } from "../lib/aggregations";
-import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
+import { usePlannedCache } from "../hooks/useZenPlanned";
 import { plannedOps, ownPlannedOps, type PlannedOp } from "../lib/plannedOps";
 
 import { useMembersStore } from "../store/useMembersStore";
@@ -140,16 +140,9 @@ export function RecurringPage() {
 
   // Planned / forecast operations straight from Zenmoney (issue #47). They ride
   // in the same cache as the transactions — no extra sync needed.
-  const [zenCache, setZenCache] = useState<ZenCache | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    loadZenCache().then((c) => {
-      if (!cancelled) setZenCache(c);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions]);
+  // С наложенной очередью действий из ленты: закрытый фактом план исчезает и
+  // здесь, не дожидаясь отправки.
+  const zenCache = usePlannedCache() ?? null;
   // Только свои планы: на общем аккаунте по одному токену приезжают планы
   // всех подключённых людей, а мобильное приложение чужие не показывает (#92).
   const ownerId = useMembersStore((s) => s.ownerId);

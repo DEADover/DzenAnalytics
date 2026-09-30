@@ -143,6 +143,7 @@ export const BACKUP_META_KEYS = [
   "newCategories",
   "budgetEdits", // планы бюджета, ещё не уехавшие в Дзен-мани
   "plannedDeletions", // просроченные планы, снятые вручную (issue #71)
+  "planActions", // факт, связь и правки запланированных из ленты
 ] as const;
 
 /**

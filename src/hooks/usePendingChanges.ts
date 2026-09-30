@@ -20,6 +20,7 @@ import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { useAccountEditsStore } from "../store/useAccountEditsStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
+import { usePlanActionsStore } from "../store/usePlanActionsStore";
 import {
   useCounterpartyEditsStore,
   countCounterpartyPending,
@@ -63,6 +64,7 @@ export function usePendingChanges(): PendingChanges {
   const cpDeleted = useCounterpartyEditsStore((s) => s.deleted);
   const merges = useCounterpartyEditsStore((s) => s.merges);
   const plannedDeletions = usePlannedDeletionsStore((s) => s.deletions);
+  const planActions = usePlanActionsStore((s) => s.actions);
 
   // Count ONLY deletions still backed by a cloud row: once pushed, the row
   // leaves `transactionsRaw` but its id lingers in `deletedIds` as a permanent
@@ -87,7 +89,10 @@ export function usePendingChanges(): PendingChanges {
       deleted: cpDeleted,
       merges,
     });
-    const plans = Object.keys(plannedDeletions).length;
+    // «Сохранить как факт» не считаем отдельно: его видно новой операцией.
+    const plans =
+      Object.keys(plannedDeletions).length +
+      Object.values(planActions).filter((a) => a.kind !== "fact").length;
     const operations = e + d + deleted;
     // Удаление просроченного плана — такое же справочное изменение, как
     // удаление категории: своя строка в списке, свой откат.
@@ -117,5 +122,6 @@ export function usePendingChanges(): PendingChanges {
     cpDeleted,
     merges,
     plannedDeletions,
+    planActions,
   ]);
 }

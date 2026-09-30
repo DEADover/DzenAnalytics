@@ -8,7 +8,7 @@ import { create } from "zustand";
 import { pluralRu } from "../lib/plural";
 import * as db from "../lib/db";
 import { fetchDiff, checkToken, ZenApiError } from "../lib/zenmoney";
-import type { ZenTermUnit } from "../lib/zenmoney";
+import type { ZenTermUnit, ZenTransaction } from "../lib/zenmoney";
 import { mapZenmoneyDiff } from "../lib/zenmoneyMap";
 import {
   loadZenCache,
@@ -56,6 +56,8 @@ import {
   usePlannedDeletionsStore,
   loadPlannedDeletions,
 } from "./usePlannedDeletionsStore";
+import { usePlanActionsStore, loadPlanActions } from "./usePlanActionsStore";
+import { buildPlanPush } from "../lib/planActions";
 import { useBudgetEditsStore, loadBudgetEdits } from "./useBudgetEditsStore";
 import { useDraftsStore, loadDrafts } from "./useDraftsStore";
 import { useImportBatchesStore } from "./useImportBatchesStore";
@@ -760,6 +762,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       useNewCategoriesStore.getState().clear(),
       useTagDeletionsStore.getState().clearAll(),
       usePlannedDeletionsStore.getState().clearAll(),
+      usePlanActionsStore.getState().clearAll(),
       useCounterpartyEditsStore.getState().clearAll(),
       useBudgetEditsStore.getState().clearAll(),
     ]);
@@ -1305,6 +1308,47 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // запись висела бы в списке изменений вечно. Список фиксируем здесь, до
       // отправки, чтобы не потерять то, что человек добавит по ходу.
       const plannedDoneIds = plannedQueue.map((p) => p.id);
+      // Действия с планами из ленты: «Сохранить как факт», «Связать»,
+      // «Изменить». Дата плана закрывается тем же запросом, что уносит её
+      // факт, — иначе в облаке был бы миг, когда плана нет, а факта ещё нет.
+      const planStamp = Math.floor(Date.now() / 1000);
+      const accInstrument = new Map(cache.accounts.map((a) => [a.id, a.instrument]));
+      const planPush = buildPlanPush(
+        Object.values(await loadPlanActions()),
+        cache.reminderMarkers ?? [],
+        cache.reminders ?? [],
+        {
+          liveTxIds: new Set(
+            cache.transactions.filter((t) => !t.deleted).map((t) => String(t.id))
+          ),
+          readyDraftIds: new Set(draftTxs.map((t) => String(t.id))),
+          pendingDraftIds: new Set(Object.keys(await loadDrafts())),
+          instrumentOf: (id) => accInstrument.get(id),
+        },
+        planStamp
+      );
+      // Связь с существующей операцией — ссылка в самой операции. Если у неё
+      // и так едет правка, ставим ссылку в неё: две записи одной операции в
+      // одном запросе спорили бы, какая главнее.
+      const linkTxs: ZenTransaction[] = [];
+      {
+        const cachedTx = new Map(cache.transactions.map((t) => [String(t.id), t]));
+        const draftById = new Map(draftTxs.map((t, i) => [String(t.id), i]));
+        for (const l of planPush.links) {
+          const di = draftById.get(l.txId);
+          if (di !== undefined) {
+            draftTxs[di] = { ...draftTxs[di], reminderMarker: l.markerId };
+            continue;
+          }
+          const item = toPush.find((i) => i.id === l.txId);
+          if (item) {
+            item.zen = { ...item.zen, reminderMarker: l.markerId };
+            continue;
+          }
+          const tx = cachedTx.get(l.txId);
+          if (tx) linkTxs.push({ ...tx, reminderMarker: l.markerId, changed: planStamp });
+        }
+      }
       // Pending plan/budget changes → ZenBudget upserts. Built against the
       // fresh cache so the (tag, month) cell and its «other side» are current.
       const budgetEdits = await loadBudgetEdits();
@@ -1356,6 +1400,9 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         cpMerge.deletions.length === 0 &&
         tagDel.deletions.length === 0 &&
         plannedDel.length === 0 &&
+        planPush.markers.length === 0 &&
+        planPush.reminders.length === 0 &&
+        linkTxs.length === 0 &&
         budgetPush.budgets.length === 0
       ) {
         const result: PushResult = { pushed: 0, created: 0, skipped, snapshotId };
@@ -1389,6 +1436,9 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         if (doneBudgetIds.length > 0) {
           await useBudgetEditsStore.getState().clearMany(doneBudgetIds);
         }
+        // Действия с планами, которым отправлять нечего (дату уже закрыли или
+        // правка ничего не меняет), тоже не должны висеть в очереди.
+        await usePlanActionsStore.getState().clearPushed(planPush.doneIds);
         return result;
       }
 
@@ -1415,11 +1465,14 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           // rebuilt from cache, so they ride the raw-transaction channel.
           ...cpMerge.transactions,
           ...tagDel.transactions,
+          ...linkTxs,
         ],
         [...tagPush.tags, ...newCatTags],
         budgetPush.budgets,
         merchantUpserts,
-        accPush.accounts
+        accPush.accounts,
+        planPush.reminders,
+        planPush.markers
       );
 
       // 4) Merge server response into local cache so subsequent diffs
@@ -1437,6 +1490,11 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       //    if the server ever DID echo them, `applyDeletions` dedups by id.)
       const nextCache = applyDiff(cache, {
         ...response,
+        // Свои даты и правила плана тоже вносим в кэш: закрытая фактом дата
+        // должна уйти из запланированных сразу, а не со следующей
+        // синхронизацией. Ответ сервера идёт следом и главнее.
+        reminderMarker: [...planPush.markers, ...(response.reminderMarker ?? [])],
+        reminder: [...planPush.reminders, ...(response.reminder ?? [])],
         deletion: [
           ...(response.deletion ?? []),
           ...deletions,
@@ -1582,6 +1640,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       if (plannedDoneIds.length > 0) {
         await usePlannedDeletionsStore.getState().clearPushed(plannedDoneIds);
       }
+      await usePlanActionsStore.getState().clearPushed(planPush.doneIds);
       // Budget edits: clear everything that was sent OR a no-op (already in
       // cloud); keep only the ones we skipped (tag not in cache) for retry.
       // `doneBudgetIds` was computed up-front so the early-return path clears

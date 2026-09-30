@@ -59,6 +59,8 @@ describe("реестр переносимых настроек", () => {
       "display.commentWrap",
       "display.columnResize",
       "display.feedHeadSticky",
+      "display.feedPlanned",
+      "display.feedPlannedOpen",
       "members.owner",
       "duplicates.exclusions",
       "accounts.view",

@@ -89,6 +89,7 @@ import { useTagEditsStore } from "../store/useTagEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
+import { usePlanActionsStore } from "../store/usePlanActionsStore";
 import {
   useCounterpartyEditsStore,
   countCounterpartyPending,
@@ -220,6 +221,8 @@ export function ImportPage() {
   const setStatementLine = useDisplayStore((s) => s.setStatementLine);
   const commentWrap = useDisplayStore((s) => s.commentWrap);
   const setCommentWrap = useDisplayStore((s) => s.setCommentWrap);
+  const feedPlanned = useDisplayStore((s) => s.feedPlanned);
+  const setFeedPlanned = useDisplayStore((s) => s.setFeedPlanned);
   const filtersMode = useDisplayStore((s) => s.filtersMode);
   const setFiltersMode = useDisplayStore((s) => s.setFiltersMode);
   const hideThanks = useDisplayStore((s) => s.hideThanks);
@@ -328,11 +331,13 @@ export function ImportPage() {
   const cpDeleted = useCounterpartyEditsStore((s) => s.deleted);
   const cpMerges = useCounterpartyEditsStore((s) => s.merges);
   const plannedDeletionsMap = usePlannedDeletionsStore((s) => s.deletions);
+  const planActionsMap = usePlanActionsStore((s) => s.actions);
   const dictPendingCount =
     Object.keys(tagEditsMap).length +
     newCatsItems.length +
     Object.keys(tagDeletionsMap).length +
     Object.keys(plannedDeletionsMap).length +
+    Object.values(planActionsMap).filter((a) => a.kind !== "fact").length +
     countCounterpartyPending({
       renames: cpRenames,
       created: cpCreated,
@@ -1571,6 +1576,32 @@ export function ImportPage() {
               checked={commentWrap}
               label="Переносить длинные комментарии на вторую строку"
               onChange={(next) => setCommentWrap(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Запланированные в ленте"
+          status={
+            feedPlanned
+              ? "Блоком над лентой «Операций» — просроченные и ближайшие"
+              : "Не показываются — они есть в «Регулярных»"
+          }
+          help={
+            <p>
+              Запланированные операции Дзен-мани — просроченные и ближайшие (до
+              конца отчётного месяца, но не меньше двух недель вперёд) — стоят серым блоком над лентой
+              «Операций», как «Будущие» в приложении. По щелчку их можно
+              сохранить как факт, связать с уже проведённой операцией,
+              изменить или удалить. Блок сворачивается щелчком по заголовку;
+              здесь его можно убрать совсем.
+            </p>
+          }
+          control={
+            <Switch
+              checked={feedPlanned}
+              label="Показывать запланированные операции над лентой"
+              onChange={(next) => setFeedPlanned(next)}
             />
           }
         />

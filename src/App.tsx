@@ -66,6 +66,7 @@ import {
 } from "./store/useCounterpartyEditsStore";
 import { useTagDeletionsStore } from "./store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "./store/usePlannedDeletionsStore";
+import { usePlanActionsStore } from "./store/usePlanActionsStore";
 import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
 import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
 import { ScrollTopButton } from "./components/ScrollTopButton";
@@ -160,6 +161,7 @@ function App() {
     useCounterpartyEditsStore.getState().hydrate();
     useTagDeletionsStore.getState().hydrate();
     usePlannedDeletionsStore.getState().hydrate();
+    usePlanActionsStore.getState().hydrate();
     useDashboardLayoutStore.getState().hydrate();
     useFilterMemoryStore.getState().hydrate();
     // Правила нужны переносу настроек с первой синхронизации, а не только на
@@ -286,7 +288,8 @@ function App() {
       const hasCpEdits =
         countCounterpartyPending(useCounterpartyEditsStore.getState()) > 0;
       const hasPlannedDeletions =
-        Object.keys(usePlannedDeletionsStore.getState().deletions).length > 0;
+        Object.keys(usePlannedDeletionsStore.getState().deletions).length > 0 ||
+        Object.keys(usePlanActionsStore.getState().actions).length > 0;
       if (
         !hasEdits &&
         !hasDeletions &&
@@ -378,6 +381,13 @@ function App() {
       if (Object.keys(s.deletions).length <= Object.keys(p.deletions).length) return;
       schedule();
     });
+    const unsubPlanActions = usePlanActionsStore.subscribe((s, p) => {
+      if (s.actions === p.actions) return;
+      // Снятие с очереди (после отправки, откат) — не повод отправлять снова.
+      if (Object.keys(s.actions).length < Object.keys(p.actions).length) return;
+      if (Object.keys(s.actions).length === 0) return;
+      schedule();
+    });
     const unsubCpEdits = useCounterpartyEditsStore.subscribe((s, p) => {
       const now = countCounterpartyPending(s);
       if (now === 0 || now <= countCounterpartyPending(p)) return;
@@ -394,6 +404,7 @@ function App() {
       unsubNewCats();
       unsubTagDeletions();
       unsubPlannedDeletions();
+      unsubPlanActions();
       unsubCpEdits();
     };
   }, []);

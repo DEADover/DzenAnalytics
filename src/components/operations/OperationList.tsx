@@ -148,9 +148,12 @@ export function OperationListRow({
   selected,
   onToggleSelect,
   onOpen,
+  className,
   children,
 }: {
   template: string;
+  /** Дополнительные классы строки — например, приглушить плановую. */
+  className?: string;
   selected: boolean;
   onToggleSelect: () => void;
   /** Двойной клик. Нет — открывать нечего, и выделение не ждёт второго клика. */
@@ -200,9 +203,11 @@ export function OperationListRow({
           onOpen();
         })
       }
-      className={`grid items-center gap-3 px-3 py-2 border-b border-border/40 cursor-pointer group text-[length:var(--tbl-font)] ${
-        selected ? "bg-accent/5" : "hover:bg-panel2/40"
-      }`}
+      className={clsx(
+        "grid items-center gap-3 px-3 py-2 border-b border-border/40 cursor-pointer group text-[length:var(--tbl-font)]",
+        selected ? "bg-accent/5" : "hover:bg-panel2/40",
+        className
+      )}
       style={{ gridTemplateColumns: template }}
     >
       {children}

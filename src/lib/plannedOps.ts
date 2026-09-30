@@ -1,5 +1,5 @@
 import type { ZenCache } from "./zenmoneyCache";
-import type { CurrencyRates } from "../types";
+import type { CurrencyRates, Transaction } from "../types";
 
 /**
  * Planned / forecast operations (issue #47).
@@ -26,6 +26,12 @@ export interface PlannedOp {
   kind: PlannedKind;
   /** Amount in the BASE currency (like `Transaction.amountBase`). */
   amountBase: number;
+  /** Сумма в валюте счёта (списания у расхода и перевода, зачисления у дохода). */
+  amount: number;
+  currency: string;
+  /** Зачисление у перевода — в валюте счёта зачисления. */
+  toAmount: number | null;
+  toCurrency: string | null;
   account: string;
   toAccount: string | null;
   payee: string;
@@ -100,18 +106,27 @@ export function plannedOps(
     let kind: PlannedKind;
     let amountBase: number;
     let account: string;
+    const code = (id: number) => instrumentById.get(id)?.shortTitle || rates.base;
+    let amount: number;
+    let currency: string;
     if (isTransfer) {
       kind = "transfer";
       amountBase = toBase(m.outcome, m.outcomeInstrument);
       account = outAcc?.title || "";
+      amount = m.outcome;
+      currency = code(m.outcomeInstrument);
     } else if (m.outcome > 0) {
       kind = "expense";
       amountBase = toBase(m.outcome, m.outcomeInstrument);
       account = outAcc?.title || "";
+      amount = m.outcome;
+      currency = code(m.outcomeInstrument);
     } else {
       kind = "income";
       amountBase = toBase(m.income, m.incomeInstrument);
       account = inAcc?.title || "";
+      amount = m.income;
+      currency = code(m.incomeInstrument);
     }
 
     const plan = reminderById.get(m.reminder);
@@ -122,6 +137,10 @@ export function plannedOps(
       date: m.date,
       kind,
       amountBase,
+      amount,
+      currency,
+      toAmount: isTransfer ? m.income : null,
+      toCurrency: isTransfer ? code(m.incomeInstrument) : null,
       account,
       toAccount: isTransfer ? inAcc?.title || "" : null,
       payee: (m.payee || "").trim(),
@@ -167,4 +186,41 @@ export function plannedBreakdown(
 export function ownPlannedOps(ops: PlannedOp[], ownerId: number | null): PlannedOp[] {
   if (ownerId == null) return ops;
   return ops.filter((p) => p.member == null || p.member === ownerId);
+}
+
+/**
+ * Запланированная операция в виде строки ленты — чтобы рисовать её теми же
+ * ячейками, что и настоящие операции, и открывать «Сохранить как факт» той же
+ * карточкой, что и копию операции (`template`).
+ *
+ * `id` — id даты плана: по нему строка находит своё действие в очереди.
+ */
+export function plannedAsTransaction(p: PlannedOp): Transaction {
+  const [category, ...rest] = p.category.split(" / ");
+  const subcategory = rest.length ? rest.join(" / ") : null;
+  const transfer = p.kind === "transfer";
+  return {
+    id: p.id,
+    date: p.date,
+    category: transfer && p.category !== "Долг" ? "Перевод" : category || "",
+    subcategory: transfer ? null : subcategory,
+    categoryFull: transfer && p.category !== "Долг" ? "Перевод" : p.category,
+    payee: p.payee,
+    brand: p.payee || null,
+    comment: p.comment,
+    outcomeAccount: p.kind === "income" ? "" : p.account,
+    outcomeAmount: p.kind === "income" ? 0 : p.amount,
+    outcomeCurrency: p.currency,
+    incomeAccount: transfer ? p.toAccount ?? "" : p.kind === "income" ? p.account : "",
+    incomeAmount: transfer ? p.toAmount ?? p.amount : p.kind === "income" ? p.amount : 0,
+    incomeCurrency: transfer ? p.toCurrency ?? p.currency : p.currency,
+    kind: p.kind,
+    amount: p.amount,
+    currency: p.currency,
+    account: p.account,
+    amountBase: p.amountBase,
+    opAmount: null,
+    opCurrency: null,
+    createdAt: `${p.date}T12:00:00Z`,
+  };
 }

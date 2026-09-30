@@ -17,6 +17,42 @@ import { plannedOps, ownPlannedOps, type PlannedOp } from "../lib/plannedOps";
 
 import { useMembersStore } from "../store/useMembersStore";
 import { useDataStore } from "../store/useDataStore";
+import { usePlanActionsStore } from "../store/usePlanActionsStore";
+import { useDraftsStore } from "../store/useDraftsStore";
+import { applyPlanActions } from "../lib/planActions";
+import type { ZenCache } from "../lib/zenmoneyCache";
+
+/**
+ * Кэш Дзен-мани с наложенной очередью действий над планами (факт, связь,
+ * правка): закрытая фактом дата пропадает из запланированных сразу, а не
+ * после отправки. `undefined`/`null` — как у `peekZenCache`.
+ */
+export function usePlannedCache(): ZenCache | null | undefined {
+  const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
+  const actions = usePlanActionsStore((s) => s.actions);
+  const drafts = useDraftsStore((s) => s.drafts);
+  useEffect(() => {
+    if (cache === undefined) void getZenCache();
+  }, [cache]);
+  return useMemo(() => {
+    if (!cache) return cache;
+    // Факт или связь, чью операцию уже удалили, план не закрывают: иначе дата пропала
+    // бы до следующей отправки, хотя закрывать её больше нечем.
+    const live = new Set(cache.transactions.filter((t) => !t.deleted).map((t) => String(t.id)));
+    const list = Object.values(actions).filter(
+      (a) => a.kind === "edit" || drafts[a.txId] !== undefined || live.has(a.txId)
+    );
+    if (list.length === 0) return cache;
+    const instrument = new Map(cache.accounts.map((a) => [a.id, a.instrument]));
+    const o = applyPlanActions(
+      cache.reminderMarkers ?? [],
+      cache.reminders ?? [],
+      list,
+      (id) => instrument.get(id)
+    );
+    return { ...cache, reminderMarkers: o.markers, reminders: o.reminders };
+  }, [cache, actions, drafts]);
+}
 
 /**
  * Планы Дзен-мани на отрезке от сегодня до конца периода.
@@ -38,13 +74,9 @@ export function useZenPlanned(
    */
   withOverdue = false
 ): PlannedOp[] | null {
-  const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
+  const cache = usePlannedCache();
   const rates = useDataStore((s) => s.rates);
   const ownerId = useMembersStore((s) => s.ownerId);
-
-  useEffect(() => {
-    if (cache === undefined) void getZenCache();
-  }, [cache]);
 
   return useMemo(() => {
     if (!cache) return cache === undefined ? [] : null;
