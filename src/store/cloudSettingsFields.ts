@@ -167,9 +167,6 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useDisplayStore, "display.feedPlanned", (s) => s.feedPlanned, (v, s) =>
     isBool(v) ? s.setFeedPlanned(v) : undefined
   ),
-  field(useDisplayStore, "display.feedPlannedOpen", (s) => s.feedPlannedOpen, (v, s) =>
-    isBool(v) ? s.setFeedPlannedOpen(v) : undefined
-  ),
   field(useDisplayStore, "display.hideThanks", (s) => s.hideThanks, (v, s) =>
     isBool(v) ? s.setHideThanks(v) : undefined
   ),

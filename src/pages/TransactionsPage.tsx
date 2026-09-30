@@ -34,7 +34,7 @@ import { OperationActions, OperationAmount, OperationCategory, OperationPayee, O
 import { TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { MergeSelectionAction } from "../components/operations/MergeSelectionAction";
-import { PlannedFeedSection } from "../components/operations/PlannedFeedSection";
+import { PlannedFeedList, PlannedSummaryRow } from "../components/operations/PlannedFeedSection";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { BulkEditModal } from "../components/BulkEditModal";
@@ -240,6 +240,9 @@ export function TransactionsPage() {
   const { applySplit } = useSplitTransaction();
   // Окно объединения выделенных открыто — Escape принадлежит ему.
   const [mergeOpen, setMergeOpen] = useState(false);
+  // Лента «только запланированные» — как вкладка «Будущие» в Дзен-мани.
+  // Включается щелчком по строке «Запланировано» над лентой.
+  const [plannedMode, setPlannedMode] = useState(false);
 
 
   // ── «Добавить» dropdown: pick which kind of operation to create. ─────
@@ -537,6 +540,8 @@ export function TransactionsPage() {
       />
       <GlobalFilters />
 
+      {/* Итоги — по операциям; в ленте одних планов они сбивали бы с толку. */}
+      {!plannedMode && (
       <StatRow>
         <StatCell
           label="Доходы"
@@ -580,6 +585,7 @@ export function TransactionsPage() {
           note={pageSearch ? `из ${filtered.length} в фильтре` : undefined}
         />
       </StatRow>
+      )}
 
       <OperationListTray
         toolbar={
@@ -715,7 +721,25 @@ export function TransactionsPage() {
           </>
         }
       >
-        {sorted.length === 0 ? (
+        {apiConnected && plannedMode ? (
+          <div>
+            <HeaderRow
+              grouped={byDate}
+              template={resize.template}
+              handle={resize.handle}
+              allSelected={false}
+              someSelected={false}
+              onToggleAll={() => {}}
+              noSelect
+            />
+            <PlannedFeedList
+              template={resize.template}
+              grouped={byDate}
+              query={pageSearch}
+              onBack={() => setPlannedMode(false)}
+            />
+          </div>
+        ) : sorted.length === 0 ? (
           <SectionEmpty variant="inline">
             По текущим фильтрам ничего не найдено
           </SectionEmpty>
@@ -729,7 +753,7 @@ export function TransactionsPage() {
               someSelected={someSelected}
               onToggleAll={toggleSelectAll}
             />
-            {apiConnected && <PlannedFeedSection template={resize.template} grouped base={base} />}
+            {apiConnected && <PlannedSummaryRow onOpen={() => setPlannedMode(true)} />}
             {groupedByDay.map(([ymd, txs]) => (
               <DayGroup
                 key={ymd}
@@ -759,9 +783,7 @@ export function TransactionsPage() {
               someSelected={someSelected}
               onToggleAll={toggleSelectAll}
             />
-            {apiConnected && (
-              <PlannedFeedSection template={resize.template} grouped={false} base={base} />
-            )}
+            {apiConnected && <PlannedSummaryRow onOpen={() => setPlannedMode(true)} />}
             {visible.map((t) => (
               <Row
                 key={t.id}
@@ -900,7 +922,10 @@ function HeaderRow({
   allSelected,
   someSelected,
   onToggleAll,
+  noSelect = false,
 }: {
+  /** Выбирать нечего (планы) — вместо флажка пустая ячейка. */
+  noSelect?: boolean;
   grouped: boolean;
   template: string;
   /** Границы своей ширины столбцов. */
@@ -911,13 +936,17 @@ function HeaderRow({
 }) {
   return (
     <OperationListHead template={template}>
-      <Checkbox
-        checked={allSelected}
-        indeterminate={someSelected}
-        onChange={onToggleAll}
-        title="Выбрать всё (под фильтрами)"
-        label="Выбрать все операции"
-      />
+      {noSelect ? (
+        <span />
+      ) : (
+        <Checkbox
+          checked={allSelected}
+          indeterminate={someSelected}
+          onChange={onToggleAll}
+          title="Выбрать всё (под фильтрами)"
+          label="Выбрать все операции"
+        />
+      )}
       {!grouped && (
         <ListHeadCell col="date" resize={handle("date")}>
           Дата

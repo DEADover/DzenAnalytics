@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import {
   CalendarCheck,
   CalendarClock,
-  ChevronDown,
+  ArrowLeft,
+  ChevronRight,
   Link2,
   MoreHorizontal,
   Pencil,
@@ -10,15 +11,11 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import type { Transaction } from "../../types";
-import { formatMoney } from "../../lib/format";
+import { formatDate } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
-import { periodKey, periodRange, shiftDays } from "../../lib/period";
 import { plannedAsTransaction, type PlannedOp } from "../../lib/plannedOps";
-import { kindTotals } from "../../lib/aggregations";
-import { useZenPlanned } from "../../hooks/useZenPlanned";
+import { usePlannedFeed, type PlannedFeedCounts } from "../../hooks/usePlannedFeed";
 import { useDisplayStore } from "../../store/useDisplayStore";
-import { useFiltersStore } from "../../store/useFiltersStore";
-import { useReportPeriodStore } from "../../store/useReportPeriodStore";
 import { usePlannedDeletionsStore } from "../../store/usePlannedDeletionsStore";
 import { confirm } from "../../store/useConfirmStore";
 import { operationTone } from "../../lib/txKindStyle";
@@ -30,12 +27,6 @@ import { OperationListRow } from "./OperationList";
 import { OperationAmount, OperationCategory, OperationComment, OperationPayee } from "./OperationCells";
 import { PlanLinkModal } from "./PlanLinkModal";
 import { PlanEditModal } from "./PlanEditModal";
-
-const pad2 = (n: number) => String(n).padStart(2, "0");
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
 
 /** «6 октября, через 6 дней» / «28 сентября, просрочено на 2 дня» — как у Дзен-мани. */
 function dayTitle(ymd: string, today: string): string {
@@ -54,53 +45,73 @@ function planTitle(p: PlannedOp): string {
   return p.payee || p.comment || p.category || (p.kind === "transfer" ? "Перевод" : "План");
 }
 
+type Counts = PlannedFeedCounts;
+
+/** «Просрочено 4 · до конца месяца 3 · до конца года 25 · всего 34». */
+function CountsLine({ counts }: { counts: Counts }) {
+  const part = (label: string, n: number, tone?: string) => (
+    <span className={clsx("whitespace-nowrap", tone)}>
+      {label} <span className="tabular-nums font-medium">{n}</span>
+    </span>
+  );
+  return (
+    <span className="flex items-center gap-x-3 gap-y-0.5 flex-wrap text-muted">
+      {counts.overdue > 0 && part("Просрочено", counts.overdue, "text-expense")}
+      {part("До конца месяца", counts.month)}
+      {part("До конца года", counts.year)}
+      {part("Всего", counts.total)}
+    </span>
+  );
+}
+
 /**
- * Запланированные операции Дзен-мани над лентой «Операций» — как «Будущие» в
- * приложении: просроченные и ближайшие (до конца отчётного месяца, не меньше
- * двух недель), серым, с
- * теми же действиями по щелчку.
+ * Строка «Запланировано» над лентой: сколько планов просрочено и сколько
+ * осталось до конца месяца, года и всего. Щелчок переключает ленту в режим
+ * «только запланированные» — как вкладка «Будущие» в приложении Дзен-мани.
+ */
+export function PlannedSummaryRow({ onOpen }: { onOpen: () => void }) {
+  const enabled = useDisplayStore((s) => s.feedPlanned);
+  const { ops, counts } = usePlannedFeed();
+  if (!enabled || ops.length === 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title="Показать только запланированные операции"
+      className="w-full px-4 py-2 border-b border-border bg-panel2/60 flex items-center gap-3 text-sm text-left hover:bg-panel2"
+    >
+      <CalendarClock className="w-4 h-4 text-accent shrink-0" aria-hidden />
+      <span className="font-semibold shrink-0">Запланировано</span>
+      <CountsLine counts={counts} />
+      <ChevronRight className="w-4 h-4 text-muted ml-auto shrink-0" aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * Лента в режиме «только запланированные»: все планы Дзен-мани — просроченные
+ * и будущие до последней даты, что есть (примерно год вперёд), по дням, от
+ * ближайших. По щелчку — те же действия, что в приложении.
  *
  * Строки — те же ячейки и та же сетка, что у ленты: план должен читаться
  * «операцией, которой ещё нет», а не отдельной таблицей. Прогнозы Дзен-мани
  * помечены: их можно закрыть фактом, но просроченными они не бывают — старая
  * догадка не то, с чем надо что-то делать (как на главной, #87).
  */
-export function PlannedFeedSection({
+export function PlannedFeedList({
   template,
   grouped,
-  base,
+  query,
+  onBack,
 }: {
   template: string;
   /** Лента разбита по дням — тогда и планы идут с заголовками дней, без колонки даты. */
   grouped: boolean;
-  base: string;
+  /** Быстрый поиск ленты — ищет и по планам. */
+  query: string;
+  onBack: () => void;
 }) {
-  const enabled = useDisplayStore((s) => s.feedPlanned);
-  const open = useDisplayStore((s) => s.feedPlannedOpen);
-  const setOpen = useDisplayStore((s) => s.setFeedPlannedOpen);
-  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
-  const accounts = useFiltersStore((s) => s.accounts);
-  const deletions = usePlannedDeletionsStore((s) => s.deletions);
-  const today = localToday();
-  // До конца отчётного месяца, но не меньше двух недель вперёд: в последние
-  // дни месяца иначе блок показывал бы одни просроченные, хотя завтрашний
-  // платёж уже на носу.
-  const periodEnd = periodRange(periodKey(today, monthStartDay), monthStartDay).to;
-  const twoWeeks = shiftDays(today, 14);
-  const horizon = periodEnd > twoWeeks ? periodEnd : twoWeeks;
-  const planned = useZenPlanned(today, horizon, true);
-
-  const ops = useMemo(() => {
-    if (!planned) return [];
-    return planned.filter(
-      (p) =>
-        deletions[p.id] === undefined &&
-        (accounts.size === 0 ||
-          accounts.has(p.account) ||
-          (p.toAccount != null && accounts.has(p.toAccount)))
-    );
-  }, [planned, deletions, accounts]);
-
+  const { ops, today, counts } = usePlannedFeed(query);
   const [menu, setMenu] = useState<{ op: PlannedOp; anchor: HTMLElement } | null>(null);
   const [fact, setFact] = useState<PlannedOp | null>(null);
   const [link, setLink] = useState<PlannedOp | null>(null);
@@ -115,10 +126,6 @@ export function PlannedFeedSection({
     }
     return [...m.entries()];
   }, [ops]);
-  const totals = useMemo(() => kindTotals(ops.map(plannedAsTransaction)), [ops]);
-  const overdue = ops.filter((p) => p.date < today).length;
-
-  if (!enabled || ops.length === 0) return null;
 
   async function removeDate(p: PlannedOp) {
     const oneOff = p.repeating === false;
@@ -225,27 +232,24 @@ export function PlannedFeedSection({
 
   return (
     <div className="border-b border-border">
-      <button
-        type="button"
-        onClick={() => void setOpen(!open)}
-        aria-expanded={open}
-        className="w-full px-4 py-2 border-b border-border bg-panel2/60 flex items-center gap-3 text-sm text-left hover:bg-panel2"
-      >
+      <div className="px-4 py-2 border-b border-border bg-panel2/60 flex items-center gap-3 text-sm flex-wrap">
+        <button type="button" onClick={onBack} className="btn-ghost text-sm !px-2 -ml-2">
+          <ArrowLeft className="w-4 h-4" aria-hidden />
+          Все операции
+        </button>
         <CalendarClock className="w-4 h-4 text-accent shrink-0" aria-hidden />
-        <span className="font-semibold">Запланировано</span>
-        <span className="text-muted tabular-nums">
-          {ops.length} {pluralRu(ops.length, ["операция", "операции", "операций"])}
-          {overdue > 0 && <span className="text-expense"> · просрочено {overdue}</span>}
-        </span>
-        <span className="ml-auto flex items-center gap-3 tabular-nums">
-          {totals.inc > 0 && <span className="text-income">+{formatMoney(totals.inc, base)}</span>}
-          {totals.exp > 0 && <span className="text-expense">−{formatMoney(totals.exp, base)}</span>}
-          <ChevronDown className={clsx("w-4 h-4 text-muted transition-transform", !open && "-rotate-90")} />
-        </span>
-      </button>
-
-      {open &&
-        (grouped
+        <span className="font-semibold">Запланированные</span>
+        <CountsLine counts={counts} />
+        {counts.last && (
+          <span className="ml-auto text-muted whitespace-nowrap">по {formatDate(counts.last, "full")}</span>
+        )}
+      </div>
+      {ops.length === 0 && (
+        <p className="px-4 py-6 text-sm text-muted text-center">
+          {query.trim() ? "Среди запланированных ничего не найдено" : "Запланированных операций нет"}
+        </p>
+      )}
+      {(grouped
           ? byDay.map(([ymd, list]) => (
               <div key={ymd}>
                 <div

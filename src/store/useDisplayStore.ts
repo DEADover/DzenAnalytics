@@ -100,14 +100,12 @@ interface DisplayState {
    */
   feedHeadSticky: boolean;
   /**
-   * Запланированные операции Дзен-мани блоком над лентой «Операций»:
-   * просроченные и ближайшие до конца отчётного месяца, с действиями как в
-   * приложении («Сохранить как факт», «Связать», «Изменить», «Удалить»).
-   * По умолчанию включено; выключается в «Оформлении».
+   * Строка «Запланировано» над лентой «Операций»: сколько планов Дзен-мани
+   * просрочено и осталось до конца месяца, года и всего; щелчок открывает
+   * ленту одних планов с действиями как в приложении. По умолчанию включено;
+   * выключается в «Оформлении».
    */
   feedPlanned: boolean;
-  /** Блок запланированных раскрыт (иначе — одна строка-заголовок). */
-  feedPlannedOpen: boolean;
   /**
    * Раскрыт ли журнал синхронизаций.
    *
@@ -148,7 +146,6 @@ interface DisplayState {
   setColumnResize: (on: boolean) => Promise<void>;
   setFeedHeadSticky: (on: boolean) => Promise<void>;
   setFeedPlanned: (on: boolean) => Promise<void>;
-  setFeedPlannedOpen: (on: boolean) => Promise<void>;
   setSyncLogOpen: (on: boolean) => Promise<void>;
   setHideThanks: (on: boolean) => Promise<void>;
   setFiltersMode: (mode: FiltersMode) => Promise<void>;
@@ -164,7 +161,6 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   columnResize: false,
   feedHeadSticky: false,
   feedPlanned: true,
-  feedPlannedOpen: true,
   syncLogOpen: false,
   hideThanks: false,
   filtersMode: "page",
@@ -181,7 +177,6 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       columnResize?: boolean;
       feedHeadSticky?: boolean;
       feedPlanned?: boolean;
-      feedPlannedOpen?: boolean;
       syncLogOpen?: boolean;
       hideThanks?: boolean;
       filtersMode?: string;
@@ -200,7 +195,6 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       columnResize: stored?.columnResize === true,
       feedHeadSticky: stored?.feedHeadSticky === true,
       feedPlanned: stored?.feedPlanned !== false,
-      feedPlannedOpen: stored?.feedPlannedOpen !== false,
       syncLogOpen: stored?.syncLogOpen === true,
       hideThanks: stored?.hideThanks === true,
       // По умолчанию фильтры стоят на странице; панель по кнопке — выбор человека.
@@ -249,11 +243,6 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     await db.saveJSON(KEY, { ...persisted(get()), feedPlanned: on });
   },
 
-  setFeedPlannedOpen: async (on) => {
-    set({ feedPlannedOpen: on });
-    await db.saveJSON(KEY, { ...persisted(get()), feedPlannedOpen: on });
-  },
-
   setSyncLogOpen: async (on) => {
     set({ syncLogOpen: on });
     await db.saveJSON(KEY, { ...persisted(get()), syncLogOpen: on });
@@ -292,7 +281,6 @@ function persisted(s: DisplayState) {
     columnResize: s.columnResize,
     feedHeadSticky: s.feedHeadSticky,
     feedPlanned: s.feedPlanned,
-    feedPlannedOpen: s.feedPlannedOpen,
     syncLogOpen: s.syncLogOpen,
     hideThanks: s.hideThanks,
     filtersMode: s.filtersMode,
