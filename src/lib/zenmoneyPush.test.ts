@@ -1644,6 +1644,57 @@ describe("buildPushItems — debt operations", () => {
   });
 });
 
+describe("buildDraftTransaction — часть разделения", () => {
+  const cache = (): ZenCache => ({
+    serverTimestamp: 0,
+    instruments: [{ id: 2, shortTitle: "RUB", rate: 1 }] as unknown as ZenCache["instruments"],
+    accounts: [{ id: "acc-card", title: "Карта", instrument: 2, archive: false }] as unknown as ZenCache["accounts"],
+    tags: [{ id: "t-food", title: "Еда", parent: null, archive: false }] as unknown as ZenCache["tags"],
+    merchants: [{ id: "m-magnit", title: "Магнит" }] as unknown as ZenCache["merchants"],
+    transactions: [],
+    user: [{ id: 99, currency: 2 }] as unknown as ZenCache["user"],
+  });
+
+  it("как у разделения в Дзен-мани: source «split», получатель из банка, время исходной, без банковских номеров", () => {
+    const r = buildDraftTransaction(
+      {
+        id: "part-1",
+        kind: "expense",
+        date: "2026-09-29",
+        amount: 200,
+        account: "Карта",
+        category: "Еда",
+        payee: "Магнит",
+        createdSeconds: 1790666719,
+        source: "split",
+        originalPayee: "Магнит",
+      },
+      cache(),
+      1790700000
+    );
+    expect(r.zen).toMatchObject({
+      source: "split",
+      originalPayee: "Магнит",
+      created: 1790666719,
+      merchant: "m-magnit",
+      outcome: 200,
+      hold: null,
+      outcomeBankID: null,
+      incomeBankID: null,
+    });
+  });
+
+  it("обычная новая операция — без источника и банковского получателя", () => {
+    const r = buildDraftTransaction(
+      { id: "n-1", kind: "expense", date: "2026-09-29", amount: 10, account: "Карта", category: "Еда" },
+      cache(),
+      1790700000
+    );
+    expect(r.zen?.source).toBeNull();
+    expect(r.zen?.originalPayee).toBeNull();
+  });
+});
+
 describe("buildDraftTransaction — debt", () => {
   const RUB = 2;
   const debtDraftCache = (): ZenCache => ({

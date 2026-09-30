@@ -1,13 +1,22 @@
 /**
- * Применение и откат разбивки операции (issue #69).
+ * Разделение операции (issue #69) — так же, как его делает сам Дзен-мани.
  *
  * Разбивка — это не пометка, а превращение одной операции в несколько
  * настоящих: у операции в Дзен-мани ровно одна сумма, и хранить суммы по
- * статьям там негде. Поэтому исходная ужимается до первой части (обычной
- * правкой суммы и статьи), а остальные части создаются рядом черновиками —
- * теми же, какими создаётся операция руками, и уезжают тем же путём.
+ * статьям там негде. Все части, в том числе первая, создаются новыми
+ * операциями — с тем же временем, счётом и получателем, с пометкой
+ * `source: "split"` и без банковских номеров. Исходная удаляется и уходит в
+ * «Удалённые», откуда её можно вернуть.
  *
- * Связь между ними Дзен-мани хранить негде, и она живёт в своём сторе. Id
+ * Прежде исходная ужималась до первой части и оставалась жить со своими
+ * банковскими номерами. Её сумма переставала совпадать с тем, что сообщил
+ * банк, и Дзен-мани заводил покупку заново из уведомления банка: у
+ * пользователя в приложении оказывались обе части и «старая» операция на
+ * полную сумму (30.09.2026). Удалённая исходная хранит номер банка и полную
+ * сумму — по ней Дзен-мани понимает, что покупка уже учтена; так устроено и
+ * его собственное разделение (сверено по записям с `source: "split"`).
+ *
+ * Связь между частями Дзен-мани хранить негде, и она живёт в своём сторе. Id
  * частей мы генерируем сами, поэтому связь переживает синхронизацию: после
  * отправки в облаке оказываются ровно те же id.
  */
@@ -19,18 +28,17 @@ import type { ZenTransaction } from "../lib/zenmoney";
 import { loadZenCache } from "../lib/zenmoneyCache";
 import { round2, type SplitDraftPart } from "../lib/splitTransaction";
 import { useDraftsStore } from "../store/useDraftsStore";
-import { useEditsStore } from "../store/useEditsStore";
 import { useSplitGroupsStore, type SplitGroup } from "../store/useSplitGroupsStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { useDataStore } from "../store/useDataStore";
 
 export function useSplitTransaction() {
-  const setEdit = useEditsStore((s) => s.setEdit);
   const addMany = useDraftsStore((s) => s.addMany);
   const newMerchants = useCounterpartyEditsStore((s) => s.created);
   const addGroup = useSplitGroupsStore((s) => s.add);
-  // Пересборка ленты: правка исходной и новые части иначе не появятся на
-  // экране до следующей синхронизации.
+  const deleteTransaction = useDataStore((s) => s.deleteTransaction);
+  // Пересборка ленты: новые части иначе не появятся на экране до следующей
+  // синхронизации.
   const refresh = useDataStore((s) => s.refresh);
 
   /** Разделить операцию. Текст ошибки или `null` при успехе. */
@@ -48,15 +56,18 @@ export function useSplitTransaction() {
       // CSV их взять негде, и разделить операцию нечем.
       if (!cache) return "Разделение работает только при подключённом Дзен-мани";
 
-      const [first, ...rest] = parts;
       const stamp = Math.floor(Date.now() / 1000);
       const created = Math.floor(new Date(tx.createdAt).getTime() / 1000);
+      // Название получателя от банка — частям, как у разделения в Дзен-мани:
+      // по нему видно, из какой покупки выросла часть.
+      const originalPayee =
+        cache.transactions.find((t) => t.id === tx.id)?.originalPayee ?? null;
 
-      // Собираем ВСЕ новые операции заранее: если хоть одна не собирается
-      // (статьи нет в справочнике), не трогаем ничего. Половина разбивки
-      // хуже, чем её отсутствие: сумма разъедется, а откатывать нечего.
+      // Собираем ВСЕ части заранее: если хоть одна не собирается (статьи нет
+      // в справочнике), не трогаем ничего. Половина разбивки хуже, чем её
+      // отсутствие: сумма разъедется, а откатывать нечего.
       const built: ZenTransaction[] = [];
-      for (const part of rest) {
+      for (const part of parts) {
         const result = buildDraftTransaction(
           {
             id: newDraftId(),
@@ -72,6 +83,8 @@ export function useSplitTransaction() {
             // Теги-категории исходной операции — каждой части (#69): чек из
             // отпуска, разложенный на еду и сувениры, остаётся отпуском целиком.
             extraCategories: tx.extraCategories,
+            source: "split",
+            originalPayee,
           },
           cache,
           stamp,
@@ -83,30 +96,11 @@ export function useSplitTransaction() {
         built.push(result.zen);
       }
 
-      // Первая часть — сама исходная операция: ужимаем её сумму и меняем
-      // статью. Обычная правка, уезжает в облако тем же путём, что и ручная.
-      const firstComment = first.comment?.trim();
-      await setEdit(tx.id, {
-        amount: round2(first.amount),
-        category: first.category,
-        subcategory: first.subcategory,
-        categoryFull: first.subcategory
-          ? `${first.category} / ${first.subcategory}`
-          : first.category,
-        // Контрагента и комментарий правим ТОЛЬКО когда их задали: пустое
-        // поле значит «оставить как было», а не «стереть».
-        ...(payee && payee !== (tx.brand || tx.payee) ? { payee } : {}),
-        ...(firstComment ? { comment: firstComment } : {}),
-        // Смена счёта у одноногой операции — это ещё и его нога: при доходе и
-        // возврате деньги пришли НА счёт, при расходе ушли С него. Поправить
-        // только `account` мало, ноги остались бы от старого счёта.
-        ...(account && account !== tx.account
-          ? tx.kind === "income" || tx.kind === "refund"
-            ? { account, incomeAccount: account, outcomeAccount: "" }
-            : { account, outcomeAccount: account, incomeAccount: "" }
-          : {}),
-      });
+      // Сначала части, потом удаление исходной: автоотправка ждёт две секунды
+      // тишины и увозит то и другое ОДНИМ запросом — в облаке не бывает
+      // момента, когда есть и исходная, и части.
       await addMany(built);
+      await deleteTransaction(tx.id);
 
       const group: SplitGroup = {
         id: newDraftId(),
@@ -117,28 +111,19 @@ export function useSplitTransaction() {
         originalAmount: round2(Math.abs(tx.amount)),
         originalCategory: tx.category,
         originalSubcategory: tx.subcategory,
-        parts: [
-          {
-            id: tx.id,
-            category: first.category,
-            subcategory: first.subcategory,
-            amount: round2(first.amount),
-          },
-          ...built.map((zen, i) => ({
-            id: zen.id,
-            category: rest[i].category,
-            subcategory: rest[i].subcategory,
-            amount: round2(rest[i].amount),
-          })),
-        ],
+        parts: built.map((zen, i) => ({
+          id: zen.id,
+          category: parts[i].category,
+          subcategory: parts[i].subcategory,
+          amount: round2(parts[i].amount),
+        })),
       };
       await addGroup(group);
       await refresh();
       return null;
     },
-    [setEdit, addMany, addGroup, newMerchants, refresh]
+    [addMany, addGroup, deleteTransaction, newMerchants, refresh]
   );
-
 
   return { applySplit };
 }

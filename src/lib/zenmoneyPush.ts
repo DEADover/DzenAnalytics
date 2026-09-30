@@ -1221,6 +1221,13 @@ export interface DraftFields {
   comment?: string;
   /** Вторые категории новой операции — полными названиями (#69). */
   extraCategories?: string[];
+  /**
+   * Откуда операция. Части разделения — `"split"`, как у разделения в самом
+   * Дзен-мани; обычная новая операция — пусто.
+   */
+  source?: string | null;
+  /** Название получателя из банка — у частей разделения его переносим с исходной. */
+  originalPayee?: string | null;
 }
 
 export type DraftBuildResult =
@@ -1289,12 +1296,12 @@ export function buildDraftTransaction(
     incomeInstrument: 0,
     outcomeInstrument: 0,
     created: fields.createdSeconds ?? stampSeconds,
-    originalPayee: null,
+    originalPayee: fields.originalPayee ?? null,
     deleted: false,
     viewed: true,
     hold: null,
     qrCode: null,
-    source: null,
+    source: fields.source ?? null,
     incomeAccount: "",
     outcomeAccount: "",
     tag: null,
