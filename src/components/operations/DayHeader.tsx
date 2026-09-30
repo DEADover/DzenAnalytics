@@ -7,6 +7,21 @@ import { pluralOps } from "../../lib/plural";
 import { formatDayHeader } from "../../lib/dayLabel";
 
 /**
+ * Итог плашкой: зелёный плюс или красный минус. Один на шапку дня и на
+ * заголовки разделов ленты планов — чтобы итоги читались одинаково.
+ */
+export function NetPill({ value, base, title }: { value: number; base: string; title?: string }) {
+  return (
+    <span
+      className={`px-2 py-0.5 rounded-md text-sm font-medium tabular-nums whitespace-nowrap ${value >= 0 ? "bg-income/15 text-income" : "bg-expense/15 text-expense"}`}
+      title={title}
+    >
+      {formatMoney(value, base, { signed: true })}
+    </span>
+  );
+}
+
+/**
  * Шапка дня в ленте: «Сегодня, 15 сентября» с днём недели и суммы дня — число
  * операций, переводы, поступления, траты и итог.
  *
@@ -75,12 +90,7 @@ export function DayHeader({
             {formatMoney(totals.exp, base)}
           </span>
         )}
-        <span
-          className={`px-2 py-0.5 rounded-md font-medium tabular-nums whitespace-nowrap ${totals.net >= 0 ? "bg-income/15 text-income" : "bg-expense/15 text-expense"}`}
-          title="Итог за день"
-        >
-          {formatMoney(totals.net, base, { signed: true })}
-        </span>
+        <NetPill value={totals.net} base={base} title="Итог за день" />
       </div>
     </div>
   );

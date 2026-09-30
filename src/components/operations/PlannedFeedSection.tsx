@@ -25,7 +25,7 @@ import { EditTransactionModal } from "../EditTransactionModal";
 import { MenuItem } from "../MenuItem";
 import { Popover } from "../Popover";
 import { OperationListRow } from "./OperationList";
-import { DayHeader } from "./DayHeader";
+import { DayHeader, NetPill } from "./DayHeader";
 import { OperationAmount, OperationCategory, OperationComment, OperationPayee } from "./OperationCells";
 import { PlanLinkModal } from "./PlanLinkModal";
 import { PlanEditModal } from "./PlanEditModal";
@@ -432,8 +432,8 @@ function SectionHead({
         · {ops.length} {pluralRu(ops.length, ["операция", "операции", "операций"])}
       </span>
       {net !== 0 && (
-        <span className="ml-auto font-medium normal-case tracking-normal tabular-nums">
-          {formatMoney(net, base, { signed: true })}
+        <span className="ml-auto flex normal-case tracking-normal">
+          <NetPill value={net} base={base} title={`Итог: ${title.toLowerCase()}`} />
         </span>
       )}
     </div>
