@@ -15,7 +15,7 @@
  *     запрещены и недоступны с тача.
  */
 
-import { useRef, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { clickedRow } from "../../lib/chartClick";
 import { pluralRu } from "../../lib/plural";
 import {
@@ -33,6 +33,7 @@ import {
   Tooltip,
   AreaChart,
   Area,
+  ReferenceLine,
 } from "recharts";
 import { ArrowRight } from "lucide-react";
 import { Segmented } from "../Segmented";
@@ -52,12 +53,22 @@ import {
   formatPct,
   formatDate,
   monthLabel,
+  dayTitle,
   chartTooltipProps,
   chartGridStroke,
   chartAxisStroke,
 } from "../../lib/format";
 import { heatStep, robustCeiling, monthEnd } from "../../lib/dashboardModel";
 import { periodRange, spanDays } from "../../lib/period";
+import {
+  CAPITAL_PERIODS,
+  capitalPeriodStart,
+  capitalSlice,
+  capitalSummary,
+  thinCapital,
+  type CapitalPeriod,
+  type CapitalPoint,
+} from "../../lib/capital";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
@@ -189,26 +200,6 @@ function CashflowTip({ active, payload, base }: TipProps & { base: string }) {
   );
 }
 
-function NetWorthTip({ active, payload, base }: TipProps & { base: string }) {
-  if (!active || !payload?.length) return null;
-  const row = payload[0]?.payload as { date?: string; net?: number } | undefined;
-  if (!row?.date) return null;
-  return (
-    <ChartTooltipCard>
-      <TooltipFacts
-        title={formatDate(row.date)}
-        facts={[
-          {
-            label: "Баланс",
-            value: formatMoney(row.net ?? 0, base, { signed: true }),
-            swatchColor: "rgb(var(--c-accent))",
-            strong: true,
-          },
-        ]}
-      />
-    </ChartTooltipCard>
-  );
-}
 
 
 /** Прямоугольник со скруглённым верхом — рисуем сами, раз у столбца своя форма. */
@@ -431,50 +422,215 @@ export function CashflowBars({
   );
 }
 
-/** Как рос совокупный баланс. */
-export function NetWorthArea({ m, height = 240 }: { m: DashboardModel; height?: number }) {
+/* ─────────────────────────────  капитал  ───────────────────────────── */
+
+function CapitalTip({
+  active,
+  payload,
+  base,
+  start,
+}: TipProps & { base: string; start: number }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload as { date?: string; net?: number } | undefined;
+  if (!row?.date) return null;
+  const net = row.net ?? 0;
   return (
-    <div className="flex-1 min-h-0" style={{ minHeight: height }}>
-      <ResponsiveContainer>
-        <AreaChart data={m.netWorthSeries}>
-          <defs>
-            <linearGradient id="dashNwV2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgb(var(--c-accent))" stopOpacity={0.5} />
-              <stop offset="100%" stopColor="rgb(var(--c-accent))" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
-          <XAxis
-            dataKey="date"
-            stroke={chartAxisStroke}
-            fontSize={11}
-            tickLine={false}
-            tickFormatter={(d) => monthLabel((d as string).slice(0, 7))}
-            minTickGap={50}
+    <ChartTooltipCard>
+      <TooltipFacts
+        title={dayTitle(row.date)}
+        facts={[
+          {
+            label: "Капитал",
+            value: formatMoney(net, base),
+            swatchColor: "rgb(var(--c-accent))",
+            strong: true,
+          },
+          {
+            label: "От начала периода",
+            value: formatMoney(net - start, base, { signed: true }),
+          },
+        ]}
+      />
+    </ChartTooltipCard>
+  );
+}
+
+/**
+ * Виджет «Капитал»: сколько денег сейчас и как это число менялось.
+ *
+ * Слева — ответ: капитал сегодня, изменение за выбранный период в деньгах и
+ * процентах, крайние точки и средний прирост в месяц. Справа — кривая за тот
+ * же период с пунктиром уровня на его начало: выше пунктира — прибавили,
+ * ниже — потеряли.
+ *
+ * Кривая та же, что «Совокупный баланс» на «Счетах», — числа совпадают.
+ */
+export function CapitalBlock({
+  series,
+  base,
+  today,
+}: {
+  series: CapitalPoint[];
+  base: string;
+  today: string;
+}) {
+  const [period, setPeriod] = useState<CapitalPeriod>("1y");
+  const points = useMemo(
+    () => capitalSlice(series, capitalPeriodStart(period, today)),
+    [series, period, today]
+  );
+  const summary = useMemo(() => capitalSummary(points), [points]);
+  const chart = useMemo(() => thinCapital(points), [points]);
+  const periodLabel = CAPITAL_PERIODS.find((p) => p.id === period)?.label ?? "";
+
+  return (
+    <>
+      <BlockTitle
+        title="Капитал"
+        info={
+          <>
+            <p>
+              Сумма остатков на счетах «в балансе» — та же, что «Совокупный
+              баланс» на «Счетах»: каждый счёт в своей валюте по курсу дня,
+              долги и кредитки с минусом.
+            </p>
+            <p>
+              Изменение — от остатка на первый день периода до сегодняшнего.
+              Пунктир на графике — уровень на начало периода. Процент не
+              пишется, если на старте капитал был нулевым или отрицательным:
+              от такой базы он ничего не значит.
+            </p>
+          </>
+        }
+        right={
+          <Segmented
+            tight
+            label="Период капитала"
+            value={period}
+            onChange={setPeriod}
+            options={CAPITAL_PERIODS.map((p) => ({ value: p.id, label: p.label }))}
+            className="ml-auto"
           />
-          <YAxis
-            stroke={chartAxisStroke}
-            fontSize={11}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v) => formatNum(v, { compact: true })}
-            domain={["auto", "auto"]}
-          />
-          <Tooltip
-            cursor={chartTooltipProps.cursor}
-            wrapperStyle={chartTooltipProps.wrapperStyle}
-            content={<NetWorthTip base={m.base} />}
-          />
-          <Area
-            type="monotone"
-            dataKey="net"
-            stroke="rgb(var(--c-accent))"
-            strokeWidth={2}
-            fill="url(#dashNwV2)"
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
+        }
+        to="/accounts"
+        linkLabel="Счета"
+      />
+      {!summary ? (
+        <SectionEmpty variant="compact">Истории остатков пока нет</SectionEmpty>
+      ) : (
+        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-5">
+          <div className="flex flex-col gap-3 min-w-0">
+            <div
+              className={`font-mono tabular-nums font-semibold text-3xl leading-none ${
+                summary.current < 0 ? "text-expense" : ""
+              }`}
+              style={{ wordSpacing: "-0.22em" }}
+            >
+              {formatMoney(summary.current, base)}
+            </div>
+            <div
+              className={`flex items-baseline gap-2 text-sm tabular-nums ${
+                summary.delta >= 0 ? "text-income" : "text-expense"
+              }`}
+            >
+              {summary.delta >= 0 ? (
+                <ArrowUp className="w-4 h-4 self-center" aria-hidden />
+              ) : (
+                <ArrowDown className="w-4 h-4 self-center" aria-hidden />
+              )}
+              <span className="font-semibold">{formatMoney(summary.delta, base, { signed: true })}</span>
+              {summary.pct != null && (
+                <span>
+                  {summary.pct > 0 ? "+" : ""}
+                  {formatPct(summary.pct / 100)}
+                </span>
+              )}
+              <span className="text-muted">
+                {period === "all" ? "за всё время" : `за ${periodLabel.toLowerCase()}`}
+              </span>
+            </div>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm border-t border-border pt-3">
+              <dt className="text-muted">На начало периода</dt>
+              <dd className="text-right tabular-nums">
+                {formatMoney(summary.start, base)}
+                <span className="block text-xs text-muted">{dayTitle(points[0].date)}</span>
+              </dd>
+              <dt className="text-muted">Максимум</dt>
+              <dd className="text-right tabular-nums">
+                {formatMoney(summary.max.net, base)}
+                <span className="block text-xs text-muted">{dayTitle(summary.max.date)}</span>
+              </dd>
+              <dt className="text-muted">Минимум</dt>
+              <dd className="text-right tabular-nums">
+                {formatMoney(summary.min.net, base)}
+                <span className="block text-xs text-muted">{dayTitle(summary.min.date)}</span>
+              </dd>
+              {summary.perMonth != null && (
+                <>
+                  <dt className="text-muted">В среднем в месяц</dt>
+                  <dd
+                    className={`text-right tabular-nums font-medium ${
+                      summary.perMonth >= 0 ? "text-income" : "text-expense"
+                    }`}
+                  >
+                    {formatMoney(summary.perMonth, base, { signed: true })}
+                  </dd>
+                </>
+              )}
+            </dl>
+          </div>
+          <div className="min-w-0 min-h-[220px]">
+            <ResponsiveContainer>
+              <AreaChart data={chart} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="dashCapital" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgb(var(--c-accent))" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="rgb(var(--c-accent))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  stroke={chartAxisStroke}
+                  fontSize={11}
+                  tickLine={false}
+                  tickFormatter={(d) => monthLabel((d as string).slice(0, 7))}
+                  minTickGap={50}
+                />
+                <YAxis
+                  stroke={chartAxisStroke}
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                  tickFormatter={(v) => formatNum(v, { compact: true })}
+                  domain={["auto", "auto"]}
+                />
+                <ReferenceLine
+                  y={summary.start}
+                  stroke={chartAxisStroke}
+                  strokeDasharray="4 4"
+                  ifOverflow="extendDomain"
+                />
+                <Tooltip
+                  cursor={chartTooltipProps.cursor}
+                  wrapperStyle={chartTooltipProps.wrapperStyle}
+                  content={<CapitalTip base={base} start={summary.start} />}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="net"
+                  stroke="rgb(var(--c-accent))"
+                  strokeWidth={2}
+                  fill="url(#dashCapital)"
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

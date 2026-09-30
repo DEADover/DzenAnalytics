@@ -157,6 +157,7 @@ describe("normalizeLayout", () => {
     expect(row(out, "observations").hidden).toBe(true);
     // Кроме него сняты только те, что и в стандартной раскладке лежат на полке.
     expect([...out.filter((p) => p.hidden).map((p) => p.kind)].sort()).toEqual([
+      "capital",
       "donutExpense",
       "donutIncome",
       "freeMoney",
@@ -200,6 +201,7 @@ describe("normalizeLayout", () => {
       "freeMoney",
       "freeMoneyCompact",
       "cashflow",
+      "capital",
       "monthOverMonth",
       "categories",
       "activity",

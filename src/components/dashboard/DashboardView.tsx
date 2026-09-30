@@ -22,6 +22,7 @@ import { CtaLink } from "../CtaLink";
 import {
   BlockTitle,
   CashflowBars,
+  CapitalBlock,
   AccountsList,
   CategoriesList,
   UpcomingList,
@@ -789,6 +790,9 @@ export function DashboardView() {
             <CashflowBars m={m} onMonth={onMonth} height={260} />
           </>
         );
+
+      case "capital":
+        return <CapitalBlock series={m.netWorthSeries} base={m.base} today={todayIso} />;
 
       case "monthOverMonth":
         return (

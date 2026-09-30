@@ -21,6 +21,7 @@ import {
   BarChart3,
   CalendarClock,
   CalendarDays,
+  ChartArea,
   Coins,
   Gauge,
   Landmark,
@@ -44,6 +45,7 @@ export const WIDGET_KINDS = [
   "freeMoneyCompact",
   "links",
   "cashflow",
+  "capital",
   "monthOverMonth",
   "categories",
   "activity",
@@ -238,6 +240,17 @@ export const WIDGETS: readonly WidgetMeta[] = [
     title: "Доходы и расходы",
     hint: "Столбцы за последние двенадцать месяцев и прогноз",
     span: 2,
+  },
+  {
+    kind: "capital",
+    icon: ChartArea,
+    title: "Капитал",
+    hint: "Совокупный баланс сейчас и как он менялся: график, прирост, максимум",
+    // Две трети: слева число и разбивка, справа кривая за период.
+    span: 2,
+    // Стандартно снят: стандартная главная собрана в ровные ряды, и новый
+    // виджет в две трети перебрал бы их все. Ставится из настройки главной.
+    offByDefault: true,
   },
   {
     kind: "monthOverMonth",
