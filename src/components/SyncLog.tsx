@@ -131,7 +131,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
               open ? "rotate-90" : ""
             }`}
           />
-          <History className={embedded ? "w-5 h-5 text-accent" : "w-5 h-5 text-accent2"} />
+          <History className="w-5 h-5 text-accent" />
           <span className="font-medium">
             {embedded ? "Журнал синхронизаций" : "Лог синхронизаций"}
           </span>

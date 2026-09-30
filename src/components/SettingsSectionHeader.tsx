@@ -5,7 +5,11 @@ import clsx from "clsx";
 interface Props {
   icon: LucideIcon;
   title: ReactNode;
-  /** Icon tint — sections default to accent2, a few use accent/warn. */
+  /**
+   * Цвет значка. По умолчанию — акцент темы, как у `CardHeader`: прежний
+   * фиолетовый (accent2) остался от старого оформления и в настройках выбивался
+   * из остального продукта.
+   */
   iconTone?: string;
   /** Controls pinned to the right of the header (segmented switch, buttons…). */
   right?: ReactNode;
@@ -24,7 +28,7 @@ interface Props {
 export function SettingsSectionHeader({
   icon: Icon,
   title,
-  iconTone = "text-accent2",
+  iconTone = "text-accent",
   right,
   className,
 }: Props) {
