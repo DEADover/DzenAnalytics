@@ -281,17 +281,31 @@ describe("linkCandidates", () => {
     expect(list.map((t) => t.id)).toEqual(["ok"]);
   });
 
-  it("похоже по контрагенту или по счёту с суммой ±10%", () => {
+  it("похоже по контрагенту с близкой суммой или по счёту с суммой ±5%", () => {
     const list = linkCandidates(
       { ...plan, payee: "Google" },
       [
-        tx({ id: "payee", amount: 5000, category: "Прочее", account: "Сбер", payee: "google" }),
-        tx({ id: "acc", amount: 720, category: "Прочее" }),
-        tx({ id: "no", amount: 900, category: "Прочее" }),
+        tx({ id: "payee", amount: 750, category: "Прочее", account: "Сбер", payee: "google" }),
+        tx({ id: "acc", amount: 710, category: "Прочее" }),
+        tx({ id: "no", amount: 780, category: "Прочее" }),
       ],
       "2026-10-07"
     );
     expect(list.map((t) => t.id).sort()).toEqual(["acc", "payee"]);
+  });
+
+  it("один контрагент не делает похожим: другие покупки того же магазина мимо", () => {
+    // План — подписка Ozon Premium на 199 ₽; салфетки и продукты с Ozon — не она.
+    const list = linkCandidates(
+      { ...plan, amount: 199, payee: "Ozon", category: "Интернет-покупки / Подписки", account: "Ozon" },
+      [
+        tx({ id: "alice", amount: 199, category: "Интернет-покупки / Подписки", payee: "Yandex" }),
+        tx({ id: "wipes", amount: 560, category: "Товары для дома", account: "Ozon", payee: "Ozon" }),
+        tx({ id: "fresh", amount: 2650, category: "Еда дома", payee: "Ozon" }),
+      ],
+      "2026-10-07"
+    );
+    expect(list.map((t) => t.id)).toEqual(["alice"]);
   });
 
   it("с поиском признаки не нужны — всё окно", () => {
