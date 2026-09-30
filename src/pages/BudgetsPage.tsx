@@ -878,6 +878,15 @@ export function BudgetsPage() {
     },
     [lines, prevYm]
   );
+  /** Планы подкатегорий категории в прошлом месяце — для копии всей группы. */
+  const prevSubsOf = useCallback(
+    (kind: BudgetKind, category: string) =>
+      lines
+        .filter((l) => l.kind === kind && l.category === category && !!l.subcategory)
+        .map((l) => ({ subcategory: l.subcategory as string, amount: plannedFor(l, prevYm) }))
+        .filter((x) => x.amount > 0),
+    [lines, prevYm]
+  );
 
   /** Всё вместе — и запланированное, и нет. Сводка считается по этому списку,
    *  поэтому итог месяца сходится с лентой операций за тот же месяц. */
@@ -1310,6 +1319,8 @@ export function BudgetsPage() {
           hideEmpty={settings.hideEmptyRows}
           showAll={settings.allCategories}
           prevTotalOf={prevTotalOf}
+          prevSubsOf={prevSubsOf}
+          savePlans={savePlans}
           headerAction={addButton("expense")}
           prepend={draftKind === "expense" ? draftRow : undefined}
         />
@@ -1327,6 +1338,8 @@ export function BudgetsPage() {
           hideEmpty={settings.hideEmptyRows}
           showAll={settings.allCategories}
           prevTotalOf={prevTotalOf}
+          prevSubsOf={prevSubsOf}
+          savePlans={savePlans}
           headerAction={addButton("income")}
           prepend={draftKind === "income" ? draftRow : undefined}
         />
@@ -1461,6 +1474,10 @@ interface SectionProps {
     tag: { kind: BudgetKind; category: string; subcategory: string | null },
     withSubs: boolean
   ) => number;
+  /** Планы подкатегорий в прошлом месяце — чтобы скопировать категорию целиком. */
+  prevSubsOf?: (kind: BudgetKind, category: string) => { subcategory: string; amount: number }[];
+  /** Несколько правок плана одной записью: поштучно доезжала только последняя. */
+  savePlans?: (edits: PlanCellEdit[]) => void;
   /** «+» button next to the heading. */
   headerAction?: ReactNode;
   /** Inline draft row, rendered at the TOP of the list (new categories first). */
@@ -1605,6 +1622,7 @@ function Section({
               : undefined
           }
           subsPlanned={hasSubs ? g.subs.reduce((s, r) => s + r.planned, 0) : undefined}
+          subRows={hasSubs ? g.subs : undefined}
           {...rest}
         />
         {hasSubs && (
@@ -1926,6 +1944,8 @@ interface RowProps
   rollupPlanned?: number;
   /** Сумма планов подкатегорий — для «Сумма подкатегорий» у категории. */
   subsPlanned?: number;
+  /** Строки подкатегорий — у категории: быстрые действия меняют группу целиком. */
+  subRows?: Row[];
 }
 
 function BudgetRow({
@@ -1945,7 +1965,10 @@ function BudgetRow({
   setPlan,
   budgetEdits,
   prevTotalOf,
+  prevSubsOf,
+  savePlans,
   subsPlanned,
+  subRows,
 }: RowProps) {
   const { line, planned, fact } = row;
   // Parent rows display the rolled-up total (own + sub-tags), like Zenmoney
@@ -2061,28 +2084,83 @@ function BudgetRow({
     }
     setEditing(false);
   }
-  /**
-   * Поставить ВИДИМЫЙ итог строки — так же, как его ставит карандаш: у
-   * категории с подкатегориями из итога вычитаются их планы, и меняется свой
-   * план категории. Общий путь для «Как в прошлом месяце», «Как по факту» и
-   * «Сумма подкатегорий».
-   */
-  function setVisibleTotal(total: number) {
-    const newOwn = Math.max(0, Math.round((total - subsTotal) * 100) / 100);
-    if (newOwn !== planned) setThisMonth(newOwn);
-  }
   // Быстрые суммы для меню (Budgera: «как в прошлом месяце», «= факту»,
-  // «сумма подкатегорий»). Пункт есть, только если он что-то меняет.
+  // «сумма подкатегорий»). Каждый пункт — набор правок планов и итог, который
+  // после них покажет строка. Пункт есть, только если он что-то меняет.
+  //
+  // У категории с подкатегориями (план не закреплён итогом) строка — это
+  // свой план плюс планы подкатегорий, и одним своим планом до нужного итога
+  // часто не дотянуться: когда подкатегории запланированы больше, чем
+  // потрачено, свой план ушёл бы в минус — и «Как по факту» не делало ничего.
+  // Поэтому «Как по факту» и «Как в прошлом месяце» меняют группу целиком:
+  // свой план и планы подкатегорий. У закреплённой категории итог — её
+  // собственный план, и меняется только он.
+  type Tag = { kind: BudgetKind; category: string; subcategory: string | null };
+  type QuickPlan = { total: number; changes: { tag: Tag; amount: number }[] };
+  const r2 = (n: number) => Math.round(Math.max(0, n) * 100) / 100;
+  const subTag = (sub: string): Tag => ({ kind: line.kind, category: line.category, subcategory: sub });
   const plannable = row.plannable !== false;
-  const prevTotal = plannable ? (prevTotalOf?.(tag, !!hasSubs) ?? 0) : 0;
-  const factTotal = plannable ? Math.max(0, Math.round(dispFact * 100) / 100) : 0;
-  const quick: { key: string; icon: LucideIcon; label: string; amount: number }[] = [];
-  if (prevTotal > 0 && prevTotal !== dispPlanned)
-    quick.push({ key: "prev", icon: History, label: "Как в прошлом месяце", amount: prevTotal });
-  if (factTotal > 0 && factTotal !== dispPlanned)
-    quick.push({ key: "fact", icon: Equal, label: "Как по факту", amount: factTotal });
-  if (plannable && hasSubs && subsPlanned !== undefined && subsPlanned > 0 && subsPlanned !== dispPlanned)
-    quick.push({ key: "subs", icon: Sigma, label: "Сумма подкатегорий", amount: subsPlanned });
+  const group = !!hasSubs && !row.locked;
+  const own = (amount: number) => ({ tag, amount });
+  const onlyChanged = (plan: QuickPlan): QuickPlan => ({
+    total: plan.total,
+    changes: plan.changes.filter((c) => {
+      if (c.tag.subcategory === tag.subcategory) return c.amount !== planned;
+      const cur = subRows?.find((r) => r.line.subcategory === c.tag.subcategory)?.planned ?? 0;
+      return c.amount !== cur;
+    }),
+  });
+  const planPrev = (): QuickPlan => {
+    if (!group) {
+      const total = prevTotalOf?.(tag, !!hasSubs) ?? 0;
+      return { total, changes: [own(total)] };
+    }
+    const prevOwn = prevTotalOf?.(tag, false) ?? 0;
+    const prevSubs = prevSubsOf?.(line.kind, line.category) ?? [];
+    const subs = new Map(prevSubs.map((x) => [x.subcategory, x.amount]));
+    for (const r of subRows ?? []) if (r.line.subcategory && !subs.has(r.line.subcategory)) subs.set(r.line.subcategory, 0);
+    const changes = [own(prevOwn), ...[...subs].map(([sub, amount]) => ({ tag: subTag(sub), amount }))];
+    return { total: changes.reduce((sum, c) => sum + c.amount, 0), changes };
+  };
+  const planFact = (): QuickPlan => {
+    if (!group) {
+      const total = r2(dispFact);
+      return { total, changes: [own(total)] };
+    }
+    const changes = [
+      own(r2(fact)),
+      ...(subRows ?? [])
+        .filter((r) => r.line.subcategory)
+        .map((r) => ({ tag: subTag(r.line.subcategory as string), amount: r2(r.fact) })),
+    ];
+    return { total: changes.reduce((sum, c) => sum + c.amount, 0), changes };
+  };
+  const planSubs = (): QuickPlan => ({
+    total: subsPlanned ?? 0,
+    // Закреплённая категория: итог — её план, ставим его суммой подкатегорий.
+    // Незакреплённая: итог и так складывается из подкатегорий, свой план — ноль.
+    changes: [own(row.locked ? (subsPlanned ?? 0) : 0)],
+  });
+  const quick: { key: string; icon: LucideIcon; label: string; plan: QuickPlan }[] = [];
+  if (plannable) {
+    const prev = onlyChanged(planPrev());
+    if (prev.total > 0 && prev.changes.length > 0)
+      quick.push({ key: "prev", icon: History, label: "Как в прошлом месяце", plan: prev });
+    const byFact = onlyChanged(planFact());
+    if (byFact.total > 0 && byFact.changes.length > 0)
+      quick.push({ key: "fact", icon: Equal, label: "Как по факту", plan: byFact });
+    if (hasSubs && (subsPlanned ?? 0) > 0) {
+      const subs = onlyChanged(planSubs());
+      if (subs.changes.length > 0)
+        quick.push({ key: "subs", icon: Sigma, label: "Сумма подкатегорий", plan: subs });
+    }
+  }
+  // Одной записью: правок у группы несколько, а поштучно каждая брала свою
+  // копию планов и затирала предыдущую — доезжала только последняя.
+  const applyQuick = (plan: QuickPlan) => {
+    if (savePlans) savePlans(plan.changes.map((c) => ({ ...c.tag, ym, amount: c.amount })));
+    else for (const c of plan.changes) setPlan(c.tag, c.amount);
+  };
 
   // «Убрать план на месяц»: zero this month's plan and push 0 to Zenmoney
   // (which clears the «План» for that tag/month). The category then drops out of
@@ -2240,10 +2318,10 @@ function BudgetRow({
             <MenuItem
               key={q.key}
               icon={q.icon}
-              hint={formatMoney(q.amount, base)}
+              hint={formatMoney(q.plan.total, base)}
               onClick={() => {
                 close();
-                setVisibleTotal(q.amount);
+                applyQuick(q.plan);
               }}
             >
               {q.label}
