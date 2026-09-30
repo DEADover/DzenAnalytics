@@ -279,7 +279,7 @@ export function PlannedFeedList({
         anchorRef={anchorRef}
         onClose={() => setMenu(null)}
         align="right"
-        className="card p-1 w-72 text-sm"
+        className="card p-1 w-max text-[13px] [&_button]:py-1"
       >
         {m && (
           <>
