@@ -873,7 +873,13 @@ export function RulesPage() {
                           </span>
                         </div>
                         {targets.length > 0 && (
-                          <div className="xl:hidden flex flex-wrap items-center gap-1 mt-1">
+                          // Со своей шириной столбцов ярлыки — в одну строку:
+                          // строка таблицы не должна расти от сжатой колонки.
+                          <div
+                            className={`xl:hidden flex items-center gap-1 mt-1 ${
+                              resize.enabled ? "flex-nowrap overflow-hidden" : "flex-wrap"
+                            }`}
+                          >
                             {targetPills}
                           </div>
                         )}
@@ -883,7 +889,13 @@ export function RulesPage() {
                             «Правила» ширина 100%, и таблица ужимает остальные
                             колонки до минимума содержимого: без неё ярлыки
                             вставали столбиком по одному. */}
-                        <div className="flex flex-wrap items-center gap-1 min-w-[12rem]">
+                        {/* Со своей шириной столбцов ярлыки идут в одну строку,
+                            а колонку не сжать уже них — как колонку сумм. */}
+                        <div
+                          className={`flex items-center gap-1 ${
+                            resize.enabled ? "flex-nowrap" : "flex-wrap min-w-[12rem]"
+                          }`}
+                        >
                           {targets.length === 0 ? (
                             <span className="text-muted">—</span>
                           ) : (

@@ -133,6 +133,43 @@ function naturalWidth(cell: HTMLElement): number {
   return Math.ceil(w) + 1;
 }
 
+/** Обрезается ли текст элемента многоточием — такой колонке можно быть уже содержимого. */
+function truncates(el: Element): boolean {
+  const s = getComputedStyle(el);
+  return s.textOverflow === "ellipsis" || (!!s.webkitLineClamp && s.webkitLineClamp !== "none");
+}
+
+/**
+ * Сколько места нужно содержимому колонки, которое НЕ умеет сжиматься: суммы,
+ * числа, даты, пилюли. Подписи шапки мало — «Сумма» короче «1 603 584 ₽», и
+ * сжатая до подписи колонка выпускала числа за свой край (а у последней
+ * колонки — и за край таблицы, с прокруткой вбок). Текст с многоточием в счёт
+ * не идёт: ему можно быть уже себя. Меряем отрисованные строки — первые 150.
+ */
+function contentMinWidth(headCell: HTMLElement): number {
+  const row = headCell.parentElement;
+  if (!row) return 0;
+  const index = [...row.children].indexOf(headCell);
+  const count = row.children.length;
+  const table = headCell.closest("table");
+  const rows = table
+    ? [...table.querySelectorAll(":scope > tbody > tr")]
+    : [...(row.parentElement?.querySelectorAll(".grid") ?? [])].filter((r) => r !== row);
+  let max = 0;
+  for (const r of rows.slice(0, 150)) {
+    if (r.children.length !== count) continue;
+    const cell = r.children[index] as HTMLElement | undefined;
+    if (!cell || truncates(cell) || [...cell.querySelectorAll("*")].some(truncates)) continue;
+    const range = document.createRange();
+    range.selectNodeContents(cell);
+    const w = range.getBoundingClientRect().width;
+    if (w <= 0) continue;
+    const cs = getComputedStyle(cell);
+    max = Math.max(max, w + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight));
+  }
+  return Math.ceil(max) + (max > 0 ? 1 : 0);
+}
+
 const RESIZING_CLASS = "col-resizing";
 
 export function useColumnResize(
@@ -213,8 +250,8 @@ export function useColumnResize(
 
       const leftStart = px(leftEl);
       const rightStart = px(rightEl);
-      const minLeft = naturalWidth(leftEl);
-      const minRight = naturalWidth(rightEl);
+      const minLeft = Math.max(naturalWidth(leftEl), contentMinWidth(leftEl));
+      const minRight = Math.max(naturalWidth(rightEl), contentMinWidth(rightEl));
       let left = leftStart;
       let right = rightStart;
       const table = handleEl.closest("table");

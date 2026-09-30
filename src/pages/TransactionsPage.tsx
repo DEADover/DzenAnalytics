@@ -119,7 +119,9 @@ const OPS_COLUMNS: ResizeColumn[] = [
   { key: "payee", label: "Контрагент", size: "minmax(0, 1.3fr)" },
   { key: "comment", label: "Комментарий", size: "minmax(0, 2.6fr)" },
   { key: "amount", label: "Сумма", size: "140px" },
-  { key: "actions", size: "112px", resizable: false },
+  // Четыре кнопки по 28 px и три зазора по 2 — 118 px. В 112 они выступали
+  // на 6 px в поле строки.
+  { key: "actions", size: "118px", resizable: false },
 ];
 const OPS_COLUMNS_NODATE = OPS_COLUMNS.filter((c) => c.key !== "date");
 

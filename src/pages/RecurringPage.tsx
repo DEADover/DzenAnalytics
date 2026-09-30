@@ -408,7 +408,9 @@ export function RecurringPage() {
       key: "act",
       type: "actions",
       label: "",
-      width: "2.5rem",
+      // Кнопка 28 px плюс поля ячейки по 12 — 52 px. В 2.5rem она выступала
+      // за край таблицы на 10 px.
+      width: "3.25rem",
       render: (p) =>
         queuedDeletions[p.id] !== undefined ? (
           <button
