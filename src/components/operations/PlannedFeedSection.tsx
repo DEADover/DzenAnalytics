@@ -133,15 +133,26 @@ export function PlannedBar({
 export function PlannedFeedList({
   template,
   grouped,
-  query,
+  query = "",
+  ops: opsProp,
+  emptyText,
 }: {
   template: string;
   /** Лента разбита по дням — тогда и планы идут с заголовками дней, без колонки даты. */
   grouped: boolean;
   /** Быстрый поиск ленты — ищет и по планам. */
-  query: string;
+  query?: string;
+  /**
+   * Свой список планов вместо всех — у «Регулярных» он отобран периодом и
+   * вкладкой «План / Прогноз». Не задан — все планы ленты (`usePlannedFeed`).
+   */
+  ops?: PlannedOp[];
+  /** Что сказать, когда показывать нечего. */
+  emptyText?: string;
 }) {
-  const { ops, today } = usePlannedFeed(query);
+  const feed = usePlannedFeed(query);
+  const ops = opsProp ?? feed.ops;
+  const today = feed.today;
   const base = useDataStore((s) => s.rates.base);
   const [menu, setMenu] = useState<{ op: PlannedOp; anchor: HTMLElement } | null>(null);
   const [fact, setFact] = useState<PlannedOp | null>(null);
@@ -266,7 +277,8 @@ export function PlannedFeedList({
     <div className="border-b border-border">
       {ops.length === 0 && (
         <p className="px-4 py-6 text-sm text-muted text-center">
-          {query.trim() ? "Среди запланированных ничего не найдено" : "Запланированных операций нет"}
+          {emptyText ??
+            (query.trim() ? "Среди запланированных ничего не найдено" : "Запланированных операций нет")}
         </p>
       )}
       {/* Дни появляются по очереди сверху вниз — лента «раскрывается»
