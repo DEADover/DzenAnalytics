@@ -19,7 +19,6 @@ import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
 import { Tooltip } from "./Tooltip";
 import { EditTransactionModal } from "./EditTransactionModal";
-import { StatCell, StatRow } from "./SectionCard";
 import { BulkEditModal } from "./BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
 import { formatMoney, formatDate, formatNum, displayPayee, payeeSearchText, transferCounterparty } from "../lib/format";
@@ -29,6 +28,8 @@ import { OperationActions, OperationAmount, OperationCategory, OperationPayee, O
 import { buildCsv, csvFileName, downloadCsv, sortRows } from "./table/tableKit";
 import type { Transaction } from "../types";
 import { SearchInput } from "./SearchInput";
+import { SplitTransactionModal } from "./SplitTransactionModal";
+import { useSplitTransaction } from "../hooks/useSplitTransaction";
 import { SelectionBar } from "./SelectionBar";
 import { MergeSelectionAction } from "./operations/MergeSelectionAction";
 import { kindTotals } from "../lib/aggregations";
@@ -65,6 +66,9 @@ export function TransactionsDrawer() {
   // Копия операции (issue #78) — та же кнопка, что и в ленте: список операций
   // здесь тот же самый, только показан сбоку.
   const [copying, setCopying] = useState<Transaction | null>(null);
+  // Разделение — та же кнопка-ножницы, что в ленте «Операций».
+  const [splitting, setSplitting] = useState<Transaction | null>(null);
+  const { applySplit } = useSplitTransaction();
   const apiConnected = useZenmoneyStore((s) => !!s.token);
 
   // ── Bulk selection + edit ──────────────────────────────────────────
@@ -110,7 +114,7 @@ export function TransactionsDrawer() {
   // Живёт это отдельным эффектом от блокировки прокрутки ниже: у него свои
   // поводы перезапускаться (выделение меняется на каждый клик), а перезапускать
   // из-за них блокировку прокрутки незачем.
-  const escOnTop = Boolean(editing) || Boolean(copying) || bulkOpen || mergeOpen;
+  const escOnTop = Boolean(editing) || Boolean(copying) || Boolean(splitting) || bulkOpen || mergeOpen;
   useEffect(() => {
     if (!open || escOnTop) return;
     const onKey = (e: KeyboardEvent) => {
@@ -244,12 +248,14 @@ export function TransactionsDrawer() {
     {
       key: "actions",
       type: "actions",
-      width: "8rem",
+      // Четыре кнопки по 28 px с зазорами — 118 px, плюс поля ячейки по 12.
+      width: "9rem",
       label: "Действия",
       render: (t) => (
         <OperationActions
           onEdit={() => setEditing(t)}
           onCopy={apiConnected ? () => setCopying(t) : undefined}
+          onSplit={apiConnected ? () => setSplitting(t) : undefined}
           onDelete={() => handleDelete(t)}
         />
       ),
@@ -387,34 +393,36 @@ export function TransactionsDrawer() {
           </div>
         )}
 
-        {/* Тот же ряд итогов, что на страницах: три числа тут стояли голым
-            текстом на плоской полосе — единственное место в продукте, где
-            показатели выглядели так. */}
-        <div className="px-5 md:px-6 py-3 border-b border-border">
-          <StatRow>
-            <StatCell label="Доходы" tone="income" value={formatMoney(totals.inc, base)} />
-            <StatCell label="Расходы" tone="expense" value={formatMoney(totals.exp, base)} />
-            <StatCell
-              label="Чистый"
-              tone={totals.net >= 0 ? "income" : "expense"}
-              value={formatMoney(totals.net, base, { signed: true })}
-            />
-          </StatRow>
-        </div>
-
-        <div className="px-5 md:px-6 py-3 border-b border-border flex items-center gap-3">
+        {/* Поиск, выгрузка и итоги — одним рядом. Итоги раньше стояли
+            отдельным блоком крупных карточек и забирали у списка полторы
+            сотни пикселей; здесь они справка к списку, а не главное. */}
+        <div className="px-5 md:px-6 py-3 border-b border-border flex items-center gap-3 flex-wrap">
           <SearchInput
             value={search}
             onChange={setSearch}
             placeholder="Поиск по получателю, комментарию, категории и счёту"
-            className="flex-1"
+            className="flex-1 min-w-[16rem]"
           />
-          <button onClick={exportCsv} className="btn-ghost text-xs whitespace-nowrap">
-            <Download className="w-3.5 h-3.5" />
+          <button onClick={exportCsv} className="btn-ghost whitespace-nowrap">
+            <Download className="w-4 h-4" />
             CSV
           </button>
           <div className="text-xs text-muted whitespace-nowrap">
             {formatNum(filtered.length)} из {formatNum(transactions.length)}
+          </div>
+          <div className="flex items-center gap-4 text-sm tabular-nums whitespace-nowrap border-l border-border pl-4">
+            <span className="text-muted">
+              Доходы <span className="font-semibold text-income">{formatMoney(totals.inc, base)}</span>
+            </span>
+            <span className="text-muted">
+              Расходы <span className="font-semibold text-expense">{formatMoney(totals.exp, base)}</span>
+            </span>
+            <span className="text-muted">
+              Прибыль{" "}
+              <span className={`font-semibold ${totals.net >= 0 ? "text-income" : "text-expense"}`}>
+                {formatMoney(totals.net, base, { signed: true })}
+              </span>
+            </span>
           </div>
         </div>
 
@@ -493,6 +501,14 @@ export function TransactionsDrawer() {
                 }
               : undefined
           }
+          onSplit={
+            apiConnected
+              ? () => {
+                  setEditing(null);
+                  setSplitting(editing);
+                }
+              : undefined
+          }
           onNavigate={(dir) => {
             const i = sorted.findIndex((t) => t.id === editing.id);
             const next = sorted[i + dir];
@@ -506,6 +522,14 @@ export function TransactionsDrawer() {
           key={`copy-${copying.id}`}
           template={copying}
           onClose={() => setCopying(null)}
+        />
+      )}
+
+      {splitting && (
+        <SplitTransactionModal
+          tx={splitting}
+          onClose={() => setSplitting(null)}
+          onSplit={(parts, payee, account) => applySplit(splitting, parts, payee, account)}
         />
       )}
     </>
