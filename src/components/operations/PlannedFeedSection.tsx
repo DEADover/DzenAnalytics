@@ -28,14 +28,14 @@ import { OperationAmount, OperationCategory, OperationComment, OperationPayee } 
 import { PlanLinkModal } from "./PlanLinkModal";
 import { PlanEditModal } from "./PlanEditModal";
 
-/** «через 6 дней» / «просрочено на 2 дня» — как у Дзен-мани; сегодня — без пометки. */
+/** «Через 6 дней» / «Просрочено на 2 дня» — как у Дзен-мани; сегодня — без пометки. */
 function dayNote(ymd: string, today: string): string | null {
   const days = Math.round((Date.parse(ymd) - Date.parse(today)) / 86_400_000);
   if (days === 0) return null;
-  if (days === 1) return "завтра";
-  if (days > 0) return `через ${days} ${pluralRu(days, ["день", "дня", "дней"])}`;
+  if (days === 1) return "Завтра";
+  if (days > 0) return `Через ${days} ${pluralRu(days, ["день", "дня", "дней"])}`;
   const late = -days;
-  return `просрочено на ${late} ${pluralRu(late, ["день", "дня", "дней"])}`;
+  return `Просрочено на ${late} ${pluralRu(late, ["день", "дня", "дней"])}`;
 }
 
 /** Подпись плана для списка изменений и подтверждений. */

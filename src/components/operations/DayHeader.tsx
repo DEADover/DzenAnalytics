@@ -27,7 +27,7 @@ export function DayHeader({
   txs: Transaction[];
   base: string;
   showTransfers: boolean;
-  /** Пометка после дня недели — у планов «через 6 дней» / «просрочено на 2 дня». */
+  /** Пометка после дня недели — у планов «Через 6 дней» / «Просрочено на 2 дня». */
   note?: ReactNode;
 }) {
   const { label, weekday } = useMemo(() => formatDayHeader(ymd), [ymd]);
