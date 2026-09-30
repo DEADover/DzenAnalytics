@@ -17,9 +17,12 @@ export function SettingRow({
   help,
   control,
   dense,
+  badge,
   children,
 }: {
   title: string;
+  /** Метка после названия — например, «Бета» у пробной функции. */
+  badge?: ReactNode;
   /** Одна строка о текущем состоянии — что сейчас происходит с этой настройкой. */
   status?: ReactNode;
   /**
@@ -52,7 +55,7 @@ export function SettingRow({
         className={`flex items-center justify-between ${dense ? "gap-3" : "gap-6"}`}
       >
         <div className="min-w-0">
-          <SettingLabel title={title} help={help} />
+          <SettingLabel title={title} help={help} badge={badge} />
           {status && (
             <div
               className={`text-xs mt-0.5 ${
@@ -82,7 +85,15 @@ export function SettingRow({
  * строки (например «Способ расчёта» под прогнозом): иначе у них другой шрифт и
  * подсказки нет вовсе.
  */
-export function SettingLabel({ title, help }: { title: string; help?: ReactNode }) {
+export function SettingLabel({
+  title,
+  help,
+  badge,
+}: {
+  title: string;
+  help?: ReactNode;
+  badge?: ReactNode;
+}) {
   return (
     // Название и знак вопроса — одной строкой, без переносов. Если рядом с
     // контролом им уже не хватает места, на другую строку уезжает контрол
@@ -94,6 +105,7 @@ export function SettingLabel({ title, help }: { title: string; help?: ReactNode 
           <InfoPopover label={`${title} — подробнее`}>{help}</InfoPopover>
         </span>
       )}
+      {badge && <span className="inline-flex align-middle ml-2">{badge}</span>}
     </div>
   );
 }

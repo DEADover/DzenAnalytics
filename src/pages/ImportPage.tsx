@@ -44,6 +44,7 @@ import { AccountsSettings } from "../components/AccountsSettings";
 import { PendingChangesModal } from "../components/PendingChangesModal";
 import { SlicesSettings } from "../components/SlicesSettings";
 import { SettingRow } from "../components/SettingRow";
+import { Badge } from "../components/Badge";
 import { CloudSettingsCard } from "../components/CloudSettingsCard";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Switch } from "../components/Switch";
@@ -1689,55 +1690,12 @@ export function ImportPage() {
         )}
 
         <SettingRow
-          title="Размер текста в таблицах"
-          status={`${TABLE_FONT_LABELS[tableFontLevel]} (${tableFontLevel}/5)`}
-          help={
-            <p>
-              Размер шрифта в списках операций: лента «Операции», поиск, окно
-              операций, дубликаты, удалённые и подобные таблицы. Остальной
-              интерфейс не меняется.
-            </p>
-          }
-          control={
-            <div className="flex items-center gap-2">
-              <span className="text-muted text-[12px]" aria-hidden>
-                А
-              </span>
-              <RangeInput
-                value={tableFontLevel}
-                min={1}
-                max={5}
-                onChange={(v) => setTableFontLevel(v as TableFontLevel)}
-                ariaLabel="Размер текста в таблицах"
-                valueText={TABLE_FONT_LABELS[tableFontLevel]}
-                className="w-40"
-              />
-              <span className="text-muted text-[18px]" aria-hidden>
-                А
-              </span>
-            </div>
-          }
-        >
-          {/* Живой пример — на той же CSS-переменной, что и таблицы, поэтому
-              масштабируется прямо во время перетаскивания. */}
-          <div className="mt-3 rounded-lg border border-border bg-panel2/40 px-3 py-2 flex items-center justify-between gap-3">
-            <span
-              className="text-muted truncate"
-              style={{ fontSize: "var(--tbl-font)" }}
-            >
-              01.06.2026 · Ёлочка · Еда дома
-            </span>
-            <span
-              className="tabular-nums font-medium text-expense whitespace-nowrap"
-              style={{ fontSize: "var(--tbl-font)" }}
-            >
-              {formatMoney(-1234, rates.base)}
-            </span>
-          </div>
-        </SettingRow>
-
-        <SettingRow
           title="Своя ширина столбцов"
+          badge={
+            <Badge tone="accent" title="Пробная функция: может измениться">
+              Бета
+            </Badge>
+          }
           status={
             !columnResize
               ? "Выключено — ширины колонок подбираются сами"
@@ -1784,6 +1742,54 @@ export function ImportPage() {
             </div>
           }
         />
+
+        <SettingRow
+          title="Размер текста в таблицах"
+          status={`${TABLE_FONT_LABELS[tableFontLevel]} (${tableFontLevel}/5)`}
+          help={
+            <p>
+              Размер шрифта в списках операций: лента «Операции», поиск, окно
+              операций, дубликаты, удалённые и подобные таблицы. Остальной
+              интерфейс не меняется.
+            </p>
+          }
+          control={
+            <div className="flex items-center gap-2">
+              <span className="text-muted text-[12px]" aria-hidden>
+                А
+              </span>
+              <RangeInput
+                value={tableFontLevel}
+                min={1}
+                max={5}
+                onChange={(v) => setTableFontLevel(v as TableFontLevel)}
+                ariaLabel="Размер текста в таблицах"
+                valueText={TABLE_FONT_LABELS[tableFontLevel]}
+                className="w-40"
+              />
+              <span className="text-muted text-[18px]" aria-hidden>
+                А
+              </span>
+            </div>
+          }
+        >
+          {/* Живой пример — на той же CSS-переменной, что и таблицы, поэтому
+              масштабируется прямо во время перетаскивания. */}
+          <div className="mt-3 rounded-lg border border-border bg-panel2/40 px-3 py-2 flex items-center justify-between gap-3">
+            <span
+              className="text-muted truncate"
+              style={{ fontSize: "var(--tbl-font)" }}
+            >
+              01.06.2026 · Ёлочка · Еда дома
+            </span>
+            <span
+              className="tabular-nums font-medium text-expense whitespace-nowrap"
+              style={{ fontSize: "var(--tbl-font)" }}
+            >
+              {formatMoney(-1234, rates.base)}
+            </span>
+          </div>
+        </SettingRow>
       </div>
 
       </>)}
