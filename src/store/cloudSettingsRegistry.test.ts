@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { SYNCED_FIELDS } from "./cloudSettingsFields";
 import { SYNCED_COLLECTIONS } from "./cloudSettingsCollections";
 import { COLLECTION_TYPES } from "../lib/cloudSettings";
+import { parseDupExclusions } from "./useDuplicateExclusionsStore";
 
 /**
  * Реестры переносимых настроек: имена — это ключи в облаке, и совпасть они не
@@ -49,5 +50,39 @@ describe("реестр переносимых настроек", () => {
     const keys = SYNCED_FIELDS.map((f) => f.key);
     expect(keys).toContain("whatIf");
     expect(keys).toContain("fire.excluded");
+  });
+
+  it("переносятся оформление лент, «Это я», «Не дубликаты» и вид «Счетов»", () => {
+    const keys = SYNCED_FIELDS.map((f) => f.key);
+    for (const k of [
+      "display.commentWrap",
+      "display.columnResize",
+      "display.feedHeadSticky",
+      "members.owner",
+      "duplicates.exclusions",
+      "accounts.view",
+    ]) {
+      expect(keys).toContain(k);
+    }
+  });
+
+  it("исключения дубликатов с другого устройства: только записи нужной формы", () => {
+    const good = {
+      signature: "expense|Магнит|100|RUB",
+      payee: "Магнит",
+      amount: 100,
+      currency: "RUB",
+      kind: "expense",
+      createdAt: "2026-09-30T00:00:00.000Z",
+    };
+    expect(
+      parseDupExclusions({
+        [good.signature]: good,
+        "чужой ключ": { ...good },
+        broken: { signature: "broken" },
+      })
+    ).toEqual({ [good.signature]: good });
+    expect(parseDupExclusions(null)).toBeNull();
+    expect(parseDupExclusions([good])).toBeNull();
   });
 });

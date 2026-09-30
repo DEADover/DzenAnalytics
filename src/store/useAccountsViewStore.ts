@@ -107,7 +107,8 @@ const SORT_KEYS = new Set<string>([
  * заменяем значением по умолчанию — страница не должна падать из-за старой
  * настройки показа.
  */
-function normalize(raw: Partial<AccountsViewPrefs> | null): AccountsViewPrefs {
+/** Проверить и дополнить настройки вида — с диска или пришедшие с другого устройства. */
+export function normalizeAccountsView(raw: Partial<AccountsViewPrefs> | null): AccountsViewPrefs {
   const d = ACCOUNTS_VIEW_DEFAULTS;
   if (!raw) return { ...d };
   const strings = (v: unknown): string[] =>
@@ -140,7 +141,7 @@ function normalize(raw: Partial<AccountsViewPrefs> | null): AccountsViewPrefs {
 }
 
 /** Всё, что кладём в IDB, — одним местом, чтобы `patch` не забывал поля. */
-function persisted(s: AccountsViewPrefs): AccountsViewPrefs {
+export function pickAccountsView(s: AccountsViewPrefs): AccountsViewPrefs {
   return {
     tab: s.tab,
     chartView: s.chartView,
@@ -163,13 +164,13 @@ export const useAccountsViewStore = create<State>((set, get) => ({
 
   hydrate: async () => {
     const raw = await db.loadJSON<Partial<AccountsViewPrefs>>(KEY);
-    set({ ...normalize(raw), loaded: true });
+    set({ ...normalizeAccountsView(raw), loaded: true });
   },
 
   patch: async (p) => {
     set(p);
-    await db.saveJSON(KEY, persisted({ ...get(), ...p }));
+    await db.saveJSON(KEY, pickAccountsView({ ...get(), ...p }));
   },
 }));
 
-export const __test = { normalize, persisted };
+export const __test = { normalize: normalizeAccountsView, persisted: pickAccountsView };

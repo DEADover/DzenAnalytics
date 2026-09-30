@@ -22,6 +22,8 @@ import { useFreeMoneyStore } from "./useFreeMoneyStore";
 import { isWindowKind, useDisplayStore } from "./useDisplayStore";
 import { useFilterMemoryStore } from "./useFilterMemoryStore";
 import { useMembersStore } from "./useMembersStore";
+import { parseDupExclusions, useDuplicateExclusionsStore } from "./useDuplicateExclusionsStore";
+import { normalizeAccountsView, pickAccountsView, useAccountsViewStore } from "./useAccountsViewStore";
 import { useThemeStore } from "./useThemeStore";
 import { useDashboardLayoutStore } from "./useDashboardLayoutStore";
 import { useHeaderNavStore } from "./useHeaderNavStore";
@@ -177,6 +179,22 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useMembersStore, "members.aliases", (s) => s.aliases, (v, s) => s.replaceAliases(v)),
   field(useMembersStore, "members.hideForeignPrivate", (s) => s.hideForeignPrivate, (v, s) =>
     isBool(v) ? s.setHideForeignPrivate(v) : undefined
+  ),
+  // «Это я» на общем аккаунте. Без него «Скрывать чужие личные счета» на
+  // другом устройстве не прятало бы ничего: не зная, кто вы, прятать нечего.
+  // Номер пользователя — из Дзен-мани, на всех устройствах один.
+  field(useMembersStore, "members.owner", (s) => s.ownerId, (v, s) =>
+    v === null || (typeof v === "number" && Number.isInteger(v)) ? s.setOwnerId(v) : undefined
+  ),
+  // «Не дубликаты» — решение человека о своих данных, в Дзен-мани его нет.
+  field(useDuplicateExclusionsStore, "duplicates.exclusions", (s) => s.rules, (v, s) => {
+    const rules = parseDupExclusions(v);
+    return rules ? s.replaceAll(rules) : undefined;
+  }),
+  // Вид страницы «Счета»: таблица или карточки, график, сортировка,
+  // группировка, фильтры — как вид «Бюджета».
+  field(useAccountsViewStore, "accounts.view", (s) => pickAccountsView(s), (v, s) =>
+    v && typeof v === "object" ? s.patch(normalizeAccountsView(v as never)) : undefined
   ),
   // Тема живёт в localStorage и читается синхронно — готова всегда.
   field(

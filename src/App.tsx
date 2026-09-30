@@ -68,6 +68,8 @@ import { useTagDeletionsStore } from "./store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "./store/usePlannedDeletionsStore";
 import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
 import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
+import { useDuplicateExclusionsStore } from "./store/useDuplicateExclusionsStore";
+import { useAccountsViewStore } from "./store/useAccountsViewStore";
 import { useMembersStore } from "./store/useMembersStore";
 import { useFreeMoneyStore } from "./store/useFreeMoneyStore";
 import { useTagModeStore } from "./store/useTagModeStore";
@@ -166,6 +168,11 @@ function App() {
     void useCloudSettingsStore.getState().hydrate();
     useSplitGroupsStore.getState().hydrate();
     useMembersStore.getState().hydrate();
+    // Эти два читают своё при запуске, а не при заходе на страницу: их
+    // настройки переносятся между устройствами, и облако ждёт, пока все
+    // переносимые хранилища прочитают своё с диска.
+    useDuplicateExclusionsStore.getState().hydrate();
+    useAccountsViewStore.getState().hydrate();
     useFreeMoneyStore.getState().hydrate();
     useTagModeStore.getState().hydrate();
     useHeaderNavStore.getState().hydrate();

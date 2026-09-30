@@ -32,6 +32,42 @@ interface State {
   add: (rule: DupExclusion) => Promise<void>;
   remove: (signature: string) => Promise<void>;
   clearAll: () => Promise<void>;
+  /** Заменить все исключения — пришедшие с другого устройства. */
+  replaceAll: (rules: Record<string, DupExclusion>) => Promise<void>;
+}
+
+/**
+ * Исключения, пришедшие с другого устройства: берём только записи нужной
+ * формы, ключ — подпись группы. Остальное молча пропускаем.
+ */
+export function parseDupExclusions(raw: unknown): Record<string, DupExclusion> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out: Record<string, DupExclusion> = {};
+  for (const [key, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== "object") continue;
+    const r = v as Partial<DupExclusion>;
+    if (
+      typeof r.signature !== "string" ||
+      r.signature !== key ||
+      typeof r.payee !== "string" ||
+      typeof r.amount !== "number" ||
+      typeof r.currency !== "string" ||
+      typeof r.kind !== "string" ||
+      typeof r.createdAt !== "string"
+    ) {
+      continue;
+    }
+    out[key] = {
+      signature: r.signature,
+      payee: r.payee,
+      amount: r.amount,
+      currency: r.currency,
+      kind: r.kind,
+      ...(typeof r.category === "string" ? { category: r.category } : {}),
+      createdAt: r.createdAt,
+    };
+  }
+  return out;
 }
 
 export const useDuplicateExclusionsStore = create<State>((set, get) => ({
@@ -60,5 +96,10 @@ export const useDuplicateExclusionsStore = create<State>((set, get) => ({
   clearAll: async () => {
     await db.saveJSON(KEY, {});
     set({ rules: {} });
+  },
+
+  replaceAll: async (rules) => {
+    await db.saveJSON(KEY, rules);
+    set({ rules });
   },
 }));
