@@ -14,7 +14,7 @@
 import { useCallback, useMemo, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { useColumnWidthsStore } from "../store/useColumnWidthsStore";
-import { scaledWidth } from "../components/table/tableKit";
+import { COLUMN_TYPES, scaledWidth, type ColumnType } from "../components/table/tableKit";
 import {
   gridTemplateWith,
   hasWidthsFor,
@@ -30,7 +30,7 @@ export interface ResizeColumn {
   key: string;
   /** Подпись — для скринридера у границы. */
   label?: string;
-  /** Тип колонки таблицы (для справки; ширину не определяет). */
+  /** Тип колонки таблицы: по нему видно, к какому краю прижато содержимое. */
   type?: string;
   /** Ширина по умолчанию (CSS) — у таблицы. */
   width?: string;
@@ -67,6 +67,11 @@ export interface ColumnResize {
    * `hidden xl:table-column`, иначе ячейки строк съедут на её место.
    */
   colgroup: (opts?: { className?: Record<string, string> }) => ReactNode;
+}
+
+/** К какому краю прижато содержимое колонки — по её типу из табличного стандарта. */
+function alignOfColumn(c: ResizeColumn): string | undefined {
+  return c.type && c.type in COLUMN_TYPES ? COLUMN_TYPES[c.type as ColumnType].align : undefined;
 }
 
 /** Шаг стрелки на клавиатуре; с Shift — втрое больше. */
@@ -295,6 +300,10 @@ export function useColumnResize(
       // Граница — между двумя колонками, и обе должны уметь меняться. У
       // правого края таблицы границы нет: таблица всегда во всю ширину.
       if (!leftCol || !rightCol || leftCol.resizable === false || rightCol.resizable === false) return null;
+      // Слева числа прижаты вправо, справа текст — влево: содержимое обеих
+      // липнет к этой самой границе и двигалось бы только вместе («# | Слово»,
+      // «Сумма | Отмечено»). Развести их перетаскиванием нельзя — границы нет.
+      if (alignOfColumn(leftCol) === "right" && alignOfColumn(rightCol) === "left") return null;
       const label = `${leftCol.label ?? leftCol.key} и ${rightCol.label ?? rightCol.key}`;
 
       const onPointerDown = (e: PointerEvent<HTMLElement>) => {

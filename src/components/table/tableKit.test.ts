@@ -14,14 +14,14 @@ import {
 } from "./tableKit";
 
 describe("тип колонки → выравнивание", () => {
-  it("текст и дата влево, числа вправо, метки и действия по центру", () => {
+  it("текст, дата и остаток влево, числа и доли вправо, метки и действия по центру", () => {
     expect(alignOf("text")).toBe("left");
     expect(alignOf("date")).toBe("left");
     expect(alignOf("money")).toBe("right");
     expect(alignOf("main")).toBe("right");
     expect(alignOf("balance")).toBe("left");
     expect(alignOf("number")).toBe("right");
-    expect(alignOf("pct")).toBe("left");
+    expect(alignOf("pct")).toBe("right");
     expect(alignOf("change")).toBe("right");
     expect(alignOf("count")).toBe("right");
     expect(alignOf("mark")).toBe("center");

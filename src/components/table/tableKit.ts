@@ -23,17 +23,18 @@ export type SortDir = "asc" | "desc";
  *   сколько прошло за период. Влево, 500, цвет — только у минуса. Главная
  *   колонка «Капитала» вместо `main`.
  * - `number` — число, но не деньги: ставка, дни, σ, «во сколько раз». Вправо.
- * - `pct` — доля. Влево, приглушённо.
+ * - `pct` — доля. Вправо, приглушённо.
  * - `change` — изменение: знак, процент или пилюля. Вправо.
  * - `count` — счётчик: операций, совпадений, упоминаний. Вправо, приглушённо.
  * - `mark` — статус, метка, значок. По центру.
  * - `actions` — кнопки. По центру, не сортируется и не выгружается.
  *
- * Доля и остаток прижаты влево по решению пользователя (14.09.2026): по
- * центру они казались уехавшими, а прижатые вправо узкие колонки с подписью и
- * значком сортировки читались сдвинутыми относительно шапки. Счётчик сначала
- * ушёл туда же, но 15.09.2026 пользователь вернул «Операций» вправо — к числам,
- * как суммы.
+ * Остаток прижат влево по решению пользователя (14.09.2026). Доля сначала
+ * ушла туда же, но 30.09.2026 вернулась вправо, к числам: при своей ширине
+ * столбцов «Сумма» (вправо) и «Доля» (влево) липли к одной границе и
+ * двигались только вместе, развести их было нельзя. Правило теперь простое:
+ * числа — вправо, текст и даты — влево. Счётчик вернулся вправо ещё
+ * 15.09.2026.
  */
 export type ColumnType =
   | "text"
@@ -78,7 +79,7 @@ export const COLUMN_TYPES: Record<ColumnType, TypeSpec> = {
   main: { align: "right", cell: `${NUM} font-medium`, firstDir: "desc", sortable: true, exported: true },
   balance: { align: "left", cell: `${NUM} font-medium`, firstDir: "desc", sortable: true, exported: true },
   number: { align: "right", cell: NUM, firstDir: "desc", sortable: true, exported: true },
-  pct: { align: "left", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
+  pct: { align: "right", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
   change: { align: "right", cell: NUM, firstDir: "desc", sortable: true, exported: true },
   count: { align: "right", cell: `${NUM} text-muted`, firstDir: "desc", sortable: true, exported: true },
   mark: { align: "center", cell: "whitespace-nowrap", firstDir: "asc", sortable: true, exported: true },
