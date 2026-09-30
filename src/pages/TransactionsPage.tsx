@@ -34,7 +34,7 @@ import { OperationActions, OperationAmount, OperationCategory, OperationPayee, O
 import { TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { MergeSelectionAction } from "../components/operations/MergeSelectionAction";
-import { PlannedFeedList, PlannedModeBar, PlannedSummaryRow } from "../components/operations/PlannedFeedSection";
+import { PlannedBar, PlannedFeedList } from "../components/operations/PlannedFeedSection";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { BulkEditModal } from "../components/BulkEditModal";
@@ -243,6 +243,9 @@ export function TransactionsPage() {
   // Лента «только запланированные» — как вкладка «Будущие» в Дзен-мани.
   // Включается щелчком по строке «Запланировано» над лентой.
   const [plannedMode, setPlannedMode] = useState(false);
+  // Только что вернулись из ленты планов — операции проявляются, а не
+  // появляются рывком. При обычной загрузке страницы анимации нет.
+  const [leftPlanned, setLeftPlanned] = useState(false);
 
 
   // ── «Добавить» dropdown: pick which kind of operation to create. ─────
@@ -720,12 +723,16 @@ export function TransactionsPage() {
       >
         {/* Строка «Запланировано» (или шапка ленты одних планов) — над
             заголовками колонок: она про всю ленту, а не про одну колонку. */}
-        {apiConnected &&
-          (plannedMode ? (
-            <PlannedModeBar query={pageSearch} onBack={() => setPlannedMode(false)} />
-          ) : (
-            <PlannedSummaryRow onOpen={() => setPlannedMode(true)} />
-          ))}
+        {apiConnected && (
+          <PlannedBar
+            open={plannedMode}
+            onToggle={() => {
+              setPlannedMode((v) => !v);
+              setLeftPlanned(plannedMode);
+            }}
+            query={pageSearch}
+          />
+        )}
         {apiConnected && plannedMode ? (
           <div>
             <HeaderRow
@@ -748,7 +755,7 @@ export function TransactionsPage() {
             По текущим фильтрам ничего не найдено
           </SectionEmpty>
         ) : groupedByDay ? (
-          <div>
+          <div className={leftPlanned ? "feed-back-in" : undefined}>
             <HeaderRow
               grouped
               template={resize.template}
@@ -777,7 +784,7 @@ export function TransactionsPage() {
             ))}
           </div>
         ) : (
-          <div>
+          <div className={leftPlanned ? "feed-back-in" : undefined}>
             <HeaderRow
               grouped={false}
               template={resize.template}
@@ -939,7 +946,11 @@ function HeaderRow({
   return (
     <OperationListHead template={template}>
       {noSelect ? (
-        <span />
+        // Тот же флажок, только невидимый: пустая ячейка ниже флажка, и
+        // строка заголовков при переключении на планы становилась ниже.
+        <span className="invisible" aria-hidden>
+          <Checkbox checked={false} onChange={() => {}} label="Выбор недоступен" />
+        </span>
       ) : (
         <Checkbox
           checked={allSelected}

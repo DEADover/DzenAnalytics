@@ -2,8 +2,7 @@ import { useMemo, useState } from "react";
 import {
   CalendarCheck,
   CalendarClock,
-  ArrowLeft,
-  ChevronRight,
+  ChevronDown,
   Link2,
   MoreHorizontal,
   Pencil,
@@ -55,7 +54,8 @@ function CountsLine({ counts }: { counts: Counts }) {
     </span>
   );
   return (
-    <span className="flex items-center gap-x-3 gap-y-0.5 flex-wrap text-muted">
+    // Одной строкой: перенос менял бы высоту строки «Запланировано».
+    <span className="flex items-center gap-x-3 min-w-0 overflow-hidden whitespace-nowrap text-muted">
       {counts.overdue > 0 && part("Просрочено", counts.overdue, "text-expense")}
       {part("До конца месяца", counts.month)}
       {part("До конца года", counts.year)}
@@ -65,54 +65,50 @@ function CountsLine({ counts }: { counts: Counts }) {
 }
 
 /**
- * Строка «Запланировано» над лентой: сколько планов просрочено и сколько
- * осталось до конца месяца, года и всего. Щелчок переключает ленту в режим
- * «только запланированные» — как вкладка «Будущие» в приложении Дзен-мани.
+ * Строка «Запланировано» над заголовками колонок — одна на оба состояния
+ * ленты, чтобы при переключении ничего не прыгало: та же высота, те же
+ * отступы, тот же текст слева. Справа — последняя дата, до которой есть
+ * планы, и шеврон: вниз — показать одни запланированные (как «Будущие» в
+ * Дзен-мани), вверх — вернуться к операциям.
  */
-export function PlannedSummaryRow({ onOpen }: { onOpen: () => void }) {
+export function PlannedBar({
+  open,
+  onToggle,
+  query,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  /** Быстрый поиск ленты — в открытом виде счётчики считают найденное. */
+  query: string;
+}) {
   const enabled = useDisplayStore((s) => s.feedPlanned);
-  const { ops, counts } = usePlannedFeed();
-  if (!enabled || ops.length === 0) return null;
+  const { ops, counts } = usePlannedFeed(open ? query : "");
+  if (!open && (!enabled || ops.length === 0)) return null;
   return (
     <button
       type="button"
-      onClick={onOpen}
-      title="Показать только запланированные операции"
-      className="w-full px-4 py-2 border-b border-border bg-panel2/60 flex items-center gap-3 text-sm text-left hover:bg-panel2"
+      onClick={onToggle}
+      aria-expanded={open}
+      title={open ? "Вернуться ко всем операциям" : "Показать только запланированные операции"}
+      className="w-full h-10 px-4 border-b border-border bg-panel2/60 flex items-center gap-3 text-sm text-left hover:bg-panel2 transition-colors"
     >
-      <CalendarClock className="w-4 h-4 text-accent shrink-0" aria-hidden />
       <span className="font-semibold shrink-0">Запланировано</span>
       <CountsLine counts={counts} />
-      <ChevronRight className="w-4 h-4 text-muted ml-auto shrink-0" aria-hidden />
+      <span className="ml-auto flex items-center gap-3 shrink-0">
+        {counts.last && (
+          <span className="text-muted whitespace-nowrap hidden sm:inline">
+            по {formatDate(counts.last, "full")}
+          </span>
+        )}
+        <ChevronDown
+          className={clsx(
+            "w-4 h-4 text-muted transition-transform duration-200",
+            open && "rotate-180"
+          )}
+          aria-hidden
+        />
+      </span>
     </button>
-  );
-}
-
-/**
- * Шапка ленты одних запланированных: кнопка назад (значком), те же счётчики
- * и последняя дата, до которой есть планы. Стоит там же, где в обычной ленте
- * строка «Запланировано», — над заголовками колонок.
- */
-export function PlannedModeBar({ query, onBack }: { query: string; onBack: () => void }) {
-  const { counts } = usePlannedFeed(query);
-  return (
-    <div className="px-4 py-2 border-b border-border bg-panel2/60 flex items-center gap-3 text-sm flex-wrap">
-      <button
-        type="button"
-        onClick={onBack}
-        className="btn-icon -ml-1"
-        title="Все операции"
-        aria-label="Вернуться ко всем операциям"
-      >
-        <ArrowLeft className="w-4 h-4" aria-hidden />
-      </button>
-      <CalendarClock className="w-4 h-4 text-accent shrink-0" aria-hidden />
-      <span className="font-semibold">Запланированные</span>
-      <CountsLine counts={counts} />
-      {counts.last && (
-        <span className="ml-auto text-muted whitespace-nowrap">по {formatDate(counts.last, "full")}</span>
-      )}
-    </div>
   );
 }
 
@@ -258,6 +254,9 @@ export function PlannedFeedList({
           {query.trim() ? "Среди запланированных ничего не найдено" : "Запланированных операций нет"}
         </p>
       )}
+      {/* Дни появляются по очереди сверху вниз — лента «раскрывается»
+          из строки «Запланировано», а не подменяется рывком. */}
+      <div className="planned-in">
       {(grouped
           ? byDay.map(([ymd, list]) => (
               <div key={ymd}>
@@ -273,6 +272,7 @@ export function PlannedFeedList({
               </div>
             ))
           : ops.map(renderRow))}
+      </div>
 
       <Popover
         open={!!menu}
