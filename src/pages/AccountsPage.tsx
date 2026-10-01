@@ -1315,29 +1315,68 @@ export function AccountsPage() {
   );
   const netWorthAll = useNetWorthSeries(transactions);
   const netWorth = useMemo(() => clip(netWorthAll), [netWorthAll, clip]);
+  /**
+   * Счета для линии «Совокупно» — тот же выбор, что у «По счетам» (#111).
+   * Контрагент долгового счёта здесь значит весь этот счёт: одной линией
+   * долг по людям не развести. `undefined` — выбора нет, все счета «в
+   * балансе». Карточки над графиком считают все счета — это капитал.
+   */
+  const netChartAccounts = useMemo<string[] | undefined>(() => {
+    if (!chartOnly || chartOnly.length === 0) return undefined;
+    const set = new Set<string>();
+    for (const key of chartOnly) set.add(parseDebtKey(key)?.account ?? key);
+    return [...set];
+  }, [chartOnly]);
+  /**
+   * Быстрый выбор накопительных (#111): «Все» снимает выбор, «Без накоплений»
+   * и «Накопления» ставят соответствующие счета «в балансе» — тот же выбор,
+   * что и в списке счетов, так что дальше его можно поправить руками.
+   */
+  const savingsPresets = useMemo(() => {
+    const savingsOf = new Map(accountRows.map((r) => [r.account, r.savings]));
+    const universe = [...(valuation?.universe ?? [])];
+    return {
+      all: [] as string[],
+      noSavings: universe.filter((t) => !savingsOf.get(t)),
+      savings: universe.filter((t) => savingsOf.get(t)),
+    };
+  }, [accountRows, valuation]);
+  const savingsMode = useMemo<"all" | "noSavings" | "savings" | "custom">(() => {
+    if (chartAccounts.size === 0) return "all";
+    const same = (list: string[]) =>
+      list.length === chartAccounts.size && list.every((t) => chartAccounts.has(t));
+    if (same(savingsPresets.noSavings)) return "noSavings";
+    if (same(savingsPresets.savings)) return "savings";
+    return "custom";
+  }, [chartAccounts, savingsPresets]);
+  const netChartAll = useNetWorthSeries(transactions, netChartAccounts);
+  const netChart = useMemo(
+    () => (chartNothingPicked ? [] : clip(netChartAll)),
+    [netChartAll, clip, chartNothingPicked]
+  );
 
   /**
    * Сравнение двух точек «Совокупного баланса»: протянули мышью по графику —
    * над ним изменение в деньгах и процентах, отрезок окрашен по знаку.
    */
-  const netDates = useMemo(() => netWorth.map((p) => p.date), [netWorth]);
+  const netDates = useMemo(() => netChart.map((p) => p.date), [netChart]);
   const netRange = useChartRangeSelect(netDates);
   const netChange = useMemo(
     () =>
       netRange.active
-        ? rangeChange(netWorth, netRange.active[0], netRange.active[1], (p) => p.net)
+        ? rangeChange(netChart, netRange.active[0], netRange.active[1], (p) => p.net)
         : null,
-    [netWorth, netRange.active]
+    [netChart, netRange.active]
   );
   /** Точки с отдельной серией `sel` — значение только внутри отрезка. */
   const netData = useMemo(() => {
-    if (!netChange) return netWorth;
+    if (!netChange) return netChart;
     const { from, to } = netChange;
-    return netWorth.map((p) => ({
+    return netChart.map((p) => ({
       ...p,
       sel: p.date >= from.date && p.date <= to.date ? p.net : null,
     }));
-  }, [netWorth, netChange]);
+  }, [netChart, netChange]);
   const netRangeColor = !netChange
     ? NET_STROKE
     : netChange.delta >= 0
@@ -1628,13 +1667,13 @@ export function AccountsPage() {
   // Точность подписей оси у графика «Совокупно»: ось там подстроена под данные,
   // и на узком размахе одного знака не хватает — все деления читаются как одно
   // и то же число.
-  const netWorthDigits = noWindowData
+  const netChartDigits = netChart.length === 0
     ? 1
-    : netWorth.length === 1
-      ? axisFractionDigits(netWorth[0].net * 0.95, netWorth[0].net * 1.05)
+    : netChart.length === 1
+      ? axisFractionDigits(netChart[0].net * 0.95, netChart[0].net * 1.05)
       : axisFractionDigits(
-        netWorth.reduce((m, p) => Math.min(m, p.net), netWorth[0].net),
-        netWorth.reduce((m, p) => Math.max(m, p.net), netWorth[0].net)
+        netChart.reduce((m, p) => Math.min(m, p.net), netChart[0].net),
+        netChart.reduce((m, p) => Math.max(m, p.net), netChart[0].net)
       );
   // Мелкие счета стопка сводит в один слой «Прочие». Подпись под графиком
   // обязана это сказать: иначе кажется, что счетов у пользователя ровно
@@ -2726,7 +2765,7 @@ export function AccountsPage() {
           }
           subtitle={
             <>
-              {chartView === "stacked" && chartNothingPicked ? (
+              {chartNothingPicked ? (
                 // Ни одного счёта не отмечено — рисовать нечего, и рассказывать
                 // про слои и период тут значило бы описывать пустое место.
                 "Счета для показа не выбраны"
@@ -2767,15 +2806,44 @@ export function AccountsPage() {
           }
           right={
             <>
-              {/* Фильтр счетов — только у стопки: «Совокупно» показывает активы
-                  минус долги целиком, и выкидывать оттуда счета нельзя, конец
-                  кривой прибит к сумме ВСЕХ реальных остатков. */}
+              {/* Выбор счетов — у обоих видов (#111): линия «Совокупно» с 1.9.9
+                  собирается из остатков отдельных счетов, и сумма выбранных —
+                  такая же честная кривая, как сумма всех. Без Дзен-мани
+                  остатков по счетам нет — тогда выбор только у стопки. */}
               {capitalPick && (
                 <button onClick={() => selectAccount(null)} className="btn-ghost text-xs shrink-0">
                   Все счета
                 </button>
               )}
-              {!capitalPick && chartView === "stacked" && chartAccountOptions.length > 1 && (
+              {!capitalPick && chartAccountOptions.length > 1 && hasRealBalances && (
+                <Segmented<"all" | "noSavings" | "savings" | "custom">
+                  size="sm"
+                  tight
+                  label="Накопительные счета на графике"
+                  value={savingsMode}
+                  onChange={(v) => {
+                    if (v !== "custom") setChartAccounts(new Set(savingsPresets[v]));
+                  }}
+                  options={[
+                    { value: "all", label: "Все", title: "Все счета" },
+                    // Пустой выбор значит «все счета», поэтому вариант без
+                    // единого счёта выключен, а не молча показывает всё.
+                    {
+                      value: "noSavings",
+                      label: "Без накоплений",
+                      title: "Без накопительных счетов",
+                      disabled: savingsPresets.noSavings.length === 0 || savingsPresets.savings.length === 0,
+                    },
+                    {
+                      value: "savings",
+                      label: "Накопления",
+                      title: "Только накопительные счета",
+                      disabled: savingsPresets.savings.length === 0,
+                    },
+                  ]}
+                />
+              )}
+              {!capitalPick && chartAccountOptions.length > 1 && (chartView === "stacked" || hasRealBalances) && (
                 <MultiSelect
                   className="w-48 shrink-0"
                   label="Счета"
@@ -2799,7 +2867,7 @@ export function AccountsPage() {
                   compactSummary
                 />
               )}
-              {chartView !== "stacked" && netWorth.length > 1 && (
+              {chartView !== "stacked" && netChart.length > 1 && (
                 <RangeCompareCard
                   change={netChange}
                   base={base}
@@ -3039,17 +3107,17 @@ export function AccountsPage() {
                   // Одна точка — размаха нет, и все деления выходили одним
                   // числом; даём шкале ±5 % вокруг остатка.
                   domain={
-                    netWorth.length === 1
+                    netChart.length === 1
                       ? [
-                          netWorth[0].net - Math.max(Math.abs(netWorth[0].net) * 0.05, 1),
-                          netWorth[0].net + Math.max(Math.abs(netWorth[0].net) * 0.05, 1),
+                          netChart[0].net - Math.max(Math.abs(netChart[0].net) * 0.05, 1),
+                          netChart[0].net + Math.max(Math.abs(netChart[0].net) * 0.05, 1),
                         ]
                       : ["auto", "auto"]
                   }
                   tickFormatter={(v) =>
                     formatNum(v, {
                       compact: true,
-                      fractionDigits: netWorthDigits,
+                      fractionDigits: netChartDigits,
                     })
                   }
                 />
@@ -3077,18 +3145,18 @@ export function AccountsPage() {
                   // Одна точка (первый день периода без операций) линией не
                   // рисуется: кружок и уровень через весь график ниже.
                   dot={
-                    netWorth.length === 1
+                    netChart.length === 1
                       ? { r: 5, fill: NET_STROKE, stroke: "rgb(var(--c-panel))", strokeWidth: 2 }
                       : false
                   }
                 />
-                {netWorth.length === 1 && (
+                {netChart.length === 1 && (
                   <ReferenceLine
-                    y={netWorth[0].net}
+                    y={netChart[0].net}
                     stroke={NET_STROKE}
                     strokeDasharray="4 4"
                     label={{
-                      value: `Остаток на ${dayTitle(netWorth[0].date)}`,
+                      value: `Остаток на ${dayTitle(netChart[0].date)}`,
                       position: "insideTopLeft",
                       fill: "rgb(var(--c-muted))",
                       fontSize: 11,
