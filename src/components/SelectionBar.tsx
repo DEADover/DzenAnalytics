@@ -11,8 +11,8 @@ import { formatMoney, formatNum } from "../lib/format";
  * «Дубликаты» — прежде ленту и шторку верстали двумя одинаковыми копиями, а
  * «Поиск» и «Дубликаты» — своей однострочной, без сумм.
  *
- * Одна строка: число и суммы, черта, действия и последним — крестик «Снять
- * выделение». В две строки панель закрывала собой нижние операции ленты.
+ * Две строки: первая — число и суммы, вторая — кнопки в один ряд, последним
+ * всегда крестик «Снять выделение».
  */
 export function SelectionBar({
   count,
@@ -47,46 +47,44 @@ export function SelectionBar({
         overDrawer ? "z-[55]" : "z-40"
       )}
     >
-      <div className="flex items-center justify-center gap-x-3 gap-y-2 flex-wrap px-3 py-2 text-sm">
-        <span className="flex items-center gap-3 whitespace-nowrap pl-1">
-          <span>
-            Выбрано <strong className="tabular-nums">{formatNum(count)}</strong>
-          </span>
-          {sums && (
-            <span className="flex items-center gap-3 tabular-nums">
-              {sums.inc > 0 && (
-                <span className="flex items-center gap-1 text-income">
-                  <ArrowUp className="w-3.5 h-3.5" />
-                  {formatMoney(sums.inc, base)}
-                </span>
-              )}
-              {sums.exp > 0 && (
-                <span className="flex items-center gap-1 text-expense">
-                  <ArrowDown className="w-3.5 h-3.5" />
-                  {formatMoney(sums.exp, base)}
-                </span>
-              )}
-              {sums.xfer > 0 && (
-                <span className="flex items-center gap-1 text-muted">
-                  <ArrowLeftRight className="w-3.5 h-3.5" />
-                  {formatMoney(sums.xfer, base)}
-                </span>
-              )}
-            </span>
-          )}
+      <div className="flex items-center justify-center gap-x-4 gap-y-1 flex-wrap px-4 pt-2.5 pb-2 text-sm">
+        <span>
+          Выбрано: <strong className="tabular-nums">{formatNum(count)}</strong>
         </span>
-        <span className="w-px h-6 bg-border" aria-hidden="true" />
-        <div className="flex items-center gap-2 [&>button]:whitespace-nowrap">
-          {children}
-          <button
-            onClick={onClear}
-            className="btn-ghost text-sm !px-2.5 text-muted"
-            title="Снять выделение (Esc)"
-            aria-label="Снять выделение"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        {sums && (
+          <span className="flex items-center gap-3 tabular-nums border-l border-border pl-4">
+            {sums.inc > 0 && (
+              <span className="flex items-center gap-1 text-income">
+                <ArrowUp className="w-3.5 h-3.5" />
+                {formatMoney(sums.inc, base)}
+              </span>
+            )}
+            {sums.exp > 0 && (
+              <span className="flex items-center gap-1 text-expense">
+                <ArrowDown className="w-3.5 h-3.5" />
+                {formatMoney(sums.exp, base)}
+              </span>
+            )}
+            {sums.xfer > 0 && (
+              <span className="flex items-center gap-1 text-muted">
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                {formatMoney(sums.xfer, base)}
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+      {/* Кнопки — одним рядом. Переносятся только на совсем узком окне. */}
+      <div className="flex items-center justify-center gap-2 flex-wrap px-4 pb-2.5 pt-2 border-t border-border [&>button]:whitespace-nowrap">
+        {children}
+        <button
+          onClick={onClear}
+          className="btn-ghost text-sm !px-2.5 text-muted"
+          title="Снять выделение (Esc)"
+          aria-label="Снять выделение"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
