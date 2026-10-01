@@ -1,3 +1,5 @@
+import { fromTouch } from "./touchInput";
+
 // One delegated bridge that replaces EVERY browser-native `title` tooltip with
 // the app's own bubble — same look as the <Tooltip> component, one place.
 //
@@ -160,6 +162,9 @@ function restore(el: Element): void {
 }
 
 function onOver(e: Event): void {
+  // «Наведение» после касания — не наведение: на телефоне подсказка всплыла
+  // бы на каждое касание и осталась висеть.
+  if (fromTouch()) return;
   const target = e.target as Element | null;
   const el = target?.closest?.(`[title], [${STASH}]`) as HTMLElement | null;
   if (!el) return;

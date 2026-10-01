@@ -264,7 +264,7 @@ export function ModalHeader({
   return (
     <div
       className={clsx(
-        "shrink-0 flex items-center gap-3 px-5 py-4 border-b border-border rounded-t-2xl",
+        "shrink-0 flex items-center gap-3 max-sm:flex-wrap max-sm:gap-y-2.5 px-5 py-4 border-b border-border rounded-t-2xl",
         entity && "bg-panel2/50"
       )}
     >
@@ -283,7 +283,13 @@ export function ModalHeader({
         </div>
         {subtitle && <div className="text-xs text-muted">{subtitle}</div>}
       </div>
-      {actions && <div className="shrink-0 flex items-center gap-2">{actions}</div>}
+      {/* На узком экране действия — второй строкой под заголовком, крестик
+          остаётся справа в первой: в одну строку они вылезали за край окна. */}
+      {actions && (
+        <div className="shrink-0 flex items-center gap-2 max-sm:order-last max-sm:basis-full max-sm:justify-end max-sm:flex-wrap">
+          {actions}
+        </div>
+      )}
       {ctx && (
         <button
           type="button"

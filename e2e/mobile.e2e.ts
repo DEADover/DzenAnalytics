@@ -3,7 +3,7 @@
  * уезжает вбок. Ловит колонки фиксированной ширины и сетки, раздутые
  * содержимым (#114).
  */
-import { test, expect, connectZen, horizontalOverflow } from "./harness";
+import { test, expect, connectZen, horizontalOverflow, setPushMode } from "./harness";
 import { ROUTES } from "./routes";
 
 test.use({ viewport: { width: 375, height: 812 } });
@@ -112,5 +112,29 @@ test.describe("планшет", () => {
       if (over > 0) wide.push(`${route}: +${over} px`);
     }
     expect(wide, wide.join("\n")).toEqual([]);
+  });
+});
+
+test.describe("сенсорный экран", () => {
+  test.use({ hasTouch: true, isMobile: true });
+
+  test("касание кнопки не оставляет висящей подсказки", async ({ page }) => {
+    await connectZen(page, "/budgets");
+    await page.getByRole("button", { name: "Месяц", exact: true }).tap();
+    // Стрелка «Предыдущий месяц» — с подсказкой и остаётся на месте после касания.
+    await page.locator("button.btn-square-lg").first().tap();
+    await page.waitForTimeout(600);
+    await expect(page.locator('[role="tooltip"]')).toHaveCount(0);
+  });
+
+  test("действия окна изменений — в экране", async ({ page }) => {
+    await connectZen(page, "/transactions");
+    await setPushMode(page, "manual");
+    await page.getByRole("button", { name: "Редактировать операцию" }).nth(2).tap();
+    await page.getByRole("dialog").getByRole("button", { name: "Сохранить" }).tap();
+    await page.locator('button[title^="Просмотреть изменения"]').tap();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("button", { name: "Отправить все" })).toBeInViewport({ ratio: 1 });
+    expect(await dialog.evaluate((d) => d.scrollWidth - d.clientWidth)).toBe(0);
   });
 });

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { fromTouch } from "../lib/touchInput";
 
 interface Props {
   /** Tooltip body. When falsy, the child renders with no tooltip at all. */
@@ -127,7 +128,8 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
     "aria-describedby": shown ? id : undefined,
     onMouseEnter: (e: unknown) => {
       call("onMouseEnter")(e);
-      open();
+      // После касания это не наведение — см. `fromTouch`.
+      if (!fromTouch()) open();
     },
     onMouseLeave: (e: unknown) => {
       call("onMouseLeave")(e);
@@ -135,7 +137,10 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
     },
     onFocus: (e: unknown) => {
       call("onFocus")(e);
-      open();
+      // Только фокус с клавиатуры: касание и щелчок тоже ставят фокус на
+      // кнопку, и подсказка висела бы, пока не нажмёшь что-то другое.
+      const el = (e as { currentTarget?: Element }).currentTarget;
+      if (!el || el.matches(":focus-visible")) open();
     },
     onBlur: (e: unknown) => {
       call("onBlur")(e);
