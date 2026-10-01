@@ -1143,7 +1143,7 @@ export function EditTransactionModal({
         </Field>
         {/* Date needs room for «дд.мм.гггг» + the calendar icon; time only
             holds «чч:мм», so give the date the wider column. */}
-        <div className="grid grid-cols-[3fr_2fr] gap-3">
+        <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3">
           <Field label="Дата">
             <DateField
               typeable
@@ -1535,7 +1535,9 @@ export function EditTransactionModal({
           </div>
         )
       )}
-      <ModalFooter justify="between">
+      {/* На узком экране подвал переносится: «Отмена» и «Сохранить» уходят
+          на вторую строку вправо, а не срезаются краем окна. */}
+      <ModalFooter justify="between" className="flex-wrap gap-y-2">
         {isCreate && planMarker ? (
           <span />
         ) : isCreate ? (
@@ -1615,7 +1617,7 @@ export function EditTransactionModal({
             )}
           </div>
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto">
           <button onClick={onClose} className="btn-ghost text-sm">
             <X className="w-3.5 h-3.5" />
             Отмена

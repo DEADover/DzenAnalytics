@@ -3,40 +3,7 @@
  * консоли и с содержимым на месте.
  */
 import { test, expect, connectZen } from "./harness";
-
-export const ROUTES = [
-  "/",
-  "/transactions",
-  "/accounts",
-  "/categories",
-  "/budgets",
-  "/50-30-20",
-  "/anomalies",
-  "/calendar",
-  "/cashflow",
-  "/compare",
-  "/digest",
-  "/duplicates",
-  "/dynamics",
-  "/goals",
-  "/health",
-  "/help",
-  "/import",
-  "/recurring",
-  "/report",
-  "/rules",
-  "/sankey",
-  "/search",
-  "/settings",
-  "/tags",
-  "/top",
-  "/trash",
-  "/trends",
-  "/uncategorized",
-  "/whatif",
-  "/wordcloud",
-  "/year-review",
-];
+import { ROUTES } from "./routes";
 
 test("все разделы открываются без ошибок", async ({ page }) => {
   test.setTimeout(180_000);

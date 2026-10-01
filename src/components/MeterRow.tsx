@@ -26,6 +26,12 @@ export interface MeterCell {
    * у её заголовка: доля и счётчик влево, суммы вправо. По умолчанию — сумма.
    */
   type?: ColumnType;
+  /**
+   * Только на широком экране (от 640 px): у ячейки и у её заголовка. На узком
+   * все колонки фиксированной ширины в строку не входят, и список уезжал вбок —
+   * второстепенное число уступает место имени и главному.
+   */
+  wideOnly?: boolean;
 }
 
 const CELL_ALIGN = { left: "text-left", right: "text-right", center: "text-center" } as const;
@@ -98,7 +104,7 @@ export function MeterRow({
       key={i}
       className={`relative tabular-nums whitespace-nowrap shrink-0 ${CELL_ALIGN[alignOf(c.type ?? "money")]} ${
         c.muted ? "text-muted" : "font-medium"
-      }`}
+      } ${c.wideOnly ? "hidden sm:inline" : ""}`}
       style={{ width: scaledWidth(c.width) }}
     >
       {c.text}
@@ -215,7 +221,7 @@ export function MeterHead({
         return (
           <span
             key={i}
-            className={`shrink-0 flex ${HEAD_ALIGN[alignOf(c.type ?? "money")]}`}
+            className={`shrink-0 ${c.wideOnly ? "hidden sm:flex" : "flex"} ${HEAD_ALIGN[alignOf(c.type ?? "money")]}`}
             style={{ width: scaledWidth(c.width) }}
           >
             {s ? <SortButton label={c.text} sort={s} /> : c.text}

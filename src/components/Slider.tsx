@@ -135,7 +135,8 @@ export function Slider({
   return (
     <div
       className={clsx(
-        "seg-track shrink-0",
+        // Не шире ряда: на узком экране сужается бегунок, а не уезжает страница.
+        "seg-track shrink-0 max-w-full",
         md ? "seg-track-md h-[42px] gap-3 px-4 text-[13.5px] leading-5" : "h-[34px] gap-2.5 px-3 text-[12.5px] leading-4",
         className
       )}
@@ -143,7 +144,12 @@ export function Slider({
       <label htmlFor={id} className="text-muted font-medium whitespace-nowrap">
         {label}
       </label>
-      <RangeInput {...range} id={id} valueText={text} className={md ? "w-24 sm:w-32" : "w-24"} />
+      <RangeInput
+        {...range}
+        id={id}
+        valueText={text}
+        className={clsx("min-w-0 shrink", md ? "w-24 sm:w-32" : "w-24")}
+      />
       <output
         htmlFor={id}
         className="font-medium tabular-nums text-right whitespace-nowrap"

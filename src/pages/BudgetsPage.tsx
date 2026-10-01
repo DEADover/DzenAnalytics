@@ -1084,7 +1084,9 @@ export function BudgetsPage() {
 
       {/* Панель: вид и период (слева), действия (справа). */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5">
+        {/* На узком экране вид и листание месяцев переносятся на две строки —
+            в одну они не входят и тащили страницу вбок. */}
+        <div className="flex items-center gap-1.5 flex-wrap gap-y-2">
           <Segmented
             label="Вид бюджета"
             value={view}
@@ -1102,6 +1104,8 @@ export function BudgetsPage() {
             ]}
             className="mr-1.5"
           />
+          {/* Стрелки и период — одним куском: переносятся только вместе. */}
+          <div className="flex items-center gap-1.5">
           <Tooltip content={monthPeriod ? "Предыдущий месяц" : "Предыдущий год"}>
             <button
               onClick={() => (monthPeriod ? setYm((m) => addMonths(m, -1)) : shiftYear(-1))}
@@ -1147,6 +1151,7 @@ export function BudgetsPage() {
               <ChevronRight className="w-4 h-4" />
             </button>
           </Tooltip>
+          </div>
           {(monthPeriod ? !isCurrent : year !== Number(cur.slice(0, 4))) && (
             <button
               onClick={() => setYm(cur)}
@@ -2177,7 +2182,10 @@ function BudgetRow({
   const isSub = !!line.subcategory;
   return (
     <div
-      className={`group/row flex items-center gap-2.5 px-3 ${nested ? "py-2 pl-10" : "py-2.5"} ${
+      // На узком экране строка в две линии: имя и меню сверху, полоса, суммы
+      // и процент — под ними (`sm:contents` ниже). В одну линию эти колонки
+      // занимают 600 с лишним пикселей и уводили страницу вбок.
+      className={`group/row flex flex-wrap sm:flex-nowrap items-center gap-x-2.5 gap-y-1.5 px-3 ${nested ? "py-2 pl-10" : "py-2.5"} ${
         nested ? "hover:bg-panel2/30" : ""
       }`}
     >
@@ -2203,7 +2211,7 @@ function BudgetRow({
       <Tooltip content={isSub ? `${line.category} › ${line.subcategory}` : line.category}>
         <button
           onClick={() => onOpen(line.category, line.subcategory ?? null)}
-          className={`truncate text-left w-60 shrink-0 hover:text-accent ${
+          className={`truncate text-left flex-1 min-w-0 sm:flex-none sm:w-60 sm:shrink-0 hover:text-accent ${
             isSub ? "text-sm text-muted" : "text-sm font-medium"
           }`}
         >
@@ -2211,6 +2219,7 @@ function BudgetRow({
         </button>
       </Tooltip>
 
+      <div className="order-last basis-full flex items-center gap-2.5 pl-6 sm:contents">
       <BudgetBar
         ratio={ratio}
         aheadRatio={aheadRatio}
@@ -2226,7 +2235,7 @@ function BudgetRow({
 
       {/* fact / plan — the plan number edits IN PLACE (borderless, no spinner)
           so nothing around it shifts and the «%» pill / pending icon stay put. */}
-      <span className="inline-flex items-center justify-end gap-1 shrink-0 w-44 text-sm tabular-nums whitespace-nowrap">
+      <span className="inline-flex items-center justify-end gap-1 shrink-0 sm:w-44 text-sm tabular-nums whitespace-nowrap">
         <Tooltip content={editing ? null : statusText}>
           <span>{formatMoney(dispFact, base)}</span>
         </Tooltip>
@@ -2283,6 +2292,7 @@ function BudgetRow({
         )}
       </span>
       <PctPill planned={dispPlanned} ratio={ratio} isIncome={isIncome} />
+      </div>
       <Tooltip content={pendingPush ? "Изменено локально, ждёт отправки в Дзен (по схеме из настроек)" : null}>
         <span className="w-4 shrink-0">
           {pendingPush && (

@@ -138,7 +138,17 @@ export function Segmented<T extends string | number>({
             )}
           >
             {Icon && (
-              <Icon className={clsx("shrink-0", small ? "w-3.5 h-3.5" : "w-4 h-4")} aria-hidden="true" />
+              <Icon
+                className={clsx(
+                  "shrink-0",
+                  small ? "w-3.5 h-3.5" : "w-4 h-4",
+                  // Во всю ширину варианты делят ряд поровну, и на узком
+                  // экране пять подписей со значками в него не входят —
+                  // остаются подписи, значки возвращаются от 640 px.
+                  block && "hidden sm:block"
+                )}
+                aria-hidden="true"
+              />
             )}
             {o.label}
             {o.count !== undefined && <span className="seg-count">{formatNum(o.count)}</span>}

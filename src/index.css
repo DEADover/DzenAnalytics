@@ -326,6 +326,16 @@ html::-webkit-scrollbar {
   height: 0;
 }
 
+/* Сетка без своих колонок — одна колонка, которая НЕ растёт от содержимого.
+   Без шаблона браузер заводит колонку `auto`, а она раздвигается под самую
+   длинную строку внутри: «Стартовый капитал» со списком счетов (#114),
+   «Дайджест» и «Итоги года» на узком экране уезжали вбок на сотни пикселей.
+   `:where` — нулевая специфичность: любой `grid-cols-*`, в том числе
+   с префиксом ширины (`md:grid-cols-2`), и стиль в разметке её перекрывают. */
+:where(.grid) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* Smooth in-page navigation (anchor jumps, «Наверх»), disabled for users who
    prefer reduced motion. */
 @media (prefers-reduced-motion: no-preference) {

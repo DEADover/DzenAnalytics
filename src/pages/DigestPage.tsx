@@ -201,7 +201,7 @@ export function DigestPage() {
 const MOVER_COLUMNS: MeterCell[] = [
   // «Рост», а не «Доля»: здесь процент изменения к прошлому периоду.
   { text: "Рост", width: "4rem", sortKey: "pct" },
-  { text: "Было → стало", width: "13rem", sortKey: "current" },
+  { text: "Было → стало", width: "13rem", sortKey: "current", wideOnly: true },
   { text: "Разница", width: "7rem", sortKey: "diff" },
 ];
 
@@ -409,6 +409,7 @@ function DigestDetail({
                       text: `${formatMoney(m.previous, baseCurrency, { compact: true })} → ${formatMoney(m.current, baseCurrency, { compact: true })}`,
                       width: MOVER_COLUMNS[1].width,
                       muted: true,
+                      wideOnly: true,
                     },
                     {
                       text: `${up ? "+" : "−"}${formatMoney(diff, baseCurrency)}`,
