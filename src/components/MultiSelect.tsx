@@ -470,7 +470,10 @@ export function MultiSelect({
         {/* Ярлык тише значения: в ряду из четырёх кнопок глазу нужно значение
             («Все (31)»), а «Счета» он и так знает по значку. */}
         {variant === "field" ? (
-          <span className={clsx("truncate flex-1", isNone && noneSummary && "text-muted")}>
+          // `w-0 flex-1`: список имён не распирает поле. Без нулевой ширины
+          // строка из названий всех отмеченных счетов задавала ширину сетки
+          // вокруг, и на узком экране страница уезжала вбок (#114).
+          <span className={clsx("w-0 flex-1 truncate", isNone && noneSummary && "text-muted")}>
             {summary}
           </span>
         ) : (

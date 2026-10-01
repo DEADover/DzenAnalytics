@@ -361,7 +361,7 @@ export function WhatIfPage() {
         />
       </StatRow>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] items-start">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] items-start">
         {/* Рычаги сценария — боковой панелью высотой в окно, со своей
             прокруткой. Колонки здесь разные по природе: рычаги растут с
             каждым событием и категорией, результат — нет. Подогнать их по
@@ -658,7 +658,7 @@ export function WhatIfPage() {
             title="Допущения"
             subtitle="Общие для всех сценариев"
           >
-            <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               <Slider
                 layout="stacked"
                 hintLines={2}
