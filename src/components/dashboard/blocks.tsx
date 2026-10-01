@@ -485,7 +485,8 @@ export function CapitalBlock({
 }) {
   const [period, setPeriod] = useState<CapitalPeriod>("1y");
   const points = useMemo(
-    () => capitalSlice(series, capitalPeriodStart(period, today)),
+    // Линия доходит до сегодня: в дни без операций остаток тот же.
+    () => capitalSlice(series, capitalPeriodStart(period, today), today),
     [series, period, today]
   );
   const summary = useMemo(() => capitalSummary(points), [points]);

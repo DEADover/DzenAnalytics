@@ -107,6 +107,7 @@ import {
   chartTotalStroke,
   niceStep,
   chartColor,
+  dayTitle,
 } from "../lib/format";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import { EmptyState } from "../components/EmptyState";
@@ -121,6 +122,7 @@ import { CardHeader } from "../components/CardHeader";
 import { HeadCell, TreeElbow } from "../components/table/TableParts";
 import { cellClass, toneOfSigned, treeIndent, type ColumnType, type Tone } from "../components/table/tableKit";
 import { toIsoDate } from "../lib/period";
+import { clipBalances } from "../lib/capital";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { Sparkline } from "../components/Sparkline";
 import { AccountLogo } from "../components/AccountLogo";
@@ -1201,20 +1203,19 @@ export function AccountsPage() {
     filters.monthYM,
     monthStartDay,
   ]);
-  /** В выбранном периоде нет ни одной операции — подменять это всей историей нельзя. */
-  const emptyWindow = useMemo(() => {
-    if (!viewWindow || transactions.length === 0) return false;
-    return !transactions.some(
-      (t) => t.date >= viewWindow.from && t.date <= viewWindow.to
-    );
-  }, [transactions, viewWindow]);
+  /**
+   * Остатки за выбранный период — с переносом через дни без операций
+   * (`clipBalances`): остаток на первый день периода берётся из последней
+   * точки до него, а линия доходит до конца периода или до сегодня. Раньше
+   * период без единой операции (первые дни месяца) давал пустые графики и
+   * прочерки, хотя деньги на счетах были.
+   */
   const clip = useCallback(
     <T extends { date: string }>(series: T[]): T[] => {
-      if (emptyWindow) return [];
       if (!viewWindow) return series;
-      return series.filter((p) => p.date >= viewWindow.from && p.date <= viewWindow.to);
+      return clipBalances(series, viewWindow.from || null, viewWindow.to, toIsoDate(new Date()));
     },
-    [viewWindow, emptyWindow]
+    [viewWindow]
   );
 
   /**
@@ -1629,7 +1630,9 @@ export function AccountsPage() {
   // и то же число.
   const netWorthDigits = noWindowData
     ? 1
-    : axisFractionDigits(
+    : netWorth.length === 1
+      ? axisFractionDigits(netWorth[0].net * 0.95, netWorth[0].net * 1.05)
+      : axisFractionDigits(
         netWorth.reduce((m, p) => Math.min(m, p.net), netWorth[0].net),
         netWorth.reduce((m, p) => Math.max(m, p.net), netWorth[0].net)
       );
@@ -1813,7 +1816,7 @@ export function AccountsPage() {
           value={noWindowData ? "—" : formatMoney(lastNetWorth, base, { signed: true })}
           note={
             noWindowData
-              ? "В выбранном периоде нет операций"
+              ? "Период раньше начала истории"
               : viewWindow
                 ? "На конец выбранного периода"
                 : "На последний день истории"
@@ -1827,7 +1830,7 @@ export function AccountsPage() {
           // должна честно называть его, а не молчать про период.
           note={
             noWindowData
-              ? "В выбранном периоде нет операций"
+              ? "Период раньше начала истории"
               : viewWindow
                 ? "В выбранном периоде"
                 : "За всю историю"
@@ -2953,7 +2956,13 @@ export function AccountsPage() {
                   name="Итого"
                   stroke={chartTotalStroke}
                   strokeWidth={2}
-                  dot={false}
+                  // Одна точка (первый день месяца без операций) линией не
+                  // рисуется — показываем её кружком.
+                  dot={
+                    stacked.series.length === 1
+                      ? { r: 5, fill: chartTotalStroke, stroke: "rgb(var(--c-panel))", strokeWidth: 2 }
+                      : false
+                  }
                   activeDot={false}
                   isAnimationActive={false}
                 />
@@ -3027,7 +3036,16 @@ export function AccountsPage() {
                   // нуля сплющивает всё движение в прямую под потолком. Ось
                   // подстраивается под данные — видно, что происходило.
                   // У стопки так нельзя: там высота слоя и есть сумма.
-                  domain={["auto", "auto"]}
+                  // Одна точка — размаха нет, и все деления выходили одним
+                  // числом; даём шкале ±5 % вокруг остатка.
+                  domain={
+                    netWorth.length === 1
+                      ? [
+                          netWorth[0].net - Math.max(Math.abs(netWorth[0].net) * 0.05, 1),
+                          netWorth[0].net + Math.max(Math.abs(netWorth[0].net) * 0.05, 1),
+                        ]
+                      : ["auto", "auto"]
+                  }
                   tickFormatter={(v) =>
                     formatNum(v, {
                       compact: true,
@@ -3056,7 +3074,27 @@ export function AccountsPage() {
                   fill="url(#netfill)"
                   fillOpacity={netChange ? 0.4 : 1}
                   isAnimationActive={!netChange}
+                  // Одна точка (первый день периода без операций) линией не
+                  // рисуется: кружок и уровень через весь график ниже.
+                  dot={
+                    netWorth.length === 1
+                      ? { r: 5, fill: NET_STROKE, stroke: "rgb(var(--c-panel))", strokeWidth: 2 }
+                      : false
+                  }
                 />
+                {netWorth.length === 1 && (
+                  <ReferenceLine
+                    y={netWorth[0].net}
+                    stroke={NET_STROKE}
+                    strokeDasharray="4 4"
+                    label={{
+                      value: `Остаток на ${dayTitle(netWorth[0].date)}`,
+                      position: "insideTopLeft",
+                      fill: "rgb(var(--c-muted))",
+                      fontSize: 11,
+                    }}
+                  />
+                )}
                 {netChange && (
                   <>
                     <Line

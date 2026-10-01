@@ -31,20 +31,59 @@ export function capitalPeriodStart(period: CapitalPeriod, today: string): string
 }
 
 /**
- * Точки периода. Первая — остаток на начало периода: последняя точка ДО
- * его первого дня, перенесённая на этот день, — иначе период, начавшийся в
- * день без операций, начинался бы с первой операции внутри и терял стартовый
- * уровень.
+ * Остатки за отрезок дат — с переносом остатка через дни без операций.
+ *
+ * Остаток не пропадает оттого, что в периоде не было операций: в октябре без
+ * единой траты баланс — это остаток на конец сентября. Поэтому:
+ *
+ *   • первая точка — остаток на первый день отрезка: последняя точка ДО него,
+ *     перенесённая на этот день (если в сам день операции не было);
+ *   • последняя — тот же остаток на конец отрезка, но не позже сегодня:
+ *     будущего остатка мы не знаем, а линия должна доходить до «сейчас»;
+ *   • пусто — только если весь отрезок лежит раньше начала истории.
+ *
+ * Раньше период без операций давал пустой график и прочерки в «Совокупном
+ * балансе» и «Наибольшем балансе», хотя деньги на счетах были (01.10.2026).
+ *
+ * Точка переносится целиком (`{ ...p, date }`) — так переносятся и остатки
+ * отдельных счетов у графика «По счетам».
  */
-export function capitalSlice(series: CapitalPoint[], from: string | null): CapitalPoint[] {
-  if (!from) return series;
-  const inside = series.filter((p) => p.date >= from);
-  const before = series.filter((p) => p.date < from);
-  const anchor = before.length ? before[before.length - 1] : null;
-  if (anchor && (inside.length === 0 || inside[0].date > from)) {
-    return [{ date: from, net: anchor.net }, ...inside];
+export function clipBalances<T extends { date: string }>(
+  series: T[],
+  from: string | null,
+  to: string | null,
+  today: string
+): T[] {
+  const lo = from ?? "";
+  const hi = to ?? "9999-12-31";
+  const out = series.filter((p) => p.date >= lo && p.date <= hi);
+  if (from) {
+    let before: T | undefined;
+    for (const p of series) {
+      if (p.date < from) before = p;
+      else break;
+    }
+    if (before && (out.length === 0 || out[0].date > from)) {
+      out.unshift({ ...before, date: from });
+    }
   }
-  return inside;
+  if (out.length === 0) return out;
+  const end = hi < today ? hi : today;
+  const last = out[out.length - 1];
+  if (last.date < end) out.push({ ...last, date: end });
+  return out;
+}
+
+/** Точки периода виджета «Капитал» — см. `clipBalances`; конец — сегодня. */
+export function capitalSlice(
+  series: CapitalPoint[],
+  from: string | null,
+  today?: string
+): CapitalPoint[] {
+  if (!from && !today) return series;
+  // Без «сегодня» линию до конца не дотягиваем — кончается последней точкой.
+  const end = today ?? series[series.length - 1]?.date ?? "";
+  return clipBalances(series, from, null, end);
 }
 
 export interface CapitalSummary {

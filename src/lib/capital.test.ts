@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { capitalPeriodStart, capitalSlice, capitalSummary, thinCapital } from "./capital";
+import { capitalPeriodStart, capitalSlice, capitalSummary, clipBalances, thinCapital } from "./capital";
 
 const pts = (rows: [string, number][]) => rows.map(([date, net]) => ({ date, net }));
 
@@ -42,6 +42,45 @@ describe("capitalSlice", () => {
 
   it("без начала — вся кривая", () => {
     expect(capitalSlice(series, null)).toBe(series);
+  });
+});
+
+describe("clipBalances", () => {
+  const series = pts([
+    ["2026-08-10", 100],
+    ["2026-09-20", 150],
+  ]);
+
+  it("в периоде без операций — ровная линия на последнем остатке до сегодня", () => {
+    expect(clipBalances(series, "2026-10-01", "2026-10-31", "2026-10-01")).toEqual(
+      pts([["2026-10-01", 150]])
+    );
+    expect(clipBalances(series, "2026-10-01", "2026-10-31", "2026-10-15")).toEqual(
+      pts([
+        ["2026-10-01", 150],
+        ["2026-10-15", 150],
+      ])
+    );
+  });
+
+  it("прошлый период без операций — до его конца", () => {
+    expect(clipBalances(pts([["2026-01-05", 10], ["2026-05-01", 20]]), "2026-03-01", "2026-03-31", "2026-10-01")).toEqual(
+      pts([
+        ["2026-03-01", 10],
+        ["2026-03-31", 10],
+      ])
+    );
+  });
+
+  it("период раньше начала истории — пусто", () => {
+    expect(clipBalances(series, "2025-01-01", "2025-01-31", "2026-10-01")).toEqual([]);
+  });
+
+  it("переносит точку целиком — с остатками отдельных счетов", () => {
+    const s = [{ date: "2026-09-20", total: 150, a: 100, b: 50 }];
+    expect(clipBalances(s, "2026-10-01", "2026-10-31", "2026-10-01")).toEqual([
+      { date: "2026-10-01", total: 150, a: 100, b: 50 },
+    ]);
   });
 });
 
