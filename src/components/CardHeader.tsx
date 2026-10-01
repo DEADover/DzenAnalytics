@@ -65,7 +65,10 @@ export function CardHeader({
         className
       )}
     >
-      <div className="min-w-0 flex-1">
+      {/* На узком экране заголовку — не меньше 11rem: правая часть, которой
+          не хватает места рядом, уходит строкой ниже, а не сжимает его до
+          «О…» с подписью столбиком. */}
+      <div className="min-w-0 flex-1 max-sm:min-w-[min(100%,11rem)]">
         <div className="flex items-center gap-1.5 min-w-0 font-semibold">
           {Icon && <Icon className={clsx("w-4 h-4 shrink-0", ICON_TONE[tone])} aria-hidden />}
           <span className="min-w-0 truncate">{title}</span>
@@ -74,7 +77,7 @@ export function CardHeader({
         {subtitle && <div className="text-xs text-muted mt-0.5">{subtitle}</div>}
       </div>
       {right && (
-        <div className="flex items-center gap-2 shrink-0 max-sm:flex-wrap max-sm:shrink max-sm:min-w-0">
+        <div className="flex items-center gap-2 shrink-0 max-sm:flex-wrap max-sm:max-w-full">
           {right}
         </div>
       )}

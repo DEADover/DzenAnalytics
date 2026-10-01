@@ -61,6 +61,13 @@ export interface Column<T> {
   headerLead?: ReactNode;
   /** Подсказка к ячейке. У текста в фиксированной таблице по умолчанию — сам текст. */
   cellTitle?: (row: T) => string | undefined;
+  /**
+   * Только на широком экране (от 640 px). На телефоне колонка уступает место
+   * главным: у «Счетов» тип счёта вытеснял остаток за край. В фиксированной
+   * таблице ячейки не выкидываются (соседние съехали бы в чужие колонки) —
+   * колонка сжимается в ноль, содержимое прячется.
+   */
+  wideOnly?: boolean;
   render: (row: T, index: number) => ReactNode;
 }
 
@@ -244,7 +251,9 @@ export function DataTable<T>({
   const narrowMin = fixed
     ? `calc(${[
         ...(selection ? [resize.leadWidth(0) ?? SELECTION_LEAD[0]] : []),
-        ...columns.map((c) => (resize.custom ? resize.widthOf(c.key) : scaledWidth(c.width))),
+        ...columns
+          .filter((c) => !c.wideOnly)
+          .map((c) => (resize.custom ? resize.widthOf(c.key) : scaledWidth(c.width))),
       ]
         .filter(Boolean)
         .join(" + ")} + 9rem)`
@@ -253,6 +262,9 @@ export function DataTable<T>({
     ...(minWidth ? { minWidth: scaledWidth(minWidth) } : {}),
     ...(narrowMin ? { "--dt-narrow-min": narrowMin } : {}),
   } as CSSProperties;
+  const narrowHidden = fixed
+    ? "max-sm:!p-0 max-sm:invisible max-sm:overflow-hidden"
+    : "max-sm:hidden";
 
   const sortCol = columns.find((c) => c.key === sort.key);
   const order = useCallback(
@@ -363,7 +375,14 @@ export function DataTable<T>({
               {selection && <col style={{ width: resize.leadWidth(0) ?? SELECTION_LEAD[0] }} />}
               {columns.map((c) => {
                 const w = resize.custom ? resize.widthOf(c.key) : scaledWidth(c.width);
-                return <col key={c.key} data-col={c.key} style={w ? { width: w } : undefined} />;
+                return (
+                  <col
+                    key={c.key}
+                    data-col={c.key}
+                    className={c.wideOnly ? "max-sm:!w-0" : undefined}
+                    style={w ? { width: w } : undefined}
+                  />
+                );
               })}
             </colgroup>
           )}
@@ -397,6 +416,7 @@ export function DataTable<T>({
                   colKey={c.key}
                   resize={resize.handle(c.key)}
                   title={c.headerTitle}
+                  className={c.wideOnly ? narrowHidden : undefined}
                   lead={
                     ci === 0 && expandableKeys.length > 0 ? (
                       <ExpandChevron
@@ -486,7 +506,10 @@ export function DataTable<T>({
                             muted={c.muted}
                             tone={tone}
                             title={textTitle}
-                            className={fixed && c.type === "text" ? "truncate" : undefined}
+                            className={clsx(
+                              fixed && c.type === "text" && "truncate",
+                              c.wideOnly && narrowHidden
+                            )}
                           >
                             {content}
                           </Cell>

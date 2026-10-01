@@ -2422,8 +2422,15 @@ export function AccountsPage() {
                 Numeric columns are sized to fit million-ruble values so nothing
                 overflows its cell (which would force a horizontal scrollbar). */}
             <table
-              className="w-full table-fixed"
+              // `acc-table`: на узком экране колонка «Тип» сжимается в ноль
+              // (index.css), и таблица уже — остаток виден без прокрутки.
+              className="acc-table w-full table-fixed max-sm:!min-w-[var(--acc-narrow-min)]"
               style={{
+                // На узком экране — колонки вкладки без «Типа» плюс 9rem под
+                // название: иначе названию оставалось 16 пикселей.
+                ["--acc-narrow-min" as string]: `calc(${
+                  (capitalView ? (hasForeignCurrency ? 29 : 23.25) : 40.75) + 9
+                }rem * var(--tbl-scale, 1))`,
                 // Минимум под НАБОР столбцов этой вкладки: на «Капитале» их
                 // пять, и ширина от восьми растянула бы таблицу пустотой.
                 // Плюс запас на пилюлю с именем участника, когда она есть:
