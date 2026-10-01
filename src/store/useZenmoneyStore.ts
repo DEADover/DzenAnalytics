@@ -18,6 +18,7 @@ import {
   cacheToDiffResponse,
   forceFetchFor,
   diffChangesPlanSet,
+  type ZenCache,
 } from "../lib/zenmoneyCache";
 import { zenUsers, type ZenUserOption } from "../lib/zenUsers";
 import { useMembersStore } from "./useMembersStore";
@@ -46,6 +47,7 @@ import { useNewCategoriesStore, loadNewCategories } from "./useNewCategoriesStor
 import {
   useCounterpartyEditsStore,
   loadCounterpartyEdits,
+  countCounterpartyPending,
 } from "./useCounterpartyEditsStore";
 import {
   useTagDeletionsStore,
@@ -474,6 +476,119 @@ export async function getZenUsersFromCache(): Promise<ZenUserOption[] | null> {
 }
 
 /**
+ * Есть ли в очередях хоть что-то для отправки — всё, что уносит
+ * `pushPendingEdits`. Одна проверка на «При синке», включение «Авто» и
+ * автоотправку: свои списки в каждом месте расходились, и правка, которой в
+ * списке не было, не уходила, пока не появится другая (issue #113).
+ */
+export function hasPendingPush(): boolean {
+  return (
+    Object.keys(useEditsStore.getState().edits).length > 0 ||
+    useDeletedStore.getState().deletedIds.length > 0 ||
+    hasPendingRestores() ||
+    Object.keys(useDraftsStore.getState().drafts).length > 0 ||
+    Object.keys(useTagEditsStore.getState().edits).length > 0 ||
+    Object.keys(useAccountEditsStore.getState().edits).length > 0 ||
+    Object.keys(useBudgetEditsStore.getState().edits).length > 0 ||
+    useNewCategoriesStore.getState().items.length > 0 ||
+    Object.keys(useTagDeletionsStore.getState().deletions).length > 0 ||
+    countCounterpartyPending(useCounterpartyEditsStore.getState()) > 0 ||
+    Object.keys(usePlannedDeletionsStore.getState().deletions).length > 0 ||
+    Object.keys(usePlanActionsStore.getState().actions).length > 0
+  );
+}
+
+/** Планы облака по ячейкам: бюджет плюс плановые операции у ячеек без замка. */
+function zenPlanSeeds(cache: ZenCache) {
+  if (!cache.budgets || cache.budgets.length === 0) return [];
+  // Effective plan = stored budget + planned ops for unlocked cells.
+  const planned = plannedOpsByTagMonth(
+    cache.reminderMarkers,
+    cache.instruments,
+    cache.user?.[0]?.currency,
+    undefined,
+    // Исполненные плановые операции переводим по курсу ЦБ на их день —
+    // тем же, каким посчитан их факт. Иначе валютная подписка даёт в
+    // плане переоценку, и остаток по статье не сходится с Дзен-мани.
+    (dateIso, code) => useDataStore.getState().histDayRates[dateIso]?.[code] ?? null,
+    (id) => cache.instruments.find((i) => i.id === id)?.shortTitle,
+    // Маркеры, за которыми стоит настоящая операция: в Дзен-мани план
+    // можно связать с уже существующей операцией, и такой маркер
+    // перестаёт быть `planned` — план месяца от этого проваливался
+    // (issue #86).
+    fulfilledMarkerIds(cache.transactions)
+  );
+  return zenPlanList(cache.budgets, cache.tags, planned);
+}
+
+/**
+ * Перенести «Планы» Дзен-мани в строки бюджета — на каждой синхронизации.
+ * Неотправленные правки защищают свои ячейки, исполненные снимаются с очереди.
+ */
+async function mirrorZenPlans(cache: ZenCache): Promise<void> {
+  const seeds = zenPlanSeeds(cache);
+  if (seeds.length === 0) return;
+  const bs = useBudgetsStore.getState();
+  if (!bs.loaded) await bs.hydrate();
+  const pendingBudgetEdits = await loadBudgetEdits();
+  // A pending edit protects its cell from Zen's value ONLY while it's
+  // still unpushed. Once the cloud plan equals the edit, the edit is
+  // SATISFIED — the value the user set is live in Дзен — so we must:
+  //   • stop protecting the cell (let the line adopt the cloud value,
+  //     which equals the edit anyway), and
+  //   • drop the edit from the queue.
+  // Otherwise a satisfied edit freezes the cell forever: the display
+  // sticks at a stale local number while Дзен moved on (this is the
+  // «у нас 160000, а в Дзене 305000» bug). Cloud plans come straight
+  // from `seeds` (zenPlanList = manual plans), keyed per cell.
+  const cloudByCell = new Map(
+    seeds.map((s) => [
+      budgetCellKey(s.kind, s.category, s.subcategory, s.ym),
+      s.amount,
+    ])
+  );
+  const protectedKeys = new Set<string>();
+  const satisfiedEditIds: string[] = [];
+  for (const [id, e] of Object.entries(pendingBudgetEdits)) {
+    const cell = budgetCellKey(e.kind, e.category, e.subcategory, e.ym);
+    if (cloudByCell.get(cell) === e.amount) satisfiedEditIds.push(id);
+    else protectedKeys.add(cell);
+  }
+  await useBudgetsStore.getState().importFromZen(seeds, protectedKeys);
+  if (satisfiedEditIds.length > 0) {
+    await useBudgetEditsStore.getState().clearMany(satisfiedEditIds);
+  }
+}
+
+/** Отменить неотправленные правки планов: снять их с очереди и сразу вернуть
+ *  ячейкам значение из облака (из сохранённой копии Дзен-мани). Ячейка, плана
+ *  которой в облаке нет, обнуляется: подхват из облака такие не трогает. */
+export async function revertBudgetEdits(ids: string[]): Promise<void> {
+  const queued = useBudgetEditsStore.getState().edits;
+  const reverted = ids.map((id) => queued[id]).filter((e) => e !== undefined);
+  await useBudgetEditsStore.getState().clearMany(ids);
+  if (reverted.length === 0) return;
+  const cache = await loadZenCache();
+  const cloud = new Map(
+    (cache ? zenPlanSeeds(cache) : []).map((s) => [
+      budgetCellKey(s.kind, s.category, s.subcategory, s.ym),
+      s.amount,
+    ])
+  );
+  const bs = useBudgetsStore.getState();
+  if (!bs.loaded) await bs.hydrate();
+  await useBudgetsStore.getState().applyPlans(
+    reverted.map((e) => ({
+      kind: e.kind,
+      category: e.category,
+      subcategory: e.subcategory,
+      ym: e.ym,
+      amount: cloud.get(budgetCellKey(e.kind, e.category, e.subcategory, e.ym)) ?? 0,
+    }))
+  );
+}
+
+/**
  * Category tags from the Zenmoney cache for the «обязательная» editor — roots
  * AND their sub-tags (the editor nests them under their parent). Each tag's
  * own `required` is editable independently and pushes to the cloud; note the
@@ -883,58 +998,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // three-way merge: new tags are created, unchanged cells adopt Zen's
       // value, and cells the user edited locally but hasn't pushed (tracked in
       // `budgetEdits`) are preserved — see importFromZen for the rationale.
-      if (nextCache.budgets && nextCache.budgets.length > 0) {
-        // Effective plan = stored budget + planned ops for unlocked cells.
-        const planned = plannedOpsByTagMonth(
-          nextCache.reminderMarkers,
-          nextCache.instruments,
-          nextCache.user?.[0]?.currency,
-          undefined,
-          // Исполненные плановые операции переводим по курсу ЦБ на их день —
-          // тем же, каким посчитан их факт. Иначе валютная подписка даёт в
-          // плане переоценку, и остаток по статье не сходится с Дзен-мани.
-          (dateIso, code) => useDataStore.getState().histDayRates[dateIso]?.[code] ?? null,
-          (id) => nextCache.instruments.find((i) => i.id === id)?.shortTitle,
-          // Маркеры, за которыми стоит настоящая операция: в Дзен-мани план
-          // можно связать с уже существующей операцией, и такой маркер
-          // перестаёт быть `planned` — план месяца от этого проваливался
-          // (issue #86).
-          fulfilledMarkerIds(nextCache.transactions)
-        );
-        const seeds = zenPlanList(nextCache.budgets, nextCache.tags, planned);
-        if (seeds.length > 0) {
-          const bs = useBudgetsStore.getState();
-          if (!bs.loaded) await bs.hydrate();
-          const pendingBudgetEdits = await loadBudgetEdits();
-          // A pending edit protects its cell from Zen's value ONLY while it's
-          // still unpushed. Once the cloud plan equals the edit, the edit is
-          // SATISFIED — the value the user set is live in Дзен — so we must:
-          //   • stop protecting the cell (let the line adopt the cloud value,
-          //     which equals the edit anyway), and
-          //   • drop the edit from the queue.
-          // Otherwise a satisfied edit freezes the cell forever: the display
-          // sticks at a stale local number while Дзен moved on (this is the
-          // «у нас 160000, а в Дзене 305000» bug). Cloud plans come straight
-          // from `seeds` (zenPlanList = manual plans), keyed per cell.
-          const cloudByCell = new Map(
-            seeds.map((s) => [
-              budgetCellKey(s.kind, s.category, s.subcategory, s.ym),
-              s.amount,
-            ])
-          );
-          const protectedKeys = new Set<string>();
-          const satisfiedEditIds: string[] = [];
-          for (const [id, e] of Object.entries(pendingBudgetEdits)) {
-            const cell = budgetCellKey(e.kind, e.category, e.subcategory, e.ym);
-            if (cloudByCell.get(cell) === e.amount) satisfiedEditIds.push(id);
-            else protectedKeys.add(cell);
-          }
-          await useBudgetsStore.getState().importFromZen(seeds, protectedKeys);
-          if (satisfiedEditIds.length > 0) {
-            await useBudgetEditsStore.getState().clearMany(satisfiedEditIds);
-          }
-        }
-      }
+      await mirrorZenPlans(nextCache);
 
       const now = new Date().toISOString();
       await db.saveJSON(TIMESTAMP_KEY, diff.serverTimestamp);
@@ -974,15 +1038,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // Guarded by there being anything to send (edits, deletions OR
       // locally-created drafts) so the common "nothing changed locally"
       // case stays a no-op.
-      if (
-        get().pushMode === "on-sync" &&
-        (Object.keys(useEditsStore.getState().edits).length > 0 ||
-          useDeletedStore.getState().deletedIds.length > 0 ||
-          hasPendingRestores() ||
-          Object.keys(useDraftsStore.getState().drafts).length > 0 ||
-          Object.keys(useTagEditsStore.getState().edits).length > 0 ||
-          Object.keys(useBudgetEditsStore.getState().edits).length > 0)
-      ) {
+      if (get().pushMode === "on-sync" && hasPendingPush()) {
         // Defer to next microtask so the sync's set() lands first and
         // pushPendingEdits sees `status: "ok"` (its own guard).
         queueMicrotask(() => {
@@ -1042,14 +1098,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     // (manual → user pushes by hand; on-sync → flushes on the next sync.)
     if (mode === "auto") {
       const s = get();
-      const hasPending =
-        Object.keys(useEditsStore.getState().edits).length > 0 ||
-        useDeletedStore.getState().deletedIds.length > 0 ||
-        hasPendingRestores() ||
-        Object.keys(useDraftsStore.getState().drafts).length > 0 ||
-        Object.keys(useTagEditsStore.getState().edits).length > 0 ||
-        Object.keys(useBudgetEditsStore.getState().edits).length > 0;
-      if (s.token && s.pushStatus !== "syncing" && hasPending) {
+      if (s.token && s.pushStatus !== "syncing" && hasPendingPush()) {
         void get().pushPendingEdits().catch(() => {
           /* surfaced via pushError + sync log */
         });

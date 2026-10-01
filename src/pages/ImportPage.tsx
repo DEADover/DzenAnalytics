@@ -85,15 +85,7 @@ import { readSnapshotFile } from "../lib/snapshotFile";
 import { BackupComparison } from "../components/BackupComparison";
 import { RestoreWizardModal } from "../components/RestoreWizardModal";
 import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
-import { useTagEditsStore } from "../store/useTagEditsStore";
-import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
-import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
-import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
-import { usePlanActionsStore } from "../store/usePlanActionsStore";
-import {
-  useCounterpartyEditsStore,
-  countCounterpartyPending,
-} from "../store/useCounterpartyEditsStore";
+import { usePendingChanges } from "../hooks/usePendingChanges";
 import * as db from "../lib/db";
 import { ImportXlsxCard } from "../components/ImportXlsxCard";
 import { RangeInput } from "../components/Slider";
@@ -322,28 +314,9 @@ export function ImportPage() {
   // Справочники ride the SAME push, but the rollback modal doesn't cover them,
   // so they're counted apart and only folded into the headline/button. Without
   // this, dictionary-only changes read as «Нет изменений для отправки» while the
-  // push would in fact send them (the editors no longer have their own button).
-  const tagEditsMap = useTagEditsStore((s) => s.edits);
-  const newCatsItems = useNewCategoriesStore((s) => s.items);
-  const tagDeletionsMap = useTagDeletionsStore((s) => s.deletions);
-  const cpRenames = useCounterpartyEditsStore((s) => s.renames);
-  const cpCreated = useCounterpartyEditsStore((s) => s.created);
-  const cpDeleted = useCounterpartyEditsStore((s) => s.deleted);
-  const cpMerges = useCounterpartyEditsStore((s) => s.merges);
-  const plannedDeletionsMap = usePlannedDeletionsStore((s) => s.deletions);
-  const planActionsMap = usePlanActionsStore((s) => s.actions);
-  const dictPendingCount =
-    Object.keys(tagEditsMap).length +
-    newCatsItems.length +
-    Object.keys(tagDeletionsMap).length +
-    Object.keys(plannedDeletionsMap).length +
-    Object.values(planActionsMap).filter((a) => a.kind !== "fact").length +
-    countCounterpartyPending({
-      renames: cpRenames,
-      created: cpCreated,
-      deleted: cpDeleted,
-      merges: cpMerges,
-    });
+  // push would in fact send them. Count from the shared hook — a local copy here
+  // once missed accounts and budgets, and a plan-only change never left (#113).
+  const dictPendingCount = usePendingChanges().dictionaries;
   const pendingAll = pendingTotal + dictPendingCount;
   const [pendingModalOpen, setPendingModalOpen] = useState(false);
   // Orphaned edits: overrides whose transaction no longer exists in the data

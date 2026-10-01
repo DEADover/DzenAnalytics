@@ -6,9 +6,10 @@
 // изменений для отправки» while the push happily sent them (issue #50).
 //
 // Buckets mirror the push flow: operations (edits / drafts / deletions) and
-// dictionaries (categories / counterparties). Budgets («Планы») ride the same
-// push but are edited in their own grid with instant undo, so they stay out of
-// the review list — `total` here is what the review modal can actually show.
+// dictionaries (categories / counterparties / plans / budgets). Budgets were
+// once left out as «edited in their own grid» — and in «Вручную» a plan-only
+// change read as «нет изменений»: the send button stayed off and the plan never
+// left the device (issue #113). Everything the push sends is counted here.
 
 import { useMemo } from "react";
 import { useDataStore } from "../store/useDataStore";
@@ -21,6 +22,7 @@ import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { useAccountEditsStore } from "../store/useAccountEditsStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { usePlanActionsStore } from "../store/usePlanActionsStore";
+import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
 import {
   useCounterpartyEditsStore,
   countCounterpartyPending,
@@ -41,6 +43,8 @@ export interface PendingChanges {
   accounts: number;
   /** Просроченные запланированные операции, снятые вручную (issue #71). */
   plans: number;
+  /** Правки бюджета — планы по категориям на месяц (issue #113). */
+  budgets: number;
   /** Operations subtotal — what the rollback list has always covered. */
   operations: number;
   /** Dictionaries subtotal. */
@@ -65,6 +69,7 @@ export function usePendingChanges(): PendingChanges {
   const merges = useCounterpartyEditsStore((s) => s.merges);
   const plannedDeletions = usePlannedDeletionsStore((s) => s.deletions);
   const planActions = usePlanActionsStore((s) => s.actions);
+  const budgetEdits = useBudgetEditsStore((s) => s.edits);
 
   // Count ONLY deletions still backed by a cloud row: once pushed, the row
   // leaves `transactionsRaw` but its id lingers in `deletedIds` as a permanent
@@ -93,10 +98,11 @@ export function usePendingChanges(): PendingChanges {
     const plans =
       Object.keys(plannedDeletions).length +
       Object.values(planActions).filter((a) => a.kind !== "fact").length;
+    const budgets = Object.keys(budgetEdits).length;
     const operations = e + d + deleted;
     // Удаление просроченного плана — такое же справочное изменение, как
     // удаление категории: своя строка в списке, свой откат.
-    const dictionaries = categories + counterparties + accounts + plans;
+    const dictionaries = categories + counterparties + accounts + plans + budgets;
     return {
       edits: e,
       drafts: d,
@@ -105,6 +111,7 @@ export function usePendingChanges(): PendingChanges {
       counterparties,
       accounts,
       plans,
+      budgets,
       operations,
       dictionaries,
       total: operations + dictionaries,
@@ -123,5 +130,6 @@ export function usePendingChanges(): PendingChanges {
     merges,
     plannedDeletions,
     planActions,
+    budgetEdits,
   ]);
 }

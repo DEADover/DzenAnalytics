@@ -17,6 +17,7 @@ import {
   UploadCloud,
   SquarePen,
   CalendarClock,
+  ClipboardList,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
@@ -28,11 +29,13 @@ import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { usePlanActionsStore } from "../store/usePlanActionsStore";
+import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import {
   getCategoryTagsFromCache,
   getCounterpartiesFromCache,
   getLiveAccountsFromCache,
+  revertBudgetEdits,
   useZenmoneyStore,
   type CategoryTag,
   type Counterparty,
@@ -42,7 +45,7 @@ import { confirm } from "../store/useConfirmStore";
 import { snapshotPromiseText } from "../lib/cloudSnapshots";
 import { EditTransactionModal } from "./EditTransactionModal";
 import { CategoryDot } from "./CategoryDot";
-import { formatMoney, formatDate, displayPayee } from "../lib/format";
+import { formatMoney, formatDate, displayPayee, monthTitle } from "../lib/format";
 import { accountKindLabel } from "../lib/accountType";
 import { pluralRu } from "../lib/plural";
 import { kindLabel, kindColorClass } from "../lib/txKindStyle";
@@ -171,6 +174,8 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
   const tagDeletions = useTagDeletionsStore((s) => s.deletions);
   const plannedDeletions = usePlannedDeletionsStore((s) => s.deletions);
   const planActions = usePlanActionsStore((s) => s.actions);
+  const budgetEdits = useBudgetEditsStore((s) => s.edits);
+  const base = useDataStore((s) => s.rates.base);
   const cpRenames = useCounterpartyEditsStore((s) => s.renames);
   const cpCreated = useCounterpartyEditsStore((s) => s.created);
   const cpDeleted = useCounterpartyEditsStore((s) => s.deleted);
@@ -252,6 +257,8 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
     note: string;
     /** «Было → стало» — есть только у правок, у создания/удаления его нет. */
     diff?: FieldDiff[];
+    /** Кружок категории — у строк бюджета, где заголовок — путь «Еда › Кафе». */
+    dot?: { category: string; parent?: string };
     revert: () => Promise<void>;
   }
 
@@ -492,7 +499,23 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
     [plannedDeletions, planActions]
   );
 
+  // Планы бюджета на месяц (issue #113). Раньше их здесь не было вовсе: в
+  // «Вручную» правка одних планов выглядела как «нет изменений» и не уходила.
+  const budgetItems = useMemo<DictItem[]>(
+    () =>
+      Object.entries(budgetEdits).map(([id, e]): DictItem => ({
+        key: `budget:${id}`,
+        action: "edit" as const,
+        title: e.subcategory ? `${e.category} › ${e.subcategory}` : e.category,
+        dot: { category: e.subcategory || e.category, parent: e.subcategory ? e.category : undefined },
+        note: `${e.kind === "income" ? "Доходы" : "Расходы"} · ${monthTitle(e.ym)} · План ${formatMoney(e.amount, base)}`,
+        revert: () => revertBudgetEdits([id]),
+      })),
+    [budgetEdits, base]
+  );
+
   const total =
+    budgetItems.length +
     editItems.length +
     draftItems.length +
     deletedItems.length +
@@ -544,6 +567,8 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
       ...plannedItems,
     ])
       await it.revert();
+    // Бюджет — одной записью: поштучная отмена затирала бы соседние правки.
+    if (budgetItems.length > 0) await revertBudgetEdits(Object.keys(budgetEdits));
     await reapply();
   }
 
@@ -670,6 +695,13 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
                 openKey={openKey}
                 onToggle={toggle}
               />
+              <DictGroup
+                icon={<ClipboardList className="w-4 h-4 text-accent" />}
+                title="Бюджет"
+                items={budgetItems}
+                openKey={openKey}
+                onToggle={toggle}
+              />
             </div>
           )}
         </ModalBody>
@@ -693,6 +725,7 @@ interface DictItemView {
   title: string;
   note: string;
   diff?: FieldDiff[];
+  dot?: { category: string; parent?: string };
   revert: () => Promise<void>;
 }
 
@@ -986,7 +1019,9 @@ function DictRow({
         {/* Категория узнаётся по своему кружку, контрагент — нейтральной
             иконкой: без них строки справочников читались как голый текст
             рядом с операциями, у которых иконка есть. */}
-        {withDot ? (
+        {item.dot ? (
+          <CategoryDot category={item.dot.category} parent={item.dot.parent} size="w-7 h-7" />
+        ) : withDot ? (
           <CategoryDot category={item.title} size="w-7 h-7" />
         ) : (
           <span className="w-7 h-7 shrink-0 rounded-full bg-panel2 border border-border flex items-center justify-center text-muted">

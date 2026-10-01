@@ -43,7 +43,7 @@ import { DigestPage } from "./pages/DigestPage";
 import { useDataStore } from "./store/useDataStore";
 import { useThemeStore } from "./store/useThemeStore";
 import { useBackupStore } from "./store/useBackupStore";
-import { useZenmoneyStore } from "./store/useZenmoneyStore";
+import { useZenmoneyStore, hasPendingPush } from "./store/useZenmoneyStore";
 import { useEditsStore } from "./store/useEditsStore";
 import { useDeletedStore } from "./store/useDeletedStore";
 import { useDeletedPayloadsStore } from "./store/useDeletedPayloadsStore";
@@ -268,41 +268,8 @@ function App() {
     const schedule = () => {
       const zen = useZenmoneyStore.getState();
       if (zen.pushMode !== "auto" || !zen.token) return;
-      const hasEdits =
-        Object.keys(useEditsStore.getState().edits).length > 0;
-      const hasDeletions =
-        useDeletedStore.getState().deletedIds.length > 0;
-      const hasDrafts =
-        Object.keys(useDraftsStore.getState().drafts).length > 0;
-      const hasTagEdits =
-        Object.keys(useTagEditsStore.getState().edits).length > 0;
-      const hasAccountEdits =
-        Object.keys(useAccountEditsStore.getState().edits).length > 0;
-      const hasBudgetEdits =
-        Object.keys(useBudgetEditsStore.getState().edits).length > 0;
-      // Справочники: created categories, category deletions, and every kind of
-      // counterparty change (rename / create / delete / merge).
-      const hasNewCats = useNewCategoriesStore.getState().items.length > 0;
-      const hasTagDeletions =
-        Object.keys(useTagDeletionsStore.getState().deletions).length > 0;
-      const hasCpEdits =
-        countCounterpartyPending(useCounterpartyEditsStore.getState()) > 0;
-      const hasPlannedDeletions =
-        Object.keys(usePlannedDeletionsStore.getState().deletions).length > 0 ||
-        Object.keys(usePlanActionsStore.getState().actions).length > 0;
-      if (
-        !hasEdits &&
-        !hasDeletions &&
-        !hasDrafts &&
-        !hasTagEdits &&
-        !hasAccountEdits &&
-        !hasBudgetEdits &&
-        !hasNewCats &&
-        !hasTagDeletions &&
-        !hasCpEdits &&
-        !hasPlannedDeletions
-      )
-        return;
+      // Та же проверка, что у «При синке», — одна на всё приложение.
+      if (!hasPendingPush()) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         timer = null;
