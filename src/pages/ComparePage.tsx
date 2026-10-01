@@ -787,8 +787,8 @@ export function ComparePage() {
               <InfoTerm>Период А</InfoTerm> — то, что смотрим,{" "}
               <InfoTerm>период Б</InfoTerm> — с чем сравниваем. Колонка{" "}
               <InfoTerm>«Изменение»</InfoTerm> всегда про то, насколько А
-              отличается от Б. У расходов стрелка вниз зелёная: тратить меньше —
-              хорошо.
+              отличается от Б: разница и процент в скобках. У расходов стрелка
+              вниз зелёная: тратить меньше — хорошо.
             </p>
             <p>
               <InfoTerm>Месяцы</InfoTerm> — два любых отчётных месяца рядом.
@@ -858,7 +858,7 @@ export function ComparePage() {
                 </PeriodHead>
                 <th
                   scope="col"
-                  className="table-th text-right align-bottom w-[9rem]"
+                  className="table-th text-right align-bottom w-[13rem]"
                   title={`Насколько «${ranges.a.label}» отличается от «${ranges.b.label}»`}
                 >
                   Изменение
@@ -894,6 +894,11 @@ export function ComparePage() {
                         baseline={m.get(kpiB)}
                         base={base}
                         asPct
+                        // Разница в единицах метрики, процент — в скобках (#115).
+                        withPct
+                        formatAmount={
+                          m.fmt === "count" ? (v) => formatNum(Math.round(v)) : undefined
+                        }
                         kind={m.invert ? "expense" : "income"}
                         sameLabel="≈ без изменений"
                         upTitle={`Больше, чем в «${ranges.b.label}»`}

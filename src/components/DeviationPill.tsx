@@ -22,6 +22,8 @@ export function DeviationPill({
   sameLabel = "≈ поровну",
   upTitle = "Больше",
   downTitle = "Меньше",
+  withPct = false,
+  formatAmount,
 }: {
   current: number;
   /** С чем сравниваем. `undefined` — сравнивать не с чем. */
@@ -38,6 +40,13 @@ export function DeviationPill({
   sameLabel?: string;
   upTitle?: string;
   downTitle?: string;
+  /**
+   * Разница в единицах значения и процент в скобках рядом — «▲ 25 000 ₽ (20%)»
+   * (#115). Процента нет там, где его не бывает: смена знака, база около нуля.
+   */
+  withPct?: boolean;
+  /** Как записать разницу: по умолчанию деньгами в базовой валюте. */
+  formatAmount?: (abs: number) => string;
 }) {
   // Все три состояния — «не с чем сравнивать», «без изменений» и сама пилюля —
   // занимают ОДИНАКОВУЮ коробку. Иначе строка таблицы становится ниже там, где
@@ -75,21 +84,24 @@ export function DeviationPill({
   // −110 179 давал «1274%», хотя это не рост в 12 раз, а смена знака. В таких
   // случаях показываем разницу деньгами — она осмысленна всегда.
   const flipped = from !== 0 && current !== 0 && Math.sign(from) !== Math.sign(current);
+  const amount = formatAmount ? formatAmount(Math.abs(diff)) : formatMoney(Math.abs(diff), base);
+  const pctOf = (share: number) => (share < 0.005 ? "менее 1%" : formatPct(share, 0));
   let label: string;
-  if (!asPct || flipped) {
-    label = formatMoney(Math.abs(diff), base);
+  if (withPct) {
+    label = flipped || scale < 0.5 ? amount : `${amount} (${pctOf(Math.abs(diff) / scale)})`;
+  } else if (!asPct || flipped) {
+    label = amount;
   } else if (scale < 0.5) {
     // Роста «с нуля» в процентах действительно не существует.
     label = "∞";
   } else {
-    const share = Math.abs(diff) / scale;
     // Округлённый до целого ноль — это не «ничего не изменилось», а «изменилось
     // меньше процента». Цветная пилюля с надписью «0%» читается как ошибка.
-    label = share < 0.005 ? "менее 1%" : formatPct(share, 0);
+    label = pctOf(Math.abs(diff) / scale);
   }
   return (
     <span
-      className={`${box} ${cls}`}
+      className={`${box} ${cls} whitespace-nowrap`}
       title={up ? upTitle : downTitle}
     >
       {up ? "▲" : "▼"} {label}
