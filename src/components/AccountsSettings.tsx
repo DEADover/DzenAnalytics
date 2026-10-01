@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, Check, ImageOff, LogIn, Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import { Camera, Check, LogIn, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 import clsx from "clsx";
-import { profileLabel, renameProfile, setProfileAvatar } from "../lib/profiles";
-import { AvatarError, avatarFromFile } from "../lib/avatarImage";
+import { profileLabel, renameProfile } from "../lib/profiles";
 import { createProfile, deleteProfile, switchProfile, useProfiles } from "../hooks/useProfiles";
 import { confirm } from "../store/useConfirmStore";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { Tooltip } from "./Tooltip";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { AvatarModal } from "./AvatarModal";
 
 /**
  * Аккаунты устройства: у каждого своя база в браузере — свои операции, токен
@@ -19,31 +19,10 @@ export function AccountsSettings() {
   const [adding, setAdding] = useState("");
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
   const boxRef = useRef<HTMLElement>(null);
-  // Фото аккаунта: один скрытый выбор файла на весь список, `avatarFor` — чей.
-  const fileRef = useRef<HTMLInputElement>(null);
+  // Фото аккаунта — своим окном: загрузить, выбрать кадр, удалить.
   const [avatarFor, setAvatarFor] = useState<string | null>(null);
-  const [avatarError, setAvatarError] = useState<{ id: string; text: string } | null>(null);
+  const avatarProfile = profiles.find((p) => p.id === avatarFor) ?? null;
 
-  function pickAvatar(id: string) {
-    setAvatarFor(id);
-    setAvatarError(null);
-    fileRef.current?.click();
-  }
-
-  async function onAvatarFile(file: File | undefined) {
-    const id = avatarFor;
-    if (!file || !id) return;
-    try {
-      const url = await avatarFromFile(file);
-      if (!setProfileAvatar(id, url)) {
-        setAvatarError({ id, text: "Фото не сохранилось: в браузере кончилось место" });
-      }
-    } catch (e) {
-      setAvatarError({ id, text: e instanceof AvatarError ? e.message : "Не удалось обработать фото" });
-    }
-  }
-
-  // Переход по ссылке «Управлять аккаунтами» из шапки — сразу к разделу.
   useEffect(() => {
     if (window.location.hash === "#accounts") {
       boxRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -78,7 +57,8 @@ export function AccountsSettings() {
         рабочий. У каждого свои данные: операции, токен, правки, правила и
         настройки хранятся отдельно и не смешиваются. Переключаться удобнее из
         шапки — переключатель появляется, когда аккаунтов больше одного. Нажмите
-        на кружок слева, чтобы поставить фото: в шапке аккаунт показан им.
+        на кружок слева, чтобы поставить, сменить или удалить фото: в шапке
+        аккаунт показан им.
       </p>
 
       <div className="divide-y divide-border/60 border border-border rounded-xl overflow-hidden">
@@ -93,7 +73,7 @@ export function AccountsSettings() {
               <Tooltip content={p.avatar ? "Сменить фото" : "Поставить фото"}>
                 <button
                   type="button"
-                  onClick={() => pickAvatar(p.id)}
+                  onClick={() => setAvatarFor(p.id)}
                   className="relative shrink-0 rounded-full group/av focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                   aria-label={`${p.avatar ? "Сменить" : "Поставить"} фото «${profileLabel(p)}»`}
                 >
@@ -129,9 +109,6 @@ export function AccountsSettings() {
                         <span className="chip chip-sm shrink-0 text-accent max-sm:hidden">Текущий</span>
                       )}
                     </div>
-                    {avatarError?.id === p.id ? (
-                      <div className="text-xs text-expense truncate">{avatarError.text}</div>
-                    ) : (
                     <div className="text-xs text-muted truncate">
                       {p.login
                         ? p.name.trim()
@@ -141,7 +118,6 @@ export function AccountsSettings() {
                           ? "Дзен-мани не подключён"
                           : "Логин появится после синхронизации в этом аккаунте"}
                     </div>
-                    )}
                   </>
                 )}
               </div>
@@ -168,18 +144,6 @@ export function AccountsSettings() {
                         <LogIn className="w-3.5 h-3.5" />
                         <span className="max-sm:hidden">Перейти</span>
                       </button>
-                    )}
-                    {p.avatar && (
-                      <Tooltip content="Убрать фото — останутся буквы на цвете">
-                        <button
-                          type="button"
-                          onClick={() => setProfileAvatar(p.id, null)}
-                          className="btn-icon"
-                          aria-label={`Убрать фото «${profileLabel(p)}»`}
-                        >
-                          <ImageOff className="w-4 h-4" />
-                        </button>
-                      </Tooltip>
                     )}
                     <Tooltip content="Переименовать">
                       <button
@@ -210,18 +174,7 @@ export function AccountsSettings() {
         })}
       </div>
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          // Сброс — чтобы то же фото можно было выбрать ещё раз.
-          e.target.value = "";
-          void onAvatarFile(file);
-        }}
-      />
+      {avatarProfile && <AvatarModal profile={avatarProfile} onClose={() => setAvatarFor(null)} />}
 
       <form
         className="flex items-center gap-2 max-sm:flex-wrap"
