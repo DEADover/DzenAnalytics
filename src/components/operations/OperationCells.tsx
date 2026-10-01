@@ -32,7 +32,7 @@ export function OperationCategory({
   draft?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 min-w-0">
+    <div data-cell="category" className="flex items-center gap-2 min-w-0">
       <span className="relative inline-flex shrink-0">
         {/* У операции в подкатегории — значок самой подкатегории, а не родителя. */}
         <CategoryDot
@@ -86,7 +86,7 @@ export function OperationPayee({ tx }: { tx: Transaction }) {
   const secondary = statementLine ? secondaryPayee(tx, "statement") : null;
   const tooltip = secondary ? `${primary} — ${secondary}` : primary;
   return (
-    <div className="min-w-0">
+    <div data-cell="payee" className="min-w-0">
       <div className="truncate text-muted" title={tooltip}>
         {primary || "—"}
       </div>
@@ -108,6 +108,7 @@ export function OperationComment({ text, className = "" }: { text: string; class
   const wrap = useDisplayStore((s) => s.commentWrap);
   return (
     <div
+      data-cell="comment"
       className={`text-muted min-w-0 ${
         wrap ? "whitespace-normal line-clamp-2 break-words" : "truncate"
       } ${className}`}
@@ -153,7 +154,8 @@ export function OperationActions({
     fn();
   };
   return (
-    <div className="flex items-center justify-center gap-0.5">
+    // На узком экране остаётся одна правка: остальное — в её карточке.
+    <div data-cell="actions" className="flex items-center justify-center gap-0.5 [&>[data-op-extra]]:max-sm:hidden">
       <button
         type="button"
         onClick={stop(onEdit)}
@@ -167,6 +169,7 @@ export function OperationActions({
         <button
           type="button"
           onClick={stop(onCopy)}
+          data-op-extra
           className="btn-icon"
           title="Копировать — та же операция сегодняшним днём"
           aria-label="Копировать операцию"
@@ -178,6 +181,7 @@ export function OperationActions({
         <button
           type="button"
           onClick={stop(onSplit)}
+          data-op-extra
           className="btn-icon"
           title="Разделить — расписать операцию по нескольким статьям"
           aria-label="Разделить операцию"
@@ -188,6 +192,7 @@ export function OperationActions({
       <button
         type="button"
         onClick={stop(onDelete)}
+          data-op-extra
         className="btn-icon-danger"
         title="Удалить"
         aria-label="Удалить операцию"

@@ -371,14 +371,17 @@ export function SplitTransactionModal({
               key={p.key}
               className="rounded-xl border border-border bg-panel2/30 p-2 space-y-1.5"
             >
-              <div className="flex items-center gap-2">
+              {/* На узком экране статья — первой строкой во всю ширину, сумма,
+                  доля и удаление — второй, под ней: в один ряд они занимают
+                  почти 500 пикселей и уходили за край окна. */}
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                 <span
                   className="w-6 h-6 shrink-0 grid place-items-center rounded-full bg-panel2 border border-border text-[11px] text-muted tabular-nums"
                   aria-hidden
                 >
                   {i + 1}
                 </span>
-                <div className="flex-1 min-w-[240px]">
+                <div className="flex-1 min-w-0 basis-[calc(100%-2rem)] sm:basis-auto sm:min-w-[240px]">
                   <CategoryCascadePicker
                     category={p.category}
                     subcategory={p.subcategory ?? ""}
@@ -392,7 +395,7 @@ export function SplitTransactionModal({
                 {/* Знак валюты у поля: сумма набирается голым числом, и
                     в чём она — видно только по крупной сумме в шапке. У
                     валютной операции это лишний повод ошибиться. */}
-                <div className="relative shrink-0">
+                <div className="relative shrink-0 ml-8 sm:ml-0">
                   <span className="absolute left-2.5 inset-y-0 grid place-items-center text-sm text-muted pointer-events-none">
                     {currencySymbol(tx.currency)}
                   </span>

@@ -112,7 +112,9 @@ export function OperationListHead({
   const sticky = useDisplayStore((s) => s.feedHeadSticky) && pinnable;
   return (
     <div
-      className={clsx("list-head grid items-center gap-3 px-3 py-2 bg-panel", sticky && "sticky z-10")}
+      // На узком экране строка ленты собирается иначе (`.op-row` в index.css),
+      // и подписи колонок не стоят ни над чем — шапки нет.
+      className={clsx("list-head grid items-center gap-3 px-3 py-2 bg-panel max-sm:hidden", sticky && "sticky z-10")}
       style={{
         gridTemplateColumns: template,
         ...(sticky ? { top: "calc(var(--app-header-h) + var(--feed-toolbar-h, 0px))" } : {}),
@@ -220,7 +222,7 @@ export function OperationListRow({
         })
       }
       className={clsx(
-        "grid items-center gap-3 px-3 py-2 border-b border-border/40 group text-[length:var(--tbl-font)]",
+        "op-row grid items-center gap-3 px-3 py-2 border-b border-border/40 group text-[length:var(--tbl-font)]",
         (onToggleSelect || onOpen) && "cursor-pointer",
         selected ? "bg-accent/5" : "hover:bg-panel2/40",
         className

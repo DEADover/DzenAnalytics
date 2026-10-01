@@ -730,11 +730,12 @@ function FeedRowView({
         </div>
       )}
       <div
+        data-cell="amount"
         className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
       >
         <OperationAmount tx={tx} />
       </div>
-      <div className="flex items-center justify-center">
+      <div data-cell="actions" className="flex items-center justify-center">
         {row.status === "restore-pending" ? (
           onCancel && (
             <button

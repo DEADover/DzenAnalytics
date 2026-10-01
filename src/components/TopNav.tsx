@@ -222,15 +222,17 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
   }, [moreOpen, mobileOpen, loc.pathname, smoothNavigate, headerItems]);
 
   // Панель закрывается по Escape — она большая, накрывает пол-экрана, и уводить
-  // руку к мыши ради «передумал» незачем.
+  // руку к мыши ради «передумал» незачем. Боковое меню узкого окна — так же.
   useEffect(() => {
-    if (!moreOpen) return;
+    if (!moreOpen && !mobileOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMoreOpen(false);
+      if (e.key !== "Escape") return;
+      setMoreOpen(false);
+      setMobileOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [moreOpen]);
+  }, [moreOpen, mobileOpen]);
 
   // Высота шапки уезжает в CSS-переменную: под неё паркуются липкие шапки
   // таблиц. Числом её не задать — она зависит от размера корневого шрифта

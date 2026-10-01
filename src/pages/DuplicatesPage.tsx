@@ -325,7 +325,7 @@ export function DuplicatesPage() {
                     {formatDate(t.date, "full")}
                   </div>
                   <OperationCategory tx={t} edited={!!edits[t.id]} />
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div data-cell="payee" className="flex items-center gap-2 min-w-0">
                     {/* Какую из операций раздел считает исходной — видно
                         прямо в строке: «Выбрать копии» её не отмечает. */}
                     {i === 0 && (
@@ -339,6 +339,7 @@ export function DuplicatesPage() {
                     <OperationComment text={t.comment} className="flex-1" />
                   </div>
                   <div
+                    data-cell="amount"
                     className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(t)]}`}
                   >
                     <OperationAmount tx={t} />

@@ -52,10 +52,12 @@ export function DayHeader({
     <div className="px-4 py-2 border-b border-t border-border bg-panel2/60 flex items-center gap-3 text-sm">
       <div className="flex items-baseline gap-2 min-w-0">
         <span className="font-semibold truncate">{title ?? label}</span>
-        {weekday && <span className="text-[13px] text-muted capitalize">{weekday}</span>}
-        {note}
+        {weekday && <span className="text-[13px] text-muted capitalize whitespace-nowrap">{weekday}</span>}
+        {note && <span className="whitespace-nowrap">{note}</span>}
       </div>
-      <div className="ml-auto flex items-center gap-3 sm:gap-4 text-sm tabular-nums">
+      {/* На узком экране — только итог дня: разбивка по видам и счётчик
+          вытесняли название дня («Сегод…»), а всё это видно в строках ниже. */}
+      <div className="ml-auto flex items-center gap-3 sm:gap-4 text-sm tabular-nums [&>span:not(:last-child)]:max-sm:hidden">
         <span
           className="flex items-center gap-1 text-muted whitespace-nowrap"
           title={`${txs.length} ${pluralOps(txs.length)}`}

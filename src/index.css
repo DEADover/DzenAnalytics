@@ -1708,3 +1708,49 @@ h2,
   .picker-items > *,
   .animate-widget-in { animation: none; }
 }
+
+/* Строка ленты операций на узком экране (до 640 px). Колонки фиксированной
+   ширины — счёт, контрагент, комментарий, четыре кнопки — в телефон не входят:
+   их сжимало до того, что от категории оставался один кружок. Здесь строка
+   собирается заново из ячеек с меткой `data-cell` (их ставят общие ячейки
+   `OperationCells` и сами ленты): выбор | категория | сумма | действие,
+   а под категорией — вторая строка (контрагент, подсказка, комментарий
+   копии). Остальное прячется; шаблон колонок из разметки перекрывается. */
+@media (max-width: 639.98px) {
+  .op-row {
+    grid-template-columns: auto minmax(0, 1fr) auto auto !important;
+    grid-template-areas:
+      "sel cat amt act"
+      "sel pay amt act";
+    column-gap: 0.625rem;
+    row-gap: 0.125rem;
+  }
+  .op-row > * {
+    display: none;
+  }
+  .op-row > input[type="checkbox"],
+  .op-row > [data-cell="select"] {
+    display: grid;
+    grid-area: sel;
+  }
+  .op-row > [data-cell="category"] {
+    display: flex;
+    grid-area: cat;
+  }
+  .op-row > [data-cell="payee"] {
+    display: flex;
+    grid-area: pay;
+    /* Под названием категории, а не под её кружком (28 + зазор 8). */
+    padding-left: 2.25rem;
+    font-size: 0.85em;
+  }
+  .op-row > [data-cell="amount"] {
+    display: block;
+    grid-area: amt;
+  }
+  .op-row > [data-cell="actions"] {
+    display: flex;
+    grid-area: act;
+  }
+}
+

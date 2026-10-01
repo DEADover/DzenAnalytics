@@ -249,7 +249,10 @@ export function PeriodPicker({
       {/* Свободный отрезок */}
       <div
         className={clsx(
-          "seg-track flex-1 min-w-fit max-sm:w-full max-sm:min-w-0",
+          // На узком экране — своей строкой: `basis-full`, а не `w-full` —
+          // у `flex-1` основа нулевая и перебивала ширину, отрезок сжимался до
+          // 30 пикселей рядом с месяцем и наезжал сам на себя.
+          "seg-track flex-1 min-w-fit max-sm:basis-full max-sm:min-w-0",
           rangeActive && activeTrack
         )}
       >

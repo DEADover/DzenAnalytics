@@ -40,3 +40,36 @@ test("окно правки операции целиком в экране", as
   await expect(dialog.getByRole("button", { name: "Сохранить" })).toBeInViewport({ ratio: 1 });
   expect(await dialog.evaluate((d) => d.scrollWidth - d.clientWidth)).toBe(0);
 });
+
+test("лента: в строке видны категория, контрагент и сумма", async ({ page }) => {
+  await connectZen(page, "/transactions");
+  const row = page.locator(".op-row", { hasText: "Перекрёсток" }).first();
+  await expect(row.getByText("Продукты")).toBeVisible();
+  await expect(row.getByText("Перекрёсток")).toBeVisible();
+  await expect(row.getByText(/2\s340/)).toBeVisible();
+  // Категории хватает места: не схлопнута до одного значка.
+  const w = await row.locator('[data-cell="category"]').evaluate((e) => e.getBoundingClientRect().width);
+  expect(w).toBeGreaterThan(120);
+});
+
+test("таблицы: колонка названий не схлопывается", async ({ page }) => {
+  await connectZen(page, "/top");
+  const head = page.locator("table thead th").first();
+  await head.scrollIntoViewIfNeeded();
+  expect(await head.evaluate((e) => e.getBoundingClientRect().width)).toBeGreaterThan(100);
+  await expect(page.locator("table tbody tr").first().getByText("Дом")).toBeVisible();
+});
+
+test("окна разделения и создания — целиком в экране", async ({ page }) => {
+  await connectZen(page, "/transactions");
+  await page.getByRole("button", { name: "Редактировать операцию" }).nth(2).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Разделить операцию" }).click();
+  const split = page.getByRole("dialog");
+  await expect(split.getByLabel("Сумма части 1")).toBeInViewport({ ratio: 1 });
+  expect(await split.evaluate((d) => d.scrollWidth - d.clientWidth)).toBe(0);
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: /Добавить/ }).first().click();
+  await page.getByRole("menuitem").first().click();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Создать", exact: true })).toBeInViewport({ ratio: 1 });
+});

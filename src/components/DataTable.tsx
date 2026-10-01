@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
@@ -237,7 +237,22 @@ export function DataTable<T>({
     { lead: selection ? SELECTION_LEAD : undefined }
   );
   const fixed = fixedProp || resize.custom;
-  const tableStyle = minWidth ? { minWidth: scaledWidth(minWidth) } : undefined;
+  // На узком экране колонки фиксированной ширины забирали всё место, и колонке
+  // названий оставался ноль — в «Топе» и «Категориях» стояли суммы без имён.
+  // Там таблица не уже суммы своих колонок плюс 9rem под название и
+  // листается вбок внутри своей обёртки; на широком экране всё как было.
+  const narrowMin = fixed
+    ? `calc(${[
+        ...(selection ? [resize.leadWidth(0) ?? SELECTION_LEAD[0]] : []),
+        ...columns.map((c) => (resize.custom ? resize.widthOf(c.key) : scaledWidth(c.width))),
+      ]
+        .filter(Boolean)
+        .join(" + ")} + 9rem)`
+    : undefined;
+  const tableStyle = {
+    ...(minWidth ? { minWidth: scaledWidth(minWidth) } : {}),
+    ...(narrowMin ? { "--dt-narrow-min": narrowMin } : {}),
+  } as CSSProperties;
 
   const sortCol = columns.find((c) => c.key === sort.key);
   const order = useCallback(
@@ -334,9 +349,13 @@ export function DataTable<T>({
       )}
       {/* Липкой шапке нужен прокручиваемый предок снаружи: своя обёртка с
           горизонтальной прокруткой стала бы им сама и не дала бы шапке липнуть. */}
-      <div className={stickyHead ? undefined : "overflow-x-auto"}>
+      <div className={stickyHead ? "max-sm:overflow-x-auto" : "overflow-x-auto"}>
         <table
-          className={clsx("w-full", fixed && "table-fixed", density === "compact" && "table-compact")}
+          className={clsx(
+            "w-full",
+            fixed && "table-fixed max-sm:min-w-[var(--dt-narrow-min)]",
+            density === "compact" && "table-compact"
+          )}
           style={tableStyle}
         >
           {fixed && (

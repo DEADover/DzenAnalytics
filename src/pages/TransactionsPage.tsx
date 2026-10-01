@@ -1108,6 +1108,7 @@ function Row({
       <OperationPayee tx={tx} />
       <OperationComment text={tx.comment} />
       <div
+        data-cell="amount"
         className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
       >
         <OperationAmount tx={tx} />

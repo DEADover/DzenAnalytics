@@ -494,7 +494,9 @@ export function CommandPalette({ open, onClose }: Props) {
                     {Icon && <Icon className="w-4 h-4 shrink-0" />}
                     <span className="truncate flex-1">{item.title}</span>
                     {item.hint && (
-                      <span className="text-xs text-muted shrink-0">{item.hint}</span>
+                      // Подсказка уступает место названию: длинные описания
+                      // тем на узком экране уходили за край окна.
+                      <span className="text-xs text-muted truncate min-w-0 max-w-[45%]">{item.hint}</span>
                     )}
                     {isActive && <ArrowRight className="w-3.5 h-3.5 shrink-0" />}
                   </button>

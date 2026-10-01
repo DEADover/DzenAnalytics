@@ -165,17 +165,20 @@ export function MakeRecurringModal({ tx, onClose }: { tx: Transaction; onClose: 
               aria-label="Через сколько периодов"
               className="input w-16 !py-1.5 text-sm tabular-nums text-center"
             />
-            <Segmented<PlanInterval>
-              value={interval}
-              onChange={setIntervalKind}
-              label="Период"
-              size="sm"
-              options={[
-                { value: "week", label: "Неделя" },
-                { value: "month", label: "Месяц" },
-                { value: "year", label: "Год" },
-              ]}
-            />
+            <div className="flex-1 min-w-0">
+              <Segmented<PlanInterval>
+                value={interval}
+                onChange={setIntervalKind}
+                label="Период"
+                size="sm"
+                block
+                options={[
+                  { value: "week", label: "Неделя" },
+                  { value: "month", label: "Месяц" },
+                  { value: "year", label: "Год" },
+                ]}
+              />
+            </div>
           </div>
         </div>
 

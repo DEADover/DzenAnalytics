@@ -216,7 +216,7 @@ export function PlannedFeedList({
             : "[&_.op-muted]:opacity-60"
         }
       >
-        <span className="grid place-items-center" aria-hidden>
+        <span data-cell="select" className="grid place-items-center" aria-hidden>
           <CalendarClock className={clsx("w-4 h-4", late ? "text-expense" : "text-muted")} />
         </span>
         {!grouped && (
@@ -224,7 +224,7 @@ export function PlannedFeedList({
             {formatShort(p.date)}
           </div>
         )}
-        <div className="op-muted min-w-0 flex items-center gap-2">
+        <div data-cell="category" className="op-muted min-w-0 flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <OperationCategory tx={tx} edited={false} />
           </div>
@@ -240,18 +240,19 @@ export function PlannedFeedList({
         <div className="op-muted truncate" title={p.toAccount ? `${p.account} → ${p.toAccount}` : p.account}>
           {p.toAccount ? `${p.account} → ${p.toAccount}` : p.account}
         </div>
-        <div className="op-muted min-w-0">
+        <div data-cell="payee" className="op-muted min-w-0">
           <OperationPayee tx={tx} />
         </div>
         <div className="op-muted min-w-0">
           <OperationComment text={p.comment} />
         </div>
         <div
+          data-cell="amount"
           className={`op-muted text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
         >
           <OperationAmount tx={tx} />
         </div>
-        <div className="flex items-center justify-center">
+        <div data-cell="actions" className="flex items-center justify-center">
           <button
             type="button"
             className="btn-icon"

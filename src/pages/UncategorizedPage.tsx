@@ -513,15 +513,21 @@ function Row({
       <div className="truncate text-muted" title={tx.account}>
         {tx.account}
       </div>
-      <OperationPayee tx={tx} />
+      {/* На узком экране получатель — главной строкой (категории тут нет), подсказка — под ним. */}
+      <div data-cell="category" className="min-w-0">
+        <OperationPayee tx={tx} />
+      </div>
       <OperationComment text={tx.comment} />
-      <SuggestionCell suggestion={suggestion} applied={applied} />
+      <div data-cell="payee" className="min-w-0">
+        <SuggestionCell suggestion={suggestion} applied={applied} />
+      </div>
       <div
+        data-cell="amount"
         className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
       >
         <OperationAmount tx={tx} />
       </div>
-      <div className="flex items-center justify-center gap-0.5">
+      <div data-cell="actions" className="flex items-center justify-center gap-0.5">
         {suggestion && !applied && key && (
           <button
             type="button"
