@@ -273,14 +273,14 @@ export function FiltersMenu() {
                         setRenamingId(v.id);
                         setRenameVal(v.name);
                       }}
-                      className="btn-icon opacity-0 group-hover:opacity-100"
+                      className="btn-icon opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
                       title="Переименовать"
                     >
                       <Pencil className="w-3 h-3" />
                     </button>
                     <button
                       onClick={() => del(v)}
-                      className="btn-icon-danger opacity-0 group-hover:opacity-100"
+                      className="btn-icon-danger opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
                       title="Удалить"
                     >
                       <Trash2 className="w-3 h-3" />

@@ -956,7 +956,7 @@ export function BudgetYearTable({
                   постоянных значков в шапке читались бы рябью. Сбоку от
                   названия и вне потока, чтобы название не сдвигалось. */}
               {copyTargets(m).length > 0 && (
-                <span className="absolute left-full ml-1 opacity-0 group-hover/month:opacity-100 focus-within:opacity-100">
+                <span className="absolute left-full ml-1 opacity-0 group-hover/month:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                   <Tooltip content="Копировать план месяца на другие месяцы">
                     <button
                       type="button"

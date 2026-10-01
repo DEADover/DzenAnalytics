@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
-import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info, Check, ListPlus, ArrowUpToLine } from "lucide-react";
+import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Check, ListPlus, ArrowUpToLine } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -42,6 +42,7 @@ import { activeProfileId } from "../lib/profiles";
 import { parseAmountInput } from "../lib/splitTransaction";
 import type { Transaction, TxKind } from "../types";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { InfoPopover } from "./InfoPopover";
 
 interface Props {
   /** The transaction to edit. Omit (or null) to open the modal in
@@ -1345,15 +1346,12 @@ export function EditTransactionModal({
             label="Сумма"
             labelAfter={
               isForeignCurrency && fxTooltip ? (
-                <span className="relative inline-flex group shrink-0">
-                  <Info className="w-3.5 h-3.5 text-muted cursor-help" aria-hidden />
-                  <span
-                    role="tooltip"
-                    className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-150 absolute z-50 left-0 top-full mt-1.5 w-60 rounded-lg border border-border bg-panel shadow-lg px-3 py-2 text-xs leading-relaxed text-text whitespace-pre-line"
-                  >
-                    {fxTooltip}
-                  </span>
-                </span>
+                // Общий значок с пояснением: открывается и касанием, а не только
+                // наведением — своя подсказка по `group-hover` на телефоне не
+                // открывалась вовсе.
+                <InfoPopover label="Курс и сумма в базовой валюте">
+                  <p className="whitespace-pre-line">{fxTooltip}</p>
+                </InfoPopover>
               ) : undefined
             }
           >
