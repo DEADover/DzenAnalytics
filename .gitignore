@@ -49,6 +49,10 @@ zen_*.csv
 .claude/skills/
 skills-lock.json
 
+# Сквозные тесты Playwright: отчёты и следы упавших прогонов
+test-results/
+playwright-report/
+
 # Dev-only logging sink — Vite middleware writes JSON request logs
 # here when the app calls `devLog()`. Useful for debugging server-side
 # Zenmoney push errors without staring at DevTools. Gitignored — no

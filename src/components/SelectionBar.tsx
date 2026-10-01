@@ -79,7 +79,7 @@ export function SelectionBar({
         {children}
         <button
           onClick={onClear}
-          className="btn-ghost text-sm !px-2.5 text-muted"
+          className="btn-ghost text-sm !p-0 w-[38px] h-[38px] shrink-0 text-muted"
           title="Снять выделение (Esc)"
           aria-label="Снять выделение"
         >
