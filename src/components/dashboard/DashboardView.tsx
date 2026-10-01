@@ -16,7 +16,7 @@
  * знать ни про хранилища, ни про то, как открывается drawer.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { CtaLink } from "../CtaLink";
 import {
@@ -74,6 +74,8 @@ import { monthOverMonth } from "../../lib/monthOverMonth";
 import { monthEnd } from "../../lib/dashboardModel";
 import { affectsExpense } from "../../lib/txKindStyle";
 import { ProgressBar } from "../ProgressBar";
+import { Popover } from "../Popover";
+import { Check, ChevronDown } from "lucide-react";
 
 /** Название месяца отдельно от года: в пилюле год только шумит. */
 function monthName(ym: string): string {
@@ -193,8 +195,14 @@ function monthPillHint(m: DashboardModel): string {
     : `${span} ${day} — так задано в «Настройки → Расчёты».`;
 }
 
+/** Месяц уже прошёл — показан прошлый месяц из переключателя. */
+function isClosed(m: DashboardModel): boolean {
+  return !m.month.running && m.month.progress >= 1;
+}
+
 /** Сколько периода осталось — хвост пилюли. */
 function monthLeft(m: DashboardModel): string {
+  if (isClosed(m)) return "Месяц завершён";
   return m.month.left === 0
     ? "Последний день"
     : `Осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`;
@@ -242,12 +250,101 @@ function MonthPill({ m, size }: { m: DashboardModel; size: "sm" | "md" }) {
 }
 
 /**
+ * Пилюля месяца с выбором «текущий / прошлый» — как «Другие периоды» в
+ * Дзен-мани. Пилюля остаётся заголовком виджета, только теперь по ней можно
+ * щёлкнуть: шеврон говорит, что там выбор. Числа виджета переключаются на
+ * выбранный месяц целиком — доход, расход, план и остаток.
+ */
+function MonthSwitch({
+  m,
+  current,
+  which,
+  onChange,
+  size,
+}: {
+  /** Модель выбранного месяца — для подписи на пилюле. */
+  m: DashboardModel;
+  /** Модель главной — названия текущего и прошлого месяцев для меню. */
+  current: DashboardModel;
+  which: "current" | "prev";
+  onChange: (next: "current" | "prev") => void;
+  size: "sm" | "md";
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+  const items = [
+    { id: "current" as const, label: `${monthName(current.ym)} (текущий месяц)` },
+    { id: "prev" as const, label: `${monthName(current.prevMonth.ym)} (прошлый месяц)` },
+  ];
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={monthPillHint(m)}
+        className="inline-flex items-center gap-2 uppercase hover:opacity-80"
+      >
+        <MonthPill m={m} size={size} />
+        <ChevronDown
+          className={clsx(
+            "shrink-0 text-muted transition-transform duration-200",
+            size === "md" ? "w-4 h-4" : "w-3.5 h-3.5",
+            open && "rotate-180"
+          )}
+          aria-hidden
+        />
+      </button>
+      <Popover open={open} anchorRef={ref} onClose={() => setOpen(false)} className="card p-1 w-max text-[13px]">
+        {items.map((it) => (
+          <button
+            key={it.id}
+            type="button"
+            role="menuitemradio"
+            aria-checked={which === it.id}
+            onClick={() => {
+              setOpen(false);
+              onChange(it.id);
+            }}
+            className={clsx(
+              "w-full text-left px-2.5 py-1.5 rounded-md flex items-center gap-2 hover:bg-panel2 normal-case tracking-normal",
+              which === it.id ? "text-accent font-medium" : "text-text font-normal"
+            )}
+          >
+            <Check className={clsx("w-4 h-4 shrink-0", which !== it.id && "invisible")} aria-hidden />
+            {it.label}
+          </button>
+        ))}
+      </Popover>
+    </>
+  );
+}
+
+/**
+ * «Итоги месяца» с выбором месяца: текущий или прошлый. Выбор живёт в самом
+ * виджете и не запоминается — открыли главную, видите текущий месяц, как в
+ * Дзен-мани.
+ */
+function MonthHero({ m, view }: { m: DashboardModel; view: string | undefined }) {
+  const [which, setWhich] = useState<"current" | "prev">("current");
+  const shown: DashboardModel = which === "prev" ? { ...m, ...m.prevMonth } : m;
+  const pill = (size: "sm" | "md") => (
+    <MonthSwitch m={shown} current={m} which={which} onChange={setWhich} size={size} />
+  );
+  if (view === "split") return <HeroSplit m={shown} pill={pill("sm")} />;
+  return <HeroOpen m={shown} sunken={view === "framed"} pill={pill("md")} />;
+}
+
+/**
  * Вариант «Открытый»: без поддона, крупная типографика на голом фоне страницы.
  * В обойме с двойным кантом он читался бы как ещё одна карточка с числом, а это
  * заголовок всего экрана.
  */
-function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
+function HeroOpen({ m, sunken, pill }: { m: DashboardModel; sunken?: boolean; pill: ReactNode }) {
   const over = m.pace === null ? null : m.pace - 1;
+  const past = isClosed(m);
   return (
     // На голом фоне итоги прижаты к низу колонки: страница под ними
     // продолжается, и это читается нижней границей первого экрана. В карточке
@@ -274,9 +371,8 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
         className={`self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] border border-border text-text font-semibold ${
           sunken ? "bg-panel" : "bg-panel2"
         }`}
-        title={monthPillHint(m)}
       >
-        <MonthPill m={m} size="md" />
+        {pill}
       </h1>
 
       <div
@@ -328,14 +424,19 @@ function HeroOpen({ m, sunken }: { m: DashboardModel; sunken?: boolean }) {
             стороны — «хотя», когда в одну — «и». Тогда вторая половина
             читается как уточнение к первой, а не как спор с ней. */}
         {over === null && "."}
-        {over !== null && Math.abs(over) < 0.005 && ", и тратите примерно как обычно."}
+        {over !== null && Math.abs(over) < 0.005 &&
+          (past ? ", и потратили примерно как обычно." : ", и тратите примерно как обычно.")}
         {over !== null && Math.abs(over) >= 0.005 && (
           <>
-            {(m.free.value < 0) !== (over >= 0) ? ", хотя тратите на " : ", и тратите на "}
+            {(m.free.value < 0) !== (over >= 0)
+              ? past ? ", хотя потратили на " : ", хотя тратите на "
+              : past ? ", и потратили на " : ", и тратите на "}
             <span className={`font-mono tabular-nums ${over >= 0 ? "text-warn" : "text-income"}`}>
               {Math.abs(over * 100).toFixed(0)}%
             </span>
-            {over >= 0 ? " быстрее обычного." : " медленнее обычного."}
+            {past
+              ? over >= 0 ? " больше обычного." : " меньше обычного."
+              : over >= 0 ? " быстрее обычного." : " медленнее обычного."}
           </>
         )}
       </p>
@@ -408,16 +509,16 @@ function RailRow({ label, value, tone }: { label: string; value: string; tone?: 
  * пройдено: без неё низ колонки пустовал, а вопрос «много ли ещё впереди»
  * ровно тот, что задают, глядя на остаток.
  */
-function HeroSplit({ m }: { m: DashboardModel }) {
+function HeroSplit({ m, pill }: { m: DashboardModel; pill: ReactNode }) {
   const over = m.pace === null ? null : m.pace - 1;
   const short = m.free.value < 0;
+  const past = isClosed(m);
   return (
     <>
       <h1
         className="self-start rounded-full px-3.5 py-1 text-[11px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold"
-        title={monthPillHint(m)}
       >
-        <MonthPill m={m} size="sm" />
+        {pill}
       </h1>
 
       {/* Разворот раскрывается только там, где колонка достаточно широка. На
@@ -446,10 +547,11 @@ function HeroSplit({ m }: { m: DashboardModel }) {
             {short
               ? "Расход месяца обогнал доход."
               : "Доход месяца за вычетом всего, что уже потрачено."}
-            {over !== null && Math.abs(over) < 0.005 && " Тратите примерно как обычно."}
+            {over !== null && Math.abs(over) < 0.005 &&
+              (past ? " Потратили примерно как обычно." : " Тратите примерно как обычно.")}
             {over !== null && Math.abs(over) >= 0.005 && (
               <>
-                {" Темп трат на "}
+                {past ? " Траты на " : " Темп трат на "}
                 <span className={`font-mono tabular-nums ${over >= 0 ? "text-warn" : "text-income"}`}>
                   {Math.abs(over * 100).toFixed(0)}%
                 </span>
@@ -491,7 +593,7 @@ function HeroSplit({ m }: { m: DashboardModel }) {
           <div className="hidden xl:block h-px bg-border" />
           <RailRow label="Расход" value={formatMoney(m.factExpense, m.base)} tone="expense" />
           <div className="hidden xl:block h-px bg-border" />
-          <RailRow label="На счетах" value={formatMoney(m.netWorth, m.base)} />
+          <RailRow label={past ? "На счетах в конце" : "На счетах"} value={formatMoney(m.netWorth, m.base)} />
         </div>
       </div>
     </>
@@ -692,8 +794,7 @@ export function DashboardView() {
         // «В рамке» — тот же «Открытый», только в поддоне и на серой
         // подложке: содержание одно, разная подача.
         const view = widgetView(widgetMeta("month"), p.view)?.id;
-        if (view === "split") return <HeroSplit m={m} />;
-        return <HeroOpen m={m} sunken={view === "framed"} />;
+        return <MonthHero m={m} view={view} />;
       }
 
       case "freeMoney":

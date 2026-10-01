@@ -41,7 +41,7 @@ import { buildNeedsWants, type NeedsWantsSplit } from "../lib/needsWants";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { buildNotices, type Notice } from "../lib/dashboardNotices";
 import { plannedFor, planTotals } from "../lib/budgets";
-import { currentPeriod, periodKey, yearRange } from "../lib/period";
+import { currentPeriod, periodKey, periodRange, shiftPeriod, yearRange } from "../lib/period";
 import {
   monthProgress,
   paceRatio,
@@ -68,6 +68,20 @@ export interface DashboardAccount {
   offBalance: boolean;
 }
 
+/** Числа одного месяца для «Итогов месяца». */
+export interface HeroMonth {
+  ym: string;
+  month: MonthProgress;
+  factIncome: number;
+  factExpense: number;
+  free: FreeMoney;
+  pace: number | null;
+  planIncome: number | null;
+  planExpense: number | null;
+  /** Остаток на счетах на конец месяца (у текущего — сейчас). */
+  netWorth: number;
+}
+
 export interface DashboardModel {
   ready: boolean;
   base: Currency;
@@ -78,6 +92,11 @@ export interface DashboardModel {
   /** Откуда взялся этот день: подсказка к пилюле объясняет это человеку. */
   monthStartDaySource: "zen" | "own" | "calendar";
   month: MonthProgress;
+  /**
+   * Прошлый отчётный месяц — для переключателя в «Итогах месяца», как
+   * «Сентябрь (прошлый месяц)» в Дзен-мани. Те же поля, что у текущего.
+   */
+  prevMonth: HeroMonth;
 
   /** Совокупный баланс и его история. */
   netWorth: number;
@@ -348,6 +367,35 @@ export function useDashboardModel(): DashboardModel {
     return { planIncome: income, planExpense: expense };
   }, [budgetLines, ym]);
 
+  // Прошлый месяц — закрытый: темп сравнивается с месяцами ДО него, план —
+  // его собственный, остаток — на его последний день.
+  const prevMonth = useMemo<HeroMonth>(() => {
+    const prevYm = shiftPeriod(ym, -1);
+    const bucket = months.find((b) => b.ym === prevYm);
+    const inc = bucket?.income ?? 0;
+    const exp = bucket?.expense ?? 0;
+    const before = months.filter((b) => b.ym < prevYm).slice(-AVG_WINDOW);
+    const avg = before.length ? before.reduce((s, b) => s + b.expense, 0) / before.length : 0;
+    const end = periodRange(prevYm, monthStartDay).to;
+    let nw = 0;
+    for (const p of netWorthSeries) {
+      if (p.date > end) break;
+      nw = p.net;
+    }
+    const plans = budgetLines.length ? planTotals(budgetLines, prevYm) : null;
+    return {
+      ym: prevYm,
+      month: monthProgress(prevYm, new Date(), monthStartDay),
+      factIncome: inc,
+      factExpense: exp,
+      free: freeMoney({ factIncome: inc, factExpense: exp }),
+      pace: exp > 0 ? paceRatio(exp, 1, avg) : null,
+      planIncome: plans ? plans.income : null,
+      planExpense: plans ? plans.expense : null,
+      netWorth: nw,
+    };
+  }, [ym, months, monthStartDay, netWorthSeries, budgetLines]);
+
   // Факт по статьям за месяц — в том же виде, в каком его ждёт фильтр наблюдений.
   const factByCategory = useMemo(() => {
     const map = new Map<string, number>();
@@ -393,6 +441,7 @@ export function useDashboardModel(): DashboardModel {
     monthStartDay,
     monthStartDaySource,
     month,
+    prevMonth,
     netWorth,
     netWorthSeries,
     accounts,
