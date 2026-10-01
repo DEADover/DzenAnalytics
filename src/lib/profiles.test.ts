@@ -10,6 +10,7 @@ import {
   renameProfile,
   setActiveProfileId,
   setProfileLogin,
+  setProfileAvatar,
 } from "./profiles";
 
 function memory() {
@@ -68,3 +69,26 @@ describe("аккаунты", () => {
     expect(readProfiles(kv).map((p) => p.id)).toEqual([DEFAULT_PROFILE_ID]);
   });
 });
+
+describe("фото аккаунта", () => {
+  it("ставится и убирается, остальное не трогает", () => {
+    const kv = memory();
+    const p = addProfile("Работа", kv);
+    expect(setProfileAvatar(p.id, "data:image/webp;base64,AAA", kv)).toBe(true);
+    expect(readProfiles(kv).find((x) => x.id === p.id)).toMatchObject({ name: "Работа", avatar: "data:image/webp;base64,AAA" });
+    expect(setProfileAvatar(p.id, null, kv)).toBe(true);
+    expect(readProfiles(kv).find((x) => x.id === p.id)).not.toHaveProperty("avatar");
+  });
+
+  it("хранилище переполнено — честное «не сохранилось»", () => {
+    const kv = memory();
+    const p = addProfile("Работа", kv);
+    const full = { getItem: kv.getItem.bind(kv), setItem: () => { throw new Error("QuotaExceededError"); } };
+    expect(setProfileAvatar(p.id, "data:image/webp;base64,AAA", full)).toBe(false);
+  });
+
+  it("неизвестный аккаунт — ничего", () => {
+    expect(setProfileAvatar("nope", "x", memory())).toBe(false);
+  });
+});
+

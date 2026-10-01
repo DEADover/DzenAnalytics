@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { HandCoins } from "lucide-react";
 import { resolveBrand, type BankBrand } from "../lib/bankRegistry";
+import { hueFromString } from "../lib/colorHash";
 
 // Vite auto-discovers any SVG file dropped into `src/assets/bank-logos/`.
 // Filename (without extension) must match the `slug` of the registry
@@ -134,10 +135,4 @@ export function AccountLogo({ title, type = "", size = 24, className = "" }: Pro
       {first}
     </span>
   );
-}
-
-function hueFromString(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h % 360;
 }

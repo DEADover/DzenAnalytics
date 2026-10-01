@@ -2,6 +2,7 @@ import { UserRound } from "lucide-react";
 import { profileLabel } from "../lib/profiles";
 import { switchProfile, useProfiles } from "../hooks/useProfiles";
 import { HeaderSwitcher } from "./HeaderSwitcher";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 /**
  * Быстрый переход между аккаунтами — в дорожке данных шапки.
@@ -22,11 +23,15 @@ export function AccountSwitcher() {
       title={`Аккаунт: ${label}\nУ каждого аккаунта свои данные`}
       ariaLabel={`Аккаунт: ${label}`}
       heading="Аккаунт"
+      // Круглый аватар вместо значка и имени: узнаётся с одного взгляда, а
+      // имя — в подсказке и в списке.
+      face={<ProfileAvatar profile={current} size={24} />}
       items={profiles.map((p) => ({
         id: p.id,
         label: profileLabel(p),
         // Логин — вторым рядом, только если название своё: иначе оно и есть логин.
         hint: p.name.trim() && p.login ? p.login : null,
+        leading: <ProfileAvatar profile={p} size={24} />,
       }))}
       activeId={current.id}
       onPick={switchProfile}

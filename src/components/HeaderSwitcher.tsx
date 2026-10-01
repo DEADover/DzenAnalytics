@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { Check, Settings2, type LucideIcon } from "lucide-react";
@@ -9,6 +9,8 @@ export interface HeaderSwitcherItem {
   label: string;
   /** Строка под названием — например, логин аккаунта. */
   hint?: string | null;
+  /** Значок перед названием — например, аватар аккаунта. */
+  leading?: ReactNode;
 }
 
 /**
@@ -26,6 +28,7 @@ export function HeaderSwitcher({
   activeId,
   onPick,
   settings,
+  face,
 }: {
   icon: LucideIcon;
   current: string;
@@ -40,6 +43,11 @@ export function HeaderSwitcher({
    * списком ссылка занимала место и читалась ещё одним вариантом выбора.
    */
   settings?: { to: string; label: string };
+  /**
+   * Своё лицо кнопки вместо значка и названия — у аккаунтов круглый аватар:
+   * он узнаётся с одного взгляда и не занимает место под имя.
+   */
+  face?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -101,12 +109,16 @@ export function HeaderSwitcher({
         // Живёт только внутри дорожки шапки: пункт той же высоты, что значки
         // рядом (32). На телефоне — один значок, без названия.
         className={clsx(
-          "seg-item px-2.5 max-sm:px-2 py-2 text-xs leading-4 max-w-[10rem]",
+          face ? "seg-item !px-1 py-1" : "seg-item px-2.5 max-sm:px-2 py-2 text-xs leading-4 max-w-[10rem]",
           open && "!bg-accent/10 !text-accent"
         )}
       >
-        <Icon className="w-3.5 h-3.5 shrink-0" />
-        <span className="truncate max-sm:hidden">{current}</span>
+        {face ?? (
+          <>
+            <Icon className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate max-sm:hidden">{current}</span>
+          </>
+        )}
       </button>
       {open &&
         createPortal(
@@ -146,11 +158,14 @@ export function HeaderSwitcher({
                   it.id === activeId ? "bg-accent/10 text-accent" : "text-text hover:bg-panel2"
                 )}
               >
-                <span className="min-w-0">
-                  <span className="block truncate">{it.label}</span>
-                  {it.hint && (
-                    <span className="block truncate text-[11px] leading-4 text-muted">{it.hint}</span>
-                  )}
+                <span className="min-w-0 flex items-center gap-2">
+                  {it.leading}
+                  <span className="min-w-0">
+                    <span className="block truncate">{it.label}</span>
+                    {it.hint && (
+                      <span className="block truncate text-[11px] leading-4 text-muted">{it.hint}</span>
+                    )}
+                  </span>
                 </span>
                 {it.id === activeId && <Check className="w-3.5 h-3.5 shrink-0" />}
               </button>

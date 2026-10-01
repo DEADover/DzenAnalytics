@@ -20,6 +20,8 @@ export interface Profile {
   name: string;
   /** Логин Дзен-мани, запомненный при последнем входе в этот аккаунт. */
   login?: string | null;
+  /** Фото — маленький квадрат data-URL (`lib/avatarImage`). Нет — буква на цвете. */
+  avatar?: string | null;
   createdAt: string;
 }
 
@@ -70,13 +72,16 @@ export function readProfiles(kv: KV | null = storage()): Profile[] {
   }
 }
 
-function writeProfiles(list: Profile[], kv: KV | null) {
+function writeProfiles(list: Profile[], kv: KV | null): boolean {
+  let ok = true;
   try {
     kv?.setItem(LIST_KEY, JSON.stringify(list));
   } catch {
-    // Хранилище недоступно — список живёт до перезагрузки.
+    ok = false;
+    // Хранилище недоступно или переполнено — список живёт до перезагрузки.
   }
   notify();
+  return ok;
 }
 
 /** Выбранный аккаунт. Неизвестный id — первый из списка. */
@@ -114,6 +119,23 @@ export function renameProfile(id: string, name: string, kv: KV | null = storage(
     readProfiles(kv).map((p) => (p.id === id ? { ...p, name: name.trim() } : p)),
     kv
   );
+}
+
+/**
+ * Поставить или убрать фото аккаунта. `false` — хранилище не приняло (место в
+ * localStorage кончилось): вызывающий скажет об этом, а не сделает вид, что
+ * фото сохранилось.
+ */
+export function setProfileAvatar(id: string, avatar: string | null, kv: KV | null = storage()): boolean {
+  const list = readProfiles(kv);
+  if (!list.some((p) => p.id === id)) return false;
+  const next = list.map((p) => {
+    if (p.id !== id) return p;
+    const { avatar: _old, ...rest } = p;
+    void _old;
+    return avatar ? { ...rest, avatar } : rest;
+  });
+  return writeProfiles(next, kv);
 }
 
 /** Запомнить логин Дзен-мани — только если он изменился. */
