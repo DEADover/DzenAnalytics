@@ -100,7 +100,7 @@ export function SectionLabel({
   right?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-x-3 gap-y-2 max-sm:flex-wrap">
       {/* Настоящий заголовок раздела, а не просто мелкий текст: на старой
           главной не было ни одного h2–h6, и с клавиатуры страница читалась
           как одно сплошное полотно. */}
@@ -108,7 +108,9 @@ export function SectionLabel({
         {children}
       </h2>
       <span className="flex-1 h-px bg-border" />
-      {right && <div className="shrink-0">{right}</div>}
+      {/* На телефоне правая часть — строкой ниже: рядом с подписью ей не
+          хватало места, и «Ежедневный» уходил под край. */}
+      {right && <div className="shrink-0 max-sm:basis-full">{right}</div>}
     </div>
   );
 }
@@ -131,19 +133,28 @@ export function BlockTitle({
   linkLabel?: string;
   right?: ReactNode;
 }) {
+  // Узкая шапка — на телефоне или в колонке в треть ширины — не вмещала
+  // заголовок, подпись ссылки и переключатели: «К…» вместо «Капитал»,
+  // «Запланированные…» на 1280 px. Подпись ссылки прячется по ширине САМОЙ
+  // шапки (`.block-title` в index.css — container query), остаётся стрелка;
+  // на телефоне переключатели уходят второй строкой (`sm:contents` — как было).
   return (
-    <div className="flex items-center justify-between gap-3 mb-3">
-      <div className="flex items-center gap-1.5 min-w-0">
-        <h3 className="font-semibold text-[16px] truncate">{title}</h3>
+    <div className="block-title flex items-center justify-between gap-x-3 gap-y-2 mb-3 max-sm:flex-wrap">
+      <div className="flex items-center gap-1.5 min-w-0 max-sm:flex-1">
+        <h3 className="font-semibold text-[16px] sm:truncate">{title}</h3>
         {info && <InfoPopover label="Что это за график">{info}</InfoPopover>}
       </div>
-      {right}
+      {right && (
+        <div className="max-sm:order-last max-sm:basis-full max-sm:min-w-0 sm:contents">{right}</div>
+      )}
       {to && (
         <Link
           to={to}
           className="pill-link"
+          // Подсказка — когда подпись спрятана (узкая шапка), видно, куда ведёт.
+          title={linkLabel}
         >
-          {linkLabel}
+          <span className="block-title-link-label">{linkLabel}</span>
           <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
         </Link>
       )}
@@ -1606,7 +1617,9 @@ function MomTile({
       {/* Пружина ПЕРЕД числом: оно с подписью держится низа плитки, а зазор
           в 20px разводит их так, что число садится по центру. */}
       <span
-        className={`mt-auto mb-5 text-[24px] font-semibold tabular-nums tracking-[-0.025em] leading-[1.1] ${numCls}`}
+        // На телефоне плитка — четверть экрана: 24 px переносили «150 000 ₽»
+        // на две строки, знак рубля оставался внизу один.
+        className={`mt-auto mb-5 text-[19px] sm:text-[24px] font-semibold tabular-nums tracking-[-0.025em] leading-[1.1] whitespace-nowrap ${numCls}`}
       >
         {show(metric.now)}
       </span>

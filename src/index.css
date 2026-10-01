@@ -1769,3 +1769,24 @@ h2,
   }
 }
 
+/* Шапка виджета главной (`BlockTitle`): подпись ссылки «Регулярные →» прячется,
+   когда сама шапка узкая — на телефоне или в колонке в треть ширины. Важна
+   ширина карточки, а не экрана, поэтому — container query. Подпись остаётся
+   для скринридера. */
+.block-title {
+  container-type: inline-size;
+}
+@container (max-width: 24rem) {
+  .block-title .block-title-link-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .block-title .pill-link {
+    padding-inline: 0.5rem;
+  }
+}
+
