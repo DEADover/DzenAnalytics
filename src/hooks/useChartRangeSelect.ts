@@ -22,24 +22,44 @@ export function useChartRangeSelect(keys: readonly string[]) {
     latest.current = { anchor, hover };
   });
 
+  // Последняя дата под мышью и запланированный кадр — см. `onMouseMove`.
+  const pending = useRef<string | null>(null);
+  /** Нажатие запоминается сразу, а не после перерисовки: при быстрой
+   *  протяжке первые движения мыши приходили раньше неё и терялись. */
+  const down = useRef<string | null>(null);
+  const frame = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+    },
+    []
+  );
+
   const labelOf = (state: MouseHandlerDataParam | undefined) =>
     state?.activeLabel != null ? String(state.activeLabel) : null;
 
   const finish = useCallback(() => {
-    const { anchor: a, hover: h } = latest.current;
+    if (frame.current !== null) {
+      cancelAnimationFrame(frame.current);
+      frame.current = null;
+    }
+    const a = down.current ?? latest.current.anchor;
+    down.current = null;
+    // Последнее положение мыши могло ещё не дойти до состояния — берём его.
+    const h = pending.current ?? latest.current.hover;
+    pending.current = null;
     if (a === null) return;
     setRange(h !== null && h !== a ? [a, h] : null);
     setAnchor(null);
     setHover(null);
   }, []);
 
-  useEffect(() => {
-    if (!dragging) return;
-    window.addEventListener("mouseup", finish);
-    return () => window.removeEventListener("mouseup", finish);
-  }, [dragging, finish]);
+  // Отпускание слушаем с самого нажатия (см. `onMouseDown`), а не после
+  // перерисовки — иначе быстрый щелчок оставлял протяжку «зависшей».
+  useEffect(() => () => window.removeEventListener("mouseup", finish), [finish]);
 
   const clear = useCallback(() => {
+    down.current = null;
     setRange(null);
     setAnchor(null);
     setHover(null);
@@ -65,13 +85,24 @@ export function useChartRangeSelect(keys: readonly string[]) {
     onMouseDown: (state: MouseHandlerDataParam) => {
       const key = labelOf(state);
       if (key === null) return;
+      pending.current = null;
+      down.current = key;
+      window.addEventListener("mouseup", finish, { once: true });
       setAnchor(key);
       setHover(key);
     },
     onMouseMove: (state: MouseHandlerDataParam) => {
-      if (!dragging) return;
+      if (down.current === null && !dragging) return;
       const key = labelOf(state);
-      if (key !== null) setHover(key);
+      if (key === null) return;
+      // Не чаще кадра: мышь присылает событие на каждый пиксель, а каждое
+      // обновление перерисовывает страницу с графиком на тысячи точек.
+      pending.current = key;
+      if (frame.current !== null) return;
+      frame.current = requestAnimationFrame(() => {
+        frame.current = null;
+        if (pending.current !== null) setHover(pending.current);
+      });
     },
   };
 

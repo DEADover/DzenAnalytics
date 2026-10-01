@@ -1368,15 +1368,23 @@ export function AccountsPage() {
         : null,
     [netChart, netRange.active]
   );
+  /**
+   * Выделение «улеглось» — кнопку мыши отпустили. Пока тянут, данные графика
+   * НЕ меняем: новый массив точек заставлял Recharts пересчитывать кривую по
+   * всей истории на каждое движение мыши, и протяжка тормозила. Во время
+   * протяжки — только лёгкая подсветка отрезка и границы с датами; цветной
+   * кусок линии и точки на краях — после отпускания.
+   */
+  const netSettled = netChange !== null && !netRange.dragging;
   /** Точки с отдельной серией `sel` — значение только внутри отрезка. */
   const netData = useMemo(() => {
-    if (!netChange) return netChart;
+    if (!netChange || !netSettled) return netChart;
     const { from, to } = netChange;
     return netChart.map((p) => ({
       ...p,
       sel: p.date >= from.date && p.date <= to.date ? p.net : null,
     }));
-  }, [netChart, netChange]);
+  }, [netChart, netChange, netSettled]);
   const netRangeColor = !netChange
     ? NET_STROKE
     : netChange.delta >= 0
@@ -3068,7 +3076,7 @@ export function AccountsPage() {
                         />
                       );
                     })}
-                    {[stackChange.from, stackChange.to].map((p) => (
+                    {!stackRange.dragging && [stackChange.from, stackChange.to].map((p) => (
                       <ReferenceDot
                         key={`sd-${p.date}`}
                         x={p.date}
@@ -3146,11 +3154,13 @@ export function AccountsPage() {
                   // С выделением линия вне отрезка гаснет, чтобы глаз шёл за
                   // окрашенным куском — как у брокеров.
                   stroke={NET_STROKE}
-                  strokeOpacity={netChange ? 0.35 : 1}
+                  strokeOpacity={netSettled ? 0.35 : 1}
                   strokeWidth={2}
                   fill="url(#netfill)"
-                  fillOpacity={netChange ? 0.4 : 1}
-                  isAnimationActive={!netChange}
+                  fillOpacity={netSettled ? 0.4 : 1}
+                  // Без анимации: она включалась и выключалась вместе с
+                  // выделением, и после снятия график заново «вырастал».
+                  isAnimationActive={false}
                   // Одна точка (первый день периода без операций) линией не
                   // рисуется: кружок и уровень через весь график ниже.
                   dot={
@@ -3174,17 +3184,19 @@ export function AccountsPage() {
                 )}
                 {netChange && (
                   <>
-                    <Line
-                      type="monotone"
-                      dataKey="sel"
-                      stroke={netRangeColor}
-                      strokeWidth={2.5}
-                      dot={false}
-                      activeDot={false}
-                      isAnimationActive={false}
-                      legendType="none"
-                      tooltipType="none"
-                    />
+                    {netSettled && (
+                      <Line
+                        type="monotone"
+                        dataKey="sel"
+                        stroke={netRangeColor}
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={false}
+                        isAnimationActive={false}
+                        legendType="none"
+                        tooltipType="none"
+                      />
+                    )}
                     {[netChange.from, netChange.to].map((p, i) => {
                       // Начало подписано слева от линии, конец — справа; у
                       // края графика плашка уходит внутрь, чтобы не обрезаться.
@@ -3203,7 +3215,7 @@ export function AccountsPage() {
                         />
                       );
                     })}
-                    {[netChange.from, netChange.to].map((p) => (
+                    {netSettled && [netChange.from, netChange.to].map((p) => (
                       <ReferenceDot
                         key={`d-${p.date}`}
                         x={p.date}
@@ -3228,6 +3240,9 @@ export function AccountsPage() {
         className={tab === "flow" ? "card-tray card-pad" : "hidden"}
         style={{ scrollMarginTop: "calc(var(--app-header-h, 64px) + 12px)" }}
       >
+        {/* Содержимое — только на своей вкладке: спрятанный классом график
+            перерисовывался на каждое движение мыши по графику «Капитала». */}
+        {tab === "flow" && (<>
         <CardHeader
           icon={TrendingUp}
           title={selectedAccount ? `Изменение по счёту: ${selectedAccount}` : "Изменение по фильтру"}
@@ -3276,6 +3291,7 @@ export function AccountsPage() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
+      </>)}
       </div>
 
       {/* Доходность вкладов. Только на «Капитале»: на «Движении» речь про обороты

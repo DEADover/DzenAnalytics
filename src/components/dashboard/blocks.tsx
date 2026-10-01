@@ -499,11 +499,14 @@ export function CapitalBlock({
     () => (range.active ? rangeChange(chart, range.active[0], range.active[1], (p) => p.net) : null),
     [chart, range.active]
   );
+  // Пока тянут мышь, данные графика не трогаем — иначе кривая пересчитывается
+  // на каждое движение (см. «Совокупный баланс» на «Счетах»).
+  const settled = change !== null && !range.dragging;
   const chartData = useMemo(() => {
-    if (!change) return chart;
+    if (!change || !settled) return chart;
     const { from, to } = change;
     return chart.map((p) => ({ ...p, sel: p.date >= from.date && p.date <= to.date ? p.net : null }));
-  }, [chart, change]);
+  }, [chart, change, settled]);
   const rangeColor = !change
     ? "rgb(var(--c-accent))"
     : change.delta >= 0
@@ -737,25 +740,27 @@ export function CapitalBlock({
                   // С выделением линия вне отрезка гаснет — глаз идёт за
                   // окрашенным куском, как на «Счетах».
                   stroke="rgb(var(--c-accent))"
-                  strokeOpacity={change ? 0.35 : 1}
+                  strokeOpacity={settled ? 0.35 : 1}
                   strokeWidth={2}
                   fill="url(#dashCapital)"
-                  fillOpacity={change ? 0.4 : 1}
+                  fillOpacity={settled ? 0.4 : 1}
                   isAnimationActive={false}
                 />
                 {change && (
                   <>
-                    <Line
-                      type="monotone"
-                      dataKey="sel"
-                      stroke={rangeColor}
-                      strokeWidth={2.5}
-                      dot={false}
-                      activeDot={false}
-                      isAnimationActive={false}
-                      legendType="none"
-                      tooltipType="none"
-                    />
+                    {settled && (
+                      <Line
+                        type="monotone"
+                        dataKey="sel"
+                        stroke={rangeColor}
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={false}
+                        isAnimationActive={false}
+                        legendType="none"
+                        tooltipType="none"
+                      />
+                    )}
                     {[change.from, change.to].map((p, i) => {
                       // Начало подписано слева от линии, конец — справа; у края
                       // графика плашка уходит внутрь, чтобы не обрезаться.
@@ -774,7 +779,7 @@ export function CapitalBlock({
                         />
                       );
                     })}
-                    {[change.from, change.to].map((p) => (
+                    {settled && [change.from, change.to].map((p) => (
                       <ReferenceDot
                         key={`d-${p.date}`}
                         x={p.date}
