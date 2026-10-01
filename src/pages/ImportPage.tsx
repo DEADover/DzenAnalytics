@@ -2272,7 +2272,7 @@ export function ImportPage() {
             {/* Add new alias. Combobox (not a native <input list>) so the
                 suggestions dropdown is width- and height-bounded — the
                 native datalist popup spilled across the whole viewport. *\/}
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto] items-center gap-2 mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 mb-3">
               <Combobox
                 value={aliasFrom}
                 options={allPayeeOptions}

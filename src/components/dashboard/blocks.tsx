@@ -600,7 +600,7 @@ export function CapitalBlock({
                 {period === "all" ? "за всё время" : `за ${periodLabel.toLowerCase()}`}
               </span>
             </div>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm border-t border-border pt-3">
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm border-t border-border pt-3">
               <dt className="text-muted">На начало периода</dt>
               <dd className="text-right tabular-nums">
                 {formatMoney(summary.start, base)}

@@ -391,7 +391,7 @@ export function CategorySunburst({
       className={
         compact
           ? "flex-1 min-h-0 flex items-center justify-center"
-          : "flex flex-col md:flex-row-reverse gap-8 items-start"
+          : "flex flex-col lg:flex-row-reverse gap-8 items-start"
       }
     >
       {/* ── Donut (right on desktop, on top when stacked) ──────────────── */}
@@ -400,7 +400,7 @@ export function CategorySunburst({
           On desktop it's STICKY and vertically centred in the viewport, so it
           stays on screen while the (now un-scrolled, full) legend scrolls past
           — issue #34. `top`/height leave room for the sticky top nav. */}
-      <div className={compact ? "w-full" : "w-full md:flex-1 md:min-w-0 md:self-stretch"}>
+      <div className={compact ? "w-full" : "w-full lg:flex-1 lg:min-w-0 lg:self-stretch"}>
         {/* Donut is STICKY just under the top nav (73px + gap), so it stays on
             screen while the full (un-scrolled) legend scrolls past — issue #34.
             The column stretches to the legend's height, which is what gives the
@@ -409,7 +409,7 @@ export function CategorySunburst({
             eaten up. It engages once the category list is taller than the donut. */}
         <div
           className={
-            compact ? "flex justify-center" : "flex justify-center md:mt-2 md:sticky md:top-[88px]"
+            compact ? "flex justify-center" : "flex justify-center lg:mt-2 lg:sticky lg:top-[88px]"
           }
         >
           <div
@@ -514,7 +514,7 @@ export function CategorySunburst({
           разделять нечего: таблицы там нет, и волосок висел бы у правого канта
           сам по себе. */}
       {!compact && (
-        <div className="hidden md:block md:self-stretch w-px bg-border" aria-hidden />
+        <div className="hidden lg:block lg:self-stretch w-px bg-border" aria-hidden />
       )}
 
       {/* ── Legend ────────────────────────────────────────────────────── */}
@@ -523,7 +523,7 @@ export function CategorySunburst({
           margins. */}
       {/* Список статей — только на странице: в плитке всё место отдано кольцу. */}
       {!compact && (
-      <div className="w-full md:w-[576px] md:shrink-0 min-w-0 flex flex-col">
+      <div className="w-full lg:w-[576px] lg:shrink-0 min-w-0 flex flex-col">
         {/* Just the «Расходы/Доходы» slider — no scope label. The donut centre
             already shows «Все расходы» / the drilled category name + total, so a
             breadcrumb here only repeats it. */}

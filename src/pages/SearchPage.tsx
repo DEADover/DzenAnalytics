@@ -220,7 +220,7 @@ export function SearchPage() {
       />
 
       <div className="card card-pad space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-[11rem_1fr_1fr] gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-[11rem_minmax(0,1fr)_minmax(0,1fr)] gap-3">
           <div>
             <label className="label block mb-1.5">Где искать</label>
             <Select value={field} onChange={setField} options={FIELD_OPTIONS} ariaLabel="Где искать" />

@@ -132,7 +132,9 @@ export function Segmented<T extends string | number>({
               "seg-item",
               small ? "seg-item-sm" : "seg-item-md",
               tight && "seg-item-tight",
-              block && "flex-1 min-w-0",
+              // Во всю ширину варианты делят ряд; иначе не сжимаются — на узком
+              // экране дорожка листается, а не режет подписи («тчётный месяц»).
+              block ? "flex-1 min-w-0" : "shrink-0",
               active && "seg-on",
               active && o.tone && TONE_CLASS[o.tone]
             )}
@@ -185,7 +187,7 @@ function SegmentedMenu<T extends string | number>({
   const current = items.find((m) => m.value === value);
 
   return (
-    <div ref={anchorRef} className="relative">
+    <div ref={anchorRef} className="relative shrink-0">
       <button
         type="button"
         aria-haspopup="menu"

@@ -264,7 +264,7 @@ const REGEX_TOKENS: [string, string][] = [
 const REGEX_HINT = (
   <div className="space-y-2">
     <div>Регулярное выражение JavaScript — ищется в любом месте значения.</div>
-    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
       {REGEX_TOKENS.map(([sign, meaning]) => (
         <Fragment key={sign}>
           <span className="font-mono text-accent">{sign}</span>

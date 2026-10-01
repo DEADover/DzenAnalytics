@@ -87,3 +87,30 @@ test("счета: название и остаток видны без прок�
   });
   expect(right).toBeLessThanOrEqual(375);
 });
+
+test("шторка операций: строки ленты с суммами вместо таблицы", async ({ page }) => {
+  await connectZen(page, "/top");
+  await page.locator("table tbody tr", { hasText: "Продукты" }).first().click();
+  const row = page.locator(".op-row").first();
+  await expect(row.locator('[data-cell="amount"]')).toBeInViewport({ ratio: 1 });
+  await expect(row.locator('[data-cell="category"]')).toContainText("Продукты");
+});
+
+test.describe("планшет", () => {
+  test.use({ viewport: { width: 768, height: 1024 } });
+  test("все разделы помещаются в ширину планшета", async ({ page }) => {
+    test.setTimeout(180_000);
+    await connectZen(page);
+    const wide: string[] = [];
+    for (const route of ROUTES) {
+      await page.evaluate((to) => {
+        history.pushState(null, "", to);
+        dispatchEvent(new PopStateEvent("popstate"));
+      }, route);
+      await page.waitForTimeout(400);
+      const over = await horizontalOverflow(page);
+      if (over > 0) wide.push(`${route}: +${over} px`);
+    }
+    expect(wide, wide.join("\n")).toEqual([]);
+  });
+});

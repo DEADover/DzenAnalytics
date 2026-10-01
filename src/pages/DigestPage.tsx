@@ -119,7 +119,7 @@ export function DigestPage() {
       {filtered.length === 0 ? (
         <SectionEmpty icon={Newspaper} title="Нет завершённых периодов для дайджеста" />
       ) : (
-        <div className="grid md:grid-cols-[260px_1fr] gap-4">
+        <div className="grid md:grid-cols-[260px_minmax(0,1fr)] gap-4">
           {/* Список периодов. На широком экране панель тянется во всю высоту
               правой колонки: карточка вынута из потока, поэтому длинный список
               не растягивает строку сетки под себя, а прокручивается внутри. С

@@ -25,7 +25,10 @@ import { formatMoney, formatDate, formatNum, displayPayee, payeeSearchText, tran
 import { kindLabel, operationTone } from "../lib/txKindStyle";
 import { DataTable, type Column, type SortState } from "./DataTable";
 import { OperationActions, OperationAmount, OperationCategory, OperationPayee, OperationComment } from "./operations/OperationCells";
-import { buildCsv, csvFileName, downloadCsv, sortRows } from "./table/tableKit";
+import { buildCsv, csvFileName, downloadCsv, sortRows, TONE_CLASS } from "./table/tableKit";
+import { OperationListRow } from "./operations/OperationList";
+import { Checkbox } from "./Checkbox";
+import { NARROW_QUERY, useMediaQuery } from "../hooks/useMediaQuery";
 import type { Transaction } from "../types";
 import { SearchInput } from "./SearchInput";
 import { SplitTransactionModal } from "./SplitTransactionModal";
@@ -75,6 +78,7 @@ export function TransactionsDrawer() {
 
   // ── Bulk selection + edit ──────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const narrow = useMediaQuery(NARROW_QUERY);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
 
@@ -336,7 +340,9 @@ export function TransactionsDrawer() {
           («Категория», «Получатель»). Пояснение, которое повторяет название
           («Расходы месяца» при «Расходы · Нояб. 25 г.»), не пишем — раньше
           одно и то же стояло двумя строками. */}
-      <div className="px-4 md:px-5 py-2.5 border-b border-border flex items-center justify-between gap-3 bg-panel">
+      {/* На узком экране — две строки: название с крестиком, под ними счётчик и
+          итоги (листаются пальцем). В одну строку они наезжали друг на друга. */}
+      <div className="px-4 md:px-5 py-2.5 border-b border-border flex items-center justify-between gap-x-3 gap-y-1.5 max-sm:flex-wrap bg-panel">
         <div className="min-w-0 flex items-center gap-2.5">
           <span className="shrink-0 w-7 h-7 rounded-lg bg-panel2 border border-border grid place-items-center">
             <ListChecks className="w-4 h-4 text-accent" />
@@ -352,7 +358,7 @@ export function TransactionsDrawer() {
             )}
           </div>
         </div>
-        <div className="ml-auto flex items-center gap-4 text-sm tabular-nums whitespace-nowrap min-w-0 overflow-hidden">
+        <div className="ml-auto flex items-center gap-4 text-sm tabular-nums whitespace-nowrap min-w-0 overflow-hidden max-sm:order-last max-sm:basis-full max-sm:ml-0 max-sm:scroll-soft-x">
           <span className="text-muted">
             Операций{" "}
             <span className="font-semibold text-text">
@@ -443,6 +449,47 @@ export function TransactionsDrawer() {
         <div ref={scrollRef} className="card-tray h-full overflow-y-auto">
           {/* Список прокручивается внутри шторки — и «Наверх» у него свой. */}
           <ScrollTopButton container={scrollRef} threshold={400} />
+          {narrow ? (
+            // Телефон: строки ленты вместо таблицы на семь колонок — категория,
+            // под ней день и контрагент, сумма и правка (`.op-row` в index.css).
+            sorted.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted">
+                {transactions.length === 0 ? "Нет операций" : "По запросу ничего не найдено"}
+              </p>
+            ) : (
+              <div>
+                {sorted.map((t) => {
+                  const on = selected.has(t.id);
+                  const toggle = () => {
+                    const next = new Set(selected);
+                    if (on) next.delete(t.id);
+                    else next.add(t.id);
+                    setSelected(next);
+                  };
+                  const who = displayPayee(t) || transferCounterparty(t);
+                  return (
+                    <OperationListRow key={t.id} template="auto" selected={on} onToggleSelect={toggle} onOpen={() => setEditing(t)}>
+                      <Checkbox checked={on} stopPropagation onChange={toggle} label="Выбрать операцию" />
+                      <OperationCategory tx={t} edited={!!edits[t.id]} draft={!!drafts[t.id]} />
+                      <div data-cell="payee" className="min-w-0 text-muted">
+                        <span className="truncate">
+                          {formatDate(t.date, "short")}
+                          {who && ` · ${who}`}
+                        </span>
+                      </div>
+                      <div
+                        data-cell="amount"
+                        className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(t)]}`}
+                      >
+                        <OperationAmount tx={t} />
+                      </div>
+                      <OperationActions onEdit={() => setEditing(t)} onDelete={() => handleDelete(t)} />
+                    </OperationListRow>
+                  );
+                })}
+              </div>
+            )
+          ) : (
           <DataTable<Transaction>
             bare
             stickyHead
@@ -460,6 +507,7 @@ export function TransactionsDrawer() {
             exportable={false}
             emptyText={transactions.length === 0 ? "Нет операций" : "По запросу ничего не найдено"}
           />
+          )}
         </div>
         </div>
         </aside>

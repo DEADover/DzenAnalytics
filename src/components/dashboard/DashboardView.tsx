@@ -125,7 +125,8 @@ function StatCol({
       <div
         className={clsx(
           "font-mono tabular-nums font-semibold mt-1.5 truncate",
-          dense ? "text-[19px]" : "text-[30px]",
+          // На телефоне колонка — полэкрана, и 30 px резали «150 000 ₽» многоточием.
+          dense ? "text-[19px]" : "text-[22px] sm:text-[30px]",
           tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""
         )}
       >
