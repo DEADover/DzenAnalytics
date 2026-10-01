@@ -897,9 +897,13 @@ export function TransactionsPage() {
             onOpenChange={setMergeOpen}
           />
           {selectedUnseen > 0 && (
-            <button onClick={markSeenBulk} className="btn-ghost text-sm">
+            <button
+              onClick={markSeenBulk}
+              className="btn-ghost text-sm"
+              title="Отметить выбранные операции просмотренными"
+            >
               <Eye className="w-4 h-4" />
-              Отметить просмотренными
+              Просмотрено
               <span className="tabular-nums text-muted">({selectedUnseen})</span>
             </button>
           )}

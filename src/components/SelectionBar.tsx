@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowDown, ArrowLeftRight, ArrowUp, XSquare } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, X } from "lucide-react";
 import clsx from "clsx";
 import { formatMoney, formatNum } from "../lib/format";
 
@@ -11,8 +11,8 @@ import { formatMoney, formatNum } from "../lib/format";
  * «Дубликаты» — прежде ленту и шторку верстали двумя одинаковыми копиями, а
  * «Поиск» и «Дубликаты» — своей однострочной, без сумм.
  *
- * Две строки: первая — число и суммы, вторая — кнопки, последней всегда
- * «Снять выделение».
+ * Одна строка: число и суммы, черта, действия и последним — крестик «Снять
+ * выделение». В две строки панель закрывала собой нижние операции ленты.
  */
 export function SelectionBar({
   count,
@@ -41,43 +41,52 @@ export function SelectionBar({
       role="region"
       aria-label="Массовые действия"
       className={clsx(
-        "fixed bottom-5 left-1/2 -translate-x-1/2 rounded-xl border border-border bg-panel shadow-xl max-w-[calc(100vw-1.5rem)] overflow-hidden",
+        // `w-max`: сдвинутая на середину панель иначе сжималась до правой
+        // половины экрана (ширина от `left-1/2` до края) и переносила кнопки.
+        "fixed bottom-5 left-1/2 -translate-x-1/2 w-max rounded-xl border border-border bg-panel shadow-xl max-w-[calc(100vw-1.5rem)] overflow-hidden",
         overDrawer ? "z-[55]" : "z-40"
       )}
     >
-      <div className="flex items-center justify-center gap-x-4 gap-y-1 flex-wrap px-4 pt-2.5 pb-2 text-sm">
-        <span>
-          Выбрано: <strong className="tabular-nums">{formatNum(count)}</strong>
-        </span>
-        {sums && (
-          <span className="flex items-center gap-3 tabular-nums border-l border-border pl-4">
-            {sums.inc > 0 && (
-              <span className="flex items-center gap-1 text-income">
-                <ArrowUp className="w-3.5 h-3.5" />
-                {formatMoney(sums.inc, base)}
-              </span>
-            )}
-            {sums.exp > 0 && (
-              <span className="flex items-center gap-1 text-expense">
-                <ArrowDown className="w-3.5 h-3.5" />
-                {formatMoney(sums.exp, base)}
-              </span>
-            )}
-            {sums.xfer > 0 && (
-              <span className="flex items-center gap-1 text-muted">
-                <ArrowLeftRight className="w-3.5 h-3.5" />
-                {formatMoney(sums.xfer, base)}
-              </span>
-            )}
+      <div className="flex items-center justify-center gap-x-3 gap-y-2 flex-wrap px-3 py-2 text-sm">
+        <span className="flex items-center gap-3 whitespace-nowrap pl-1">
+          <span>
+            Выбрано <strong className="tabular-nums">{formatNum(count)}</strong>
           </span>
-        )}
-      </div>
-      <div className="flex items-center justify-center gap-2 flex-wrap px-4 pb-2.5 pt-2 border-t border-border">
-        {children}
-        <button onClick={onClear} className="btn-ghost text-sm text-muted">
-          <XSquare className="w-3.5 h-3.5" />
-          Снять выделение
-        </button>
+          {sums && (
+            <span className="flex items-center gap-3 tabular-nums">
+              {sums.inc > 0 && (
+                <span className="flex items-center gap-1 text-income">
+                  <ArrowUp className="w-3.5 h-3.5" />
+                  {formatMoney(sums.inc, base)}
+                </span>
+              )}
+              {sums.exp > 0 && (
+                <span className="flex items-center gap-1 text-expense">
+                  <ArrowDown className="w-3.5 h-3.5" />
+                  {formatMoney(sums.exp, base)}
+                </span>
+              )}
+              {sums.xfer > 0 && (
+                <span className="flex items-center gap-1 text-muted">
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  {formatMoney(sums.xfer, base)}
+                </span>
+              )}
+            </span>
+          )}
+        </span>
+        <span className="w-px h-6 bg-border" aria-hidden="true" />
+        <div className="flex items-center gap-2 [&>button]:whitespace-nowrap">
+          {children}
+          <button
+            onClick={onClear}
+            className="btn-ghost text-sm !px-2.5 text-muted"
+            title="Снять выделение (Esc)"
+            aria-label="Снять выделение"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
