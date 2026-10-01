@@ -64,7 +64,7 @@ import {
   chartGridStroke,
   chartAxisStroke,
 } from "../../lib/format";
-import { heatStep, robustCeiling, monthEnd } from "../../lib/dashboardModel";
+import { heatStep, robustCeiling, niceScale, monthEnd } from "../../lib/dashboardModel";
 import { periodRange, spanDays } from "../../lib/period";
 import {
   CAPITAL_PERIODS,
@@ -88,6 +88,7 @@ import type { PlannedOp } from "../../lib/plannedOps";
 import type { Currency } from "../../types";
 import { SectionEmpty } from "../SectionEmpty";
 import { ProgressBar } from "../ProgressBar";
+import { NARROW_QUERY, useMediaQuery } from "../../hooks/useMediaQuery";
 
 /* ─────────────────────────────  мелочи  ───────────────────────────── */
 
@@ -324,9 +325,15 @@ export function CashflowBars({
   // помечает, что щелчок уже разобран, — иначе поверх шторки доходов тут же
   // открылась бы шторка всего месяца.
   const barClicked = useRef(false);
-  const { cap, clipped } = robustCeiling(
+  // На телефоне подписи месяцев через одну шли вплотную («Июль 26Сент. 26»).
+  const narrow = useMediaQuery(NARROW_QUERY);
+  const { cap: rawCap, clipped } = robustCeiling(
     tail.flatMap((p) => [p.income, p.expense]).map((v) => Math.round(v))
   );
+  // Круглый верх и ровный шаг: сырой срез давал деление «680,9 тыс.», которое
+  // не влезало в ось и срезалось слева.
+  const scale = niceScale(rawCap);
+  const cap = scale.max;
   // Срезанный столбец не дотягивается до верха: над ним нужно место под число.
   const limit = cap * 0.9;
   const draw = (v: number) => (clipped ? Math.min(v, limit) : v);
@@ -357,7 +364,9 @@ export function CashflowBars({
         <ResponsiveContainer>
           <ComposedChart
             data={data}
-            margin={{ top: 18, right: 4, bottom: 0, left: 0 }}
+            // Справа — место под подпись последнего месяца: она стоит по центру
+            // крайнего столбца и при 4 px срезалась («Янв. 2…»).
+            margin={{ top: 18, right: 16, bottom: 0, left: 0 }}
             barCategoryGap="14%"
             barGap={3}
             onClick={(e: unknown) => {
@@ -380,7 +389,7 @@ export function CashflowBars({
               stroke={chartAxisStroke}
               fontSize={11}
               tickLine={false}
-              interval={1}
+              interval={narrow ? 2 : 1}
               tickFormatter={(v: string) => String(v).replace(/\s*г\.$/, "")}
             />
             <YAxis
@@ -389,6 +398,7 @@ export function CashflowBars({
               tickLine={false}
               axisLine={false}
               domain={[0, cap > 0 ? cap : "auto"]}
+              ticks={cap > 0 ? scale.ticks : undefined}
               tickFormatter={(v) => formatNum(v, { compact: true })}
             />
             {/* Настоящие суммы, а не срезанные высоты столбцов, — их берёт

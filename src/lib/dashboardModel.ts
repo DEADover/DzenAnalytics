@@ -198,6 +198,23 @@ export function robustCeiling(
 }
 
 /**
+ * Круглая шкала от нуля: шаг из ряда 1 / 2 / 2,5 / 5 × 10ⁿ, не больше `maxTicks`
+ * делений, верх — первое деление не ниже `top`. Срез по выбросам
+ * (`robustCeiling`) даёт «сырое» число вроде 680 943 — подпись «680,9 тыс.»
+ * не влезала в ось и срезалась слева, а деление выглядело случайным.
+ */
+export function niceScale(top: number, maxTicks = 4): { max: number; ticks: number[] } {
+  if (!(top > 0)) return { max: 0, ticks: [0] };
+  const rough = top / maxTicks;
+  const pow = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map((k) => k * pow).find((s) => s >= rough) ?? 10 * pow;
+  const max = Math.ceil(top / step - 1e-9) * step;
+  const ticks: number[] = [];
+  for (let v = 0; v <= max + step / 2; v += step) ticks.push(Math.round(v * 1e6) / 1e6);
+  return { max, ticks };
+}
+
+/**
  * Границы шкалы для ряда, который уходит и в минус, — устойчивые к выбросам.
  *
  * Тот же приём, что `robustCeiling`, но по модулю: норма сбережений в месяц без

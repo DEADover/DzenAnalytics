@@ -8,7 +8,7 @@ import {
   freeMoney,
   monthEnd,
   heatStep,
-  robustCeiling, robustBounds,
+  robustCeiling, robustBounds, niceScale,
   forecastMonths,
 } from "./dashboardModel";
 import type { RecurringCandidate } from "./aggregations";
@@ -377,5 +377,19 @@ describe("robustBounds", () => {
   it("без выбросов границы — настоящие минимум и максимум", () => {
     const b = robustBounds([20, -10, 30, 15], 100);
     expect(b).toEqual({ lo: -10, hi: 30, clipped: false });
+  });
+});
+
+describe("niceScale", () => {
+  it("круглый верх и ровный шаг вместо сырого среза", () => {
+    expect(niceScale(680_943)).toEqual({ max: 800_000, ticks: [0, 200_000, 400_000, 600_000, 800_000] });
+    expect(niceScale(150_000)).toEqual({ max: 150_000, ticks: [0, 50_000, 100_000, 150_000] });
+    expect(niceScale(3_200)).toEqual({ max: 4_000, ticks: [0, 1_000, 2_000, 3_000, 4_000] });
+  });
+  it("ровное число не раздувается", () => {
+    expect(niceScale(600_000).max).toBe(600_000);
+  });
+  it("пусто — ноль", () => {
+    expect(niceScale(0)).toEqual({ max: 0, ticks: [0] });
   });
 });
