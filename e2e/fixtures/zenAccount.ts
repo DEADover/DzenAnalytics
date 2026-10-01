@@ -139,7 +139,7 @@ function buildTransactions(): ZenTransaction[] {
       if (d % 2 === 0) out.push(tx(day, "expense", 650 + ((d * 13) % 400), { tag: "tag-cafe", payee: "Кофейня у дома", account: "acc-sber" }));
       if (d % 4 === 1) out.push(tx(day, "expense", 420 + ((d * 7) % 300), { tag: "tag-taxi", payee: "Яндекс Go" }));
     }
-    out.push(tx(`${ym}-20`, "expense", 499, { tag: "tag-subs", payee: "Кинопоиск" }));
+    if (lastDay >= 20) out.push(tx(`${ym}-20`, "expense", 499, { tag: "tag-subs", payee: "Кинопоиск" }));
   }
   // Свежие непросмотренные — для «Просмотрено» в панели выделения.
   out.push(tx("2026-10-14", "expense", 2_340, { tag: "tag-food", payee: "Перекрёсток", viewed: false }));
@@ -161,6 +161,25 @@ export const BUDGETS: ZenBudget[] = [
 ];
 
 export const REMINDERS: ZenReminder[] = [
+  {
+    id: "rem-advance",
+    user: USER,
+    changed: STAMP,
+    interval: "month",
+    step: 1,
+    points: [25],
+    startDate: "2026-10-25",
+    endDate: null,
+    payee: "ООО Ромашка",
+    comment: "Аванс",
+    income: 30_000,
+    incomeInstrument: RUB,
+    incomeAccount: "acc-tbank",
+    outcome: 0,
+    outcomeInstrument: RUB,
+    outcomeAccount: "acc-tbank",
+    tag: ["tag-salary"],
+  },
   {
     id: "rem-gym",
     user: USER,
@@ -200,11 +219,24 @@ const marker = (id: string, date: string): ZenReminderMarker => ({
   comment: "Абонемент",
 });
 
-/** 12.10 — уже прошло и не исполнено: в ленте это «Просрочено». */
+const advance = (id: string, date: string): ZenReminderMarker => ({
+  ...marker(id, date),
+  income: 30_000,
+  outcome: 0,
+  tag: ["tag-salary"],
+  reminder: "rem-advance",
+  payee: "ООО Ромашка",
+  comment: "Аванс",
+});
+
+/** 12.10 — уже прошло и не исполнено: в ленте это «Просрочено». Аванс 25.10 —
+ *  будущий план внутри текущего месяца (прогноз остатка на «Счетах»). */
 export const MARKERS: ZenReminderMarker[] = [
   marker("mk-2026-10", "2026-10-12"),
   marker("mk-2026-11", "2026-11-12"),
   marker("mk-2026-12", "2026-12-12"),
+  advance("mk-adv-2026-10", "2026-10-25"),
+  advance("mk-adv-2026-11", "2026-11-25"),
 ];
 
 export function fullDiff(serverTimestamp: number): ZenDiffResponse {

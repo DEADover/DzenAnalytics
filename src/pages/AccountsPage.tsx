@@ -42,6 +42,7 @@ import {
   Users,
   UserRound,
   TrendingUp,
+  CalendarClock,
 } from "lucide-react";
 import {
   debtPayeeKey,
@@ -123,6 +124,9 @@ import { HeadCell, TreeElbow } from "../components/table/TableParts";
 import { cellClass, toneOfSigned, treeIndent, type ColumnType, type Tone } from "../components/table/tableKit";
 import { toIsoDate } from "../lib/period";
 import { clipBalances } from "../lib/capital";
+import { balanceForecast, type ForecastOp, type ForecastPoint } from "../lib/balanceForecast";
+import { useZenPlanned } from "../hooks/useZenPlanned";
+import { toBase as toBaseCurrency } from "../lib/csv";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { Sparkline } from "../components/Sparkline";
 import { AccountLogo } from "../components/AccountLogo";
@@ -429,6 +433,15 @@ const DEPOSIT_COLUMNS: ResizeColumn[] = [
   { key: "interest", label: "Проценты", type: "money", width: "124px" },
   { key: "total", label: "На конец срока", type: "main", width: "152px" },
 ];
+
+/** Точка графика «Совокупно»: настоящий остаток, отрезок сравнения, прогноз. */
+interface NetPlotRow {
+  date: string;
+  net?: number;
+  sel?: number | null;
+  forecast?: number;
+  planOps?: ForecastPoint["ops"];
+}
 
 export function AccountsPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -1385,6 +1398,44 @@ export function AccountsPage() {
       sel: p.date >= from.date && p.date <= to.date ? p.net : null,
     }));
   }, [netChart, netChange, netSettled]);
+  /**
+   * Прогноз до конца периода — пунктир от сегодняшнего остатка по
+   * запланированным операциям выбранных счетов (`balanceForecast`). Только
+   * когда период тянется дальше сегодня и у него есть конец: на «Всё время»
+   * год планов вперёд растянул бы ось ради пары точек.
+   */
+  const todayIso = toIsoDate(new Date());
+  const forecastUntil =
+    viewWindow && viewWindow.to > todayIso && viewWindow.to < "9999" ? viewWindow.to : todayIso;
+  const plannedAhead = useZenPlanned(todayIso, forecastUntil);
+  const netForecast = useMemo<ForecastPoint[]>(() => {
+    const last = netChart[netChart.length - 1];
+    // Кривая кончается сегодня — или позже, если в Дзен-мани есть операции
+    // будущей датой: тогда прогноз продолжает её с последней настоящей точки.
+    if (chartView === "stacked" || !last || last.date < todayIso || !plannedAhead) return [];
+    const picked = new Set(netChartAccounts ?? valuation?.universe ?? []);
+    const ops: ForecastOp[] = plannedAhead
+      .filter((p) => !p.forecast)
+      .map((p) => ({
+        date: p.date,
+        kind: p.kind,
+        amountBase: p.amountBase,
+        toAmountBase:
+          p.toAmount != null && p.toCurrency ? toBaseCurrency(p.toAmount, p.toCurrency, rates) : null,
+        account: p.account,
+        toAccount: p.toAccount,
+        title: p.payee || p.comment || p.category || "Без категории",
+      }));
+    return balanceForecast(last.net, ops, (a) => picked.has(a), last.date, forecastUntil);
+  }, [netChart, chartView, todayIso, plannedAhead, netChartAccounts, valuation, rates, forecastUntil]);
+  /** Данные графика: настоящая кривая и за ней дни прогноза. */
+  const netPlot = useMemo<NetPlotRow[]>(() => {
+    if (netForecast.length === 0) return netData;
+    const rows: NetPlotRow[] = netData.map((p, i) => (i === netData.length - 1 ? { ...p, forecast: netForecast[0].forecast } : p));
+    for (const f of netForecast.slice(1)) rows.push({ date: f.date, forecast: f.forecast, planOps: f.ops });
+    return rows;
+  }, [netData, netForecast]);
+
   const netRangeColor = !netChange
     ? NET_STROKE
     : netChange.delta >= 0
@@ -1557,10 +1608,41 @@ export function AccountsPage() {
       );
     };
 
-  /** Линия совокупного баланса — цвет тот же, что у самой линии на графике. */
-  const renderNetTooltip = seriesTooltip((key) =>
+  /** Линия совокупного баланса — цвет тот же, что у самой линии на графике.
+   *  День прогноза — ожидаемый остаток и планы, которые его сдвинули. */
+  const renderNetBalanceTooltip = seriesTooltip((key) =>
     key === "net" ? { label: "Баланс", color: NET_STROKE } : null
   );
+  const renderNetTooltip = (props: TooltipContentProps) => {
+    const datum = (props.payload?.[0]?.payload ?? {}) as {
+      net?: number;
+      forecast?: number;
+      planOps?: ForecastPoint["ops"];
+    };
+    if (!props.active || datum.net != null || datum.forecast == null) return renderNetBalanceTooltip(props);
+    const facts: TooltipFact[] = [
+      {
+        label: "Прогноз",
+        value: formatMoney(datum.forecast, base, { signed: true }),
+        swatchColor: NET_STROKE,
+        tone: datum.forecast > 0 ? "income" : datum.forecast < 0 ? "expense" : "muted",
+        strong: true,
+      },
+      ...(datum.planOps ?? []).map(
+        (o): TooltipFact => ({
+          label: o.title,
+          value: formatMoney(o.delta, base, { signed: true }),
+          icon: <CalendarClock />,
+          tone: o.delta > 0 ? "income" : "expense",
+        })
+      ),
+    ];
+    return (
+      <ChartTooltipCard>
+        <TooltipFacts title={formatDate(props.label as string)} facts={facts} />
+      </ChartTooltipCard>
+    );
+  };
 
   /**
    * «Изменение по фильтру»: накоплено с начала периода и сколько дал этот день.
@@ -3094,7 +3176,7 @@ export function AccountsPage() {
           ) : (
             <ResponsiveContainer>
               <ComposedChart
-                data={netData}
+                data={netPlot}
                 {...netRange.handlers}
                 className="select-none"
                 style={{ cursor: "crosshair" }}
@@ -3169,6 +3251,22 @@ export function AccountsPage() {
                       : false
                   }
                 />
+                {netForecast.length > 0 && (
+                  // Прогноз — тем же цветом, но пунктиром и без заливки: это
+                  // ожидание, а не деньги на счетах.
+                  <Line
+                    type="stepAfter"
+                    dataKey="forecast"
+                    stroke={NET_STROKE}
+                    strokeWidth={2}
+                    strokeDasharray="5 4"
+                    strokeOpacity={netSettled ? 0.35 : 0.85}
+                    dot={false}
+                    activeDot={{ r: 4, fill: NET_STROKE, stroke: "rgb(var(--c-panel))", strokeWidth: 2 }}
+                    isAnimationActive={false}
+                    legendType="none"
+                  />
+                )}
                 {netChart.length === 1 && (
                   <ReferenceLine
                     y={netChart[0].net}
@@ -3232,6 +3330,24 @@ export function AccountsPage() {
             </ResponsiveContainer>
           )}
         </div>
+        {netForecast.length > 0 && (() => {
+          const end = netForecast[netForecast.length - 1];
+          const delta = end.forecast - netForecast[0].forecast;
+          return (
+            <p className="mt-2 text-xs text-muted flex items-center gap-2">
+              <svg width="18" height="2" aria-hidden="true" className="shrink-0">
+                <line x1="0" y1="1" x2="18" y2="1" stroke={NET_STROKE} strokeWidth="2" strokeDasharray="5 4" />
+              </svg>
+              <span>
+                Прогноз по запланированным операциям: к {dayTitle(end.date)} —{" "}
+                <span className="text-text tabular-nums">{formatMoney(end.forecast, base)}</span>{" "}
+                <span className={clsx("tabular-nums", delta < 0 ? "text-expense" : "text-income")}>
+                  ({formatMoney(delta, base, { signed: true })})
+                </span>
+              </span>
+            </p>
+          );
+        })()}
       </div>
 
       {/* Отступ прокрутки — на высоту шапки: иначе график подъезжал под неё. */}
