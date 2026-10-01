@@ -29,6 +29,7 @@ import { buildCsv, csvFileName, downloadCsv, sortRows } from "./table/tableKit";
 import type { Transaction } from "../types";
 import { SearchInput } from "./SearchInput";
 import { SplitTransactionModal } from "./SplitTransactionModal";
+import { MakeRecurringModal } from "./operations/MakeRecurringModal";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
 import { SelectionBar } from "./SelectionBar";
 import { MergeSelectionAction } from "./operations/MergeSelectionAction";
@@ -68,6 +69,7 @@ export function TransactionsDrawer() {
   const [copying, setCopying] = useState<Transaction | null>(null);
   // Разделение — та же кнопка-ножницы, что в ленте «Операций».
   const [splitting, setSplitting] = useState<Transaction | null>(null);
+  const [recurring, setRecurring] = useState<Transaction | null>(null);
   const { applySplit } = useSplitTransaction();
   const apiConnected = useZenmoneyStore((s) => !!s.token);
 
@@ -114,7 +116,8 @@ export function TransactionsDrawer() {
   // Живёт это отдельным эффектом от блокировки прокрутки ниже: у него свои
   // поводы перезапускаться (выделение меняется на каждый клик), а перезапускать
   // из-за них блокировку прокрутки незачем.
-  const escOnTop = Boolean(editing) || Boolean(copying) || Boolean(splitting) || bulkOpen || mergeOpen;
+  const escOnTop =
+    Boolean(editing) || Boolean(copying) || Boolean(splitting) || Boolean(recurring) || bulkOpen || mergeOpen;
   useEffect(() => {
     if (!open || escOnTop) return;
     const onKey = (e: KeyboardEvent) => {
@@ -516,6 +519,14 @@ export function TransactionsDrawer() {
                 }
               : undefined
           }
+          onMakeRecurring={
+            apiConnected
+              ? () => {
+                  setEditing(null);
+                  setRecurring(editing);
+                }
+              : undefined
+          }
           onNavigate={(dir) => {
             const i = sorted.findIndex((t) => t.id === editing.id);
             const next = sorted[i + dir];
@@ -531,6 +542,8 @@ export function TransactionsDrawer() {
           onClose={() => setCopying(null)}
         />
       )}
+
+      {recurring && <MakeRecurringModal tx={recurring} onClose={() => setRecurring(null)} />}
 
       {splitting && (
         <SplitTransactionModal

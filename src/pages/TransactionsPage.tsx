@@ -33,6 +33,7 @@ import { Checkbox } from "../components/Checkbox";
 import { OperationActions, OperationAmount, OperationCategory, OperationPayee, OperationComment } from "../components/operations/OperationCells";
 import { TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
+import { MakeRecurringModal } from "../components/operations/MakeRecurringModal";
 import { MergeSelectionAction } from "../components/operations/MergeSelectionAction";
 import { PlannedBar, PlannedFeedList } from "../components/operations/PlannedFeedSection";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
@@ -237,6 +238,7 @@ export function TransactionsPage() {
   // `creating`: там выбирают вид с нуля, здесь форма открывается заполненной.
   const [copying, setCopying] = useState<Transaction | null>(null);
   const [splitting, setSplitting] = useState<Transaction | null>(null);
+  const [recurring, setRecurring] = useState<Transaction | null>(null);
   const { applySplit } = useSplitTransaction();
   // Окно объединения выделенных открыто — Escape принадлежит ему.
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -816,6 +818,8 @@ export function TransactionsPage() {
         )}
       </OperationListTray>
 
+      {recurring && <MakeRecurringModal tx={recurring} onClose={() => setRecurring(null)} />}
+
       {splitting && (
         <SplitTransactionModal
           tx={splitting}
@@ -850,6 +854,14 @@ export function TransactionsPage() {
               ? () => {
                   setEditing(null);
                   setSplitting(editing);
+                }
+              : undefined
+          }
+          onMakeRecurring={
+            apiConnected
+              ? () => {
+                  setEditing(null);
+                  setRecurring(editing);
                 }
               : undefined
           }

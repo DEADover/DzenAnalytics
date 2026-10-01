@@ -30,6 +30,7 @@ import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { usePlanActionsStore } from "../store/usePlanActionsStore";
 import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
+import { intervalLabel, type PlanInterval } from "../lib/planCreate";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import {
   getCategoryTagsFromCache,
@@ -485,10 +486,12 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
           .filter((a) => a.kind !== "fact")
           .map((a): DictItem => ({
             key: `planact:${a.markerId}`,
-            action: "edit" as const,
+            action: a.kind === "create" ? ("create" as const) : ("edit" as const),
             title: a.title,
             note:
-              a.kind === "link"
+              a.kind === "create"
+                ? `${intervalLabel(a.reminder.interval as PlanInterval, a.reminder.step ?? 1)} с ${formatDate(a.date, "short")} · Новый план`
+                : a.kind === "link"
                 ? `План от ${formatDate(a.date, "short")} · Связь с операцией`
                 : a.scope === "chain"
                   ? `План с ${formatDate(a.date, "short")} · Правка всей цепочки`

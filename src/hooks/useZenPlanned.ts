@@ -40,7 +40,11 @@ export function usePlannedCache(): ZenCache | null | undefined {
     // бы до следующей отправки, хотя закрывать её больше нечем.
     const live = new Set(cache.transactions.filter((t) => !t.deleted).map((t) => String(t.id)));
     const list = Object.values(actions).filter(
-      (a) => a.kind === "edit" || drafts[a.txId] !== undefined || live.has(a.txId)
+      (a) =>
+        a.kind === "edit" ||
+        a.kind === "create" ||
+        drafts[a.txId] !== undefined ||
+        live.has(a.txId)
     );
     if (list.length === 0) return cache;
     const instrument = new Map(cache.accounts.map((a) => [a.id, a.instrument]));

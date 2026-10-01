@@ -47,7 +47,7 @@ export function PlanLinkModal({
     // Связанные с планом — по сырым записям Дзен-мани: в ленте ссылки нет.
     const linked = new Set<string>();
     for (const t of cache?.transactions ?? []) if (t.reminderMarker) linked.add(String(t.id));
-    for (const a of Object.values(queued)) if (a.kind !== "edit") linked.add(a.txId);
+    for (const a of Object.values(queued)) if (a.kind === "fact" || a.kind === "link") linked.add(a.txId);
     const input = transactions.map((t) => ({
       id: t.id,
       date: t.date,

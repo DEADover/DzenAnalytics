@@ -341,3 +341,60 @@ describe("linkCandidates", () => {
     expect(list.map((t) => t.id)).toEqual(["r"]);
   });
 });
+
+describe("новый план («Сделать регулярной»)", () => {
+  const fresh = reminder({ id: "new", startDate: "2026-11-05" });
+  const dates = [
+    marker({ id: "n1", reminder: "new", date: "2026-11-05" }),
+    marker({ id: "n2", reminder: "new", date: "2026-12-05" }),
+  ];
+  const create: PlanAction = { kind: "create", markerId: "new", date: "2026-11-05", title: "Google", reminder: fresh, markers: dates };
+  const opts = (over: Partial<Parameters<typeof buildPlanPush>[3]> = {}) => ({
+    liveTxIds: new Set<string>(),
+    readyDraftIds: new Set<string>(),
+    pendingDraftIds: new Set<string>(),
+    instrumentOf: inst,
+    ...over,
+  });
+
+  it("сразу виден в ленте вместе с датами", () => {
+    const o = applyPlanActions([marker()], [reminder()], [create], inst);
+    expect(o.reminders.map((r) => r.id)).toEqual(["r1", "new"]);
+    expect(o.markers.map((m) => m.id)).toEqual(["m1", "n1", "n2"]);
+  });
+
+  it("уходит правилом и всеми датами, со свежей меткой", () => {
+    const p = buildPlanPush([create], [marker()], [reminder()], opts(), 777);
+    expect(p.reminders).toEqual([expect.objectContaining({ id: "new", changed: 777 })]);
+    expect(p.markers.map((m) => [m.id, m.changed])).toEqual([
+      ["n1", 777],
+      ["n2", 777],
+    ]);
+    expect(p.doneIds).toEqual(["new"]);
+  });
+
+  it("правка его даты до отправки уезжает в той же дате", () => {
+    const edit: PlanAction = { kind: "edit", scope: "date", markerId: "n2", date: "2026-12-05", title: "Google", patch: { amount: 900 } };
+    const p = buildPlanPush([create, edit], [], [], opts(), 1);
+    expect(p.markers.find((m) => m.id === "n2")).toMatchObject({ outcome: 900 });
+    expect(p.markers).toHaveLength(2);
+  });
+
+  it("снятая в ленте дата не создаётся, снятая цепочка — весь план", () => {
+    const oneDate = buildPlanPush([create], [], [], opts({ deletedMarkers: new Map([["n1", false]]) }), 1);
+    expect(oneDate.markers.map((m) => m.id)).toEqual(["n2"]);
+    expect(oneDate.reminders).toHaveLength(1);
+
+    const chain = buildPlanPush([create], [], [], opts({ deletedMarkers: new Map([["n2", true]]) }), 1);
+    expect(chain.markers).toEqual([]);
+    expect(chain.reminders).toEqual([]);
+    expect(chain.doneIds).toEqual(["new"]);
+  });
+
+  it("уже в облаке — второй раз не отправляется", () => {
+    const p = buildPlanPush([create], dates, [fresh], opts(), 1);
+    expect(p.reminders).toEqual([]);
+    expect(p.markers).toEqual([]);
+    expect(p.doneIds).toEqual(["new"]);
+  });
+});

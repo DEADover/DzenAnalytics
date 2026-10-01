@@ -57,7 +57,40 @@ export type PlanAction =
   /** Существующая операция `txId` закрывает дату. */
   | (Base & { kind: "link"; txId: string })
   /** Правка одной даты или всей цепочки (с этой даты и дальше). */
-  | (Base & { kind: "edit"; scope: "date" | "chain"; patch: PlanPatch });
+  | (Base & { kind: "edit"; scope: "date" | "chain"; patch: PlanPatch })
+  /**
+   * Новый план — «Сделать регулярной» (`lib/planCreate`). Ключ — id правила;
+   * правило и даты собраны заранее, с готовыми id: повторная отправка не
+   * плодит дублей.
+   */
+  | (Base & { kind: "create"; reminder: ZenReminder; markers: ZenReminderMarker[] });
+
+/**
+ * Новые планы, которых в облаке ещё нет, — как будто они уже там: правка или
+ * факт по такой дате ложатся на неё так же, как на любую другую.
+ */
+function withCreated(
+  markers: ZenReminderMarker[],
+  reminders: ZenReminder[],
+  actions: PlanAction[]
+): { markers: ZenReminderMarker[]; reminders: ZenReminder[]; fresh: Set<string>; rest: PlanAction[] } {
+  const known = new Set(reminders.map((r) => r.id));
+  const fresh = new Set<string>();
+  const addM: ZenReminderMarker[] = [];
+  const addR: ZenReminder[] = [];
+  const rest: PlanAction[] = [];
+  for (const a of actions) {
+    if (a.kind !== "create") {
+      rest.push(a);
+      continue;
+    }
+    if (known.has(a.reminder.id)) continue;
+    fresh.add(a.reminder.id);
+    addR.push(a.reminder);
+    addM.push(...a.markers);
+  }
+  return { markers: [...markers, ...addM], reminders: [...reminders, ...addR], fresh, rest };
+}
 
 type Kind = "expense" | "income" | "transfer";
 
@@ -161,6 +194,7 @@ export function applyPlanActions(
   actions: PlanAction[],
   instrumentOf: (account: string) => number | undefined
 ): PlanOverlay {
+  ({ markers, reminders, rest: actions } = withCreated(markers, reminders, actions));
   const byId = new Map(markers.map((m) => [m.id, m]));
   const remById = new Map(reminders.map((r) => [r.id, r]));
   const nextMarkers = new Map(markers.map((m) => [m.id, m]));
@@ -168,6 +202,7 @@ export function applyPlanActions(
   const processed = new Set<string>();
 
   for (const a of actions) {
+    if (a.kind === "create") continue;
     const m = byId.get(a.markerId);
     if (!m) continue;
     if (a.kind === "fact" || a.kind === "link") {
@@ -263,14 +298,33 @@ export function buildPlanPush(
     readyDraftIds: Set<string>;
     pendingDraftIds: Set<string>;
     instrumentOf: (account: string) => number | undefined;
+    /**
+     * Даты, снятые в ленте (`usePlannedDeletionsStore`): id даты → удалить
+     * весь план. Новый план, у которого сняли цепочку, не создаётся вовсе;
+     * снятая дата — не создаётся она одна.
+     */
+    deletedMarkers?: Map<string, boolean>;
   },
   stampSeconds: number
 ): PlanPush {
-  const byId = new Map(markers.map((m) => [m.id, m]));
   const doneIds: string[] = [];
+  const deleted = opts.deletedMarkers ?? new Map<string, boolean>();
+  // Новые планы: снятые целиком — выбрасываем, остальные — без снятых дат.
+  const creates: PlanAction[] = [];
+  for (const a of actions) {
+    if (a.kind !== "create") continue;
+    doneIds.push(a.markerId);
+    if (a.markers.some((m) => deleted.get(m.id) === true)) continue;
+    creates.push({ ...a, markers: a.markers.filter((m) => !deleted.has(m.id)) });
+  }
+  const base = withCreated(markers, reminders, [...creates, ...actions.filter((a) => a.kind !== "create")]);
+  markers = base.markers;
+  reminders = base.reminders;
+  const freshMarkerIds = new Set(markers.filter((m) => base.fresh.has(m.reminder)).map((m) => m.id));
+  const byId = new Map(markers.map((m) => [m.id, m]));
   const kept: PlanAction[] = [];
   const links: PlanPush["links"] = [];
-  for (const a of actions) {
+  for (const a of base.rest) {
     if (!byId.has(a.markerId)) {
       doneIds.push(a.markerId);
       continue;
@@ -308,13 +362,13 @@ export function buildPlanPush(
   }
   for (const m of overlay.markers) {
     const orig = byId.get(m.id);
-    if (orig && differs(orig, m)) outMarkers.push({ ...m, changed: stampSeconds });
+    if (freshMarkerIds.has(m.id) || (orig && differs(orig, m))) outMarkers.push({ ...m, changed: stampSeconds });
   }
   const remById = new Map(reminders.map((r) => [r.id, r]));
   const outReminders: ZenReminder[] = [];
   for (const r of overlay.reminders) {
     const orig = remById.get(r.id);
-    if (orig && differs(orig, r)) outReminders.push({ ...r, changed: stampSeconds });
+    if (base.fresh.has(r.id) || (orig && differs(orig, r))) outReminders.push({ ...r, changed: stampSeconds });
   }
   return { markers: outMarkers, reminders: outReminders, links, doneIds };
 }

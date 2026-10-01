@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
-import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info, Check, ListPlus, ArrowUpToLine } from "lucide-react";
+import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Info, Check, ListPlus, ArrowUpToLine } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -79,6 +79,8 @@ interface Props {
   onCopy?: () => void;
   /** Открыть разделение этой операции. Нет — делить нечем или уже разделена. */
   onSplit?: () => void;
+  /** «Сделать регулярной» — завести план по образцу этой операции. */
+  onMakeRecurring?: () => void;
   /** Edit mode only. Step to the previous (-1) / next (+1) operation in the
    *  caller's current order. Wired to ←/→ keys; the caller swaps which `tx`
    *  is being edited. Omit to disable arrow navigation. */
@@ -165,6 +167,7 @@ export function EditTransactionModal({
   onClose,
   onCopy,
   onSplit,
+  onMakeRecurring,
   onNavigate,
 }: Props) {
   const isCreate = !txProp;
@@ -1595,6 +1598,18 @@ export function EditTransactionModal({
                   className="btn-ghost text-sm px-3"
                 >
                   <Scissors className="w-4 h-4" />
+                </button>
+              </Tooltip>
+            )}
+            {onMakeRecurring && (
+              <Tooltip content="Сделать регулярной — запланировать повтор этой операции">
+                <button
+                  onClick={onMakeRecurring}
+                  disabled={saving}
+                  aria-label="Сделать регулярной"
+                  className="btn-ghost text-sm px-3"
+                >
+                  <Repeat className="w-4 h-4" />
                 </button>
               </Tooltip>
             )}

@@ -1373,6 +1373,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           readyDraftIds: new Set(draftTxs.map((t) => String(t.id))),
           pendingDraftIds: new Set(Object.keys(await loadDrafts())),
           instrumentOf: (id) => accInstrument.get(id),
+          deletedMarkers: new Map(plannedQueue.map((p) => [p.id, p.wholePlan])),
         },
         planStamp
       );
