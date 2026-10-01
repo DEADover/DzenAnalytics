@@ -529,7 +529,11 @@ function HeroSplit({ m, pill }: { m: DashboardModel; pill: ReactNode }) {
           экранах до 1280 треть сетки — около 320 пикселей, и рядом с рейкой
           крупному числу не остаётся места: тогда рейка уходит вниз, а волосок
           из вертикального становится горизонтальным. */}
-      <div className="flex-1 min-h-0 mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1px_auto]">
+      {/* Рейка справа — постоянной ширины, а не по содержимому: «На счетах в
+          конце» у прошлого месяца шире, чем «На счетах» у текущего, и
+          волосок уезжал при переключении месяца. 10rem вмещают самую длинную
+          подпись и суммы до десятков миллионов. */}
+      <div className="flex-1 min-h-0 mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_1px_10rem]">
         <div className="flex flex-col min-w-0">
           <span className="text-[11px] uppercase tracking-[0.1em] text-muted">
             {/* «К концу месяца» больше не про это: будущие списания в сумму не
