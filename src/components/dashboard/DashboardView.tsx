@@ -386,9 +386,13 @@ function HeroOpen({ m, sunken, pill }: { m: DashboardModel; sunken?: boolean; pi
         {formatMoney(Math.abs(m.free.value), m.base)}
       </div>
 
+      {/* Высота — ровно три строки, сколько бы их ни было на деле: фраза
+          бывает в одну строку («…после всех трат месяца.») и в три (с темпом
+          трат), и кнопки под ней прыгали при переключении месяца.
+          4.875em = 3 строки × межстрочный 1.625. */}
       <p
         className={clsx(
-          "leading-relaxed text-muted max-w-[30ch]",
+          "leading-relaxed text-muted max-w-[30ch] min-h-[4.875em]",
           sunken ? "text-[14.5px]" : "text-[17px]"
         )}
       >
@@ -541,7 +545,8 @@ function HeroSplit({ m, pill }: { m: DashboardModel; pill: ReactNode }) {
             {formatMoney(Math.abs(m.free.value), m.base)}
           </div>
 
-          <p className="text-[13.5px] leading-relaxed text-muted mt-3">
+          {/* Три строки под текст всегда — кнопки ниже не прыгают от его длины. */}
+          <p className="text-[13.5px] leading-relaxed text-muted mt-3 min-h-[4.875em]">
             {/* Причину нехватки называем ту, что есть на самом деле: доход может
                 быть больше расхода, а в минус уводить ещё не списанные платежи. */}
             {short
