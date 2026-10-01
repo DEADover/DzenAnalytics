@@ -2815,74 +2815,6 @@ export function AccountsPage() {
                   Все счета
                 </button>
               )}
-              {!capitalPick && chartAccountOptions.length > 1 && hasRealBalances && (
-                <Segmented<"all" | "noSavings" | "savings" | "custom">
-                  size="sm"
-                  tight
-                  label="Накопительные счета на графике"
-                  value={savingsMode}
-                  onChange={(v) => {
-                    if (v !== "custom") setChartAccounts(new Set(savingsPresets[v]));
-                  }}
-                  options={[
-                    { value: "all", label: "Все", title: "Все счета" },
-                    // Пустой выбор значит «все счета», поэтому вариант без
-                    // единого счёта выключен, а не молча показывает всё.
-                    {
-                      value: "noSavings",
-                      label: "Без накоплений",
-                      title: "Без накопительных счетов",
-                      disabled: savingsPresets.noSavings.length === 0 || savingsPresets.savings.length === 0,
-                    },
-                    {
-                      value: "savings",
-                      label: "Накопления",
-                      title: "Только накопительные счета",
-                      disabled: savingsPresets.savings.length === 0,
-                    },
-                  ]}
-                />
-              )}
-              {!capitalPick && chartAccountOptions.length > 1 && (chartView === "stacked" || hasRealBalances) && (
-                <MultiSelect
-                  className="w-48 shrink-0"
-                  label="Счета"
-                  options={chartAccountOptions}
-                  selected={chartAccounts}
-                  onChange={setChartAccounts}
-                  renderIcon={(name) =>
-                    parseDebtKey(name) ? (
-                      <Users className="w-[18px] h-[18px] text-muted" />
-                    ) : (
-                      <AccountLogo title={name} size={18} />
-                    )
-                  }
-                  labelOf={(name) => parseDebtKey(name)?.payee ?? name}
-                  nestedOf={(name) => parseDebtKey(name) !== null}
-                  nestedUnitForms={["контрагент", "контрагента", "контрагентов"]}
-                  groupOf={chartAccountGroup}
-                  unitForms={["счёт", "счёта", "счетов"]}
-                  searchPlaceholder="Поиск счёта"
-                  archivedSet={chartArchived}
-                  compactSummary
-                />
-              )}
-              {chartView !== "stacked" && netChart.length > 1 && (
-                <RangeCompareCard
-                  change={netChange}
-                  base={base}
-                  hint="Проведите мышью по графику — сравним две даты"
-                  onClear={netRange.clear}
-                />
-              )}
-              {chartView === "stacked" && !chartNothingPicked && stacked.series.length > 1 && (
-                <RangeCompareCard
-                  change={stackChange}
-                  base={base}
-                  hint="Проведите мышью по графику — сравним «Итого» на двух датах"
-                  onClear={stackRange.clear}
-                />
-              )}
               <Segmented
                 size="sm"
                 label="Вид графика"
@@ -2906,8 +2838,85 @@ export function AccountsPage() {
             </>
           }
         />
+        {/* Второй ряд — фильтры графика слева, итог сравнения двух дат справа.
+            Раньше всё стояло в строке заголовка, и стоило выделить отрезок,
+            как карточка сравнения выталкивала остальное: подпись под
+            заголовком переносилась, кнопки съезжали. Здесь у ряда своя высота
+            (как у карточки сравнения), и выделение ничего не двигает. */}
+        <div className="flex items-center gap-3 flex-wrap min-h-10 mb-3">
+          {!capitalPick && chartAccountOptions.length > 1 && hasRealBalances && (
+            <Segmented<"all" | "noSavings" | "savings" | "custom">
+              size="sm"
+              tight
+              label="Накопительные счета на графике"
+              value={savingsMode}
+              onChange={(v) => {
+                if (v !== "custom") setChartAccounts(new Set(savingsPresets[v]));
+              }}
+              options={[
+                { value: "all", label: "Все", title: "Все счета" },
+                // Пустой выбор значит «все счета», поэтому вариант без
+                // единого счёта выключен, а не молча показывает всё.
+                {
+                  value: "noSavings",
+                  label: "Без накоплений",
+                  title: "Без накопительных счетов",
+                  disabled: savingsPresets.noSavings.length === 0 || savingsPresets.savings.length === 0,
+                },
+                {
+                  value: "savings",
+                  label: "Накопления",
+                  title: "Только накопительные счета",
+                  disabled: savingsPresets.savings.length === 0,
+                },
+              ]}
+            />
+          )}
+          {!capitalPick && chartAccountOptions.length > 1 && (chartView === "stacked" || hasRealBalances) && (
+            <MultiSelect
+              className="w-48 shrink-0"
+              label="Счета"
+              options={chartAccountOptions}
+              selected={chartAccounts}
+              onChange={setChartAccounts}
+              renderIcon={(name) =>
+                parseDebtKey(name) ? (
+                  <Users className="w-[18px] h-[18px] text-muted" />
+                ) : (
+                  <AccountLogo title={name} size={18} />
+                )
+              }
+              labelOf={(name) => parseDebtKey(name)?.payee ?? name}
+              nestedOf={(name) => parseDebtKey(name) !== null}
+              nestedUnitForms={["контрагент", "контрагента", "контрагентов"]}
+              groupOf={chartAccountGroup}
+              unitForms={["счёт", "счёта", "счетов"]}
+              searchPlaceholder="Поиск счёта"
+              archivedSet={chartArchived}
+              compactSummary
+            />
+          )}
+          <div className="ml-auto flex items-center">
+          {chartView !== "stacked" && netChart.length > 1 && (
+            <RangeCompareCard
+              change={netChange}
+              base={base}
+              hint="Проведите мышью по графику — сравним две даты"
+              onClear={netRange.clear}
+            />
+          )}
+          {chartView === "stacked" && !chartNothingPicked && stacked.series.length > 1 && (
+            <RangeCompareCard
+              change={stackChange}
+              base={base}
+              hint="Проведите мышью по графику — сравним «Итого» на двух датах"
+              onClear={stackRange.clear}
+            />
+          )}
+          </div>
+        </div>
         <div className="h-96">
-          {chartView === "stacked" && chartNothingPicked ? (
+          {chartNothingPicked ? (
             <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted">
               <div>Не выбрано ни одного счёта.</div>
               <button
