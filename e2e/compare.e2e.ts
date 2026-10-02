@@ -7,9 +7,9 @@ test("«Изменение»: разница в единицах метрики 
   await connectZen(page, "/compare");
   const table = page.locator("table").first();
   const change = (label: string) => table.locator("tr", { hasText: label }).locator("td").last();
-  // Октябрь (по 15-е) против того же отрезка сентября.
-  await expect(change("Расходы")).toHaveText(/^▲ 2\s955 ₽ \(6%\)$/);
-  await expect(change("Операций")).toHaveText(/^▲ 2 \(18%\)$/);
+  // Октябрь (по 15-е, со всплеском в кафе) против того же отрезка сентября.
+  await expect(change("Расходы")).toHaveText(/^▲ 11\s955 ₽ \(25%\)$/);
+  await expect(change("Операций")).toHaveText(/^▲ 3 \(27%\)$/);
   // Пилюля целиком в своей ячейке.
   const fits = await change("Средний чек").evaluate((td) => {
     const pill = td.querySelector("span") as HTMLElement;

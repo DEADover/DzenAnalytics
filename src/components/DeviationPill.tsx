@@ -1,8 +1,9 @@
 import { formatMoney, formatPct } from "../lib/format";
+import type { DiffMode } from "../lib/diffMode";
 
 /**
  * Пилюля отклонения: насколько текущее значение выше или ниже того, с чем его
- * сравнивают, — в деньгах или в процентах.
+ * сравнивают, — в деньгах, в процентах или деньгами с процентом в скобках.
  *
  * Цвет семантический, а не «больше значит красное»: для расхода потратить
  * МЕНЬШЕ — хорошо (зелёная), для дохода наоборот. Поэтому направление «хорошо»
@@ -16,13 +17,12 @@ export function DeviationPill({
   current,
   baseline,
   base,
-  asPct,
+  mode,
   kind,
   comparable = true,
   sameLabel = "≈ поровну",
   upTitle = "Больше",
   downTitle = "Меньше",
-  withPct = false,
   formatAmount,
 }: {
   current: number;
@@ -30,8 +30,12 @@ export function DeviationPill({
   baseline: number | undefined;
   /** Базовая валюта для денежного вида. */
   base: string;
-  /** Показывать разницу в процентах, а не в деньгах. */
-  asPct: boolean;
+  /**
+   * Деньгами, процентом или деньгами с процентом в скобках — «▲ 25 000 ₽
+   * (20%)» (#115). Процента нет там, где его не бывает: смена знака, база около
+   * нуля, — тогда показываем деньги.
+   */
+  mode: DiffMode;
   /** Расход или доход — от этого зависит, какая сторона «хорошая». */
   kind: "expense" | "income";
   /** Есть ли вообще с чем сравнивать (например, нет предыдущих периодов). */
@@ -40,11 +44,6 @@ export function DeviationPill({
   sameLabel?: string;
   upTitle?: string;
   downTitle?: string;
-  /**
-   * Разница в единицах значения и процент в скобках рядом — «▲ 25 000 ₽ (20%)»
-   * (#115). Процента нет там, где его не бывает: смена знака, база около нуля.
-   */
-  withPct?: boolean;
   /** Как записать разницу: по умолчанию деньгами в базовой валюте. */
   formatAmount?: (abs: number) => string;
 }) {
@@ -87,9 +86,9 @@ export function DeviationPill({
   const amount = formatAmount ? formatAmount(Math.abs(diff)) : formatMoney(Math.abs(diff), base);
   const pctOf = (share: number) => (share < 0.005 ? "менее 1%" : formatPct(share, 0));
   let label: string;
-  if (withPct) {
+  if (mode === "both") {
     label = flipped || scale < 0.5 ? amount : `${amount} (${pctOf(Math.abs(diff) / scale)})`;
-  } else if (!asPct || flipped) {
+  } else if (mode === "money" || flipped) {
     label = amount;
   } else if (scale < 0.5) {
     // Роста «с нуля» в процентах действительно не существует.

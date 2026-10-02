@@ -1331,6 +1331,7 @@ export function ImportPage() {
                     "zenmoneyAutoSyncUnit",
                     "displaySettings",
                     "columnWidths",
+                    "diffModes",
                     "dashboardLayout",
                     "reportPeriod",
                     "includeOffBalance",

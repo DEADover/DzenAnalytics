@@ -139,8 +139,11 @@ function buildTransactions(): ZenTransaction[] {
       if (d % 2 === 0) out.push(tx(day, "expense", 650 + ((d * 13) % 400), { tag: "tag-cafe", payee: "Кофейня у дома", account: "acc-sber" }));
       if (d % 4 === 1) out.push(tx(day, "expense", 420 + ((d * 7) % 300), { tag: "tag-taxi", payee: "Яндекс Go" }));
     }
-    if (lastDay >= 20) out.push(tx(`${ym}-20`, "expense", 499, { tag: "tag-subs", payee: "Кинопоиск" }));
+    // В сентябре подписка подорожала — «Изменение» в «Регулярных».
+    if (lastDay >= 20) out.push(tx(`${ym}-20`, "expense", ym === "2026-09" ? 599 : 499, { tag: "tag-subs", payee: "Кинопоиск" }));
   }
+  // Всплеск: кафе в октябре втрое дороже обычного — «Всплески по категориям».
+  out.push(tx("2026-10-12", "expense", 9_000, { tag: "tag-cafe", payee: "Ресторан", comment: "День рождения", account: "acc-sber" }));
   // Свежие непросмотренные — для «Просмотрено» в панели выделения.
   out.push(tx("2026-10-14", "expense", 2_340, { tag: "tag-food", payee: "Перекрёсток", viewed: false }));
   out.push(tx("2026-10-15", "expense", 560, { tag: "tag-cafe", payee: "Кофейня у дома", account: "acc-cash", viewed: false }));

@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { currencySymbol, formatMoney, formatNum, formatPct } from "../lib/format";
+import { formatMoney, formatNum, formatPct } from "../lib/format";
+import { diffSortValue, type DiffMode } from "../lib/diffMode";
 import { CategoryDot } from "./CategoryDot";
 import { DataTable, type Column } from "./DataTable";
 import { DeviationPill } from "./DeviationPill";
+import { DiffModeToggle } from "./DiffModeToggle";
 
 /**
  * Строка таблицы категорий: категория или её подкатегория.
@@ -41,9 +43,9 @@ interface CompareSpec {
   downTitle: string;
   /** Подпись засечки на полосе: «Среднее за 3 мес», «Май 26 г.». */
   markerLabel: string;
-  /** Разница в процентах, а не в деньгах. */
-  asPct: boolean;
-  onAsPctChange: (next: boolean) => void;
+  /** Разница деньгами, процентом или и тем и другим — переключается в шапке. */
+  mode: DiffMode;
+  onModeChange: (next: DiffMode) => void;
 }
 
 /**
@@ -173,34 +175,22 @@ export function CategoryTable({
       {
         key: "change",
         type: "change",
-        // 11rem: в шапке переключатель «₽ / %», подпись и значок сортировки. При
-        // 9,5rem запас был в 2 px, и где шрифт рисуется чуть шире, «Отклонение»
-        // резалось многоточием (см. e2e headers).
-        width: "11rem",
+        // В шапке переключатель режима, подпись и значок сортировки: при 9,5rem
+        // запас был в 2 px, и где шрифт рисуется чуть шире, «Отклонение»
+        // резалось многоточием (см. e2e headers). «Деньги (процент)» длиннее —
+        // «▲ 1 234 567 ₽ (123%)» — и получают колонку шире.
+        width: compare.mode === "both" ? "13rem" : "11rem",
         label: compare.changeLabel,
         headerTitle: compare.changeTitle,
-        headerLead: (
-          <button
-            type="button"
-            onClick={() => compare.onAsPctChange(!compare.asPct)}
-            className="normal-case rounded bg-panel2 px-1 leading-4 text-text hover:text-accent transition-colors"
-            title={`Показать разницу ${compare.asPct ? "в деньгах" : "в процентах"}`}
-            aria-label={`Показать разницу ${compare.asPct ? "в деньгах" : "в процентах"}`}
-          >
-            {compare.asPct ? "%" : currencySymbol(base)}
-          </button>
-        ),
-        sortValue: (r) => {
-          if (!compare.comparable || r.compare === undefined) return undefined;
-          const diff = r.value - r.compare;
-          return compare.asPct ? (r.compare !== 0 ? diff / Math.abs(r.compare) : undefined) : diff;
-        },
+        headerLead: <DiffModeToggle mode={compare.mode} onChange={compare.onModeChange} base={base} />,
+        sortValue: (r) =>
+          compare.comparable ? diffSortValue(r.value, r.compare, compare.mode) : undefined,
         render: (r) => (
           <DeviationPill
             current={r.value}
             baseline={r.compare}
             base={base}
-            asPct={compare.asPct}
+            mode={compare.mode}
             kind={kind}
             comparable={compare.comparable}
             sameLabel={compare.sameLabel}

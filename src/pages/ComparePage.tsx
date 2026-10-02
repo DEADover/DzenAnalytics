@@ -38,8 +38,10 @@ import {
 import { DateField } from "../components/DateField";
 import { KindSwitcher } from "../components/KindSwitcher";
 import { DeviationPill } from "../components/DeviationPill";
+import { DiffModeToggle } from "../components/DiffModeToggle";
 import { CategoryTable, type CategoryTableRow } from "../components/CategoryTable";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
+import { useDiffMode } from "../store/useDiffModeStore";
 import { colorForCategory } from "../lib/categoryColor";
 import type { Transaction } from "../types";
 
@@ -333,8 +335,12 @@ export function ComparePage() {
   const [aligned, setAligned] = useState(true);
   // Сколько предыдущих месяцев усредняем в режиме «Среднее».
   const [avgMonths, setAvgMonths] = useState<AvgMonths>(3);
-  // Отклонение в деньгах или в процентах — переключается кликом по заголовку.
-  const [devPct, setDevPct] = useState(false);
+  // Изменение по категориям: деньгами, процентом или обоими — переключается в
+  // шапке столбца и запоминается.
+  const [devMode, setDevMode] = useDiffMode("compare.categories", "money");
+  // То же у таблицы метрик наверху; по умолчанию — разница и процент в скобках
+  // (#115).
+  const [kpiMode, setKpiMode] = useDiffMode("compare.metrics", "both");
   // Раскрытые категории в списке по категориям.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Разбор по категориям — про расходы или про доходы. Отдельно от остальной
@@ -787,8 +793,10 @@ export function ComparePage() {
               <InfoTerm>Период А</InfoTerm> — то, что смотрим,{" "}
               <InfoTerm>период Б</InfoTerm> — с чем сравниваем. Колонка{" "}
               <InfoTerm>«Изменение»</InfoTerm> всегда про то, насколько А
-              отличается от Б: разница и процент в скобках. У расходов стрелка
-              вниз зелёная: тратить меньше — хорошо.
+              отличается от Б — деньгами, процентом или деньгами с процентом в
+              скобках: режим переключается значком в шапке колонки и
+              запоминается. У расходов стрелка вниз зелёная: тратить меньше —
+              хорошо.
             </p>
             <p>
               <InfoTerm>Месяцы</InfoTerm> — два любых отчётных месяца рядом.
@@ -861,7 +869,10 @@ export function ComparePage() {
                   className="table-th text-right align-bottom w-[13rem]"
                   title={`Насколько «${ranges.a.label}» отличается от «${ranges.b.label}»`}
                 >
-                  Изменение
+                  <span className="inline-flex items-center gap-1.5">
+                    <DiffModeToggle mode={kpiMode} onChange={setKpiMode} base={base} />
+                    Изменение
+                  </span>
                 </th>
               </tr>
             </thead>
@@ -893,9 +904,8 @@ export function ComparePage() {
                         current={m.get(kpiA)}
                         baseline={m.get(kpiB)}
                         base={base}
-                        asPct
-                        // Разница в единицах метрики, процент — в скобках (#115).
-                        withPct
+                        // Разница в единицах метрики: у счётчиков — штуками.
+                        mode={kpiMode}
                         formatAmount={
                           m.fmt === "count" ? (v) => formatNum(Math.round(v)) : undefined
                         }
@@ -939,8 +949,8 @@ export function ComparePage() {
           upTitle: "Больше, чем в периоде Б",
           downTitle: "Меньше, чем в периоде Б",
           markerLabel: ranges.b.label,
-          asPct: devPct,
-          onAsPctChange: setDevPct,
+          mode: devMode,
+          onModeChange: setDevMode,
         }}
         expanded={expanded}
         onExpandedChange={setExpanded}

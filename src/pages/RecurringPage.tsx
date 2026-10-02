@@ -17,6 +17,7 @@ import { usePlannedCache } from "../hooks/useZenPlanned";
 import { plannedOps, ownPlannedOps } from "../lib/plannedOps";
 
 import { useMembersStore } from "../store/useMembersStore";
+import { useDiffMode } from "../store/useDiffModeStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { currentPeriod, periodRange } from "../lib/period";
 import { formatMoney, formatDate, formatNum, formatPct } from "../lib/format";
@@ -30,6 +31,8 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { DataTable, type Column } from "../components/DataTable";
 import { DeviationPill } from "../components/DeviationPill";
+import { DiffModeToggle } from "../components/DiffModeToggle";
+import { diffSortValue } from "../lib/diffMode";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { ProgressBar } from "../components/ProgressBar";
@@ -234,35 +237,34 @@ export function RecurringPage() {
     [candidates, todayIso]
   );
 
+  // «Изменение» цены: деньгами, процентом или обоими — запоминается.
+  const [priceMode, setPriceMode] = useDiffMode("recurring.priceTrend", "pct");
+
   // ── Column definitions ──────────────────────────────────────────────────
   const recurringColumns = useMemo<Column<RecurringCandidate>[]>(
     () => [
       {
-        // Светофор: зелёный — платежи идут по графику, красный — платежа нет
-        // дольше двух ожидаемых циклов.
-        key: "status",
-        type: "mark",
-        label: "Статус",
-        width: "5.75rem",
-        sortValue: (c) => (c.stale ? "неактивен" : "активен"),
-        cellTitle: (c) =>
-          c.stale
-            ? `Неактивен: нет платежа ${c.daysSinceLast} дн. при периоде ~${c.avgIntervalDays} дн.`
-            : "Активен: платежи идут по графику",
-        render: (c) => (
-          <span
-            className={`inline-block w-2.5 h-2.5 rounded-full align-middle ${
-              c.stale ? "bg-expense" : "bg-income"
-            }`}
-          />
-        ),
-      },
-      {
+        // Светофор — кружком перед получателем, а не отдельной колонкой: в
+        // таблице одиннадцать колонок, и на 1440 px колонка ради одной точки
+        // отнимала у подписей запас (см. e2e diffmode). Неактивные и так
+        // прячет «Только активные».
         key: "payee",
         type: "text",
         label: "Получатель",
         sortValue: (c) => c.payee,
-        render: (c) => c.payee,
+        render: (c) => (
+          <span className="flex items-center gap-2 min-w-0">
+            <span
+              className={`shrink-0 w-2.5 h-2.5 rounded-full ${c.stale ? "bg-expense" : "bg-income"}`}
+              title={
+                c.stale
+                  ? `Неактивен: нет платежа ${c.daysSinceLast} дн. при периоде ~${c.avgIntervalDays} дн.`
+                  : "Активен: платежи идут по графику"
+              }
+            />
+            <span className="truncate">{c.payee}</span>
+          </span>
+        ),
       },
       {
         key: "category",
@@ -276,27 +278,32 @@ export function RecurringPage() {
         key: "avgAmount",
         type: "money",
         label: "Сумма ср.",
-        width: "7.25rem",
+        width: "7.625rem",
         sortValue: (c) => c.avgAmount,
         render: (c) => formatMoney(c.avgAmount, c.currency),
       },
       {
         // Последний платёж против исторического среднего. У ровных подписок —
-        // прочерк: колонка не рябит там, где ничего не меняется.
+        // прочерк: колонка не рябит там, где ничего не меняется. Деньгами — в
+        // валюте самой подписки.
         key: "priceTrend",
         type: "change",
         label: "Изменение",
-        width: "7.75rem",
-        sortValue: (c) => c.priceTrend.changePct,
+        headerTitle: "Последний платёж против среднего прежних",
+        headerLead: <DiffModeToggle mode={priceMode} onChange={setPriceMode} base={base} />,
+        // В шапке ещё и переключатель режима; «₽ %» на нём шире «₽» и «%».
+        width: priceMode === "both" ? "10.75rem" : "9.75rem",
+        sortValue: (c) =>
+          diffSortValue(c.priceTrend.lastAmount, c.priceTrend.baselineAmount, priceMode),
         render: (c) =>
           c.priceTrend.priceFlag === "flat" ? (
             <span className="text-muted">—</span>
           ) : (
             <DeviationPill
-              current={1 + c.priceTrend.changePct}
-              baseline={1}
+              current={c.priceTrend.lastAmount}
+              baseline={c.priceTrend.baselineAmount}
               base={c.currency}
-              asPct
+              mode={priceMode}
               kind="expense"
               upTitle="Последний платёж дороже исторического среднего"
               downTitle="Последний платёж дешевле исторического среднего"
@@ -307,7 +314,7 @@ export function RecurringPage() {
         key: "avgInterval",
         type: "number",
         label: "Раз в",
-        width: "5rem",
+        width: "5.375rem",
         sortValue: (c) => c.avgIntervalDays,
         render: (c) => `${formatNum(c.avgIntervalDays)} дн`,
       },
@@ -315,7 +322,7 @@ export function RecurringPage() {
         key: "occurrences",
         type: "count",
         label: "Повторов",
-        width: "7.25rem",
+        width: "7.5rem",
         sortValue: (c) => c.occurrences,
         render: (c) => formatNum(c.occurrences),
       },
@@ -336,7 +343,7 @@ export function RecurringPage() {
         key: "lastDate",
         type: "date",
         label: "Последний",
-        width: "8rem",
+        width: "8.25rem",
         sortValue: (c) => c.lastDate,
         render: (c) => formatDate(c.lastDate, "short"),
       },
@@ -344,7 +351,7 @@ export function RecurringPage() {
         key: "nextExpected",
         type: "date",
         label: "Следующий",
-        width: "8.25rem",
+        width: "8.625rem",
         sortValue: (c) => c.nextExpected,
         render: (c) => formatDate(c.nextExpected, "short"),
       },
@@ -353,12 +360,12 @@ export function RecurringPage() {
         type: "main",
         tone: "expense",
         label: "Итого",
-        width: "7.5rem",
+        width: "7rem",
         sortValue: (c) => c.totalSpent,
         render: (c) => formatMoney(c.totalSpent, c.currency),
       },
     ],
-    []
+    [priceMode, setPriceMode, base]
   );
 
   if (transactions.length === 0) return <EmptyState />;
@@ -410,7 +417,7 @@ export function RecurringPage() {
               подписках, а не факт за прошлый год.
             </p>
             <p>
-              Кружок в колонке <InfoTerm>«Статус»</InfoTerm>: зелёный — платежи
+              Кружок перед <InfoTerm>получателем</InfoTerm>: зелёный — платежи
               идут по графику, красный — пропущено больше двух ожидаемых подряд,
               и подписку, скорее всего, уже отменили. Такие спрятаны, пока
               включён переключатель <InfoTerm>«Только активные»</InfoTerm>.
@@ -657,8 +664,9 @@ export function RecurringPage() {
           title="Все регулярные платежи"
           data={candidates}
           columns={recurringColumns}
-          // 66,25rem узких колонок и по ~8rem получателю и категории.
-          minWidth="82rem"
+          // 63,5rem узких колонок (64,5 — в режиме «₽ %») и по ~8,5rem
+          // получателю и категории.
+          minWidth="81.5rem"
           rowKey={(c) => c.payee + c.currency}
           defaultSortKey="totalSpent"
           onRowClick={openCandidate}

@@ -19,7 +19,7 @@ function rec(over: Partial<RecurringCandidate>): RecurringCandidate {
     totalSpent: 3000,
     txIds: [],
     cadence: "monthly",
-    priceTrend: { changePct: 0, priceFlag: "flat" },
+    priceTrend: { changePct: 0, priceFlag: "flat", lastAmount: 0, baselineAmount: 0 },
     ...over,
   } as RecurringCandidate;
 }
@@ -87,7 +87,7 @@ describe("buildNotices — подписки", () => {
     // Расчёт priceTrend делался при поиске регулярных, но результат нигде
     // не показывали.
     const n = buildNotices(
-      input({ recurring: [rec({ payee: "Стриминг", priceTrend: { changePct: 0.5, priceFlag: "up" } })] })
+      input({ recurring: [rec({ payee: "Стриминг", priceTrend: { changePct: 0.5, priceFlag: "up", lastAmount: 0, baselineAmount: 0 } })] })
     );
     expect(n).toHaveLength(1);
     expect(n[0].title).toBe("Стриминг");
@@ -96,7 +96,7 @@ describe("buildNotices — подписки", () => {
 
   it("колебание чека ниже порога подорожанием не считается", () => {
     const n = buildNotices(
-      input({ recurring: [rec({ priceTrend: { changePct: 0.04, priceFlag: "up" } })] })
+      input({ recurring: [rec({ priceTrend: { changePct: 0.04, priceFlag: "up", lastAmount: 0, baselineAmount: 0 } })] })
     );
     expect(n).toEqual([]);
   });
@@ -105,8 +105,8 @@ describe("buildNotices — подписки", () => {
     const n = buildNotices(
       input({
         recurring: [
-          rec({ payee: "Дешевле", priceTrend: { changePct: 0.4, priceFlag: "down" } }),
-          rec({ payee: "Брошена", stale: true, priceTrend: { changePct: 0.4, priceFlag: "up" } }),
+          rec({ payee: "Дешевле", priceTrend: { changePct: 0.4, priceFlag: "down", lastAmount: 0, baselineAmount: 0 } }),
+          rec({ payee: "Брошена", stale: true, priceTrend: { changePct: 0.4, priceFlag: "up", lastAmount: 0, baselineAmount: 0 } }),
         ],
       })
     );
@@ -163,9 +163,9 @@ describe("buildNotices — предел на источник", () => {
     const n = buildNotices(
       input({
         recurring: [
-          rec({ payee: "A", priceTrend: { changePct: 0.5, priceFlag: "up" } }),
-          rec({ payee: "B", priceTrend: { changePct: 0.4, priceFlag: "up" } }),
-          rec({ payee: "C", priceTrend: { changePct: 0.3, priceFlag: "up" } }),
+          rec({ payee: "A", priceTrend: { changePct: 0.5, priceFlag: "up", lastAmount: 0, baselineAmount: 0 } }),
+          rec({ payee: "B", priceTrend: { changePct: 0.4, priceFlag: "up", lastAmount: 0, baselineAmount: 0 } }),
+          rec({ payee: "C", priceTrend: { changePct: 0.3, priceFlag: "up", lastAmount: 0, baselineAmount: 0 } }),
         ],
         insights: [{ kind: "highlight", title: "Самая крупная трата", body: "Аренда", value: 62000 }],
       })

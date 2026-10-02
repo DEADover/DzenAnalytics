@@ -13,6 +13,7 @@ import { previousWindows } from "../lib/period";
 import { buildHierarchy, type CategoryNode } from "../lib/aggregations";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
+import { useDiffMode } from "../store/useDiffModeStore";
 import { affectsExpense } from "../lib/txKindStyle";
 import { colorForCategory, subcategoryColor } from "../lib/categoryColor";
 import { formatMoney, formatPct } from "../lib/format";
@@ -381,8 +382,9 @@ export function CategoriesPage() {
     return { comparable: true, cat, sub };
   }, [transactions, filters, monthStartDay, kind, avgMonths]);
 
-  // «Отклонение» — ₽ or % of the N-month average (quick toggle in the header).
-  const [devPct, setDevPct] = useState(false);
+  // «Отклонение» — ₽, % of the N-month average or both (toggle in the header,
+  // remembered per table).
+  const [devMode, setDevMode] = useDiffMode("categories.deviation", "money");
 
   // «Отклонение» pill — difference of the current period from the N-month
   // average (Zenmoney «выше/ниже среднего на N ₽»), shown either in ₽ or as a
@@ -641,8 +643,8 @@ export function CategoriesPage() {
                 upTitle: "Выше среднего",
                 downTitle: "Ниже среднего",
                 markerLabel: `Среднее за ${avgMonths} мес`,
-                asPct: devPct,
-                onAsPctChange: setDevPct,
+                mode: devMode,
+                onModeChange: setDevMode,
               }}
               expanded={expanded}
               onExpandedChange={setExpanded}

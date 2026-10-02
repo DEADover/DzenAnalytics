@@ -2104,7 +2104,13 @@ export interface RecurringCandidate {
    *   • `priceFlag: "down"` — last charge < avg × 0.90
    *   • `priceFlag: "flat"` — within ±10%
    */
-  priceTrend: { changePct: number; priceFlag: "up" | "down" | "flat" };
+  priceTrend: {
+    changePct: number;
+    priceFlag: "up" | "down" | "flat";
+    /** Последний платёж и среднее прежних — в валюте подписки (0, если их меньше двух). */
+    lastAmount: number;
+    baselineAmount: number;
+  };
 }
 
 export function detectRecurring(
@@ -2198,11 +2204,12 @@ export function detectRecurring(
     // we can trust; otherwise flag as "flat".
     let priceFlag: "up" | "down" | "flat" = "flat";
     let changePct = 0;
+    let lastAmt = 0;
+    let earlierMean = 0;
     if (list.length >= 3) {
       const earlier = list.slice(0, -1);
-      const earlierMean =
-        earlier.reduce((s, t) => s + t.amount, 0) / earlier.length;
-      const lastAmt = list[list.length - 1].amount;
+      earlierMean = earlier.reduce((s, t) => s + t.amount, 0) / earlier.length;
+      lastAmt = list[list.length - 1].amount;
       if (earlierMean > 0) {
         changePct = (lastAmt - earlierMean) / earlierMean;
         if (changePct > 0.1) priceFlag = "up";
@@ -2226,7 +2233,7 @@ export function detectRecurring(
       totalSpent,
       txIds: list.map((t) => t.id),
       cadence,
-      priceTrend: { changePct, priceFlag },
+      priceTrend: { changePct, priceFlag, lastAmount: lastAmt, baselineAmount: earlierMean },
     });
   }
 

@@ -6,8 +6,12 @@ import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../store/useDrillStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
+import { useDiffMode } from "../store/useDiffModeStore";
 import { detectAnomalies, detectMonthSpikes, type Anomaly, type MonthSpike } from "../lib/aggregations";
 import { DataTable } from "../components/DataTable";
+import { DeviationPill } from "../components/DeviationPill";
+import { DiffModeToggle } from "../components/DiffModeToggle";
+import { diffSortValue } from "../lib/diffMode";
 import { PageHeader } from "../components/PageHeader";
 import { Segmented } from "../components/Segmented";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
@@ -51,6 +55,8 @@ export function AnomaliesPage() {
   // учитывать в аналитике», и внебалансовые счета до детектора не доходят (#14).
   const transactions = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
+  // «Больше обычного» во всплесках: деньгами, процентом или обоими — запоминается.
+  const [spikeMode, setSpikeMode] = useDiffMode("anomalies.spikes", "money");
   const showDrill = useDrillStore((s) => s.show);
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
@@ -341,11 +347,23 @@ export function AnomaliesPage() {
               },
               {
                 key: "delta",
-                type: "main",
-                tone: "expense",
+                type: "change",
                 label: "Больше обычного",
-                sortValue: (sp) => sp.delta,
-                render: (sp) => `+${formatMoney(sp.delta, base)}`,
+                headerTitle: "Насколько расход месяца больше среднего за три предыдущих",
+                headerLead: <DiffModeToggle mode={spikeMode} onChange={setSpikeMode} base={base} />,
+                width: spikeMode === "both" ? "13rem" : "11.5rem",
+                sortValue: (sp) => diffSortValue(sp.current, sp.baseline, spikeMode),
+                exportValue: (sp) => sp.delta,
+                render: (sp) => (
+                  <DeviationPill
+                    current={sp.current}
+                    baseline={sp.baseline}
+                    base={base}
+                    mode={spikeMode}
+                    kind="expense"
+                    upTitle="Больше обычного"
+                  />
+                ),
               },
               {
                 key: "ratio",
