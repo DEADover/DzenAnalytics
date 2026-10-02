@@ -235,3 +235,34 @@ describe("transactionsForCell: отчётный месяц", () => {
     ]);
   });
 });
+
+describe("периметр «все счета» без счетов вне баланса", () => {
+  const offBalance = (accounts: string[] = [], perimeterTransfers = true): BudgetScope => ({
+    accounts: new Set(accounts),
+    excluded: new Set(["Накопительный"]),
+    perimeterTransfers,
+  });
+
+  it("трата со счёта вне баланса в бюджет не идёт, с обычного — идёт", () => {
+    expect(budgetHits(tx({ account: "Накопительный" }), offBalance())).toEqual([]);
+    expect(budgetHits(tx({ account: "Карта" }), offBalance())).toHaveLength(1);
+  });
+
+  it("перевод на счёт вне баланса — отток, как через границу суженного бюджета", () => {
+    const hits = budgetHits(transfer("Карта", "Накопительный", 200), offBalance());
+    expect(hits).toEqual([
+      { kind: "expense", category: "Переводы", subcategory: "Накопительный", amount: 200, transfer: true },
+    ]);
+  });
+
+  it("явно выбранный счёт вне баланса — в бюджете", () => {
+    expect(budgetHits(tx({ account: "Накопительный" }), offBalance(["Накопительный"]))).toHaveLength(1);
+  });
+
+  it("график периметра: операции счёта вне баланса не рисуются", () => {
+    const txs = [tx({ id: "card", account: "Карта" }), tx({ id: "save", account: "Накопительный" })];
+    expect(insidePerimeter(txs, offBalance()).map((t) => t.id)).toEqual(["card"]);
+    // Без исключений — тот же массив, без копии.
+    expect(insidePerimeter(txs, ALL_ACCOUNTS)).toBe(txs);
+  });
+});

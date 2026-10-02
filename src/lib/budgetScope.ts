@@ -21,10 +21,28 @@ import { periodRange } from "./period";
  * внутри: перевод наружу — чистый отток, перевод внутрь — поступление.
  */
 export interface BudgetScope {
-  /** Имена счетов в бюджете. Пустой набор = все счета. */
+  /** Имена счетов в бюджете. Пустой набор = все счета (кроме `excluded`). */
   accounts: Set<string>;
+  /**
+   * Счета, которых нет и в «все счета»: счета вне баланса, пока они не
+   * считаются (Настройки → Расчёты). Так же считает сам Дзен-мани — факт
+   * бюджета у него по счетам в балансе. Явно выбранных счетов не касается:
+   * выбрали накопительный в периметр — он в бюджете.
+   */
+  excluded?: Set<string>;
   /** Считать переводы: списание — в расходы, зачисление — в доходы. */
   perimeterTransfers: boolean;
+}
+
+/** Входит ли счёт в периметр — единственная проверка на весь раздел. */
+export function inPerimeter(scope: BudgetScope, account: string | null | undefined): boolean {
+  if (scope.accounts.size > 0) return !!account && scope.accounts.has(account);
+  return !account || !scope.excluded?.has(account);
+}
+
+/** Периметр — все счета, без сужения (исключённые вне баланса не в счёт). */
+export function isAllAccounts(scope: BudgetScope): boolean {
+  return scope.accounts.size === 0 && !scope.excluded?.size;
 }
 
 /** Статья, под которой в бюджете видны переводы. */
@@ -58,9 +76,7 @@ export interface BudgetHit {
  * зачисление в доходы. У всего остального — одно или ни одного.
  */
 export function budgetHits(t: Transaction, scope: BudgetScope): BudgetHit[] {
-  const all = scope.accounts.size === 0;
-  const inside = (account: string | undefined) =>
-    all ? true : !!account && scope.accounts.has(account);
+  const inside = (account: string | undefined) => inPerimeter(scope, account);
 
   if (t.kind === "transfer") {
     if (!scope.perimeterTransfers) return [];
@@ -164,8 +180,8 @@ export function insidePerimeter(
   transactions: Transaction[],
   scope: BudgetScope
 ): Transaction[] {
-  if (scope.accounts.size === 0) return transactions;
+  if (isAllAccounts(scope)) return transactions;
   return transactions.filter(
-    (t) => t.kind !== "transfer" && !!t.account && scope.accounts.has(t.account)
+    (t) => t.kind !== "transfer" && !!t.account && inPerimeter(scope, t.account)
   );
 }

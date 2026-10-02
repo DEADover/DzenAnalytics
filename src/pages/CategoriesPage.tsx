@@ -27,6 +27,7 @@ import { KindSwitcher } from "../components/KindSwitcher";
 import { PieChart as PieChartIcon } from "lucide-react";
 import type { Transaction } from "../types";
 import { SectionControls } from "../components/SectionControls";
+import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 
 const COLORS = [
   "#22D3EE", "#A78BFA", "#F59E0B", "#10B981", "#EF4444",
@@ -283,7 +284,9 @@ function TreemapCell({
 type View = "rings" | "treemap" | "bars";
 
 export function CategoriesPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Без движений по счетам вне баланса, пока они не считаются, — как во всех
+  // итогах сервиса (Настройки → Расчёты → «Счета вне баланса»).
+  const transactions = useInBalanceTransactions();
   const base = useDataStore((s) => s.rates.base);
   const theme = useThemeStore((s) => s.resolved);
   const categoryMeta = useCategoryMetaStore((s) => s.meta);

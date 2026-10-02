@@ -18,6 +18,7 @@ import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 
 const COLORS = {
   income: chartColor.income,
@@ -28,7 +29,9 @@ const COLORS = {
 };
 
 export function SankeyPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Без движений по счетам вне баланса, пока они не считаются, — как во всех
+  // итогах сервиса (Настройки → Расчёты → «Счета вне баланса»).
+  const transactions = useInBalanceTransactions();
   const base = useDataStore((s) => s.rates.base);
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
   const metaLoaded = useCategoryMetaStore((s) => s.loaded);

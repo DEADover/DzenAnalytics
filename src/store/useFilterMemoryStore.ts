@@ -36,7 +36,6 @@ export interface FilterSnapshot {
   hideZero: boolean;
   onlyWithComment: boolean;
   onlyNew: boolean;
-  excludeOffBalance: boolean;
 }
 
 /** Что лежит в базе под `filterMemory`. */
@@ -60,7 +59,6 @@ export interface FilterValues {
   hideZero: boolean;
   onlyWithComment: boolean;
   onlyNew: boolean;
-  excludeOffBalance: boolean;
 }
 
 /** Снять фильтр в вид, который переживёт JSON. Множества — массивами. */
@@ -78,7 +76,6 @@ export function snapshotFilters(s: FilterValues): FilterSnapshot {
     hideZero: s.hideZero,
     onlyWithComment: s.onlyWithComment,
     onlyNew: s.onlyNew,
-    excludeOffBalance: s.excludeOffBalance,
   };
 }
 
@@ -96,8 +93,7 @@ export function isEmptySnapshot(s: FilterSnapshot): boolean {
     !s.onlyUncategorized &&
     !s.hideZero &&
     !s.onlyWithComment &&
-    !s.onlyNew &&
-    !s.excludeOffBalance
+    !s.onlyNew
   );
 }
 
@@ -131,7 +127,6 @@ export function restoreFilters(raw: unknown): FilterValues | null {
     hideZero: bool(s.hideZero),
     onlyWithComment: bool(s.onlyWithComment),
     onlyNew: bool(s.onlyNew),
-    excludeOffBalance: bool(s.excludeOffBalance),
   };
 }
 

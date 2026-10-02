@@ -19,7 +19,6 @@ const values = (over: Partial<FilterValues> = {}): FilterValues => ({
   hideZero: false,
   onlyWithComment: false,
   onlyNew: false,
-  excludeOffBalance: false,
   ...over,
 });
 
@@ -35,7 +34,6 @@ describe("snapshotFilters / restoreFilters", () => {
       maxAmount: 5000,
       types: new Set(["expense"]),
       onlyWithComment: true,
-      excludeOffBalance: true,
     });
     const after = restoreFilters(JSON.parse(JSON.stringify(snapshotFilters(before))));
     expect(after).toEqual(before);
@@ -58,11 +56,12 @@ describe("snapshotFilters / restoreFilters", () => {
     }
   });
 
-  it("справочные счета вне баланса не сохраняются", () => {
-    // Это загруженные данные, а не выбор человека: сохранив их, мы бы
-    // восстановили вчерашний список счетов поверх сегодняшнего.
-    const snap = snapshotFilters(values({ excludeOffBalance: true }));
-    expect(snap).not.toHaveProperty("offBalanceAccounts");
+  it("старый отбор «Без внебалансовых счетов» из снимка игнорируется", () => {
+    // Отбора больше нет: счета вне баланса решает один переключатель в
+    // «Расчётах». Снимок, сохранённый раньше, читается без него.
+    const restored = restoreFilters({ accounts: ["Карта"], excludeOffBalance: true });
+    expect(restored).not.toHaveProperty("excludeOffBalance");
+    expect([...restored!.accounts]).toEqual(["Карта"]);
   });
 });
 
@@ -120,7 +119,6 @@ describe("isEmptySnapshot", () => {
       { hideZero: true },
       { onlyWithComment: true },
       { onlyNew: true },
-      { excludeOffBalance: true },
     ];
     for (const c of cases) {
       expect(isEmptySnapshot(snapshotFilters(values(c)))).toBe(false);

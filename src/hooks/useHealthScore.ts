@@ -6,6 +6,7 @@ import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { useLiveAccounts } from "./useLiveAccounts";
+import { useOffBalanceExcluded } from "./useInBalanceTransactions";
 import { computeHealthScore, type HealthScore } from "../lib/health";
 import { stripFromAnalytics } from "../lib/aggregations";
 
@@ -38,6 +39,8 @@ export function useHealthScore(): HealthScore | null {
   const hydrateExcl = useSlicesStore((s) => s.hydrate);
   const slice = activeSlice({ slices, activeId });
   const liveAccounts = useLiveAccounts();
+  // Чьи операции не считаются — то же правило, что во всём сервисе.
+  const offBalanceExcluded = useOffBalanceExcluded();
 
   useEffect(() => {
     if (!calibLoaded) hydrateCalibration();
@@ -63,7 +66,7 @@ export function useHealthScore(): HealthScore | null {
     // flows the user excluded (#14). Emergency-fund cushion (extraLiquid) is a
     // BALANCE and stays untouched — off-balance accounts still count there.
     const skipAccounts = new Set(slice.excludedAccounts);
-    for (const a of offBalance) skipAccounts.add(a.title);
+    for (const t of offBalanceExcluded ?? []) skipAccounts.add(t);
     const scored = stripFromAnalytics(transactions, {
       excludedCategories: new Set(slice.excludedCategories),
       offBalanceTitles: skipAccounts.size ? skipAccounts : undefined,
@@ -85,6 +88,7 @@ export function useHealthScore(): HealthScore | null {
     categoryMeta,
     includeOffBalance,
     liveAccounts,
+    offBalanceExcluded,
     slice,
     monthStartDay,
   ]);

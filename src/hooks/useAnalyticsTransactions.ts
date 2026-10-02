@@ -1,8 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useDataStore } from "../store/useDataStore";
-import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
-import { useLiveAccounts } from "./useLiveAccounts";
+import { useOffBalanceExcluded } from "./useInBalanceTransactions";
 import { stripFromAnalytics } from "../lib/aggregations";
 import type { Transaction } from "../types";
 
@@ -27,23 +26,12 @@ export function useAnalyticsTransactions(): Transaction[] {
   const exclLoaded = useSlicesStore((s) => s.loaded);
   const hydrateExcl = useSlicesStore((s) => s.hydrate);
   const slice = activeSlice({ slices, activeId });
-  const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
-  const liveAccounts = useLiveAccounts();
+  const offBalanceTitles = useOffBalanceExcluded();
 
   useEffect(() => {
     if (!exclLoaded) hydrateExcl();
   }, [exclLoaded, hydrateExcl]);
 
-
-  // Off-balance titles matter only while «включить внебалансовые» is OFF (the
-  // default) — otherwise those accounts count everywhere and we keep their flows.
-  const offBalanceTitles = useMemo(() => {
-    if (includeOffBalance || !liveAccounts) return undefined;
-    const titles = liveAccounts
-      .filter((a) => !a.archive && !a.inBalance)
-      .map((a) => a.title);
-    return titles.length ? new Set(titles) : undefined;
-  }, [includeOffBalance, liveAccounts]);
 
   const excluded = useMemo(
     () => new Set(slice.excludedCategories),

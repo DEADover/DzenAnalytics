@@ -19,6 +19,7 @@ import { counterpartyOf } from "../lib/yearReview";
 import { formatNum } from "../lib/format";
 import { TrendingUp, TrendingDown, Tags, Users, Receipt, Coins } from "lucide-react";
 import { SectionControls } from "../components/SectionControls";
+import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 
 type Tab = "categories" | "payees" | "transactions";
 
@@ -43,7 +44,9 @@ const COL = { value: "11rem", share: "7rem", count: "8rem", avg: "10rem" } as co
 const TX_COL = { date: "9rem", category: "15rem", payee: "15rem", amount: "11rem" } as const;
 
 export function TopPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Без движений по счетам вне баланса, пока они не считаются, — как во всех
+  // итогах сервиса (Настройки → Расчёты → «Счета вне баланса»).
+  const transactions = useInBalanceTransactions();
   const base = useDataStore((s) => s.rates.base);
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);

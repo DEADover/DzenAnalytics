@@ -33,6 +33,7 @@ import { KindSwitcher } from "../components/KindSwitcher";
 import { YearPicker } from "../components/MonthPicker";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionControls } from "../components/SectionControls";
+import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const MONTHS = [
@@ -85,7 +86,9 @@ function binIdx(v: number, thresholds: number[], paletteSize: number): number {
 }
 
 export function CalendarPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Без движений по счетам вне баланса, пока они не считаются, — как во всех
+  // итогах сервиса (Настройки → Расчёты → «Счета вне баланса»).
+  const transactions = useInBalanceTransactions();
   const rates = useDataStore((s) => s.rates);
   const base = rates.base;
   const filters = useFiltersStore();

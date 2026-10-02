@@ -72,9 +72,12 @@ import { DataTable } from "../components/DataTable";
 import { toneOfSigned } from "../components/table/tableKit";
 import type { MonthBucket } from "../lib/aggregations";
 import { clickedRow } from "../lib/chartClick";
+import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 
 export function CashflowPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Без движений по счетам вне баланса, пока они не считаются, — как во всех
+  // итогах сервиса (Настройки → Расчёты → «Счета вне баланса»).
+  const transactions = useInBalanceTransactions();
   const base = useDataStore((s) => s.rates.base);
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
   const metaLoaded = useCategoryMetaStore((s) => s.loaded);

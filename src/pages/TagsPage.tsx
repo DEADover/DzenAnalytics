@@ -28,6 +28,7 @@ import { TooltipFacts } from "../components/TooltipFacts";
 import { WordCloud } from "../components/WordCloud";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { SectionControls } from "../components/SectionControls";
+import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 
 /**
  * Значок тега. Хэштег — решёткой, как его набирают в комментарии. Вторая
@@ -101,7 +102,9 @@ interface TagRow {
 }
 
 export function TagsPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Без движений по счетам вне баланса, пока они не считаются, — как во всех
+  // итогах сервиса (Настройки → Расчёты → «Счета вне баланса»).
+  const transactions = useInBalanceTransactions();
   const base = useDataStore((s) => s.rates.base);
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);

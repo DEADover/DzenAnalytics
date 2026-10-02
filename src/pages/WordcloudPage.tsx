@@ -18,9 +18,12 @@ import { Slider } from "../components/Slider";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { WordCloud } from "../components/WordCloud";
 import { CardHeader } from "../components/CardHeader";
+import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 
 export function WordcloudPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Без движений по счетам вне баланса, пока они не считаются, — как во всех
+  // итогах сервиса (Настройки → Расчёты → «Счета вне баланса»).
+  const transactions = useInBalanceTransactions();
   const base = useDataStore((s) => s.rates.base);
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);

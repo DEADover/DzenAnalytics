@@ -95,15 +95,6 @@ interface FiltersState {
   /** Только «новые» — то, что приехало из банка и чего пользователь ещё не
    *  открывал (`viewed: false` в Дзен-мани). У операций из CSV признака нет. */
   onlyNew: boolean;
-  /** Exclude operations whose account is off-balance (Zenmoney inBalance:false —
-   *  savings/brokerage). Independent of the global «включить внебалансовые»
-   *  toggle: this drops such flows from the analytics entirely. */
-  excludeOffBalance: boolean;
-  /** Titles of off-balance accounts — reference data loaded from the account
-   *  cache (not a user choice), kept here so the pure `applyFilters` can honour
-   *  `excludeOffBalance` without an account-metadata lookup. Preserved across
-   *  `reset()` (it's data, not a filter value). */
-  offBalanceAccounts: Set<string>;
 
   setPreset: (p: DatePreset) => void;
   /**
@@ -147,8 +138,6 @@ interface FiltersState {
   setHideZero: (v: boolean) => void;
   setOnlyWithComment: (v: boolean) => void;
   setOnlyNew: (v: boolean) => void;
-  setExcludeOffBalance: (v: boolean) => void;
-  setOffBalanceAccounts: (titles: Set<string>) => void;
   resetToCurrentPeriod: (startDay: number) => void;
   /**
    * Первый день отчётного месяца сменился — пришёл из Дзен-мани после запуска
@@ -185,8 +174,6 @@ const initial = {
   hideZero: false,
   onlyWithComment: false,
   onlyNew: false,
-  excludeOffBalance: false,
-  offBalanceAccounts: new Set<string>(),
 };
 
 export const useFiltersStore = create<FiltersState>((set, get) => ({
@@ -270,8 +257,6 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
   setHideZero: (hideZero) => set({ hideZero }),
   setOnlyWithComment: (onlyWithComment) => set({ onlyWithComment }),
   setOnlyNew: (onlyNew) => set({ onlyNew }),
-  setExcludeOffBalance: (excludeOffBalance) => set({ excludeOffBalance }),
-  setOffBalanceAccounts: (offBalanceAccounts) => set({ offBalanceAccounts }),
   // Текущий период — того вида, который человек выбрал последним: выбрав
   // календарный месяц, он и после перезагрузки должен увидеть календарный, а
   // не отчётный.
@@ -291,13 +276,10 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
     if (preset !== "period" || monthYM !== currentPeriod(prevDay)) return;
     set({ monthYM: currentPeriod(nextDay) });
   },
-  // Preserve the off-balance reference set — it's loaded data, not a filter the
-  // user set, so a «сбросить» shouldn't wipe it (only the toggle resets to off).
   reset: () =>
-    set((s) => ({
+    set(() => ({
       ...initial,
       monthYM: currentYM(),
-      offBalanceAccounts: s.offBalanceAccounts,
     })),
 }));
 
@@ -479,17 +461,6 @@ export function applyFilters(
     if (state.hideZero && t.amountBase === 0) return false;
     if (state.onlyWithComment && !(t.comment && t.comment.trim())) return false;
     if (state.onlyNew && !t.unseen) return false;
-    // Off-balance flows: drop the op if its account (or either transfer leg) is
-    // an off-balance account (savings/brokerage). Belt-and-suspenders on the
-    // legs so a transfer touching an off-balance account is excluded too.
-    if (
-      state.excludeOffBalance &&
-      state.offBalanceAccounts.size > 0 &&
-      (state.offBalanceAccounts.has(t.account) ||
-        state.offBalanceAccounts.has(t.outcomeAccount) ||
-        state.offBalanceAccounts.has(t.incomeAccount))
-    )
-      return false;
     return true;
   });
 }

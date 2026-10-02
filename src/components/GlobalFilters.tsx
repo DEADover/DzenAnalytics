@@ -218,11 +218,6 @@ export function GlobalFilters({
       cancelled = true;
     };
   }, [transactions]);
-  // Off-balance account titles → the filter store, so `applyFilters` can honour
-  // the «исключить внебалансовые» option (which needs account metadata the pure
-  // filter can't see). Loaded here since GlobalFilters renders on every page.
-  const offBalanceAccounts = f.offBalanceAccounts;
-  const setOffBalanceAccounts = f.setOffBalanceAccounts;
   useEffect(() => {
     let cancelled = false;
     getLiveAccountsFromCache().then((live) => {
@@ -232,14 +227,11 @@ export function GlobalFilters({
         new Map(live.map((a) => [a.title, accountKindLabel(a.type, a.savings)]))
       );
       setDebtAccounts(new Set(live.filter((a) => DEBT_TYPES.has(a.type)).map((a) => a.title)));
-      setOffBalanceAccounts(
-        new Set(live.filter((a) => !a.archive && !a.inBalance).map((a) => a.title))
-      );
     });
     return () => {
       cancelled = true;
     };
-  }, [transactions, setOffBalanceAccounts]);
+  }, [transactions]);
 
   // Список счетов — операции ПЛЮС справочник Дзен-мани: счёт без операций в
   // загруженных данных на странице «Счета» есть, и в фильтре он тоже должен
@@ -617,8 +609,7 @@ export function GlobalFilters({
     f.onlyUncategorized ||
     f.hideZero ||
     f.onlyWithComment ||
-    f.onlyNew ||
-    f.excludeOffBalance;
+    f.onlyNew;
   const extraCount =
     (f.excludeTransfers ? 1 : 0) +
     (f.minAmount != null || f.maxAmount != null ? 1 : 0) +
@@ -626,8 +617,7 @@ export function GlobalFilters({
     (f.onlyUncategorized ? 1 : 0) +
     (f.hideZero ? 1 : 0) +
     (f.onlyWithComment ? 1 : 0) +
-    (f.onlyNew ? 1 : 0) +
-    (f.excludeOffBalance ? 1 : 0);
+    (f.onlyNew ? 1 : 0);
   const hasFilters =
     f.accounts.size > 0 ||
     f.categories.size > 0 ||
@@ -788,17 +778,6 @@ export function GlobalFilters({
                     { label: "Скрыть нулевые операции", checked: f.hideZero, on: f.setHideZero },
                     { label: "Только с комментарием", checked: f.onlyWithComment, on: f.setOnlyWithComment },
                     { label: "Только новые", checked: f.onlyNew, on: f.setOnlyNew },
-                    // Only offered when the user actually HAS off-balance accounts
-                    // (savings/brokerage) — otherwise the option would be a no-op.
-                    ...(offBalanceAccounts.size > 0
-                      ? [
-                          {
-                            label: "Без внебалансовых счетов",
-                            checked: f.excludeOffBalance,
-                            on: f.setExcludeOffBalance,
-                          },
-                        ]
-                      : []),
                   ].map((row) => (
                     <label
                       key={row.label}

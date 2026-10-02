@@ -10,6 +10,7 @@ import { InfoTerm } from "./InfoPopover";
 import { SettingRow } from "./SettingRow";
 import { Switch } from "./Switch";
 import { Tooltip } from "./Tooltip";
+import { useOffBalanceExcluded } from "../hooks/useInBalanceTransactions";
 
 
 /**
@@ -41,7 +42,9 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
   }, [transactions]);
 
   const selected = useMemo(() => new Set(s.accounts), [s.accounts]);
-  const allAccounts = selected.size === 0;
+  // Пустой выбор — все счета; пока счета вне баланса не считаются, без них.
+  const offBalance = useOffBalanceExcluded();
+  const allAccounts = selected.size === 0 && !offBalance?.size;
 
   return (
     <div ref={anchorRef} className="relative">
@@ -78,7 +81,10 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
               </p>
               <p>
                 Пустой выбор означает все счета — то же соглашение, что и у
-                фильтров в остальном сервисе.
+                фильтров в остальном сервисе. Счета вне баланса в «все» не
+                входят, пока они не считаются (Настройки → Расчёты → «Счета вне
+                баланса»), — так же считает сам Дзен-мани. Выберите такой счёт
+                явно, и он войдёт в бюджет.
               </p>
             </>
           }
@@ -117,7 +123,10 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
               </p>
               {!allAccounts && (
                 <p>
-                  Бюджет сужен до части счетов: сторона перевода считается,
+                  {selected.size === 0
+                    ? "Счета вне баланса в бюджет не входят: "
+                    : "Бюджет сужен до части счетов: "}
+                  сторона перевода считается,
                   только если её счёт входит в бюджет. Перевод наружу — чистый
                   отток, перевод внутрь — поступление.
                 </p>

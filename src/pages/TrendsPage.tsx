@@ -55,9 +55,12 @@ import { colorForCategory } from "../lib/categoryColor";
 import { useEffect } from "react";
 import { SectionControls } from "../components/SectionControls";
 import { clickedRow, clickedDataKey } from "../lib/chartClick";
+import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 
 export function TrendsPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Без движений по счетам вне баланса, пока они не считаются, — как во всех
+  // итогах сервиса (Настройки → Расчёты → «Счета вне баланса»).
+  const transactions = useInBalanceTransactions();
   const base = useDataStore((s) => s.rates.base);
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
   const metaLoaded = useCategoryMetaStore((s) => s.loaded);

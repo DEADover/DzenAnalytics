@@ -49,12 +49,14 @@ import {
   type PlanCellEdit,
 } from "../lib/budgetYear";
 import { useLiveCategoryPaths } from "../hooks/useDictionaries";
+import { useOffBalanceExcluded } from "../hooks/useInBalanceTransactions";
 import { nameKey } from "../lib/budgetLines";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
 import { BudgetDashboardPrint } from "../components/BudgetDashboardPrint";
 import { BudgetDashboardView } from "../components/BudgetDashboardView";
 import {
   budgetHits,
+  inPerimeter,
   insidePerimeter,
   transactionsForCell,
   TRANSFER_CATEGORY,
@@ -161,12 +163,16 @@ export function BudgetsPage() {
     if (!settingsLoaded) hydrateSettings();
   }, [settingsLoaded, hydrateSettings]);
 
+  // «Все счета» — все, кроме счетов вне баланса, пока они не считаются: то же
+  // правило, что во всех итогах сервиса, и так же считает сам Дзен-мани.
+  const offBalanceExcluded = useOffBalanceExcluded();
   const scope = useMemo(
     () => ({
       accounts: new Set(settings.accounts),
+      excluded: offBalanceExcluded,
       perimeterTransfers: settings.perimeterTransfers,
     }),
-    [settings.accounts, settings.perimeterTransfers]
+    [settings.accounts, settings.perimeterTransfers, offBalanceExcluded]
   );
   // График движения денег считает сам по операциям — ему отдаём только то, что
   // внутри периметра.
@@ -241,8 +247,7 @@ export function BudgetsPage() {
     // Периметр счетов действует и на планы: если бюджет сужен до карты, чужой
     // счёт не должен подрисовывать ступеньку на графике. Пустой периметр —
     // все счета, как и везде в разделе.
-    const inScope = (account: string) =>
-      scope.accounts.size === 0 || scope.accounts.has(account);
+    const inScope = (account: string) => inPerimeter(scope, account);
     for (const p of zenPlanned) {
       if (p.forecast) continue;
       const day = p.date.slice(0, 10);
@@ -739,8 +744,7 @@ export function BudgetsPage() {
       if (cur) cur.fact += amount;
       else agg.set(key, { kind, category, subcategory, fact: amount });
     };
-    const inScope = (account: string | undefined) =>
-      scope.accounts.size === 0 || (!!account && scope.accounts.has(account));
+    const inScope = (account: string | undefined) => inPerimeter(scope, account);
     for (const t of transactions) {
       if (!inMonth(t.date)) continue;
       // «Без категории» `budgetHits` отсеивает — планировать неразобранное

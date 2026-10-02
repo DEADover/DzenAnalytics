@@ -37,6 +37,7 @@ import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { ProgressBar } from "../components/ProgressBar";
 import { SectionControls } from "../components/SectionControls";
+import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 
 // One pill per coarse cadence bucket, plus an "all" pseudo-option.
 // Order matches the user's likely usage frequency on this page:
@@ -107,7 +108,9 @@ function plannedPeriodEnd(period: PlannedPeriod, monthStartDay: number = 1): str
  * «вчера» должно быть вчера независимо от того, сколько сейчас на часах.
  */
 export function RecurringPage() {
-  const transactions = useDataStore((s) => s.transactions);
+  // Без движений по счетам вне баланса, пока они не считаются, — как во всех
+  // итогах сервиса (Настройки → Расчёты → «Счета вне баланса»).
+  const transactions = useInBalanceTransactions();
   const rates = useDataStore((s) => s.rates);
   const base = rates.base;
   const showDrill = useDrillStore((s) => s.show);
