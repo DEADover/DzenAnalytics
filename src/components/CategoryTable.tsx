@@ -173,7 +173,10 @@ export function CategoryTable({
       {
         key: "change",
         type: "change",
-        width: "9.5rem",
+        // 11rem: в шапке переключатель «₽ / %», подпись и значок сортировки. При
+        // 9,5rem запас был в 2 px, и где шрифт рисуется чуть шире, «Отклонение»
+        // резалось многоточием (см. e2e headers).
+        width: "11rem",
         label: compare.changeLabel,
         headerTitle: compare.changeTitle,
         headerLead: (
