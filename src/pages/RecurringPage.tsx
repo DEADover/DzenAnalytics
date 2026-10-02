@@ -294,8 +294,9 @@ export function RecurringPage() {
         label: "Изменение",
         headerTitle: "Последний платёж против среднего прежних",
         headerLead: <DiffModeToggle mode={priceMode} onChange={setPriceMode} base={base} />,
-        // В шапке ещё и переключатель режима; «₽ %» на нём шире «₽» и «%».
-        width: priceMode === "both" ? "10.75rem" : "9.75rem",
+        // Под самый широкий режим «₽ %» и от режима не зависит: иначе при
+        // переключении соседние колонки ехали бы вбок (см. e2e diffmode).
+        width: "10.75rem",
         sortValue: (c) =>
           diffSortValue(c.priceTrend.lastAmount, c.priceTrend.baselineAmount, priceMode),
         render: (c) =>

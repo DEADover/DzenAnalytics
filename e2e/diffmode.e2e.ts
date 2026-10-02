@@ -8,6 +8,13 @@ import { test, expect, connectZen } from "./harness";
 import { tightHeaders } from "./tableHeaders";
 
 const toggle = (scope: Page | Locator) => scope.getByRole("button", { name: /^Разница в / });
+/** Режим переключателя — по его подписи: в самой кнопке невидимо лежит ещё и самый длинный вариант. */
+const MODE = {
+  money: /^Разница в деньгах\./,
+  pct: /^Разница в процентах\./,
+  both: /^Разница в деньгах и процентах\./,
+};
+const modeOf = async (t: Locator) => (await t.getAttribute("aria-label"))?.split(".")[0] ?? "";
 
 /** Ячейки таблиц с заданными ширинами, чьё содержимое не влезает. */
 async function clippedCells(page: Page): Promise<string[]> {
@@ -42,42 +49,55 @@ test("три режима по кругу и запоминаются для к�
   await connectZen(page, "/categories");
   await page.getByRole("button", { name: "Полосы" }).click();
   const t = toggle(page);
-  await expect(t).toHaveText("₽");
+  await expect(t).toHaveAttribute("aria-label", MODE.money);
   const pills = page.locator("table tbody td span.rounded-full", { hasText: /[▲▼]/ });
   await expect(pills.first()).toHaveText(/^[▲▼] [\d\s ]+₽$/);
 
   await t.click();
-  await expect(t).toHaveText("%");
+  await expect(t).toHaveAttribute("aria-label", MODE.pct);
   await expect(pills.first()).toHaveText(/%$/);
   await expect(pills.first()).not.toHaveText(/₽/);
 
   await t.click();
-  await expect(t).toHaveText("₽ %");
+  await expect(t).toHaveAttribute("aria-label", MODE.both);
   await expect(pills.filter({ hasText: /₽ \((менее 1|\d+)%\)$/ }).first()).toBeVisible();
 
   // Режим «Сравнения» свой и не задет.
   await go(page, "/compare");
   await expect(toggle(page)).toHaveCount(2);
-  await expect(toggle(page).last()).toHaveText("₽");
+  await expect(toggle(page).last()).toHaveAttribute("aria-label", MODE.money);
 
   // После перезагрузки «Категории» помнят «₽ %».
   await page.reload();
   await page.waitForLoadState("networkidle");
   await go(page, "/categories");
   await page.getByRole("button", { name: "Полосы" }).click();
-  await expect(toggle(page)).toHaveText("₽ %");
+  await expect(toggle(page)).toHaveAttribute("aria-label", MODE.both);
 });
 
-test("ни в одном режиме не режутся подписи и суммы", async ({ page }) => {
+/** Левые края всех столбцов таблицы, где стоит переключатель, и его самого. */
+async function columnEdges(t: Locator): Promise<number[]> {
+  return t.evaluate((btn) => {
+    const table = btn.closest("table")!;
+    const ths = [...table.querySelectorAll("thead th")].map((th) => Math.round(th.getBoundingClientRect().left));
+    // Подпись рядом с кнопкой — по правому краю кнопки.
+    return [...ths, Math.round(btn.getBoundingClientRect().right)];
+  });
+}
+
+test("ни в одном режиме не режутся подписи и суммы, и столбцы не двигаются", async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await connectZen(page, "/categories");
   const problems: string[] = [];
   const sweep = async (where: string, scope: Locator) => {
+    const edges = await columnEdges(scope);
     for (let i = 0; i < 3; i++) {
-      const mode = (await scope.textContent())?.trim();
+      const mode = await modeOf(scope);
       for (const h of await tightHeaders(page)) problems.push(`${where} [${mode}] шапка: ${h}`);
       for (const c of await clippedCells(page)) problems.push(`${where} [${mode}] ячейка: ${c}`);
+      const now = await columnEdges(scope);
+      if (now.join() !== edges.join()) problems.push(`${where} [${mode}] столбцы сдвинулись: ${edges} → ${now}`);
       await scope.click();
       await page.waitForTimeout(150);
     }

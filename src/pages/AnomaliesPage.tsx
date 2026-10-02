@@ -351,7 +351,9 @@ export function AnomaliesPage() {
                 label: "Больше обычного",
                 headerTitle: "Насколько расход месяца больше среднего за три предыдущих",
                 headerLead: <DiffModeToggle mode={spikeMode} onChange={setSpikeMode} base={base} />,
-                width: spikeMode === "both" ? "13rem" : "11.5rem",
+                // Под самый широкий режим «₽ %» и от режима не зависит: иначе
+                // при переключении соседние колонки ехали бы вбок.
+                width: "13rem",
                 sortValue: (sp) => diffSortValue(sp.current, sp.baseline, spikeMode),
                 exportValue: (sp) => sp.delta,
                 render: (sp) => (

@@ -29,11 +29,18 @@ export function DiffModeToggle({
         e.stopPropagation();
         onChange(next);
       }}
-      className="normal-case rounded bg-panel2 px-1 leading-4 text-text hover:text-accent transition-colors whitespace-nowrap tabular-nums"
+      className="normal-case inline-grid rounded bg-panel2 px-1 leading-4 text-text hover:text-accent transition-colors whitespace-nowrap tabular-nums"
       title={hint}
       aria-label={hint}
     >
-      {mode === "money" ? money : mode === "pct" ? "%" : `${money} %`}
+      {/* Ширина одна на все три режима: в той же клетке невидимо лежит самый
+          длинный, «₽ %», — подпись столбца рядом не прыгает при переключении. */}
+      <span aria-hidden className="invisible col-start-1 row-start-1">
+        {money} %
+      </span>
+      <span className="col-start-1 row-start-1 text-center">
+        {mode === "money" ? money : mode === "pct" ? "%" : `${money} %`}
+      </span>
     </button>
   );
 }

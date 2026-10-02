@@ -177,9 +177,10 @@ export function CategoryTable({
         type: "change",
         // В шапке переключатель режима, подпись и значок сортировки: при 9,5rem
         // запас был в 2 px, и где шрифт рисуется чуть шире, «Отклонение»
-        // резалось многоточием (см. e2e headers). «Деньги (процент)» длиннее —
-        // «▲ 1 234 567 ₽ (123%)» — и получают колонку шире.
-        width: compare.mode === "both" ? "13rem" : "11rem",
+        // резалось многоточием (см. e2e headers). Ширина — под самый длинный
+        // режим, «▲ 1 234 567 ₽ (123%)», и от режима НЕ зависит: иначе при
+        // переключении соседние колонки ехали бы вбок (см. e2e diffmode).
+        width: "13rem",
         label: compare.changeLabel,
         headerTitle: compare.changeTitle,
         headerLead: <DiffModeToggle mode={compare.mode} onChange={compare.onModeChange} base={base} />,
