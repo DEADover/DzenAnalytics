@@ -20,6 +20,7 @@ import {
   moveWidgetBefore,
   removeWidget,
   setRowLinks,
+  setWidgetOffBalance,
   setWidgetHidden,
   setWidgetView,
   shiftWidget,
@@ -48,6 +49,8 @@ interface State {
   remove: (key: string) => Promise<void>;
   /** Выбрать вариант оформления виджета. */
   setView: (key: string, view: string) => Promise<void>;
+  /** Счета вне баланса в «Балансах счетов»; `undefined` — как в «Расчётах». */
+  setOffBalance: (key: string, value: boolean | undefined) => Promise<void>;
   /** Задать набор кнопок дорожки. */
   setLinks: (key: string, links: readonly (string | null)[]) => Promise<void>;
   reset: () => Promise<void>;
@@ -86,6 +89,7 @@ export const useDashboardLayoutStore = create<State>((set, get) => {
     remove: (key) => apply(removeWidget(get().layout, key)),
     setView: (key, view) => apply(setWidgetView(get().layout, key, view)),
     setLinks: (key, links) => apply(setRowLinks(get().layout, key, links)),
+    setOffBalance: (key, value) => apply(setWidgetOffBalance(get().layout, key, value)),
     reset: () => apply(defaultLayout()),
     replaceLayout: (raw) => apply(layoutFromStored(raw)),
   };

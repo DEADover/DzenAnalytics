@@ -102,6 +102,14 @@ export interface DashboardModel {
   netWorth: number;
   netWorthSeries: { date: string; net: number }[];
   accounts: DashboardAccount[];
+  /**
+   * Все счета с остатком — и в балансе, и вне его (`offBalance`), независимо
+   * от настройки. Для «Балансов счетов», где счета вне баланса включаются
+   * своим переключателем.
+   */
+  accountsAll: DashboardAccount[];
+  /** Настройка «Счета вне баланса»: по ней посчитаны `accounts` и `netWorth`. */
+  includeOffBalance: boolean;
   /** Разложение баланса: обычные счета, накопительные, вне баланса. */
   liquid: number;
   savings: number;
@@ -261,10 +269,9 @@ export function useDashboardModel(): DashboardModel {
     return buildNeedsWants(txs, categoryMeta);
   }, [months, ym, transactions, monthStartDay, categoryMeta]);
 
-  const accounts = useMemo<DashboardAccount[]>(() => {
+  const accountsAll = useMemo<DashboardAccount[]>(() => {
     if (liveAccounts && liveAccounts.length > 0) {
       return liveAccounts
-        .filter((a) => (includeOffBalance ? true : a.inBalance))
         .filter((a) => !a.archive)
         .filter((a) => Math.abs(a.balance) > 0.005)
         .map((a) => ({
@@ -293,7 +300,11 @@ export function useDashboardModel(): DashboardModel {
         offBalance: false,
       }))
       .sort((a, b) => Math.abs(b.balanceBase) - Math.abs(a.balanceBase));
-  }, [liveAccounts, transactions, base, rates, includeOffBalance]);
+  }, [liveAccounts, transactions, base, rates]);
+  const accounts = useMemo(
+    () => (includeOffBalance ? accountsAll : accountsAll.filter((a) => !a.offBalance)),
+    [accountsAll, includeOffBalance]
+  );
 
   const netWorth = netWorthSeries.length
     ? netWorthSeries[netWorthSeries.length - 1].net
@@ -445,6 +456,8 @@ export function useDashboardModel(): DashboardModel {
     netWorth,
     netWorthSeries,
     accounts,
+    accountsAll,
+    includeOffBalance,
     liquid,
     savings,
     factIncome,

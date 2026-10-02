@@ -334,6 +334,12 @@ export interface WidgetPlacement {
   /** Только у полоски: что стоит на каждом из шести мест. */
   links?: LinkSlots;
   /**
+   * Только у «Балансов счетов»: показывать ли счета вне баланса и прибавлять
+   * ли их к сумме. Пусто — как в «Расчётах» («Счета вне баланса»). Касается
+   * одного виджета: итоги и отчёты сервиса по-прежнему решает настройка.
+   */
+  offBalance?: boolean;
+  /**
    * Сколько пустых клеток оставить слева от виджета в его ряду.
    *
    * Без этого виджет всегда прижат к левому краю своего ряда: раскладка —
@@ -409,6 +415,7 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
       view?: unknown;
       links?: unknown;
       offset?: unknown;
+      offBalance?: unknown;
     };
     const kind = typeof rec.kind === "string" ? BY_KIND.get(rec.kind) : undefined;
     if (!kind) continue;
@@ -429,6 +436,9 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
       placement.links = links;
     }
     if (rec.hidden === true) placement.hidden = true;
+    if (kind.kind === "accounts" && typeof rec.offBalance === "boolean") {
+      placement.offBalance = rec.offBalance;
+    }
     const offset = clampOffset(rec.offset, kind);
     if (offset > 0) placement.offset = offset;
 
@@ -832,6 +842,22 @@ export function setRowLinks(
 }
 
 /** Выбрать вариант оформления виджета. */
+/**
+ * Счета вне баланса в «Балансах счетов». `undefined` — снова как в
+ * «Расчётах»: свой выбор не храним, раскладка остаётся стандартной.
+ */
+export function setWidgetOffBalance(
+  layout: readonly WidgetPlacement[],
+  key: string,
+  value: boolean | undefined
+): WidgetPlacement[] {
+  return layout.map((p) => {
+    if (p.key !== key || p.kind !== "accounts") return p;
+    const { offBalance: _dropped, ...rest } = p;
+    return value === undefined ? rest : { ...rest, offBalance: value };
+  });
+}
+
 export function setWidgetView(
   layout: readonly WidgetPlacement[],
   key: string,

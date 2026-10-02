@@ -1789,4 +1789,30 @@ h2,
     padding-inline: 0.5rem;
   }
 }
+/* Шапка с переключателем («Балансы счетов» в колонке в треть ширины): ему
+   нужно место, поэтому подпись ссылки прячется раньше, а когда не влезает и
+   так — переключатель уходит второй строкой, как на телефоне. Иначе резался
+   заголовок: «Балансы счет…» на 1280 px. Пороги — по замеру шапки: заголовок
+   160 + переключатель 129 + ссылка 83 (32 без подписи) + промежутки. */
+@container (max-width: 25.5rem) {
+  .block-title .block-title-right ~ .pill-link .block-title-link-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .block-title .block-title-right ~ .pill-link {
+    padding-inline: 0.5rem;
+  }
+}
+@container (max-width: 22.5rem) {
+  .block-title .block-title-right {
+    display: block;
+    order: 9;
+    flex-basis: 100%;
+    min-width: 0;
+  }
+}
 

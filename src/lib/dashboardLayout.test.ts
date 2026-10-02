@@ -16,6 +16,7 @@ import {
   isBareWidget,
   setRowLinks,
   setWidgetHidden,
+  setWidgetOffBalance,
   setWidgetView,
   shiftWidget,
   widgetMeta,
@@ -704,5 +705,29 @@ describe("реестр виджетов", () => {
     expect(DEFAULT_LINKS).toHaveLength(LINK_SLOTS);
     expect(DEFAULT_LINKS.every(Boolean)).toBe(true);
     expect(row(DEFAULT_LAYOUT, "links").links).toEqual(DEFAULT_LINKS);
+  });
+});
+
+describe("«Балансы счетов»: счета вне баланса — выбор виджета", () => {
+  const acc = (l: readonly { kind: string; offBalance?: boolean }[]) => l.find((p) => p.kind === "accounts");
+
+  it("выбор хранится, «как в настройках» — не хранится", () => {
+    const on = setWidgetOffBalance(DEFAULT_LAYOUT, "accounts", true);
+    expect(acc(on)?.offBalance).toBe(true);
+    expect(acc(setWidgetOffBalance(on, "accounts", false))?.offBalance).toBe(false);
+    expect(acc(setWidgetOffBalance(on, "accounts", undefined))).not.toHaveProperty("offBalance");
+  });
+
+  it("другим виджетам поле не ставится", () => {
+    expect(setWidgetOffBalance(DEFAULT_LAYOUT, "month", true)).toEqual(DEFAULT_LAYOUT);
+  });
+
+  it("переживает чтение с диска и с другого устройства", () => {
+    const raw = JSON.parse(JSON.stringify(setWidgetOffBalance(DEFAULT_LAYOUT, "accounts", false)));
+    expect(acc(normalizeLayout(raw))?.offBalance).toBe(false);
+    // Чужое и битое отсекается.
+    const junk = normalizeLayout([{ key: "accounts", kind: "accounts", offBalance: "да" }, { key: "month", kind: "month", offBalance: true }]);
+    expect(acc(junk)).not.toHaveProperty("offBalance");
+    expect(junk.find((p) => p.kind === "month")).not.toHaveProperty("offBalance");
   });
 });

@@ -81,7 +81,7 @@ const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 /** «19 авг» — в узкой колонке полное название месяца переносит строку. */
 const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн",
   "июл", "авг", "сен", "окт", "ноя", "дек"];
-import type { DashboardModel } from "../../hooks/useDashboardModel";
+import type { DashboardAccount, DashboardModel } from "../../hooks/useDashboardModel";
 import type { FreeMoneyModel } from "../../hooks/useFreeMoney";
 import type { BalanceMode, PlanLeft } from "../../lib/freeMoney";
 import type { PlannedOp } from "../../lib/plannedOps";
@@ -140,13 +140,19 @@ export function BlockTitle({
   // шапки (`.block-title` в index.css — container query), остаётся стрелка;
   // на телефоне переключатели уходят второй строкой (`sm:contents` — как было).
   return (
-    <div className="block-title flex items-center justify-between gap-x-3 gap-y-2 mb-3 max-sm:flex-wrap">
+    <div
+      className={`block-title flex items-center justify-between gap-x-3 gap-y-2 mb-3 ${
+        right ? "flex-wrap" : "max-sm:flex-wrap"
+      }`}
+    >
       <div className="flex items-center gap-1.5 min-w-0 max-sm:flex-1">
         <h3 className="font-semibold text-[16px] sm:truncate">{title}</h3>
         {info && <InfoPopover label="Что это за график">{info}</InfoPopover>}
       </div>
       {right && (
-        <div className="max-sm:order-last max-sm:basis-full max-sm:min-w-0 sm:contents">{right}</div>
+        <div className="block-title-right max-sm:order-last max-sm:basis-full max-sm:min-w-0 sm:contents">
+          {right}
+        </div>
       )}
       {to && (
         <Link
@@ -825,14 +831,93 @@ export function CapitalBlock({
 
 /* ─────────────────────────────  списки  ───────────────────────────── */
 
-export function AccountsList({
+/**
+ * «Балансы счетов»: совокупный баланс и остаток на каждом счёте.
+ *
+ * Счета вне баланса здесь включаются своим переключателем в шапке — он меняет
+ * только этот виджет (#116: «все счета и так живут в "Капитале"», хочется
+ * выбирать). Итоги и отчёты сервиса по-прежнему решает настройка «Счета вне
+ * баланса» в «Расчётах»; пока в виджете ничего не выбрано, он следует ей.
+ */
+export function AccountsBlock({
   m,
+  offBalance,
+  onOffBalanceChange,
   onAccount,
 }: {
   m: DashboardModel;
+  /** Выбор виджета; `undefined` — как в «Расчётах». */
+  offBalance: boolean | undefined;
+  onOffBalanceChange: (next: boolean) => void;
   onAccount?: (title: string) => void;
 }) {
-  if (m.accounts.length === 0) {
+  const show = offBalance ?? m.includeOffBalance;
+  const offSum = m.accountsAll.reduce((s, a) => (a.offBalance ? s + a.balanceBase : s), 0);
+  const hasOff = m.accountsAll.some((a) => a.offBalance);
+  const accounts = show ? m.accountsAll : m.accountsAll.filter((a) => !a.offBalance);
+  // Совокупный баланс модели посчитан по настройке; виджет её поправляет на
+  // сумму счетов вне баланса, если его выбор другой.
+  const total =
+    m.netWorth + (show === m.includeOffBalance ? 0 : show ? offSum : -offSum);
+  return (
+    <>
+      <BlockTitle
+        title="Балансы счетов"
+        info={
+          hasOff ? (
+            <p>
+              Счета вне баланса — накопительные, брокерские, всё, что в Дзен-мани
+              помечено «вне баланса». Переключатель в шапке решает, показывать
+              ли их здесь и прибавлять ли к сумме, — только в этом виджете. В
+              итоги и отчёты они входят по настройке «Счета вне баланса» в
+              «Расчётах».
+            </p>
+          ) : undefined
+        }
+        right={
+          hasOff ? (
+            <Segmented
+              tight
+              label="Какие счета показывать"
+              value={show ? "all" : "in"}
+              onChange={(v) => onOffBalanceChange(v === "all")}
+              options={[
+                { value: "in", label: "В балансе", title: "Только счета в балансе" },
+                { value: "all", label: "Все", title: "Со счетами вне баланса" },
+              ]}
+              className="ml-auto"
+            />
+          ) : undefined
+        }
+        to="/accounts"
+        linkLabel="Счета"
+      />
+      {/* Черта под итогом — та же, что делит строки списка: без неё
+          крупное число и первая строка счёта читались как одно целое. */}
+      <div
+        className={`font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none pb-3 mb-1 border-b border-border ${
+          total < 0 ? "text-expense" : ""
+        }`}
+        style={{ wordSpacing: "-0.22em" }}
+      >
+        {formatMoney(total, m.base)}
+      </div>
+      <AccountsList m={m} accounts={accounts} onAccount={onAccount} />
+    </>
+  );
+}
+
+export function AccountsList({
+  m,
+  accounts = m.accounts,
+  onAccount,
+}: {
+  m: DashboardModel;
+  /** Какие счета показать; по умолчанию — по настройке «Счета вне баланса». */
+  accounts?: DashboardAccount[];
+  onAccount?: (title: string) => void;
+}) {
+  if (accounts.length === 0) {
     return <SectionEmpty variant="compact">Счетов пока нет</SectionEmpty>;
   }
   return (
@@ -840,7 +925,7 @@ export function AccountsList({
       {/* Список прокручивается внутри карточки: счетов бывает и двенадцать, а
           обрезать их числом значило бы врать итогом внизу. */}
       <div className="scroll-soft flex flex-col flex-1 min-h-0 -mx-2 px-2">
-      {m.accounts.map((a) => {
+      {accounts.map((a) => {
         // Тип известен только из кэша Дзен-мани; в режиме CSV его нет.
         // И не повторяем его, когда он слово в слово совпал с названием счёта
         // («Наличные — Наличные»).

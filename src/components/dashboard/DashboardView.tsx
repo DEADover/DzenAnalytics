@@ -23,7 +23,7 @@ import {
   BlockTitle,
   CashflowBars,
   CapitalBlock,
-  AccountsList,
+  AccountsBlock,
   CategoriesList,
   UpcomingList,
   ObservationsList,
@@ -650,6 +650,7 @@ export function DashboardView() {
   const move = useDashboardLayoutStore((s) => s.move);
   const shift = useDashboardLayoutStore((s) => s.shift);
   const setLinks = useDashboardLayoutStore((s) => s.setLinks);
+  const setOffBalance = useDashboardLayoutStore((s) => s.setOffBalance);
   const dropInGap = useDashboardLayoutStore((s) => s.dropInGap);
 
   // Планы Дзен-мани — второй вид «Запланированных платежей». Отрезок тот же,
@@ -814,20 +815,12 @@ export function DashboardView() {
 
       case "accounts":
         return (
-          <>
-            <BlockTitle title="Балансы счетов" to="/accounts" linkLabel="Счета" />
-            {/* Черта под итогом — та же, что делит строки списка: без неё
-                крупное число и первая строка счёта читались как одно целое. */}
-            <div
-              className={`font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none pb-3 mb-1 border-b border-border ${
-                m.netWorth < 0 ? "text-expense" : ""
-              }`}
-              style={{ wordSpacing: "-0.22em" }}
-            >
-              {formatMoney(m.netWorth, m.base)}
-            </div>
-            <AccountsList m={m} onAccount={onAccount} />
-          </>
+          <AccountsBlock
+            m={m}
+            offBalance={p.offBalance}
+            onOffBalanceChange={(v) => void setOffBalance(p.key, v)}
+            onAccount={onAccount}
+          />
         );
 
       case "upcoming": {
