@@ -11,6 +11,12 @@ import { parseDupExclusions } from "./useDuplicateExclusionsStore";
  * записей.
  */
 describe("реестр переносимых настроек", () => {
+  it("личное помечено, «Это я» не переносится (#116)", () => {
+    const personal = SYNCED_FIELDS.filter((f) => f.personal).map((f) => f.key).sort();
+    expect(personal).toEqual(["includeOffBalance", "members.hideForeignPrivate"]);
+    expect(SYNCED_FIELDS.map((f) => f.key)).not.toContain("members.owner");
+  });
+
   it("ключи полей уникальны", () => {
     const keys = SYNCED_FIELDS.map((f) => f.key);
     expect(new Set(keys).size).toBe(keys.length);
@@ -53,14 +59,13 @@ describe("реестр переносимых настроек", () => {
     expect(keys).toContain("fire.excluded");
   });
 
-  it("переносятся оформление лент, «Это я», «Не дубликаты» и вид «Счетов»", () => {
+  it("переносятся оформление лент, «Не дубликаты» и вид «Счетов»", () => {
     const keys = SYNCED_FIELDS.map((f) => f.key);
     for (const k of [
       "display.commentWrap",
       "display.columnResize",
       "display.feedHeadSticky",
       "display.feedPlanned",
-      "members.owner",
       "duplicates.exclusions",
       "accounts.view",
     ]) {

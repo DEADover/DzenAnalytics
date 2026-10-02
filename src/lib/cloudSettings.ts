@@ -260,6 +260,94 @@ export function mergeFields(local: FieldMap, cloud: FieldMap | null): FieldMerge
   return { merged, applyLocally, pushNeeded };
 }
 
+/**
+ * Запись настроек в облаке: общие поля и личные — по участникам.
+ *
+ * Аккаунт Дзен-мани бывает общим, семейным, и служебная запись у всех
+ * участников одна. Личное — «Счета вне баланса», «Скрывать чужие личные
+ * счета» — у каждого своё: раньше оно лежало в общих полях, и выбор одного
+ * человека приезжал всем (#116). Теперь личное лежит в `people` под номером
+ * пользователя Дзен-мани.
+ */
+export interface SettingsDoc {
+  fields: FieldMap;
+  people: Record<string, FieldMap>;
+}
+
+export interface SettingsMergeResult {
+  merged: SettingsDoc;
+  /** Общие поля, которые надо применить у себя. */
+  applyShared: string[];
+  /** Личные поля этого человека, которые надо применить у себя. */
+  applyPersonal: string[];
+  pushNeeded: boolean;
+}
+
+/** Запись настроек из облака: битое отбрасывается, форма гарантирована. */
+export function sanitizeSettingsDoc(raw: unknown): SettingsDoc {
+  const doc: SettingsDoc = { fields: {}, people: {} };
+  if (!isRecord(raw)) return doc;
+  doc.fields = sanitizeFieldMap(raw.fields);
+  if (isRecord(raw.people)) {
+    for (const [id, map] of Object.entries(raw.people)) {
+      if (!/^\d+$/.test(id)) continue;
+      const fields = sanitizeFieldMap(map);
+      if (Object.keys(fields).length > 0) doc.people[id] = fields;
+    }
+  }
+  return doc;
+}
+
+/** Две облачные записи в одну — когда на сервере остались дубли. */
+export function combineSettingsDocs(a: SettingsDoc, b: SettingsDoc): SettingsDoc {
+  const people: Record<string, FieldMap> = { ...a.people };
+  for (const [id, map] of Object.entries(b.people)) {
+    people[id] = people[id] ? mergeFields(people[id], map).merged : map;
+  }
+  return { fields: mergeFields(a.fields, b.fields).merged, people };
+}
+
+/**
+ * Слияние записи настроек.
+ *
+ *   • общие поля — как раньше, по полям; применяются у себя только ключи из
+ *     `sharedKeys`. Личные ключи, оставленные в общих полях старыми версиями,
+ *     переносятся как есть, но НЕ применяются: это чужой выбор, из-за него и
+ *     был #116. Выбросить их нельзя — старая версия на другом устройстве
+ *     вернула бы их, и устройства перекидывались бы записью на каждой
+ *     синхронизации;
+ *   • личные — только свои: `people[person]`. Чужие участники переносятся
+ *     нетронутыми. `person = null` — неизвестно, кто вы (общий аккаунт, «Это
+ *     я» не отвечено): личное не уходит и не приходит.
+ */
+export function mergeSettings(opts: {
+  shared: FieldMap;
+  sharedKeys: readonly string[];
+  personal: FieldMap;
+  person: number | null;
+  cloud: SettingsDoc | null;
+}): SettingsMergeResult {
+  const { shared, sharedKeys, personal, person, cloud } = opts;
+  const allowed = new Set(sharedKeys);
+  const cloudShared = cloud?.fields ?? null;
+  const fieldsRes = mergeFields(shared, cloudShared);
+  const applyShared = fieldsRes.applyLocally.filter((k) => allowed.has(k));
+
+  const people: Record<string, FieldMap> = { ...(cloud?.people ?? {}) };
+  let applyPersonal: string[] = [];
+  if (person !== null && Object.keys(personal).length > 0) {
+    const key = String(person);
+    const res = mergeFields(personal, cloud?.people[key] ?? null);
+    people[key] = res.merged;
+    applyPersonal = res.applyLocally.filter((k) => k in personal);
+  }
+
+  const merged: SettingsDoc = { fields: fieldsRes.merged, people };
+  const pushNeeded =
+    !cloud || stableStringify(merged) !== stableStringify({ fields: cloud.fields, people: cloud.people });
+  return { merged, applyShared, applyPersonal, pushNeeded };
+}
+
 /** Какие поля поменялись между двумя снимками — им время правки «сейчас». */
 export function stampFieldChanges(
   prev: Record<string, unknown>,

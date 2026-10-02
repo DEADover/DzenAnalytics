@@ -38,6 +38,8 @@ export class FakeZen {
   readonly pushes: DiffBody[] = [];
   /** Сколько раз приложение скачивало изменения. */
   pulls = 0;
+  /** Подправить выдуманный аккаунт под тест — до подключения. */
+  patchFull: ((diff: ZenDiffResponse) => ZenDiffResponse) | null = null;
 
   respond(body: DiffBody): ZenDiffResponse {
     this.stamp += 1;
@@ -59,7 +61,10 @@ export class FakeZen {
       };
     }
     this.pulls += 1;
-    if (body.serverTimestamp === 0) return fullDiff(this.stamp);
+    if (body.serverTimestamp === 0) {
+      const diff = fullDiff(this.stamp);
+      return this.patchFull ? this.patchFull(diff) : diff;
+    }
     return {
       serverTimestamp: this.stamp,
       instrument: [],

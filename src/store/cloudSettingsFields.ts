@@ -36,6 +36,11 @@ import { isDarkSchemeId, isLightSchemeId } from "../lib/themeSchemes";
 
 export interface SyncedField {
   key: string;
+  /**
+   * Личное: у каждого участника общего аккаунта Дзен-мани своё (#116). Лежит в
+   * облаке под номером человека из «Это я», а не в общих полях.
+   */
+  personal?: boolean;
   /** Хранилище уже прочитало своё с диска — до этого значение не настоящее. */
   ready: () => boolean;
   read: () => unknown;
@@ -55,12 +60,25 @@ function field<S>(
 ): SyncedField {
   return {
     key,
+    personal: PERSONAL_KEYS.has(key),
     ready: () => ready(store.getState()),
     read: () => read(store.getState()),
     write: (value) => write(value, store.getState()),
     subscribe: (listener) => store.subscribe(listener),
   };
 }
+
+/**
+ * Личные поля. «Счета вне баланса» решают, что входит в ВАШ баланс, а «чужие
+ * личные счета» — чьи счета вам прятать: выбор одного члена семьи не должен
+ * приезжать другому (#116).
+ *
+ * «Это я» не переносится вовсе: по ответу API владельца токена не отличить
+ * (см. `useMembersStore`), поэтому ответ — свой у каждого устройства. Раньше
+ * он переносился, и на общем аккаунте жене могло приехать «Это я» мужа — тогда
+ * её личные счета прятались, а его становились видны.
+ */
+const PERSONAL_KEYS = new Set(["includeOffBalance", "members.hideForeignPrivate"]);
 
 const isBool = (v: unknown): v is boolean => typeof v === "boolean";
 const isStrings = (v: unknown): v is string[] =>
@@ -185,12 +203,6 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useMembersStore, "members.aliases", (s) => s.aliases, (v, s) => s.replaceAliases(v)),
   field(useMembersStore, "members.hideForeignPrivate", (s) => s.hideForeignPrivate, (v, s) =>
     isBool(v) ? s.setHideForeignPrivate(v) : undefined
-  ),
-  // «Это я» на общем аккаунте. Без него «Скрывать чужие личные счета» на
-  // другом устройстве не прятало бы ничего: не зная, кто вы, прятать нечего.
-  // Номер пользователя — из Дзен-мани, на всех устройствах один.
-  field(useMembersStore, "members.owner", (s) => s.ownerId, (v, s) =>
-    v === null || (typeof v === "number" && Number.isInteger(v)) ? s.setOwnerId(v) : undefined
   ),
   // «Не дубликаты» — решение человека о своих данных, в Дзен-мани его нет.
   field(useDuplicateExclusionsStore, "duplicates.exclusions", (s) => s.rules, (v, s) => {

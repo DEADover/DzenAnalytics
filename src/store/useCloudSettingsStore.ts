@@ -10,13 +10,15 @@ import {
   buildServiceAccount,
   envelopeComment,
   findCloudDocs,
-  mergeFields,
+  combineSettingsDocs,
+  mergeSettings,
+  sanitizeSettingsDoc,
+  type SettingsDoc,
   mergeRulesDocs,
   metaFromRulesDoc,
   nextChanged,
   rulesDocFromLocal,
   rulesFromDoc,
-  sanitizeFieldMap,
   readCollectionMeta,
   sanitizeRulesDoc,
   stableStringify,
@@ -30,6 +32,7 @@ import {
 } from "../lib/cloudSettings";
 import { SYNCED_FIELDS, syncedField } from "./cloudSettingsFields";
 import { SYNCED_COLLECTIONS, type CloudItem } from "./cloudSettingsCollections";
+import { useMembersStore } from "./useMembersStore";
 
 /**
  * Перенос настроек между устройствами через Дзен-мани (16.09.2026).
@@ -72,6 +75,11 @@ interface PersistedMeta {
   lastSyncAt: string | null;
   /** Пояснение для человека: почему перенос выключился сам. */
   notice: string | null;
+  /**
+   * Чьи личные настройки на этом устройстве (номер пользователя Дзен-мани).
+   * `undefined` — ещё не синхронизировались с личными.
+   */
+  personalFor?: number | null;
 }
 
 const DEFAULT_META: PersistedMeta = {
@@ -81,6 +89,7 @@ const DEFAULT_META: PersistedMeta = {
   accountId: null,
   lastSyncAt: null,
   notice: null,
+  personalFor: undefined,
 };
 
 interface State extends PersistedMeta {
@@ -104,6 +113,7 @@ async function persist(patch: Partial<PersistedMeta>): Promise<void> {
     accountId: s.accountId,
     lastSyncAt: s.lastSyncAt,
     notice: s.notice,
+    personalFor: s.personalFor,
   };
   await db.saveJSON(META_KEY, meta);
 }
@@ -222,6 +232,24 @@ function splitDuplicates(docs: FoundDoc[]): { main: FoundDoc | null; extra: Foun
   return { main: sorted[0], extra: sorted.slice(1) };
 }
 
+/**
+ * Кто вы на этом аккаунте Дзен-мани — для личных настроек. Один пользователь —
+ * он и есть; на общем аккаунте — ответ «Это я», а без ответа — никто: личное
+ * тогда не переносится, чтобы не забрать чужое.
+ */
+function personOf(cache: ZenCache): number | null {
+  const users = cache.user ?? [];
+  if (users.length === 1) return users[0].id;
+  const owner = useMembersStore.getState().ownerId;
+  return owner !== null && users.some((u) => u.id === owner) ? owner : null;
+}
+
+function withoutPersonal(fieldAt: Record<string, number>): Record<string, number> {
+  const out = { ...fieldAt };
+  for (const f of SYNCED_FIELDS) if (f.personal) delete out[f.key];
+  return out;
+}
+
 function newId(): string {
   return crypto.randomUUID();
 }
@@ -241,6 +269,10 @@ export const useCloudSettingsStore = create<State>((set, get) => ({
       accountId: typeof saved?.accountId === "string" ? saved.accountId : null,
       lastSyncAt: typeof saved?.lastSyncAt === "string" ? saved.lastSyncAt : null,
       notice: typeof saved?.notice === "string" ? saved.notice : null,
+      personalFor:
+        typeof saved?.personalFor === "number" || saved?.personalFor === null
+          ? saved.personalFor
+          : undefined,
       loaded: true,
     });
     startWatching();
@@ -312,30 +344,54 @@ export const useCloudSettingsStore = create<State>((set, get) => ({
         }
       }
 
-      // ── Настройки ──
+      // ── Настройки: общие поля и личные — свои, под номером человека ──
       const settingsDocs = found.byType.settings;
       const settingsNewer = settingsDocs.some((d) => d.env.v > CLOUD_FORMAT_VERSION);
-      let cloudFields: FieldMap | null = null;
+      let cloudSettings: SettingsDoc | null = null;
       for (const d of settingsDocs.filter((x) => x.env.v <= CLOUD_FORMAT_VERSION)) {
-        const fields = sanitizeFieldMap((d.env.data as { fields?: unknown }).fields);
-        cloudFields = cloudFields ? mergeFields(cloudFields, fields).merged : fields;
+        const doc = sanitizeSettingsDoc(d.env.data);
+        cloudSettings = cloudSettings ? combineSettingsDocs(cloudSettings, doc) : doc;
       }
-      const localFields: FieldMap = {};
+      const person = personOf(cache);
+      // Сменили «Это я» — личные метки прежнего человека к новому не относятся:
+      // его выбор должен прийти из облака, а не затереться здешним.
+      const personChanged = person !== null && s.personalFor !== undefined && s.personalFor !== person;
+      const shared: FieldMap = {};
+      const personal: FieldMap = {};
       for (const f of SYNCED_FIELDS) {
-        localFields[f.key] = { v: f.read(), at: get().fieldAt[f.key] ?? 0 };
+        const at = get().fieldAt[f.key] ?? 0;
+        if (f.personal) personal[f.key] = { v: f.read(), at: personChanged ? 0 : at };
+        else shared[f.key] = { v: f.read(), at };
       }
-      const fieldsRes = mergeFields(localFields, cloudFields);
-      if (fieldsRes.applyLocally.length > 0) {
+      const settingsRes = mergeSettings({
+        shared,
+        sharedKeys: SYNCED_FIELDS.filter((f) => !f.personal).map((f) => f.key),
+        personal,
+        person,
+        cloud: cloudSettings,
+      });
+      const toApply = [...settingsRes.applyShared, ...settingsRes.applyPersonal];
+      if (toApply.length > 0) {
         await applying(async () => {
-          for (const key of fieldsRes.applyLocally) {
-            await syncedField(key)?.write(fieldsRes.merged[key].v);
+          for (const key of settingsRes.applyShared) {
+            await syncedField(key)?.write(settingsRes.merged.fields[key].v);
+          }
+          for (const key of settingsRes.applyPersonal) {
+            await syncedField(key)?.write(settingsRes.merged.people[String(person)][key].v);
           }
         });
       }
       const fieldAt: Record<string, number> = {};
-      for (const [key, value] of Object.entries(fieldsRes.merged)) fieldAt[key] = value.at;
-      if (!settingsNewer && (fieldsRes.pushNeeded || settingsDocs.length > 1)) {
-        outgoing.push({ type: "settings", data: { fields: fieldsRes.merged }, docs: settingsDocs });
+      for (const f of SYNCED_FIELDS) {
+        const value = f.personal
+          ? person !== null
+            ? settingsRes.merged.people[String(person)]?.[f.key]
+            : personal[f.key]
+          : settingsRes.merged.fields[f.key];
+        if (value) fieldAt[f.key] = value.at;
+      }
+      if (!settingsNewer && (settingsRes.pushNeeded || settingsDocs.length > 1)) {
+        outgoing.push({ type: "settings", data: settingsRes.merged, docs: settingsDocs });
       }
 
       // ── Отправка ──
@@ -395,7 +451,9 @@ export const useCloudSettingsStore = create<State>((set, get) => ({
         };
       }
       await persist({
-        fieldAt: keepLater(fieldAt, now.fieldAt),
+        // После смены человека здешние личные метки обнулены — не возвращаем их.
+        fieldAt: keepLater(fieldAt, personChanged ? withoutPersonal(now.fieldAt) : now.fieldAt),
+        personalFor: person ?? now.personalFor,
         collections,
         accountId,
         lastSyncAt: new Date().toISOString(),

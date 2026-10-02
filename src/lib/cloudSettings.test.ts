@@ -9,6 +9,10 @@ import {
   findCloudDocs,
   isServiceAccountTitle,
   mergeFields,
+  mergeSettings,
+  sanitizeSettingsDoc,
+  combineSettingsDocs,
+  type SettingsDoc,
   mergeRulesDocs,
   metaFromRulesDoc,
   nextChanged,
@@ -269,5 +273,68 @@ describe("readCollectionMeta", () => {
     const meta = readCollectionMeta({ collections: { goals: { itemAt: { g: "вчера" }, orderAt: "нет" } } });
     expect(meta.goals).toEqual(EMPTY_RULES_META);
     expect(readCollectionMeta(null)).toEqual({});
+  });
+});
+
+describe("настройки: личное — у каждого участника своё (#116)", () => {
+  const SHARED = ["theme"];
+  const mine = (v: boolean, at: number) => ({ includeOffBalance: { v, at } });
+
+  it("чужой выбор из старых общих полей не применяется, но и не выбрасывается", () => {
+    // Так было до исправления: «Счета вне баланса» другого члена семьи лежало
+    // в общих полях и на новом устройстве побеждало стандартное значение.
+    const cloud = sanitizeSettingsDoc({
+      fields: { theme: { v: "dark", at: 5 }, includeOffBalance: { v: true, at: 9 }, "members.owner": { v: 2, at: 9 } },
+    });
+    const res = mergeSettings({
+      shared: { theme: { v: "auto", at: 0 } },
+      sharedKeys: SHARED,
+      personal: mine(false, 0),
+      person: 1,
+      cloud,
+    });
+    expect(res.applyShared).toEqual(["theme"]);
+    expect(res.applyPersonal).toEqual([]);
+    // Старая версия на другом устройстве их ждёт — иначе устройства
+    // перекидывались бы записью на каждой синхронизации.
+    expect(res.merged.fields.includeOffBalance).toEqual({ v: true, at: 9 });
+    expect(res.merged.people["1"]).toEqual(mine(false, 0));
+    expect(res.pushNeeded).toBe(true);
+  });
+
+  it("второе устройство того же человека получает его выбор", () => {
+    const cloud: SettingsDoc = { fields: {}, people: { "1": mine(true, 7) } };
+    const res = mergeSettings({ shared: {}, sharedKeys: SHARED, personal: mine(false, 0), person: 1, cloud });
+    expect(res.applyPersonal).toEqual(["includeOffBalance"]);
+    expect(res.pushNeeded).toBe(false);
+  });
+
+  it("выбор другого участника не приходит и не затирается", () => {
+    const cloud: SettingsDoc = { fields: {}, people: { "2": mine(true, 7) } };
+    const res = mergeSettings({ shared: {}, sharedKeys: SHARED, personal: mine(false, 3), person: 1, cloud });
+    expect(res.applyPersonal).toEqual([]);
+    expect(res.merged.people).toEqual({ "1": mine(false, 3), "2": mine(true, 7) });
+  });
+
+  it("неизвестно, кто вы, — личное не уходит и не приходит", () => {
+    const cloud: SettingsDoc = { fields: {}, people: { "2": mine(true, 7) } };
+    const res = mergeSettings({ shared: {}, sharedKeys: SHARED, personal: mine(false, 3), person: null, cloud });
+    expect(res.applyPersonal).toEqual([]);
+    expect(res.merged.people).toEqual({ "2": mine(true, 7) });
+    expect(res.pushNeeded).toBe(false);
+  });
+
+  it("дубли записи сливаются и по людям", () => {
+    const a: SettingsDoc = { fields: { theme: { v: "dark", at: 1 } }, people: { "1": mine(true, 1) } };
+    const b: SettingsDoc = { fields: {}, people: { "1": mine(false, 4), "2": mine(true, 2) } };
+    expect(combineSettingsDocs(a, b)).toEqual({
+      fields: { theme: { v: "dark", at: 1 } },
+      people: { "1": mine(false, 4), "2": mine(true, 2) },
+    });
+  });
+
+  it("разбор: номера людей — только числа, битое отбрасывается", () => {
+    const doc = sanitizeSettingsDoc({ fields: {}, people: { "12": { x: { v: 1, at: 1 } }, bad: { x: { v: 1, at: 1 } }, "3": 5 } });
+    expect(doc.people).toEqual({ "12": { x: { v: 1, at: 1 } } });
   });
 });
