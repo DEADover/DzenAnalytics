@@ -32,6 +32,10 @@ const ENTITY_KEYS = [
   "deletion",
 ] as const;
 
+/** Заведомо фальшивый токен: поддельный сервер принимает любой, кроме
+ *  отмеченных в `rejected`. */
+export const FAKE_TOKEN = "e2e-fake-token";
+
 export class FakeZen {
   private stamp = Math.floor(NOW.getTime() / 1000);
   /** Все запросы с данными — то, что приложение отправило в облако. */
@@ -40,9 +44,18 @@ export class FakeZen {
   pulls = 0;
   /** Подправить выдуманный аккаунт под тест — до подключения. */
   patchFull: ((diff: ZenDiffResponse) => ZenDiffResponse) | null = null;
+  /** Токены, которые сервер больше не принимает (ответ 401). */
+  readonly rejected = new Set<string>();
+  /** Чей токен: id пользователя. Не указан — пользователь выдуманного аккаунта. */
+  readonly owners = new Map<string, number>();
 
-  respond(body: DiffBody): ZenDiffResponse {
+  respond(body: DiffBody, token = FAKE_TOKEN): ZenDiffResponse {
     this.stamp += 1;
+    // Как настоящий сервер: forceFetch «user» возвращает пользователей
+    // аккаунта, которому принадлежит токен.
+    const users = body.forceFetch?.includes("user")
+      ? fullDiff(this.stamp).user.map((u) => ({ ...u, id: this.owners.get(token) ?? u.id }))
+      : [];
     const sent = ENTITY_KEYS.some((k) => (body[k]?.length ?? 0) > 0);
     if (sent) {
       this.pushes.push(body);
@@ -72,7 +85,7 @@ export class FakeZen {
       tag: [],
       merchant: [],
       transaction: [],
-      user: [],
+      user: users,
     };
   }
 }
@@ -92,8 +105,6 @@ const CBR_DAY = JSON.stringify({
   },
 });
 
-/** Заведомо фальшивый токен: поддельный сервер принимает любой. */
-const FAKE_TOKEN = "e2e-fake-token";
 
 export const test = base.extend<{ zen: FakeZen }>({
   // `auto`: подделка включается в КАЖДОМ тесте, даже если он её не просит, —
@@ -110,11 +121,20 @@ export const test = base.extend<{ zen: FakeZen }>({
         return route.fulfill({ status: 204, headers: CORS });
       }
       const body = route.request().postDataJSON() as DiffBody;
+      const token = (route.request().headers()["authorization"] ?? "").replace(/^Bearer\s+/i, "");
+      if (zen.rejected.has(token)) {
+        return route.fulfill({
+          status: 401,
+          headers: CORS,
+          contentType: "application/json",
+          body: JSON.stringify({ error: { message: "Unauthorized" } }),
+        });
+      }
       return route.fulfill({
         status: 200,
         headers: CORS,
         contentType: "application/json",
-        body: JSON.stringify(zen.respond(body)),
+        body: JSON.stringify(zen.respond(body, token)),
       });
     });
     await use(zen);

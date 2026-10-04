@@ -390,6 +390,7 @@ function LogTableRow({
         ? entry.details?.counts?.accepted
         : undefined;
   const totalCount = entry.details?.counts?.total;
+  const repeated = (entry.repeat ?? 1) > 1;
 
   return (
     <>
@@ -410,6 +411,8 @@ function LogTableRow({
             <span className="truncate" title={entry.summary ? `${entry.title} · ${capitalize(entry.summary)}` : entry.title}>
               {entry.title}
               {entry.summary && <span className="text-muted"> · {capitalize(entry.summary)}</span>}
+              {/* Та же ошибка подряд — одной строкой со счётчиком. */}
+              {repeated && <span className="text-expense tabular-nums"> · ×{formatN(entry.repeat!)}</span>}
             </span>
           </div>
         </td>
@@ -432,6 +435,14 @@ function LogTableRow({
           {/* Отступ — до начала названия над строкой: поле 12 + шеврон 16 + промежуток 6. */}
           <td colSpan={6} className="table-td pl-[34px] pr-3 py-3">
             <div className="text-xs space-y-2">
+              {repeated && entry.firstTs && (
+                <p className="text-muted">
+                  Повторилось {formatN(entry.repeat!)}{" "}
+                  {pluralRu(entry.repeat!, ["раз", "раза", "раз"])}: с{" "}
+                  {new Date(entry.firstTs).toLocaleString("ru-RU")} по{" "}
+                  {new Date(entry.ts).toLocaleString("ru-RU")}
+                </p>
+              )}
               {entry.error && (
                 <Callout tone="expense">
                   <span className="whitespace-pre-wrap break-words font-mono text-[11px] text-expense">

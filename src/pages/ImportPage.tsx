@@ -37,6 +37,9 @@ import {
 import { parseCsv } from "../lib/csv";
 import { isOAuthConfigured, startOAuth } from "../lib/oauth";
 import { SyncLog } from "../components/SyncLog";
+import { SyncDiagnostics } from "../components/SyncDiagnostics";
+import { isAuthExpired } from "../lib/syncDiagnostics";
+import clsx from "clsx";
 import { OperationsSettings } from "../components/OperationsSettings";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { useColumnWidthsStore } from "../store/useColumnWidthsStore";
@@ -261,6 +264,8 @@ export function ImportPage() {
   const zenLoaded = useZenmoneyStore((s) => s.loaded);
   const zenHydrate = useZenmoneyStore((s) => s.hydrate);
   const zenValidateAndSave = useZenmoneyStore((s) => s.validateAndSaveToken);
+  const zenPullFailure = useZenmoneyStore((s) => s.pullFailure);
+  const zenPushFailure = useZenmoneyStore((s) => s.pushFailure);
   const zenSync = useZenmoneyStore((s) => s.sync);
   const zenRemoveToken = useZenmoneyStore((s) => s.removeToken);
   const autoSyncEnabled = useZenmoneyStore((s) => s.autoSyncEnabled);
@@ -417,7 +422,7 @@ export function ImportPage() {
   // но оставлял открытой ту же вкладку.
   useEffect(() => {
     const q = searchParams.get("tab");
-    if (q === "operations" || q === "interface" || q === "processing" || q === "backups") {
+    if (q === "source" || q === "operations" || q === "interface" || q === "processing" || q === "backups") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSettingsTab(q);
     }
@@ -447,6 +452,15 @@ export function ImportPage() {
     if (meta?.source === "csv" && transactions.length > 0) return "csv";
     return "api";
   });
+  // Ссылка из шапки («Войти заново») ведёт сюда же, когда страница уже открыта.
+  useEffect(() => {
+    const q = searchParams.get("source");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (q === "api" || q === "csv") setSourceTab(q);
+  }, [searchParams]);
+  // Дзен-мани перестал принимать токен — предлагаем войти заново, не отключая.
+  const zenAuthExpired =
+    isAuthExpired(zenPullFailure) || isAuthExpired(zenPushFailure);
 
   function formatSyncResult(r: {
     count: number;
@@ -502,6 +516,15 @@ export function ImportPage() {
         /* error already in store */
       }
     }
+  }
+
+  /** Новый токен вместо непринятого: тот же аккаунт, кэш и правки на месте. */
+  async function replaceToken() {
+    setSyncSuccess(null);
+    const ok = await zenValidateAndSave(tokenDraft, "token");
+    if (!ok) return;
+    setTokenDraft("");
+    await runSync();
   }
 
   async function connectProvider() {
@@ -1090,6 +1113,56 @@ export function ImportPage() {
               </button>
             </div>
 
+            {/* Токен перестал приниматься: войти заново, не отключая. «Отключить»
+                стёр бы кэш и очередь неотправленных правок — из-за этого люди
+                сидели со сломанной синхронизацией, а не переподключались. */}
+            {zenAuthExpired && (
+              <div className="space-y-2">
+                {!zenError && (
+                  <div className="text-xs text-expense flex items-start gap-2">
+                    <KeyRound className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      Дзен-мани больше не принимает этот токен. Войдите заново — данные и
+                      неотправленные правки сохранятся.
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {isOAuthConfigured() && (
+                    <button
+                      onClick={() => startOAuth({ replaceCsv: false })}
+                      disabled={zenStatus === "checking" || zenStatus === "syncing"}
+                      className="btn-primary text-sm"
+                    >
+                      Войти через Дзен-мани
+                    </button>
+                  )}
+                  <input
+                    type="password"
+                    value={tokenDraft}
+                    onChange={(e) => setTokenDraft(e.target.value)}
+                    placeholder={isOAuthConfigured() ? "Или вставьте новый токен" : "Вставьте новый токен"}
+                    aria-label="Новый токен Дзен-мани"
+                    className="input text-sm flex-1 min-w-[220px] font-mono"
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={zenStatus === "checking" || zenStatus === "syncing"}
+                  />
+                  <button
+                    onClick={replaceToken}
+                    disabled={!tokenDraft.trim() || zenStatus === "checking" || zenStatus === "syncing"}
+                    className={clsx(isOAuthConfigured() ? "btn-ghost" : "btn-primary", "text-sm whitespace-nowrap")}
+                  >
+                    {zenStatus === "checking" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <KeyRound className="w-3.5 h-3.5" />
+                    )}
+                    Заменить токен
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -2919,6 +2992,9 @@ export function ImportPage() {
                 }
               />
             </div>
+
+            {/* Что с синхронизацией и отчёт для автора — под журналом. */}
+            <SyncDiagnostics />
           </div>
       )}
 

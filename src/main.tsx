@@ -55,11 +55,14 @@ async function mount() {
       await useZenmoneyStore.getState().hydrate();
       if ("error" in callback) throw new Error("Invalid OAuth callback");
       const token = await exchangeCode(callback.code);
-      syncAfterLogin = await useZenmoneyStore.getState().validateAndSaveToken(token);
+      syncAfterLogin = await useZenmoneyStore.getState().validateAndSaveToken(token, "oauth");
       // CSV стираем только теперь, с проверенным токеном на руках: согласие
       // на замену дано до ухода к провайдеру, но вход мог и не состояться.
       if (syncAfterLogin && callback.replaceCsv) await useDataStore.getState().clearAll();
-    } catch {
+    } catch (e) {
+      // Человеку — общая фраза, а настоящую причину — в консоль: по ней и
+      // разбираемся, когда вход «просто не работает».
+      console.error("[DzenAnalytics] Вход через Дзен-мани не завершён:", e);
       useZenmoneyStore.setState({ status: "error", error: "Не удалось завершить вход. Попробуйте снова." });
     }
   }

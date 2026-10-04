@@ -292,6 +292,74 @@ export class ZenApiError extends Error {
   }
 }
 
+/** Дзен-мани не ответил вовремя — запрос оборван по тайм-ауту. */
+export class ZenTimeoutError extends Error {
+  /** Что не уложилось: ответ сервера или скачивание его тела. */
+  phase: "headers" | "body";
+  constructor(phase: "headers" | "body", ms: number) {
+    super(
+      phase === "headers"
+        ? `Дзен-мани не ответил за ${Math.round(ms / 1000)} с`
+        : `Ответ Дзен-мани не скачался за ${Math.round(ms / 60_000)} мин`
+    );
+    this.phase = phase;
+    this.name = "ZenTimeoutError";
+  }
+}
+
+/** Сколько ждать первого ответа сервера и сколько — скачивания тела. Тело
+ *  полной синхронизации большого аккаунта весит десятки мегабайт, поэтому на
+ *  него отдельный, длинный срок. */
+export const ZEN_HEADERS_TIMEOUT_MS = 60_000;
+export const ZEN_BODY_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * Запрос к /v8/diff/ с тайм-аутами. Без них зависший запрос (обрыв связи
+ * посреди ответа, VPN, фильтр) держал синхронизацию «в процессе» до
+ * перезагрузки страницы: кнопки неактивны, ошибки нет. `read` читает тело —
+ * под тем же контролем срока.
+ */
+async function zenRequest<T>(
+  token: string,
+  bodyJson: string,
+  signal: AbortSignal | undefined,
+  read: (res: Response) => Promise<T>
+): Promise<T> {
+  const ctrl = new AbortController();
+  const forward = () => ctrl.abort(signal?.reason);
+  if (signal?.aborted) forward();
+  signal?.addEventListener("abort", forward);
+  let timedOut: "headers" | "body" | null = null;
+  let timer = setTimeout(() => {
+    timedOut = "headers";
+    ctrl.abort();
+  }, ZEN_HEADERS_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE}/v8/diff/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: bodyJson,
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      timedOut = "body";
+      ctrl.abort();
+    }, ZEN_BODY_TIMEOUT_MS);
+    return await read(res);
+  } catch (e) {
+    if (timedOut === "headers") throw new ZenTimeoutError("headers", ZEN_HEADERS_TIMEOUT_MS);
+    if (timedOut === "body") throw new ZenTimeoutError("body", ZEN_BODY_TIMEOUT_MS);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", forward);
+  }
+}
+
 interface DiffRequest {
   currentClientTimestamp: number;
   serverTimestamp: number;
@@ -335,28 +403,21 @@ export async function fetchDiff(
     serverTimestamp,
   };
   if (forceFetch && forceFetch.length > 0) body.forceFetch = forceFetch;
-  const res = await fetch(`${API_BASE}/v8/diff/`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    let code: string | null = null;
-    try {
-      const j = (await res.json()) as { error?: { message?: string; code?: string } };
-      if (j.error?.message) msg = j.error.message;
-      if (j.error?.code) code = j.error.code;
-    } catch {
-      // ignore parse errors — keep the HTTP-status fallback
+  return zenRequest(token, JSON.stringify(body), signal, async (res) => {
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      let code: string | null = null;
+      try {
+        const j = (await res.json()) as { error?: { message?: string; code?: string } };
+        if (j.error?.message) msg = j.error.message;
+        if (j.error?.code) code = j.error.code;
+      } catch {
+        // ignore parse errors — keep the HTTP-status fallback
+      }
+      throw new ZenApiError(msg, res.status, code);
     }
-    throw new ZenApiError(msg, res.status, code);
-  }
-  return (await res.json()) as ZenDiffResponse;
+    return (await res.json()) as ZenDiffResponse;
+  });
 }
 
 /**
@@ -396,104 +457,97 @@ export async function pushDiff(
     ...payload,
   };
   const requestBodyJson = JSON.stringify(body);
-  const res = await fetch(`${API_BASE}/v8/diff/`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: requestBodyJson,
-    signal,
-  });
-  if (!res.ok) {
-    // Read the raw body once — we use it both for the structured error
-    // parse and (in dev) for diagnostics. `res.text()` doesn't consume
-    // a second-time-readable copy, so we save it first.
-    let rawText = "";
-    try {
-      rawText = await res.text();
-    } catch {
-      /* network already closed — fall through */
-    }
-    let msg = `HTTP ${res.status}`;
-    let code: string | null = null;
-    try {
-      const j = JSON.parse(rawText) as {
-        error?: { message?: string; code?: string };
-      };
-      if (j.error?.message) msg = j.error.message;
-      if (j.error?.code) code = j.error.code;
-    } catch {
-      // ignore parse errors — keep the HTTP-status fallback
-    }
-    // In dev, surface the full failure context to DevTools so we can
-    // diagnose Zen-side errors (which are usually very terse). Logs:
-    //   • outgoing request size + section counts
-    //   • full server response body (not just the parsed `error.message`)
-    //   • a tiny sample of the first/last transaction we sent, in case
-    //     the failure is on a specific shape we sent.
-    // Same context goes to `dev-logs/app.log` via `devLog` so it can
-    // be inspected outside the browser.
-    if (!import.meta.env.PROD) {
-      const sections = {
-        transaction: payload.transaction?.length ?? 0,
-        account: payload.account?.length ?? 0,
-        tag: payload.tag?.length ?? 0,
-        merchant: payload.merchant?.length ?? 0,
-        deletion: payload.deletion?.length ?? 0,
-      };
-      console.groupCollapsed(
-        `[Zenmoney API error] HTTP ${res.status} — ${msg}`
-      );
-      console.log("request body size:", requestBodyJson.length, "bytes");
-      console.log("sections:", sections);
-      console.log("server response body:", rawText || "(empty)");
-      if (payload.transaction && payload.transaction.length > 0) {
-        console.log("first tx sample:", payload.transaction[0]);
-        console.log(
-          "last tx sample:",
-          payload.transaction[payload.transaction.length - 1]
-        );
+  return zenRequest(token, requestBodyJson, signal, async (res) => {
+    if (!res.ok) {
+      // Read the raw body once — we use it both for the structured error
+      // parse and (in dev) for diagnostics. `res.text()` doesn't consume
+      // a second-time-readable copy, so we save it first.
+      let rawText = "";
+      try {
+        rawText = await res.text();
+      } catch {
+        /* network already closed — fall through */
       }
-      console.groupEnd();
-
-      // Mirror to dev-logs/app.log for outside-browser inspection.
-      // Lazy import keeps prod bundle clean of this code path.
-      void (async () => {
-        const { devLog } = await import("./devLog");
-        devLog(
-          "zen-api",
-          `HTTP ${res.status} ${msg} — body size ${requestBodyJson.length}b, ` +
-            `sections=${JSON.stringify(sections)}, ` +
-            `server-response=${rawText.slice(0, 1000) || "(empty)"}`,
-          "error"
+      let msg = `HTTP ${res.status}`;
+      let code: string | null = null;
+      try {
+        const j = JSON.parse(rawText) as {
+          error?: { message?: string; code?: string };
+        };
+        if (j.error?.message) msg = j.error.message;
+        if (j.error?.code) code = j.error.code;
+      } catch {
+        // ignore parse errors — keep the HTTP-status fallback
+      }
+      // In dev, surface the full failure context to DevTools so we can
+      // diagnose Zen-side errors (which are usually very terse). Logs:
+      //   • outgoing request size + section counts
+      //   • full server response body (not just the parsed `error.message`)
+      //   • a tiny sample of the first/last transaction we sent, in case
+      //     the failure is on a specific shape we sent.
+      // Same context goes to `dev-logs/app.log` via `devLog` so it can
+      // be inspected outside the browser.
+      if (!import.meta.env.PROD) {
+        const sections = {
+          transaction: payload.transaction?.length ?? 0,
+          account: payload.account?.length ?? 0,
+          tag: payload.tag?.length ?? 0,
+          merchant: payload.merchant?.length ?? 0,
+          deletion: payload.deletion?.length ?? 0,
+        };
+        console.groupCollapsed(
+          `[Zenmoney API error] HTTP ${res.status} — ${msg}`
         );
-        // Dump the EXACT outgoing request body so we can verify what
-        // actually went over the wire — useful when investigating
-        // "did we add a field we shouldn't have" suspicions. Cap at
-        // 4 KB so the log file stays manageable.
-        devLog(
-          "zen-api",
-          `outgoing body (first 4KB): ${requestBodyJson.slice(0, 4000)}`,
-          "debug"
-        );
+        console.log("request body size:", requestBodyJson.length, "bytes");
+        console.log("sections:", sections);
+        console.log("server response body:", rawText || "(empty)");
         if (payload.transaction && payload.transaction.length > 0) {
-          devLog(
-            "zen-api",
-            `first tx: ${JSON.stringify(payload.transaction[0]).slice(0, 800)}`,
-            "debug"
-          );
-          devLog(
-            "zen-api",
-            `last tx: ${JSON.stringify(payload.transaction[payload.transaction.length - 1]).slice(0, 800)}`,
-            "debug"
+          console.log("first tx sample:", payload.transaction[0]);
+          console.log(
+            "last tx sample:",
+            payload.transaction[payload.transaction.length - 1]
           );
         }
-      })();
+        console.groupEnd();
+
+        // Mirror to dev-logs/app.log for outside-browser inspection.
+        // Lazy import keeps prod bundle clean of this code path.
+        void (async () => {
+          const { devLog } = await import("./devLog");
+          devLog(
+            "zen-api",
+            `HTTP ${res.status} ${msg} — body size ${requestBodyJson.length}b, ` +
+              `sections=${JSON.stringify(sections)}, ` +
+              `server-response=${rawText.slice(0, 1000) || "(empty)"}`,
+            "error"
+          );
+          // Dump the EXACT outgoing request body so we can verify what
+          // actually went over the wire — useful when investigating
+          // "did we add a field we shouldn't have" suspicions. Cap at
+          // 4 KB so the log file stays manageable.
+          devLog(
+            "zen-api",
+            `outgoing body (first 4KB): ${requestBodyJson.slice(0, 4000)}`,
+            "debug"
+          );
+          if (payload.transaction && payload.transaction.length > 0) {
+            devLog(
+              "zen-api",
+              `first tx: ${JSON.stringify(payload.transaction[0]).slice(0, 800)}`,
+              "debug"
+            );
+            devLog(
+              "zen-api",
+              `last tx: ${JSON.stringify(payload.transaction[payload.transaction.length - 1]).slice(0, 800)}`,
+              "debug"
+            );
+          }
+        })();
+      }
+      throw new ZenApiError(msg, res.status, code);
     }
-    throw new ZenApiError(msg, res.status, code);
-  }
-  return (await res.json()) as ZenDiffResponse;
+    return (await res.json()) as ZenDiffResponse;
+  });
 }
 
 /**
@@ -508,6 +562,22 @@ export async function checkToken(token: string): Promise<boolean> {
     return true;
   } catch (e) {
     if (e instanceof ZenApiError && e.status === 401) return false;
+    throw e;
+  }
+}
+
+/**
+ * Чей это токен: id пользователей аккаунта Дзен-мани (у семейного их
+ * несколько). Нужен при замене токена — новый должен быть от того же
+ * аккаунта, иначе кэш и очередь правок одного аккаунта уехали бы в другой.
+ * 401 → `null` (токен не принят).
+ */
+export async function fetchTokenUserIds(token: string): Promise<number[] | null> {
+  try {
+    const res = await fetchDiff(token, Math.floor(Date.now() / 1000), undefined, ["user"]);
+    return (res.user ?? []).map((u) => u.id).filter((id): id is number => typeof id === "number");
+  } catch (e) {
+    if (e instanceof ZenApiError && e.status === 401) return null;
     throw e;
   }
 }

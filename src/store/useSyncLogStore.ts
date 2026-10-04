@@ -46,6 +46,42 @@ export interface SyncLogEntry {
   /** Full error message (server text or thrown Error.message). */
   error?: string;
   durationMs?: number;
+  /** Та же ошибка подряд N раз — одной строкой, а не N строками. */
+  repeat?: number;
+  /** Когда эта серия повторов началась (`ts` — последний раз). */
+  firstTs?: number;
+}
+
+/**
+ * Добавить запись в голову журнала. Ошибка, совпадающая с предыдущей записью
+ * (тот же вид и тот же текст), не плодит новую строку: увеличивает счётчик
+ * повторов у прежней. Иначе автосинхронизация при сбое затирала журнал на 100
+ * записей за час — и с ним момент, когда всё началось.
+ */
+export function mergeLogEntry(
+  entries: SyncLogEntry[],
+  entry: SyncLogEntry,
+  max: number
+): SyncLogEntry[] {
+  const head = entries[0];
+  if (
+    head &&
+    entry.status === "error" &&
+    head.status === "error" &&
+    head.kind === entry.kind &&
+    head.title === entry.title &&
+    head.error === entry.error
+  ) {
+    const merged: SyncLogEntry = {
+      ...head,
+      ts: entry.ts,
+      durationMs: entry.durationMs,
+      repeat: (head.repeat ?? 1) + 1,
+      firstTs: head.firstTs ?? head.ts,
+    };
+    return [merged, ...entries.slice(1)];
+  }
+  return [entry, ...entries].slice(0, max);
 }
 
 const KEY = "syncLog";
@@ -83,12 +119,12 @@ export const useSyncLogStore = create<State>((set, get) => ({
       ts: Date.now(),
       ...entry,
     };
-    const next = [full, ...get().entries].slice(0, MAX_ENTRIES);
+    const next = mergeLogEntry(get().entries, full, MAX_ENTRIES);
     set({ entries: next });
     // Fire-and-forget; if the write fails (storage full, etc.) we
     // still have the entry in memory for this session.
     await db.saveJSON(KEY, next);
-    return full;
+    return next[0];
   },
 
   clear: async () => {

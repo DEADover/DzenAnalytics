@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { RefreshCw, CloudDownload, Check, AlertTriangle, UploadCloud, ListChecks } from "lucide-react";
+import { RefreshCw, CloudDownload, Check, AlertTriangle, UploadCloud, ListChecks, KeyRound } from "lucide-react";
 import clsx from "clsx";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useSyncFlashStore } from "../store/useSyncFlashStore";
@@ -10,6 +10,8 @@ import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { usePendingChanges } from "../hooks/usePendingChanges";
 import { PendingChangesModal } from "./PendingChangesModal";
+import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
+import { friendlyFailure, isAuthExpired, isFailureActive } from "../lib/syncDiagnostics";
 
 /**
  * Header quick-actions for Zenmoney sync.
@@ -46,6 +48,12 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
   const pushStatus = useZenmoneyStore((s) => s.pushStatus);
   const pending = usePendingChanges();
   const [reviewOpen, setReviewOpen] = useState(false);
+  // Последний сбой — из хранилища, поэтому переживает перезагрузку: раньше
+  // красная рамка и причина пропадали вместе со страницей, и через минуту
+  // было уже не понять, что синхронизация стоит.
+  const pullFailure = useZenmoneyStore((s) => s.pullFailure);
+  const pushFailure = useZenmoneyStore((s) => s.pushFailure);
+  const navigate = useSmoothNavigate();
 
   // Плашка итога живёт в сторе: полную синхронизацию на телефоне запускают из
   // меню, а итог показывает шапка. Исчезает в два шага — пока `closing`,
@@ -88,6 +96,11 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
   const lastSyncHuman = lastSyncAt
     ? `Последняя синхронизация: ${new Date(lastSyncAt).toLocaleString("ru-RU")}`
     : "Ещё не синхронизировано на этом устройстве";
+  const failing = isFailureActive(pullFailure);
+  const lastErrorHuman = failing && pullFailure ? `\nНе удалось: ${friendlyFailure(pullFailure)}` : "";
+  // Токен больше не принимается: без нового входа ничего не заработает —
+  // поэтому кнопка входа стоит в шапке постоянно, пока вход не восстановлен.
+  const authExpired = isAuthExpired(pullFailure) || isAuthExpired(pushFailure);
 
   // One shared class for the inner icon-buttons. They sit inside the
   // bordered container, so they themselves don't carry a border — just
@@ -160,7 +173,7 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
           // обойма со своим скруглением — в ряду, где всё остальное одного
           // вида, она читалась деталью из другого набора.
           "seg-track",
-          error && !busy && !flash
+          (error || failing) && !busy && !flash
             ? "!border-expense/40"
             : hasPending && "!border-accent/40 !bg-accent/5"
         )}
@@ -170,6 +183,20 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
             плодить в ряду ещё один предмет. */}
         {leading}
         {leading && <div className="w-px h-5 bg-border mx-0.5 self-center" />}
+        {authExpired && (
+          <>
+            <button
+              type="button"
+              onClick={() => navigate("/settings?tab=source&source=api")}
+              title="Дзен-мани больше не принимает токен. Войдите заново — данные и неотправленные правки сохранятся"
+              className={clsx(innerBtn, "gap-1.5 text-expense")}
+            >
+              <KeyRound className="w-4 h-4" />
+              <span className="text-xs font-medium max-sm:hidden">Войти заново</span>
+            </button>
+            <div className="w-px h-5 bg-border mx-0.5 self-center" />
+          </>
+        )}
         {(canReview || canPush) && (
           <>
             {canReview && (
@@ -214,7 +241,7 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
           type="button"
           onClick={runIncremental}
           disabled={busy}
-          title={`Синхронизация с Дзен-мани (только изменения)\n${lastSyncHuman}`}
+          title={`Синхронизация с Дзен-мани (только изменения)\n${lastSyncHuman}${lastErrorHuman}`}
           className={innerBtn}
         >
           <RefreshCw

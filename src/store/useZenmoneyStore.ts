@@ -7,7 +7,16 @@
 import { create } from "zustand";
 import { pluralRu } from "../lib/plural";
 import * as db from "../lib/db";
-import { fetchDiff, checkToken, ZenApiError } from "../lib/zenmoney";
+import { fetchDiff, fetchTokenUserIds } from "../lib/zenmoney";
+import {
+  describeFailure,
+  failureDetails,
+  friendlyFailure,
+  logFailure,
+  nextAutoRetryAt,
+  type SyncFailure,
+  type SyncStage,
+} from "../lib/syncDiagnostics";
 import type { ZenTermUnit, ZenTransaction } from "../lib/zenmoney";
 import { mapZenmoneyDiff } from "../lib/zenmoneyMap";
 import {
@@ -109,6 +118,15 @@ const SNAPSHOT_POLICY_KEY = "zenmoneySnapshotPolicy";
 const AUTO_SYNC_ENABLED_KEY = "zenmoneyAutoSyncEnabled";
 const AUTO_SYNC_VALUE_KEY = "zenmoneyAutoSyncValue";
 const AUTO_SYNC_UNIT_KEY = "zenmoneyAutoSyncUnit";
+/** Последняя неудачная синхронизация (загрузка) — для диагностики и паузы
+ *  автоповтора; переживает перезагрузку страницы. */
+const PULL_FAILURE_KEY = "zenmoneyPullFailure";
+/** Последняя неудачная отправка правок. */
+const PUSH_FAILURE_KEY = "zenmoneyPushFailure";
+/** Как подключён токен: кнопкой входа у провайдера или вставлен вручную. */
+const LOGIN_METHOD_KEY = "zenmoneyLoginMethod";
+
+export type LoginMethod = "oauth" | "token";
 
 /**
  * Overlay pending tag edits onto a freshly-mapped `categoryMeta` map so
@@ -704,10 +722,19 @@ interface ZenmoneyState {
   autoSyncValue: number;
   /** Unit component of the interval — minutes / hours / days. */
   autoSyncUnit: AutoSyncUnit;
+  /** Последняя неудачная синхронизация: шаг, код ответа, версия, сколько
+   *  подряд. Не стирается удачей — по `at` и `lastSyncAt` видно, прошла ли. */
+  pullFailure: SyncFailure | null;
+  /** Последняя неудачная отправка правок. */
+  pushFailure: SyncFailure | null;
+  /** Как подключён токен; null — подключён до того, как это стали запоминать. */
+  loginMethod: LoginMethod | null;
 
   hydrate: () => Promise<void>;
   saveToken: (token: string) => Promise<void>;
-  validateAndSaveToken: (token: string) => Promise<boolean>;
+  /** Проверить токен и сохранить. При живом подключении — только токен того
+   *  же аккаунта: так токен заменяется без потери кэша и очереди правок. */
+  validateAndSaveToken: (token: string, method?: LoginMethod) => Promise<boolean>;
   removeToken: () => Promise<void>;
   /**
    * Synchronise with Zenmoney. By default uses the last `serverTimestamp`
@@ -764,6 +791,9 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
   autoSyncEnabled: false,
   autoSyncValue: AUTO_SYNC_VALUE_DEFAULT,
   autoSyncUnit: AUTO_SYNC_UNIT_DEFAULT,
+  pullFailure: null,
+  pushFailure: null,
+  loginMethod: null,
 
   hydrate: async () => {
     const [
@@ -777,6 +807,9 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       autoSyncEnabled,
       autoSyncValue,
       autoSyncUnit,
+      pullFailure,
+      pushFailure,
+      loginMethod,
     ] = await Promise.all([
       db.loadJSON<string>(TOKEN_KEY),
       db.loadJSON<number>(TIMESTAMP_KEY),
@@ -788,6 +821,9 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       db.loadJSON<boolean>(AUTO_SYNC_ENABLED_KEY),
       db.loadJSON<number>(AUTO_SYNC_VALUE_KEY),
       db.loadJSON<AutoSyncUnit>(AUTO_SYNC_UNIT_KEY),
+      db.loadJSON<SyncFailure>(PULL_FAILURE_KEY),
+      db.loadJSON<SyncFailure>(PUSH_FAILURE_KEY),
+      db.loadJSON<LoginMethod>(LOGIN_METHOD_KEY),
     ]);
     // Migration: callers from the boolean-toggle era stored
     // `pushEnabled: true` without a mode. Treat that as "manual" so
@@ -808,6 +844,9 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           ? autoSyncValue
           : AUTO_SYNC_VALUE_DEFAULT,
       autoSyncUnit: autoSyncUnit || AUTO_SYNC_UNIT_DEFAULT,
+      pullFailure: pullFailure ?? null,
+      pushFailure: pushFailure ?? null,
+      loginMethod: loginMethod ?? null,
       loaded: true,
     });
 
@@ -831,7 +870,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     set({ token: trimmed, error: null });
   },
 
-  validateAndSaveToken: async (token) => {
+  validateAndSaveToken: async (token, method = "token") => {
     const trimmed = token.trim();
     if (!trimmed) {
       set({ error: "Введите токен" });
@@ -839,13 +878,41 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     }
     set({ status: "checking", error: null });
     try {
-      const ok = await checkToken(trimmed);
-      if (!ok) {
+      const userIds = await fetchTokenUserIds(trimmed);
+      if (userIds === null) {
         set({ status: "error", error: "Токен отклонён сервером (401)" });
         return false;
       }
+      // Замена токена при живом подключении (старый перестал приниматься):
+      // кэш, очередь правок и правила адресованы ТОМУ аккаунту. Токен другого
+      // аккаунта увёз бы их туда — такой не принимаем, переход на другой
+      // аккаунт — через «Отключить» или отдельный аккаунт в панели.
+      // Сравниваем множества: у семейного аккаунта несколько пользователей, и
+      // токен любого из них — тот же аккаунт.
+      const cachedIds = new Set(((await loadZenCache())?.user ?? []).map((u) => u.id));
+      if (cachedIds.size > 0 && userIds.length > 0 && !userIds.some((id) => cachedIds.has(id))) {
+        set({
+          status: "error",
+          error:
+            "Это токен другого аккаунта Дзен-мани. Чтобы перейти на другой аккаунт, сначала нажмите «Отключить» — или заведите его отдельным аккаунтом в панели.",
+        });
+        return false;
+      }
       await db.saveJSON(TOKEN_KEY, trimmed);
-      set({ token: trimmed, status: "idle", error: null });
+      await db.saveJSON(LOGIN_METHOD_KEY, method);
+      // Токен снова принят — прежняя ошибка «401» больше не про него.
+      const { pullFailure, pushFailure } = get();
+      const clear401 = (f: SyncFailure | null) => (f?.status === 401 ? null : f);
+      if (pullFailure?.status === 401) await db.saveJSON(PULL_FAILURE_KEY, null);
+      if (pushFailure?.status === 401) await db.saveJSON(PUSH_FAILURE_KEY, null);
+      set({
+        token: trimmed,
+        loginMethod: method,
+        status: "idle",
+        error: null,
+        pullFailure: clear401(pullFailure),
+        pushFailure: clear401(pushFailure),
+      });
       return true;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Не удалось проверить токен";
@@ -898,6 +965,8 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     }
     set({ status: "syncing", error: null });
     const startedAt = Date.now();
+    // На каком шаге синхронизация — чтобы при сбое сказать, где упало.
+    let stage: SyncStage = "request";
     try {
       // Incremental by default. `force: true` (or no cache yet) → full sync
       // by sending serverTimestamp=0. The merged cache is then re-mapped
@@ -927,6 +996,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // метки времени, поэтому остального почти не несёт. Упадёт — упадёт вся
       // синхронизация, и следующая повторит оба шага с прежней метки.
       if (!backfill.includes("reminderMarker") && diffChangesPlanSet(prevCache, diff)) {
+        stage = "plans";
         const plans = await fetchDiff(token, nextCache.serverTimestamp, undefined, [
           "reminderMarker",
         ]);
@@ -935,14 +1005,17 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // Настройки и правила, перенесённые с других устройств, — и отправка
       // своих, если облако отстало. Выключено — шаг ничего не делает; упал —
       // синхронизация операций от этого не страдает.
+      stage = "cloud";
       nextCache = await useCloudSettingsStore.getState().step({
         token,
         cache: nextCache,
         deletions: diff.deletion ?? [],
       });
+      stage = "save";
       await saveZenCache(nextCache);
       invalidateLiveAccounts();
       invalidateZenCache();
+      stage = "apply";
       useReportPeriodStore.getState().adoptZenDay(nextCache.user?.[0]?.monthStartDay);
       // Правила — вслед за справочниками: переименованная категория, счёт или
       // контрагент подтягивается в правила по id.
@@ -980,12 +1053,14 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // which CSV lacks. Anchor the "Совокупный баланс" chart/KPIs to the real
       // total (respecting the global "include off-balance" setting). Overwrites
       // any existing calibration since the API value is authoritative.
+      stage = "calibrate";
       await recalcBalanceCalibration();
 
       // Имена статей бюджета — вслед за справочником. БЕЗУСЛОВНО, до и вне
       // блока планов: переименованная категория может не иметь плана вовсе, и
       // тогда синхронизация планов до её строки не доходит — та остаётся со
       // старым именем и висит в отчётах призраком с нулевым фактом (#77).
+      stage = "budgets";
       if (nextCache.tags && nextCache.tags.length > 0) {
         const bs = useBudgetsStore.getState();
         if (!bs.loaded) await bs.hydrate();
@@ -1000,14 +1075,21 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // `budgetEdits`) are preserved — see importFromZen for the rationale.
       await mirrorZenPlans(nextCache);
 
+      stage = "finish";
       const now = new Date().toISOString();
       await db.saveJSON(TIMESTAMP_KEY, diff.serverTimestamp);
       await db.saveJSON(LAST_SYNC_KEY, now);
+      // Прошла — серия ошибок закончилась: автоповтор снова по расписанию.
+      // Саму запись оставляем — по времени видно, что она уже в прошлом.
+      const prevFailure = get().pullFailure;
+      const pullFailure = prevFailure && prevFailure.streak > 0 ? { ...prevFailure, streak: 0 } : prevFailure;
+      if (pullFailure !== prevFailure) await db.saveJSON(PULL_FAILURE_KEY, pullFailure);
       set({
         serverTimestamp: diff.serverTimestamp,
         lastSyncAt: now,
         status: "ok",
         error: null,
+        pullFailure,
       });
       // Log the result. Full vs incremental + non-zero deltas drive
       // the human-readable summary in the log row.
@@ -1059,24 +1141,23 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         },
       };
     } catch (e) {
-      let msg: string;
-      if (e instanceof ZenApiError) {
-        msg =
-          e.status === 401
-            ? "Токен недействителен или истёк (401). Подключите заново."
-            : `Сервер: ${e.message}`;
-      } else if (e instanceof Error) {
-        msg = e.message;
-      } else {
-        msg = "Не удалось синхронизировать";
-      }
-      set({ status: "error", error: msg });
+      const prev = get().pullFailure;
+      const failure = describeFailure(e, {
+        kind: "pull",
+        stage,
+        streak: (prev?.streak ?? 0) + 1,
+        version: __APP_VERSION__,
+      });
+      logFailure(failure);
+      const msg = friendlyFailure(failure);
+      set({ status: "error", error: msg, pullFailure: failure });
+      void db.saveJSON(PULL_FAILURE_KEY, failure).catch(() => {});
       void useSyncLogStore.getState().append({
         kind: "pull",
         status: "error",
         title: opts.force ? "Полная синхронизация" : "Синхронизация",
         summary: "Не удалось синхронизировать",
-        error: msg,
+        error: `${msg}\n${failureDetails(failure)}`,
         durationMs: Date.now() - startedAt,
       });
       throw e;
@@ -1125,6 +1206,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     }
     set({ pushStatus: "syncing", pushError: null });
     const pushStartedAt = Date.now();
+    let stage: SyncStage = "push-prepare";
     try {
       // 1) Phase 0 safety net — snapshot what's in cloud right before
       //    we touch anything. Frequency depends on `snapshotPolicy`:
@@ -1496,6 +1578,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       //    returns the saved entities (with possibly bumped `changed`) and
       //    its current `serverTimestamp`. Deletions ride along in the same
       //    request body.
+      stage = "push-send";
       const response = await sendPush(
         token,
         get().serverTimestamp,
@@ -1524,6 +1607,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         planPush.reminders,
         planPush.markers
       );
+      stage = "push-apply";
 
       // 4) Merge server response into local cache so subsequent diffs
       //    are anchored to the post-push state.
@@ -1778,26 +1862,32 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         },
         durationMs: Date.now() - pushStartedAt,
       });
+      // Отправка прошла — серия её ошибок закончилась (запись остаётся).
+      const prevPushFailure = get().pushFailure;
+      if (prevPushFailure && prevPushFailure.streak > 0) {
+        const pushFailure = { ...prevPushFailure, streak: 0 };
+        set({ pushFailure });
+        void db.saveJSON(PUSH_FAILURE_KEY, pushFailure).catch(() => {});
+      }
       return result;
     } catch (e) {
-      let msg: string;
-      if (e instanceof ZenApiError) {
-        msg =
-          e.status === 401
-            ? "Токен недействителен или истёк (401). Подключите заново."
-            : `Сервер: ${e.message}`;
-      } else if (e instanceof Error) {
-        msg = e.message;
-      } else {
-        msg = "Не удалось отправить правки в облако";
-      }
-      set({ pushStatus: "error", pushError: msg });
+      const prev = get().pushFailure;
+      const failure = describeFailure(e, {
+        kind: "push",
+        stage,
+        streak: (prev?.streak ?? 0) + 1,
+        version: __APP_VERSION__,
+      });
+      logFailure(failure);
+      const msg = friendlyFailure(failure);
+      set({ pushStatus: "error", pushError: msg, pushFailure: failure });
+      void db.saveJSON(PUSH_FAILURE_KEY, failure).catch(() => {});
       void useSyncLogStore.getState().append({
         kind: "push",
         status: "error",
         title: "Push в облако",
         summary: "Ошибка отправки правок",
-        error: msg,
+        error: `${msg}\n${failureDetails(failure)}`,
         durationMs: Date.now() - pushStartedAt,
       });
       throw e;
@@ -1822,6 +1912,10 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     const intervalMs = autoSyncToMs(s.autoSyncValue, s.autoSyncUnit);
     const lastMs = s.lastSyncAt ? new Date(s.lastSyncAt).getTime() : 0;
     if (Date.now() - lastMs < intervalMs) return false;
+    // После ошибок — нарастающая пауза (1 → 2 → 5 → 15 → 30 мин), а не
+    // попытка каждые 30 секунд. Ручная синхронизация её не ждёт.
+    const retryAt = nextAutoRetryAt(s.pullFailure);
+    if (retryAt !== null && Date.now() < retryAt) return false;
     try {
       await get().sync();
       return true;
