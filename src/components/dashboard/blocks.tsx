@@ -24,7 +24,6 @@ import {
   type MonthOverMonth,
 } from "../../lib/monthOverMonth";
 import {
-  ResponsiveContainer,
   ComposedChart,
   Bar,
   XAxis,
@@ -37,6 +36,7 @@ import {
   ReferenceDot,
   ReferenceLine,
 } from "recharts";
+import { ChartContainer } from "../ChartContainer";
 import { ArrowRight } from "lucide-react";
 import { Segmented } from "../Segmented";
 import { useFreeMoneyStore } from "../../store/useFreeMoneyStore";
@@ -367,7 +367,7 @@ export function CashflowBars({
     // флекс, размер задаёт `minHeight`, и поведение не меняется.
     <div className="flex flex-col gap-1 flex-1 min-h-0">
       <div className="flex-1 min-h-0" style={{ minHeight: height }}>
-        <ResponsiveContainer>
+        <ChartContainer>
           <ComposedChart
             data={data}
             // Справа — место под подпись последнего месяца: она стоит по центру
@@ -449,7 +449,7 @@ export function CashflowBars({
               )}
             />
           </ComposedChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </div>
     </div>
   );
@@ -707,7 +707,7 @@ export function CapitalBlock({
               </div>
             )}
             <div className="flex-1 min-h-[200px]">
-            <ResponsiveContainer>
+            <ChartContainer>
               <ComposedChart
                 data={chartData}
                 margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
@@ -820,7 +820,7 @@ export function CapitalBlock({
                   </>
                 )}
               </ComposedChart>
-            </ResponsiveContainer>
+            </ChartContainer>
             </div>
           </div>
         </div>

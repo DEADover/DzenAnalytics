@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
-  ResponsiveContainer,
   AreaChart,
   Area,
   XAxis,
@@ -11,6 +10,7 @@ import {
   ReferenceLine,
   ReferenceDot,
 } from "recharts";
+import { ChartContainer } from "../components/ChartContainer";
 import { PieChart as PieIcon, Home, ShoppingBag, PiggyBank, Target } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
@@ -358,7 +358,7 @@ export function Budget503020Page() {
           }
         />
         <div className="h-72">
-          <ResponsiveContainer>
+          <ChartContainer>
             <AreaChart data={trend.points}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
               <XAxis dataKey="month" stroke={chartAxisStroke} fontSize={11} />
@@ -404,7 +404,7 @@ export function Budget503020Page() {
                   />
                 ))}
             </AreaChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </div>
       </div>
     </div>

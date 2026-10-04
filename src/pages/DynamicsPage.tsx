@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ResponsiveContainer,
   ComposedChart,
   Area,
   Line,
@@ -11,6 +10,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
+import { ChartContainer } from "../components/ChartContainer";
 import { Activity, BarChart3, LineChart as LineChartIcon } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters, FILTER_NONE } from "../store/useFiltersStore";
@@ -322,7 +322,7 @@ export function DynamicsPage() {
         ) : (
           <>
             <div className="h-80">
-              <ResponsiveContainer>
+              <ChartContainer>
                 <ComposedChart
                   data={series.points}
                   onClick={(e: unknown) => {
@@ -392,7 +392,7 @@ export function DynamicsPage() {
                     />
                   )}
                 </ComposedChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             </div>
 
             {/* Крупный итог — главная цифра отчёта, как в оригинале. */}

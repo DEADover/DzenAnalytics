@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Select } from "../components/Select";
 import { useSearchParams } from "react-router-dom";
-import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
+import { Tooltip, Treemap } from "recharts";
+import { ChartContainer } from "../components/ChartContainer";
 import { Maximize2, X, BarChart3, LayoutGrid } from "lucide-react";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -449,7 +450,7 @@ export function CategoriesPage() {
 
   function renderTreemap() {
     return (
-      <ResponsiveContainer>
+      <ChartContainer>
         <Treemap
           data={treemapData}
           dataKey="value"
@@ -468,7 +469,7 @@ export function CategoriesPage() {
             wrapperStyle={{ zIndex: 50 }}
           />
         </Treemap>
-      </ResponsiveContainer>
+      </ChartContainer>
     );
   }
 

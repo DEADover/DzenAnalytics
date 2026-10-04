@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import {
-  ResponsiveContainer,
   ComposedChart,
   Area,
   Line,
@@ -11,6 +10,7 @@ import {
   ReferenceLine,
   ReferenceDot,
 } from "recharts";
+import { ChartContainer } from "../ChartContainer";
 import type { Projection } from "../../lib/whatif";
 import {
   chartAxisStroke,
@@ -69,7 +69,7 @@ export function WhatIfChart({
 
   return (
     <div className="h-80">
-      <ResponsiveContainer>
+      <ChartContainer>
         <ComposedChart data={data} margin={{ top: 8, right: 20, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="whatIfFill" x1="0" y1="0" x2="0" y2="1">
@@ -163,7 +163,7 @@ export function WhatIfChart({
             />
           )}
         </ComposedChart>
-      </ResponsiveContainer>
+      </ChartContainer>
     </div>
   );
 }

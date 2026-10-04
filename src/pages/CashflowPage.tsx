@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ResponsiveContainer,
   ComposedChart,
   Bar,
   Line,
@@ -14,6 +13,7 @@ import {
   AreaChart,
   Cell,
 } from "recharts";
+import { ChartContainer } from "../components/ChartContainer";
 import {
   TrendingDown,
   TrendingUp,
@@ -313,7 +313,7 @@ export function CashflowPage() {
         />
         <div className="h-80">
           {vizMode === "bars" ? (
-          <ResponsiveContainer>
+          <ChartContainer>
             <ComposedChart
               data={chartData}
               // Столбцы держим компактной парой у центра месяца, чтобы линия
@@ -448,9 +448,9 @@ export function CashflowPage() {
                 isAnimationActive={false}
               />
             </ComposedChart>
-          </ResponsiveContainer>
+          </ChartContainer>
           ) : (
-            <ResponsiveContainer>
+            <ChartContainer>
               <AreaChart
                 data={stream.data}
                 stackOffset="silhouette"
@@ -494,7 +494,7 @@ export function CashflowPage() {
                   );
                 })}
               </AreaChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           )}
         </div>
         {vsAvg.current && vsAvg.avg.expense > 0 && (
@@ -555,7 +555,7 @@ export function CashflowPage() {
             }
           />
           <div className="h-72">
-            <ResponsiveContainer>
+            <ChartContainer>
               <ComposedChart data={yoyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis dataKey="monthName" stroke={chartAxisStroke} fontSize={11} />
@@ -584,7 +584,7 @@ export function CashflowPage() {
                   activeBar={false}
                 />
               </ComposedChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </div>
         </div>
       )}
@@ -599,7 +599,7 @@ export function CashflowPage() {
             subtitle="Средний расход по месяцу года, цветом — отклонение от общего среднего · вся история (период не влияет)"
           />
           <div className="h-64">
-            <ResponsiveContainer>
+            <ChartContainer>
               <ComposedChart data={seasonality}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis dataKey="monthName" stroke={chartAxisStroke} fontSize={11} />
@@ -667,7 +667,7 @@ export function CashflowPage() {
                   })}
                 </Bar>
               </ComposedChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs mt-3">
             {(() => {

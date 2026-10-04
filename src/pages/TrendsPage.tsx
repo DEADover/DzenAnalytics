@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { periodKey } from "../lib/period";
 import {
-  ResponsiveContainer,
   LineChart,
   Line,
   XAxis,
@@ -18,6 +17,7 @@ import {
   Radar,
   Legend,
 } from "recharts";
+import { ChartContainer } from "../components/ChartContainer";
 import { Activity, Calendar, Clock, Grid3x3, LineChart as LineChartIcon, Radar as RadarIcon } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { CardHeader } from "../components/CardHeader";
@@ -245,7 +245,7 @@ export function TrendsPage() {
           })}
         </div>
         <div className="h-80">
-          <ResponsiveContainer>
+          <ChartContainer>
             <LineChart
               data={series}
               onClick={(e: unknown) => {
@@ -282,7 +282,7 @@ export function TrendsPage() {
                 />
               ))}
             </LineChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </div>
       </div>
 
@@ -294,7 +294,7 @@ export function TrendsPage() {
             subtitle={<>Средний чек {kind === "expense" ? "расхода" : "дохода"} за день</>}
           />
           <div className="h-64">
-            <ResponsiveContainer>
+            <ChartContainer>
               <BarChart
                 data={dowChart}
                 onClick={(e: unknown) => {
@@ -329,7 +329,7 @@ export function TrendsPage() {
                   ))}
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </div>
         </div>
 
@@ -340,7 +340,7 @@ export function TrendsPage() {
             subtitle={`Средний чек ${kind === "expense" ? "расхода" : "дохода"} за день — форма недели`}
           />
           <div className="h-64">
-            <ResponsiveContainer>
+            <ChartContainer>
               <RadarChart data={radarData}>
                 <PolarGrid stroke={chartGridStroke} />
                 <PolarAngleAxis dataKey="day" stroke={chartAxisStroke} fontSize={11} />
@@ -362,7 +362,7 @@ export function TrendsPage() {
                   content={<SeriesTooltip formatValue={(v) => formatMoney(v, base)} />}
                 />
               </RadarChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </div>
         </div>
       </div>
@@ -564,7 +564,7 @@ function HourOfDayBars({
         }
       />
       <div className="flex-1 min-h-[240px]">
-        <ResponsiveContainer>
+        <ChartContainer>
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
             <XAxis
@@ -600,7 +600,7 @@ function HourOfDayBars({
               ))}
             </Bar>
           </BarChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </div>
     </div>
   );

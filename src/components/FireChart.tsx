@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Select } from "./Select";
 import { Segmented } from "./Segmented";
 import {
-  ResponsiveContainer,
   AreaChart,
   Area,
   XAxis,
@@ -11,6 +10,7 @@ import {
   Tooltip as RTooltip,
   ReferenceLine,
 } from "recharts";
+import { ChartContainer } from "./ChartContainer";
 import { Flame } from "lucide-react";
 import type { FirePoint } from "../lib/aggregations";
 import {
@@ -292,7 +292,7 @@ export function FireChart({
       </div>
 
       <div className="h-72">
-        <ResponsiveContainer>
+        <ChartContainer>
           <AreaChart data={chart}>
             <defs>
               <linearGradient id="fireFill" x1="0" y1="0" x2="0" y2="1">
@@ -359,7 +359,7 @@ export function FireChart({
               fill="url(#fireFill)"
             />
           </AreaChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </div>
     </div>
   );

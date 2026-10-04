@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ResponsiveContainer,
   BarChart,
   Bar,
   XAxis,
@@ -8,6 +7,7 @@ import {
   CartesianGrid,
   Tooltip as ChartTooltip,
 } from "recharts";
+import { ChartContainer } from "../components/ChartContainer";
 import {
   Sparkles,
   TrendingUp,
@@ -596,7 +596,7 @@ function YearBars({
           под графиком оставалась полоса пустоты, когда соседняя карточка в
           ряду выходила выше. */}
       <div className="flex-1 min-h-[13rem]">
-        <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer>
           <BarChart
             data={data}
             margin={{ top: 4, right: 4, left: 4, bottom: 0 }}
@@ -683,7 +683,7 @@ function YearBars({
               isAnimationActive={false}
             />
           </BarChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </div>
     </SectionCard>
   );

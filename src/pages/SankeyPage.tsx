@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { pluralRu } from "../lib/plural";
-import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
+import { Sankey, Tooltip } from "recharts";
+import { ChartContainer } from "../components/ChartContainer";
 import { GitFork, TrendingUp, TrendingDown, Trophy, PiggyBank } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
@@ -160,7 +161,7 @@ export function SankeyPage() {
 
       <div className="card-tray px-4 py-3">
         <div className="h-[600px]">
-          <ResponsiveContainer>
+          <ChartContainer>
             <Sankey
               data={data}
               // Поля под подписи: узлы стоят вплотную к краям области, а имя
@@ -290,7 +291,7 @@ export function SankeyPage() {
                 )}
               />
             </Sankey>
-          </ResponsiveContainer>
+          </ChartContainer>
         </div>
         {/* Легенда одной строкой под диаграммой: пять чипов вразброс по центру
             занимали высоту наравне с содержимым. */}

@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  ResponsiveContainer,
   ComposedChart,
   Line,
   XAxis,
@@ -9,6 +8,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
+import { ChartContainer } from "./ChartContainer";
 import type { Transaction } from "../types";
 import { Scale } from "lucide-react";
 import { buildMonthCashflow } from "../lib/budgets";
@@ -236,7 +236,7 @@ export function MonthCashflowChart({
           if (date) onDayClick(date);
         }}
       >
-        <ResponsiveContainer>
+        <ChartContainer>
           <ComposedChart data={cf.points} margin={{ top: 18, right: 12, bottom: 0, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
             <XAxis
@@ -279,7 +279,7 @@ export function MonthCashflowChart({
             <Line type="monotone" dataKey="incomeF" name="Прогноз поступлений" stroke={INCOME} strokeWidth={2} strokeDasharray="4 3" strokeOpacity={0.7} dot={false} isAnimationActive={false} />
             <Line type="monotone" dataKey="expenseF" name="Прогноз расходов" stroke={EXPENSE} strokeWidth={2} strokeDasharray="4 3" strokeOpacity={0.7} dot={false} isAnimationActive={false} />
           </ComposedChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </div>
     </div>
     </div>

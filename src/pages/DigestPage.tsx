@@ -12,7 +12,8 @@ import {
   Store,
   Sparkles,
 } from "lucide-react";
-import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip } from "recharts";
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip } from "recharts";
+import { ChartContainer } from "../components/ChartContainer";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../store/useDrillStore";
@@ -560,7 +561,7 @@ function DaysChart({
   const data = days.map((d) => ({ ...d, label: dayLabel(d.date, week) }));
   return (
     <div className="h-40">
-      <ResponsiveContainer>
+      <ChartContainer>
         <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
           <XAxis dataKey="label" stroke={chartAxisStroke} fontSize={11} interval={week ? 0 : 4} />
@@ -592,7 +593,7 @@ function DaysChart({
             ))}
           </Bar>
         </BarChart>
-      </ResponsiveContainer>
+      </ChartContainer>
     </div>
   );
 }

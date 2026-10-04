@@ -1,7 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Checkbox } from "../components/Checkbox";
 import {
-  ResponsiveContainer,
   AreaChart,
   Area,
   XAxis,
@@ -15,6 +14,7 @@ import {
   ReferenceArea,
   type TooltipContentProps,
 } from "recharts";
+import { ChartContainer } from "../components/ChartContainer";
 import clsx from "clsx";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -3024,7 +3024,7 @@ export function AccountsPage() {
               </button>
             </div>
           ) : chartView === "stacked" ? (
-            <ResponsiveContainer>
+            <ChartContainer>
               {/* `stackOffset="sign"`: активы растут вверх от нуля, долги — вниз,
                   каждый от своей стороны. Без него стопка складывается подряд, и
                   долг, нарисованный после активов, утягивает всю ленту вниз, а
@@ -3179,9 +3179,9 @@ export function AccountsPage() {
                   </>
                 )}
               </ComposedChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           ) : (
-            <ResponsiveContainer>
+            <ChartContainer>
               <ComposedChart
                 data={netPlot}
                 {...netRange.handlers}
@@ -3334,7 +3334,7 @@ export function AccountsPage() {
                   </>
                 )}
               </ComposedChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           )}
         </div>
         {netForecast.length > 0 && (() => {
@@ -3379,7 +3379,7 @@ export function AccountsPage() {
           }
         />
         <div className="h-64">
-          <ResponsiveContainer>
+          <ChartContainer>
             <AreaChart data={series}>
               <defs>
                 <linearGradient id="bal" x1="0" y1="0" x2="0" y2="1">
@@ -3412,7 +3412,7 @@ export function AccountsPage() {
                 fill="url(#bal)"
               />
             </AreaChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </div>
       </>)}
       </div>
