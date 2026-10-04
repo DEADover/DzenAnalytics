@@ -65,7 +65,11 @@ async function mount() {
   }
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <Router useTransitions={false}>
+      <Router
+        useTransitions={false}
+        // Панель может жить не в корне сайта (например, на «/app/»).
+        {...(Router === BrowserRouter ? { basename: import.meta.env.BASE_URL.replace(/\/$/, "") || "/" } : {})}
+      >
         <App />
       </Router>
     </StrictMode>
@@ -86,7 +90,9 @@ if (
   !__STANDALONE__
 ) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
+    // От базы панели, а не от текущего адреса: на вложенных разделах
+    // («/app/budget/…») «./sw.js» вёл бы в никуда.
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
       // ignore registration failures
     });
   });

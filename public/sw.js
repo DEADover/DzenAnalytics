@@ -2,17 +2,20 @@
 // Cache-first для статических ассетов, network-first для HTML.
 // v2 — новый знак «DA»: иконки лежат по прежним адресам, и без смены версии
 // кэш «сначала из кэша» ещё долго отдавал бы старые.
-const VERSION = "v2";
+// v3 — пути от адреса воркера: панель может жить на «/app/», а не в корне.
+const VERSION = "v3";
 const STATIC_CACHE = `dzen-static-${VERSION}`;
 const RUNTIME_CACHE = `dzen-runtime-${VERSION}`;
 
+// Пути — от адреса самого воркера: панель может жить и не в корне сайта
+// (например, на «/app/»).
 const PRECACHE = [
-  "/",
-  "/index.html",
-  "/manifest.webmanifest",
-  "/favicon-16.png",
-  "/favicon-32.png",
-  "/favicon-48.png",
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./favicon-16.png",
+  "./favicon-32.png",
+  "./favicon-48.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -60,7 +63,7 @@ self.addEventListener("fetch", (event) => {
         } catch {
           const cached = await caches.match(req);
           if (cached) return cached;
-          const offline = await caches.match("/index.html");
+          const offline = await caches.match(new URL("./index.html", self.registration.scope).href);
           if (offline) return offline;
           return new Response("Offline", { status: 503 });
         }

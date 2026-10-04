@@ -32,7 +32,7 @@ export function consumeOAuthCallback():
   | null {
   if (location.pathname !== callbackPath) return null;
   const params = new URLSearchParams(location.search);
-  history.replaceState(null, "", "/settings?source=api");
+  history.replaceState(null, "", `${import.meta.env.BASE_URL}settings?source=api`);
   const pending = sessionStorage.getItem(attemptKey);
   sessionStorage.removeItem(attemptKey);
   try {

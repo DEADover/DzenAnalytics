@@ -102,7 +102,9 @@ function inlineStandaloneAssets(): Plugin {
 }
 
 export default defineConfig({
-  base: standalone ? "./" : "/",
+  // APP_BASE — путь панели, если она открывается не из корня сайта: «/app/».
+  // По умолчанию «/», как в Docker-образе и при запуске из исходников.
+  base: standalone ? "./" : (process.env.APP_BASE ?? "/"),
   define: {
     __APP_VERSION__: JSON.stringify(pkgVersion),
     // Однофайловая сборка: адреса разделов — после «#», service worker не нужен.
