@@ -81,6 +81,23 @@ async function mount() {
 
 void mount();
 
+// После выкладки новой версии файлы прошлой с сервера пропадают: вкладка,
+// открытая до выкладки, не догрузит модуль, который подгружается по
+// требованию, и тихо сломается. Перезагружаемся на свежую версию — не чаще
+// раза в минуту, чтобы при настоящей поломке не уйти в бесконечный цикл.
+window.addEventListener("vite:preloadError", (event) => {
+  const key = "da-preload-reload";
+  try {
+    const last = Number(sessionStorage.getItem(key)) || 0;
+    if (Date.now() - last < 60_000) return;
+    sessionStorage.setItem(key, String(Date.now()));
+  } catch {
+    return;
+  }
+  event.preventDefault();
+  location.reload();
+});
+
 // Service worker — только у обычной сборки на http(s). В однофайловой его
 // файла нет: регистрация лишь сыпала 404 в консоль хоста.
 if (

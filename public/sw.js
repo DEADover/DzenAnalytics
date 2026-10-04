@@ -56,9 +56,15 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         try {
-          const fresh = await fetch(req);
-          const cache = await caches.open(RUNTIME_CACHE);
-          cache.put(req, fresh.clone()).catch(() => {});
+          // no-cache — всегда сверка с сервером: без неё запрос шёл через кеш
+          // браузера, и при сервере без Cache-Control у страницы вкладка могла
+          // днями открываться старой версией панели.
+          const fresh = await fetch(req, { cache: "no-cache" });
+          // В запас кладём только нормальную страницу, не ошибку сервера.
+          if (fresh.ok) {
+            const cache = await caches.open(RUNTIME_CACHE);
+            cache.put(req, fresh.clone()).catch(() => {});
+          }
           return fresh;
         } catch {
           const cached = await caches.match(req);
