@@ -43,6 +43,8 @@ import { CategoryTable, type CategoryTableRow } from "../components/CategoryTabl
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useDiffMode } from "../store/useDiffModeStore";
 import { colorForCategory } from "../lib/categoryColor";
+import { buildCompareTrack } from "../lib/compareTrack";
+import { CompareTrackChart } from "../components/CompareTrackChart";
 import type { Transaction } from "../types";
 
 /** Same logic as `periodKey` but accepts a Date instead of an ISO string. */
@@ -312,6 +314,80 @@ function PeriodHead({
   );
 }
 
+/**
+ * Какие отрезки сравниваются при заданных настройках. Вынесено из страницы,
+ * чтобы посчитать дважды: для сумм — с выравниванием равных отрезков, для
+ * графика нарастающим итогом — без него (там период Б нужен целиком).
+ */
+function computeComparison({
+  preset,
+  customA,
+  customB,
+  maxDate,
+  monthStartDay,
+  months,
+  years,
+  aligned,
+  avgMonths,
+}: {
+  preset: Preset;
+  customA: Range;
+  customB: Range;
+  maxDate: string;
+  monthStartDay: number;
+  months: { a: string; b: string };
+  years: { a: number; b: number };
+  aligned: boolean;
+  avgMonths: AvgMonths;
+}): Comparison {
+  const one = (r: Range): DayRange[] => (r.from && r.to ? [{ from: r.from, to: r.to }] : []);
+
+  if (preset === "custom") {
+    const a = { ...customA, label: customA.label || "Период А" };
+    const b = { ...customB, label: customB.label || "Период Б" };
+    return { a, b, windowsB: one(b) };
+  }
+
+  // ── «Среднее»: А — выбранный месяц, Б — типичный месяц из N предыдущих ──
+  if (preset === "avg") {
+    const full = periodRange(months.a, monthStartDay);
+    // Идущий месяц обрезаем по последней операции — как и в режиме «Месяцы».
+    const partial = !!maxDate && maxDate < full.to && maxDate >= full.from;
+    const a: Range = {
+      from: full.from,
+      to: partial ? maxDate : full.to,
+      label: monthTitle(months.a),
+    };
+    let windows = previousWindows(full, avgMonths, months.a, monthStartDay);
+    // Неполный месяц сравниваем с такими же началами предыдущих: три дня
+    // против целых месяцев не сказали бы ничего.
+    if (aligned && partial) windows = alignWindows(windows, spanDays(a.from, a.to));
+    const b: Range = {
+      // Окна идут от свежего к старому, поэтому границы берём с разных концов.
+      from: windows[windows.length - 1]?.from ?? "",
+      to: windows[0]?.to ?? "",
+      label: `Среднее за ${avgMonths} мес`,
+    };
+    return { a, b, windowsB: windows };
+  }
+
+  const raw = rangeOf(
+    preset,
+    maxDate || new Date().toISOString().slice(0, 10),
+    monthStartDay,
+    months,
+    years
+  );
+  // Остальные пресеты строят одинаковые по длине окна сами, а «свои даты»
+  // пользователь задал руками — там подрезать нечего.
+  if (preset !== "months" && preset !== "years")
+    return { ...raw, windowsB: one(raw.b) };
+  const fit = comparableRanges(raw.a, raw.b, maxDate, aligned);
+  const a = { ...fit.a, label: raw.a.label };
+  const b = { ...fit.b, label: raw.b.label };
+  return { a, b, windowsB: one(b) };
+}
+
 export function ComparePage() {
   // Сравнение периодов — это доходы и расходы, поэтому обороты и взаимозачёты
   // из него исключаются так же, как из остальных сводных виджетов (#14).
@@ -398,54 +474,17 @@ export function ComparePage() {
     return { a, b: yearB ?? a - 1 };
   }, [yearA, yearB, maxYM]);
 
-  const ranges = useMemo<Comparison>(() => {
-    const one = (r: Range): DayRange[] => (r.from && r.to ? [{ from: r.from, to: r.to }] : []);
-
-    if (preset === "custom") {
-      const a = { ...customA, label: customA.label || "Период А" };
-      const b = { ...customB, label: customB.label || "Период Б" };
-      return { a, b, windowsB: one(b) };
-    }
-
-    // ── «Среднее»: А — выбранный месяц, Б — типичный месяц из N предыдущих ──
-    if (preset === "avg") {
-      const full = periodRange(months.a, monthStartDay);
-      // Идущий месяц обрезаем по последней операции — как и в режиме «Месяцы».
-      const partial = !!maxDate && maxDate < full.to && maxDate >= full.from;
-      const a: Range = {
-        from: full.from,
-        to: partial ? maxDate : full.to,
-        label: monthTitle(months.a),
-      };
-      let windows = previousWindows(full, avgMonths, months.a, monthStartDay);
-      // Неполный месяц сравниваем с такими же началами предыдущих: три дня
-      // против целых месяцев не сказали бы ничего.
-      if (aligned && partial) windows = alignWindows(windows, spanDays(a.from, a.to));
-      const b: Range = {
-        // Окна идут от свежего к старому, поэтому границы берём с разных концов.
-        from: windows[windows.length - 1]?.from ?? "",
-        to: windows[0]?.to ?? "",
-        label: `Среднее за ${avgMonths} мес`,
-      };
-      return { a, b, windowsB: windows };
-    }
-
-    const raw = rangeOf(
-      preset,
-      maxDate || new Date().toISOString().slice(0, 10),
-      monthStartDay,
-      months,
-      years
-    );
-    // Остальные пресеты строят одинаковые по длине окна сами, а «свои даты»
-    // пользователь задал руками — там подрезать нечего.
-    if (preset !== "months" && preset !== "years")
-      return { ...raw, windowsB: one(raw.b) };
-    const fit = comparableRanges(raw.a, raw.b, maxDate, aligned);
-    const a = { ...fit.a, label: raw.a.label };
-    const b = { ...fit.b, label: raw.b.label };
-    return { a, b, windowsB: one(b) };
-  }, [preset, customA, customB, maxDate, monthStartDay, months, years, aligned, avgMonths]);
+  const ranges = useMemo<Comparison>(
+    () =>
+      computeComparison({ preset, customA, customB, maxDate, monthStartDay, months, years, aligned, avgMonths }),
+    [preset, customA, customB, maxDate, monthStartDay, months, years, aligned, avgMonths]
+  );
+  /** Те же периоды без выравнивания — для графика: период Б в нём целиком. */
+  const trackRanges = useMemo<Comparison>(
+    () =>
+      computeComparison({ preset, customA, customB, maxDate, monthStartDay, months, years, aligned: false, avgMonths }),
+    [preset, customA, customB, maxDate, monthStartDay, months, years, avgMonths]
+  );
 
   /** На сколько периодов делить суммы Б. В «Среднем» их несколько, иначе один. */
   const divisorB = preset === "avg" ? Math.max(1, ranges.windowsB.length) : 1;
@@ -463,6 +502,19 @@ export function ComparePage() {
   );
 
   const kpiA = useMemo(() => computeKPI(txsA), [txsA]);
+
+  // Нарастающий итог по дням (#117): А — от начала своего периода до последнего
+  // дня с данными, Б — целиком, без выравнивания.
+  const track = useMemo(() => {
+    const r = trackRanges.a;
+    const full =
+      preset === "months" || preset === "avg"
+        ? periodRange(months.a, monthStartDay)
+        : preset === "years"
+          ? yearRange(years.a, monthStartDay)
+          : { from: r.from, to: r.to };
+    return buildCompareTrack(filtered, chartKind, { full, to: r.to }, trackRanges.windowsB);
+  }, [filtered, chartKind, trackRanges, preset, months.a, years.a, monthStartDay]);
   // В «Среднем» суммы Б собраны за несколько месяцев — приводим к одному.
   const kpiB = useMemo(
     () => scaleKPI(computeKPI(txsB), divisorB),
@@ -924,9 +976,20 @@ export function ComparePage() {
 
       </div>
 
-      {/* Переключатель «Расходы / Доходы» стоит только у этого блока: карточки
-          и таблица выше показывают доходы и расходы одновременно. Полоса —
-          период А, засечка на ней — период Б. */}
+      {/* Переключатель «Расходы / Доходы» — у графика и у таблицы категорий,
+          общий для обоих: карточки и таблица выше показывают доходы и расходы
+          одновременно. */}
+      <CompareTrackChart
+        track={track}
+        kind={chartKind}
+        onKindChange={setChartKind}
+        base={base}
+        labelA={ranges.a.label}
+        labelB={ranges.b.label}
+        datesB={trackRanges.windowsB.length === 1}
+      />
+
+      {/* Полоса — период А, засечка на ней — период Б. */}
       <CategoryTable
         icon={GitCompare}
         card
