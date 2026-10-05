@@ -48,3 +48,21 @@ export function queryMatcher(query: string): (text: string) => boolean {
     return t.includes(direct) || (swapped !== direct && t.includes(swapped));
   };
 }
+
+/**
+ * Начинается ли `text` с набранного `query` — как есть или в другой раскладке.
+ * Для подсказок, которые дописывают начатое слово: «#Jngecr» → «Отпуск».
+ * Сначала проверяется прямое совпадение, поэтому в списке оно идёт первым,
+ * если отсортировать по `rank`.
+ */
+export function prefixMatcher(query: string): { test: (text: string) => boolean; rank: (text: string) => number } {
+  const direct = fold(query);
+  const swapped = fold(swapLayout(query.toLowerCase()));
+  const rank = (text: string) => {
+    const t = fold(text);
+    if (t.startsWith(direct)) return 0;
+    if (swapped !== direct && t.startsWith(swapped)) return 1;
+    return -1;
+  };
+  return { test: (text) => rank(text) >= 0, rank };
+}

@@ -7,6 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Hash } from "lucide-react";
+import { prefixMatcher } from "../lib/keyboardLayout";
 
 /**
  * A <textarea> with inline hashtag autocomplete. Typing «#» opens a menu of
@@ -47,8 +48,15 @@ export function HashtagTextarea({
 
   const suggestions = useMemo(() => {
     if (!open) return [];
-    const q = query.toLowerCase();
-    return tags.filter((t) => t.toLowerCase().startsWith(q)).slice(0, MAX_ITEMS);
+    // Набрали в другой раскладке — тоже находим: «#Jngecr» предлагает
+    // «#Отпуск». Прямые совпадения — первыми.
+    const m = prefixMatcher(query);
+    return tags
+      .map((t) => ({ t, r: m.rank(t) }))
+      .filter((x) => x.r >= 0)
+      .sort((a, b) => a.r - b.r)
+      .map((x) => x.t)
+      .slice(0, MAX_ITEMS);
   }, [open, query, tags]);
 
   // ── Position (portal, fixed). Flip above when there's no room below. ──
@@ -134,7 +142,9 @@ export function HashtagTextarea({
     const between = hashIdx === -1 ? "" : upto.slice(hashIdx + 1);
     // Open only while the text right after «#» is a valid tag fragment
     // (letters/digits/_/-, no spaces) — same charset as the hashtag regex.
-    if (hashIdx !== -1 && /^[\p{L}\p{N}_-]*$/u.test(between)) {
+    // Плюс клавиши, на которых в другой раскладке стоят буквы «х ъ ж э б ю ё»
+    // («[j,,b» — это «хобби»): подсказка решит, подходит ли такое начало.
+    if (hashIdx !== -1 && /^[\p{L}\p{N}_\-[\];',.`]*$/u.test(between)) {
       setStart(hashIdx);
       if (between !== query) setIndex(0); // keep highlight stable on arrow nav
       setQuery(between);
