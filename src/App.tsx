@@ -122,6 +122,7 @@ function PlainLayout() {
 function App() {
   const hydrate = useDataStore((s) => s.hydrate);
   const loaded = useDataStore((s) => s.loaded);
+  const hasData = useDataStore((s) => s.transactions.length > 0);
   const initTheme = useThemeStore((s) => s.init);
   const backupHydrate = useBackupStore((s) => s.hydrate);
   const backupRunIfDue = useBackupStore((s) => s.runIfDue);
@@ -439,7 +440,7 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <TopNav onOpenPalette={() => setPaletteOpen(true)} />
+      <TopNav onOpenPalette={() => setPaletteOpen(true)} hasData={hasData} />
       {/* Сверху воздуха меньше, чем снизу: первая строка страницы — тонкие
           крошки раздела (PageHeader), они читаются как продолжение шапки, и
           отбивать их наравне с остальными блоками незачем. */}

@@ -85,13 +85,27 @@ const sheetRow = (active = false) =>
     active ? "bg-accent/10 text-accent" : "text-muted hover:text-text hover:bg-panel2"
   );
 
-export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
+export function TopNav({
+  onOpenPalette,
+  hasData = true,
+}: {
+  onOpenPalette?: () => void;
+  /**
+   * Есть ли данные. Приходит от `App`: своё обращение к хранилищу операций в
+   * шапке меняло порядок загрузки модулей, и давний круг импортов между
+   * хранилищами ронял приложение при старте.
+   */
+  hasData?: boolean;
+}) {
   const [moreOpenState, setMoreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const loc = useLocation();
   const editingLayout = useDashboardLayoutStore((s) => s.editing);
   const setEditingLayout = useDashboardLayoutStore((s) => s.setEditing);
   const onDashboard = loc.pathname === "/";
+  // Настраивать главную нечего, пока нет данных: на ней стоит экран «С чего
+  // начнём?», а не виджеты.
+  const canEditLayout = onDashboard && hasData;
   // Переключатель разреза появляется только со второго разреза — от этого
   // зависит, нужен ли разделитель внутри панели.
   const hasSlices = useSlicesStore((s) => s.slices.length) > 1;
@@ -466,19 +480,21 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
             «Главной» в меню, и два одинаковых значка в одной шапке читались бы
             как одно и то же действие. */}
         <button
-          onClick={() => onDashboard && setEditingLayout(!editingLayout)}
+          onClick={() => canEditLayout && setEditingLayout(!editingLayout)}
           // Именно `aria-disabled`, а не `disabled`: выключенная кнопка в
           // браузере не получает событий мыши, и подсказка о том, почему она
           // погасла, не показалась бы как раз тогда, когда она нужнее всего.
-          aria-disabled={!onDashboard}
+          aria-disabled={!canEditLayout}
           title={
-            onDashboard
+            canEditLayout
               ? "Настроить главную\nПорядок, ширина и состав виджетов"
-              : "Настроить главную\nДоступно на главной странице"
+              : !hasData
+                ? "Настроить главную\nДоступно, когда подключены данные или открыто демо"
+                : "Настроить главную\nДоступно на главной странице"
           }
           aria-label="Настроить главную"
-          aria-pressed={editingLayout}
-          className={iconItem(!!onDashboard && editingLayout)}
+          aria-pressed={canEditLayout && editingLayout}
+          className={iconItem(canEditLayout && editingLayout)}
         >
           <LayoutTemplate className="w-4 h-4" />
         </button>
@@ -741,22 +757,24 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
               <button
                 type="button"
                 onClick={() => {
-                  if (!onDashboard) return;
+                  if (!canEditLayout) return;
                   setEditingLayout(!editingLayout);
                   setMobileOpen(false);
                 }}
-                aria-disabled={!onDashboard}
-                aria-pressed={onDashboard && editingLayout}
+                aria-disabled={!canEditLayout}
+                aria-pressed={canEditLayout && editingLayout}
                 className={clsx(
-                  sheetRow(onDashboard && editingLayout),
+                  sheetRow(canEditLayout && editingLayout),
                   "w-full",
-                  !onDashboard && "opacity-40 cursor-not-allowed"
+                  !canEditLayout && "opacity-40 cursor-not-allowed"
                 )}
               >
                 <LayoutTemplate className="w-4 h-4 shrink-0" />
                 <span>
                   Настроить главную
-                  {!onDashboard && <span className="block text-xs">Доступно на главной</span>}
+                  {!canEditLayout && (
+                    <span className="block text-xs">{hasData ? "Доступно на главной" : "Доступно, когда есть данные"}</span>
+                  )}
                 </span>
               </button>
             </div>

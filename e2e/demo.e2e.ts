@@ -7,11 +7,15 @@ import { test, expect } from "./harness";
 test("демо-данные: открываются из пустой панели, работают без сети, выход стирает их", async ({ page, zen }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "С чего начнём?" })).toBeVisible();
+  // Без данных настраивать главную нечего — кнопка погашена.
+  const layoutBtn = page.getByRole("button", { name: "Настроить главную" }).first();
+  await expect(layoutBtn).toHaveAttribute("aria-disabled", "true");
   await page.getByRole("button", { name: "Открыть демо-данные" }).click();
 
   const banner = page.getByText("Это демо-данные выдуманной семьи.");
   await expect(banner).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("heading", { name: "С чего начнём?" })).toHaveCount(0);
+  await expect(layoutBtn).toHaveAttribute("aria-disabled", "false");
 
   // История доходит до «сегодня» (часы тестов — 15.10.2026), а не дальше.
   const range = await page.evaluate(async () => {
