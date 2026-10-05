@@ -31,6 +31,22 @@ function dayLabel(date: string | null | undefined, month: "long" | "short" = "lo
   return new Date(y, m - 1, d).toLocaleDateString("ru-RU", { day: "numeric", month });
 }
 
+/**
+ * Как подписать ось — зависит от того, что сравниваем:
+ * - `monthDay` — месяц с месяцем (и со средним месяцем): числа месяца, общие
+ *   для обоих;
+ * - `month` — год с годом: месяцы;
+ * - `dayIndex` — отрезки, которые не совпадают по числам (30/90 дней, свои
+ *   даты): номер дня от начала периода, даты обоих — в подсказке.
+ */
+export type TrackAxis = "monthDay" | "month" | "dayIndex";
+
+/** «янв» — короткое название месяца без точки. */
+function monthShort(date: string): string {
+  const [y, m] = date.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("ru-RU", { month: "short" }).replace(".", "");
+}
+
 function TrackTip({
   active,
   payload,
@@ -39,6 +55,7 @@ function TrackTip({
   labelB,
   color,
   datesB,
+  axis,
 }: {
   active?: boolean;
   payload?: { payload?: TrackPoint }[];
@@ -48,19 +65,26 @@ function TrackTip({
   color: string;
   /** Показывать ли дату дня в периоде Б: у среднего за несколько месяцев её нет. */
   datesB: boolean;
+  axis: TrackAxis;
 }) {
   const p = payload?.[0]?.payload;
   if (!active || !p || (p.a == null && p.b == null)) return null;
   const facts: TooltipFact[] = [];
+  // По номеру дня у каждого периода своя дата — пишем обе в строках.
+  const byIndex = axis === "dayIndex";
   if (p.a != null)
-    facts.push({ label: labelA, value: formatMoney(p.a, base), swatchColor: color });
+    facts.push({
+      label: byIndex && p.dateA ? `${labelA} · ${dayLabel(p.dateA)}` : labelA,
+      value: formatMoney(p.a, base),
+      swatchColor: color,
+    });
   // Дату дня Б пишем, только если это другое число месяца, чем у А: у
   // месяцев и годов число то же (23 марта — 23 февраля), повторять его незачем;
   // «30 дней» и свои даты бывают сдвинуты.
   const sameDay = !!p.dateA && !!p.dateB && p.dateA.slice(8) === p.dateB.slice(8);
   if (p.b != null)
     facts.push({
-      label: datesB && p.dateB && !sameDay ? `${labelB} · ${dayLabel(p.dateB)}` : labelB,
+      label: datesB && p.dateB && (byIndex || !sameDay) ? `${labelB} · ${dayLabel(p.dateB)}` : labelB,
       value: formatMoney(p.b, base),
       swatch: "bg-muted opacity-60",
     });
@@ -71,7 +95,7 @@ function TrackTip({
       icon: <Scale />,
       strong: true,
     });
-  const title = p.dateA ? dayLabel(p.dateA) : `${formatNum(p.day)}-й день`;
+  const title = p.dateA && !byIndex ? dayLabel(p.dateA) : `${formatNum(p.day)}-й день`;
   return (
     <ChartTooltipCard>
       <TooltipFacts title={title} facts={facts} />
@@ -93,6 +117,7 @@ export function CompareTrackChart({
   labelA,
   labelB,
   datesB,
+  axis,
 }: {
   track: CompareTrack;
   kind: TrackKind;
@@ -102,6 +127,8 @@ export function CompareTrackChart({
   labelB: string;
   /** Есть ли у дней периода Б свои даты (нет у среднего за несколько месяцев). */
   datesB: boolean;
+  /** Подписи оси: числа месяца, месяцы или номер дня — см. {@link TrackAxis}. */
+  axis: TrackAxis;
 }) {
   const color = kind === "expense" ? chartColor.expense : chartColor.income;
   const muted = chartColor.muted;
@@ -109,6 +136,12 @@ export function CompareTrackChart({
   const lastA = track.aDays > 0 ? track.points[track.aDays - 1] : null;
   const hasB = track.points.some((p) => p.b != null);
   const atDay = lastA?.dateA ? ` на ${dayLabel(lastA.dateA)}` : "";
+  // У годов деления — на первый день каждого месяца периода А.
+  const firstDD = track.points[0]?.dateA?.slice(8);
+  const monthTicks =
+    axis === "month"
+      ? track.points.filter((p) => p.dateA && p.dateA.slice(8) === firstDD).map((p) => p.day)
+      : undefined;
 
   return (
     <SectionCard
@@ -174,12 +207,12 @@ export function CompareTrackChart({
               stroke={chartAxisStroke}
               fontSize={11}
               tickLine={false}
-              minTickGap={28}
-              // На оси — даты периода А: «1 окт … 31 окт». За его концом (Б
-              // длиннее) — номер дня.
+              minTickGap={axis === "month" ? 4 : 20}
+              ticks={monthTicks}
               tickFormatter={(v) => {
                 const p = track.points[Number(v) - 1];
-                return p?.dateA ? dayLabel(p.dateA, "short") : String(v);
+                if (axis === "dayIndex" || !p?.dateA) return String(v);
+                return axis === "month" ? monthShort(p.dateA) : String(Number(p.dateA.slice(8)));
               }}
             />
             <YAxis
@@ -193,7 +226,7 @@ export function CompareTrackChart({
               cursor={chartTooltipProps.cursor}
               wrapperStyle={chartTooltipProps.wrapperStyle}
               content={
-                <TrackTip base={base} labelA={labelA} labelB={labelB} color={color} datesB={datesB} />
+                <TrackTip base={base} labelA={labelA} labelB={labelB} color={color} datesB={datesB} axis={axis} />
               }
             />
             {track.running && lastA && (

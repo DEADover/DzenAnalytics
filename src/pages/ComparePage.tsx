@@ -988,6 +988,13 @@ export function ComparePage() {
         labelA={ranges.a.label}
         labelB={ranges.b.label}
         datesB={trackRanges.windowsB.length === 1}
+        axis={
+          preset === "months" || preset === "avg"
+            ? "monthDay"
+            : preset === "years" || preset === "ytd_vs_prev_ytd"
+              ? "month"
+              : "dayIndex"
+        }
       />
 
       {/* Полоса — период А, засечка на ней — период Б. */}
