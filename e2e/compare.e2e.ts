@@ -110,6 +110,12 @@ test("А ⇄ Б: кнопка меняет периоды местами, где
   await swap.click();
   await expect(head("Период А").getByRole("button", { name: /Сентябрь/ })).toBeVisible();
   await expect(head("Период Б").getByRole("button", { name: /Октябрь/ })).toBeVisible();
+  // Кнопка посередине между выбором А и выбором Б (±1 px).
+  const mid = async (left: import("@playwright/test").Locator, right: import("@playwright/test").Locator) => {
+    const [l, r, s] = await Promise.all([left.boundingBox(), right.boundingBox(), swap.boundingBox()]);
+    return Math.abs(s!.x - (l!.x + l!.width) - (r!.x - (s!.x + s!.width)));
+  };
+  expect(await mid(head("Период А").locator(".seg-track").last(), head("Период Б").locator(".seg-track").last())).toBeLessThanOrEqual(1);
   // Кнопка одной высоты с выбором месяца.
   const [hs, hp] = await Promise.all([
     swap.locator("xpath=..").boundingBox(),
@@ -124,4 +130,5 @@ test("А ⇄ Б: кнопка меняет периоды местами, где
   // Свои даты: меняются сами даты.
   await page.getByRole("button", { name: "Свои даты", exact: true, disabled: false }).last().click();
   await expect(swap).toBeVisible();
+  expect(await mid(head("Период А").locator(".input").last(), head("Период Б").locator(".input").first())).toBeLessThanOrEqual(1);
 });

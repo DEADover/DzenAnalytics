@@ -296,7 +296,7 @@ function PeriodHead({
   return (
     <th
       scope="col"
-      className={`table-th text-right align-bottom font-normal ${withSwap ? "w-[22.75rem]" : "w-[20rem]"}`}
+      className={`table-th text-right align-bottom font-normal ${withSwap ? "w-[23.75rem]" : "w-[20rem]"}`}
     >
       <div className="label mb-1.5">{title}</div>
       <div className="flex items-center justify-end gap-2 h-[34px]">{children}</div>
@@ -721,7 +721,13 @@ export function ComparePage() {
               setCustomB({ ...customB, from: customA.from, to: customA.to });
             }
           : null;
+  // Кнопка — посередине между выбором А и выбором Б: обёртка забирает всё
+  // свободное место слева от выбора Б и ставит кнопку в его центр. `-ml-4`
+  // уравнивает края: слева до выбора А ещё поля двух ячеек, справа — `gap-2`.
+  // В «Своих датах» свободного места нет — поля дат растянуты, — и кнопка
+  // стоит между ними с равными отступами, а колонка Б шире на неё.
   const swapButton = swap && (
+    <div className={preset === "custom" ? "shrink-0 -ml-4 px-2" : "flex-1 flex justify-center -ml-4"}>
     <div className="seg-track shrink-0">
       <button
         type="button"
@@ -732,6 +738,7 @@ export function ComparePage() {
       >
         <ArrowLeftRight className="w-4 h-4" />
       </button>
+    </div>
     </div>
   );
 
@@ -969,7 +976,7 @@ export function ComparePage() {
                 <PeriodHead title="Период А" range={ranges.a}>
                   {slotA}
                 </PeriodHead>
-                <PeriodHead title="Период Б" range={ranges.b} suffix={rangeSuffixB} withSwap={!!swapButton}>
+                <PeriodHead title="Период Б" range={ranges.b} suffix={rangeSuffixB} withSwap={!!swapButton && preset === "custom"}>
                   {swapButton}
                   {slotB}
                 </PeriodHead>
