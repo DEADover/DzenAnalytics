@@ -1,6 +1,6 @@
-import { activeProfileId, addProfile, readProfiles, setActiveProfileId, DEFAULT_PROFILE_ID } from "../lib/profiles";
+import { activeProfileId, addProfile, profileLabel, readProfiles, setActiveProfileId, DEFAULT_PROFILE_ID } from "../lib/profiles";
 import { beginSwitch } from "../lib/switchOverlay";
-import { deleteProfile, switchProfile } from "./useProfiles";
+import { deleteProfile, profileFace, switchProfile } from "./useProfiles";
 
 /**
  * Демо-данные — отдельный аккаунт панели со своей базой: выдуманная семья, её
@@ -59,7 +59,8 @@ export function exitDemo(path = "/"): void {
   const back = get(RETURN_KEY);
   const target =
     back && back !== demo && readProfiles().some((p) => p.id === back) ? back : DEFAULT_PROFILE_ID;
-  beginSwitch("ваш аккаунт", () => {
+  const targetProfile = readProfiles().find((p) => p.id === target);
+  beginSwitch(targetProfile ? profileLabel(targetProfile) : "ваш аккаунт", () => {
     setActiveProfileId(target);
     put(DEMO_KEY, null);
     put(RETURN_KEY, null);
@@ -76,5 +77,5 @@ export function exitDemo(path = "/"): void {
       const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       window.location.assign(`${base}${path}`);
     });
-  });
+  }, targetProfile ? profileFace(targetProfile) : null);
 }

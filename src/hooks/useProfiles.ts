@@ -12,7 +12,8 @@ import {
   type Profile,
 } from "../lib/profiles";
 import { loadZenCache } from "../lib/zenmoneyCache";
-import { beginSwitch } from "../lib/switchOverlay";
+import { beginSwitch, type SwitchFace } from "../lib/switchOverlay";
+import { hueFromString } from "../lib/colorHash";
 import { zenUsers } from "../lib/zenUsers";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 
@@ -30,6 +31,14 @@ export function useProfiles(): { profiles: Profile[]; activeId: string } {
   }, [snap]);
 }
 
+/** Аватар аккаунта для экрана перехода — как у `ProfileAvatar`. */
+export function profileFace(p: Profile): SwitchFace {
+  const label = profileLabel(p);
+  const words = label.trim().split(/[\s@._-]+/).filter(Boolean);
+  const initials = (words.length > 1 ? words[0][0] + words[1][0] : (words[0]?.[0] ?? "?")).toUpperCase();
+  return { avatar: p.avatar ?? null, initials, hue: hueFromString(p.id + label) };
+}
+
 /**
  * Перейти в другой аккаунт. Страница перезагружается уже на его базе: все
  * сторы, кэши в памяти и открытые окна начинаются заново, и остаток прежнего
@@ -40,10 +49,14 @@ export function switchProfile(id: string): void {
   const target = readProfiles().find((p) => p.id === id);
   // Перезагрузка — под плавной заглушкой (`lib/switchOverlay`): страница гаснет,
   // новая стартует с той же заглушки и проявляется, когда данные прочитаны.
-  beginSwitch(target ? profileLabel(target) : "аккаунт", () => {
-    setActiveProfileId(id);
-    window.location.reload();
-  });
+  beginSwitch(
+    target ? profileLabel(target) : "аккаунт",
+    () => {
+      setActiveProfileId(id);
+      window.location.reload();
+    },
+    target ? profileFace(target) : null
+  );
 }
 
 /** Завести аккаунт и сразу перейти в него — там пустой экран подключения. */
