@@ -151,38 +151,101 @@ const TAG_SEEDS: TagSeed[] = [
  * случайность — иначе комментарии сдвинули бы суммы и даты операций.
  */
 const COMMENTS: Record<string, readonly string[]> = {
-  "t-food": ["Продукты на неделю", "Молоко, хлеб, фрукты", "К ужину", "Закупка на выходные", "Овощи и курица", "Для завтраков"],
-  "t-coffee": ["Капучино по дороге", "Флэт уайт", "Кофе с Сашей", "Раф и круассан"],
-  "t-delivery": ["Пицца на вечер", "Роллы", "Обед в офис", "Ужин доставкой"],
-  "t-cafe": ["Обед с коллегами", "Ужин с друзьями", "Завтрак в выходной", "Семейный ужин"],
-  "t-taxi": ["До офиса", "Из аэропорта", "Домой после встречи", "В гости", "Опаздывал на встречу"],
-  "t-metro": ["Проезд"],
-  "t-fuel": ["Полный бак", "Заправка по пути на дачу", "95-й"],
-  "t-pharmacy": ["Витамины", "От простуды", "Детские лекарства #Лечение", "Пластыри и бинты"],
-  "t-pets": ["Корм коту #Кот", "Наполнитель #Кот", "Игрушка для Барсика #Кот", "Корм для Рекса #Собака", "Лакомства #Собака", "Поводок и шлейка #Собака"],
-  "t-health": ["Анализы", "Приём терапевта", "Педиатр, приём #Лечение"],
-  "t-dentist": ["Профчистка", "Лечение зуба"],
-  "t-sport": ["Абонемент", "Бассейн"],
-  "t-mortgage": ["Ипотека"],
+  "t-food": [
+    "Продукты на неделю", "Молоко, хлеб, фрукты", "К ужину", "Закупка на выходные", "Овощи и курица",
+    "Для завтраков", "Сыр и вино к пятнице", "Фрукты детям в школу", "Мясо на шашлык", "Крупы и макароны про запас",
+    "Забыл хлеб — забежал вечером", "Йогурты и творог", "Всё для пирога", "Рыба на ужин", "Бытовая химия и продукты",
+    "Арбуз", "Кофе в зёрнах домой", "Мелочь по пути с работы",
+  ],
+  "t-coffee": [
+    "Капучино по дороге", "Флэт уайт", "Кофе с Сашей", "Раф и круассан", "Американо навынос", "Латте на овсяном",
+    "Кофе перед встречей", "Чай и сырник", "Эспрессо после обеда", "Какао дочке",
+  ],
+  "t-delivery": [
+    "Пицца на вечер", "Роллы", "Обед в офис", "Ужин доставкой", "Бургеры под футбол", "Суп и салат — болел",
+    "Шаурма, некогда готовить", "Пицца на день рождения дочки", "Вок на двоих", "Завтрак в постель",
+  ],
+  "t-cafe": [
+    "Обед с коллегами", "Ужин с друзьями", "Завтрак в выходной", "Семейный ужин", "Встреча с однокурсниками",
+    "Бизнес-ланч", "Свидание", "Отмечали премию", "Посидели с Мишей", "Ужин после театра", "Завтрак с детьми",
+  ],
+  "t-taxi": [
+    "До офиса", "Из аэропорта", "Домой после встречи", "В гости", "Опаздывал на встречу", "Ночью из гостей",
+    "В аэропорт, рано утром", "Дождь, не стал ждать автобус", "До поликлиники", "Из театра", "С дачи с вещами", "На вокзал",
+  ],
+  "t-metro": ["Проезд", "Метро", "Тройка", "Проезд до центра"],
+  "t-fuel": ["Полный бак, {l} л", "Заправка по пути на дачу", "95-й, {l} л", "Дозаправка", "Бензин перед поездкой", "92-й, {l} л"],
+  "t-pharmacy": [
+    "Витамины", "От простуды", "Детские лекарства #Лечение", "Пластыри и бинты", "Сироп от кашля #Лечение",
+    "Капли в нос", "Аптечка в машину", "Крем для рук", "Таблетки от головы", "Антибиотик по рецепту #Лечение",
+  ],
+  "t-pets": [
+    "Корм коту #Кот", "Наполнитель #Кот", "Игрушка для Барсика #Кот", "Когтеточка #Кот", "Витамины для кота #Кот",
+    "Корм для Рекса #Собака", "Лакомства #Собака", "Поводок и шлейка #Собака", "Косточки #Собака", "Шампунь для собаки #Собака",
+    "Средство от клещей #Собака", "Миски и коврик",
+  ],
+  "t-health": ["Анализы", "Приём терапевта", "Педиатр, приём #Лечение", "УЗИ", "Окулист", "Массаж спины"],
+  "t-dentist": ["Профчистка", "Лечение зуба", "Осмотр"],
+  "t-sport": ["Абонемент", "Бассейн", "Персональная тренировка", "Скалодром с детьми"],
   "t-travel": ["Билеты", "Отель"],
-  "t-gifts": ["Подарок", "Цветы"],
-  "t-cafe-trip": ["Ужин в отпуске #Отпуск", "Обед у моря #Отпуск", "Кафе на набережной #Отпуск"],
-  "t-clothes": ["Кроссовки", "Куртка на осень", "Футболки", "Джинсы", "Детская одежда"],
-  "t-fun": ["Кино всей семьёй", "Билеты на концерт", "Прогулка в парке"],
-  "t-beauty": ["Стрижка"],
-  "t-kids": ["Конструктор", "Канцтовары", "Подарок однокласснику"],
-  "t-kids-clubs": ["Рисование, месяц"],
-  "t-edu": ["Курс по аналитике"],
-  "t-telecom": ["Мобильная связь"],
-  "t-utils": ["Квартплата", "ЖКУ за месяц"],
+  "t-gifts": ["Подарок", "Цветы", "Подарок маме", "На свадьбу друзьям", "Сертификат в подарок"],
+  "t-cafe-trip": [
+    "Ужин в отпуске #Отпуск", "Обед у моря #Отпуск", "Кафе на набережной #Отпуск", "Мороженое и лимонад #Отпуск",
+    "Рыбный ресторан #Отпуск", "Завтрак в отеле не включён #Отпуск",
+  ],
+  "t-clothes": [
+    "Кроссовки", "Куртка на осень", "Футболки", "Джинсы", "Детская одежда", "Сапоги на зиму", "Рубашка на работу",
+    "Купальник к отпуску", "Шапка и варежки дочке", "Спортивный костюм", "Платье на выпускной", "Носки и бельё",
+  ],
+  "t-fun": [
+    "Кино всей семьёй", "Билеты на концерт", "Прогулка в парке", "Квест с друзьями", "Боулинг", "Театр",
+    "Аттракционы", "Выставка", "Каток", "Зоопарк с дочкой",
+  ],
+  "t-beauty": ["Стрижка", "Стрижка и борода", "Маникюр", "Окрашивание", "Уходовая косметика", "Стрижка дочке"],
+  "t-kids": [
+    "Конструктор", "Канцтовары", "Подарок однокласснику", "Тетради и ручки", "Рюкзак в школу", "Самокат",
+    "Билеты на ёлку", "Краски и альбомы", "Настольная игра", "Экскурсия с классом",
+  ],
+  "t-kids-clubs": ["Рисование, {month}", "Студия «Акварель», {month}", "Кружок рисования"],
+  "t-edu": ["Курс по аналитике", "Английский, {month}", "Книги по работе", "Вебинар"],
+  "t-telecom": ["Мобильная связь", "Связь, {month}", "Телефон жене"],
+  "t-utils": ["Квартплата", "ЖКУ за {month}", "Коммуналка за {month}", "Свет и вода за {month}"],
   "t-subs": ["Подписка"],
+  "t-freelance": ["Проект для клиента", "Дашборд для магазина", "Консультация по отчётам", "Доработки по сайту", "Аналитика для кофейни"],
 };
+
+/** Комментарии к возвратам — по категории покупки. */
+const REFUND_COMMENTS: Record<string, readonly string[]> = {
+  "t-clothes": ["Возврат: не подошёл размер", "Вернул — не понравилось", "Возврат части заказа", "Возврат: брак"],
+  "t-taxi": ["Возврат за отменённую поездку", "Списали дважды — вернули"],
+  "t-food": ["Возврат за испорченный товар", "Вернули за недовложение"],
+  "t-delivery": ["Опоздали с доставкой — вернули деньги", "Привезли не то — возврат"],
+};
+
+const MONTH_NAMES = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+
+/** Подставить в шаблон комментария месяц ({month} — прошлый, {cur} — этот) и литры ({l}). */
+function fillComment(text: string, date: string): string {
+  const m = Number(date.slice(5, 7)) - 1;
+  return text
+    .replace("{month}", MONTH_NAMES[(m + 11) % 12])
+    .replace("{cur}", MONTH_NAMES[m])
+    .replace("{l}", String(30 + Math.floor(commentRnd() * 21)));
+}
 let commentRnd = mulberry32(7);
 /** Во сколько раз цены этого дня ниже нынешних — инфляция ~7% в год. */
 let priceK = 1;
 
 let seq = 0;
 const txs: ZenTransaction[] = [];
+/** Возвраты, которые придут позже: на дату — сумма, категория, магазин, счёт. */
+const refunds: { date: string; sum: number; tag: string; payee: string; account: string }[] = [];
+/** Назначить возврат через `days` дней — всю сумму или её часть. */
+function refundLater(date: string, days: number, sum: number, tag: string, payee: string, account: string) {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  refunds.push({ date: d.toISOString().slice(0, 10), sum, tag, payee, account });
+}
 /** Траты по кредитке с прошлого погашения — гасим их целиком. */
 let alfaDebt = 0;
 
@@ -201,9 +264,11 @@ function push(
     const title = TAG_SEEDS.find((t) => t.id === o.tag)?.title;
     o = { ...o, comment: pool ? pool[Math.floor(commentRnd() * pool.length)] : (title ?? "Покупка") };
   }
+  if (o.comment) o = { ...o, comment: fillComment(o.comment, date) };
   // Траты прошлых лет — по ценам тех лет (кроме ипотеки: платёж фиксирован).
   if (kind === "expense" && o.tag !== "t-mortgage") sum = Math.max(1, Math.round(sum * priceK));
   if (acc === "a-alfa" && kind === "expense") alfaDebt += sum;
+  if (acc === "a-alfa" && kind === "income") alfaDebt = Math.max(0, alfaDebt - sum);
   const created = Math.floor(Date.parse(`${date}T09:00:00Z`) / 1000) + seq * 7;
   const incomeAcc = kind === "transfer" ? (o.to ?? "a-save") : acc;
   const inst = (id: string) => (id === "a-usd" ? USD : RUB);
@@ -239,6 +304,7 @@ function push(
     outcomeBankID: null,
     reminderMarker: null,
   });
+  return sum;
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -253,6 +319,7 @@ const MARKETPLACES = ["Wildberries", "Ozon", "Lamoda"];
 function buildTransactions(start: string, today: string) {
   seq = 0;
   txs.length = 0;
+  refunds.length = 0;
   alfaDebt = 0;
   commentRnd = mulberry32(7);
   rnd = mulberry32(20260922);
@@ -261,6 +328,11 @@ function buildTransactions(start: string, today: string) {
     const date = iso(d);
     const dom = day(date);
     const month = Number(date.slice(5, 7));
+    // ── Возвраты, назначенные покупками прошлых дней ──
+    for (const rf of refunds.filter((x) => x.date === date)) {
+      const pool = REFUND_COMMENTS[rf.tag];
+      push(date, "income", rf.sum, { tag: rf.tag, payee: rf.payee, account: rf.account, comment: pool[Math.floor(commentRnd() * pool.length)] });
+    }
     const year = Number(date.slice(0, 4));
     const md = date.slice(5);
     const weekday = d.getUTCDay(); // 0 — воскресенье
@@ -272,11 +344,11 @@ function buildTransactions(start: string, today: string) {
     const yearsBack = Math.max(0, Number(RAISE_FROM.slice(0, 4)) - (md >= "03-01" ? year : year - 1));
     const raise = Math.pow(0.92, yearsBack);
     priceK = Math.pow(0.93, yearsBack);
-    if (dom === 5) push(date, "income", Math.round(150_000 * raise), { tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Зарплата" });
-    if (dom === 20) push(date, "income", Math.round(95_000 * raise), { tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Аванс" });
-    if (dom === 14 && chance(0.55)) push(date, "income", amount(18_000, 46_000), { tag: "t-freelance", payee: "Самозанятость", comment: "Проект для клиента" });
-    if (dom === 2) push(date, "income", amount(900, 2_600), { tag: "t-cashback", payee: "Т-Банк", comment: "Кэшбэк за месяц" });
-    if (dom === 28) push(date, "income", amount(3_600, 5_200), { tag: "t-interest", account: "a-save", payee: "Т-Банк", comment: "Проценты на остаток" });
+    if (dom === 5) push(date, "income", Math.round(150_000 * raise), { tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Зарплата за {month}" });
+    if (dom === 20) push(date, "income", Math.round(95_000 * raise), { tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Аванс за {cur}" });
+    if (dom === 14 && chance(0.55)) push(date, "income", amount(18_000, 46_000), { tag: "t-freelance", payee: "Самозанятость" });
+    if (dom === 2) push(date, "income", amount(900, 2_600), { tag: "t-cashback", payee: "Т-Банк", comment: "Кэшбэк за {month}" });
+    if (dom === 28) push(date, "income", amount(3_600, 5_200), { tag: "t-interest", account: "a-save", payee: "Т-Банк", comment: "Проценты на остаток за {cur}" });
 
     // ── Переводы ──
     if (dom === 6) push(date, "transfer", Math.round(18_000 * raise), { to: "a-save", comment: "В накопления" });
@@ -290,27 +362,37 @@ function buildTransactions(start: string, today: string) {
     if (dom === 15 && month % 3 === 0) push(date, "transfer", 9_000, { to: "a-usd", toSum: 100, comment: "Купил долларов" });
 
     // ── Обязательные ──
-    if (dom === 10) push(date, "expense", 58_400, { tag: "t-mortgage", payee: "Сбербанк", comment: "Ипотека" });
+    if (dom === 10) push(date, "expense", 58_400, { tag: "t-mortgage", payee: "Сбербанк", comment: "Платёж по ипотеке за {cur}" });
     if (dom === 12) push(date, "expense", amount(month >= 11 || month <= 3 ? 7_800 : 5_900, month >= 11 || month <= 3 ? 9_400 : 6_800), { tag: "t-utils", payee: "Мосэнергосбыт" });
-    if (dom === 8) push(date, "expense", 1_190, { tag: "t-telecom", payee: "МГТС", comment: "Интернет" });
+    if (dom === 8) push(date, "expense", 1_190, { tag: "t-telecom", payee: "МГТС", comment: "Домашний интернет, {cur}" });
     if (dom === 18) push(date, "expense", 850, { tag: "t-telecom", payee: "Билайн", account: "a-sber" });
-    if (dom === 3) push(date, "expense", 4_900, { tag: "t-sport", payee: "World Class", comment: "Абонемент" });
+    if (dom === 3) push(date, "expense", 4_900, { tag: "t-sport", payee: "World Class", comment: "Абонемент на {cur}" });
     if (dom === 1) push(date, "expense", 6_200, { tag: "t-kids-clubs", payee: "Детская студия «Акварель»", account: "a-sber" });
 
     // ── Подписки ──
-    if (dom === 9) push(date, "expense", 449, { tag: "t-subs", payee: "Яндекс Плюс" });
-    if (dom === 16) push(date, "expense", date >= monthStart(-3) ? 399 : 299, { tag: "t-subs", payee: "Кинопоиск" });
-    if (dom === 23) push(date, "expense", 299, { tag: "t-subs", payee: "Telegram Premium", account: "a-alfa" });
+    if (dom === 9) push(date, "expense", 449, { tag: "t-subs", payee: "Яндекс Плюс", comment: "Плюс — семейная подписка" });
+    if (dom === 16) push(date, "expense", date >= monthStart(-3) ? 399 : 299, { tag: "t-subs", payee: "Кинопоиск", comment: "Кинопоиск, {cur}" });
+    if (dom === 23) push(date, "expense", 299, { tag: "t-subs", payee: "Telegram Premium", comment: "Telegram Premium на месяц", account: "a-alfa" });
 
     // ── Повседневное ──
     if (chance(weekend ? 0.75 : 0.5)) {
       const big = weekend && chance(0.6);
-      push(date, "expense", amount(big ? 3_200 : 650, big ? 6_800 : 2_400), { tag: "t-food", payee: pick(GROCERIES), account: chance(0.2) ? "a-alfa" : "a-tbank" });
+      const shop = pick(GROCERIES);
+      const card = chance(0.2) ? "a-alfa" : "a-tbank";
+      const paid = push(date, "expense", amount(big ? 3_200 : 650, big ? 6_800 : 2_400), { tag: "t-food", payee: shop, account: card });
+      if (chance(0.012)) refundLater(date, 1, Math.round(paid * 0.2), "t-food", shop, card);
     }
     if (!weekend && chance(0.55)) push(date, "expense", amount(240, 420), { tag: "t-coffee", payee: pick(COFFEE), account: "a-sber" });
-    if (chance(0.16)) push(date, "expense", amount(900, 2_100), { tag: "t-delivery", payee: pick(DELIVERY) });
+    if (chance(0.16)) {
+      const shop = pick(DELIVERY);
+      const paid = push(date, "expense", amount(900, 2_100), { tag: "t-delivery", payee: shop });
+      if (chance(0.03)) refundLater(date, 1, Math.round(paid * 0.5), "t-delivery", shop, "a-tbank");
+    }
     if (weekend && chance(0.4)) push(date, "expense", amount(2_400, 6_900), { tag: "t-cafe", payee: pick(RESTAURANTS), account: "a-alfa" });
-    if (chance(0.22)) push(date, "expense", amount(340, 980), { tag: "t-taxi", payee: "Яндекс Go" });
+    if (chance(0.22)) {
+      const paid = push(date, "expense", amount(340, 980), { tag: "t-taxi", payee: "Яндекс Go" });
+      if (chance(0.04)) refundLater(date, 0, paid, "t-taxi", "Яндекс Go", "a-tbank");
+    }
     if (!weekend && chance(0.6)) push(date, "expense", 62, { tag: "t-metro", payee: "Московский метрополитен", account: "a-sber" });
     if (dom % 9 === 4) push(date, "expense", amount(2_700, 3_900), { tag: "t-fuel", payee: pick(["Лукойл", "Газпромнефть"]) });
     if (chance(0.07)) push(date, "expense", amount(320, 1_900), { tag: "t-pharmacy", payee: pick(["Ригла", "Горздрав"]) });
@@ -319,7 +401,12 @@ function buildTransactions(start: string, today: string) {
     if (dom === 11 && month % 6 === 2) push(date, "expense", amount(3_200, 6_400), { tag: "t-health", payee: "Детская клиника «Здоровье»", comment: "Педиатр и анализы #Лечение" });
     // Иногда операция приходит дважды — дубль удаляют (виден в «Удалённых»).
     if ((dom === 27 && month % 2 === 0) || date === RECENT_DUP) push(date, "expense", amount(240, 420), { tag: "t-coffee", payee: pick(COFFEE), account: "a-sber", comment: "Дубль — списали дважды", deleted: true });
-    if (chance(0.06)) push(date, "expense", amount(1_400, 7_800), { tag: "t-clothes", payee: pick(MARKETPLACES), account: "a-alfa" });
+    if (chance(0.06)) {
+      const shop = pick(MARKETPLACES);
+      const paid = push(date, "expense", amount(1_400, 7_800), { tag: "t-clothes", payee: shop, account: "a-alfa" });
+      // Треть заказов одежды частично или целиком возвращают.
+      if (chance(0.33)) refundLater(date, 5 + Math.floor(rnd() * 9), chance(0.5) ? paid : Math.round(paid * 0.45), "t-clothes", shop, "a-alfa");
+    }
     if (weekend && chance(0.12)) push(date, "expense", amount(900, 3_600), { tag: "t-fun", payee: pick(["Каро Фильм", "Кассир.ру", "Парк Горького"]) });
     if (dom === 19 && chance(0.6)) push(date, "expense", amount(2_200, 3_400), { tag: "t-beauty", payee: "Барбершоп Chop-Chop" });
     if (chance(0.05)) push(date, "expense", amount(800, 3_500), { tag: "t-kids", payee: "Детский мир", account: "a-sber" });

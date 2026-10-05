@@ -15,11 +15,14 @@ test("демо-данные: открываются из пустой панел
 
   // История доходит до «сегодня» (часы тестов — 15.10.2026), а не дальше.
   const range = await page.evaluate(async () => {
-    type Store = { useDataStore: { getState: () => { transactions: { date: string }[] } } };
+    type Store = { useDataStore: { getState: () => { transactions: { date: string; kind: string }[] } } };
     const { useDataStore } = await (window as unknown as { __store: (n: string) => Promise<Store> }).__store("useDataStore");
-    const dates = useDataStore.getState().transactions.map((t) => t.date).sort();
-    return { first: dates[0], last: dates[dates.length - 1], count: dates.length };
+    const txs = useDataStore.getState().transactions;
+    const dates = txs.map((t) => t.date).sort();
+    return { first: dates[0], last: dates[dates.length - 1], count: dates.length, refunds: txs.filter((t) => t.kind === "refund").length };
   });
+  // Возвраты панель распознала как возвраты, а не доходы.
+  expect(range.refunds).toBeGreaterThan(20);
   expect(range.last.slice(0, 7)).toBe("2026-10");
   expect(range.last <= "2026-10-15").toBe(true);
   // Пять лет истории.

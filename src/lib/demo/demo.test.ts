@@ -17,7 +17,7 @@ describe("demoDiff — история до «сегодня»", () => {
   it("события года — в своих месяцах при любом «сегодня»", () => {
     for (const today of ["2027-03-10", "2026-10-05", "2028-01-20"]) {
       const d = demoDiff(1, today);
-      const salary = d.transaction.filter((t) => t.comment === "Зарплата");
+      const salary = d.transaction.filter((t) => t.comment?.startsWith("Зарплата за"));
       expect(salary.every((t) => t.date.endsWith("-05"))).toBe(true);
       const months = (tag: string) => new Set(d.transaction.filter((t) => t.tag?.[0] === tag).map((t) => t.date.slice(5, 7)));
       // Отпуск — летом, подарки — в декабре и к 8 Марта.
@@ -39,6 +39,27 @@ describe("demoDiff — история до «сегодня»", () => {
     expect(tagged / d.transaction.length).toBeLessThan(0.1);
     expect(d.transaction.filter((t) => t.deleted).length).toBeGreaterThan(10);
     expect(d.tag.find((t) => t.id === "t-pets")?.title).toBe("Животные");
+  });
+
+  it("есть возвраты — поступления в категорию расходов, после покупки", () => {
+    const d = demoDiff(1, "2026-10-05");
+    const expenseTags = new Set(d.tag.filter((t) => t.showOutcome && !t.showIncome).map((t) => t.id));
+    const refunds = d.transaction.filter((t) => t.income > 0 && t.outcome === 0 && expenseTags.has(t.tag?.[0] ?? ""));
+    expect(refunds.length).toBeGreaterThan(20);
+    expect(new Set(refunds.map((t) => t.tag![0])).size).toBeGreaterThanOrEqual(3);
+    expect(refunds.every((t) => t.comment && /возврат|вернул/i.test(t.comment))).toBe(true);
+  });
+
+  it("комментарии разнообразные: ни один не повторяется слишком часто", () => {
+    const d = demoDiff(1, "2026-10-05");
+    const counts = new Map<string, number>();
+    for (const t of d.transaction) counts.set(t.comment!, (counts.get(t.comment!) ?? 0) + 1);
+    expect(counts.size).toBeGreaterThan(250);
+    const top = Math.max(...counts.values());
+    expect(top / d.transaction.length).toBeLessThan(0.05);
+    // Шаблоны заполнены.
+    expect([...counts.keys()].some((c) => c.includes("{"))).toBe(false);
+    expect([...counts.keys()]).toContain("Зарплата за август");
   });
 
   it("остатки счетов не уходят в минус ни на один день (кредитка — в пределах лимита)", () => {
