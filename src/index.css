@@ -475,15 +475,17 @@ h2,
      `backdrop-filter` Chromium перерисовывает при каждой перерисовке окна над
      ними (ввод, прокрутка списка), и на кадр сквозь затемнение проступал
      белый фон корня — «моргание». Под затемнением стекло всё равно не видно,
-     сплошной фон ничем не хуже. Класс ставит `Modal`. */
+     сплошной фон ничем не хуже. Класс ставит `Modal`.
+     Порядок важен: сначала -webkit-, потом стандартное. В обратном сжатие CSS
+     при сборке оставляет только -webkit-, а его Chrome не понимает. */
   html.modal-open .glass {
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     background-color: rgb(var(--c-panel));
   }
   html.modal-open .drawer-backdrop {
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
   .card-sunken {
     @apply rounded-[18px] shadow-tray;
