@@ -1,8 +1,32 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
 import type { UserAliases } from "../lib/zenUsers";
-import { useDataStore } from "./useDataStore";
-import { invalidateLiveAccounts } from "./useZenmoneyStore";
+
+/**
+ * Кто перестраивается, когда меняется, чьё видно (кто вы, прятать ли чужие
+ * личные счета). Хранилище участников само никого не зовёт — иначе ему пришлось
+ * бы импортировать хранилища данных и Дзен-мани, а они импортируют его: круг
+ * импортов, который при неудачном порядке загрузки ронял приложение на старте.
+ * Наоборот, они подписываются сюда сами (`onMembersVisibilityChange`).
+ *
+ * `order` — порядок вызова: список счетов сбрасывается раньше (0), чем
+ * пересобираются операции (1). Действия ждут всех подписчиков.
+ */
+const visibilityListeners: { fn: () => void | Promise<void>; order: number }[] = [];
+
+export function onMembersVisibilityChange(fn: () => void | Promise<void>, order = 0): () => void {
+  const entry = { fn, order };
+  visibilityListeners.push(entry);
+  visibilityListeners.sort((a, b) => a.order - b.order);
+  return () => {
+    const i = visibilityListeners.indexOf(entry);
+    if (i >= 0) visibilityListeners.splice(i, 1);
+  };
+}
+
+async function visibilityChanged(): Promise<void> {
+  for (const l of visibilityListeners) await l.fn();
+}
 
 /**
  * Настройки участников общего аккаунта Дзен-мани (issues #92, #95).
@@ -88,15 +112,13 @@ export const useMembersStore = create<MembersState>((set, get) => ({
     await db.saveJSON("membersShowForeign", !v);
     set({ hideForeignPrivate: v });
     // Списки пересобираются из неизменного сырого набора — дёшево и мгновенно.
-    invalidateLiveAccounts();
-    await useDataStore.getState().refresh();
+    await visibilityChanged();
   },
 
   setOwnerId: async (userId) => {
     await db.saveJSON("userOwner", userId);
     set({ ownerId: userId });
-    invalidateLiveAccounts();
-    await useDataStore.getState().refresh();
+    await visibilityChanged();
   },
 
   replaceAliases: async (raw) => {
@@ -127,7 +149,6 @@ export const useMembersStore = create<MembersState>((set, get) => ({
       db.saveJSON("membersShowForeign", false),
     ]);
     set({ aliases: {}, ownerId: null, hideForeignPrivate: true });
-    invalidateLiveAccounts();
-    await useDataStore.getState().refresh();
+    await visibilityChanged();
   },
 }));

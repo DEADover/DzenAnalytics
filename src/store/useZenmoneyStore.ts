@@ -30,7 +30,7 @@ import {
   type ZenCache,
 } from "../lib/zenmoneyCache";
 import { zenUsers, type ZenUserOption } from "../lib/zenUsers";
-import { useMembersStore } from "./useMembersStore";
+import { onMembersVisibilityChange, useMembersStore } from "./useMembersStore";
 import {
   buildPushItems,
   buildBudgetPush,
@@ -345,6 +345,10 @@ export function invalidateLiveAccounts(): void {
   liveAccountsInFlight = null;
   if (liveAccountsMemo !== undefined) void getLiveAccountsFromCache();
 }
+
+// Сменилось, чьё видно, — список счетов из кэша собирается заново (раньше
+// операций: см. `onMembersVisibilityChange`).
+onMembersVisibilityChange(invalidateLiveAccounts, 0);
 
 export function getLiveAccountsFromCache(): Promise<LiveAccount[] | null> {
   if (liveAccountsMemo !== undefined && !liveAccountsStale) {

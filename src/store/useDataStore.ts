@@ -33,7 +33,7 @@ import type { ZenTransaction } from "../lib/zenmoney";
 import { loadDrafts, useDraftsStore } from "./useDraftsStore";
 import { draftsToTransactions } from "../lib/draftsMap";
 import { aliasesToMap, type PayeeAlias } from "./usePayeeAliasStore";
-import { useMembersStore } from "./useMembersStore";
+import { onMembersVisibilityChange, useMembersStore } from "./useMembersStore";
 
 // Rough cross-rates relative to RUB — purely a starting point so the rates UI
 // is populated out of the box. Users adjust to their own actual rates.
@@ -1025,3 +1025,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     set({ transactions: final, transactionsRaw: nextRaw });
   },
 }));
+
+// Сменилось, чьё видно (кто вы, прятать ли чужие личные счета), — операции
+// пересобираются из неизменного сырого набора. После сброса списка счетов.
+onMembersVisibilityChange(() => useDataStore.getState().refresh(), 1);
