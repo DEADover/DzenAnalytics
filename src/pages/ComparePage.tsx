@@ -422,6 +422,8 @@ export function ComparePage() {
   // Разбор по категориям — про расходы или про доходы. Отдельно от остальной
   // страницы: карточки и таблица наверху показывают и то, и другое сразу.
   const [chartKind, setChartKind] = useState<"expense" | "income">("expense");
+  // У графика нарастающим итогом свой переключатель, независимый от таблицы.
+  const [trackKind, setTrackKind] = useState<"expense" | "income">("expense");
 
   const filtered = useMemo(
     () =>
@@ -513,8 +515,8 @@ export function ComparePage() {
         : preset === "years"
           ? yearRange(years.a, monthStartDay)
           : { from: r.from, to: r.to };
-    return buildCompareTrack(filtered, chartKind, { full, to: r.to }, trackRanges.windowsB);
-  }, [filtered, chartKind, trackRanges, preset, months.a, years.a, monthStartDay]);
+    return buildCompareTrack(filtered, trackKind, { full, to: r.to }, trackRanges.windowsB);
+  }, [filtered, trackKind, trackRanges, preset, months.a, years.a, monthStartDay]);
   // В «Среднем» суммы Б собраны за несколько месяцев — приводим к одному.
   const kpiB = useMemo(
     () => scaleKPI(computeKPI(txsB), divisorB),
@@ -976,13 +978,12 @@ export function ComparePage() {
 
       </div>
 
-      {/* Переключатель «Расходы / Доходы» — у графика и у таблицы категорий,
-          общий для обоих: карточки и таблица выше показывают доходы и расходы
-          одновременно. */}
+      {/* Свой переключатель «Расходы / Доходы» у графика и у таблицы категорий:
+          карточки и таблица выше показывают доходы и расходы одновременно. */}
       <CompareTrackChart
         track={track}
-        kind={chartKind}
-        onKindChange={setChartKind}
+        kind={trackKind}
+        onKindChange={setTrackKind}
         base={base}
         labelA={ranges.a.label}
         labelB={ranges.b.label}

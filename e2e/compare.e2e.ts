@@ -32,8 +32,8 @@ test("нарастающий итог по дням: идущий месяц д�
   // Две линии: сплошная (октябрь) и пунктир (сентябрь).
   await expect(card.locator(".recharts-line")).toHaveCount(2);
 
-  // Переключатель общий с таблицей категорий.
+  // Переключатель свой: таблица категорий остаётся на расходах.
   await card.getByRole("radio", { name: /Доходы/ }).or(card.getByRole("button", { name: /Доходы/ })).first().click();
   await expect(page.getByText("График сравнения доходов")).toBeVisible();
-  await expect(page.getByText("Сравнение доходов по категориям")).toBeVisible();
+  await expect(page.getByText("Сравнение расходов по категориям")).toBeVisible();
 });
