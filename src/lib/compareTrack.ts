@@ -41,9 +41,16 @@ export interface CompareTrack {
   days: number;
   /** До какого дня у А есть данные (0 — данных в периоде нет). */
   aDays: number;
-  /** Последний день, где есть обе линии: на нём честно сравнивать периоды. */
+  /**
+   * Последний день, где есть обе линии. Сравнение на нём — только когда один
+   * из периодов ещё идёт (`limited`); законченные периоды сравниваются
+   * целиком, как в таблице: месяц в 30 дней против месяца в 31 — это просто
+   * два месяца.
+   */
   cmpDay: number;
-  /** Итог А и Б на `cmpDay`. */
+  /** Сравнение на `cmpDay`, а не целиком: А или Б ещё идёт. */
+  limited: boolean;
+  /** Что сравниваем: итоги на `cmpDay` или целиком (см. `limited`). */
   aAtCmp: number;
   bAtCmp: number;
   /** Итоги целиком. */
@@ -51,7 +58,7 @@ export interface CompareTrack {
   bTotal: number;
   /** А ещё идёт: данные кончаются раньше его календарного конца. */
   running: boolean;
-  /** Б кончается раньше А (например, Б — идущий год против прошлого целиком). */
+  /** Б ещё идёт и кончается раньше А (например, идущий год против прошлого). */
   bShorter: boolean;
 }
 
@@ -97,7 +104,9 @@ export function buildCompareTrack(
    * Совмещать по календарной дате (годы, «с начала года»), а не по номеру дня.
    * Берётся первое окно Б.
    */
-  calendar = false
+  calendar = false,
+  /** Период Б ещё идёт: его данные кончаются раньше календарного конца. */
+  bRunning = false
 ): CompareTrack {
   const aFullDays = a.full.from && a.full.to ? spanDays(a.full.from, a.full.to) : 0;
   const aDays = a.full.from && a.to ? Math.min(spanDays(a.full.from, a.to), aFullDays) : 0;
@@ -148,17 +157,23 @@ export function buildCompareTrack(
   for (const p of points) if (p.a != null && p.b != null) cmpDay = p.day;
   const at = cmpDay > 0 ? points[cmpDay - 1] : null;
   const lastB = [...points].reverse().find((p) => p.b != null);
+  const running = aDays > 0 && aDays < aFullDays;
+  const bShorter = bRunning && !!lastB && aDays > 0 && lastB.day < aDays;
+  const aTotal = aDays > 0 ? cumA[aDays - 1] : 0;
+  const bTotal = calendar ? (cumB[0]?.[cumB[0].length - 1] ?? 0) : (bAt(bMaxLen) ?? 0);
+  const limited = cmpDay > 0 && (running || bShorter);
 
   return {
     points,
     days: points.length,
     aDays,
     cmpDay,
-    aAtCmp: at?.a ?? 0,
-    bAtCmp: at?.b ?? 0,
-    aTotal: aDays > 0 ? cumA[aDays - 1] : 0,
-    bTotal: calendar ? (cumB[0]?.[cumB[0].length - 1] ?? 0) : (bAt(bMaxLen) ?? 0),
-    running: aDays > 0 && aDays < aFullDays,
-    bShorter: !!lastB && aDays > 0 && lastB.day < aDays,
+    limited,
+    aAtCmp: limited ? (at?.a ?? 0) : aTotal,
+    bAtCmp: limited ? (at?.b ?? 0) : bTotal,
+    aTotal,
+    bTotal,
+    running,
+    bShorter,
   };
 }

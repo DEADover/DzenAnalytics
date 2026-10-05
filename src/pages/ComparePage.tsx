@@ -527,9 +527,15 @@ export function ComparePage() {
       { full, to: r.to },
       trackRanges.windowsB,
       // Годы — по календарной дате: у високосного свой 29 февраля.
-      preset === "years" || preset === "ytd_vs_prev_ytd"
+      preset === "years" || preset === "ytd_vs_prev_ytd",
+      // Б ещё идёт (выбран текущий месяц или год) — сравнивать на общем дне.
+      preset === "months"
+        ? isRunningPeriod(periodRange(months.b, monthStartDay), maxDate)
+        : preset === "years"
+          ? isRunningPeriod(yearRange(years.b, monthStartDay), maxDate)
+          : false
     );
-  }, [filtered, trackKind, trackRanges, preset, months.a, years.a, monthStartDay]);
+  }, [filtered, trackKind, trackRanges, preset, months.a, months.b, years.a, years.b, monthStartDay, maxDate]);
   // В «Среднем» суммы Б собраны за несколько месяцев — приводим к одному.
   const kpiB = useMemo(
     () => scaleKPI(computeKPI(txsB), divisorB),

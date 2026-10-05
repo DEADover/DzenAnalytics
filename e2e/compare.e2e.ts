@@ -132,3 +132,45 @@ test("А ⇄ Б: кнопка меняет периоды местами, где
   await expect(swap).toBeVisible();
   expect(await mid(head("Период А").locator(".input").last(), head("Период Б").locator(".input").first())).toBeLessThanOrEqual(1);
 });
+
+test("законченные месяцы: сводка графика = таблица, ⇄ меняет только местами", async ({ page }) => {
+  await connectZen(page, "/compare");
+  const head = (name: string) => page.locator("th", { hasText: name });
+  const pick = async (col: string, current: RegExp, month: string) => {
+    await head(col).getByRole("button", { name: current }).click();
+    await page.locator(".fixed.card.w-64").getByRole("button", { name: month, exact: true }).click();
+  };
+  // А — июль (31 день), Б — июнь (30): оба закончились.
+  await pick("Период Б", /Сентябрь/, "Июн");
+  await pick("Период А", /Октябрь/, "Июл");
+  const row = page.locator("table").first().locator("tr", { hasText: "Расходы" });
+  const summary = page.getByTestId("compare-track-summary");
+  const nums = (s: string) => (s.replace(/\u00a0/g, " ").match(/\d[\d ]*\d ₽|\d ₽/g) ?? []).map((x) => x.trim());
+  const check = async () => {
+    const cells = await row.locator("td").allInnerTexts();
+    const [a, b] = [nums(cells[1])[0], nums(cells[2])[0]];
+    const sum = nums(await summary.innerText());
+    expect(sum.slice(0, 2)).toEqual([a, b]);
+    // Ни «к тому же дню», ни «целиком»: сравниваются месяцы целиком.
+    await expect(summary).not.toContainText("к тому же дню");
+    await expect(summary).not.toContainText("целиком");
+    return [a, b];
+  };
+  const [a1, b1] = await check();
+  await page.getByRole("button", { name: "Поменять периоды А и Б местами" }).click();
+  const [a2, b2] = await check();
+  expect([a2, b2]).toEqual([b1, a1]);
+});
+
+test("идёт период Б: после ⇄ сравнение на том же дне, разница = таблица", async ({ page }) => {
+  await connectZen(page, "/compare");
+  const summary = page.getByTestId("compare-track-summary");
+  const change = page.locator("table").first().locator("tr", { hasText: "Расходы" }).locator("td").last();
+  await page.getByRole("button", { name: "Поменять периоды А и Б местами" }).click();
+  // А — сентябрь целиком, Б — идущий октябрь (по 15-е).
+  await expect(summary).toContainText("на 15 сентября");
+  await expect(summary).toContainText("к тому же дню");
+  await expect(summary).toContainText("Сентябрь 2026 целиком");
+  const pill = (await change.innerText()).trim();
+  await expect(summary).toContainText(pill);
+});

@@ -70,15 +70,35 @@ describe("buildCompareTrack", () => {
   });
 
   it("идёт период Б: сравнение на последнем общем дне, А целиком — отдельно", () => {
-    const t = buildCompareTrack(txs, "expense", { full: sep, to: sep.to }, [
-      { from: "2026-10-01", to: "2026-10-05" },
-    ]);
+    const t = buildCompareTrack(
+      txs,
+      "expense",
+      { full: sep, to: sep.to },
+      [{ from: "2026-10-01", to: "2026-10-05" }],
+      false,
+      true
+    );
     expect(t.running).toBe(false);
     expect(t.bShorter).toBe(true);
     expect(t.cmpDay).toBe(5);
     expect(t.aAtCmp).toBe(150);
     expect(t.bAtCmp).toBe(180);
     expect(t.aTotal).toBe(1150);
+  });
+
+  it("законченные месяцы разной длины — целиком и одинаково в обе стороны", () => {
+    const mar = { from: "2026-03-01", to: "2026-03-31" };
+    const sepFull = { from: "2026-09-01", to: "2026-09-30" };
+    const data = [tx("2026-03-05", "expense", 10), tx("2026-03-31", "expense", 5), tx("2026-09-10", "expense", 7)];
+    const ab = buildCompareTrack(data, "expense", { full: mar, to: mar.to }, [sepFull]);
+    const ba = buildCompareTrack(data, "expense", { full: sepFull, to: sepFull.to }, [mar]);
+    for (const t of [ab, ba]) {
+      expect(t.limited).toBe(false);
+      expect(t.running).toBe(false);
+      expect(t.bShorter).toBe(false);
+    }
+    expect([ab.aAtCmp, ab.bAtCmp]).toEqual([15, 7]);
+    expect([ba.aAtCmp, ba.bAtCmp]).toEqual([7, 15]);
   });
 
   describe("годы — по календарной дате", () => {
@@ -91,6 +111,7 @@ describe("buildCompareTrack", () => {
         "expense",
         { full: y2024, to: y2024.to },
         [{ from: "2026-01-01", to: "2026-10-05" }],
+        true,
         true
       );
       expect(t.days).toBe(366);

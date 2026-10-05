@@ -135,7 +135,7 @@ export function CompareTrackChart({
   const hasB = track.points.some((p) => p.b != null);
   // Один из периодов ещё идёт — сравниваем на последнем общем дне и отмечаем
   // его на графике.
-  const limited = track.cmpDay > 0 && (track.running || track.bShorter);
+  const limited = track.limited;
   const cmp = track.cmpDay > 0 ? track.points[track.cmpDay - 1] : null;
   const atDay = limited && cmp?.dateA ? ` на ${dayLabel(cmp.dateA)}` : limited ? ` на ${formatNum(track.cmpDay)}-й день` : "";
   // У годов деления — на первый день каждого месяца периода А.
@@ -154,7 +154,8 @@ export function CompareTrackChart({
           Сколько набралось с начала периода к каждому дню. Сплошная линия —
           {` «${labelA}»`}, пунктир — {`«${labelB}»`}. Месяцы совмещаются по
           числам, годы — по датам, остальные отрезки — по номеру дня от начала.
-          Идущий период обрывается на последнем дне с операциями, и периоды
+          Законченные периоды сравниваются целиком, как в таблице выше. Идущий
+          период обрывается на последнем дне с операциями, и тогда периоды
           сравниваются на этом дне.
         </p>
       }
@@ -168,7 +169,7 @@ export function CompareTrackChart({
             {atDay}
           </span>
           <span className="font-semibold tabular-nums">
-            {formatMoney(track.cmpDay > 0 ? track.aAtCmp : track.aTotal, base)}
+            {formatMoney(track.aAtCmp, base)}
           </span>
         </span>
         {hasB && (
@@ -182,28 +183,28 @@ export function CompareTrackChart({
               {limited ? " к тому же дню" : ""}
             </span>
             <span className="font-semibold tabular-nums">
-              {formatMoney(track.cmpDay > 0 ? track.bAtCmp : track.bTotal, base)}
+              {formatMoney(track.bAtCmp, base)}
             </span>
           </span>
         )}
-        {track.cmpDay > 0 && (
+        {hasB && track.aDays > 0 && (
           <DeviationPill
             current={track.aAtCmp}
             baseline={track.bAtCmp}
             base={base}
             mode="both"
             kind={kind}
-            upTitle={`Больше, чем «${labelB}» к тому же дню`}
-            downTitle={`Меньше, чем «${labelB}» к тому же дню`}
+            upTitle={`Больше, чем «${labelB}»${limited ? " к тому же дню" : ""}`}
+            downTitle={`Меньше, чем «${labelB}»${limited ? " к тому же дню" : ""}`}
           />
         )}
-        {hasB && track.running && !track.bShorter && (
+        {limited && track.running && (
           <span className="text-muted">
             {labelB} целиком —{" "}
             <span className="text-text tabular-nums">{formatMoney(track.bTotal, base)}</span>
           </span>
         )}
-        {track.bShorter && (
+        {limited && track.bShorter && (
           <span className="text-muted">
             {labelA} целиком —{" "}
             <span className="text-text tabular-nums">{formatMoney(track.aTotal, base)}</span>
