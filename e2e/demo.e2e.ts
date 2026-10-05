@@ -22,12 +22,29 @@ test("демо-данные: открываются из пустой панел
   });
   expect(range.last.slice(0, 7)).toBe("2026-10");
   expect(range.last <= "2026-10-15").toBe(true);
-  expect(range.first.slice(0, 7)).toBe("2025-02");
-  expect(range.count).toBeGreaterThan(1000);
+  // Пять лет истории.
+  expect(range.first.slice(0, 7)).toBe("2021-11");
+  expect(range.count).toBeGreaterThan(5000);
 
   // Счета выдуманной семьи.
   await page.goto("/accounts");
   await expect(page.getByText("Т-Банк Black").first()).toBeVisible();
+
+  // Цели, правила и удалённые дубли.
+  await page.goto("/goals");
+  await expect(page.getByText("Отпуск в Японии").first()).toBeVisible();
+  await page.goto("/rules");
+  await expect(page.getByText("Такси — в «Такси»").first()).toBeVisible();
+  // Хэштеги — за всё время (за один месяц их немного: так и задумано).
+  await page.goto("/tags");
+  await page.getByRole("button", { name: "Всё", exact: true }).first().click();
+  await expect(page.getByText("Собака").first()).toBeVisible();
+  await expect(page.getByText("Лечение").first()).toBeVisible();
+  await expect(page.getByText("Отпуск").first()).toBeVisible();
+  await page.goto("/recurring");
+  await expect(page.getByText("Кинопоиск").first()).toBeVisible();
+  await page.goto("/trash");
+  await expect(page.getByText("Дубль — списали дважды").first()).toBeVisible();
 
   // Сравнение: идущий октябрь против сентября.
   await page.goto("/compare");

@@ -27,6 +27,35 @@ describe("demoDiff — история до «сегодня»", () => {
     }
   });
 
+  it("пять лет истории, комментарий у каждой операции, хэштеги и удалённые дубли", () => {
+    const d = demoDiff(1, "2026-10-05");
+    const dates = d.transaction.map((t) => t.date).sort();
+    expect(dates[0].slice(0, 7)).toBe("2021-11");
+    expect(d.transaction.every((t) => !!t.comment && t.comment.trim().length > 0)).toBe(true);
+    const text = d.transaction.map((t) => t.comment).join(" ");
+    for (const tag of ["#Отпуск", "#Лечение", "#Кот", "#Собака"]) expect(text).toContain(tag);
+    // Хэштеги — не у каждой второй операции.
+    const tagged = d.transaction.filter((t) => t.comment?.includes("#")).length;
+    expect(tagged / d.transaction.length).toBeLessThan(0.1);
+    expect(d.transaction.filter((t) => t.deleted).length).toBeGreaterThan(10);
+    expect(d.tag.find((t) => t.id === "t-pets")?.title).toBe("Животные");
+  });
+
+  it("остатки счетов не уходят в минус ни на один день (кредитка — в пределах лимита)", () => {
+    for (const today of ["2026-10-05", "2028-02-10", "2027-07-01"]) {
+      const d = demoDiff(1, today);
+      const bal = new Map(d.account.map((a) => [a.id, a.startBalance]));
+      for (const t of d.transaction.filter((x) => !x.deleted).sort((a, b) => a.date.localeCompare(b.date))) {
+        bal.set(t.outcomeAccount, bal.get(t.outcomeAccount)! - t.outcome);
+        bal.set(t.incomeAccount, bal.get(t.incomeAccount)! + t.income);
+        for (const a of d.account) {
+          const floor = a.creditLimit ? -a.creditLimit : 0;
+          expect(bal.get(a.id)!, `${today} ${a.title} ${t.date}`).toBeGreaterThanOrEqual(floor);
+        }
+      }
+    }
+  });
+
   it("одна и та же дата — один и тот же аккаунт", () => {
     expect(JSON.stringify(demoDiff(1, "2026-11-02"))).toBe(JSON.stringify(demoDiff(1, "2026-11-02")));
   });

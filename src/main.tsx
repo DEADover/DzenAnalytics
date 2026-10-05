@@ -10,6 +10,7 @@ import App from "./App";
 import { consumeOAuthCallback, exchangeCode } from "./lib/oauth";
 import { isDemoActive } from "./hooks/useDemo";
 import { DEMO_TOKEN } from "./lib/demo/demoServer";
+import { seedDemoLocal } from "./lib/demo/demoSeed";
 import { useZenmoneyStore } from "./store/useZenmoneyStore";
 import { useDataStore } from "./store/useDataStore";
 import { resumeSwitch } from "./lib/switchOverlay";
@@ -60,6 +61,8 @@ async function mount() {
       document.getElementById("root")!.textContent = "Готовим демо-данные…";
       if (await useZenmoneyStore.getState().validateAndSaveToken(DEMO_TOKEN, "token")) {
         await useZenmoneyStore.getState().sync().catch(() => {});
+        // Цели и правила живут в панели, а не в Дзен-мани — заводим их сами.
+        await seedDemoLocal().catch(() => {});
       }
       document.getElementById("root")!.textContent = "";
     }

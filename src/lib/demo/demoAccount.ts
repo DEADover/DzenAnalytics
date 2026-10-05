@@ -6,10 +6,12 @@
  * «Год в цифрах» и тренды были не пустыми. Ни одного настоящего счёта или
  * операции здесь нет.
  *
- * История — 20 полных месяцев до `today` (настоящего «сегодня») и текущий
+ * История — пять лет до `today` (настоящего «сегодня»), включая текущий
  * месяц, чтобы он не был пустым. События года привязаны к своим месяцам и
  * повторяются каждый год: отпуск летом, сборы в школу в конце августа, подарки
- * в декабре, 8 Марта. Для одной и той же даты результат всегда один и тот же:
+ * в декабре, 8 Марта; зарплату индексируют каждый март. У каждой операции есть
+ * комментарий, у некоторых — хэштеги (#Отпуск, #Лечение, #Кот, #Собака), а
+ * несколько дублей «удалены» — они видны в разделе «Удалённые». Для одной и той же даты результат всегда один и тот же:
  * случайность — из генератора с фиксированным зерном. Остатки счетов не
  * задаются руками, а считаются из операций: иначе история остатков на
  * «Счетах» не сошлась бы с текущими.
@@ -86,13 +88,13 @@ interface AccountSeed {
 }
 
 const ACCOUNT_SEEDS: AccountSeed[] = [
-  { id: "a-tbank", title: "Т-Банк Black", start: 697_000 },
+  { id: "a-tbank", title: "Т-Банк Black", start: 250_000 },
   { id: "a-sber", title: "СберКарта", start: 18_500 },
   { id: "a-cash", title: "Наличные", type: "cash", start: 2_000 },
   { id: "a-alfa", title: "Альфа кредитка", creditLimit: 150_000, start: -12_300 },
-  { id: "a-save", title: "Накопительный счёт", type: "checking", savings: true, start: 420_000 },
+  { id: "a-save", title: "Накопительный счёт", type: "checking", savings: true, start: 150_000 },
   { id: "a-usd", title: "Валютный счёт", instrument: USD, start: 2_400 },
-  { id: "a-broker", title: "Брокерский счёт", type: "checking", inBalance: false, start: 310_000 },
+  { id: "a-broker", title: "Брокерский счёт", type: "checking", inBalance: false, start: 120_000 },
 ];
 
 /* ───────────────────────── категории ───────────────────────── */
@@ -134,7 +136,7 @@ const TAG_SEEDS: TagSeed[] = [
   { id: "t-gifts", title: "Подарки", icon: "7001_gift", color: "#E93D82" },
   { id: "t-kids", title: "Дети", icon: "6001_children", color: "#F76B15" },
   { id: "t-kids-clubs", title: "Кружки", icon: "2505_paint_palette", color: "#FF9E5E", parent: "t-kids" },
-  { id: "t-pets", title: "Кот", icon: "7901_cat", color: "#978365" },
+  { id: "t-pets", title: "Животные", icon: "7901_cat", color: "#978365" },
   { id: "t-edu", title: "Образование", icon: "2008_books", color: "#3E63DD" },
   { id: "t-salary", title: "Зарплата", icon: "9003_banknotes", color: "#30A46C", income: true },
   { id: "t-freelance", title: "Подработка", icon: "9013_portfolio", color: "#46A758", income: true },
@@ -156,8 +158,15 @@ const COMMENTS: Record<string, readonly string[]> = {
   "t-taxi": ["До офиса", "Из аэропорта", "Домой после встречи", "В гости", "Опаздывал на встречу"],
   "t-metro": ["Проезд"],
   "t-fuel": ["Полный бак", "Заправка по пути на дачу", "95-й"],
-  "t-pharmacy": ["Витамины", "От простуды", "Детские лекарства"],
-  "t-pets": ["Корм коту", "Наполнитель", "Игрушка для Барсика"],
+  "t-pharmacy": ["Витамины", "От простуды", "Детские лекарства #Лечение", "Пластыри и бинты"],
+  "t-pets": ["Корм коту #Кот", "Наполнитель #Кот", "Игрушка для Барсика #Кот", "Корм для Рекса #Собака", "Лакомства #Собака", "Поводок и шлейка #Собака"],
+  "t-health": ["Анализы", "Приём терапевта", "Педиатр, приём #Лечение"],
+  "t-dentist": ["Профчистка", "Лечение зуба"],
+  "t-sport": ["Абонемент", "Бассейн"],
+  "t-mortgage": ["Ипотека"],
+  "t-travel": ["Билеты", "Отель"],
+  "t-gifts": ["Подарок", "Цветы"],
+  "t-cafe-trip": ["Ужин в отпуске #Отпуск", "Обед у моря #Отпуск", "Кафе на набережной #Отпуск"],
   "t-clothes": ["Кроссовки", "Куртка на осень", "Футболки", "Джинсы", "Детская одежда"],
   "t-fun": ["Кино всей семьёй", "Билеты на концерт", "Прогулка в парке"],
   "t-beauty": ["Стрижка"],
@@ -169,6 +178,8 @@ const COMMENTS: Record<string, readonly string[]> = {
   "t-subs": ["Подписка"],
 };
 let commentRnd = mulberry32(7);
+/** Во сколько раз цены этого дня ниже нынешних — инфляция ~7% в год. */
+let priceK = 1;
 
 let seq = 0;
 const txs: ZenTransaction[] = [];
@@ -179,14 +190,19 @@ function push(
   date: string,
   kind: "expense" | "income" | "transfer",
   sum: number,
-  o: { tag?: string; account?: string; to?: string; payee?: string; comment?: string; toSum?: number } = {}
+  o: { tag?: string; account?: string; to?: string; payee?: string; comment?: string; toSum?: number; deleted?: boolean } = {}
 ) {
   seq += 1;
   const acc = o.account ?? "a-tbank";
-  if (o.comment === undefined && kind === "expense" && o.tag && COMMENTS[o.tag] && commentRnd() < 0.62) {
-    const pool = COMMENTS[o.tag];
-    o = { ...o, comment: pool[Math.floor(commentRnd() * pool.length)] };
+  // Комментарий есть у каждой операции: свой из набора категории, а если
+  // набора нет — название категории.
+  if (o.comment === undefined) {
+    const pool = o.tag ? COMMENTS[o.tag] : undefined;
+    const title = TAG_SEEDS.find((t) => t.id === o.tag)?.title;
+    o = { ...o, comment: pool ? pool[Math.floor(commentRnd() * pool.length)] : (title ?? "Покупка") };
   }
+  // Траты прошлых лет — по ценам тех лет (кроме ипотеки: платёж фиксирован).
+  if (kind === "expense" && o.tag !== "t-mortgage") sum = Math.max(1, Math.round(sum * priceK));
   if (acc === "a-alfa" && kind === "expense") alfaDebt += sum;
   const created = Math.floor(Date.parse(`${date}T09:00:00Z`) / 1000) + seq * 7;
   const incomeAcc = kind === "transfer" ? (o.to ?? "a-save") : acc;
@@ -202,7 +218,7 @@ function push(
     outcomeInstrument: inst(acc),
     created,
     originalPayee: null,
-    deleted: false,
+    deleted: o.deleted ?? false,
     viewed: true,
     hold: false,
     qrCode: null,
@@ -252,23 +268,25 @@ function buildTransactions(start: string, today: string) {
     const summer = month === 7;
 
     // ── Доходы ──
-    // Повышение — с марта текущего года (или прошлого, если март ещё впереди).
-    const raise = date >= RAISE_FROM ? 1 : 0.9;
-    if (dom === 5) push(date, "income", Math.round(132_000 * raise), { tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Зарплата" });
-    if (dom === 20) push(date, "income", Math.round(86_000 * raise), { tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Аванс" });
+    // Индексация каждый март: за каждый год назад зарплата на 8% меньше.
+    const yearsBack = Math.max(0, Number(RAISE_FROM.slice(0, 4)) - (md >= "03-01" ? year : year - 1));
+    const raise = Math.pow(0.92, yearsBack);
+    priceK = Math.pow(0.93, yearsBack);
+    if (dom === 5) push(date, "income", Math.round(150_000 * raise), { tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Зарплата" });
+    if (dom === 20) push(date, "income", Math.round(95_000 * raise), { tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Аванс" });
     if (dom === 14 && chance(0.55)) push(date, "income", amount(18_000, 46_000), { tag: "t-freelance", payee: "Самозанятость", comment: "Проект для клиента" });
     if (dom === 2) push(date, "income", amount(900, 2_600), { tag: "t-cashback", payee: "Т-Банк", comment: "Кэшбэк за месяц" });
     if (dom === 28) push(date, "income", amount(3_600, 5_200), { tag: "t-interest", account: "a-save", payee: "Т-Банк", comment: "Проценты на остаток" });
 
     // ── Переводы ──
-    if (dom === 6) push(date, "transfer", 25_000, { to: "a-save", comment: "В накопления" });
+    if (dom === 6) push(date, "transfer", Math.round(18_000 * raise), { to: "a-save", comment: "В накопления" });
     if (dom === 21 && chance(0.4)) push(date, "transfer", 20_000, { to: "a-broker", comment: "Пополнение брокерского" });
     if (dom === 25 && alfaDebt > 0) {
       push(date, "transfer", Math.round(alfaDebt), { account: "a-tbank", to: "a-alfa", comment: "Погашение кредитки" });
       alfaDebt = 0;
     }
-    if (dom === 5) push(date, "transfer", 16_000, { to: "a-sber", comment: "На вторую карту" });
-    if (dom === 16) push(date, "transfer", 3_000, { to: "a-cash", comment: "Снял наличные" });
+    if (dom === 5) push(date, "transfer", Math.round(16_500 * raise), { to: "a-sber", comment: "На вторую карту" });
+    if (dom === 16) push(date, "transfer", 2_500, { to: "a-cash", comment: "Снял наличные" });
     if (dom === 15 && month % 3 === 0) push(date, "transfer", 9_000, { to: "a-usd", toSum: 100, comment: "Купил долларов" });
 
     // ── Обязательные ──
@@ -296,7 +314,11 @@ function buildTransactions(start: string, today: string) {
     if (!weekend && chance(0.6)) push(date, "expense", 62, { tag: "t-metro", payee: "Московский метрополитен", account: "a-sber" });
     if (dom % 9 === 4) push(date, "expense", amount(2_700, 3_900), { tag: "t-fuel", payee: pick(["Лукойл", "Газпромнефть"]) });
     if (chance(0.07)) push(date, "expense", amount(320, 1_900), { tag: "t-pharmacy", payee: pick(["Ригла", "Горздрав"]) });
-    if (chance(0.05)) push(date, "expense", amount(600, 2_400), { tag: "t-pets", payee: "Четыре лапы" });
+    if (chance(0.08)) push(date, "expense", amount(600, 2_400), { tag: "t-pets", payee: "Четыре лапы" });
+    if (dom === 17 && month % 4 === 1) push(date, "expense", amount(2_800, 5_600), { tag: "t-pets", payee: "Ветклиника «Айболит»", comment: "Прививка и осмотр #Собака" });
+    if (dom === 11 && month % 6 === 2) push(date, "expense", amount(3_200, 6_400), { tag: "t-health", payee: "Детская клиника «Здоровье»", comment: "Педиатр и анализы #Лечение" });
+    // Иногда операция приходит дважды — дубль удаляют (виден в «Удалённых»).
+    if ((dom === 27 && month % 2 === 0) || date === RECENT_DUP) push(date, "expense", amount(240, 420), { tag: "t-coffee", payee: pick(COFFEE), account: "a-sber", comment: "Дубль — списали дважды", deleted: true });
     if (chance(0.06)) push(date, "expense", amount(1_400, 7_800), { tag: "t-clothes", payee: pick(MARKETPLACES), account: "a-alfa" });
     if (weekend && chance(0.12)) push(date, "expense", amount(900, 3_600), { tag: "t-fun", payee: pick(["Каро Фильм", "Кассир.ру", "Парк Горького"]) });
     if (dom === 19 && chance(0.6)) push(date, "expense", amount(2_200, 3_400), { tag: "t-beauty", payee: "Барбершоп Chop-Chop" });
@@ -308,16 +330,19 @@ function buildTransactions(start: string, today: string) {
     // ── Сезонное ──
     // Отпуск: в нечётный год — Сочи в июле, в чётный — Калининград в июне.
     const odd = year % 2 === 1;
-    if (odd && md === "07-03") push(date, "expense", 92_400, { tag: "t-travel", payee: "Аэрофлот", comment: "Билеты в Сочи", account: "a-alfa" });
-    if (odd && md === "07-05") push(date, "expense", 71_800, { tag: "t-travel", payee: "Островок", comment: "Отель, 9 ночей" });
-    if (!odd && md === "06-02") push(date, "expense", 78_600, { tag: "t-travel", payee: "Аэрофлот", comment: "Билеты в Калининград", account: "a-alfa" });
-    if (!odd && md === "06-09") push(date, "expense", 64_200, { tag: "t-travel", payee: "Островок", comment: "Отель, 7 ночей" });
+    if (odd && md === "07-03") push(date, "expense", Math.round(92_400 * raise), { tag: "t-travel", payee: "Аэрофлот", comment: "Билеты в Сочи #Отпуск", account: "a-alfa" });
+    if (odd && md === "07-05") push(date, "expense", Math.round(71_800 * raise), { tag: "t-travel", payee: "Островок", comment: "Отель, 9 ночей #Отпуск" });
+    if (!odd && md === "06-02") push(date, "expense", Math.round(78_600 * raise), { tag: "t-travel", payee: "Аэрофлот", comment: "Билеты в Калининград #Отпуск", account: "a-alfa" });
+    if (!odd && md === "06-09") push(date, "expense", Math.round(64_200 * raise), { tag: "t-travel", payee: "Островок", comment: "Отель, 7 ночей #Отпуск" });
     if (md === (odd ? "08-25" : "08-24")) push(date, "expense", odd ? 24_600 : 27_300, { tag: "t-kids", payee: "Детский мир", comment: "Сборы в школу" });
     if (md === "12-22") push(date, "expense", 23_400, { tag: "t-gifts", payee: "Ozon", comment: "Подарки к Новому году", account: "a-alfa" });
-    if (md === "12-27") push(date, "expense", 8_900, { tag: "t-gifts", payee: "Золотое яблоко", account: "a-alfa" });
-    if (md === "03-06" && date >= RAISE_FROM) push(date, "expense", 6_400, { tag: "t-gifts", payee: "Цветочный ряд", comment: "8 Марта" });
-    if (date === DENTIST) push(date, "expense", 34_800, { tag: "t-dentist", payee: "Клиника «Дента Люкс»", comment: "Лечение зуба" });
-    if (summer && dom >= 4 && dom <= 11) push(date, "expense", amount(3_500, 7_800), { tag: "t-cafe", payee: pick(RESTAURANTS), comment: "Отпуск" });
+    if (md === "12-27") push(date, "expense", 8_900, { tag: "t-gifts", payee: "Золотое яблоко", comment: "Подарок жене", account: "a-alfa" });
+    if (md === "03-06") push(date, "expense", 6_400, { tag: "t-gifts", payee: "Цветочный ряд", comment: "8 Марта" });
+    if (date === DENTIST) push(date, "expense", 34_800, { tag: "t-dentist", payee: "Клиника «Дента Люкс»", comment: "Лечение зуба дочке #Лечение" });
+    if (summer && dom >= 4 && dom <= 11) {
+      const trip = COMMENTS["t-cafe-trip"];
+      push(date, "expense", amount(3_500, 7_800), { tag: "t-cafe", payee: pick(RESTAURANTS), comment: trip[Math.floor(commentRnd() * trip.length)] });
+    }
     if (date === BIRTHDAY) push(date, "expense", 12_900, { tag: "t-cafe", payee: "Grill Room", comment: "День рождения", account: "a-alfa" });
   }
   return txs.slice();
@@ -325,16 +350,20 @@ function buildTransactions(start: string, today: string) {
 
 /* ───────────────────────── сборка ответа ───────────────────────── */
 
-/** Начало истории — 20 месяцев до текущего. */
-const historyStart = () => monthStart(-20);
+/** Начало истории — пять лет: 59 месяцев до текущего и он сам. */
+const HISTORY_MONTHS = 59;
+const historyStart = () => monthStart(-HISTORY_MONTHS);
 /** Разовые даты года, отсчитанные от «сегодня». */
 let RAISE_FROM = "";
 let DENTIST = "";
 let BIRTHDAY = "";
+/** Свежий дубль — в текущем месяце, чтобы «Удалённые» не были пустыми на нём. */
+let RECENT_DUP = "";
 
 function accounts(list: ZenTransaction[]): ZenAccount[] {
   const net = new Map<string, number>();
   for (const t of list) {
+    if (t.deleted) continue;
     net.set(t.outcomeAccount, (net.get(t.outcomeAccount) ?? 0) - t.outcome);
     net.set(t.incomeAccount, (net.get(t.incomeAccount) ?? 0) + t.income);
   }
@@ -391,14 +420,14 @@ const BUDGET_LIMITS: Record<string, number> = {
   "t-subs": 1_500,
   "t-kids": 12_000,
   "t-pets": 2_500,
-  "t-salary": 218_000,
+  "t-salary": 245_000,
 };
 
 function budgets(): ZenBudget[] {
   const out: ZenBudget[] = [];
   const months: string[] = [];
   // Вся история и три месяца вперёд.
-  for (let n = -20; n <= 3; n++) months.push(monthStart(n).slice(0, 7));
+  for (let n = -HISTORY_MONTHS; n <= 3; n++) months.push(monthStart(n).slice(0, 7));
   for (const month of months) {
     for (const [tag, limit] of Object.entries(BUDGET_LIMITS)) {
       const income = tag === "t-salary";
@@ -429,8 +458,8 @@ interface PlanSeed {
 }
 
 const PLANS: PlanSeed[] = [
-  { id: "r-salary", dom: 5, tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Зарплата", income: 132_000 },
-  { id: "r-advance", dom: 20, tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Аванс", income: 86_000 },
+  { id: "r-salary", dom: 5, tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Зарплата", income: 150_000 },
+  { id: "r-advance", dom: 20, tag: "t-salary", payee: "ООО «Северный ветер»", comment: "Аванс", income: 95_000 },
   { id: "r-mortgage", dom: 10, tag: "t-mortgage", payee: "Сбербанк", comment: "Ипотека", outcome: 58_400 },
   { id: "r-utils", dom: 12, tag: "t-utils", payee: "Мосэнергосбыт", comment: "Коммуналка", outcome: 7_200 },
   { id: "r-internet", dom: 8, tag: "t-telecom", payee: "МГТС", comment: "Интернет", outcome: 1_190 },
@@ -505,6 +534,8 @@ export function demoDiff(serverTimestamp: number, today: string = DEMO_TODAY): Z
   DENTIST = `${monthStart(-4).slice(0, 7)}-14`;
   // День рождения — 12-го числа текущего месяца, если оно уже было, иначе прошлого.
   BIRTHDAY = `${(today.slice(8) >= "12" ? monthStart(0) : monthStart(-1)).slice(0, 7)}-12`;
+  const dd = Number(today.slice(8));
+  RECENT_DUP = `${today.slice(0, 8)}${String(Math.max(1, dd - 2)).padStart(2, "0")}`;
   const transaction = buildTransactions(historyStart(), today);
   return {
     serverTimestamp,
