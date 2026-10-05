@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Cloud, FlaskConical, Lock, Upload, type LucideIcon } from "lucide-react";
 import { Badge } from "./Badge";
 import { startDemo } from "../hooks/useDemo";
-import logoDa from "../assets/logo-da.png";
 
 /** Карточка одного способа начать: значок, название, пояснение, действие внизу. */
 function StartCard({
@@ -51,8 +50,8 @@ const CARD =
 export function EmptyState() {
   return (
     <div className="card-tray card-pad flex flex-col items-center text-center py-12 md:py-16 gap-8">
+      {/* Без знака сервиса: он уже стоит в шапке, второй на экране — лишний. */}
       <div className="flex flex-col items-center gap-4 max-w-xl">
-        <img src={logoDa} alt="" width={200} height={111} className="h-12 w-auto" />
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">С чего начнём?</h1>
           <p className="mt-2 text-sm text-muted text-balance">
