@@ -54,9 +54,10 @@ function TrackTip({
   const facts: TooltipFact[] = [];
   if (p.a != null)
     facts.push({ label: labelA, value: formatMoney(p.a, base), swatchColor: color });
-  // Дату дня Б пишем, только если она другая, чем у А: у месяцев и годов это
-  // то же число, а «30 дней» и свои даты бывают сдвинуты.
-  const sameDay = !!p.dateA && !!p.dateB && p.dateA.slice(5) === p.dateB.slice(5);
+  // Дату дня Б пишем, только если это другое число месяца, чем у А: у
+  // месяцев и годов число то же (23 марта — 23 февраля), повторять его незачем;
+  // «30 дней» и свои даты бывают сдвинуты.
+  const sameDay = !!p.dateA && !!p.dateB && p.dateA.slice(8) === p.dateB.slice(8);
   if (p.b != null)
     facts.push({
       label: datesB && p.dateB && !sameDay ? `${labelB} · ${dayLabel(p.dateB)}` : labelB,
