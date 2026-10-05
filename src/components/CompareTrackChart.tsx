@@ -53,7 +53,7 @@ function TrackTip({
   if (!active || !p || (p.a == null && p.b == null)) return null;
   const facts: TooltipFact[] = [];
   if (p.a != null)
-    facts.push({ label: labelA, value: formatMoney(p.a, base), swatchColor: color, strong: true });
+    facts.push({ label: labelA, value: formatMoney(p.a, base), swatchColor: color });
   // Дату дня Б пишем, только если она другая, чем у А: у месяцев и годов это
   // то же число, а «30 дней» и свои даты бывают сдвинуты.
   const sameDay = !!p.dateA && !!p.dateB && p.dateA.slice(5) === p.dateB.slice(5);
