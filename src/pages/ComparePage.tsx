@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { GitCompare } from "lucide-react";
+import { ArrowLeftRight, GitCompare } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
@@ -280,10 +280,13 @@ function PeriodHead({
   title,
   range,
   suffix,
+  withSwap,
   children,
 }: {
   title: string;
   range: Range;
+  /** В колонке ещё и кнопка «А ⇄ Б» — шире на неё, чтобы поля дат не ужимались. */
+  withSwap?: boolean;
   /** Уточнение после длины — например «· 3 мес» у среднего. */
   suffix?: string;
   children: React.ReactNode;
@@ -291,7 +294,10 @@ function PeriodHead({
   const days = range.from && range.to ? spanDays(range.from, range.to) : 0;
   const reversed = !!range.from && !!range.to && range.from > range.to;
   return (
-    <th scope="col" className="table-th text-right align-bottom font-normal w-[20rem]">
+    <th
+      scope="col"
+      className={`table-th text-right align-bottom font-normal ${withSwap ? "w-[22.75rem]" : "w-[20rem]"}`}
+    >
       <div className="label mb-1.5">{title}</div>
       <div className="flex items-center justify-end gap-2 h-[34px]">{children}</div>
       <div className="text-xs text-muted mt-1.5 normal-case tracking-normal tabular-nums truncate">
@@ -693,6 +699,42 @@ export function ComparePage() {
       <span className="text-sm truncate">{ranges.a.label}</span>
     );
 
+  /**
+   * Поменять А и Б местами — там, где оба периода выбираются руками. В
+   * «Среднем», «30/90 днях» и «С начала года» Б выводится из А, менять нечего,
+   * и кнопки нет вовсе: погашенная читалась бы как поломка.
+   */
+  const swap =
+    preset === "months"
+      ? () => {
+          setMonthA(months.b);
+          setMonthB(months.a);
+        }
+      : preset === "years"
+        ? () => {
+            setYearA(years.b);
+            setYearB(years.a);
+          }
+        : preset === "custom"
+          ? () => {
+              setCustomA({ ...customA, from: customB.from, to: customB.to });
+              setCustomB({ ...customB, from: customA.from, to: customA.to });
+            }
+          : null;
+  const swapButton = swap && (
+    <div className="seg-track shrink-0">
+      <button
+        type="button"
+        onClick={swap}
+        className="seg-icon seg-icon-sm"
+        title="Поменять периоды А и Б местами"
+        aria-label="Поменять периоды А и Б местами"
+      >
+        <ArrowLeftRight className="w-4 h-4" />
+      </button>
+    </div>
+  );
+
   const slotB =
     preset === "months" ? (
       <MonthPicker
@@ -927,7 +969,8 @@ export function ComparePage() {
                 <PeriodHead title="Период А" range={ranges.a}>
                   {slotA}
                 </PeriodHead>
-                <PeriodHead title="Период Б" range={ranges.b} suffix={rangeSuffixB}>
+                <PeriodHead title="Период Б" range={ranges.b} suffix={rangeSuffixB} withSwap={!!swapButton}>
+                  {swapButton}
                   {slotB}
                 </PeriodHead>
                 <th

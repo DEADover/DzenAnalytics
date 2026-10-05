@@ -100,3 +100,28 @@ test("подсказка графика: дата один раз, кроме с
     }
   }
 });
+
+test("А ⇄ Б: кнопка меняет периоды местами, где оба выбираются руками", async ({ page }) => {
+  await connectZen(page, "/compare");
+  const head = (name: string) => page.locator("th", { hasText: name });
+  const swap = page.getByRole("button", { name: "Поменять периоды А и Б местами" });
+  // Месяцы: октябрь ⇄ сентябрь.
+  await expect(head("Период А").getByRole("button", { name: /Октябрь/ })).toBeVisible();
+  await swap.click();
+  await expect(head("Период А").getByRole("button", { name: /Сентябрь/ })).toBeVisible();
+  await expect(head("Период Б").getByRole("button", { name: /Октябрь/ })).toBeVisible();
+  // Кнопка одной высоты с выбором месяца.
+  const [hs, hp] = await Promise.all([
+    swap.locator("xpath=..").boundingBox(),
+    head("Период Б").locator(".seg-track").last().boundingBox(),
+  ]);
+  expect(hs!.height).toBe(hp!.height);
+  // Где Б выводится из А — кнопки нет.
+  for (const mode of ["Среднее", "30 дней", "90 дней", "С начала года"]) {
+    await page.getByRole("button", { name: mode, exact: true, disabled: false }).last().click();
+    await expect(swap).toHaveCount(0);
+  }
+  // Свои даты: меняются сами даты.
+  await page.getByRole("button", { name: "Свои даты", exact: true, disabled: false }).last().click();
+  await expect(swap).toBeVisible();
+});
