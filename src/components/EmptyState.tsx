@@ -16,8 +16,8 @@ export function EmptyState() {
       <div>
         <div className="text-lg font-semibold mb-1">Нет данных</div>
         <div className="text-sm text-muted">
-          Подключите Дзен-мани для онлайн-синхронизации или загрузите
-          CSV-выгрузку — и появится аналитика
+          Подключите свой аккаунт Дзен-мани для онлайн-синхронизации по API или
+          загрузите CSV-выгрузку из приложения.
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
