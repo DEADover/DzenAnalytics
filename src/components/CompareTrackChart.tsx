@@ -78,13 +78,12 @@ function TrackTip({
       value: formatMoney(p.a, base),
       swatchColor: color,
     });
-  // Дату дня Б пишем, только если это другое число месяца, чем у А: у
-  // месяцев и годов число то же (23 марта — 23 февраля), повторять его незачем;
-  // «30 дней» и свои даты бывают сдвинуты.
-  const sameDay = !!p.dateA && !!p.dateB && p.dateA.slice(8) === p.dateB.slice(8);
+  // Даты в строках — только по номеру дня (30/90 дней, свои даты): там у
+  // периодов разные числа. Месяцы совмещаются по числу, годы — по дате, и
+  // дата одна — в заголовке.
   if (p.b != null)
     facts.push({
-      label: datesB && p.dateB && (byIndex || !sameDay) ? `${labelB} · ${dayLabel(p.dateB)}` : labelB,
+      label: datesB && byIndex && p.dateB ? `${labelB} · ${dayLabel(p.dateB)}` : labelB,
       value: formatMoney(p.b, base),
       swatch: "bg-muted opacity-60",
     });
@@ -133,9 +132,12 @@ export function CompareTrackChart({
   const color = kind === "expense" ? chartColor.expense : chartColor.income;
   const muted = chartColor.muted;
   const noun = kind === "expense" ? "расходов" : "доходов";
-  const lastA = track.aDays > 0 ? track.points[track.aDays - 1] : null;
   const hasB = track.points.some((p) => p.b != null);
-  const atDay = lastA?.dateA ? ` на ${dayLabel(lastA.dateA)}` : "";
+  // Один из периодов ещё идёт — сравниваем на последнем общем дне и отмечаем
+  // его на графике.
+  const limited = track.cmpDay > 0 && (track.running || track.bShorter);
+  const cmp = track.cmpDay > 0 ? track.points[track.cmpDay - 1] : null;
+  const atDay = limited && cmp?.dateA ? ` на ${dayLabel(cmp.dateA)}` : limited ? ` на ${formatNum(track.cmpDay)}-й день` : "";
   // У годов деления — на первый день каждого месяца периода А.
   const firstDD = track.points[0]?.dateA?.slice(8);
   const monthTicks =
@@ -150,10 +152,10 @@ export function CompareTrackChart({
       info={
         <p>
           Сколько набралось с начала периода к каждому дню. Сплошная линия —
-          {` «${labelA}»`}, пунктир — {`«${labelB}»`}. Дни считаются от начала
-          каждого периода, поэтому пятое число одного месяца стоит над пятым
-          числом другого. Идущий период обрывается на последнем дне с
-          операциями, сравнивается он с тем, что было к тому же дню.
+          {` «${labelA}»`}, пунктир — {`«${labelB}»`}. Месяцы совмещаются по
+          числам, годы — по датам, остальные отрезки — по номеру дня от начала.
+          Идущий период обрывается на последнем дне с операциями, и периоды
+          сравниваются на этом дне.
         </p>
       }
       right={<KindSwitcher kind={kind} onChange={onKindChange} />}
@@ -163,9 +165,11 @@ export function CompareTrackChart({
           <span className="inline-block w-3.5 h-0.5 rounded-full" style={{ background: color }} />
           <span className="text-muted">
             {labelA}
-            {track.running ? atDay : ""}
+            {atDay}
           </span>
-          <span className="font-semibold tabular-nums">{formatMoney(track.aTotal, base)}</span>
+          <span className="font-semibold tabular-nums">
+            {formatMoney(track.cmpDay > 0 ? track.aAtCmp : track.aTotal, base)}
+          </span>
         </span>
         {hasB && (
           <span className="flex items-center gap-1.5">
@@ -175,15 +179,17 @@ export function CompareTrackChart({
             />
             <span className="text-muted">
               {labelB}
-              {track.running ? " к тому же дню" : ""}
+              {limited ? " к тому же дню" : ""}
             </span>
-            <span className="font-semibold tabular-nums">{formatMoney(track.bAtA, base)}</span>
+            <span className="font-semibold tabular-nums">
+              {formatMoney(track.cmpDay > 0 ? track.bAtCmp : track.bTotal, base)}
+            </span>
           </span>
         )}
-        {hasB && track.aDays > 0 && (
+        {track.cmpDay > 0 && (
           <DeviationPill
-            current={track.aTotal}
-            baseline={track.bAtA}
+            current={track.aAtCmp}
+            baseline={track.bAtCmp}
             base={base}
             mode="both"
             kind={kind}
@@ -191,10 +197,16 @@ export function CompareTrackChart({
             downTitle={`Меньше, чем «${labelB}» к тому же дню`}
           />
         )}
-        {hasB && track.running && (
+        {hasB && track.running && !track.bShorter && (
           <span className="text-muted">
             {labelB} целиком —{" "}
             <span className="text-text tabular-nums">{formatMoney(track.bTotal, base)}</span>
+          </span>
+        )}
+        {track.bShorter && (
+          <span className="text-muted">
+            {labelA} целиком —{" "}
+            <span className="text-text tabular-nums">{formatMoney(track.aTotal, base)}</span>
           </span>
         )}
       </div>
@@ -229,8 +241,8 @@ export function CompareTrackChart({
                 <TrackTip base={base} labelA={labelA} labelB={labelB} color={color} datesB={datesB} axis={axis} />
               }
             />
-            {track.running && lastA && (
-              <ReferenceLine x={lastA.day} stroke={chartAxisStroke} strokeDasharray="2 2" />
+            {limited && cmp && (
+              <ReferenceLine x={cmp.day} stroke={chartAxisStroke} strokeDasharray="2 2" />
             )}
             <Line
               type="monotone"
@@ -254,11 +266,11 @@ export function CompareTrackChart({
               connectNulls={false}
               isAnimationActive={false}
             />
-            {track.running && lastA && lastA.b != null && (
-              <ReferenceDot x={lastA.day} y={lastA.b} r={3.5} fill={muted} stroke="none" />
+            {limited && cmp && cmp.b != null && (
+              <ReferenceDot x={cmp.day} y={cmp.b} r={3.5} fill={muted} stroke="none" />
             )}
-            {track.running && lastA && lastA.a != null && (
-              <ReferenceDot x={lastA.day} y={lastA.a} r={4.5} fill={color} stroke="rgb(var(--c-panel))" strokeWidth={2} />
+            {limited && cmp && cmp.a != null && (
+              <ReferenceDot x={cmp.day} y={cmp.a} r={4.5} fill={color} stroke="rgb(var(--c-panel))" strokeWidth={2} />
             )}
           </ComposedChart>
         </ChartContainer>

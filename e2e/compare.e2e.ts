@@ -62,3 +62,41 @@ test("один и тот же месяц в А и Б выбрать нельзя
   await head("Период А").getByTitle("Предыдущий месяц").click();
   await expect(head("Период А").getByRole("button", { name: /Июль/ })).toBeVisible();
 });
+
+test("подсказка графика: дата один раз, кроме сравнения по номеру дня", async ({ page }) => {
+  await connectZen(page, "/compare");
+  const card = page.locator(".card-tray", { has: page.getByText("График сравнения расходов") });
+  const tip = card.locator(".recharts-tooltip-wrapper");
+  let current = "";
+  const hover = async (frac: number) => {
+    // График ниже первого экрана — сначала прокрутить к нему.
+    await card.locator(".recharts-wrapper").scrollIntoViewIfNeeded();
+    const box = (await card.locator(".recharts-wrapper").boundingBox())!;
+    await page.mouse.move(box.x + 60 + (box.width - 80) * frac, box.y + box.height / 2, { steps: 4 });
+    await expect(tip, `${current} @ ${frac}`).toContainText("₽");
+    return (await tip.innerText()).replace(/ /g, " ");
+  };
+  const modes: [string, boolean][] = [
+    ["Месяцы", false],
+    ["Годы", false],
+    ["Среднее", false],
+    ["30 дней", true],
+    ["90 дней", true],
+    ["С начала года", false],
+  ];
+  for (const [mode, byIndex] of modes) {
+    current = mode;
+    await page.getByRole("button", { name: mode, exact: true, disabled: false }).last().click();
+    for (const frac of [0.2, 0.55, 0.9]) {
+      const text = await hover(frac);
+      const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+      const dates = text.match(/\d{1,2} (января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)/g) ?? [];
+      if (byIndex) {
+        expect(lines[0], `${mode}: заголовок — номер дня`).toMatch(/^\d+-й день$/);
+      } else {
+        expect(dates.length, `${mode}: дата одна — «${text}»`).toBe(1);
+        expect(lines[0], `${mode}: дата в заголовке`).toBe(dates[0]);
+      }
+    }
+  }
+});

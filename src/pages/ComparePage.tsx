@@ -515,7 +515,14 @@ export function ComparePage() {
         : preset === "years"
           ? yearRange(years.a, monthStartDay)
           : { from: r.from, to: r.to };
-    return buildCompareTrack(filtered, trackKind, { full, to: r.to }, trackRanges.windowsB);
+    return buildCompareTrack(
+      filtered,
+      trackKind,
+      { full, to: r.to },
+      trackRanges.windowsB,
+      // Годы — по календарной дате: у високосного свой 29 февраля.
+      preset === "years" || preset === "ytd_vs_prev_ytd"
+    );
   }, [filtered, trackKind, trackRanges, preset, months.a, years.a, monthStartDay]);
   // В «Среднем» суммы Б собраны за несколько месяцев — приводим к одному.
   const kpiB = useMemo(

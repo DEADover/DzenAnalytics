@@ -14,6 +14,10 @@ import { endAfterDays, spanDays, type DayRange } from "./period";
  * несколько окон (режим «Среднее»), линия — среднее их нарастающих итогов;
  * короткое окно после своего конца держит итог (у 30-дневного месяца 31-й
  * день равен 30-му).
+ *
+ * Годы совмещаются по календарной дате, а не по номеру дня: в високосном
+ * году 270-й день — 26 сентября, в обычном — 27-е. 29 февраля в паре с
+ * обычным годом ложится на 28-е.
  */
 
 export type TrackKind = "expense" | "income";
@@ -37,14 +41,18 @@ export interface CompareTrack {
   days: number;
   /** До какого дня у А есть данные (0 — данных в периоде нет). */
   aDays: number;
-  /** Итог А на его последний день с данными. */
+  /** Последний день, где есть обе линии: на нём честно сравнивать периоды. */
+  cmpDay: number;
+  /** Итог А и Б на `cmpDay`. */
+  aAtCmp: number;
+  bAtCmp: number;
+  /** Итоги целиком. */
   aTotal: number;
-  /** Итог Б к тому же дню — с ним честно сравнивать А. */
-  bAtA: number;
-  /** Итог Б целиком. */
   bTotal: number;
   /** А ещё идёт: данные кончаются раньше его календарного конца. */
   running: boolean;
+  /** Б кончается раньше А (например, Б — идущий год против прошлого целиком). */
+  bShorter: boolean;
 }
 
 /** Сколько операция добавляет к расходам или доходам. Возврат уменьшает расход. */
@@ -67,13 +75,29 @@ function cumulative(txs: Transaction[], kind: TrackKind, range: DayRange, len: n
   return daily.map((v) => (run += v));
 }
 
+/**
+ * Та же календарная дата в периоде Б: год сдвигается на разницу начал
+ * периодов. 29 февраля в невисокосном году — 28-е.
+ */
+function sameDateIn(dateA: string, aFrom: string, bFrom: string): string {
+  const y = Number(dateA.slice(0, 4)) + (Number(bFrom.slice(0, 4)) - Number(aFrom.slice(0, 4)));
+  let md = dateA.slice(5);
+  if (md === "02-29" && !(y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0))) md = "02-28";
+  return `${y}-${md}`;
+}
+
 export function buildCompareTrack(
   txs: Transaction[],
   kind: TrackKind,
   /** Период А: полные границы и последний день с данными (`to` ≤ `full.to`). */
   a: { full: DayRange; to: string },
   /** Окна периода Б, целиком. В «Среднем» их несколько, свежее — первое. */
-  windowsB: DayRange[]
+  windowsB: DayRange[],
+  /**
+   * Совмещать по календарной дате (годы, «с начала года»), а не по номеру дня.
+   * Берётся первое окно Б.
+   */
+  calendar = false
 ): CompareTrack {
   const aFullDays = a.full.from && a.full.to ? spanDays(a.full.from, a.full.to) : 0;
   const aDays = a.full.from && a.to ? Math.min(spanDays(a.full.from, a.to), aFullDays) : 0;
@@ -96,23 +120,45 @@ export function buildCompareTrack(
   };
 
   const points: TrackPoint[] = [];
-  for (let day = 1; day <= days; day++) {
-    points.push({
-      day,
-      dateA: day <= aFullDays ? endAfterDays(a.full.from, day) : null,
-      dateB: windows.length && day <= bLens[0] ? endAfterDays(windows[0].from, day) : null,
-      a: day <= aDays ? cumA[day - 1] : null,
-      b: bAt(day),
-    });
+  if (calendar && aFullDays > 0) {
+    // Ось — даты А; у каждой своя дата в Б с тем же числом и месяцем.
+    const w = windows[0];
+    const cb = w ? cumB[0] : [];
+    for (let day = 1; day <= aFullDays; day++) {
+      const dateA = endAfterDays(a.full.from, day);
+      const dateB = w ? sameDateIn(dateA, a.full.from, w.from) : null;
+      let b: number | null = null;
+      if (w && dateB && dateB >= w.from && dateB <= w.to) b = cb[spanDays(w.from, dateB) - 1] ?? 0;
+      points.push({ day, dateA, dateB, a: day <= aDays ? cumA[day - 1] : null, b });
+    }
+  } else {
+    for (let day = 1; day <= days; day++) {
+      points.push({
+        day,
+        dateA: day <= aFullDays ? endAfterDays(a.full.from, day) : null,
+        dateB: windows.length && day <= bLens[0] ? endAfterDays(windows[0].from, day) : null,
+        a: day <= aDays ? cumA[day - 1] : null,
+        b: bAt(day),
+      });
+    }
   }
+
+  // Последний день, где есть обе линии.
+  let cmpDay = 0;
+  for (const p of points) if (p.a != null && p.b != null) cmpDay = p.day;
+  const at = cmpDay > 0 ? points[cmpDay - 1] : null;
+  const lastB = [...points].reverse().find((p) => p.b != null);
 
   return {
     points,
-    days,
+    days: points.length,
     aDays,
+    cmpDay,
+    aAtCmp: at?.a ?? 0,
+    bAtCmp: at?.b ?? 0,
     aTotal: aDays > 0 ? cumA[aDays - 1] : 0,
-    bAtA: aDays > 0 ? bAt(aDays) ?? 0 : 0,
-    bTotal: bAt(bMaxLen) ?? 0,
+    bTotal: calendar ? (cumB[0]?.[cumB[0].length - 1] ?? 0) : (bAt(bMaxLen) ?? 0),
     running: aDays > 0 && aDays < aFullDays,
+    bShorter: !!lastB && aDays > 0 && lastB.day < aDays,
   };
 }
