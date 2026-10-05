@@ -71,6 +71,7 @@ import { usePlanActionsStore } from "./store/usePlanActionsStore";
 import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
 import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
 import { ScrollTopButton } from "./components/ScrollTopButton";
+import { DemoBanner } from "./components/DemoBanner";
 import { useDuplicateExclusionsStore } from "./store/useDuplicateExclusionsStore";
 import { useAccountsViewStore } from "./store/useAccountsViewStore";
 import { useMembersStore } from "./store/useMembersStore";
@@ -443,6 +444,7 @@ function App() {
           крошки раздела (PageHeader), они читаются как продолжение шапки, и
           отбивать их наравне с остальными блоками незачем. */}
       <main className="flex-1 w-full px-4 md:px-6 pt-3 md:pt-4 pb-4 md:pb-6">
+        <DemoBanner />
         <Routes>
           <Route element={<PlainLayout />}>
             <Route path="/" element={<DashboardPage />} />

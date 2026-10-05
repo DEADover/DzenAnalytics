@@ -1,12 +1,14 @@
 import { Link } from "react-router-dom";
-import { Cloud, Upload } from "lucide-react";
+import { Cloud, FlaskConical, Upload } from "lucide-react";
+import { startDemo } from "../hooks/useDemo";
 import { Badge } from "./Badge";
 
 /**
  * Shown on every analytics page while there are no transactions yet.
  * Offers the two ways to get data in — online sync via the Zenmoney API
  * (recommended) or a one-off CSV import — each deep-linking to the right
- * sub-tab of the settings "source" panel.
+ * sub-tab of the settings "source" panel. Ниже — демо-данные выдуманной
+ * семьи: посмотреть разделы до того, как подключать свой аккаунт.
  */
 export function EmptyState() {
   return (
@@ -52,6 +54,13 @@ export function EmptyState() {
             разовой аналитики без токена.
           </p>
         </Link>
+      </div>
+      <div className="flex items-center gap-3 flex-wrap justify-center text-sm text-muted">
+        <span>Сначала посмотреть, как всё устроено?</span>
+        <button type="button" className="btn-ghost" onClick={startDemo}>
+          <FlaskConical className="w-4 h-4" />
+          Открыть демо-данные
+        </button>
       </div>
     </div>
   );

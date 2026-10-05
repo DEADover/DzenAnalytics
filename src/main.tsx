@@ -8,6 +8,8 @@ import "@fontsource-variable/geist-mono";
 import "./index.css";
 import App from "./App";
 import { consumeOAuthCallback, exchangeCode } from "./lib/oauth";
+import { isDemoActive } from "./hooks/useDemo";
+import { DEMO_TOKEN } from "./lib/demo/demoServer";
 import { useZenmoneyStore } from "./store/useZenmoneyStore";
 import { useDataStore } from "./store/useDataStore";
 import { resumeSwitch } from "./lib/switchOverlay";
@@ -50,6 +52,18 @@ if (callback) document.getElementById("root")!.textContent = "Завершаем
 
 async function mount() {
   let syncAfterLogin = false;
+  // Первый заход в демо-данные: «подключаем» демо-аккаунт и ждём синхронизацию
+  // до первой отрисовки — чтобы не мелькнул пустой экран «Нет данных».
+  if (!callback && isDemoActive()) {
+    await useZenmoneyStore.getState().hydrate();
+    if (!useZenmoneyStore.getState().token) {
+      document.getElementById("root")!.textContent = "Готовим демо-данные…";
+      if (await useZenmoneyStore.getState().validateAndSaveToken(DEMO_TOKEN, "token")) {
+        await useZenmoneyStore.getState().sync().catch(() => {});
+      }
+      document.getElementById("root")!.textContent = "";
+    }
+  }
   if (callback) {
     try {
       await useZenmoneyStore.getState().hydrate();

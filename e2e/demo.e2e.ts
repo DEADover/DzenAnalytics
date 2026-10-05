@@ -1,0 +1,46 @@
+/**
+ * «Открыть демо-данные» без своего аккаунта: выдуманная семья в отдельном
+ * аккаунте панели, «Дзен-мани» отвечает из браузера — в сеть не уходит ничего.
+ */
+import { test, expect } from "./harness";
+
+test("демо-данные: открываются из пустой панели, работают без сети, выход стирает их", async ({ page, zen }) => {
+  await page.goto("/");
+  await expect(page.getByText("Нет данных")).toBeVisible();
+  await page.getByRole("button", { name: "Открыть демо-данные" }).click();
+
+  const banner = page.getByText("Это демо-данные выдуманной семьи.");
+  await expect(banner).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Нет данных")).toHaveCount(0);
+
+  // История доходит до «сегодня» (часы тестов — 15.10.2026), а не дальше.
+  const range = await page.evaluate(async () => {
+    type Store = { useDataStore: { getState: () => { transactions: { date: string }[] } } };
+    const { useDataStore } = await (window as unknown as { __store: (n: string) => Promise<Store> }).__store("useDataStore");
+    const dates = useDataStore.getState().transactions.map((t) => t.date).sort();
+    return { first: dates[0], last: dates[dates.length - 1], count: dates.length };
+  });
+  expect(range.last.slice(0, 7)).toBe("2026-10");
+  expect(range.last <= "2026-10-15").toBe(true);
+  expect(range.first.slice(0, 7)).toBe("2025-02");
+  expect(range.count).toBeGreaterThan(1000);
+
+  // Счета выдуманной семьи.
+  await page.goto("/accounts");
+  await expect(page.getByText("Т-Банк Black").first()).toBeVisible();
+
+  // Сравнение: идущий октябрь против сентября.
+  await page.goto("/compare");
+  await expect(page.getByTestId("compare-track-summary")).toContainText("к тому же дню");
+
+  // В настоящий Дзен-мани не ушло ни одного запроса.
+  expect(zen.pulls).toBe(0);
+  expect(zen.pushes).toHaveLength(0);
+
+  // Выход — обратно в пустую панель, демо-база стёрта.
+  await page.getByRole("button", { name: "Выйти из демо" }).click();
+  await expect(page.getByText("Нет данных")).toBeVisible({ timeout: 20_000 });
+  await expect(banner).toHaveCount(0);
+  const dbs = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
+  expect(dbs.filter((n) => n && n !== "dzenanalytics")).toEqual([]);
+});

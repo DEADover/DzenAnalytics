@@ -9,6 +9,8 @@
 // as Bearer header. CORS is open (Access-Control-Allow-Origin: *), so this
 // works directly from the browser, including file:// origins.
 
+import { isDemoToken, respondDemo } from "./demo/demoServer";
+
 const API_BASE = "https://api.zenmoney.ru";
 
 export interface ZenInstrument {
@@ -325,6 +327,11 @@ async function zenRequest<T>(
   signal: AbortSignal | undefined,
   read: (res: Response) => Promise<T>
 ): Promise<T> {
+  // Демо-аккаунт отвечает из браузера: в сеть ничего не уходит.
+  if (isDemoToken(token)) {
+    const body = JSON.stringify(respondDemo(JSON.parse(bodyJson)));
+    return read(new Response(body, { status: 200, headers: { "Content-Type": "application/json" } }));
+  }
   const ctrl = new AbortController();
   const forward = () => ctrl.abort(signal?.reason);
   if (signal?.aborted) forward();
