@@ -746,13 +746,10 @@ export function RulesPage() {
                   // Раньше получатель с комментарием выделялись
                   // предупреждающим цветом: они, в отличие от категории,
                   // менялись только после записи. Теперь так работают все
-                  // поля — выделять нечего.
+                  // поля — выделять нечего. Подсказки у пилюль нет: она у
+                  // всех одна и та же и ничего не добавляла к названию поля.
                   const targetPills = targets.map((t) => (
-                    <span
-                      key={t}
-                      className="pill whitespace-nowrap"
-                      title={`${RULE_TARGET_LABELS[t]} изменится после кнопки «Проверить и применить»`}
-                    >
+                    <span key={t} className="pill whitespace-nowrap">
                       {RULE_TARGET_LABELS[t]}
                     </span>
                   ));
