@@ -74,7 +74,7 @@ test("подсказка графика: дата один раз, кроме с
     const box = (await card.locator(".recharts-wrapper").boundingBox())!;
     await page.mouse.move(box.x + 60 + (box.width - 80) * frac, box.y + box.height / 2, { steps: 4 });
     await expect(tip, `${current} @ ${frac}`).toContainText("₽");
-    return (await tip.innerText()).replace(/ /g, " ");
+    return (await tip.innerText()).replace(/\u00a0/g, " ");
   };
   const modes: [string, boolean][] = [
     ["Месяцы", false],
