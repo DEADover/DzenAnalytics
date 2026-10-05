@@ -84,7 +84,7 @@ export function EmptyState() {
 
       <div className="flex items-center gap-1.5 text-xs text-muted">
         <Lock className="w-3.5 h-3.5" aria-hidden="true" />
-        Данные хранятся только в вашем браузере и на сервер панели не попадают.
+        Данные хранятся только в вашем браузере и не попадают на наш сервер.
       </div>
     </div>
   );
