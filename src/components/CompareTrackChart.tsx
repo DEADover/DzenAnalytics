@@ -54,9 +54,12 @@ function TrackTip({
   const facts: TooltipFact[] = [];
   if (p.a != null)
     facts.push({ label: labelA, value: formatMoney(p.a, base), swatchColor: color, strong: true });
+  // Дату дня Б пишем, только если она другая, чем у А: у месяцев и годов это
+  // то же число, а «30 дней» и свои даты бывают сдвинуты.
+  const sameDay = !!p.dateA && !!p.dateB && p.dateA.slice(5) === p.dateB.slice(5);
   if (p.b != null)
     facts.push({
-      label: datesB && p.dateB ? `${labelB} · ${dayLabel(p.dateB)}` : labelB,
+      label: datesB && p.dateB && !sameDay ? `${labelB} · ${dayLabel(p.dateB)}` : labelB,
       value: formatMoney(p.b, base),
       swatch: "bg-muted opacity-60",
     });
@@ -67,7 +70,7 @@ function TrackTip({
       icon: <Scale />,
       strong: true,
     });
-  const title = p.dateA ? `${dayLabel(p.dateA)} · ${formatNum(p.day)}-й день` : `${formatNum(p.day)}-й день`;
+  const title = p.dateA ? dayLabel(p.dateA) : `${formatNum(p.day)}-й день`;
   return (
     <ChartTooltipCard>
       <TooltipFacts title={title} facts={facts} />
