@@ -96,6 +96,11 @@ function inlineStandaloneAssets(): Plugin {
       for (const [re, val] of replacements) out = out.replace(re, val);
       // The PWA manifest cannot load from file:// — strip it.
       out = out.replace(/<link rel="manifest"[^>]*>\s*/g, "");
+      // Соседнего файла у однофайловой сборки нет — встраиваем его код.
+      out = out.replace(
+        /<script src="\.\/switch-boot\.js"><\/script>/,
+        `<script>${readFileSync(resolve("public/switch-boot.js"), "utf8")}</script>`
+      );
       return out;
     },
   };

@@ -1,4 +1,13 @@
-import { activeProfileId, addProfile, profileLabel, readProfiles, setActiveProfileId, DEFAULT_PROFILE_ID } from "../lib/profiles";
+import {
+  activeProfileId,
+  addProfile,
+  profileLabel,
+  readProfiles,
+  setActiveProfileId,
+  setProfileAvatar,
+  DEFAULT_PROFILE_ID,
+} from "../lib/profiles";
+import { demoAvatar } from "../lib/demo/demoAvatar";
 import { beginSwitch } from "../lib/switchOverlay";
 import { deleteProfile, profileFace, switchProfile } from "./useProfiles";
 
@@ -41,12 +50,18 @@ export function isDemoActive(): boolean {
 }
 
 /** Открыть демо-данные: завести их аккаунт (если ещё нет) и перейти в него. */
-export function startDemo(): void {
+export async function startDemo(): Promise<void> {
   const existing = demoProfileId();
   if (existing === activeProfileId()) return;
   put(RETURN_KEY, activeProfileId());
-  const id = existing ?? addProfile("Демо-данные").id;
+  const id = existing ?? addProfile("Семья (демо)").id;
   put(DEMO_KEY, id);
+  // Свой аватар — дом с сердцем на тёплом градиенте: виден в переключателе
+  // аккаунтов и на экране перехода.
+  if (!readProfiles().find((p) => p.id === id)?.avatar) {
+    const avatar = await demoAvatar();
+    if (avatar) setProfileAvatar(id, avatar);
+  }
   switchProfile(id);
 }
 

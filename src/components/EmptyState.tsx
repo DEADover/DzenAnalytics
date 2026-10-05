@@ -74,7 +74,7 @@ export function EmptyState() {
             подключения.
           </StartCard>
         </Link>
-        <button type="button" onClick={startDemo} className={CARD}>
+        <button type="button" onClick={() => void startDemo()} className={CARD}>
           <StartCard icon={FlaskConical} title="Посмотреть демо" action="Открыть демо-данные">
             Выдуманная семья: пять лет операций, бюджеты, цели и правила.
             Ничего никуда не отправляется.

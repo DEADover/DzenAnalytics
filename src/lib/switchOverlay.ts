@@ -33,6 +33,8 @@ export interface SwitchFace {
 interface SwitchFlag {
   label: string;
   face?: SwitchFace | null;
+  /** Фон заглушки — им `public/switch-boot.js` красит новую страницу до загрузки стилей. */
+  bg?: string | null;
   at: number;
   theme: string | null;
   scheme: string | null;
@@ -146,9 +148,11 @@ function build(label: string, visible: boolean, face?: SwitchFace | null): HTMLD
  */
 export function beginSwitch(label: string, then: () => void, face?: SwitchFace | null): void {
   const root = document.documentElement;
+  const cssBg = getComputedStyle(root).getPropertyValue("--c-bg").trim();
   const flag: SwitchFlag = {
     label,
     face: face ?? null,
+    bg: cssBg ? `rgb(${cssBg})` : null,
     at: Date.now(),
     theme: root.getAttribute("data-theme"),
     scheme: root.getAttribute("data-scheme"),
@@ -208,6 +212,8 @@ export function endSwitch(): void {
   } catch {
     // ignore
   }
+  // Фон, которым страницу закрасили до загрузки стилей, дальше не нужен.
+  document.documentElement.style.removeProperty("background");
   const el = document.getElementById(ID);
   if (!el) return;
   if (reduceMotion()) {
