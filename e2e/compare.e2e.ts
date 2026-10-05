@@ -37,3 +37,28 @@ test("нарастающий итог по дням: идущий месяц д�
   await expect(page.getByText("График сравнения доходов")).toBeVisible();
   await expect(page.getByText("Сравнение расходов по категориям")).toBeVisible();
 });
+
+test("один и тот же месяц в А и Б выбрать нельзя, календарь — по центру кнопки", async ({ page }) => {
+  await connectZen(page, "/compare");
+  // Октябрь против сентября. Открываем календарь периода Б.
+  const head = (name: string) => page.locator("th", { hasText: name });
+  const pickerB = head("Период Б").getByRole("button", { name: /Сентябрь/ });
+  await pickerB.click();
+  const panel = page.locator(".fixed.card.w-64");
+  await expect(panel).toBeVisible();
+  // Октябрь занят периодом А — погашен.
+  await expect(panel.getByRole("button", { name: "Окт", exact: true })).toBeDisabled();
+  // Панель по центру кнопки (±2 px).
+  const b = (await pickerB.boundingBox())!;
+  const p = (await panel.boundingBox())!;
+  expect(Math.abs(b.x + b.width / 2 - (p.x + p.width / 2))).toBeLessThan(2);
+  // Б выбираем руками — август; теперь у А погашен август.
+  await panel.getByRole("button", { name: "Авг", exact: true }).click();
+  const pickerA = head("Период А").getByRole("button", { name: /Октябрь/ });
+  await pickerA.click();
+  await expect(panel.getByRole("button", { name: "Авг", exact: true })).toBeDisabled();
+  await panel.getByRole("button", { name: "Сен", exact: true }).click();
+  // Стрелка «назад» у А с сентября перешагивает август (он у Б) — на июль.
+  await head("Период А").getByTitle("Предыдущий месяц").click();
+  await expect(head("Период А").getByRole("button", { name: /Июль/ })).toBeVisible();
+});

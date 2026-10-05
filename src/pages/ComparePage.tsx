@@ -640,14 +640,18 @@ export function ComparePage() {
       active
       onSelect={setMonthA}
       onStep={(dir) => setMonthA(shiftPeriod(months.a, dir))}
+      // Б выбран руками — тот же месяц у А выбрать нельзя. Пока Б следует за А,
+      // совпасть они не могут, и запрещать нечего.
+      exclude={monthB ?? undefined}
     />
   );
-  const yearPicker = (value: number, set: (y: number) => void) => (
+  const yearPicker = (value: number, set: (y: number) => void, exclude?: number) => (
     <YearPicker
       year={value}
       minYear={Number(minYM.slice(0, 4))}
       maxYear={Number(maxYM.slice(0, 4))}
       onChange={set}
+      exclude={exclude}
     />
   );
   const dateFields = (
@@ -675,7 +679,7 @@ export function ComparePage() {
     preset === "months" || preset === "avg" ? (
       monthPickerA
     ) : preset === "years" ? (
-      yearPicker(years.a, setYearA)
+      yearPicker(years.a, setYearA, yearB ?? undefined)
     ) : preset === "custom" ? (
       dateFields(customA, setCustomA)
     ) : (
@@ -691,9 +695,10 @@ export function ComparePage() {
         active
         onSelect={setMonthB}
         onStep={(dir) => setMonthB(shiftPeriod(months.b, dir))}
+        exclude={months.a}
       />
     ) : preset === "years" ? (
-      yearPicker(years.b, setYearB)
+      yearPicker(years.b, setYearB, years.a)
     ) : preset === "avg" ? (
       <>
         <span className="text-sm shrink-0">Среднее за</span>

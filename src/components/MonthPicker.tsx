@@ -5,6 +5,12 @@ import clsx from "clsx";
 import { MONTHS_SHORT } from "../lib/months";
 import { monthLabelFull } from "../lib/format";
 
+/** «YYYY-MM» плюс `n` месяцев. */
+function addMonths(ym: string, n: number): string {
+  const idx = Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7)) - 1 + n;
+  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
+}
+
 
 /**
  * Month filter control: ‹ prev › step arrows around a label button that opens
@@ -29,6 +35,7 @@ export function MonthPicker({
   onSelect,
   onSelectYear,
   onStep,
+  exclude,
 }: {
   /** Currently shown month, "YYYY-MM". В режиме года берётся только год. */
   value: string;
@@ -54,6 +61,12 @@ export function MonthPicker({
   onSelect: (ym: string) => void;
   onSelectYear?: (year: number) => void;
   onStep: (dir: -1 | 1) => void;
+  /**
+   * Значение, которое выбрать нельзя: «YYYY-MM» (или год в режиме года). В
+   * «Сравнении» это второй период — сравнивать месяц с ним же незачем.
+   * В списке оно погашено, стрелки его перешагивают.
+   */
+  exclude?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [viewYear, setViewYear] = useState(
@@ -67,8 +80,29 @@ export function MonthPicker({
   const minY = Number(minYM?.slice(0, 4)) || 1970;
   const maxY = Number(maxYM?.slice(0, 4)) || 3000;
   const isYear = mode === "year";
-  const canPrev = isYear ? year > minY : !!minYM && value > minYM;
-  const canNext = isYear ? year < maxY : !!maxYM && value < maxYM;
+  const excludedYear = isYear && exclude ? Number(exclude.slice(0, 4)) : null;
+  const excludedYM = !isYear && exclude ? exclude : null;
+  /** Куда шагнуть стрелкой: через исключённое значение — дальше на один. */
+  const stepTarget = (dir: -1 | 1): { year: number; ym: string; skip: boolean } => {
+    let y = year + dir;
+    let ym = value ? addMonths(value, dir) : "";
+    const skip = isYear ? y === excludedYear : !!ym && ym === excludedYM;
+    if (skip) {
+      y += dir;
+      ym = addMonths(ym, dir);
+    }
+    return { year: y, ym, skip };
+  };
+  const inBounds = (t: { year: number; ym: string }) =>
+    isYear ? t.year >= minY && t.year <= maxY : (!minYM || t.ym >= minYM) && (!maxYM || t.ym <= maxYM);
+  const canPrev = (isYear ? year > minY : !!minYM && value > minYM) && inBounds(stepTarget(-1));
+  const canNext = (isYear ? year < maxY : !!maxYM && value < maxYM) && inBounds(stepTarget(1));
+  const step = (dir: -1 | 1) => {
+    const t = stepTarget(dir);
+    if (!t.skip) return onStep(dir);
+    if (isYear) onSelectYear?.(t.year);
+    else onSelect(t.ym);
+  };
   const years: number[] = [];
   for (let y = maxY; y >= minY; y--) years.push(y);
 
@@ -83,13 +117,13 @@ export function MonthPicker({
     const estH = 240;
     const below = window.innerHeight - r.bottom - 8;
     const flipUp = below < estH && r.top - 8 > below;
-    // Прижимаем к экрану: панель шириной 16rem рисуется от ЛЕВОГО края кнопки,
-    // и у пикера, стоящего в правом углу шапки, она уезжала за границу окна —
-    // половина годов оказывалась за кадром.
+    // Панель шириной 16rem — по центру кнопки и прижата к экрану: у пикера в
+    // правом углу шапки она иначе уезжала бы за границу окна.
     const PANEL = 256; // w-64
     const MARGIN = 8;
     const vw = window.innerWidth || PANEL + MARGIN * 2;
-    const left = Math.min(Math.max(r.left, MARGIN), Math.max(MARGIN, vw - PANEL - MARGIN));
+    const center = r.left + r.width / 2 - PANEL / 2;
+    const left = Math.min(Math.max(center, MARGIN), Math.max(MARGIN, vw - PANEL - MARGIN));
     setPos(
       flipUp
         ? { left, bottom: window.innerHeight - r.top + 4 }
@@ -121,7 +155,7 @@ export function MonthPicker({
       title={isYear ? "Перейти к одному году" : "Перейти к одному месяцу"}
     >
       <button
-        onClick={() => onStep(-1)}
+        onClick={() => step(-1)}
         disabled={!canPrev}
         className={clsx("seg-icon", size === "md" ? "seg-icon-md" : "seg-icon-sm")}
         title={isYear ? "Предыдущий год" : "Предыдущий месяц"}
@@ -161,7 +195,7 @@ export function MonthPicker({
       </button>
 
       <button
-        onClick={() => onStep(1)}
+        onClick={() => step(1)}
         disabled={!canNext}
         className={clsx("seg-icon", size === "md" ? "seg-icon-md" : "seg-icon-sm")}
         title={isYear ? "Следующий год" : "Следующий месяц"}
@@ -184,6 +218,8 @@ export function MonthPicker({
                   {years.map((y) => (
                     <button
                       key={y}
+                      disabled={y === excludedYear}
+                      title={y === excludedYear ? "Уже выбран для другого периода" : undefined}
                       onClick={() => {
                         onSelectYear?.(y);
                         setOpen(false);
@@ -192,7 +228,8 @@ export function MonthPicker({
                         "px-2 py-2 rounded-md text-sm tabular-nums transition-colors",
                         y === year
                           ? "bg-accent text-accent-fg font-medium"
-                          : "text-text hover:bg-panel2"
+                          : "text-text hover:bg-panel2",
+                        y === excludedYear && "opacity-30 cursor-not-allowed hover:bg-transparent"
                       )}
                     >
                       {y}
@@ -237,12 +274,14 @@ export function MonthPicker({
               <div className="grid grid-cols-3 gap-1">
                 {MONTHS_SHORT.map((m, i) => {
                   const ym = `${viewYear}-${String(i + 1).padStart(2, "0")}`;
-                  const disabled = (!!minYM && ym < minYM) || (!!maxYM && ym > maxYM);
+                  const disabled =
+                    (!!minYM && ym < minYM) || (!!maxYM && ym > maxYM) || ym === excludedYM;
                   const isSel = ym === value;
                   return (
                     <button
                       key={m}
                       disabled={disabled}
+                      title={ym === excludedYM ? "Уже выбран для другого периода" : undefined}
                       onClick={() => {
                         onSelect(ym);
                         setOpen(false);
@@ -283,6 +322,7 @@ export function YearPicker({
   maxYear,
   onChange,
   size = "sm",
+  exclude,
 }: {
   year: number;
   minYear: number;
@@ -290,10 +330,13 @@ export function YearPicker({
   onChange: (year: number) => void;
   /** `md` 42 — год раздела в ряду контролов; `sm` 34 — в шапке карточки. */
   size?: "sm" | "md";
+  /** Год, который выбрать нельзя (второй период сравнения). */
+  exclude?: number;
 }) {
   return (
     <MonthPicker
       size={size}
+      exclude={exclude != null ? String(exclude) : undefined}
       value={`${year}-01`}
       minYM={`${minYear}-01`}
       maxYM={`${maxYear}-12`}
