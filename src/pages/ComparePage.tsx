@@ -993,7 +993,7 @@ export function ComparePage() {
       <CategoryTable
         icon={GitCompare}
         card
-        title={`${chartKind === "expense" ? "Расходы" : "Доходы"} по категориям: ${ranges.a.label} против ${ranges.b.label}`}
+        title={`Сравнение ${chartKind === "expense" ? "расходов" : "доходов"} по категориям`}
         actions={<KindSwitcher kind={chartKind} onChange={setChartKind} />}
         rows={compareRows}
         base={base}

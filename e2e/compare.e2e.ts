@@ -20,7 +20,7 @@ test("«Изменение»: разница в единицах метрики 
 
 test("нарастающий итог по дням: идущий месяц до сегодня, прошлый целиком (#117)", async ({ page }) => {
   await connectZen(page, "/compare");
-  const card = page.locator(".card-tray", { has: page.getByText("Расходы нарастающим итогом") });
+  const card = page.locator(".card-tray", { has: page.getByText("График сравнения расходов") });
   await expect(card).toBeVisible();
   const summary = card.getByTestId("compare-track-summary");
   // Октябрь идёт до 15-го — сравнивается с тем, что было в сентябре к 15-му:
@@ -34,6 +34,6 @@ test("нарастающий итог по дням: идущий месяц д�
 
   // Переключатель общий с таблицей категорий.
   await card.getByRole("radio", { name: /Доходы/ }).or(card.getByRole("button", { name: /Доходы/ })).first().click();
-  await expect(page.getByText("Доходы нарастающим итогом")).toBeVisible();
-  await expect(page.getByText(/^Доходы по категориям:/)).toBeVisible();
+  await expect(page.getByText("График сравнения доходов")).toBeVisible();
+  await expect(page.getByText("Сравнение доходов по категориям")).toBeVisible();
 });

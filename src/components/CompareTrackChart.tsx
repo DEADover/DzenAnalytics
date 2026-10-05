@@ -104,7 +104,7 @@ export function CompareTrackChart({
 }) {
   const color = kind === "expense" ? chartColor.expense : chartColor.income;
   const muted = chartColor.muted;
-  const noun = kind === "expense" ? "Расходы" : "Доходы";
+  const noun = kind === "expense" ? "расходов" : "доходов";
   const lastA = track.aDays > 0 ? track.points[track.aDays - 1] : null;
   const hasB = track.points.some((p) => p.b != null);
   const atDay = lastA?.dateA ? ` на ${dayLabel(lastA.dateA)}` : "";
@@ -112,7 +112,7 @@ export function CompareTrackChart({
   return (
     <SectionCard
       icon={TrendingUp}
-      title={`${noun} нарастающим итогом`}
+      title={`График сравнения ${noun}`}
       info={
         <p>
           Сколько набралось с начала периода к каждому дню. Сплошная линия —
