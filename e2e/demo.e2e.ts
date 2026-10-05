@@ -6,12 +6,12 @@ import { test, expect } from "./harness";
 
 test("демо-данные: открываются из пустой панели, работают без сети, выход стирает их", async ({ page, zen }) => {
   await page.goto("/");
-  await expect(page.getByText("Нет данных")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "С чего начнём?" })).toBeVisible();
   await page.getByRole("button", { name: "Открыть демо-данные" }).click();
 
   const banner = page.getByText("Это демо-данные выдуманной семьи.");
   await expect(banner).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Нет данных")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "С чего начнём?" })).toHaveCount(0);
 
   // История доходит до «сегодня» (часы тестов — 15.10.2026), а не дальше.
   const range = await page.evaluate(async () => {
@@ -39,7 +39,7 @@ test("демо-данные: открываются из пустой панел
 
   // Выход — обратно в пустую панель, демо-база стёрта.
   await page.getByRole("button", { name: "Выйти из демо" }).click();
-  await expect(page.getByText("Нет данных")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "С чего начнём?" })).toBeVisible({ timeout: 20_000 });
   await expect(banner).toHaveCount(0);
   const dbs = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
   expect(dbs.filter((n) => n && n !== "dzenanalytics")).toEqual([]);
