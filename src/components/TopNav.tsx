@@ -362,7 +362,10 @@ export function TopNav({ onOpenPalette }: { onOpenPalette?: () => void }) {
                 onClick={() => setMoreOpen((o) => !o)}
                 aria-expanded={moreOpen}
                 aria-haspopup="true"
-                className={navItem(moreOpen || inMore, iconsOnly)}
+                // Подсвечен, только когда открыт раздел из него. Раскрытая
+                // панель — как под курсором: иначе рядом горели две «выбранные»
+                // кнопки — текущий раздел и «Ещё».
+                className={clsx(navItem(inMore, iconsOnly), moreOpen && !inMore && "text-text bg-panel/70")}
                 style={iconStyle}
                 title={iconsOnly && !moreOpen ? "Ещё" : undefined}
               >

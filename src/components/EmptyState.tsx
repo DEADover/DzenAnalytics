@@ -76,8 +76,8 @@ export function EmptyState() {
         </Link>
         <button type="button" onClick={startDemo} className={CARD}>
           <StartCard icon={FlaskConical} title="Посмотреть демо" action="Открыть демо-данные">
-            Выдуманная семья: почти два года операций, бюджеты и планы. Ничего
-            никуда не отправляется.
+            Выдуманная семья: пять лет операций, бюджеты, цели и правила.
+            Ничего никуда не отправляется.
           </StartCard>
         </button>
       </div>
