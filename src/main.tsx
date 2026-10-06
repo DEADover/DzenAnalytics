@@ -8,7 +8,7 @@ import "@fontsource-variable/geist-mono";
 import "./index.css";
 import App from "./App";
 import { consumeOAuthCallback, exchangeCode } from "./lib/oauth";
-import { isDemoActive } from "./hooks/useDemo";
+import { isDemoActive, startDemo } from "./hooks/useDemo";
 import { DEMO_TOKEN } from "./lib/demo/demoServer";
 import { seedDemoLocal } from "./lib/demo/demoSeed";
 import { useZenmoneyStore } from "./store/useZenmoneyStore";
@@ -52,6 +52,18 @@ const callback = consumeOAuthCallback();
 if (callback) document.getElementById("root")!.textContent = "Завершаем вход…";
 
 async function mount() {
+  // Ссылка «Посмотреть демо» с сайта: ?demo — сразу в демо-данные (отдельный
+  // аккаунт; свой, если он есть, не трогается). После перехода метку убираем.
+  const params = new URLSearchParams(location.search);
+  if (params.has("demo")) {
+    if (!isDemoActive()) {
+      await startDemo();
+      return;
+    }
+    params.delete("demo");
+    const qs = params.toString();
+    history.replaceState(history.state, "", `${location.pathname}${qs ? `?${qs}` : ""}${location.hash}`);
+  }
   let syncAfterLogin = false;
   // Первый заход в демо-данные: «подключаем» демо-аккаунт и ждём синхронизацию
   // до первой отрисовки — чтобы не мелькнул пустой экран «Нет данных».

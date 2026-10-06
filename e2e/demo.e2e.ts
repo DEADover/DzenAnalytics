@@ -68,3 +68,10 @@ test("демо-данные: открываются из пустой панел
   const dbs = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
   expect(dbs.filter((n) => n && n !== "dzenanalytics")).toEqual([]);
 });
+
+test("ссылка ?demo сразу открывает демо-данные и убирает метку из адреса", async ({ page, zen }) => {
+  await page.goto("/?demo");
+  await expect(page.getByText("Это демо-данные выдуманной семьи.")).toBeVisible({ timeout: 20_000 });
+  await expect(page).not.toHaveURL(/demo/);
+  expect(zen.pulls).toBe(0);
+});
