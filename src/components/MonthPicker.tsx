@@ -155,6 +155,7 @@ export function MonthPicker({
       title={isYear ? "Перейти к одному году" : "Перейти к одному месяцу"}
     >
       <button
+        type="button"
         onClick={() => step(-1)}
         disabled={!canPrev}
         className={clsx("seg-icon", size === "md" ? "seg-icon-md" : "seg-icon-sm")}
@@ -164,6 +165,7 @@ export function MonthPicker({
       </button>
 
       <button
+        type="button"
         ref={btnRef}
         onClick={() => {
           // Открываем — показываем год выбранного месяца. Это следствие
@@ -195,6 +197,7 @@ export function MonthPicker({
       </button>
 
       <button
+        type="button"
         onClick={() => step(1)}
         disabled={!canNext}
         className={clsx("seg-icon", size === "md" ? "seg-icon-md" : "seg-icon-sm")}
@@ -217,6 +220,7 @@ export function MonthPicker({
                 <div className="grid grid-cols-3 gap-1 max-h-64 overflow-y-auto">
                   {years.map((y) => (
                     <button
+                      type="button"
                       key={y}
                       disabled={y === excludedYear}
                       title={y === excludedYear ? "Уже выбран для другого периода" : undefined}
@@ -240,6 +244,7 @@ export function MonthPicker({
               <>
               <div className="flex items-center justify-between mb-2">
                 <button
+                  type="button"
                   onClick={() => setViewYear((y) => y - 1)}
                   disabled={viewYear <= minY}
                   className="btn-icon btn-icon-sm"
@@ -251,6 +256,7 @@ export function MonthPicker({
                     этот год», а дорога к нему шла через кнопку «Год» в ряду
                     пресетов и возврат к нужному году стрелками. */}
                 <button
+                  type="button"
                   onClick={() => {
                     onSelectYear?.(viewYear);
                     setOpen(false);
@@ -262,6 +268,7 @@ export function MonthPicker({
                   {viewYear}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setViewYear((y) => y + 1)}
                   disabled={viewYear >= maxY}
                   className="btn-icon btn-icon-sm"
@@ -279,6 +286,7 @@ export function MonthPicker({
                   const isSel = ym === value;
                   return (
                     <button
+                      type="button"
                       key={m}
                       disabled={disabled}
                       title={ym === excludedYM ? "Уже выбран для другого периода" : undefined}
