@@ -6,8 +6,8 @@ import { NO_CATEGORY, isServiceCategory } from "./zenmoneyMap";
 /**
  * «Создать правило» из окна операции: черновик правила по её образцу.
  *
- * Условия — всё, по чему такие операции узнаются, через «И»: получатель
- * «равно», комментарий «содержит», счёт, тип операции и сумма «равно». Пустые
+ * Условия — всё, по чему такие операции узнаются, через «И»: тип операции,
+ * счёт, получатель «равно», комментарий «содержит» и сумма «равно». Пустые
  * поля условий не дают. Лишнее человек удалит одной кнопкой, а дописывать
  * недостающее руками дольше. Действие — категория этой
  * операции: чаще всего правило заводят именно затем, чтобы похожие операции сами
@@ -30,11 +30,12 @@ export function ruleDraftFromTransaction(t: RuleSource): RulePrefill {
   const comment = (t.comment ?? "").trim();
   const account = (t.account ?? "").trim();
   const amount = t.amountBase != null && Number.isFinite(t.amountBase) ? Math.round(Math.abs(t.amountBase) * 100) / 100 : null;
+  // Порядок — от общего к частному, как в списке полей редактора.
   const conditions: RuleCondition[] = [];
+  conditions.push({ field: "kind", op: "equals", value: t.kind, caseInsensitive: true });
+  if (account) conditions.push({ field: "account", op: "equals", value: account, caseInsensitive: true });
   if (payee) conditions.push({ field: "payee", op: "equals", value: payee, caseInsensitive: true });
   if (comment) conditions.push({ field: "comment", op: "contains", value: comment, caseInsensitive: true });
-  if (account) conditions.push({ field: "account", op: "equals", value: account, caseInsensitive: true });
-  conditions.push({ field: "kind", op: "equals", value: t.kind, caseInsensitive: true });
   if (amount) conditions.push({ field: "amount", op: "equals", value: String(amount), caseInsensitive: false });
   const category = (t.categoryFull ?? "").trim();
   // «Перевод», «Долг» и «Без категории» — не категории, записать их правило не

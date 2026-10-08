@@ -42,13 +42,15 @@ import { NO_CATEGORY } from "./zenmoneyMap";
 
 export type { RuleField };
 
+/** Подписи полей. Порядок ключей — порядок в списке полей условия: от общего
+ *  к частному, как в черновике «Создать правило» (`ruleFromTransaction`). */
 export const FIELD_LABELS: Record<RuleField, string> = {
+  kind: "Тип операции",
+  account: "Счёт",
+  category: "Текущая категория",
   payee: "Получатель",
   comment: "Комментарий",
-  category: "Текущая категория",
-  account: "Счёт",
   amount: "Сумма",
-  kind: "Тип операции",
 };
 
 /**
