@@ -51,6 +51,7 @@ import type { RuleSchedule } from "../lib/ruleSchedule";
 import { useDataStore } from "../store/useDataStore";
 import { isServiceCategory } from "../lib/zenmoneyMap";
 import type { Transaction } from "../types";
+import type { RulePrefill } from "../lib/ruleFromTransaction";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { InfoPopover } from "./InfoPopover";
 
@@ -168,6 +169,8 @@ export interface RuleDraft {
 interface Props {
   /** Правило для редактирования; отсутствует — создаём новое. */
   rule?: CategoryRuleV2;
+  /** Новое правило по образцу операции («Создать правило» в её окне). */
+  prefill?: RulePrefill | null;
   /** Операции ДО правок — правила видят именно их, значит и счётчик совпадений
    *  должен считаться по ним, иначе он покажет одно, а правило сделает другое. */
   transactions: Transaction[];
@@ -359,6 +362,7 @@ function matchTitle(t: Transaction): string {
  */
 export function RuleEditModal({
   rule,
+  prefill,
   transactions,
   categories,
   liveCategories,
@@ -431,7 +435,17 @@ export function RuleEditModal({
             id: a.id ?? nextId(),
           })),
         }
-      : EMPTY
+      : prefill
+        ? {
+            ...EMPTY,
+            groups: prefill.groups.map((g) => ({
+              ...g,
+              id: nextId(),
+              conditions: g.conditions.map((c) => ({ ...c, id: nextId() })),
+            })),
+            actions: prefill.actions.map((a) => ({ ...a, id: nextId() })),
+          }
+        : EMPTY
   );
 
   function patchCondition(id: string, patch: Partial<RuleCondition>) {

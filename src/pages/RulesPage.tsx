@@ -50,6 +50,7 @@ import { HeadCell } from "../components/table/TableParts";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { cellClass } from "../components/table/tableKit";
 import { CardHeader } from "../components/CardHeader";
+import { clearPendingRulePrefill, peekPendingRulePrefill } from "../lib/ruleFromTransaction";
 import { RuleEditModal, type RuleDraft } from "../components/RuleEditModal";
 import { RulePreviewModal } from "../components/RulePreviewModal";
 import { buildRulePlan, type KindChecks, type RuleRow } from "../lib/rulePlan";
@@ -144,8 +145,13 @@ export function RulesPage() {
     void loadRuleRuns();
   }, [loadRuleRuns]);
 
+  /** Черновик из окна операции («Создать правило») — открываем редактор сразу. */
+  const [prefill, setPrefill] = useState(peekPendingRulePrefill);
+  useEffect(() => clearPendingRulePrefill(), []);
   /** null — окно закрыто, «create» — новое правило, иначе редактируем. */
-  const [editing, setEditing] = useState<StoredCategoryRule | "create" | null>(null);
+  const [editing, setEditing] = useState<StoredCategoryRule | "create" | null>(() =>
+    prefill ? "create" : null
+  );
   const [loadedZenTags, setZenTags] = useState<ZenTag[] | null>(null);
   /** Проверки смены типа: долговые счета, валюты, категории (#98). */
   const [loadedKindChecks, setKindChecks] = useState<KindChecks | null>(null);
@@ -639,7 +645,10 @@ export function RulesPage() {
               />
               <button
                 type="button"
-                onClick={() => setEditing("create")}
+                onClick={() => {
+                  setPrefill(null);
+                  setEditing("create");
+                }}
                 className="btn-primary text-xs shrink-0"
               >
                 <Plus className="w-4 h-4" />
@@ -968,6 +977,7 @@ export function RulesPage() {
       {editing && (
         <RuleEditModal
           rule={editing === "create" ? undefined : editing}
+          prefill={editing === "create" ? prefill : null}
           transactions={transactionsRaw}
           categories={allCategories}
           liveCategories={liveCategories}

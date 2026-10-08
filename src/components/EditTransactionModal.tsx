@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
-import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Check, ListPlus, ArrowUpToLine } from "lucide-react";
+import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Check, ListPlus, ArrowUpToLine, Wand2 } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -43,6 +43,8 @@ import { parseAmountInput } from "../lib/splitTransaction";
 import type { Transaction, TxKind } from "../types";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { InfoPopover } from "./InfoPopover";
+import { ruleDraftFromTransaction, setPendingRulePrefill } from "../lib/ruleFromTransaction";
+import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 
 interface Props {
   /** The transaction to edit. Omit (or null) to open the modal in
@@ -535,6 +537,20 @@ export function EditTransactionModal({
   // for what the bank actually printed.
   const [payee, setPayee] = useState(tx.brand?.trim() || tx.payee || "");
   const [comment, setComment] = useState(tx.comment);
+  const navigate = useSmoothNavigate();
+  /** «Создать правило»: черновик по тому, что сейчас в полях, — и в «Правила». */
+  function createRule() {
+    setPendingRulePrefill(
+      ruleDraftFromTransaction({
+        payee,
+        brand: "",
+        comment,
+        categoryFull: subcategory ? `${category} / ${subcategory}` : category,
+      })
+    );
+    onClose();
+    navigate("/rules");
+  }
   // The comment field is drag-resizable. Its dragged height otherwise sticks to
   // the single shared <textarea> and «inherits» across the operation-type tabs.
   // Keying the field by the visible tab remounts it on switch, so each tab shows
@@ -1613,6 +1629,16 @@ export function EditTransactionModal({
                 </button>
               </Tooltip>
             )}
+            <Tooltip content="Создать правило — чтобы все такие же операции ложились так же">
+              <button
+                onClick={createRule}
+                disabled={saving}
+                aria-label="Создать правило"
+                className="btn-ghost text-sm px-3"
+              >
+                <Wand2 className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </div>
         )}
         <div className="flex items-center gap-2 ml-auto">
