@@ -92,6 +92,9 @@ interface FiltersState {
   onlyUncategorized: boolean;
   hideZero: boolean;
   onlyWithComment: boolean;
+  /** Только операции без комментария. Взаимоисключается с `onlyWithComment`:
+   *  включение одного выключает другое. */
+  onlyWithoutComment: boolean;
   /** Только «новые» — то, что приехало из банка и чего пользователь ещё не
    *  открывал (`viewed: false` в Дзен-мани). У операций из CSV признака нет. */
   onlyNew: boolean;
@@ -137,6 +140,7 @@ interface FiltersState {
   setOnlyUncategorized: (v: boolean) => void;
   setHideZero: (v: boolean) => void;
   setOnlyWithComment: (v: boolean) => void;
+  setOnlyWithoutComment: (v: boolean) => void;
   setOnlyNew: (v: boolean) => void;
   resetToCurrentPeriod: (startDay: number) => void;
   /**
@@ -173,6 +177,7 @@ const initial = {
   onlyUncategorized: false,
   hideZero: false,
   onlyWithComment: false,
+  onlyWithoutComment: false,
   onlyNew: false,
 };
 
@@ -255,7 +260,10 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
     }),
   setOnlyUncategorized: (onlyUncategorized) => set({ onlyUncategorized }),
   setHideZero: (hideZero) => set({ hideZero }),
-  setOnlyWithComment: (onlyWithComment) => set({ onlyWithComment }),
+  setOnlyWithComment: (onlyWithComment) =>
+    set(onlyWithComment ? { onlyWithComment, onlyWithoutComment: false } : { onlyWithComment }),
+  setOnlyWithoutComment: (onlyWithoutComment) =>
+    set(onlyWithoutComment ? { onlyWithoutComment, onlyWithComment: false } : { onlyWithoutComment }),
   setOnlyNew: (onlyNew) => set({ onlyNew }),
   // Текущий период — того вида, который человек выбрал последним: выбрав
   // календарный месяц, он и после перезагрузки должен увидеть календарный, а
@@ -460,6 +468,7 @@ export function applyFilters(
       return false;
     if (state.hideZero && t.amountBase === 0) return false;
     if (state.onlyWithComment && !(t.comment && t.comment.trim())) return false;
+    if (state.onlyWithoutComment && t.comment && t.comment.trim()) return false;
     if (state.onlyNew && !t.unseen) return false;
     return true;
   });

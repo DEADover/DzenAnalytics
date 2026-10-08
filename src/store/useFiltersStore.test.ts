@@ -463,6 +463,21 @@ describe("applyFilters — «Дополнительно»", () => {
   it("onlyWithComment keeps commented ops only", () => {
     expect(ids(applyFilters(txs, filt({ onlyWithComment: true })))).toEqual(["b"]);
   });
+
+  it("onlyWithoutComment keeps ops without a comment", () => {
+    // Пустой комментарий и его отсутствие — одно и то же: «без комментария».
+    expect(ids(applyFilters(txs, filt({ onlyWithoutComment: true })))).toEqual(["a", "c", "d"]);
+  });
+
+  it("«с комментарием» и «без» выключают друг друга", () => {
+    const st = useFiltersStore.getState();
+    st.setOnlyWithComment(true);
+    st.setOnlyWithoutComment(true);
+    expect(useFiltersStore.getState()).toMatchObject({ onlyWithComment: false, onlyWithoutComment: true });
+    st.setOnlyWithComment(true);
+    expect(useFiltersStore.getState()).toMatchObject({ onlyWithComment: true, onlyWithoutComment: false });
+    st.setOnlyWithComment(false);
+  });
 });
 
 describe("applyFilters — переводы в фильтре по счёту (issue #41)", () => {

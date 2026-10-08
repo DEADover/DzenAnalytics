@@ -609,6 +609,7 @@ export function GlobalFilters({
     f.onlyUncategorized ||
     f.hideZero ||
     f.onlyWithComment ||
+    f.onlyWithoutComment ||
     f.onlyNew;
   const extraCount =
     (f.excludeTransfers ? 1 : 0) +
@@ -617,6 +618,7 @@ export function GlobalFilters({
     (f.onlyUncategorized ? 1 : 0) +
     (f.hideZero ? 1 : 0) +
     (f.onlyWithComment ? 1 : 0) +
+    (f.onlyWithoutComment ? 1 : 0) +
     (f.onlyNew ? 1 : 0);
   const hasFilters =
     f.accounts.size > 0 ||
@@ -777,6 +779,7 @@ export function GlobalFilters({
                     { label: "Только без категории", checked: f.onlyUncategorized, on: f.setOnlyUncategorized },
                     { label: "Скрыть нулевые операции", checked: f.hideZero, on: f.setHideZero },
                     { label: "Только с комментарием", checked: f.onlyWithComment, on: f.setOnlyWithComment },
+                    { label: "Только без комментариев", checked: f.onlyWithoutComment, on: f.setOnlyWithoutComment },
                     { label: "Только новые", checked: f.onlyNew, on: f.setOnlyNew },
                   ].map((row) => (
                     <label

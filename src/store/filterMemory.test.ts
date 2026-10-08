@@ -18,6 +18,7 @@ const values = (over: Partial<FilterValues> = {}): FilterValues => ({
   onlyUncategorized: false,
   hideZero: false,
   onlyWithComment: false,
+  onlyWithoutComment: false,
   onlyNew: false,
   ...over,
 });
@@ -118,11 +119,17 @@ describe("isEmptySnapshot", () => {
       { onlyUncategorized: true },
       { hideZero: true },
       { onlyWithComment: true },
+      { onlyWithoutComment: true },
       { onlyNew: true },
     ];
     for (const c of cases) {
       expect(isEmptySnapshot(snapshotFilters(values(c)))).toBe(false);
     }
+  });
+
+  it("«с комментарием» и «без» вместе из файла не приходят — остаётся первое", () => {
+    const r = restoreFilters({ onlyWithComment: true, onlyWithoutComment: true });
+    expect(r).toMatchObject({ onlyWithComment: true, onlyWithoutComment: false });
   });
 
   it("поиск из одних пробелов — это не фильтр", () => {
