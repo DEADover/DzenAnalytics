@@ -28,6 +28,14 @@ test("правило из операции: редактор открыт и з�
   await expect(editor.getByText("Расход").first()).toBeVisible();
   await expect(editor.getByText("Еда вне дома").first()).toBeVisible();
 
+  // Сумма «равно» → «от … до»: число становится нижней границей.
+  await editor.locator('[aria-haspopup="listbox"][aria-label="Условие"]').last().click();
+  await page.getByRole("option", { name: "от … до" }).click();
+  await expect(editor.getByLabel("Сумма от")).toHaveValue("9000");
+  await editor.getByLabel("Сумма до").fill("10 000");
+  await expect(editor.getByText(/Сумма от 9000 до 10 000/).first()).toBeVisible();
+  await expect(editor.getByText(/Подойд[её]т 1 операция/)).toBeVisible();
+
   // Закрыли — обычное «Новое правило» уже пустое, черновик не прилипает.
   await editor.getByRole("button", { name: "Отмена" }).click();
   await expect(editor).toHaveCount(0);

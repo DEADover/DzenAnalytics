@@ -15,6 +15,9 @@ import {
   NUMERIC_FIELDS,
   opsForField,
   VALUELESS_OPS,
+  conditionHasValue,
+  joinRange,
+  parseRange,
   actionTarget,
   compileCondition,
   compileRuleV2,
@@ -209,6 +212,21 @@ const newCondition = (): RuleCondition => ({
 });
 
 const newAction = (): RuleAction => ({ id: nextId(), kind: "setCategory", value: "" });
+
+/**
+ * Значение при смене операции у суммы: число переезжает в «от … до» нижней
+ * границей и обратно — чтобы набранное не пропадало и в поле не всплывало
+ * служебное «от;до».
+ */
+function valueForOp(c: RuleCondition, next: ConditionOp): string {
+  if (next === c.op) return c.value;
+  if (next === "between") return joinRange(c.value, "");
+  if (c.op === "between") {
+    const { from, to } = parseRange(c.value);
+    return from || to;
+  }
+  return c.value;
+}
 
 /**
  * Применить правку строки правила и сбросить ссылку на справочник, если
@@ -524,15 +542,13 @@ export function RuleEditModal({
         .map((g) => ({
           ...g,
           conditions: g.conditions.filter(
-            (c) => VALUELESS_OPS.has(c.op) || c.value.length > 0
+            (c) => conditionHasValue(c)
           ),
         }))
         .filter((g) => g.conditions.length > 0),
     [cleaned]
   );
-  const usableConditions = useMemo(() => allConditions(cleaned), [cleaned]).filter(
-    (c) => VALUELESS_OPS.has(c.op) || c.value.length > 0
-  );
+  const usableConditions = useMemo(() => allConditions(cleaned), [cleaned]).filter(conditionHasValue);
 
   /** Условия с несобирающимся выражением — подсвечиваем именно их поле, а не
    *  пишем общую строку «где-то ошибка» под формой. */
@@ -563,9 +579,7 @@ export function RuleEditModal({
   // --- Валидация. Правило без условий подошло бы ко всему подряд, правило без
   // действий ничего не делает, а действие без значения движок молча пропустит —
   // о каждом из трёх случаев пользователю надо сказать до сохранения.
-  const emptyConditionValue = allConditions(cleaned).some(
-    (c) => !VALUELESS_OPS.has(c.op) && c.value.length === 0
-  );
+  const emptyConditionValue = allConditions(cleaned).some((c) => !conditionHasValue(c));
   const emptyActionValue = cleaned.actions.some((a) => a.value.length === 0);
   const noConditions = allConditions(cleaned).length === 0;
   const noActions = cleaned.actions.length === 0;
@@ -735,7 +749,7 @@ export function RuleEditModal({
                       portal
                       value={c.op}
                       options={opsOf(c.field)}
-                      onChange={(v) => patchCondition(c.id!, { op: v })}
+                      onChange={(v) => patchCondition(c.id!, { op: v, value: valueForOp(c, v) })}
                     />
                     <button
                       type="button"
@@ -801,6 +815,32 @@ export function RuleEditModal({
                                 value: joinCategoryFull(cat, sub || null),
                               })
                             }
+                          />
+                        </div>
+                      ) : c.op === "between" ? (
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <input
+                            value={parseRange(c.value).from}
+                            onChange={(e) =>
+                              patchCondition(c.id!, { value: joinRange(e.target.value, parseRange(c.value).to) })
+                            }
+                            placeholder="От"
+                            inputMode="decimal"
+                            className={clsx(FIELD, "tabular-nums")}
+                            aria-label="Сумма от"
+                          />
+                          <span className="text-muted shrink-0" aria-hidden>
+                            —
+                          </span>
+                          <input
+                            value={parseRange(c.value).to}
+                            onChange={(e) =>
+                              patchCondition(c.id!, { value: joinRange(parseRange(c.value).from, e.target.value) })
+                            }
+                            placeholder="До"
+                            inputMode="decimal"
+                            className={clsx(FIELD, "tabular-nums")}
+                            aria-label="Сумма до"
                           />
                         </div>
                       ) : (

@@ -101,7 +101,9 @@ export type ConditionOp =
   | "gt"
   | "gte"
   | "lt"
-  | "lte";
+  | "lte"
+  /** «от … до» у суммы, границы включительно. Значение — «от;до» (`parseRange`). */
+  | "between";
 
 export const CONDITION_OP_LABELS: Record<ConditionOp, string> = {
   contains: "содержит",
@@ -115,6 +117,7 @@ export const CONDITION_OP_LABELS: Record<ConditionOp, string> = {
   gte: "больше или равно",
   lt: "меньше",
   lte: "меньше или равно",
+  between: "от … до",
 };
 
 /** Операции текстовых полей — в том порядке, в котором их показывает окно. */
@@ -129,7 +132,7 @@ export const TEXT_OPS: readonly ConditionOp[] = [
 ];
 
 /** Операции числовых полей. «Не заполнено» у суммы не бывает: она всегда есть. */
-export const NUMERIC_OPS: readonly ConditionOp[] = ["equals", "gt", "gte", "lt", "lte"];
+export const NUMERIC_OPS: readonly ConditionOp[] = ["equals", "between", "gt", "gte", "lt", "lte"];
 
 /** Какие операции предлагать для поля. */
 export function opsForField(field: RuleField): readonly ConditionOp[] {
@@ -142,6 +145,37 @@ export const KIND_OPS: readonly ConditionOp[] = ["equals"];
 
 /** Операции, которым значение не нужно, — у них поле ввода прячется. */
 export const VALUELESS_OPS: ReadonlySet<ConditionOp> = new Set(["empty", "not_empty"]);
+
+/**
+ * Границы «от … до» — одной строкой «от;до», чтобы условие осталось тем же
+ * `{ field, op, value }`, что и все остальные: облако, бэкап и выгрузка правил
+ * переносят его без изменений. Любая сторона может быть пустой: «от 500» без
+ * верхней границы — тоже диапазон.
+ */
+export function parseRange(value: string): { from: string; to: string } {
+  const [from = "", to = ""] = value.split(";");
+  return { from: from.trim(), to: to.trim() };
+}
+
+export function joinRange(from: string, to: string): string {
+  return `${from.trim()};${to.trim()}`;
+}
+
+/** Условие дописано: у него есть значение, а у «от … до» — хотя бы одна граница. */
+export function conditionHasValue(c: Pick<RuleCondition, "op" | "value">): boolean {
+  if (VALUELESS_OPS.has(c.op)) return true;
+  if (c.op === "between") {
+    const { from, to } = parseRange(c.value);
+    return !!(from || to);
+  }
+  return c.value.length > 0;
+}
+
+/** Число из поля правила: пробелы и запятая как в «1 000,50». Пусто — NaN. */
+function ruleNumber(raw: string): number {
+  const s = raw.replace(/\s|\u00a0/g, "").replace(",", ".");
+  return s ? Number(s) : Number.NaN;
+}
 
 export interface RuleCondition {
   /** Ключ для списка в интерфейсе; на смысл правила не влияет. */
@@ -511,6 +545,15 @@ export function conditionMatches(
   // лексикографическое «999 больше 1000».
   if (NUMERIC_FIELDS.has(c.field)) {
     const left = conditionNumber(t, c.field);
+    if (c.op === "between") {
+      const { from, to } = parseRange(String(c.value));
+      if (left === null || (!from && !to)) return false;
+      const lo = from ? ruleNumber(from) : -Infinity;
+      const hi = to ? ruleNumber(to) : Infinity;
+      // Опечатка в границе — недописанное условие, а не «без границы».
+      if (Number.isNaN(lo) || Number.isNaN(hi)) return false;
+      return left >= lo - 0.005 && left <= hi + 0.005;
+    }
     const raw = String(c.value).replace(/\s|\u00a0/g, "").replace(",", ".");
     // Пустое значение — недописанное условие, а не «больше нуля»: иначе
     // полуготовое правило поймало бы все операции подряд.
@@ -950,6 +993,10 @@ export function describeRule(rule: CategoryRuleV2): string {
     const op = c.op === "regex" ? "по выражению" : CONDITION_OP_LABELS[c.op];
     // Число в кавычках выглядит как текст: «Сумма больше «1000»». Кавычки
     // нужны там, где значение — строка и его край надо видеть.
+    if (c.op === "between") {
+      const { from, to } = parseRange(c.value);
+      return [f, from && `от ${from}`, to && `до ${to}`].filter(Boolean).join(" ");
+    }
     if (NUMERIC_FIELDS.has(c.field)) return `${f} ${op} ${c.value}`;
     return `${f} ${op} «${c.value}»`;
   };

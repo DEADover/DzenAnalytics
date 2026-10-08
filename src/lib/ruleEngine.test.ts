@@ -21,6 +21,7 @@ import {
   type RuleAction,
   type RuleCondition,
   opsForField,
+  conditionHasValue,
   type ConditionOp,
 } from "./ruleEngine";
 import type { CategoryRule } from "../store/useCategoryRulesStore";
@@ -812,8 +813,37 @@ describe("условие по сумме", () => {
     expect(conditionMatches(tx(), cond("gt", ""))).toBe(false);
   });
 
+  it("«от … до»: границы включительно", () => {
+    const range = cond("between", "500;1 500");
+    expect(conditionMatches(tx({ amountBase: 499.99 }), range)).toBe(false);
+    expect(conditionMatches(tx({ amountBase: 500 }), range)).toBe(true);
+    expect(conditionMatches(tx({ amountBase: -1500, kind: "income" }), range)).toBe(true);
+    expect(conditionMatches(tx({ amountBase: 1500.01 }), range)).toBe(false);
+  });
+
+  it("«от … до» с одной границей — открытый диапазон", () => {
+    expect(conditionMatches(tx({ amountBase: 10_000 }), cond("between", "500;"))).toBe(true);
+    expect(conditionMatches(tx({ amountBase: 100 }), cond("between", "500;"))).toBe(false);
+    expect(conditionMatches(tx({ amountBase: 100 }), cond("between", ";500"))).toBe(true);
+  });
+
+  it("«от … до» без границ или с опечаткой — недописано, не совпадает", () => {
+    expect(conditionMatches(tx(), cond("between", ";"))).toBe(false);
+    expect(conditionMatches(tx(), cond("between", ""))).toBe(false);
+    expect(conditionMatches(tx({ amountBase: 700 }), cond("between", "500;много"))).toBe(false);
+    expect(conditionHasValue(cond("between", ";"))).toBe(false);
+    expect(conditionHasValue(cond("between", ";500"))).toBe(true);
+  });
+
+  it("«от … до» в описании правила", () => {
+    const r = (value: string) => describeRule(rule({ conditions: [cond("between", value)] }));
+    expect(r("500;1500")).toMatch(/^Сумма от 500 до 1500 →/);
+    expect(r("500;")).toMatch(/^Сумма от 500 →/);
+    expect(r(";1500")).toMatch(/^Сумма до 1500 →/);
+  });
+
   it("у суммы свой список операций — текстовых там нет", () => {
-    expect(opsForField("amount")).toEqual(["equals", "gt", "gte", "lt", "lte"]);
+    expect(opsForField("amount")).toEqual(["equals", "between", "gt", "gte", "lt", "lte"]);
     expect(opsForField("payee")).toContain("contains");
     expect(opsForField("payee")).not.toContain("gt");
   });
