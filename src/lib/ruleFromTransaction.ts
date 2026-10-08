@@ -1,13 +1,13 @@
 import type { Transaction } from "../types";
-import type { RuleAction, RuleConditionGroup } from "./ruleEngine";
+import type { RuleAction, RuleCondition, RuleConditionGroup } from "./ruleEngine";
 import { displayPayee } from "./format";
 import { NO_CATEGORY, isServiceCategory } from "./zenmoneyMap";
 
 /**
  * «Создать правило» из окна операции: черновик правила по её образцу.
  *
- * Условие — то, по чему такие операции узнаются: получатель «равно», а у
- * операций без получателя — комментарий «содержит». Действие — категория этой
+ * Условия — то, по чему такие операции узнаются: получатель «равно» и, если
+ * у операции есть комментарий, ещё комментарий «содержит» (через «И»). Действие — категория этой
  * операции: чаще всего правило заводят именно затем, чтобы похожие операции сами
  * получали ту же категорию. Человек дальше правит черновик в обычном редакторе.
  */
@@ -21,15 +21,18 @@ export function ruleDraftFromTransaction(
 ): RulePrefill {
   const payee = displayPayee(t).trim();
   const comment = (t.comment ?? "").trim();
-  const condition = payee
-    ? { field: "payee" as const, op: "equals" as const, value: payee, caseInsensitive: true }
-    : { field: "comment" as const, op: "contains" as const, value: comment, caseInsensitive: true };
+  const conditions: RuleCondition[] = [];
+  if (payee) conditions.push({ field: "payee", op: "equals", value: payee, caseInsensitive: true });
+  // Комментарий — второе условие через «И»: у одного получателя бывают
+  // разные покупки, и правило берёт только такие же. Без получателя он
+  // остаётся единственной зацепкой.
+  if (comment || !payee) conditions.push({ field: "comment", op: "contains", value: comment, caseInsensitive: true });
   const category = (t.categoryFull ?? "").trim();
   // «Перевод», «Долг» и «Без категории» — не категории, записать их правило не
   // сможет; тогда действие остаётся пустым, категорию выберет человек.
   const usable = category && category !== NO_CATEGORY && !isServiceCategory(category) ? category : "";
   return {
-    groups: [{ join: "and", conditions: [condition] }],
+    groups: [{ join: "and", conditions }],
     actions: [{ kind: "setCategory", value: usable }],
   };
 }
