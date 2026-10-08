@@ -1,7 +1,7 @@
 /**
  * «Создать правило» в окне операции: «Правила» открываются с черновиком по
- * образцу операции — получатель, комментарий, счёт, тип и сумма через «И» и
- * её категория.
+ * образцу операции — тип, счёт, категория, получатель, комментарий и сумма через «И»;
+ * действие «Категория» — пустое, если категорию в карточке не меняли.
  */
 import { test, expect, connectZen } from "./harness";
 
@@ -33,7 +33,7 @@ test("правило из операции: редактор открыт и з�
   ]);
   // Счёт, тип и сумма — тоже условиями.
   await expect(editor.locator('input[value="9000"]').first()).toBeVisible();
-  await expect(editor.getByText("Сбер").first()).toBeVisible();
+  await expect(editor.getByRole("textbox", { name: "Поиск счёта" })).toHaveValue("Сбер");
   await expect(editor.getByText("Расход").first()).toBeVisible();
   await expect(editor.getByText("Еда вне дома").first()).toBeVisible();
 
@@ -42,7 +42,7 @@ test("правило из операции: редактор открыт и з�
   await page.getByRole("option", { name: "от … до" }).click();
   await expect(editor.getByLabel("Сумма от")).toHaveValue("9000");
   await editor.getByLabel("Сумма до").fill("10 000");
-  await expect(editor.getByText(/Сумма от 9000 до 10 000/).first()).toBeVisible();
+  await expect(editor.getByLabel("Сумма до")).toHaveValue("10 000");
   await expect(editor.getByText(/Подойд[её]т 1 операция/)).toBeVisible();
 
   // Закрыли — обычное «Новое правило» уже пустое, черновик не прилипает.

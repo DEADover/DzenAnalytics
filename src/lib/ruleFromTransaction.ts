@@ -50,7 +50,12 @@ export function ruleDraftFromTransaction(t: RuleSource): RulePrefill {
   const category = (t.categoryFull ?? "").trim();
   // «Перевод», «Долг» и «Без категории» — не категории, записать их правило не
   // сможет; тогда действие остаётся пустым, категорию выберет человек.
-  const usable = category && category !== NO_CATEGORY && !isServiceCategory(category) ? category : "";
+  // Та же категория, что уже стоит у операции, — не действие: правило ничего
+  // бы не меняло. Тогда поле пустое, и человек выберет, куда переложить.
+  const usable =
+    category && category !== NO_CATEGORY && !isServiceCategory(category) && category !== current
+      ? category
+      : "";
   return {
     groups: [{ join: "and", conditions }],
     actions: [{ kind: "setCategory", value: usable }],

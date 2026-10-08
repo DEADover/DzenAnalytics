@@ -78,6 +78,11 @@ describe("ruleDraftFromTransaction", () => {
     }
   });
 
+  it("категорию не меняли — действие пустое: та же категория ничего бы не изменила", () => {
+    const d = ruleDraftFromTransaction(src({ payee: "Кофейня", currentCategory: "Еда / Кафе", categoryFull: "Еда / Кафе" }));
+    expect(d.actions).toEqual([{ kind: "setCategory", value: "" }]);
+  });
+
   it("«Без категории», «Перевод», «Долг» — действие пустое, категорию выберет человек", () => {
     for (const categoryFull of ["Без категории", "Перевод", "Долг", ""]) {
       const d = ruleDraftFromTransaction(src({ payee: "Кто-то", categoryFull }));
