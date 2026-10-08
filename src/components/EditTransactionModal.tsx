@@ -1550,6 +1550,11 @@ export function EditTransactionModal({
             // footer (same bottom edge for all types); min-h is the floor for
             // manual (drag) shrinking / the rare no-spare-space case.
             className="input text-sm w-full resize-y min-h-[3.75rem] flex-1"
+            boxClassName="flex-1 min-h-0"
+            suggestContext={{
+              payee,
+              category: subcategory ? `${category} / ${subcategory}` : category,
+            }}
           />
         </Field>
       </ModalBody>
