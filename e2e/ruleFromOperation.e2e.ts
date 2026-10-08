@@ -1,6 +1,7 @@
 /**
  * «Создать правило» в окне операции: «Правила» открываются с черновиком по
- * образцу операции — получатель «равно», комментарий «содержит» и её категория.
+ * образцу операции — получатель, комментарий, счёт, тип и сумма через «И» и
+ * её категория.
  */
 import { test, expect, connectZen } from "./harness";
 
@@ -21,6 +22,10 @@ test("правило из операции: редактор открыт и з�
   await expect(editor.locator('input[value="Ресторан"]').first()).toBeVisible();
   // Комментарий операции — вторым условием через «И».
   await expect(editor.locator('input[value="День рождения"]').first()).toBeVisible();
+  // Счёт, тип и сумма — тоже условиями.
+  await expect(editor.locator('input[value="9000"]').first()).toBeVisible();
+  await expect(editor.getByText("Сбер").first()).toBeVisible();
+  await expect(editor.getByText("Расход").first()).toBeVisible();
   await expect(editor.getByText("Еда вне дома").first()).toBeVisible();
 
   // Закрыли — обычное «Новое правило» уже пустое, черновик не прилипает.

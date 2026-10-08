@@ -1,13 +1,15 @@
 import type { Transaction } from "../types";
-import type { RuleAction, RuleCondition, RuleConditionGroup } from "./ruleEngine";
+import type { RuleAction, RuleCondition, RuleConditionGroup, RuleKindValue } from "./ruleEngine";
 import { displayPayee } from "./format";
 import { NO_CATEGORY, isServiceCategory } from "./zenmoneyMap";
 
 /**
  * «Создать правило» из окна операции: черновик правила по её образцу.
  *
- * Условия — то, по чему такие операции узнаются: получатель «равно» и, если
- * у операции есть комментарий, ещё комментарий «содержит» (через «И»). Действие — категория этой
+ * Условия — всё, по чему такие операции узнаются, через «И»: получатель
+ * «равно», комментарий «содержит», счёт, тип операции и сумма «равно». Пустые
+ * поля условий не дают. Лишнее человек удалит одной кнопкой, а дописывать
+ * недостающее руками дольше. Действие — категория этой
  * операции: чаще всего правило заводят именно затем, чтобы похожие операции сами
  * получали ту же категорию. Человек дальше правит черновик в обычном редакторе.
  */
@@ -16,17 +18,24 @@ export interface RulePrefill {
   actions: RuleAction[];
 }
 
-export function ruleDraftFromTransaction(
-  t: Pick<Transaction, "payee" | "brand" | "comment" | "categoryFull">
-): RulePrefill {
+export interface RuleSource extends Pick<Transaction, "payee" | "brand" | "comment" | "categoryFull" | "account"> {
+  /** Тип в терминах правил: долг отдельно от перевода (`ruleKindOf`). */
+  kind: RuleKindValue;
+  /** Сумма в валюте отчётов без знака — так её сравнивает условие. */
+  amountBase: number | null;
+}
+
+export function ruleDraftFromTransaction(t: RuleSource): RulePrefill {
   const payee = displayPayee(t).trim();
   const comment = (t.comment ?? "").trim();
+  const account = (t.account ?? "").trim();
+  const amount = t.amountBase != null && Number.isFinite(t.amountBase) ? Math.round(Math.abs(t.amountBase) * 100) / 100 : null;
   const conditions: RuleCondition[] = [];
   if (payee) conditions.push({ field: "payee", op: "equals", value: payee, caseInsensitive: true });
-  // Комментарий — второе условие через «И»: у одного получателя бывают
-  // разные покупки, и правило берёт только такие же. Без получателя он
-  // остаётся единственной зацепкой.
-  if (comment || !payee) conditions.push({ field: "comment", op: "contains", value: comment, caseInsensitive: true });
+  if (comment) conditions.push({ field: "comment", op: "contains", value: comment, caseInsensitive: true });
+  if (account) conditions.push({ field: "account", op: "equals", value: account, caseInsensitive: true });
+  conditions.push({ field: "kind", op: "equals", value: t.kind, caseInsensitive: true });
+  if (amount) conditions.push({ field: "amount", op: "equals", value: String(amount), caseInsensitive: false });
   const category = (t.categoryFull ?? "").trim();
   // «Перевод», «Долг» и «Без категории» — не категории, записать их правило не
   // сможет; тогда действие остаётся пустым, категорию выберет человек.

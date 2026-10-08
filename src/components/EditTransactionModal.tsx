@@ -538,6 +538,15 @@ export function EditTransactionModal({
   const [payee, setPayee] = useState(tx.brand?.trim() || tx.payee || "");
   const [comment, setComment] = useState(tx.comment);
   const navigate = useSmoothNavigate();
+  /** Сумма для условия правила — в валюте отчётов, как её сравнивает движок.
+   *  В валюте отчётов берём из поля; в чужой — сохранённую сумму операции,
+   *  если её не трогали; иначе пересчитать нечем, и условия по сумме не будет. */
+  function ruleAmountBase(): number | null {
+    const typed = parseAmountInput(amount);
+    if (!Number.isFinite(typed) || typed === 0) return null;
+    if (currency === rates.base) return typed;
+    return currency === tx.currency && typed === tx.amount ? tx.amountBase : null;
+  }
   /** «Создать правило»: черновик по тому, что сейчас в полях, — и в «Правила». */
   function createRule() {
     setPendingRulePrefill(
@@ -546,6 +555,9 @@ export function EditTransactionModal({
         brand: "",
         comment,
         categoryFull: subcategory ? `${category} / ${subcategory}` : category,
+        account,
+        kind: isDebt ? "debt" : kind,
+        amountBase: ruleAmountBase(),
       })
     );
     onClose();
