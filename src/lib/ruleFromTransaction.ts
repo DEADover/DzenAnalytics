@@ -7,7 +7,8 @@ import { NO_CATEGORY, isServiceCategory } from "./zenmoneyMap";
  * «Создать правило» из окна операции: черновик правила по её образцу.
  *
  * Условия — всё, по чему такие операции узнаются, через «И»: тип операции,
- * счёт, получатель «равно», комментарий «содержит» и сумма «равно». Пустые
+ * счёт, текущая категория (у операции без неё — «не заполнено»), получатель
+ * «равно», комментарий «содержит» и сумма «равно». Пустые
  * поля условий не дают. Лишнее человек удалит одной кнопкой, а дописывать
  * недостающее руками дольше. Действие — категория этой
  * операции: чаще всего правило заводят именно затем, чтобы похожие операции сами
@@ -23,6 +24,9 @@ export interface RuleSource extends Pick<Transaction, "payee" | "brand" | "comme
   kind: RuleKindValue;
   /** Сумма в валюте отчётов без знака — так её сравнивает условие. */
   amountBase: number | null;
+  /** Категория, с которой операция сохранена, — для условия «Текущая
+   *  категория». `categoryFull` — то, что выбрано в карточке, — идёт в действие. */
+  currentCategory: string;
 }
 
 export function ruleDraftFromTransaction(t: RuleSource): RulePrefill {
@@ -34,6 +38,12 @@ export function ruleDraftFromTransaction(t: RuleSource): RulePrefill {
   const conditions: RuleCondition[] = [];
   conditions.push({ field: "kind", op: "equals", value: t.kind, caseInsensitive: true });
   if (account) conditions.push({ field: "account", op: "equals", value: account, caseInsensitive: true });
+  // «Перевод» и «Долг» уже сказаны типом операции — повторять их категорией незачем.
+  const current = (t.currentCategory ?? "").trim();
+  if (!current || current === NO_CATEGORY)
+    conditions.push({ field: "category", op: "empty", value: "", caseInsensitive: true });
+  else if (!isServiceCategory(current))
+    conditions.push({ field: "category", op: "equals", value: current, caseInsensitive: true });
   if (payee) conditions.push({ field: "payee", op: "equals", value: payee, caseInsensitive: true });
   if (comment) conditions.push({ field: "comment", op: "contains", value: comment, caseInsensitive: true });
   if (amount) conditions.push({ field: "amount", op: "equals", value: String(amount), caseInsensitive: false });

@@ -22,6 +22,15 @@ test("правило из операции: редактор открыт и з�
   await expect(editor.locator('input[value="Ресторан"]').first()).toBeVisible();
   // Комментарий операции — вторым условием через «И».
   await expect(editor.locator('input[value="День рождения"]').first()).toBeVisible();
+  // Условия — в том же порядке, что и список полей.
+  await expect(editor.locator('[aria-label="Поле условия"]')).toHaveText([
+    /Тип операции/,
+    /Счёт/,
+    /Текущая категория/,
+    /Получатель/,
+    /Комментарий/,
+    /Сумма/,
+  ]);
   // Счёт, тип и сумма — тоже условиями.
   await expect(editor.locator('input[value="9000"]').first()).toBeVisible();
   await expect(editor.getByText("Сбер").first()).toBeVisible();

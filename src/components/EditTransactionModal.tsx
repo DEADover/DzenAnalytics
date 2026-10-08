@@ -558,6 +558,8 @@ export function EditTransactionModal({
         account,
         kind: isDebt ? "debt" : kind,
         amountBase: ruleAmountBase(),
+        // Сравнивается с тем, что сохранено: правило видит операции до правок.
+        currentCategory: tx.categoryFullOriginal || tx.categoryFull || "",
       })
     );
     onClose();
