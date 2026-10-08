@@ -5,9 +5,6 @@
  */
 import { test, expect, connectZen } from "./harness";
 
-// Календарь месяца закрывается при прокрутке — нужно окно, где он помещается целиком.
-test.use({ viewport: { width: 1440, height: 900 } });
-
 test("правка события: календарь месяца и стрелки не закрывают окно", async ({ page }) => {
   await connectZen(page, "/whatif");
   await page.getByRole("button", { name: "Добавить", exact: true }).click();
@@ -27,7 +24,13 @@ test("правка события: календарь месяца и стрел
   // Подпись месяца открывает календарь, окно остаётся.
   await dialog.getByRole("button", { name: /Декабрь 26 г\./ }).click();
   await expect(page.locator("#whatif-event-amount")).toBeVisible();
-  await page.getByRole("button", { name: "Ноя", exact: true }).click();
+  // Прокрутка не закрывает календарь — он едет вслед за кнопкой.
+  const nov = page.getByRole("button", { name: "Ноя", exact: true });
+  await expect(nov).toBeVisible();
+  await page.mouse.wheel(0, 40);
+  await page.waitForTimeout(150);
+  await expect(nov).toBeVisible();
+  await nov.click();
   await expect(dialog.getByRole("button", { name: /Ноябрь 26 г\./ })).toBeVisible();
 
   await dialog.getByRole("button", { name: "Сохранить" }).click();

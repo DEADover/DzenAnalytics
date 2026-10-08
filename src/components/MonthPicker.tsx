@@ -106,14 +106,13 @@ export function MonthPicker({
   const years: number[] = [];
   for (let y = maxY; y >= minY; y--) years.push(y);
 
-  useLayoutEffect(() => {
+  /** Поставить список под кнопкой (или над ней, если снизу тесно). `false` —
+   *  кнопка уехала за край окна, держать список открытым незачем. */
+  const place = (): boolean => {
     const el = btnRef.current;
-    // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
-    // следующем открытии `useLayoutEffect` пересчитает координаты ДО того,
-    // как браузер нарисует кадр, — старое значение показать некому. Лишний
-    // сброс стоил перерисовки на каждом закрытии.
-    if (!open || !el) return;
+    if (!el) return false;
     const r = el.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) return false;
     const estH = 240;
     const below = window.innerHeight - r.bottom - 8;
     const flipUp = below < estH && r.top - 8 > below;
@@ -129,21 +128,37 @@ export function MonthPicker({
         ? { left, bottom: window.innerHeight - r.top + 4 }
         : { left, top: r.bottom + 4 }
     );
+    return true;
+  };
+
+  // Сбрасывать `pos` при закрытии не нужно: список живёт только при `open`, а
+  // при следующем открытии координаты пересчитаются ДО того, как браузер
+  // нарисует кадр, — старое значение показать некому.
+  useLayoutEffect(() => {
+    if (open) place();
   }, [open]);
 
+  // Прокрутка и смена размера окна не закрывают список, а двигают его вслед
+  // за кнопкой: внутри окна события или страницы, прокрученной на пару
+  // пикселей, он иначе исчезал прямо из-под мыши (issue #118). Закрываем,
+  // только когда сама кнопка ушла за край.
   useEffect(() => {
     if (!open) return;
-    const onScroll = (e: Event) => {
+    let frame = 0;
+    const follow = (e: Event) => {
       const t = e.target;
       if (menuRef.current && t instanceof Node && menuRef.current.contains(t)) return;
-      setOpen(false);
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!place()) setOpen(false);
+      });
     };
-    const onResize = () => setOpen(false);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
     return () => {
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onResize);
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
     };
   }, [open]);
 
