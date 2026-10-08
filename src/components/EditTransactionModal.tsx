@@ -1629,7 +1629,7 @@ export function EditTransactionModal({
                 </button>
               </Tooltip>
             )}
-            <Tooltip content="Создать правило — чтобы все такие же операции ложились так же">
+            <Tooltip content="Создать правило для похожих операций">
               <button
                 onClick={createRule}
                 disabled={saving}
