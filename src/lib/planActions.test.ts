@@ -398,3 +398,61 @@ describe("новый план («Сделать регулярной»)", () => 
     expect(p.doneIds).toEqual(["new"]);
   });
 });
+
+describe("смена расписания цепочки", () => {
+  const opts = {
+    liveTxIds: new Set<string>(),
+    readyDraftIds: new Set<string>(),
+    pendingDraftIds: new Set<string>(),
+    instrumentOf: inst,
+  };
+  const markers = [
+    marker({ id: "past", date: "2026-09-06", state: "processed" }),
+    marker({ id: "m1", date: "2026-10-06" }),
+    marker({ id: "m2", date: "2026-11-06" }),
+    marker({ id: "other", reminder: "r2", date: "2026-11-06" }),
+  ];
+  const fresh = (id: string, date: string) => marker({ id, date, changed: 0 });
+  const action: PlanAction = {
+    ...base,
+    kind: "edit",
+    scope: "chain",
+    markerId: "m2",
+    patch: { amount: 800 },
+    schedule: {
+      rule: { interval: "month", step: 1, points: [0], startDate: "2026-10-20", endDate: null },
+      markers: [fresh("n1", "2026-10-20"), fresh("n2", "2026-11-20")],
+    },
+  };
+
+  it("незакрытые даты плана уходят все (и раньше той, с которой правили), закрытые и чужие — остаются", () => {
+    const o = applyPlanActions(markers, [reminder(), reminder({ id: "r2" })], [action], inst);
+    expect(o.markers.map((m) => m.id).sort()).toEqual(["n1", "n2", "other", "past"]);
+    expect([...o.dropped].sort()).toEqual(["m1", "m2"]);
+    // Правка сумм ложится и на новые даты, правило получает расписание.
+    expect(o.markers.find((m) => m.id === "n1")?.outcome).toBe(800);
+    expect(o.reminders.find((r) => r.id === "r1")).toMatchObject({ startDate: "2026-10-20", outcome: 800 });
+  });
+
+  it("отправка: правило, новые даты и удаление старых — одним запросом", () => {
+    const p = buildPlanPush([action], markers, [reminder(), reminder({ id: "r2" })], opts, 777);
+    expect(p.reminders).toEqual([expect.objectContaining({ id: "r1", startDate: "2026-10-20", changed: 777 })]);
+    expect(p.markers.map((m) => m.id).sort()).toEqual(["n1", "n2"]);
+    expect(p.markers.every((m) => m.changed === 777)).toBe(true);
+    expect(p.deletions).toEqual([
+      { id: "m1", object: "reminderMarker", user: 1, stamp: 777 },
+      { id: "m2", object: "reminderMarker", user: 1, stamp: 777 },
+    ]);
+    expect(p.doneIds).toEqual(["m2"]);
+  });
+
+  it("смена только интервала — тоже правка правила", () => {
+    const weekly: PlanAction = {
+      ...action,
+      patch: {},
+      schedule: { rule: { interval: "day", step: 14, points: [0], startDate: "2026-01-06", endDate: null }, markers: [] },
+    };
+    const p = buildPlanPush([weekly], markers, [reminder()], opts, 777);
+    expect(p.reminders).toEqual([expect.objectContaining({ interval: "day", step: 14 })]);
+  });
+});

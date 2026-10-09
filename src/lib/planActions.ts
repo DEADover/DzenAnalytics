@@ -23,7 +23,20 @@
  * показывала задуманное) и собрать из очереди то, что уедет в облако.
  */
 
-import type { ZenReminder, ZenReminderMarker } from "./zenmoney";
+import type { ZenDeletion, ZenReminder, ZenReminderMarker } from "./zenmoney";
+import type { ReminderRule } from "./planSchedule";
+
+/**
+ * Новое расписание цепочки. При смене расписания сервер Дзен-мани сам стирает
+ * ВСЕ незакрытые даты плана и новых не строит (проверено 08.10.2026), поэтому
+ * даты собираем здесь же — один раз, при постановке в очередь, с готовыми id:
+ * повторная отправка не плодит дублей. Закрытые фактом даты не трогаются.
+ */
+export interface PlanReschedule {
+  rule: ReminderRule;
+  /** Новые даты с сегодняшнего дня — ноги взяты у правила до правки. */
+  markers: ZenReminderMarker[];
+}
 
 /** Правка полей даты плана — уже в терминах Дзен-мани (id счетов и тегов). */
 export interface PlanPatch {
@@ -57,7 +70,7 @@ export type PlanAction =
   /** Существующая операция `txId` закрывает дату. */
   | (Base & { kind: "link"; txId: string })
   /** Правка одной даты или всей цепочки (с этой даты и дальше). */
-  | (Base & { kind: "edit"; scope: "date" | "chain"; patch: PlanPatch })
+  | (Base & { kind: "edit"; scope: "date" | "chain"; patch: PlanPatch; schedule?: PlanReschedule })
   /**
    * Новый план — «Сделать регулярной» (`lib/planCreate`). Ключ — id правила;
    * правило и даты собраны заранее, с готовыми id: повторная отправка не
@@ -174,6 +187,8 @@ export interface PlanOverlay {
   reminders: ZenReminder[];
   /** id дат, закрытых фактом (для них лента показывает «связано»). */
   processed: Set<string>;
+  /** id дат, которые уходят при смене расписания (их заменяют новые). */
+  dropped: Set<string>;
 }
 
 /**
@@ -200,6 +215,7 @@ export function applyPlanActions(
   const nextMarkers = new Map(markers.map((m) => [m.id, m]));
   const nextReminders = new Map(reminders.map((r) => [r.id, r]));
   const processed = new Set<string>();
+  const dropped = new Set<string>();
 
   for (const a of actions) {
     if (a.kind === "create") continue;
@@ -215,7 +231,22 @@ export function applyPlanActions(
     if (a.scope === "chain" && rem && !oneOff) {
       const { date: _skip, ...legs } = a.patch;
       void _skip;
-      nextReminders.set(rem.id, patchLegs(nextReminders.get(rem.id) ?? rem, kind, legs, instrumentOf));
+      const patchedRem = patchLegs(nextReminders.get(rem.id) ?? rem, kind, legs, instrumentOf);
+      if (a.schedule) {
+        // Новое расписание: все незакрытые даты плана уходят (так поступит и
+        // сервер), на их место — даты, собранные при постановке в очередь.
+        nextReminders.set(rem.id, { ...patchedRem, ...a.schedule.rule });
+        for (const other of markers) {
+          if (other.reminder !== rem.id || other.state !== "planned") continue;
+          nextMarkers.delete(other.id);
+          dropped.add(other.id);
+        }
+        for (const fresh of a.schedule.markers) {
+          nextMarkers.set(fresh.id, patchLegs(fresh, kind, legs, instrumentOf));
+        }
+        continue;
+      }
+      nextReminders.set(rem.id, patchedRem);
       for (const other of markers) {
         if (other.reminder !== rem.id || other.state !== "planned" || other.date < m.date) continue;
         const cur = nextMarkers.get(other.id) ?? other;
@@ -242,6 +273,7 @@ export function applyPlanActions(
     markers: [...nextMarkers.values()].filter((m) => !processed.has(m.id)),
     reminders: [...nextReminders.values()],
     processed,
+    dropped,
   };
 }
 
@@ -259,6 +291,9 @@ const LEG_KEYS = [
   "comment",
   "startDate",
   "endDate",
+  "interval",
+  "step",
+  "points",
 ] as const;
 
 function differs(a: object, b: object): boolean {
@@ -270,6 +305,8 @@ function differs(a: object, b: object): boolean {
 export interface PlanPush {
   markers: ZenReminderMarker[];
   reminders: ZenReminder[];
+  /** Даты, снятые сменой расписания, — уходят тем же запросом, что и новые. */
+  deletions: ZenDeletion[];
   /** Операции, которым надо поставить ссылку на дату плана. */
   links: { txId: string; markerId: string }[];
   /** Действия, которые можно снять с очереди после отправки. */
@@ -362,7 +399,13 @@ export function buildPlanPush(
   }
   for (const m of overlay.markers) {
     const orig = byId.get(m.id);
-    if (freshMarkerIds.has(m.id) || (orig && differs(orig, m))) outMarkers.push({ ...m, changed: stampSeconds });
+    // Даты нового расписания в кэше ещё нет — они уходят целиком.
+    if (!orig || freshMarkerIds.has(m.id) || differs(orig, m)) outMarkers.push({ ...m, changed: stampSeconds });
+  }
+  const deletions: ZenDeletion[] = [];
+  for (const id of overlay.dropped) {
+    const m = byId.get(id);
+    if (m) deletions.push({ id, object: "reminderMarker", user: m.user, stamp: stampSeconds });
   }
   const remById = new Map(reminders.map((r) => [r.id, r]));
   const outReminders: ZenReminder[] = [];
@@ -370,7 +413,7 @@ export function buildPlanPush(
     const orig = remById.get(r.id);
     if (base.fresh.has(r.id) || (orig && differs(orig, r))) outReminders.push({ ...r, changed: stampSeconds });
   }
-  return { markers: outMarkers, reminders: outReminders, links, doneIds };
+  return { markers: outMarkers, reminders: outReminders, deletions, links, doneIds };
 }
 
 /**

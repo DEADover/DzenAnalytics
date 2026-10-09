@@ -1,33 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, Check, Repeat, X } from "lucide-react";
 import type { Transaction } from "../../types";
 import type { ZenTransaction } from "../../lib/zenmoney";
 import { loadZenCache } from "../../lib/zenmoneyCache";
 import { evalAmount, round2 } from "../../lib/splitTransaction";
 import { currencySymbol, displayPayee, formatDate, formatMoney } from "../../lib/format";
-import {
-  buildNewPlan,
-  firstOccurrence,
-  intervalLabel,
-  occurrenceDates,
-  addInterval,
-  PLAN_HORIZON_MONTHS,
-  type PlanInterval,
-} from "../../lib/planCreate";
+import { buildNewPlan } from "../../lib/planCreate";
+import { firstAfter, localToday, planHorizon, scheduleDates, weekdayOf, type PlanSchedule } from "../../lib/planSchedule";
 import { usePlanActionsStore } from "../../store/usePlanActionsStore";
-import { DateField } from "../DateField";
 import { ExprAmountInput } from "../ExprAmountInput";
 import { InfoPopover } from "../InfoPopover";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "../Modal";
-import { Segmented } from "../Segmented";
-
-const pad2 = (n: number) => String(n).padStart(2, "0");
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-type EndMode = "never" | "until";
+import { PlanScheduleFields } from "./PlanScheduleFields";
 
 /**
  * «Сделать регулярной»: завести в Дзен-мани план по образцу операции —
@@ -50,24 +34,24 @@ export function MakeRecurringModal({ tx, onClose }: { tx: Transaction; onClose: 
     };
   }, [tx.id]);
 
-  const [interval, setIntervalKind] = useState<PlanInterval>("month");
-  const [step, setStep] = useState("1");
-  const stepN = Math.min(99, Math.max(1, Math.floor(Number(step)) || 1));
   // Первая дата идёт за периодичностью, пока её не поменяли руками.
+  const [rule, setRule] = useState<Omit<PlanSchedule, "startDate">>(() => ({
+    unit: "month",
+    every: 1,
+    weekdays: [weekdayOf(tx.date)],
+    endDate: null,
+  }));
   const [startOverride, setStartOverride] = useState<string | null>(null);
-  const startDate = startOverride ?? firstOccurrence(tx.date, interval, stepN, today);
-  const [endMode, setEndMode] = useState<EndMode>("never");
-  const [endDate, setEndDate] = useState(() => addInterval(today, "year", 1));
+  const schedule: PlanSchedule = {
+    ...rule,
+    startDate: startOverride ?? firstAfter(tx.date, { ...rule, startDate: tx.date }, today),
+  };
   const [amount, setAmount] = useState(String(Math.abs(tx.amount)));
   const [comment, setComment] = useState(tx.comment ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const horizon = addInterval(today, "month", PLAN_HORIZON_MONTHS);
-  const preview = useMemo(
-    () => occurrenceDates(startDate, interval, stepN, endMode === "until" ? endDate : null, horizon),
-    [startDate, interval, stepN, endMode, endDate, horizon]
-  );
+  const preview = scheduleDates(schedule, schedule.startDate, planHorizon(today));
 
   const title = displayPayee(tx) || tx.comment || tx.categoryFull || "План";
   const transfer = tx.kind === "transfer";
@@ -92,10 +76,7 @@ export function MakeRecurringModal({ tx, onClose }: { tx: Transaction; onClose: 
       {
         tx: raw,
         amount: round2(value),
-        interval,
-        step: stepN,
-        startDate,
-        endDate: endMode === "until" ? endDate : null,
+        schedule,
         comment: comment.trim() || null,
       },
       { uuid: () => crypto.randomUUID(), today, stamp: Math.floor(Date.now() / 1000) }
@@ -103,7 +84,7 @@ export function MakeRecurringModal({ tx, onClose }: { tx: Transaction; onClose: 
     await usePlanActionsStore.getState().put({
       kind: "create",
       markerId: plan.reminder.id,
-      date: startDate,
+      date: preview[0] ?? schedule.startDate,
       title,
       reminder: plan.reminder,
       markers: plan.markers,
@@ -152,35 +133,15 @@ export function MakeRecurringModal({ tx, onClose }: { tx: Transaction; onClose: 
           </div>
         </div>
 
-        <div>
-          <span className="label block mb-1">Повторять</span>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted shrink-0">Каждые</span>
-            <input
-              type="number"
-              min={1}
-              max={99}
-              value={step}
-              onChange={(e) => setStep(e.target.value)}
-              aria-label="Через сколько периодов"
-              className="input w-16 !py-1.5 text-sm tabular-nums text-center"
-            />
-            <div className="flex-1 min-w-0">
-              <Segmented<PlanInterval>
-                value={interval}
-                onChange={setIntervalKind}
-                label="Период"
-                size="sm"
-                block
-                options={[
-                  { value: "week", label: "Неделя" },
-                  { value: "month", label: "Месяц" },
-                  { value: "year", label: "Год" },
-                ]}
-              />
-            </div>
-          </div>
-        </div>
+        <PlanScheduleFields
+          value={schedule}
+          onChange={(next) => {
+            const { startDate: nextStart, ...nextRule } = next;
+            setRule(nextRule);
+            if (nextStart !== schedule.startDate) setStartOverride(nextStart);
+          }}
+          preview={preview}
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block">
@@ -192,44 +153,7 @@ export function MakeRecurringModal({ tx, onClose }: { tx: Transaction; onClose: 
               className="input w-full text-sm tabular-nums"
             />
           </label>
-          <div>
-            <span className="label block mb-1">Первая дата</span>
-            <DateField
-              value={startDate}
-              onChange={(e) => e.target.value && setStartOverride(e.target.value)}
-              typeable
-              className="input text-sm w-full"
-            />
-          </div>
-          <div>
-            <span className="label block mb-1">Окончание</span>
-            <Segmented<EndMode>
-              value={endMode}
-              onChange={setEndMode}
-              label="Окончание"
-              size="sm"
-              block
-              options={[
-                { value: "never", label: "Без конца" },
-                { value: "until", label: "До даты" },
-              ]}
-            />
-          </div>
-          <div>
-            <span className="label block mb-1">Последняя дата</span>
-            {endMode === "until" ? (
-              // Ряд с переключателем высотой 34 — поле той же высоты.
-              <DateField
-                value={endDate}
-                onChange={(e) => e.target.value && setEndDate(e.target.value)}
-                typeable
-                className="input !py-1.5 text-sm w-full"
-              />
-            ) : (
-              <div className="input !py-1.5 w-full text-sm text-muted flex items-center">Не задана</div>
-            )}
-          </div>
-          <label className="block sm:col-span-2">
+          <label className="block">
             <span className="label block mb-1">Комментарий</span>
             <input
               value={comment}
@@ -239,18 +163,6 @@ export function MakeRecurringModal({ tx, onClose }: { tx: Transaction; onClose: 
             />
           </label>
         </div>
-
-        <p className="text-xs text-muted">
-          {intervalLabel(interval, stepN)}
-          {preview.length > 0 ? (
-            <>
-              {" "}· ближайшие: {preview.slice(0, 3).map((d) => formatDate(d, "short")).join(", ")}
-              {preview.length > 3 && ` и ещё ${preview.length - 3}`}
-            </>
-          ) : (
-            " · ни одной даты"
-          )}
-        </p>
       </ModalBody>
 
       <ModalFooter justify="between" className="flex-wrap">

@@ -1538,6 +1538,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         plannedDel.length === 0 &&
         planPush.markers.length === 0 &&
         planPush.reminders.length === 0 &&
+        planPush.deletions.length === 0 &&
         linkTxs.length === 0 &&
         budgetPush.budgets.length === 0
       ) {
@@ -1593,6 +1594,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           ...cpMerge.deletions,
           ...tagDel.deletions,
           ...plannedDel,
+          ...planPush.deletions,
         ],
         [
           ...resurrections.map((r) => r.tx),
@@ -1640,6 +1642,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           ...cpMerge.deletions,
           ...tagDel.deletions,
           ...plannedDel,
+          ...planPush.deletions,
         ],
       });
       await saveZenCache(nextCache);

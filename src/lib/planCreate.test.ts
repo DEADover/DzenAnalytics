@@ -1,52 +1,14 @@
 import { describe, it, expect } from "vitest";
-import {
-  addInterval,
-  buildNewPlan,
-  firstOccurrence,
-  intervalLabel,
-  occurrenceDates,
-} from "./planCreate";
+import { buildNewPlan } from "./planCreate";
+import type { PlanSchedule } from "./planSchedule";
 import type { ZenTransaction } from "./zenmoney";
 
-describe("addInterval", () => {
-  it("месяц держит день, а в коротком месяце берёт последнее число", () => {
-    expect(addInterval("2026-01-31", "month", 1)).toBe("2026-02-28");
-    expect(addInterval("2026-01-31", "month", 2)).toBe("2026-03-31");
-    expect(addInterval("2026-11-15", "month", 3)).toBe("2027-02-15");
-  });
-  it("неделя и год", () => {
-    expect(addInterval("2026-10-15", "week", 2)).toBe("2026-10-29");
-    expect(addInterval("2024-02-29", "year", 1)).toBe("2025-02-28");
-  });
-});
-
-describe("occurrenceDates", () => {
-  it("до горизонта или до конца — что раньше", () => {
-    expect(occurrenceDates("2026-10-20", "month", 1, null, "2027-01-15")).toEqual([
-      "2026-10-20",
-      "2026-11-20",
-      "2026-12-20",
-    ]);
-    expect(occurrenceDates("2026-10-20", "month", 1, "2026-11-30", "2027-10-15")).toEqual([
-      "2026-10-20",
-      "2026-11-20",
-    ]);
-  });
-  it("шаг больше одного", () => {
-    expect(occurrenceDates("2026-10-01", "week", 2, null, "2026-11-01")).toEqual([
-      "2026-10-01",
-      "2026-10-15",
-      "2026-10-29",
-    ]);
-  });
-});
-
-describe("firstOccurrence", () => {
-  it("следующий повтор после операции, но не в прошлом", () => {
-    expect(firstOccurrence("2026-10-05", "month", 1, "2026-10-15")).toBe("2026-11-05");
-    expect(firstOccurrence("2026-06-05", "month", 1, "2026-10-15")).toBe("2026-11-05");
-    expect(firstOccurrence("2026-10-14", "week", 1, "2026-10-15")).toBe("2026-10-21");
-  });
+const monthly = (startDate: string, endDate: string | null = null): PlanSchedule => ({
+  unit: "month",
+  every: 1,
+  weekdays: [],
+  startDate,
+  endDate,
 });
 
 const tx = (o: Partial<ZenTransaction>): ZenTransaction =>
@@ -74,7 +36,7 @@ describe("buildNewPlan", () => {
   it("расход: правило как у Дзен-мани и даты на год", () => {
     n = 0;
     const plan = buildNewPlan(
-      { tx: tx({}), amount: 599, interval: "month", step: 1, startDate: "2026-11-05", endDate: null, comment: "Подписка" },
+      { tx: tx({}), amount: 599, schedule: monthly("2026-11-05"), comment: "Подписка" },
       { uuid, today: "2026-10-15", stamp: 100 }
     );
     expect(plan.reminder).toMatchObject({
@@ -100,7 +62,7 @@ describe("buildNewPlan", () => {
 
   it("доход и перевод между валютами", () => {
     const income = buildNewPlan(
-      { tx: tx({ income: 150_000, outcome: 0 }), amount: 160_000, interval: "month", step: 1, startDate: "2026-11-05", endDate: "2026-12-31", comment: null },
+      { tx: tx({ income: 150_000, outcome: 0 }), amount: 160_000, schedule: monthly("2026-11-05", "2026-12-31"), comment: null },
       { uuid, today: "2026-10-15", stamp: 1 }
     );
     expect(income.reminder).toMatchObject({ income: 160_000, outcome: 0 });
@@ -110,10 +72,7 @@ describe("buildNewPlan", () => {
       {
         tx: tx({ outcome: 9_000, income: 100, outcomeAccount: "rub", incomeAccount: "usd", incomeInstrument: 1 }),
         amount: 18_000,
-        interval: "month",
-        step: 1,
-        startDate: "2026-11-05",
-        endDate: null,
+        schedule: monthly("2026-11-05"),
         comment: null,
       },
       { uuid, today: "2026-10-15", stamp: 1 }
@@ -122,11 +81,16 @@ describe("buildNewPlan", () => {
   });
 });
 
-describe("intervalLabel", () => {
-  it("по-русски с числом", () => {
-    expect(intervalLabel("month", 1)).toBe("Каждый месяц");
-    expect(intervalLabel("week", 2)).toBe("Каждые 2 недели");
-    expect(intervalLabel("month", 5)).toBe("Каждые 5 месяцев");
-    expect(intervalLabel("year", 1)).toBe("Каждый год");
-  });
+it("неделя пишется как в самом приложении: «каждые 7 дней» с днями недели", () => {
+  const plan = buildNewPlan(
+    {
+      tx: tx({}),
+      amount: 100,
+      schedule: { unit: "week", every: 1, weekdays: [0, 3], startDate: "2026-11-09", endDate: "2026-11-22" },
+      comment: null,
+    },
+    { uuid: () => "x" + Math.random(), today: "2026-10-15", stamp: 1 }
+  );
+  expect(plan.reminder).toMatchObject({ interval: "day", step: 7, points: [0, 3], startDate: "2026-11-09" });
+  expect(plan.markers.map((m) => m.date)).toEqual(["2026-11-09", "2026-11-12", "2026-11-16", "2026-11-19"]);
 });

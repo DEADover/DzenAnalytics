@@ -1,11 +1,21 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Pencil, X } from "lucide-react";
 import { buildDraftTransaction, newDraftId } from "../../lib/zenmoneyPush";
 import { loadZenCache } from "../../lib/zenmoneyCache";
 import { evalAmount, round2 } from "../../lib/splitTransaction";
 import { extractHashtags } from "../../lib/aggregations";
 import { currencySymbol } from "../../lib/format";
-import type { PlanPatch } from "../../lib/planActions";
+import type { PlanPatch, PlanReschedule } from "../../lib/planActions";
+import {
+  localToday,
+  planHorizon,
+  sameSchedule,
+  scheduleDates,
+  scheduleFromReminder,
+  scheduleToReminder,
+  type PlanSchedule,
+} from "../../lib/planSchedule";
+import type { ZenReminder, ZenReminderMarker } from "../../lib/zenmoney";
 import type { PlannedOp } from "../../lib/plannedOps";
 import { useCategoryNodes } from "../../hooks/useCategoryNodes";
 import { useLiveAccounts } from "../../hooks/useLiveAccounts";
@@ -20,6 +30,7 @@ import { HashtagTextarea } from "../HashtagTextarea";
 import { InfoPopover } from "../InfoPopover";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "../Modal";
 import { Segmented } from "../Segmented";
+import { PlanScheduleFields } from "./PlanScheduleFields";
 
 type Scope = "date" | "chain";
 
@@ -27,9 +38,11 @@ type Scope = "date" | "chain";
  * «Изменить» у запланированной операции: только эту дату или всю цепочку.
  *
  * Цепочка — это правило плана и все его даты с этой и дальше; прошедшие не
- * трогаем. День у цепочки не меняется: даты плана строит само приложение
- * Дзен-мани по правилу, и переставить их все значит пересоздать серию — на
- * этом и рождались дубли при переносе (issue #99). Перенести одну дату можно.
+ * трогаем. У цепочки можно поменять и расписание — периодичность, дни, начало
+ * и конец. Тогда все незакрытые даты плана пересобираются с сегодняшнего дня:
+ * при смене правила сервер Дзен-мани сам стирает их и новых не строит
+ * (проверено 08.10.2026), поэтому новые даты уходят тем же запросом
+ * (`lib/planActions`). Закрытые фактом даты остаются как были.
  *
  * Названия счёта, категории и контрагента превращаются в id Дзен-мани тем же
  * сборщиком, что и новая операция (`buildDraftTransaction`), — у плана те же
@@ -69,6 +82,31 @@ export function PlanEditModal({
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
   const [scope, setScope] = useState<Scope>("date");
+  const today = localToday();
+  // Расписание — из правила плана в кэше Дзен-мани. Пока не прочитано (или
+  // план разовый) — блока расписания нет.
+  const [rule, setRule] = useState<ZenReminder | null>(null);
+  /** Дата этого плана из кэша — образец ног для новых дат. */
+  const [template, setTemplate] = useState<ZenReminderMarker | null>(null);
+  const [schedule, setSchedule] = useState<PlanSchedule | null>(null);
+  const [scheduleOrig, setScheduleOrig] = useState<PlanSchedule | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void loadZenCache().then((c) => {
+      const r = c?.reminders?.find((x) => x.id === plan.reminder) ?? null;
+      const sc = r ? scheduleFromReminder(r) : null;
+      if (!alive) return;
+      setRule(r);
+      setTemplate(c?.reminderMarkers?.find((m) => m.id === plan.id) ?? null);
+      setSchedule(sc);
+      setScheduleOrig(sc);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [plan.reminder]);
+  const scheduleChanged = scope === "chain" && !!schedule && !!scheduleOrig && !sameSchedule(schedule, scheduleOrig);
+  const schedulePreview = schedule ? scheduleDates(schedule, today, planHorizon(today)) : [];
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,7 +129,8 @@ export function PlanEditModal({
     return [...s].sort((a, b) => a.localeCompare(b, "ru"));
   }, [allTransactions]);
 
-  const changed = (Object.keys(form) as (keyof typeof form)[]).some((k) => form[k] !== original[k]);
+  const changed =
+    (Object.keys(form) as (keyof typeof form)[]).some((k) => form[k] !== original[k]) || scheduleChanged;
 
   async function save() {
     setError(null);
@@ -149,12 +188,37 @@ export function PlanEditModal({
     if (form.comment !== original.comment) patch.comment = form.comment.trim() || null;
     if (scope === "date" && form.date !== original.date) patch.date = form.date;
 
+    // Новое расписание: даты собираем сейчас, с готовыми id — повторная
+    // отправка не плодит дублей. Ноги — у правила до правки; правка полей
+    // ляжет на них при отправке, как и на остальные даты.
+    let reschedule: PlanReschedule | undefined;
+    if (scheduleChanged && schedule && rule && template) {
+      if (schedulePreview.length === 0) {
+        setError("По такому расписанию не получается ни одной даты");
+        return;
+      }
+      const stamp = Math.floor(Date.now() / 1000);
+      const markers = schedulePreview.map(
+        (date): ZenReminderMarker => ({
+          ...template,
+          id: crypto.randomUUID(),
+          changed: stamp,
+          date,
+          reminder: rule.id,
+          state: "planned",
+          isForecast: false,
+        })
+      );
+      reschedule = { rule: scheduleToReminder(schedule), markers };
+    }
+
     setSaving(true);
     await usePlanActionsStore.getState().put({
       kind: "edit",
       scope,
       markerId: plan.id,
       patch,
+      ...(reschedule ? { schedule: reschedule } : {}),
       date: plan.date,
       title,
     });
@@ -172,9 +236,10 @@ export function PlanEditModal({
           </p>
           <p>
             <strong>Вся цепочка</strong> — меняется сам план и все его даты с
-            этой и дальше; прошедшие не трогаются. День повторения здесь не
-            меняется — периодичность и дату начала правьте в приложении
-            Дзен-мани.
+            этой и дальше; прошедшие не трогаются. Здесь же меняется
+            расписание: периодичность, дни недели, первая и последняя даты.
+            Тогда все незакрытые даты плана строятся заново с сегодняшнего дня,
+            а закрытые фактом остаются как были.
           </p>
         </InfoPopover>
       </ModalHeader>
@@ -193,6 +258,17 @@ export function PlanEditModal({
             ]}
           />
         )}
+        {scope === "chain" && schedule && (
+          <>
+            <PlanScheduleFields value={schedule} onChange={setSchedule} preview={schedulePreview} />
+            {scheduleChanged && (
+              <p className="text-xs text-muted">
+                Незакрытые даты плана, включая просроченные, заменятся новыми с сегодняшнего дня. Закрытые
+                фактом останутся.
+              </p>
+            )}
+          </>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block">
             <span className="label block mb-1">Сумма, {currencySymbol(plan.currency)}</span>
@@ -203,24 +279,17 @@ export function PlanEditModal({
               className="input w-full text-sm tabular-nums"
             />
           </label>
-          <div>
-            <span className="label block mb-1">Дата</span>
-            {scope === "chain" ? (
-              <div
-                className="input w-full text-sm text-muted flex items-center"
-                title="У цепочки день не меняется — только у одной даты"
-              >
-                Как в плане
-              </div>
-            ) : (
+          {scope === "date" && (
+            <div>
+              <span className="label block mb-1">Дата</span>
               <DateField
                 value={form.date}
                 onChange={(e) => e.target.value && set("date", e.target.value)}
                 typeable
                 className="input text-sm w-full"
               />
-            )}
-          </div>
+            </div>
+          )}
           {transfer && plan.toCurrency && plan.toCurrency !== plan.currency && (
             <label className="block sm:col-span-2">
               <span className="label block mb-1">Зачисление, {currencySymbol(plan.toCurrency)}</span>

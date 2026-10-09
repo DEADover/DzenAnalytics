@@ -30,7 +30,7 @@ import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 import { usePlanActionsStore } from "../store/usePlanActionsStore";
 import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
-import { intervalLabel, type PlanInterval } from "../lib/planCreate";
+import { reminderLabel } from "../lib/planSchedule";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import {
   getCategoryTagsFromCache,
@@ -490,7 +490,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
             title: a.title,
             note:
               a.kind === "create"
-                ? `${intervalLabel(a.reminder.interval as PlanInterval, a.reminder.step ?? 1)} с ${formatDate(a.date, "short")} · Новый план`
+                ? `${reminderLabel(a.reminder)} с ${formatDate(a.date, "short")} · Новый план`
                 : a.kind === "link"
                 ? `План от ${formatDate(a.date, "short")} · Связь с операцией`
                 : a.scope === "chain"
