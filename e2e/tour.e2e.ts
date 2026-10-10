@@ -13,11 +13,11 @@ test("знакомство: само при первых данных, шаги 
     localStorage.setItem("dzenanalytics:tour", JSON.stringify({ done: [], welcomed: false }));
   });
   await connectZen(page, "/");
-  const tour = page.getByRole("dialog", { name: /Обучение: Знакомство с панелью/ });
-  await expect(tour.getByText("Добро пожаловать в DzenAnalytics")).toBeVisible({ timeout: 10_000 });
+  const tour = page.getByRole("dialog", { name: /Обучение: Знакомство с сервисом/ });
+  await expect(tour.getByRole("heading", { name: "Добро пожаловать в DzenAnalytics" })).toBeVisible({ timeout: 10_000 });
 
   await page.keyboard.press("ArrowRight");
-  await expect(tour.getByText("Основные разделы")).toBeVisible();
+  await expect(tour.getByRole("heading", { name: "Основные разделы" })).toBeVisible();
   // Окно подсветки встало на меню разделов.
   const nav = await page.locator('[data-tour="nav"]').boundingBox();
   const spot = await page.locator(".tour-spot").boundingBox();
@@ -26,7 +26,7 @@ test("знакомство: само при первых данных, шаги 
 
   // ← назад, Esc — закончить; второй раз само не запускается.
   await page.keyboard.press("ArrowLeft");
-  await expect(tour.getByText("Добро пожаловать в DzenAnalytics")).toBeVisible();
+  await expect(tour.getByRole("heading", { name: "Добро пожаловать в DzenAnalytics" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(tour).toHaveCount(0);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("dzenanalytics:tour") ?? "{}"));
@@ -39,8 +39,8 @@ test("знакомство: само при первых данных, шаги 
 test("знакомство из справки сразу уводит на главную", async ({ page }) => {
   await connectZen(page, "/help");
   await page.getByRole("button", { name: "Обучение" }).click();
-  await page.getByRole("dialog").filter({ hasText: "Центр обучения" }).getByRole("button", { name: /Знакомство с панелью/ }).click();
-  await expect(page.getByText("Добро пожаловать в DzenAnalytics")).toBeVisible();
+  await page.getByRole("dialog").filter({ hasText: "Центр обучения" }).getByRole("button", { name: /Знакомство с сервисом/ }).click();
+  await expect(page.getByRole("heading", { name: "Добро пожаловать в DzenAnalytics" })).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
 });
 
@@ -54,14 +54,14 @@ test("центр обучения: глава «Главная, операции
   const tour = page.getByRole("dialog", { name: /Обучение: Главная, операции и фильтр/ });
   await expect(tour.getByRole("heading", { name: "Главная" })).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
-  // Сначала главная, потом лента: глава идёт только вперёд.
+  // Сначала главная, потом «Операции» сверху вниз: фильтр, лента, её части.
   for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowRight");
-  await expect(tour.getByRole("heading", { name: "Лента операций" })).toBeVisible();
-  await expect(page).toHaveURL(/\/transactions/);
-  for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowRight");
   await expect(tour.getByRole("heading", { name: "Общий фильтр" })).toBeVisible();
-  // Сразу за фильтром — где его спрятать: строка «Панель фильтров» в оформлении.
+  await expect(page).toHaveURL(/\/transactions/);
   await page.keyboard.press("ArrowRight");
+  await expect(tour.getByRole("heading", { name: "Лента операций" })).toBeVisible();
+  // Последний шаг — где фильтр спрятать: строка «Панель фильтров» в оформлении.
+  for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowRight");
   await expect(tour.getByRole("heading", { name: "Фильтр можно спрятать" })).toBeVisible();
   await expect(page).toHaveURL(/tab=interface/);
   await expect(page.locator('[data-tour="filters-mode"]')).toBeVisible();
@@ -80,7 +80,7 @@ test("шаг «Карточка операции» открывает карто
     type S = { useTourStore: { getState: () => { start: (id: string) => void; next: () => void } } };
     const m = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useTourStore");
     m.useTourStore.getState().start("daily");
-    for (let i = 0; i < 6; i++) m.useTourStore.getState().next();
+    for (let i = 0; i < 7; i++) m.useTourStore.getState().next();
   });
   const tour = page.getByRole("dialog", { name: /Обучение/ });
   await expect(tour.getByRole("heading", { name: "Карточка операции" })).toBeVisible();
@@ -100,7 +100,7 @@ test("без данных: «Пройти обучение на демо-дан�
   await expect(page.getByRole("heading", { name: "С чего начнём?" })).toBeVisible();
   await page.getByRole("button", { name: "Пройти обучение на демо-данных" }).click();
   await expect(page.getByText("Это демо-данные выдуманной семьи.")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Добро пожаловать в DzenAnalytics")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Добро пожаловать в DzenAnalytics" })).toBeVisible({ timeout: 10_000 });
 });
 
 test("без данных: глава из центра обучения идёт на демо", async ({ page }) => {

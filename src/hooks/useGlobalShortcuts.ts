@@ -41,7 +41,9 @@ export function useGlobalShortcuts(onOpenPalette: () => void) {
         target.tagName === "SELECT" ||
         target.isContentEditable;
 
-      const isCtrlK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k";
+      // По физической клавише: в русской раскладке `e.key` — «л», а палитра
+      // должна открываться при любой.
+      const isCtrlK = (e.ctrlKey || e.metaKey) && (e.code === "KeyK" || e.key.toLowerCase() === "k");
       if (isCtrlK) {
         e.preventDefault();
         onOpenPalette();
@@ -50,7 +52,9 @@ export function useGlobalShortcuts(onOpenPalette: () => void) {
 
       if (isInput) return;
 
-      if (e.key === "/") {
+      // «/» — и клавишей «/» латинской раскладки, где бы она ни стояла в
+      // русской (там это «.»).
+      if (e.key === "/" || (e.code === "Slash" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey)) {
         e.preventDefault();
         onOpenPalette();
         return;

@@ -2034,3 +2034,16 @@ h2,
   }
 }
 
+
+/* Двойник карточки обучения для замера высоты — не виден и не анимируется. */
+.tour-measure {
+  visibility: hidden;
+  pointer-events: none;
+  animation: none;
+  transition: none;
+}
+
+/* Пока идёт обучение — запас прокрутки под страницей (см. TourOverlay). */
+.tour-on body {
+  padding-bottom: 100vh;
+}

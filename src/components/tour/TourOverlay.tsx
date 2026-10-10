@@ -4,7 +4,14 @@ import { useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, ArrowRight, Check, GraduationCap, X } from "lucide-react";
 import logoDa from "../../assets/logo-da.png";
-import { TOUR_MORE_EVENT, TOUR_OP_EVENT, tourChapter, type TourOpen, type TourStep } from "../../lib/tour";
+import {
+  TOUR_MORE_EVENT,
+  TOUR_OP_EVENT,
+  tourChapter,
+  type TourChapter,
+  type TourOpen,
+  type TourStep,
+} from "../../lib/tour";
 import { useHeaderNavStore } from "../../store/useHeaderNavStore";
 import { useTourStore } from "../../store/useTourStore";
 
@@ -125,8 +132,16 @@ const same = (a: Box | null, b: Box | null) =>
   Math.abs(a.width - b.width) < 0.5 &&
   Math.abs(a.height - b.height) < 0.5;
 
+interface CardPlace {
+  left: number;
+  top: number;
+  width: number;
+  /** Карточка легла поверх подсвеченного блока — места вокруг не нашлось. */
+  over?: boolean;
+}
+
 /** Где встать карточке: под элементом, над ним, сбоку или — если он во весь экран — поверх его низа. */
-function cardPosition(spot: Box | null, cardH: number): { left: number; top: number; width: number } {
+function cardPosition(spot: Box | null, cardH: number): CardPlace {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const width = Math.min(CARD_W, vw - EDGE * 2);
@@ -141,7 +156,7 @@ function cardPosition(spot: Box | null, cardH: number): { left: number; top: num
     return { width, left: spot.left + spot.width + GAP, top: sideTop };
   if (spot.left - GAP - width >= EDGE) return { width, left: spot.left - GAP - width, top: sideTop };
   // Блок во всю ширину — поверх его низа.
-  return { width, left, top: Math.max(EDGE, vh - cardH - EDGE * 2) };
+  return { width, left, top: Math.max(EDGE, vh - cardH - EDGE * 2), over: true };
 }
 
 /**
@@ -177,6 +192,15 @@ export function TourOverlay() {
   const [shownKey, setShownKey] = useState<string | null>(null);
   const [cardH, setCardH] = useState(240);
   const cardRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+
+  // Запас прокрутки под страницей, пока идёт глава: блок в самом низу
+  // страницы тоже можно поднять под шапку, чтобы карточка встала под ним.
+  useEffect(() => {
+    if (!chapterId) return;
+    document.documentElement.classList.add("tour-on");
+    return () => document.documentElement.classList.remove("tour-on");
+  }, [chapterId]);
 
   // Нужный раздел. Параметры адреса сравниваем по вхождению: у настроек они
   // выбирают вкладку, а лишние (например, `?demo`) не мешают.
@@ -228,11 +252,25 @@ export function TourOverlay() {
       phaseAt = performance.now();
       const r0 = next.getBoundingClientRect();
       const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--app-header-h")) || 72;
+      const vh = window.innerHeight;
       const behavior = reduceMotion() ? "auto" : "smooth";
-      // Виден целиком — не трогаем прокрутку: лишнее движение только мешает.
-      const visible = r0.top >= header + EDGE / 2 && r0.bottom <= window.innerHeight - EDGE / 2;
-      if (visible) return;
-      if (r0.height > window.innerHeight * TALL) {
+      // Высота карточки этого шага — по невидимому двойнику: видимая ещё
+      // показывает прошлый шаг.
+      const cardH = measureRef.current?.offsetHeight ?? 240;
+      const visible = r0.top >= header + EDGE / 2 && r0.bottom <= vh - EDGE / 2;
+      // Виден целиком и карточке есть место рядом — не трогаем прокрутку:
+      // лишнее движение только мешает.
+      if (visible && !cardPosition(spotBox(r0), cardH).over) return;
+      // Блок и карточка помещаются друг под другом — блок поднимаем под шапку,
+      // и карточка встаёт под ним, а не поверх. Решаем по месту после
+      // прокрутки: по центру экрана карточке часто не хватает места ни сверху,
+      // ни снизу, хотя до прокрутки хватало.
+      const fitsStacked = r0.height + PAD * 2 + GAP + cardH + EDGE <= vh - header - EDGE;
+      if (fitsStacked) {
+        window.scrollTo({ top: window.scrollY + r0.top - header - EDGE - PAD, behavior });
+      } else if (visible) {
+        return;
+      } else if (r0.height > vh * TALL) {
         // Высокий блок — к его началу, под закреплённую шапку.
         window.scrollTo({ top: window.scrollY + r0.top - header - EDGE, behavior });
       } else {
@@ -315,12 +353,10 @@ export function TourOverlay() {
 
   if (!chapter || !step) return null;
 
-  const total = chapter.steps.length;
   // На карточке — шаг, к которому подсветка уже перелетела (см. `shownKey`).
   const shownIdx =
     shownKey && shownKey.startsWith(`${chapter.id}-`) ? Number(shownKey.slice(chapter.id.length + 1)) : stepIdx;
   const view = chapter.steps[shownIdx] ?? step;
-  const last = shownIdx === total - 1;
   const special = view.kind === "welcome" || view.kind === "finish";
   // Особые шаги — всегда по центру и без окна.
   const shownSpot = special ? null : spot;
@@ -348,83 +384,118 @@ export function TourOverlay() {
         className={clsx("tour-card", !animate && "tour-still")}
         style={{ left: pos.left, top: pos.top, width: pos.width }}
       >
-        <div key={`${chapter.id}-${shownIdx}`} className="tour-step-in">
-          {view.kind === "welcome" && <WelcomeArt />}
-          {view.kind === "finish" && <FinishArt />}
-          <div className={clsx("flex items-center gap-2 text-xs text-muted", special && "justify-center")}>
-            <GraduationCap className="w-3.5 h-3.5 text-accent" aria-hidden />
-            <span>{chapter.title}</span>
-            {!special && (
-              <span className="tabular-nums">
-                · {shownIdx + 1} из {total}
-              </span>
-            )}
-          </div>
-          <h2 className={clsx("mt-1.5 text-lg font-semibold tracking-tight text-balance", special && "text-center text-xl")}>
-            {view.title}
-          </h2>
-          <div className={clsx("mt-2 space-y-2 text-sm text-muted leading-relaxed", special && "text-center")}>
-            {view.body.map((p, i) => (
-              <p key={i}>{rich(p)}</p>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-4 flex gap-1" aria-hidden>
-          {chapter.steps.map((_, i) => (
-            <span key={i} className={clsx("tour-dot", i <= shownIdx && "tour-dot-on")} />
-          ))}
-        </div>
-
-        <div className="mt-4 flex items-center gap-2">
-          {!last ? (
-            <button type="button" className="text-xs text-muted hover:text-text mr-auto" onClick={() => stop()}>
-              Пропустить
-            </button>
-          ) : (
-            <span className="mr-auto" />
-          )}
-          {shownIdx > 0 && !last && (
-            <button type="button" className="btn-ghost text-sm" onClick={back} aria-label="Назад">
-              <ArrowLeft className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {last ? (
-            <>
-              <button
-                type="button"
-                className="btn-ghost text-sm"
-                onClick={() => {
-                  stop(true);
-                  openHub();
-                }}
-              >
-                Другие темы
-              </button>
-              <button type="button" className="btn-primary text-sm" onClick={() => stop(true)}>
-                <Check className="w-3.5 h-3.5" />
-                Готово
-              </button>
-            </>
-          ) : (
-            <button type="button" className="btn-primary text-sm" onClick={next} autoFocus>
-              {view.kind === "welcome" ? "Начать" : "Далее"}
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        <button
-          type="button"
-          className="absolute top-3 right-3 p-1 rounded-md text-muted hover:text-text hover:bg-panel2"
-          onClick={() => stop()}
-          aria-label="Закончить обучение"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <TourCard chapter={chapter} idx={shownIdx} onNext={next} onBack={back} onStop={stop} onHub={openHub} />
+      </div>
+      {/* Невидимый двойник карточки нового шага — чтобы заранее знать её высоту. */}
+      <div
+        ref={measureRef}
+        className="tour-card tour-measure"
+        style={{ left: -10000, top: 0, width: pos.width }}
+        aria-hidden
+        inert
+      >
+        <TourCard chapter={chapter} idx={stepIdx} measure />
       </div>
     </div>,
     document.body
+  );
+}
+
+interface TourCardProps {
+  chapter: TourChapter;
+  idx: number;
+  /** Невидимый двойник для замера: без фокуса и обработчиков. */
+  measure?: boolean;
+  onNext?: () => void;
+  onBack?: () => void;
+  onStop?: (completed?: boolean) => void;
+  onHub?: () => void;
+}
+
+/** Содержимое карточки шага: заголовок, текст, прогресс и кнопки. */
+function TourCard({ chapter, idx, measure, onNext, onBack, onStop, onHub }: TourCardProps) {
+  const view = chapter.steps[idx];
+  const total = chapter.steps.length;
+  const last = idx === total - 1;
+  const special = view.kind === "welcome" || view.kind === "finish";
+  const stop = (completed?: boolean) => onStop?.(completed);
+  return (
+    <>
+      <div key={`${chapter.id}-${idx}`} className="tour-step-in">
+        {view.kind === "welcome" && <WelcomeArt />}
+        {view.kind === "finish" && <FinishArt />}
+        <div className={clsx("flex items-center gap-2 text-xs text-muted", special && "justify-center")}>
+          <GraduationCap className="w-3.5 h-3.5 text-accent" aria-hidden />
+          <span>{chapter.title}</span>
+          {!special && (
+            <span className="tabular-nums">
+              · {idx + 1} из {total}
+            </span>
+          )}
+        </div>
+        <h2 className={clsx("mt-1.5 text-lg font-semibold tracking-tight text-balance", special && "text-center text-xl")}>
+          {view.title}
+        </h2>
+        <div className={clsx("mt-2 space-y-2 text-sm text-muted leading-relaxed", special && "text-center")}>
+          {view.body.map((p, i) => (
+            <p key={i}>{rich(p)}</p>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 flex gap-1" aria-hidden>
+        {chapter.steps.map((_, i) => (
+          <span key={i} className={clsx("tour-dot", i <= idx && "tour-dot-on")} />
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-center gap-2">
+        {!last ? (
+          <button type="button" className="text-xs text-muted hover:text-text mr-auto" onClick={() => stop()}>
+            Пропустить
+          </button>
+        ) : (
+          <span className="mr-auto" />
+        )}
+        {idx > 0 && !last && (
+          <button type="button" className="btn-ghost text-sm" onClick={onBack} aria-label="Назад">
+            <ArrowLeft className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {last ? (
+          <>
+            <button
+              type="button"
+              className="btn-ghost text-sm"
+              onClick={() => {
+                stop(true);
+                onHub?.();
+              }}
+            >
+              Другие темы
+            </button>
+            <button type="button" className="btn-primary text-sm" onClick={() => stop(true)}>
+              <Check className="w-3.5 h-3.5" />
+              Готово
+            </button>
+          </>
+        ) : (
+          <button type="button" className="btn-primary text-sm" onClick={onNext} autoFocus={!measure}>
+            {view.kind === "welcome" ? "Начать" : "Далее"}
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      <button
+        type="button"
+        className="absolute top-3 right-3 p-1 rounded-md text-muted hover:text-text hover:bg-panel2"
+        onClick={() => stop()}
+        aria-label="Закончить обучение"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </>
   );
 }
 
