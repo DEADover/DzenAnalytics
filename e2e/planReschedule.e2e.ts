@@ -12,14 +12,21 @@ test("расписание цепочки: правило, новые даты �
   await setPushMode(page, "manual");
 
   await page.getByRole("button", { name: /^Запланировано/ }).click();
+  // Лента переключилась на одни планы — дальше она уже не перестраивается.
+  await expect(page.getByRole("button", { name: /^Запланировано/ })).toHaveAttribute("aria-expanded", "true");
   // Любая дата «Фитнес-клуба»: новое расписание пересобирает всю цепочку.
-  await page
-    .getByText("Фитнес-клуб", { exact: true })
-    .first()
-    .locator("xpath=ancestor::*[.//button[@aria-label='Действия с запланированной операцией']][1]")
-    .getByRole("button", { name: "Действия с запланированной операцией" })
-    .click();
-  await page.getByRole("button", { name: "Изменить", exact: true }).click();
+  // Под нагрузкой меню строки может закрыться, пока лента дорисовывается, —
+  // тогда открываем его заново.
+  await expect(async () => {
+    await page
+      .getByText("Фитнес-клуб", { exact: true })
+      .first()
+      .locator("xpath=ancestor::*[.//button[@aria-label='Действия с запланированной операцией']][1]")
+      .getByRole("button", { name: "Действия с запланированной операцией" })
+      .click();
+    await page.getByRole("button", { name: "Изменить", exact: true }).click({ timeout: 2000 });
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 20_000 });
 
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "Вся цепочка", exact: true }).click();
