@@ -1150,8 +1150,8 @@ h2,
   background: rgb(8 12 24 / 0.55);
   -webkit-backdrop-filter: blur(3px) saturate(0.8);
   backdrop-filter: blur(3px) saturate(0.8);
-  transition: clip-path 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-  animation: tour-fade 0.35s ease-out both;
+  transition: clip-path var(--tour-move) var(--tour-ease);
+  animation: tour-fade 0.3s ease-out both;
 }
 @keyframes tour-fade {
   from { opacity: 0; }
@@ -1159,9 +1159,18 @@ h2,
 .tour-spot {
   position: fixed;
   border-radius: 16px;
-  transition: left 0.55s cubic-bezier(0.22, 1, 0.36, 1), top 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    width 0.55s cubic-bezier(0.22, 1, 0.36, 1), height 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: left var(--tour-move) var(--tour-ease), top var(--tour-move) var(--tour-ease),
+    width var(--tour-move) var(--tour-ease), height var(--tour-move) var(--tour-ease);
   pointer-events: none;
+}
+/* Окно, затемнение и карточка: один перелёт к новой цели, дальше — без
+   переходов (см. фазы в TourOverlay). */
+:root {
+  --tour-move: 0.42s;
+  --tour-ease: cubic-bezier(0.25, 1, 0.5, 1);
+}
+.tour-still {
+  transition: none !important;
 }
 /* Рамка вокруг окна: пульсирует, пока шаг на экране. */
 .tour-spot::after {
@@ -1191,8 +1200,8 @@ h2,
   -webkit-backdrop-filter: blur(24px) saturate(1.6);
   backdrop-filter: blur(24px) saturate(1.6);
   box-shadow: 0 30px 80px -20px rgb(8 12 24 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.04) inset;
-  transition: left 0.55s cubic-bezier(0.22, 1, 0.36, 1), top 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-  animation: tour-card-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: left var(--tour-move) var(--tour-ease), top var(--tour-move) var(--tour-ease);
+  animation: tour-card-in 0.4s var(--tour-ease) both;
 }
 @keyframes tour-card-in {
   from { opacity: 0; transform: translateY(12px) scale(0.97); }

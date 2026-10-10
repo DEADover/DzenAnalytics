@@ -13,6 +13,8 @@ const PAD = 8;
 const GAP = 16;
 const EDGE = 16;
 const CARD_W = 380;
+/** Перелёт подсветки к новой цели — как `--tour-move` в index.css. */
+const MOVE_MS = 420;
 
 interface Box {
   left: number;
@@ -165,6 +167,14 @@ export function TourOverlay() {
   const navigate = useNavigate();
 
   const [spot, setSpot] = useState<Box | null>(null);
+  /** Переход окна и карточки включён — только на время перелёта к новой цели. */
+  const [animate, setAnimate] = useState(true);
+  /**
+   * Какой шаг сейчас на карточке. Меняется в момент перелёта к новой цели,
+   * а не сразу: иначе текст сменялся бы на старом месте, а карточка уезжала
+   * бы следом — два движения вместо одного.
+   */
+  const [shownKey, setShownKey] = useState<string | null>(null);
   const [cardH, setCardH] = useState(240);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -190,52 +200,91 @@ export function TourOverlay() {
     };
   }, [open]);
 
-  // Цель шага: ищем, прокручиваем к ней один раз и дальше следим за её
-  // местом каждый кадр — страница могла догрузиться, сдвинуться, прокрутиться.
+  // Цель шага. Чтобы подсветка не «догоняла» элемент, пока тот едет
+  // (плавная прокрутка, появление раздела), движение идёт в три фазы:
+  //   1. «settle» — ищем цель, при нужде прокручиваем к ней и ждём, пока её
+  //      место перестанет меняться; подсветка стоит на прежнем месте;
+  //   2. «move» — один плавный переход к итоговому месту;
+  //   3. «follow» — дальше мелкие сдвиги (подгрузка, размер окна) подсветка
+  //      повторяет сразу, без анимации.
+  // Раньше она шла за элементом каждый кадр с переходом, и каждый кадр
+  // переход начинался заново — отсюда рывки и запаздывающая обводка.
   useEffect(() => {
-    if (!step) return;
+    if (!step || !chapterId) return;
+    const key = `${chapterId}-${stepIdx}`;
     let raf = 0;
     let el: HTMLElement | null = null;
     let rank = 0;
-    let scrolled = false;
+    let phase: "settle" | "move" | "follow" = "settle";
+    let last: Box | null = null;
+    let stillFrames = 0;
+    let phaseAt = performance.now();
     const started = performance.now();
+    const begin = (next: HTMLElement) => {
+      el = next;
+      phase = "settle";
+      last = null;
+      stillFrames = 0;
+      phaseAt = performance.now();
+      const r0 = next.getBoundingClientRect();
+      const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--app-header-h")) || 72;
+      const behavior = reduceMotion() ? "auto" : "smooth";
+      // Виден целиком — не трогаем прокрутку: лишнее движение только мешает.
+      const visible = r0.top >= header + EDGE / 2 && r0.bottom <= window.innerHeight - EDGE / 2;
+      if (visible) return;
+      if (r0.height > window.innerHeight * TALL) {
+        // Высокий блок — к его началу, под закреплённую шапку.
+        window.scrollTo({ top: window.scrollY + r0.top - header - EDGE, behavior });
+      } else {
+        next.scrollIntoView({ block: "center", behavior });
+      }
+    };
     const tick = () => {
       // Стоим на запасной цели — продолжаем искать основную: окно или
       // панель, которые открывает шаг, появляются не сразу.
       if (!el || !el.isConnected || rank > 0) {
         const found = step.target ? findTarget(step) : null;
         if (found && (found.el !== el || !el?.isConnected)) {
-          el = found.el;
           rank = found.rank;
-          scrolled = false;
+          begin(found.el);
         } else if (!found) {
           el = null;
         }
       }
+      const now = performance.now();
       if (el) {
-        if (!scrolled) {
-          scrolled = true;
-          const r0 = el.getBoundingClientRect();
-          const behavior = reduceMotion() ? "auto" : "smooth";
-          if (r0.height > window.innerHeight * TALL) {
-            // Высокий блок — к его началу, под закреплённую шапку.
-            const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--app-header-h")) || 72;
-            window.scrollTo({ top: window.scrollY + r0.top - header - EDGE, behavior });
-          } else {
-            el.scrollIntoView({ block: "center", behavior });
-          }
-        }
         const box = spotBox(el.getBoundingClientRect());
-        setSpot((prev) => (same(prev, box) ? prev : box));
-      } else if (!step.target || performance.now() - started > 2500) {
+        if (phase === "settle") {
+          stillFrames = same(last, box) ? stillFrames + 1 : 0;
+          last = box;
+          // Место не меняется несколько кадров подряд (или ждать дольше
+          // нечего) — один плавный переход туда.
+          if (stillFrames >= 4 || now - phaseAt > 1200) {
+            setAnimate(true);
+            setSpot(box);
+            setShownKey(key);
+            phase = "move";
+            phaseAt = now;
+          }
+        } else if (phase === "move") {
+          if (now - phaseAt > MOVE_MS) {
+            phase = "follow";
+            setAnimate(false);
+          }
+        } else {
+          setSpot((prev) => (same(prev, box) ? prev : box));
+        }
+      } else if (!step.target || now - started > 2500) {
         // Элемента нет (узкое окно, нет подключения) — объясняем по центру.
+        setAnimate(true);
         setSpot(null);
+        setShownKey(key);
       }
       raf = requestAnimationFrame(tick);
     };
     tick();
     return () => cancelAnimationFrame(raf);
-  }, [step]);
+  }, [step, chapterId, stepIdx]);
 
   useLayoutEffect(() => {
     const h = cardRef.current?.offsetHeight;
@@ -267,8 +316,12 @@ export function TourOverlay() {
   if (!chapter || !step) return null;
 
   const total = chapter.steps.length;
-  const last = stepIdx === total - 1;
-  const special = step.kind === "welcome" || step.kind === "finish";
+  // На карточке — шаг, к которому подсветка уже перелетела (см. `shownKey`).
+  const shownIdx =
+    shownKey && shownKey.startsWith(`${chapter.id}-`) ? Number(shownKey.slice(chapter.id.length + 1)) : stepIdx;
+  const view = chapter.steps[shownIdx] ?? step;
+  const last = shownIdx === total - 1;
+  const special = view.kind === "welcome" || view.kind === "finish";
   // Особые шаги — всегда по центру и без окна.
   const shownSpot = special ? null : spot;
   const pos = cardPosition(shownSpot, cardH);
@@ -284,34 +337,34 @@ export function TourOverlay() {
     <div className="fixed inset-0 z-[120]" role="dialog" aria-modal="true" aria-label={`Обучение: ${chapter.title}`}>
       {/* Щелчки мимо карточки — не в панель под туром. */}
       <div className="absolute inset-0" onClick={(e) => e.stopPropagation()} />
-      <div className="tour-dim" style={{ clipPath: dimPath(box) }} aria-hidden />
+      <div className={clsx("tour-dim", !animate && "tour-still")} style={{ clipPath: dimPath(box) }} aria-hidden />
       <div
-        className={clsx("tour-spot", !shownSpot && "tour-spot-none")}
+        className={clsx("tour-spot", !shownSpot && "tour-spot-none", !animate && "tour-still")}
         style={{ left: box.left, top: box.top, width: box.width, height: box.height }}
         aria-hidden
       />
       <div
         ref={cardRef}
-        className="tour-card"
+        className={clsx("tour-card", !animate && "tour-still")}
         style={{ left: pos.left, top: pos.top, width: pos.width }}
       >
-        <div key={`${chapter.id}-${stepIdx}`} className="tour-step-in">
-          {step.kind === "welcome" && <WelcomeArt />}
-          {step.kind === "finish" && <FinishArt />}
+        <div key={`${chapter.id}-${shownIdx}`} className="tour-step-in">
+          {view.kind === "welcome" && <WelcomeArt />}
+          {view.kind === "finish" && <FinishArt />}
           <div className={clsx("flex items-center gap-2 text-xs text-muted", special && "justify-center")}>
             <GraduationCap className="w-3.5 h-3.5 text-accent" aria-hidden />
             <span>{chapter.title}</span>
             {!special && (
               <span className="tabular-nums">
-                · {stepIdx + 1} из {total}
+                · {shownIdx + 1} из {total}
               </span>
             )}
           </div>
           <h2 className={clsx("mt-1.5 text-lg font-semibold tracking-tight text-balance", special && "text-center text-xl")}>
-            {step.title}
+            {view.title}
           </h2>
           <div className={clsx("mt-2 space-y-2 text-sm text-muted leading-relaxed", special && "text-center")}>
-            {step.body.map((p, i) => (
+            {view.body.map((p, i) => (
               <p key={i}>{rich(p)}</p>
             ))}
           </div>
@@ -319,7 +372,7 @@ export function TourOverlay() {
 
         <div className="mt-4 flex gap-1" aria-hidden>
           {chapter.steps.map((_, i) => (
-            <span key={i} className={clsx("tour-dot", i <= stepIdx && "tour-dot-on")} />
+            <span key={i} className={clsx("tour-dot", i <= shownIdx && "tour-dot-on")} />
           ))}
         </div>
 
@@ -331,7 +384,7 @@ export function TourOverlay() {
           ) : (
             <span className="mr-auto" />
           )}
-          {stepIdx > 0 && !last && (
+          {shownIdx > 0 && !last && (
             <button type="button" className="btn-ghost text-sm" onClick={back} aria-label="Назад">
               <ArrowLeft className="w-3.5 h-3.5" />
             </button>
@@ -355,7 +408,7 @@ export function TourOverlay() {
             </>
           ) : (
             <button type="button" className="btn-primary text-sm" onClick={next} autoFocus>
-              {step.kind === "welcome" ? "Начать" : "Далее"}
+              {view.kind === "welcome" ? "Начать" : "Далее"}
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
