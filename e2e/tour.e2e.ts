@@ -36,6 +36,14 @@ test("знакомство: само при первых данных, шаги 
   await expect(page.getByRole("dialog", { name: /Обучение/ })).toHaveCount(0);
 });
 
+test("знакомство из справки сразу уводит на главную", async ({ page }) => {
+  await connectZen(page, "/help");
+  await page.getByRole("button", { name: "Обучение" }).click();
+  await page.getByRole("dialog").filter({ hasText: "Центр обучения" }).getByRole("button", { name: /Знакомство с панелью/ }).click();
+  await expect(page.getByText("Добро пожаловать в DzenAnalytics")).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("центр обучения: глава «Главная, операции и фильтр» проходит до конца и отмечается", async ({ page }) => {
   await connectZen(page, "/help");
   await page.getByRole("button", { name: "Обучение" }).click();

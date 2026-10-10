@@ -54,6 +54,8 @@ export const TOUR_CHAPTERS: TourChapter[] = [
     icon: Sparkles,
     steps: [
       {
+        // Знакомство начинается с главной, откуда бы его ни запустили.
+        route: "/",
         kind: "welcome",
         title: "Добро пожаловать в DzenAnalytics",
         body: [
