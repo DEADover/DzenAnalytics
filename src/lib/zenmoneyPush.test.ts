@@ -589,6 +589,23 @@ describe("buildPushItems — transfer collapse", () => {
     expect(skipped).toHaveLength(0);
     expect(toPush[0].zen.tag).toEqual(["tag-eda"]);
   });
+
+  // Перевод → расход вместе с местом платежа: раньше эта ветка контрагента
+  // не переносила, и он пропадал после синхронизации.
+  it("carries a free-text counterparty when collapsing transfer → expense", () => {
+    const { toPush, skipped } = pushIn(transferTx(), { kind: "expense", category: "Еда", brand: "Ларёк у дома" });
+    expect(skipped).toHaveLength(0);
+    expect(toPush[0].zen.payee).toBe("Ларёк у дома");
+    expect(toPush[0].zen.merchant).toBeNull();
+  });
+
+  it("links a known counterparty when collapsing transfer → expense", () => {
+    const t = transferTx();
+    const cache = { ...multiCache(t), merchants: [{ id: "m-pyat", title: "Пятёрочка" }] as unknown as ZenCache["merchants"] };
+    const { toPush, skipped } = buildPushItems({ [t.id]: { kind: "expense", category: "Еда", brand: "Пятёрочка" } }, cache);
+    expect(skipped).toHaveLength(0);
+    expect(toPush[0].zen.merchant).toBe("m-pyat");
+  });
 });
 
 describe("buildPushItems — clear category («Без категории»)", () => {

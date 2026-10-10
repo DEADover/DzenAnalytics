@@ -164,6 +164,35 @@ function applyDateComment(zen: ZenTransaction, edit: TransactionEdit): void {
 }
 
 /**
+ * Контрагент из правки — поле «Получатель» в карточке пишет его в `brand`.
+ * Два пути:
+ *   1) имя есть в справочнике контрагентов → ставим `merchant` его id, а
+ *      `payee` не трогаем: там остаётся то, что напечатал банк;
+ *   2) имени в справочнике нет → кладём его свободным текстом в `payee` и
+ *      снимаем `merchant`. Так не плодятся записи-призраки в справочнике, и
+ *      так же делает мобильное приложение для нераспознанных строк выписки.
+ * Пустое поле — человек стёр контрагента: снимаем и `merchant`, и `payee`
+ * (иначе снова всплыл бы текст из выписки — «стереть» имеется в виду не это).
+ */
+function applyBrand(zen: ZenTransaction, edit: TransactionEdit, merchantsByTitle: Map<string, string>): void {
+  if (edit.payee !== undefined) zen.payee = edit.payee || null;
+  if (edit.brand === undefined) return;
+  const wanted = (edit.brand || "").trim();
+  if (!wanted) {
+    zen.merchant = null;
+    zen.payee = null;
+    return;
+  }
+  const merchantId = merchantsByTitle.get(wanted.toLowerCase());
+  if (merchantId) {
+    zen.merchant = merchantId;
+  } else {
+    zen.merchant = null;
+    zen.payee = wanted;
+  }
+}
+
+/**
  * Build a TRANSFER ZenTransaction (Branch A): money leaves `outcomeAccount`
  * and lands on `incomeAccount`. Single-currency only — both accounts must
  * share an instrument (the UI offers one amount field). Returns a skip
@@ -724,6 +753,9 @@ export function buildPushItems(
       }
       const zen = built.zen!;
       applyDateComment(zen, edit);
+      // У перевода контрагента нет — у расхода или дохода из него он
+      // появляется только из правки. Без этого он терялся при отправке.
+      applyBrand(zen, edit, merchantsByTitle);
       emit(id, zen, original);
       continue;
     }
@@ -790,44 +822,10 @@ export function buildPushItems(
       }
     }
     applyCreatedAt(zen, edit);
-    if (edit.payee !== undefined) {
-      zen.payee = edit.payee || null;
-    }
     if (edit.comment !== undefined) {
       zen.comment = edit.comment || null;
     }
-
-    // Brand handling. Two paths:
-    //   1) The user picked a known brand (exists in the merchant
-    //      dictionary) → set `merchant` to its id. Leave `payee`
-    //      alone so the bank's original printout is preserved.
-    //   2) The user typed a free-text name not in the dictionary
-    //      → store it on the `payee` field (Zenmoney's free-text
-    //      counterparty) and clear `merchant`. This avoids
-    //      creating phantom merchant entities and matches what the
-    //      mobile app does for unmatched bank lines.
-    if (edit.brand !== undefined) {
-      const wanted = (edit.brand || "").trim();
-      if (!wanted) {
-        // User cleared the field entirely → drop the merchant ref
-        // and the free-text payee. (Leaving payee would surface
-        // the bank's raw text again — usually not what "clear"
-        // means.)
-        zen.merchant = null;
-        zen.payee = null;
-      } else {
-        const merchantId = merchantsByTitle.get(wanted.toLowerCase());
-        if (merchantId) {
-          zen.merchant = merchantId;
-          // Known brand: keep zen.payee untouched (bank's original).
-        } else {
-          // Free-text fallback. This is intentional — see the
-          // brand-handling block in the file-top JSDoc.
-          zen.merchant = null;
-          zen.payee = wanted;
-        }
-      }
-    }
+    applyBrand(zen, edit, merchantsByTitle);
 
     // Amount + currency go on `targetLeg` — the leg that holds the money
     // after any kind flip (for unchanged rows targetLeg === the original

@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
 import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Check, ListPlus, ArrowUpToLine, Wand2 } from "lucide-react";
@@ -37,7 +38,7 @@ import { getHistoricalRubRate, type HistoricalRate } from "../lib/historicalRate
 import { formatDate, formatMoney } from "../lib/format";
 import { ExprAmountInput } from "./ExprAmountInput";
 import { rankPayees } from "../lib/payeeSuggest";
-import { NO_CATEGORY } from "../lib/zenmoneyMap";
+import { NO_CATEGORY, isServiceCategory } from "../lib/zenmoneyMap";
 import { activeProfileId } from "../lib/profiles";
 import { parseAmountInput } from "../lib/splitTransaction";
 import type { Transaction, TxKind } from "../types";
@@ -588,6 +589,14 @@ export function EditTransactionModal({
     return known.some((b) => merchantKey(b) === key) ? "existing" : "new";
   }, [payee, cachedBrands, newCounterparties]);
 
+  // Перевод или долг стал расходом, доходом или возвратом: у исходной
+  // операции не было ни настоящей категории, ни места платежа — эти поля
+  // подсвечиваем, пока их не заполнят. Категория при этом обязательна
+  // (см. `validate`), место платежа — по желанию.
+  const fromTransfer = tx.kind === "transfer" && kind !== "transfer" && !isDebt;
+  const needCategory = fromTransfer && (!category.trim() || isServiceCategory(category.trim()));
+  const needPayee = fromTransfer && !payee.trim();
+
   // Tags already used across the account — fed to the comment field's «#»
   // autocomplete (see HashtagTextarea).
   const allTags = useMemo(() => {
@@ -901,6 +910,7 @@ export function EditTransactionModal({
   // (issue #19: 2, 7, 8). Mirrors the builder/push skip-reasons.
   function validate(): string | null {
     const cat = category.trim();
+    if (needCategory) return "Выберите категорию: у перевода её не было";
     // Без основной категории вторые в Дзен-мани не живут: основной молча стала
     // бы первая из них. Лучше сказать сразу, чем застрять правкой при отправке.
     if (
@@ -1159,6 +1169,13 @@ export function EditTransactionModal({
               } else {
                 setKind(next);
                 setIsDebt(false);
+                // «Перевод» и «Долг» — ярлыки сервиса, а не категории: у
+                // расхода или дохода с ними категория была бы ненастоящей.
+                // Поле пустеет и подсвечивается — выбрать настоящую.
+                if (next !== "transfer" && isServiceCategory(category)) {
+                  setCategory("");
+                  setSubcategory("");
+                }
               }
             }}
             options={[
@@ -1198,7 +1215,10 @@ export function EditTransactionModal({
         {kind !== "transfer" && (
           // Single full-width field: top level lists only real categories;
           // a category's sub-categories open to the right (issue #12).
-          <Field label="Категория">
+          <Field
+            label="Категория"
+            attention={needCategory ? "Выберите — у перевода её не было" : undefined}
+          >
             <CategoryCascadePicker
               category={category}
               subcategory={subcategory}
@@ -1466,6 +1486,7 @@ export function EditTransactionModal({
                     ? "Плательщик"
                     : "Место платежа"
               }
+              attention={needPayee ? "У перевода его не было — укажите, если нужно" : undefined}
               labelAfter={
                 // Состояние справочника рядом с ярлыком. ✓ — запись есть, и
                 // операция сохранится СВЯЗЬЮ с ней. Плюс — записи нет, но мы
@@ -1686,10 +1707,14 @@ export function EditTransactionModal({
 function Field({
   label,
   labelAfter,
+  attention,
   className,
   children,
 }: {
   label: string;
+  /** Поле нужно заполнить (например, после смены типа операции): рамка
+   *  акцентом и пояснение под ним. */
+  attention?: string;
   /** Optional inline element rendered right after the label (e.g. a
    *  small status badge), sharing the label's baseline. */
   labelAfter?: React.ReactNode;
@@ -1699,12 +1724,13 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className={className}>
+    <div className={clsx(className, attention && "field-attention")}>
       <div className="flex items-center gap-1.5 mb-1">
         <label className="label">{label}</label>
         {labelAfter}
       </div>
       {children}
+      {attention && <div className="mt-1 text-xs text-accent">{attention}</div>}
     </div>
   );
 }

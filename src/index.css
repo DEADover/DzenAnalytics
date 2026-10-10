@@ -840,6 +840,12 @@ h2,
            focus:outline-none focus:border-accent
            focus-visible:ring-2 focus-visible:ring-accent/25;
   }
+  /* Поле, которое нужно заполнить (карточка операции после смены типа):
+     рамка акцентом и мягкое свечение — как у фокуса, только постоянно. */
+  .field-attention .input {
+    border-color: rgb(var(--c-accent));
+    box-shadow: 0 0 0 3px rgb(var(--c-accent) / 0.18);
+  }
   /* DateField hides the native <input type="date"> (opacity 0) and paints
      its own Russian layer on top, so the browser's English "dd.mm.yyyy" is
      never rendered. The native calendar-picker indicator is kept (invisible
