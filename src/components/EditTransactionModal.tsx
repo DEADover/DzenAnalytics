@@ -1218,7 +1218,7 @@ export function EditTransactionModal({
           // a category's sub-categories open to the right (issue #12).
           <Field
             label="Категория"
-            attention={needCategory ? { text: "Нужно выбрать", title: "У перевода категории не было" } : undefined}
+            attention={needCategory ? { text: "Нужно выбрать", title: "У перевода категории не было", required: true } : undefined}
           >
             <CategoryCascadePicker
               category={category}
@@ -1713,9 +1713,11 @@ function Field({
   children,
 }: {
   label: string;
-  /** Поле нужно заполнить (например, после смены типа операции): рамка
-   *  акцентом и пилюля в строке ярлыка — высота поля не меняется. */
-  attention?: { text: string; title?: string };
+  /** Поле стоит заполнить (например, после смены типа операции): пилюля в
+   *  строке ярлыка — высота поля не меняется. Обязательное (`required`) —
+   *  ещё и рамка акцентом, а пилюля сплошная: светлая слилась бы с рамкой.
+   *  Необязательное — только светлая пилюля, поле как обычно. */
+  attention?: { text: string; title?: string; required?: boolean };
   /** Optional inline element rendered right after the label (e.g. a
    *  small status badge), sharing the label's baseline. */
   labelAfter?: React.ReactNode;
@@ -1725,13 +1727,13 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className={clsx(className, attention && "field-attention")}>
+    <div className={clsx(className, attention?.required && "field-attention")}>
       <div className="flex items-center gap-1.5 mb-1">
         <label className="label">{label}</label>
         {labelAfter}
         {attention && (
           // -my-0.5: пилюля чуть выше ярлыка и не раздвигает строку.
-          <Badge tone="accent" title={attention.title} className="-my-0.5">
+          <Badge tone="accent" solid={attention.required} title={attention.title} className="-my-0.5">
             {attention.text}
           </Badge>
         )}

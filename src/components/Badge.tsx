@@ -14,6 +14,16 @@ const TONE: Record<BadgeTone, string> = {
   warn: "bg-warn/15 text-warn",
 };
 
+/** Сплошная заливка — метка, которая должна читаться поверх светлых полей. */
+const SOLID: Record<BadgeTone, string> = {
+  neutral: "bg-muted text-on-tone",
+  accent: "bg-accent text-on-tone",
+  accent2: "bg-accent2 text-on-tone",
+  income: "bg-income text-on-tone",
+  expense: "bg-expense text-on-tone",
+  warn: "bg-warn text-on-tone",
+};
+
 /**
  * Метка состояния: короткое слово с заглавной буквы в пилюле цвета смысла —
  * «Новая», «Удалена», «Изменён», «Архив», «Профицит», «92%».
@@ -25,6 +35,7 @@ const TONE: Record<BadgeTone, string> = {
 export function Badge({
   tone = "neutral",
   size = "sm",
+  solid = false,
   icon: Icon,
   title,
   className,
@@ -33,6 +44,9 @@ export function Badge({
   tone?: BadgeTone;
   /** `sm` 12 px — в строке списка; `md` 14 px — рядом с крупным итогом. */
   size?: "sm" | "md";
+  /** Сплошная заливка тоном вместо подложки — когда метка стоит рядом с
+   *  такими же светлыми полями и иначе с ними сливается. */
+  solid?: boolean;
   icon?: LucideIcon;
   title?: string;
   className?: string;
@@ -44,7 +58,7 @@ export function Badge({
       className={clsx(
         "inline-flex items-center gap-1 rounded-full font-medium whitespace-nowrap",
         size === "sm" ? "px-2 py-0.5 text-xs leading-4" : "px-3 py-1 text-sm",
-        TONE[tone],
+        solid ? SOLID[tone] : TONE[tone],
         className
       )}
     >
