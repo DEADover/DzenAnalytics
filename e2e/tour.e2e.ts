@@ -71,3 +71,24 @@ test("центр обучения: глава «Главная, операции
   await page.getByRole("button", { name: /^Центр обучения/ }).click();
   await expect(page.getByRole("dialog").filter({ hasText: "Центр обучения" }).getByText("Пройдено 1 из 3")).toBeVisible();
 });
+
+test("шаг «В карточке операции» открывает карточку и закрывает её, ничего не правя", async ({ page }) => {
+  await connectZen(page, "/");
+  await page.evaluate(async () => {
+    type S = { useTourStore: { getState: () => { start: (id: string) => void; next: () => void } } };
+    const m = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useTourStore");
+    m.useTourStore.getState().start("daily");
+    for (let i = 0; i < 8; i++) m.useTourStore.getState().next();
+  });
+  const tour = page.getByRole("dialog", { name: /Обучение/ });
+  await expect(tour.getByRole("heading", { name: "В карточке операции" })).toBeVisible();
+  await expect(page.locator('[data-tour="op-actions"]')).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator('[data-tour="op-actions"]')).toHaveCount(0);
+  const edits = await page.evaluate(async () => {
+    type E = { useEditsStore: { getState: () => { edits: Record<string, unknown> } } };
+    const m = await (window as unknown as { __store: (n: string) => Promise<E> }).__store("useEditsStore");
+    return Object.keys(m.useEditsStore.getState().edits).length;
+  });
+  expect(edits).toBe(0);
+});

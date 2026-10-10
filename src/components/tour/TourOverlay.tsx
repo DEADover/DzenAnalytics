@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, ArrowRight, Check, GraduationCap, X } from "lucide-react";
 import logoDa from "../../assets/logo-da.png";
-import { TOUR_MORE_EVENT, tourChapter, type TourOpen, type TourStep } from "../../lib/tour";
+import { TOUR_MORE_EVENT, TOUR_OP_EVENT, tourChapter, type TourOpen, type TourStep } from "../../lib/tour";
 import { useHeaderNavStore } from "../../store/useHeaderNavStore";
 import { useTourStore } from "../../store/useTourStore";
 
@@ -37,16 +37,33 @@ function rich(text: string): ReactNode {
   );
 }
 
-/** Раскрыть или закрыть панель «Ещё» либо окно настройки основного меню. */
-function setOpened(what: TourOpen, on: boolean): void {
+/**
+ * Раскрыть или закрыть то, что показывает шаг. Вернёт отмену ожидания: лента
+ * операций могла ещё не появиться (шаг только что перевёл в раздел), поэтому
+ * карточку просим, пока она не откроется.
+ */
+function setOpened(what: TourOpen, on: boolean): () => void {
   if (what === "more") window.dispatchEvent(new CustomEvent(TOUR_MORE_EVENT, { detail: on }));
-  else if (on) useHeaderNavStore.getState().openEditor();
-  else useHeaderNavStore.getState().closeEditor();
+  else if (what === "nav-editor") {
+    if (on) useHeaderNavStore.getState().openEditor();
+    else useHeaderNavStore.getState().closeEditor();
+  } else {
+    window.dispatchEvent(new CustomEvent(TOUR_OP_EVENT, { detail: on }));
+    if (on) {
+      let tries = 0;
+      const t = setInterval(() => {
+        if (document.querySelector('[data-tour="op-actions"]') || ++tries > 20) clearInterval(t);
+        else window.dispatchEvent(new CustomEvent(TOUR_OP_EVENT, { detail: true }));
+      }, 150);
+      return () => clearInterval(t);
+    }
+  }
+  return () => {};
 }
 
-/** Первый видимый элемент из меток шага. */
-function findTarget(step: TourStep): HTMLElement | null {
-  for (const t of step.target ?? []) {
+/** Первый видимый элемент из меток шага — и его место в списке (0 — основная цель). */
+function findTarget(step: TourStep): { el: HTMLElement; rank: number } | null {
+  for (const [rank, t] of (step.target ?? []).entries()) {
     // «метка:first» — первый ребёнок: сетка виджетов выше экрана, а показать
     // нужно один виджет, не весь экран.
     const [name, part] = t.split(":");
@@ -54,7 +71,7 @@ function findTarget(step: TourStep): HTMLElement | null {
     const el = part === "first" ? (found?.firstElementChild as HTMLElement | null) : found;
     if (!el) continue;
     const r = el.getBoundingClientRect();
-    if (r.width > 0 && r.height > 0) return el;
+    if (r.width > 0 && r.height > 0) return { el, rank };
   }
   return null;
 }
@@ -166,8 +183,11 @@ export function TourOverlay() {
   const open = step?.open;
   useEffect(() => {
     if (!open) return;
-    setOpened(open, true);
-    return () => setOpened(open, false);
+    const stopWaiting = setOpened(open, true);
+    return () => {
+      stopWaiting();
+      setOpened(open, false);
+    };
   }, [open]);
 
   // Цель шага: ищем, прокручиваем к ней один раз и дальше следим за её
@@ -176,10 +196,22 @@ export function TourOverlay() {
     if (!step) return;
     let raf = 0;
     let el: HTMLElement | null = null;
+    let rank = 0;
     let scrolled = false;
     const started = performance.now();
     const tick = () => {
-      if (!el || !el.isConnected) el = step.target ? findTarget(step) : null;
+      // Стоим на запасной цели — продолжаем искать основную: окно или
+      // панель, которые открывает шаг, появляются не сразу.
+      if (!el || !el.isConnected || rank > 0) {
+        const found = step.target ? findTarget(step) : null;
+        if (found && (found.el !== el || !el?.isConnected)) {
+          el = found.el;
+          rank = found.rank;
+          scrolled = false;
+        } else if (!found) {
+          el = null;
+        }
+      }
       if (el) {
         if (!scrolled) {
           scrolled = true;

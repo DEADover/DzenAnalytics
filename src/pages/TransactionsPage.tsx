@@ -62,6 +62,7 @@ import {
   OperationListTray,
 } from "../components/operations/OperationList";
 import { queryMatcher } from "../lib/keyboardLayout";
+import { TOUR_OP_EVENT } from "../lib/tour";
 
 type SortMode = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
 
@@ -464,6 +465,24 @@ export function TransactionsPage() {
   );
 
   const visible = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
+
+  // Обучение открывает карточку первой операции ленты, чтобы показать значки
+  // внизу, и само закрывает (`components/tour`). Без отметки «просмотрено»:
+  // это была бы правка, которую человек не делал.
+  const firstTx = useRef<Transaction | undefined>(undefined);
+  useEffect(() => {
+    firstTx.current = sorted[0];
+  });
+  useEffect(() => {
+    const onTour = (e: Event) => {
+      if ((e as CustomEvent<boolean>).detail) {
+        const t = firstTx.current;
+        if (t) setEditing((cur) => cur ?? t);
+      } else setEditing(null);
+    };
+    window.addEventListener(TOUR_OP_EVENT, onTour);
+    return () => window.removeEventListener(TOUR_OP_EVENT, onTour);
+  }, []);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
