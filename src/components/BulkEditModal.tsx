@@ -141,6 +141,8 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
               value={category}
               options={categoryOptions}
               allowCustom={false}
+              // Без него поле только для чтения: набор не фильтрует список.
+              searchable
               onChange={(next) => {
                 setCategory(next);
                 if (
@@ -159,6 +161,7 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
                 (a, b) => a.localeCompare(b, "ru")
               )}
               allowCustom={false}
+              searchable
               clearable
               onChange={setSubcategory}
               placeholder="Подкатегория"
