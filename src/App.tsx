@@ -150,12 +150,14 @@ function App() {
   // Знакомство — само, один раз: когда в панели впервые появились данные
   // (подключили Дзен-мани, загрузили CSV или открыли демо). Небольшая пауза —
   // чтобы панель успела отрисоваться и было что подсвечивать.
+  // Глава, выбранная без данных, ждёт их здесь же (обучение на демо-данных).
   const tourWelcomed = useTourStore((s) => s.welcomed);
+  const tourPending = useTourStore((s) => s.pending);
   useEffect(() => {
-    if (!loaded || !hasData || tourWelcomed) return;
-    const t = setTimeout(() => useTourStore.getState().start("intro"), 900);
+    if (!loaded || !hasData || (tourWelcomed && !tourPending)) return;
+    const t = setTimeout(() => useTourStore.getState().start(tourPending ?? "intro"), 900);
     return () => clearTimeout(t);
-  }, [loaded, hasData, tourWelcomed]);
+  }, [loaded, hasData, tourWelcomed, tourPending]);
 
   useEffect(() => {
     // Hydrate the deleted-ids set first so the data store's pipeline

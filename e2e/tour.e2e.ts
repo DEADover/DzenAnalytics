@@ -92,3 +92,23 @@ test("шаг «В карточке операции» открывает кар�
   });
   expect(edits).toBe(0);
 });
+
+test("без данных: «Пройти обучение на демо-данных» открывает демо и запускает знакомство", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "С чего начнём?" })).toBeVisible();
+  await page.getByRole("button", { name: "Пройти обучение на демо-данных" }).click();
+  await expect(page.getByText("Это демо-данные выдуманной семьи.")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Добро пожаловать в DzenAnalytics")).toBeVisible({ timeout: 10_000 });
+});
+
+test("без данных: глава из центра обучения идёт на демо", async ({ page }) => {
+  await page.goto("/help");
+  await page.getByRole("button", { name: "Обучение" }).click();
+  const hub = page.getByRole("dialog").filter({ hasText: "Центр обучения" });
+  await expect(hub.getByText("Данных пока нет — обучение пройдёт на демо-данных.")).toBeVisible();
+  await hub.getByRole("button", { name: /Подключение и синхронизация/ }).click();
+  await expect(page.getByText("Это демо-данные выдуманной семьи.")).toBeVisible({ timeout: 20_000 });
+  const tour = page.getByRole("dialog", { name: /Обучение: Подключение и синхронизация/ });
+  await expect(tour.getByRole("heading", { name: "Источник данных" })).toBeVisible({ timeout: 10_000 });
+  await expect(page).toHaveURL(/\/settings/);
+});

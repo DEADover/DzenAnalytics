@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Cloud, FlaskConical, Lock, Upload, type LucideIcon } from "lucide-react";
+import { ArrowRight, Cloud, FlaskConical, GraduationCap, Lock, Upload, type LucideIcon } from "lucide-react";
 import { Badge } from "./Badge";
 import { startDemo } from "../hooks/useDemo";
+import { useTourStore } from "../store/useTourStore";
 
 /** Карточка одного способа начать: значок, название, пояснение, действие внизу. */
 function StartCard({
@@ -81,6 +82,20 @@ export function EmptyState() {
           </StartCard>
         </button>
       </div>
+
+      {/* Не знаете, с чего начать, — обучение на демо-данных: демо откроется, а
+          знакомство с панелью запустится поверх него само. */}
+      <button
+        type="button"
+        onClick={() => {
+          useTourStore.getState().startWhenReady("intro");
+          void startDemo();
+        }}
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
+      >
+        <GraduationCap className="w-4 h-4" aria-hidden="true" />
+        Пройти обучение на демо-данных
+      </button>
 
       <div className="flex items-center gap-1.5 text-xs text-muted">
         <Lock className="w-3.5 h-3.5" aria-hidden="true" />

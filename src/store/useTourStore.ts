@@ -14,6 +14,12 @@ interface Saved {
   done: string[];
   /** Знакомство уже предлагали — сами больше не запускаем. */
   welcomed: boolean;
+  /**
+   * Глава, которую запустить, как только в панели появятся данные. Без
+   * данных учиться не на чем — обучение открывает демо, а оно перезагружает
+   * страницу; глава переживает перезагрузку здесь.
+   */
+  pending: string | null;
 }
 
 function load(): Saved {
@@ -22,9 +28,10 @@ function load(): Saved {
     return {
       done: Array.isArray(raw?.done) ? raw!.done.filter((x): x is string => typeof x === "string") : [],
       welcomed: raw?.welcomed === true,
+      pending: typeof raw?.pending === "string" ? raw.pending : null,
     };
   } catch {
-    return { done: [], welcomed: false };
+    return { done: [], welcomed: false, pending: null };
   }
 }
 
@@ -49,10 +56,12 @@ interface State extends Saved {
   openHub: () => void;
   closeHub: () => void;
   markWelcomed: () => void;
+  /** Запустить главу, когда появятся данные (после открытия демо). */
+  startWhenReady: (chapterId: string) => void;
 }
 
 export const useTourStore = create<State>((set, get) => {
-  const persist = () => save({ done: get().done, welcomed: get().welcomed });
+  const persist = () => save({ done: get().done, welcomed: get().welcomed, pending: get().pending });
   return {
     ...load(),
     chapter: null,
@@ -60,7 +69,7 @@ export const useTourStore = create<State>((set, get) => {
     hubOpen: false,
     start: (chapterId) => {
       if (!tourChapter(chapterId)) return;
-      set({ chapter: chapterId, step: 0, hubOpen: false, welcomed: true });
+      set({ chapter: chapterId, step: 0, hubOpen: false, welcomed: true, pending: null });
       persist();
     },
     next: () => {
@@ -84,6 +93,11 @@ export const useTourStore = create<State>((set, get) => {
     closeHub: () => set({ hubOpen: false }),
     markWelcomed: () => {
       set({ welcomed: true });
+      persist();
+    },
+    startWhenReady: (chapterId) => {
+      if (!tourChapter(chapterId)) return;
+      set({ pending: chapterId, hubOpen: false });
       persist();
     },
   };

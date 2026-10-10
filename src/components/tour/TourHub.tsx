@@ -1,5 +1,7 @@
 import clsx from "clsx";
-import { ArrowRight, Check, GraduationCap } from "lucide-react";
+import { ArrowRight, Check, FlaskConical, GraduationCap } from "lucide-react";
+import { useDataStore } from "../../store/useDataStore";
+import { startDemo } from "../../hooks/useDemo";
 import { TOUR_CHAPTERS, chapterDuration } from "../../lib/tour";
 import { pluralRu } from "../../lib/plural";
 import { tourProgress, useTourStore } from "../../store/useTourStore";
@@ -14,7 +16,18 @@ export function TourHub() {
   const open = useTourStore((s) => s.hubOpen);
   const done = useTourStore((s) => s.done);
   const close = useTourStore((s) => s.closeHub);
-  const start = useTourStore((s) => s.start);
+  const startNow = useTourStore((s) => s.start);
+  const startWhenReady = useTourStore((s) => s.startWhenReady);
+  const hasData = useDataStore((s) => s.transactions.length > 0);
+  // Без данных учиться не на чем: подсвечивать нечего, кроме пустых мест.
+  // Тогда глава идёт на демо-данных — выдуманная семья в отдельном аккаунте,
+  // настоящий не задевается. Демо перезагружает страницу; глава запустится,
+  // как только данные загрузятся (`pending` в сторе обучения).
+  const start = (id: string) => {
+    if (hasData) return startNow(id);
+    startWhenReady(id);
+    void startDemo();
+  };
   if (!open) return null;
   const p = tourProgress(done);
   const share = p.total ? p.done / p.total : 0;
@@ -50,6 +63,19 @@ export function TourHub() {
             </p>
           </div>
         </div>
+
+        {!hasData && (
+          <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 flex gap-3 text-sm">
+            <FlaskConical className="w-5 h-5 text-accent shrink-0 mt-0.5" aria-hidden />
+            <p>
+              <span className="font-medium">Данных пока нет — обучение пройдёт на демо-данных.</span>{" "}
+              <span className="text-muted">
+                Это выдуманная семья в отдельном аккаунте: ваши данные он не затрагивает. Выбранная глава
+                начнётся, как только демо загрузится, а выйти из демо можно кнопкой на плашке сверху.
+              </span>
+            </p>
+          </div>
+        )}
 
         <div className="space-y-3">
           {TOUR_CHAPTERS.map((c, i) => {
@@ -91,7 +117,7 @@ export function TourHub() {
                       </span>
                     ))}
                     <span className="ml-auto inline-flex items-center gap-1 text-sm text-accent font-medium">
-                      {passed ? "Пройти ещё раз" : "Начать"}
+                      {!hasData ? "Начать на демо" : passed ? "Пройти ещё раз" : "Начать"}
                       <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                     </span>
                   </span>
