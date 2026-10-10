@@ -169,7 +169,7 @@ export function CommandPalette({ open, onClose }: Props) {
       { id: "theme:auto", group: "Действия", title: "Тема: авто", icon: Monitor, action: () => setMode("auto") },
       { id: "theme:pick", group: "Действия", title: "Выбрать тему оформления", icon: Palette, action: showThemeModal },
       { id: "header-nav:edit", group: "Действия", title: "Настроить основное меню", icon: PanelTop, action: openHeaderNavEditor },
-      { id: "tour:hub", group: "Действия", title: "Центр обучения", hint: "Короткие туры по панели", icon: GraduationCap, action: () => useTourStore.getState().openHub() },
+      { id: "tour:hub", group: "Действия", title: "Центр обучения", hint: "Короткие туры по интерфейсу", icon: GraduationCap, action: () => useTourStore.getState().openHub() },
       // Все двенадцать тем: «тема лагуна» или «уголь» находит нужную сразу.
       // Из палитры тему просят увидеть — поэтому включаем и её вид.
       ...ALL_SCHEMES.map((sc) => ({
