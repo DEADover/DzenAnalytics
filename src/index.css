@@ -1140,6 +1140,213 @@ h2,
   color: rgb(var(--c-text));
 }
 
+/* ───────── Обучение по живому интерфейсу (`components/tour`) ─────────
+   Окно подсветки — прямоугольник с огромной тенью: тень и есть затемнение,
+   а прозрачная середина — «окно». Окно и карточка перетекают между шагами
+   одной пружинистой кривой; содержимое карточки сменяется мягким всплытием. */
+.tour-dim {
+  position: fixed;
+  inset: 0;
+  background: rgb(8 12 24 / 0.55);
+  -webkit-backdrop-filter: blur(3px) saturate(0.8);
+  backdrop-filter: blur(3px) saturate(0.8);
+  transition: clip-path 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: tour-fade 0.35s ease-out both;
+}
+@keyframes tour-fade {
+  from { opacity: 0; }
+}
+.tour-spot {
+  position: fixed;
+  border-radius: 16px;
+  transition: left 0.55s cubic-bezier(0.22, 1, 0.36, 1), top 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.55s cubic-bezier(0.22, 1, 0.36, 1), height 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+/* Рамка вокруг окна: пульсирует, пока шаг на экране. */
+.tour-spot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid rgb(var(--c-accent));
+  box-shadow: 0 0 24px 2px rgb(var(--c-accent) / 0.45);
+  animation: tour-pulse 2s ease-in-out infinite;
+}
+.tour-spot-none::after {
+  opacity: 0;
+  animation: none;
+}
+@keyframes tour-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(1.012); }
+}
+
+.tour-card {
+  position: fixed;
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid rgb(var(--c-border) / 0.9);
+  background: rgb(var(--c-panel) / 0.86);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: 0 30px 80px -20px rgb(8 12 24 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.04) inset;
+  transition: left 0.55s cubic-bezier(0.22, 1, 0.36, 1), top 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: tour-card-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes tour-card-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.tour-step-in {
+  animation: tour-step-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes tour-step-in {
+  from { opacity: 0; transform: translateY(6px); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+/* Прогресс главы — полоски, пройденные заливаются акцентом. */
+.tour-dot {
+  height: 4px;
+  flex: 1;
+  border-radius: 999px;
+  background: rgb(var(--c-border));
+  overflow: hidden;
+  position: relative;
+}
+.tour-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(var(--c-accent));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tour-dot-on::after {
+  transform: scaleX(1);
+}
+
+/* Приветствие: свечение, знак и орбита точек. */
+.tour-glow {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(var(--c-accent) / 0.45), rgb(var(--c-accent2) / 0.18) 45%, transparent 70%);
+  filter: blur(8px);
+  animation: tour-breathe 3.2s ease-in-out infinite;
+}
+.tour-glow-income {
+  background: radial-gradient(circle, rgb(var(--c-income) / 0.4), transparent 68%);
+}
+@keyframes tour-breathe {
+  0%, 100% { transform: scale(0.92); opacity: 0.85; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+.tour-logo {
+  animation: tour-logo-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes tour-logo-in {
+  from { opacity: 0; transform: scale(0.6) rotate(-8deg); }
+  to { opacity: 1; transform: none; }
+}
+.tour-orbit {
+  position: absolute;
+  width: 0;
+  height: 0;
+  animation: tour-spin 14s linear infinite;
+}
+.tour-orbit > span {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(var(--c-accent));
+  opacity: 0.7;
+}
+.tour-orbit > span:nth-child(even) {
+  background: rgb(var(--c-accent2));
+  width: 4px;
+  height: 4px;
+}
+@keyframes tour-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Финал: круг и галочка рисуются, искры разлетаются. */
+.tour-check-circle {
+  stroke: rgb(var(--c-income));
+  stroke-width: 3;
+  stroke-dasharray: 151;
+  stroke-dashoffset: 151;
+  animation: tour-draw 0.6s 0.1s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.tour-check-mark {
+  stroke: rgb(var(--c-income));
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 36;
+  stroke-dashoffset: 36;
+  animation: tour-draw 0.35s 0.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+@keyframes tour-draw {
+  to { stroke-dashoffset: 0; }
+}
+.tour-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px;
+  border-radius: 50%;
+  background: rgb(var(--c-accent));
+  opacity: 0;
+  animation: tour-spark 0.9s 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.tour-spark:nth-child(odd) {
+  background: rgb(var(--c-income));
+}
+@keyframes tour-spark {
+  0% { opacity: 1; transform: rotate(var(--a)) translateX(0) scale(1); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(64px) scale(0.4); }
+}
+
+/* Карточки глав в центре обучения появляются лесенкой. */
+.tour-hub-card {
+  animation: tour-step-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-dim,
+  .tour-spot,
+  .tour-card,
+  .tour-dot::after {
+    transition: none;
+  }
+  .tour-dim,
+  .tour-spot::after,
+  .tour-card,
+  .tour-hub-card,
+  .tour-step-in,
+  .tour-glow,
+  .tour-logo,
+  .tour-orbit,
+  .tour-spark {
+    animation: none;
+  }
+  .tour-check-circle,
+  .tour-check-mark {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

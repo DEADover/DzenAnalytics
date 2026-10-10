@@ -653,6 +653,7 @@ export function GlobalFilters({
   const panel = (
     <div className={docked ? undefined : "mb-4 md:mb-6"}>
       <div
+        data-tour={docked ? undefined : "filters"}
         className={clsx(
           // В режиме кнопки панель — второй ярус шапки: та же стеклянная
           // подложка, её поля, черта снизу, никаких скруглений и тени. На

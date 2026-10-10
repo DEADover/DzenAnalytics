@@ -42,7 +42,7 @@ export function CloudSettingsCard() {
             : "Включено — сверится при следующей синхронизации";
 
   return (
-    <div className="card-tray card-pad">
+    <div data-tour="cloud" className="card-tray card-pad">
       <SettingsSectionHeader icon={MonitorSmartphone} title="Настройки на всех устройствах" />
 
       <SettingRow

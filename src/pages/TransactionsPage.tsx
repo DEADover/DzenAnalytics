@@ -603,6 +603,7 @@ export function TransactionsPage() {
             {apiConnected && (
               <div className="relative" ref={addMenuRef}>
                 <button
+                  data-tour="add-op"
                   onClick={() => setAddMenuOpen((o) => !o)}
                   className="btn-primary text-xs whitespace-nowrap"
                   title="Добавить новую операцию"

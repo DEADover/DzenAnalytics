@@ -60,7 +60,9 @@ import {
   Trash2,
   FileSpreadsheet,
   MonitorSmartphone,
+  GraduationCap,
 } from "lucide-react";
+import { useTourStore } from "../store/useTourStore";
 import { Callout } from "../components/Callout";
 import { ChangelogModal } from "../components/ChangelogModal";
 import { GithubMark } from "../components/GithubMark";
@@ -4647,7 +4649,16 @@ export function HelpPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader icon={HelpCircle} title="Справка" />
+      <PageHeader
+        icon={HelpCircle}
+        title="Справка"
+        right={
+          <button type="button" className="btn-primary text-sm" onClick={() => useTourStore.getState().openHub()}>
+            <GraduationCap className="w-4 h-4" />
+            Обучение
+          </button>
+        }
+      />
 
       {/* Дерево слева, лента разделов справа. На узком экране дерево
           сворачивается в одну кнопку: полоса из шестидесяти разделов над

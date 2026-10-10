@@ -18,6 +18,7 @@ export function SettingRow({
   control,
   dense,
   badge,
+  tourId,
   children,
 }: {
   title: string;
@@ -40,11 +41,13 @@ export function SettingRow({
    * настроек воздух уместен, во всплывающем окне он выходит боком.
    */
   dense?: boolean;
+  /** Метка для обучения (`data-tour`) — строку подсвечивает тур. */
+  tourId?: string;
   /** Раскрывающееся содержимое под строкой — редактор на всю ширину. */
   children?: ReactNode;
 }) {
   return (
-    <div className={`${dense ? "py-1.5" : "py-3"} border-b border-border/60 last:border-b-0`}>
+    <div data-tour={tourId} className={`${dense ? "py-1.5" : "py-3"} border-b border-border/60 last:border-b-0`}>
       {/* Подпись слева, контрол у правого края. Колонку фиксированной ширины
           отсюда убрали: она ставила контролы на одну отметку, но правый край
           карточки при этом пустовал, и строка не читалась строкой. Пустота

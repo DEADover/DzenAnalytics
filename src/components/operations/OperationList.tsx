@@ -58,7 +58,7 @@ export function OperationListTray({
   }, [sticky]);
 
   return (
-    <div className="tray">
+    <div className="tray" data-tour="feed">
       <div ref={coreRef} className={clsx("tray-core", sticky ? "overflow-clip" : "overflow-hidden")}>
         <div
           ref={barRef}

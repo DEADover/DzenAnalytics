@@ -875,7 +875,7 @@ export function ImportPage() {
           from and what state is it in?". Now: source tabs at the
           top, panel for the active source, current-data footer at
           the bottom. */}
-      <section className="card-tray card-pad space-y-5">
+      <section data-tour="source" className="card-tray card-pad space-y-5">
         {/* Source tabs. A small green dot on the tab whose source
             is actually populated lets the user tell at a glance
             which mode they're in even if the active tab is the
@@ -1528,6 +1528,7 @@ export function ImportPage() {
         />
 
         <SettingRow
+          tourId="filters-mode"
           title="Панель фильтров"
           status={
             filtersMode === "button"
@@ -2793,7 +2794,7 @@ export function ImportPage() {
             {/* Both settings live in one inset panel with the active choice
                 explained right under it — three loose label/control lines read
                 as unrelated scraps, and the modes' meaning was hover-only. */}
-            <div className="rounded-xl border border-border bg-panel2/30 p-4 mb-3 space-y-3">
+            <div data-tour="push-mode" className="rounded-xl border border-border bg-panel2/30 p-4 mb-3 space-y-3">
               <div>
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-sm font-medium w-44 shrink-0">

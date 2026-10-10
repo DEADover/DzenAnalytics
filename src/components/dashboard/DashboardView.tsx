@@ -1055,7 +1055,7 @@ export function DashboardView() {
       {visible.length === 0 ? (
         <EmptyDashboard />
       ) : (
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6">
+        <section data-tour="widgets" className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6">
           {cells.map((cell, ci) => {
             if (cell.type === "gap") {
               // В ряду дырок бывает две: перенос на новый ряд и отступ слева от

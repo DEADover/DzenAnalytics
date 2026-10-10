@@ -111,6 +111,13 @@ export const test = base.extend<{ zen: FakeZen }>({
   // иначе запросы тихо уходили бы на настоящий api.zenmoney.ru.
   zen: [async ({ context }, use) => {
     const zen = new FakeZen();
+    // Знакомство запускается само при первых данных и закрыло бы экран
+    // в каждом тесте — считаем его уже показанным. Тест обучения снимает это.
+    await context.addInitScript(() => {
+      if (!localStorage.getItem("dzenanalytics:tour")) {
+        localStorage.setItem("dzenanalytics:tour", JSON.stringify({ done: [], welcomed: true }));
+      }
+    });
     // Порядок важен: Playwright проверяет маршруты с последнего добавленного.
     await context.route(/^https?:\/\/(?!localhost[:/]|127\.0\.0\.1[:/])/, (route) => route.abort());
     await context.route("https://www.cbr-xml-daily.ru/**", (route) =>

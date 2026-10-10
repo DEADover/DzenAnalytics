@@ -316,7 +316,7 @@ export function TopNav({
         {/* До `xl` у пунктов меню с названиями нет значков: при ширине
             1024–1279 меню со значками налезало на кнопки справа. Подписи
             короткие и без значков читаются. */}
-        <nav className="seg-track hidden lg:inline-flex min-w-0 max-w-full">
+        <nav data-tour="nav" className="seg-track hidden lg:inline-flex min-w-0 max-w-full">
           <img
             src={logoDa}
             alt="DzenAnalytics"
@@ -354,6 +354,7 @@ export function TopNav({
             {groups.length === 0 && (
               <button
                 type="button"
+                data-tour="nav-edit"
                 onClick={() => {
                   setMoreOpen(false);
                   openHeaderEditor();
@@ -373,6 +374,7 @@ export function TopNav({
           {groups.length > 0 && (
             <div className="shrink-0">
               <button
+                data-tour="more"
                 onClick={() => setMoreOpen((o) => !o)}
                 aria-expanded={moreOpen}
                 aria-haspopup="true"
@@ -419,6 +421,7 @@ export function TopNav({
         {filtersDocked && (
         <button
           type="button"
+          data-tour="filters-toggle"
           onClick={() => {
             setMoreOpen(false);
             toggleFilters();
@@ -445,6 +448,7 @@ export function TopNav({
         </button>
         )}
         <button
+          data-tour="palette"
           onClick={onOpenPalette}
           className={iconItem()}
           title="Команды и поиск (⌘K / Ctrl+K)"
@@ -480,6 +484,7 @@ export function TopNav({
             «Главной» в меню, и два одинаковых значка в одной шапке читались бы
             как одно и то же действие. */}
         <button
+          data-tour="layout-edit"
           onClick={() => canEditLayout && setEditingLayout(!editingLayout)}
           // Именно `aria-disabled`, а не `disabled`: выключенная кнопка в
           // браузере не получает событий мыши, и подсказка о том, почему она
@@ -502,6 +507,7 @@ export function TopNav({
         {/* Help — question icon. Same active treatment as Settings. */}
         <SmoothNavLink
           to="/help"
+          data-tour="help"
           onNavigate={() => setMoreOpen(false)}
           title="Справка"
           className={({ isActive }) => iconItem(isActive)}
@@ -531,6 +537,7 @@ export function TopNav({
             кнопкой оно было ниже соседних (30 против 42) и занимало лишний
             промежуток. */}
         <button
+          data-tour="menu-button"
           onClick={() => setMobileOpen(true)}
           className={clsx(iconItem(mobileOpen), "lg:hidden")}
           title="Меню"

@@ -10,6 +10,9 @@ import { HeaderNavModal } from "./components/HeaderNavModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HistRatesProgress } from "./components/HistRatesProgress";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
+import { useTourStore } from "./store/useTourStore";
+import { TourHub } from "./components/tour/TourHub";
+import { TourOverlay } from "./components/tour/TourOverlay";
 import { DashboardPage } from "./pages/DashboardPage";
 import { CashflowPage } from "./pages/CashflowPage";
 import { TransactionsPage } from "./pages/TransactionsPage";
@@ -143,6 +146,16 @@ function App() {
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   useGlobalShortcuts(() => setPaletteOpen(true));
+
+  // Знакомство — само, один раз: когда в панели впервые появились данные
+  // (подключили Дзен-мани, загрузили CSV или открыли демо). Небольшая пауза —
+  // чтобы панель успела отрисоваться и было что подсвечивать.
+  const tourWelcomed = useTourStore((s) => s.welcomed);
+  useEffect(() => {
+    if (!loaded || !hasData || tourWelcomed) return;
+    const t = setTimeout(() => useTourStore.getState().start("intro"), 900);
+    return () => clearTimeout(t);
+  }, [loaded, hasData, tourWelcomed]);
 
   useEffect(() => {
     // Hydrate the deleted-ids set first so the data store's pipeline
@@ -496,6 +509,8 @@ function App() {
       </main>
       <TransactionsDrawer />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <TourHub />
+      <TourOverlay />
       <ThemeModal />
       <HeaderNavModal />
       <ConfirmDialog />

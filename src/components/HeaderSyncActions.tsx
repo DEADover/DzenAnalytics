@@ -163,7 +163,7 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
     // block — without this the surrounding header `items-center` row
     // aligns the wrapper as a block element and the segmented control
     // ends up a hair higher than the gear/help icons next to it.
-    <div className="relative inline-flex items-center shrink-0">
+    <div data-tour="sync" className="relative inline-flex items-center shrink-0">
       {/* Одна панель на всё, что общается с облаком: отправку и загрузку.
           Рамка подсвечивается акцентом, только когда есть что отправлять, —
           в спокойном состоянии панель не тянет на себя внимание. */}

@@ -100,6 +100,7 @@ export function PlannedBar({
   return (
     <button
       type="button"
+      data-tour="planned"
       onClick={onToggle}
       aria-expanded={open}
       title={open ? "Вернуться ко всем операциям" : "Показать только запланированные операции"}
