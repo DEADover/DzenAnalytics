@@ -16,13 +16,12 @@ import type { ZenTag } from "../lib/zenmoney";
 import { useDataStore } from "../store/useDataStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 
-/** `kind` задаёт, какие категории предлагать: расходные или доходные. */
-export function useCategoryNodes(kind: string): CategoryNode[] {
-  const allTransactions = useDataStore((s) => s.transactions);
-  const categoryMeta = useCategoryMetaStore((s) => s.meta);
-
-  // Сырые теги Дзен-мани — единственное место, где лежит настоящая иерархия
-  // родитель→ребёнок (`categoryMeta` ключуется по названию и её схлопывает).
+/**
+ * Сырые теги Дзен-мани — единственное место, где лежит настоящая иерархия
+ * родитель→ребёнок (`categoryMeta` ключуется по названию и её схлопывает).
+ * `null` — кэша нет (режим CSV).
+ */
+export function useZenTags(): ZenTag[] | null {
   const [cacheTags, setCacheTags] = useState<ZenTag[] | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -33,6 +32,15 @@ export function useCategoryNodes(kind: string): CategoryNode[] {
       cancelled = true;
     };
   }, []);
+  return cacheTags;
+}
+
+/** `kind` задаёт, какие категории предлагать: расходные или доходные. */
+export function useCategoryNodes(kind: string): CategoryNode[] {
+  const allTransactions = useDataStore((s) => s.transactions);
+  const categoryMeta = useCategoryMetaStore((s) => s.meta);
+
+  const cacheTags = useZenTags();
 
   const { categoryOptions, subcatByCategory } = useMemo(() => {
     const subByCat = new Map<string, Set<string>>();

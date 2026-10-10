@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { CategoryDot } from "./CategoryDot";
 import { SearchInput } from "./SearchInput";
 import { textMatches } from "../lib/keyboardLayout";
@@ -30,6 +30,9 @@ interface Props {
    * категорий приходится прокручивать само окно.
    */
   portal?: boolean;
+  /** Крестик «Очистить» у выбранной категории — где пустое поле что-то значит
+   *  («Категория без изменений» в массовом изменении). */
+  clearable?: boolean;
 }
 
 /**
@@ -50,6 +53,7 @@ export function CategoryCascadePicker({
   maxHeight = "min(46vh, 280px)",
   hideParentOption,
   portal = false,
+  clearable = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -198,7 +202,8 @@ export function CategoryCascadePicker({
         onClick={toggle}
         className="input text-sm w-full flex items-center justify-between gap-2 text-left"
       >
-        <span className="flex items-center gap-2 min-w-0">
+        {/* Место под крестик «Очистить» — он стоит поверх, перед стрелкой. */}
+        <span className={`flex items-center gap-2 min-w-0 ${clearable && category ? "mr-5" : ""}`}>
           {category && <CategoryDot category={category} size="w-5 h-5" />}
           <span className={`truncate ${label ? "" : "text-muted"}`}>
             {label || placeholder}
@@ -208,6 +213,21 @@ export function CategoryCascadePicker({
           className={`w-4 h-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
+      {clearable && category && (
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setQuery("");
+            onChange("", "");
+          }}
+          title="Очистить"
+          aria-label="Очистить категорию"
+          className="absolute right-8 top-1/2 -translate-y-1/2 text-muted hover:text-expense"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
       {open && renderPopup(
         <div
           ref={popupRef}

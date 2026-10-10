@@ -10,6 +10,9 @@ import type { TransactionEdit } from "../store/useEditsStore";
 import { Segmented } from "./Segmented";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { DateField } from "./DateField";
+import { CategoryCascadePicker, type CategoryNode } from "./CategoryCascadePicker";
+import { buildCategoryNodes } from "../lib/categoryNodes";
+import { useZenTags } from "../hooks/useCategoryNodes";
 
 /**
  * Bulk-edit modal. Lets the user change Категория (+подкатегория),
@@ -88,6 +91,14 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
     };
   }, [allTransactions, dict]);
 
+  // Тот же выбор категории, что в карточке операции: одно поле, родители
+  // слева, подкатегории справа, поиск по обоим уровням.
+  const zenTags = useZenTags();
+  const categoryNodes = useMemo<CategoryNode[]>(
+    () => buildCategoryNodes(categoryOptions, subcatByCategory, zenTags),
+    [categoryOptions, subcatByCategory, zenTags]
+  );
+
   const canApply =
     category.trim() !== "" || payee.trim() !== "" || comment.trim() !== "" || date !== "";
 
@@ -136,38 +147,18 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
         {/* Category + subcategory */}
         <div>
           <label className="label block mb-1">Категория</label>
-          <div className="grid grid-cols-2 gap-2">
-            <Combobox
-              value={category}
-              options={categoryOptions}
-              allowCustom={false}
-              // Без него поле только для чтения: набор не фильтрует список.
-              searchable
-              onChange={(next) => {
-                setCategory(next);
-                if (
-                  subcategory &&
-                  !subcatByCategory.get(next)?.has(subcategory)
-                ) {
-                  setSubcategory("");
-                }
-              }}
-              placeholder="Категория без изменений"
-              maxHeight="200px"
-            />
-            <Combobox
-              value={subcategory}
-              options={Array.from(subcatByCategory.get(category) || []).sort(
-                (a, b) => a.localeCompare(b, "ru")
-              )}
-              allowCustom={false}
-              searchable
-              clearable
-              onChange={setSubcategory}
-              placeholder="Подкатегория"
-              maxHeight="200px"
-            />
-          </div>
+          <CategoryCascadePicker
+            category={category}
+            subcategory={subcategory}
+            categories={categoryNodes}
+            placeholder="Категория без изменений"
+            clearable
+            portal
+            onChange={(cat, sub) => {
+              setCategory(cat);
+              setSubcategory(sub);
+            }}
+          />
         </div>
 
         {/* Payee */}
