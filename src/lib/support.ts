@@ -5,6 +5,8 @@
  * и канал с новостями: блок «О сервисе» в справке и окно истории изменений.
  */
 export const PROJECT_URL = "https://github.com/DEADover/DzenAnalytics";
+/** Официальный сайт: что умеет сервис, установка, ответы на вопросы. */
+export const SITE_URL = "https://dzenanalytics.ru";
 /** Канал сервиса: анонсы выпусков и разбор изменений. */
 export const CHANNEL_URL = "https://t.me/dzenanalytics";
 export const CHANNEL_TITLE = "Канал в Telegram";

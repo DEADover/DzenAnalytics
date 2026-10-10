@@ -61,12 +61,13 @@ import {
   FileSpreadsheet,
   MonitorSmartphone,
   GraduationCap,
+  Globe,
 } from "lucide-react";
 import { useTourStore } from "../store/useTourStore";
 import { Callout } from "../components/Callout";
 import { ChangelogModal } from "../components/ChangelogModal";
 import { GithubMark } from "../components/GithubMark";
-import { CHANNEL_TITLE, CHANNEL_URL, PROJECT_URL, SUPPORT_TITLE, SUPPORT_URL } from "../lib/support";
+import { CHANNEL_TITLE, CHANNEL_URL, PROJECT_URL, SITE_URL, SUPPORT_TITLE, SUPPORT_URL } from "../lib/support";
 import { formatReleaseDate, parseRelease } from "../lib/releaseInfo";
 import changelogRaw from "../../CHANGELOG.md?raw";
 
@@ -4649,16 +4650,7 @@ export function HelpPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        icon={HelpCircle}
-        title="Справка"
-        right={
-          <button type="button" className="btn-primary text-sm" onClick={() => useTourStore.getState().openHub()}>
-            <GraduationCap className="w-4 h-4" />
-            Обучение
-          </button>
-        }
-      />
+      <PageHeader icon={HelpCircle} title="Справка" />
 
       {/* Дерево слева, лента разделов справа. На узком экране дерево
           сворачивается в одну кнопку: полоса из шестидесяти разделов над
@@ -4944,10 +4936,19 @@ function AboutSection({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Обучение — первым: в справку чаще всего приходят разобраться. */}
+          <button type="button" className="btn-primary" onClick={() => useTourStore.getState().openHub()}>
+            <GraduationCap className="w-4 h-4" />
+            Обучение
+          </button>
           <button type="button" className="btn-ghost" onClick={onChangelog}>
             <History className="w-4 h-4" />
             Что нового
           </button>
+          <a href={SITE_URL} target="_blank" rel="noopener noreferrer" className="btn-ghost">
+            <Globe className="w-4 h-4" />
+            Официальный сайт
+          </a>
           <a href={PROJECT_URL} target="_blank" rel="noreferrer" className="btn-ghost">
             <GithubMark className="w-4 h-4" />
             GitHub
