@@ -32,6 +32,7 @@ import { SmoothNavLink } from "./SmoothNavLink";
 import { FiltersDock } from "./FiltersDock";
 import { headerSections, iconButtonWidth, moreGroups } from "../lib/headerNav";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
+import { TOUR_MORE_EVENT } from "../lib/tour";
 import { useDisplayStore } from "../store/useDisplayStore";
 import { useFiltersDockStore } from "../store/useFiltersDockStore";
 import { SUPPORT_TITLE, SUPPORT_URL } from "../lib/support";
@@ -234,6 +235,14 @@ export function TopNav({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [moreOpen, mobileOpen, loc.pathname, smoothNavigate, headerItems]);
+
+  // Обучение раскрывает «Ещё», чтобы показать разделы и карандаш настройки, и
+  // само же закрывает (`components/tour`).
+  useEffect(() => {
+    const onTour = (e: Event) => setMoreOpen((e as CustomEvent<boolean>).detail);
+    window.addEventListener(TOUR_MORE_EVENT, onTour);
+    return () => window.removeEventListener(TOUR_MORE_EVENT, onTour);
+  }, []);
 
   // Панель закрывается по Escape — она большая, накрывает пол-экрана, и уводить
   // руку к мыши ради «передумал» незачем. Боковое меню узкого окна — так же.
@@ -575,6 +584,7 @@ export function TopNav({
                   короткие и прижаты влево. */}
               <button
                 type="button"
+                data-tour="more-edit"
                 className="btn-icon absolute top-3 right-3"
                 onClick={() => {
                   setMoreOpen(false);

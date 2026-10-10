@@ -70,6 +70,7 @@ export function Modal({
   initialFocus = true,
   closeOnEscape = true,
   className,
+  tourId,
   children,
 }: {
   onClose: () => void;
@@ -96,6 +97,8 @@ export function Modal({
   closeOnEscape?: boolean;
   /** Доп. классы окна: фиксированная высота и т. п. */
   className?: string;
+  /** Метка для обучения (`data-tour`) — окно подсвечивает тур. */
+  tourId?: string;
   children: ReactNode;
 }) {
   const id = useId();
@@ -180,6 +183,7 @@ export function Modal({
     >
       <div
         ref={panelRef}
+        data-tour={tourId}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"

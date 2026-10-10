@@ -45,7 +45,7 @@ function HeaderNavModalContent({ onClose }: { onClose: () => void }) {
   const rest = moreGroups(items);
 
   return (
-    <Modal onClose={onClose} width="3xl" className="h-[min(760px,calc(100dvh-2rem))]">
+    <Modal onClose={onClose} width="3xl" tourId="nav-editor" className="h-[min(760px,calc(100dvh-2rem))]">
       <ModalHeader
         icon={PanelTop}
         title="Основное меню"

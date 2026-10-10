@@ -228,6 +228,8 @@ export function WidgetShell({
   return (
     <div
       {...drag}
+      // Метка для обучения: шаг может показать конкретный виджет.
+      data-tour={`widget-${placement.kind}`}
       className={clsx(
         "min-w-0 relative",
         meta.span === 2 && "lg:col-span-2",

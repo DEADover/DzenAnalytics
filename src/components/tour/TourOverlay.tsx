@@ -4,7 +4,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, ArrowRight, Check, GraduationCap, X } from "lucide-react";
 import logoDa from "../../assets/logo-da.png";
-import { tourChapter, type TourStep } from "../../lib/tour";
+import { TOUR_MORE_EVENT, tourChapter, type TourOpen, type TourStep } from "../../lib/tour";
+import { useHeaderNavStore } from "../../store/useHeaderNavStore";
 import { useTourStore } from "../../store/useTourStore";
 
 /** Поле вокруг подсвеченного элемента и отступ карточки от него. */
@@ -34,6 +35,13 @@ function rich(text: string): ReactNode {
       <Fragment key={i}>{part}</Fragment>
     )
   );
+}
+
+/** Раскрыть или закрыть панель «Ещё» либо окно настройки основного меню. */
+function setOpened(what: TourOpen, on: boolean): void {
+  if (what === "more") window.dispatchEvent(new CustomEvent(TOUR_MORE_EVENT, { detail: on }));
+  else if (on) useHeaderNavStore.getState().openEditor();
+  else useHeaderNavStore.getState().closeEditor();
 }
 
 /** Первый видимый элемент из меток шага. */
@@ -98,7 +106,7 @@ const same = (a: Box | null, b: Box | null) =>
   Math.abs(a.width - b.width) < 0.5 &&
   Math.abs(a.height - b.height) < 0.5;
 
-/** Где встать карточке: под элементом, над ним или поверх его низа, если он во весь экран. */
+/** Где встать карточке: под элементом, над ним, сбоку или — если он во весь экран — поверх его низа. */
 function cardPosition(spot: Box | null, cardH: number): { left: number; top: number; width: number } {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -108,6 +116,12 @@ function cardPosition(spot: Box | null, cardH: number): { left: number; top: num
   const below = vh - (spot.top + spot.height);
   if (below >= cardH + GAP + EDGE) return { width, left, top: spot.top + spot.height + GAP };
   if (spot.top >= cardH + GAP + EDGE) return { width, left, top: spot.top - cardH - GAP };
+  // Ни снизу, ни сверху не помещается — сбоку, вровень с серединой блока.
+  const sideTop = Math.min(vh - cardH - EDGE, Math.max(EDGE, spot.top + spot.height / 2 - cardH / 2));
+  if (spot.left + spot.width + GAP + width + EDGE <= vw)
+    return { width, left: spot.left + spot.width + GAP, top: sideTop };
+  if (spot.left - GAP - width >= EDGE) return { width, left: spot.left - GAP - width, top: sideTop };
+  // Блок во всю ширину — поверх его низа.
   return { width, left, top: Math.max(EDGE, vh - cardH - EDGE * 2) };
 }
 
@@ -146,6 +160,15 @@ export function TourOverlay() {
     const missing = [...new URLSearchParams(query)].some(([k, v]) => params.get(k) !== v);
     if (loc.pathname !== path || missing) navigate(step.route);
   }, [step, loc.pathname, loc.search, navigate]);
+
+  // Раскрыть то, что показывает шаг, и закрыть, когда тур уйдёт с него. Два
+  // шага подряд с одним и тем же — панель не закрывается между ними.
+  const open = step?.open;
+  useEffect(() => {
+    if (!open) return;
+    setOpened(open, true);
+    return () => setOpened(open, false);
+  }, [open]);
 
   // Цель шага: ищем, прокручиваем к ней один раз и дальше следим за её
   // местом каждый кадр — страница могла догрузиться, сдвинуться, прокрутиться.
