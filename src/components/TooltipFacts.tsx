@@ -75,8 +75,11 @@ export function TooltipFacts({
       {title != null && <div className="font-semibold text-text">{title}</div>}
       {hasFacts && (
         <div className="space-y-1">
-          {facts.map((f) => (
-            <div key={f.label} className="flex items-center justify-between gap-6">
+          {/* Ключ — номер строки, не подпись: подписи повторяются (два плана
+              «Yandex» в один день), и с одинаковыми ключами React путал строки —
+              при движении по графику в подсказке оставались строки соседних дней. */}
+          {facts.map((f, i) => (
+            <div key={i} className="flex items-center justify-between gap-6">
               <span className="flex items-center gap-1.5 text-muted whitespace-nowrap">
                 {(f.swatch || f.swatchColor || f.icon) && (
                   <span className="w-3.5 shrink-0 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
