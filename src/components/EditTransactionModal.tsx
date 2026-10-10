@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { Badge } from "./Badge";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
 import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Check, ListPlus, ArrowUpToLine, Wand2 } from "lucide-react";
@@ -1217,7 +1218,7 @@ export function EditTransactionModal({
           // a category's sub-categories open to the right (issue #12).
           <Field
             label="Категория"
-            attention={needCategory ? "Выберите — у перевода её не было" : undefined}
+            attention={needCategory ? { text: "Нужно выбрать", title: "У перевода категории не было" } : undefined}
           >
             <CategoryCascadePicker
               category={category}
@@ -1486,7 +1487,7 @@ export function EditTransactionModal({
                     ? "Плательщик"
                     : "Место платежа"
               }
-              attention={needPayee ? "У перевода его не было — укажите, если нужно" : undefined}
+              attention={needPayee ? { text: "Можно указать", title: "У перевода места платежа не было" } : undefined}
               labelAfter={
                 // Состояние справочника рядом с ярлыком. ✓ — запись есть, и
                 // операция сохранится СВЯЗЬЮ с ней. Плюс — записи нет, но мы
@@ -1713,8 +1714,8 @@ function Field({
 }: {
   label: string;
   /** Поле нужно заполнить (например, после смены типа операции): рамка
-   *  акцентом и пояснение под ним. */
-  attention?: string;
+   *  акцентом и пилюля в строке ярлыка — высота поля не меняется. */
+  attention?: { text: string; title?: string };
   /** Optional inline element rendered right after the label (e.g. a
    *  small status badge), sharing the label's baseline. */
   labelAfter?: React.ReactNode;
@@ -1728,9 +1729,14 @@ function Field({
       <div className="flex items-center gap-1.5 mb-1">
         <label className="label">{label}</label>
         {labelAfter}
+        {attention && (
+          // -my-0.5: пилюля чуть выше ярлыка и не раздвигает строку.
+          <Badge tone="accent" title={attention.title} className="-my-0.5">
+            {attention.text}
+          </Badge>
+        )}
       </div>
       {children}
-      {attention && <div className="mt-1 text-xs text-accent">{attention}</div>}
     </div>
   );
 }

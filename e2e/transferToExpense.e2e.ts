@@ -13,8 +13,8 @@ test("перевод стал расходом: поля подсвечены, �
 
   // Категория пуста, а не «Перевод»; оба поля подсвечены.
   await expect(card.getByRole("button", { name: "Выберите категорию" })).toBeVisible();
-  await expect(card.getByText("Выберите — у перевода её не было")).toBeVisible();
-  await expect(card.getByText("У перевода его не было — укажите, если нужно")).toBeVisible();
+  await expect(card.getByText("Нужно выбрать", { exact: true })).toBeVisible();
+  await expect(card.getByText("Можно указать", { exact: true })).toBeVisible();
 
   // Без категории не сохраняется.
   await card.getByRole("button", { name: "Сохранить" }).click();
@@ -22,11 +22,11 @@ test("перевод стал расходом: поля подсвечены, �
 
   await card.getByRole("button", { name: "Выберите категорию" }).click();
   await page.locator("button").filter({ hasText: /^Продукты$/ }).last().click();
-  await expect(card.getByText("Выберите — у перевода её не было")).toHaveCount(0);
+  await expect(card.getByText("Нужно выбрать", { exact: true })).toHaveCount(0);
   const payee = card.getByPlaceholder("Введите или выберите из списка");
   await payee.fill("Ларёк у дома");
   await page.keyboard.press("Enter");
-  await expect(card.getByText("У перевода его не было — укажите, если нужно")).toHaveCount(0);
+  await expect(card.getByText("Можно указать", { exact: true })).toHaveCount(0);
   await card.getByRole("button", { name: "Сохранить" }).click();
   await expect(card).toHaveCount(0);
 
