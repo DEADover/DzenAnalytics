@@ -1732,8 +1732,7 @@ function Field({
         <label className="label">{label}</label>
         {labelAfter}
         {attention && (
-          // -my-0.5: пилюля чуть выше ярлыка и не раздвигает строку.
-          <Badge tone="accent" solid={attention.required} title={attention.title} className="-my-0.5">
+          <Badge size="xs" tone="accent" solid={attention.required} title={attention.title}>
             {attention.text}
           </Badge>
         )}

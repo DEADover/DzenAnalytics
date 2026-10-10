@@ -42,8 +42,9 @@ export function Badge({
   children,
 }: {
   tone?: BadgeTone;
-  /** `sm` 12 px — в строке списка; `md` 14 px — рядом с крупным итогом. */
-  size?: "sm" | "md";
+  /** `xs` 10 px — в строке ярлыка поля (ниже самого ярлыка, строку не
+   *  раздвигает); `sm` 12 px — в строке списка; `md` 14 px — рядом с крупным итогом. */
+  size?: "xs" | "sm" | "md";
   /** Сплошная заливка тоном вместо подложки — когда метка стоит рядом с
    *  такими же светлыми полями и иначе с ними сливается. */
   solid?: boolean;
@@ -57,12 +58,16 @@ export function Badge({
       title={title}
       className={clsx(
         "inline-flex items-center gap-1 rounded-full font-medium whitespace-nowrap",
-        size === "sm" ? "px-2 py-0.5 text-xs leading-4" : "px-3 py-1 text-sm",
+        size === "xs"
+          ? "px-1.5 text-[10px] leading-[14px]"
+          : size === "sm"
+            ? "px-2 py-0.5 text-xs leading-4"
+            : "px-3 py-1 text-sm",
         solid ? SOLID[tone] : TONE[tone],
         className
       )}
     >
-      {Icon && <Icon className={clsx("shrink-0", size === "sm" ? "w-3 h-3" : "w-3.5 h-3.5")} aria-hidden="true" />}
+      {Icon && <Icon className={clsx("shrink-0", size === "md" ? "w-3.5 h-3.5" : "w-3 h-3")} aria-hidden="true" />}
       {children}
     </span>
   );
