@@ -54,12 +54,14 @@ test("центр обучения: глава «Главная, операции
   const tour = page.getByRole("dialog", { name: /Обучение: Главная, операции и фильтр/ });
   await expect(tour.getByRole("heading", { name: "Главная" })).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
-  // К ленте: шаги 4–9 идут в «Операциях».
+  // Сначала главная, потом лента: глава идёт только вперёд.
   for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowRight");
-  await expect(tour.getByRole("heading", { name: "Общий фильтр" })).toBeVisible();
+  await expect(tour.getByRole("heading", { name: "Лента операций" })).toBeVisible();
   await expect(page).toHaveURL(/\/transactions/);
-  for (let i = 0; i < 6; i++) await page.keyboard.press("ArrowRight");
-  // Предпоследний шаг — в настройках оформления, на строке «Панель фильтров».
+  for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowRight");
+  await expect(tour.getByRole("heading", { name: "Общий фильтр" })).toBeVisible();
+  // Сразу за фильтром — где его спрятать: строка «Панель фильтров» в оформлении.
+  await page.keyboard.press("ArrowRight");
   await expect(tour.getByRole("heading", { name: "Фильтр можно спрятать" })).toBeVisible();
   await expect(page).toHaveURL(/tab=interface/);
   await expect(page.locator('[data-tour="filters-mode"]')).toBeVisible();
@@ -72,16 +74,16 @@ test("центр обучения: глава «Главная, операции
   await expect(page.getByRole("dialog").filter({ hasText: "Центр обучения" }).getByText("Пройдено 1 из 3")).toBeVisible();
 });
 
-test("шаг «В карточке операции» открывает карточку и закрывает её, ничего не правя", async ({ page }) => {
+test("шаг «Карточка операции» открывает карточку и закрывает её, ничего не правя", async ({ page }) => {
   await connectZen(page, "/");
   await page.evaluate(async () => {
     type S = { useTourStore: { getState: () => { start: (id: string) => void; next: () => void } } };
     const m = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useTourStore");
     m.useTourStore.getState().start("daily");
-    for (let i = 0; i < 8; i++) m.useTourStore.getState().next();
+    for (let i = 0; i < 6; i++) m.useTourStore.getState().next();
   });
   const tour = page.getByRole("dialog", { name: /Обучение/ });
-  await expect(tour.getByRole("heading", { name: "В карточке операции" })).toBeVisible();
+  await expect(tour.getByRole("heading", { name: "Карточка операции" })).toBeVisible();
   await expect(page.locator('[data-tour="op-actions"]')).toBeVisible();
   await page.keyboard.press("ArrowRight");
   await expect(page.locator('[data-tour="op-actions"]')).toHaveCount(0);
