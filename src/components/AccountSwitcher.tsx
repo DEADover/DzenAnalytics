@@ -17,25 +17,28 @@ export function AccountSwitcher() {
   const current = profiles.find((p) => p.id === activeId) ?? profiles[0];
   const label = profileLabel(current);
   return (
-    <HeaderSwitcher
-      icon={UserRound}
-      current={label}
-      title={`Аккаунт: ${label}\nУ каждого аккаунта свои данные`}
-      ariaLabel={`Аккаунт: ${label}`}
-      heading="Аккаунт"
-      // Круглый аватар вместо значка и имени: узнаётся с одного взгляда, а
-      // имя — в подсказке и в списке.
-      face={<ProfileAvatar profile={current} size={24} />}
-      items={profiles.map((p) => ({
-        id: p.id,
-        label: profileLabel(p),
-        // Логин — вторым рядом, только если название своё: иначе оно и есть логин.
-        hint: p.name.trim() && p.login ? p.login : null,
-        leading: <ProfileAvatar profile={p} size={24} />,
-      }))}
-      activeId={current.id}
-      onPick={switchProfile}
-      settings={{ to: "/settings?tab=source#accounts", label: "Управлять аккаунтами" }}
-    />
+    // Метка для обучения: сам переключатель — общий компонент с меню.
+    <span data-tour="account-switcher" className="inline-flex">
+      <HeaderSwitcher
+        icon={UserRound}
+        current={label}
+        title={`Аккаунт: ${label}\nУ каждого аккаунта свои данные`}
+        ariaLabel={`Аккаунт: ${label}`}
+        heading="Аккаунт"
+        // Круглый аватар вместо значка и имени: узнаётся с одного взгляда, а
+        // имя — в подсказке и в списке.
+        face={<ProfileAvatar profile={current} size={24} />}
+        items={profiles.map((p) => ({
+          id: p.id,
+          label: profileLabel(p),
+          // Логин — вторым рядом, только если название своё: иначе оно и есть логин.
+          hint: p.name.trim() && p.login ? p.login : null,
+          leading: <ProfileAvatar profile={p} size={24} />,
+        }))}
+        activeId={current.id}
+        onPick={switchProfile}
+        settings={{ to: "/settings?tab=source#accounts", label: "Управлять аккаунтами" }}
+      />
+    </span>
   );
 }

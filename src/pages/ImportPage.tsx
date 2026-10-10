@@ -941,7 +941,7 @@ export function ImportPage() {
                 </InfoPopover>
               </div>
               {zenToken && (
-                <div className="flex items-center gap-3 flex-wrap text-xs text-muted">
+                <div data-tour="autosync" className="flex items-center gap-3 flex-wrap text-xs text-muted">
                   <span className="flex items-center gap-1.5 text-text">
                     <CheckCircle2 className="w-3.5 h-3.5 text-income shrink-0" />
                     Подключено

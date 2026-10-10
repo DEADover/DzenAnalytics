@@ -50,7 +50,7 @@ export function AccountsSettings() {
   }
 
   return (
-    <section id="accounts" ref={boxRef} className="card-tray card-pad space-y-4 scroll-mt-24">
+    <section id="accounts" data-tour="accounts" ref={boxRef} className="card-tray card-pad space-y-4 scroll-mt-24">
       <SettingsSectionHeader icon={Users} title="Аккаунты" />
       <p className="text-sm text-muted">
         Несколько аккаунтов Дзен-мани на одном устройстве — например, личный и

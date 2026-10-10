@@ -6,8 +6,8 @@ import { tourProgress, useTourStore } from "../../store/useTourStore";
 import { Modal, ModalBody, ModalHeader } from "../Modal";
 
 /**
- * Центр обучения: все главы карточками — значок, о чём, сколько займёт и
- * пройдена ли. Сверху — общий прогресс кольцом. Щелчок по главе закрывает
+ * Центр обучения: все главы карточками — значок, о чём, какие темы внутри,
+ * сколько займёт и пройдена ли. Сверху — общий прогресс кольцом. Щелчок по главе закрывает
  * окно и запускает тур прямо по живой панели.
  */
 export function TourHub() {
@@ -45,13 +45,13 @@ export function TourHub() {
               Пройдено {p.done} из {p.total}
             </div>
             <p className="text-sm text-muted">
-              Короткие туры прямо по панели: подсвечиваем нужное место и объясняем. Любую главу можно пройти
-              ещё раз.
+              Туры прямо по панели: подсвечиваем нужное место и объясняем, что оно умеет. Любую главу можно
+              пройти ещё раз.
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-3">
           {TOUR_CHAPTERS.map((c, i) => {
             const passed = done.includes(c.id);
             const Icon = c.icon;
@@ -60,12 +60,12 @@ export function TourHub() {
                 key={c.id}
                 type="button"
                 onClick={() => start(c.id)}
-                className="tour-hub-card group text-left rounded-2xl border border-border bg-panel2/40 p-4 flex gap-3 transition-colors hover:border-accent/60 hover:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                style={{ animationDelay: `${i * 40}ms` }}
+                className="tour-hub-card group w-full text-left rounded-2xl border border-border bg-panel2/40 p-4 flex gap-4 transition-colors hover:border-accent/60 hover:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                style={{ animationDelay: `${i * 60}ms` }}
               >
                 <span
                   className={clsx(
-                    "relative w-10 h-10 shrink-0 rounded-xl flex items-center justify-center",
+                    "relative w-11 h-11 shrink-0 rounded-xl flex items-center justify-center",
                     passed ? "bg-income/10 text-income" : "bg-accent/10 text-accent"
                   )}
                 >
@@ -77,13 +77,22 @@ export function TourHub() {
                   )}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-medium text-sm">{c.title}</span>
-                  <span className="block text-xs text-muted mt-0.5">{c.summary}</span>
-                  <span className="mt-2 flex items-center gap-1.5 text-xs text-muted">
-                    {chapterDuration(c)} · {c.steps.length} {pluralRu(c.steps.length, ["шаг", "шага", "шагов"])}
-                    <span className="ml-auto inline-flex items-center gap-1 text-accent font-medium">
-                      {passed ? "Ещё раз" : "Начать"}
-                      <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="font-semibold">{c.title}</span>
+                    <span className="text-xs text-muted shrink-0 tabular-nums">
+                      {chapterDuration(c)} · {c.steps.length} {pluralRu(c.steps.length, ["шаг", "шага", "шагов"])}
+                    </span>
+                  </span>
+                  <span className="block text-sm text-muted mt-0.5">{c.summary}</span>
+                  <span className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    {c.topics.map((t) => (
+                      <span key={t} className="chip chip-sm">
+                        {t}
+                      </span>
+                    ))}
+                    <span className="ml-auto inline-flex items-center gap-1 text-sm text-accent font-medium">
+                      {passed ? "Пройти ещё раз" : "Начать"}
+                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                     </span>
                   </span>
                 </span>
