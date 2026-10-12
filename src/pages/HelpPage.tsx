@@ -6,6 +6,7 @@ import { matchesQuery, nodeText } from "../lib/nodeText";
 import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { PageHeader } from "../components/PageHeader";
+import { isOAuthConfigured } from "../lib/oauth";
 import {
   HelpCircle,
   History,
@@ -2313,12 +2314,46 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <p>
-          Чтобы включить онлайн-синхронизацию, нужен personal access token из
-          Дзен-мани. Это статичный токен, привязанный к вашему аккаунту — не
-          путать с разовым OAuth-кодом.
+          Для онлайн-синхронизации сервису нужен токен доступа к вашему
+          аккаунту Дзен-мани. Его выдаёт сам Дзен-мани после входа — через
+          кнопку на нашем сайте или через zerro.app/token.
+        </p>
+        {/* Вход через Дзен-мани есть только в сборке сайта (параметры
+            VITE_OAUTH_*): ключ API Дзен-мани привязан к нашему адресу. Справка
+            говорит об этом везде — в zip, Docker и у velios тоже, — чтобы там
+            не искали кнопку, которой нет. */}
+        <p className="mt-2">
+          <strong>Вход через Дзен-мани — только на нашем сайте</strong>{" "}
+          <a
+            href="https://app.dzenanalytics.ru"
+            target="_blank"
+            rel="noreferrer"
+            className="underline text-accent"
+          >
+            app.dzenanalytics.ru
+          </a>
+          . Кнопка «Войти через Дзен-мани» есть только там: ключ доступа к
+          Дзен-мани выдан на этот адрес. В локальной копии, в Docker и на других
+          адресах сервиса подключайтесь токеном — как описано ниже.
+        </p>
+        {isOAuthConfigured() && (
+          <ol className="list-decimal list-inside space-y-1 mt-1">
+            <li>
+              «Настройки» (⚙️) → «Данные» → в карточке «Источник данных»
+              выберите «Дзен-мани API» → «Войти через Дзен-мани»
+            </li>
+            <li>На странице Дзен-мани войдите своим логином и разрешите доступ</li>
+            <li>Сервис вернёт вас обратно уже подключённым и начнёт загрузку</li>
+          </ol>
+        )}
+        <p className="mt-2 text-muted text-xs">
+          Логин и пароль вводятся только на сайте Дзен-мани — сервис их не
+          видит. Сервис получает токен и хранит его только у вас в браузере.
         </p>
         <p className="mt-2">
-          <strong>Где взять токен:</strong>
+          <strong>
+            {isOAuthConfigured() ? "Или вставьте токен вручную:" : "Подключение токеном:"}
+          </strong>
         </p>
         <ol className="list-decimal list-inside space-y-1 mt-1">
           <li>
