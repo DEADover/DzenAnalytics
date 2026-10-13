@@ -8,7 +8,7 @@
  */
 
 import type { Currency, CurrencyRates } from "../types";
-import { periodRange, spanDays } from "./period";
+import { periodDayCount, periodRange, toIsoDate } from "./period";
 import type { RecurringCandidate } from "./aggregations";
 import { toBase } from "./csv";
 
@@ -20,7 +20,10 @@ export interface MonthProgress {
   days: number;
   /** `day / days`, от 0 до 1. */
   progress: number;
-  /** Сколько дней осталось до конца периода. Ноль у завершённого месяца. */
+  /**
+   * Сколько дней осталось, СЧИТАЯ СЕГОДНЯШНИЙ, — как у «Свободных денег» и
+   * Дзен-мани (см. `periodDayCount`). В последний день — 1, у завершённого — 0.
+   */
   left: number;
   /** Период ещё идёт — значит сравнивать его с полным месяцем нельзя. */
   running: boolean;
@@ -41,18 +44,11 @@ export function monthProgress(
   now: Date = new Date(),
   startDay: number = 1
 ): MonthProgress {
-  const { from, to } = periodRange(ym, startDay);
-  const days = spanDays(from, to);
-  const startsAt = Date.parse(`${from}T00:00:00`);
-  // Период кончается ВЕЧЕРОМ последнего дня: сравниваем с началом следующего.
-  const endsAt = Date.parse(`${to}T00:00:00`) + 86_400_000;
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-
-  if (today >= endsAt) return { day: days, days, progress: 1, left: 0, running: false };
-  if (today < startsAt) return { day: 0, days, progress: 0, left: days, running: false };
-
-  const day = Math.round((today - startsAt) / 86_400_000) + 1;
-  return { day, days, progress: day / days, left: days - day, running: true };
+  const { day, days, left, running } = periodDayCount(
+    periodRange(ym, startDay),
+    toIsoDate(now)
+  );
+  return { day, days, progress: days > 0 ? day / days : 0, left, running };
 }
 
 /**
