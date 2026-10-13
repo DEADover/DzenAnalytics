@@ -18,7 +18,7 @@ import { useFreeMoneyStore } from "../store/useFreeMoneyStore";
 import { useDataStore } from "../store/useDataStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
-import { periodRange, spanDays } from "../lib/period";
+import { periodDayCount, periodKey, periodRange } from "../lib/period";
 import type { ZenCache } from "../lib/zenmoneyCache";
 import type { CurrencyRates } from "../types";
 import { fulfilledMarkerIds, plannedOpsByTagMonth } from "../lib/zenBudgets";
@@ -115,11 +115,14 @@ export function useFreeMoney(
         ? "includeOpeningBalance"
         : "excludeOpeningBalance";
 
-    const ym = periodKeyOf(today, startDay);
+    const ym = periodKey(today, startDay);
     const range = periodRange(ym, startDay);
-    const daysTotal = Math.max(1, spanDays(range.from, range.to));
-    const dayIndex = Math.min(daysTotal, Math.max(1, spanDays(range.from, today)));
-    const daysLeft = daysTotal - dayIndex + 1;
+    // Дни — тем же счётом, что и пилюля месяца: сегодняшний считается
+    // оставшимся, и лимит «на день» делится ровно на показанное число.
+    const days = periodDayCount(range, today);
+    const daysTotal = Math.max(1, days.days);
+    const dayIndex = Math.min(daysTotal, Math.max(1, days.day));
+    const daysLeft = Math.max(1, days.left);
 
     const conv = converter(cache, rates);
     // Баланс периода и факт по статьям — по счетам «в балансе», как у
@@ -333,14 +336,6 @@ export function useFreeMoney(
     today,
     plannedDeletions,
   ]);
-}
-
-/** Период, в который попадает дата, при своём дне начала месяца. */
-function periodKeyOf(iso: string, startDay: number): string {
-  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  if (d >= startDay) return `${y}-${String(m).padStart(2, "0")}`;
-  const prev = new Date(y, m - 2, 1);
-  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
 }
 
 /**

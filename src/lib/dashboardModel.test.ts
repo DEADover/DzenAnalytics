@@ -41,7 +41,7 @@ describe("monthProgress — насколько месяц прожит", () => {
     const p = monthProgress("2026-08", new Date(2026, 7, 18, 12));
     expect(p.day).toBe(18);
     expect(p.days).toBe(31);
-    expect(p.left).toBe(13);
+    expect(p.left).toBe(14);
     expect(p.running).toBe(true);
     expect(p.progress).toBeCloseTo(18 / 31, 5);
   });
@@ -61,7 +61,7 @@ describe("monthProgress — насколько месяц прожит", () => {
     const p = monthProgress("2026-08", new Date(2026, 8, 17, 12), 28);
     expect(p.days).toBe(31);
     expect(p.day).toBe(21);
-    expect(p.left).toBe(10);
+    expect(p.left).toBe(11);
     expect(p.running).toBe(true);
   });
 
@@ -72,11 +72,31 @@ describe("monthProgress — насколько месяц прожит", () => {
     });
     expect(monthProgress("2026-08", new Date(2026, 8, 27), 28)).toMatchObject({
       day: 31,
-      left: 0,
+      left: 1,
       running: true,
     });
     // 28 сентября начался следующий период — этот закрыт.
     expect(monthProgress("2026-08", new Date(2026, 8, 28), 28).running).toBe(false);
+  });
+
+  // Пилюля «Осталось N дней» и «Свободно до … · N дней» — одно число: оба
+  // считают сегодняшний день оставшимся (periodDayCount).
+  it("демо 22.09.2026: осталось 9 дней — столько же, сколько у «Свободных денег»", () => {
+    const p = monthProgress("2026-09", new Date(2026, 8, 22, 12));
+    expect(p).toMatchObject({ day: 22, days: 30, left: 9, running: true });
+  });
+
+  it("календарный месяц: 1-е и последнее число", () => {
+    expect(monthProgress("2026-09", new Date(2026, 8, 1))).toMatchObject({
+      day: 1,
+      left: 30,
+      running: true,
+    });
+    expect(monthProgress("2026-09", new Date(2026, 8, 30, 23, 30))).toMatchObject({
+      day: 30,
+      left: 1,
+      running: true,
+    });
   });
 
   it("будущий месяц: ноль прожитых дней, а не отрицательные", () => {

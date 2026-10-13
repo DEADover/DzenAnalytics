@@ -153,6 +153,40 @@ export function spanDays(from: string, to: string): number {
   return Math.round((b - a) / 86_400_000) + 1;
 }
 
+/** Где сегодняшний день внутри периода — общий счёт для всей главной. */
+export interface PeriodDayCount {
+  /** Длина периода в днях. */
+  days: number;
+  /** Номер сегодняшнего дня, с единицы. 0 — период ещё не начался, `days` — уже кончился. */
+  day: number;
+  /** Сколько дней осталось, СЧИТАЯ СЕГОДНЯШНИЙ. 0 — период кончился. */
+  left: number;
+  /** Сегодня внутри периода. */
+  running: boolean;
+}
+
+/**
+ * Сколько дней периода прожито и сколько осталось на дату `todayIso`.
+ *
+ * ОДНО ПРАВИЛО НА ВСЮ ГЛАВНУЮ: сегодняшний день — ещё оставшийся. Так считает
+ * Дзен-мани: 12 сентября в 30-дневном месяце у него «19 дней», и на них же
+ * делится лимит «на день» (`dailyAllowance`). Пилюля месяца считала без
+ * сегодняшнего и показывала «Осталось 8 дней» рядом со «Свободно до 30
+ * сентября · 9 дней» — одни и те же сутки, два разных числа.
+ *
+ * Отсюда `day + left = days + 1` у идущего периода: сегодня и прожито (полоса
+ * «месяц пройден» закрашивает его целиком), и ещё доступно для трат. В
+ * последний день `left` — единица, а не ноль.
+ */
+export function periodDayCount(range: DayRange, todayIso: string): PeriodDayCount {
+  const days = spanDays(range.from, range.to);
+  const today = todayIso.slice(0, 10);
+  if (today > range.to) return { days, day: days, left: 0, running: false };
+  if (today < range.from) return { days, day: 0, left: days, running: false };
+  const day = spanDays(range.from, today);
+  return { days, day, left: days - day + 1, running: true };
+}
+
 /**
  * Идёт ли период прямо сейчас — то есть кончаются ли данные внутри него, не
  * доходя до его календарного конца.

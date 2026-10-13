@@ -11,6 +11,7 @@ import {
   endAfterDays,
   isRunningPeriod,
   parseIsoDate,
+  periodDayCount,
   periodRange,
   previousWindows,
   shiftPeriod,
@@ -409,5 +410,103 @@ describe("календарный квартал (#109)", () => {
     expect(quarterOf("2026-03")).toBe(1);
     expect(quarterOf("2026-04")).toBe(2);
     expect(quarterLabel("2026-09")).toBe("III кв. 2026");
+  });
+});
+
+describe("periodDayCount — сколько дней периода осталось, считая сегодня", () => {
+  const sep = periodRange("2026-09");
+
+  // Демо-данные: 22.09.2026, календарный месяц. Пилюля говорила «Осталось 8
+  // дней», «Свободные деньги» — «9 дней». Правило одно: сегодня — оставшийся.
+  it("22 сентября: 22-й день из 30, осталось 9 — вместе с сегодняшним", () => {
+    expect(periodDayCount(sep, "2026-09-22")).toEqual({
+      days: 30,
+      day: 22,
+      left: 9,
+      running: true,
+    });
+  });
+
+  it("сверка с Дзен-мани: 12 сентября у него «19 дней»", () => {
+    expect(periodDayCount(sep, "2026-09-12").left).toBe(19);
+  });
+
+  it("1-е число: первый день, осталось все 30", () => {
+    expect(periodDayCount(sep, "2026-09-01")).toEqual({
+      days: 30,
+      day: 1,
+      left: 30,
+      running: true,
+    });
+  });
+
+  it("последний день: осталась одна — сегодняшняя, а не ноль", () => {
+    expect(periodDayCount(sep, "2026-09-30")).toEqual({
+      days: 30,
+      day: 30,
+      left: 1,
+      running: true,
+    });
+  });
+
+  it("у идущего периода прожитое и оставшееся пересекаются ровно в сегодня", () => {
+    for (let d = 1; d <= 30; d++) {
+      const c = periodDayCount(sep, `2026-09-${String(d).padStart(2, "0")}`);
+      expect(c.day + c.left).toBe(c.days + 1);
+    }
+  });
+
+  it("на следующий день после конца — период закрыт, осталось 0", () => {
+    expect(periodDayCount(sep, "2026-10-01")).toEqual({
+      days: 30,
+      day: 30,
+      left: 0,
+      running: false,
+    });
+  });
+
+  it("накануне начала — ничего не прожито, впереди весь период", () => {
+    expect(periodDayCount(sep, "2026-08-31")).toEqual({
+      days: 30,
+      day: 0,
+      left: 30,
+      running: false,
+    });
+  });
+
+  it("время в дате не мешает", () => {
+    expect(periodDayCount(sep, "2026-09-22T23:59:00").left).toBe(9);
+  });
+
+  describe("свой первый день периода (report-period-day)", () => {
+    // День 11: «Сентябрь» — 11.09–10.10, 30 дней.
+    const r = periodRange("2026-09", 11);
+
+    it("первый день периода — 11-е, а не 1-е", () => {
+      expect(periodDayCount(r, "2026-09-11")).toMatchObject({ day: 1, left: 30, running: true });
+    });
+
+    it("1-е число следующего календарного месяца — середина периода", () => {
+      expect(periodDayCount(r, "2026-10-01")).toMatchObject({ day: 21, left: 10, running: true });
+    });
+
+    it("последний день периода — 10-е: осталась одна", () => {
+      expect(periodDayCount(r, "2026-10-10")).toMatchObject({ day: 30, left: 1, running: true });
+    });
+
+    it("11-е следующего месяца — этот период уже закрыт", () => {
+      expect(periodDayCount(r, "2026-10-11")).toMatchObject({ left: 0, running: false });
+    });
+
+    it("день 31 в феврале: период 28.02–30.03, а не хвост январского", () => {
+      const ym = periodKey("2026-02-28", 31);
+      expect(ym).toBe("2026-02");
+      expect(periodDayCount(periodRange(ym, 31), "2026-02-28")).toMatchObject({
+        days: 31,
+        day: 1,
+        left: 31,
+        running: true,
+      });
+    });
   });
 });

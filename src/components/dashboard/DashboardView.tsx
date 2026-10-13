@@ -201,10 +201,14 @@ function isClosed(m: DashboardModel): boolean {
   return !m.month.running && m.month.progress >= 1;
 }
 
-/** Сколько периода осталось — хвост пилюли. */
+/**
+ * Сколько периода осталось — хвост пилюли. Сегодняшний день считается
+ * оставшимся, как в «Свободных деньгах» (`periodDayCount`), поэтому последний
+ * день — это `left === 1`.
+ */
 function monthLeft(m: DashboardModel): string {
   if (isClosed(m)) return "Месяц завершён";
-  return m.month.left === 0
+  return m.month.running && m.month.left <= 1
     ? "Последний день"
     : `Осталось ${m.month.left} ${pluralRu(m.month.left, ["день", "дня", "дней"])}`;
 }
