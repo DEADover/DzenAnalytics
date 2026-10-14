@@ -1625,7 +1625,7 @@ export function EditTransactionModal({
         ) : isCreate ? (
           // Вторая кнопка создания — слева, подальше от основной: «Создать»
           // по привычке жмут справа, и перепутать их не должно получаться.
-          <Tooltip content={`${futurePlan ? "Запланировать" : "Создать"} и сразу вносить следующую — дата, счёт и категория останутся`}>
+          <Tooltip content={`${futurePlan ? "Запланировать" : "Создать"} и сразу внести следующую — дата, счёт и категория останутся`}>
             <button
               onClick={() => void save(true)}
               disabled={saving}
@@ -1757,7 +1757,10 @@ function Field({
     <div className={clsx(className, attention?.required && "field-attention")}>
       <div className="flex items-center gap-1.5 mb-1">
         <label className="label">{label}</label>
-        {labelAfter}
+        {/* Значок в ярлыке (например, «?» с курсом у суммы в чужой валюте) — кнопка
+            24 px, выше самой строки ярлыка. Без отрицательного отступа она
+            раздувала строку, и поле уезжало ниже соседних в том же ряду. */}
+        {labelAfter && <span className="flex items-center -my-1">{labelAfter}</span>}
         {attention && (
           <Badge size="xs" tone="accent" solid={attention.required} title={attention.title}>
             {attention.text}
