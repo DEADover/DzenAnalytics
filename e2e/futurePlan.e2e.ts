@@ -4,6 +4,17 @@
  */
 import { test, expect, connectZen, setPushMode } from "./harness";
 
+/** Кнопки подвала окна — в одну строку: длинная подпись не должна переносить ряд. */
+async function footerInOneRow(card: import("@playwright/test").Locator) {
+  const tops = await card.locator("button").evaluateAll((bs) =>
+    bs
+      .filter((b) => /Отмена|Создать|Запланировать/.test(b.textContent ?? ""))
+      .map((b) => Math.round(b.getBoundingClientRect().top))
+  );
+  expect(tops.length).toBe(3);
+  expect(new Set(tops).size, `кнопки подвала в разных строках: ${tops.join(", ")}`).toBe(1);
+}
+
 test("копия с будущей датой становится разовым планом", async ({ page, zen }) => {
   await connectZen(page, "/transactions");
   await setPushMode(page, "manual");
@@ -15,6 +26,7 @@ test("копия с будущей датой становится разовы�
   await expect(card).toBeVisible();
   // Сегодня (15.10) — обычная операция.
   await expect(card.getByRole("button", { name: "Создать", exact: true })).toBeVisible();
+  await footerInOneRow(card);
 
   // На 20.10 — плановая: пометка у даты и другая кнопка.
   const date = card.getByLabel("Дата").first();
@@ -22,8 +34,9 @@ test("копия с будущей датой становится разовы�
   await date.fill("20.10.2026");
   await date.press("Enter");
   await expect(card.getByText("Будет плановой")).toBeVisible();
+  await footerInOneRow(card);
   if (process.env.E2E_SHOTS) await card.screenshot({ path: process.env.E2E_SHOTS + "/future-plan.png" });
-  await expect(card.getByRole("button", { name: "Запланировать и продолжить" })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Запланировать ещё" })).toBeVisible();
   await card.getByRole("button", { name: "Запланировать", exact: true }).click();
   await expect(card).toHaveCount(0);
 

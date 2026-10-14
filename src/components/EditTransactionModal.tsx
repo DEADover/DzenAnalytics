@@ -1625,14 +1625,14 @@ export function EditTransactionModal({
         ) : isCreate ? (
           // Вторая кнопка создания — слева, подальше от основной: «Создать»
           // по привычке жмут справа, и перепутать их не должно получаться.
-          <Tooltip content="Создать и сразу вносить следующую — дата, счёт и категория останутся">
+          <Tooltip content={`${futurePlan ? "Запланировать" : "Создать"} и сразу вносить следующую — дата, счёт и категория останутся`}>
             <button
               onClick={() => void save(true)}
               disabled={saving}
               className="btn-ghost text-sm"
             >
               <ListPlus className="w-3.5 h-3.5" />
-              {futurePlan ? "Запланировать и продолжить" : "Создать и продолжить"}
+              {futurePlan ? "Запланировать ещё" : "Создать и продолжить"}
             </button>
           </Tooltip>
         ) : (
