@@ -8,6 +8,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { usePlanActionsStore } from "../store/usePlanActionsStore";
+import { buildOneOffPlan } from "../lib/planCreate";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import {
@@ -460,6 +461,9 @@ export function EditTransactionModal({
   }, [allTransactions, accountOptions, archivedAccounts]);
 
   const [date, setDate] = useState(tx.date);
+  // Как в Дзен-мани: новая операция (и копия) с датой позже сегодняшней
+  // становится плановой (#120). Правку существующей операции это не касается.
+  const futurePlan = isCreate && !planMarker && date > todayIso();
   // Operation time-of-day. New draft → seed with the current local time;
   // edit → the original `created` time. Persisted via the `createdAt` patch.
   const [time, setTime] = useState(() =>
@@ -853,7 +857,23 @@ export function EditTransactionModal({
       setError(built.skip ?? "Не удалось создать операцию");
       return;
     }
-    await addDraft(built.zen);
+    if (futurePlan) {
+      // Будущая дата — разовый план, а не операция: так же, как в Дзен-мани.
+      const plan = buildOneOffPlan(built.zen, {
+        uuid: () => crypto.randomUUID(),
+        stamp: Math.floor(Date.now() / 1000),
+      });
+      await usePlanActionsStore.getState().put({
+        kind: "create",
+        markerId: plan.reminder.id,
+        date: built.zen.date,
+        title: payee.trim() || comment.trim() || category.trim() || "План",
+        reminder: plan.reminder,
+        markers: plan.markers,
+      });
+    } else {
+      await addDraft(built.zen);
+    }
     if (planMarker) {
       await usePlanActionsStore.getState().put({
         kind: "fact",
@@ -868,7 +888,7 @@ export function EditTransactionModal({
     if (keepOpen) {
       const sum = parseAmountInput(amount);
       setSavedNote(
-        `Создано: ${Number.isFinite(sum) ? formatMoney(sum, currency) : amount}` +
+        `${futurePlan ? "Запланировано" : "Создано"}: ${Number.isFinite(sum) ? formatMoney(sum, currency) : amount}` +
           (payee.trim() ? ` · ${payee.trim()}` : "")
       );
       setAmount("");
@@ -1193,7 +1213,14 @@ export function EditTransactionModal({
         {/* Date needs room for «дд.мм.гггг» + the calendar icon; time only
             holds «чч:мм», so give the date the wider column. */}
         <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3">
-          <Field label="Дата">
+          <Field
+            label="Дата"
+            attention={
+              futurePlan
+                ? { text: "Будет плановой", title: "Как в Дзен-мани: операция с будущей датой становится плановой" }
+                : undefined
+            }
+          >
             <DateField
               typeable
               value={date}
@@ -1605,7 +1632,7 @@ export function EditTransactionModal({
               className="btn-ghost text-sm"
             >
               <ListPlus className="w-3.5 h-3.5" />
-              Создать и продолжить
+              {futurePlan ? "Запланировать и продолжить" : "Создать и продолжить"}
             </button>
           </Tooltip>
         ) : (
@@ -1697,7 +1724,7 @@ export function EditTransactionModal({
             ) : (
               <Save className="w-3.5 h-3.5" />
             )}
-            {isCreate ? "Создать" : "Сохранить"}
+            {isCreate ? (futurePlan ? "Запланировать" : "Создать") : "Сохранить"}
           </button>
         </div>
       </ModalFooter>

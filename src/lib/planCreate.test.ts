@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildNewPlan } from "./planCreate";
+import { buildNewPlan, buildOneOffPlan } from "./planCreate";
 import type { PlanSchedule } from "./planSchedule";
 import type { ZenTransaction } from "./zenmoney";
 
@@ -93,4 +93,27 @@ it("неделя пишется как в самом приложении: «к�
   );
   expect(plan.reminder).toMatchObject({ interval: "day", step: 7, points: [0, 3], startDate: "2026-11-09" });
   expect(plan.markers.map((m) => m.date)).toEqual(["2026-11-09", "2026-11-12", "2026-11-16", "2026-11-19"]);
+});
+
+describe("разовый план из операции с будущей датой (#120)", () => {
+  it("правило без шага на дату операции и одна плановая дата с теми же ногами", () => {
+    let n = 0;
+    const plan = buildOneOffPlan(tx({ date: "2026-10-20" }), { uuid: () => `id${++n}`, stamp: 100 });
+    expect(plan.reminder).toMatchObject({
+      interval: null,
+      step: null,
+      points: null,
+      startDate: "2026-10-20",
+      endDate: "2026-10-20",
+      outcome: 499,
+      income: 0,
+      outcomeAccount: "acc",
+      tag: ["tag-subs"],
+      payee: "Кинопоиск",
+      merchant: "m1",
+      comment: "старый",
+    });
+    expect(plan.markers).toHaveLength(1);
+    expect(plan.markers[0]).toMatchObject({ date: "2026-10-20", state: "planned", reminder: plan.reminder.id, outcome: 499 });
+  });
 });

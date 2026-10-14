@@ -96,3 +96,54 @@ export function buildNewPlan(
   );
   return { reminder, markers };
 }
+
+/**
+ * Разовый план из операции с будущей датой (#120) — как в Дзен-мани: операция,
+ * внесённая на завтра и позже, становится плановой.
+ *
+ * Разовый план в Дзен-мани — правило без шага (`interval`, `step`, `points` —
+ * null), `startDate` = `endDate` = дата, и одна дата-маркер в состоянии
+ * «planned» (см. `ZenReminder`). Ноги, счета, категория, получатель и
+ * комментарий — как у операции.
+ */
+export function buildOneOffPlan(
+  tx: ZenTransaction,
+  opts: { uuid: () => string; stamp: number }
+): NewPlan {
+  const legs = {
+    income: tx.income,
+    incomeInstrument: tx.incomeInstrument,
+    incomeAccount: tx.incomeAccount,
+    outcome: tx.outcome,
+    outcomeInstrument: tx.outcomeInstrument,
+    outcomeAccount: tx.outcomeAccount,
+    tag: tx.tag,
+    payee: tx.payee,
+    merchant: tx.merchant,
+    comment: tx.comment,
+  };
+  const reminder: ZenReminder = {
+    id: opts.uuid(),
+    user: tx.user,
+    changed: opts.stamp,
+    interval: null,
+    step: null,
+    points: null,
+    startDate: tx.date,
+    endDate: tx.date,
+    notify: true,
+    ...legs,
+  };
+  const marker: ZenReminderMarker = {
+    id: opts.uuid(),
+    user: tx.user,
+    changed: opts.stamp,
+    date: tx.date,
+    reminder: reminder.id,
+    state: "planned",
+    isForecast: false,
+    notify: true,
+    ...legs,
+  };
+  return { reminder, markers: [marker] };
+}
