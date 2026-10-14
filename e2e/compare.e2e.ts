@@ -174,3 +174,22 @@ test("идёт период Б: после ⇄ сравнение на том ж
   const pill = (await change.innerText()).trim();
   await expect(summary).toContainText(pill);
 });
+
+test("категории: строка открывает операции периода А, сумма периода Б — периода Б (#122)", async ({ page }) => {
+  await connectZen(page, "/compare");
+  const card = page.locator(".card-tray", { has: page.getByText("Сравнение расходов по категориям") });
+  await card.scrollIntoViewIfNeeded();
+  const row = card.locator("tbody tr").first();
+  const name = (await row.locator("td").first().innerText()).trim().split("\n")[0];
+  const title = page.locator("span.font-semibold[title]");
+  const close = page.getByRole("button", { name: "Закрыть (Esc)" });
+
+  // Сумма периода Б — своя кнопка: открываются операции сентября, а не октября.
+  await row.getByRole("button", { name: /₽/ }).first().click();
+  await expect(title).toHaveText(new RegExp(`^${name} · Сентябрь`));
+  await close.click();
+
+  // Клик по строке — как раньше, период А (октябрь).
+  await row.locator("td").first().click();
+  await expect(title).toHaveText(new RegExp(`^${name} · Октябрь`));
+});

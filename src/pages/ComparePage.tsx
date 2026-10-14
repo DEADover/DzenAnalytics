@@ -557,18 +557,20 @@ export function ComparePage() {
     const txs = label === "A" ? txsA : txsB;
     showDrill(range.label, txs, label === "A" ? "Период А" : noteB);
   }
-  function openCategoryInPeriod(category: string, label: "A" | "B") {
+  function openCategoryInPeriod(row: CategoryTableRow, label: "A" | "B") {
     // Вид операций тот же, что показан в разборе: иначе клик по строке доходов
-    // открывал бы расходы той же категории.
+    // открывал бы расходы той же категории. У подкатегории — только её операции.
+    const category = row.parent ?? row.name;
+    const sub = row.parent ? row.name : null;
     const match = (t: Transaction) =>
       chartKind === "expense" ? affectsExpense(t.kind) : t.kind === "income";
     const txs = (label === "A" ? txsA : txsB).filter(
-      (t) => match(t) && t.category === category
+      (t) => match(t) && t.category === category && (sub === null || t.subcategory === sub)
     );
     const range = label === "A" ? ranges.a : ranges.b;
     const what = chartKind === "expense" ? "Расходы" : "Доходы";
     showDrill(
-      `${category} · ${range.label}`,
+      `${sub ? `${category} / ${sub}` : category} · ${range.label}`,
       txs,
       label === "A" ? `${what} в периоде А` : `${what} · ${noteB}`
     );
@@ -1090,10 +1092,11 @@ export function ComparePage() {
           markerLabel: ranges.b.label,
           mode: devMode,
           onModeChange: setDevMode,
+          onClick: (r) => openCategoryInPeriod(r, "B"),
         }}
         expanded={expanded}
         onExpandedChange={setExpanded}
-        onRowClick={(r) => openCategoryInPeriod(r.parent ?? r.name, "A")}
+        onRowClick={(r) => openCategoryInPeriod(r, "A")}
         exportName={`compare_categories_${chartKind}`}
         emptyText={`${
           chartKind === "expense"

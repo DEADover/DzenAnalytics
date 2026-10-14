@@ -46,6 +46,8 @@ interface CompareSpec {
   /** Разница деньгами, процентом или и тем и другим — переключается в шапке. */
   mode: DiffMode;
   onModeChange: (next: DiffMode) => void;
+  /** Клик по сумме сравнения — операции второго периода (клик по строке — первого). */
+  onClick?: (row: CategoryTableRow) => void;
 }
 
 /**
@@ -167,10 +169,25 @@ export function CategoryTable({
         label: compare.label,
         headerTitle: compare.title,
         sortValue: (r) => (compare.comparable ? r.compare : undefined),
-        render: (r) =>
-          compare.comparable && r.compare !== undefined && r.compare > 0
-            ? formatMoney(r.compare, base)
-            : "—",
+        render: (r) => {
+          if (!compare.comparable || r.compare === undefined || r.compare <= 0) return "—";
+          const text = formatMoney(r.compare, base);
+          if (!compare.onClick) return text;
+          const open = compare.onClick;
+          // Своя кнопка: клик по строке открывает первый период, а по этой сумме — второй.
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                open(r);
+              }}
+              className="tabular-nums hover:text-accent"
+            >
+              {text}
+            </button>
+          );
+        },
       },
       {
         key: "change",
