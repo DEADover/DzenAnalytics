@@ -34,7 +34,7 @@ test("копия с будущей датой становится разовы�
   // Ни одной новой операции — только разовый план на 20.10.
   expect(sent.transaction ?? []).toHaveLength(0);
   expect(sent.reminder).toEqual([
-    expect.objectContaining({ interval: null, step: null, startDate: "2026-10-20", endDate: "2026-10-20", outcome: 832, outcomeAccount: "acc-sber", tag: ["tag-cafe"] }),
+    expect.objectContaining({ interval: null, step: 0, points: [0], startDate: "2026-10-20", endDate: "2026-10-20", outcome: 832, outcomeAccount: "acc-sber", tag: ["tag-cafe"] }),
   ]);
   // Получатель — ссылкой на контрагента, как у операций; новый уходит тем же запросом.
   const merchant = sent.reminder![0].merchant;

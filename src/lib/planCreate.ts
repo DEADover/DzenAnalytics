@@ -101,8 +101,9 @@ export function buildNewPlan(
  * Разовый план из операции с будущей датой (#120) — как в Дзен-мани: операция,
  * внесённая на завтра и позже, становится плановой.
  *
- * Разовый план в Дзен-мани — правило без шага (`interval`, `step`, `points` —
- * null), `startDate` = `endDate` = дата, и одна дата-маркер в состоянии
+ * Разовый план в Дзен-мани — правило без интервала: `interval: null`,
+ * `step: 0`, `points: [0]` (так записаны живые разовые планы, сверено
+ * 14.10.2026), `startDate` = `endDate` = дата, и одна дата-маркер в состоянии
  * «planned» (см. `ZenReminder`). Ноги, счета, категория, получатель и
  * комментарий — как у операции.
  */
@@ -127,8 +128,8 @@ export function buildOneOffPlan(
     user: tx.user,
     changed: opts.stamp,
     interval: null,
-    step: null,
-    points: null,
+    step: 0,
+    points: [0],
     startDate: tx.date,
     endDate: tx.date,
     notify: true,

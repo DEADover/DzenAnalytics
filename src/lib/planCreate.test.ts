@@ -101,8 +101,8 @@ describe("разовый план из операции с будущей дат
     const plan = buildOneOffPlan(tx({ date: "2026-10-20" }), { uuid: () => `id${++n}`, stamp: 100 });
     expect(plan.reminder).toMatchObject({
       interval: null,
-      step: null,
-      points: null,
+      step: 0,
+      points: [0],
       startDate: "2026-10-20",
       endDate: "2026-10-20",
       outcome: 499,
