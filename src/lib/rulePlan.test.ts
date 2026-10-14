@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildRulePlan, skippedByReason } from "./rulePlan";
-import type { StoredRule } from "./ruleEngine";
+import { ruleSeesTx, type StoredRule } from "./ruleEngine";
 import type { Transaction } from "../types";
 
 function tx(p: Partial<Transaction>): Transaction {
@@ -401,5 +401,34 @@ describe("действия «Вторая категория» и «Отмети
     );
     expect(plan.rows[0].status).toBe("blocked");
     expect(plan.rows[0].blockedCategory).toBe("Отпуск");
+  });
+});
+
+describe("«Авто · Только новые» в окне «Проверить и применить» (#121)", () => {
+  const onlyNew: StoredRule = { ...coupon, autoApply: true, createdAt: "2026-07-10T00:00:00.000Z" };
+  const ids = new Set(["coupon"]);
+  const old = tx({ id: "old", comment: "купон", createdAt: "2026-07-01T00:00:00Z", unseen: true });
+  const seen = tx({ id: "seen", comment: "купон", createdAt: "2026-07-12T00:00:00Z", unseen: false });
+  const fresh = tx({ id: "fresh", comment: "купон", createdAt: "2026-07-12T00:00:00Z", unseen: true });
+  const csv = tx({ id: "csv", comment: "купон", createdAt: "2026-07-12T00:00:00Z" });
+  const ids_ = (p: { rows: { tx: Transaction }[] }) => p.rows.map((r) => r.tx.id).sort();
+
+  it("видит только операции новее правила и ещё новые в Дзен-мани; без пометки — по дате", () => {
+    const plan = buildRulePlan([old, seen, fresh, csv], [onlyNew], ids, {}, new Set(), null, null, null, ruleSeesTx);
+    expect(ids_(plan)).toEqual(["csv", "fresh"]);
+  });
+
+  it("правило «По кнопке» и правило с расписанием видят всю историю", () => {
+    const manual: StoredRule = { ...onlyNew, autoApply: false };
+    const scheduled = { ...onlyNew, schedule: { every: "day", depth: "all" } } as unknown as StoredRule;
+    for (const r of [manual, scheduled]) {
+      const plan = buildRulePlan([old, seen, fresh, csv], [r], ids, {}, new Set(), null, null, null, ruleSeesTx);
+      expect(ids_(plan)).toEqual(["csv", "fresh", "old", "seen"]);
+    }
+  });
+
+  it("без фильтра план прежний — автоприменение по-прежнему решает само", () => {
+    const plan = buildRulePlan([old, seen, fresh, csv], [onlyNew], ids, {}, new Set(), null);
+    expect(plan.rows).toHaveLength(4);
   });
 });

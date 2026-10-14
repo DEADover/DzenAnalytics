@@ -19,6 +19,7 @@ import {
   migrateRule,
   previewRules,
   splitCategoryFull,
+  type CategoryRuleV2,
   type StoredRule,
 } from "./ruleEngine";
 import type { TransactionEdit } from "../store/useEditsStore";
@@ -199,12 +200,14 @@ export function buildRulePlan(
   deletedSet: Set<string>,
   categoryOk: ((category: string, subcategory: string | null) => boolean) | null,
   payeeOk: ((title: string) => boolean) | null = null,
-  kindChecks: KindChecks | null = null
+  kindChecks: KindChecks | null = null,
+  /** Какие операции правило рассматривает (#121); по умолчанию — все. */
+  eligible?: (t: Transaction, rule: CategoryRuleV2) => boolean
 ): RulePlan {
   if (ruleIds.size === 0)
     return { rows: [], pending: [], skipped: [], skippedCount: 0 };
 
-  const hits = previewRules(raw, rules, ruleIds);
+  const hits = previewRules(raw, rules, ruleIds, eligible);
   const byTx = mergeHits(hits);
   // Кто занял какое поле. Поле забирает ПЕРВОЕ высказавшееся о нём правило
   // (см. `collectRuleHits`), поэтому и здесь запоминаем первого — иначе подпись

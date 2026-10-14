@@ -9,7 +9,7 @@ import {
   type HistDayRates,
 } from "../lib/historicalRates";
 import { buildPayeeAliasMap } from "../lib/payeeNormalize";
-import { migrateRule, restoreRuleCategories, type StoredRule } from "../lib/ruleEngine";
+import { migrateRule, restoreRuleCategories, ruleSeesTx, type StoredRule } from "../lib/ruleEngine";
 import { autoApplyPatches } from "../lib/ruleAutoApply";
 import { rulesView } from "../lib/rulesView";
 import { buildRulePlan } from "../lib/rulePlan";
@@ -485,7 +485,10 @@ async function runRuleNow(ruleId: string): Promise<number> {
   const from = rule.schedule
     ? depthFrom(rule.schedule.depth, now, depthCount(rule.schedule))
     : null;
-  const scope = from ? view.filter((t) => withinDepth(t.date, from)) : view;
+  // «Только новые» и здесь не трогает историю — так же, как окно «Проверить и применить» (#121).
+  const scope = from
+    ? view.filter((t) => withinDepth(t.date, from))
+    : view.filter((t) => ruleSeesTx(t, rule));
   const found = autoApplyPatches(
     scope,
     [rule],
@@ -541,7 +544,7 @@ async function applyRulesNow(ruleIds: readonly string[]): Promise<number> {
   const origins = useEditsStore.getState().origins;
   const deleted = await loadDeletedSet();
   const view = rulesView(raw, userEdits(edits, origins));
-  const plan = buildRulePlan(view, rules, ids, edits, deleted, categoryOk, payeeOk, kindChecks);
+  const plan = buildRulePlan(view, rules, ids, edits, deleted, categoryOk, payeeOk, kindChecks, ruleSeesTx);
   if (plan.rows.length === 0) return 0;
 
   const patches: Record<string, TransactionEdit> = {};

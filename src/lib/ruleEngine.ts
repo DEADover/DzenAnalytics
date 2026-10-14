@@ -957,7 +957,9 @@ export function applyRulesV2(txs: Transaction[], rules: StoredRule[]): Transacti
 export function previewRules(
   txs: Transaction[],
   rules: StoredRule[],
-  onlyRuleIds?: ReadonlySet<string>
+  onlyRuleIds?: ReadonlySet<string>,
+  /** Какие операции правило вообще рассматривает — см. `ruleSeesTx`. */
+  eligible?: (t: Transaction, rule: CategoryRuleV2) => boolean
 ): RuleHit[] {
   const picked = onlyRuleIds ? rules.filter((r) => onlyRuleIds.has(r.id)) : rules;
   const { active, compiled } = prepare(picked, onlyRuleIds === undefined);
@@ -965,9 +967,32 @@ export function previewRules(
 
   const out: RuleHit[] = [];
   for (const t of txs) {
-    out.push(...collectRuleHits(withOriginalCategory(t), active, compiled));
+    const own = eligible ? active.filter((r) => eligible(t, r)) : active;
+    if (own.length === 0) continue;
+    out.push(...collectRuleHits(withOriginalCategory(t), own, compiled));
   }
   return out;
+}
+
+/** Правило «Авто · Только новые»: само размечает лишь то, что пришло синхронизацией. */
+export function isOnlyNewRule(rule: CategoryRuleV2): boolean {
+  return rule.autoApply === true && !rule.schedule;
+}
+
+/**
+ * Видит ли правило операцию в «Проверить и применить» и «Прогнать сейчас» (#121).
+ *
+ * Правило «Авто · Только новые» историю не трогает, поэтому и в разборе ему
+ * показываются только операции, появившиеся после его создания и ещё новые в
+ * Дзен-мани (не просмотренные). Иначе окно предлагало бы переписать то, чего
+ * само правило никогда бы не коснулось. У операций из CSV пометки «новая» нет —
+ * для них решает только дата. Остальные правила видят всю историю.
+ */
+export function ruleSeesTx(t: Transaction, rule: CategoryRuleV2): boolean {
+  if (!isOnlyNewRule(rule)) return true;
+  if (t.unseen === false) return false;
+  const created = Date.parse(t.createdAt), since = Date.parse(rule.createdAt);
+  return Number.isNaN(created) || Number.isNaN(since) || created >= since;
 }
 
 /** Слить вклады нескольких правил в одну правку операции. Ранние правила уже

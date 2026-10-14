@@ -25,6 +25,9 @@ import {
   describeRule,
   ruleHasEffect,
   ruleMatchesV2,
+  ruleSeesTx,
+  isOnlyNewRule,
+  migrateRule,
 } from "../lib/ruleEngine";
 import { confirm } from "../store/useConfirmStore";
 import { useDataStore } from "../store/useDataStore";
@@ -395,7 +398,8 @@ export function RulesPage() {
         deletedSet,
         categoryOk,
         payeeOk,
-        kindChecks
+        kindChecks,
+        ruleSeesTx
       ),
     [matchable, rules, selectedIds, edits, deletedSet, categoryOk, payeeOk, kindChecks]
   );
@@ -471,6 +475,11 @@ export function RulesPage() {
         : "Дальше правки уедут в Дзен-мани тем же путём, что и правки из редактора операции."
       : "Дзен-мани не подключён — правки останутся только на этом устройстве.",
     "Отменить можно построчно в списке изменений. Выключение правила записанное не отменяет: правки живут отдельно от правил.",
+    ...(rules.some((r) => selectedIds.has(r.id) && isOnlyNewRule(migrateRule(r)))
+      ? [
+          "Правила «Авто · Только новые» историю не трогают: для них здесь только новые операции, появившиеся после создания правила. Чтобы пройти по всей истории, переключите правило в режим «По кнопке».",
+        ]
+      : []),
   ];
 
   return (
