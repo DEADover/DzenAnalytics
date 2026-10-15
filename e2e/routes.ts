@@ -10,6 +10,7 @@ export const ROUTES = [
   "/calendar",
   "/cashflow",
   "/compare",
+  "/counterparties",
   "/digest",
   "/duplicates",
   "/dynamics",

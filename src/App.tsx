@@ -22,6 +22,7 @@ import { ReportPage } from "./pages/ReportPage";
 import { DynamicsPage } from "./pages/DynamicsPage";
 import { AccountsPage } from "./pages/AccountsPage";
 import { TopPage } from "./pages/TopPage";
+import { CounterpartiesPage } from "./pages/CounterpartiesPage";
 import { ComparePage } from "./pages/ComparePage";
 import { ImportPage } from "./pages/ImportPage";
 import { CalendarPage } from "./pages/CalendarPage";
@@ -501,6 +502,7 @@ function App() {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/tags" element={<TagsPage />} />
             <Route path="/top" element={<TopPage />} />
+            <Route path="/counterparties" element={<CounterpartiesPage />} />
             <Route path="/trends" element={<TrendsPage />} />
             <Route path="/sankey" element={<SankeyPage />} />
             <Route path="/wordcloud" element={<WordcloudPage />} />

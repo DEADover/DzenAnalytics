@@ -33,6 +33,7 @@ import {
   PanelTop,
   User,
   GraduationCap,
+  Store,
 } from "lucide-react";
 import { useTourStore } from "../store/useTourStore";
 import { useDataStore } from "../store/useDataStore";
@@ -81,6 +82,7 @@ const PAGE_ITEMS: { path: string; title: string; icon: React.ComponentType<{ cla
   { path: "/health", title: "Финансовое здоровье", icon: HeartPulse, aliases: ["health", "fire", "здоровье", "мж", "месяцы жизни"] },
   { path: "/calendar", title: "Календарь", icon: CalendarDays, aliases: ["calendar"] },
   { path: "/top", title: "Топ", icon: TrendingUp, aliases: ["top"] },
+  { path: "/counterparties", title: "Контрагенты", icon: Store, aliases: ["counterparties", "места", "магазины", "получатели", "merchants"] },
   { path: "/tags", title: "Теги", icon: Hash, aliases: ["tags"] },
   { path: "/recurring", title: "Регулярные", icon: Repeat, aliases: ["recurring", "subscriptions"] },
   { path: "/anomalies", title: "Аномалии", icon: Zap, aliases: ["anomalies"] },
