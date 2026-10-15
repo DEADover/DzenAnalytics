@@ -13,7 +13,7 @@ import {
   PieChart,
   Flame,
 } from "lucide-react";
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip } from "recharts";
+import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip as RTooltip } from "recharts";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters, presetToRange } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -40,7 +40,6 @@ import {
   formatDate,
   chartAxisStroke,
   chartColor,
-  chartGridStroke,
   chartTooltipProps,
 } from "../lib/format";
 import { CATEGORY_PALETTE } from "../lib/categoryColor";
@@ -595,18 +594,17 @@ function PlaceCard({
         <div className="h-36 mt-2">
           <ChartContainer>
             <BarChart data={months} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
-              <XAxis dataKey="ym" stroke={chartAxisStroke} fontSize={11} tickFormatter={monthTick} interval={1} tickLine={false} />
-              <YAxis
+              <XAxis
+                dataKey="ym"
                 stroke={chartAxisStroke}
                 fontSize={11}
-                width={60}
-                tickCount={3}
+                tickFormatter={monthTick}
+                interval={1}
                 tickLine={false}
                 axisLine={false}
-                allowDecimals={metric !== "visits"}
-                tickFormatter={(v: number) => formatNum(v, { compact: true })}
               />
+              {/* Без оси Y и сетки — как у недели ниже: важна форма, числа — в подсказке. */}
+              <YAxis hide allowDecimals={metric !== "visits"} />
               <RTooltip
                 {...chartTooltipProps}
                 cursor={{ fill: "rgb(var(--c-border) / 0.35)" }}
@@ -624,7 +622,7 @@ function PlaceCard({
                   />
                 }
               />
-              <Bar dataKey={metric} name={METRIC_LABEL[metric]} radius={[3, 3, 0, 0]}>
+              <Bar dataKey={metric} name={METRIC_LABEL[metric]} radius={[3, 3, 0, 0]} minPointSize={3}>
                 {months.map((m) => (
                   <Cell key={m.ym} fill={chartColor.accent} fillOpacity={allHit || m.hit ? 0.9 : 0.35} />
                 ))}
