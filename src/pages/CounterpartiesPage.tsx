@@ -57,6 +57,7 @@ import { MeterRow } from "../components/MeterRow";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { ShowMore } from "../components/table/TableParts";
 import { Segmented } from "../components/Segmented";
 import { Tooltip } from "../components/Tooltip";
 import { SeriesTooltip, TooltipFacts } from "../components/TooltipFacts";
@@ -131,6 +132,10 @@ export function CounterpartiesPage() {
   const showDrill = useDrillStore((s) => s.show);
   const [checkMode, setCheckMode] = useDiffMode("counterparties.check", "pct");
   const [picked, setPicked] = useState<string | null>(null);
+  // Новых контрагентов в шапке блока столько, сколько можно раскрыть: первые
+  // пять сразу, остальные — общим подвалом «Показать ещё».
+  // Раскрытое помнится для своего периода: сменили период — снова первые пять.
+  const [freshOpen, setFreshOpen] = useState({ key: "", n: INSIGHT_LIMIT });
 
   const maxDate = useMemo(
     () => transactions.reduce((m, t) => (t.date > m ? t.date : m), ""),
@@ -154,6 +159,9 @@ export function CounterpartiesPage() {
   const byPlace = useMemo(() => groupByPlace(history), [history]);
   const rows = useMemo(() => buildPlaceRows(history, range), [history, range]);
   const fresh = useMemo(() => rows.filter((r) => r.isNew), [rows]);
+  const rangeKey = `${range.from}|${range.to}`;
+  const freshShown = freshOpen.key === rangeKey ? freshOpen.n : INSIGHT_LIMIT;
+  const setFreshShown = (n: number) => setFreshOpen({ key: rangeKey, n });
   const risers = useMemo(() => priceRisers(rows, INSIGHT_LIMIT), [rows]);
 
   const selected = (picked && byPlace.has(picked) ? picked : null) ?? rows[0]?.name ?? null;
@@ -306,7 +314,7 @@ export function CounterpartiesPage() {
             </SectionEmpty>
           ) : (
             <div className="space-y-0.5">
-              {fresh.slice(0, INSIGHT_LIMIT).map((r) => (
+              {fresh.slice(0, freshShown).map((r) => (
                 <MeterRow
                   key={r.name}
                   bar="track"
@@ -319,6 +327,13 @@ export function CounterpartiesPage() {
                   title="Открыть карточку"
                 />
               ))}
+              <ShowMore
+                shown={Math.min(freshShown, fresh.length)}
+                total={fresh.length}
+                step={INSIGHT_LIMIT}
+                onMore={() => setFreshShown(freshShown + INSIGHT_LIMIT)}
+                onAll={() => setFreshShown(fresh.length)}
+              />
             </div>
           )}
         </SectionCard>

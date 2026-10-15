@@ -147,3 +147,19 @@ test("вся история: выводы объясняют, что нужен 
   await expect(fresh.getByText("Ресторан")).toBeVisible();
   await expect(page.getByText("Нужен период")).toHaveCount(0);
 });
+
+test("новые контрагенты: число в шапке — столько же, сколько можно раскрыть", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/counterparties");
+  await page.getByRole("button", { name: "Всё", exact: true }).click();
+  const fresh = page.locator(".card-tray", { has: page.getByText("Новые контрагенты", { exact: true }) });
+  await fresh.getByRole("button", { name: "Показать за последние 12 месяцев" }).click();
+  const count = Number((await fresh.getByText(/^\d+ контрагент/).textContent())!.match(/^\d+/)![0]);
+  const rows = fresh.getByRole("button", { name: /₽$/ });
+  if (count > 5) {
+    await expect(rows).toHaveCount(5);
+    await expect(fresh.getByText(`Показано 5 из ${count}`)).toBeVisible();
+    await fresh.getByRole("button", { name: "Показать все" }).click();
+  }
+  await expect(rows).toHaveCount(count);
+});
