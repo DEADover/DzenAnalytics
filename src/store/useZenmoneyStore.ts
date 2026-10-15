@@ -1105,10 +1105,12 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // the human-readable summary in the log row.
       const deltaTx = diff.transaction?.length || 0;
       const deltaDel = diff.deletion?.length || 0;
+      // Сколько операций всего — в своём столбце журнала («Всего операций»),
+      // в описании его не повторяем.
       const summary = isFull
-        ? `Полная синхронизация: ${formatNum(mapped.transactions.length)} ${pluralRu(mapped.transactions.length, ["операция", "операции", "операций"])}`
+        ? "Полная синхронизация"
         : deltaTx === 0 && deltaDel === 0
-          ? `Без изменений (всего ${formatNum(mapped.transactions.length)})`
+          ? "Без изменений"
           : `+${formatNum(deltaTx)} новых/изменённых${deltaDel > 0 ? `, ${formatNum(deltaDel)} удалено` : ""}`;
       void useSyncLogStore.getState().append({
         kind: "pull",
