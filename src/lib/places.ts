@@ -348,26 +348,32 @@ export function placesForHalf(rows: readonly PlaceRow[]): number {
   return sorted.length;
 }
 
-/** Место, где чек вырос сильнее всего, — с ростом в долях. */
-export interface PriceRiser {
+/** Контрагент, у которого средний чек заметно сдвинулся, — со сдвигом в долях. */
+export interface PriceChange {
   row: PlaceRow;
-  /** Рост среднего чека в долях: 0,25 — на четверть дороже. */
+  /** Изменение среднего чека в долях: 0,25 — на четверть дороже, −0,2 — на пятую часть дешевле. */
   growth: number;
 }
 
+/** Меньше этого сдвиг чека — не вывод, а шум: ±5 %. */
+const PRICE_STEP = 0.05;
+
 /**
- * Где подорожало: средний чек периода против года до него, по местам, где
- * сравнивать есть с чем. Только рост — подешевевшее в этом списке не вывод.
- * Порядок — по прибавке в рублях на месяц похода, а не по проценту: +40 % к
- * чашке кофе заметно меньше, чем +10 % к продуктам на неделю.
+ * Где подорожало или подешевело: средний чек периода против года до него, у
+ * тех, где сравнивать есть с чем, и только при сдвиге больше 5 %.
+ *
+ * Порядок — по деньгам, а не по проценту: сдвиг чека, умноженный на число
+ * операций. +40 % к чашке кофе в бюджете заметно меньше, чем +10 % к продуктам
+ * на неделю; так же и с экономией.
  */
-export function priceRisers(rows: readonly PlaceRow[], limit = 5): PriceRiser[] {
+export function priceChanges(rows: readonly PlaceRow[], dir: "up" | "down"): PriceChange[] {
+  const sign = dir === "up" ? 1 : -1;
   return rows
-    .filter((r) => r.prevAvgCheck != null && r.prevAvgCheck > 0 && r.avgCheck > r.prevAvgCheck * 1.05)
+    .filter((r) => r.prevAvgCheck != null && r.prevAvgCheck > 0)
     .map((row) => ({ row, growth: row.avgCheck / row.prevAvgCheck! - 1 }))
+    .filter((c) => c.growth * sign > PRICE_STEP)
     .sort(
       (a, b) =>
-        (b.row.avgCheck - b.row.prevAvgCheck!) * b.row.visits - (a.row.avgCheck - a.row.prevAvgCheck!) * a.row.visits
-    )
-    .slice(0, limit);
+        sign * ((b.row.avgCheck - b.row.prevAvgCheck!) * b.row.visits - (a.row.avgCheck - a.row.prevAvgCheck!) * a.row.visits)
+    );
 }

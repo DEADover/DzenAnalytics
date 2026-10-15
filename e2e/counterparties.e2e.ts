@@ -219,3 +219,17 @@ test("карточка одной высоты у любого контраге�
   }
   expect([...heights]).toHaveLength(1);
 });
+
+test("«Где подорожало» переключается на «Где подешевело»", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/counterparties");
+  const block = page.locator(".card-tray", { has: page.getByText(/^Где подорожало$|^Где подешевело$/) });
+  await expect(block.getByText("Где подорожало", { exact: true })).toBeVisible();
+  await block.getByRole("radio", { name: "Дешевле" }).or(block.getByRole("button", { name: "Дешевле", exact: true })).first().click();
+  await expect(block.getByText("Где подешевело", { exact: true })).toBeVisible();
+  // Шапка блока с переключателем не режет заголовок.
+  const cut = await block.evaluate((el) =>
+    [...el.querySelectorAll("*")].filter((e) => e.children.length === 0 && e.scrollWidth > e.clientWidth + 1).length
+  );
+  expect(cut).toBe(0);
+});

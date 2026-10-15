@@ -11,6 +11,7 @@ import {
   History,
   Trophy,
   ChevronRight,
+  TrendingDown,
   PieChart,
   Flame,
 } from "lucide-react";
@@ -26,7 +27,7 @@ import {
   buildPlaceRows,
   groupByPlace,
   placesForHalf,
-  priceRisers,
+  priceChanges,
   type OpenRange,
   type PlaceDossier,
   type PlaceRow,
@@ -152,7 +153,8 @@ export function CounterpartiesPage() {
   const byPlace = useMemo(() => groupByPlace(history), [history]);
   const rows = useMemo(() => buildPlaceRows(history, range), [history, range]);
   const fresh = useMemo(() => rows.filter((r) => r.isNew), [rows]);
-  const risers = useMemo(() => priceRisers(rows, Infinity), [rows]);
+  const [priceDir, setPriceDir] = useState<"up" | "down">("up");
+  const risers = useMemo(() => priceChanges(rows, priceDir), [rows, priceDir]);
 
   const selected = (picked && byPlace.has(picked) ? picked : null) ?? rows[0]?.name ?? null;
   const dossier = useMemo(
@@ -344,19 +346,31 @@ export function CounterpartiesPage() {
         </SectionCard>
 
         <SectionCard
-          icon={Flame}
-          title="Где подорожало"
+          icon={priceDir === "up" ? Flame : TrendingDown}
+          title={priceDir === "up" ? "Где подорожало" : "Где подешевело"}
           subtitle={
             risers.length > 0
-              ? `${formatNum(risers.length)} ${pluralRu(risers.length, ["контрагент", "контрагента", "контрагентов"])} · чек против года до периода`
+              ? `${formatNum(risers.length)} ${pluralRu(risers.length, ["контрагент", "контрагента", "контрагентов"])} · средний чек против года до периода`
               : undefined
+          }
+          right={
+            <Segmented
+              size="sm"
+              label="Подорожало или подешевело"
+              value={priceDir}
+              onChange={setPriceDir}
+              options={[
+                { value: "up" as const, label: "Дороже" },
+                { value: "down" as const, label: "Дешевле" },
+              ]}
+            />
           }
           info={
             <p>
-              Контрагенты, у которых средний чек вырос больше чем на 5% против года
-              до периода. Сверху — те, где подорожание стоит вам больше всего денег:
-              рост чека, умноженный на число операций. Поэтому +10% к продуктам
-              стоят выше, чем +40% к кофе.
+              Контрагенты, у которых средний чек изменился больше чем на 5% против
+              года до периода: вверх — «Дороже», вниз — «Дешевле». Сверху — где
+              изменение весит больше всего в деньгах: сдвиг чека, умноженный на число
+              операций. Поэтому +10% к продуктам стоят выше, чем +40% к кофе.
             </p>
           }
         >
@@ -381,8 +395,14 @@ export function CounterpartiesPage() {
               него. В коротком периоде их часто одна-две, за год обычно хватает.
             </SectionEmpty>
           ) : risers.length === 0 ? (
-            <SectionEmpty variant="compact" align="start" title="Чеки не выросли">
-              Там, где есть с чем сравнить, средний чек не выше, чем за год до периода.
+            <SectionEmpty
+              variant="compact"
+              align="start"
+              title={priceDir === "up" ? "Чеки не выросли" : "Чеки не снизились"}
+            >
+              {priceDir === "up"
+                ? "Там, где есть с чем сравнить, средний чек не выше, чем за год до периода."
+                : "Там, где есть с чем сравнить, средний чек не ниже, чем за год до периода."}
             </SectionEmpty>
           ) : (
             // Как «Новые контрагенты»: все в блоке, около пяти строк на виду.
@@ -393,15 +413,19 @@ export function CounterpartiesPage() {
                   bar="track"
                   leadIcon={<CategoryDot category={r.category} size="w-7 h-7" />}
                   label={r.name}
-                  share={growth / risers.reduce((m, x) => Math.max(m, x.growth), 0)}
-                  barCls="bg-warn"
+                  share={Math.abs(growth) / risers.reduce((m, x) => Math.max(m, Math.abs(x.growth)), 0)}
+                  barCls={priceDir === "up" ? "bg-warn" : "bg-income"}
                   cells={[
                     {
                       text: `${formatNum(Math.round(r.prevAvgCheck!))} → ${formatMoney(Math.round(r.avgCheck), base)}`,
                       width: "9.5rem",
                       muted: true,
                     },
-                    { text: `+${formatPct(growth, 0)}`, width: "3.5rem", type: "pct" },
+                    {
+                      text: `${growth > 0 ? "+" : "−"}${formatPct(Math.abs(growth), 0)}`,
+                      width: "3.5rem",
+                      type: "pct",
+                    },
                   ]}
                   onClick={() => pick(r.name)}
                   title="Открыть карточку"

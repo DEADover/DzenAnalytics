@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPlaceDossier, buildPlaceRows, placesForHalf, priceRisers, type PlaceRow } from "./places";
+import { buildPlaceDossier, buildPlaceRows, placesForHalf, priceChanges, type PlaceRow } from "./places";
 import type { Transaction } from "../types";
 
 let seq = 0;
@@ -137,16 +137,23 @@ describe("placesForHalf: сколько мест набирают половин
   });
 });
 
-describe("priceRisers: где подорожало", () => {
-  it("только рост больше 5 %, порядок по прибавке в рублях", () => {
-    const list = priceRisers([
-      row({ name: "Кофе", avgCheck: 280, prevAvgCheck: 200, visits: 3 }), // +40 %, +240 ₽
-      row({ name: "Продукты", avgCheck: 2200, prevAvgCheck: 2000, visits: 4 }), // +10 %, +800 ₽
-      row({ name: "Ровно", avgCheck: 1020, prevAvgCheck: 1000, visits: 9 }), // +2 %
-      row({ name: "Дешевле", avgCheck: 900, prevAvgCheck: 1000, visits: 9 }),
-      row({ name: "Новое", avgCheck: 900, visits: 9 }),
-    ]);
-    expect(list.map((r) => r.row.name)).toEqual(["Продукты", "Кофе"]);
-    expect(list[1].growth).toBeCloseTo(0.4);
+describe("priceChanges: где подорожало и подешевело", () => {
+  const rows = [
+    row({ name: "Кофе", avgCheck: 280, prevAvgCheck: 200, visits: 3 }), // +40 %, +240 ₽
+    row({ name: "Продукты", avgCheck: 2200, prevAvgCheck: 2000, visits: 4 }), // +10 %, +800 ₽
+    row({ name: "Ровно", avgCheck: 1020, prevAvgCheck: 1000, visits: 9 }), // +2 %
+    row({ name: "Такси", avgCheck: 400, prevAvgCheck: 500, visits: 10 }), // −20 %, −1000 ₽
+    row({ name: "Аптека", avgCheck: 600, prevAvgCheck: 1000, visits: 2 }), // −40 %, −800 ₽
+    row({ name: "Новое", avgCheck: 900, visits: 9 }),
+  ];
+  it("подорожало: рост больше 5 %, порядок по прибавке в рублях", () => {
+    const up = priceChanges(rows, "up");
+    expect(up.map((r) => r.row.name)).toEqual(["Продукты", "Кофе"]);
+    expect(up[1].growth).toBeCloseTo(0.4);
+  });
+  it("подешевело: падение больше 5 %, порядок по экономии в рублях", () => {
+    const down = priceChanges(rows, "down");
+    expect(down.map((r) => r.row.name)).toEqual(["Такси", "Аптека"]);
+    expect(down[0].growth).toBeCloseTo(-0.2);
   });
 });
