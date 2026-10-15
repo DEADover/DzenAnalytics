@@ -181,6 +181,13 @@ export function CounterpartiesPage() {
   const grown = rows.filter((r) => r.prevAvgCheck != null && r.avgCheck > r.prevAvgCheck * 1.05).length;
   const compared = rows.filter((r) => r.prevAvgCheck != null).length;
   const freshTotal = fresh.reduce((s, r) => s + r.total, 0);
+  // Пустые выводы чинятся периодом — кнопка ставит его сразу, а не отправляет
+  // искать нужный пункт в фильтре.
+  const yearButton = (
+    <button type="button" className="btn-ghost text-sm" onClick={() => filters.setPreset("12m")}>
+      Показать за последние 12 месяцев
+    </button>
+  );
 
   const header = (
     <>
@@ -275,9 +282,19 @@ export function CounterpartiesPage() {
           info={<p>Места, где первая покупка за всю историю пришлась на этот период: новый магазин, кафе, сервис.</p>}
         >
           {!range.from ? (
-            <SectionEmpty variant="compact">Выберите период в фильтре — новые места считаются от его начала</SectionEmpty>
+            <SectionEmpty
+              variant="compact"
+              align="start"
+              title="Нужен период"
+              action={yearButton}
+            >
+              Новое место — то, где первая покупка случилась в выбранном периоде. Сейчас в
+              фильтре вся история, а в ней новым когда-то было всё.
+            </SectionEmpty>
           ) : fresh.length === 0 ? (
-            <SectionEmpty variant="compact">В этом периоде вы ходили только в знакомые места</SectionEmpty>
+            <SectionEmpty variant="compact" align="start" title="Новых мест нет">
+              В этом периоде все покупки — в местах, где вы бывали и раньше.
+            </SectionEmpty>
           ) : (
             <div className="space-y-0.5">
               {fresh.slice(0, INSIGHT_LIMIT).map((r) => (
@@ -310,10 +327,30 @@ export function CounterpartiesPage() {
             </p>
           }
         >
-          {compared === 0 ? (
-            <SectionEmpty variant="compact">Сравнивать не с чем: нужно хотя бы по три покупки в периоде и за год до него</SectionEmpty>
+          {!range.from ? (
+            <SectionEmpty
+              variant="compact"
+              align="start"
+              title="Нужен период"
+              action={yearButton}
+            >
+              Средний чек периода сравнивается с чеком за год до него. Со всей историей
+              сравнивать нечего — выберите месяц, квартал или год.
+            </SectionEmpty>
+          ) : compared === 0 ? (
+            <SectionEmpty
+              variant="compact"
+              align="start"
+              title="Пока не с чем сравнить"
+              action={filters.preset === "12m" ? undefined : yearButton}
+            >
+              Нужно хотя бы по три покупки в одном месте — и в периоде, и за год до него. В
+              коротком периоде их часто одна-две: на годе сравнение почти всегда находится.
+            </SectionEmpty>
           ) : risers.length === 0 ? (
-            <SectionEmpty variant="compact">Чеки там, где вы бываете часто, не выросли</SectionEmpty>
+            <SectionEmpty variant="compact" align="start" title="Чеки не выросли">
+              Там, где есть с чем сравнить, средняя покупка не дороже, чем за год до периода.
+            </SectionEmpty>
           ) : (
             <div className="space-y-0.5">
               {risers.map(({ row: r, growth }) => (

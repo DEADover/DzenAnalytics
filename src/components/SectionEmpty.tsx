@@ -28,6 +28,7 @@ export function SectionEmpty({
   children,
   action,
   variant = "card",
+  align = "center",
   className,
 }: {
   icon?: LucideIcon;
@@ -39,12 +40,18 @@ export function SectionEmpty({
   /** Одна кнопка, если пустоту можно заполнить сразу. */
   action?: ReactNode;
   variant?: "card" | "inline" | "compact";
+  /**
+   * `start` — по левому краю: внутри карточки с заголовком слева пустота по
+   * центру повисает отдельным островком, а с краю читается продолжением шапки.
+   */
+  align?: "center" | "start";
   className?: string;
 }) {
   return (
     <div
       className={clsx(
-        "flex flex-col items-center text-center",
+        "flex flex-col",
+        align === "start" ? "items-start text-left" : "items-center text-center",
         variant === "card" ? "card-tray card-pad py-12" : variant === "inline" ? "py-10" : "py-6",
         className
       )}
@@ -52,7 +59,7 @@ export function SectionEmpty({
       {Icon && <Icon className={clsx("w-10 h-10 mb-3", ICON_TONE[tone])} aria-hidden="true" />}
       {title && <div className="text-base font-medium mb-1">{title}</div>}
       {children && <div className="text-sm text-muted max-w-md">{children}</div>}
-      {action && <div className="mt-5 flex flex-wrap items-center justify-center gap-2">{action}</div>}
+      {action && <div className={clsx("mt-5 flex flex-wrap items-center gap-2", align === "start" ? "justify-start" : "justify-center")}>{action}</div>}
     </div>
   );
 }

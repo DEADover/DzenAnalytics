@@ -120,3 +120,21 @@ test("карточка места в низком окне: целиком в э
   expect(reached).toBe(true);
   expect(box.scrollable).toBe(true);
 });
+
+test("вся история: выводы объясняют, что нужен период, и ставят его кнопкой", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/counterparties");
+  await page.getByRole("button", { name: "Всё", exact: true }).click();
+  const fresh = page.locator(".card-tray", { has: page.getByText("Новые места", { exact: true }) });
+  await expect(fresh.getByText("Нужен период")).toBeVisible();
+  // Пояснение — по левому краю, вровень с заголовком карточки.
+  const [titleX, textX] = await Promise.all([
+    fresh.getByText("Новые места", { exact: true }).evaluate((el) => el.getBoundingClientRect().left),
+    fresh.getByText("Нужен период").evaluate((el) => el.getBoundingClientRect().left),
+  ]);
+  expect(Math.abs(textX - titleX)).toBeLessThan(40);
+
+  await fresh.getByRole("button", { name: "Показать за последние 12 месяцев" }).click();
+  await expect(fresh.getByText("Ресторан")).toBeVisible();
+  await expect(page.getByText("Нужен период")).toHaveCount(0);
+});
