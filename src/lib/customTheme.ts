@@ -24,19 +24,19 @@ export function customSchemeId(kind: ThemeKind): CustomSchemeId {
 
 /** Цвета-роли в порядке редактора. `token` — CSS-переменная в формате «R G B». */
 export const CUSTOM_COLOR_TOKENS = [
-  { key: "bg", token: "--c-bg", label: "Фон" },
-  { key: "panel", token: "--c-panel", label: "Карточки" },
-  { key: "panel2", token: "--c-panel2", label: "Вторичный фон" },
-  { key: "border", token: "--c-border", label: "Границы" },
-  { key: "muted", token: "--c-muted", label: "Второстепенный текст" },
-  { key: "text", token: "--c-text", label: "Текст" },
-  { key: "accent", token: "--c-accent", label: "Акцент" },
-  { key: "accentFg", token: "--c-accent-fg", label: "Текст на акценте" },
-  { key: "accent2", token: "--c-accent2", label: "Второй акцент" },
-  { key: "income", token: "--c-income", label: "Доходы" },
-  { key: "expense", token: "--c-expense", label: "Расходы" },
-  { key: "warn", token: "--c-warn", label: "Предупреждение" },
-  { key: "onTone", token: "--c-on-tone", label: "Текст на цветной заливке" },
+  { key: "bg", token: "--c-bg", label: "Фон", hint: "Фон страницы под карточками" },
+  { key: "panel", token: "--c-panel", label: "Карточки", hint: "Карточки, окна, меню, подсказки" },
+  { key: "panel2", token: "--c-panel2", label: "Дорожки и поля", hint: "Шапка с меню, вкладки, переключатели, поля ввода, наведение" },
+  { key: "border", token: "--c-border", label: "Границы", hint: "Рамки, разделители, сетка графиков" },
+  { key: "muted", token: "--c-muted", label: "Второстепенный текст", hint: "Подписи, пояснения, неактивные пункты" },
+  { key: "text", token: "--c-text", label: "Текст", hint: "Основной текст и суммы" },
+  { key: "accent", token: "--c-accent", label: "Акцент", hint: "Главные кнопки, выбранная вкладка, ссылки" },
+  { key: "accentFg", token: "--c-accent-fg", label: "Текст на акценте", hint: "Подписи на главных кнопках" },
+  { key: "accent2", token: "--c-accent2", label: "Второй акцент", hint: "Значки, отметки, полосы прогресса" },
+  { key: "income", token: "--c-income", label: "Доходы", hint: "Суммы доходов, «в плюсе»" },
+  { key: "expense", token: "--c-expense", label: "Расходы", hint: "Суммы расходов, удаление, ошибки" },
+  { key: "warn", token: "--c-warn", label: "Предупреждение", hint: "Предупреждения и пометки «внимание»" },
+  { key: "onTone", token: "--c-on-tone", label: "Текст на цветной заливке", hint: "Текст на зелёных, красных и жёлтых плашках" },
 ] as const;
 
 export type CustomColorKey = (typeof CUSTOM_COLOR_TOKENS)[number]["key"];

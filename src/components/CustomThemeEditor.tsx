@@ -80,6 +80,7 @@ export function CustomThemeEditor({ kind, onDone }: { kind: ThemeKind; onDone: (
               <ColorRow
                 key={t.key}
                 label={t.label}
+                hint={t.hint}
                 value={custom.colors[t.key]}
                 note={contrastNote(t.key, custom.colors)}
                 onChange={(hex) => setColor(t.key, hex)}
@@ -127,11 +128,14 @@ function contrastNote(key: CustomColorKey, colors: CustomColors): { text: string
  */
 function ColorRow({
   label,
+  hint,
   value,
   note,
   onChange,
 }: {
   label: string;
+  /** Где этот цвет на экране — строкой под подписью. */
+  hint: string;
   value: string;
   note: { text: string; low: boolean } | null;
   onChange: (hex: string) => void;
@@ -144,6 +148,7 @@ function ColorRow({
     <div className="flex items-center gap-3 min-w-0" data-color-row={label}>
       <div className="min-w-0 flex-1">
         <div className="text-sm">{label}</div>
+        <div className="text-xs leading-snug text-muted">{hint}</div>
         {note && (
           <div className={clsx("text-xs leading-snug", note.low ? "text-warn" : "text-muted")}>{note.text}</div>
         )}
