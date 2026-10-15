@@ -107,10 +107,10 @@ export function FireIndependence({
       : Infinity;
 
   const yearsHeader = fireAchieved
-    ? "цель достигнута 🎉"
+    ? "Цель достигнута 🎉"
     : Number.isFinite(yearsToFire)
       ? `${yearsFmt(yearsToFire)} до цели`
-      : "расходы больше доходов";
+      : "Расходы больше доходов";
 
   // Interactive scenario: drag the savings rate → live years-to-goal.
   const scenMonthly = avgIncome * (scenarioRate / 100);
@@ -231,7 +231,7 @@ export function FireIndependence({
                 <span className={`flex-1 truncate ${on ? "" : "text-muted line-through"}`}>
                   {a.title}
                   {a.savings && (
-                    <span className="ml-1.5 text-[10px] pill align-middle">накопит.</span>
+                    <span className="ml-1.5 text-[10px] pill align-middle">Накопит.</span>
                   )}
                   {!a.inBalance && (
                     <span className="ml-1.5 text-[10px] pill align-middle">Вне баланса</span>
@@ -245,7 +245,7 @@ export function FireIndependence({
           })}
           <p className="text-[11px] text-muted pt-1">
             По умолчанию учитываются все активные счета, включая помеченные в Дзен-мани как
-            «вне баланса» (накопительные, брокерские и т.п.). Снимите галочку, чтобы
+            «вне баланса» (накопительные, брокерские и т. п.). Снимите галочку, чтобы
             исключить счёт из капитала FIRE.
           </p>
         </div>

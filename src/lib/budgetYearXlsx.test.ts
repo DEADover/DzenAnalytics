@@ -202,7 +202,7 @@ describe("buildCharts", () => {
     expect(mom.series[0].pointColors![0]).toBe("DC2626");
   });
 
-  it("на диаграммах все статьи И их под-категории", () => {
+  it("на диаграммах все статьи И их подкатегории", () => {
     const { report, prev } = sample();
     const d = buildBudgetDashboard(report, prev, 1);
     const bar = buildCharts(d, buildDataSheet(d, FORMAT), FORMAT, 14).find((c) => c.kind === "bar")!;
@@ -287,7 +287,7 @@ describe("buildDashboardSheet", () => {
     expect(values(row)[5]).toBe(ytd(d.expense.prevFactByMonth, 1));
   });
 
-  it("считает строки диаграмм вместе с под-категориями", () => {
+  it("считает строки диаграмм вместе с подкатегориями", () => {
     const txs = [
       ...Array.from({ length: 14 }, (_, i) =>
         tx({ date: "2026-01-10", amountBase: (i + 1) * 100, category: `К${i}` })
@@ -492,7 +492,7 @@ describe("выбор месяца внутри Excel", () => {
       )!;
     const feb = buildDataSheet(buildBudgetDashboard(report, prev, 1), FORMAT);
     const jan = buildDataSheet(buildBudgetDashboard(report, prev, 0), FORMAT);
-    // «Еда» с под-категорией: 9000 + 3000 в январе, ещё 12 000 в феврале.
+    // «Еда» с подкатегорией: 9000 + 3000 в январе, ещё 12 000 в феврале.
     expect(values(row(jan, "Еда"))[5]).toBe(12_000);
     expect(values(row(feb, "Еда"))[5]).toBe(24_000);
     // Месяц выгрузки меняет только кэш, набор и порядок строк — нет.

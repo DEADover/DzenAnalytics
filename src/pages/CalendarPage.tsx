@@ -454,7 +454,7 @@ function DayTip({
     <div className="space-y-0.5">
       <div className="font-medium">{formatDate(date)}</div>
       <div className={value > 0 ? (kind === "expense" ? "text-expense" : "text-income") : "text-muted"}>
-        {value > 0 ? `${side}: ${formatMoney(value, base)}` : `${side.toLowerCase()} отсутствуют`}
+        {value > 0 ? `${side}: ${formatMoney(value, base)}` : `${side} отсутствуют`}
       </div>
       <div className="text-muted">
         {formatNum(count)} {pluralRu(count, ["операция", "операции", "операций"])}

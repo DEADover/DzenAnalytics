@@ -403,7 +403,7 @@ export function SplitTransactionModal({
                   className="input w-32 pl-7 text-right text-sm tabular-nums"
                   inputMode="decimal"
                   aria-label={`Сумма части ${i + 1}`}
-                  placeholder={p.pinned ? "0" : "остаток"}
+                  placeholder={p.pinned ? "0" : "Остаток"}
                   value={typed[p.key] ?? (p.amount ? String(p.amount) : "")}
                   onChange={(e) =>
                     setTyped((t) => ({ ...t, [p.key]: e.target.value }))

@@ -18,7 +18,7 @@ export type ForecastBasis = "average" | "median";
 export type ForecastScope = "empty" | "all";
 
 export interface ForecastSuggestion {
-  /** Ключ строки — (тип, категория, под-категория). */
+  /** Ключ строки — (тип, категория, подкатегория). */
   key: string;
   kind: BudgetKind;
   category: string;
@@ -50,7 +50,7 @@ export interface ForecastOptions {
   monthStartDay?: number;
 }
 
-/** Ключ статьи бюджета: тип + категория + под-категория. */
+/** Ключ статьи бюджета: тип + категория + подкатегория. */
 export function tagKey(
   kind: string,
   category: string,

@@ -22,7 +22,7 @@ export function InsightsPanel({ insights, base }: { insights: Insight[]; base: s
 
   return (
     <div className="card-tray card-pad">
-      <CardHeader icon={Lightbulb} tone="warn" title="Авто-наблюдения" />
+      <CardHeader icon={Lightbulb} tone="warn" title="Автонаблюдения" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {insights.map((ins, i) => {
           const Icon = ICONS[ins.kind];

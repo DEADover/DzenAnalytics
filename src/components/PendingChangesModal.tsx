@@ -199,12 +199,12 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
   const tagTitle = useMemo(() => {
     const m = new Map(cacheTags.map((t) => [t.id, t.title]));
     for (const c of newCats) m.set(c.id, c.title);
-    return (id: string) => m.get(id) ?? "категория удалена из Дзен-мани";
+    return (id: string) => m.get(id) ?? "Категория удалена из Дзен-мани";
   }, [cacheTags, newCats]);
   const cpTitle = useMemo(() => {
     const m = new Map(cacheCps.map((c) => [c.id, c.title]));
     for (const c of cpCreated) m.set(c.id, c.title);
-    return (id: string) => m.get(id) ?? "контрагент удалён из Дзен-мани";
+    return (id: string) => m.get(id) ?? "Контрагент удалён из Дзен-мани";
   }, [cacheCps, cpCreated]);
 
   // Аккордеон: раскрыта максимум одна строка — иначе список из десятка правок
@@ -377,8 +377,8 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
       if (patch.percent !== undefined)
         diff.push({
           label: "Ставка",
-          from: was?.percent != null ? `${was.percent}%` : "не указана",
-          to: patch.percent != null ? `${patch.percent}%` : "не указана",
+          from: was?.percent != null ? `${was.percent}%` : "Не указана",
+          to: patch.percent != null ? `${patch.percent}%` : "Не указана",
         });
       if (patch.capitalization !== undefined)
         diff.push({
@@ -392,7 +392,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
           from:
             was?.endDateOffset != null
               ? `${was.endDateOffset} ${unitRu(was.endDateOffsetInterval)}`
-              : "не указан",
+              : "Не указан",
           to: `${patch.endDateOffset ?? was?.endDateOffset ?? "—"} ${unitRu(
             patch.endDateOffsetInterval ?? was?.endDateOffsetInterval
           )}`,
@@ -409,13 +409,13 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
       if (patch.startDate !== undefined)
         diff.push({
           label: "Дата открытия",
-          from: was?.startDate ? formatDate(was.startDate) : "не указана",
-          to: patch.startDate ? formatDate(patch.startDate) : "не указана",
+          from: was?.startDate ? formatDate(was.startDate) : "Не указана",
+          to: patch.startDate ? formatDate(patch.startDate) : "Не указана",
         });
       out.push({
         key: `acc:${id}`,
         action: "edit",
-        title: patch.title ?? was?.title ?? "счёт удалён из Дзен-мани",
+        title: patch.title ?? was?.title ?? "Счёт удалён из Дзен-мани",
         note: diff.map((d) => d.label).join(", ") || "Изменено",
         diff,
         revert: () => useAccountEditsStore.getState().revert(id),
@@ -554,7 +554,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
   async function revertAll() {
     const ok = await confirm({
       title: "Откатить все изменения?",
-      message: `${total} несинхронизированных изменений будут отменены локально (правки, черновики, удаления). В облаке Дзен-мани ничего не тронется.`,
+      message: `Все несинхронизированные изменения (${total}) будут отменены локально: правки, черновики, удаления. В облаке Дзен-мани ничего не тронется.`,
       confirmLabel: "Откатить все",
       tone: "danger",
     });

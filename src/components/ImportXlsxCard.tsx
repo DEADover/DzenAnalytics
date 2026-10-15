@@ -286,10 +286,10 @@ export function ImportXlsxCard() {
         <div className="min-w-0">
           <div className="font-medium text-sm flex items-center gap-2">
             <FileSpreadsheet className="w-4 h-4 text-accent" />
-            Импорт дополнительных операций из Excel шаблона
+            Импорт дополнительных операций из Excel-шаблона
           </div>
           <div className="text-xs text-muted mt-1">
-            Нужно загрузить операции из других источников? — скачайте шаблон,
+            Нужно загрузить операции из других источников? Скачайте шаблон,
             заполните и загрузите в DzenAnalytics.
           </div>
         </div>

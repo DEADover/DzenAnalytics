@@ -152,7 +152,7 @@ describe("buildForecast: периметр", () => {
 });
 
 describe("buildForecast: статьи", () => {
-  it("родитель и под-категория считаются раздельно", () => {
+  it("родитель и подкатегория считаются раздельно", () => {
     const txs = [
       tx({ date: "2026-05-10", amountBase: 1000 }),
       tx({ date: "2026-05-11", amountBase: 3000, subcategory: "Кафе" }),
@@ -211,7 +211,7 @@ describe("previousPlan", () => {
     expect(previousPlan(lines, "2026-06")[0].current).toBe(9000);
   });
 
-  it("родитель и под-категория копируются раздельно", () => {
+  it("родитель и подкатегория копируются раздельно", () => {
     const lines = [
       line({ overrides: { "2026-05": 7000 } }),
       line({ subcategory: "Кафе", overrides: { "2026-05": 3000 } }),

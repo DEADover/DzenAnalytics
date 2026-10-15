@@ -371,7 +371,7 @@ export function useDashboardModel(): DashboardModel {
   const free = freeMoney({ factIncome, factExpense });
 
   // План месяца берём из тех же строк бюджета и по тому же правилу, что и
-  // раздел «Бюджет»: под-статья под «запертым» родителем в итог не идёт.
+  // раздел «Бюджет»: подстатья под «запертым» родителем в итог не идёт.
   const { planIncome, planExpense } = useMemo(() => {
     if (!budgetLines.length) return { planIncome: null, planExpense: null };
     const { income, expense } = planTotals(budgetLines, ym);

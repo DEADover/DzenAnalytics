@@ -198,7 +198,7 @@ function CapitalTooltip({
   if (now != null) facts.push({ label: names.now, value: formatMoney(now, base), swatchColor: SERIES_COLOR.now });
   if (act != null && now != null && Math.round(act - now) !== 0)
     facts.push({
-      label: "Разница со «Как сейчас»",
+      label: "Разница с «Как сейчас»",
       value: formatMoney(act - now, base, { signed: true }),
       tone: act > now ? "income" : "expense",
     });

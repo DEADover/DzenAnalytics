@@ -230,8 +230,8 @@ function TransferSelect({
           {current
             ? current.title
             : allowNone
-              ? "— не переносить, очистить контрагента —"
-              : "— выберите контрагента —"}
+              ? "— Не переносить, очистить контрагента —"
+              : "— Выберите контрагента —"}
         </span>
         <ChevronDown
           className={clsx(
@@ -263,7 +263,7 @@ function TransferSelect({
                   value === null ? "bg-accent/10 text-accent" : "text-muted hover:bg-panel2"
                 )}
               >
-                <span className="truncate">— не переносить, очистить контрагента —</span>
+                <span className="truncate">— Не переносить, очистить контрагента —</span>
                 {value === null && <Check className="w-3.5 h-3.5 shrink-0" />}
               </button>
             )}

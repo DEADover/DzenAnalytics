@@ -996,7 +996,7 @@ export function DashboardView() {
         return (
           <>
             <BlockTitle
-              title="Авто-наблюдения"
+              title="Автонаблюдения"
               info={
                 <p>
                   Статьи, пробившие план или разогнавшиеся против обычного, подорожавшие

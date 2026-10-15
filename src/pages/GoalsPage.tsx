@@ -573,7 +573,7 @@ function GoalForm({
           <div className="input text-sm flex items-center text-muted bg-panel2/60 cursor-not-allowed tabular-nums">
             {balanceOf(sources)?.bound
               ? formatMoney(balanceOf(sources)!.current, base)
-              : "по балансу счетов"}
+              : "По балансу счетов"}
           </div>
         </Field>
       ) : (
@@ -1194,7 +1194,7 @@ function GoalChart({
                 }`}
                 style={{ left: `${deadlinePct}%` }}
               >
-                дедлайн · {monthYear(deadline)}
+                Дедлайн · {monthYear(deadline)}
               </div>
             )}
           </div>

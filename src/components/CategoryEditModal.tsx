@@ -365,7 +365,7 @@ function ParentSelect({
         <span className="flex items-center gap-2 min-w-0">
           {currentTitle && <CategoryDot category={currentTitle} size="w-5 h-5" />}
           <span className={clsx("truncate text-sm", !currentTitle && "text-muted")}>
-            {currentTitle ?? "— нет (верхний уровень) —"}
+            {currentTitle ?? "— Нет (верхний уровень) —"}
           </span>
         </span>
         <ChevronDown
@@ -386,7 +386,7 @@ function ParentSelect({
               value === null ? "bg-accent/10 text-accent" : "text-muted hover:bg-panel2"
             )}
           >
-            <span className="truncate">— нет (верхний уровень) —</span>
+            <span className="truncate">— Нет (верхний уровень) —</span>
             {value === null && <Check className="w-3.5 h-3.5 shrink-0" />}
           </button>
           {options.map((o) => (

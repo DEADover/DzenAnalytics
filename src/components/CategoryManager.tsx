@@ -275,7 +275,7 @@ export function CategoryManager() {
       const ok = await confirm({
         title: "Удалить новую категорию?",
         message: kids.length
-          ? `«${t.title}» ещё не отправлена в облако — черновик удалится вместе с ${formatNum(kids.length)} подкатегориями.`
+          ? `«${t.title}» ещё не отправлена в облако — черновик удалится вместе с подкатегориями: ${formatNum(kids.length)}.`
           : `«${t.title}» ещё не отправлена в облако — черновик просто удалится.`,
         confirmLabel: "Удалить",
         tone: "danger",

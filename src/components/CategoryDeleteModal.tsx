@@ -183,7 +183,7 @@ function ReplacementSelect({
             />
           )}
           <span className={clsx("truncate text-sm", !current && "text-muted")}>
-            {current ? label(current) : "— без категории —"}
+            {current ? label(current) : "— Без категории —"}
           </span>
         </span>
         <ChevronDown
@@ -207,7 +207,7 @@ function ReplacementSelect({
               value === null ? "bg-accent/10 text-accent" : "text-muted hover:bg-panel2"
             )}
           >
-            <span className="truncate">— без категории —</span>
+            <span className="truncate">— Без категории —</span>
             {value === null && <Check className="w-3.5 h-3.5 shrink-0" />}
           </button>
           {options.map((o) => (

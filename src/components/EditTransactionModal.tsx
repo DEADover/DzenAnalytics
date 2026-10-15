@@ -240,7 +240,7 @@ export function EditTransactionModal({
       message: isDraftEdit
         ? "Это несинхронизированный черновик — он будет удалён локально и не отправится в Дзен-мани. Действие необратимо."
         : pushMode !== "off"
-          ? "Операция скроется из всех расчётов и списков. Так как включён Push, при следующей отправке она будет удалена и в облаке Дзен-мани. Вернуть можно на странице «Удалённые» — в т.ч. в облако."
+          ? "Операция скроется из всех расчётов и списков. Так как включён Push, при следующей отправке она будет удалена и в облаке Дзен-мани. Вернуть можно на странице «Удалённые» — в т. ч. в облако."
           : "Операция скроется из всех расчётов и списков. Вернуть можно на странице «Удалённые». В облаке Дзен-мани она не тронется.",
       confirmLabel: "Удалить",
       tone: "danger",
@@ -953,7 +953,7 @@ export function EditTransactionModal({
       inAcc: inAcc.trim(),
       category: cat,
       categoryHasIncome: !!categoryMeta[cat]?.showIncome,
-      // Тип операции Дзен-мани берёт по первому тегу — под-категории, если
+      // Тип операции Дзен-мани берёт по первому тегу — подкатегории, если
       // она выбрана, иначе категории.
       categoryExpenseOnly: (() => {
         const m = categoryMeta[subcategory.trim()] ?? categoryMeta[cat];
@@ -1166,7 +1166,7 @@ export function EditTransactionModal({
             >
               <kbd className="kbd">←</kbd>
               <kbd className="kbd">→</kbd>
-              перелистывание
+              Перелистывание
             </span>
           ) : undefined
         }
@@ -1486,7 +1486,7 @@ export function EditTransactionModal({
                     onClick={() => setManualIn(false)}
                     className="text-accent hover:underline"
                   >
-                    ↻ пересчитать по курсу
+                    ↻ Пересчитать по курсу
                   </button>
                 </Tooltip>
               )}

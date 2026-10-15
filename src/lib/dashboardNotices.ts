@@ -71,7 +71,7 @@ export interface NoticesInput {
   planByCategory: Map<string, number>;
   /** Факт месяца по статьям: категория → сумма. */
   factByCategory: Map<string, number>;
-  /** Готовые авто-наблюдения. */
+  /** Готовые автонаблюдения. */
   insights: Insight[];
 }
 

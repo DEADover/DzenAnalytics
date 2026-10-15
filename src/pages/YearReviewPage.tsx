@@ -520,7 +520,7 @@ export function YearReviewPage() {
               value={
                 review.longestStreak.days > 0
                   ? `${formatNum(review.longestStreak.days)} ${pluralRu(review.longestStreak.days, ["день", "дня", "дней"])}`
-                  : "не было"
+                  : "Не было"
               }
               sub={
                 review.longestStreak.days > 0

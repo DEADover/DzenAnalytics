@@ -88,7 +88,7 @@ export function budgetHits(t: Transaction, scope: BudgetScope): BudgetHit[] {
       out.push({
         kind: "expense",
         category: TRANSFER_CATEGORY,
-        // Под-категория — счёт НА ТОЙ СТОРОНЕ: в расходах видно, куда ушло, в
+        // Подкатегория — счёт НА ТОЙ СТОРОНЕ: в расходах видно, куда ушло, в
         // доходах — откуда пришло. Свой счёт и так известен из раздела.
         subcategory: t.incomeAccount || null,
         amount: t.amountBase,

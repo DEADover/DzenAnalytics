@@ -145,7 +145,7 @@ describe("paginateGroups", () => {
   const child = (r: { child: boolean }) => r.child;
   const shape = (pages: { child: boolean }[][]) => pages.map((p) => p.map((r) => (r.child ? "c" : "P")).join(""));
 
-  it("категория уезжает на следующий лист вместе со своими под-категориями", () => {
+  it("категория уезжает на следующий лист вместе со своими подкатегориями", () => {
     // Шесть строк на лист: разрез «PccPcc» встык дал бы «PccPc» + «c» —
     // одинокая ветка без родителя над ней.
     expect(shape(paginateGroups(rows("PccPccPcc"), 5, child))).toEqual(["Pcc", "Pcc", "Pcc"]);

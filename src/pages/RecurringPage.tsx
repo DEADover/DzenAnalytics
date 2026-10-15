@@ -395,7 +395,7 @@ export function RecurringPage() {
             <p>
               <InfoTerm>«Планы Дзен-мани»</InfoTerm> — то, что стоит в самом
               Дзен-мани: и заведённое вами вручную (<InfoTerm>План</InfoTerm>),
-              и достроенное Дзеном по регулярности (
+              и достроенное Дзен-мани по регулярности (
               <InfoTerm>Прогноз</InfoTerm>).
             </p>
             <p>
@@ -646,7 +646,7 @@ export function RecurringPage() {
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="font-medium text-sm truncate">{c.payee}</div>
                     <div className="text-xs pill shrink-0">
-                      {daysUntil === 0 ? "сегодня" : `через ${daysUntil} дн.`}
+                      {daysUntil === 0 ? "Сегодня" : `Через ${daysUntil} дн.`}
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted">

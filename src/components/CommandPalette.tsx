@@ -511,13 +511,13 @@ export function CommandPalette({ open, onClose }: Props) {
 
         <div className="px-4 py-2 border-t border-border flex items-center gap-3 text-[10px] text-muted">
           <span>
-            <kbd className="kbd">↑↓</kbd> навигация
+            <kbd className="kbd">↑↓</kbd> Навигация
           </span>
           <span>
-            <kbd className="kbd">↵</kbd> выбрать
+            <kbd className="kbd">↵</kbd> Выбрать
           </span>
           <span>
-            <kbd className="kbd">Esc</kbd> закрыть
+            <kbd className="kbd">Esc</kbd> Закрыть
           </span>
           <span className="ml-auto">{filtered.length} из {items.length}</span>
         </div>

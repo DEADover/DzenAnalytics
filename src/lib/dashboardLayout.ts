@@ -279,7 +279,7 @@ export const WIDGETS: readonly WidgetMeta[] = [
   {
     kind: "observations",
     icon: Lightbulb,
-    title: "Авто-наблюдения",
+    title: "Автонаблюдения",
     hint: "Что выбилось из обычного: перерасход, подписки, пропуски",
     span: 1,
   },

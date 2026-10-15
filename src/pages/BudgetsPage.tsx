@@ -108,7 +108,7 @@ interface Row {
   /** True when `planned` is a forecast (no manual plan this month). */
   forecast: boolean;
   /** План задан точной суммой (замок Дзен-мани). У категории это значит «вся
-   *  категория целиком»: планы под-категорий уже внутри и не складываются. */
+   *  категория целиком»: планы подкатегорий уже внутри и не складываются. */
   locked?: boolean;
   /** План взят из назначенной операции Дзен-мани, своего плана у статьи нет. */
   scheduled?: boolean;
@@ -316,7 +316,7 @@ export function BudgetsPage() {
   const formCats = catsByKind[dKind];
 
   // Sub-categories present in the data, per parent category — populates the
-  // «под-категория» selector so a budget can target one sub-tag.
+  // «подкатегория» selector so a budget can target one sub-tag.
   const subsByCat = useMemo(() => {
     const m = new Map<string, Set<string>>();
     for (const t of transactions) {
@@ -657,7 +657,7 @@ export function BudgetsPage() {
     }
     const all = [...shown, ...scheduled];
     // Второй проход — факты. Строка категории забирает и траты по своим
-    // под-категориям, кроме тех, что показаны отдельной строкой прямо здесь.
+    // подкатегориям, кроме тех, что показаны отдельной строкой прямо здесь.
     const ownSubs = ownSubsIndex(all);
     const budgeted = all
       .map(
@@ -697,7 +697,7 @@ export function BudgetsPage() {
           { name: b.line.category, amount: catFact.get(catKey(b)) ?? 0 },
           rowOrder
         );
-      // Внутри категории первой идёт она сама, следом её под-категории.
+      // Внутри категории первой идёт она сама, следом её подкатегории.
       const as = a.line.subcategory ?? "";
       const bs = b.line.subcategory ?? "";
       if (!as || !bs) return as ? 1 : bs ? -1 : 0;
@@ -762,7 +762,7 @@ export function BudgetsPage() {
     const shown = new Set(
       rows.map((r) => budgetKey(r.line.kind, r.line.category, r.line.subcategory ?? null))
     );
-    // Под-категория не «без плана», если план есть у её КАТЕГОРИИ: эти траты
+    // Подкатегория не «без плана», если план есть у её КАТЕГОРИИ: эти траты
     // уже проедают родительский план и показаны в нём (#70).
     const parentShown = (u: { kind: BudgetKind; category: string; subcategory: string | null }) =>
       u.subcategory !== null && shown.has(budgetKey(u.kind, u.category, null));
@@ -982,9 +982,9 @@ export function BudgetsPage() {
 
   if (transactions.length === 0) return <EmptyState />;
 
-  // План раздела: у категории с ЗАМКОМ планы её под-категорий уже внутри её
+  // План раздела: у категории с ЗАМКОМ планы её подкатегорий уже внутри её
   // числа, и прибавлять их второй раз нельзя — иначе итог раздела больше того,
-  // что показывает Дзен-мани, ровно на сумму таких под-категорий.
+  // что показывает Дзен-мани, ровно на сумму таких подкатегорий.
   const lockedParents = new Set(
     rows
       .filter((r) => !r.line.subcategory && r.locked)
@@ -1612,20 +1612,20 @@ function Section({
           rollupFact={
             hasSubs ? parent.fact + g.subs.reduce((s, r) => s + r.fact, 0) : undefined
           }
-          // «Ещё в плане» у категории — своё плюс все под-категории, как и факт.
+          // «Ещё в плане» у категории — своё плюс все подкатегории, как и факт.
           rollupAhead={
             hasSubs
               ? aheadOf(parent) + g.subs.reduce((s, r) => s + aheadOf(r), 0)
               : aheadOf(parent)
           }
-          // План категории — СВОЙ план плюс планы под-категорий, ровно как в
+          // План категории — СВОЙ план плюс планы подкатегорий, ровно как в
           // Дзен-мани: «Еда дома 50 000» и «Алкоголь 5 000» дают в строке
           // категории 55 000. Так же считается и факт строки (свои траты плюс
-          // траты под-категорий) — сравнивать сумму с частью плана значило бы
+          // траты подкатегорий) — сравнивать сумму с частью плана значило бы
           // показывать неверный процент.
           //
           // Правка при этом остаётся правкой СВОЕГО плана: введённое число
-          // уменьшается на сумму под-категорий (см. `subsTotal`), поэтому
+          // уменьшается на сумму подкатегорий (см. `subsTotal`), поэтому
           // «поставил 37 000 → стало 72 000» не повторяется.
           rollupPlanned={
             hasSubs
@@ -1941,7 +1941,7 @@ interface RowProps
     SectionProps,
     "heading" | "summary" | "rows" | "hideEmpty" | "aheadByTag"
   > {
-  /** «Ещё в плане» по категории целиком (своё + под-категории). */
+  /** «Ещё в плане» по категории целиком (своё + подкатегории). */
   rollupAhead?: number;
   row: Row;
   /** True when rendered indented under its parent category. */
@@ -2297,10 +2297,10 @@ function BudgetRow({
       </span>
       <PctPill planned={dispPlanned} ratio={ratio} isIncome={isIncome} />
       </div>
-      <Tooltip content={pendingPush ? "Изменено локально, ждёт отправки в Дзен (по схеме из настроек)" : null}>
+      <Tooltip content={pendingPush ? "Изменено локально, ждёт отправки в Дзен-мани (по схеме из настроек)" : null}>
         <span className="w-4 shrink-0">
           {pendingPush && (
-            <ArrowUp className="w-4 h-4 text-warn" aria-label="Ждёт отправки в Дзен" />
+            <ArrowUp className="w-4 h-4 text-warn" aria-label="Ждёт отправки в Дзен-мани" />
           )}
         </span>
       </Tooltip>

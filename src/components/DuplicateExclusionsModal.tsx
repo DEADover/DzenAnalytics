@@ -42,7 +42,7 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
   async function handleClearAll() {
     const ok = await confirm({
       title: "Удалить все исключения?",
-      message: `Все ${total} ${pluralRu(total, ["правило", "правила", "правил"])} «не дубликаты» будут удалены — отмеченные группы снова начнут проверяться.`,
+      message: `Все ${total} ${pluralRu(total, ["правило", "правила", "правил"])} «Не дубликаты» будут удалены — отмеченные группы снова начнут проверяться.`,
       confirmLabel: "Удалить все",
       tone: "danger",
     });
@@ -54,7 +54,7 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
       <ModalHeader
         icon={ShieldOff}
         tone="muted"
-        title="Исключения «не дубликаты»"
+        title="Исключения «Не дубликаты»"
         subtitle={`Всего: ${total}`}
       />
 

@@ -38,7 +38,7 @@ export interface ZenPlanEntry {
   amount: number;
   /**
    * Замок Дзен-мани: сумма задана точно. У категории это ещё и значит «вся
-   * категория целиком, вместе с под-категориями» — см. `BudgetLine.locks`.
+   * категория целиком, вместе с подкатегориями» — см. `BudgetLine.locks`.
    */
   locked: boolean;
 }

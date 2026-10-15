@@ -211,7 +211,7 @@ export function FireChart({
   const subline =
     mode === "months"
       ? `${firePct.toFixed(0)}% пути к цели · на ${asOf}`
-      : `среднее за год · на ${asOf}`;
+      : `Среднее за год · на ${asOf}`;
 
   return (
     <div className={bare ? "" : "card card-pad"}>
@@ -344,7 +344,7 @@ export function FireChart({
                 strokeWidth={2}
                 strokeDasharray="4 4"
                 label={{
-                  value: "цель · FIRE 100%",
+                  value: "Цель · FIRE 100%",
                   position: "insideTopRight",
                   fill: chartColor.warn,
                   fontSize: 11,

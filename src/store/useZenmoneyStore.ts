@@ -1291,7 +1291,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         .map((i) => ({
           id: i.id,
           reason:
-            "операция изменена в облаке после последней синхронизации — обновите и повторите",
+            "Операция изменена в облаке после последней синхронизации — обновите и повторите",
         }));
       // A locally-deleted row must NOT also be pushed as an edit/upsert — the
       // deletion wins (issue #19.4). Edits are cleared on delete, but guard here
@@ -1313,7 +1313,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         .map((r) => ({
           id: r.oldId,
           reason:
-            "операция изменена в облаке после последней синхронизации — обновите и повторите",
+            "Операция изменена в облаке после последней синхронизации — обновите и повторите",
         }));
       const skipped = [
         ...built.skipped,
@@ -1517,7 +1517,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
             kind: "push",
             status: "partial",
             title: "Планы: отброшены зависшие правки",
-            summary: `Правок бюджета не удалось отправить за ${MAX_BUDGET_EDIT_SKIPS} попыток (тег удалён/переименован в Дзене): ${dropped.length}`,
+            summary: `Правок бюджета не удалось отправить за ${MAX_BUDGET_EDIT_SKIPS} попыток (тег удалён/переименован в Дзен-мани): ${dropped.length}`,
             durationMs: Date.now() - pushStartedAt,
           });
         }

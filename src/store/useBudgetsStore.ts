@@ -22,7 +22,7 @@ export interface ZenPlanSeed {
   subcategory: string | null;
   ym: string; // "YYYY-MM"
   amount: number;
-  /** Замок Дзен-мани: сумма точная, под-категории уже внутри неё. */
+  /** Замок Дзен-мани: сумма точная, подкатегории уже внутри неё. */
   locked?: boolean;
 }
 
@@ -272,7 +272,7 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
       category: string;
       subcategory: string | null;
       months: Map<string, number>;
-      /** Месяцы с замком: «сумма точная, под-категории уже внутри». */
+      /** Месяцы с замком: «сумма точная, подкатегории уже внутри». */
       locks: Map<string, boolean>;
     }
     const groups = new Map<string, PlanGroup>();

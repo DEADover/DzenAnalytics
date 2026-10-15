@@ -660,10 +660,10 @@ export function buildPushItems(
       ): string | null => {
         if (title === undefined || title === origTitle) return null;
         const a = accountsByTitle.get(title);
-        if (!a) return `счёт "${title}" не найден в Дзен-мани`;
+        if (!a) return `Счёт «${title}» не найден в Дзен-мани`;
         const curInstr = leg === "outcome" ? original.outcomeInstrument : original.incomeInstrument;
         if (a.instrument !== curInstr) {
-          return "смена счёта на счёт в другой валюте у долговой операции пока не поддерживается — отредактируйте в приложении Дзена";
+          return "Смена счёта на счёт в другой валюте у долговой операции пока не поддерживается — отредактируйте операцию в Дзен-мани";
         }
         if (leg === "outcome") {
           zen.outcomeAccount = a.id;
@@ -681,7 +681,7 @@ export function buildPushItems(
               const a = accountsByTitle.get(edit.account!);
               if (!a) return `Счёт «${edit.account}» не найден в Дзен-мани`;
               if (a.instrument !== original.outcomeInstrument)
-                return "смена счёта на счёт в другой валюте у долговой операции пока не поддерживается — отредактируйте в приложении Дзена";
+                return "Смена счёта на счёт в другой валюте у долговой операции пока не поддерживается — отредактируйте операцию в Дзен-мани";
               zen.outcomeAccount = a.id;
               zen.incomeAccount = a.id;
               return null;
