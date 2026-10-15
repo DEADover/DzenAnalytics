@@ -64,7 +64,8 @@ interface SyncLogProps {
 
 /** Колонки журнала — для своей ширины столбцов. «Тип» резиновый. */
 const LOG_COLUMNS: ResizeColumn[] = [
-  { key: "kind", label: "Тип", type: "text" },
+  { key: "kind", label: "Тип", type: "text", width: "12rem" },
+  { key: "result", label: "Результат", type: "text" },
   { key: "at", label: "Дата и время", type: "date", width: "10rem" },
   { key: "fresh", label: "Новых операций", type: "count", width: "10rem" },
   { key: "total", label: "Всего операций", type: "count", width: "10rem" },
@@ -250,9 +251,18 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
                   <HeadCell
                     type="text"
                     label="Тип"
-                    className={resize.custom ? undefined : "w-full"}
+                    className={resize.custom ? undefined : "w-px whitespace-nowrap"}
                     colKey="kind"
                     resize={resize.handle("kind")}
+                  />
+                  {/* Итог записи — своим столбцом: «Без изменений», «+1 новых/изменённых»,
+                      «Отправлено: 1». Он и забирает остаток ширины. */}
+                  <HeadCell
+                    type="text"
+                    label="Результат"
+                    className={resize.custom ? undefined : "w-full"}
+                    colKey="result"
+                    resize={resize.handle("result")}
                   />
                   <HeadCell
                     type="date"
@@ -397,7 +407,7 @@ function LogTableRow({
         className={hasDetails ? "cursor-pointer hover:bg-panel2/50" : undefined}
       >
         {/* Шеврон раскрытия — внутри ячейки «Тип», перед названием, как в
-            дереве любой таблицы. Итог записи — той же строкой, приглушённо. */}
+            дереве любой таблицы. Итог записи — в соседнем столбце «Результат». */}
         <td className={cellClass("text")}>
           <div className="flex items-center gap-1.5 min-w-0">
             {reserveChevron &&
@@ -406,13 +416,15 @@ function LogTableRow({
               ) : (
                 <span className="w-4 shrink-0" aria-hidden />
               ))}
-            <span className="truncate" title={entry.summary ? `${legacyText(entry.title)} · ${capitalize(legacyText(entry.summary))}` : legacyText(entry.title)}>
-              {legacyText(entry.title)}
-              {entry.summary && <span className="text-muted"> · {capitalize(legacyText(entry.summary))}</span>}
-              {/* Та же ошибка подряд — одной строкой со счётчиком. */}
-              {repeated && <span className="text-expense tabular-nums"> · ×{formatN(entry.repeat!)}</span>}
-            </span>
+            <span className="whitespace-nowrap">{legacyText(entry.title)}</span>
           </div>
+        </td>
+        <td className={cellClass("text", { muted: true })}>
+          <span className="block truncate" title={entry.summary ? capitalize(legacyText(entry.summary)) : undefined}>
+            {entry.summary ? capitalize(legacyText(entry.summary)) : "—"}
+            {/* Та же ошибка подряд — одной строкой со счётчиком. */}
+            {repeated && <span className="text-expense tabular-nums"> · ×{formatN(entry.repeat!)}</span>}
+          </span>
         </td>
         <td className={cellClass("date")}>{new Date(entry.ts).toLocaleString("ru-RU")}</td>
         <td className={cellClass("count", { className: "hidden md:table-cell" })}>
@@ -431,7 +443,7 @@ function LogTableRow({
       {expanded && hasDetails && (
         <tr className="bg-panel2/30">
           {/* Отступ — до начала названия над строкой: поле 12 + шеврон 16 + промежуток 6. */}
-          <td colSpan={6} className="table-td pl-[34px] pr-3 py-3">
+          <td colSpan={7} className="table-td pl-[34px] pr-3 py-3">
             <div className="text-xs space-y-2">
               {repeated && entry.firstTs && (
                 <p className="text-muted">
@@ -516,7 +528,7 @@ function StatusBadge({ status }: { status: SyncLogStatus }) {
 function legacyText(s: string): string {
   if (s === "Push в облако") return "Отправка правок";
   // Общее число операций есть в столбце «Всего операций» — в описании не дублируем.
-  return s.replace(/^Без изменений \(всего [\d\s\u00a0]+\)$/, "Без изменений").replace(/^Полная синхронизация: [\d\s\u00a0]+ операци[яий]+$/, "Полная синхронизация");
+  return s.replace(/^Без изменений \(всего [\d\s\u00a0]+\)$/, "Без изменений").replace(/^Полная синхронизация: [\d\s\u00a0]+ операци[яий]+$/, "Загружено заново");
 }
 
 function capitalize(s: string): string {

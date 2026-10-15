@@ -1108,7 +1108,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // Сколько операций всего — в своём столбце журнала («Всего операций»),
       // в описании его не повторяем.
       const summary = isFull
-        ? "Полная синхронизация"
+        ? "Загружено заново"
         : deltaTx === 0 && deltaDel === 0
           ? "Без изменений"
           : `+${formatNum(deltaTx)} новых/изменённых${deltaDel > 0 ? `, ${formatNum(deltaDel)} удалено` : ""}`;
