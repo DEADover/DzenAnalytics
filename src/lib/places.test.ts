@@ -124,7 +124,7 @@ describe("buildPlaceDossier: досье места", () => {
     expect(d.months).toHaveLength(12);
     expect(d.months[11]).toMatchObject({ ym: "2026-09", expense: 1200, visits: 2 });
     expect(d.months[0].ym).toBe("2025-10");
-    expect(d.biggest).toEqual({ date: "2026-08-01", amount: 1000 });
+    expect(d.biggest).toMatchObject({ date: "2026-08-01", amount: 1000 });
   });
 
   it("месяцы считаются по своему первому дню", () => {

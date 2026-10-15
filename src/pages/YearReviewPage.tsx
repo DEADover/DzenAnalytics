@@ -57,6 +57,7 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import type { LucideIcon } from "lucide-react";
 import type { CardHeaderTone } from "../components/CardHeader";
+import { FactTile } from "../components/FactTile";
 import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { MeterRow, MeterHead, type MeterCell } from "../components/MeterRow";
 import { nextSort, sortRows, type SortState } from "../components/table/tableKit";
@@ -496,17 +497,17 @@ export function YearReviewPage() {
                 операцию», «Первая пятёрка статей») читались как случайный
                 набор, а не как один ряд. Уточнение под числом отвечает «от
                 чего» и нигде не повторяет саму подпись. */}
-            <Fact
+            <FactTile
               label="Расход в день"
               value={formatMoney(review.avgPerDay, baseCurrency)}
               sub="в среднем"
             />
-            <Fact
+            <FactTile
               label="Расход на операцию"
               value={formatMoney(review.avgCheck, baseCurrency)}
               sub={`в среднем по ${formatNum(review.expenseCount)}`}
             />
-            <Fact
+            <FactTile
               label="Дни с тратами"
               value={`${formatNum(review.daysWithExpense)} из ${formatNum(review.window.days)}`}
               sub={
@@ -515,7 +516,7 @@ export function YearReviewPage() {
                   : undefined
               }
             />
-            <Fact
+            <FactTile
               label="Перерыв без трат"
               value={
                 review.longestStreak.days > 0
@@ -530,12 +531,12 @@ export function YearReviewPage() {
                   : "тратили каждый день"
               }
             />
-            <Fact
+            <FactTile
               label="Контрагенты"
               value={formatNum(review.uniqueMerchants)}
               sub="мест и людей за год"
             />
-            <Fact
+            <FactTile
               label="Категории"
               value={formatNum(review.uniqueCategories)}
               sub={`первая пятёрка — ${formatPct(review.topFiveShare, 0)} расхода`}
@@ -1038,38 +1039,3 @@ function TopList({
  * «что меряем», число стоит отдельно и крупно, а вторая строчка договаривает
  * то, что в подпись не влезло.
  */
-/**
- * Факт: плитка «имя показателя, число, уточнение».
- *
- * Пустота в этом блоке оказалась не свойством плиток, а следствием растяжки.
- * Карточка тянулась по высоте соседней, лишняя высота уходила в плитки, и они
- * распухали: содержимого на две строки, плитка на четыре. Стоило прижать
- * содержимое к ширине — пустота переезжала вниз, и наоборот.
- *
- * Поэтому карточка больше не тянется, а плиток три в ряд, а не две: при ширине
- * в треть карточки подпись, число и уточнение занимают плитку целиком в обе
- * стороны, и добирать высоту нечем — её ровно столько, сколько нужно тексту.
- */
-function Fact({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className="card-sunken px-3 py-2.5 min-w-0">
-      <div className="caps-label truncate">
-        {label}
-      </div>
-      <div className="stat-num text-xl font-bold tabular-nums leading-tight mt-1 truncate">
-        {value}
-      </div>
-      {sub && (
-        <div className="text-[11px] text-muted leading-tight truncate mt-0.5">{sub}</div>
-      )}
-    </div>
-  );
-}

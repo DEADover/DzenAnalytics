@@ -88,7 +88,7 @@ export interface PlaceDossier {
   /** Двенадцать отчётных периодов, последний — тот, где последняя операция истории. */
   months: PlaceMonth[];
   /** Самая крупная покупка. */
-  biggest: { date: string; amount: number } | null;
+  biggest: { id: string; date: string; amount: number } | null;
 }
 
 /** Сколько покупок нужно в обоих отрезках, чтобы сравнивать средний чек. */
@@ -337,7 +337,7 @@ export function buildPlaceDossier(
   for (const m of months) if (m.expense < 0) m.expense = 0;
 
   let biggest: PlaceDossier["biggest"] = null;
-  for (const t of buys) if (!biggest || t.amountBase > biggest.amount) biggest = { date: t.date, amount: t.amountBase };
+  for (const t of buys) if (!biggest || t.amountBase > biggest.amount) biggest = { id: t.id, date: t.date, amount: t.amountBase };
 
   return {
     name,

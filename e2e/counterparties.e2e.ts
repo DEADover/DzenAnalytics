@@ -31,10 +31,22 @@ test("места за месяц, карточка места и новые ме
   await table.locator("tr", { hasText: "Кофейня у дома" }).click();
   const title = page.locator("[data-dossier-title]");
   await expect(title).toHaveText("Кофейня у дома");
-  const card = page.locator(".card-tray", { has: title });
-  await expect(card.getByText("Как часто")).toBeVisible();
-  await expect(card.getByText("Впервые")).toBeVisible();
+  const card = page.locator("[data-place-card]");
+  await expect(card.getByText("Покупок", { exact: true })).toBeVisible();
+  await expect(card.getByText(/^Последний раз /)).toBeVisible();
   await expect(card.locator(".recharts-bar")).toBeVisible();
+  // Выбранная строка отмечена, «Новое» — у мест, впервые появившихся в периоде.
+  await expect(table.locator("tr", { hasText: "Ресторан" }).getByText("Новое", { exact: true })).toBeVisible();
+
+  // В карточке ничего не обрезано — ни у одного места таблицы.
+  for (const tr of await table.locator("tbody tr").all()) {
+    await tr.click();
+    const cutInCard = await card.evaluate((el) =>
+      [...el.querySelectorAll("*")].filter((e) => e.children.length === 0 && e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent)
+    );
+    expect(cutInCard).toEqual([]);
+  }
+  await table.locator("tr", { hasText: "Кофейня у дома" }).click();
 
   // Подписи оси графика внутри карточки.
   const axisOut = await card.locator("svg.recharts-surface").first().evaluate((svg) => {
