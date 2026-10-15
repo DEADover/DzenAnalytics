@@ -96,3 +96,27 @@ for (const width of [1024, 1280, 1440]) {
     expect(cut).toEqual([]);
   });
 }
+
+test("карточка места в низком окне: целиком в экране, низ докручивается", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 640 });
+  await connectZen(page, "/counterparties");
+  const card = page.locator("[data-place-card] > .card-tray");
+  await expect(card).toBeVisible();
+  // Листаем страницу вниз — карточка прилипла и не выше окна.
+  await page.locator("tbody tr").last().scrollIntoViewIfNeeded();
+  await page.mouse.wheel(0, 400);
+  const box = await card.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, vh: window.innerHeight, scrollable: el.scrollHeight > el.clientHeight };
+  });
+  expect(box.bottom).toBeLessThanOrEqual(box.vh);
+  expect(box.top).toBeGreaterThanOrEqual(0);
+  // Своя прокрутка доводит до последнего блока карточки.
+  const reached = await card.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+    const last = el.lastElementChild!.getBoundingClientRect();
+    return last.bottom <= el.getBoundingClientRect().bottom + 1;
+  });
+  expect(reached).toBe(true);
+  expect(box.scrollable).toBe(true);
+});

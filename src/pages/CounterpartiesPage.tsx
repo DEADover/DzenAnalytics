@@ -432,7 +432,10 @@ export function CounterpartiesPage() {
           ]}
         />
 
-        <div className="order-1 xl:order-none xl:sticky xl:top-24 scroll-mt-24" data-place-card>
+        <div
+          className="order-1 xl:order-none xl:sticky xl:top-[calc(var(--app-header-h)+0.75rem)] scroll-mt-24"
+          data-place-card
+        >
           {dossier && (
             <PlaceCard
               dossier={dossier}
@@ -481,7 +484,10 @@ function PlaceCard({
   const maxDay = Math.max(...d.weekdays, 1);
 
   return (
-    <div className="card-tray px-4 py-4 space-y-4">
+    // Карточка прилипает к экрану, пока листается таблица, — значит, она не
+    // может быть выше окна: низ карточки было бы не достать ничем. Выше окна —
+    // своя прокрутка внутри.
+    <div className="card-tray px-4 py-4 space-y-4 xl:max-h-[calc(100dvh-var(--app-header-h)-1.5rem)] xl:overflow-y-auto">
       {/* Шапка: значок главной статьи, имя, статьи — и действие справа. */}
       <div className="flex items-start gap-3">
         <CategoryDot category={lead} size="w-10 h-10" />
@@ -490,7 +496,7 @@ function PlaceCard({
             {d.name}
           </div>
           <div className="text-xs text-muted truncate mt-0.5">
-            {d.categories.map((c) => c.name).join(" · ") || "Без категории"}
+            {lead || "Без категории"}
           </div>
         </div>
         <button type="button" className="btn-ghost text-sm shrink-0" onClick={onOpenAll}>
