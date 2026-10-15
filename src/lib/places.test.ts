@@ -117,7 +117,8 @@ describe("досье: дни недели, год к году, доля в ст�
       "Рынок",
       "2026-09-30"
     )!;
-    expect(d.weekdays).toEqual([0, 0, 0, 0, 0, 2, 1]);
+    expect(d.weekdays.map((w) => w.visits)).toEqual([0, 0, 0, 0, 0, 2, 1]);
+    expect(d.weekdays[5]).toEqual({ expense: 400, visits: 2, avgCheck: 200 });
     expect(d.yearOverYear).toEqual({ last: 400, prev: 200 });
     // Еды всего 1200, из них на рынке 600.
     expect(d.categoryShare).toBe(0.5);

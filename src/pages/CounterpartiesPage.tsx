@@ -73,6 +73,13 @@ const WEEKDAY_FULL = ["Понедельник", "Вторник", "Среда", 
 
 const WEEKDAYS = ["понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам", "воскресеньям"];
 
+/** Значение столбика для подсказки: сумма, операции или чек — и число операций рядом. */
+function metricText(v: { expense: number; visits: number; avgCheck: number }, metric: Metric, base: string): string {
+  const ops = `${formatNum(v.visits)} ${pluralRu(v.visits, ["операция", "операции", "операций"])}`;
+  if (metric === "visits") return ops;
+  return `${formatMoney(metric === "expense" ? v.expense : v.avgCheck, base)} · ${ops}`;
+}
+
 /** «Каждый день», «Раз в неделю», «Раз в 10 дней», «Раз в месяц», «Раз в 3 месяца». */
 function everyText(days: number): string {
   if (days <= 1) return "Каждый день";
@@ -518,7 +525,13 @@ function PlaceCard({
   const months = d.months.map((m) => ({ ...m, hit: inRange(m.ym) }));
   const allHit = months.every((m) => m.hit);
   const { last, prev } = d.yearOverYear;
-  const maxDay = Math.max(...d.weekdays, 1);
+  const dayValues = d.weekdays.map((w) => w[metric]);
+  const maxDay = Math.max(...dayValues, 1);
+  // Выделяем день-лидер по выбранному показателю — только если он один.
+  const topDay =
+    dayValues.filter((v) => v === Math.max(...dayValues)).length === 1 && Math.max(...dayValues) > 0
+      ? dayValues.indexOf(Math.max(...dayValues))
+      : null;
 
   return (
     // Карточка прилипает к экрану, пока листается таблица, — значит, она не
@@ -596,12 +609,14 @@ function PlaceCard({
         )}
       </ul>
 
+      {/* Один переключатель на оба графика ниже — месяцы и дни недели
+          показывают одно и то же: сумму, число операций или средний чек. */}
       <div>
         <div className="flex items-center justify-between gap-2">
-          <div className="caps-label">По месяцам</div>
+          <div className="caps-label">Траты во времени</div>
           <Segmented
             size="sm"
-            label="Что показывать на графике"
+            label="Что показывать на графиках"
             value={metric}
             onChange={setMetric}
             options={[
@@ -611,7 +626,8 @@ function PlaceCard({
             ]}
           />
         </div>
-        <div className="text-xs text-muted mt-1 flex items-center gap-1.5 flex-wrap tabular-nums">
+        <div className="text-sm font-medium mt-3">По месяцам</div>
+        <div className="text-xs text-muted mt-0.5 flex items-center gap-1.5 flex-wrap tabular-nums">
           За 12 месяцев {formatMoney(last, base)}
           {prev > 0 && (
             <>
@@ -668,19 +684,18 @@ function PlaceCard({
             </BarChart>
           </ChartContainer>
         </div>
-      </div>
 
-      <div>
-        <div className="caps-label mb-2">По дням недели</div>
+        <div className="text-sm font-medium mt-4">По дням недели</div>
+        <div className="text-xs text-muted mt-0.5 mb-2">За всё время</div>
         {/* Семь столбиков без осей: важна форма недели, а не точные числа —
             они в подсказке. Любимый день — акцентом. */}
         <div className="grid grid-cols-7 gap-1.5 items-end h-14">
-          {d.weekdays.map((n, i) => (
-            <Tooltip key={i} content={`${WEEKDAY_FULL[i]} · ${formatNum(n)} ${pluralRu(n, ["операция", "операции", "операций"])}`}>
+          {d.weekdays.map((w, i) => (
+            <Tooltip key={i} content={`${WEEKDAY_FULL[i]} · ${metricText(w, metric, base)}`}>
               <div className="h-full flex items-end">
                 <div
-                  className={i === d.favWeekday ? "w-full rounded-t-[3px] bg-accent" : "w-full rounded-t-[3px] bg-accent/35"}
-                  style={{ height: `${Math.max(n > 0 ? 6 : 2, (n / maxDay) * 100)}%` }}
+                  className={i === topDay ? "w-full rounded-t-[3px] bg-accent" : "w-full rounded-t-[3px] bg-accent/35"}
+                  style={{ height: `${Math.max(w[metric] > 0 ? 6 : 2, (w[metric] / maxDay) * 100)}%` }}
                 />
               </div>
             </Tooltip>
@@ -688,7 +703,7 @@ function PlaceCard({
         </div>
         <div className="grid grid-cols-7 gap-1.5 mt-1 text-[11px] text-muted text-center">
           {WEEKDAY_SHORT.map((w, i) => (
-            <span key={w} className={i === d.favWeekday ? "text-accent font-semibold" : undefined}>
+            <span key={w} className={i === topDay ? "text-accent font-semibold" : undefined}>
               {w}
             </span>
           ))}

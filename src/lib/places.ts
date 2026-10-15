@@ -57,6 +57,13 @@ export interface PlaceMonth {
   avgCheck: number;
 }
 
+/** Столбик графика — месяц или день недели: те же три показателя. */
+export interface PlaceMonthLike {
+  expense: number;
+  visits: number;
+  avgCheck: number;
+}
+
 /** Всё о месте за всю историю. */
 export interface PlaceDossier {
   name: string;
@@ -80,8 +87,8 @@ export interface PlaceDossier {
   months: PlaceMonth[];
   /** Самая крупная покупка. */
   biggest: { id: string; date: string; amount: number } | null;
-  /** Покупок по дням недели, с понедельника. */
-  weekdays: number[];
+  /** Дни недели с понедельника: сумма, операции и средний чек за всю историю. */
+  weekdays: PlaceMonthLike[];
   /**
    * Последние двенадцать месяцев против двенадцати перед ними — по последней
    * операции истории. `prev` — 0, если тогда места ещё не было.
@@ -235,6 +242,16 @@ export function buildPlaceDossier(
 
   const counts: number[] = new Array(7).fill(0);
   for (const d of dates) counts[weekdayMon(d)]++;
+  const weekdays: PlaceMonthLike[] = counts.map((visits) => ({ expense: 0, visits, avgCheck: 0 }));
+  for (const t of list) {
+    const w = weekdays[weekdayMon(t.date)];
+    w.expense += expenseDelta(t);
+    if (t.kind === "expense") w.avgCheck += t.amountBase;
+  }
+  for (const w of weekdays) {
+    if (w.expense < 0) w.expense = 0;
+    w.avgCheck = w.visits > 0 ? w.avgCheck / w.visits : 0;
+  }
   let favWeekday: number | null = null;
   let favWeekdayShare = 0;
   if (buys.length >= 5) {
@@ -309,7 +326,7 @@ export function buildPlaceDossier(
     categories,
     months,
     biggest,
-    weekdays: counts,
+    weekdays,
     yearOverYear,
     categoryShare,
   };

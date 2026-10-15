@@ -41,8 +41,15 @@ test("места за месяц, карточка места и новые ме
   await expect(card.getByText(/^Последний раз /)).toBeVisible();
   await expect(card.locator(".recharts-bar")).toBeVisible();
   await expect(card.getByText("По дням недели")).toBeVisible();
-  // График переключается на средний чек.
-  await card.getByRole("radio", { name: "Чек" }).or(card.getByRole("button", { name: "Чек", exact: true })).first().click();
+  // Один переключатель на оба графика: дни недели тоже меняются.
+  const week = () =>
+    card.locator(".grid-cols-7 .rounded-t-\\[3px\\]").evaluateAll((bars) => bars.map((b) => (b as HTMLElement).style.height).join(","));
+  const metric = (name: string) =>
+    card.getByRole("radio", { name }).or(card.getByRole("button", { name, exact: true })).first().click();
+  const bySum = await week();
+  await metric("Операции");
+  await expect.poll(week).not.toBe(bySum);
+  await metric("Чек");
   await expect(card.locator(".recharts-bar")).toBeVisible();
   // Выбранная строка отмечена, «Новое» — у мест, впервые появившихся в периоде.
   await expect(table.locator("tr", { hasText: "Ресторан" }).getByText("Новый", { exact: true })).toBeVisible();
