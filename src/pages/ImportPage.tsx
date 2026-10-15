@@ -1656,7 +1656,7 @@ export function ImportPage() {
         />
 
         <SettingRow
-          title="Убрать иконку благодарности"
+          title="Убрать значок благодарности"
           status={
             hideThanks
               ? "Сердечко скрыто"
@@ -1672,7 +1672,7 @@ export function ImportPage() {
           control={
             <Switch
               checked={hideThanks}
-              label="Убрать иконку благодарности"
+              label="Убрать значок благодарности"
               onChange={(next) => setHideThanks(next)}
             />
           }

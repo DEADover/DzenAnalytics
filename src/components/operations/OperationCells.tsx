@@ -43,7 +43,7 @@ export function OperationCategory({
         {draft && (
           <span
             className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-expense border-2 border-panel"
-            aria-label="Новая операция — не синхронизирована"
+            aria-label="Новая операция — не отправлена"
           />
         )}
         {/* «Новая» — приехала из банка, и в Дзен-мани её ещё не открывали. С
@@ -160,8 +160,8 @@ export function OperationActions({
         type="button"
         onClick={stop(onEdit)}
         className="btn-icon"
-        title="Редактировать"
-        aria-label="Редактировать операцию"
+        title="Изменить"
+        aria-label="Изменить операцию"
       >
         <Pencil className="w-4 h-4" />
       </button>

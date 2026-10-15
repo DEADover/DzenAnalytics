@@ -6,7 +6,7 @@ import { test, expect, connectZen } from "./harness";
 
 test("тег в комментарии подсказывается и в неправильной раскладке", async ({ page }) => {
   await connectZen(page, "/transactions");
-  const edit = page.getByRole("button", { name: "Редактировать операцию" });
+  const edit = page.getByRole("button", { name: "Изменить операцию" });
   const dialog = page.getByRole("dialog");
   const comment = dialog.locator("textarea").first();
 

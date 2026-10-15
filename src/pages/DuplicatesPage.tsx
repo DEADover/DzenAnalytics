@@ -231,7 +231,7 @@ export function DuplicatesPage() {
           <Tooltip content="Группы, отмеченные «Не дубликаты»">
             <button onClick={() => setExclusionsModalOpen(true)} className="btn-ghost btn-lg">
               <ShieldOff className="w-4 h-4" />
-              Исключения ({formatNum(exclusionsCount)})
+              Не дубликаты ({formatNum(exclusionsCount)})
             </button>
           </Tooltip>
         )}
@@ -444,7 +444,7 @@ function GroupHeader({
           type="button"
           onClick={onNotDuplicates}
           className="btn-ghost text-xs"
-          title={"Это разные операции\nГруппа уйдёт из списка и больше не будет помечаться. Вернуть — в «Исключениях»."}
+          title={"Это разные операции\nГруппа уйдёт из списка и больше не будет помечаться. Вернуть — в списке «Не дубликаты»."}
         >
           <ShieldOff className="w-3.5 h-3.5" aria-hidden />
           Не дубликаты

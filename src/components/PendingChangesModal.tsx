@@ -297,7 +297,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
           to: patch.required === false ? "Необязательная" : "Обязательная",
         });
       if (patch.color !== undefined) diff.push({ label: "Цвет", from: "Прежний", to: "Новый" });
-      if (patch.icon !== undefined) diff.push({ label: "Иконка", from: "Прежняя", to: "Новая" });
+      if (patch.icon !== undefined) diff.push({ label: "Значок", from: "Прежний", to: "Новый" });
       out.push({
         key: `edit:${id}`,
         action: "edit",
@@ -554,7 +554,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
   async function revertAll() {
     const ok = await confirm({
       title: "Откатить все изменения?",
-      message: `Все несинхронизированные изменения (${total}) будут отменены локально: правки, черновики, удаления. В облаке Дзен-мани ничего не тронется.`,
+      message: `Все неотправленные изменения (${total}) будут отменены локально: правки, черновики, удаления. В облаке Дзен-мани ничего не тронется.`,
       confirmLabel: "Откатить все",
       tone: "danger",
     });
@@ -613,7 +613,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
         <ModalBody scroll>
           {total === 0 ? (
             <SectionEmpty variant="inline">
-              Нет несинхронизированных изменений — всё отправлено в Дзен-мани.
+              Нет неотправленных изменений — всё отправлено в Дзен-мани.
             </SectionEmpty>
           ) : (
             <div className="space-y-6">

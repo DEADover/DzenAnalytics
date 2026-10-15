@@ -9,9 +9,9 @@ test("комментарий: подсказка по прежним, Tab при
   const row = page
     .getByText("Ресторан", { exact: true })
     .first()
-    .locator("xpath=ancestor::*[.//button[@aria-label='Редактировать операцию']][1]");
+    .locator("xpath=ancestor::*[.//button[@aria-label='Изменить операцию']][1]");
   await row.hover();
-  await row.getByRole("button", { name: "Редактировать операцию" }).click();
+  await row.getByRole("button", { name: "Изменить операцию" }).click();
   const dialog = page.getByRole("dialog");
   const field = dialog.locator("textarea");
   const ghost = dialog.locator("[data-comment-ghost]");

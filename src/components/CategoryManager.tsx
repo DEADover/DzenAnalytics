@@ -333,7 +333,7 @@ export function CategoryManager() {
   if (tags === null) {
     return (
       <p className="text-sm text-muted">
-        Управление категориями (название, тип, иерархия, цвет, иконка,
+        Управление категориями (название, тип, иерархия, цвет, значок,
         обязательность, создание) доступно, только когда подключён Дзен-мани, — нужен
         живой список категорий и синхронизация. Подключите Дзен-мани в
         настройках.
@@ -360,7 +360,7 @@ export function CategoryManager() {
                   <strong className="text-text">тип</strong> (расходная/доходная),{" "}
                   <strong className="text-text">родительская категория</strong>,{" "}
                   <strong className="text-text">цвет</strong>,{" "}
-                  <strong className="text-text">иконка</strong> и{" "}
+                  <strong className="text-text">значок</strong> и{" "}
                   <strong className="text-text">обязательность</strong>. Кнопка{" "}
                   <strong className="text-text">«Добавить»</strong> создаёт новую
                   категорию или подкатегорию. Всё копится локально и уходит в
@@ -538,8 +538,8 @@ export function CategoryManager() {
                         <button
                           onClick={() => openEdit(root)}
                           disabled={rDeleted}
-                          title="Редактировать категорию"
-                          aria-label="Редактировать категорию"
+                          title="Изменить категорию"
+                          aria-label="Изменить категорию"
                           className="btn-icon disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Pencil className="w-4 h-4" />
@@ -680,8 +680,8 @@ export function CategoryManager() {
                                 <button
                                   onClick={() => openEdit(c)}
                                   disabled={cDeleted}
-                                  title="Редактировать подкатегорию"
-                                  aria-label="Редактировать подкатегорию"
+                                  title="Изменить подкатегорию"
+                                  aria-label="Изменить подкатегорию"
                                   className="btn-icon disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                   <Pencil className="w-4 h-4" />

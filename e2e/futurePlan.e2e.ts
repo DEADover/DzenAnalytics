@@ -20,7 +20,7 @@ test("копия с будущей датой становится разовы�
   await setPushMode(page, "manual");
 
   const row = page.locator("div.grid", { hasText: "Кофейня у дома" }).filter({ hasText: "832" }).first();
-  await row.getByRole("button", { name: "Редактировать операцию" }).click();
+  await row.getByRole("button", { name: "Изменить операцию" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Копировать операцию" }).click();
   const card = page.getByRole("dialog").filter({ hasText: "Копия операции" });
   await expect(card).toBeVisible();

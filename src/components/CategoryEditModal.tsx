@@ -221,7 +221,7 @@ export function CategoryEditModal({
         {/* Icon + colour on one row, tops aligned (both controls 40px). */}
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
-            <label className="label block mb-1 h-4">Иконка</label>
+            <label className="label block mb-1 h-4">Значок</label>
             <IconPicker value={icon} color={previewColor} onChange={setIcon} />
           </div>
           <div className="relative">

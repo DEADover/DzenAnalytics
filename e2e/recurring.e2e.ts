@@ -11,7 +11,7 @@ test("операция становится планом: правило и 12 �
   // «Кофейня у дома» 14 октября — 832 ₽ со «Сбера». Уже просмотрена: открытие
   // непросмотренной само ставит отметку «просмотрено» — второе изменение.
   const row = page.locator("div.grid", { hasText: "Кофейня у дома" }).filter({ hasText: "832" }).first();
-  await row.getByRole("button", { name: "Редактировать операцию" }).click();
+  await row.getByRole("button", { name: "Изменить операцию" }).click();
   await page.getByRole("button", { name: "Сделать регулярной" }).click();
 
   const dialog = page.getByRole("dialog");

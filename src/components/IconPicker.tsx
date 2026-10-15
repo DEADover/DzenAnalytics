@@ -53,7 +53,7 @@ export function IconPicker({ value, color, onChange }: Props) {
               value ? "text-text" : "text-muted"
             )}
           >
-            {value ? value.replace(/^\d+_/, "").replace(/_/g, " ") : "Выбрать иконку"}
+            {value ? value.replace(/^\d+_/, "").replace(/_/g, " ") : "Выбрать значок"}
           </span>
         </span>
         <ChevronDown

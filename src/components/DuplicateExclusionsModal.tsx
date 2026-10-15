@@ -41,7 +41,7 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
 
   async function handleClearAll() {
     const ok = await confirm({
-      title: "Удалить все исключения?",
+      title: "Удалить все правила?",
       message: `Все ${total} ${pluralRu(total, ["правило", "правила", "правил"])} «Не дубликаты» будут удалены — отмеченные группы снова начнут проверяться.`,
       confirmLabel: "Удалить все",
       tone: "danger",
@@ -54,7 +54,7 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
       <ModalHeader
         icon={ShieldOff}
         tone="muted"
-        title="Исключения «Не дубликаты»"
+        title="Не дубликаты"
         subtitle={`Всего: ${total}`}
       />
 
@@ -77,7 +77,7 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
       <ModalBody scroll list gap={0}>
         {total === 0 ? (
           <SectionEmpty variant="inline">
-            Пока нет исключений. Отметьте группу «Не дубликаты» на странице — правило
+            Пока нет правил. Отметьте группу «Не дубликаты» на странице — правило
             появится здесь.
           </SectionEmpty>
         ) : list.length === 0 ? (

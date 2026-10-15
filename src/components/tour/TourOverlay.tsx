@@ -472,7 +472,7 @@ function TourCard({ chapter, idx, measure, onNext, onBack, onStop, onHub }: Tour
                 onHub?.();
               }}
             >
-              Другие темы
+              Другие главы
             </button>
             <button type="button" className="btn-primary text-sm" onClick={() => stop(true)}>
               <Check className="w-3.5 h-3.5" />

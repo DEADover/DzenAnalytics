@@ -35,7 +35,7 @@ test("бюджет: «Год» и «Дашборд» тоже", async ({ page })
 
 test("окно правки операции целиком в экране", async ({ page }) => {
   await connectZen(page, "/transactions");
-  await page.getByRole("button", { name: "Редактировать операцию" }).first().click();
+  await page.getByRole("button", { name: "Изменить операцию" }).first().click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("button", { name: "Сохранить" })).toBeInViewport({ ratio: 1 });
   expect(await dialog.evaluate((d) => d.scrollWidth - d.clientWidth)).toBe(0);
@@ -62,7 +62,7 @@ test("таблицы: колонка названий не схлопывает�
 
 test("окна разделения и создания — целиком в экране", async ({ page }) => {
   await connectZen(page, "/transactions");
-  await page.getByRole("button", { name: "Редактировать операцию" }).nth(2).click();
+  await page.getByRole("button", { name: "Изменить операцию" }).nth(2).click();
   await page.getByRole("dialog").getByRole("button", { name: "Разделить операцию" }).click();
   const split = page.getByRole("dialog");
   await expect(split.getByLabel("Сумма части 1")).toBeInViewport({ ratio: 1 });
@@ -130,7 +130,7 @@ test.describe("сенсорный экран", () => {
   test("действия окна изменений — в экране", async ({ page }) => {
     await connectZen(page, "/transactions");
     await setPushMode(page, "manual");
-    await page.getByRole("button", { name: "Редактировать операцию" }).nth(2).tap();
+    await page.getByRole("button", { name: "Изменить операцию" }).nth(2).tap();
     await page.getByRole("dialog").getByRole("button", { name: "Сохранить" }).tap();
     await page.locator('button[title^="Просмотреть изменения"]').tap();
     const dialog = page.getByRole("dialog");

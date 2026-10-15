@@ -734,11 +734,11 @@ function GoalCard({
             {pct}%
           </div>
           <div className="flex items-center gap-0.5">
-            <Tooltip content="Редактировать цель">
+            <Tooltip content="Изменить цель">
               <button
                 onClick={() => (editing && !closing ? closeEdit() : openEdit())}
                 className={`btn-icon ${editing && !closing ? "text-accent bg-accent/10" : ""}`}
-                aria-label="Редактировать цель"
+                aria-label="Изменить цель"
               >
                 <Pencil className="w-4 h-4" />
               </button>

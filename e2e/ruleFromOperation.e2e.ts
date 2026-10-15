@@ -10,9 +10,9 @@ test("правило из операции: редактор открыт и з�
   const row = page
     .getByText("Ресторан", { exact: true })
     .first()
-    .locator("xpath=ancestor::*[.//button[@aria-label='Редактировать операцию']][1]");
+    .locator("xpath=ancestor::*[.//button[@aria-label='Изменить операцию']][1]");
   await row.hover();
-  await row.getByRole("button", { name: "Редактировать операцию" }).click();
+  await row.getByRole("button", { name: "Изменить операцию" }).click();
   const op = page.getByRole("dialog").filter({ has: page.getByRole("button", { name: "Создать правило" }) });
   await op.getByRole("button", { name: "Создать правило" }).click();
 
