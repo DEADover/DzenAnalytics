@@ -1031,7 +1031,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // already runs payee grouping + category rules + recomputes amountBase.
       const meta: ImportMeta = {
         importedAt: new Date().toISOString(),
-        fileName: `Дзен-мани API · ${mapped.accountsActive} ${pluralRu(mapped.accountsActive, ["счёт", "счёта", "счетов"])} · ${mapped.tagsTotal} ${pluralRu(mapped.tagsTotal, ["тег", "тега", "тегов"])}`,
+        fileName: `Дзен-мани API · ${mapped.accountsActive} ${pluralRu(mapped.accountsActive, ["счёт", "счёта", "счетов"])} · ${mapped.tagsTotal} ${pluralRu(mapped.tagsTotal, ["категория", "категории", "категорий"])}`,
         totalRows: nextCache.transactions.length,
         parsed: mapped.transactions.length,
         skipped: nextCache.transactions.length - mapped.transactions.length,
@@ -1517,7 +1517,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
             kind: "push",
             status: "partial",
             title: "Планы: отброшены зависшие правки",
-            summary: `Правок бюджета не удалось отправить за ${MAX_BUDGET_EDIT_SKIPS} попыток (тег удалён/переименован в Дзен-мани): ${dropped.length}`,
+            summary: `Правок бюджета не удалось отправить за ${MAX_BUDGET_EDIT_SKIPS} попыток (категория удалена или переименована в Дзен-мани): ${dropped.length}`,
             durationMs: Date.now() - pushStartedAt,
           });
         }
@@ -1553,7 +1553,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         void useSyncLogStore.getState().append({
           kind: "push",
           status: skipped.length > 0 ? "partial" : "ok",
-          title: "Push в облако",
+          title: "Отправка правок",
           summary:
             skipped.length > 0
               ? `Нет изменений для отправки. Пропущено: ${skipped.length}`
@@ -1723,7 +1723,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       //    calibration (push doesn't move account balances locally).
       const importMeta: ImportMeta = {
         importedAt: new Date().toISOString(),
-        fileName: `Дзен-мани API · ${mapped.accountsActive} ${pluralRu(mapped.accountsActive, ["счёт", "счёта", "счетов"])} · ${mapped.tagsTotal} ${pluralRu(mapped.tagsTotal, ["тег", "тега", "тегов"])}`,
+        fileName: `Дзен-мани API · ${mapped.accountsActive} ${pluralRu(mapped.accountsActive, ["счёт", "счёта", "счетов"])} · ${mapped.tagsTotal} ${pluralRu(mapped.tagsTotal, ["категория", "категории", "категорий"])}`,
         totalRows: nextCache.transactions.length,
         parsed: mapped.transactions.length,
         skipped: nextCache.transactions.length - mapped.transactions.length,
@@ -1857,8 +1857,8 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       void useSyncLogStore.getState().append({
         kind: "push",
         status: skipped.length > 0 ? "partial" : "ok",
-        title: "Push в облако",
-        summary: parts.join(", ") || "Push в облако",
+        title: "Отправка правок",
+        summary: parts.join(", ") || "Отправка правок",
         details: {
           counts: {
             accepted: toPush.length,
@@ -1892,7 +1892,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       void useSyncLogStore.getState().append({
         kind: "push",
         status: "error",
-        title: "Push в облако",
+        title: "Отправка правок",
         summary: "Ошибка отправки правок",
         error: `${msg}\n${failureDetails(failure)}`,
         durationMs: Date.now() - pushStartedAt,

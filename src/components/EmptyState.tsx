@@ -56,7 +56,7 @@ export function EmptyState() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">С чего начнём?</h1>
           <p className="mt-2 text-sm text-muted text-balance">
-            Подключите свой аккаунт Дзен-мани для онлайн-синхронизации по API или
+            Подключите свой аккаунт Дзен-мани для онлайн-синхронизации или
             загрузите CSV-выгрузку из приложения.
           </p>
         </div>
@@ -65,7 +65,7 @@ export function EmptyState() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl">
         <Link to="/settings?source=api" className={CARD}>
           <StartCard icon={Cloud} title="Подключить Дзен-мани" badge="Рекомендуем" action="Подключить">
-            Онлайн-синхронизация по API: операции, счета и категории подтянутся
+            Онлайн-синхронизация: операции, счета и категории подтянутся
             сами и будут обновляться.
           </StartCard>
         </Link>

@@ -56,7 +56,7 @@ export function TransactionsDrawer() {
       title: "Удалить операцию?",
       message:
         pushMode !== "off"
-          ? "Операция скроется из всех расчётов и списков. Так как включён Push, при следующей отправке она будет удалена и в облаке Дзен-мани. Вернуть можно на странице «Удалённые» — в т. ч. в облако."
+          ? "Операция скроется из всех расчётов и списков. Так как отправка в Дзен-мани включена, при следующей отправке она будет удалена и в облаке. Вернуть можно на странице «Удалённые» — в т. ч. в облако."
           : "Операция скроется из всех расчётов и списков. Вернуть можно на странице «Удалённые». В облаке Дзен-мани она не тронется.",
       confirmLabel: "Удалить",
       tone: "danger",
@@ -375,7 +375,7 @@ export function TransactionsDrawer() {
               Расходы <span className="font-semibold text-expense">{formatMoney(totals.exp, base)}</span>
             </span>
             <span className="text-muted">
-              Прибыль{" "}
+              Разница{" "}
               <span className={`font-semibold ${totals.net >= 0 ? "text-income" : "text-expense"}`}>
                 {formatMoney(totals.net, base, { signed: true })}
               </span>

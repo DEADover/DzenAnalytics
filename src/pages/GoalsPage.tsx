@@ -341,7 +341,7 @@ export function GoalsPage() {
           <CardHeader
             icon={Target}
             title="Новая цель"
-            subtitle="Прогресс, срок достижения и статус по дедлайну появятся сразу после создания"
+            subtitle="Прогресс, срок достижения и успеваете ли вы к сроку — сразу после создания"
             right={
               <Tooltip content="Закрыть">
                 <button
@@ -407,8 +407,8 @@ export function GoalsPage() {
               </button>
             }
           >
-            Создайте цель — и увидите прогресс, расчётный срок достижения и статус по
-            дедлайну.
+            Создайте цель — и увидите прогресс, расчётный срок достижения и успеваете
+            ли вы к своему сроку.
           </SectionEmpty>
         )
       ) : (
@@ -601,7 +601,7 @@ function GoalForm({
           className="input text-sm tabular-nums"
         />
       </Field>
-      <Field label="Дедлайн" hint="Необязательно">
+      <Field label="Срок" hint="Необязательно">
         <DateField
           placeholder="дд.мм.гггг"
           value={deadline}
@@ -820,11 +820,11 @@ function GoalCard({
                 icon={CalendarClock}
                 tone={m.done ? "muted" : m.onTrack ? "income" : "expense"}
               >
-                Дедлайн: {formatDate(g.deadline)}
+                Срок: {formatDate(g.deadline)}
                 {!m.done && ` (${m.onTrack ? "успеваете" : "не успеваете"})`}
               </Chip>
             ) : (
-              <Chip icon={CalendarClock}>Дедлайн не задан</Chip>
+              <Chip icon={CalendarClock}>Срок не задан</Chip>
             )}
             <SourcesChip progress={m.progress} base={base} />
           </div>
@@ -1194,7 +1194,7 @@ function GoalChart({
                 }`}
                 style={{ left: `${deadlinePct}%` }}
               >
-                Дедлайн · {monthYear(deadline)}
+                Срок · {monthYear(deadline)}
               </div>
             )}
           </div>
@@ -1241,7 +1241,7 @@ function GoalChart({
               />
             }
           >
-            Дедлайн
+            Срок
           </Legend>
         )}
         <Legend swatch={<span className="inline-block w-3.5 border-t border-dashed border-border" />}>

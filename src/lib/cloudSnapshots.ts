@@ -1151,7 +1151,7 @@ export async function importSnapshotFromJson(
   if (!raw || typeof raw !== "object") {
     throw new Error(
       "Не похоже на снимок аккаунта. Подходит снимок, сохранённый здесь, " +
-        "или бэкап ZenTable — в формате json, zip или gz."
+        "или резервная копия ZenTable — в формате json, zip или gz."
     );
   }
   if (typeof raw.serverTimestamp !== "number") {

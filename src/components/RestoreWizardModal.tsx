@@ -332,7 +332,7 @@ function PickStep({
           Загрузить файл
         </button>
         <p className="text-[11px] text-muted">
-          Поддерживаются файлы бэкапа DzenAnalytics и ZenTable — в формате json,
+          Поддерживаются резервные копии DzenAnalytics и ZenTable — в формате json,
           zip или gz.
         </p>
       </div>

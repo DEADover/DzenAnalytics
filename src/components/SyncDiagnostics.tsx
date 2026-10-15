@@ -20,7 +20,7 @@ const PUSH_MODE_LABEL: Record<PushMode, string> = {
   off: "Выключена",
   manual: "Вручную",
   auto: "Авто",
-  "on-sync": "При синке",
+  "on-sync": "При синхронизации",
 };
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("ru-RU") : "—");

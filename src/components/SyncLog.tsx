@@ -31,7 +31,7 @@ import { formatFixed } from "../lib/format";
  *
  * Columns:
  *   • Тип            — human-readable kind: "Синхронизация", "Полная
- *                       синхронизация", "Push в облако", …
+ *                       синхронизация", "Отправка правок", …
  *   • Дата-время     — full localized timestamp.
  *   • Новых          — for pulls: delta.transactions (new/changed).
  *                       For pushes: accepted (sent successfully).
@@ -146,7 +146,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
           />
           <History className="w-5 h-5 text-accent" />
           <span className="font-medium">
-            {embedded ? "Журнал синхронизаций" : "Лог синхронизаций"}
+            "Журнал синхронизаций"
           </span>
           {/* Record count as a labelled chip — a bare «· 8» next to the title
               didn't say what it counted, and blended into the status text. */}
@@ -198,7 +198,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
             <button
               onClick={async () => {
                 const ok = await confirm({
-                  title: "Очистить лог?",
+                  title: "Очистить журнал синхронизаций?",
                   message:
                     "История синхронизаций будет удалена. Действие необратимо.",
                   confirmLabel: "Очистить",
@@ -236,7 +236,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
           <div className="pt-3">
       {entries.length === 0 ? (
         <p className="text-xs text-muted">
-          История пуста. После первой синхронизации, push'а или снимка
+          История пуста. После первой синхронизации, отправки правок или снимка
           сюда упадут записи о результатах.
         </p>
       ) : (
@@ -273,7 +273,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
                         Новых операций
                         <InfoPopover label="Что считается">
                           <p>
-                            Сколько записей пришло от сервера в этом синке. Для
+                            Сколько записей пришло от сервера при этой синхронизации. Для
                             синхронизации — новые и изменённые операции, для
                             полной — весь объём целиком, включая удалённые и
                             нулевые служебные записи. Для отправки — сколько правок
@@ -293,7 +293,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
                         Всего операций
                         <InfoPopover label="Что считается">
                           <p>
-                            Сколько операций видно в приложении после синка:
+                            Сколько операций видно в приложении после синхронизации:
                             удалённые и нулевые служебные записи отфильтрованы.
                             Поэтому при полной синхронизации это число может быть
                             меньше «Новых операций».
@@ -408,9 +408,9 @@ function LogTableRow({
               ) : (
                 <span className="w-4 shrink-0" aria-hidden />
               ))}
-            <span className="truncate" title={entry.summary ? `${entry.title} · ${capitalize(entry.summary)}` : entry.title}>
-              {entry.title}
-              {entry.summary && <span className="text-muted"> · {capitalize(entry.summary)}</span>}
+            <span className="truncate" title={entry.summary ? `${legacyText(entry.title)} · ${capitalize(legacyText(entry.summary))}` : legacyText(entry.title)}>
+              {legacyText(entry.title)}
+              {entry.summary && <span className="text-muted"> · {capitalize(legacyText(entry.summary))}</span>}
               {/* Та же ошибка подряд — одной строкой со счётчиком. */}
               {repeated && <span className="text-expense tabular-nums"> · ×{formatN(entry.repeat!)}</span>}
             </span>
@@ -510,6 +510,12 @@ function StatusBadge({ status }: { status: SyncLogStatus }) {
       {label}
     </Badge>
   );
+}
+
+/** Записи, сохранённые до переименования, показываем новыми словами:
+ *  журнал хранится в браузере, и старые строки иначе остались бы с «Push». */
+function legacyText(s: string): string {
+  return s === "Push в облако" ? "Отправка правок" : s;
 }
 
 function capitalize(s: string): string {

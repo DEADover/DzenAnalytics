@@ -37,7 +37,7 @@ test.describe("правка одних только планов", () => {
     await expect(page.locator('button[title="Нет изменений, ожидающих отправки"]')).toHaveText("0");
   });
 
-  test("в «При синке» уходит со следующей синхронизацией", async ({ page, zen }) => {
+  test("в «При синхронизации» уходит со следующей синхронизацией", async ({ page, zen }) => {
     await connectZen(page);
     await setPushMode(page, "on-sync");
     await editFoodPlan(page, "27500");
@@ -55,3 +55,30 @@ test.describe("правка одних только планов", () => {
     expect(zen.pushes).toHaveLength(0);
   });
 });
+
+/** Переключатель режима отправки — одной строкой рядом с подписью и кнопкой,
+ *  самая длинная подпись («При синхронизации») не обрезается и не переносится. */
+for (const width of [1440, 1280]) {
+  test(`переключатель режима отправки помещается в строку (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await connectZen(page, "/settings?tab=source&source=api");
+    const box = page.locator('[data-tour="push-mode"]');
+    const seg = box.getByRole("group", { name: "Отправка правок в облако" });
+    await expect(seg.getByRole("button", { name: "При синхронизации" })).toBeVisible();
+    const m = await seg.evaluate((el) => {
+      const bs = [...el.querySelectorAll("button")];
+      const row = el.parentElement!;
+      const label = row.querySelector("span")!;
+      const send = row.querySelector(":scope > button")!;
+      return {
+        tops: bs.map((b) => Math.round(b.getBoundingClientRect().top)),
+        clipped: bs.filter((b) => b.scrollWidth > b.clientWidth + 1 || b.getBoundingClientRect().height > 40).map((b) => b.textContent),
+        rowTops: [label, el, send].map((n) => Math.round(n.getBoundingClientRect().top + n.getBoundingClientRect().height / 2)),
+      };
+    });
+    expect(new Set(m.tops).size, `кнопки режима в разных строках: ${m.tops.join(", ")}`).toBe(1);
+    expect(m.clipped, "подписи режима обрезаны или перенесены").toEqual([]);
+    expect(new Set(m.rowTops).size, `ряд переносится: ${m.rowTops.join(", ")}`).toBe(1);
+    if (process.env.E2E_SHOTS) await box.screenshot({ path: `${process.env.E2E_SHOTS}/push-mode-${width}.png` });
+  });
+}

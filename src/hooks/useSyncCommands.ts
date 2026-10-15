@@ -6,7 +6,7 @@ import { formatNum } from "../lib/format";
 
 /** Итог синхронизации одной фразой — для плашки под кнопками шапки. */
 export function formatSyncResult(r: SyncResult): string {
-  if (r.full) return `Полный синк: ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
+  if (r.full) return `Полная синхронизация: ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
   if (r.delta.transactions === 0 && r.delta.deletions === 0) {
     return `Без изменений. Всего ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
   }
@@ -45,7 +45,7 @@ export function useSyncCommands() {
       title: "Полная синхронизация?",
       message:
         "Сбросит локальный кэш и заново скачает все данные. Используйте, если данные не сходятся или после массовых переименований категорий в Дзен-мани.",
-      confirmLabel: "Полный синк",
+      confirmLabel: "Синхронизировать всё",
       tone: "warning",
     });
     if (!ok) return;

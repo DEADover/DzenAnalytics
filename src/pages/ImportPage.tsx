@@ -467,7 +467,7 @@ export function ImportPage() {
     full: boolean;
     delta: { transactions: number; deletions: number };
   }): string {
-    if (r.full) return `Полный синк: ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
+    if (r.full) return `Полная синхронизация: ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
     if (r.delta.transactions === 0 && r.delta.deletions === 0) {
       return `Свежее: ничего нового. Всего ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
     }
@@ -487,8 +487,8 @@ export function ImportPage() {
   async function confirmReplaceCsv(): Promise<boolean | null> {
     if (!(meta?.source === "csv" && transactions.length > 0)) return false;
     const ok = await confirm({
-      title: "Заменить CSV-данные на API?",
-      message: `У вас сейчас ${formatNum(transactions.length)} ${pluralRu(transactions.length, ["операция", "операции", "операций"])} из CSV (${meta.fileName}). API-синк заменит их данными из Дзен-мани. Бюджеты, цели и правила сохранятся.`,
+      title: "Заменить данные из CSV?",
+      message: `У вас сейчас ${formatNum(transactions.length)} ${pluralRu(transactions.length, ["операция", "операции", "операций"])} из CSV (${meta.fileName}). Синхронизация заменит их данными из Дзен-мани. Бюджеты, цели и правила сохранятся.`,
       confirmLabel: "Заменить",
       tone: "warning",
     });
@@ -735,7 +735,7 @@ export function ImportPage() {
       // size/depth bounds) before anything touches IndexedDB.
       dump = parseAndValidateBackup(text) as unknown as Record<string, unknown>;
     } catch (e) {
-      setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Ошибка импорта backup'а");
+      setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Не удалось восстановить из копии");
       return;
     }
 
@@ -768,7 +768,7 @@ export function ImportPage() {
       // сторы поднимаются штатным путём, и забыть что-то физически нельзя.
       setTimeout(() => window.location.reload(), 1200);
     } catch (e) {
-      setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Ошибка импорта backup'а");
+      setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Не удалось восстановить из копии");
     } finally {
       setBackupBusy(false);
     }
@@ -780,9 +780,9 @@ export function ImportPage() {
     // Guard: API token connected → confirm before mixing.
     if (zenToken) {
       const ok = await confirm({
-        title: "Импорт CSV поверх API?",
+        title: "Импортировать CSV поверх данных Дзен-мани?",
         message:
-          "У вас подключён API Дзен-мани. CSV-импорт может затереть синхронизированные данные. Если импорт нужен, советуем сначала отключить API на этой странице, чтобы избежать путаницы.",
+          "У вас подключён Дзен-мани. Импорт CSV может затереть синхронизированные данные. Если импорт нужен, советуем сначала отключить Дзен-мани на этой странице, чтобы избежать путаницы.",
         confirmLabel: "Продолжить",
         tone: "warning",
       });
@@ -896,7 +896,7 @@ export function ImportPage() {
                 value: "api",
                 label: "Дзен-мани API",
                 icon: Cloud,
-                title: "Онлайн-синхронизация с Дзен-мани через токен API",
+                title: "Онлайн-синхронизация с Дзен-мани по токену",
                 dot: zenToken ? "Источник активен" : undefined,
               },
               {
@@ -1172,7 +1172,7 @@ export function ImportPage() {
             <span>{zenError}</span>
           </div>
         )}
-        {syncSuccess && !syncSuccess.startsWith("Полный синк") && (
+        {syncSuccess && !syncSuccess.startsWith("Полная синхронизация") && (
           <div className="mt-3 text-xs text-income flex items-start gap-2">
             <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>{syncSuccess}</span>
@@ -1742,8 +1742,8 @@ export function ImportPage() {
                 <p>
                   К аккаунту Дзен-мани можно подключить несколько человек, и
                   счёт можно пометить <InfoTerm>личным</InfoTerm> — тогда
-                  остальные его не видят ни в приложении, ни на сайте. Но по
-                  API такие счета приходят всем, поэтому прячем их мы.
+                  остальные его не видят ни в приложении, ни на сайте. Но
+                  в сервис такие счета приходят всем, поэтому прячем их мы.
                 </p>
                 <p>
                   Выключите, если на общем аккаунте вам нужнее видеть операции
@@ -2809,7 +2809,7 @@ export function ImportPage() {
                       { value: "off", label: "Выключена" },
                       { value: "manual", label: "Вручную" },
                       { value: "auto", label: "Авто" },
-                      { value: "on-sync", label: "При синке" },
+                      { value: "on-sync", label: "При синхронизации" },
                     ]}
                   />
                   {/* Always present, so the row never changes shape — it just
@@ -2950,8 +2950,8 @@ export function ImportPage() {
                           <InfoPopover label="Что такое зависшие правки">
                             <p>
                               Подходящей операции в данных нет. Обычно остаётся после
-                              перехода с CSV на API (меняются id): такие правки не
-                              применяются и не уходят в облако, а ре-синк их не убирает.
+                              перехода с CSV на подключённый Дзен-мани (меняются id): такие правки не
+                              применяются и не уходят в облако, а повторная синхронизация их не убирает.
                               Убрать их можно здесь — на облако это не влияет.
                             </p>
                           </InfoPopover>{" "}
@@ -2983,7 +2983,7 @@ export function ImportPage() {
                       </span>
                     ) : (
                       <span>
-                        Последний Push:{" "}
+                        Последняя отправка:{" "}
                         {lastPushAt
                           ? new Date(lastPushAt).toLocaleString("ru-RU")
                           : "—"}
