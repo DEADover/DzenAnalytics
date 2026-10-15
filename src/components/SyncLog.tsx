@@ -145,9 +145,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
             }`}
           />
           <History className="w-5 h-5 text-accent" />
-          <span className="font-medium">
-            "Журнал синхронизаций"
-          </span>
+          <span className="font-medium">Журнал синхронизаций</span>
           {/* Record count as a labelled chip — a bare «· 8» next to the title
               didn't say what it counted, and blended into the status text. */}
           {entries.length > 0 && (
