@@ -27,6 +27,13 @@ test("места за месяц, карточка места и новые ме
   const lost = page.locator(".card-tray", { has: page.getByText("Куда перестали ходить", { exact: true }) });
   await expect(lost.getByText("Все привычные места на месте")).toBeVisible();
 
+  // Полоса долей: половина трат — в первых местах, кусок открывает карточку.
+  const share = page.locator(".card-tray", { has: page.getByText("Куда уходят деньги", { exact: true }) });
+  await expect(share.getByText(/^Половина трат — в \d+ мест/)).toBeVisible();
+  await share.getByRole("button", { name: /^Пятёрочка:/ }).click();
+  await expect(page.locator("[data-dossier-title]")).toHaveText("Пятёрочка");
+  await expect(page.getByText("Где подорожало", { exact: true })).toBeVisible();
+
   // Карточка места — по нажатию на строку, за всю историю.
   await table.locator("tr", { hasText: "Кофейня у дома" }).click();
   const title = page.locator("[data-dossier-title]");
@@ -34,6 +41,10 @@ test("места за месяц, карточка места и новые ме
   const card = page.locator("[data-place-card]");
   await expect(card.getByText("Покупок", { exact: true })).toBeVisible();
   await expect(card.getByText(/^Последний раз /)).toBeVisible();
+  await expect(card.locator(".recharts-bar")).toBeVisible();
+  await expect(card.getByText("По дням недели")).toBeVisible();
+  // График переключается на средний чек.
+  await card.getByRole("radio", { name: "Чек" }).or(card.getByRole("button", { name: "Чек", exact: true })).first().click();
   await expect(card.locator(".recharts-bar")).toBeVisible();
   // Выбранная строка отмечена, «Новое» — у мест, впервые появившихся в периоде.
   await expect(table.locator("tr", { hasText: "Ресторан" }).getByText("Новое", { exact: true })).toBeVisible();
@@ -73,3 +84,17 @@ test("узкое окно: карточка над таблицей, прокр�
   expect(cardTop).toBeLessThan(tableTop);
   expect(await horizontalOverflow(page)).toBe(0);
 });
+
+for (const width of [1024, 1280, 1440]) {
+  test(`${width} px: в выводах и карточке ничего не обрезано`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await connectZen(page, "/counterparties");
+    await expect(page.locator("[data-dossier-title]")).toBeVisible();
+    const cut = await page.locator("main").evaluate((main) =>
+      [...main.querySelectorAll("*")]
+        .filter((e) => e.children.length === 0 && !e.closest("tbody") && e.scrollWidth > e.clientWidth + 1)
+        .map((e) => e.textContent)
+    );
+    expect(cut).toEqual([]);
+  });
+}

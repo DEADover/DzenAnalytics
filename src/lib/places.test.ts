@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPlaceDossier, buildPlaceRows, findLostPlaces } from "./places";
+import { buildPlaceDossier, buildPlaceRows, findLostPlaces, placesForHalf, priceRisers, type PlaceRow } from "./places";
 import type { Transaction } from "../types";
 
 let seq = 0;
@@ -135,5 +135,50 @@ describe("buildPlaceDossier: досье места", () => {
 
   it("место без покупок — нет досье", () => {
     expect(buildPlaceDossier([tx({ payee: "Кафе", kind: "refund" })], "Кафе", "2026-09-30")).toBeNull();
+  });
+});
+
+describe("досье: дни недели, год к году, доля в статье, чек по месяцам", () => {
+  it("считает всё по истории", () => {
+    const d = buildPlaceDossier(
+      [
+        tx({ payee: "Рынок", date: "2026-09-05", amountBase: 300, categoryFull: "Еда" }), // сб
+        tx({ payee: "Рынок", date: "2026-09-12", amountBase: 100, categoryFull: "Еда" }), // сб
+        tx({ payee: "Рынок", date: "2025-06-01", amountBase: 200, categoryFull: "Еда" }), // вс, год назад
+        tx({ payee: "Магазин", date: "2026-09-10", amountBase: 600, categoryFull: "Еда" }),
+      ],
+      "Рынок",
+      "2026-09-30"
+    )!;
+    expect(d.weekdays).toEqual([0, 0, 0, 0, 0, 2, 1]);
+    expect(d.yearOverYear).toEqual({ last: 400, prev: 200 });
+    // Еды всего 1200, из них на рынке 600.
+    expect(d.categoryShare).toBe(0.5);
+    expect(d.months[11]).toMatchObject({ visits: 2, avgCheck: 200 });
+  });
+});
+
+const row = (p: Partial<PlaceRow>): PlaceRow =>
+  ({ name: "x", total: 0, visits: 1, avgCheck: 0, category: "", firstDate: "", lastDate: "", isNew: false, ...p }) as PlaceRow;
+
+describe("placesForHalf: сколько мест набирают половину трат", () => {
+  it("по убыванию суммы", () => {
+    expect(placesForHalf([row({ total: 10 }), row({ total: 60 }), row({ total: 30 })])).toBe(1);
+    expect(placesForHalf([row({ total: 40 }), row({ total: 35 }), row({ total: 25 })])).toBe(2);
+    expect(placesForHalf([])).toBe(0);
+  });
+});
+
+describe("priceRisers: где подорожало", () => {
+  it("только рост больше 5 %, порядок по прибавке в рублях", () => {
+    const list = priceRisers([
+      row({ name: "Кофе", avgCheck: 280, prevAvgCheck: 200, visits: 3 }), // +40 %, +240 ₽
+      row({ name: "Продукты", avgCheck: 2200, prevAvgCheck: 2000, visits: 4 }), // +10 %, +800 ₽
+      row({ name: "Ровно", avgCheck: 1020, prevAvgCheck: 1000, visits: 9 }), // +2 %
+      row({ name: "Дешевле", avgCheck: 900, prevAvgCheck: 1000, visits: 9 }),
+      row({ name: "Новое", avgCheck: 900, visits: 9 }),
+    ]);
+    expect(list.map((r) => r.row.name)).toEqual(["Продукты", "Кофе"]);
+    expect(list[1].growth).toBeCloseTo(0.4);
   });
 });

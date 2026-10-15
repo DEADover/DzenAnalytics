@@ -64,6 +64,8 @@ export interface PlaceMonth {
   ym: string;
   expense: number;
   visits: number;
+  /** Средняя покупка месяца; 0 — покупок не было. */
+  avgCheck: number;
 }
 
 /** Всё о месте за всю историю. */
@@ -89,6 +91,18 @@ export interface PlaceDossier {
   months: PlaceMonth[];
   /** Самая крупная покупка. */
   biggest: { id: string; date: string; amount: number } | null;
+  /** Покупок по дням недели, с понедельника. */
+  weekdays: number[];
+  /**
+   * Последние двенадцать месяцев против двенадцати перед ними — по последней
+   * операции истории. `prev` — 0, если тогда места ещё не было.
+   */
+  yearOverYear: { last: number; prev: number };
+  /**
+   * Какую долю всех трат главной статьи места (по всей истории, со всеми
+   * местами и без них) забирает это место. `null`, если статья пустая.
+   */
+  categoryShare: number | null;
 }
 
 /** Сколько покупок нужно в обоих отрезках, чтобы сравнивать средний чек. */
@@ -298,11 +312,11 @@ export function buildPlaceDossier(
   const gap = typicalGap(dates);
   const everyDays = gap == null ? null : Math.max(1, Math.round(gap));
 
+  const counts: number[] = new Array(7).fill(0);
+  for (const d of dates) counts[weekdayMon(d)]++;
   let favWeekday: number | null = null;
   let favWeekdayShare = 0;
   if (buys.length >= 5) {
-    const counts = new Array(7).fill(0);
-    for (const d of dates) counts[weekdayMon(d)]++;
     const max = Math.max(...counts);
     // День «любимый», только если он заметно чаще остальных: при равномерных
     // походах «чаще всего в среду» — случайность.
@@ -324,7 +338,7 @@ export function buildPlaceDossier(
   const months: PlaceMonth[] = [];
   const idx = new Map<string, PlaceMonth>();
   for (let k = 11; k >= 0; k--) {
-    const m = { ym: shiftPeriod(last, -k), expense: 0, visits: 0 };
+    const m = { ym: shiftPeriod(last, -k), expense: 0, visits: 0, avgCheck: 0 };
     months.push(m);
     idx.set(m.ym, m);
   }
@@ -332,9 +346,31 @@ export function buildPlaceDossier(
     const m = idx.get(periodKey(t.date, monthStartDay));
     if (!m) continue;
     m.expense += expenseDelta(t);
-    if (t.kind === "expense") m.visits++;
+    if (t.kind === "expense") {
+      m.visits++;
+      m.avgCheck += t.amountBase;
+    }
   }
-  for (const m of months) if (m.expense < 0) m.expense = 0;
+  for (const m of months) {
+    if (m.expense < 0) m.expense = 0;
+    m.avgCheck = m.visits > 0 ? m.avgCheck / m.visits : 0;
+  }
+
+  const yearFrom = shiftDays(maxDate, -364);
+  const prevFrom = shiftDays(maxDate, -729);
+  const yearOverYear = { last: 0, prev: 0 };
+  for (const t of list) {
+    if (t.date >= yearFrom) yearOverYear.last += expenseDelta(t);
+    else if (t.date >= prevFrom) yearOverYear.prev += expenseDelta(t);
+  }
+
+  const lead = categories[0]?.name;
+  let categoryShare: number | null = null;
+  if (lead) {
+    let all = 0;
+    for (const t of history) if (t.categoryFull === lead) all += expenseDelta(t);
+    categoryShare = all > 0 ? Math.min(1, categories[0].amount / all) : null;
+  }
 
   let biggest: PlaceDossier["biggest"] = null;
   for (const t of buys) if (!biggest || t.amountBase > biggest.amount) biggest = { id: t.id, date: t.date, amount: t.amountBase };
@@ -352,5 +388,48 @@ export function buildPlaceDossier(
     categories,
     months,
     biggest,
+    weekdays: counts,
+    yearOverYear,
+    categoryShare,
   };
+}
+
+/**
+ * Сколько первых мест (по сумме) набирают половину всех трат. Чем меньше —
+ * тем сильнее деньги сосредоточены в немногих местах.
+ */
+export function placesForHalf(rows: readonly PlaceRow[]): number {
+  const total = rows.reduce((s, r) => s + r.total, 0);
+  if (total <= 0) return 0;
+  const sorted = [...rows].sort((a, b) => b.total - a.total);
+  let acc = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    acc += sorted[i].total;
+    if (acc >= total / 2) return i + 1;
+  }
+  return sorted.length;
+}
+
+/** Место, где чек вырос сильнее всего, — с ростом в долях. */
+export interface PriceRiser {
+  row: PlaceRow;
+  /** Рост среднего чека в долях: 0,25 — на четверть дороже. */
+  growth: number;
+}
+
+/**
+ * Где подорожало: средний чек периода против года до него, по местам, где
+ * сравнивать есть с чем. Только рост — подешевевшее в этом списке не вывод.
+ * Порядок — по прибавке в рублях на месяц похода, а не по проценту: +40 % к
+ * чашке кофе заметно меньше, чем +10 % к продуктам на неделю.
+ */
+export function priceRisers(rows: readonly PlaceRow[], limit = 5): PriceRiser[] {
+  return rows
+    .filter((r) => r.prevAvgCheck != null && r.prevAvgCheck > 0 && r.avgCheck > r.prevAvgCheck * 1.05)
+    .map((row) => ({ row, growth: row.avgCheck / row.prevAvgCheck! - 1 }))
+    .sort(
+      (a, b) =>
+        (b.row.avgCheck - b.row.prevAvgCheck!) * b.row.visits - (a.row.avgCheck - a.row.prevAvgCheck!) * a.row.visits
+    )
+    .slice(0, limit);
 }

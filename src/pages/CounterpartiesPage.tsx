@@ -11,6 +11,8 @@ import {
   History,
   Trophy,
   ChevronRight,
+  PieChart,
+  Flame,
 } from "lucide-react";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip } from "recharts";
 import { useDataStore } from "../store/useDataStore";
@@ -24,6 +26,8 @@ import {
   buildPlaceRows,
   findLostPlaces,
   groupByPlace,
+  placesForHalf,
+  priceRisers,
   type OpenRange,
   type PlaceDossier,
   type PlaceRow,
@@ -41,6 +45,7 @@ import {
   chartGridStroke,
   chartTooltipProps,
 } from "../lib/format";
+import { CATEGORY_PALETTE } from "../lib/categoryColor";
 import { CategoryDot } from "../components/CategoryDot";
 import { ChartContainer } from "../components/ChartContainer";
 import { DataTable } from "../components/DataTable";
@@ -54,13 +59,20 @@ import { MeterRow } from "../components/MeterRow";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
-import { SeriesTooltip } from "../components/TooltipFacts";
+import { Segmented } from "../components/Segmented";
+import { Tooltip } from "../components/Tooltip";
+import { SeriesTooltip, TooltipFacts } from "../components/TooltipFacts";
 
 /** Ширины колонок — постоянные: при смене периода колонки не прыгают. */
 const COL = { total: "10rem", visits: "7.5rem", avg: "9rem", change: "10.75rem" } as const;
 
 /** Сколько мест в «Новых» и «Перестали ходить» — дальше это уже не вывод, а список. */
 const INSIGHT_LIMIT = 5;
+
+type Metric = "expense" | "visits" | "avgCheck";
+const METRIC_LABEL: Record<Metric, string> = { expense: "Потрачено", visits: "Покупок", avgCheck: "Средний чек" };
+const WEEKDAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const WEEKDAY_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 
 const WEEKDAYS = ["понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам", "воскресеньям"];
 
@@ -138,6 +150,7 @@ export function CounterpartiesPage() {
   const rows = useMemo(() => buildPlaceRows(history, range), [history, range]);
   const lost = useMemo(() => findLostPlaces(history, range, maxDate), [history, range, maxDate]);
   const fresh = useMemo(() => rows.filter((r) => r.isNew), [rows]);
+  const risers = useMemo(() => priceRisers(rows, INSIGHT_LIMIT), [rows]);
 
   // Карточка открывается и для места из «Перестали ходить» — его в таблице
   // периода нет, но история у него есть.
@@ -253,8 +266,10 @@ export function CounterpartiesPage() {
         />
       </StatRow>
 
+      <SpendShare rows={rows} base={base} onPick={pick} />
+
       {/* Выводы — над таблицей: под списком из полусотни мест их никто бы не увидел. */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         <SectionCard
           icon={Sparkles}
           title="Новые места"
@@ -279,9 +294,49 @@ export function CounterpartiesPage() {
                   label={r.name}
                   share={r.total / fresh[0].total}
                   barCls="bg-accent"
+                  cells={[{ text: formatMoney(r.total, base), width: "7rem" }]}
+                  onClick={() => pick(r.name)}
+                  title="Открыть карточку места"
+                />
+              ))}
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          icon={Flame}
+          title="Где подорожало"
+          subtitle={risers.length > 0 ? "Средний чек против года до периода" : undefined}
+          info={
+            <p>
+              Места, где средняя покупка стала дороже, чем за год до периода,
+              больше чем на 5 %. Сверху — где прибавка сильнее всего бьёт по
+              кошельку: рост чека, умноженный на число покупок, а не самый большой
+              процент — +40 % к чашке кофе заметнее на чеке, чем в бюджете.
+            </p>
+          }
+        >
+          {compared === 0 ? (
+            <SectionEmpty variant="compact">Сравнивать не с чем: нужно хотя бы по три покупки в периоде и за год до него</SectionEmpty>
+          ) : risers.length === 0 ? (
+            <SectionEmpty variant="compact">Чеки там, где вы бываете часто, не выросли</SectionEmpty>
+          ) : (
+            <div className="space-y-0.5">
+              {risers.map(({ row: r, growth }) => (
+                <MeterRow
+                  key={r.name}
+                  bar="track"
+                  leadIcon={<CategoryDot category={r.category} size="w-7 h-7" />}
+                  label={r.name}
+                  share={growth / risers.reduce((m, x) => Math.max(m, x.growth), 0)}
+                  barCls="bg-warn"
                   cells={[
-                    { text: `с ${formatDate(r.firstDate, "short")}`, width: "6.5rem", muted: true, type: "date" },
-                    { text: formatMoney(r.total, base), width: "7.5rem" },
+                    {
+                      text: `${formatNum(Math.round(r.prevAvgCheck!))} → ${formatMoney(Math.round(r.avgCheck), base)}`,
+                      width: "9.5rem",
+                      muted: true,
+                    },
+                    { text: `+${formatPct(growth, 0)}`, width: "3.5rem", type: "pct" },
                   ]}
                   onClick={() => pick(r.name)}
                   title="Открыть карточку места"
@@ -292,6 +347,7 @@ export function CounterpartiesPage() {
         </SectionCard>
 
         <SectionCard
+          className="lg:col-span-2 2xl:col-span-1"
           icon={DoorOpen}
           title="Куда перестали ходить"
           subtitle={
@@ -321,10 +377,7 @@ export function CounterpartiesPage() {
                   label={p.name}
                   share={p.perMonthBefore / lost[0].perMonthBefore}
                   barCls="bg-muted/60"
-                  cells={[
-                    { text: `до ${formatDate(p.lastDate, "short")}`, width: "6.5rem", muted: true, type: "date" },
-                    { text: `${formatMoney(p.perMonthBefore, base)}/мес`, width: "8.5rem" },
-                  ]}
+                  cells={[{ text: `${formatMoney(p.perMonthBefore, base)}/мес`, width: "8.5rem" }]}
                   onClick={() => pick(p.name)}
                   title="Открыть карточку места"
                 />
@@ -465,9 +518,11 @@ function PlaceCard({
     const r = periodRange(ym, monthStartDay);
     return (!range.from || r.to >= range.from) && (!range.to || r.from <= range.to);
   };
+  const [metric, setMetric] = useState<Metric>("expense");
   const months = d.months.map((m) => ({ ...m, hit: inRange(m.ym) }));
   const allHit = months.every((m) => m.hit);
-  const yearSum = months.reduce((s, m) => s + m.expense, 0);
+  const { last, prev } = d.yearOverYear;
+  const maxDay = Math.max(...d.weekdays, 1);
 
   return (
     <div className="card-tray px-4 py-4 space-y-4">
@@ -509,6 +564,14 @@ function PlaceCard({
             </span>
           </li>
         )}
+        {d.categoryShare != null && lead && (
+          <li className="flex items-center gap-2.5">
+            <PieChart className="w-4 h-4 text-muted shrink-0" />
+            <span className="min-w-0 truncate">
+              {formatPct(d.categoryShare, 0)} всех трат на «{lead}»
+            </span>
+          </li>
+        )}
         <li className="flex items-center gap-2.5">
           <History className="w-4 h-4 text-muted shrink-0" />
           <span className="min-w-0 truncate">
@@ -535,9 +598,37 @@ function PlaceCard({
       </ul>
 
       <div>
-        <div className="flex items-baseline justify-between gap-2">
-          <div className="caps-label">Траты по месяцам</div>
-          <div className="text-xs text-muted tabular-nums">{formatMoney(yearSum, base)} за год</div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="caps-label">По месяцам</div>
+          <Segmented
+            size="sm"
+            label="Что показывать на графике"
+            value={metric}
+            onChange={setMetric}
+            options={[
+              { value: "expense" as Metric, label: "Сумма" },
+              { value: "visits" as Metric, label: "Покупки" },
+              { value: "avgCheck" as Metric, label: "Чек" },
+            ]}
+          />
+        </div>
+        <div className="text-xs text-muted mt-1 flex items-center gap-1.5 flex-wrap tabular-nums">
+          За 12 месяцев {formatMoney(last, base)}
+          {prev > 0 && (
+            <>
+              <span>·</span>
+              <DeviationPill
+                current={last}
+                baseline={prev}
+                base={base}
+                mode="pct"
+                kind="expense"
+                upTitle="Больше, чем за двенадцать месяцев до того"
+                downTitle="Меньше, чем за двенадцать месяцев до того"
+              />
+              <span>к году раньше</span>
+            </>
+          )}
         </div>
         <div className="h-36 mt-2">
           <ChartContainer>
@@ -551,6 +642,7 @@ function PlaceCard({
                 tickCount={3}
                 tickLine={false}
                 axisLine={false}
+                allowDecimals={metric !== "visits"}
                 tickFormatter={(v: number) => formatNum(v, { compact: true })}
               />
               <RTooltip
@@ -558,24 +650,50 @@ function PlaceCard({
                 cursor={{ fill: "rgb(var(--c-border) / 0.35)" }}
                 content={
                   <SeriesTooltip
-                    formatValue={(v) => formatMoney(v, base)}
+                    formatValue={(v) => (metric === "visits" ? `${formatNum(v)} ${pluralRu(v, ["покупка", "покупки", "покупок"])}` : formatMoney(v, base))}
                     formatLabel={(_, rows) => {
                       const m = rows[0]?.payload as { ym?: string; visits?: number } | undefined;
                       if (!m?.ym) return "";
                       const name = formatDate(`${m.ym}-01`, "month");
                       const n = m.visits ?? 0;
-                      return `${name[0].toUpperCase()}${name.slice(1)} · ${formatNum(n)} ${pluralRu(n, ["покупка", "покупки", "покупок"])}`;
+                      const tail = metric === "visits" ? "" : ` · ${formatNum(n)} ${pluralRu(n, ["покупка", "покупки", "покупок"])}`;
+                      return `${name[0].toUpperCase()}${name.slice(1)}${tail}`;
                     }}
                   />
                 }
               />
-              <Bar dataKey="expense" name="Потрачено" radius={[3, 3, 0, 0]}>
+              <Bar dataKey={metric} name={METRIC_LABEL[metric]} radius={[3, 3, 0, 0]}>
                 {months.map((m) => (
                   <Cell key={m.ym} fill={chartColor.accent} fillOpacity={allHit || m.hit ? 0.9 : 0.35} />
                 ))}
               </Bar>
             </BarChart>
           </ChartContainer>
+        </div>
+      </div>
+
+      <div>
+        <div className="caps-label mb-2">По дням недели</div>
+        {/* Семь столбиков без осей: важна форма недели, а не точные числа —
+            они в подсказке. Любимый день — акцентом. */}
+        <div className="grid grid-cols-7 gap-1.5 items-end h-14">
+          {d.weekdays.map((n, i) => (
+            <Tooltip key={i} content={`${WEEKDAY_FULL[i]} · ${formatNum(n)} ${pluralRu(n, ["покупка", "покупки", "покупок"])}`}>
+              <div className="h-full flex items-end">
+                <div
+                  className={i === d.favWeekday ? "w-full rounded-t-[3px] bg-accent" : "w-full rounded-t-[3px] bg-accent/35"}
+                  style={{ height: `${Math.max(n > 0 ? 6 : 2, (n / maxDay) * 100)}%` }}
+                />
+              </div>
+            </Tooltip>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1.5 mt-1 text-[11px] text-muted text-center">
+          {WEEKDAY_SHORT.map((w, i) => (
+            <span key={w} className={i === d.favWeekday ? "text-accent font-semibold" : undefined}>
+              {w}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -601,5 +719,95 @@ function PlaceCard({
         </div>
       )}
     </div>
+  );
+}
+
+/** Сколько мест показывать отдельными кусками полосы — остальные одним. */
+const SHARE_TOP = 8;
+
+/**
+ * Куда уходят деньги: одна полоса на все траты периода, куски — крупнейшие
+ * места, хвост — «остальные». Отвечает на вопрос «сколько мест забирают
+ * половину денег», которого в таблице не видно.
+ */
+function SpendShare({
+  rows,
+  base,
+  onPick,
+}: {
+  rows: PlaceRow[];
+  base: string;
+  onPick: (name: string) => void;
+}) {
+  const total = rows.reduce((s, r) => s + r.total, 0);
+  if (total <= 0) return null;
+  const top = rows.slice(0, SHARE_TOP);
+  const rest = total - top.reduce((s, r) => s + r.total, 0);
+  const half = placesForHalf(rows);
+  const color = (i: number) => CATEGORY_PALETTE[i % CATEGORY_PALETTE.length];
+
+  return (
+    <SectionCard
+      icon={PieChart}
+      title="Куда уходят деньги"
+      subtitle={`Половина трат — в ${formatNum(half)} ${pluralRu(half, ["месте", "местах", "местах"])} из ${formatNum(rows.length)}`}
+      info={
+        <p>
+          Все траты периода одной полосой: каждый кусок — место, его ширина —
+          доля в сумме. Отдельно показаны {SHARE_TOP} крупнейших, остальные — одним
+          серым куском. Нажатие открывает карточку места.
+        </p>
+      }
+    >
+      <div className="flex h-4 rounded-track overflow-hidden gap-px mt-1">
+        {top.map((r, i) => (
+          <Tooltip
+            key={r.name}
+            content={
+              <TooltipFacts
+                title={r.name}
+                facts={[
+                  { label: "Потрачено", value: formatMoney(r.total, base), tone: "expense", swatchColor: color(i) },
+                  { label: "Доля", value: formatPct(r.total / total, 1) },
+                  { label: "Покупок", value: formatNum(r.visits) },
+                ]}
+              />
+            }
+          >
+            <button
+              type="button"
+              aria-label={`${r.name}: ${formatPct(r.total / total, 0)}`}
+              onClick={() => onPick(r.name)}
+              className="h-full transition-opacity hover:opacity-80"
+              style={{ width: `${(r.total / total) * 100}%`, background: color(i) }}
+            />
+          </Tooltip>
+        ))}
+        {rest > 0 && <div className="h-full bg-muted/30" style={{ width: `${(rest / total) * 100}%` }} />}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 mt-3 text-sm">
+        {top.map((r, i) => (
+          <button
+            key={r.name}
+            type="button"
+            onClick={() => onPick(r.name)}
+            className="flex items-center gap-2 min-w-0 text-left hover:text-accent transition-colors"
+          >
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: color(i) }} />
+            <span className="truncate">{r.name}</span>
+            <span className="ml-auto text-muted tabular-nums shrink-0">{formatPct(r.total / total, 0)}</span>
+          </button>
+        ))}
+        {rest > 0 && (
+          <div className="flex items-center gap-2 min-w-0 text-muted">
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0 bg-muted/30" />
+            <span className="truncate">
+              Ещё {formatNum(rows.length - top.length)} {pluralRu(rows.length - top.length, ["место", "места", "мест"])}
+            </span>
+            <span className="ml-auto tabular-nums shrink-0">{formatPct(rest / total, 0)}</span>
+          </div>
+        )}
+      </div>
+    </SectionCard>
   );
 }
