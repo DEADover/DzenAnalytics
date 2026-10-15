@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { CategoryDot } from "./CategoryDot";
 import { SearchInput } from "./SearchInput";
 import { textMatches } from "../lib/keyboardLayout";
+import { useListNav } from "./useListNav";
 
 export interface CategoryNode {
   name: string;
@@ -61,6 +62,9 @@ export function CategoryCascadePicker({
   const [activeParent, setActiveParent] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  /** В какой колонке ходят стрелки: категории слева или подкатегории справа. */
+  const [column, setColumn] = useState<"cats" | "subs">("cats");
   const [pos, setPos] = useState<{
     left: number;
     top: number;
@@ -169,10 +173,25 @@ export function CategoryCascadePicker({
     return items;
   }, [categories, q, hideParentOption]);
 
+  /** Правая колонка: «Без подкатегории» (если не скрыта) и подкатегории. */
+  const rightItems = useMemo<string[]>(() => {
+    if (!active || active.subs.length === 0) return [];
+    return [...(hideParentOption?.(active.name) ? [] : [""]), ...activeSubs];
+  }, [active, activeSubs, hideParentOption]);
+
+  // Подсветка — своя у каждого списка: колонки категорий, колонки
+  // подкатегорий и плоского списка результатов поиска.
+  const catNav = useListNav(filtered.length, open && !searchLeaves);
+  const subNav = useListNav(rightItems.length, open && !searchLeaves);
+  const searchNav = useListNav(searchLeaves?.length ?? 0, open && !!searchLeaves);
+
   function toggle() {
     if (!open) {
       setQuery("");
       setActiveParent(category || null);
+      setColumn("cats");
+      // Подсветка начинается с выбранной категории.
+      catNav.set(categories.findIndex((c) => c.name === category), true);
     }
     setOpen((o) => !o);
   }
@@ -181,6 +200,93 @@ export function CategoryCascadePicker({
     onChange(cat, sub);
     setOpen(false);
     setQuery("");
+    // Поле поиска внутри списка исчезает вместе с ним — фокус возвращаем на
+    // поле категории, чтобы Tab с клавиатуры шёл дальше по форме.
+    triggerRef.current?.focus({ preventScroll: true });
+  }
+
+  /** Перейти в колонку подкатегорий — на выбранную, если она в этой категории. */
+  function enterSubs(parent: CategoryNode) {
+    setActiveParent(parent.name);
+    setColumn("subs");
+    const items = [...(hideParentOption?.(parent.name) ? [] : [""]), ...parent.subs];
+    const cur = parent.name === category ? items.indexOf(subcategory) : -1;
+    subNav.set(Math.max(0, cur), true);
+  }
+
+  /** Щелчок по пункту не уводит фокус из поиска — стрелки работают и дальше. */
+  const keepSearchFocus = (e: React.MouseEvent) => e.preventDefault();
+
+  function onSearchKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Escape") {
+      // Закрывает список, а не окно, в котором стоит поле.
+      e.stopPropagation();
+      setOpen(false);
+      triggerRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (e.key === "Tab") {
+      // Уходим к следующему полю без выбора. Фокус — на поле категории, и Tab
+      // по умолчанию продолжит обход уже от него (в портале поиск лежит в
+      // конце страницы, и обход ушёл бы туда).
+      setOpen(false);
+      triggerRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (e.altKey || e.metaKey || e.ctrlKey) return;
+    const down = e.key === "ArrowDown";
+    const up = e.key === "ArrowUp";
+
+    // Поиск — один плоский список результатов.
+    if (searchLeaves) {
+      if (down || up) {
+        e.preventDefault();
+        searchNav.move(down ? 1 : -1);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        const it = searchLeaves[searchNav.active];
+        if (it) commit(it.cat, it.kind === "sub" ? it.sub : "");
+      }
+      return;
+    }
+
+    if (column === "subs" && active && rightItems.length > 0) {
+      if (down || up) {
+        e.preventDefault();
+        subNav.move(down ? 1 : -1);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setColumn("cats");
+        catNav.set(filtered.findIndex((c) => c.name === active.name), true);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        const sub = rightItems[subNav.active];
+        if (sub !== undefined) commit(active.name, sub);
+      }
+      return;
+    }
+
+    if (down || up) {
+      e.preventDefault();
+      const i = catNav.move(down ? 1 : -1);
+      // Справа сразу видно, что внутри подсвеченной категории.
+      if (i >= 0) setActiveParent(filtered[i].name);
+      return;
+    }
+    const cat = filtered[catNav.active];
+    if (!cat) return;
+    if (e.key === "ArrowRight" && cat.subs.length > 0) {
+      e.preventDefault();
+      enterSubs(cat);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cat.subs.length > 0) enterSubs(cat);
+      else commit(cat.name, "");
+    }
   }
 
   const label = category
@@ -198,8 +304,18 @@ export function CategoryCascadePicker({
   return (
     <div ref={ref} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={toggle}
+        onKeyDown={(e) => {
+          // ↓ на закрытом поле открывает список, как у остальных списков.
+          if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp") && !e.altKey && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            toggle();
+          }
+        }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         className="input text-sm w-full flex items-center justify-between gap-2 text-left"
       >
         {/* Место под крестик «Очистить» — он стоит поверх, перед стрелкой. */}
@@ -238,23 +354,67 @@ export function CategoryCascadePicker({
           }
           style={portal && pos ? { left: pos.left, top: pos.top, width: pos.width } : undefined}
         >
-          <SearchInput variant="menu" value={query} onChange={setQuery} placeholder="Поиск категории" autoFocus />
+          <SearchInput
+            variant="menu"
+            value={query}
+            onChange={(next) => {
+              setQuery(next);
+              // Набрали — подсветка на первом найденном, Enter его и выберет.
+              searchNav.set(0, true);
+            }}
+            placeholder="Поиск категории"
+            autoFocus
+            inputProps={{
+              role: "combobox",
+              "aria-expanded": true,
+              "aria-autocomplete": "list",
+              "aria-controls": searchLeaves
+                ? searchNav.listId
+                : column === "subs"
+                  ? subNav.listId
+                  : catNav.listId,
+              "aria-activedescendant": searchLeaves
+                ? searchNav.active >= 0
+                  ? searchNav.optionId(searchNav.active)
+                  : undefined
+                : column === "subs"
+                  ? subNav.active >= 0
+                    ? subNav.optionId(subNav.active)
+                    : undefined
+                  : catNav.active >= 0
+                    ? catNav.optionId(catNav.active)
+                    : undefined,
+              onKeyDown: onSearchKey,
+            }}
+          />
           {searchLeaves ? (
             /* Search mode — one flat list with directly-selectable leaves,
                sub-categories included (issue #21). */
-            <div className="overflow-y-auto" style={{ maxHeight: listMaxHeight }}>
+            <div
+              id={searchNav.listId}
+              role="listbox"
+              aria-label="Найденные категории"
+              className="overflow-y-auto"
+              style={{ maxHeight: listMaxHeight }}
+            >
               {searchLeaves.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-muted">Ничего не найдено</div>
               ) : (
-                searchLeaves.map((it) =>
+                searchLeaves.map((it, i) =>
                   it.kind === "cat" ? (
                     <button
                       key={`c:${it.cat}`}
+                      id={searchNav.optionId(i)}
                       type="button"
+                      role="option"
+                      aria-selected={category === it.cat && !subcategory}
+                      tabIndex={-1}
+                      onMouseDown={keepSearchFocus}
                       onClick={() => commit(it.cat, "")}
+                      onMouseMove={(e) => searchNav.hover(i, e)}
                       className={`w-full text-left px-2.5 py-1.5 text-sm flex items-center gap-2 hover:bg-panel2 ${
-                        category === it.cat && !subcategory ? "text-accent" : ""
-                      }`}
+                        i === searchNav.active ? "bg-panel2" : ""
+                      } ${category === it.cat && !subcategory ? "text-accent" : ""}`}
                     >
                       <CategoryDot category={it.cat} size="w-4 h-4" />
                       <span className="truncate">{it.cat}</span>
@@ -262,11 +422,17 @@ export function CategoryCascadePicker({
                   ) : (
                     <button
                       key={`s:${it.cat}/${it.sub}`}
+                      id={searchNav.optionId(i)}
                       type="button"
+                      role="option"
+                      aria-selected={category === it.cat && subcategory === it.sub}
+                      tabIndex={-1}
+                      onMouseDown={keepSearchFocus}
                       onClick={() => commit(it.cat, it.sub)}
+                      onMouseMove={(e) => searchNav.hover(i, e)}
                       className={`w-full text-left px-2.5 py-1.5 text-sm flex items-center gap-2 hover:bg-panel2 ${
-                        category === it.cat && subcategory === it.sub ? "text-accent" : ""
-                      }`}
+                        i === searchNav.active ? "bg-panel2" : ""
+                      } ${category === it.cat && subcategory === it.sub ? "text-accent" : ""}`}
                     >
                       <CategoryDot category={it.sub} parent={it.cat} size="w-4 h-4" />
                       <span className="truncate">
@@ -281,18 +447,34 @@ export function CategoryCascadePicker({
           ) : (
           <div className="flex" style={{ maxHeight: listMaxHeight }}>
             {/* Left — top-level categories */}
-            <div className="w-1/2 overflow-y-auto border-r border-border/60">
+            <div
+              id={catNav.listId}
+              role="listbox"
+              aria-label="Категории"
+              className="w-1/2 overflow-y-auto border-r border-border/60"
+            >
               {filtered.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-muted">Ничего не найдено</div>
               ) : (
-                filtered.map((c) => {
+                filtered.map((c, i) => {
                   const isSel = c.name === category;
                   const isActive = c.name === activeParent;
                   const hasSubs = c.subs.length > 0;
+                  // Подсветка стрелок/курсора — пока ходят по этой колонке.
+                  const isHi = column === "cats" && i === catNav.active;
                   return (
                     <button
                       key={c.name}
+                      id={catNav.optionId(i)}
                       type="button"
+                      role="option"
+                      aria-selected={isSel}
+                      tabIndex={-1}
+                      onMouseDown={keepSearchFocus}
+                      onMouseMove={(e) => {
+                        if (column !== "cats") setColumn("cats");
+                        catNav.hover(i, e);
+                      }}
                       // A category WITH sub-categories toggles them open/closed
                       // on click (explicit — no hover); a leaf category commits.
                       onClick={() =>
@@ -302,7 +484,7 @@ export function CategoryCascadePicker({
                       }
                       aria-expanded={hasSubs ? isActive : undefined}
                       className={`w-full text-left px-2.5 py-1.5 text-sm flex items-center gap-2 hover:bg-panel2 ${
-                        isActive ? "bg-panel2" : ""
+                        isActive || isHi ? "bg-panel2" : ""
                       } ${isSel ? "text-accent" : ""}`}
                     >
                       <CategoryDot category={c.name} size="w-4 h-4" />
@@ -319,40 +501,47 @@ export function CategoryCascadePicker({
               )}
             </div>
             {/* Right — sub-categories of the active parent */}
-            <div className="w-1/2 overflow-y-auto">
-              {active && active.subs.length > 0 ? (
-                <>
-                  {/* Pick the parent category itself (no sub-category) — hidden
-                      when the parent is already taken. */}
-                  {!hideParentOption?.(active.name) && (
+            <div
+              id={subNav.listId}
+              role="listbox"
+              aria-label="Подкатегории"
+              className="w-1/2 overflow-y-auto"
+            >
+              {active && rightItems.length > 0 ? (
+                // Первым — сама категория без подкатегории (скрыт, если она
+                // уже занята), дальше подкатегории.
+                rightItems.map((s, i) => {
+                  const isParent = s === "";
+                  const isSel =
+                    category === active.name && (isParent ? !subcategory : subcategory === s);
+                  const isHi = column === "subs" && i === subNav.active;
+                  return (
                     <button
+                      key={isParent ? "parent" : `s:${s}`}
+                      id={subNav.optionId(i)}
                       type="button"
-                      onClick={() => commit(active.name, "")}
+                      role="option"
+                      aria-selected={isSel}
+                      tabIndex={-1}
+                      onMouseDown={keepSearchFocus}
+                      onClick={() => commit(active.name, s)}
+                      onMouseMove={(e) => {
+                        if (column !== "subs") setColumn("subs");
+                        subNav.hover(i, e);
+                      }}
                       className={`w-full text-left px-2.5 py-1.5 text-sm flex items-center gap-2 hover:bg-panel2 ${
-                        category === active.name && !subcategory ? "text-accent" : "text-muted"
-                      }`}
+                        isHi ? "bg-panel2" : ""
+                      } ${isSel ? "text-accent" : isParent ? "text-muted" : ""}`}
                     >
-                      <CategoryDot category={active.name} size="w-4 h-4" />
-                      <span className="truncate">Без подкатегории</span>
-                    </button>
-                  )}
-                  {activeSubs.map((s) => {
-                    const isSel = category === active.name && subcategory === s;
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => commit(active.name, s)}
-                        className={`w-full text-left px-2.5 py-1.5 text-sm flex items-center gap-2 hover:bg-panel2 ${
-                          isSel ? "text-accent" : ""
-                        }`}
-                      >
+                      {isParent ? (
+                        <CategoryDot category={active.name} size="w-4 h-4" />
+                      ) : (
                         <CategoryDot category={s} parent={active.name} size="w-4 h-4" />
-                        <span className="truncate">{s}</span>
-                      </button>
-                    );
-                  })}
-                </>
+                      )}
+                      <span className="truncate">{isParent ? "Без подкатегории" : s}</span>
+                    </button>
+                  );
+                })
               ) : (
                 <div className="px-3 py-2 text-xs text-muted">
                   {active ? "Нет подкатегорий" : "Выберите категорию"}

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { textMatches } from "../lib/keyboardLayout";
+import { useListNav } from "./useListNav";
 
 /**
  * Optional grouped variant of the dropdown — items split into named
@@ -199,12 +200,69 @@ export function Combobox({
     ? filteredGroups.length > 0
     : filtered.length > 0;
 
+  /** Видимые пункты подряд, сквозь группы, — по ним ходят стрелки. */
+  const flat = useMemo(
+    () => (filteredGroups ? filteredGroups.flatMap((g) => g.items) : filtered),
+    [filteredGroups, filtered]
+  );
+  const nav = useListNav(flat.length, open && popupHasItems);
+
   function commit(next: string) {
     setQuery(next);
     onChange(next);
     setFiltering(false);
     setOpen(false);
   }
+
+  /**
+   * Открыть список с подсветкой на текущем значении. Открывают его с полным
+   * списком (поиск сброшен), поэтому индекс берём по всем вариантам.
+   * `orFirst` — открыли стрелкой: без текущего значения встаём на первый пункт.
+   */
+  function openList(orFirst = false) {
+    if (open) return;
+    const all = groups ? groups.flatMap((g) => g.items) : options;
+    const i = all.indexOf(value);
+    nav.set(i >= 0 ? i : orFirst ? 0 : -1, true);
+    setOpen(true);
+  }
+
+  /** Закрыть без выбора; недонабранный поиск откатывается, как при щелчке мимо. */
+  function closeList() {
+    setOpen(false);
+    if (searchable && !allowCustom) {
+      setQuery(value);
+      setFiltering(false);
+    }
+  }
+
+  /** Пункт списка — один и тот же в группах и в плоском списке. */
+  const renderOption = (opt: string, i: number) => {
+    const isCurrent = opt === value;
+    const isActive = i === nav.active;
+    return (
+      <button
+        key={opt}
+        id={nav.optionId(i)}
+        type="button"
+        role="option"
+        aria-selected={isCurrent}
+        tabIndex={-1}
+        onClick={() => commit(opt)}
+        onMouseMove={(e) => nav.hover(i, e)}
+        // В группах заголовок липнет к верху списка — прокрутка стрелками
+        // оставляет над пунктом место под него, иначе пункт уходил под шапку.
+        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center gap-2 ${
+          groups ? "scroll-mt-8" : ""
+        } ${
+          isActive ? "bg-panel2" : isCurrent ? "bg-panel2/60" : ""
+        } ${isCurrent ? "text-accent" : ""}`}
+      >
+        {renderIcon && <span className="shrink-0">{renderIcon(opt)}</span>}
+        <span className="truncate">{opt}</span>
+      </button>
+    );
+  };
 
   /** В режиме портала список уезжает в body, иначе остаётся на месте. */
   const renderPopup = (node: React.ReactElement) =>
@@ -222,25 +280,62 @@ export function Combobox({
             // уходит только выбранный из списка пункт.
             if (allowCustom) onChange(e.target.value);
             setFiltering(true);
+            // Поиск — подсветка на первом подходящем, Enter его и выберет.
+            // Свободный ввод — без подсветки: набранное и есть значение, и
+            // Enter не должен подменять его первой похожей подсказкой.
+            nav.set(allowCustom ? -1 : 0, true);
             if (!open) setOpen(true);
           }}
           readOnly={!allowCustom && !searchable}
           onFocus={() => {
             setFiltering(false);
-            setOpen(true);
+            openList();
           }}
           onClick={() => {
-            setOpen(true);
+            openList();
           }}
+          role="combobox"
+          aria-expanded={open && popupHasItems}
+          aria-controls={open && popupHasItems ? nav.listId : undefined}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            open && nav.active >= 0 ? nav.optionId(nav.active) : undefined
+          }
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
             if (e.key === "Escape" && open) {
+              // Закрывает список, а не окно, в котором стоит поле.
               e.stopPropagation();
-              setOpen(false);
-              if (searchable && !allowCustom) {
-                setQuery(value);
-                setFiltering(false);
-              }
+              closeList();
+              return;
             }
+            if (
+              (e.key === "ArrowDown" || e.key === "ArrowUp") &&
+              !e.altKey &&
+              !e.metaKey &&
+              !e.ctrlKey
+            ) {
+              e.preventDefault();
+              if (!open) openList(true);
+              else nav.move(e.key === "ArrowDown" ? 1 : -1);
+              return;
+            }
+            if (e.key === "Enter" && open && !e.metaKey && !e.ctrlKey) {
+              if (nav.active >= 0) {
+                // Enter выбирает пункт — и только: ни сохранения формы, ни
+                // других обработчиков окна.
+                e.preventDefault();
+                e.stopPropagation();
+                commit(flat[nav.active]);
+              } else if (allowCustom) {
+                // Набранный текст и есть значение — просто убираем подсказки.
+                setFiltering(false);
+                setOpen(false);
+              }
+              return;
+            }
+            // Tab уходит к следующему полю, ничего не выбирая.
+            if (e.key === "Tab" && open) closeList();
           }}
           placeholder={placeholder}
           // Extra right-padding when the clear-X is showing, otherwise
@@ -278,7 +373,8 @@ export function Combobox({
             // mouseDown so the toggle wins over input blur.
             e.preventDefault();
             setFiltering(false);
-            setOpen((v) => !v);
+            if (open) setOpen(false);
+            else openList();
           }}
           className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-text"
           tabIndex={-1}
@@ -291,6 +387,8 @@ export function Combobox({
       {open && popupHasItems && renderPopup(
         <div
           ref={popupRef}
+          id={nav.listId}
+          role="listbox"
           className={
             portal
               ? // Тот же слой, что у `Select`: список обязан быть выше окна,
@@ -305,50 +403,28 @@ export function Combobox({
           }
         >
           {filteredGroups
-            ? filteredGroups.map((g) => (
-                <div key={g.label}>
-                  {/* Sticky-ish group header — distinct from list items
-                      so the user can tell at a glance "this section is
-                      brands from Дзен" vs "this section is what you've
-                      typed before". */}
-                  <div className="caps-label sticky top-0 px-3 pt-2 pb-1 bg-panel border-b border-border/40">
-                    {g.label}
-                    <span className="ml-1.5 opacity-60">{g.items.length}</span>
-                  </div>
-                  {g.items.map((opt) => {
-                    const isCurrent = opt === value;
-                    return (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => commit(opt)}
-                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center gap-2 ${
-                          isCurrent ? "bg-panel2/60 text-accent" : ""
-                        }`}
-                      >
-                        {renderIcon && <span className="shrink-0">{renderIcon(opt)}</span>}
-                        <span className="truncate">{opt}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))
-            : filtered.map((opt) => {
-                const isCurrent = opt === value;
-                return (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => commit(opt)}
-                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center gap-2 ${
-                      isCurrent ? "bg-panel2/60 text-accent" : ""
-                    }`}
-                  >
-                    {renderIcon && <span className="shrink-0">{renderIcon(opt)}</span>}
-                    <span className="truncate">{opt}</span>
-                  </button>
-                );
-              })}
+            ? (() => {
+                // Сквозной номер пункта через группы — тот же, что в `flat`.
+                let offset = 0;
+                return filteredGroups.map((g) => {
+                  const base = offset;
+                  offset += g.items.length;
+                  return (
+                    <div key={g.label} role="group" aria-label={g.label}>
+                      {/* Sticky-ish group header — distinct from list items
+                          so the user can tell at a glance "this section is
+                          brands from Дзен" vs "this section is what you've
+                          typed before". */}
+                      <div className="caps-label sticky top-0 px-3 pt-2 pb-1 bg-panel border-b border-border/40">
+                        {g.label}
+                        <span className="ml-1.5 opacity-60">{g.items.length}</span>
+                      </div>
+                      {g.items.map((opt, j) => renderOption(opt, base + j))}
+                    </div>
+                  );
+                });
+              })()
+            : filtered.map((opt, i) => renderOption(opt, i))}
         </div>
       )}
     </div>

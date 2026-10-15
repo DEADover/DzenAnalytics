@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 import clsx from "clsx";
+import { useListNav } from "./useListNav";
 
 /**
  * Пикер в стиле остальных полей сервиса: строка `.input` с текущим значением и
@@ -58,6 +59,18 @@ export function Select<T extends string>({
     maxHeight: number;
   } | null>(null);
   const current = options.find((o) => o.value === value)?.label ?? "";
+  const nav = useListNav(options.length, open);
+
+  /** Открыть с подсветкой на текущем значении (его нет — на первом пункте). */
+  function openList() {
+    nav.set(Math.max(0, options.findIndex((o) => o.value === value)), true);
+    setOpen(true);
+  }
+
+  function pick(next: T) {
+    onChange(next);
+    setOpen(false);
+  }
 
   // Клик мимо закрывает список. В режиме портала список лежит вне контейнера,
   // поэтому проверяем и его — иначе выбор варианта закрывал бы список раньше,
@@ -129,6 +142,7 @@ export function Select<T extends string>({
   const list = (
     <div
       ref={popupRef}
+      id={nav.listId}
       role="listbox"
       className={clsx(
         "border border-border rounded-lg bg-panel p-1 shadow-xl overflow-y-auto",
@@ -151,28 +165,37 @@ export function Select<T extends string>({
           : undefined
       }
     >
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="option"
-          aria-selected={o.value === value}
-          onClick={() => {
-            onChange(o.value);
-            setOpen(false);
-          }}
-          className={clsx(
-            "w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-sm text-left",
-            // Перенос — только когда подпись не влезла даже в расширенный
-            // список: ширина у него растёт по содержимому до `maxWidth`.
-            portal ? "whitespace-normal" : "whitespace-nowrap",
-            o.value === value ? "bg-accent/10 text-accent" : "text-text hover:bg-panel2"
-          )}
-        >
-          <span>{o.label}</span>
-          {o.value === value && <Check className="w-3.5 h-3.5 shrink-0" />}
-        </button>
-      ))}
+      {options.map((o, i) => {
+        const isCurrent = o.value === value;
+        return (
+          <button
+            key={o.value}
+            id={nav.optionId(i)}
+            type="button"
+            role="option"
+            aria-selected={isCurrent}
+            tabIndex={-1}
+            onClick={() => pick(o.value)}
+            onMouseMove={(e) => nav.hover(i, e)}
+            className={clsx(
+              "w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-sm text-left",
+              // Перенос — только когда подпись не влезла даже в расширенный
+              // список: ширина у него растёт по содержимому до `maxWidth`.
+              portal ? "whitespace-normal" : "whitespace-nowrap",
+              // Подсветка (стрелки или курсор) — заливкой наведения; выбранный
+              // узнаётся по цвету и галочке и под подсветкой.
+              i === nav.active
+                ? clsx("bg-panel2", isCurrent ? "text-accent" : "text-text")
+                : isCurrent
+                  ? "bg-accent/10 text-accent"
+                  : "text-text hover:bg-panel2"
+            )}
+          >
+            <span>{o.label}</span>
+            {isCurrent && <Check className="w-3.5 h-3.5 shrink-0" />}
+          </button>
+        );
+      })}
     </div>
   );
 
@@ -180,9 +203,37 @@ export function Select<T extends string>({
     <div ref={boxRef} className={clsx("relative", className)}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? setOpen(false) : openList())}
+        onKeyDown={(e) => {
+          if (e.altKey || e.metaKey || e.ctrlKey) return;
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            if (!open) openList();
+            else nav.move(e.key === "ArrowDown" ? 1 : -1);
+            return;
+          }
+          if (!open) return;
+          if (e.key === "Enter" || e.key === " ") {
+            // Иначе кнопка поля сработала бы щелчком и просто закрыла список.
+            e.preventDefault();
+            e.stopPropagation();
+            if (nav.active >= 0) pick(options[nav.active].value);
+            else setOpen(false);
+            return;
+          }
+          if (e.key === "Escape") {
+            // Закрывает список, а не окно, в котором стоит поле.
+            e.stopPropagation();
+            setOpen(false);
+            return;
+          }
+          // Tab уходит к следующему полю, ничего не выбирая.
+          if (e.key === "Tab") setOpen(false);
+        }}
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-controls={open ? nav.listId : undefined}
+        aria-activedescendant={open && nav.active >= 0 ? nav.optionId(nav.active) : undefined}
         aria-label={ariaLabel}
         disabled={disabled}
         title={title}

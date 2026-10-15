@@ -14,7 +14,7 @@ test("поля «Счёт», «Сумма» и «Валюта» в одну ли
 
   const account = card.getByPlaceholder("Выберите счёт");
   await account.fill("Валютный");
-  await card.getByRole("button", { name: "Валютный счёт", exact: true }).click();
+  await card.getByRole("option", { name: "Валютный счёт", exact: true }).click();
   await card.getByLabel("Сумма", { exact: true }).first().fill("10");
   await expect(card.getByRole("button", { name: "Курс и сумма в базовой валюте" })).toBeVisible();
 

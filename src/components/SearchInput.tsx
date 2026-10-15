@@ -1,5 +1,6 @@
 import { Search, X } from "lucide-react";
 import clsx from "clsx";
+import type { InputHTMLAttributes } from "react";
 
 /**
  * Поле поиска: лупа слева, крестик «очистить», пока что-то набрано.
@@ -22,6 +23,7 @@ export function SearchInput({
   ariaLabel,
   title,
   className,
+  inputProps,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -33,6 +35,14 @@ export function SearchInput({
   /** Подсказка на всём поле: что именно ищется. */
   title?: string;
   className?: string;
+  /**
+   * Дополнительные свойства самого поля — клавиши и ARIA, когда поиск ведёт
+   * список: стрелки по пунктам, `aria-activedescendant` подсвеченного.
+   */
+  inputProps?: Omit<
+    InputHTMLAttributes<HTMLInputElement>,
+    "value" | "onChange" | "placeholder" | "autoFocus" | "className"
+  >;
 }) {
   const clear = value ? (
     <button
@@ -53,6 +63,7 @@ export function SearchInput({
       <div className={clsx("flex items-center gap-2 px-3 py-1.5 border-b border-border/60", className)} title={title}>
         <Search className="w-3.5 h-3.5 text-muted shrink-0" aria-hidden="true" />
         <input
+          {...inputProps}
           autoFocus={autoFocus}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -72,6 +83,7 @@ export function SearchInput({
         aria-hidden="true"
       />
       <input
+        {...inputProps}
         autoFocus={autoFocus}
         value={value}
         onChange={(e) => onChange(e.target.value)}

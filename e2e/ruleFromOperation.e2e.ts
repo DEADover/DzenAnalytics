@@ -33,7 +33,7 @@ test("правило из операции: редактор открыт и з�
   ]);
   // Счёт, тип и сумма — тоже условиями.
   await expect(editor.locator('input[value="9000"]').first()).toBeVisible();
-  await expect(editor.getByRole("textbox", { name: "Поиск счёта" })).toHaveValue("Сбер");
+  await expect(editor.getByRole("combobox", { name: "Поиск счёта" })).toHaveValue("Сбер");
   await expect(editor.getByText("Расход").first()).toBeVisible();
   await expect(editor.getByText("Еда вне дома").first()).toBeVisible();
 
