@@ -58,3 +58,27 @@ export function isDarkSchemeId(v: unknown): v is DarkSchemeId {
 export function schemeById(id: string): (typeof ALL_SCHEMES)[number] | undefined {
   return ALL_SCHEMES.find((s) => s.id === id);
 }
+
+/**
+ * Выбор для вида: готовая тема или своя (`lib/customTheme.ts`). Своей темы нет
+ * в списках выше и в index.css — её блок кладёт в `<head>` хранилище темы.
+ */
+export type LightChoice = LightSchemeId | "custom-light";
+export type DarkChoice = DarkSchemeId | "custom-dark";
+export type SchemeChoice = LightChoice | DarkChoice;
+
+export const CUSTOM_SCHEME_NAME = "Своя";
+
+export function isLightChoice(v: unknown): v is LightChoice {
+  return v === "custom-light" || isLightSchemeId(v);
+}
+
+export function isDarkChoice(v: unknown): v is DarkChoice {
+  return v === "custom-dark" || isDarkSchemeId(v);
+}
+
+/** Имя для подписей: у готовой — её имя, у своей — «Своя». */
+export function schemeName(id: string): string {
+  if (id === "custom-light" || id === "custom-dark") return CUSTOM_SCHEME_NAME;
+  return schemeById(id)?.name ?? "";
+}

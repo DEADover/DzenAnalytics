@@ -1,7 +1,9 @@
 import clsx from "clsx";
-import { Check } from "lucide-react";
-import { DARK_SCHEMES, LIGHT_SCHEMES, type ThemeKind } from "../lib/themeSchemes";
+import { Check, Pencil, Plus } from "lucide-react";
+import { DARK_SCHEMES, LIGHT_SCHEMES, schemeName, type ThemeKind } from "../lib/themeSchemes";
+import { customSchemeId } from "../lib/customTheme";
 import { useThemeStore } from "../store/useThemeStore";
+import { useThemeModalStore } from "../store/useThemeModalStore";
 
 /**
  * Выбор темы одного вида — шесть плиток с превью и галочкой.
@@ -13,6 +15,10 @@ import { useThemeStore } from "../store/useThemeStore";
  *
  * Галочка только отмечает тему для вида и вид не переключает: включена ли
  * тёмная, решает переключатель вида над списком.
+ *
+ * Последняя плитка — «Своя»: пока её нет, она предлагает создать копию
+ * отмеченной темы и открывает редактор; потом это обычная плитка со своими
+ * цветами и карандашом «Настроить свои цвета».
  */
 export function ThemeSchemePicker({ kind, className }: { kind: ThemeKind; className?: string }) {
   const schemes = kind === "dark" ? DARK_SCHEMES : LIGHT_SCHEMES;
@@ -61,12 +67,106 @@ export function ThemeSchemePicker({ kind, className }: { kind: ThemeKind; classN
           </button>
         );
       })}
+      <CustomSchemeTile kind={kind} />
+    </div>
+  );
+}
+
+function CustomSchemeTile({ kind }: { kind: ThemeKind }) {
+  const id = customSchemeId(kind);
+  const custom = useThemeStore((s) => (kind === "dark" ? s.customDark : s.customLight));
+  const selected = useThemeStore((s) => (kind === "dark" ? s.darkScheme : s.lightScheme));
+  const setScheme = useThemeStore((s) => s.setScheme);
+  const createCustom = useThemeStore((s) => s.createCustom);
+  const edit = useThemeModalStore((s) => s.edit);
+  const on = selected === id;
+
+  if (!custom) {
+    // Превью — тема, с которой будет снята копия: такой «Своя» и начнётся.
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          createCustom(kind);
+          edit(kind);
+        }}
+        className={clsx(
+          "text-left rounded-[14px] border border-dashed border-border p-1.5 transition-colors duration-200",
+          "hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        )}
+      >
+        <div className="opacity-60">
+          <SchemePreview id={selected} kind={kind} />
+        </div>
+        <div className="flex items-start justify-between gap-2 px-1.5 pt-2 pb-1">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-text">Своя</div>
+            <div className="text-xs text-muted leading-snug mt-0.5">
+              Копия «{schemeName(selected)}» — цвета на ваш вкус
+            </div>
+          </div>
+          <span
+            className="shrink-0 mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full border border-border text-muted"
+            aria-hidden
+          >
+            <Plus className="w-3 h-3" strokeWidth={3} />
+          </span>
+        </div>
+      </button>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        role="radio"
+        aria-checked={on}
+        onClick={() => setScheme(id)}
+        className={clsx(
+          "w-full h-full text-left rounded-[14px] border p-1.5 transition-colors duration-200",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+          on ? "border-accent bg-accent/5" : "border-border hover:border-accent/40"
+        )}
+      >
+        <SchemePreview id={id} kind={kind} />
+        <div className="flex items-start justify-between gap-2 px-1.5 pt-2 pb-1">
+          <div className="min-w-0">
+            <div className={clsx("text-sm font-medium", on ? "text-accent" : "text-text")}>Своя</div>
+            <div className="text-xs text-muted leading-snug mt-0.5">
+              Ваши цвета на основе «{schemeName(custom.base)}»
+            </div>
+          </div>
+          <span
+            className={clsx(
+              "shrink-0 mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full border transition-colors duration-200",
+              on ? "bg-accent border-accent text-accent-fg" : "border-border text-transparent"
+            )}
+            aria-hidden
+          >
+            <Check className="w-3 h-3" strokeWidth={3} />
+          </span>
+        </div>
+      </button>
+      {/* Рядом с плиткой, а не внутри: кнопка в кнопке недопустима. */}
+      <button
+        type="button"
+        onClick={() => {
+          setScheme(id);
+          edit(kind);
+        }}
+        className="btn-icon btn-icon-sm absolute top-3 right-3 bg-panel border border-border shadow-sm"
+        aria-label="Настроить свои цвета"
+        title="Настроить свои цвета"
+      >
+        <Pencil className="w-4 h-4" />
+      </button>
     </div>
   );
 }
 
 /** Мини-страница: шапка с выбранным пунктом, карточка с суммами и полем. */
-function SchemePreview({ id, kind }: { id: string; kind: ThemeKind }) {
+export function SchemePreview({ id, kind }: { id: string; kind: ThemeKind }) {
   return (
     <div
       data-scheme={id}

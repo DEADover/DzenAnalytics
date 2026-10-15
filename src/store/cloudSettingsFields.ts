@@ -32,7 +32,8 @@ import { useReportPeriodStore } from "./useReportPeriodStore";
 import { useFireStore } from "./useFireStore";
 import { parseWhatIfState, pickWhatIf, useWhatIfStore } from "./useWhatIfStore";
 import { useSlicesStore } from "./useSlicesStore";
-import { isDarkSchemeId, isLightSchemeId } from "../lib/themeSchemes";
+import { isDarkChoice, isLightChoice } from "../lib/themeSchemes";
+import { parseCustomTheme } from "../lib/customTheme";
 
 export interface SyncedField {
   key: string;
@@ -222,18 +223,41 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
     (v, s) => (v === "light" || v === "dark" || v === "auto" ? s.setMode(v) : undefined),
     () => true
   ),
+  // Цвета своих тем — раньше выбора: выбор «Своя» должен застать их на месте,
+  // а не копировать текущую тему. Пустое (`null`) своей темы не убирает:
+  // удалить её с другого устройства нельзя, только перекрасить.
+  field(
+    useThemeStore,
+    "theme.customLight",
+    (s) => s.customLight,
+    (v, s) => {
+      const t = parseCustomTheme(v);
+      return t ? s.setCustom("light", t) : undefined;
+    },
+    () => true
+  ),
+  field(
+    useThemeStore,
+    "theme.customDark",
+    (s) => s.customDark,
+    (v, s) => {
+      const t = parseCustomTheme(v);
+      return t ? s.setCustom("dark", t) : undefined;
+    },
+    () => true
+  ),
   field(
     useThemeStore,
     "theme.light",
     (s) => s.lightScheme,
-    (v, s) => (isLightSchemeId(v) ? s.setScheme(v) : undefined),
+    (v, s) => (isLightChoice(v) ? s.setScheme(v) : undefined),
     () => true
   ),
   field(
     useThemeStore,
     "theme.dark",
     (s) => s.darkScheme,
-    (v, s) => (isDarkSchemeId(v) ? s.setScheme(v) : undefined),
+    (v, s) => (isDarkChoice(v) ? s.setScheme(v) : undefined),
     () => true
   ),
 

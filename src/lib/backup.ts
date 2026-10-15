@@ -161,9 +161,15 @@ export const BACKUP_META_KEYS = [
  * Всё остальное приложение хранит в IndexedDB, но тема выбирается до того,
  * как база успевает открыться (иначе страница мигала бы светлым), и живёт
  * отдельно. В бэкапе она едет своим разделом — вместе с выбранными светлой и
- * тёмной темой.
+ * тёмной темой и цветами своих тем.
  */
-export const BACKUP_LOCAL_KEYS = ["dzen.theme", "dzen.lightScheme", "dzen.darkScheme"] as const;
+export const BACKUP_LOCAL_KEYS = [
+  "dzen.theme",
+  "dzen.lightScheme",
+  "dzen.darkScheme",
+  "dzen.customLight",
+  "dzen.customDark",
+] as const;
 
 export interface BackupPayload {
   version: number;

@@ -51,7 +51,7 @@ import { CloudSettingsCard } from "../components/CloudSettingsCard";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { Switch } from "../components/Switch";
 import { Segmented } from "../components/Segmented";
-import { schemeById } from "../lib/themeSchemes";
+import { schemeName } from "../lib/themeSchemes";
 import { Select } from "../components/Select";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDataStore } from "../store/useDataStore";
@@ -210,8 +210,8 @@ export function ImportPage() {
   const headerNavIconsOnly = useHeaderNavStore((s) => s.iconsOnly);
   const headerNavIconWidth = useHeaderNavStore((s) => s.iconWidth);
   const openHeaderNavEditor = useHeaderNavStore((s) => s.openEditor);
-  const lightSchemeName = useThemeStore((s) => schemeById(s.lightScheme)?.name ?? "");
-  const darkSchemeName = useThemeStore((s) => schemeById(s.darkScheme)?.name ?? "");
+  const lightSchemeName = useThemeStore((s) => schemeName(s.lightScheme));
+  const darkSchemeName = useThemeStore((s) => schemeName(s.darkScheme));
   const fractionDigits = useDisplayStore((s) => s.fractionDigits);
   const statementLine = useDisplayStore((s) => s.statementLine);
   const rememberFilters = useFilterMemoryStore((s) => s.enabled);
@@ -1482,7 +1482,8 @@ export function ImportPage() {
           help={
             <p>
               В окне темы — вид (светлый, тёмный или как в системе) и по шесть
-              тем для каждого вида: галочкой отмечается, какая нравится. «Как в
+              тем для каждого вида: галочкой отмечается, какая нравится. Плитка
+              «Своя» — копия темы, в которой можно поменять любые цвета. «Как в
               системе» переключается вместе с вашей ОС, в том числе по
               расписанию. Кнопка в шапке переключает светлый и тёмный вид
               напрямую, каждый — со своей темой.

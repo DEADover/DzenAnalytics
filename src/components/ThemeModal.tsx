@@ -4,7 +4,8 @@ import { Monitor, Moon, Palette, Sun } from "lucide-react";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { Segmented } from "./Segmented";
 import { ThemeSchemePicker } from "./ThemeSchemePicker";
-import { schemeById, type ThemeKind } from "../lib/themeSchemes";
+import { CustomThemeEditor } from "./CustomThemeEditor";
+import { schemeName, type ThemeKind } from "../lib/themeSchemes";
 import { useThemeStore, type ThemeMode } from "../store/useThemeStore";
 import { useThemeModalStore } from "../store/useThemeModalStore";
 
@@ -17,11 +18,23 @@ import { useThemeModalStore } from "../store/useThemeModalStore";
  * галочки в списках только отмечают, какая тема нравится для светлого и для
  * тёмного вида. Сменил вид — список сам доезжает до тем этого вида, и выбор
  * виден сразу за окном.
+ *
+ * В том же окне — редактор своей темы (плитка «Своя», палитра команд): он
+ * подменяет список, а «Готово» возвращает к нему.
  */
 export function ThemeModal() {
   const open = useThemeModalStore((s) => s.open);
+  const editing = useThemeModalStore((s) => s.editing);
   const hide = useThemeModalStore((s) => s.hide);
+  const back = useThemeModalStore((s) => s.back);
   if (!open) return null;
+  if (editing) {
+    return (
+      <Modal onClose={hide} width="3xl" className="h-[min(820px,calc(100dvh-2rem))]">
+        <CustomThemeEditor key={editing} kind={editing} onDone={back} />
+      </Modal>
+    );
+  }
   return <ThemeModalContent onClose={hide} />;
 }
 
@@ -29,8 +42,8 @@ function ThemeModalContent({ onClose }: { onClose: () => void }) {
   const mode = useThemeStore((s) => s.mode);
   const resolved = useThemeStore((s) => s.resolved);
   const setMode = useThemeStore((s) => s.setMode);
-  const lightName = useThemeStore((s) => schemeById(s.lightScheme)?.name ?? "");
-  const darkName = useThemeStore((s) => schemeById(s.darkScheme)?.name ?? "");
+  const lightName = useThemeStore((s) => schemeName(s.lightScheme));
+  const darkName = useThemeStore((s) => schemeName(s.darkScheme));
 
   const sections = useRef<Record<ThemeKind, HTMLElement | null>>({ light: null, dark: null });
   const first = useRef(true);

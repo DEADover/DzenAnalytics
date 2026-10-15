@@ -168,6 +168,15 @@ export function CommandPalette({ open, onClose }: Props) {
       { id: "theme:dark", group: "Действия", title: "Тёмная тема", icon: Moon, action: () => setMode("dark") },
       { id: "theme:auto", group: "Действия", title: "Тема: авто", icon: Monitor, action: () => setMode("auto") },
       { id: "theme:pick", group: "Действия", title: "Выбрать тему оформления", icon: Palette, action: showThemeModal },
+      // Своя тема того вида, что на экране: её и правим, глядя на результат.
+      {
+        id: "theme:custom",
+        group: "Действия",
+        title: "Настроить свои цвета",
+        hint: "Своя тема: фон, текст, акцент и остальные цвета",
+        icon: Palette,
+        action: () => useThemeModalStore.getState().edit(useThemeStore.getState().resolved),
+      },
       { id: "header-nav:edit", group: "Действия", title: "Настроить основное меню", icon: PanelTop, action: openHeaderNavEditor },
       { id: "tour:hub", group: "Действия", title: "Центр обучения", hint: "Короткие туры по интерфейсу", icon: GraduationCap, action: () => useTourStore.getState().openHub() },
       // Все двенадцать тем: «тема лагуна» или «уголь» находит нужную сразу.
