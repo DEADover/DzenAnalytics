@@ -1,5 +1,5 @@
 /**
- * «Контрагенты»: места за период, карточка места, новые и пропавшие места.
+ * «Контрагенты»: места за период, карточка места, новые места, где подорожало.
  */
 import { test, expect, connectZen, horizontalOverflow } from "./harness";
 
@@ -23,9 +23,7 @@ test("места за месяц, карточка места и новые ме
   await expect(fresh.getByText("Ресторан")).toBeVisible();
   await expect(fresh.getByText("Перекрёсток")).toBeVisible();
   await expect(fresh.getByText("Пятёрочка")).toHaveCount(0);
-  // «Кинопоиск» в октябре ещё не списывался, но раз в месяц — пауза обычная.
-  const lost = page.locator(".card-tray", { has: page.getByText("Куда перестали ходить", { exact: true }) });
-  await expect(lost.getByText("Все привычные места на месте")).toBeVisible();
+  await expect(page.getByText("Куда перестали ходить")).toHaveCount(0);
 
   // Полоса долей: половина трат — в первых местах, кусок открывает карточку.
   const share = page.locator(".card-tray", { has: page.getByText("Куда уходят деньги", { exact: true }) });

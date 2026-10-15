@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import {
   Store,
   Sparkles,
-  DoorOpen,
   Receipt,
   Coins,
   ListChecks,
@@ -24,7 +23,6 @@ import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 import {
   buildPlaceDossier,
   buildPlaceRows,
-  findLostPlaces,
   groupByPlace,
   placesForHalf,
   priceRisers,
@@ -132,7 +130,7 @@ export function CounterpartiesPage() {
     [transactions]
   );
   // Тот же отрезок, что у общего фильтра, — но нужен он здесь сам по себе:
-  // «впервые» и «перестали ходить» смотрят в историю до него.
+  // «впервые» и рост чека смотрят в историю до него.
   const range: OpenRange = useMemo(
     () =>
       filters.preset === "custom"
@@ -148,12 +146,9 @@ export function CounterpartiesPage() {
   );
   const byPlace = useMemo(() => groupByPlace(history), [history]);
   const rows = useMemo(() => buildPlaceRows(history, range), [history, range]);
-  const lost = useMemo(() => findLostPlaces(history, range, maxDate), [history, range, maxDate]);
   const fresh = useMemo(() => rows.filter((r) => r.isNew), [rows]);
   const risers = useMemo(() => priceRisers(rows, INSIGHT_LIMIT), [rows]);
 
-  // Карточка открывается и для места из «Перестали ходить» — его в таблице
-  // периода нет, но история у него есть.
   const selected = (picked && byPlace.has(picked) ? picked : null) ?? rows[0]?.name ?? null;
   const dossier = useMemo(
     () => (selected ? buildPlaceDossier(history, selected, maxDate, monthStartDay) : null),
@@ -269,7 +264,7 @@ export function CounterpartiesPage() {
       <SpendShare rows={rows} base={base} onPick={pick} />
 
       {/* Выводы — над таблицей: под списком из полусотни мест их никто бы не увидел. */}
-      <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard
           icon={Sparkles}
           title="Новые места"
@@ -346,45 +341,6 @@ export function CounterpartiesPage() {
           )}
         </SectionCard>
 
-        <SectionCard
-          className="lg:col-span-2 2xl:col-span-1"
-          icon={DoorOpen}
-          title="Куда перестали ходить"
-          subtitle={
-            range.from && lost.length > 0
-              ? `Раньше уходило ${formatMoney(lost.reduce((s, p) => s + p.perMonthBefore, 0), base)} в месяц`
-              : undefined
-          }
-          info={
-            <p>
-              Места, где за полгода до периода были хотя бы три покупки в разные
-              месяцы, а с начала периода — ни одной, и пауза уже заметно длиннее
-              обычной. Сумма — сколько там в среднем уходило в месяц.
-            </p>
-          }
-        >
-          {!range.from ? (
-            <SectionEmpty variant="compact">Выберите период в фильтре — сравнение идёт с полугодом до него</SectionEmpty>
-          ) : lost.length === 0 ? (
-            <SectionEmpty variant="compact">Все привычные места на месте</SectionEmpty>
-          ) : (
-            <div className="space-y-0.5">
-              {lost.slice(0, INSIGHT_LIMIT).map((p) => (
-                <MeterRow
-                  key={p.name}
-                  bar="track"
-                  leadIcon={<CategoryDot category={p.category} size="w-7 h-7" />}
-                  label={p.name}
-                  share={p.perMonthBefore / lost[0].perMonthBefore}
-                  barCls="bg-muted/60"
-                  cells={[{ text: `${formatMoney(p.perMonthBefore, base)}/мес`, width: "8.5rem" }]}
-                  onClick={() => pick(p.name)}
-                  title="Открыть карточку места"
-                />
-              ))}
-            </div>
-          )}
-        </SectionCard>
       </div>
 
       {/* Карточка места — узкой колонкой справа только там, где таблице хватает

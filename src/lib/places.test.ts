@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPlaceDossier, buildPlaceRows, findLostPlaces, placesForHalf, priceRisers, type PlaceRow } from "./places";
+import { buildPlaceDossier, buildPlaceRows, placesForHalf, priceRisers, type PlaceRow } from "./places";
 import type { Transaction } from "../types";
 
 let seq = 0;
@@ -67,39 +67,6 @@ describe("buildPlaceRows: места за период", () => {
     const now = [1, 2, 3].map((i) => tx({ payee: "Кафе", date: `2026-09-0${i}`, amountBase: 500 }));
     expect(buildPlaceRows([...before, ...now], SEPT)[0].prevAvgCheck).toBe(400);
     expect(buildPlaceRows([...before.slice(0, 2), ...now], SEPT)[0].prevAvgCheck).toBeUndefined();
-  });
-});
-
-describe("findLostPlaces: куда перестали ходить", () => {
-  const regular = ["2026-04-05", "2026-05-05", "2026-06-05", "2026-07-05"].map((date) =>
-    tx({ payee: "Бассейн", date, amountBase: 3000 })
-  );
-
-  it("регулярное место без покупок в периоде", () => {
-    const lost = findLostPlaces(regular, SEPT, "2026-09-30");
-    expect(lost).toHaveLength(1);
-    expect(lost[0]).toMatchObject({ name: "Бассейн", visitsBefore: 4, lastDate: "2026-07-05" });
-  });
-
-  it("покупка в периоде — не пропало", () => {
-    expect(findLostPlaces([...regular, tx({ payee: "Бассейн", date: "2026-09-20" })], SEPT, "2026-09-30")).toEqual([]);
-  });
-
-  it("пауза короче привычной — рано говорить", () => {
-    // Ходили раз в месяц, период только начался: с 5 августа прошло 36 дней.
-    const monthly = ["2026-05-05", "2026-06-05", "2026-07-05", "2026-08-05"].map((date) =>
-      tx({ payee: "Бассейн", date })
-    );
-    expect(findLostPlaces(monthly, SEPT, "2026-09-10")).toEqual([]);
-  });
-
-  it("три покупки за одну неделю — не привычка", () => {
-    const burst = ["2026-06-01", "2026-06-03", "2026-06-05"].map((date) => tx({ payee: "Стройка", date }));
-    expect(findLostPlaces(burst, SEPT, "2026-09-30")).toEqual([]);
-  });
-
-  it("без начала периода сравнивать не с чем", () => {
-    expect(findLostPlaces(regular, { from: null, to: null }, "2026-09-30")).toEqual([]);
   });
 });
 
