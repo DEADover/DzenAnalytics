@@ -350,7 +350,7 @@ export function CounterpartiesPage() {
           title={priceDir === "up" ? "Где подорожало" : "Где подешевело"}
           subtitle={
             risers.length > 0
-              ? `${formatNum(risers.length)} ${pluralRu(risers.length, ["контрагент", "контрагента", "контрагентов"])} · средний чек против года до периода`
+              ? `${formatNum(risers.length)} ${pluralRu(risers.length, ["контрагент", "контрагента", "контрагентов"])} · Средний чек против года до периода`
               : undefined
           }
           right={
