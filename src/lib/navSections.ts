@@ -72,7 +72,7 @@ export const SECONDARY_GROUPS: { title: string; items: NavSection[] }[] = [
       { to: "/cashflow", label: "Cash-flow", icon: LineChart, hint: "Доходы, расходы и чистый поток по месяцам" },
       { to: "/compare", label: "Сравнение", icon: GitCompare, hint: "Два периода рядом" },
       { to: "/top", label: "Топ", icon: TrendingUp, hint: "Крупные категории, контрагенты и операции" },
-      { to: "/counterparties", label: "Контрагенты", icon: Store, hint: "Места, где тратите, и привычки по ним" },
+      { to: "/counterparties", label: "Контрагенты", icon: Store, hint: "Кому вы платите, сколько и как часто" },
       { to: "/calendar", label: "Календарь", icon: CalendarDays, hint: "Тепловая карта по дням года" },
       { to: "/sankey", label: "Потоки", icon: GitFork, hint: "Откуда пришли деньги и куда ушли" },
       { to: "/year-review", label: "Год в цифрах", icon: Sparkles, hint: "Итоги и рекорды года" },

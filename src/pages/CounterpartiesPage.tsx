@@ -63,11 +63,11 @@ import { SeriesTooltip, TooltipFacts } from "../components/TooltipFacts";
 /** Ширины колонок — постоянные: при смене периода колонки не прыгают. */
 const COL = { total: "10rem", visits: "7.5rem", avg: "9rem", change: "10.75rem" } as const;
 
-/** Сколько мест в «Новых» и «Перестали ходить» — дальше это уже не вывод, а список. */
+/** Сколько строк в «Новых контрагентах» и «Где подорожало» — дальше это уже не вывод, а список. */
 const INSIGHT_LIMIT = 5;
 
 type Metric = "expense" | "visits" | "avgCheck";
-const METRIC_LABEL: Record<Metric, string> = { expense: "Потрачено", visits: "Покупок", avgCheck: "Средний чек" };
+const METRIC_LABEL: Record<Metric, string> = { expense: "Потрачено", visits: "Операций", avgCheck: "Средний чек" };
 const WEEKDAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const WEEKDAY_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 
@@ -158,11 +158,11 @@ export function CounterpartiesPage() {
     const list = (byPlace.get(name) ?? []).filter(
       (t) => scope === "all" || ((!range.from || t.date >= range.from) && (!range.to || t.date <= range.to))
     );
-    showDrill(name, list, scope === "all" ? "Все покупки" : "Покупки за период");
+    showDrill(name, list, scope === "all" ? "Все операции" : "Операции за период");
   }
   function openOne(name: string, id: string) {
     const tx = byPlace.get(name)?.find((t) => t.id === id);
-    if (tx) showDrill(name, [tx], "Самая крупная покупка");
+    if (tx) showDrill(name, [tx], "Самая крупная операция");
   }
   /** Выбрать место; на узком экране карточка над таблицей — показать её. */
   function pick(name: string) {
@@ -197,19 +197,20 @@ export function CounterpartiesPage() {
         info={
           <InfoPopover>
             <p>
-              Магазины, кафе и сервисы, где вы тратите, — за период и счета из{" "}
-              <InfoTerm>общего фильтра</InfoTerm>. Имя берётся из справочника
-              контрагентов, а не из банковской строки. Операции без контрагента
-              сюда не попадают.
+              Кому уходят ваши деньги: магазины, кафе, сервисы, люди — за период и
+              счета из <InfoTerm>общего фильтра</InfoTerm>. Имя берётся из
+              справочника контрагентов, а не из банковской строки. Операции без
+              контрагента сюда не попадают.
             </p>
             <p>
-              <InfoTerm>Средний чек</InfoTerm> — средняя покупка; возвраты
-              уменьшают сумму места, но чек не занижают. Изменение чека считается
-              против года до периода, если покупок с обеих сторон хотя бы три.
+              <InfoTerm>Средний чек</InfoTerm> — средняя сумма одной операции.
+              Возвраты уменьшают сумму контрагента, но чек не занижают. Чек
+              сравнивается с годом до периода, если операций и там, и там хотя бы
+              три.
             </p>
             <p>
-              Нажмите на место — откроется его карточка за всю историю: как часто
-              вы туда ходите, в какой день, сколько тратите по месяцам.
+              Нажмите на строку — откроется карточка контрагента за всю историю: как
+              часто вы платите, в какие дни, сколько по месяцам.
             </p>
           </InfoPopover>
         }
@@ -222,8 +223,8 @@ export function CounterpartiesPage() {
     return (
       <div className="space-y-6">
         {header}
-        <SectionEmpty icon={Store} title="В выборке нет покупок с контрагентом">
-          Контрагента можно указать в операции или правилом — тогда место появится здесь
+        <SectionEmpty icon={Store} title="Нет трат с контрагентом">
+          Для выбранных фильтров ни у одной траты не указан контрагент. Его можно указать в операции или правилом — тогда он появится здесь
         </SectionEmpty>
       </div>
     );
@@ -235,12 +236,12 @@ export function CounterpartiesPage() {
 
       <StatRow>
         <StatCell
-          label="Мест"
+          label="Контрагентов"
           value={formatNum(rows.length)}
           icon={<Store className="w-4 h-4" />}
           note={
             range.from
-              ? `${formatNum(fresh.length)} ${pluralRu(fresh.length, ["новое", "новых", "новых"])} в периоде`
+              ? `${formatNum(fresh.length)} ${pluralRu(fresh.length, ["новый", "новых", "новых"])} в периоде`
               : "за всю историю"
           }
         />
@@ -249,21 +250,21 @@ export function CounterpartiesPage() {
           value={formatMoney(total, base)}
           tone="expense"
           icon={<Coins className="w-4 h-4" />}
-          note={`${formatNum(visits)} ${pluralRu(visits, ["покупка", "покупки", "покупок"])}`}
+          note={`${formatNum(visits)} ${pluralRu(visits, ["операция", "операции", "операций"])}`}
         />
         <StatCell
           label="Средний чек"
           value={visits > 0 ? formatMoney(rows.reduce((s, r) => s + r.avgCheck * r.visits, 0) / visits, base) : "—"}
           icon={<Receipt className="w-4 h-4" />}
-          note="по всем местам"
+          note="по всем контрагентам"
         />
         <StatCell
           label="Чек вырос"
           value={compared > 0 ? `${formatNum(grown)} из ${formatNum(compared)}` : "—"}
           tone={grown > 0 ? "warn" : "default"}
           icon={<TrendingUp className="w-4 h-4" />}
-          note={compared > 0 ? "мест, где есть с чем сравнить" : "не с чем сравнить"}
-          tooltip="Средний чек периода выше, чем за год до него, больше чем на 5 %. Сравниваются места, где покупок хотя бы три и тогда, и сейчас."
+          note={compared > 0 ? "у кого есть с чем сравнить" : "не с чем сравнить"}
+          tooltip="Средний чек периода выше, чем за год до него, больше чем на 5%. Сравниваются контрагенты, у которых хотя бы по три операции и тогда, и сейчас."
         />
       </StatRow>
 
@@ -273,13 +274,13 @@ export function CounterpartiesPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard
           icon={Sparkles}
-          title="Новые места"
+          title="Новые контрагенты"
           subtitle={
             range.from && fresh.length > 0
-              ? `${formatNum(fresh.length)} ${pluralRu(fresh.length, ["место", "места", "мест"])} · ${formatMoney(freshTotal, base)}`
+              ? `${formatNum(fresh.length)} ${pluralRu(fresh.length, ["контрагент", "контрагента", "контрагентов"])} · ${formatMoney(freshTotal, base)}`
               : undefined
           }
-          info={<p>Места, где первая покупка за всю историю пришлась на этот период: новый магазин, кафе, сервис.</p>}
+          info={<p>Те, кому вы впервые заплатили в этом периоде: новый магазин, кафе, сервис.</p>}
         >
           {!range.from ? (
             <SectionEmpty
@@ -288,12 +289,12 @@ export function CounterpartiesPage() {
               title="Нужен период"
               action={yearButton}
             >
-              Новое место — то, где первая покупка случилась в выбранном периоде. Сейчас в
-              фильтре вся история, а в ней новым когда-то было всё.
+              Новый контрагент — тот, кому вы впервые заплатили в выбранном периоде. Сейчас в
+              фильтре вся история, а в ней новым когда-то был каждый.
             </SectionEmpty>
           ) : fresh.length === 0 ? (
-            <SectionEmpty variant="compact" align="start" title="Новых мест нет">
-              В этом периоде все покупки — в местах, где вы бывали и раньше.
+            <SectionEmpty variant="compact" align="start" title="Новых контрагентов нет">
+              В этом периоде вы платили только тем, кому платили и раньше.
             </SectionEmpty>
           ) : (
             <div className="space-y-0.5">
@@ -307,7 +308,7 @@ export function CounterpartiesPage() {
                   barCls="bg-accent"
                   cells={[{ text: formatMoney(r.total, base), width: "7rem" }]}
                   onClick={() => pick(r.name)}
-                  title="Открыть карточку места"
+                  title="Открыть карточку"
                 />
               ))}
             </div>
@@ -320,10 +321,10 @@ export function CounterpartiesPage() {
           subtitle={risers.length > 0 ? "Средний чек против года до периода" : undefined}
           info={
             <p>
-              Места, где средняя покупка стала дороже, чем за год до периода,
-              больше чем на 5 %. Сверху — где прибавка сильнее всего бьёт по
-              кошельку: рост чека, умноженный на число покупок, а не самый большой
-              процент — +40 % к чашке кофе заметнее на чеке, чем в бюджете.
+              Контрагенты, у которых средний чек вырос больше чем на 5% против года
+              до периода. Сверху — те, где подорожание стоит вам больше всего денег:
+              рост чека, умноженный на число операций. Поэтому +10% к продуктам
+              стоят выше, чем +40% к кофе.
             </p>
           }
         >
@@ -344,12 +345,12 @@ export function CounterpartiesPage() {
               title="Пока не с чем сравнить"
               action={filters.preset === "12m" ? undefined : yearButton}
             >
-              Нужно хотя бы по три покупки в одном месте — и в периоде, и за год до него. В
-              коротком периоде их часто одна-две: на годе сравнение почти всегда находится.
+              Нужно хотя бы по три операции у одного контрагента — и в периоде, и за год до
+              него. В коротком периоде их часто одна-две, за год обычно хватает.
             </SectionEmpty>
           ) : risers.length === 0 ? (
             <SectionEmpty variant="compact" align="start" title="Чеки не выросли">
-              Там, где есть с чем сравнить, средняя покупка не дороже, чем за год до периода.
+              Там, где есть с чем сравнить, средний чек не выше, чем за год до периода.
             </SectionEmpty>
           ) : (
             <div className="space-y-0.5">
@@ -370,7 +371,7 @@ export function CounterpartiesPage() {
                     { text: `+${formatPct(growth, 0)}`, width: "3.5rem", type: "pct" },
                   ]}
                   onClick={() => pick(r.name)}
-                  title="Открыть карточку места"
+                  title="Открыть карточку"
                 />
               ))}
             </div>
@@ -385,7 +386,7 @@ export function CounterpartiesPage() {
         <DataTable<PlaceRow>
           className="order-2 xl:order-none"
           icon={ListChecks}
-          title="Все места"
+          title="Все контрагенты"
           data={rows}
           rowKey={(r) => r.name}
           defaultSortKey="total"
@@ -408,7 +409,7 @@ export function CounterpartiesPage() {
                   <span className="truncate">{r.name}</span>
                   {r.isNew && (
                     <span className="shrink-0 rounded-full bg-accent/15 text-accent text-[10px] font-semibold px-1.5 py-px">
-                      Новое
+                      Новый
                     </span>
                   )}
                 </span>
@@ -427,7 +428,7 @@ export function CounterpartiesPage() {
               key: "visits",
               type: "count",
               width: COL.visits,
-              label: "Покупок",
+              label: "Операций",
               sortValue: (r) => r.visits,
               render: (r) => formatNum(r.visits),
             },
@@ -536,7 +537,7 @@ function PlaceCard({
           </div>
         </div>
         <button type="button" className="btn-ghost text-sm shrink-0" onClick={onOpenAll}>
-          Все покупки
+          Все операции
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -545,11 +546,11 @@ function PlaceCard({
         <FactTile small label="Всего" value={formatMoney(d.total, base, { compact: d.total >= 1_000_000 })} tone="expense" sub={sinceText(d.firstDate)} />
         <FactTile
           small
-          label="Покупок"
+          label="Операций"
           value={formatNum(d.visits)}
           sub={d.everyDays != null ? everyText(d.everyDays).toLowerCase() : undefined}
         />
-        <FactTile small label="Средний чек" value={formatMoney(d.avgCheck, base)} sub="одна покупка" />
+        <FactTile small label="Средний чек" value={formatMoney(d.avgCheck, base)} sub="за одну операцию" />
       </div>
 
       <ul className="space-y-2 text-sm">
@@ -558,7 +559,7 @@ function PlaceCard({
             <CalendarDays className="w-4 h-4 text-muted shrink-0" />
             <span className="min-w-0 truncate">
               Чаще всего по {WEEKDAYS[d.favWeekday]}
-              <span className="text-muted"> · {formatPct(d.favWeekdayShare, 0)} покупок</span>
+              <span className="text-muted"> · {formatPct(d.favWeekdayShare, 0)} операций</span>
             </span>
           </li>
         )}
@@ -566,7 +567,7 @@ function PlaceCard({
           <li className="flex items-center gap-2.5">
             <PieChart className="w-4 h-4 text-muted shrink-0" />
             <span className="min-w-0 truncate">
-              {formatPct(d.categoryShare, 0)} всех трат на «{lead}»
+              {formatPct(d.categoryShare, 0)} всех трат в категории «{lead}»
             </span>
           </li>
         )}
@@ -605,7 +606,7 @@ function PlaceCard({
             onChange={setMetric}
             options={[
               { value: "expense" as Metric, label: "Сумма" },
-              { value: "visits" as Metric, label: "Покупки" },
+              { value: "visits" as Metric, label: "Операции" },
               { value: "avgCheck" as Metric, label: "Чек" },
             ]}
           />
@@ -621,10 +622,10 @@ function PlaceCard({
                 base={base}
                 mode="pct"
                 kind="expense"
-                upTitle="Больше, чем за двенадцать месяцев до того"
-                downTitle="Меньше, чем за двенадцать месяцев до того"
+                upTitle="Больше, чем за предыдущие 12 месяцев"
+                downTitle="Меньше, чем за предыдущие 12 месяцев"
               />
-              <span>к году раньше</span>
+              <span>к предыдущим 12 месяцам</span>
             </>
           )}
         </div>
@@ -647,13 +648,13 @@ function PlaceCard({
                 cursor={{ fill: "rgb(var(--c-border) / 0.35)" }}
                 content={
                   <SeriesTooltip
-                    formatValue={(v) => (metric === "visits" ? `${formatNum(v)} ${pluralRu(v, ["покупка", "покупки", "покупок"])}` : formatMoney(v, base))}
+                    formatValue={(v) => (metric === "visits" ? `${formatNum(v)} ${pluralRu(v, ["операция", "операции", "операций"])}` : formatMoney(v, base))}
                     formatLabel={(_, rows) => {
                       const m = rows[0]?.payload as { ym?: string; visits?: number } | undefined;
                       if (!m?.ym) return "";
                       const name = formatDate(`${m.ym}-01`, "month");
                       const n = m.visits ?? 0;
-                      const tail = metric === "visits" ? "" : ` · ${formatNum(n)} ${pluralRu(n, ["покупка", "покупки", "покупок"])}`;
+                      const tail = metric === "visits" ? "" : ` · ${formatNum(n)} ${pluralRu(n, ["операция", "операции", "операций"])}`;
                       return `${name[0].toUpperCase()}${name.slice(1)}${tail}`;
                     }}
                   />
@@ -675,7 +676,7 @@ function PlaceCard({
             они в подсказке. Любимый день — акцентом. */}
         <div className="grid grid-cols-7 gap-1.5 items-end h-14">
           {d.weekdays.map((n, i) => (
-            <Tooltip key={i} content={`${WEEKDAY_FULL[i]} · ${formatNum(n)} ${pluralRu(n, ["покупка", "покупки", "покупок"])}`}>
+            <Tooltip key={i} content={`${WEEKDAY_FULL[i]} · ${formatNum(n)} ${pluralRu(n, ["операция", "операции", "операций"])}`}>
               <div className="h-full flex items-end">
                 <div
                   className={i === d.favWeekday ? "w-full rounded-t-[3px] bg-accent" : "w-full rounded-t-[3px] bg-accent/35"}
@@ -696,7 +697,7 @@ function PlaceCard({
 
       {d.categories.length > 1 && (
         <div>
-          <div className="caps-label mb-1.5">По статьям</div>
+          <div className="caps-label mb-1.5">По категориям</div>
           <div className="space-y-0.5">
             {d.categories.map((c) => (
               <MeterRow
@@ -747,12 +748,12 @@ function SpendShare({
     <SectionCard
       icon={PieChart}
       title="Куда уходят деньги"
-      subtitle={`Половина трат — в ${formatNum(half)} ${pluralRu(half, ["месте", "местах", "местах"])} из ${formatNum(rows.length)}`}
+      subtitle={`Половина трат — у ${formatNum(half)} ${pluralRu(half, ["контрагента", "контрагентов", "контрагентов"])} из ${formatNum(rows.length)}`}
       info={
         <p>
-          Все траты периода одной полосой: каждый кусок — место, его ширина —
-          доля в сумме. Отдельно показаны {SHARE_TOP} крупнейших, остальные — одним
-          серым куском. Нажатие открывает карточку места.
+          Все траты периода одной полосой: каждый кусок — контрагент, ширина —
+          его доля. Отдельно показаны {SHARE_TOP} крупнейших, остальные — одним
+          серым куском. Нажмите на кусок или имя — откроется карточка.
         </p>
       }
     >
@@ -766,7 +767,7 @@ function SpendShare({
                 facts={[
                   { label: "Потрачено", value: formatMoney(r.total, base), tone: "expense", swatchColor: color(i) },
                   { label: "Доля", value: formatPct(r.total / total, 1) },
-                  { label: "Покупок", value: formatNum(r.visits) },
+                  { label: "Операций", value: formatNum(r.visits) },
                 ]}
               />
             }
@@ -799,7 +800,7 @@ function SpendShare({
           <div className="flex items-center gap-2 min-w-0 text-muted">
             <span className="w-2.5 h-2.5 rounded-sm shrink-0 bg-muted/30" />
             <span className="truncate">
-              Ещё {formatNum(rows.length - top.length)} {pluralRu(rows.length - top.length, ["место", "места", "мест"])}
+              Ещё {formatNum(rows.length - top.length)} {pluralRu(rows.length - top.length, ["контрагент", "контрагента", "контрагентов"])}
             </span>
             <span className="ml-auto tabular-nums shrink-0">{formatPct(rest / total, 0)}</span>
           </div>

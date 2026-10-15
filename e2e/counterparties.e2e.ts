@@ -19,7 +19,7 @@ test("места за месяц, карточка места и новые ме
   expect(cut).toBe(0);
 
   // Октябрь: «Ресторан» и «Перекрёсток» — впервые, «Пятёрочка» — давно своя.
-  const fresh = page.locator(".card-tray", { has: page.getByText("Новые места", { exact: true }) });
+  const fresh = page.locator(".card-tray", { has: page.getByText("Новые контрагенты", { exact: true }) });
   await expect(fresh.getByText("Ресторан")).toBeVisible();
   await expect(fresh.getByText("Перекрёсток")).toBeVisible();
   await expect(fresh.getByText("Пятёрочка")).toHaveCount(0);
@@ -27,7 +27,7 @@ test("места за месяц, карточка места и новые ме
 
   // Полоса долей: половина трат — в первых местах, кусок открывает карточку.
   const share = page.locator(".card-tray", { has: page.getByText("Куда уходят деньги", { exact: true }) });
-  await expect(share.getByText(/^Половина трат — в \d+ мест/)).toBeVisible();
+  await expect(share.getByText(/^Половина трат — у \d+ контрагент/)).toBeVisible();
   await share.getByRole("button", { name: /^Пятёрочка:/ }).click();
   await expect(page.locator("[data-dossier-title]")).toHaveText("Пятёрочка");
   await expect(page.getByText("Где подорожало", { exact: true })).toBeVisible();
@@ -37,7 +37,7 @@ test("места за месяц, карточка места и новые ме
   const title = page.locator("[data-dossier-title]");
   await expect(title).toHaveText("Кофейня у дома");
   const card = page.locator("[data-place-card]");
-  await expect(card.getByText("Покупок", { exact: true })).toBeVisible();
+  await expect(card.getByText("Операций", { exact: true })).toBeVisible();
   await expect(card.getByText(/^Последний раз /)).toBeVisible();
   await expect(card.locator(".recharts-bar")).toBeVisible();
   await expect(card.getByText("По дням недели")).toBeVisible();
@@ -45,7 +45,7 @@ test("места за месяц, карточка места и новые ме
   await card.getByRole("radio", { name: "Чек" }).or(card.getByRole("button", { name: "Чек", exact: true })).first().click();
   await expect(card.locator(".recharts-bar")).toBeVisible();
   // Выбранная строка отмечена, «Новое» — у мест, впервые появившихся в периоде.
-  await expect(table.locator("tr", { hasText: "Ресторан" }).getByText("Новое", { exact: true })).toBeVisible();
+  await expect(table.locator("tr", { hasText: "Ресторан" }).getByText("Новый", { exact: true })).toBeVisible();
 
   // В карточке ничего не обрезано — ни у одного места таблицы.
   for (const tr of await table.locator("tbody tr").all()) {
@@ -66,8 +66,8 @@ test("места за месяц, карточка места и новые ме
 
   if (process.env.E2E_SHOTS) await page.screenshot({ path: process.env.E2E_SHOTS + "/counterparties.png", fullPage: true });
 
-  await card.getByRole("button", { name: "Все покупки" }).click();
-  await expect(page.getByText("Все покупки").nth(1)).toBeVisible();
+  await card.getByRole("button", { name: "Все операции" }).click();
+  await expect(page.getByText("Все операции").nth(1)).toBeVisible();
 });
 
 test("узкое окно: карточка над таблицей, прокрутки вбок нет", async ({ page }) => {
@@ -125,11 +125,11 @@ test("вся история: выводы объясняют, что нужен 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await connectZen(page, "/counterparties");
   await page.getByRole("button", { name: "Всё", exact: true }).click();
-  const fresh = page.locator(".card-tray", { has: page.getByText("Новые места", { exact: true }) });
+  const fresh = page.locator(".card-tray", { has: page.getByText("Новые контрагенты", { exact: true }) });
   await expect(fresh.getByText("Нужен период")).toBeVisible();
   // Пояснение — по левому краю, вровень с заголовком карточки.
   const [titleX, textX] = await Promise.all([
-    fresh.getByText("Новые места", { exact: true }).evaluate((el) => el.getBoundingClientRect().left),
+    fresh.getByText("Новые контрагенты", { exact: true }).evaluate((el) => el.getBoundingClientRect().left),
     fresh.getByText("Нужен период").evaluate((el) => el.getBoundingClientRect().left),
   ]);
   expect(Math.abs(textX - titleX)).toBeLessThan(40);
