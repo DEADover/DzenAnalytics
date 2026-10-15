@@ -32,7 +32,7 @@ import {
   type PlaceRow,
 } from "../lib/places";
 import { diffSortValue } from "../lib/diffMode";
-import { periodRange, spanDays, toIsoDate } from "../lib/period";
+import { periodKey, periodRange, spanDays, toIsoDate } from "../lib/period";
 import { pluralRu } from "../lib/plural";
 import {
   formatMoney,
@@ -57,7 +57,6 @@ import { MeterRow } from "../components/MeterRow";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard, StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
-import { ShowMore } from "../components/table/TableParts";
 import { Segmented } from "../components/Segmented";
 import { Tooltip } from "../components/Tooltip";
 import { SeriesTooltip, TooltipFacts } from "../components/TooltipFacts";
@@ -65,8 +64,6 @@ import { SeriesTooltip, TooltipFacts } from "../components/TooltipFacts";
 /** Ширины колонок — постоянные: при смене периода колонки не прыгают. */
 const COL = { total: "10rem", visits: "7.5rem", avg: "9rem", change: "10.75rem" } as const;
 
-/** Сколько строк в «Новых контрагентах» и «Где подорожало» — дальше это уже не вывод, а список. */
-const INSIGHT_LIMIT = 5;
 
 type Metric = "expense" | "visits" | "avgCheck";
 const METRIC_LABEL: Record<Metric, string> = { expense: "Потрачено", visits: "Операций", avgCheck: "Средний чек" };
@@ -132,10 +129,6 @@ export function CounterpartiesPage() {
   const showDrill = useDrillStore((s) => s.show);
   const [checkMode, setCheckMode] = useDiffMode("counterparties.check", "pct");
   const [picked, setPicked] = useState<string | null>(null);
-  // Новых контрагентов в шапке блока столько, сколько можно раскрыть: первые
-  // пять сразу, остальные — общим подвалом «Показать ещё».
-  // Раскрытое помнится для своего периода: сменили период — снова первые пять.
-  const [freshOpen, setFreshOpen] = useState({ key: "", n: INSIGHT_LIMIT });
 
   const maxDate = useMemo(
     () => transactions.reduce((m, t) => (t.date > m ? t.date : m), ""),
@@ -159,10 +152,7 @@ export function CounterpartiesPage() {
   const byPlace = useMemo(() => groupByPlace(history), [history]);
   const rows = useMemo(() => buildPlaceRows(history, range), [history, range]);
   const fresh = useMemo(() => rows.filter((r) => r.isNew), [rows]);
-  const rangeKey = `${range.from}|${range.to}`;
-  const freshShown = freshOpen.key === rangeKey ? freshOpen.n : INSIGHT_LIMIT;
-  const setFreshShown = (n: number) => setFreshOpen({ key: rangeKey, n });
-  const risers = useMemo(() => priceRisers(rows, INSIGHT_LIMIT), [rows]);
+  const risers = useMemo(() => priceRisers(rows, Infinity), [rows]);
 
   const selected = (picked && byPlace.has(picked) ? picked : null) ?? rows[0]?.name ?? null;
   const dossier = useMemo(
@@ -175,6 +165,22 @@ export function CounterpartiesPage() {
       (t) => scope === "all" || ((!range.from || t.date >= range.from) && (!range.to || t.date <= range.to))
     );
     showDrill(name, list, scope === "all" ? "Все операции" : "Операции за период");
+  }
+  /** Столбик месяца в карточке — операции контрагента за этот отчётный месяц. */
+  function openMonth(name: string, ym: string) {
+    const list = (byPlace.get(name) ?? []).filter((t) => periodKey(t.date, monthStartDay) === ym);
+    if (list.length === 0) return;
+    const title = formatDate(`${ym}-01`, "month");
+    showDrill(name, list, `${title[0].toUpperCase()}${title.slice(1)}`);
+  }
+  /** Столбик дня недели — все операции контрагента в этот день недели. */
+  function openWeekday(name: string, day: number) {
+    const list = (byPlace.get(name) ?? []).filter((t) => {
+      const [y, m, dd] = t.date.split("-").map(Number);
+      return (new Date(y, m - 1, dd).getDay() + 6) % 7 === day;
+    });
+    if (list.length === 0) return;
+    showDrill(name, list, `${WEEKDAY_FULL[day]} · за всё время`);
   }
   function openOne(name: string, id: string) {
     const tx = byPlace.get(name)?.find((t) => t.id === id);
@@ -313,8 +319,10 @@ export function CounterpartiesPage() {
               В этом периоде вы платили только тем, кому платили и раньше.
             </SectionEmpty>
           ) : (
-            <div className="space-y-0.5">
-              {fresh.slice(0, freshShown).map((r) => (
+            // Все новые — в блоке, около пяти строк на виду, остальные листаются
+            // внутри: блок стоит рядом с «Где подорожало» и не растёт в высоту.
+            <div className="space-y-0.5 scroll-soft max-h-[16.5rem] -mr-2 pr-2">
+              {fresh.map((r) => (
                 <MeterRow
                   key={r.name}
                   bar="track"
@@ -327,13 +335,6 @@ export function CounterpartiesPage() {
                   title="Открыть карточку"
                 />
               ))}
-              <ShowMore
-                shown={Math.min(freshShown, fresh.length)}
-                total={fresh.length}
-                step={INSIGHT_LIMIT}
-                onMore={() => setFreshShown(freshShown + INSIGHT_LIMIT)}
-                onAll={() => setFreshShown(fresh.length)}
-              />
             </div>
           )}
         </SectionCard>
@@ -341,7 +342,11 @@ export function CounterpartiesPage() {
         <SectionCard
           icon={Flame}
           title="Где подорожало"
-          subtitle={risers.length > 0 ? "Средний чек против года до периода" : undefined}
+          subtitle={
+            risers.length > 0
+              ? `${formatNum(risers.length)} ${pluralRu(risers.length, ["контрагент", "контрагента", "контрагентов"])} · чек против года до периода`
+              : undefined
+          }
           info={
             <p>
               Контрагенты, у которых средний чек вырос больше чем на 5% против года
@@ -376,7 +381,8 @@ export function CounterpartiesPage() {
               Там, где есть с чем сравнить, средний чек не выше, чем за год до периода.
             </SectionEmpty>
           ) : (
-            <div className="space-y-0.5">
+            // Как «Новые контрагенты»: все в блоке, около пяти строк на виду.
+            <div className="space-y-0.5 scroll-soft max-h-[16.5rem] -mr-2 pr-2">
               {risers.map(({ row: r, growth }) => (
                 <MeterRow
                   key={r.name}
@@ -504,6 +510,8 @@ export function CounterpartiesPage() {
               monthStartDay={monthStartDay}
               onOpenAll={() => openPlace(dossier.name, "all")}
               onOpenBiggest={(id) => openOne(dossier.name, id)}
+              onOpenMonth={(ym) => openMonth(dossier.name, ym)}
+              onOpenWeekday={(day) => openWeekday(dossier.name, day)}
             />
           )}
         </div>
@@ -520,6 +528,8 @@ function PlaceCard({
   monthStartDay,
   onOpenAll,
   onOpenBiggest,
+  onOpenMonth,
+  onOpenWeekday,
 }: {
   dossier: PlaceDossier;
   base: string;
@@ -527,6 +537,8 @@ function PlaceCard({
   monthStartDay: number;
   onOpenAll: () => void;
   onOpenBiggest: (id: string) => void;
+  onOpenMonth: (ym: string) => void;
+  onOpenWeekday: (day: number) => void;
 }) {
   const today = toIsoDate(new Date());
   const lead = d.categories[0]?.name ?? "";
@@ -699,7 +711,17 @@ function PlaceCard({
                   />
                 }
               />
-              <Bar dataKey={metric} name={METRIC_LABEL[metric]} radius={[3, 3, 0, 0]} minPointSize={3}>
+              <Bar
+                dataKey={metric}
+                name={METRIC_LABEL[metric]}
+                radius={[3, 3, 0, 0]}
+                minPointSize={3}
+                className="cursor-pointer"
+                // Как в «Дайджесте» и на главной: столбик открывает свои операции.
+                onClick={(e: { payload?: { ym?: string; visits?: number } }) => {
+                  if (e?.payload?.ym && (e.payload.visits ?? 0) > 0) onOpenMonth(e.payload.ym);
+                }}
+              >
                 {months.map((m) => (
                   <Cell key={m.ym} fill={chartColor.accent} fillOpacity={allHit || m.hit ? 0.9 : 0.35} />
                 ))}
@@ -715,7 +737,13 @@ function PlaceCard({
         <div className="grid grid-cols-7 gap-1.5 items-end h-14">
           {d.weekdays.map((w, i) => (
             <Tooltip key={i} content={`${WEEKDAY_FULL[i]} · ${metricText(w, metric, base)}`}>
-              <div className="h-full flex items-end">
+              <button
+                type="button"
+                className="h-full w-full flex items-end cursor-pointer disabled:cursor-default"
+                disabled={w.visits === 0}
+                onClick={() => onOpenWeekday(i)}
+                aria-label={`${WEEKDAY_FULL[i]}: показать операции`}
+              >
                 <div
                   className={clsx(
                     "w-full rounded-t-[3px] transition-[height,background-color] duration-[400ms] ease-[ease] motion-reduce:transition-none",
@@ -723,7 +751,7 @@ function PlaceCard({
                   )}
                   style={{ height: grown ? `${Math.max(w[metric] > 0 ? 6 : 2, (w[metric] / maxDay) * 100)}%` : "0%" }}
                 />
-              </div>
+              </button>
             </Tooltip>
           ))}
         </div>

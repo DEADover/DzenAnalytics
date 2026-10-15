@@ -148,18 +148,34 @@ test("вся история: выводы объясняют, что нужен 
   await expect(page.getByText("Нужен период")).toHaveCount(0);
 });
 
-test("новые контрагенты: число в шапке — столько же, сколько можно раскрыть", async ({ page }) => {
+test("новые контрагенты: в блоке все из шапки, лишние листаются внутри", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await connectZen(page, "/counterparties");
   await page.getByRole("button", { name: "Всё", exact: true }).click();
   const fresh = page.locator(".card-tray", { has: page.getByText("Новые контрагенты", { exact: true }) });
   await fresh.getByRole("button", { name: "Показать за последние 12 месяцев" }).click();
   const count = Number((await fresh.getByText(/^\d+ контрагент/).textContent())!.match(/^\d+/)![0]);
-  const rows = fresh.getByRole("button", { name: /₽$/ });
-  if (count > 5) {
-    await expect(rows).toHaveCount(5);
-    await expect(fresh.getByText(`Показано 5 из ${count}`)).toBeVisible();
-    await fresh.getByRole("button", { name: "Показать все" }).click();
-  }
-  await expect(rows).toHaveCount(count);
+  await expect(fresh.getByRole("button", { name: /₽$/ })).toHaveCount(count);
+  await expect(fresh.getByText(/^Показано/)).toHaveCount(0);
+  const list = fresh.locator(".scroll-soft");
+  const { scrollable, height } = await list.evaluate((el) => ({
+    scrollable: el.scrollHeight > el.clientHeight,
+    height: el.clientHeight,
+  }));
+  // Больше пяти — листается, и блок не выше списка из пяти строк.
+  expect(scrollable).toBe(count > 5);
+  expect(height).toBeLessThanOrEqual(16.5 * 16 + 1);
+});
+
+test("столбики в карточке открывают операции месяца и дня недели", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/counterparties");
+  await page.locator("table").first().locator("tr", { hasText: "Пятёрочка" }).click();
+  const card = page.locator("[data-place-card]");
+  // Последний столбик — октябрь, в нём есть операции.
+  await card.locator(".recharts-bar-rectangle").last().click();
+  await expect(page.getByText(/^Октябрь 2026/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await card.getByRole("button", { name: /: показать операции$/ }).and(card.locator(":enabled")).first().click();
+  await expect(page.getByText(/· за всё время$/)).toBeVisible();
 });
