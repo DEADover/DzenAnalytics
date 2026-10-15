@@ -59,7 +59,7 @@ test("своя светлая тема: копия, правка акцента,
 
   // Белый текст на светлом акценте — предупреждение строкой рядом.
   await hex.fill("#ffe0ec");
-  await expect(dialog.getByText(/Контраст с акцентом .* — мало, нужно от 4,5:1/)).toBeVisible();
+  await expect(dialog.getByText(/Контраст с акцентом .* — мало, нужно от 3:1/)).toBeVisible();
   await hex.fill("#b0004a");
   await expect(dialog.getByText(/— мало/)).toHaveCount(0);
   await expect(dialog.getByText(/Контраст с акцентом 7,\d:1/)).toBeVisible();

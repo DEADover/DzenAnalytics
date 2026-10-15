@@ -68,7 +68,8 @@ describe("своя тема: цвета", () => {
     expect(contrastRatio(FROST.accentFg, FROST.accent)).toBeLessThan(4.5);
     // Округление вниз: 4,49 не должно показываться как «4,5».
     expect(formatContrast(4.49)).toBe("4,4:1");
-    expect(formatContrast(21)).toBe("21,0:1");
+    expect(formatContrast(21)).toBe("21:1");
+    expect(formatContrast(3)).toBe("3:1");
   });
 });
 

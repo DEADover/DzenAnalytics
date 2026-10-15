@@ -7,7 +7,6 @@ import { schemeName, type ThemeKind } from "../lib/themeSchemes";
 import {
   CONTRAST_CHECKS,
   CUSTOM_COLOR_TOKENS,
-  MIN_CONTRAST,
   contrastRatio,
   customSchemeId,
   formatContrast,
@@ -112,11 +111,11 @@ function contrastNote(key: CustomColorKey, colors: CustomColors): { text: string
   const check = CONTRAST_CHECKS.find((c) => c.key === key);
   if (!check) return null;
   const ratio = contrastRatio(colors[check.key], colors[check.against]);
-  const low = ratio < MIN_CONTRAST;
+  const low = ratio < check.min;
   return {
     low,
     text: low
-      ? `Контраст ${check.label} ${formatContrast(ratio)} — мало, нужно от ${formatContrast(MIN_CONTRAST)}`
+      ? `Контраст ${check.label} ${formatContrast(ratio)} — мало, нужно от ${formatContrast(check.min)}`
       : `Контраст ${check.label} ${formatContrast(ratio)}`,
   };
 }

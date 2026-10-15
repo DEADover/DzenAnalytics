@@ -114,16 +114,23 @@ export function contrastRatio(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/** «4,5:1» — с одним знаком, запятой. */
+/** «4,5:1» — с одним знаком, запятой; целое — «3:1». */
 export function formatContrast(ratio: number): string {
-  return `${(Math.floor(ratio * 10) / 10).toFixed(1).replace(".", ",")}:1`;
+  // Целое — без «,0»: «3:1», «21:1».
+  return `${(Math.floor(ratio * 10) / 10).toFixed(1).replace(/\.0$/, "").replace(".", ",")}:1`;
 }
 
 /** Пары, контраст которых проверяет редактор: у какого цвета и с каким. */
+/**
+ * Что проверяем и с каким порогом. Текст на фоне — 4,5:1 (WCAG AA для текста).
+ * Текст на акценте — 3:1: это подписи кнопок и отметок, крупные и жирные, и
+ * для них WCAG допускает 3:1; иначе копия готовых «Инея» и «Гипса» (3,7:1)
+ * сразу показывала бы «мало».
+ */
 export const CONTRAST_CHECKS = [
-  { key: "text", against: "bg", label: "с фоном" },
-  { key: "accentFg", against: "accent", label: "с акцентом" },
-] as const satisfies readonly { key: CustomColorKey; against: CustomColorKey; label: string }[];
+  { key: "text", against: "bg", label: "с фоном", min: MIN_CONTRAST },
+  { key: "accentFg", against: "accent", label: "с акцентом", min: 3 },
+] as const satisfies readonly { key: CustomColorKey; against: CustomColorKey; label: string; min: number }[];
 
 // ── Тема целиком ──
 
