@@ -46,6 +46,8 @@ test("места за месяц, карточка места и новые ме
     card.locator(".grid-cols-7 .rounded-t-\\[3px\\]").evaluateAll((bars) => bars.map((b) => (b as HTMLElement).style.height).join(","));
   const metric = (name: string) =>
     card.getByRole("radio", { name }).or(card.getByRole("button", { name, exact: true })).first().click();
+  // Столбики выросли из нуля — анимация появления.
+  await expect.poll(async () => (await week()).split(",").some((h) => h !== "0%")).toBe(true);
   const bySum = await week();
   await metric("Операции");
   await expect.poll(week).not.toBe(bySum);

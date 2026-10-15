@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import clsx from "clsx";
 import {
   Store,
   Sparkles,
@@ -525,6 +526,13 @@ function PlaceCard({
   const months = d.months.map((m) => ({ ...m, hit: inRange(m.ym) }));
   const allHit = months.every((m) => m.hit);
   const { last, prev } = d.yearOverYear;
+  // Столбики недели растут из нуля при появлении карточки и плавно меняют
+  // высоту при смене показателя — как столбики Recharts над ними (400 мс).
+  const [grown, setGrown] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setGrown(true)));
+    return () => cancelAnimationFrame(id);
+  }, []);
   const dayValues = d.weekdays.map((w) => w[metric]);
   const maxDay = Math.max(...dayValues, 1);
   // Выделяем день-лидер по выбранному показателю — только если он один.
@@ -694,8 +702,11 @@ function PlaceCard({
             <Tooltip key={i} content={`${WEEKDAY_FULL[i]} · ${metricText(w, metric, base)}`}>
               <div className="h-full flex items-end">
                 <div
-                  className={i === topDay ? "w-full rounded-t-[3px] bg-accent" : "w-full rounded-t-[3px] bg-accent/35"}
-                  style={{ height: `${Math.max(w[metric] > 0 ? 6 : 2, (w[metric] / maxDay) * 100)}%` }}
+                  className={clsx(
+                    "w-full rounded-t-[3px] transition-[height,background-color] duration-[400ms] ease-[ease] motion-reduce:transition-none",
+                    i === topDay ? "bg-accent" : "bg-accent/35"
+                  )}
+                  style={{ height: grown ? `${Math.max(w[metric] > 0 ? 6 : 2, (w[metric] / maxDay) * 100)}%` : "0%" }}
                 />
               </div>
             </Tooltip>
