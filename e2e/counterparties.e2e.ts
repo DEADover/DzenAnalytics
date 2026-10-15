@@ -233,3 +233,19 @@ test("«Где подорожало» переключается на «Где �
   );
   expect(cut).toBe(0);
 });
+
+test("сменили период — выбранного нет в таблице, карточка на первом", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/counterparties");
+  await page.getByRole("button", { name: "Всё", exact: true }).click();
+  // «Кинопоиск» в октябре ещё не списывался.
+  await page.locator("table").first().locator("tr", { hasText: "Кинопоиск" }).click();
+  await expect(page.locator("[data-dossier-title]")).toHaveText("Кинопоиск");
+  await page.evaluate(async () => {
+    type S = { useFiltersStore: { setState: (x: unknown) => void } };
+    const { useFiltersStore } = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useFiltersStore");
+    useFiltersStore.setState({ preset: "period" });
+  });
+  const first = (await page.locator("table").first().locator("tbody tr").first().innerText()).split("\n")[0].trim();
+  await expect(page.locator("[data-dossier-title]")).toHaveText(first);
+});

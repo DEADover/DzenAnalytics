@@ -157,3 +157,92 @@ describe("priceChanges: где подорожало и подешевело", ()
     expect(down[0].growth).toBeCloseTo(-0.2);
   });
 });
+
+describe("крайние случаи", () => {
+  it("контрагент с одними возвратами или вернувший всё — не в списке и без досье", () => {
+    const rows = buildPlaceRows(
+      [
+        tx({ payee: "Возвраты", kind: "refund" }),
+        tx({ payee: "Вернул", amountBase: 500 }),
+        tx({ payee: "Вернул", kind: "refund", amountBase: 500 }),
+      ],
+      SEPT
+    );
+    expect(rows).toEqual([]);
+    expect(buildPlaceDossier([tx({ payee: "Возвраты", kind: "refund" })], "Возвраты", "2026-09-30")).toBeNull();
+  });
+
+  it("суммы — в базовой валюте, бренд важнее строки банка", () => {
+    const rows = buildPlaceRows(
+      [
+        tx({ payee: "AMAZON*1", brand: "Amazon", amount: 10, currency: "USD", amountBase: 900 }),
+        tx({ payee: "AMAZON*2", brand: "Amazon", amount: 20, currency: "USD", amountBase: 1800 }),
+      ],
+      SEPT
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: "Amazon", total: 2700, avgCheck: 1350 });
+  });
+
+  it("возврат до первой покупки не делает контрагента «старым»", () => {
+    const rows = buildPlaceRows(
+      [tx({ payee: "Кафе", kind: "refund", date: "2026-03-01" }), tx({ payee: "Кафе", date: "2026-09-10" })],
+      SEPT
+    );
+    expect(rows[0]).toMatchObject({ isNew: true, firstDate: "2026-09-10" });
+  });
+
+  it("год до периода — ровно 365 дней перед его началом", () => {
+    const at = (date: string) => tx({ payee: "Кафе", date, amountBase: 100 });
+    const now = [1, 2, 3].map((d) => tx({ payee: "Кафе", date: `2026-09-0${d}`, amountBase: 200 }));
+    // 2025-09-01 — первый день окна, 2025-08-31 — уже за ним.
+    const inside = buildPlaceRows([at("2025-09-01"), at("2026-01-10"), at("2026-08-31"), ...now], SEPT)[0];
+    expect(inside.prevAvgCheck).toBe(100);
+    const outside = buildPlaceRows([at("2025-08-31"), at("2026-01-10"), at("2026-08-31"), ...now], SEPT)[0];
+    expect(outside.prevAvgCheck).toBeUndefined();
+  });
+
+  it("несколько операций в один день — одна точка частоты", () => {
+    const same = [1, 2, 3, 4, 5].map(() => tx({ payee: "Кафе", date: "2026-09-10" }));
+    const d = buildPlaceDossier(same, "Кафе", "2026-09-30")!;
+    expect(d.everyDays).toBeNull();
+    // Все пять — в четверг: день выделяется.
+    expect(d.favWeekday).toBe(3);
+    expect(d.favWeekdayShare).toBe(1);
+  });
+
+  it("доля в категории учитывает возвраты и чужие операции", () => {
+    const d = buildPlaceDossier(
+      [
+        tx({ payee: "Аптека", amountBase: 1000, categoryFull: "Здоровье" }),
+        tx({ payee: "Аптека", kind: "refund", amountBase: 200, categoryFull: "Здоровье" }),
+        tx({ payee: "", amountBase: 800, categoryFull: "Здоровье" }),
+      ],
+      "Аптека",
+      "2026-09-30"
+    )!;
+    expect(d.categoryShare).toBe(0.5);
+  });
+
+  it("год к году: границы окон", () => {
+    const d = buildPlaceDossier(
+      [
+        tx({ payee: "Кафе", date: "2025-10-01", amountBase: 10 }), // первый день последних 12 месяцев
+        tx({ payee: "Кафе", date: "2025-09-30", amountBase: 20 }), // уже предыдущие
+        tx({ payee: "Кафе", date: "2024-10-01", amountBase: 40 }), // первый день предыдущих
+        tx({ payee: "Кафе", date: "2024-09-30", amountBase: 80 }), // вне обоих
+      ],
+      "Кафе",
+      "2026-09-30"
+    )!;
+    expect(d.yearOverYear).toEqual({ last: 10, prev: 60 });
+  });
+
+  it("сравнение чека не ломается на нулевом прошлом чеке", () => {
+    expect(priceChanges([row({ avgCheck: 100, prevAvgCheck: 0, visits: 3 })], "up")).toEqual([]);
+  });
+
+  it("половина трат при равных суммах", () => {
+    expect(placesForHalf([row({ total: 1 }), row({ total: 1 }), row({ total: 1 }), row({ total: 1 })])).toBe(2);
+  });
+});

@@ -156,7 +156,9 @@ export function CounterpartiesPage() {
   const [priceDir, setPriceDir] = useState<"up" | "down">("up");
   const risers = useMemo(() => priceChanges(rows, priceDir), [rows, priceDir]);
 
-  const selected = (picked && byPlace.has(picked) ? picked : null) ?? rows[0]?.name ?? null;
+  // Выбранный — только из таблицы: сменили период, и его там нет — карточка
+  // переходит на первого, а не показывает того, кого в списке не видно.
+  const selected = (picked && rows.some((r) => r.name === picked) ? picked : null) ?? rows[0]?.name ?? null;
   const dossier = useMemo(
     () => (selected ? buildPlaceDossier(history, selected, maxDate, monthStartDay) : null),
     [history, selected, maxDate, monthStartDay]
@@ -299,7 +301,9 @@ export function CounterpartiesPage() {
       <SpendShare rows={rows} base={base} onPick={pick} />
 
       {/* Выводы — над таблицей: под списком из полусотни мест их никто бы не увидел. */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Рядом — только с 1280 px: в половине экрана 1024 строке «до → после»
+          не хватало места, и длинные имена резались. */}
+      <div className="grid gap-4 xl:grid-cols-2">
         <SectionCard
           icon={Sparkles}
           title="Новые контрагенты"
@@ -718,7 +722,9 @@ function PlaceCard({
           />
         </div>
         <div className="text-sm font-medium mt-3">По месяцам</div>
-        <div className="text-xs text-muted mt-0.5 flex items-center gap-1.5 h-5 whitespace-nowrap overflow-hidden tabular-nums">
+        {/* Одна строка постоянной высоты там, где карточка стоит колонкой (xl);
+            уже — карточка во всю ширину над таблицей, и строке можно переноситься. */}
+        <div className="text-xs text-muted mt-0.5 flex items-center gap-x-1.5 gap-y-1 flex-wrap min-h-5 xl:flex-nowrap xl:h-5 xl:whitespace-nowrap tabular-nums">
           За 12 месяцев {formatMoney(last, base)}
           {prev <= 0 && <span>· раньше операций не было</span>}
           {prev > 0 && (
@@ -915,10 +921,11 @@ function SpendShare({
             key={r.name}
             type="button"
             onClick={() => onPick(r.name)}
-            className="flex items-center gap-2 min-w-0 text-left hover:text-accent transition-colors"
+            className="flex items-start gap-2 min-w-0 text-left hover:text-accent transition-colors"
           >
-            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: color(i) }} />
-            <span className="truncate">{r.name}</span>
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0 mt-[0.3rem]" style={{ background: color(i) }} />
+            {/* Имя переносится, а не режется: в легенде это единственная подпись куска. */}
+            <span className="min-w-0 break-words">{r.name}</span>
             <span className="ml-auto text-muted tabular-nums shrink-0">{formatPct(r.total / total, 0)}</span>
           </button>
         ))}

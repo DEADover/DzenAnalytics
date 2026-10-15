@@ -19,7 +19,9 @@ export function DemoBanner() {
         Смотрите и пробуйте что угодно: правки остаются только в этом браузере и
         никуда не отправляются.
       </div>
-      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+      {/* `max-w-full`, а не `shrink-0`: на узком экране кнопки встают одна под
+          другую, а не выталкивают страницу вбок. */}
+      <div className="flex items-center gap-2 flex-wrap max-w-full">
         <button type="button" className="btn-ghost" onClick={() => exitDemo()}>
           Выйти из демо
         </button>
