@@ -60,7 +60,9 @@ test("места за месяц, карточка места и новые ме
   for (const tr of await table.locator("tbody tr").all()) {
     await tr.click();
     const cutInCard = await card.evaluate((el) =>
-      [...el.querySelectorAll("*")].filter((e) => e.children.length === 0 && e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent)
+      [...el.querySelectorAll("*")]
+        .filter((e) => e.children.length === 0 && !e.hasAttribute("data-dossier-title") && e.scrollWidth > e.clientWidth + 1)
+        .map((e) => e.textContent)
     );
     expect(cutInCard).toEqual([]);
   }
@@ -99,7 +101,14 @@ for (const width of [1024, 1280, 1440]) {
     await expect(page.locator("[data-dossier-title]")).toBeVisible();
     const cut = await page.locator("main").evaluate((main) =>
       [...main.querySelectorAll("*")]
-        .filter((e) => e.children.length === 0 && !e.closest("tbody") && e.scrollWidth > e.clientWidth + 1)
+        // Имя в шапке карточки режется намеренно — полное в подсказке.
+        .filter(
+          (e) =>
+            e.children.length === 0 &&
+            !e.closest("tbody") &&
+            !e.hasAttribute("data-dossier-title") &&
+            e.scrollWidth > e.clientWidth + 1
+        )
         .map((e) => e.textContent)
     );
     expect(cut).toEqual([]);
@@ -178,4 +187,35 @@ test("столбики в карточке открывают операции �
   await page.keyboard.press("Escape");
   await card.getByRole("button", { name: /: показать операции$/ }).and(card.locator(":enabled")).first().click();
   await expect(page.getByText(/· за всё время$/)).toBeVisible();
+});
+
+test("число операций в таблице открывает их в боковой панели", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/counterparties");
+  const row = page.locator("table").first().locator("tr", { hasText: "Пятёрочка" });
+  const btn = row.getByRole("button", { name: /^Операции «Пятёрочка» за период: \d+$/ });
+  const n = Number((await btn.textContent())!.replace(/\s/g, ""));
+  await btn.click();
+  await expect(page.getByText("Операции за период")).toBeVisible();
+  // В панели ровно столько операций, сколько в ячейке.
+  const inDrawer = await page.evaluate(async () => {
+    type DrillStore = { useDrillStore: { getState: () => { transactions: unknown[] } } };
+    const store = (window as unknown as { __store: (n: string) => Promise<DrillStore> }).__store;
+    return (await store("useDrillStore")).useDrillStore.getState().transactions.length;
+  });
+  expect(inDrawer).toBe(n);
+});
+
+test("карточка одной высоты у любого контрагента", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1400 });
+  await connectZen(page, "/counterparties");
+  await page.getByRole("button", { name: "Всё", exact: true }).click();
+  const card = page.locator("[data-place-card] > .card-tray");
+  const heights = new Set<number>();
+  for (const tr of await page.locator("table").first().locator("tbody tr").all()) {
+    await tr.click();
+    await page.waitForTimeout(50);
+    heights.add(await card.evaluate((el) => Math.round(el.scrollHeight)));
+  }
+  expect([...heights]).toHaveLength(1);
 });

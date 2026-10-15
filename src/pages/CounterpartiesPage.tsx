@@ -160,9 +160,13 @@ export function CounterpartiesPage() {
     [history, selected, maxDate, monthStartDay]
   );
 
-  function openPlace(name: string, scope: "period" | "all") {
+  function openPlace(name: string, scope: "period" | "all", onlyCounted = false) {
     const list = (byPlace.get(name) ?? []).filter(
-      (t) => scope === "all" || ((!range.from || t.date >= range.from) && (!range.to || t.date <= range.to))
+      (t) =>
+        (scope === "all" || ((!range.from || t.date >= range.from) && (!range.to || t.date <= range.to))) &&
+        // Число операций в таблице — без возвратов; по клику на него в панели
+        // ровно столько же строк.
+        (!onlyCounted || t.kind === "expense")
     );
     showDrill(name, list, scope === "all" ? "Все операции" : "Операции за период");
   }
@@ -459,7 +463,21 @@ export function CounterpartiesPage() {
               width: COL.visits,
               label: "Операций",
               sortValue: (r) => r.visits,
-              render: (r) => formatNum(r.visits),
+              // Своя кнопка: клик по строке открывает карточку, а по числу —
+              // сами операции периода в боковой панели.
+              render: (r) => (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPlace(r.name, "period", true);
+                  }}
+                  className="tabular-nums hover:text-accent hover:underline underline-offset-2"
+                  aria-label={`Операции «${r.name}» за период: ${formatNum(r.visits)}`}
+                >
+                  {formatNum(r.visits)}
+                </button>
+              ),
             },
             {
               key: "avg",
@@ -577,9 +595,13 @@ function PlaceCard({
       <div className="flex items-start gap-3">
         <CategoryDot category={lead} size="w-10 h-10" />
         <div className="min-w-0 flex-1">
-          <div className="text-base font-semibold leading-tight line-clamp-2 break-words" data-dossier-title>
-            {d.name}
-          </div>
+          {/* Одна строка при любом имени: перенос на вторую сдвигал всю карточку.
+              Полное имя — в подсказке. */}
+          <Tooltip content={d.name}>
+            <div className="text-base font-semibold leading-tight truncate" data-dossier-title>
+              {d.name}
+            </div>
+          </Tooltip>
           <div className="text-xs text-muted truncate mt-0.5">
             {lead || "Без категории"}
           </div>
@@ -596,29 +618,39 @@ function PlaceCard({
           small
           label="Операций"
           value={formatNum(d.visits)}
-          sub={d.everyDays != null ? everyText(d.everyDays).toLowerCase() : undefined}
+          sub={d.everyDays != null ? everyText(d.everyDays).toLowerCase() : "мало для частоты"}
         />
         <FactTile small label="Средний чек" value={formatMoney(d.avgCheck, base)} sub="за одну операцию" />
       </div>
 
       <ul className="space-y-2 text-sm">
-        {d.favWeekday != null && (
-          <li className="flex items-center gap-2.5">
-            <CalendarDays className="w-4 h-4 text-muted shrink-0" />
-            <span className="min-w-0 truncate">
-              Чаще всего по {WEEKDAYS[d.favWeekday]}
-              <span className="text-muted"> · {formatPct(d.favWeekdayShare, 0)} операций</span>
-            </span>
-          </li>
-        )}
-        {d.categoryShare != null && lead && (
-          <li className="flex items-center gap-2.5">
-            <PieChart className="w-4 h-4 text-muted shrink-0" />
-            <span className="min-w-0 truncate">
-              {formatPct(d.categoryShare, 0)} всех трат в категории «{lead}»
-            </span>
-          </li>
-        )}
+        {/* Строк всегда четыре: где сказать нечего, строка говорит почему, —
+            иначе карточка прыгала по высоте от контрагента к контрагенту. */}
+        <li className="flex items-center gap-2.5">
+          <CalendarDays className="w-4 h-4 text-muted shrink-0" />
+          <span className="min-w-0 truncate">
+            {d.favWeekday != null ? (
+              <>
+                Чаще всего по {WEEKDAYS[d.favWeekday]}
+                <span className="text-muted"> · {formatPct(d.favWeekdayShare, 0)} операций</span>
+              </>
+            ) : (
+              <span className="text-muted">
+                {d.visits < 5 ? "Любимого дня пока нет — мало операций" : "Ни один день недели не выделяется"}
+              </span>
+            )}
+          </span>
+        </li>
+        <li className="flex items-center gap-2.5">
+          <PieChart className="w-4 h-4 text-muted shrink-0" />
+          <span className="min-w-0 truncate">
+            {d.categoryShare != null && lead ? (
+              <>{formatPct(d.categoryShare, 0)} всех трат в категории «{lead}»</>
+            ) : (
+              <span className="text-muted">Операции без категории</span>
+            )}
+          </span>
+        </li>
         <li className="flex items-center gap-2.5">
           <History className="w-4 h-4 text-muted shrink-0" />
           <span className="min-w-0 truncate">
@@ -662,8 +694,9 @@ function PlaceCard({
           />
         </div>
         <div className="text-sm font-medium mt-3">По месяцам</div>
-        <div className="text-xs text-muted mt-0.5 flex items-center gap-1.5 flex-wrap tabular-nums">
+        <div className="text-xs text-muted mt-0.5 flex items-center gap-1.5 h-5 whitespace-nowrap overflow-hidden tabular-nums">
           За 12 месяцев {formatMoney(last, base)}
+          {prev <= 0 && <span>· раньше операций не было</span>}
           {prev > 0 && (
             <>
               <span>·</span>
@@ -764,10 +797,11 @@ function PlaceCard({
         </div>
       </div>
 
-      {d.categories.length > 1 && (
-        <div>
-          <div className="caps-label mb-1.5">По категориям</div>
-          <div className="space-y-0.5">
+      <div>
+        <div className="caps-label mb-1.5">По категориям</div>
+        {/* Место под три строки всегда — у контрагента с одной категорией
+            блок не короче, чем у того, у кого их три. */}
+        <div className="space-y-0.5 min-h-[var(--cat-rows)]" style={{ ["--cat-rows" as string]: "8.25rem" }}>
             {d.categories.map((c) => (
               <MeterRow
                 key={c.name}
@@ -783,8 +817,7 @@ function PlaceCard({
               />
             ))}
           </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
