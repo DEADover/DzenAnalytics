@@ -305,10 +305,10 @@ export function parseAndValidateBackup(text: string): BackupPayload {
   try {
     parsed = JSON.parse(text);
   } catch (e) {
-    throw new Error("Файл не похож на JSON", { cause: e });
+    throw new Error("Это не файл копии: внутри не JSON. Выберите файл копии сервиса (.json)", { cause: e });
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Это не копия данных сервиса: внутри не тот вид файла");
+    throw new Error("Это не копия данных сервиса. Выберите другой файл");
   }
   const obj = parsed as Record<string, unknown>;
   if (!obj.version) {
@@ -331,15 +331,15 @@ export function parseAndValidateBackup(text: string): BackupPayload {
           "«Загрузить файл»."
       );
     }
-    throw new Error("Не похоже на копию данных DzenAnalytics");
+    throw new Error("Это не копия данных DzenAnalytics. Выберите другой файл");
   }
   // transactions, if present, must be an array of bounded length.
   if (obj.transactions !== undefined) {
     if (!Array.isArray(obj.transactions)) {
-      throw new Error("Копия повреждена: список операций внутри неё испорчен");
+      throw new Error("Копия повреждена: испорчен список операций. Выберите другую копию");
     }
     if (obj.transactions.length > MAX_TRANSACTIONS) {
-      throw new Error("В копии слишком много операций — файл повреждён");
+      throw new Error("Копия повреждена: в ней слишком много операций. Выберите другую копию");
     }
   }
   // rates, if present, must be an object (base + rates map).
@@ -348,7 +348,7 @@ export function parseAndValidateBackup(text: string): BackupPayload {
     obj.rates !== null &&
     (typeof obj.rates !== "object" || Array.isArray(obj.rates))
   ) {
-    throw new Error("Копия повреждена: испорчены курсы валют");
+    throw new Error("Копия повреждена: испорчены курсы валют. Выберите другую копию");
   }
   return deepSanitize(obj) as BackupPayload;
 }

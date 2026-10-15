@@ -841,7 +841,7 @@ export function EditTransactionModal({
   async function saveDraft(keepOpen = false) {
     const cache = await loadZenCache();
     if (!cache) {
-      setError("Создание операций доступно только при синхронизации с Дзен-мани.");
+      setError("Операции создаются только при подключённом Дзен-мани. Подключите его в настройках или синхронизируйтесь.");
       return;
     }
     const built = buildDraftTransaction(
@@ -854,7 +854,7 @@ export function EditTransactionModal({
       await ensureCounterparty(cache)
     );
     if (!built.zen) {
-      setError(built.skip ?? "Не удалось создать операцию");
+      setError(built.skip ?? "Операция не создалась. Проверьте поля и попробуйте ещё раз");
       return;
     }
     if (futurePlan) {
@@ -908,7 +908,7 @@ export function EditTransactionModal({
   async function saveDraftEdit() {
     const cache = await loadZenCache();
     if (!cache) {
-      setError("Создание операций доступно только при синхронизации с Дзен-мани.");
+      setError("Операции создаются только при подключённом Дзен-мани. Подключите его в настройках или синхронизируйтесь.");
       return;
     }
     const built = buildDraftTransaction(
@@ -918,7 +918,7 @@ export function EditTransactionModal({
       await ensureCounterparty(cache)
     );
     if (!built.zen) {
-      setError(built.skip ?? "Не удалось сохранить операцию");
+      setError(built.skip ?? "Операция не сохранилась. Проверьте поля и попробуйте ещё раз");
       return;
     }
     await updateDraft(built.zen);
@@ -1129,7 +1129,7 @@ export function EditTransactionModal({
       // в консоль, а человек оставался перед той же формой и не понимал,
       // сохранилось у него что-нибудь или нет.
       setError(
-        `Не удалось сохранить операцию: ${e instanceof Error ? e.message : String(e)}`
+        `Операция не сохранилась. Попробуйте ещё раз (${e instanceof Error ? e.message : String(e)})`
       );
     } finally {
       setSaving(false);

@@ -188,7 +188,7 @@ async function persistSnapshot(
  * Throws if the API call fails. Caller decides UX (toast / inline error).
  */
 export async function takeSnapshot(token: string): Promise<CloudSnapshot> {
-  if (!token) throw new Error("Нет токена Дзен-мани — снимок невозможен");
+  if (!token) throw new Error("Снимок делается только при подключённом Дзен-мани. Подключите его на вкладке «Данные»");
   // `serverTimestamp=0` → полный ответ, ПЛАНЫ ВКЛЮЧАЯ.
   //
   // Здесь стоял `forceFetch: FULL_SYNC_ENTITIES` — по аналогии с полной
@@ -264,7 +264,7 @@ export async function clearAllSnapshots(): Promise<void> {
  */
 export async function downloadSnapshot(id: string): Promise<void> {
   const snap = await loadSnapshot(id);
-  if (!snap) throw new Error("Снимок не найден в локальной базе");
+  if (!snap) throw new Error("Снимок не найден на этом компьютере — возможно, его удалили. Обновите страницу");
   const payload = {
     _meta: {
       app: "DzenAnalytics",
@@ -538,7 +538,7 @@ export async function restoreSnapshotToCloud(
   onProgress?: (p: RestoreProgress) => void
 ): Promise<RestoreResult> {
   const snap = await loadSnapshot(id);
-  if (!snap) throw new Error("Снимок не найден в локальной базе");
+  if (!snap) throw new Error("Снимок не найден на этом компьютере — возможно, его удалили. Обновите страницу");
 
   const raw = snap.raw;
   const snapshotUserId = raw.user?.[0]?.id ?? null;
@@ -1130,12 +1130,12 @@ export async function importSnapshotFromJson(
     // позицию неожиданного символа — человеку, выбравшему не тот файл, это
     // ничего не объясняет. Подробность остаётся в `cause` для отладки.
     throw new Error(
-      "Файл не читается как JSON — возможно, он повреждён или это другой файл.",
+      "Файл не читается как JSON — возможно, он повреждён или это другой файл. Выберите файл снимка (.json, .zip или .gz).",
       { cause: e }
     );
   }
   if (!parsed || typeof parsed !== "object") {
-    throw new Error("Файл не похож на JSON");
+    throw new Error("Это не снимок аккаунта. Выберите файл снимка (.json, .zip или .gz).");
   }
 
   // Two accepted shapes:
@@ -1155,7 +1155,7 @@ export async function importSnapshotFromJson(
     );
   }
   if (typeof raw.serverTimestamp !== "number") {
-    throw new Error("Файл неполный: в нём нет отметки времени, которую ставит Дзен-мани.");
+    throw new Error("Файл неполный: в нём нет отметки времени, которую ставит Дзен-мани. Выберите другой снимок.");
   }
 
   // Тем же путём, что и снятый с облака: сжатие, счётчики, вытеснение старых.

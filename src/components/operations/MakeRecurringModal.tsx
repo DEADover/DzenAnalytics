@@ -68,7 +68,7 @@ export function MakeRecurringModal({ tx, onClose }: { tx: Transaction; onClose: 
       return;
     }
     if (preview.length === 0) {
-      setError("Ни одной даты: конец раньше начала");
+      setError("Окончание раньше начала — не выходит ни одной даты. Поставьте дату окончания позже");
       return;
     }
     setSaving(true);

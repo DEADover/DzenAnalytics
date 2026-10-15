@@ -31,7 +31,7 @@ export function CloudSettingsCard() {
       : busy
         ? "Сверяются с Дзен-мани…"
         : error
-          ? `Не удалось сверить: ${error}`
+          ? `Не сверились — повторим при следующей синхронизации (${error})`
           : lastSyncAt
             ? `Включено · сверено ${new Date(lastSyncAt).toLocaleString("ru-RU", {
                 day: "numeric",

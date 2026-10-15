@@ -89,7 +89,7 @@ export const useCloudSnapshotStore = create<State>((set) => ({
     } catch (e) {
       set({
         busy: false, busyOp: null,
-        error: errText(e, "Не удалось сделать снимок"),
+        error: errText(e, "Не удалось сделать снимок. Попробуйте ещё раз"),
       });
     }
   },
@@ -131,7 +131,7 @@ export const useCloudSnapshotStore = create<State>((set) => ({
     } catch (e) {
       set({
         busy: false, busyOp: null,
-        error: errText(e, "Не удалось загрузить снимок"),
+        error: errText(e, "Не удалось загрузить снимок. Проверьте файл и попробуйте ещё раз"),
       });
     }
   },

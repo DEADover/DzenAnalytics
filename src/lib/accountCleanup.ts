@@ -123,7 +123,7 @@ export async function cleanupDictionaries(
   onProgress?: (p: CleanupProgress) => void,
   signal?: AbortSignal
 ): Promise<CleanupResult> {
-  if (!token) throw new Error("Нет токена Дзен-мани");
+  if (!token) throw new Error("Нет подключения к Дзен-мани. Подключите его на вкладке «Данные»");
   const cache = await loadZenCache();
   if (!cache) throw new Error("Нет данных Дзен-мани — сначала синхронизируйтесь");
 

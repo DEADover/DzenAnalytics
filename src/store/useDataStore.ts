@@ -855,7 +855,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     const anchor = current.rates[newBase];
     if (!anchor || anchor <= 0) {
       throw new Error(
-        `Установите положительный курс для ${newBase} перед сменой базовой валюты`
+        `Сначала укажите курс ${newBase} больше нуля — потом её можно сделать базовой валютой`
       );
     }
     // Rates were stored as "1 X = r[X] OLD_BASE".

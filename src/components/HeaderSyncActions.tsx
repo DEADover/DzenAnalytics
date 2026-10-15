@@ -97,7 +97,7 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
     ? `Последняя синхронизация: ${new Date(lastSyncAt).toLocaleString("ru-RU")}`
     : "Ещё не синхронизировано на этом устройстве";
   const failing = isFailureActive(pullFailure);
-  const lastErrorHuman = failing && pullFailure ? `\nНе удалось: ${friendlyFailure(pullFailure)}` : "";
+  const lastErrorHuman = failing && pullFailure ? `\nПоследняя синхронизация не прошла. ${friendlyFailure(pullFailure)}` : "";
   // Токен больше не принимается: без нового входа ничего не заработает —
   // поэтому кнопка входа стоит в шапке постоянно, пока вход не восстановлен.
   const authExpired = isAuthExpired(pullFailure) || isAuthExpired(pushFailure);
@@ -153,7 +153,7 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
     } catch {
       showFlash({
         tone: "err",
-        text: useZenmoneyStore.getState().pushError || "Не удалось отправить",
+        text: useZenmoneyStore.getState().pushError || "Правки не отправились. Попробуйте ещё раз",
       });
     }
   }

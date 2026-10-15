@@ -42,7 +42,9 @@ describe("запись об ошибке", () => {
 
   it("ошибка разбора данных — с названием шага", () => {
     const f = describeFailure(new TypeError("Cannot read properties of undefined"), { ...ctx, stage: "apply" });
-    expect(friendlyFailure(f)).toBe("Не удалось на шаге «Разбор операций и правил»: Cannot read properties of undefined");
+    expect(friendlyFailure(f)).toBe(
+      "Сбой на шаге «Разбор операций и правил». Попробуйте ещё раз, а если повторится — обновите страницу (Cannot read properties of undefined)"
+    );
     expect(f.stack?.split("\n").length).toBeLessThanOrEqual(6);
   });
 

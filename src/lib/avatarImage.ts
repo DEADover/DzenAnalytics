@@ -33,7 +33,7 @@ export function renderAvatar(
   canvas.width = AVATAR_PX;
   canvas.height = AVATAR_PX;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new AvatarError("Браузер не дал обработать фото");
+  if (!ctx) throw new AvatarError("Браузер не смог обработать фото. Обновите страницу и попробуйте ещё раз");
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(source, rect.sx, rect.sy, rect.side, rect.side, 0, 0, AVATAR_PX, AVATAR_PX);
   const webp = canvas.toDataURL("image/webp", 0.86);

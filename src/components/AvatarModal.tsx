@@ -44,7 +44,7 @@ export function AvatarModal({ profile, onClose }: { profile: Profile; onClose: (
       setSource({ bitmap, url: URL.createObjectURL(file) });
       setCrop(initialCrop(bitmap.width, bitmap.height, VIEW));
     } catch (e) {
-      setError(e instanceof AvatarError ? e.message : "Не удалось открыть фото");
+      setError(e instanceof AvatarError ? e.message : "Не удалось открыть фото — попробуйте другое");
     }
   }
 
@@ -54,11 +54,11 @@ export function AvatarModal({ profile, onClose }: { profile: Profile; onClose: (
     try {
       url = renderAvatar(source.bitmap, cropRect(crop));
     } catch (e) {
-      setError(e instanceof AvatarError ? e.message : "Не удалось обработать фото");
+      setError(e instanceof AvatarError ? e.message : "Не удалось обработать фото. Обновите страницу и попробуйте ещё раз");
       return;
     }
     if (!setProfileAvatar(profile.id, url)) {
-      setError("Фото не сохранилось: в браузере кончилось место");
+      setError("Фото не сохранилось: в браузере кончилось место. Обновите страницу и попробуйте ещё раз");
       return;
     }
     onClose();

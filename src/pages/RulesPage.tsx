@@ -177,7 +177,7 @@ export function RulesPage() {
   async function openImportFile(file: File) {
     const parsed: RulesFileParse =
       file.size > RULES_FILE_MAX_BYTES
-        ? { ok: false, error: "Файл слишком большой для файла правил." }
+        ? { ok: false, error: `Файл больше ${RULES_FILE_MAX_BYTES / 1024 / 1024} МБ — это не похоже на файл правил. Выберите файл, сохранённый «Экспортом правил».` }
         : parseRulesFile(await file.text());
     setImporting({ fileName: file.name, parsed });
   }

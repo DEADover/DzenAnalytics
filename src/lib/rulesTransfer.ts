@@ -239,13 +239,13 @@ export function parseRulesFile(text: string): RulesFileParse {
   try {
     data = JSON.parse(text);
   } catch {
-    return { ok: false, error: "Это не JSON — файл повреждён или другого формата." };
+    return { ok: false, error: "Это не JSON — файл повреждён или другого формата. Выберите файл, сохранённый «Экспортом правил»." };
   }
   if (isObj(data) && typeof data.v === "number" && data.v > RULES_FILE_VERSION && data.app === RULES_FILE_APP) {
     return { ok: false, error: "Файл из более новой версии DzenAnalytics — обновите страницу." };
   }
   const list = rulesList(data);
-  if (!list) return { ok: false, error: "В файле не нашлось правил DzenAnalytics." };
+  if (!list) return { ok: false, error: "В файле не нашлось правил DzenAnalytics. Выберите файл, сохранённый «Экспортом правил»." };
   const rules: CategoryRuleV2[] = [];
   let invalid = 0;
   for (const raw of list) {
@@ -254,7 +254,7 @@ export function parseRulesFile(text: string): RulesFileParse {
     else invalid++;
   }
   if (rules.length === 0 && invalid === 0) {
-    return { ok: false, error: "Файл правильный, но правил в нём нет." };
+    return { ok: false, error: "Файл правильный, но правил в нём нет. Выберите другой файл." };
   }
   return { ok: true, rules, invalid };
 }

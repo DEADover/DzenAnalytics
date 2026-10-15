@@ -71,15 +71,15 @@ export async function readXlsxSheet(
       }
     }
   } catch {
-    throw new Error("Файл повреждён — Excel не смог бы открыть его тоже.");
+    throw new Error("Файл повреждён и не открывается. Сохраните таблицу заново в формате .xlsx и загрузите её.");
   }
   if (!files["xl/workbook.xml"]) {
-    throw new Error("Это не книга Excel: внутри нет ни одного листа.");
+    throw new Error("Это не книга Excel: внутри нет ни одного листа. Сохраните таблицу в формате .xlsx или возьмите шаблон.");
   }
 
   const path = sheetPathByName(files, sheetName);
   const sheetXml = files[path];
-  if (!sheetXml) throw new Error(`Лист «${sheetName}» не найден в книге.`);
+  if (!sheetXml) throw new Error(`В книге нет листа «${sheetName}». Скачайте шаблон и перенесите операции в него.`);
 
   return {
     cells: parseSheet(sheetXml, parseSharedStrings(files["xl/sharedStrings.xml"])),

@@ -276,7 +276,9 @@ export function RulesImportModal({
                 синхронизации без нажатия кнопки.
               </Callout>
             )}
-            {error && <Callout tone="expense">Не удалось сохранить: {error}</Callout>}
+            {error && (
+              <Callout tone="expense">Правила не сохранились. Попробуйте ещё раз ({error})</Callout>
+            )}
           </>
         )}
 

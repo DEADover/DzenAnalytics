@@ -173,7 +173,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
       // полон, и без этого шага мастер докладывал бы старое состояние вечно.
       await useZenmoneyStore.getState().sync({ force: true });
       const snap = await loadSnapshot(snapshotId);
-      if (!snap) throw new Error("Снимок не найден — возможно, его удалили");
+      if (!snap) throw new Error("Снимок не найден — возможно, его удалили. Выберите другой снимок");
       const cache = await loadZenCache();
       if (!cache) throw new Error("Нет данных из Дзен-мани: сначала синхронизируйтесь");
       const result = restorePreflight(snap.raw, {
@@ -191,7 +191,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
     } catch (e) {
       set({
         running: null,
-        error: errText(e, "Не удалось проверить аккаунт"),
+        error: errText(e, "Не удалось проверить аккаунт. Попробуйте ещё раз"),
       });
     }
   },
@@ -211,7 +211,7 @@ export const useRestoreWizardStore = create<State>((set, get) => ({
       set({
         running: null,
         cleanupProgress: null,
-        error: errText(e, "Не удалось удалить категории и контрагентов"),
+        error: errText(e, "Не удалось удалить категории и контрагентов. Попробуйте ещё раз"),
       });
       return;
     }

@@ -55,8 +55,8 @@ async function gunzip(buf: ArrayBuffer): Promise<string> {
     return await new Response(stream).text();
   } catch (e) {
     throw new Error(
-      "Файл начинается как gzip, но распаковать его не удалось — возможно, " +
-        "он скачался не полностью.",
+      "Архив .gz не распаковался — возможно, файл скачался не полностью. " +
+        "Скачайте его заново.",
       { cause: e }
     );
   }
@@ -80,8 +80,8 @@ async function unzipJson(buf: ArrayBuffer): Promise<string> {
     files = unzipSync(new Uint8Array(buf));
   } catch (e) {
     throw new Error(
-      "Файл начинается как zip, но распаковать его не удалось — возможно, " +
-        "он скачался не полностью.",
+      "Архив .zip не распаковался — возможно, файл скачался не полностью. " +
+        "Скачайте его заново.",
       { cause: e }
     );
   }
@@ -92,7 +92,7 @@ async function unzipJson(buf: ArrayBuffer): Promise<string> {
       !n.split("/").pop()?.startsWith(".")
   );
   if (names.length === 0) {
-    throw new Error("В архиве нет файлов.");
+    throw new Error("В архиве нет файлов. Выберите другой архив или сам файл .json.");
   }
   // Один файл берём любой: архив с единственным .txt внутри честнее пустить
   // дальше и дать разбору JSON объяснить, что не так, чем отказать по

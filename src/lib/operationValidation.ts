@@ -39,17 +39,17 @@ export interface OperationInput {
 const SYNTHETIC = new Set(["Перевод", "Долг"]);
 
 export function validateOperation(o: OperationInput): string | null {
-  if (!(o.amount > 0)) return "Сумма должна быть больше нуля.";
+  if (!(o.amount > 0)) return "Укажите сумму больше нуля.";
 
   if (o.isDebt) {
-    if (!o.payee) return "Укажите плательщика (контрагента) для долговой операции.";
+    if (!o.payee) return "Укажите контрагента — с кем долг.";
     if (!o.realAcc) return "Выберите счёт для долговой операции.";
     return null;
   }
 
   if (o.kind === "transfer") {
     if (!o.outAcc || !o.inAcc) return "Выберите оба счёта перевода.";
-    if (o.outAcc === o.inAcc) return "Перевод нельзя сделать на тот же счёт.";
+    if (o.outAcc === o.inAcc) return "Перевод нельзя сделать на тот же счёт. Выберите другой счёт зачисления.";
     return null;
   }
 
@@ -58,7 +58,7 @@ export function validateOperation(o: OperationInput): string | null {
     return `«${o.category}» — служебная категория. Выберите реальную категорию или «Без категории».`;
   }
   if (o.kind === "refund" && o.category && o.categoryHasIncome) {
-    return "Возврат возможен только по расходной категории.";
+    return "Возврат возможен только по расходной категории. Выберите расходную категорию.";
   }
   // Зеркало правила выше. Отдельного признака «возврат» у Дзен-мани нет:
   // приход по расходной категории он сам записывает возвратом. Сменить тип с

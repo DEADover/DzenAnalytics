@@ -40,12 +40,12 @@ export class ErrorBoundary extends Component<Props, State> {
       <div className="card-tray card-pad max-w-2xl mx-auto mt-8 space-y-4">
         <div className="flex items-center gap-2 font-semibold text-expense">
           <AlertTriangle className="w-5 h-5 shrink-0" />
-          Не удалось отобразить эту страницу
+          Страница не открылась из-за ошибки
         </div>
         <p className="text-sm text-muted">
-          Что-то пошло не так при построении этой страницы. Остальное приложение
-          работает — попробуйте открыть её заново или вернуться на другую вкладку.
-          Ваши данные не пострадали.
+          Остальное приложение работает, данные не пострадали. Нажмите
+          «Попробовать снова» или обновите страницу. Можно и перейти в другой
+          раздел.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -58,7 +58,7 @@ export class ErrorBoundary extends Component<Props, State> {
             onClick={() => window.location.reload()}
             className="px-3 py-1.5 text-sm rounded-lg bg-panel2 border border-border text-muted hover:text-text"
           >
-            Перезагрузить
+            Обновить страницу
           </button>
         </div>
         {error.message && (

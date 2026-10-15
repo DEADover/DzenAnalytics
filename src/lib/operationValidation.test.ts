@@ -38,7 +38,7 @@ describe("validateOperation", () => {
 
   // issue #19.7 — debt requires a counterparty
   it("requires a payee for a debt op", () => {
-    expect(v({ isDebt: true, realAcc: "Карта", payee: "" })).toMatch(/плательщик/i);
+    expect(v({ isDebt: true, realAcc: "Карта", payee: "" })).toMatch(/контрагент/i);
   });
   it("requires a real account for a debt op", () => {
     expect(v({ isDebt: true, realAcc: "", payee: "Иван" })).toMatch(/счёт/i);

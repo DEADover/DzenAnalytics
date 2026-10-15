@@ -359,7 +359,7 @@ export function rowToVerdict(
   minter: CounterpartyMinter = createCounterpartyMinter(cache.merchants)
 ): RowVerdict {
   if (!row.date) return { ok: false, reason: "Не разобрали дату. Формат: 17.08.2026" };
-  if (!row.type) return { ok: false, reason: "Не заполнен тип операции" };
+  if (!row.type) return { ok: false, reason: "Не заполнен тип операции — выберите его из списка" };
 
   const typeHit = OP_TYPES.find((t) => t.toLowerCase() === row.type.toLowerCase());
   if (!typeHit) {

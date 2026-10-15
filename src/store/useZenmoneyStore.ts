@@ -884,7 +884,10 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     try {
       const userIds = await fetchTokenUserIds(trimmed);
       if (userIds === null) {
-        set({ status: "error", error: "Токен отклонён сервером (401)" });
+        set({
+          status: "error",
+          error: "Дзен-мани не принял токен. Скопируйте его заново целиком или получите новый",
+        });
         return false;
       }
       // Замена токена при живом подключении (старый перестал приниматься):
@@ -919,8 +922,11 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       });
       return true;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Не удалось проверить токен";
-      set({ status: "error", error: msg });
+      const raw = e instanceof Error ? e.message.trim() : "";
+      set({
+        status: "error",
+        error: `Не удалось проверить токен. Проверьте интернет и попробуйте ещё раз${raw ? ` (${raw})` : ""}`,
+      });
       return false;
     }
   },
@@ -964,7 +970,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
   sync: async (opts = {}) => {
     const token = get().token;
     if (!token) {
-      set({ status: "error", error: "Сначала подключите токен" });
+      set({ status: "error", error: "Сначала подключите Дзен-мани на вкладке «Данные»" });
       throw new Error("no token");
     }
     set({ status: "syncing", error: null });
@@ -1199,12 +1205,12 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
   pushPendingEdits: async () => {
     const { token, pushEnabled } = get();
     if (!token) {
-      const msg = "Сначала подключите токен";
+      const msg = "Сначала подключите Дзен-мани на вкладке «Данные»";
       set({ pushStatus: "error", pushError: msg });
       throw new Error(msg);
     }
     if (!pushEnabled) {
-      const msg = "Двусторонняя синхронизация выключена в настройках";
+      const msg = "Отправка правок в облако выключена. Включите её в настройках на вкладке «Данные»";
       set({ pushStatus: "error", pushError: msg });
       throw new Error(msg);
     }
@@ -1249,7 +1255,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // 2) Build push items from the current overlay.
       let cache = await loadZenCache();
       if (!cache) {
-        const msg = "Локальный кэш Дзен-мани пуст — сначала синхронизируйтесь";
+        const msg = "Данных из Дзен-мани ещё нет — сначала синхронизируйтесь";
         set({ pushStatus: "error", pushError: msg });
         throw new Error(msg);
       }
@@ -1517,7 +1523,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
             kind: "push",
             status: "partial",
             title: "Планы: отброшены зависшие правки",
-            summary: `Правок бюджета не удалось отправить за ${MAX_BUDGET_EDIT_SKIPS} попыток (категория удалена или переименована в Дзен-мани): ${dropped.length}`,
+            summary: `${dropped.length} ${pluralRu(dropped.length, ["правка", "правки", "правок"])} бюджета не ${pluralRu(dropped.length, ["отправилась", "отправились", "отправились"])} за ${MAX_BUDGET_EDIT_SKIPS} попыток: категорию удалили или переименовали в Дзен-мани. Эти правки сняты — задайте суммы в бюджете заново`,
             durationMs: Date.now() - pushStartedAt,
           });
         }
@@ -1893,7 +1899,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         kind: "push",
         status: "error",
         title: "Отправка правок",
-        summary: "Ошибка отправки правок",
+        summary: "Не удалось отправить правки",
         error: `${msg}\n${failureDetails(failure)}`,
         durationMs: Date.now() - pushStartedAt,
       });

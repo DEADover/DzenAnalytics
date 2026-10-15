@@ -95,6 +95,9 @@ import { RangeInput } from "../components/Slider";
 
 type Mode = "replace" | "merge";
 
+/** CSV прочитался, но ни одной операции в нём не нашлось. */
+const CSV_NO_ROWS = "В файле не нашлось ни одной операции. Проверьте, что это CSV-выгрузка из Дзен-мани.";
+
 /**
  * One row of the auto-grouping table. Shows `from → effectiveTo` where
  * the target is inline-editable. Editing commits a manual alias
@@ -715,7 +718,9 @@ export function ImportPage() {
       // скачивании, а строка оставалась висеть рядом с кнопкой навсегда.
       setBackupMsg(null);
     } catch (e) {
-      setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Ошибка экспорта");
+      setBackupMsg(
+        `Копия не скачалась. Попробуйте ещё раз${e instanceof Error && e.message ? ` (${e.message})` : ""}`
+      );
     } finally {
       setBackupBusy(false);
     }
@@ -735,7 +740,12 @@ export function ImportPage() {
       // size/depth bounds) before anything touches IndexedDB.
       dump = parseAndValidateBackup(text) as unknown as Record<string, unknown>;
     } catch (e) {
-      setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Не удалось восстановить из копии");
+      // Разбор и распаковка бросают готовые фразы «что не так и что делать».
+      setBackupMsg(
+        e instanceof Error && e.message
+          ? e.message
+          : "Файл копии не прочитался. Выберите файл копии сервиса (.json) и попробуйте ещё раз"
+      );
       return;
     }
 
@@ -768,7 +778,11 @@ export function ImportPage() {
       // сторы поднимаются штатным путём, и забыть что-то физически нельзя.
       setTimeout(() => window.location.reload(), 1200);
     } catch (e) {
-      setBackupMsg(e instanceof Error ? `Ошибка: ${e.message}` : "Не удалось восстановить из копии");
+      setBackupMsg(
+        `Данные из копии не восстановились. Обновите страницу и попробуйте ещё раз${
+          e instanceof Error && e.message ? ` (${e.message})` : ""
+        }`
+      );
     } finally {
       setBackupBusy(false);
     }
@@ -793,7 +807,7 @@ export function ImportPage() {
       const text = await file.text();
       const result = await parseCsv(text, rates);
       if (result.parsed === 0) {
-        throw new Error("Не удалось распарсить ни одной строки. Проверьте формат файла.");
+        throw new Error(CSV_NO_ROWS);
       }
       const importMeta = {
         importedAt: new Date().toISOString(),
@@ -814,7 +828,13 @@ export function ImportPage() {
       }
       setTimeout(() => nav("/"), 1500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка чтения файла");
+      setError(
+        e instanceof Error && e.message === CSV_NO_ROWS
+          ? CSV_NO_ROWS
+          : `Файл не прочитался. Проверьте, что это CSV-выгрузка из Дзен-мани, и попробуйте ещё раз${
+              e instanceof Error && e.message ? ` (${e.message})` : ""
+            }`
+      );
     } finally {
       setBusy(false);
     }

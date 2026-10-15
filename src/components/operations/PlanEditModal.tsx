@@ -141,7 +141,7 @@ export function PlanEditModal({
     }
     const cache = await loadZenCache();
     if (!cache) {
-      setError("Изменение планов работает только при подключённом Дзен-мани");
+      setError("Планы меняются только при подключённом Дзен-мани. Подключите его в настройках на вкладке «Данные»");
       return;
     }
     // Собираем операцию с полями формы — только чтобы перевести названия в
@@ -165,7 +165,7 @@ export function PlanEditModal({
       newMerchants
     );
     if (!built.zen) {
-      setError(built.skip ?? "Не удалось разобрать поля");
+      setError(built.skip ?? "План не сохранился. Проверьте сумму, счёт и категорию и попробуйте ещё раз");
       return;
     }
     const z = built.zen;
@@ -194,7 +194,7 @@ export function PlanEditModal({
     let reschedule: PlanReschedule | undefined;
     if (scheduleChanged && schedule && rule && template) {
       if (schedulePreview.length === 0) {
-        setError("По такому расписанию не получается ни одной даты");
+        setError("По такому расписанию не выходит ни одной даты. Проверьте период и дату окончания");
         return;
       }
       const stamp = Math.floor(Date.now() / 1000);

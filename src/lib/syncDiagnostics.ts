@@ -112,8 +112,8 @@ export function friendlyFailure(f: SyncFailure): string {
     return "Нет связи с Дзен-мани: запрос не дошёл. Проверьте интернет, VPN, блокировщик рекламы или антивирус.";
   if (f.name === "QuotaExceededError")
     return "В браузере кончилось место для данных сайта. Удалите старые снимки во вкладке «Бэкапы» или освободите место на диске.";
-  if (f.status !== null) return `Дзен-мани ответил ошибкой ${f.status}: ${f.message}`;
-  return `Не удалось на шаге «${STAGE_LABEL[f.stage]}»: ${f.message}`;
+  if (f.status !== null) return `Дзен-мани ответил ошибкой ${f.status}. Попробуйте ещё раз позже (${f.message})`;
+  return `Сбой на шаге «${STAGE_LABEL[f.stage]}». Попробуйте ещё раз, а если повторится — обновите страницу (${f.message})`;
 }
 
 /** Одна строка для журнала: шаг, код ответа и текст ошибки как есть. */

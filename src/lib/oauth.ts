@@ -56,6 +56,6 @@ export async function exchangeCode(code: string): Promise<string> {
   });
   if (!response.ok) throw new Error("Не удалось завершить вход. Попробуйте снова.");
   const result = await response.json();
-  if (typeof result?.accessToken !== "string" || !result.accessToken) throw new Error("Некорректный ответ входа");
+  if (typeof result?.accessToken !== "string" || !result.accessToken) throw new Error("Вход не завершился: пришёл неполный ответ. Попробуйте войти ещё раз");
   return result.accessToken;
 }

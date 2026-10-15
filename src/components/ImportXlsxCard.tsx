@@ -33,6 +33,8 @@ import { pluralRu } from "../lib/plural";
 import { confirm } from "../store/useConfirmStore";
 import { Tooltip } from "./Tooltip";
 
+const NO_DICTS = "Справочники Дзен-мани ещё не загружены — синхронизируйтесь и попробуйте ещё раз.";
+
 /**
  * Импорт операций из Excel — карточка на странице настроек.
  *
@@ -82,7 +84,7 @@ export function ImportXlsxCard() {
     accounts: { title: string; currency: string; kind: string }[];
   } }> {
     const cache = await loadZenCache();
-    if (!cache) throw new Error("Справочники Дзен-мани ещё не загружены — синхронизируйтесь.");
+    if (!cache) throw new Error(NO_DICTS);
     const instruments = new Map(cache.instruments.map((i) => [i.id, i.shortTitle]));
     const live = cache.accounts.filter((a) => !a.archive);
     const rich = {
@@ -118,7 +120,13 @@ export function ImportXlsxCard() {
         new Date().toISOString().slice(0, 10)
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось собрать шаблон");
+      setError(
+        e instanceof Error && e.message === NO_DICTS
+          ? NO_DICTS
+          : `Шаблон не собрался. Обновите страницу и попробуйте ещё раз${
+              e instanceof Error && e.message ? ` (${e.message})` : ""
+            }`
+      );
     } finally {
       setBusy(null);
     }
@@ -150,7 +158,7 @@ export function ImportXlsxCard() {
       }
 
       const cache = await loadZenCache();
-      if (!cache) throw new Error("Справочники Дзен-мани ещё не загружены — синхронизируйтесь.");
+      if (!cache) throw new Error(NO_DICTS);
       const d = await dictsFromCache();
       const dicts: ImportDicts = {
         accounts: d.accounts,
@@ -184,7 +192,14 @@ export function ImportXlsxCard() {
         stamp,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось прочитать файл");
+      // Свои проверки бросают готовую фразу по-русски; чужое (сбой чтения
+      // файла, базы) — общей фразой с подробностью в скобках.
+      const raw = e instanceof Error ? e.message.trim() : "";
+      setError(
+        /[А-Яа-яЁё]/.test(raw)
+          ? raw
+          : `Файл не прочитался. Проверьте, что это заполненный шаблон .xlsx, и попробуйте ещё раз${raw ? ` (${raw})` : ""}`
+      );
     } finally {
       setBusy(null);
     }

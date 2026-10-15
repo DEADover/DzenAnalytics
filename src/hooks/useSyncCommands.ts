@@ -35,7 +35,7 @@ export function useSyncCommands() {
     try {
       show({ tone: "ok", text: formatSyncResult(await sync()) });
     } catch {
-      show({ tone: "err", text: useZenmoneyStore.getState().error || "Ошибка синхронизации" });
+      show({ tone: "err", text: useZenmoneyStore.getState().error || "Синхронизация не прошла. Попробуйте ещё раз" });
     }
   }
 
@@ -53,7 +53,7 @@ export function useSyncCommands() {
     try {
       show({ tone: "ok", text: formatSyncResult(await sync({ force: true })) });
     } catch {
-      show({ tone: "err", text: useZenmoneyStore.getState().error || "Ошибка синхронизации" });
+      show({ tone: "err", text: useZenmoneyStore.getState().error || "Синхронизация не прошла. Попробуйте ещё раз" });
     }
   }
 

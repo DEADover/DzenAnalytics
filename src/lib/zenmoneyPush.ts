@@ -226,10 +226,10 @@ function buildTransferTarget(
   const dstTitle = edit.incomeAccount ?? orig.inAcc;
   const src = accountsByTitle.get(srcTitle);
   const dst = accountsByTitle.get(dstTitle);
-  if (!src) return { skip: `Счёт списания «${srcTitle}» не найден в Дзен-мани` };
-  if (!dst) return { skip: `Счёт зачисления «${dstTitle}» не найден в Дзен-мани` };
+  if (!src) return { skip: `Счёт списания «${srcTitle}» не найден в Дзен-мани — выберите другой` };
+  if (!dst) return { skip: `Счёт зачисления «${dstTitle}» не найден в Дзен-мани — выберите другой` };
   if (src.id === dst.id) {
-    return { skip: "Перевод на тот же счёт невозможен" };
+    return { skip: "Перевод на тот же счёт невозможен — выберите другой счёт зачисления" };
   }
   // Amount on the source leg (in the source account's currency).
   const outcome = edit.amount ?? (original.outcome || original.income);
@@ -313,7 +313,7 @@ function collapseTransfer(
     keepLeg === "outcome" ? original.outcomeInstrument : original.incomeInstrument;
   const wantTitle = edit.account ?? (keepLeg === "outcome" ? orig.outAcc : orig.inAcc);
   const acc = accountsByTitle.get(wantTitle);
-  if (!acc) return { skip: `Счёт «${wantTitle}» не найден в Дзен-мани` };
+  if (!acc) return { skip: `Счёт «${wantTitle}» не найден в Дзен-мани — выберите другой` };
   if (acc.instrument !== keepInstr) {
     return {
       skip: "Перенос на счёт в другой валюте пока не поддерживается — отредактируйте операцию в Дзен-мани",
@@ -773,7 +773,7 @@ export function buildPushItems(
     if (edit.category && SYNTHETIC_CATEGORIES.has(edit.category)) {
       skipped.push({
         id,
-        reason: `«${edit.category}» — ярлык сервиса, а не категория Дзен-мани`,
+        reason: `«${edit.category}» — ярлык сервиса, а не категория Дзен-мани. Выберите категорию из Дзен-мани`,
       });
       continue;
     }
@@ -844,7 +844,7 @@ export function buildPushItems(
       } else {
         skipped.push({
           id,
-          reason: `Валюта «${edit.currency}» не найдена в Дзен-мани`,
+          reason: `Валюта «${edit.currency}» не найдена в Дзен-мани — выберите другую`,
         });
         continue;
       }
@@ -888,7 +888,7 @@ export function buildPushItems(
       if (!resolved) {
         skipped.push({
           id,
-          reason: `Подкатегория «${edit.subcategory}» не найдена внутри этой категории`,
+          reason: `Подкатегория «${edit.subcategory}» не найдена внутри этой категории — выберите другую`,
         });
         continue;
       }
@@ -912,7 +912,7 @@ export function buildPushItems(
     if (edit.account !== undefined && edit.account !== orig.account) {
       const newAcc = accountsByTitle.get(edit.account);
       if (!newAcc) {
-        skipped.push({ id, reason: `Счёт «${edit.account}» не найден в Дзен-мани` });
+        skipped.push({ id, reason: `Счёт «${edit.account}» не найден в Дзен-мани — выберите другой` });
         continue;
       }
       const effInstr =
@@ -1266,10 +1266,10 @@ export function buildDraftTransaction(
   newMerchants: NewCounterpartyDraft[] = []
 ): DraftBuildResult {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.date)) {
-    return { skip: "Некорректная дата" };
+    return { skip: "Не распознана дата — выберите её заново" };
   }
   if (!(fields.amount > 0)) {
-    return { skip: "Сумма должна быть больше нуля" };
+    return { skip: "Укажите сумму больше нуля" };
   }
 
   const accountsByTitle = new Map<string, ZenAccount>();
@@ -1329,11 +1329,11 @@ export function buildDraftTransaction(
     const dst = fields.incomeAccount
       ? accountsByTitle.get(fields.incomeAccount)
       : undefined;
-    if (!src) return { skip: `Счёт «${fields.account}» не найден в Дзен-мани` };
+    if (!src) return { skip: `Счёт «${fields.account}» не найден в Дзен-мани — выберите другой` };
     if (!dst) {
-      return { skip: `Счёт зачисления «${fields.incomeAccount ?? ""}» не найден в Дзен-мани` };
+      return { skip: `Счёт зачисления «${fields.incomeAccount ?? ""}» не найден в Дзен-мани — выберите другой` };
     }
-    if (src.id === dst.id) return { skip: "Счета перевода совпадают" };
+    if (src.id === dst.id) return { skip: "Счета перевода совпадают — выберите другой счёт зачисления" };
     const sameCurrency = src.instrument === dst.instrument;
     const incomeAmount = sameCurrency ? fields.amount : fields.incomeAmount;
     if (!sameCurrency && !(incomeAmount! > 0)) {
@@ -1348,7 +1348,7 @@ export function buildDraftTransaction(
   } else {
     // Single-leg: expense leaves the account, income/refund lands in it.
     const acc = accountsByTitle.get(fields.account);
-    if (!acc) return { skip: `Счёт «${fields.account}» не найден в Дзен-мани` };
+    if (!acc) return { skip: `Счёт «${fields.account}» не найден в Дзен-мани — выберите другой` };
     zen.outcomeAccount = acc.id;
     zen.incomeAccount = acc.id;
     zen.outcomeInstrument = acc.instrument;
@@ -1364,7 +1364,7 @@ export function buildDraftTransaction(
     if (!category) return { skip: "Укажите категорию" };
     if (category !== NO_CATEGORY) {
       if (SYNTHETIC_CATEGORIES.has(category)) {
-        return { skip: `«${category}» — ярлык сервиса, а не категория Дзен-мани` };
+        return { skip: `«${category}» — ярлык сервиса, а не категория Дзен-мани. Выберите категорию из Дзен-мани` };
       }
       const tagId = resolveTagId(
         category,
@@ -1498,11 +1498,11 @@ export function validateDrafts(
       !instrumentIds.has(zt.outcomeInstrument) ||
       !instrumentIds.has(zt.incomeInstrument)
     ) {
-      skipped.push({ id, reason: "Валюта операции не найдена в Дзен-мани" });
+      skipped.push({ id, reason: "Валюта операции не найдена в Дзен-мани — синхронизируйтесь и повторите" });
       continue;
     }
     if (zt.tag && zt.tag.some((t) => !tagIds.has(t))) {
-      skipped.push({ id, reason: "Категория операции не найдена в Дзен-мани" });
+      skipped.push({ id, reason: "Категория операции не найдена в Дзен-мани — синхронизируйтесь и повторите" });
       continue;
     }
     if (zt.merchant && !merchantIds.has(String(zt.merchant))) {
@@ -2156,7 +2156,7 @@ export function buildAccountPush(
     if (edit.title !== undefined) {
       const t = edit.title.trim();
       if (!t) {
-        skipped.push({ id, reason: "Пустое название" });
+        skipped.push({ id, reason: "Пустое название — впишите его" });
         continue;
       }
       setIf("title", t);
