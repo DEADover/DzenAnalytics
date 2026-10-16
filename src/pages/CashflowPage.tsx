@@ -339,7 +339,7 @@ export function CashflowPage() {
           }
         />
         {/* «Зеркалу» выше: под графиком ещё легенда по сторонам. */}
-        <div className={vizMode === "mirror" ? "h-[26rem]" : "h-80"}>
+        <div className={vizMode === "mirror" ? "h-[30rem]" : "h-80"}>
           {vizMode === "bars" ? (
           <ChartContainer>
             <ComposedChart
@@ -949,35 +949,50 @@ function MirrorChart({
           </ComposedChart>
         </ChartContainer>
       </div>
-      {/* Легенда по сторонам; наведение на категорию высвечивает её слой. */}
-      <div className="mt-2 space-y-1 text-xs" onMouseLeave={() => setFocus(null)}>
+      {/* Легенда: две колонки — доходы и расходы с суммой за период, категории
+          плашками с суммой; наведение на плашку высвечивает её слой. */}
+      <div className="mt-3 grid gap-x-8 gap-y-3 lg:grid-cols-[2fr_3fr]" onMouseLeave={() => setFocus(null)}>
         {([
-          ["Доходы", income],
-          ["Расходы", expense],
-        ] as const).map(([title, group]) =>
+          ["Доходы", income, "text-income"],
+          ["Расходы", expense, "text-expense"],
+        ] as const).map(([title, group, tone]) =>
           group.length === 0 ? null : (
-            <div key={title} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-muted w-16 shrink-0">{title}</span>
-              {group.map((l) => (
-                <span
-                  key={l.key}
-                  className="inline-flex items-center gap-1.5 cursor-default"
-                  onMouseEnter={() => setFocus(l.key)}
-                  onMouseLeave={() => setFocus(null)}
-                  data-mirror-legend={l.key}
-                >
-                  <span className="w-3 h-3 rounded-sm" style={{ background: colorOf(l), opacity: layerOpacity((l.side === "income" ? income : expense).indexOf(l), (l.side === "income" ? income : expense).length) }} />
-                  <span className={focus === l.key ? "font-semibold" : undefined}>{l.name}</span>
+            <div key={title} className="min-w-0">
+              <div className="flex items-baseline gap-2 mb-1.5">
+                <span className="caps-label">{title}</span>
+                <span className={`text-sm font-semibold tabular-nums ${tone}`}>
+                  {formatMoney(group.reduce((sum, l) => sum + l.total, 0), base)}
                 </span>
-              ))}
+                <span className="text-xs text-muted">за период</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {group.map((l, i) => (
+                  <span
+                    key={l.key}
+                    data-mirror-legend={l.key}
+                    onMouseEnter={() => setFocus(l.key)}
+                    onMouseLeave={() => setFocus(null)}
+                    className={`inline-flex items-center gap-1.5 rounded-control-sm border px-2 py-1 text-xs cursor-default transition-colors ${
+                      focus === l.key ? "border-border bg-panel2" : "border-transparent bg-panel2/50"
+                    }`}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-[3px] shrink-0"
+                      style={{ background: colorOf(l), opacity: layerOpacity(i, group.length) }}
+                    />
+                    <span>{l.name}</span>
+                    <span className="text-muted tabular-nums">{formatMoney(l.total, base, { compact: true })}</span>
+                  </span>
+                ))}
+              </div>
             </div>
           )
         )}
-        <div className="flex items-center gap-x-3">
-          <span className="w-16 shrink-0" />
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-3.5 h-0.5 rounded-full" style={{ background: chartTotalStroke }} />
-            Итог месяца — доходы минус расходы
+        <div className="lg:col-span-2 flex items-center gap-2 text-xs text-muted">
+          <span className="w-4 h-0.5 rounded-full" style={{ background: chartTotalStroke }} />
+          <span>
+            <span className="text-text font-medium">Итог месяца</span> — доходы минус расходы: выше оси месяц в плюсе,
+            ниже — в минусе
           </span>
         </div>
       </div>

@@ -58,7 +58,7 @@ test("«Зеркало»: итог месяца, ось по данным, по�
 
   // Линия итога поверх слоёв.
   await expect(card.locator(".recharts-line")).toHaveCount(1);
-  await expect(card.getByText("Итог месяца — доходы минус расходы")).toBeVisible();
+  await expect(card.getByText(/доходы минус расходы/)).toBeVisible();
 
   // Ось по данным: доходов в тестовом аккаунте больше — низ оси короче верха.
   // Подписи оси Y — суммы («50 тыс.», «0»), в отличие от месяцев оси X.
