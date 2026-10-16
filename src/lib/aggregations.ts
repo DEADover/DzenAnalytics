@@ -794,6 +794,115 @@ export function buildStreamData(
   return { data, categories: [...topCats, "Прочие"] };
 }
 
+// ============= Mirror graph: доходы вверх, расходы вниз =============
+
+/** Слой «зеркального» графика — категория дохода или расхода. */
+export interface MirrorLayer {
+  /** Ключ ряда в точках: `i0…` — доходы, `e0…` — расходы. */
+  key: string;
+  name: string;
+  side: "income" | "expense";
+  total: number;
+}
+
+export interface MirrorPoint {
+  ym: string;
+  /** Доходы месяца — сумма слоёв дохода. */
+  income: number;
+  /** Расходы месяца — положительным числом. */
+  expense: number;
+  [key: string]: number | string;
+}
+
+/**
+ * Доходы и расходы по категориям одним графиком: доходы стопкой вверх от оси,
+ * расходы — вниз (в точках отрицательными числами), месяцы подряд без дыр.
+ *
+ * Крупнейшая категория — первая в стопке, ближе всего к оси; мелкие
+ * собираются в «Прочие». Возврат уменьшает расход своей категории, но не
+ * переводит её в плюс: месяц, где вернули больше, чем потратили, — ноль, а не
+ * слой над осью среди доходов. Переводы не участвуют.
+ */
+export function buildMirrorData(
+  txs: Transaction[],
+  opts: { topIncome?: number; topExpense?: number; monthStartDay?: number } = {}
+): { data: MirrorPoint[]; layers: MirrorLayer[] } {
+  const { topIncome = 5, topExpense = 7, monthStartDay = 1 } = opts;
+  const sides = {
+    income: { totals: new Map<string, number>(), byMonth: new Map<string, Map<string, number>>() },
+    expense: { totals: new Map<string, number>(), byMonth: new Map<string, Map<string, number>>() },
+  };
+  let minYm = "";
+  let maxYm = "";
+  for (const t of txs) {
+    const side = t.kind === "income" ? "income" : affectsExpense(t.kind) ? "expense" : null;
+    if (!side) continue;
+    const ym = periodKey(t.date, monthStartDay);
+    if (!ym) continue;
+    if (!minYm || ym < minYm) minYm = ym;
+    if (ym > maxYm) maxYm = ym;
+    const delta = side === "income" ? t.amountBase : expenseDelta(t);
+    const cat = t.category || "Без категории";
+    const s2 = sides[side];
+    s2.totals.set(cat, (s2.totals.get(cat) ?? 0) + delta);
+    let m = s2.byMonth.get(ym);
+    if (!m) s2.byMonth.set(ym, (m = new Map()));
+    m.set(cat, (m.get(cat) ?? 0) + delta);
+  }
+  if (!minYm) return { data: [], layers: [] };
+
+  const layers: MirrorLayer[] = [];
+  const pick = (side: "income" | "expense", top: number, prefix: string) => {
+    const ranked = [...sides[side].totals.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    const head = ranked.slice(0, top);
+    const rest = ranked.slice(top);
+    const out: { key: string; cats: string[]; name: string; total: number }[] = head.map(([name, total], i) => ({
+      key: `${prefix}${i}`,
+      cats: [name],
+      name,
+      total,
+    }));
+    if (rest.length) {
+      out.push({
+        key: `${prefix}${head.length}`,
+        cats: rest.map(([n]) => n),
+        name: "Прочие",
+        total: rest.reduce((sum, [, v]) => sum + v, 0),
+      });
+    }
+    for (const l of out) layers.push({ key: l.key, name: l.name, side, total: l.total });
+    return out;
+  };
+  const inc = pick("income", topIncome, "i");
+  const exp = pick("expense", topExpense, "e");
+
+  // Месяцы подряд от первого до последнего: пустой месяц — ноль на графике, а
+  // не склейка соседних.
+  const months: string[] = [];
+  for (let ym = minYm; ym <= maxYm; ) {
+    months.push(ym);
+    const [y, mo] = ym.split("-").map(Number);
+    ym = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`;
+  }
+  const data = months.map((ym) => {
+    const point: MirrorPoint = { ym, income: 0, expense: 0 };
+    const im = sides.income.byMonth.get(ym);
+    for (const l of inc) {
+      const v = Math.max(0, Math.round(l.cats.reduce((sum, c) => sum + (im?.get(c) ?? 0), 0)));
+      point[l.key] = v;
+      point.income += v;
+    }
+    const em = sides.expense.byMonth.get(ym);
+    for (const l of exp) {
+      const v = Math.max(0, Math.round(l.cats.reduce((sum, c) => sum + (em?.get(c) ?? 0), 0)));
+      point[l.key] = v === 0 ? 0 : -v;
+      point.expense += v;
+    }
+    return point;
+  });
+  return { data, layers };
+}
+
 // ============= Seasonality =============
 
 export interface SeasonalityPoint {

@@ -22,6 +22,7 @@ import {
   BarChart3,
   CalendarRange,
   Layers,
+  FlipVertical2,
   LineChart as LineChartIcon,
   Sparkles,
   Table as TableIcon,
@@ -42,7 +43,10 @@ import {
   yearOverYearMonthly,
   vsAverageStats,
   buildStreamData,
+  buildMirrorData,
   detectSeasonality,
+  type MirrorLayer,
+  type MirrorPoint,
 } from "../lib/aggregations";
 import { InsightsPanel } from "../components/InsightsPanel";
 import {
@@ -177,9 +181,15 @@ export function CashflowPage() {
   );
 
   // Cash-flow visualization mode: bars (по умолчанию) или stream graph
-  const [vizMode, setVizMode] = useState<"bars" | "stream">("bars");
+  const [vizMode, setVizMode] = useState<"bars" | "stream" | "mirror">("bars");
   const stream = useMemo(
     () => buildStreamData(filtered, 10, "expense", monthStartDay),
+    [filtered, monthStartDay]
+  );
+  // «Зеркало»: доходы слоями вверх, расходы слоями вниз — один взгляд на то,
+  // откуда пришли деньги, куда ушли и какая сторона в каком месяце перевесила.
+  const mirror = useMemo(
+    () => buildMirrorData(filtered, { topIncome: 5, topExpense: 7, monthStartDay }),
     [filtered, monthStartDay]
   );
 
@@ -288,12 +298,20 @@ export function CashflowPage() {
 
       <div className="card-tray card-pad">
         <CardHeader
-          icon={vizMode === "bars" ? BarChart3 : Layers}
-          title={vizMode === "bars" ? "Доходы и расходы по месяцам" : "Поток расходов по категориям"}
+          icon={vizMode === "bars" ? BarChart3 : vizMode === "stream" ? Layers : FlipVertical2}
+          title={
+            vizMode === "bars"
+              ? "Доходы и расходы по месяцам"
+              : vizMode === "stream"
+                ? "Поток расходов по категориям"
+                : "Доходы и расходы по категориям"
+          }
           subtitle={
             vizMode === "bars"
               ? "Столбцы — суммы, линия — чистый поток"
-              : "Категории как реки расходов во времени"
+              : vizMode === "stream"
+                ? "Категории как реки расходов во времени"
+                : "Доходы — вверх от оси, расходы — вниз, слоями по категориям"
           }
           right={
             <>
@@ -305,13 +323,15 @@ export function CashflowPage() {
                 options={[
                   { value: "bars", label: "Бары", icon: BarChart3 },
                   { value: "stream", label: "Поток", icon: Layers },
+                  { value: "mirror", label: "Зеркало", icon: FlipVertical2 },
                 ]}
               />
               <div className="text-xs text-muted">{months.length} мес.</div>
             </>
           }
         />
-        <div className="h-80">
+        {/* «Зеркалу» выше: под графиком ещё легенда по сторонам. */}
+        <div className={vizMode === "mirror" ? "h-[26rem]" : "h-80"}>
           {vizMode === "bars" ? (
           <ChartContainer>
             <ComposedChart
@@ -449,6 +469,8 @@ export function CashflowPage() {
               />
             </ComposedChart>
           </ChartContainer>
+          ) : vizMode === "mirror" ? (
+            <MirrorChart data={mirror.data} layers={mirror.layers} base={base} onMonth={openMonth} />
           ) : (
             <ChartContainer>
               <AreaChart
@@ -747,6 +769,142 @@ export function CashflowPage() {
           },
         ]}
       />
+    </div>
+  );
+}
+
+/** Прозрачность слоя: ближний к оси — плотный, дальние — светлее. */
+function layerOpacity(i: number, n: number): number {
+  return n <= 1 ? 0.85 : 0.85 - (0.55 * i) / (n - 1);
+}
+
+/**
+ * «Зеркало»: доходы стопкой вверх от оси, расходы — вниз. Слои одного цвета
+ * стороны разной плотности: плюс и минус читаются сразу, а категория — по
+ * подписи в легенде и подсказке. Нажатие на месяц открывает его операции.
+ */
+function MirrorChart({
+  data,
+  layers,
+  base,
+  onMonth,
+}: {
+  data: MirrorPoint[];
+  layers: MirrorLayer[];
+  base: string;
+  onMonth: (ym: string) => void;
+}) {
+  const income = layers.filter((l) => l.side === "income");
+  const expense = layers.filter((l) => l.side === "expense");
+  // Стопка «по знаку» считает ноль плюсом: месяц без трат в категории
+  // поднимал её слой к доходам, и переход к тратам рисовался дугой через ось.
+  // Пустой расход — чуть ниже нуля, слой остаётся внизу.
+  const chartData = useMemo(
+    () =>
+      data.map((p) => {
+        const q: MirrorPoint = { ...p };
+        for (const l of expense) if (q[l.key] === 0) q[l.key] = -1e-6;
+        return q;
+      }),
+    [data, expense]
+  );
+  const colorOf = (l: MirrorLayer) => (l.side === "income" ? chartColor.income : chartColor.expense);
+  const opacityOf = (l: MirrorLayer) => {
+    const group = l.side === "income" ? income : expense;
+    return layerOpacity(group.indexOf(l), group.length);
+  };
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex-1 min-h-0">
+        <ChartContainer>
+          <AreaChart
+            data={chartData}
+            stackOffset="sign"
+            margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+            onClick={(e: unknown) => {
+              const ym = (clickedRow(e, chartData) as { ym?: string } | undefined)?.ym;
+              if (ym) onMonth(ym);
+            }}
+            style={{ cursor: "pointer" }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
+            <XAxis dataKey="ym" stroke={chartAxisStroke} fontSize={11} tickFormatter={(d) => monthLabel(String(d))} minTickGap={40} />
+            <YAxis
+              stroke={chartAxisStroke}
+              fontSize={11}
+              width={56}
+              tickFormatter={(v: number) => formatNum(Math.abs(v), { compact: true })}
+            />
+            <Tooltip
+              {...chartTooltipProps}
+              content={({ active, payload }) => {
+                const p = payload?.[0]?.payload as MirrorPoint | undefined;
+                if (!active || !p) return null;
+                const row = (l: MirrorLayer) => {
+                  const v = Math.abs(Number(p[l.key] ?? 0));
+                  return v >= 0.5
+                    ? [{ label: l.name, value: formatMoney(v, base), swatchColor: colorOf(l), swatch: undefined }]
+                    : [];
+                };
+                const net = p.income - p.expense;
+                return (
+                  <ChartTooltipCard>
+                    <TooltipFacts
+                      title={monthLabelFull(p.ym)}
+                      facts={[
+                        { label: "Доходы", value: formatMoney(p.income, base), tone: "income" as const, strong: true },
+                        ...income.flatMap(row),
+                        { label: "Расходы", value: formatMoney(p.expense, base), tone: "expense" as const, strong: true },
+                        ...expense.flatMap(row),
+                        {
+                          label: "Итог месяца",
+                          value: formatMoney(net, base, { signed: true }),
+                          tone: net >= 0 ? ("income" as const) : ("expense" as const),
+                          strong: true,
+                        },
+                      ]}
+                    />
+                  </ChartTooltipCard>
+                );
+              }}
+            />
+            {layers.map((l) => (
+              <Area
+                key={l.key}
+                type="monotone"
+                dataKey={l.key}
+                name={l.name}
+                stackId="mirror"
+                stroke="rgb(var(--c-panel))"
+                strokeWidth={1}
+                fill={colorOf(l)}
+                fillOpacity={opacityOf(l)}
+              />
+            ))}
+            {/* Ось времени — граница доходов и расходов. */}
+            <ReferenceLine y={0} stroke={chartAxisStroke} strokeWidth={1.5} />
+          </AreaChart>
+        </ChartContainer>
+      </div>
+      {/* Легенда по сторонам: какой слой — какая категория. */}
+      <div className="mt-2 space-y-1 text-xs">
+        {([
+          ["Доходы", income],
+          ["Расходы", expense],
+        ] as const).map(([title, group]) =>
+          group.length === 0 ? null : (
+            <div key={title} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-muted w-16 shrink-0">{title}</span>
+              {group.map((l) => (
+                <span key={l.key} className="inline-flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm" style={{ background: colorOf(l), opacity: opacityOf(l) }} />
+                  {l.name}
+                </span>
+              ))}
+            </div>
+          )
+        )}
+      </div>
     </div>
   );
 }

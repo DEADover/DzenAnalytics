@@ -23,6 +23,7 @@ import {
   stripFromAnalytics,
   scaleKPI,
   buildStreamData,
+  buildMirrorData,
   categoryMonthlySeries,
   detectMonthSpikes,
   buildInsights,
@@ -1468,5 +1469,55 @@ describe("разложение по месяцам уважает первый �
     const deltas = accountMonthlyDeltas(acc, "Карта", 12, DAY);
     // Последний столбик — отчётный август, а не пустой сентябрь.
     expect(deltas[deltas.length - 1]).toBe(-100);
+  });
+});
+
+describe("buildMirrorData — доходы вверх, расходы вниз", () => {
+  const txs = [
+    tx({ kind: "income", category: "Зарплата", date: "2026-01-05", amountBase: 100_000 }),
+    tx({ kind: "income", category: "Проценты", date: "2026-03-10", amountBase: 2_000 }),
+    tx({ kind: "expense", category: "Продукты", date: "2026-01-10", amountBase: 30_000 }),
+    tx({ kind: "expense", category: "Кафе", date: "2026-01-12", amountBase: 5_000 }),
+    tx({ kind: "refund", category: "Кафе", date: "2026-03-12", amountBase: 900 }),
+    tx({ kind: "transfer", category: "Перевод", date: "2026-02-01", amountBase: 50_000 }),
+  ];
+
+  it("месяцы подряд, расходы отрицательными, суммы по сторонам", () => {
+    const { data, layers } = buildMirrorData(txs);
+    expect(data.map((d) => d.ym)).toEqual(["2026-01", "2026-02", "2026-03"]);
+    const inc = layers.filter((l) => l.side === "income").map((l) => l.name);
+    const exp = layers.filter((l) => l.side === "expense").map((l) => l.name);
+    // Крупнейшая категория — первая, ближе к оси.
+    expect(inc).toEqual(["Зарплата", "Проценты"]);
+    expect(exp).toEqual(["Продукты", "Кафе"]);
+    const jan = data[0];
+    expect(jan.income).toBe(100_000);
+    expect(jan.expense).toBe(35_000);
+    expect(jan[layers.find((l) => l.name === "Продукты")!.key]).toBe(-30_000);
+    // Февраль — только перевод: ноль, а не пропуск.
+    expect(data[1]).toMatchObject({ income: 0, expense: 0 });
+  });
+
+  it("возврат больше расхода месяца — ноль, а не слой над осью", () => {
+    const { data, layers } = buildMirrorData(txs);
+    const cafe = layers.find((l) => l.name === "Кафе")!.key;
+    expect(data[2][cafe]).toBe(0);
+  });
+
+  it("мелкие категории собираются в «Прочие»", () => {
+    const many = ["А", "Б", "В", "Г"].map((c, i) =>
+      tx({ kind: "expense", category: c, date: "2026-01-10", amountBase: 1000 * (4 - i) })
+    );
+    const { data, layers } = buildMirrorData(many, { topExpense: 2 });
+    expect(layers.map((l) => l.name)).toEqual(["А", "Б", "Прочие"]);
+    expect(data[0][layers[2].key]).toBe(-3000);
+    expect(data[0].expense).toBe(10_000);
+  });
+
+  it("свой первый день месяца", () => {
+    const { data } = buildMirrorData([tx({ kind: "expense", category: "Кафе", date: "2026-02-05", amountBase: 100 })], {
+      monthStartDay: 10,
+    });
+    expect(data[0].ym).toBe("2026-01");
   });
 });
