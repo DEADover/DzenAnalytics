@@ -29,9 +29,10 @@ test("«Зеркало»: слои по сторонам оси, легенда,
 
   // Подсказка месяца и операции по нажатию.
   const surface = card.locator("svg.recharts-surface").first();
+  await surface.scrollIntoViewIfNeeded();
   const box = (await surface.boundingBox())!;
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
-  await expect(page.getByText("Итог месяца")).toBeVisible();
+  await expect(page.getByText("Итог месяца", { exact: true })).toBeVisible();
   await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
   const drill = () =>
     page.evaluate(async () => {
@@ -44,4 +45,39 @@ test("«Зеркало»: слои по сторонам оси, легенда,
   expect(d.subtitle).toBe("Месяц");
   expect(d.n).toBeGreaterThan(0);
   expect(await horizontalOverflow(page)).toBe(0);
+});
+
+test("«Зеркало»: итог месяца, ось по данным, подсветка слоя, неполный месяц", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await connectZen(page, "/cashflow");
+  const btn = page.getByRole("radio", { name: "Зеркало" }).or(page.getByRole("button", { name: "Зеркало", exact: true })).first();
+  await btn.click();
+  const card = page.locator(".card-tray", { has: page.getByText("Доходы и расходы по категориям", { exact: true }) });
+  const surface = card.locator("svg.recharts-surface").first();
+  await surface.scrollIntoViewIfNeeded();
+
+  // Линия итога поверх слоёв.
+  await expect(card.locator(".recharts-line")).toHaveCount(1);
+  await expect(card.getByText("Итог месяца — доходы минус расходы")).toBeVisible();
+
+  // Ось по данным: доходов в тестовом аккаунте больше — низ оси короче верха.
+  // Подписи оси Y — суммы («50 тыс.», «0»), в отличие от месяцев оси X.
+  const ticks = (await surface.locator(".recharts-cartesian-axis-tick-label").allTextContents()).filter((t) =>
+    /^(0|[\d,\s]+(тыс|млн)\.?)$/.test(t.trim())
+  );
+  expect(ticks.length).toBeGreaterThan(2);
+  expect(ticks[0]).not.toBe(ticks[ticks.length - 1]);
+
+  // Наведение на категорию в легенде гасит остальные слои.
+  const areas = surface.locator(".recharts-area-area");
+  const opac = () => areas.evaluateAll((els) => els.map((e) => Number(e.getAttribute("fill-opacity"))));
+  const before = await opac();
+  await card.locator("[data-mirror-legend]").first().hover();
+  const after = await opac();
+  expect(after.filter((o, i) => o < before[i]).length).toBe(before.length - 1);
+
+  // Последний месяц (октябрь) в периоде не целиком — пометка в подсказке.
+  const box = (await surface.boundingBox())!;
+  await page.mouse.move(box.x + box.width - 14, box.y + box.height * 0.45);
+  await expect(page.getByText(/^Неполный месяц: по 15 октября/)).toBeVisible();
 });

@@ -30,11 +30,11 @@ import {
 import { useDataStore } from "../store/useDataStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
-import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
+import { useFiltersStore, applyFilters, presetToRange } from "../store/useFiltersStore";
 import { useLocalPeriod } from "../hooks/useLocalPeriod";
 import { useDrillStore } from "../store/useDrillStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { periodKey } from "../lib/period";
+import { periodKey, periodRange } from "../lib/period";
 import {
   groupByMonth,
   computeKPI,
@@ -60,7 +60,9 @@ import {
   chartGridStroke,
   chartAxisStroke,
   chartColor,
+  chartTotalStroke,
   monthTitle,
+  niceStep,
 } from "../lib/format";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
@@ -192,6 +194,12 @@ export function CashflowPage() {
     () => buildMirrorData(filtered, { topIncome: 5, topExpense: 7, monthStartDay }),
     [filtered, monthStartDay]
   );
+  // Границы периода графика — чтобы пометить крайние неполные месяцы.
+  const mirrorBounds = useMemo(() => {
+    if (lp.preset === "custom") return { from: lp.from, to: lp.to };
+    const maxDate = transactions.reduce((m, t) => (t.date > m ? t.date : m), "");
+    return presetToRange(lp.preset, maxDate, lp.monthYM, monthStartDay);
+  }, [lp.preset, lp.from, lp.to, lp.monthYM, transactions, monthStartDay]);
 
   // Seasonality
   const seasonality = useMemo(() => detectSeasonality(dimensionFiltered), [dimensionFiltered]);
@@ -470,7 +478,14 @@ export function CashflowPage() {
             </ComposedChart>
           </ChartContainer>
           ) : vizMode === "mirror" ? (
-            <MirrorChart data={mirror.data} layers={mirror.layers} base={base} onMonth={openMonth} />
+            <MirrorChart
+              data={mirror.data}
+              layers={mirror.layers}
+              base={base}
+              onMonth={openMonth}
+              bounds={mirrorBounds}
+              monthStartDay={monthStartDay}
+            />
           ) : (
             <ChartContainer>
               <AreaChart
@@ -778,22 +793,35 @@ function layerOpacity(i: number, n: number): number {
   return n <= 1 ? 0.85 : 0.85 - (0.55 * i) / (n - 1);
 }
 
+/** «15 октября» по «ГГГГ-ММ-ДД». */
+function dayMonth(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+}
+
 /**
- * «Зеркало»: доходы стопкой вверх от оси, расходы — вниз. Слои одного цвета
- * стороны разной плотности: плюс и минус читаются сразу, а категория — по
- * подписи в легенде и подсказке. Нажатие на месяц открывает его операции.
+ * «Зеркало»: доходы стопкой вверх от оси, расходы — вниз, поверх — итог месяца
+ * линией. Слои одного цвета стороны разной плотности: плюс и минус читаются
+ * сразу, а категория — по легенде (наведение на неё высвечивает слой) и
+ * подсказке. Нажатие на месяц открывает его операции.
  */
 function MirrorChart({
   data,
   layers,
   base,
   onMonth,
+  bounds,
+  monthStartDay,
 }: {
   data: MirrorPoint[];
   layers: MirrorLayer[];
   base: string;
   onMonth: (ym: string) => void;
+  /** Границы периода графика: крайние месяцы могут попасть в него не целиком. */
+  bounds: { from: string | null; to: string | null };
+  monthStartDay: number;
 }) {
+  const [focus, setFocus] = useState<string | null>(null);
   const income = layers.filter((l) => l.side === "income");
   const expense = layers.filter((l) => l.side === "expense");
   // Стопка «по знаку» считает ноль плюсом: месяц без трат в категории
@@ -802,22 +830,44 @@ function MirrorChart({
   const chartData = useMemo(
     () =>
       data.map((p) => {
-        const q: MirrorPoint = { ...p };
+        const q: MirrorPoint = { ...p, net: p.income - p.expense };
         for (const l of expense) if (q[l.key] === 0) q[l.key] = -1e-6;
         return q;
       }),
     [data, expense]
   );
+  // Ось — по данным, а не зеркально: расходы вдвое меньше доходов — и низ
+  // графика не пустует наполовину.
+  const maxUp = Math.max(0, ...data.map((p) => p.income));
+  const maxDown = Math.max(0, ...data.map((p) => p.expense));
+  const step = niceStep(Math.max(maxUp, maxDown) / 3 || 1);
+  const top = Math.ceil(maxUp / step) * step;
+  const bottom = -Math.ceil(maxDown / step) * step;
+  const ticks: number[] = [];
+  for (let v = bottom; v <= top + 1e-6; v += step) ticks.push(v);
+
+  // Крайние месяцы, попавшие в период не целиком: подписываем в подсказке.
+  const partial = (ym: string): string | null => {
+    const r = periodRange(ym, monthStartDay);
+    const from = bounds.from && bounds.from > r.from ? bounds.from : null;
+    const to = bounds.to && bounds.to < r.to ? bounds.to : null;
+    if (from && to) return `Неполный месяц: с ${dayMonth(from)} по ${dayMonth(to)}`;
+    if (from) return `Неполный месяц: с ${dayMonth(from)}`;
+    if (to) return `Неполный месяц: по ${dayMonth(to)}`;
+    return null;
+  };
+
   const colorOf = (l: MirrorLayer) => (l.side === "income" ? chartColor.income : chartColor.expense);
   const opacityOf = (l: MirrorLayer) => {
     const group = l.side === "income" ? income : expense;
-    return layerOpacity(group.indexOf(l), group.length);
+    const base0 = layerOpacity(group.indexOf(l), group.length);
+    return focus && focus !== l.key ? base0 * 0.18 : focus === l.key ? 0.9 : base0;
   };
   return (
     <div className="h-full flex flex-col">
       <div className="flex-1 min-h-0">
         <ChartContainer>
-          <AreaChart
+          <ComposedChart
             data={chartData}
             stackOffset="sign"
             margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
@@ -833,6 +883,8 @@ function MirrorChart({
               stroke={chartAxisStroke}
               fontSize={11}
               width={56}
+              domain={[bottom, top]}
+              ticks={ticks}
               tickFormatter={(v: number) => formatNum(Math.abs(v), { compact: true })}
             />
             <Tooltip
@@ -842,9 +894,7 @@ function MirrorChart({
                 if (!active || !p) return null;
                 const row = (l: MirrorLayer) => {
                   const v = Math.abs(Number(p[l.key] ?? 0));
-                  return v >= 0.5
-                    ? [{ label: l.name, value: formatMoney(v, base), swatchColor: colorOf(l), swatch: undefined }]
-                    : [];
+                  return v >= 0.5 ? [{ label: l.name, value: formatMoney(v, base), swatchColor: colorOf(l) }] : [];
                 };
                 const net = p.income - p.expense;
                 return (
@@ -863,6 +913,7 @@ function MirrorChart({
                           strong: true,
                         },
                       ]}
+                      note={partial(p.ym) ?? undefined}
                     />
                   </ChartTooltipCard>
                 );
@@ -879,15 +930,27 @@ function MirrorChart({
                 strokeWidth={1}
                 fill={colorOf(l)}
                 fillOpacity={opacityOf(l)}
+                isAnimationActive={false}
               />
             ))}
             {/* Ось времени — граница доходов и расходов. */}
             <ReferenceLine y={0} stroke={chartAxisStroke} strokeWidth={1.5} />
-          </AreaChart>
+            {/* Итог месяца — доходы минус расходы: выше оси — месяц в плюсе. */}
+            <Line
+              type="monotone"
+              dataKey="net"
+              name="Итог месяца"
+              stroke={chartTotalStroke}
+              strokeWidth={2}
+              dot={{ r: 2.5, fill: chartTotalStroke, strokeWidth: 0 }}
+              activeDot={{ r: 4 }}
+              isAnimationActive={false}
+            />
+          </ComposedChart>
         </ChartContainer>
       </div>
-      {/* Легенда по сторонам: какой слой — какая категория. */}
-      <div className="mt-2 space-y-1 text-xs">
+      {/* Легенда по сторонам; наведение на категорию высвечивает её слой. */}
+      <div className="mt-2 space-y-1 text-xs" onMouseLeave={() => setFocus(null)}>
         {([
           ["Доходы", income],
           ["Расходы", expense],
@@ -896,14 +959,27 @@ function MirrorChart({
             <div key={title} className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-muted w-16 shrink-0">{title}</span>
               {group.map((l) => (
-                <span key={l.key} className="inline-flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm" style={{ background: colorOf(l), opacity: opacityOf(l) }} />
-                  {l.name}
+                <span
+                  key={l.key}
+                  className="inline-flex items-center gap-1.5 cursor-default"
+                  onMouseEnter={() => setFocus(l.key)}
+                  onMouseLeave={() => setFocus(null)}
+                  data-mirror-legend={l.key}
+                >
+                  <span className="w-3 h-3 rounded-sm" style={{ background: colorOf(l), opacity: layerOpacity((l.side === "income" ? income : expense).indexOf(l), (l.side === "income" ? income : expense).length) }} />
+                  <span className={focus === l.key ? "font-semibold" : undefined}>{l.name}</span>
                 </span>
               ))}
             </div>
           )
         )}
+        <div className="flex items-center gap-x-3">
+          <span className="w-16 shrink-0" />
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-3.5 h-0.5 rounded-full" style={{ background: chartTotalStroke }} />
+            Итог месяца — доходы минус расходы
+          </span>
+        </div>
       </div>
     </div>
   );
