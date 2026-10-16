@@ -43,8 +43,8 @@ import { CategoryTable, type CategoryTableRow } from "../components/CategoryTabl
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useDiffMode } from "../store/useDiffModeStore";
 import { colorForCategory } from "../lib/categoryColor";
-import { buildCompareTrack } from "../lib/compareTrack";
-import { CompareTrackChart } from "../components/CompareTrackChart";
+import { buildBalanceTrack, buildCompareTrack } from "../lib/compareTrack";
+import { BalanceTrackChart, CompareTrackChart } from "../components/CompareTrackChart";
 import type { Transaction } from "../types";
 
 /** Same logic as `periodKey` but accepts a Date instead of an ISO string. */
@@ -513,14 +513,23 @@ export function ComparePage() {
 
   // Нарастающий итог по дням (#117): А — от начала своего периода до последнего
   // дня с данными, Б — целиком, без выравнивания.
+  // Полные границы периода А — общие у графика сравнения и «Доходов и расходов».
+  const trackFullA = useMemo(() => {
+    const r = trackRanges.a;
+    return preset === "months" || preset === "avg"
+      ? periodRange(months.a, monthStartDay)
+      : preset === "years"
+        ? yearRange(years.a, monthStartDay)
+        : { from: r.from, to: r.to };
+  }, [trackRanges, preset, months.a, years.a, monthStartDay]);
+  // Доходы против расходов периода А — тот же отрезок, что у линии А.
+  const balance = useMemo(
+    () => buildBalanceTrack(filtered, { full: trackFullA, to: trackRanges.a.to }),
+    [filtered, trackFullA, trackRanges]
+  );
   const track = useMemo(() => {
     const r = trackRanges.a;
-    const full =
-      preset === "months" || preset === "avg"
-        ? periodRange(months.a, monthStartDay)
-        : preset === "years"
-          ? yearRange(years.a, monthStartDay)
-          : { from: r.from, to: r.to };
+    const full = trackFullA;
     return buildCompareTrack(
       filtered,
       trackKind,
@@ -535,7 +544,7 @@ export function ComparePage() {
           ? isRunningPeriod(yearRange(years.b, monthStartDay), maxDate)
           : false
     );
-  }, [filtered, trackKind, trackRanges, preset, months.a, months.b, years.a, years.b, monthStartDay, maxDate]);
+  }, [filtered, trackKind, trackRanges, preset, trackFullA, months.b, years.b, monthStartDay, maxDate]);
   // В «Среднем» суммы Б собраны за несколько месяцев — приводим к одному.
   const kpiB = useMemo(
     () => scaleKPI(computeKPI(txsB), divisorB),
@@ -1058,6 +1067,21 @@ export function ComparePage() {
         labelA={ranges.a.label}
         labelB={ranges.b.label}
         datesB={trackRanges.windowsB.length === 1}
+        axis={
+          preset === "months" || preset === "avg"
+            ? "monthDay"
+            : preset === "years" || preset === "ytd_vs_prev_ytd"
+              ? "month"
+              : "dayIndex"
+        }
+      />
+
+      {/* Сопоставление доходов и расходов одного периода — не А с Б, а
+          «сколько пришло» с «сколько ушло» внутри А. */}
+      <BalanceTrackChart
+        track={balance}
+        base={base}
+        label={ranges.a.label}
         axis={
           preset === "months" || preset === "avg"
             ? "monthDay"

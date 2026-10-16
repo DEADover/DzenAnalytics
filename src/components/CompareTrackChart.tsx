@@ -1,4 +1,4 @@
-import { TrendingUp, Scale } from "lucide-react";
+import { TrendingUp, Scale, ArrowLeftRight } from "lucide-react";
 import {
   ComposedChart,
   Line,
@@ -8,13 +8,14 @@ import {
   CartesianGrid,
   ReferenceLine,
   ReferenceDot,
+  Area,
 } from "recharts";
 import { ChartContainer } from "./ChartContainer";
 import { SectionCard } from "./SectionCard";
 import { KindSwitcher } from "./KindSwitcher";
 import { DeviationPill } from "./DeviationPill";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "./TooltipFacts";
-import type { CompareTrack, TrackKind, TrackPoint } from "../lib/compareTrack";
+import type { BalancePoint, BalanceTrack, CompareTrack, TrackKind, TrackPoint } from "../lib/compareTrack";
 import {
   chartAxisStroke,
   chartColor,
@@ -272,6 +273,133 @@ export function CompareTrackChart({
             )}
             {limited && cmp && cmp.a != null && (
               <ReferenceDot x={cmp.day} y={cmp.a} r={4.5} fill={color} stroke="rgb(var(--c-panel))" strokeWidth={2} />
+            )}
+          </ComposedChart>
+        </ChartContainer>
+      </div>
+    </SectionCard>
+  );
+}
+
+function BalanceTip({ active, payload, base }: { active?: boolean; payload?: { payload?: BalancePoint }[]; base: string }) {
+  const p = payload?.[0]?.payload;
+  if (!active || !p || p.income == null || p.expense == null) return null;
+  const net = p.income - p.expense;
+  return (
+    <ChartTooltipCard>
+      <TooltipFacts
+        title={dayLabel(p.date)}
+        facts={[
+          { label: "Доходы", value: formatMoney(p.income, base), swatchColor: chartColor.income },
+          { label: "Расходы", value: formatMoney(p.expense, base), swatchColor: chartColor.expense },
+          {
+            label: "Остаток",
+            value: formatMoney(net, base, { signed: true }),
+            tone: net >= 0 ? "income" : "expense",
+            icon: <Scale />,
+            strong: true,
+          },
+        ]}
+      />
+    </ChartTooltipCard>
+  );
+}
+
+/**
+ * Доходы против расходов одного периода нарастающим итогом по дням: сколько
+ * пришло и сколько ушло к каждому дню. Между линиями — заливка: зелёная, пока
+ * доходов больше, красная, когда расходы их обогнали. Над графиком — итоги,
+ * остаток и с какого дня расходы держатся выше доходов.
+ */
+export function BalanceTrackChart({
+  track,
+  base,
+  label,
+  axis,
+}: {
+  track: BalanceTrack;
+  base: string;
+  /** Название периода — «Октябрь 2026», «Последние 30 дней». */
+  label: string;
+  axis: TrackAxis;
+}) {
+  const last = track.days > 0 ? track.points[track.days - 1] : null;
+  const atDay = track.running && last ? ` на ${dayLabel(last.date)}` : "";
+  const firstDD = track.points[0]?.date.slice(8);
+  const monthTicks =
+    axis === "month" ? track.points.filter((p) => p.date.slice(8) === firstDD).map((p) => p.day) : undefined;
+  const verdict =
+    track.days === 0
+      ? null
+      : track.deficitSince
+        ? `Расходы больше доходов с ${dayLabel(track.deficitSince)}`
+        : track.income > 0
+          ? `Доходы покрывают расходы${track.running ? " — пока" : ""}`
+          : null;
+
+  return (
+    <SectionCard
+      icon={ArrowLeftRight}
+      title="Доходы и расходы"
+      subtitle={label}
+      info={
+        <p>
+          Доходы и расходы периода А нарастающим итогом: сколько пришло и
+          сколько ушло к каждому дню. Зелёная заливка между линиями — доходов
+          больше, красная — расходы их обогнали. Возвраты уменьшают расходы,
+          переводы не учитываются. Идущий период обрывается на последнем дне с
+          операциями.
+        </p>
+      }
+    >
+      <div className="flex items-center gap-x-5 gap-y-1 flex-wrap text-sm mt-1 mb-2" data-testid="balance-track-summary">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3.5 h-0.5 rounded-full" style={{ background: chartColor.income }} />
+          <span className="text-muted">Доходы{atDay}</span>
+          <span className="font-semibold tabular-nums">{formatMoney(track.income, base)}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3.5 h-0.5 rounded-full" style={{ background: chartColor.expense }} />
+          <span className="text-muted">Расходы</span>
+          <span className="font-semibold tabular-nums">{formatMoney(track.expense, base)}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-muted">Остаток</span>
+          <span className={`font-semibold tabular-nums ${track.net >= 0 ? "text-income" : "text-expense"}`}>
+            {formatMoney(track.net, base, { signed: true })}
+          </span>
+        </span>
+        {verdict && <span className="text-muted">{verdict}</span>}
+      </div>
+      <div className="h-64">
+        <ChartContainer>
+          <ComposedChart data={track.points} margin={{ top: 12, right: 12, bottom: 0, left: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
+            <XAxis
+              dataKey="day"
+              stroke={chartAxisStroke}
+              fontSize={11}
+              tickLine={false}
+              minTickGap={axis === "month" ? 4 : 20}
+              ticks={monthTicks}
+              tickFormatter={(v) => {
+                const p = track.points[Number(v) - 1];
+                if (axis === "dayIndex" || !p) return String(v);
+                return axis === "month" ? monthShort(p.date) : String(Number(p.date.slice(8)));
+              }}
+            />
+            <YAxis stroke={chartAxisStroke} fontSize={11} tickLine={false} width={48} tickFormatter={(v) => formatNum(v, { compact: true })} />
+            <ChartTooltip
+              cursor={chartTooltipProps.cursor}
+              wrapperStyle={chartTooltipProps.wrapperStyle}
+              content={<BalanceTip base={base} />}
+            />
+            <Area dataKey="surplus" name="Доходов больше" stroke="none" fill={chartColor.income} fillOpacity={0.14} isAnimationActive={false} connectNulls={false} />
+            <Area dataKey="deficit" name="Расходов больше" stroke="none" fill={chartColor.expense} fillOpacity={0.14} isAnimationActive={false} connectNulls={false} />
+            <Line type="linear" dataKey="income" name="Доходы" stroke={chartColor.income} strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false} />
+            <Line type="linear" dataKey="expense" name="Расходы" stroke={chartColor.expense} strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false} />
+            {track.running && last && (
+              <ReferenceLine x={last.day} stroke={chartAxisStroke} strokeDasharray="2 2" />
             )}
           </ComposedChart>
         </ChartContainer>

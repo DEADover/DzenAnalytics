@@ -177,3 +177,77 @@ export function buildCompareTrack(
     bShorter,
   };
 }
+
+/** День графика «доходы против расходов» одного периода. */
+export interface BalancePoint {
+  day: number;
+  date: string;
+  /** Нарастающие итоги; null — после последнего дня с данными. */
+  income: number | null;
+  expense: number | null;
+  /** Заливка между линиями: [низ, верх], пока доходов больше, иначе null. */
+  surplus: [number, number] | null;
+  /** То же, пока больше расходов. */
+  deficit: [number, number] | null;
+}
+
+export interface BalanceTrack {
+  points: BalancePoint[];
+  /** До какого дня есть данные (0 — данных нет). */
+  days: number;
+  income: number;
+  expense: number;
+  /** Остаток: доходы минус расходы к последнему дню с данными. */
+  net: number;
+  /**
+   * С какой даты расходы держатся выше доходов — до последнего дня с
+   * данными. null — к концу доходов не меньше расходов.
+   */
+  deficitSince: string | null;
+  /** Период ещё идёт: данные кончаются раньше его календарного конца. */
+  running: boolean;
+}
+
+/**
+ * Доходы и расходы ОДНОГО периода нарастающим итогом по дням — сопоставление
+ * «сколько пришло» и «сколько ушло» к каждому дню. Возврат уменьшает расход,
+ * переводы не участвуют — как у соседнего графика сравнения периодов.
+ */
+export function buildBalanceTrack(txs: Transaction[], a: { full: DayRange; to: string }): BalanceTrack {
+  const fullDays = a.full.from && a.full.to ? spanDays(a.full.from, a.full.to) : 0;
+  const days = a.full.from && a.to ? Math.min(spanDays(a.full.from, a.to), fullDays) : 0;
+  const range = { from: a.full.from, to: a.to };
+  const inc = cumulative(txs, "income", range, days);
+  const exp = cumulative(txs, "expense", range, days);
+  const points: BalancePoint[] = [];
+  let deficitSince: string | null = null;
+  for (let day = 1; day <= fullDays; day++) {
+    const date = endAfterDays(a.full.from, day);
+    const has = day <= days;
+    const i = has ? inc[day - 1] : null;
+    const e = has ? exp[day - 1] : null;
+    let surplus: [number, number] | null = null;
+    let deficit: [number, number] | null = null;
+    if (i != null && e != null) {
+      if (i >= e) {
+        surplus = [e, i];
+        deficitSince = null;
+      } else {
+        deficit = [i, e];
+        if (!deficitSince) deficitSince = date;
+      }
+    }
+    points.push({ day, date, income: i, expense: e, surplus, deficit });
+  }
+  const income = days > 0 ? inc[days - 1] : 0;
+  const expense = days > 0 ? exp[days - 1] : 0;
+  return {
+    points,
+    days,
+    income,
+    expense,
+    net: income - expense,
+    deficitSince: income - expense < 0 ? deficitSince : null,
+    running: days > 0 && days < fullDays,
+  };
+}
