@@ -32,7 +32,7 @@ test("«Зеркало»: слои по сторонам оси, легенда,
   await surface.scrollIntoViewIfNeeded();
   const box = (await surface.boundingBox())!;
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
-  await expect(page.getByText("Итог месяца", { exact: true })).toBeVisible();
+  await expect(card.locator(".recharts-tooltip-wrapper").getByText("Итог месяца", { exact: true })).toBeVisible();
   await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
   const drill = () =>
     page.evaluate(async () => {
