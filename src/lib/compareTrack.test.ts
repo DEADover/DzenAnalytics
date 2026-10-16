@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction } from "../types";
-import { buildBalanceTrack, buildCompareTrack } from "./compareTrack";
+import { buildCompareTrack } from "./compareTrack";
 
 const tx = (date: string, kind: Transaction["kind"], amountBase: number) =>
   ({ date, kind, amountBase }) as Transaction;
@@ -153,48 +153,5 @@ describe("buildCompareTrack", () => {
       expect(t.points.find((x) => x.dateA === "2025-03-01")!.b).toBe(5);
       expect(t.bTotal).toBe(5);
     });
-  });
-});
-
-describe("buildBalanceTrack — доходы против расходов одного периода", () => {
-  const oct = { from: "2026-10-01", to: "2026-10-31" };
-
-  it("нарастающие итоги, возврат уменьшает расход, переводы не в счёт", () => {
-    const t = buildBalanceTrack(
-      [
-        tx("2026-10-01", "expense", 300),
-        tx("2026-10-05", "income", 1000),
-        tx("2026-10-06", "refund", 50),
-        tx("2026-10-07", "transfer", 9999),
-      ],
-      { full: oct, to: "2026-10-10" }
-    );
-    expect(t.points).toHaveLength(31);
-    expect(t.days).toBe(10);
-    expect(t.running).toBe(true);
-    expect(t.points[0]).toMatchObject({ income: 0, expense: 300, deficit: [0, 300], surplus: null });
-    expect(t.points[4]).toMatchObject({ income: 1000, expense: 300, surplus: [300, 1000], deficit: null });
-    expect(t.points[5].expense).toBe(250);
-    expect(t.points[10]).toMatchObject({ income: null, expense: null });
-    expect(t).toMatchObject({ income: 1000, expense: 250, net: 750, deficitSince: null });
-  });
-
-  it("«расходы больше доходов с …» — с последнего перехода в минус", () => {
-    const t = buildBalanceTrack(
-      [
-        tx("2026-10-01", "expense", 100), // 1-го — минус
-        tx("2026-10-05", "income", 1000), // 5-го — плюс
-        tx("2026-10-20", "expense", 1500), // 20-го — снова минус и до конца
-      ],
-      { full: oct, to: "2026-10-31" }
-    );
-    expect(t.running).toBe(false);
-    expect(t.net).toBe(-600);
-    expect(t.deficitSince).toBe("2026-10-20");
-  });
-
-  it("пустой период", () => {
-    const t = buildBalanceTrack([], { full: oct, to: "" });
-    expect(t).toMatchObject({ days: 0, net: 0, deficitSince: null, running: false });
   });
 });

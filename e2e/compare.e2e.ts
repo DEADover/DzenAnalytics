@@ -193,23 +193,3 @@ test("категории: строка открывает операции пе�
   await row.locator("td").first().click();
   await expect(title).toHaveText(new RegExp(`^${name} · Октябрь`));
 });
-
-test("«Доходы и расходы»: сопоставление внутри периода А", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await connectZen(page, "/compare");
-  const summary = page.getByTestId("balance-track-summary");
-  const card = page.locator(".card-tray", { has: summary });
-  await expect(card.getByText("Доходы и расходы", { exact: true })).toBeVisible();
-  // Октябрь идёт до 15-го: зарплата 5-го покрывает траты — пока.
-  await expect(summary).toContainText("Доходы на 15 октября");
-  await expect(summary).toContainText("150 000 ₽");
-  await expect(summary).toContainText("Остаток");
-  await expect(summary).toContainText("Доходы покрывают расходы — пока");
-  // Две линии и заливка между ними.
-  await expect(card.locator(".recharts-line")).toHaveCount(2);
-  const surface = card.locator("svg.recharts-surface").first();
-  await surface.scrollIntoViewIfNeeded();
-  const box = (await surface.boundingBox())!;
-  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5);
-  await expect(page.getByText("Остаток").nth(1)).toBeVisible();
-});
