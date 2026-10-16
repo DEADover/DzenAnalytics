@@ -320,7 +320,7 @@ export function TrendsPage() {
                     />
                   }
                 />
-                <Bar dataKey="avg" radius={[4, 4, 0, 0]} activeBar={false}>
+                <Bar dataKey="avg" name="Средний чек" radius={[4, 4, 0, 0]} activeBar={false}>
                   {dowChart.map((d, i) => (
                     <Cell
                       key={i}
@@ -590,7 +590,7 @@ function HourOfDayBars({
                 />
               }
             />
-            <Bar dataKey="total" radius={[3, 3, 0, 0]}>
+            <Bar dataKey="total" name="Сумма" radius={[3, 3, 0, 0]}>
               {data.map((d) => (
                 <Cell
                   key={d.hour}

@@ -680,7 +680,7 @@ export function CashflowPage() {
                     </div>
                   )}
                 />
-                <Bar dataKey="avgExpense" radius={[4, 4, 0, 0]} activeBar={false} isAnimationActive={false}>
+                <Bar dataKey="avgExpense" name="Средний расход" radius={[4, 4, 0, 0]} activeBar={false} isAnimationActive={false}>
                   {seasonality.map((s, i) => {
                     const dev = s.expenseDeviationPct;
                     const color =
