@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ComposedChart,
   Bar,
@@ -252,6 +252,44 @@ export function CashflowPage() {
   const avgMonthlyIncome = kpi.income / monthsCount;
   const savingsRate = kpi.income > 0 ? (kpi.income - kpi.expense) / kpi.income : 0;
 
+  // Сравнение текущего месяца со средним — под графиком. В «Зеркале» оно
+  // встаёт между графиком и легендой, а не под ней.
+  const vsAvgRow =
+    vsAvg.current && vsAvg.avg.expense > 0 ? (
+      <div className="text-xs mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-muted text-center">
+            <div>
+              Расходы текущего месяца:{" "}
+              <span
+                className={
+                  vsAvg.current.expense > vsAvg.avg.expense * 1.1
+                    ? "text-expense"
+                    : vsAvg.current.expense < vsAvg.avg.expense * 0.9
+                      ? "text-income"
+                      : "text-text"
+                }
+              >
+                {((vsAvg.current.expense / vsAvg.avg.expense - 1) * 100).toFixed(0)}%
+              </span>{" "}
+              от среднего
+            </div>
+            <div>
+              Доходы текущего месяца:{" "}
+              <span className="text-text">
+                {vsAvg.avg.income > 0
+                  ? `${((vsAvg.current.income / vsAvg.avg.income - 1) * 100).toFixed(0)}%`
+                  : "—"}
+              </span>{" "}
+              от среднего
+            </div>
+            <div>
+              Чистый: <span className={vsAvg.current.net > vsAvg.avg.net ? "text-income" : "text-expense"}>
+                {vsAvg.current.net > vsAvg.avg.net ? "лучше" : "хуже"}
+              </span>{" "}
+              среднего на {formatMoney(Math.abs(vsAvg.current.net - vsAvg.avg.net), base)}
+            </div>
+          </div>
+    ) : null;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -339,7 +377,7 @@ export function CashflowPage() {
           }
         />
         {/* «Зеркалу» выше: под графиком ещё легенда по сторонам. */}
-        <div className={vizMode === "mirror" ? "h-[30rem]" : "h-80"}>
+        <div className={vizMode === "mirror" ? "h-[32rem]" : "h-80"}>
           {vizMode === "bars" ? (
           <ChartContainer>
             <ComposedChart
@@ -485,6 +523,7 @@ export function CashflowPage() {
               onMonth={openMonth}
               bounds={mirrorBounds}
               monthStartDay={monthStartDay}
+              summary={vsAvgRow}
             />
           ) : (
             <ChartContainer>
@@ -534,40 +573,7 @@ export function CashflowPage() {
             </ChartContainer>
           )}
         </div>
-        {vsAvg.current && vsAvg.avg.expense > 0 && (
-          <div className="text-xs mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-muted text-center">
-            <div>
-              Расходы текущего месяца:{" "}
-              <span
-                className={
-                  vsAvg.current.expense > vsAvg.avg.expense * 1.1
-                    ? "text-expense"
-                    : vsAvg.current.expense < vsAvg.avg.expense * 0.9
-                      ? "text-income"
-                      : "text-text"
-                }
-              >
-                {((vsAvg.current.expense / vsAvg.avg.expense - 1) * 100).toFixed(0)}%
-              </span>{" "}
-              от среднего
-            </div>
-            <div>
-              Доходы текущего месяца:{" "}
-              <span className="text-text">
-                {vsAvg.avg.income > 0
-                  ? `${((vsAvg.current.income / vsAvg.avg.income - 1) * 100).toFixed(0)}%`
-                  : "—"}
-              </span>{" "}
-              от среднего
-            </div>
-            <div>
-              Чистый: <span className={vsAvg.current.net > vsAvg.avg.net ? "text-income" : "text-expense"}>
-                {vsAvg.current.net > vsAvg.avg.net ? "лучше" : "хуже"}
-              </span>{" "}
-              среднего на {formatMoney(Math.abs(vsAvg.current.net - vsAvg.avg.net), base)}
-            </div>
-          </div>
-        )}
+        {vizMode !== "mirror" && vsAvgRow}
       </div>
 
       {allYears.length >= 2 && (
@@ -812,6 +818,7 @@ function MirrorChart({
   onMonth,
   bounds,
   monthStartDay,
+  summary,
 }: {
   data: MirrorPoint[];
   layers: MirrorLayer[];
@@ -820,6 +827,8 @@ function MirrorChart({
   /** Границы периода графика: крайние месяцы могут попасть в него не целиком. */
   bounds: { from: string | null; to: string | null };
   monthStartDay: number;
+  /** Сводка «… от среднего» — сразу под графиком, до легенды. */
+  summary?: ReactNode;
 }) {
   const [focus, setFocus] = useState<string | null>(null);
   const income = layers.filter((l) => l.side === "income");
@@ -949,6 +958,7 @@ function MirrorChart({
           </ComposedChart>
         </ChartContainer>
       </div>
+      {summary}
       {/* Легенда: две колонки — доходы и расходы с суммой за период, категории
           плашками с суммой; наведение на плашку высвечивает её слой. */}
       <div className="mt-3 grid gap-x-8 gap-y-3 lg:grid-cols-[2fr_3fr]" onMouseLeave={() => setFocus(null)}>
