@@ -46,3 +46,21 @@ test("год — по-прежнему помесячно", async ({ page }) => 
   const card = page.locator(".card-tray", { has: page.getByText("Доходы и расходы по месяцам", { exact: true }) });
   await expect(card.getByText(/^\d+ мес\.$/)).toBeVisible();
 });
+
+test("«Поток»: в подсказке дня только категории с тратами", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await connectZen(page, "/cashflow");
+  await page.locator("button", { hasText: "Отчётный месяц" }).first().click();
+  const seg = page.getByRole("radio", { name: "Поток" }).or(page.getByRole("button", { name: "Поток", exact: true })).first();
+  await seg.click();
+  const card = page.locator(".card-tray", { has: seg }).first();
+  const surface = card.locator(".recharts-wrapper > svg.recharts-surface").first();
+  await surface.scrollIntoViewIfNeeded();
+  const box = (await surface.boundingBox())!;
+  // 10 октября — аренда и продукты, остальные категории в этот день пустые.
+  await page.mouse.move(box.x + 60 + ((box.width - 70) * 9) / 14, box.y + box.height * 0.5);
+  const tip = card.locator(".recharts-tooltip-wrapper");
+  await expect(tip).toContainText("октября");
+  const values = await tip.locator("span, div").allTextContents();
+  expect(values.filter((v) => v.trim() === "0 ₽")).toEqual([]);
+});

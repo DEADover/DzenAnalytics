@@ -141,6 +141,7 @@ export function SeriesTooltip({
   formatLabel,
   skipKeys,
   note,
+  hideZero = false,
 }: {
   active?: boolean;
   payload?: {
@@ -159,23 +160,32 @@ export function SeriesTooltip({
   formatLabel?: (label: unknown, rows: { payload?: Record<string, unknown> }[]) => string;
   /** Служебные серии, которых в подсказке быть не должно (подложки, границы). */
   skipKeys?: string[];
+  /**
+   * Не показывать нулевые строки — для графиков с десятком рядов (категории
+   * потока): в дне с одной тратой иначе выходил столбик «0 ₽» на всю подсказку.
+   * Крупные — сверху.
+   */
+  hideZero?: boolean;
   note?: ReactNode;
 }) {
   if (!active || !payload?.length) return null;
-  const rows = payload.filter(
+  const all = payload.filter(
     (p) => !skipKeys?.includes(String(p.dataKey)) && Number.isFinite(Number(p.value))
   );
-  if (rows.length === 0) return null;
+  if (all.length === 0) return null;
+  const rows = hideZero
+    ? all.filter((p) => Math.abs(Number(p.value)) >= 0.5).sort((a, b) => Math.abs(Number(b.value)) - Math.abs(Number(a.value)))
+    : all;
   return (
     <ChartTooltipCard>
       <TooltipFacts
-        title={formatLabel ? formatLabel(label, rows) : String(label ?? "")}
+        title={formatLabel ? formatLabel(label, all) : String(label ?? "")}
         facts={rows.map((p) => ({
           label: String(p.name ?? p.dataKey ?? ""),
           value: formatValue(Number(p.value)),
           swatchColor: p.color,
         }))}
-        note={note}
+        note={rows.length === 0 ? "Операций нет" : note}
       />
     </ChartTooltipCard>
   );

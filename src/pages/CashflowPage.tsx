@@ -595,6 +595,7 @@ export function CashflowPage() {
                   {...chartTooltipProps}
                   content={
                     <SeriesTooltip
+                      hideZero
                       formatValue={(v) => formatMoney(v, base)}
                       formatLabel={(d) => (daily ? dayTitle(String(d)) : monthLabel(String(d)))}
                     />

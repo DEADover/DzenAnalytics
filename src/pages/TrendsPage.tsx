@@ -268,7 +268,7 @@ export function TrendsPage() {
               />
               <Tooltip
                 {...chartTooltipProps}
-                content={<SeriesTooltip formatValue={(v) => formatMoney(v, base)} />}
+                content={<SeriesTooltip hideZero formatValue={(v) => formatMoney(v, base)} />}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {activeCategories.map((cat) => (
@@ -359,7 +359,7 @@ export function TrendsPage() {
                 />
                 <Tooltip
                   {...chartTooltipProps}
-                  content={<SeriesTooltip formatValue={(v) => formatMoney(v, base)} />}
+                  content={<SeriesTooltip hideZero formatValue={(v) => formatMoney(v, base)} />}
                 />
               </RadarChart>
             </ChartContainer>
