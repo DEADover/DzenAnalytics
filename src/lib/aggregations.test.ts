@@ -1521,3 +1521,24 @@ describe("buildMirrorData — доходы вверх, расходы вниз",
     expect(data[0].ym).toBe("2026-01");
   });
 });
+
+describe("графики Cash-flow по дням — свои отрезки", () => {
+  const days = { keyOf: (d: string) => d, keys: ["2026-10-01", "2026-10-02", "2026-10-03"] };
+  const txs = [
+    tx({ kind: "income", category: "Зарплата", date: "2026-10-01", amountBase: 1000 }),
+    tx({ kind: "expense", category: "Кафе", date: "2026-10-03", amountBase: 300 }),
+  ];
+
+  it("«Зеркало» — по дням, пустой день нулём", () => {
+    const { data } = buildMirrorData(txs, { buckets: days });
+    expect(data.map((d) => d.ym)).toEqual(days.keys);
+    expect(data.map((d) => [d.income, d.expense])).toEqual([[1000, 0], [0, 0], [0, 300]]);
+  });
+
+  it("«Поток» — по дням, все отрезки по порядку", () => {
+    const { data } = buildStreamData(txs, 10, "expense", 1, days);
+    expect(data.map((d) => d.ym)).toEqual(days.keys);
+    expect(data[2]["Кафе"]).toBe(300);
+    expect(data[1]["Кафе"]).toBe(0);
+  });
+});

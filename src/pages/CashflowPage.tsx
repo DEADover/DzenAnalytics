@@ -34,7 +34,7 @@ import { useFiltersStore, applyFilters, presetToRange } from "../store/useFilter
 import { useLocalPeriod } from "../hooks/useLocalPeriod";
 import { useDrillStore } from "../store/useDrillStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { periodKey, periodRange } from "../lib/period";
+import { periodKey, periodRange, shiftDays, spanDays } from "../lib/period";
 import {
   groupByMonth,
   computeKPI,
@@ -184,22 +184,61 @@ export function CashflowPage() {
 
   // Cash-flow visualization mode: bars (по умолчанию) или stream graph
   const [vizMode, setVizMode] = useState<"bars" | "stream" | "mirror">("bars");
-  const stream = useMemo(
-    () => buildStreamData(filtered, 10, "expense", monthStartDay),
-    [filtered, monthStartDay]
-  );
-  // «Зеркало»: доходы слоями вверх, расходы слоями вниз — один взгляд на то,
-  // откуда пришли деньги, куда ушли и какая сторона в каком месяце перевесила.
-  const mirror = useMemo(
-    () => buildMirrorData(filtered, { topIncome: 5, topExpense: 7, monthStartDay }),
-    [filtered, monthStartDay]
-  );
-  // Границы периода графика — чтобы пометить крайние неполные месяцы.
-  const mirrorBounds = useMemo(() => {
+  // Границы периода графика — чтобы пометить крайние неполные месяцы и понять,
+  // не короткий ли период.
+  const periodBounds = useMemo(() => {
     if (lp.preset === "custom") return { from: lp.from, to: lp.to };
     const maxDate = transactions.reduce((m, t) => (t.date > m ? t.date : m), "");
     return presetToRange(lp.preset, maxDate, lp.monthYM, monthStartDay);
   }, [lp.preset, lp.from, lp.to, lp.monthYM, transactions, monthStartDay]);
+  // Короткий период (месяц, 30 дней, свои даты до двух месяцев) — графики по
+  // дням: помесячно там была бы одна точка. Дни — от начала периода до его
+  // конца или до последней операции, если период ещё идёт.
+  const dayKeys = useMemo(() => {
+    const { from, to } = periodBounds;
+    if (!from || !to) return null;
+    const last = transactions.reduce((m, t) => (t.date > m ? t.date : m), "");
+    const end = last && last < to ? (last < from ? from : last) : to;
+    if (spanDays(from, end) > DAILY_MAX_DAYS) return null;
+    const out: string[] = [];
+    for (let d = from; d <= end; d = shiftDays(d, 1)) out.push(d);
+    return out;
+  }, [periodBounds, transactions]);
+  const daily = dayKeys !== null;
+  const buckets = useMemo(() => (dayKeys ? { keyOf: (d: string) => d, keys: dayKeys } : undefined), [dayKeys]);
+  const stream = useMemo(
+    () => buildStreamData(filtered, 10, "expense", monthStartDay, buckets),
+    [filtered, monthStartDay, buckets]
+  );
+  // «Зеркало»: доходы слоями вверх, расходы слоями вниз — один взгляд на то,
+  // откуда пришли деньги, куда ушли и какая сторона в каком месяце перевесила.
+  const mirror = useMemo(
+    () => buildMirrorData(filtered, { topIncome: 5, topExpense: 7, monthStartDay, buckets }),
+    [filtered, monthStartDay, buckets]
+  );
+  // «Бары» по дням: доходы и расходы дня, линия — итог с начала периода.
+  const dailyBars = useMemo(() => {
+    if (!dayKeys) return [];
+    const by = new Map(dayKeys.map((d) => [d, { income: 0, expense: 0 }]));
+    for (const t of filtered) {
+      const b = by.get(t.date);
+      if (!b) continue;
+      if (t.kind === "income") b.income += t.amountBase;
+      else if (t.kind === "expense") b.expense += t.amountBase;
+      else if (t.kind === "refund") b.expense -= t.amountBase;
+    }
+    let run = 0;
+    return dayKeys.map((d) => {
+      const b = by.get(d)!;
+      run += b.income - b.expense;
+      return { ym: d, income: Math.round(b.income), expense: Math.round(b.expense), net: Math.round(run) };
+    });
+  }, [dayKeys, filtered]);
+  /** Столбик или точка графика — месяц или день, смотря по периоду. */
+  function openBucket(key: string) {
+    if (!daily) return openMonth(key);
+    showDrill(dayTitle(key), filtered.filter((t) => t.date === key), "День");
+  }
 
   // Seasonality
   const seasonality = useMemo(() => detectSeasonality(dimensionFiltered), [dimensionFiltered]);
@@ -347,14 +386,18 @@ export function CashflowPage() {
           icon={vizMode === "bars" ? BarChart3 : vizMode === "stream" ? Layers : FlipVertical2}
           title={
             vizMode === "bars"
-              ? "Доходы и расходы по месяцам"
+              ? daily
+                ? "Доходы и расходы по дням"
+                : "Доходы и расходы по месяцам"
               : vizMode === "stream"
                 ? "Поток расходов по категориям"
                 : "Доходы и расходы по категориям"
           }
           subtitle={
             vizMode === "bars"
-              ? "Столбцы — суммы, линия — чистый поток"
+              ? daily
+                ? "Столбцы — суммы дня, линия — итог с начала периода"
+                : "Столбцы — суммы, линия — чистый поток"
               : vizMode === "stream"
                 ? "Категории как реки расходов во времени"
                 : "Доходы — вверх от оси, расходы — вниз, слоями по категориям"
@@ -372,13 +415,15 @@ export function CashflowPage() {
                   { value: "mirror", label: "Зеркало", icon: FlipVertical2 },
                 ]}
               />
-              <div className="text-xs text-muted">{months.length} мес.</div>
+              <div className="text-xs text-muted">{daily ? `${dayKeys!.length} дн.` : `${months.length} мес.`}</div>
             </>
           }
         />
         {/* «Зеркалу» выше: под графиком ещё легенда по сторонам. */}
         <div className={vizMode === "mirror" ? "h-[32rem]" : "h-80"}>
-          {vizMode === "bars" ? (
+          {vizMode === "bars" && daily ? (
+            <DailyBarsChart data={dailyBars} base={base} onDay={openBucket} />
+          ) : vizMode === "bars" ? (
           <ChartContainer>
             <ComposedChart
               data={chartData}
@@ -520,8 +565,9 @@ export function CashflowPage() {
               data={mirror.data}
               layers={mirror.layers}
               base={base}
-              onMonth={openMonth}
-              bounds={mirrorBounds}
+              onMonth={openBucket}
+              bounds={periodBounds}
+              daily={daily}
               monthStartDay={monthStartDay}
               summary={vsAvgRow}
             />
@@ -532,7 +578,7 @@ export function CashflowPage() {
                 stackOffset="silhouette"
                 onClick={(e: unknown) => {
                   const ym = (clickedRow(e, stream.data) as { ym?: string } | undefined)?.ym;
-                  if (ym) openMonth(ym);
+                  if (ym) openBucket(ym);
                 }}
                 style={{ cursor: "pointer" }}
               >
@@ -541,7 +587,7 @@ export function CashflowPage() {
                   dataKey="label"
                   stroke={chartAxisStroke}
                   fontSize={11}
-                  tickFormatter={(d) => monthLabel(String(d))}
+                  tickFormatter={(d) => (daily ? dayTick(String(d)) : monthLabel(String(d)))}
                   minTickGap={40}
                 />
                 <YAxis hide />
@@ -550,7 +596,7 @@ export function CashflowPage() {
                   content={
                     <SeriesTooltip
                       formatValue={(v) => formatMoney(v, base)}
-                      formatLabel={(d) => monthLabel(String(d))}
+                      formatLabel={(d) => (daily ? dayTitle(String(d)) : monthLabel(String(d)))}
                     />
                   }
                 />
@@ -819,6 +865,7 @@ function MirrorChart({
   bounds,
   monthStartDay,
   summary,
+  daily = false,
 }: {
   data: MirrorPoint[];
   layers: MirrorLayer[];
@@ -829,6 +876,8 @@ function MirrorChart({
   monthStartDay: number;
   /** Сводка «… от среднего» — сразу под графиком, до легенды. */
   summary?: ReactNode;
+  /** Точки — дни короткого периода, а не месяцы. */
+  daily?: boolean;
 }) {
   const [focus, setFocus] = useState<string | null>(null);
   const income = layers.filter((l) => l.side === "income");
@@ -857,6 +906,7 @@ function MirrorChart({
 
   // Крайние месяцы, попавшие в период не целиком: подписываем в подсказке.
   const partial = (ym: string): string | null => {
+    if (daily) return null;
     const r = periodRange(ym, monthStartDay);
     const from = bounds.from && bounds.from > r.from ? bounds.from : null;
     const to = bounds.to && bounds.to < r.to ? bounds.to : null;
@@ -887,7 +937,13 @@ function MirrorChart({
             style={{ cursor: "pointer" }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
-            <XAxis dataKey="ym" stroke={chartAxisStroke} fontSize={11} tickFormatter={(d) => monthLabel(String(d))} minTickGap={40} />
+            <XAxis
+              dataKey="ym"
+              stroke={chartAxisStroke}
+              fontSize={11}
+              tickFormatter={(d) => (daily ? dayTick(String(d)) : monthLabel(String(d)))}
+              minTickGap={daily ? 12 : 40}
+            />
             <YAxis
               stroke={chartAxisStroke}
               fontSize={11}
@@ -909,14 +965,14 @@ function MirrorChart({
                 return (
                   <ChartTooltipCard>
                     <TooltipFacts
-                      title={monthLabelFull(p.ym)}
+                      title={daily ? dayTitle(p.ym) : monthLabelFull(p.ym)}
                       facts={[
                         { label: "Доходы", value: formatMoney(p.income, base), tone: "income" as const, strong: true },
                         ...income.flatMap(row),
                         { label: "Расходы", value: formatMoney(p.expense, base), tone: "expense" as const, strong: true },
                         ...expense.flatMap(row),
                         {
-                          label: "Итог месяца",
+                          label: daily ? "Итог дня" : "Итог месяца",
                           value: formatMoney(net, base, { signed: true }),
                           tone: net >= 0 ? ("income" as const) : ("expense" as const),
                           strong: true,
@@ -948,7 +1004,7 @@ function MirrorChart({
             <Line
               type="monotone"
               dataKey="net"
-              name="Итог месяца"
+              name={daily ? "Итог дня" : "Итог месяца"}
               stroke={chartTotalStroke}
               strokeWidth={2}
               dot={{ r: 2.5, fill: chartTotalStroke, strokeWidth: 0 }}
@@ -1001,11 +1057,89 @@ function MirrorChart({
         <div className="lg:col-span-2 flex items-center gap-2 text-xs text-muted">
           <span className="w-4 h-0.5 rounded-full" style={{ background: chartTotalStroke }} />
           <span>
-            <span className="text-text font-medium">Итог месяца</span> — доходы минус расходы: выше оси месяц в плюсе,
-            ниже — в минусе
+            <span className="text-text font-medium">{daily ? "Итог дня" : "Итог месяца"}</span> — доходы минус расходы:
+            выше оси {daily ? "день" : "месяц"} в плюсе, ниже — в минусе
           </span>
         </div>
       </div>
     </div>
+  );
+}
+
+/** Дальше — помесячно: по дням столбики слишком тонкие. */
+const DAILY_MAX_DAYS = 62;
+
+/** «5» — число месяца на оси. */
+function dayTick(d: string): string {
+  return String(Number(d.slice(8)));
+}
+
+/** «Пн, 5 октября» — заголовок подсказки и боковой панели. */
+function dayTitle(d: string): string {
+  const [y, m, dd] = d.split("-").map(Number);
+  const s = new Date(y, m - 1, dd).toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "long" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * «Бары» короткого периода: доходы и расходы по дням, линия — итог с начала
+ * периода (дневной «чистый поток» скачет от нуля к зарплате и ничего не
+ * говорит). Прогноза нет — он помесячный.
+ */
+function DailyBarsChart({
+  data,
+  base,
+  onDay,
+}: {
+  data: { ym: string; income: number; expense: number; net: number }[];
+  base: string;
+  onDay: (d: string) => void;
+}) {
+  return (
+    <ChartContainer>
+      <ComposedChart
+        data={data}
+        barCategoryGap="20%"
+        barGap={0}
+        maxBarSize={14}
+        onClick={(e: unknown) => {
+          const d = (clickedRow(e, data) as { ym?: string } | undefined)?.ym;
+          if (d) onDay(d);
+        }}
+        style={{ cursor: "pointer" }}
+      >
+        <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
+        <XAxis dataKey="ym" stroke={chartAxisStroke} fontSize={11} tickFormatter={(d) => dayTick(String(d))} minTickGap={12} />
+        <YAxis stroke={chartAxisStroke} fontSize={11} tickFormatter={(v) => formatNum(v, { compact: true })} />
+        <Tooltip
+          {...chartTooltipProps}
+          content={<SeriesTooltip formatValue={(v) => formatMoney(v, base)} formatLabel={(d) => dayTitle(String(d))} />}
+        />
+        <Legend
+          content={() => (
+            <div className="flex flex-wrap justify-center gap-4 pt-1 text-xs">
+              {[
+                { label: "Доходы", color: chartColor.income, bar: true },
+                { label: "Расходы", color: chartColor.expense, bar: true },
+                { label: "Итог с начала периода", color: chartColor.accent, bar: false },
+              ].map((it) => (
+                <span key={it.label} className="inline-flex items-center gap-1.5" style={{ color: it.color }}>
+                  {it.bar ? (
+                    <span style={{ width: 12, height: 12, borderRadius: 2, background: it.color }} />
+                  ) : (
+                    <span style={{ width: 16, borderTop: `2px solid ${it.color}` }} />
+                  )}
+                  {it.label}
+                </span>
+              ))}
+            </div>
+          )}
+        />
+        <ReferenceLine y={0} stroke={chartAxisStroke} />
+        <Bar dataKey="income" name="Доходы" fill={chartColor.income} radius={[3, 3, 0, 0]} activeBar={false} isAnimationActive={false} />
+        <Bar dataKey="expense" name="Расходы" fill={chartColor.expense} radius={[3, 3, 0, 0]} activeBar={false} isAnimationActive={false} />
+        <Line type="linear" dataKey="net" name="Итог с начала периода" stroke={chartColor.accent} strokeWidth={2} dot={false} isAnimationActive={false} />
+      </ComposedChart>
+    </ChartContainer>
   );
 }

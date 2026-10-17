@@ -743,11 +743,22 @@ export interface StreamPoint {
   [category: string]: number | string;
 }
 
+/**
+ * Свои отрезки графика вместо месяцев: ключ отрезка по дате и все ключи по
+ * порядку (пустые тоже — график не склеивает соседние). Нужно, когда выбран
+ * один месяц: тогда отрезок — день.
+ */
+export interface ChartBuckets {
+  keyOf: (date: string) => string;
+  keys: string[];
+}
+
 export function buildStreamData(
   txs: Transaction[],
   topCategories = 10,
   kind: "expense" | "income" = "expense",
-  monthStartDay: number = 1
+  monthStartDay: number = 1,
+  buckets?: ChartBuckets
 ): { data: StreamPoint[]; categories: string[] } {
   const monthsSet = new Set<string>();
   const totals = new Map<string, number>();
@@ -761,7 +772,7 @@ export function buildStreamData(
     if (!include) continue;
     // Тот же ключ, что у «столбцов» этого же графика: иначе переключение
     // «столбцы ↔ поток» меняло суммы за один и тот же месяц.
-    const ym = periodKey(t.date, monthStartDay);
+    const ym = buckets ? buckets.keyOf(t.date) : periodKey(t.date, monthStartDay);
     if (!ym) continue;
     monthsSet.add(ym);
     const delta = kind === "expense" ? expenseDelta(t) : t.amountBase;
@@ -780,7 +791,7 @@ export function buildStreamData(
     .map(([k]) => k);
   const topSet = new Set(topCats);
 
-  const months = Array.from(monthsSet).sort();
+  const months = buckets ? buckets.keys : Array.from(monthsSet).sort();
   const data: StreamPoint[] = months.map((ym) => {
     const m = byMonthCat.get(ym) || new Map();
     const point: StreamPoint = { ym, label: ym };
@@ -825,9 +836,9 @@ export interface MirrorPoint {
  */
 export function buildMirrorData(
   txs: Transaction[],
-  opts: { topIncome?: number; topExpense?: number; monthStartDay?: number } = {}
+  opts: { topIncome?: number; topExpense?: number; monthStartDay?: number; buckets?: ChartBuckets } = {}
 ): { data: MirrorPoint[]; layers: MirrorLayer[] } {
-  const { topIncome = 5, topExpense = 7, monthStartDay = 1 } = opts;
+  const { topIncome = 5, topExpense = 7, monthStartDay = 1, buckets } = opts;
   const sides = {
     income: { totals: new Map<string, number>(), byMonth: new Map<string, Map<string, number>>() },
     expense: { totals: new Map<string, number>(), byMonth: new Map<string, Map<string, number>>() },
@@ -837,7 +848,7 @@ export function buildMirrorData(
   for (const t of txs) {
     const side = t.kind === "income" ? "income" : affectsExpense(t.kind) ? "expense" : null;
     if (!side) continue;
-    const ym = periodKey(t.date, monthStartDay);
+    const ym = buckets ? buckets.keyOf(t.date) : periodKey(t.date, monthStartDay);
     if (!ym) continue;
     if (!minYm || ym < minYm) minYm = ym;
     if (ym > maxYm) maxYm = ym;
@@ -849,7 +860,7 @@ export function buildMirrorData(
     if (!m) s2.byMonth.set(ym, (m = new Map()));
     m.set(cat, (m.get(cat) ?? 0) + delta);
   }
-  if (!minYm) return { data: [], layers: [] };
+  if (!minYm && !buckets?.keys.length) return { data: [], layers: [] };
 
   const layers: MirrorLayer[] = [];
   const pick = (side: "income" | "expense", top: number, prefix: string) => {
@@ -878,8 +889,8 @@ export function buildMirrorData(
 
   // Месяцы подряд от первого до последнего: пустой месяц — ноль на графике, а
   // не склейка соседних.
-  const months: string[] = [];
-  for (let ym = minYm; ym <= maxYm; ) {
+  const months: string[] = buckets ? [...buckets.keys] : [];
+  for (let ym = minYm; !buckets && ym <= maxYm; ) {
     months.push(ym);
     const [y, mo] = ym.split("-").map(Number);
     ym = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`;
