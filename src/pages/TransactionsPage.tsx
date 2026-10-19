@@ -1087,7 +1087,7 @@ function DayGroup({
         txs={facts.length ? facts : txs}
         base={base}
         showTransfers={showTransfers}
-        note={facts.length === 0 && <span className="text-[13px] text-muted">· запланировано</span>}
+        note={facts.length === 0 && <span className="text-[13px] text-muted">· Запланировано</span>}
       />
       {txs.map((t, i) => plans?.[i] ?? (
         <Row
