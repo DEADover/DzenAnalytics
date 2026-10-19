@@ -220,6 +220,8 @@ export function ImportPage() {
   const commentWrap = useDisplayStore((s) => s.commentWrap);
   const setCommentWrap = useDisplayStore((s) => s.setCommentWrap);
   const feedPlanned = useDisplayStore((s) => s.feedPlanned);
+  const feedPlannedMode = useDisplayStore((s) => s.feedPlannedMode);
+  const setFeedPlannedMode = useDisplayStore((s) => s.setFeedPlannedMode);
   const setFeedPlanned = useDisplayStore((s) => s.setFeedPlanned);
   const filtersMode = useDisplayStore((s) => s.filtersMode);
   const setFiltersMode = useDisplayStore((s) => s.setFiltersMode);
@@ -1591,6 +1593,57 @@ export function ImportPage() {
         />
 
         <SettingRow
+          title="Запланированные в ленте"
+          status={
+            !feedPlanned
+              ? "Не показываются — они есть в «Регулярных»"
+              : feedPlannedMode === "inline"
+                ? "В ленте среди операций — до конца выбранного периода"
+                : "Строкой над лентой «Операций» — щелчок показывает одни планы"
+          }
+          help={
+            <>
+              <p>
+                <strong>Строкой.</strong> Над лентой «Операций» стоит строка
+                «Запланировано»: сколько запланированных операций Дзен-мани
+                просрочено и сколько осталось до конца месяца, до конца года и
+                всего. Щелчок по ней показывает ленту одних запланированных — все,
+                какие есть, как «Будущие» в приложении.
+              </p>
+              <p>
+                <strong>В ленте.</strong> Запланированные стоят прямо среди
+                операций, на своих датах, и подчиняются тем же фильтрам. Сколько
+                вперёд — решает период: за отчётный месяц видны планы до его
+                конца, за год — до конца года, за всё время — все. В итоги ленты
+                планы не входят — только проведённые операции.
+              </p>
+              <p>
+                В обоих видах кнопкой «⋯» план можно сохранить как факт, связать
+                с уже проведённой операцией, изменить или удалить.
+              </p>
+            </>
+          }
+          control={
+            <Segmented
+              label="Запланированные в ленте"
+              value={feedPlanned ? feedPlannedMode : "off"}
+              onChange={(v) => {
+                if (v === "off") void setFeedPlanned(false);
+                else {
+                  void setFeedPlannedMode(v);
+                  if (!feedPlanned) void setFeedPlanned(true);
+                }
+              }}
+              options={[
+                { value: "off" as const, label: "Скрыть", title: "Не показывать запланированные" },
+                { value: "bar" as const, label: "Строкой", title: "Строкой «Запланировано» над лентой" },
+                { value: "inline" as const, label: "В ленте", title: "Среди операций, до конца выбранного периода" },
+              ]}
+            />
+          }
+        />
+
+        <SettingRow
           title="Строка из выписки"
           status={
             statementLine
@@ -1645,33 +1698,6 @@ export function ImportPage() {
               checked={commentWrap}
               label="Переносить длинные комментарии на вторую строку"
               onChange={(next) => setCommentWrap(next)}
-            />
-          }
-        />
-
-        <SettingRow
-          title="Запланированные в ленте"
-          status={
-            feedPlanned
-              ? "Строкой над лентой «Операций» — щелчок показывает одни планы"
-              : "Не показываются — они есть в «Регулярных»"
-          }
-          help={
-            <p>
-              Над лентой «Операций» стоит строка «Запланировано»: сколько
-              запланированных операций Дзен-мани просрочено и сколько осталось
-              до конца месяца, до конца года и всего. Щелчок по ней показывает
-              ленту одних запланированных — все, какие есть, как «Будущие» в
-              приложении. Кнопкой «⋯» план можно сохранить как факт,
-              связать с уже проведённой операцией, изменить или удалить. Здесь
-              строку можно убрать совсем.
-            </p>
-          }
-          control={
-            <Switch
-              checked={feedPlanned}
-              label="Показывать запланированные операции над лентой"
-              onChange={(next) => setFeedPlanned(next)}
             />
           }
         />

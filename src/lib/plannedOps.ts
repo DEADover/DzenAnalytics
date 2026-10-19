@@ -224,3 +224,13 @@ export function plannedAsTransaction(p: PlannedOp): Transaction {
     createdAt: `${p.date}T12:00:00Z`,
   };
 }
+
+/** Подпись плана для списка изменений и подтверждений. */
+export function planTitle(p: PlannedOp): string {
+  return p.payee || p.comment || p.category || (p.kind === "transfer" ? "Перевод" : "План");
+}
+
+/** Дата плана коротко: «18.10». */
+export function formatPlanDate(ymd: string): string {
+  return `${ymd.slice(8, 10)}.${ymd.slice(5, 7)}`;
+}

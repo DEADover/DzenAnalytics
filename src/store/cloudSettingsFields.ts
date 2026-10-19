@@ -19,7 +19,7 @@ import type { StoreApi, UseBoundStore } from "zustand";
 import { useTagModeStore } from "./useTagModeStore";
 import { useOffBalanceStore } from "./useOffBalanceStore";
 import { useFreeMoneyStore } from "./useFreeMoneyStore";
-import { isWindowKind, useDisplayStore } from "./useDisplayStore";
+import { isFeedPlannedMode, isWindowKind, useDisplayStore } from "./useDisplayStore";
 import { useFilterMemoryStore } from "./useFilterMemoryStore";
 import { useMembersStore } from "./useMembersStore";
 import { parseDupExclusions, useDuplicateExclusionsStore } from "./useDuplicateExclusionsStore";
@@ -185,6 +185,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   ),
   field(useDisplayStore, "display.feedPlanned", (s) => s.feedPlanned, (v, s) =>
     isBool(v) ? s.setFeedPlanned(v) : undefined
+  ),
+  field(useDisplayStore, "display.feedPlannedMode", (s) => s.feedPlannedMode, (v, s) =>
+    isFeedPlannedMode(v) ? s.setFeedPlannedMode(v) : undefined
   ),
   field(useDisplayStore, "display.hideThanks", (s) => s.hideThanks, (v, s) =>
     isBool(v) ? s.setHideThanks(v) : undefined

@@ -7,7 +7,7 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
-function localToday(): string {
+export function localToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }

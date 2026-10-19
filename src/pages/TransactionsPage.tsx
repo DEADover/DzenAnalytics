@@ -36,6 +36,10 @@ import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { MakeRecurringModal } from "../components/operations/MakeRecurringModal";
 import { MergeSelectionAction } from "../components/operations/MergeSelectionAction";
 import { PlannedBar, PlannedFeedList } from "../components/operations/PlannedFeedSection";
+import { usePlanRows } from "../hooks/usePlanRows";
+import { usePlannedFeed } from "../hooks/usePlannedFeed";
+import { plannedAsTransaction, type PlannedOp } from "../lib/plannedOps";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { BulkEditModal } from "../components/BulkEditModal";
@@ -343,22 +347,30 @@ export function TransactionsPage() {
     );
   }, [filtered, pageSearch]);
 
-  const sorted = useMemo(() => {
-    const arr = [...searched];
-    arr.sort((a, b) => {
-      switch (sortMode) {
-        case "date-desc":
-          return b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
-        case "date-asc":
-          return a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt);
-        case "amount-desc":
-          return b.amountBase - a.amountBase;
-        case "amount-asc":
-          return a.amountBase - b.amountBase;
-      }
-    });
-    return arr;
-  }, [searched, sortMode]);
+  const sorted = useMemo(() => [...searched].sort(feedComparator(sortMode)), [searched, sortMode]);
+
+  // ── Запланированные «В ленте» ─────────────────────────────────────────
+  // Настройка «Запланированные в ленте» → «В ленте»: планы Дзен-мани стоят
+  // среди операций на своих датах и проходят те же фильтры, что и операции, —
+  // значит, и период: за отчётный месяц видны планы до его конца, за год — до
+  // конца года, за всё время — все. В итоги, выделение и выгрузку планы не
+  // входят: это ещё не деньги, а намерение.
+  const inlinePlans = useDisplayStore((s) => s.feedPlanned && s.feedPlannedMode === "inline") && apiConnected;
+  const planFeed = usePlannedFeed(pageSearch);
+  const planById = useMemo(() => {
+    const m = new Map<string, PlannedOp>();
+    if (inlinePlans) for (const p of planFeed.ops) m.set(p.id, p);
+    return m;
+  }, [planFeed.ops, inlinePlans]);
+  const planTxs = useMemo(
+    () => (planById.size ? applyFilters([...planById.values()].map(plannedAsTransaction), filters, monthStartDay) : []),
+    [planById, filters, monthStartDay]
+  );
+  /** Лента целиком: операции и, в режиме «В ленте», планы — одним порядком. */
+  const feedRows = useMemo(
+    () => (planTxs.length ? [...sorted, ...planTxs].sort(feedComparator(sortMode)) : sorted),
+    [sorted, planTxs, sortMode]
+  );
 
   // Titles of accounts marked «накопительный» in Zenmoney — needed for the
   // «Накопления» total (issue #42). Empty in CSV mode (no live accounts).
@@ -464,7 +476,7 @@ export function TransactionsPage() {
     [transactions, selected]
   );
 
-  const visible = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
+  const visible = useMemo(() => feedRows.slice(0, visibleCount), [feedRows, visibleCount]);
 
   // Обучение открывает карточку первой операции ленты, чтобы показать значки
   // внизу, и само закрывает (`components/tour`). Без отметки «просмотрено»:
@@ -508,6 +520,12 @@ export function TransactionsPage() {
   const resize = useColumnResize("operations", byDate ? OPS_COLUMNS_NODATE : OPS_COLUMNS, {
     mode: "grid",
   });
+  // Строки планов в режиме «В ленте» — те же, что в ленте одних планов.
+  const planRows = usePlanRows(resize.template);
+  const renderPlan = (t: Transaction, grouped: boolean) => {
+    const p = planById.get(t.id);
+    return p ? planRows.renderRow(p, grouped) : null;
+  };
 
   // Group by day only when sorted by date. Apply lazy slicing FIRST so groups
   // appear/grow incrementally as the user scrolls.
@@ -554,7 +572,7 @@ export function TransactionsPage() {
 
   if (transactions.length === 0) return <EmptyState />;
 
-  const showingTail = visibleCount < sorted.length;
+  const showingTail = visibleCount < feedRows.length;
 
   return (
     <div className="space-y-6">
@@ -772,7 +790,7 @@ export function TransactionsPage() {
               query={pageSearch}
             />
           </div>
-        ) : sorted.length === 0 ? (
+        ) : feedRows.length === 0 ? (
           <SectionEmpty variant="inline">
             По текущим фильтрам ничего не найдено
           </SectionEmpty>
@@ -802,6 +820,7 @@ export function TransactionsPage() {
                 onSplit={apiConnected ? setSplitting : undefined}
                 selected={selected}
                 onToggleSelect={toggleSelect}
+                renderPlan={planById.size ? (t) => renderPlan(t, true) : undefined}
               />
             ))}
           </div>
@@ -815,7 +834,7 @@ export function TransactionsPage() {
               someSelected={someSelected}
               onToggleAll={toggleSelectAll}
             />
-            {visible.map((t) => (
+            {visible.map((t) => renderPlan(t, false) ?? (
               <Row
                 key={t.id}
                 tx={t}
@@ -833,8 +852,9 @@ export function TransactionsPage() {
           </div>
         )}
 
+        {planById.size > 0 && planRows.overlay}
         {showingTail && (
-          <LazyListFooter shown={visibleCount} total={sorted.length} sentinelRef={sentinelRef} />
+          <LazyListFooter shown={visibleCount} total={feedRows.length} sentinelRef={sentinelRef} />
         )}
       </OperationListTray>
 
@@ -1035,6 +1055,7 @@ function DayGroup({
   onSplit,
   selected,
   onToggleSelect,
+  renderPlan,
 }: {
   ymd: string;
   txs: Transaction[];
@@ -1052,11 +1073,23 @@ function DayGroup({
   onSplit?: (t: Transaction) => void;
   selected: Set<string>;
   onToggleSelect: (id: string) => void;
+  /** Строка плана («Запланированные в ленте» → «В ленте»); `null` — не план. */
+  renderPlan?: (t: Transaction) => ReactNode;
 }) {
+  // Суммы дня — по проведённым операциям: план ещё не деньги. День, где одни
+  // планы, показывает их суммы — иначе шапка над ними стояла бы пустой.
+  const plans = renderPlan ? txs.map((t) => renderPlan(t)) : null;
+  const facts = plans ? txs.filter((_, i) => plans[i] == null) : txs;
   return (
     <div>
-      <DayHeader ymd={ymd} txs={txs} base={base} showTransfers={showTransfers} />
-      {txs.map((t) => (
+      <DayHeader
+        ymd={ymd}
+        txs={facts.length ? facts : txs}
+        base={base}
+        showTransfers={showTransfers}
+        note={facts.length === 0 && <span className="text-[13px] text-muted">· запланировано</span>}
+      />
+      {txs.map((t, i) => plans?.[i] ?? (
         <Row
           key={t.id}
           tx={t}
@@ -1136,4 +1169,20 @@ function Row({
       <OperationActions onEdit={onEdit} onCopy={onCopy} onSplit={onSplit} onDelete={onDelete} />
     </OperationListRow>
   );
+}
+
+/** Порядок ленты по выбранной сортировке — общий для операций и планов в ней. */
+function feedComparator(mode: SortMode): (a: Transaction, b: Transaction) => number {
+  return (a, b) => {
+    switch (mode) {
+      case "date-desc":
+        return b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
+      case "date-asc":
+        return a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt);
+      case "amount-desc":
+        return b.amountBase - a.amountBase;
+      case "amount-asc":
+        return a.amountBase - b.amountBase;
+    }
+  };
 }
