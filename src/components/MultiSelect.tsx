@@ -28,6 +28,9 @@ import { nestedBranches, visibleOptions } from "../lib/nestedOptions";
 import { SearchInput } from "./SearchInput";
 import { textMatches } from "../lib/keyboardLayout";
 
+/** Потолок высоты меню: длиннее — своя прокрутка внутри. */
+const MENU_MAX_H = 360;
+
 export function MultiSelect({
   label,
   options,
@@ -334,6 +337,26 @@ export function MultiSelect({
         ? [...selected].map(text).join(", ")
         : `${selectedCount} из ${totalCount}`;
 
+  /**
+   * Прикидка высоты меню — для выбора стороны и подкрутки страницы.
+   *
+   * Считаем и заголовки групп («Карта», «Архивные»): без них при поиске
+   * прикидка выходила ниже содержимого, и меню с одним найденным счётом
+   * открывалось обрезанным, со своей прокруткой (#123). Саму высоту меню
+   * прикидка больше не ограничивает — только потолок и место на экране.
+   */
+  const menuHeightEstimate = () => {
+    let headers = 0;
+    visible.forEach((opt, i) => {
+      const prev = i > 0 ? visible[i - 1] : null;
+      if (archivedSet?.has(opt) && (prev === null || !archivedSet.has(prev))) headers++;
+      const g = groupOf?.(opt) ?? null;
+      if (g !== null && (prev === null || (groupOf?.(prev) ?? null) !== g)) headers++;
+    });
+    const rows = Math.max(visible.length, 1) * 32 + headers * 32;
+    return Math.min(rows + 52 + (showSearch ? 40 : 0), MENU_MAX_H);
+  };
+
   // The menu renders in a portal (position: fixed) so it floats above the
   // table below — `absolute` left it under a later stacking context. Its
   // left edge lines up with the button; it flips up if there's more room
@@ -357,7 +380,7 @@ export function MultiSelect({
       // Высоту прикидываем по СТРОКАМ НА ЭКРАНЕ: со свёрнутыми ветками список
       // короче, и резервировать под них место — значит открыть меню с пустым
       // хвостом. Раскрыли ветку — прикидка пересчитается, и меню подрастёт.
-      const estH = Math.min(visible.length * 32 + 44 + (showSearch ? 40 : 0), 360);
+      const estH = menuHeightEstimate();
       const below = window.innerHeight - r.bottom - 8;
       // Сверху место кончается не у края окна, а у липкой шапки: меню,
       // раскрытое поверх неё, закрывало навигацию и выглядело оторванным от
@@ -381,16 +404,19 @@ export function MultiSelect({
             left,
             width,
             bottom: window.innerHeight - r.top + 4,
-            maxHeight: Math.min(estH, above),
+            maxHeight: Math.min(MENU_MAX_H, above),
           }
         : {
             left,
             width,
             top: r.bottom + 4,
-            maxHeight: Math.min(estH, below),
+            maxHeight: Math.min(MENU_MAX_H, below),
           };
     }
     setPos(next);
+    // Прикидка зависит от показанных строк, а их число — в зависимостях;
+    // сам массив `visible` новый на каждой отрисовке и зациклил бы эффект.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, visible.length, showSearch, MENU_W]);
 
   /**
@@ -407,7 +433,7 @@ export function MultiSelect({
     const el = btnRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const want = Math.min(visible.length * 32 + 44 + (showSearch ? 40 : 0), 360);
+    const want = menuHeightEstimate();
     const lack = r.bottom + 4 + want + 8 - window.innerHeight;
     if (lack <= 0) return;
     const headerBottom = Math.max(
