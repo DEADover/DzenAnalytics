@@ -31,6 +31,7 @@ describe("реестр переносимых настроек", () => {
   it("переносятся списки, которых нет в Дзен-мани", () => {
     expect(SYNCED_COLLECTIONS.map((c) => c.type).sort()).toEqual([
       "goals",
+      "notes",
       "rules",
       "slices",
       "views",

@@ -77,6 +77,7 @@ export const BACKUP_META_KEYS = [
   // вовсе. Цена вопроса — 0,6 МБ на те же три года, и она того стоит.
   "histDayRates",
   "goals",
+  "counterpartyNotes", // заметки о контрагентах и должниках (#119)
   "calibration",
   "fireExcludedAccounts",
   "whatIfScenario", // сценарии «Что-если» и их допущения

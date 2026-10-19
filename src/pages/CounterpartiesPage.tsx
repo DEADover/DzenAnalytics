@@ -46,6 +46,7 @@ import {
 } from "../lib/format";
 import { CATEGORY_PALETTE } from "../lib/categoryColor";
 import { CategoryDot } from "../components/CategoryDot";
+import { CounterpartyNoteField, CounterpartyNoteMark } from "../components/CounterpartyNote";
 import { ChartContainer } from "../components/ChartContainer";
 import { DataTable } from "../components/DataTable";
 import { DeviationPill } from "../components/DeviationPill";
@@ -468,6 +469,7 @@ export function CounterpartiesPage() {
                 <span className="flex items-center gap-2.5 min-w-0">
                   <CategoryDot category={r.category} size="w-5 h-5" />
                   <span className="truncate">{r.name}</span>
+                  <CounterpartyNoteMark name={r.name} />
                   {r.isNew && (
                     <span className="shrink-0 rounded-full bg-accent/15 text-accent text-[10px] font-semibold px-1.5 py-px">
                       Новый
@@ -639,6 +641,10 @@ function PlaceCard({
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* Заметка себе на будущее (#119): в Дзен-мани такого поля нет, живёт
+          у нас и переносится между устройствами вместе с настройками. */}
+      <CounterpartyNoteField key={d.name} name={d.name} />
 
       <div className="grid grid-cols-3 gap-2">
         <FactTile small label="Всего" value={formatMoney(d.total, base, { compact: d.total >= 1_000_000 })} tone="expense" sub={sinceText(d.firstDate)} />

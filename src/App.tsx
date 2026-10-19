@@ -84,6 +84,7 @@ import { useTagModeStore } from "./store/useTagModeStore";
 import { useHeaderNavStore } from "./store/useHeaderNavStore";
 import { useBudgetSettingsStore } from "./store/useBudgetSettingsStore";
 import { useGoalsStore } from "./store/useGoalsStore";
+import { useCounterpartyNotesStore } from "./store/useCounterpartyNotesStore";
 import { useSavedViewsStore } from "./store/useSavedViewsStore";
 import { useFireStore } from "./store/useFireStore";
 import { useWhatIfStore } from "./store/useWhatIfStore";
@@ -204,6 +205,7 @@ function App() {
     // открывал «Бюджет», «Цели» и «Здоровье», настройки не переносились вовсе.
     useBudgetSettingsStore.getState().hydrate();
     useGoalsStore.getState().hydrate();
+    useCounterpartyNotesStore.getState().hydrate();
     useSavedViewsStore.getState().hydrate();
     useFireStore.getState().hydrate();
     useWhatIfStore.getState().hydrate();

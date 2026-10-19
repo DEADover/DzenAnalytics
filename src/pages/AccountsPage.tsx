@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CounterpartyNoteButton } from "../components/CounterpartyNote";
 import { Checkbox } from "../components/Checkbox";
 import {
   AreaChart,
@@ -2797,7 +2798,15 @@ export function AccountsPage() {
                               свободную ширину между ним и колонкой «Счёт», та
                               ужималась вдвое, и таблица на глазах съезжала
                               влево, оставляя пустое поле справа (issue #80). */}
-                          <td className="table-td" colSpan={2} />
+                          <td className="table-td" />
+                          {/* Заметка о человеке (#119) — в колонке действий,
+                              как кнопки самого счёта; та же, что в
+                              «Контрагентах» у этого имени. */}
+                          <td className={cellClass("actions")}>
+                            <div className="flex items-center justify-center">
+                              {d.payee !== NO_COUNTERPARTY && <CounterpartyNoteButton name={d.payee} />}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     {/* Строка сверки: остаток счёта минус сумма по людям.

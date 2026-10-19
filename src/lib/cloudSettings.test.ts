@@ -88,6 +88,15 @@ describe("служебный счёт и записи в кэше", () => {
     expect(found.accountId).toBe("svc");
   });
 
+  it("заметки о контрагентах — свой документ (#119)", () => {
+    const found = findCloudDocs({
+      accounts: [acc("svc", SERVICE_ACCOUNT_TITLE)],
+      reminders: [rem("n1", "svc", envelopeComment("notes", { items: {} }, 1))],
+    });
+    expect(found.byType.notes.map((d) => d.reminder.id)).toEqual(["n1"]);
+    expect(found.byType.rules).toEqual([]);
+  });
+
   it("без записей счёт ищется по названию", () => {
     const found = findCloudDocs({ accounts: [acc("svc", SERVICE_ACCOUNT_TITLE)], reminders: [] });
     expect(found.accountId).toBe("svc");

@@ -18,6 +18,7 @@ import { useCategoryRulesStore } from "./useCategoryRulesStore";
 import { useGoalsStore } from "./useGoalsStore";
 import { useSavedViewsStore } from "./useSavedViewsStore";
 import { useSlicesStore } from "./useSlicesStore";
+import { useCounterpartyNotesStore } from "./useCounterpartyNotesStore";
 
 /** Элемент списка: своё устойчивое имя и, по возможности, время создания. */
 export interface CloudItem {
@@ -57,6 +58,13 @@ export const SYNCED_COLLECTIONS: readonly SyncedCollection[] = [
   collection(useGoalsStore, "goals", (s) => s.goals, (items, s) => s.replaceAll(items)),
   collection(useSavedViewsStore, "views", (s) => s.views, (items, s) => s.replaceAll(items)),
   collection(useSlicesStore, "slices", (s) => s.slices, (items, s) => s.replaceAll(items)),
+  // Заметки о контрагентах (#119): в хранилище — словарь по ключу имени.
+  collection(
+    useCounterpartyNotesStore,
+    "notes",
+    (s) => Object.values(s.notes),
+    (items, s) => s.replaceAll(items)
+  ),
 ];
 
 export function syncedCollection(type: string): SyncedCollection | undefined {

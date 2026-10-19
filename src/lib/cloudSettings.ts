@@ -39,10 +39,10 @@ export const TOMBSTONE_TTL_MS = 90 * 24 * 3600 * 1000;
  * КОЛЛЕКЦИИ объектов с `id`, которые сливаются поэлементно: правила, цели,
  * сохранённые виды, разрезы данных.
  */
-export type CloudDocType = "settings" | "rules" | "goals" | "views" | "slices";
-const DOC_TYPES: readonly CloudDocType[] = ["settings", "rules", "goals", "views", "slices"];
+export type CloudDocType = "settings" | "rules" | "goals" | "views" | "slices" | "notes";
+const DOC_TYPES: readonly CloudDocType[] = ["settings", "rules", "goals", "views", "slices", "notes"];
 /** Записи, которые сливаются поэлементно. */
-export const COLLECTION_TYPES = ["rules", "goals", "views", "slices"] as const;
+export const COLLECTION_TYPES = ["rules", "goals", "views", "slices", "notes"] as const;
 export type CloudCollectionType = (typeof COLLECTION_TYPES)[number];
 
 export interface CloudEnvelope<T = unknown> {
@@ -117,6 +117,7 @@ export function findCloudDocs(cache: Pick<ZenCache, "reminders" | "accounts">): 
     goals: [],
     views: [],
     slices: [],
+    notes: [],
   };
   const accounts = new Map((cache.accounts ?? []).map((a) => [a.id, a]));
   let accountId: string | null = null;
