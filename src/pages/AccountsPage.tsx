@@ -2783,8 +2783,10 @@ export function AccountsPage() {
                               на «Капитале» это остаток, на «Движении» —
                               изменение за период. */}
                           {!capitalView && <td className="table-td" colSpan={2} />}
+                          {/* На «Капитале» колонка — «Остаток», и сумма по человеку
+                              стоит по её краю, как остатки счетов над ней. */}
                           <td
-                            className={cellClass("main", {
+                            className={cellClass(capitalView ? "balance" : "main", {
                               tone: d.settled ? "muted" : d.amount > 0 ? "income" : "expense",
                             })}
                           >
@@ -2835,7 +2837,7 @@ export function AccountsPage() {
                           {unallocated > 0 ? "Должны вам" : "Должны вы"}
                         </td>
                         {!capitalView && <td className="table-td" colSpan={2} />}
-                        <td className={cellClass("money", { muted: true })}>
+                        <td className={cellClass(capitalView ? "balance" : "money", { muted: true })}>
                           {formatMoney(Math.abs(unallocated), base)}
                         </td>
                         <td className="table-td" colSpan={2} />
