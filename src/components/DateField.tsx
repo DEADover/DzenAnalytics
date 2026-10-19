@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { MONTHS, MONTHS_SHORT } from "../lib/months";
-import { parseTypedDate } from "../lib/dateInput";
+import { applyDateMaskKey, parseTypedDate } from "../lib/dateInput";
 
 /**
  * A fully Russian date field. The native <input type="date"> and its
@@ -128,6 +128,18 @@ export function DateField({
   const boxRef = useRef<HTMLDivElement>(null);
   /** Набираемый текст; `null` — не редактируется, в поле видна сама дата. */
   const [typed, setTyped] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  /** Куда поставить курсор после того, как маска переписала текст. */
+  const caretRef = useRef<number | null>(null);
+  /** Поле только что получило фокус щелчком — выделение не сбрасывать. */
+  const focusClickRef = useRef(false);
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (el && caretRef.current !== null) {
+      el.setSelectionRange(caretRef.current, caretRef.current);
+      caretRef.current = null;
+    }
+  }, [typed]);
   const display = value
     ? granularity === "month"
       ? toDisplayMonth(value)
@@ -154,18 +166,48 @@ export function DateField({
           className={`${className} flex items-center gap-2 ${invalid ? "!border-expense" : ""}`}
         >
           <input
+            ref={inputRef}
             value={typed ?? display}
             placeholder={ph}
             inputMode="numeric"
             aria-label={placeholder || "Дата"}
             aria-invalid={invalid || undefined}
-            title="Можно набрать: 28.03.2026, 280326, 2803, 28 или «вчера»"
+            title="Цифры по маске дд.мм.гггг, точки встают сами; можно и словом: «вчера»"
+            onMouseDown={(e) => {
+              focusClickRef.current = document.activeElement !== e.currentTarget;
+            }}
             onFocus={(e) => {
               setTyped(display);
               e.target.select();
             }}
+            // Щелчок, которым поле получило фокус, ставил курсор в точку
+            // щелчка и снимал выделение — набранное вставлялось в середину
+            // старой даты (#125). Первый щелчок оставляет дату выделенной.
+            onMouseUp={(e) => {
+              if (focusClickRef.current) {
+                e.preventDefault();
+                focusClickRef.current = false;
+              }
+            }}
             onChange={(e) => setTyped(e.target.value)}
             onKeyDown={(e) => {
+              if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+                const el = e.currentTarget;
+                const masked = applyDateMaskKey(
+                  el.value,
+                  el.selectionStart ?? el.value.length,
+                  el.selectionEnd ?? el.value.length,
+                  e.key
+                );
+                if (masked) {
+                  e.preventDefault();
+                  caretRef.current = masked.caret;
+                  setTyped(masked.text);
+                  // Тот же текст (лишняя цифра в конце) — эффект не сработает.
+                  if (masked.text === el.value) el.setSelectionRange(masked.caret, masked.caret);
+                  return;
+                }
+              }
               if (e.key === "Enter") {
                 e.preventDefault();
                 commit();
