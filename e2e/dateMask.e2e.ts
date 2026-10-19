@@ -29,6 +29,21 @@ test("дата по маске: щелчок в середину и набор �
   await page.keyboard.type("21");
   await expect(date).toHaveValue("21.09.2026");
 
+  // Невозможное не набирается: «32» — остаётся «3», «31.04» — месяц не встаёт.
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("32");
+  await expect(date).toHaveValue("3");
+  await page.keyboard.type("104");
+  await expect(date).toHaveValue("31.0");
+  await page.keyboard.type("3");
+  await expect(date).toHaveValue("31.03.");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type("09.2026");
+  await expect(date).toHaveValue("31.0");
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("21092026");
+
   await page.keyboard.press("Enter");
   await expect(date).toHaveValue("21.09.2026");
   await expect(date).not.toHaveAttribute("aria-invalid", "true");

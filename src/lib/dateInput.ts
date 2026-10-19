@@ -58,6 +58,35 @@ const SEPARATOR_KEYS = new Set([".", ",", "/", "-", " "]);
 /** Сколько цифр в каждой части: день, месяц, год. */
 const PART_LENGTHS = [2, 2, 4];
 
+/** Дней в месяце (1–12); без года — как в високосном, чтобы «29.02» не отсечь раньше времени. */
+const daysIn = (m: number, y: number | null) =>
+  m === 2 ? (y === null || (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28) : [4, 6, 9, 11].includes(m) ? 30 : 31;
+
+/**
+ * Может ли из набранного по маске получиться настоящая дата.
+ *
+ * Части проверяются по мере набора: день не больше 31 (первая цифра — 0–3),
+ * месяц 01–12 (первая — 0 или 1), «00» — ни то, ни другое. День сверяется с
+ * месяцем («31.04», «30.02» — нет), а 29 февраля — с годом, когда год набран.
+ * Год — 2000-е: две цифры («26» = 2026) или четыре, начиная с «20» —
+ * операций старше 2000 года не бывает, как и в `parseTypedDate`.
+ */
+export function isPlausibleDatePrefix(text: string): boolean {
+  if (text === "") return true;
+  const parts = text.split(/[./\-\s]/);
+  if (parts.length > 3 || parts.some((p, i) => !/^\d*$/.test(p) || p.length > PART_LENGTHS[i]!)) return false;
+  const [dd = "", mm = "", yy = ""] = parts;
+  const okPart = (p: string, max: number) =>
+    p.length === 0 || (p.length === 1 ? Number(p) <= Math.floor(max / 10) : Number(p) >= 1 && Number(p) <= max);
+  if (!okPart(dd, 31) || !okPart(mm, 12)) return false;
+  if (yy.length >= 1 && !/^[12]/.test(yy)) return false;
+  if (yy.length >= 3 && !yy.startsWith("20")) return false;
+  // Год известен целиком: «26» → 2026, «2026». «20» — ещё неясно: 2020 или 20xx.
+  const year = yy.length === 4 ? Number(yy) : yy.length === 2 && yy !== "20" ? 2000 + Number(yy) : null;
+  if (dd.length === 2 && mm.length === 2 && Number(dd) > daysIn(Number(mm), year)) return false;
+  return true;
+}
+
 /**
  * Нажатие клавиши в поле даты по маске «дд.мм.гггг» — новый текст и место
  * курсора, или `null`, если клавишу маска не трогает (её обработает браузер).
@@ -70,7 +99,11 @@ const PART_LENGTHS = [2, 2, 4];
  *     встаёт сама: «18» → «18.», дальше уже месяц;
  *   • точка (запятая, «/», «-», пробел) после одной цифры дописывает ноль:
  *     «5.» → «05.»;
- *   • Backspace сразу за автоматической точкой стирает её вместе с цифрой.
+ *   • Backspace сразу за автоматической точкой стирает её вместе с цифрой;
+ *   • невозможное не набирается (`isPlausibleDatePrefix`): «32», месяц
+ *     «13», «31.04», «29.02.2025» — цифра просто не встаёт. Цифра, с которой
+ *     двузначный день или месяц не начинается («5» дня, «3» месяца), сразу
+ *     становится частью целиком: «05.», «03.».
  * Слова («вчера») маска не трогает: в тексте с буквами — `null`.
  */
 export function applyDateMaskKey(
@@ -84,13 +117,21 @@ export function applyDateMaskKey(
   const allSelected = selStart === 0 && selEnd === text.length && text.length > 0;
   const s = allSelected ? "" : text;
   const a = allSelected ? 0 : selStart;
+  /** Отказ: текст и курсор как были. */
+  const keep = { text, caret: selStart };
 
   if (/^\d$/.test(key)) {
     let pos = a;
     while (isSep(s[pos])) pos++;
     if (pos < s.length) {
       // Внутри набранного — замена цифры под курсором.
-      const next = s.slice(0, pos) + key + s.slice(pos + 1);
+      let next = s.slice(0, pos) + key + s.slice(pos + 1);
+      // Первая цифра части не сходится со второй («15» → «35»): вторую
+      // обнуляем — «30», дальше её можно набрать.
+      if (!isPlausibleDatePrefix(next) && /\d/.test(next[pos + 1] ?? "") && (pos === 0 || isSep(next[pos - 1]))) {
+        next = next.slice(0, pos + 1) + "0" + next.slice(pos + 2);
+      }
+      if (!isPlausibleDatePrefix(next)) return keep;
       let caret = pos + 1;
       while (isSep(next[caret])) caret++;
       return { text: next, caret };
@@ -98,9 +139,17 @@ export function applyDateMaskKey(
     // В конце — дописываем в текущую часть; полная часть закрывается точкой.
     const parts = s.split(/[./\-\s]/);
     const idx = parts.length - 1;
-    if (idx >= PART_LENGTHS.length || parts[idx].length >= PART_LENGTHS[idx]) return { text: s, caret: s.length };
+    const part = parts[idx]!;
+    if (idx >= PART_LENGTHS.length || part.length >= PART_LENGTHS[idx]!) return keep;
+    const isLast = idx === PART_LENGTHS.length - 1;
     let next = s + key;
-    if (parts[idx].length + 1 === PART_LENGTHS[idx] && idx < PART_LENGTHS.length - 1) next += ".";
+    if (!isLast && part.length === 0 && Number(key) > (idx === 0 ? 3 : 1)) {
+      // «5» дня или «3» месяца двузначными не начинаются — это «05.», «03.».
+      next = s + "0" + key + ".";
+    } else if (!isLast && part.length + 1 === PART_LENGTHS[idx]) {
+      next += ".";
+    }
+    if (!isPlausibleDatePrefix(next)) return keep;
     return { text: next, caret: next.length };
   }
 
@@ -114,9 +163,10 @@ export function applyDateMaskKey(
     }
     const parts = s.split(/[./\-\s]/);
     const idx = parts.length - 1;
-    const part = parts[idx];
+    const part = parts[idx]!;
     if (part.length === 0 || idx >= PART_LENGTHS.length - 1) return { text: s, caret: s.length };
-    const next = s.slice(0, s.length - part.length) + part.padStart(PART_LENGTHS[idx], "0") + ".";
+    const next = s.slice(0, s.length - part.length) + part.padStart(PART_LENGTHS[idx]!, "0") + ".";
+    if (!isPlausibleDatePrefix(next)) return keep;
     return { text: next, caret: next.length };
   }
 
