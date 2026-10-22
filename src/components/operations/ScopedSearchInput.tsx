@@ -7,17 +7,15 @@ import { formatNum } from "../../lib/format";
 
 export type SearchScope = "filter" | "all";
 
-const OPTIONS: { value: SearchScope; label: string; hint: string; icon: typeof Filter }[] = [
+const OPTIONS: { value: SearchScope; label: string; icon: typeof Filter }[] = [
   {
     value: "filter",
     label: "В фильтре",
-    hint: "Только то, что прошло общий фильтр",
     icon: Filter,
   },
   {
     value: "all",
     label: "Везде",
-    hint: "Все операции без фильтра",
     icon: Globe,
   },
 ];
@@ -122,10 +120,9 @@ export function ScopedSearchInput({
         open={shown}
         anchorRef={anchor}
         onClose={close}
-        className="card p-1 w-80 shadow-xl"
+        className="card p-1 w-56 shadow-xl"
       >
         <div id="search-scope-list" role="listbox" aria-label="Где искать" className="flex flex-col">
-          <div className="px-2.5 pt-1.5 pb-1 text-[11px] uppercase tracking-wide text-muted">Где искать</div>
           {OPTIONS.map((o) => {
             const Icon = o.icon;
             const selected = scope === o.value;
@@ -138,17 +135,16 @@ export function ScopedSearchInput({
                 onMouseEnter={() => setActive(o.value)}
                 onClick={() => pick(o.value)}
                 className={clsx(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left",
+                  "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm",
                   active === o.value && "bg-panel2"
                 )}
                 data-search-scope={o.value}
               >
                 <Icon className="w-4 h-4 shrink-0 text-muted" aria-hidden />
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm">{o.label}</span>
-                  <span className="block text-xs text-muted">{o.hint}</span>
-                </span>
-                <span className="text-sm tabular-nums text-muted" data-count>
+                <span className="flex-1 min-w-0 whitespace-nowrap">{o.label}</span>
+                {/* Место под число отведено заранее и с запасом: окошко одной
+                    ширины, найдено ли 1 или 100 000. */}
+                <span className="w-[4.5rem] shrink-0 text-right tabular-nums text-muted" data-count>
                   {formatNum(counts[o.value])}
                 </span>
                 <Check
