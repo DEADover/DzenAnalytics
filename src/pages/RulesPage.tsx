@@ -9,6 +9,7 @@ import {
   ChevronDown,
   GripVertical,
   Pencil,
+  Copy,
   ListChecks,
   Download,
   Upload,
@@ -16,6 +17,7 @@ import {
 import clsx from "clsx";
 import {
   useCategoryRulesStore,
+  ruleRepeats,
   type StoredCategoryRule,
 } from "../store/useCategoryRulesStore";
 import {
@@ -111,7 +113,7 @@ const RULE_COLUMNS: ResizeColumn[] = [
   { key: "targets", label: "Что меняет", type: "text", width: "18rem" },
   { key: "mode", label: "Режим", type: "mark", width: "13rem" },
   { key: "count", label: "Совпадений", type: "count", width: "6.5rem" },
-  { key: "actions", label: "Действия", type: "actions", width: "6rem", resizable: false },
+  { key: "actions", label: "Действия", type: "actions", width: "8rem", resizable: false },
 ];
 
 export function RulesPage() {
@@ -151,10 +153,13 @@ export function RulesPage() {
   /** Черновик из окна операции («Создать правило») — открываем редактор сразу. */
   const [prefill, setPrefill] = useState(peekPendingRulePrefill);
   useEffect(() => clearPendingRulePrefill(), []);
-  /** null — окно закрыто, «create» — новое правило, иначе редактируем. */
-  const [editing, setEditing] = useState<StoredCategoryRule | "create" | null>(() =>
-    prefill ? "create" : null
-  );
+  /** null — окно закрыто, «create» — новое правило, `{ copyOf }` — копия
+   *  правила, иначе редактируем само правило. */
+  const [editing, setEditing] = useState<
+    StoredCategoryRule | "create" | { copyOf: StoredCategoryRule } | null
+  >(() => (prefill ? "create" : null));
+  /** Правила, повторяющие правило выше: id → номер того, что выше. */
+  const repeats = useMemo(() => ruleRepeats(rules), [rules]);
   const [loadedZenTags, setZenTags] = useState<ZenTag[] | null>(null);
   /** Проверки смены типа: долговые счета, валюты, категории (#98). */
   const [loadedKindChecks, setKindChecks] = useState<KindChecks | null>(null);
@@ -423,7 +428,9 @@ export function RulesPage() {
       join: draft.join,
       actions: draft.actions,
     };
-    if (editing && editing !== "create") await update(editing.id, patch);
+    if (editing && editing !== "create" && "copyOf" in editing)
+      await add(patch, { after: editing.copyOf.id });
+    else if (editing && editing !== "create") await update(editing.id, patch);
     else await add(patch);
     await reapplyRules();
   }
@@ -875,6 +882,17 @@ export function RulesPage() {
                         <div className="flex items-center gap-1.5 min-w-0">
                           {/* Пустое правило помечено значком с подсказкой, а не
                               второй строкой: строка таблицы остаётся одной. */}
+                          {repeats.has(rule.id) && (
+                            <Tooltip
+                              content={`Делает то же, что правило № ${repeats.get(rule.id)}, — одно из них лишнее`}
+                            >
+                              <Copy
+                                className="w-3.5 h-3.5 shrink-0 text-warn"
+                                aria-label="Повторяет другое правило"
+                                data-rule-repeat
+                              />
+                            </Tooltip>
+                          )}
                           {!ruleHasEffect(rule) && (
                             <Tooltip content="Ни одно действие не заполнено — правило ничего не делает">
                               <AlertTriangle
@@ -964,6 +982,17 @@ export function RulesPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              setEditing({ copyOf: rule });
+                            }}
+                            className="btn-icon"
+                            title="Копировать правило"
+                            aria-label="Копировать правило"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               void removeRule(rule);
                             }}
                             className="btn-icon-danger"
@@ -985,8 +1014,10 @@ export function RulesPage() {
 
       {editing && (
         <RuleEditModal
-          rule={editing === "create" ? undefined : editing}
+          rule={editing === "create" || "copyOf" in editing ? undefined : editing}
           prefill={editing === "create" ? prefill : null}
+          copyOf={editing !== "create" && "copyOf" in editing ? editing.copyOf : null}
+          rules={rules}
           transactions={transactionsRaw}
           categories={allCategories}
           liveCategories={liveCategories}

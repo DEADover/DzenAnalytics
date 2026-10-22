@@ -82,7 +82,7 @@ interface RulesState {
    * такое же уже было: вызвавшему обычно нужно тут же прогнать правило по
    * операциям, а прогонять надо и совпавшее.
    */
-  add: (r: NewRule | NewRuleV2) => Promise<string>;
+  add: (r: NewRule | NewRuleV2, opts?: { after?: string }) => Promise<string>;
   /** То же пачкой: id по каждому правилу, без повторов. */
   addMany: (rs: (NewRule | NewRuleV2)[]) => Promise<string[]>;
   update: (id: string, patch: Partial<NewRuleV2>) => Promise<void>;
@@ -228,6 +228,38 @@ function ruleKey(r: RuleLike): string {
   return `${v2.join} [${conds}] → [${acts}]`;
 }
 
+/**
+ * Правило из списка, которое делает ровно то же, что `candidate`: те же
+ * условия и те же действия (название и режим не в счёт). `exceptId` — само
+ * редактируемое правило, с собой оно не сравнивается. Редактор этим не даёт
+ * сохранить второе такое же правило — в том числе копию, которую не изменили.
+ */
+export function findTwinRule<R extends CategoryRuleV2>(
+  rules: readonly R[],
+  candidate: Omit<CategoryRuleV2, "id" | "createdAt">,
+  exceptId?: string
+): R | null {
+  const key = ruleKey({ ...candidate, id: "", createdAt: "" });
+  return rules.find((r) => r.id !== exceptId && ruleKey(r) === key) ?? null;
+}
+
+/**
+ * Повторы в списке: id правила → номер (с 1) правила выше, которое делает то
+ * же самое. Первое из одинаковых не помечается. Такие пары появляются не из
+ * редактора, а из старых версий и переноса настроек между устройствами.
+ */
+export function ruleRepeats(rules: readonly CategoryRuleV2[]): Map<string, number> {
+  const first = new Map<string, number>();
+  const out = new Map<string, number>();
+  rules.forEach((r, i) => {
+    const key = ruleKey(r);
+    const at = first.get(key);
+    if (at === undefined) first.set(key, i + 1);
+    else out.set(r.id, at);
+  });
+  return out;
+}
+
 function makeRule(r: NewRule | NewRuleV2, salt: number): StoredCategoryRule {
   return normalizeRule({
     ...(r as Partial<CategoryRule> & Partial<CategoryRuleV2>),
@@ -352,13 +384,19 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     return cache ? get().reconcileRefs(refDictionaryFromCache(cache)) : false;
   },
 
-  add: async (r) => {
+  add: async (r, opts) => {
     const existing = get().rules;
     const fresh = makeRule(r, 0);
     const key = ruleKey(fresh);
     const twin = existing.find((x) => ruleKey(x) === key);
     if (twin) return twin.id;
-    const list = [...existing, fresh];
+    // Копия встаёт сразу под оригиналом: порядок правил важен, и рядом её
+    // проще найти и поправить.
+    const at = opts?.after ? existing.findIndex((x) => x.id === opts.after) : -1;
+    const list =
+      at >= 0
+        ? [...existing.slice(0, at + 1), fresh, ...existing.slice(at + 1)]
+        : [...existing, fresh];
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
     await get().reconcileRefsFromCache();

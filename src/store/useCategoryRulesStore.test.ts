@@ -24,6 +24,8 @@ import {
   describeCategoryRule,
   planRulesImport,
   ruleImportStatuses,
+  findTwinRule,
+  ruleRepeats,
   type CategoryRule,
   type StoredCategoryRule,
 } from "./useCategoryRulesStore";
@@ -736,5 +738,54 @@ describe("импорт правил из файла", () => {
     expect(ruleImportStatuses(existing, incoming, "replace")).toEqual(["new", "new", "repeat"]);
     const plan = planRulesImport(existing, incoming, "add");
     expect(plan).toMatchObject({ added: 1, duplicates: 2 });
+  });
+});
+
+describe("копирование правил и проверка на одинаковые", () => {
+  const mk = (id: string, payee: string, category = "Еда", title?: string): StoredCategoryRule => ({
+    id,
+    enabled: true,
+    createdAt: "",
+    join: "and",
+    groups: [
+      {
+        join: "and",
+        conditions: [{ field: "payee", op: "contains", value: payee, caseInsensitive: true }],
+      },
+    ],
+    actions: [{ kind: "setCategory", value: category }],
+    ...(title ? { title } : {}),
+  });
+
+  it("находит такое же правило, но не само редактируемое", () => {
+    const list = [mk("a", "Пятёрочка"), mk("b", "Магнит")];
+    expect(findTwinRule(list, mk("x", "пятёрочка"))?.id).toBe("a");
+    expect(findTwinRule(list, mk("a", "Пятёрочка"), "a")).toBeNull();
+    expect(findTwinRule(list, mk("x", "Пятёрочка", "Кафе"))).toBeNull();
+  });
+
+  it("название и режим не делают правило другим", () => {
+    const copy = { ...mk("x", "Магнит", "Еда", "Моё"), enabled: false, autoApply: true };
+    expect(findTwinRule([mk("a", "Магнит")], copy)?.id).toBe("a");
+  });
+
+  it("помечает повторы номером первого такого правила", () => {
+    const list = [mk("a", "Магнит"), mk("b", "Лента"), mk("c", "МАГНИТ"), mk("d", "Магнит")];
+    expect([...ruleRepeats(list)]).toEqual([
+      ["c", 1],
+      ["d", 1],
+    ]);
+  });
+
+  it("копия встаёт сразу под оригиналом", async () => {
+    useCategoryRulesStore.setState({
+      rules: [mk("a", "Магнит"), mk("b", "Лента"), mk("c", "Ашан")],
+      loaded: true,
+    });
+    const id = await useCategoryRulesStore
+      .getState()
+      .add({ ...mk("", "Магнит", "Продукты"), title: "Копия" }, { after: "a" });
+    const ids = useCategoryRulesStore.getState().rules.map((r) => r.id);
+    expect(ids).toEqual(["a", id, "b", "c"]);
   });
 });

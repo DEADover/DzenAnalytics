@@ -57,6 +57,7 @@ import type { Transaction } from "../types";
 import type { RulePrefill } from "../lib/ruleFromTransaction";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { InfoPopover } from "./InfoPopover";
+import { findTwinRule } from "../store/useCategoryRulesStore";
 
 const RULE_FIELDS: { value: RuleField; label: string }[] = (
   Object.keys(FIELD_LABELS) as RuleField[]
@@ -174,6 +175,13 @@ interface Props {
   rule?: CategoryRuleV2;
   /** Новое правило по образцу операции («Создать правило» в её окне). */
   prefill?: RulePrefill | null;
+  /** Новое правило — копия этого («Копировать» в списке правил). */
+  copyOf?: CategoryRuleV2 | null;
+  /**
+   * Все правила по порядку — чтобы не дать сохранить второе такое же: те же
+   * условия и те же действия, что у правила из списка.
+   */
+  rules?: readonly CategoryRuleV2[];
   /** Операции ДО правок — правила видят именно их, значит и счётчик совпадений
    *  должен считаться по ним, иначе он покажет одно, а правило сделает другое. */
   transactions: Transaction[];
@@ -381,6 +389,8 @@ function matchTitle(t: Transaction): string {
 export function RuleEditModal({
   rule,
   prefill,
+  copyOf,
+  rules = [],
   transactions,
   categories,
   liveCategories,
@@ -430,27 +440,32 @@ export function RuleEditModal({
   const base = useDataStore((s) => s.rates.base);
   const ruleRuns = useDataStore((s) => s.ruleRuns);
   const runRuleNow = useDataStore((s) => s.runRuleNow);
+  /** Откуда берётся черновик: само правило или то, с которого снята копия. */
+  const source = rule ?? copyOf ?? null;
   const [draft, setDraft] = useState<RuleDraft>(() =>
-    rule
+    source
       ? {
-          enabled: rule.enabled,
-          autoApply: !!rule.autoApply,
-          schedule: rule.schedule,
-          title: rule.title ?? "",
+          enabled: source.enabled,
+          autoApply: !!source.autoApply,
+          schedule: source.schedule,
+          // Своё название копия получает с пометкой — иначе в списке две
+          // одинаковые строки и непонятно, какую править.
+          title: source.title ? (rule ? source.title : `${source.title} (копия)`) : "",
           // Ключи строк проставляем при открытии: в хранилище их может не быть,
           // а списку нужен стабильный key, иначе React путает строки при удалении.
-          groups: (rule.groups.length ? rule.groups : [newGroup()]).map((g) => ({
+          // У копии ключи строк свои: с оригиналом они не должны совпадать.
+          groups: (source.groups.length ? source.groups : [newGroup()]).map((g) => ({
             ...g,
-            id: g.id ?? nextId(),
+            id: (rule && g.id) || nextId(),
             conditions: (g.conditions.length ? g.conditions : [newCondition()]).map((c) => ({
               ...c,
-              id: c.id ?? nextId(),
+              id: (rule && c.id) || nextId(),
             })),
           })),
-          join: rule.join,
-          actions: (rule.actions.length ? rule.actions : [newAction()]).map((a) => ({
+          join: source.join,
+          actions: (source.actions.length ? source.actions : [newAction()]).map((a) => ({
             ...a,
-            id: a.id ?? nextId(),
+            id: (rule && a.id) || nextId(),
           })),
         }
       : prefill
@@ -583,8 +598,11 @@ export function RuleEditModal({
   const emptyActionValue = cleaned.actions.some((a) => a.value.length === 0);
   const noConditions = allConditions(cleaned).length === 0;
   const noActions = cleaned.actions.length === 0;
+  /** Правило из списка, которое делает ровно то же самое (не само это). */
+  const twin = useMemo(() => findTwinRule(rules, cleaned, rule?.id), [rules, cleaned, rule?.id]);
+  const twinNo = twin ? rules.indexOf(twin) + 1 : 0;
   const canSave =
-    !noConditions && !noActions && !emptyConditionValue && !emptyActionValue;
+    !noConditions && !noActions && !emptyConditionValue && !emptyActionValue && !twin;
 
   /** Правило уже что-то значит: есть заполненное условие И заполненное действие.
    *  До этого описывать его в заголовке нечем. */
@@ -603,7 +621,9 @@ export function RuleEditModal({
           ? "Заполните значение действия"
           : badRegex
             ? "Выражение не собирается"
-            : null;
+            : twin
+              ? `Такое правило уже есть — № ${twinNo}`
+              : null;
 
   /** Поля, которым назначено больше одного действия: движок внутри правила
    *  перезаписывает, поэтому применится последнее — и об этом надо сказать
@@ -627,7 +647,7 @@ export function RuleEditModal({
     <Modal onClose={onClose} width="2xl">
       <ModalHeader
         icon={Wand2}
-        overline={rule ? "Правило" : "Новое правило"}
+        overline={rule ? "Правило" : copyOf ? "Копия правила" : "Новое правило"}
         // Описание показываем, только когда правило уже что-то значит: на пустом
         // бланке «Получатель содержит «»» — шум, а не подсказка.
         title={
@@ -1186,7 +1206,12 @@ export function RuleEditModal({
 
       <ModalFooter>
         {blocker && (
-          <span className="text-xs text-muted mr-auto">{blocker}</span>
+          <span
+            className={clsx("text-xs mr-auto", twin ? "text-warn" : "text-muted")}
+            data-rule-blocker
+          >
+            {blocker}
+          </span>
         )}
         <button type="button" onClick={onClose} className="btn-ghost text-sm">
           Отмена
