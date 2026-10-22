@@ -884,7 +884,7 @@ export function RulesPage() {
                               второй строкой: строка таблицы остаётся одной. */}
                           {repeats.has(rule.id) && (
                             <Tooltip
-                              content={`Делает то же, что правило № ${repeats.get(rule.id)}, — одно из них лишнее`}
+                              content={`Повторяет правило № ${repeats.get(rule.id)}, поэтому выключено. Его можно удалить`}
                             >
                               <Copy
                                 className="w-3.5 h-3.5 shrink-0 text-warn"

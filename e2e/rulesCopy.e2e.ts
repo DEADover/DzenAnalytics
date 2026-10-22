@@ -2,7 +2,7 @@
  * Копирование правила и запрет второго такого же: копия открывается в
  * редакторе, пока она повторяет оригинал — «Создать» недоступна; после правки
  * копия встаёт сразу под оригиналом. Повторы, пришедшие в список не из
- * редактора, помечены значком.
+ * редактора, сразу выключаются и помечены значком.
  */
 import { test, expect, connectZen } from "./harness";
 
@@ -73,4 +73,10 @@ test("копия правила: повтор не сохранить, испр�
   });
   await expect(page.locator("[data-rule-repeat]")).toHaveCount(1);
   await expect(rows.nth(3).locator("[data-rule-repeat]")).toBeVisible();
+  // Повтор сразу выключен: работает только одно из одинаковых правил.
+  const enabled = await page.evaluate(async () => {
+    const { useCategoryRulesStore } = await (window as unknown as StoreWindow).__store("useCategoryRulesStore");
+    return useCategoryRulesStore.getState().rules.map((r) => (r as { enabled?: boolean }).enabled);
+  });
+  expect(enabled).toEqual([true, true, true, false]);
 });

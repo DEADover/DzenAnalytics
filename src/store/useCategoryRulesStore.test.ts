@@ -26,6 +26,7 @@ import {
   ruleImportStatuses,
   findTwinRule,
   ruleRepeats,
+  switchOffRepeats,
   type CategoryRule,
   type StoredCategoryRule,
 } from "./useCategoryRulesStore";
@@ -774,6 +775,58 @@ describe("копирование правил и проверка на один�
     expect([...ruleRepeats(list)]).toEqual([
       ["c", 1],
       ["d", 1],
+    ]);
+  });
+
+  it("повторы выключаются: работает правило с самым сильным режимом", () => {
+    const list = [
+      mk("a", "Магнит"),
+      { ...mk("b", "Магнит"), autoApply: true },
+      mk("c", "Лента"),
+      { ...mk("d", "Магнит"), enabled: false },
+    ];
+    const { rules, switchedOff } = switchOffRepeats(list);
+    expect(switchedOff).toBe(1);
+    expect(rules.map((r) => [r.id, r.enabled])).toEqual([
+      ["a", false],
+      ["b", true],
+      ["c", true],
+      ["d", false],
+    ]);
+    // Помечены выключенные — с номером того, что работает.
+    expect([...ruleRepeats(rules)]).toEqual([
+      ["a", 2],
+      ["d", 2],
+    ]);
+  });
+
+  it("при равных режимах работает верхнее; без повторов ничего не меняется", () => {
+    const { rules } = switchOffRepeats([mk("a", "Магнит"), mk("b", "Магнит")]);
+    expect(rules.map((r) => r.enabled)).toEqual([true, false]);
+    expect(switchOffRepeats([mk("a", "Магнит"), mk("b", "Лента")]).switchedOff).toBe(0);
+  });
+
+  it("включили повтор руками — выключается его двойник", async () => {
+    useCategoryRulesStore.setState({
+      rules: [mk("a", "Магнит"), { ...mk("b", "Магнит"), enabled: false }],
+      loaded: true,
+    });
+    await useCategoryRulesStore.getState().update("b", { enabled: true });
+    const st = useCategoryRulesStore.getState().rules;
+    expect(st.map((r) => [r.id, r.enabled])).toEqual([
+      ["a", false],
+      ["b", true],
+    ]);
+    expect(st[0]).not.toHaveProperty("autoApply");
+  });
+
+  it("при чтении с диска повторы выключаются и записываются", async () => {
+    disk.set("categoryRules", [mk("a", "Магнит"), mk("b", "Магнит")]);
+    await useCategoryRulesStore.getState().hydrate();
+    expect(useCategoryRulesStore.getState().rules.map((r) => r.enabled)).toEqual([true, false]);
+    expect((disk.get("categoryRules") as StoredCategoryRule[]).map((r) => r.enabled)).toEqual([
+      true,
+      false,
     ]);
   });
 

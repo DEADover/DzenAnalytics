@@ -243,21 +243,77 @@ export function findTwinRule<R extends CategoryRuleV2>(
   return rules.find((r) => r.id !== exceptId && ruleKey(r) === key) ?? null;
 }
 
+/** Сила режима: из одинаковых правил работать остаётся самое сильное. */
+const MODE_RANK = { off: 0, manual: 1, auto: 2 } as const;
+const modeRank = (r: CategoryRuleV2) =>
+  MODE_RANK[!r.enabled ? "off" : r.autoApply ? "auto" : "manual"];
+
 /**
- * Повторы в списке: id правила → номер (с 1) правила выше, которое делает то
- * же самое. Первое из одинаковых не помечается. Такие пары появляются не из
+ * Одинаковые правила (те же условия и действия) группами по порядку списка —
+ * только группы из двух и больше — и в каждой главное правило: то, что
+ * `preferId` (его только что включили руками), иначе включённое с самым
+ * сильным режимом, при равных — верхнее.
+ */
+function repeatGroups<R extends CategoryRuleV2>(
+  rules: readonly R[],
+  preferId?: string
+): { main: R; mainNo: number; members: R[] }[] {
+  const byKey = new Map<string, R[]>();
+  for (const r of rules) {
+    const key = ruleKey(r);
+    const list = byKey.get(key);
+    if (list) list.push(r);
+    else byKey.set(key, [r]);
+  }
+  const out: { main: R; mainNo: number; members: R[] }[] = [];
+  for (const members of byKey.values()) {
+    if (members.length < 2) continue;
+    const preferred = members.find((r) => r.id === preferId && r.enabled);
+    const main =
+      preferred ??
+      members.reduce((best, r) => (modeRank(r) > modeRank(best) ? r : best), members[0]);
+    out.push({ main, mainNo: rules.indexOf(main) + 1, members });
+  }
+  return out;
+}
+
+/**
+ * Повторы в списке: id правила → номер (с 1) главного из одинаковых — того,
+ * что работает. Само главное не помечается. Такие пары появляются не из
  * редактора, а из старых версий и переноса настроек между устройствами.
  */
 export function ruleRepeats(rules: readonly CategoryRuleV2[]): Map<string, number> {
-  const first = new Map<string, number>();
   const out = new Map<string, number>();
-  rules.forEach((r, i) => {
-    const key = ruleKey(r);
-    const at = first.get(key);
-    if (at === undefined) first.set(key, i + 1);
-    else out.set(r.id, at);
-  });
+  for (const g of repeatGroups(rules))
+    for (const r of g.members) if (r !== g.main) out.set(r.id, g.mainNo);
   return out;
+}
+
+/**
+ * Выключить повторы: из одинаковых правил работает одно (`repeatGroups`),
+ * остальные переводятся в «Выкл». Два одинаковых включённых правила делали бы
+ * одно и то же дважды — дописали бы пометку в комментарий два раза.
+ * Расписание остаётся: включат правило обратно — настраивать заново не придётся.
+ */
+export function switchOffRepeats<R extends CategoryRuleV2>(
+  rules: readonly R[],
+  preferId?: string
+): { rules: R[]; switchedOff: number } {
+  const off = new Set<string>();
+  for (const g of repeatGroups(rules, preferId))
+    for (const r of g.members) if (r !== g.main && r.enabled) off.add(r.id);
+  if (off.size === 0) return { rules: [...rules], switchedOff: 0 };
+  return {
+    rules: rules.map((r) => (off.has(r.id) ? { ...r, enabled: false, autoApply: undefined } : r)),
+    switchedOff: off.size,
+  };
+}
+
+/** Убрать `autoApply: undefined`, оставленный выключением, — на диск не пишем. */
+function tidy(r: StoredCategoryRule): StoredCategoryRule {
+  if (r.autoApply !== undefined) return r;
+  const { autoApply: _drop, ...rest } = r;
+  return rest as StoredCategoryRule;
 }
 
 function makeRule(r: NewRule | NewRuleV2, salt: number): StoredCategoryRule {
@@ -354,17 +410,25 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
     // чтении, чтобы дальше по коду поколение уже не встречалось. Обратно на
     // диск не пишем: пересчёт идемпотентен, а лишняя запись при каждом старте
     // приложения ничего не даёт.
-    set({ rules: (data || []).map((r) => normalizeRule(r)), loaded: true });
+    const read = (data || []).map((r) => normalizeRule(r));
+    // Одинаковые правила, накопленные старыми версиями, выключаем сразу —
+    // и только тогда пишем на диск.
+    const { rules, switchedOff } = switchOffRepeats(read);
+    const list = rules.map(tidy);
+    if (switchedOff > 0) await db.saveJSON("categoryRules", list);
+    set({ rules: list, loaded: true });
     await get().reconcileRefsFromCache();
   },
 
   replaceAll: async (raw) => {
-    const list = raw
+    const merged = raw
       .filter(
         (r): r is RuleLike =>
           !!r && typeof r === "object" && typeof (r as RuleLike).id === "string"
       )
       .map((r) => normalizeRule({ ...r, createdAt: r.createdAt ?? "" }));
+    // Слияние с облаком может свести одинаковые правила с двух устройств.
+    const list = switchOffRepeats(merged).rules.map(tidy);
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
     await get().reconcileRefsFromCache();
@@ -487,7 +551,9 @@ export const useCategoryRulesStore = create<RulesState>((set, get) => ({
             ],
           }
         : rest;
-    const list = get().rules.map((r) => (r.id === id ? normalizeRule({ ...r, ...next }) : r));
+    const patched = get().rules.map((r) => (r.id === id ? normalizeRule({ ...r, ...next }) : r));
+    // Включили повтор — работать остаётся он, а двойник выключается.
+    const list = switchOffRepeats(patched, id).rules.map(tidy);
     await db.saveJSON("categoryRules", list);
     set({ rules: list });
     await get().reconcileRefsFromCache();
