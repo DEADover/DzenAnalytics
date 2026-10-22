@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CounterpartyName, CounterpartyNoteMark } from "../components/CounterpartyNote";
 import { pluralRu } from "../lib/plural";
 import {
   Newspaper,
@@ -452,9 +453,11 @@ function DigestDetail({
                 {/* Имя и комментарий одной колонкой, сумма соседней: комментарий
                     не заезжает под сумму и обрывается там же, где она начинается. */}
                 <span className="flex-1 min-w-0">
-                  <span className="block font-medium truncate">
-                    {counterpartyOf(t) || t.categoryFull || "—"}
-                  </span>
+                  <CounterpartyName
+                    name={counterpartyOf(t)}
+                    label={counterpartyOf(t) || t.categoryFull || "—"}
+                    className="font-medium"
+                  />
                   <span className="block text-xs text-muted truncate">
                     {t.categoryFull} · {formatDate(t.date, "full")}
                     {truncateWords(t.comment, 140) ? ` · ${truncateWords(t.comment, 140)}` : ""}
@@ -615,6 +618,7 @@ function PayeeList({ payees, base, empty }: { payees: DigestPayee[]; base: strin
           key={p.name}
           bar="track"
           label={p.name}
+          labelAfter={<CounterpartyNoteMark name={p.name} />}
           share={p.expense / max}
           barCls="bg-accent"
           cells={[

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CounterpartyName } from "../components/CounterpartyNote";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -300,7 +301,7 @@ export function TopPage() {
               type: "text",
               label: "Контрагент",
               sortValue: (p) => p.payee,
-              render: (p) => p.payee,
+              render: (p) => <CounterpartyName name={p.payee === NO_PAYEE_LABEL ? "" : p.payee} label={p.payee} />,
             },
             {
               key: "total",
@@ -381,7 +382,7 @@ export function TopPage() {
               width: TX_COL.payee,
               label: "Контрагент",
               sortValue: (t) => counterpartyOf(t),
-              render: (t) => counterpartyOf(t) || "—",
+              render: (t) => <CounterpartyName name={counterpartyOf(t)} label={counterpartyOf(t) || "—"} />,
             },
             {
               key: "comment",

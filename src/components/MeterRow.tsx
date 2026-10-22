@@ -59,6 +59,7 @@ export function MeterRow({
   icon,
   leadIcon,
   label,
+  labelAfter,
   share,
   cells,
   barCls,
@@ -78,6 +79,8 @@ export function MeterRow({
    */
   leadIcon?: React.ReactNode;
   label: string;
+  /** Пометка сразу после подписи — например, значок заметки о контрагенте. */
+  labelAfter?: React.ReactNode;
   /** Доля от 0 до 1 — ширина полосы. */
   share: number;
   cells: MeterCell[];
@@ -121,6 +124,7 @@ export function MeterRow({
           <span className="flex items-center gap-1.5 min-w-0">
             {icon && <span className="shrink-0 flex items-center">{icon}</span>}
             <span className={`truncate ${strong ? "font-medium" : ""}`}>{label}</span>
+            {labelAfter}
           </span>
           <span className="relative h-1 rounded-full bg-panel2">
             <span
@@ -158,6 +162,7 @@ export function MeterRow({
           <span className={`relative truncate min-w-0 ${strong ? "font-medium" : ""}`}>
             {label}
           </span>
+          {labelAfter && <span className="relative shrink-0 flex items-center">{labelAfter}</span>}
         </span>
         {numbers}
       </>

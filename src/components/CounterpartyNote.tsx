@@ -169,3 +169,26 @@ export function CounterpartyNoteMark({ name }: { name: string }) {
     </Tooltip>
   );
 }
+
+/**
+ * Имя контрагента со значком заметки — для списков в других разделах (#128):
+ * «Регулярные», «Аномалии», «Топ», «Дайджест». Имя обрезается многоточием,
+ * значок остаётся виден. `label` — что показать, если оно отличается от
+ * имени, по которому ищется заметка (например, «—» у пустого).
+ */
+export function CounterpartyName({
+  name,
+  label,
+  className,
+}: {
+  name: string;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <span className={clsx("flex items-center gap-1 min-w-0 max-w-full", className)}>
+      <span className="truncate">{label ?? name}</span>
+      {name && <CounterpartyNoteMark name={name} />}
+    </span>
+  );
+}

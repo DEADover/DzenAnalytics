@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CounterpartyName } from "../components/CounterpartyNote";
 import { periodKey } from "../lib/period";
 import { AlertTriangle, Zap, TrendingUp } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
@@ -249,7 +250,7 @@ export function AnomaliesPage() {
                 width: "13rem",
                 label: "Получатель",
                 sortValue: (a) => a.tx.payee || "",
-                render: (a) => a.tx.payee || "—",
+                render: (a) => <CounterpartyName name={a.tx.payee || ""} label={a.tx.payee || "—"} />,
               },
               {
                 key: "category",

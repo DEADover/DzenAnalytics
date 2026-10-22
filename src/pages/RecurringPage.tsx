@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CounterpartyName } from "../components/CounterpartyNote";
 import {
   Repeat,
   Calendar,
@@ -265,7 +266,7 @@ export function RecurringPage() {
                   : "Активен: платежи идут по графику"
               }
             />
-            <span className="truncate">{c.payee}</span>
+            <CounterpartyName name={c.payee} />
           </span>
         ),
       },
@@ -644,7 +645,7 @@ export function RecurringPage() {
                   className="text-left p-3 rounded-xl bg-panel2 border border-border hover:border-accent transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="font-medium text-sm truncate">{c.payee}</div>
+                    <CounterpartyName name={c.payee} className="font-medium text-sm" />
                     <div className="text-xs pill shrink-0">
                       {daysUntil === 0 ? "Сегодня" : `Через ${daysUntil} дн.`}
                     </div>

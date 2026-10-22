@@ -20,6 +20,7 @@ import { kindGlyphClass, kindSignGlyph } from "../../lib/txKindStyle";
 import { CategoryDot } from "../CategoryDot";
 import { ExtraCategoriesLine } from "../ExtraCategoriesLine";
 import { Tooltip } from "../Tooltip";
+import { CounterpartyNoteMark } from "../CounterpartyNote";
 
 /** Категория: значок 28 с отметками, название, подкатегория и вторые категории строками ниже. */
 export function OperationCategory({
@@ -82,13 +83,19 @@ export function OperationCategory({
  */
 export function OperationPayee({ tx }: { tx: Transaction }) {
   const statementLine = useDisplayStore((s) => s.statementLine);
-  const primary = displayPayee(tx) || transferCounterparty(tx) || "";
+  const counterparty = displayPayee(tx);
+  const primary = counterparty || transferCounterparty(tx) || "";
   const secondary = statementLine ? secondaryPayee(tx, "statement") : null;
   const tooltip = secondary ? `${primary} — ${secondary}` : primary;
   return (
     <div data-cell="payee" className="min-w-0">
-      <div className="truncate text-muted" title={tooltip}>
-        {primary || "—"}
+      {/* Заметка о контрагенте (#128) — значком у имени, текст в подсказке.
+          У перевода имени контрагента нет — и значка тоже. */}
+      <div className="flex items-center gap-1 min-w-0">
+        <div className="truncate text-muted" title={tooltip}>
+          {primary || "—"}
+        </div>
+        {counterparty && <CounterpartyNoteMark name={counterparty} />}
       </div>
       {secondary && (
         <div className="truncate text-[0.85em] text-text" title={secondary}>
