@@ -1,6 +1,6 @@
 import { Search, X } from "lucide-react";
 import clsx from "clsx";
-import type { InputHTMLAttributes } from "react";
+import type { InputHTMLAttributes, ReactNode } from "react";
 
 /**
  * Поле поиска: лупа слева, крестик «очистить», пока что-то набрано.
@@ -24,6 +24,7 @@ export function SearchInput({
   title,
   className,
   inputProps,
+  badge,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -43,6 +44,8 @@ export function SearchInput({
     InputHTMLAttributes<HTMLInputElement>,
     "value" | "onChange" | "placeholder" | "autoFocus" | "className"
   >;
+  /** Метка внутри поля справа, перед крестиком, — например, где идёт поиск. Только у `field`. */
+  badge?: ReactNode;
 }) {
   const clear = value ? (
     <button
@@ -50,7 +53,7 @@ export function SearchInput({
       onClick={() => onChange("")}
       className={clsx(
         "btn-icon btn-icon-sm shrink-0",
-        variant === "field" && "absolute right-1.5 top-1/2 -translate-y-1/2"
+        variant === "field" && !badge && "absolute right-1.5 top-1/2 -translate-y-1/2"
       )}
       aria-label="Очистить поиск"
     >
@@ -90,11 +93,19 @@ export function SearchInput({
         placeholder={placeholder}
         aria-label={ariaLabel ?? placeholder}
         className={clsx(
-          "input pl-9 pr-9",
+          "input pl-9",
+          badge ? "pr-28" : "pr-9",
           size === "sm" ? "h-[34px] text-xs" : "h-[38px] text-sm"
         )}
       />
-      {clear}
+      {badge ? (
+        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          {badge}
+          {clear}
+        </div>
+      ) : (
+        clear
+      )}
     </div>
   );
 }

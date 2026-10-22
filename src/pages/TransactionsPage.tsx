@@ -51,11 +51,10 @@ import { Popover } from "../components/Popover";
 import { PageHeader } from "../components/PageHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { formatMoney, formatNum, payeeSearchText } from "../lib/format";
-import { Segmented } from "../components/Segmented";
+import { ScopedSearchInput, type SearchScope } from "../components/operations/ScopedSearchInput";
 import { kindLabel, operationTone } from "../lib/txKindStyle";
 import type { Transaction, TxKind } from "../types";
 import { SectionEmpty } from "../components/SectionEmpty";
-import { SearchInput } from "../components/SearchInput";
 import { SortMenu, type SortOption } from "../components/SortMenu";
 import { SelectionBar } from "../components/SelectionBar";
 import { DayHeader } from "../components/operations/DayHeader";
@@ -232,7 +231,7 @@ export function TransactionsPage() {
    * всем — за всё время, по всем счетам и категориям. Выбор живёт, пока открыта
    * страница: поиск и так не сохраняется.
    */
-  const [searchScope, setSearchScope] = useState<"filter" | "all">("filter");
+  const [searchScope, setSearchScope] = useState<SearchScope>("filter");
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
   const [sortOpen, setSortOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -650,38 +649,16 @@ export function TransactionsPage() {
       <OperationListTray
         toolbar={
           <>
-            <SearchInput
-              size="sm"
+            <ScopedSearchInput
               value={pageSearch}
               onChange={setPageSearch}
+              scope={searchScope}
+              onScopeChange={setSearchScope}
+              counts={{ filter: inFilter.length, all: everywhere.length }}
               placeholder="Быстрый поиск по таблице…"
-              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту — в общем фильтре или везде, на выбор рядом с полем. Не сохраняется и на другие страницы не влияет."}
+              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту — в общем фильтре или везде: выбор всплывает под полем. Не сохраняется и на другие страницы не влияет."}
               className="flex-1 min-w-[220px]"
             />
-            {/* Где искать — появляется, когда в поле есть текст: числа сразу
-                говорят, сколько найдётся в фильтре и сколько по всем операциям. */}
-            {searchMatch && (
-              <Segmented
-                size="sm"
-                label="Где искать"
-                value={searchScope}
-                onChange={setSearchScope}
-                options={[
-                  {
-                    value: "filter",
-                    label: "В фильтре",
-                    count: inFilter.length,
-                    title: "Только среди операций, которые прошли общий фильтр: период, счета, категории",
-                  },
-                  {
-                    value: "all",
-                    label: "Везде",
-                    count: everywhere.length,
-                    title: "По всем операциям — за всё время, по всем счетам и категориям, без общего фильтра",
-                  },
-                ]}
-              />
-            )}
             {apiConnected && (
               <div className="relative" ref={addMenuRef}>
                 <button
