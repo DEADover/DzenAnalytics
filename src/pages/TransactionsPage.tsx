@@ -51,6 +51,7 @@ import { Popover } from "../components/Popover";
 import { PageHeader } from "../components/PageHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { formatMoney, formatNum, payeeSearchText } from "../lib/format";
+import { Segmented } from "../components/Segmented";
 import { kindLabel, operationTone } from "../lib/txKindStyle";
 import type { Transaction, TxKind } from "../types";
 import { SectionEmpty } from "../components/SectionEmpty";
@@ -226,6 +227,12 @@ export function TransactionsPage() {
   const drafts = useDraftsStore((s) => s.drafts);
 
   const [pageSearch, setPageSearch] = useState("");
+  /**
+   * Где ищет быстрый поиск: среди операций, прошедших общий фильтр, или по
+   * всем — за всё время, по всем счетам и категориям. Выбор живёт, пока открыта
+   * страница: поиск и так не сохраняется.
+   */
+  const [searchScope, setSearchScope] = useState<"filter" | "all">("filter");
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
   const [sortOpen, setSortOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -335,17 +342,27 @@ export function TransactionsPage() {
     [transactions, filters, monthStartDay]
   );
 
-  const searched = useMemo(() => {
-    const q = pageSearch.trim();
-    if (!q) return filtered;
-    // Раскладка не важна — как в общем фильтре и списках.
-    const match = queryMatcher(q);
-    return filtered.filter((t) =>
+  const query = pageSearch.trim();
+  /** Подходит ли операция под быстрый поиск. Раскладка не важна — как в общем фильтре и списках. */
+  const searchMatch = useMemo(() => {
+    if (!query) return null;
+    const match = queryMatcher(query);
+    return (t: Transaction) =>
       match(
         `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
-      )
-    );
-  }, [filtered, pageSearch]);
+      );
+  }, [query]);
+  const inFilter = useMemo(
+    () => (searchMatch ? filtered.filter(searchMatch) : filtered),
+    [filtered, searchMatch]
+  );
+  /** Найденное по всем операциям — для варианта «Везде» и его счётчика. */
+  const everywhere = useMemo(
+    () => (searchMatch ? transactions.filter(searchMatch) : []),
+    [transactions, searchMatch]
+  );
+  const searchAll = !!searchMatch && searchScope === "all";
+  const searched = searchAll ? everywhere : inFilter;
 
   const sorted = useMemo(() => [...searched].sort(feedComparator(sortMode)), [searched, sortMode]);
 
@@ -362,10 +379,12 @@ export function TransactionsPage() {
     if (inlinePlans) for (const p of planFeed.ops) m.set(p.id, p);
     return m;
   }, [planFeed.ops, inlinePlans]);
-  const planTxs = useMemo(
-    () => (planById.size ? applyFilters([...planById.values()].map(plannedAsTransaction), filters, monthStartDay) : []),
-    [planById, filters, monthStartDay]
-  );
+  const planTxs = useMemo(() => {
+    if (!planById.size) return [];
+    const all = [...planById.values()].map(plannedAsTransaction);
+    // «Везде» — и планы без общего фильтра: все, что подходят под поиск.
+    return searchAll ? all : applyFilters(all, filters, monthStartDay);
+  }, [planById, filters, monthStartDay, searchAll]);
   /** Лента целиком: операции и, в режиме «В ленте», планы — одним порядком. */
   const feedRows = useMemo(
     () => (planTxs.length ? [...sorted, ...planTxs].sort(feedComparator(sortMode)) : sorted),
@@ -622,7 +641,9 @@ export function TransactionsPage() {
           label="Операций"
           value={formatNum(totals.count)}
           icon={<List className="w-4 h-4" />}
-          note={pageSearch ? `из ${filtered.length} в фильтре` : undefined}
+          note={
+            searchAll ? "по всем операциям" : searchMatch ? `из ${filtered.length} в фильтре` : undefined
+          }
         />
       </StatRow>
 
@@ -634,9 +655,33 @@ export function TransactionsPage() {
               value={pageSearch}
               onChange={setPageSearch}
               placeholder="Быстрый поиск по таблице…"
-              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту. Не сохраняется и на другие страницы не влияет."}
+              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту — в общем фильтре или везде, на выбор рядом с полем. Не сохраняется и на другие страницы не влияет."}
               className="flex-1 min-w-[220px]"
             />
+            {/* Где искать — появляется, когда в поле есть текст: числа сразу
+                говорят, сколько найдётся в фильтре и сколько по всем операциям. */}
+            {searchMatch && (
+              <Segmented
+                size="sm"
+                label="Где искать"
+                value={searchScope}
+                onChange={setSearchScope}
+                options={[
+                  {
+                    value: "filter",
+                    label: "В фильтре",
+                    count: inFilter.length,
+                    title: "Только среди операций, которые прошли общий фильтр: период, счета, категории",
+                  },
+                  {
+                    value: "all",
+                    label: "Везде",
+                    count: everywhere.length,
+                    title: "По всем операциям — за всё время, по всем счетам и категориям, без общего фильтра",
+                  },
+                ]}
+              />
+            )}
             {apiConnected && (
               <div className="relative" ref={addMenuRef}>
                 <button
@@ -792,7 +837,7 @@ export function TransactionsPage() {
           </div>
         ) : feedRows.length === 0 ? (
           <SectionEmpty variant="inline">
-            По текущим фильтрам ничего не найдено
+            {searchAll ? "Ничего не найдено" : "По текущим фильтрам ничего не найдено"}
           </SectionEmpty>
         ) : groupedByDay ? (
           <div className={leftPlanned ? "feed-back-in" : undefined}>
