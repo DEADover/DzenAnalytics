@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
-import { pushDiff, type PushPayload, type ZenDeletion } from "../lib/zenmoney";
-import { applyDiff, type ZenCache } from "../lib/zenmoneyCache";
+import { fetchDiff, pushDiff, type PushPayload, type ZenDeletion } from "../lib/zenmoney";
+import { applyDiffWithPlans, type ZenCache } from "../lib/zenmoneyCache";
 import {
   CLOUD_FORMAT_VERSION,
   EMPTY_RULES_META,
@@ -429,7 +429,14 @@ export const useCloudSettingsStore = create<State>((set, get) => ({
         }
         if (payload.deletion!.length === 0) delete payload.deletion;
         const response = await pushDiff(token, cache.serverTimestamp, payload);
-        nextCache = applyDiff(cache, response);
+        // В ответе и чужие изменения с прошлой синхронизации — смена
+        // расписания плана в том числе: вливаем с дозапросом дат (#127).
+        nextCache = await applyDiffWithPlans(
+          cache,
+          response,
+          (from) => fetchDiff(token, from, undefined, ["reminderMarker"]),
+          { rewindOnError: true }
+        );
       }
 
       // Пока шла отправка, человек мог что-то поменять — его пометки уже в

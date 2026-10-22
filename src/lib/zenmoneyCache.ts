@@ -59,7 +59,7 @@ export interface ZenCache {
 }
 
 /** Bump when a new entity type starts being consumed AND needs a back-fill. */
-export const CACHE_SCHEMA_VERSION = 6;
+export const CACHE_SCHEMA_VERSION = 7;
 
 /** Entity types to force-fetch once when upgrading TO that version. */
 const BACKFILL_BY_VERSION: Record<number, string[]> = {
@@ -79,6 +79,10 @@ const BACKFILL_BY_VERSION: Record<number, string[]> = {
   // выходил меньше дзеновского ровно на их сумму. Инкрементальный diff их
   // повторно не пришлёт — нужен разовый полный запрос.
   6: ["reminderMarker"],
+  // Разовый перезабор планов после #127: смена расписания, пришедшая в ответе
+  // на отправку, а не в синхронизации, оставляла у нас старые даты плана
+  // навсегда. Полный список вычищает уже застрявшие.
+  7: ["reminderMarker"],
 };
 
 /**
@@ -239,6 +243,40 @@ export function diffChangesPlanSet(prev: ZenCache | null, diff: ZenDiffResponse)
   }
   const known = new Set((prev.reminderMarkers ?? []).map((m) => String(m.id)));
   return (diff.reminderMarker ?? []).some((m) => !known.has(String(m.id)));
+}
+
+/**
+ * Влить ответ сервера в кэш — с дозапросом дат планов, когда их состав мог
+ * поменяться (`diffChangesPlanSet`).
+ *
+ * Ответ сервера — это любой diff «что изменилось с прошлого раза»: обычная
+ * синхронизация, свежие данные перед отправкой правок, ответ на саму отправку
+ * правок или настроек. Раньше дозапрос стоял только в синхронизации, и если
+ * план поменяли в мобильном приложении, а следующим нашим запросом оказалась
+ * отправка, смена расписания вливалась простым слиянием: сервер молча стирает
+ * старые даты, а у нас они оставались. Метка времени уходила вперёд, и
+ * синхронизация этого плана больше не видела — старая дата висела
+ * просроченной навсегда (issue #127).
+ *
+ * `rewindOnError` — дозапрос не удался: кэш всё равно принимает ответ, но метка
+ * времени остаётся прежней, и следующая синхронизация увидит изменение плана
+ * снова. Без флага ошибка уходит вызывающему.
+ */
+export async function applyDiffWithPlans(
+  prev: ZenCache | null,
+  diff: ZenDiffResponse,
+  fetchPlans: (fromTimestamp: number) => Promise<ZenDiffResponse>,
+  opts: { replaceMarkers?: boolean; rewindOnError?: boolean } = {}
+): Promise<ZenCache> {
+  const next = applyDiff(prev, diff, { replaceMarkers: opts.replaceMarkers });
+  if (opts.replaceMarkers || !diffChangesPlanSet(prev, diff)) return next;
+  try {
+    const plans = await fetchPlans(next.serverTimestamp);
+    return applyDiff(next, plans, { replaceMarkers: true });
+  } catch (e) {
+    if (!opts.rewindOnError || !prev) throw e;
+    return { ...next, serverTimestamp: prev.serverTimestamp };
+  }
 }
 
 export async function loadZenCache(): Promise<ZenCache | null> {

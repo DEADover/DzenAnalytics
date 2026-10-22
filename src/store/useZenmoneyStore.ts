@@ -23,10 +23,9 @@ import {
   loadZenCache,
   saveZenCache,
   clearZenCache,
-  applyDiff,
   cacheToDiffResponse,
   forceFetchFor,
-  diffChangesPlanSet,
+  applyDiffWithPlans,
   type ZenCache,
 } from "../lib/zenmoneyCache";
 import { zenUsers, type ZenUserOption } from "../lib/zenUsers";
@@ -110,6 +109,10 @@ import type { ImportMeta } from "../types";
 
 const TOKEN_KEY = "zenmoneyToken";
 const TIMESTAMP_KEY = "zenmoneyServerTimestamp";
+
+/** Полный список дат планов от метки времени — для `applyDiffWithPlans`. */
+const fetchPlansFrom = (token: string) => (fromTimestamp: number) =>
+  fetchDiff(token, fromTimestamp, undefined, ["reminderMarker"]);
 const LAST_SYNC_KEY = "zenmoneyLastSyncAt";
 const PUSH_ENABLED_KEY = "zenmoneyPushEnabled";
 const PUSH_MODE_KEY = "zenmoneyPushMode";
@@ -997,21 +1000,15 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // Перезабор планов — полный список, а не добавка: только так из кэша
       // уходят операции удалённых планов, о которых Дзен-мани сообщил
       // удалением самого плана, а не каждой операции (issue #71).
-      let nextCache = applyDiff(prevCache, diff, {
-        replaceMarkers: backfill.includes("reminderMarker"),
-      });
       // Состав планов поменялся — список их операций берём целиком и заменяем
       // им наш: только так уходит старая дата перенесённой операции, о которой
       // сервер в diff не сообщает (issue #99). Второй запрос идёт от новой
       // метки времени, поэтому остального почти не несёт. Упадёт — упадёт вся
       // синхронизация, и следующая повторит оба шага с прежней метки.
-      if (!backfill.includes("reminderMarker") && diffChangesPlanSet(prevCache, diff)) {
-        stage = "plans";
-        const plans = await fetchDiff(token, nextCache.serverTimestamp, undefined, [
-          "reminderMarker",
-        ]);
-        nextCache = applyDiff(nextCache, plans, { replaceMarkers: true });
-      }
+      stage = "plans";
+      let nextCache = await applyDiffWithPlans(prevCache, diff, fetchPlansFrom(token), {
+        replaceMarkers: backfill.includes("reminderMarker"),
+      });
       // Настройки и правила, перенесённые с других устройств, — и отправка
       // своих, если облако отстало. Выключено — шаг ничего не делает; упал —
       // синхронизация операций от этого не страдает.
@@ -1273,12 +1270,15 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       try {
         const fresh = await fetchDiff(token, cache.serverTimestamp);
         conflicts = detectConflicts(Object.keys(edits), cache, fresh.transaction);
-        cache = applyDiff(cache, fresh); // adopt fresh cloud truth
+        // adopt fresh cloud truth — с дозапросом дат, если менялись планы (#127)
+        cache = await applyDiffWithPlans(cache, fresh, fetchPlansFrom(token), {
+          rewindOnError: true,
+        });
         await saveZenCache(cache);
         invalidateZenCache();
         invalidateLiveAccounts();
-        set({ serverTimestamp: fresh.serverTimestamp });
-        await db.saveJSON(TIMESTAMP_KEY, fresh.serverTimestamp);
+        set({ serverTimestamp: cache.serverTimestamp });
+        await db.saveJSON(TIMESTAMP_KEY, cache.serverTimestamp);
       } catch {
         /* best-effort — push against the (possibly stale) cached state */
       }
@@ -1636,7 +1636,11 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       //    lit, as if it never synced. The push returned 200 → the server
       //    accepted these deletions → apply them to the cache now. (Idempotent:
       //    if the server ever DID echo them, `applyDeletions` dedups by id.)
-      const nextCache = applyDiff(cache, {
+      // Ответ несёт и чужие изменения с прошлой синхронизации — смену расписания
+      // плана в том числе, поэтому вливаем с дозапросом дат (#127).
+      const nextCache = await applyDiffWithPlans(
+        cache,
+        {
         ...response,
         // Свои даты и правила плана тоже вносим в кэш: закрытая фактом дата
         // должна уйти из запланированных сразу, а не со следующей
@@ -1652,7 +1656,10 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           ...plannedDel,
           ...planPush.deletions,
         ],
-      });
+        },
+        fetchPlansFrom(token),
+        { rewindOnError: true }
+      );
       await saveZenCache(nextCache);
       invalidateLiveAccounts();
       invalidateZenCache();
@@ -1808,7 +1815,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       await useDataStore.getState().setTransactions(mapped.transactions, importMeta);
 
       const nowIso = new Date().toISOString();
-      await db.saveJSON(TIMESTAMP_KEY, response.serverTimestamp);
+      await db.saveJSON(TIMESTAMP_KEY, nextCache.serverTimestamp);
       await db.saveJSON(LAST_PUSH_KEY, nowIso);
       const result: PushResult = {
         // Recreates are edits from the user's POV (they changed the time), so

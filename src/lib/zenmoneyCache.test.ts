@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   applyDiff,
+  applyDiffWithPlans,
+  backfillEntities,
   CACHE_SCHEMA_VERSION,
   diffChangesPlanSet,
   type ZenCache,
@@ -262,5 +264,61 @@ describe("записи с настройками не считаются пра�
     expect(
       diffChangesPlanSet(prev, { serverTimestamp: 2, reminder: [{ id: "plan", comment: "Аренда" }] } as unknown as ZenDiffResponse)
     ).toBe(true);
+  });
+});
+
+describe("смена расписания плана в ответе на отправку (#127)", () => {
+  // Форма — как в живом ответе сервера 22.10.2026 (тестовый аккаунт): план
+  // «каждое 20-е» перенесли в мобильном приложении на 25-е. Сервер молча
+  // стирает будущие даты на 20-е (ни удаления, ни смены статуса) и присылает
+  // сам план с новой датой начала и новые даты с новыми id.
+  const marker = (id: string, date: string) =>
+    ({ id, reminder: "r1", date, state: "planned", outcome: 10000, income: 0 }) as ZenReminderMarker;
+  const plan = (startDate: string) =>
+    ({ id: "r1", interval: "month", step: 1, points: [0], startDate, comment: "" }) as never;
+  const prev = cache({
+    serverTimestamp: 100,
+    reminders: [plan("2026-10-20")],
+    reminderMarkers: [marker("nov20", "2026-11-20"), marker("dec20", "2026-12-20")],
+  });
+  const diff = {
+    serverTimestamp: 200,
+    reminder: [plan("2026-11-25")],
+    reminderMarker: [marker("nov25", "2026-11-25"), marker("dec25", "2026-12-25")],
+  } as unknown as ZenDiffResponse;
+  const full = { serverTimestamp: 201, reminderMarker: diff.reminderMarker } as ZenDiffResponse;
+  const dates = (c: ZenCache) => c.reminderMarkers!.map((m) => m.date).sort();
+
+  it("дозапрашивает даты и оставляет только новые", async () => {
+    const asked: number[] = [];
+    const next = await applyDiffWithPlans(prev, diff, async (from) => {
+      asked.push(from);
+      return full;
+    });
+    expect(asked).toEqual([200]);
+    expect(dates(next)).toEqual(["2026-11-25", "2026-12-25"]);
+  });
+
+  it("без смены планов лишнего запроса нет", async () => {
+    let asked = false;
+    await applyDiffWithPlans(prev, { serverTimestamp: 200 } as ZenDiffResponse, async () => {
+      asked = true;
+      return full;
+    });
+    expect(asked).toBe(false);
+  });
+
+  it("дозапрос упал — метка времени прежняя, синхронизация увидит план снова", async () => {
+    const fail = async (): Promise<ZenDiffResponse> => {
+      throw new Error("offline");
+    };
+    const next = await applyDiffWithPlans(prev, diff, fail, { rewindOnError: true });
+    expect(next.serverTimestamp).toBe(100);
+    await expect(applyDiffWithPlans(prev, diff, fail)).rejects.toThrow("offline");
+  });
+
+  it("застрявшие даты вычищаются разовым перезабором планов", () => {
+    expect(backfillEntities(cache({ cacheSchemaVersion: 6 }))).toEqual(["reminderMarker"]);
+    expect(CACHE_SCHEMA_VERSION).toBe(7);
   });
 });
