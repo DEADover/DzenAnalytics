@@ -79,6 +79,11 @@ export function Popover({
 
   useEffect(() => {
     if (!open) return;
+    // Где был якорь, когда окно открылось. Прокрутка, после которой он стоит
+    // на месте, окно не закрывает: так бывает, когда содержимое страницы под
+    // окном перестроилось и браузер подровнял прокрутку на пиксель-другой —
+    // подсказка быстрого поиска от этого мигала и пропадала.
+    const start = anchorRef.current?.getBoundingClientRect();
     const close = (e?: Event) => {
       // Окно приклеено к якорю на момент открытия: уехал якорь — уехало и оно,
       // поэтому прокрутка страницы его закрывает. Но прокрутка ВНУТРИ него
@@ -94,6 +99,9 @@ export function Popover({
       // Двигают якорь только прокрутка документа и его собственных предков.
       const anchor = anchorRef.current;
       if (target instanceof Element && anchor && !target.contains(anchor)) return;
+      const now = anchor?.getBoundingClientRect();
+      if (start && now && Math.abs(now.top - start.top) < 1 && Math.abs(now.left - start.left) < 1)
+        return;
       onClose();
     };
     // Изменился размер окна — якорь наверняка переехал, тут закрываем без

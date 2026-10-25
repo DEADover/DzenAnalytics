@@ -51,7 +51,10 @@ for (const width of [1440, 768]) {
     // Метка открывает подсказку; щелчок «В фильтре» — обратно.
     await badge.click();
     await expect(list).toBeVisible();
-    await list.locator("[data-search-scope='filter']").click();
+    // Без прокрутки к пункту: Playwright перед щелчком прокручивает элемент в
+    // видимую область, якорь подсказки при этом едет — и она честно
+    // закрывается, как любое всплывающее окно. Человек к пункту не листает.
+    await list.locator("[data-search-scope='filter']").dispatchEvent("click");
     await expect(badge).toHaveCount(0);
     await expect(payees).toHaveCount(nFilter);
 
