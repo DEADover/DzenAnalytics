@@ -17,6 +17,8 @@ export interface AccountOptionsMeta {
   archived: Set<string>;
   /** Название счёта → его вид («Карта», «Депозит», …). Пусто в режиме CSV. */
   kinds: Map<string, string>;
+  /** Подпись счёта по ключу — по ней и сортировка (ключ бывает номером). */
+  labelOf?: (key: string) => string;
 }
 
 /**
@@ -41,7 +43,9 @@ export function accountOptions(
     const ka = meta.kinds.get(a) ?? "";
     const kb = meta.kinds.get(b) ?? "";
     if (ka !== kb) return ka.localeCompare(kb, "ru");
-    return a.localeCompare(b, "ru");
+    const la = meta.labelOf ? meta.labelOf(a) : a;
+    const lb = meta.labelOf ? meta.labelOf(b) : b;
+    return la.localeCompare(lb, "ru");
   });
 }
 

@@ -1,3 +1,4 @@
+import { accountKeyOf } from "../lib/accountKey";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ComposedChart,
@@ -178,7 +179,11 @@ export function DynamicsPage() {
   const realBalances = useMemo(() => {
     if (!liveAccounts || liveAccounts.length === 0) return null;
     const m: Record<string, number> = {};
-    for (const a of liveAccounts) m[a.title] = toBase(a.balance, a.currency, rates);
+    // По ключу счёта: тёзки — разные остатки, долги в разных валютах — один.
+    for (const a of liveAccounts) {
+      const k = accountKeyOf(a);
+      m[k] = (m[k] ?? 0) + toBase(a.balance, a.currency, rates);
+    }
     return m;
   }, [liveAccounts, rates]);
 

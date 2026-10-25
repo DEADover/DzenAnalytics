@@ -27,9 +27,10 @@ import { PeriodPicker } from "./PeriodPicker";
 import { Segmented, type SegmentedOption } from "./Segmented";
 import { currencySymbol } from "../lib/format";
 import clsx from "clsx";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
+import { txAccountKey } from "../lib/accountKey";
 import { useDataStore } from "../store/useDataStore";
 import {
-  getLiveAccountsFromCache,
   getCategoryTagsFromCache,
   getZenUsersFromCache,
 } from "../store/useZenmoneyStore";
@@ -218,20 +219,41 @@ export function GlobalFilters({
       cancelled = true;
     };
   }, [transactions]);
+  // Счета — по ключам справочника (номер счёта, а не название): два
+  // «Т-Банка» в фильтре — две строки, у каждой своя подпись с уточнением.
+  const dir = useAccountDirectory();
   useEffect(() => {
-    let cancelled = false;
-    getLiveAccountsFromCache().then((live) => {
-      if (cancelled || !live) return;
-      setArchivedAccounts(new Set(live.filter((a) => a.archive).map((a) => a.title)));
-      setAccountKinds(
-        new Map(live.map((a) => [a.title, accountKindLabel(a.type, a.savings)]))
-      );
-      setDebtAccounts(new Set(live.filter((a) => DEBT_TYPES.has(a.type)).map((a) => a.title)));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions]);
+    const live = dir.list.filter((e) => e.live);
+    setArchivedAccounts(new Set(live.filter((e) => e.archive).map((e) => e.key)));
+    setAccountKinds(
+      new Map(live.map((e) => [e.key, accountKindLabel(e.type ?? "", e.savings)]))
+    );
+    setDebtAccounts(new Set(live.filter((e) => DEBT_TYPES.has(e.type ?? "")).map((e) => e.key)));
+  }, [dir]);
+
+  // Отобранные счета, запомненные названием (память фильтров, сохранённые
+  // виды, наборы до перехода на ключи), — в ключи: название раскрывается во
+  // все счета с ним, как и работало раньше.
+  const setSetRef = f.setSet;
+  useEffect(() => {
+    if (f.accounts.size === 0 || dir.list.length === 0) return;
+    let changed = false;
+    const next = new Set<string>();
+    for (const v of f.accounts) {
+      if (v === FILTER_NONE || dir.byKey.has(v) || parseDebtKey(v)) {
+        next.add(v);
+        continue;
+      }
+      const keys = dir.keysByTitle(v);
+      if (keys.length === 0) {
+        next.add(v);
+        continue;
+      }
+      for (const k of keys) next.add(k);
+      changed = true;
+    }
+    if (changed) setSetRef("accounts", next);
+  }, [f.accounts, dir, setSetRef]);
 
   // Список счетов — операции ПЛЮС справочник Дзен-мани: счёт без операций в
   // загруженных данных на странице «Счета» есть, и в фильтре он тоже должен
@@ -239,16 +261,16 @@ export function GlobalFilters({
   // режиме CSV — там остаются одни операции.
   const accounts = useMemo(() => {
     const base = accountOptions(
-      transactions.map((t) => t.account),
+      transactions.map((t) => txAccountKey(t)),
       accountKinds.keys(),
-      { archived: archivedAccounts, kinds: accountKinds }
+      { archived: archivedAccounts, kinds: accountKinds, labelOf: dir.label }
     );
     if (debtAccounts.size === 0) return base;
     // Долговой счёт в Дзен-мани ОДИН на все долги, и фильтр по нему отвечает
     // «все сразу». Поэтому контрагенты идут ВЛОЖЕННЫМИ прямо под своим счётом —
     // теми же именами, что и в разбивке на странице «Счета».
     return withDebtCounterparties(base, debtAccounts, transactions);
-  }, [transactions, archivedAccounts, accountKinds, debtAccounts]);
+  }, [transactions, archivedAccounts, accountKinds, debtAccounts, dir]);
 
   /** Заголовок группы для пикера счетов: архивные идут под своим разделителем,
    *  который рисует сам MultiSelect, поэтому им группу не назначаем. */
@@ -265,8 +287,8 @@ export function GlobalFilters({
 
   /** Подпись варианта: у пары «счёт → контрагент» показываем человека. */
   const accountLabel = useCallback(
-    (value: string) => parseDebtKey(value)?.payee ?? value,
-    []
+    (value: string) => parseDebtKey(value)?.payee ?? dir.label(value),
+    [dir]
   );
 
   /**
@@ -936,7 +958,7 @@ export function GlobalFilters({
             parseDebtKey(name) ? (
               <Users className="w-[18px] h-[18px] text-muted" />
             ) : (
-              <AccountLogo title={name} size={18} />
+              <AccountLogo title={dir.byKey.get(name)?.title ?? name} size={18} />
             )
           }
           labelOf={accountLabel}

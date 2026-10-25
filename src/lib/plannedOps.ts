@@ -1,3 +1,4 @@
+import { accountKeyOf } from "./accountKey";
 import type { ZenCache } from "./zenmoneyCache";
 import type { CurrencyRates, Transaction } from "../types";
 
@@ -34,6 +35,9 @@ export interface PlannedOp {
   toCurrency: string | null;
   account: string;
   toAccount: string | null;
+  /** Ключи счетов (см. `lib/accountKey`) — по ним отбор фильтром «Счета». */
+  accountKey?: string;
+  toAccountKey?: string | null;
   payee: string;
   comment: string;
   category: string;
@@ -164,6 +168,8 @@ export function plannedOps(
     }
 
     const plan = reminderById.get(m.reminder);
+    // Счёт плана — та же нога, что дала `account`.
+    const mainAcc = kind === "income" ? inAcc : outAcc;
     out.push({
       id: m.id,
       reminder: m.reminder,
@@ -177,6 +183,8 @@ export function plannedOps(
       toCurrency: isTransfer ? code(m.incomeInstrument) : null,
       account,
       toAccount: isTransfer ? inAcc?.title || "" : null,
+      ...(mainAcc ? { accountKey: accountKeyOf(mainAcc) } : {}),
+      ...(isTransfer ? { toAccountKey: inAcc ? accountKeyOf(inAcc) : null } : {}),
       payee: (m.payee || "").trim(),
       comment: (m.comment || "").trim(),
       category: involvesDebt ? "Долг" : categoryOf(m.tag),

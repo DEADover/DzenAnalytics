@@ -42,8 +42,8 @@ export function usePlannedFeed(query = "") {
       (p) =>
         deletions[p.id] === undefined &&
         (accounts.size === 0 ||
-          accounts.has(p.account) ||
-          (p.toAccount != null && accounts.has(p.toAccount))) &&
+          accounts.has(p.accountKey ?? p.account) ||
+          (p.toAccount != null && accounts.has(p.toAccountKey ?? p.toAccount))) &&
         (!match || match(`${p.payee} ${p.comment} ${p.category} ${p.account} ${p.toAccount ?? ""}`))
     );
   }, [planned, deletions, accounts, query]);

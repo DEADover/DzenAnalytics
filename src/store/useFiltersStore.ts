@@ -1,3 +1,4 @@
+import { txAccountKey, txInKey, txOutKey } from "../lib/accountKey";
 import { create } from "zustand";
 import { useDisplayStore } from "./useDisplayStore";
 import type { Transaction } from "../types";
@@ -350,8 +351,8 @@ export function onPickedAccounts(
   debtPicks: ReturnType<typeof debtSelection> = debtSelection(accounts as Set<string>)
 ): boolean {
   return (
-    accounts.has(t.account) ||
-    (t.kind === "transfer" && (accounts.has(t.outcomeAccount) || accounts.has(t.incomeAccount))) ||
+    accounts.has(txAccountKey(t)) ||
+    (t.kind === "transfer" && (accounts.has(txOutKey(t)) || accounts.has(txInKey(t)))) ||
     // Долговой счёт можно отобрать не целиком, а по конкретному человеку:
     // в Дзен-мани все долги лежат на одном счёте, и «все долги сразу» —
     // редко то, что нужно.

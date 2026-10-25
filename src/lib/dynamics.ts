@@ -9,6 +9,7 @@
  * на все дни периода, а не на дни, когда что-то покупалось.
  */
 
+import { txAccountKey, txInKey, txOutKey } from "./accountKey";
 import { periodKey, periodRange } from "./period";
 import { monthLabel } from "./format";
 import { MONTHS } from "./months";
@@ -95,8 +96,9 @@ export interface BalanceSource {
 function accountDelta(t: Transaction, accounts: Set<string> | null): number {
   // У односторонней операции нога может быть пустой (небрежный CSV) — тогда
   // берём счёт-владельца операции, иначе сумма молча выпала бы из остатка.
-  const out = t.outcomeAccount || t.account;
-  const inc = t.incomeAccount || t.account;
+  // Счета — ключами (`lib/accountKey`): у двух «Т-Банков» разные остатки.
+  const out = t.outcomeAccount ? txOutKey(t) : txAccountKey(t);
+  const inc = t.incomeAccount ? txInKey(t) : txAccountKey(t);
   const inSet = (a: string) => !!a && (accounts === null || accounts.has(a));
   let delta = 0;
   if (t.kind === "expense") {
@@ -106,8 +108,8 @@ function accountDelta(t: Transaction, accounts: Set<string> | null): number {
   } else if (t.kind === "transfer") {
     // У перевода обе ноги настоящие; подставлять счёт-владельца нельзя — иначе
     // перевод «сам себе» схлопнется в ноль на обеих сторонах.
-    if (inSet(t.outcomeAccount)) delta -= t.amountBase;
-    if (inSet(t.incomeAccount)) delta += t.amountBase;
+    if (t.outcomeAccount && inSet(txOutKey(t))) delta -= t.amountBase;
+    if (t.incomeAccount && inSet(txInKey(t))) delta += t.amountBase;
   }
   return delta;
 }
@@ -131,12 +133,13 @@ function balanceOffset(src: BalanceSource): { offset: number; anchored: boolean 
   for (const t of src.all) {
     // Те же подстановки пустой ноги, что и в accountDelta, — иначе сдвиг
     // считался бы по одному набору операций, а кривая по другому.
-    if (t.kind === "expense") bump(t.outcomeAccount || t.account, -t.amountBase);
+    if (t.kind === "expense")
+      bump(t.outcomeAccount ? txOutKey(t) : txAccountKey(t), -t.amountBase);
     else if (t.kind === "income" || t.kind === "refund")
-      bump(t.incomeAccount || t.account, t.amountBase);
+      bump(t.incomeAccount ? txInKey(t) : txAccountKey(t), t.amountBase);
     else if (t.kind === "transfer") {
-      bump(t.outcomeAccount, -t.amountBase);
-      bump(t.incomeAccount, t.amountBase);
+      if (t.outcomeAccount) bump(txOutKey(t), -t.amountBase);
+      if (t.incomeAccount) bump(txInKey(t), t.amountBase);
     }
   }
   let offset = 0;
