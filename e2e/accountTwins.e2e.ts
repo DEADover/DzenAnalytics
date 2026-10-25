@@ -52,3 +52,30 @@ test("тёзки — два счёта: фильтр и перенос опер�
   expect(tx?.outcomeAccount).toBe("acc-sber");
   expect(tx?.incomeAccount).toBe("acc-sber");
 });
+
+test("тёзки — две строки на «Счетах» и два пункта в периметре бюджета", async ({ page, zen }) => {
+  zen.patchFull = (diff) => ({
+    ...diff,
+    company: [
+      { id: 1, title: "Тинькофф" },
+      { id: 2, title: "Сбербанк" },
+    ],
+    account: diff.account.map((a) =>
+      a.id === "acc-tbank"
+        ? { ...a, company: 1 }
+        : a.id === "acc-sber"
+          ? { ...a, title: "Т-Банк", company: 2 }
+          : a
+    ),
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/accounts");
+  await expect(page.getByText("Т-Банк · Тинькофф", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Т-Банк · Сбербанк", { exact: true }).first()).toBeVisible();
+
+  await page.goto("/budgets");
+  await page.getByRole("button", { name: "Настройки бюджета" }).click();
+  await page.getByRole("button", { name: /^Счета/ }).last().click();
+  await expect(page.getByText("Т-Банк · Тинькофф", { exact: true }).last()).toBeVisible();
+  await expect(page.getByText("Т-Банк · Сбербанк", { exact: true }).last()).toBeVisible();
+});

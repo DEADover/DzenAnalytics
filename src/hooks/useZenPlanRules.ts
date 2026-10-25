@@ -7,6 +7,7 @@ import {
   type ZenPlanRules,
 } from "../lib/zenPlanRules";
 import { useDataStore } from "../store/useDataStore";
+import { accountKeyOf } from "../lib/accountKey";
 
 /**
  * Правила «Планов» Дзен-мани для бюджета — из кэша: настройки пользователя,
@@ -32,7 +33,7 @@ export function useZenPlanRules(): ZenPlanRules | undefined {
     // Архивные счета тоже: перевод на закрытый вклад в прошлом месяце — тот
     // же перевод в накопления, и в периметр счёт входит по своему признаку.
     return buildZenPlanRules(
-      cache.accounts ?? [],
+      (cache.accounts ?? []).map((a) => ({ ...a, key: accountKeyOf(a) })),
       zenPlanSettings(cache.user[0]),
       categories
     );

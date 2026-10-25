@@ -28,6 +28,8 @@ import { getZenForecastsFromCache } from "../store/useZenmoneyStore";
 import { loadZenCache } from "../lib/zenmoneyCache";
 import { plannedOps, type PlannedOp } from "../lib/plannedOps";
 import { plannedPlans } from "../lib/plannedPlans";
+import { txAccountKey } from "../lib/accountKey";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
 import { zenPlanKey } from "../lib/zenBudgets";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
@@ -182,14 +184,18 @@ export function BudgetsPage() {
   // возвраты, показывать ли входящий баланс — по настройкам самого
   // пользователя в приложении (см. `zenPlanRules`).
   const zenRules = useZenPlanRules();
+  const accountDir = useAccountDirectory();
   const scope = useMemo(
     () => ({
-      accounts: new Set(settings.accounts),
+      // Счета периметра запоминались названиями — старая запись значит все
+      // счета с этим названием.
+      accounts: accountDir.resolve(settings.accounts),
       excluded: offBalanceExcluded,
       perimeterTransfers: settings.perimeterTransfers,
       zen: zenRules,
+      labelOf: accountDir.label,
     }),
-    [settings.accounts, settings.perimeterTransfers, offBalanceExcluded, zenRules]
+    [settings.accounts, settings.perimeterTransfers, offBalanceExcluded, zenRules, accountDir]
   );
   // График движения денег считает сам по операциям — ему отдаём только то, что
   // внутри периметра.
@@ -288,7 +294,7 @@ export function BudgetsPage() {
       if (p.forecast) continue;
       const day = p.date.slice(0, 10);
       if (day < range.from || day > range.to) continue;
-      if (!inScope(p.account)) continue;
+      if (!inScope(p.accountKey ?? p.account)) continue;
       // Индекс — номер дня ВНУТРИ периода, как и ось графика.
       const d = spanDays(range.from, day);
       if (!(d >= 1 && d <= days)) continue;
@@ -849,7 +855,7 @@ export function BudgetsPage() {
       // нечего. Но деньги-то потрачены, и без них итог месяца не сойдётся с
       // операциями. Собираем их отдельной строкой, которую нельзя планировать.
       if (t.kind !== "transfer" && (!t.category || t.category === NO_CATEGORY)) {
-        if (!inScope(t.account)) continue;
+        if (!inScope(t.account ? txAccountKey(t) : undefined)) continue;
         if (t.kind === "income") add("income", NO_CATEGORY, null, t.amountBase);
         else if (affectsExpense(t.kind)) add("expense", NO_CATEGORY, null, expenseDelta(t));
         continue;
@@ -1408,7 +1414,7 @@ export function BudgetsPage() {
               </button>
             </Tooltip>
           )}
-          <BudgetSettingsPopover transactions={transactions} />
+          <BudgetSettingsPopover />
         </div>
       </div>
 

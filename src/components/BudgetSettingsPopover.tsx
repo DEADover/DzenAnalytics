@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Settings2 } from "lucide-react";
 import { useBudgetSettingsStore } from "../store/useBudgetSettingsStore";
-import type { Transaction } from "../types";
 import { AccountLogo } from "./AccountLogo";
 import { MultiSelect } from "./MultiSelect";
 import { Popover } from "./Popover";
@@ -11,6 +10,9 @@ import { SettingRow } from "./SettingRow";
 import { Switch } from "./Switch";
 import { Tooltip } from "./Tooltip";
 import { useOffBalanceExcluded } from "../hooks/useInBalanceTransactions";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
+import { accountOptions } from "../lib/accountOptions";
+import { accountKindLabel } from "../lib/accountType";
 
 
 /**
@@ -24,24 +26,35 @@ import { useOffBalanceExcluded } from "../hooks/useInBalanceTransactions";
  * Живут на самой странице, а не в общих настройках сервиса: это настройки
  * одного раздела, и менять их хочется, глядя на бюджет.
  */
-export function BudgetSettingsPopover({ transactions }: { transactions: Transaction[] }) {
+export function BudgetSettingsPopover() {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
   const s = useBudgetSettingsStore();
 
-  // Счета берём из самих операций: так список одинаково полон и на выгрузке
-  // CSV, и на синхронизации по API.
+  // Счета — из справочника: все счета Дзен-мани, в том числе без единой
+  // операции (новая карта, вклад без движения), плюс известные только по
+  // операциям (CSV). Тёзки — разными строками с уточнением.
+  const dir = useAccountDirectory();
+  const kinds = useMemo(
+    () => new Map(dir.list.map((e) => [e.key, e.type ? accountKindLabel(e.type, e.savings) : ""])),
+    [dir]
+  );
   const accounts = useMemo(() => {
-    const set = new Set<string>();
-    for (const t of transactions) {
-      if (t.account) set.add(t.account);
-      if (t.outcomeAccount) set.add(t.outcomeAccount);
-      if (t.incomeAccount) set.add(t.incomeAccount);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b, "ru"));
-  }, [transactions]);
+    const archived = new Set(dir.list.filter((e) => e.archive).map((e) => e.key));
+    return accountOptions(
+      dir.list.map((e) => e.key),
+      [],
+      { archived, kinds, labelOf: dir.label }
+    );
+  }, [dir, kinds]);
+  const archivedSet = useMemo(
+    () => new Set(dir.list.filter((e) => e.archive).map((e) => e.key)),
+    [dir]
+  );
 
-  const selected = useMemo(() => new Set(s.accounts), [s.accounts]);
+  // Старые настройки помнят счета названиями — читаем их как все счета с
+  // этим названием, сохраняем уже ключами.
+  const selected = useMemo(() => dir.resolve(s.accounts), [s.accounts, dir]);
   // Пустой выбор — все счета; пока счета вне баланса не считаются, без них.
   const offBalance = useOffBalanceExcluded();
   const allAccounts = selected.size === 0 && !offBalance?.size;
@@ -95,7 +108,10 @@ export function BudgetSettingsPopover({ transactions }: { transactions: Transact
               options={accounts}
               selected={selected}
               onChange={(next) => void s.update({ accounts: [...next] })}
-              renderIcon={(name) => <AccountLogo title={name} size={18} />}
+              renderIcon={(key) => <AccountLogo title={dir.byKey.get(key)?.title ?? key} size={18} />}
+              labelOf={dir.label}
+              groupOf={(key) => (archivedSet.has(key) ? null : kinds.get(key) || null)}
+              archivedSet={archivedSet}
               unitForms={["счёт", "счёта", "счетов"]}
               searchPlaceholder="Поиск счёта"
             />

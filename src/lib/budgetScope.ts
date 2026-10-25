@@ -4,6 +4,7 @@ import type { BudgetKind } from "./budgets";
 import { NO_CATEGORY } from "./zenmoneyMap";
 import { periodRange } from "./period";
 import { categoryKey, type ZenPlanRules } from "./zenPlanRules";
+import { txAccountKey, txInKey, txOutKey } from "./accountKey";
 
 /**
  * Периметр бюджета: какие счета в него входят и что делать с переводами.
@@ -22,7 +23,8 @@ import { categoryKey, type ZenPlanRules } from "./zenPlanRules";
  * внутри: перевод наружу — чистый отток, перевод внутрь — поступление.
  */
 export interface BudgetScope {
-  /** Имена счетов в бюджете. Пустой набор = все счета (кроме `excluded`). */
+  /** Ключи счетов в бюджете (`lib/accountKey`). Пустой набор = все счета
+   *  (кроме `excluded`). */
   accounts: Set<string>;
   /**
    * Счета, которых нет и в «все счета»: счета вне баланса, пока они не
@@ -40,6 +42,9 @@ export interface BudgetScope {
    * своих групп, возвраты по режиму пользователя.
    */
   zen?: ZenPlanRules;
+  /** Подпись счёта по ключу — для строк переводов: у тёзок с уточнением.
+   *  Не задана — название счёта из операции. */
+  labelOf?: (key: string) => string;
 }
 
 /** Действуют ли сейчас правила «Планов» Дзен-мани. */
@@ -101,15 +106,19 @@ export interface BudgetHit {
 export function budgetHits(t: Transaction, scope: BudgetScope): BudgetHit[] {
   const inside = (account: string | undefined) => inPerimeter(scope, account);
   const zen = zenRulesOn(scope);
+  const label = (key: string, title: string) => (key && scope.labelOf ? scope.labelOf(key) : title);
 
   if (t.kind === "transfer" && zen) {
-    const outIn = !!t.outcomeAccount && zen.inside.has(t.outcomeAccount);
-    const inIn = !!t.incomeAccount && zen.inside.has(t.incomeAccount);
+    const outKey = txOutKey(t);
+    const inKey = txInKey(t);
+    const outIn = !!t.outcomeAccount && zen.inside.has(outKey);
+    const inIn = !!t.incomeAccount && zen.inside.has(inKey);
     // Между своими счетами в балансе и между двумя внешними — мимо планов.
     if (outIn === inIn) return [];
     const side = outIn ? "to" : "from";
-    const other = (outIn ? t.incomeAccount : t.outcomeAccount) || "";
-    const group = zen.groupOf.get(other) ?? "other";
+    const otherKey = outIn ? inKey : outKey;
+    const other = label(otherKey, (outIn ? t.incomeAccount : t.outcomeAccount) || "");
+    const group = zen.groupOf.get(otherKey) ?? "other";
     if (zen.excluded.has(`${side}:${group}`)) return [];
     return [
       {
@@ -130,28 +139,28 @@ export function budgetHits(t: Transaction, scope: BudgetScope): BudgetHit[] {
     // Обе ноги берут сумму в БАЗОВОЙ валюте. У валютного перевода списание и
     // зачисление — разные числа в своих валютах, но в базовой это одна и та же
     // сумма; иначе перевод перестал бы гаситься и поехала бы «Разница».
-    if (inside(t.outcomeAccount))
+    if (inside(t.outcomeAccount ? txOutKey(t) : undefined))
       out.push({
         kind: "expense",
         category: TRANSFER_CATEGORY,
         // Подкатегория — счёт НА ТОЙ СТОРОНЕ: в расходах видно, куда ушло, в
         // доходах — откуда пришло. Свой счёт и так известен из раздела.
-        subcategory: t.incomeAccount || null,
+        subcategory: t.incomeAccount ? label(txInKey(t), t.incomeAccount) : null,
         amount: t.amountBase,
         transfer: true,
       });
-    if (inside(t.incomeAccount))
+    if (inside(t.incomeAccount ? txInKey(t) : undefined))
       out.push({
         kind: "income",
         category: TRANSFER_CATEGORY,
-        subcategory: t.outcomeAccount || null,
+        subcategory: t.outcomeAccount ? label(txOutKey(t), t.outcomeAccount) : null,
         amount: t.amountBase,
         transfer: true,
       });
     return out;
   }
 
-  if (!inside(t.account)) return [];
+  if (!inside(t.account ? txAccountKey(t) : undefined)) return [];
   // «Без категории» — не статья бюджета: планировать неразобранное нечего.
   if (!t.category || t.category === NO_CATEGORY) return [];
   if (t.kind === "income")
@@ -255,6 +264,6 @@ export function insidePerimeter(
 ): Transaction[] {
   if (isAllAccounts(scope)) return transactions;
   return transactions.filter(
-    (t) => t.kind !== "transfer" && !!t.account && inPerimeter(scope, t.account)
+    (t) => t.kind !== "transfer" && !!t.account && inPerimeter(scope, txAccountKey(t))
   );
 }

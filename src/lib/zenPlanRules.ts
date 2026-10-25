@@ -123,6 +123,8 @@ export function zenPlanSettings(
 
 /** Что о счёте нужно правилам. */
 export interface PlanAccount {
+  /** Ключ счёта (`lib/accountKey`); не задан — название. */
+  key?: string;
   title: string;
   type: string;
   savings: boolean;
@@ -144,9 +146,9 @@ export function accountGroup(a: Pick<PlanAccount, "type" | "savings" | "creditLi
 
 /** Правила, привязанные к счетам и категориям конкретного аккаунта. */
 export interface ZenPlanRules extends ZenPlanSettings {
-  /** Счета внутри периметра — по названию, как в операциях. */
+  /** Счета внутри периметра — по ключу счёта (`lib/accountKey`). */
   inside: Set<string>;
-  /** Группа каждого внешнего счёта. */
+  /** Группа каждого внешнего счёта — по ключу. */
   groupOf: Map<string, PlanTransferGroup>;
   /** Подписи групп с учётом совпадений с категориями пользователя. */
   labels: Record<PlanTransferSide, Record<PlanTransferGroup, string>>;
@@ -171,8 +173,9 @@ export function buildZenPlanRules(
   const inside = new Set<string>();
   const groupOf = new Map<string, PlanTransferGroup>();
   for (const a of accounts) {
-    if (a.inBalance) inside.add(a.title);
-    else groupOf.set(a.title, accountGroup(a));
+    const key = a.key ?? a.title;
+    if (a.inBalance) inside.add(key);
+    else groupOf.set(key, accountGroup(a));
   }
   // Подпись группы не должна совпасть с категорией пользователя: строки
   // бюджета опознаются по имени, и «Накопления»-перевод слился бы с
