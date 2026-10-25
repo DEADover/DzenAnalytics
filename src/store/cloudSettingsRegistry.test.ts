@@ -67,6 +67,7 @@ describe("реестр переносимых настроек", () => {
       "display.columnResize",
       "display.feedHeadSticky",
       "display.feedPlanned",
+      "display.contentWidth",
       "duplicates.exclusions",
       "accounts.view",
     ]) {

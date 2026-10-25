@@ -91,7 +91,14 @@ import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
 import { usePendingChanges } from "../hooks/usePendingChanges";
 import * as db from "../lib/db";
 import { ImportXlsxCard } from "../components/ImportXlsxCard";
-import { RangeInput } from "../components/Slider";
+import { RangeInput, Slider } from "../components/Slider";
+import {
+  CONTENT_WIDTH_DEFAULT,
+  CONTENT_WIDTH_MAX,
+  CONTENT_WIDTH_MIN,
+  CONTENT_WIDTH_STEP,
+} from "../lib/contentWidth";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 type Mode = "replace" | "merge";
 
@@ -231,6 +238,15 @@ export function ImportPage() {
   const tableFontLevel = useDisplayStore((s) => s.tableFontLevel);
   const setTableFontLevel = useDisplayStore((s) => s.setTableFontLevel);
   const columnResize = useDisplayStore((s) => s.columnResize);
+  const contentWidth = useDisplayStore((s) => s.contentWidth);
+  const setContentWidth = useDisplayStore((s) => s.setContentWidth);
+  // Шире ли экран выбранной колонки: на более узком ограничение ничего не
+  // меняет, и об этом честнее сказать в статусе, чем молча двигать бегунок.
+  const screenWiderThanColumn = useMediaQuery(`(min-width: ${(contentWidth || CONTENT_WIDTH_MAX) + 1}px)`);
+  // Последняя выбранная ширина: «Во весь экран» → «Ограничить» возвращает её,
+  // а не начинает заново с 1920.
+  const [lastContentWidth, setLastContentWidth] = useState(contentWidth || CONTENT_WIDTH_DEFAULT);
+  if (contentWidth > 0 && contentWidth !== lastContentWidth) setLastContentWidth(contentWidth);
   const setColumnResize = useDisplayStore((s) => s.setColumnResize);
   const customWidthTables = useColumnWidthsStore((s) => Object.keys(s.tables).length);
   const resetColumnWidths = useColumnWidthsStore((s) => s.resetAll);
@@ -1524,6 +1540,60 @@ export function ImportPage() {
               <PanelTop className="w-4 h-4" />
               Настроить
             </button>
+          }
+        />
+
+        <SettingRow
+          title="Ширина сервиса"
+          status={
+            contentWidth === 0
+              ? "Во весь экран — от края до края окна"
+              : screenWiderThanColumn
+                ? `Не шире ${formatNum(contentWidth)} px — колонкой по центру экрана`
+                : `Не шире ${formatNum(contentWidth)} px — на этом экране не видно: он уже`
+          }
+          help={
+            <>
+              <p>
+                На широком мониторе (например, 21:9) сервис растягивается до
+                краёв окна, и строки таблиц и графики приходится читать
+                поворотом головы. Ограничьте ширину — шапка, панель фильтров и
+                страница встанут колонкой по центру экрана, а фон и подложка
+                шапки останутся во всю ширину.
+              </p>
+              <p className="mt-2">
+                Ширина задаётся бегунком, от {formatNum(CONTENT_WIDTH_MIN)} до{" "}
+                {formatNum(CONTENT_WIDTH_MAX)} пикселей, и меняется сразу. На
+                экране уже выбранной ширины ничего не меняется. Боковая
+                панель операций и окна остаются своей ширины.
+              </p>
+            </>
+          }
+          control={
+            // Бегунок — перед переключателем: переключатель при этом стоит на
+            // месте, и щелчок по «Ограничить» не уводит его из-под курсора.
+            <div className="flex items-center gap-2">
+              {contentWidth > 0 && (
+                <Slider
+                  label="Ширина"
+                  value={contentWidth}
+                  min={CONTENT_WIDTH_MIN}
+                  max={CONTENT_WIDTH_MAX}
+                  step={CONTENT_WIDTH_STEP}
+                  format={(v) => `${formatNum(v)} px`}
+                  onChange={(v) => void setContentWidth(v)}
+                />
+              )}
+              <Segmented
+                label="Ширина сервиса"
+                value={contentWidth > 0 ? "limit" : "full"}
+                onChange={(v) => void setContentWidth(v === "limit" ? lastContentWidth : 0)}
+                options={[
+                  { value: "full", label: "Во весь экран" },
+                  { value: "limit", label: "Ограничить", title: "Колонкой по центру экрана" },
+                ]}
+              />
+            </div>
           }
         />
 

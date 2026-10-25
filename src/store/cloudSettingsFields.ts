@@ -33,6 +33,7 @@ import { useFireStore } from "./useFireStore";
 import { parseWhatIfState, pickWhatIf, useWhatIfStore } from "./useWhatIfStore";
 import { useSlicesStore } from "./useSlicesStore";
 import { isDarkChoice, isLightChoice } from "../lib/themeSchemes";
+import { isContentWidth } from "../lib/contentWidth";
 import { parseCustomTheme } from "../lib/customTheme";
 
 export interface SyncedField {
@@ -200,6 +201,11 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   ),
   field(useDisplayStore, "display.windowKind", (s) => s.windowKind, (v, s) =>
     isWindowKind(v) ? s.setWindowKind(v) : undefined
+  ),
+  // Ширина сервиса — общая, как размер текста таблиц: на экране уже колонки
+  // она ничего не меняет, а на втором широком мониторе нужна та же.
+  field(useDisplayStore, "display.contentWidth", (s) => s.contentWidth, (v, s) =>
+    isContentWidth(v) ? s.setContentWidth(v) : undefined
   ),
   field(useFilterMemoryStore, "filterMemory.enabled", (s) => s.enabled, (v, s) =>
     isBool(v) ? s.setEnabled(v) : undefined

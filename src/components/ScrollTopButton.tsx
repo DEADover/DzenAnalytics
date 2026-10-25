@@ -67,7 +67,9 @@ export function ScrollTopButton({
       style={
         container && corner
           ? { right: corner.right, bottom: corner.bottom }
-          : { right: "1.5rem", bottom: "var(--corner-stack, 1.5rem)" }
+          : // Угол колонки сервиса, а не экрана: при заданной «Ширине
+            // сервиса» кнопка стоит у края страницы, а не в пустоте сбоку.
+            { right: "calc(var(--column-inset) + 1.5rem)", bottom: "var(--corner-stack, 1.5rem)" }
       }
       title="Наверх"
       aria-label="Вернуться к началу списка"

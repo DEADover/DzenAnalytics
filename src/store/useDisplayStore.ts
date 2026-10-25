@@ -14,6 +14,7 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
 import { setMoneyFractionDigits } from "../lib/format";
+import { contentMaxCss, normalizeContentWidth } from "../lib/contentWidth";
 
 const KEY = "displaySettings";
 
@@ -64,6 +65,12 @@ function applyTableFont(level: TableFontLevel): void {
   if (typeof document === "undefined") return;
   document.documentElement.style.setProperty("--tbl-font", TABLE_FONT_REM[level]);
   document.documentElement.style.setProperty("--tbl-scale", TABLE_FONT_SCALE[level]);
+}
+
+/** Ширина колонки сервиса — CSS-переменной на корне, как размер текста таблиц. */
+function applyContentWidth(width: number): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.setProperty("--content-max", contentMaxCss(width));
 }
 
 function normalizeLevel(n: unknown): TableFontLevel {
@@ -147,6 +154,12 @@ interface DisplayState {
    * показывала «30 дней».
    */
   windowKind: WindowKind;
+  /**
+   * Ширина сервиса в пикселях: шапка, фильтры и страница — колонкой не шире
+   * этого по центру экрана. 0 — во весь экран (по умолчанию). См.
+   * `lib/contentWidth`.
+   */
+  contentWidth: number;
   loaded: boolean;
   hydrate: () => Promise<void>;
   setFractionDigits: (n: FractionDigits) => Promise<void>;
@@ -162,6 +175,7 @@ interface DisplayState {
   setFiltersMode: (mode: FiltersMode) => Promise<void>;
   setMonthKind: (kind: MonthKind) => Promise<void>;
   setWindowKind: (kind: WindowKind) => Promise<void>;
+  setContentWidth: (width: number) => Promise<void>;
 }
 
 export const useDisplayStore = create<DisplayState>((set, get) => ({
@@ -178,6 +192,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   filtersMode: "page",
   monthKind: "period",
   windowKind: "30d",
+  contentWidth: 0,
   loaded: false,
 
   hydrate: async () => {
@@ -195,11 +210,14 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       filtersMode?: string;
       monthKind?: string;
       windowKind?: string;
+      contentWidth?: number;
     }>(KEY);
     const fd: FractionDigits = stored?.fractionDigits === 2 ? 2 : 0;
     const level = normalizeLevel(stored?.tableFontLevel);
     setMoneyFractionDigits(fd); // sync the formatter before first paint
     applyTableFont(level); // sync the CSS var before first paint
+    const contentWidth = normalizeContentWidth(stored?.contentWidth);
+    applyContentWidth(contentWidth);
     set({
       fractionDigits: fd,
       tableFontLevel: level,
@@ -215,6 +233,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       filtersMode: stored?.filtersMode === "button" ? "button" : "page",
       monthKind: stored?.monthKind === "month" ? "month" : "period",
       windowKind: isWindowKind(stored?.windowKind) ? stored.windowKind : "30d",
+      contentWidth,
       loaded: true,
     });
   },
@@ -288,6 +307,14 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     set({ windowKind });
     await db.saveJSON(KEY, { ...persisted(get()), windowKind });
   },
+
+  setContentWidth: async (width) => {
+    const contentWidth = normalizeContentWidth(width);
+    applyContentWidth(contentWidth);
+    if (get().contentWidth === contentWidth) return;
+    set({ contentWidth });
+    await db.saveJSON(KEY, { ...persisted(get()), contentWidth });
+  },
 }));
 
 /** Всё, что кладём в IDB, — одним местом, чтобы сеттеры не забывали поля. */
@@ -306,5 +333,6 @@ function persisted(s: DisplayState) {
     filtersMode: s.filtersMode,
     monthKind: s.monthKind,
     windowKind: s.windowKind,
+    contentWidth: s.contentWidth,
   };
 }

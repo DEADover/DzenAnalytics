@@ -98,7 +98,9 @@ function Chip({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={ref}
-      className="fixed bottom-4 right-4 z-50 flex items-start gap-2.5 rounded-lg border border-border bg-panel shadow-lg px-3 py-2 text-xs text-text max-w-xs"
+      // Угол колонки сервиса — над ним же встаёт «Наверх» (см. ScrollTopButton).
+      style={{ right: "calc(var(--column-inset) + 1rem)" }}
+      className="fixed bottom-4 z-50 flex items-start gap-2.5 rounded-lg border border-border bg-panel shadow-lg px-3 py-2 text-xs text-text max-w-xs"
       role="status"
       aria-live="polite"
     >

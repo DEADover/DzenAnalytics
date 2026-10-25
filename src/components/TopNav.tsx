@@ -298,8 +298,10 @@ export function TopNav({
           таблицы. На строке метка ничему не мешает — внутри строки размытия нет.
 
           Подложка — общее матовое стекло (`.glass`), та же, что у панели
-          фильтров. */}
-      <div className="app-header w-full px-4 md:px-6 py-3 flex items-center gap-2 sm:gap-3 md:gap-6 border-b border-border glass">
+          фильтров. Поля — колонкой сервиса (`app-gutter`): при заданной
+          «Ширине сервиса» стекло остаётся во всю ширину окна, а кнопки встают
+          над краями страницы. */}
+      <div className="app-header w-full app-gutter py-3 flex items-center gap-2 sm:gap-3 md:gap-6 border-b border-border glass">
         {/* Знак «DA» (проба 16.09.2026). От `lg` он первым пунктом стоит в
             дорожке меню, перед «Главной», а меню прижато к левому краю. Ниже
             `lg` меню разделов в шапке нет — оно в кнопке справа, — и знак стоит
@@ -576,7 +578,7 @@ export function TopNav({
             onClick={() => setMoreOpen(false)}
             aria-hidden="true"
           />
-          <div className="hidden lg:block absolute left-0 right-0 top-full z-20 px-4 md:px-6 pt-1">
+          <div className="hidden lg:block absolute left-0 right-0 top-full z-20 app-gutter pt-1">
             <div className="card-tray relative p-5 3xl:p-6">
               {/* Настройка основного меню — значком в углу панели: тут видно,
                   чего не хватает в шапке, и значок не отнимает места у разделов.

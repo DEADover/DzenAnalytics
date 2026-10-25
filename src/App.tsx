@@ -461,8 +461,10 @@ function App() {
       <TopNav onOpenPalette={() => setPaletteOpen(true)} hasData={hasData} />
       {/* Сверху воздуха меньше, чем снизу: первая строка страницы — тонкие
           крошки раздела (PageHeader), они читаются как продолжение шапки, и
-          отбивать их наравне с остальными блоками незачем. */}
-      <main className="flex-1 w-full px-4 md:px-6 pt-3 md:pt-4 pb-4 md:pb-6">
+          отбивать их наравне с остальными блоками незачем.
+          Поля по бокам — колонкой сервиса (`app-gutter`): при заданной
+          «Ширине сервиса» страница встаёт по центру широкого экрана. */}
+      <main className="flex-1 w-full app-gutter pt-3 md:pt-4 pb-4 md:pb-6">
         <DemoBanner />
         <Routes>
           <Route element={<PlainLayout />}>
