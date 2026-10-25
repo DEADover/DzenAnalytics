@@ -67,3 +67,24 @@ export function useZenOpeningBalance(
     return openingBalance(cache.accounts, cache.transactions, fromIso, toBase);
   }, [rules, cache, fromIso, todayIso, rates, histDayRates]);
 }
+
+/**
+ * Остаток на счетах «в балансе» сейчас, в базовой валюте, — отправная точка
+ * прогноза входящего баланса будущих месяцев. `null` — правила его не просят
+ * или подключения нет.
+ */
+export function useZenBalanceNow(rules: ZenPlanRules | undefined | null): number | null {
+  const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
+  const rates = useDataStore((s) => s.rates);
+  return useMemo(() => {
+    if (!rules?.openingBalance || !cache) return null;
+    const code = new Map(cache.instruments.map((i) => [i.id, i.shortTitle]));
+    let sum = 0;
+    for (const a of cache.accounts) {
+      if (!a.inBalance) continue;
+      const cur = code.get(a.instrument);
+      sum += !cur || cur === rates.base ? a.balance : a.balance * (rates.rates[cur] ?? 1);
+    }
+    return sum;
+  }, [rules, cache, rates]);
+}

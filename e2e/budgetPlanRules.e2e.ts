@@ -54,6 +54,19 @@ test("«Баланс vs Расходы»: накопления строками 
   await expect(summary).toContainText("Остаток");
 });
 
+test("будущий месяц: входящий баланс — прогнозом", async ({ page, zen }) => {
+  await setup(page, zen, "balance");
+  const main = page.locator("main");
+  await expect(main.getByText("Входящий баланс", { exact: true })).toBeVisible();
+  const next = main.locator("button", { has: page.locator("svg.lucide-chevron-right") }).first();
+  await next.click();
+  await expect(main.getByText(/Ноя\. 2026/).first()).toBeVisible();
+  // В будущем месяце строка есть — прогноз остатка на конец текущего.
+  const row = main.locator(".card", { hasText: "Входящий баланс" }).first();
+  await expect(row).toBeVisible();
+  await expect(row).not.toContainText(/^\s*0 ₽/);
+});
+
 test("«Доходы vs Расходы»: выключенная группа и без входящего баланса", async ({ page, zen }) => {
   await setup(page, zen, "excludeOpeningBalance", ["excludeTransferToSavings"]);
   const main = page.locator("main");

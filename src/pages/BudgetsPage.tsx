@@ -51,8 +51,8 @@ import {
 } from "../lib/budgetYear";
 import { useLiveCategoryPaths } from "../hooks/useDictionaries";
 import { useOffBalanceExcluded } from "../hooks/useInBalanceTransactions";
-import { useZenOpeningBalance, useZenPlanRules } from "../hooks/useZenPlanRules";
-import { OPENING_BALANCE_LABEL } from "../lib/zenPlanRules";
+import { useZenBalanceNow, useZenOpeningBalance, useZenPlanRules } from "../hooks/useZenPlanRules";
+import { OPENING_BALANCE_LABEL, monthResidues } from "../lib/zenPlanRules";
 import { nameKey } from "../lib/budgetLines";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
 import { BudgetDashboardPrint } from "../components/BudgetDashboardPrint";
@@ -626,7 +626,12 @@ export function BudgetsPage() {
     void queueBudgets(edits);
   }
 
-  const rows = useMemo<Row[]>(() => {
+  /**
+   * Строки плана одного месяца. Функцией от месяца, а не только выбранного:
+   * прогноз входящего баланса будущего месяца проходит по всем месяцам до
+   * него (см. `forecastOpening`).
+   */
+  const buildRows = useCallback((ym: string): Row[] => {
     // Первый проход — только планы: от фактов они не зависят, а факт категории
     // зависит от того, какие под-строки в итоге окажутся на экране (issue #70).
     const inWindow = lines
@@ -746,7 +751,6 @@ export function BudgetsPage() {
     });
   }, [
     lines,
-    ym,
     transactions,
     zenForecasts,
     zenLoaded,
@@ -757,6 +761,41 @@ export function BudgetsPage() {
     livePaths,
     monthStartDay,
   ]);
+  const rows = useMemo(() => buildRows(ym), [buildRows, ym]);
+
+  /**
+   * Входящий баланс будущего месяца — прогнозный, как у Дзен-мани: остаток на
+   * счетах сейчас плюс то, что по плану ещё поступит, минус то, что ещё
+   * потратится, — по текущему месяцу и по каждому месяцу до выбранного.
+   */
+  const balanceNow = useZenBalanceNow(zenRules);
+  const forecastOpening = useMemo(() => {
+    if (balanceNow === null || ym <= cur) return null;
+    const pendingKey = (kind: string, c: string, sub: string | null, m: string) =>
+      [kind, c, sub ?? "", m].join("\u0000");
+    // Ещё не исполненные плановые — вместе с просроченными: у Дзен-мани они
+    // держат остаток статьи.
+    const pending = new Map<string, number>();
+    for (const p of plannedPlans(zenPlanned, scope, undefined, monthStartDay, !!zenRules?.forecasts))
+      pending.set(pendingKey(p.kind, p.category, p.subcategory, p.ym), p.amount);
+    let sum = balanceNow;
+    for (let m = cur; m < ym; m = addMonths(m, 1)) {
+      const left = monthResidues(
+        buildRows(m).map((r) => ({
+          kind: r.line.kind,
+          category: r.line.category,
+          subcategory: r.line.subcategory ?? null,
+          planned: r.planned,
+          fact: r.fact,
+          ahead: pending.get(pendingKey(r.line.kind, r.line.category, r.line.subcategory ?? null, m)) ?? 0,
+          locked: r.locked,
+        }))
+      );
+      sum += left.income - left.expense;
+    }
+    return sum;
+  }, [balanceNow, ym, cur, buildRows, zenPlanned, scope, monthStartDay, zenRules]);
+  const openingShown = ym > cur ? forecastOpening : openingBalanceSum;
   /**
    * Статьи, по которым в этом месяце были деньги, но плана нет.
    *
@@ -964,7 +1003,7 @@ export function BudgetsPage() {
    *  поэтому итог месяца сходится с лентой операций за тот же месяц. */
   const allRows = useMemo(() => {
     const opening: Row[] =
-      openingBalanceSum === null
+      openingShown === null
         ? []
         : [
             {
@@ -979,9 +1018,10 @@ export function BudgetsPage() {
                 endMonth: null,
                 createdAt: "",
               },
-              planned: openingBalanceSum,
-              fact: openingBalanceSum,
-              forecast: false,
+              planned: openingShown,
+              fact: openingShown,
+              // Будущий месяц — прогноз остатка, а не факт.
+              forecast: ym > cur,
               unplanned: true,
               plannable: false,
               opening: true,
@@ -1005,7 +1045,7 @@ export function BudgetsPage() {
       if (!as || !bs) return as ? 1 : bs ? -1 : 0;
       return compareBudgetRows({ name: as, amount: a.fact }, { name: bs, amount: b.fact }, rowOrder);
     });
-  }, [rows, unplannedRows, catalogRows, rowOrder, openingBalanceSum, ym]);
+  }, [rows, unplannedRows, catalogRows, rowOrder, openingShown, ym, cur]);
 
   const expenseRows = allRows.filter((r) => r.line.kind === "expense");
   const incomeRows = allRows.filter((r) => r.line.kind === "income");
@@ -1162,7 +1202,7 @@ export function BudgetsPage() {
   // обе части и внутри бюджета гасятся; перевод наружу — настоящий отток.
   // Входящий баланс в разницу не идёт: это остаток прошлых месяцев, а не
   // поступление этого — «без учёта входящего баланса», как в приложении.
-  const opening = openingBalanceSum ?? 0;
+  const opening = openingShown ?? 0;
   const planDelta = incPlan - opening - expPlan;
   const factDelta = incFact - opening + incTransfers - (expFact + expTransfers);
 

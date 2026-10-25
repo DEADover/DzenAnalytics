@@ -4,6 +4,7 @@ import {
   buildZenPlanRules,
   openingBalance,
   planResidue,
+  monthResidues,
   zenPlanSettings,
   type PlanAccount,
 } from "./zenPlanRules";
@@ -207,5 +208,36 @@ describe("planResidue", () => {
     expect(planResidue(10_000, 4_000, 0)).toBe(6_000);
     expect(planResidue(10_000, 12_000, 0)).toBe(0);
     expect(planResidue(10_000, 9_000, 3_000)).toBe(3_000);
+  });
+});
+
+describe("monthResidues", () => {
+  const row = (p: Partial<import("./zenPlanRules").ResidueRow>) => ({
+    kind: "expense" as const,
+    category: "Еда",
+    subcategory: null,
+    planned: 0,
+    fact: 0,
+    ahead: 0,
+    ...p,
+  });
+
+  it("сумма остатков статей, перерасход одной не съедает другую", () => {
+    const r = monthResidues([
+      row({ category: "Еда", planned: 10_000, fact: 4_000 }),
+      row({ category: "Кафе", planned: 5_000, fact: 9_000 }),
+      row({ kind: "income", category: "Работа", planned: 100_000, fact: 40_000 }),
+    ]);
+    expect(r.expense).toBe(6_000);
+    expect(r.income).toBe(60_000);
+  });
+
+  it("категория с замком: остаток — большее из своего и суммы подкатегорий", () => {
+    // Ноябрь 2026: «Интернет-покупки» 2 000 с замком, «Подписки» 26 703.
+    const r = monthResidues([
+      row({ category: "Интернет", planned: 2_000, locked: true }),
+      row({ category: "Интернет", subcategory: "Подписки", planned: 26_703 }),
+    ]);
+    expect(r.expense).toBe(26_703);
   });
 });

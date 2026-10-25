@@ -245,3 +245,48 @@ export function planResidue(plan: number, fact: number, ahead: number): number {
   if (plan === 0) return 0;
   return Math.max(0, ahead, plan - fact);
 }
+
+/** Строка плана месяца — то, что нужно для его остатков. */
+export interface ResidueRow {
+  kind: "income" | "expense";
+  category: string;
+  subcategory: string | null;
+  planned: number;
+  fact: number;
+  /** Плановые операции, ещё не исполненные (вместе с просроченными). */
+  ahead: number;
+  /** Замок у категории: её план уже включает подкатегории. */
+  locked?: boolean;
+}
+
+/**
+ * Сколько по плану месяца ещё поступит и ещё потратится — как «Ещё в планах»
+ * у Дзен-мани: сумма остатков статей верхнего уровня. Остаток категории —
+ * большее из её собственного (по плану и факту вместе с подкатегориями) и
+ * суммы остатков подкатегорий: перерасход одной подкатегории не съедает
+ * остаток другой.
+ */
+export function monthResidues(rows: ResidueRow[]): { income: number; expense: number } {
+  const groups = new Map<string, { parent?: ResidueRow; subs: ResidueRow[] }>();
+  for (const r of rows) {
+    const key = `${r.kind}\u0000${r.category}`;
+    const g = groups.get(key) ?? { subs: [] };
+    if (r.subcategory === null) g.parent = r;
+    else g.subs.push(r);
+    groups.set(key, g);
+  }
+  const out = { income: 0, expense: 0 };
+  for (const { parent, subs } of groups.values()) {
+    const kind = parent?.kind ?? subs[0].kind;
+    const sum = (f: (r: ResidueRow) => number) => subs.reduce((s, r) => s + f(r), 0);
+    const plan = parent?.locked ? parent.planned : (parent?.planned ?? 0) + sum((r) => r.planned);
+    const own = planResidue(
+      plan,
+      (parent?.fact ?? 0) + sum((r) => r.fact),
+      (parent?.ahead ?? 0) + sum((r) => r.ahead)
+    );
+    const kids = sum((r) => planResidue(r.planned, r.fact, r.ahead));
+    out[kind] += subs.length > 0 ? Math.max(own, kids) : own;
+  }
+  return out;
+}
