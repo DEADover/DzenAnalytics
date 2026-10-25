@@ -63,6 +63,7 @@ import {
   insidePerimeter,
   transactionsForCell,
   TRANSFER_CATEGORY,
+  type BudgetScope,
 } from "../lib/budgetScope";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { affectsExpense, expenseDelta } from "../lib/txKindStyle";
@@ -631,7 +632,7 @@ export function BudgetsPage() {
    * прогноз входящего баланса будущего месяца проходит по всем месяцам до
    * него (см. `forecastOpening`).
    */
-  const buildRows = useCallback((ym: string): Row[] => {
+  const buildRows = useCallback((ym: string, sc: BudgetScope = scope): Row[] => {
     // Первый проход — только планы: от фактов они не зависят, а факт категории
     // зависит от того, какие под-строки в итоге окажутся на экране (issue #70).
     const inWindow = lines
@@ -658,7 +659,7 @@ export function BudgetsPage() {
             fc = zenForecasts.get(
               zenPlanKey(line.kind, line.category, line.subcategory ?? null, ym)
             ) ?? 0; // API: trust Дзен (missing = no forecast)
-          else fc = forecastFor(line, transactions, ym, 6, scope, monthStartDay); // CSV: median estimate
+          else fc = forecastFor(line, transactions, ym, 6, sc, monthStartDay); // CSV: median estimate
           if (fc > 0) return { line, planned: fc, forecast: true };
         }
         return { line, planned, forecast: false, locked: lockedFor(line, ym) };
@@ -713,7 +714,7 @@ export function BudgetsPage() {
             r.line,
             transactions,
             ym,
-            scope,
+            sc,
             ownSubsFor(ownSubs, r.line),
             monthStartDay
           ),
@@ -778,10 +779,19 @@ export function BudgetsPage() {
     const pending = new Map<string, number>();
     for (const p of plannedPlans(zenPlanned, scope, undefined, monthStartDay, !!zenRules?.forecasts))
       pending.set(pendingKey(p.kind, p.category, p.subcategory, p.ym), p.amount);
+    // Прогноз приложение считает копией расчёта в режиме «Баланс vs Расходы»:
+    // все переводы через границу, возвраты не вычитаются, — если в «Доходах vs
+    // Расходах» выбрано что-то кроме одного входящего баланса (сверено: иначе
+    // прогноз ноября расходился на 629 ₽ — ровно на возвраты в статьях с
+    // остатком).
+    const fc =
+      zenRules && zenRules.excluded.size > 0
+        ? { ...scope, zen: { ...zenRules, refunds: false, excluded: new Set<string>() } }
+        : scope;
     let sum = balanceNow;
     for (let m = cur; m < ym; m = addMonths(m, 1)) {
       const left = monthResidues(
-        buildRows(m).map((r) => ({
+        buildRows(m, fc).map((r) => ({
           kind: r.line.kind,
           category: r.line.category,
           subcategory: r.line.subcategory ?? null,

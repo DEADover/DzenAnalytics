@@ -45,6 +45,12 @@ export function useZenPlanRules(): ZenPlanRules | undefined {
  * подключения или период ещё не начался (входящий баланс будущего месяца
  * неизвестен).
  */
+function shiftDay(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export function useZenOpeningBalance(
   rules: ZenPlanRules | undefined | null,
   fromIso: string,
@@ -53,15 +59,22 @@ export function useZenOpeningBalance(
   const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
   const rates = useDataStore((s) => s.rates);
   const histDayRates = useDataStore((s) => s.histDayRates);
+  const requestRateDates = useDataStore((s) => s.requestRateDates);
+  // Курс накануне периода в прогреве может не оказаться — попросим его.
+  useEffect(() => {
+    if (rules?.openingBalance && fromIso <= todayIso) requestRateDates([shiftDay(fromIso, -1)]);
+  }, [rules, fromIso, todayIso, requestRateDates]);
   return useMemo(() => {
     if (!rules?.openingBalance || !cache || fromIso > todayIso) return null;
     const code = new Map(cache.instruments.map((i) => [i.id, i.shortTitle]));
-    // Остаток валютного счёта — по курсу первого дня периода, как в
-    // приложении; нет курса на этот день — по текущему.
+    // Остаток валютного счёта — по курсу дня НАКАНУНЕ периода: это остаток на
+    // конец предыдущего дня, и приложение оценивает его тем днём (сверено:
+    // по курсу 1-го выходило на 1 173 ₽ меньше). Нет курса — по текущему.
+    const dayBefore = shiftDay(fromIso, -1);
     const toBase = (amount: number, instrument: number) => {
       const cur = code.get(instrument);
       if (!cur || cur === rates.base) return amount;
-      const r = rates.base === "RUB" ? histDayRates[fromIso]?.[cur] : undefined;
+      const r = rates.base === "RUB" ? histDayRates[dayBefore]?.[cur] : undefined;
       return amount * (r ?? rates.rates[cur] ?? 1);
     };
     return openingBalance(cache.accounts, cache.transactions, fromIso, toBase);
