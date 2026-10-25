@@ -136,3 +136,21 @@ describe("plannedPlans: отчётный месяц", () => {
     expect(by(1)).toEqual({ "2026-09": 3000, "2026-10": 3000 });
   });
 });
+
+describe("plannedPlans — исполненные плановые операции", () => {
+  it("идут в план месяца, но не во «впереди»", () => {
+    const ops = [
+      { ...op({ date: "2026-09-10", amountBase: 12_000, category: "Садик" }), done: true },
+      op({ date: "2026-09-25", amountBase: 3_000, category: "Садик" }),
+    ];
+    const [p] = plannedPlans(ops, ALL_ACCOUNTS, "2026-09-20");
+    expect(p.amount).toBe(15_000);
+    expect(p.ahead).toBe(3_000);
+  });
+
+  it("прогнозы — только когда они включены у пользователя", () => {
+    const ops = [op({ date: "2026-09-25", amountBase: 500, category: "Садик", forecast: true })];
+    expect(plannedPlans(ops, ALL_ACCOUNTS)).toHaveLength(0);
+    expect(plannedPlans(ops, ALL_ACCOUNTS, undefined, 1, true)[0].amount).toBe(500);
+  });
+});

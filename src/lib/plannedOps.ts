@@ -48,6 +48,23 @@ export interface PlannedOp {
    * не показывает, а по API они приезжают.
    */
   member?: number | null;
+  /**
+   * Плановая операция уже исполнена (`processed` или на неё ссылается
+   * настоящая операция). Такие идут только туда, где их просят явно, —
+   * в план месяца бюджета (см. `plannedOps(…, { withProcessed })`).
+   */
+  done?: boolean;
+}
+
+export interface PlannedOpsOptions {
+  /**
+   * Брать и исполненные плановые операции. Нужно бюджету: план статьи без
+   * своего плана у Дзен-мани — все её плановые операции месяца, и
+   * исполненные тоже (план отвечает на «сколько собирались»).
+   */
+  withProcessed?: boolean;
+  /** Курс на дату — исполненную операцию переводим по курсу её дня. */
+  histRate?: (dateIso: string, code: string) => number | null;
 }
 
 /**
@@ -57,7 +74,8 @@ export interface PlannedOp {
  */
 export function plannedOps(
   cache: ZenCache | null | undefined,
-  rates: CurrencyRates
+  rates: CurrencyRates,
+  opts: PlannedOpsOptions = {}
 ): PlannedOp[] {
   const markers = cache?.reminderMarkers;
   if (!cache || !markers || markers.length === 0) return [];
@@ -89,9 +107,16 @@ export function plannedOps(
   /** Loan / credit / debt legs — same set the transaction mapper uses. */
   const DEBT_TYPES = ["loan", "credit", "debt"];
 
+  // Исполненные — по состоянию или по ссылке настоящей операции (issue #86).
+  const linked = opts.withProcessed
+    ? new Set(
+        (cache.transactions || []).filter((t) => !t.deleted && t.reminderMarker).map((t) => t.reminderMarker)
+      )
+    : null;
   const out: PlannedOp[] = [];
   for (const m of markers) {
-    if (m.state !== "planned") continue;
+    const done = !!linked && (m.state === "processed" || linked.has(m.id));
+    if (m.state !== "planned" && !done) continue;
     // A zero/zero marker carries no money — it would render as a phantom
     // «доход 0 ₽». The transaction mapper and the budget aggregator skip these
     // too; do the same so the three stay consistent.
@@ -109,21 +134,30 @@ export function plannedOps(
     const code = (id: number) => instrumentById.get(id)?.shortTitle || rates.base;
     let amount: number;
     let currency: string;
+    // Исполненную — по курсу её дня, как и её факт.
+    const toBaseOn = (amt: number, instr: number) => {
+      if (done && opts.histRate) {
+        const c = code(instr);
+        const r = c === rates.base ? 1 : opts.histRate(m.date, c);
+        if (r != null) return amt * r;
+      }
+      return toBase(amt, instr);
+    };
     if (isTransfer) {
       kind = "transfer";
-      amountBase = toBase(m.outcome, m.outcomeInstrument);
+      amountBase = toBaseOn(m.outcome, m.outcomeInstrument);
       account = outAcc?.title || "";
       amount = m.outcome;
       currency = code(m.outcomeInstrument);
     } else if (m.outcome > 0) {
       kind = "expense";
-      amountBase = toBase(m.outcome, m.outcomeInstrument);
+      amountBase = toBaseOn(m.outcome, m.outcomeInstrument);
       account = outAcc?.title || "";
       amount = m.outcome;
       currency = code(m.outcomeInstrument);
     } else {
       kind = "income";
-      amountBase = toBase(m.income, m.incomeInstrument);
+      amountBase = toBaseOn(m.income, m.incomeInstrument);
       account = inAcc?.title || "";
       amount = m.income;
       currency = code(m.incomeInstrument);
@@ -148,6 +182,7 @@ export function plannedOps(
       category: involvesDebt ? "Долг" : categoryOf(m.tag),
       forecast: m.isForecast === true,
       member: outAcc?.role ?? inAcc?.role ?? null,
+      ...(done ? { done: true } : {}),
     });
   }
   out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));

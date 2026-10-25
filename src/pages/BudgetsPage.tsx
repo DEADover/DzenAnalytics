@@ -217,15 +217,27 @@ export function BudgetsPage() {
   // (issue #72). Прогнозы самого Дзена не берём — это не назначенная дата, а
   // достроенная регулярность, обещать её конкретным днём неправильно.
   const [zenPlanned, setZenPlanned] = useState<PlannedOp[]>([]);
+  // Те же плановые операции вместе с исполненными — для плана статей без
+  // своего плана: у Дзен-мани их план — все плановые операции месяца, и
+  // исполненные тоже (в прошлом месяце «Садик 12 000» исполнен — план 12 000).
+  const [zenPlannedAll, setZenPlannedAll] = useState<PlannedOp[]>([]);
+  const histDayRates = useDataStore((s) => s.histDayRates);
   useEffect(() => {
     let alive = true;
     loadZenCache().then((c) => {
-      if (alive) setZenPlanned(plannedOps(c, rates));
+      if (!alive) return;
+      setZenPlanned(plannedOps(c, rates));
+      setZenPlannedAll(
+        plannedOps(c, rates, {
+          withProcessed: true,
+          histRate: (d, code) => histDayRates[d]?.[code] ?? null,
+        })
+      );
     });
     return () => {
       alive = false;
     };
-  }, [transactions, rates]);
+  }, [transactions, rates, histDayRates]);
 
   const cur = currentPeriod(monthStartDay);
   const [ym, setYm] = useState(() =>
@@ -295,8 +307,8 @@ export function BudgetsPage() {
    * нет, никуда не сохраняется и в Дзен-мани не уходит.
    */
   const plannedAsPlan = useMemo(
-    () => plannedPlans(zenPlanned, scope, undefined, monthStartDay),
-    [zenPlanned, scope, monthStartDay]
+    () => plannedPlans(zenPlannedAll, scope, undefined, monthStartDay, !!zenRules?.forecasts),
+    [zenPlannedAll, scope, monthStartDay, zenRules]
   );
 
   /**
@@ -310,7 +322,7 @@ export function BudgetsPage() {
   const aheadByTag = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     const m = new Map<string, { sum: number; ops: PlannedOp[] }>();
-    for (const p of plannedPlans(zenPlanned, scope, today, monthStartDay)) {
+    for (const p of plannedPlans(zenPlanned, scope, today, monthStartDay, !!zenRules?.forecasts)) {
       if (p.ym !== ym || p.ahead <= 0) continue;
       // Ключ тот же, что у `budgetKey` ниже; собираем его здесь, чтобы не
       // тянуть объявление функции выше по файлу.
@@ -320,7 +332,7 @@ export function BudgetsPage() {
       });
     }
     return m;
-  }, [zenPlanned, scope, ym, monthStartDay]);
+  }, [zenPlanned, scope, ym, monthStartDay, zenRules]);
 
   // ── Inline add: a draft row inside the «Расходы»/«Доходы» section ──
   const [draftKind, setDraftKind] = useState<BudgetKind | null>(null);
