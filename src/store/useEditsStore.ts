@@ -42,6 +42,9 @@ export type EditableField =
   | "accountId"
   | "outcomeAccountId"
   | "incomeAccountId"
+  | "accountKey"
+  | "outcomeAccountKey"
+  | "incomeAccountKey"
   // Transfer-aware fields. Editing `kind` lets the user fix
   | "kind"
   // misclassified expense/income/transfer rows; the two side-fields

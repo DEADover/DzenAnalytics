@@ -89,6 +89,14 @@ export interface Transaction {
   accountId?: string;
   outcomeAccountId?: string;
   incomeAccountId?: string;
+  /**
+   * Ключи счетов — тождество для отбора, группировки и запоминания (см.
+   * `lib/accountKey`): номер счёта, у долговых — общее название. Читать
+   * через `txAccountKey` / `txOutKey` / `txInKey`: без ключа — название.
+   */
+  accountKey?: string;
+  outcomeAccountKey?: string;
+  incomeAccountKey?: string;
   amountBase: number;
   /** Bank-original operation amount when the bank converted currencies
    *  (e.g. 5 000 TRY on a USD account). Null when op currency = account currency. */

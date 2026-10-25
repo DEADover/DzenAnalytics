@@ -9,6 +9,7 @@
 // - `transaction.tag` is an array of tag IDs (multi-tagging). We treat the
 //   first entry as the primary category.
 
+import { accountKeyOf } from "./accountKey";
 import type { Transaction, CurrencyRates } from "../types";
 import type {
   ZenDiffResponse,
@@ -203,26 +204,26 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
     const isTransfer =
       outcome > 0 && income > 0 && zt.outcomeAccount !== zt.incomeAccount;
 
-    // Номер счёта операции — той же ноги, что даёт название (см. `accountId`).
-    let accountId: string | undefined;
+    // Счёт операции — та же нога, что даёт название (см. `accountId`).
+    let accountObj: typeof outAcc;
     if (isTransfer) {
       kind = "transfer";
       amount = outcome;
       currency = outCurrency;
       account = outAcc?.title || "";
-      accountId = outAcc?.id;
+      accountObj = outAcc;
     } else if (outcome > 0) {
       kind = "expense";
       amount = outcome;
       currency = outCurrency;
       account = outAcc?.title || "";
-      accountId = outAcc?.id;
+      accountObj = outAcc;
     } else {
       kind = "income";
       amount = income;
       currency = inCurrency;
       account = inAcc?.title || "";
-      accountId = inAcc?.id;
+      accountObj = inAcc;
 
       // Refund detection: an income-side movement tagged with an
       // *expense* category (a tag whose `showOutcome` is on while
@@ -315,18 +316,18 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
       brand: zt.merchant ? merchantsById.get(zt.merchant) || null : null,
       comment: zt.comment || "",
       outcomeAccount: outAcc?.title || "",
-      ...(outAcc ? { outcomeAccountId: outAcc.id } : {}),
+      ...(outAcc ? { outcomeAccountId: outAcc.id, outcomeAccountKey: accountKeyOf(outAcc) } : {}),
       outcomeAmount: outcome,
       outcomeCurrency: outCurrency,
       incomeAccount: inAcc?.title || "",
-      ...(inAcc ? { incomeAccountId: inAcc.id } : {}),
+      ...(inAcc ? { incomeAccountId: inAcc.id, incomeAccountKey: accountKeyOf(inAcc) } : {}),
       incomeAmount: income,
       incomeCurrency: inCurrency,
       kind,
       amount,
       currency,
       account,
-      ...(accountId ? { accountId } : {}),
+      ...(accountObj ? { accountId: accountObj.id, accountKey: accountKeyOf(accountObj) } : {}),
       amountBase: toBase(amount, currency),
       opAmount: opAmountResolved,
       opCurrency: opAmountResolved != null ? opCurrencyResolved : null,
