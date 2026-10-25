@@ -57,3 +57,32 @@ describe("buildAccountDirectory", () => {
     expect(d.byKey.get("Карта")?.live).toBe(false);
   });
 });
+
+describe("тёзки одного банка, валюты и вида", () => {
+  it("различаются цифрами номера из банка", () => {
+    const d = buildAccountDirectory([
+      acc({ id: "old", title: "Т-Банк - Вклад", type: "deposit", bank: "Т-Банк", archive: true, numbers: ["0090", "7859"] }),
+      acc({ id: "new", title: "Т-Банк - Вклад", type: "deposit", bank: "Т-Банк", numbers: ["1213"] }),
+    ]);
+    expect(d.label("old")).toBe("Т-Банк - Вклад · 0090");
+    expect(d.label("new")).toBe("Т-Банк - Вклад · 1213");
+  });
+
+  it("без номеров: действующий — без уточнения, закрытый — «Архив»", () => {
+    const d = buildAccountDirectory([
+      acc({ id: "old", title: "Вклад", archive: true }),
+      acc({ id: "new", title: "Вклад" }),
+    ]);
+    expect(d.label("new")).toBe("Вклад");
+    expect(d.label("old")).toBe("Вклад · Архив");
+  });
+
+  it("resolve: старая запись по названию — все тёзки, ключ — сам ключ", () => {
+    const d = buildAccountDirectory([
+      acc({ id: "a", title: "Т-Банк", bank: "Т-Банк" }),
+      acc({ id: "b", title: "Т-Банк", bank: "Альфа-Банк" }),
+    ]);
+    expect([...d.resolve(["Т-Банк"])].sort()).toEqual(["a", "b"]);
+    expect([...d.resolve(["b", "Пропавший"])]).toEqual(["b", "Пропавший"]);
+  });
+});

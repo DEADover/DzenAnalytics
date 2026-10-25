@@ -21,6 +21,8 @@ export interface DirAccount {
   inBalance: boolean;
   savings: boolean;
   creditLimit?: number;
+  /** Последние цифры номера из банка — уточнение для тёзок. */
+  numbers?: string[];
 }
 
 export interface AccountEntry {
@@ -40,6 +42,7 @@ export interface AccountEntry {
   inBalance: boolean;
   savings: boolean;
   creditLimit: number;
+  numbers: string[];
 }
 
 export interface AccountDirectory {
@@ -59,8 +62,10 @@ export interface AccountDirectory {
 }
 
 /**
- * Уточнения для тёзок: первое из «банк, валюта, вид счёта», которое у всех
- * одноимённых разное. Не нашлось — порядковый номер.
+ * Уточнения для тёзок: первое из «банк, валюта, вид счёта, цифры номера»,
+ * которое у всех одноимённых разное. Не нашлось, но действующий счёт среди
+ * них один — он остаётся без уточнения, закрытые помечаются «Архив». Иначе —
+ * порядковый номер.
  */
 function disambiguate(group: AccountEntry[]): void {
   const pick = (f: (e: AccountEntry) => string | null | undefined) => {
@@ -72,9 +77,23 @@ function disambiguate(group: AccountEntry[]): void {
     pick((e) => e.bank) ??
     pick((e) => e.currency) ??
     pick((e) => (e.type ? accountKindLabel(e.type, e.savings) : "")) ??
-    group.map((_, i) => String(i + 1));
+    pick((e) => e.numbers[0]);
+  if (parts) {
+    group.forEach((e, i) => {
+      e.label = `${e.title} · ${parts[i]}`;
+    });
+    return;
+  }
+  const active = group.filter((e) => !e.archive);
+  if (active.length === 1) {
+    const archived = group.filter((e) => e.archive);
+    archived.forEach((e, i) => {
+      e.label = archived.length > 1 ? `${e.title} · Архив ${i + 1}` : `${e.title} · Архив`;
+    });
+    return;
+  }
   group.forEach((e, i) => {
-    e.label = `${e.title} · ${parts[i]}`;
+    e.label = `${e.title} · ${i + 1}`;
   });
 }
 
@@ -106,6 +125,7 @@ export function buildAccountDirectory(
       inBalance: a.inBalance,
       savings: a.savings,
       creditLimit: a.creditLimit ?? 0,
+      numbers: a.numbers ?? [],
     });
   }
   // Счета, известные только по операциям: CSV или счёт, которого в
@@ -122,6 +142,7 @@ export function buildAccountDirectory(
       inBalance: true,
       savings: false,
       creditLimit: 0,
+      numbers: [],
     });
   };
   for (const t of txs) {

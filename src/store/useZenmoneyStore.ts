@@ -276,6 +276,9 @@ export interface LiveAccount {
   member: number | null;
   /** Credit limit (native currency); 0 for accounts without one. */
   creditLimit: number;
+  /** Последние цифры номера счёта или карты из банка (`syncID`) — ими
+   *  различаются одноимённые счета. */
+  numbers: string[];
   /** Заполнен ли полный набор параметров вклада/кредита (дата открытия, срок,
    *  ставка, капитализация, периодичность выплат). Дзен-мани отвергает такой
    *  счёт целиком, если хоть одного из них нет, — проверено на живом API. */
@@ -416,6 +419,7 @@ async function readLiveAccounts(): Promise<LiveAccount[] | null> {
     private: a.private ?? false,
     member: a.role ?? null,
     creditLimit: a.creditLimit || 0,
+    numbers: (a.syncID ?? []).filter((x) => /^\*?\d{4}$/.test(x)).map((x) => x.replace("*", "")),
   }));
 }
 

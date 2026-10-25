@@ -30,6 +30,8 @@ import { useEditsStore, type TransactionEdit } from "./useEditsStore";
 import { useDeletedStore, loadDeletedSet } from "./useDeletedStore";
 import { useDeletedPayloadsStore, loadDeletedPayloads } from "./useDeletedPayloadsStore";
 import { loadZenCache } from "../lib/zenmoneyCache";
+import { getZenCache } from "../lib/zenCacheMemo";
+import { fillAccountKeys } from "../lib/accountKey";
 import type { ZenTransaction } from "../lib/zenmoney";
 import { loadDrafts, useDraftsStore } from "./useDraftsStore";
 import { draftsToTransactions } from "../lib/draftsMap";
@@ -257,7 +259,10 @@ async function finalize(
   // cloud row wins (and we then drop the draft from the store).
   const drafts = await loadDraftRows(rates, visible);
   const withDrafts = drafts.length === 0 ? visible : [...visible, ...drafts];
-  return hideForeignMembers(withDrafts);
+  // Ключи счетов — тем операциям, что сохранены до их появления или
+  // переписаны правкой прежних версий (см. `fillAccountKeys`).
+  const keyed = fillAccountKeys(withDrafts, (await getZenCache())?.accounts);
+  return hideForeignMembers(keyed);
 }
 
 /**
