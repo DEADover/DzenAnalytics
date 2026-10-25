@@ -111,8 +111,8 @@ export function DynamicsPage() {
   // «Доходов и расходов» с «Трендами» умолчание и так это.
   const lp = useLocalPeriod("12m");
   const effectiveFilters = useMemo(
-    () => ({ ...filters, preset: lp.preset, monthYM: lp.monthYM, from: lp.from, to: lp.to }),
-    [filters, lp.preset, lp.monthYM, lp.from, lp.to]
+    () => ({ ...filters, preset: lp.preset, windowShift: lp.windowShift, monthYM: lp.monthYM, from: lp.from, to: lp.to }),
+    [filters, lp.preset, lp.windowShift, lp.monthYM, lp.from, lp.to]
   );
 
   const filtered = useMemo(
@@ -171,7 +171,8 @@ export function DynamicsPage() {
           effectiveFilters.preset,
           maxDate,
           effectiveFilters.monthYM,
-          monthStartDay
+          monthStartDay,
+          effectiveFilters.windowShift
         );
   }, [effectiveFilters, all, monthStartDay]);
 

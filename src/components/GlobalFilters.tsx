@@ -39,6 +39,7 @@ import {
   FILTER_NONE,
   onPickedAccounts,
   presetToRange,
+  isWindowPreset,
   useFiltersStore,
   type DatePreset,
 } from "../store/useFiltersStore";
@@ -71,15 +72,15 @@ import { useMembersStore } from "../store/useMembersStore";
  */
 /**
  * Скользящие окна — одной кнопкой со стрелкой, как и вид месяца: четыре
- * кнопки «30 дней · 3 мес · 6 мес · 12 мес» с «Кварталом» не давали ряду
+ * кнопки «30 · 90 · 180 · 365 дней» с «Кварталом» не давали ряду
  * встать рядом с «Дополнительно», и дорожка дат уезжала третьей строкой.
  * Кнопка подписана выбранным окном, остальные — в меню.
  */
 const WINDOWS: { value: DatePreset; label: string }[] = [
   { value: "30d", label: "30 дней" },
-  { value: "3m", label: "3 мес" },
-  { value: "6m", label: "6 мес" },
-  { value: "12m", label: "12 мес" },
+  { value: "3m", label: "90 дней" },
+  { value: "6m", label: "180 дней" },
+  { value: "12m", label: "365 дней" },
 ];
 
 const PRESETS: SegmentedOption<DatePreset>[] = [
@@ -91,7 +92,7 @@ const PRESETS: SegmentedOption<DatePreset>[] = [
   {
     value: "year",
     label: "Год",
-    title: "Календарный год целиком — листается стрелками, в отличие от скользящих «12 мес»",
+    title: "Календарный год целиком — листается стрелками, в отличие от скользящих «365 дней»",
   },
   { value: "all", label: "Всё" },
 ];
@@ -183,14 +184,6 @@ export function GlobalFilters({
   const additionalRef = useRef<HTMLDivElement>(null);
   const [additionalOpen, setAdditionalOpen] = useState(false);
 
-  // Archived (closed) account titles from the Zenmoney cache — used to sort the
-  // archived accounts to the bottom of the filter and group them under a divider.
-  const [archivedAccounts, setArchivedAccounts] = useState<Set<string>>(new Set());
-  /** Название счёта → его вид («Карта», «Депозит», …). Пусто в режиме CSV: там
-   *  метаданных счетов нет, и группировать нечем. */
-  const [accountKinds, setAccountKinds] = useState<Map<string, string>>(new Map());
-  /** Долговые счета: их в фильтре можно раскрыть по контрагентам. */
-  const [debtAccounts, setDebtAccounts] = useState<Set<string>>(new Set());
   /** Название категории → расходная она или доходная, по справочнику Дзен-мани.
    *  Пусто в режиме CSV — тогда тип выводим из самих операций. */
   const [tagKinds, setTagKinds] = useState<Map<string, "expense" | "income" | "both">>(
@@ -222,14 +215,23 @@ export function GlobalFilters({
   // Счета — по ключам справочника (номер счёта, а не название): два
   // «Т-Банка» в фильтре — две строки, у каждой своя подпись с уточнением.
   const dir = useAccountDirectory();
-  useEffect(() => {
-    const live = dir.list.filter((e) => e.live);
-    setArchivedAccounts(new Set(live.filter((e) => e.archive).map((e) => e.key)));
-    setAccountKinds(
-      new Map(live.map((e) => [e.key, accountKindLabel(e.type ?? "", e.savings)]))
-    );
-    setDebtAccounts(new Set(live.filter((e) => DEBT_TYPES.has(e.type ?? "")).map((e) => e.key)));
-  }, [dir]);
+  const liveEntries = useMemo(() => dir.list.filter((e) => e.live), [dir]);
+  // Архивные — вниз списка, под разделителем.
+  const archivedAccounts = useMemo(
+    () => new Set(liveEntries.filter((e) => e.archive).map((e) => e.key)),
+    [liveEntries]
+  );
+  /** Ключ счёта → его вид («Карта», «Депозит», …). Пусто в режиме CSV: там
+   *  метаданных счетов нет, и группировать нечем. */
+  const accountKinds = useMemo(
+    () => new Map(liveEntries.map((e) => [e.key, accountKindLabel(e.type ?? "", e.savings)])),
+    [liveEntries]
+  );
+  /** Долговые счета: их в фильтре можно раскрыть по контрагентам. */
+  const debtAccounts = useMemo(
+    () => new Set(liveEntries.filter((e) => DEBT_TYPES.has(e.type ?? "")).map((e) => e.key)),
+    [liveEntries]
+  );
 
   // Отобранные счета, запомненные названием (память фильтров, сохранённые
   // виды, наборы до перехода на ключи), — в ключи: название раскрывается во
@@ -507,7 +509,7 @@ export function GlobalFilters({
   const windowOption: SegmentedOption<DatePreset> = {
     value: windowValue,
     label: WINDOWS.find((w) => w.value === windowValue)!.label,
-    title: "Скользящее окно до последней операции",
+    title: "Последние дни до последней операции — стрелки листают окнами той же длины",
     menu: WINDOWS.map((w) => ({ value: w.value, label: w.label })),
   };
 
@@ -562,7 +564,8 @@ export function GlobalFilters({
       periodCtl.preset,
       dataRange.maxDate,
       periodCtl.monthYM,
-      monthStartDay
+      monthStartDay,
+      periodCtl.windowShift
     );
     return {
       from: r.from ?? dataRange.minDate,
@@ -570,6 +573,7 @@ export function GlobalFilters({
     };
   }, [
     periodCtl.preset,
+    periodCtl.windowShift,
     periodCtl.from,
     periodCtl.to,
     periodCtl.monthYM,
@@ -608,13 +612,16 @@ export function GlobalFilters({
   };
   const goCurrent = () => {
     const p = periodCtl.preset;
-    if (p === "quarter") periodCtl.setQuarter(calendarNow);
+    // Окно — к последним дням, кнопка та же.
+    if (isWindowPreset(p)) periodCtl.setPreset(p);
+    else if (p === "quarter") periodCtl.setQuarter(calendarNow);
     else if (p === "year") periodCtl.setYear(Number(calendarNow.slice(0, 4)));
     else if (p === "month") periodCtl.setMonth(calendarNow);
     else periodCtl.setPeriodMonth(defaultMonthYM);
   };
   const atCurrent = (() => {
     const p = periodCtl.preset;
+    if (isWindowPreset(p)) return periodCtl.windowShift === 0;
     const ym = periodCtl.monthYM;
     if (!ym) return false;
     if (p === "quarter")
@@ -912,6 +919,9 @@ export function GlobalFilters({
                 // «30 дней» выдавал себя за выбранный месяц.
                 blank={!monthAnchored && periodCtl.preset !== "custom"}
                 rangeFixed={periodCtl.preset === "all"}
+                // Пресет листается сам и остаётся выбранным — и стрелками у
+                // названия, и стрелками у дат. Свои даты — сдвигом отрезка.
+                presetStep={periodCtl.preset !== "custom" && periodCtl.preset !== "all"}
                 onStep={(dir) => periodCtl.stepPeriod(dir, dataRange.maxYM)}
                 onRangeChange={(from, to) => periodCtl.setRange(clampDate(from), clampDate(to))}
                 onCurrent={goCurrent}

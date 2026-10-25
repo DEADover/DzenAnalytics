@@ -211,8 +211,8 @@ export function ReportPage() {
     if (monthParam) lp.setPeriodMonth(monthParam);
   }, [monthParam, lp]);
   const effectiveFilters = useMemo(
-    () => ({ ...filters, preset: lp.preset, monthYM: lp.monthYM, from: lp.from, to: lp.to }),
-    [filters, lp.preset, lp.monthYM, lp.from, lp.to]
+    () => ({ ...filters, preset: lp.preset, windowShift: lp.windowShift, monthYM: lp.monthYM, from: lp.from, to: lp.to }),
+    [filters, lp.preset, lp.windowShift, lp.monthYM, lp.from, lp.to]
   );
 
   const filtered = useMemo(

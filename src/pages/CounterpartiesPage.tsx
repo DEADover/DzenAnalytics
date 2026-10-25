@@ -142,8 +142,8 @@ export function CounterpartiesPage() {
     () =>
       filters.preset === "custom"
         ? { from: filters.from, to: filters.to }
-        : presetToRange(filters.preset, maxDate, filters.monthYM, monthStartDay),
-    [filters.preset, filters.from, filters.to, filters.monthYM, maxDate, monthStartDay]
+        : presetToRange(filters.preset, maxDate, filters.monthYM, monthStartDay, filters.windowShift),
+    [filters.preset, filters.windowShift, filters.from, filters.to, filters.monthYM, maxDate, monthStartDay]
   );
   // Все остальные условия фильтра — счета, категории, поиск — действуют и на
   // историю: иначе «впервые» считалось бы по чужим счетам.
@@ -216,7 +216,7 @@ export function CounterpartiesPage() {
   // искать нужный пункт в фильтре.
   const yearButton = (
     <button type="button" className="btn-ghost text-sm" onClick={() => filters.setPreset("12m")}>
-      Показать за последние 12 месяцев
+      Показать за последние 365 дней
     </button>
   );
 

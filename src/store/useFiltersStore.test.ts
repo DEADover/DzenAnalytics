@@ -358,6 +358,54 @@ describe("presetToRange", () => {
     expect(r.from! < r.to!).toBe(true);
     expect(r.from!.startsWith("2025-06")).toBe(true);
   });
+
+  /** Дней в отрезке, включая оба края. */
+  const span = (r: { from: string | null; to: string | null }) =>
+    Math.round((Date.parse(`${r.to}T00:00:00Z`) - Date.parse(`${r.from}T00:00:00Z`)) / 86_400_000) + 1;
+
+  it("окна — ровно 30/90/180/365 дней, включая последний день", () => {
+    expect(span(presetToRange("30d", "2026-03-31"))).toBe(30);
+    expect(span(presetToRange("3m", "2026-03-31"))).toBe(90);
+    expect(span(presetToRange("6m", "2026-03-31"))).toBe(180);
+    expect(span(presetToRange("12m", "2026-03-31"))).toBe(365);
+    expect(presetToRange("30d", "2026-03-31")).toEqual({ from: "2026-03-02", to: "2026-03-31" });
+  });
+
+  it("в феврале и в марте окно одной длины", () => {
+    expect(span(presetToRange("30d", "2026-02-28"))).toBe(span(presetToRange("30d", "2026-03-31")));
+  });
+
+  it("сдвиг окна — на его длину, без нахлёста и без дыр", () => {
+    const now = presetToRange("3m", "2026-10-25");
+    const prev = presetToRange("3m", "2026-10-25", null, 1, -1);
+    expect(span(prev)).toBe(90);
+    const dayAfterPrev = new Date(`${prev.to}T00:00:00Z`);
+    dayAfterPrev.setUTCDate(dayAfterPrev.getUTCDate() + 1);
+    expect(dayAfterPrev.toISOString().slice(0, 10)).toBe(now.from);
+  });
+});
+
+describe("стрелки при скользящем окне", () => {
+  beforeEach(() => useFiltersStore.getState().reset());
+
+  it("окно остаётся выбранным и листается окнами; вперёд — не дальше последних дней", () => {
+    const st = useFiltersStore.getState();
+    st.setPreset("3m");
+    st.stepPeriod(-1, "2026-10");
+    expect(useFiltersStore.getState().preset).toBe("3m");
+    expect(useFiltersStore.getState().windowShift).toBe(-1);
+    st.stepPeriod(1, "2026-10");
+    st.stepPeriod(1, "2026-10");
+    expect(useFiltersStore.getState().windowShift).toBe(0);
+  });
+
+  it("другой выбор периода сдвиг обнуляет", () => {
+    const st = useFiltersStore.getState();
+    st.setPreset("30d");
+    st.stepPeriod(-1, "2026-10");
+    st.setPreset("6m");
+    expect(useFiltersStore.getState().windowShift).toBe(0);
+  });
 });
 
 describe("useFiltersStore reducers", () => {
@@ -559,7 +607,8 @@ describe("пресет «Год»", () => {
     const rolling = presetToRange("12m", "2026-08-07", "2026-08", 1);
     expect(year).not.toEqual(rolling);
     expect(year.from).toBe("2026-01-01");
-    expect(rolling.from).toBe("2025-08-07");
+    // 365 дней включая последний: с 08.08.2025 по 07.08.2026.
+    expect(rolling.from).toBe("2025-08-08");
   });
 
   it("без якоря отрезка нет — а не «весь период»", () => {

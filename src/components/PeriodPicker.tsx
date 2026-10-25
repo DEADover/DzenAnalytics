@@ -101,6 +101,7 @@ export function PeriodPicker({
   onSelectQuarter,
   blank = false,
   rangeFixed = false,
+  presetStep = false,
   minDate = null,
   maxDate = null,
   onStep,
@@ -140,6 +141,13 @@ export function PeriodPicker({
    */
   rangeFixed?: boolean;
   /**
+   * Выбран пресет (отчётный месяц, окно, квартал, год), а не свои даты: ВСЕ
+   * стрелки листают сам пресет через `onStep`, и подсвеченной остаётся его
+   * кнопка. Раньше стрелки у дат превращали пресет в «свои даты», а стрелки у
+   * названия при окне не работали вовсе.
+   */
+  presetStep?: boolean;
+  /**
    * Границы истории по дням — дальше них отрезок не сдвигается: окно, целиком
    * ушедшее за первую операцию или за сегодняшний день, показывало бы пустоту.
    */
@@ -178,6 +186,14 @@ export function PeriodPicker({
     windowStep > 0 && (!minDate || !to || shiftDays(to, -windowStep) >= minDate);
   const canNextWindow =
     windowStep > 0 && (!maxDate || !from || shiftDays(from, windowStep) <= maxDate);
+  // Стрелки пресета — одни на обе дорожки. Окно (названия у него нет)
+  // листается окнами и вперёд — не дальше последних дней; у названия — своей
+  // единицей.
+  const windowPreset = presetStep && blank;
+  const canPrev = presetStep ? (windowPreset ? canPrevWindow : canPrevUnit) : canPrevWindow;
+  const canNext = presetStep ? (windowPreset ? !atCurrent : canNextUnit) : canNextWindow;
+  const prevTitle = windowPreset ? `Предыдущие ${windowStep} дн.` : `Предыдущий ${unitTitle}`;
+  const nextTitle = windowPreset ? `Следующие ${windowStep} дн.` : `Следующий ${unitTitle}`;
   const rangeTitle = rangeFixed
     ? "Выбрана вся история — сдвигать отрезок некуда"
     : "Задайте даты, чтобы листать отрезок";
@@ -197,9 +213,9 @@ export function PeriodPicker({
         <button
           type="button"
           onClick={() => onStep(-1)}
-          disabled={!canPrevUnit}
+          disabled={windowPreset ? !canPrev : !canPrevUnit}
           className={clsx("seg-icon", icon)}
-          title={canPrevUnit || blank ? `Предыдущий ${unitTitle}` : "Раньше операций нет"}
+          title={windowPreset ? prevTitle : canPrevUnit || blank ? `Предыдущий ${unitTitle}` : "Раньше операций нет"}
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -225,9 +241,9 @@ export function PeriodPicker({
         <button
           type="button"
           onClick={() => onStep(1)}
-          disabled={!canNextUnit}
+          disabled={windowPreset ? !canNext : !canNextUnit}
           className={clsx("seg-icon", icon)}
-          title={canNextUnit || blank ? `Следующий ${unitTitle}` : "Дальше операций нет"}
+          title={windowPreset ? nextTitle : canNextUnit || blank ? `Следующий ${unitTitle}` : "Дальше операций нет"}
         >
           <ChevronRight className="w-4 h-4" />
         </button>
@@ -237,9 +253,13 @@ export function PeriodPicker({
           disabled={atCurrent}
           className={clsx("seg-icon", icon)}
           title={
-            atCurrent
-              ? `Это текущий ${isYear ? "год" : isQuarter ? "квартал" : "месяц"}`
-              : `Вернуться к текущему ${isYear ? "году" : isQuarter ? "кварталу" : "месяцу"}`
+            windowPreset
+              ? atCurrent
+                ? "Это последние дни"
+                : "Вернуться к последним дням"
+              : atCurrent
+                ? `Это текущий ${isYear ? "год" : isQuarter ? "квартал" : "месяц"}`
+                : `Вернуться к текущему ${isYear ? "году" : isQuarter ? "кварталу" : "месяцу"}`
           }
         >
           <CalendarCheck className="w-4 h-4" />
@@ -258,10 +278,10 @@ export function PeriodPicker({
       >
         <button
           type="button"
-          onClick={() => shiftWindow(-1)}
-          disabled={!canPrevWindow}
+          onClick={() => (presetStep ? onStep(-1) : shiftWindow(-1))}
+          disabled={!canPrev}
           className={clsx("seg-icon", icon)}
-          title={canPrevWindow ? `Предыдущие ${windowStep} дн.` : windowStep > 0 ? "Раньше операций нет" : rangeTitle}
+          title={presetStep ? prevTitle : canPrevWindow ? `Предыдущие ${windowStep} дн.` : windowStep > 0 ? "Раньше операций нет" : rangeTitle}
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -309,10 +329,10 @@ export function PeriodPicker({
         </div>
         <button
           type="button"
-          onClick={() => shiftWindow(1)}
-          disabled={!canNextWindow}
+          onClick={() => (presetStep ? onStep(1) : shiftWindow(1))}
+          disabled={!canNext}
           className={clsx("seg-icon", icon)}
-          title={canNextWindow ? `Следующие ${windowStep} дн.` : windowStep > 0 ? "Дальше операций нет" : rangeTitle}
+          title={presetStep ? nextTitle : canNextWindow ? `Следующие ${windowStep} дн.` : windowStep > 0 ? "Дальше операций нет" : rangeTitle}
         >
           <ChevronRight className="w-4 h-4" />
         </button>

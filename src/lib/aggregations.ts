@@ -227,7 +227,7 @@ export function stackedBalanceByAccount(
   const built = valuation
     ? valuedLines(allTxs, valuation, unsyncedIds ?? null, only, debtSplit ?? null)
     : flowLines(allTxs, realBalances ?? null, unsyncedIds ?? null, only, debtSplit ?? null);
-  return assembleStack(built.lines, built.dates, built.layers, topN, only);
+  return assembleStack(built.lines, built.dates, built.layers, topN);
 }
 
 /** Дата «позже всех»: по ней `rateAt` отдаёт курс синхронизации. */
@@ -579,8 +579,7 @@ function assembleStack(
   line: Map<string, number[]>,
   sortedDates: string[],
   layers: string[],
-  topN: number,
-  only: ReadonlySet<string> | null
+  topN: number
 ): { series: StackedBalancePoint[]; accounts: string[] } {
   /**
    * «Вес» слоя — САМОЕ БОЛЬШОЕ, чем он был на графике, а не то, сколько на нём
@@ -598,8 +597,12 @@ function assembleStack(
   };
   const weight = new Map(layers.map((a) => [a, peak(a)]));
   const ordered = [...layers].sort((a, b) => weight.get(b)! - weight.get(a)!);
-  const shown = only ? ordered : ordered.slice(0, topN);
-  const rest = only ? [] : ordered.slice(topN);
+  // Выбранные руками счета — по тому же правилу, что и все: крупнейшие
+  // слоями, остальное в «Прочие». Раньше выбор из двадцати счетов рисовал
+  // двадцать слоёв, подсказка вырастала выше окна и прыгала за мышью, а
+  // цветов в палитре всего десять. `topN` 0 — слои не нужны (только итог).
+  const shown = topN > 0 ? ordered.slice(0, topN) : ordered;
+  const rest = topN > 0 ? ordered.slice(topN) : [];
   // «Прочие» из одного счёта ничего не обобщают — только прячут его имя под
   // безымянным слоем. Такой счёт показываем отдельно: слоёв ровно столько же,
   // а в легенде вместо «Прочие» стоит настоящее название.

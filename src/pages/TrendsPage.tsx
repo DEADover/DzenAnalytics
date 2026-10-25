@@ -83,11 +83,12 @@ export function TrendsPage() {
     () => ({
       ...filters,
       preset: lp.preset,
+      windowShift: lp.windowShift,
       monthYM: lp.monthYM,
       from: lp.from,
       to: lp.to,
     }),
-    [filters, lp.preset, lp.monthYM, lp.from, lp.to]
+    [filters, lp.preset, lp.windowShift, lp.monthYM, lp.from, lp.to]
   );
 
   const filtered = useMemo(() => applyFilters(transactions, effectiveFilters, monthStartDay), [transactions, effectiveFilters, monthStartDay]);

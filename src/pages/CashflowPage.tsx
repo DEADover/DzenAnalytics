@@ -105,11 +105,12 @@ export function CashflowPage() {
     () => ({
       ...filters,
       preset: lp.preset,
+      windowShift: lp.windowShift,
       monthYM: lp.monthYM,
       from: lp.from,
       to: lp.to,
     }),
-    [filters, lp.preset, lp.monthYM, lp.from, lp.to]
+    [filters, lp.preset, lp.windowShift, lp.monthYM, lp.from, lp.to]
   );
 
   const filtered = useMemo(
@@ -189,8 +190,8 @@ export function CashflowPage() {
   const periodBounds = useMemo(() => {
     if (lp.preset === "custom") return { from: lp.from, to: lp.to };
     const maxDate = transactions.reduce((m, t) => (t.date > m ? t.date : m), "");
-    return presetToRange(lp.preset, maxDate, lp.monthYM, monthStartDay);
-  }, [lp.preset, lp.from, lp.to, lp.monthYM, transactions, monthStartDay]);
+    return presetToRange(lp.preset, maxDate, lp.monthYM, monthStartDay, lp.windowShift);
+  }, [lp.preset, lp.windowShift, lp.from, lp.to, lp.monthYM, transactions, monthStartDay]);
   // Короткий период (месяц, 30 дней, свои даты до двух месяцев) — графики по
   // дням: помесячно там была бы одна точка. Дни — от начала периода до его
   // конца или до последней операции, если период ещё идёт.

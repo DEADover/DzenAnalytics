@@ -87,8 +87,8 @@ export function Budget503020Page() {
     () =>
       filters.preset === "custom"
         ? { from: filters.from, to: filters.to }
-        : presetToRange(filters.preset, lastDate, filters.monthYM, monthStartDay),
-    [filters.preset, filters.from, filters.to, filters.monthYM, lastDate, monthStartDay]
+        : presetToRange(filters.preset, lastDate, filters.monthYM, monthStartDay, filters.windowShift),
+    [filters.preset, filters.windowShift, filters.from, filters.to, filters.monthYM, lastDate, monthStartDay]
   );
 
   // Динамика — по периоду фильтра, если в нём хотя бы три месяца. Короче —

@@ -345,7 +345,7 @@ export function CategoriesPage() {
     const curRange =
       filters.preset === "custom"
         ? { from: filters.from, to: filters.to }
-        : presetToRange(filters.preset, maxDate, filters.monthYM, monthStartDay);
+        : presetToRange(filters.preset, maxDate, filters.monthYM, monthStartDay, filters.windowShift);
     const empty = {
       comparable: false,
       cat: new Map<string, number>(),

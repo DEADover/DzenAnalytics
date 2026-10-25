@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFiltersStore, type DatePreset } from "../store/useFiltersStore";
+import { isWindowPreset, useFiltersStore, type DatePreset } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { currentPeriod, shiftPeriod } from "../lib/period";
 
@@ -13,6 +13,8 @@ import { currentPeriod, shiftPeriod } from "../lib/period";
  */
 export interface PeriodController {
   preset: DatePreset;
+  /** Сдвиг скользящего окна стрелками, в окнах (см. `FiltersState.windowShift`). */
+  windowShift: number;
   monthYM: string | null;
   from: string | null;
   to: string | null;
@@ -47,6 +49,7 @@ export function useLocalPeriod(
   initialMonthYM?: string | null
 ): PeriodController {
   const gPreset = useFiltersStore((s) => s.preset);
+  const gShift = useFiltersStore((s) => s.windowShift);
   const gFrom = useFiltersStore((s) => s.from);
   const gTo = useFiltersStore((s) => s.to);
   const gMonthYM = useFiltersStore((s) => s.monthYM);
@@ -72,6 +75,7 @@ export function useLocalPeriod(
   const [to, setTo] = useState<string | null>(
     pinned ? null : gPreset === "custom" ? gTo : null
   );
+  const [windowShift, setWindowShift] = useState(0);
 
   // Follow the GLOBAL period whenever it actually CHANGES — that's a saved
   // filter being applied (it carries «от»/«до» dates), or the period changed
@@ -93,41 +97,56 @@ export function useLocalPeriod(
     setFrom(gFrom);
     setTo(gTo);
     setMonthYM(gMonthYM);
-  }, [gPreset, gFrom, gTo, gMonthYM]);
+    setWindowShift(gShift);
+  }, [gPreset, gFrom, gTo, gMonthYM, gShift]);
 
   return useMemo(
     () => ({
       preset,
+      windowShift,
       monthYM,
       from,
       to,
-      setPreset: (p: DatePreset) => setPreset(p),
+      setPreset: (p: DatePreset) => {
+        setPreset(p);
+        setWindowShift(0);
+      },
       setRange: (f: string | null, t: string | null) => {
         setFrom(f);
         setTo(t);
         setPreset("custom");
+        setWindowShift(0);
       },
       setMonth: (ym: string) => {
         setPreset("month");
         setMonthYM(ym);
+        setWindowShift(0);
       },
       setPeriodMonth: (ym: string) => {
+        setWindowShift(0);
         setPreset("period");
         setMonthYM(ym);
         setFrom(null);
         setTo(null);
       },
       setQuarter: (ym: string) => {
+        setWindowShift(0);
         setPreset("quarter");
         setMonthYM(ym);
       },
       setYear: (year: number) => {
+        setWindowShift(0);
         setPreset("year");
         setMonthYM(
           `${year}-${(monthYM ?? currentPeriod(useReportPeriodStore.getState().monthStartDay)).slice(5, 7)}`
         );
       },
       stepPeriod: (delta: number, fallbackMaxYM: string) => {
+        // Окно листается окнами и остаётся выбранным (как в общем фильтре).
+        if (isWindowPreset(preset)) {
+          setWindowShift((s) => Math.min(0, s + delta));
+          return;
+        }
         const anchored =
           preset === "month" || preset === "quarter" || preset === "year" || preset === "period";
         // После своего отрезка — от месяца его начала (как в общем фильтре).
@@ -143,6 +162,6 @@ export function useLocalPeriod(
         }
       },
     }),
-    [preset, monthYM, from, to]
+    [preset, windowShift, monthYM, from, to]
   );
 }

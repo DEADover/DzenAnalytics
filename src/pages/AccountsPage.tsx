@@ -1247,12 +1247,13 @@ export function AccountsPage() {
     const r =
       filters.preset === "custom"
         ? { from: filters.from, to: filters.to }
-        : presetToRange(filters.preset, maxDate, filters.monthYM, monthStartDay);
+        : presetToRange(filters.preset, maxDate, filters.monthYM, monthStartDay, filters.windowShift);
     if (!r.from && !r.to) return null;
     return { from: r.from ?? "", to: r.to ?? "9999-12-31" };
   }, [
     transactions,
     filters.preset,
+    filters.windowShift,
     filters.from,
     filters.to,
     filters.monthYM,
@@ -2960,7 +2961,8 @@ export function AccountsPage() {
                   {chartView === "stacked" &&
                     !capitalPick &&
                     (chartFiltered
-                      ? ` · ${chartOnly!.length} из ${chartAccountOptions.length}`
+                      ? ` · ${chartOnly!.length} из ${chartAccountOptions.length}` +
+                        (stackHasOther ? `, крупнейшие ${stackTopCount} — слоями, остальные — в «Прочие»` : "")
                       : stackHasOther
                         ? ` · ${stackTopCount} ${pluralRu(stackTopCount, [
                             "крупнейший счёт",

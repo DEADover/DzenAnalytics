@@ -16,6 +16,6 @@ test("«Совокупно»: прогноз до конца месяца по �
 test("прошлый месяц — без прогноза", async ({ page }) => {
   await connectZen(page, "/accounts");
   await page.getByRole("button", { name: "Совокупно" }).click();
-  await page.getByRole("button", { name: "Предыдущий период" }).click();
+  await page.getByRole("button", { name: "Предыдущий период" }).first().click();
   await expect(page.getByText(/Прогноз по запланированным/)).toHaveCount(0);
 });

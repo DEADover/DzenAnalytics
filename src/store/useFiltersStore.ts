@@ -2,7 +2,7 @@ import { txAccountKey, txInKey, txOutKey } from "../lib/accountKey";
 import { create } from "zustand";
 import { useDisplayStore } from "./useDisplayStore";
 import type { Transaction } from "../types";
-import { currentPeriod, periodRange, quarterRange, shiftPeriod } from "../lib/period";
+import { currentPeriod, periodRange, quarterRange, shiftPeriod, toIsoDate } from "../lib/period";
 import { payeeSearchText } from "../lib/format";
 import { categoryFilter, categoryKeysOf } from "../lib/operationTags";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
@@ -54,11 +54,35 @@ export type DatePreset =
  */
 export const FILTER_NONE = "\u0000__none__";
 
+/**
+ * Скользящие окна — ровно столько дней, включая последний: «30 дней» это
+ * тридцать дней, а не тридцать один. Месяцы здесь не календарные, а по 30
+ * дней (год — 365): окна нужны, чтобы сравнивать отрезки между собой, и
+ * в феврале с мартом они должны быть одной длины.
+ */
+export const WINDOW_DAYS: Partial<Record<DatePreset, number>> = {
+  "30d": 30,
+  "3m": 90,
+  "6m": 180,
+  "12m": 365,
+};
+
+/** Пресет — скользящее окно («30 дней», «90 дней»…). */
+export function isWindowPreset(p: DatePreset): boolean {
+  return WINDOW_DAYS[p] !== undefined;
+}
+
 /** Множественные фильтры — те, что живут набором значений. */
 export type SetFilter = "accounts" | "categories" | "currencies" | "users";
 
 interface FiltersState {
   preset: DatePreset;
+  /**
+   * Сдвиг скользящего окна стрелками, в окнах: 0 — последние N дней, −1 —
+   * N дней перед ними. Кнопка окна при этом остаётся выбранной. Любой
+   * другой выбор периода сдвиг обнуляет.
+   */
+  windowShift: number;
   from: string | null;
   to: string | null;
   monthYM: string | null;
@@ -162,6 +186,7 @@ const initial = {
   // Первый день приезжает позже (см. useReportPeriodStore), и период
   // пересчитывается в App.tsx, когда тот стор поднимется.
   preset: "period" as DatePreset,
+  windowShift: 0,
   from: null,
   to: null,
   monthYM: currentPeriod(1) as string | null,
@@ -188,33 +213,40 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
   // переключении сбрасывается: иначе поля дат продолжали показывать даты
   // прошлого фильтра, хотя данные считались уже по пресету.
   setPreset: (preset) =>
-    set(preset === "custom" ? { preset } : { preset, from: null, to: null }),
-  setPeriod: ({ preset, from, to, monthYM }) => set({ preset, from, to, monthYM }),
-  setRange: (from, to) => set({ from, to, preset: "custom" }),
+    set(preset === "custom" ? { preset, windowShift: 0 } : { preset, from: null, to: null, windowShift: 0 }),
+  setPeriod: ({ preset, from, to, monthYM }) => set({ preset, from, to, monthYM, windowShift: 0 }),
+  setRange: (from, to) => set({ from, to, preset: "custom", windowShift: 0 }),
   // Выбранный вид месяца запоминается в настройках: это привычка человека, а
   // не часть периода. Запись на диск фильтру не важна — если она не удалась
   // (приватное окно, тест без базы), период всё равно должен примениться.
   setMonth: (monthYM) => {
     void useDisplayStore.getState().setMonthKind("month").catch(() => {});
-    set({ preset: "month", monthYM });
+    set({ preset: "month", monthYM, windowShift: 0 });
   },
   /** Отчётный месяц целиком — то же, что кнопка «Период» без правки дат. */
   setPeriodMonth: (monthYM) => {
     void useDisplayStore.getState().setMonthKind("period").catch(() => {});
-    set({ preset: "period", monthYM, from: null, to: null });
+    set({ preset: "period", monthYM, from: null, to: null, windowShift: 0 });
   },
   // Месяц якоря сохраняем: вернувшись потом в «Месяц», попадаешь в тот же
   // месяц выбранного года, а не в январь.
   // Якорь — любой месяц квартала: подпись и границы берутся у квартала, а
   // вернувшись в «Месяц», попадаешь в тот же месяц.
-  setQuarter: (monthYM) => set({ preset: "quarter", monthYM }),
+  setQuarter: (monthYM) => set({ preset: "quarter", monthYM, windowShift: 0 }),
   setYear: (year) =>
     set((s) => ({
       preset: "year",
+      windowShift: 0,
       monthYM: `${year}-${(s.monthYM ?? currentYM()).slice(5, 7)}`,
     })),
   stepPeriod: (delta, fallbackMaxYM) => {
-    const { preset, monthYM, from } = get();
+    const { preset, monthYM, from, windowShift } = get();
+    // Окно листается окнами и остаётся выбранным: «90 дней» → предыдущие 90.
+    // Вперёд — не дальше последних дней.
+    if (isWindowPreset(preset)) {
+      set({ windowShift: Math.min(0, windowShift + delta) });
+      return;
+    }
     const unit = preset === "year" ? 12 : preset === "quarter" ? 3 : 1;
     const anchored =
       preset === "month" || preset === "quarter" || preset === "year" || preset === "period";
@@ -276,6 +308,7 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
       monthYM: currentPeriod(calendar ? 1 : startDay),
       from: null,
       to: null,
+      windowShift: 0,
     });
   },
   followStartDay: (prevDay, nextDay) => {
@@ -296,7 +329,9 @@ export function presetToRange(
   preset: DatePreset,
   maxDate: string | null,
   monthYM?: string | null,
-  monthStartDay: number = 1
+  monthStartDay: number = 1,
+  /** Сдвиг скользящего окна в окнах (`FiltersState.windowShift`). */
+  windowShift: number = 0
 ): { from: string | null; to: string | null } {
   if (preset === "all" || preset === "custom") return { from: null, to: null };
   if (preset === "month") {
@@ -321,21 +356,21 @@ export function presetToRange(
     if (!y) return { from: null, to: null };
     return { from: `${y}-01-01`, to: `${y}-12-31` };
   }
-  const today = maxDate ? new Date(maxDate) : new Date();
-  const to = today.toISOString().slice(0, 10);
-  const from = new Date(today);
-  if (preset === "ytd") {
-    from.setMonth(0, 1);
-  } else if (preset === "12m") {
-    from.setFullYear(from.getFullYear() - 1);
-  } else if (preset === "6m") {
-    from.setMonth(from.getMonth() - 6);
-  } else if (preset === "3m") {
-    from.setMonth(from.getMonth() - 3);
-  } else if (preset === "30d") {
-    from.setDate(from.getDate() - 30);
-  }
-  return { from: from.toISOString().slice(0, 10), to };
+  // Отсчёт — от последней операции, без неё — от сегодняшнего дня по местному
+  // календарю: `toISOString()` от «сейчас» ночью по Москве давал вчера.
+  const anchor = (maxDate || toIsoDate(new Date())).slice(0, 10);
+  if (preset === "ytd") return { from: `${anchor.slice(0, 4)}-01-01`, to: anchor };
+  const days = WINDOW_DAYS[preset];
+  if (!days) return { from: null, to: null };
+  const to = shiftIsoDay(anchor, windowShift * days);
+  return { from: shiftIsoDay(to, -(days - 1)), to };
+}
+
+/** Дата «ГГГГ-ММ-ДД» плюс `days` дней — в UTC, без часовых поясов. */
+function shiftIsoDay(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -386,7 +421,7 @@ export function applyFilters(
   const range =
     state.preset === "custom"
       ? { from: state.from, to: state.to }
-      : presetToRange(state.preset, maxDate, state.monthYM, monthStartDay);
+      : presetToRange(state.preset, maxDate, state.monthYM, monthStartDay, state.windowShift ?? 0);
   const search = state.search.trim().toLowerCase();
   // Раскладка не важна: «ghjl» находит «Продукты», «ё» равна «е».
   const matchesSearch = queryMatcher(search);

@@ -1542,3 +1542,18 @@ describe("графики Cash-flow по дням — свои отрезки", (
     expect(data[1]["Кафе"]).toBe(0);
   });
 });
+
+describe("stackedBalanceByAccount — выбранные руками счета", () => {
+  it("больше topN — крупнейшие слоями, остальные в «Прочие», итог тот же", () => {
+    const names = Array.from({ length: 12 }, (_, i) => `S${i + 1}`);
+    const txs = names.map((n, i) =>
+      tx({ kind: "income", amount: (i + 1) * 100, incomeAccount: n, date: "2026-01-01" })
+    );
+    const { series, accounts } = stackedBalanceByAccount(txs, 9, null, null, names);
+    expect(accounts).toHaveLength(10);
+    expect(accounts[accounts.length - 1]).toBe("Прочие");
+    // Самые мелкие — в «Прочих»: 100 + 200 + 300.
+    expect(series[series.length - 1]["Прочие"]).toBe(600);
+    expect(series[series.length - 1].total).toBe(7800);
+  });
+});

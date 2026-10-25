@@ -152,7 +152,7 @@ test("вся история: выводы объясняют, что нужен 
   ]);
   expect(Math.abs(textX - titleX)).toBeLessThan(40);
 
-  await fresh.getByRole("button", { name: "Показать за последние 12 месяцев" }).click();
+  await fresh.getByRole("button", { name: "Показать за последние 365 дней" }).click();
   await expect(fresh.getByText("Ресторан")).toBeVisible();
   await expect(page.getByText("Нужен период")).toHaveCount(0);
 });
@@ -162,7 +162,7 @@ test("новые контрагенты: в блоке все из шапки, �
   await connectZen(page, "/counterparties");
   await page.getByRole("button", { name: "Всё", exact: true }).click();
   const fresh = page.locator(".card-tray", { has: page.getByText("Новые контрагенты", { exact: true }) });
-  await fresh.getByRole("button", { name: "Показать за последние 12 месяцев" }).click();
+  await fresh.getByRole("button", { name: "Показать за последние 365 дней" }).click();
   const count = Number((await fresh.getByText(/^\d+ контрагент/).textContent())!.match(/^\d+/)![0]);
   await expect(fresh.getByRole("button", { name: /₽$/ })).toHaveCount(count);
   await expect(fresh.getByText(/^Показано/)).toHaveCount(0);
