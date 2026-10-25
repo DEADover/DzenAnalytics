@@ -51,6 +51,8 @@ import { useLazyList } from "../hooks/useLazyList";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import type { Transaction } from "../types";
 import { queryMatcher } from "../lib/keyboardLayout";
+import { txAccountKey } from "../lib/accountKey";
+import { AccountName } from "../components/AccountName";
 
 /** Порция ленты при подгрузке — как в «Операциях». */
 const PAGE_SIZE = 100;
@@ -714,9 +716,7 @@ function FeedRowView({
         <div className="text-muted tabular-nums whitespace-nowrap">{formatDate(tx.date, "full")}</div>
       )}
       <OperationCategory tx={tx} edited={false} />
-      <div className="truncate text-muted" title={tx.account}>
-        {tx.account}
-      </div>
+      <AccountName className="truncate text-muted block" accountKey={txAccountKey(tx)} title={tx.account} />
       <OperationPayee tx={tx} />
       <OperationComment text={tx.comment} />
       {cols.status && (

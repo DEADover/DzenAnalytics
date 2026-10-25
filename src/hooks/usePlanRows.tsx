@@ -15,6 +15,7 @@ import { OperationListRow } from "../components/operations/OperationList";
 import { OperationAmount, OperationCategory, OperationComment, OperationPayee } from "../components/operations/OperationCells";
 import { PlanLinkModal } from "../components/operations/PlanLinkModal";
 import { PlanEditModal } from "../components/operations/PlanEditModal";
+import { AccountName } from "../components/AccountName";
 
 /**
  * Строки планов и всё, что к ним прилагается: меню «⋯» с действиями,
@@ -101,9 +102,13 @@ export function usePlanRows(template: string) {
             </span>
           )}
         </div>
-        <div className="op-muted truncate" title={p.toAccount ? `${p.account} → ${p.toAccount}` : p.account}>
-          {p.toAccount ? `${p.account} → ${p.toAccount}` : p.account}
-        </div>
+        <AccountName
+          className="op-muted truncate block"
+          accountKey={p.accountKey ?? p.account}
+          title={p.account}
+          toKey={p.toAccount ? (p.toAccountKey ?? p.toAccount) : null}
+          toTitle={p.toAccount}
+        />
         <div data-cell="payee" className="op-muted min-w-0">
           <OperationPayee tx={tx} />
         </div>

@@ -12,6 +12,8 @@ import { ExprAmountInput } from "../ExprAmountInput";
 import { InfoPopover } from "../InfoPopover";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "../Modal";
 import { PlanScheduleFields } from "./PlanScheduleFields";
+import { txAccountKey, txInKey } from "../../lib/accountKey";
+import { AccountName } from "../AccountName";
 
 /**
  * «Сделать регулярной»: завести в Дзен-мани план по образцу операции —
@@ -120,9 +122,13 @@ export function MakeRecurringModal({ tx, onClose }: { tx: Transaction; onClose: 
               {transfer ? "Перевод" : tx.categoryFull || "Без категории"}
               {displayPayee(tx) && <span className="text-muted"> · {displayPayee(tx)}</span>}
             </div>
-            <div className="text-xs text-muted truncate">
-              {transfer && tx.incomeAccount ? `${tx.account} → ${tx.incomeAccount}` : tx.account}
-            </div>
+            <AccountName
+              className="text-xs text-muted truncate block"
+              accountKey={txAccountKey(tx)}
+              title={tx.account}
+              toKey={transfer && tx.incomeAccount ? txInKey(tx) : null}
+              toTitle={transfer ? tx.incomeAccount : null}
+            />
           </div>
           <div className="text-right shrink-0">
             <div className={out ? "tabular-nums text-expense" : "tabular-nums text-income"}>

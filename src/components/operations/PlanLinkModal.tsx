@@ -13,6 +13,8 @@ import { CategoryDot } from "../CategoryDot";
 import { InfoPopover } from "../InfoPopover";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "../Modal";
 import { SearchInput } from "../SearchInput";
+import { txAccountKey } from "../../lib/accountKey";
+import { AccountName } from "../AccountName";
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 function localToday(): string {
@@ -185,7 +187,7 @@ function CandidateRow({ tx, picked, onPick }: { tx: Transaction; picked: boolean
             {displayPayee(tx) && <span className="text-muted"> · {displayPayee(tx)}</span>}
           </span>
           <span className="block truncate text-xs text-muted">
-            {tx.account}
+            <AccountName accountKey={txAccountKey(tx)} title={tx.account} />
             {tx.comment && ` · ${tx.comment}`}
           </span>
         </span>

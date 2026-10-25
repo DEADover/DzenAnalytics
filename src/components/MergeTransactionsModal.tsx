@@ -14,6 +14,8 @@ import { useCategoryNodes } from "../hooks/useCategoryNodes";
 import type { MergeChoice } from "../hooks/useMergeTransactions";
 import { useDataStore } from "../store/useDataStore";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { txAccountKey, txInKey, txOutKey } from "../lib/accountKey";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
 
 const KIND_LABEL: Record<string, string> = {
   expense: "Расход",
@@ -74,9 +76,12 @@ export function MergeTransactionsModal({
 
   const first = txs[0];
   const currency = isTransfer ? first?.outcomeCurrency : first?.currency;
-  const account = isTransfer
-    ? `${first?.outcomeAccount} → ${first?.incomeAccount}`
-    : first?.account;
+  const dir = useAccountDirectory();
+  const account = !first
+    ? undefined
+    : isTransfer
+      ? `${dir.label(txOutKey(first))} → ${dir.label(txInKey(first))}`
+      : dir.label(txAccountKey(first));
   const blocker = problem ?? (!isTransfer && !category ? "Выберите категорию" : null);
 
   // Новые сверху, как в ленте: так список читается тем же порядком.

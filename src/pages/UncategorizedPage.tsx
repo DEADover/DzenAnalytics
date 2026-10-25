@@ -64,6 +64,8 @@ import { useLazyList } from "../hooks/useLazyList";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import type { Transaction } from "../types";
 import { queryMatcher } from "../lib/keyboardLayout";
+import { txAccountKey } from "../lib/accountKey";
+import { AccountName } from "../components/AccountName";
 
 /**
  * «Без категории» — операции, которым категорию так и не поставили, и разметка
@@ -510,9 +512,7 @@ function Row({
     >
       <Checkbox checked={selected} stopPropagation onChange={onToggleSelect} label="Выбрать операцию" />
       <div className="text-muted tabular-nums whitespace-nowrap">{formatDate(tx.date, "full")}</div>
-      <div className="truncate text-muted" title={tx.account}>
-        {tx.account}
-      </div>
+      <AccountName className="truncate text-muted block" accountKey={txAccountKey(tx)} title={tx.account} />
       {/* На узком экране получатель — главной строкой (категории тут нет), подсказка — под ним. */}
       <div data-cell="category" className="min-w-0">
         <OperationPayee tx={tx} />
