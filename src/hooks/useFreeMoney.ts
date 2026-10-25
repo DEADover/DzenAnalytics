@@ -204,7 +204,8 @@ export function useFreeMoney(
       (cache.reminderMarkers ?? []).filter((m) => plannedDeletions[m.id] === undefined),
       cache.instruments,
       me?.currency,
-      today,
+      // План месяца — вместе с просроченными плановыми, как у Дзен-мани.
+      undefined,
       (dateIso, code) => histDayRates[dateIso]?.[code] ?? null,
       (id) => cache.instruments.find((i) => i.id === id)?.shortTitle,
       fulfilled,

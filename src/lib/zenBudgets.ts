@@ -104,22 +104,29 @@ function plannedKey(tagId: string, ym: string): string {
  * вопрос «сколько всего собирались потратить», а не «сколько осталось»; факт
  * вычитается из него отдельно и даёт остаток.
  *
- * А вот ПРОСРОЧЕННЫЙ план (`planned` с датой в прошлом) не считается: он не
- * исполнился, и обещать его задним числом неправильно — Дзен-мани так же.
+ * ПРОСРОЧЕННЫЙ план (`planned` с датой в прошлом) план месяца тоже держит —
+ * проверено вживую 25.10.2026: плановая 1 234 ₽ на 20.10 при сегодня 25.10
+ * подняла план «Здоровья» в «Планах» с 5 000 до 6 234. Отсекать его можно
+ * только там, где нужно «что ещё впереди» (`aheadFrom`).
  *
  * Прогнозы, достроенные Дзеном по регулярности (`isForecast`), в план не идут.
  * Сумма каждой операции переводится из своей валюты в базовую по курсу
  * справочника. У исполненной операции Дзен берёт курс дня исполнения, мы —
  * текущий; на валютных подписках это даёт расхождение в доли процента.
  *
- * Маркер с несколькими тегами попадает в каждый (так делает и Дзен-мани).
+ * Маркер с несколькими тегами идёт в план ПЕРВОГО тега: остальные — вторые
+ * категории, плана не касаются (проверено вживую: 777 ₽ на «Здоровье,
+ * Подарки» подняли только «Здоровье»), как и у операций.
  */
 export function plannedOpsByTagMonth(
   markers: ZenReminderMarker[] | undefined,
   instruments: ZenInstrument[] | undefined,
   baseCurrencyId: number | undefined,
-  /** Сегодня, «ГГГГ-ММ-ДД». Планы этого дня и позже — впереди. */
-  todayIso = new Date().toISOString().slice(0, 10),
+  /**
+   * Только то, что ещё впереди: `planned` раньше этой даты («ГГГГ-ММ-ДД»)
+   * пропускается. Для плана месяца не задаётся — просроченное в нём есть.
+   */
+  aheadFrom?: string,
   /**
    * Курс валюты на дату — для УЖЕ ИСПОЛНЕННЫХ операций.
    *
@@ -177,11 +184,8 @@ export function plannedOpsByTagMonth(
     // человек назначил сам. Без этого условия зарплата, достроенная Дзеном,
     // прибавлялась к плану, и «Работа» показывала 465 900 вместо 305 000.
     if (m.isForecast === true && !withForecasts) continue;
-    // Просроченный план — тот, что остался `planned`, хотя день прошёл, —
-    // не считается: он не исполнился, и обещать его задним числом неправильно.
-    // Исполненные (`processed`) при этом идут в план целиком, независимо от
-    // даты: план месяца — это сколько всего собирались потратить.
-    if (m.state === "planned" && !linked && (m.date || "") < todayIso) continue;
+    // «Что ещё впереди» — без просроченного; план месяца — со всем.
+    if (aheadFrom && m.state === "planned" && !linked && (m.date || "") < aheadFrom) continue;
     if (!/^\d{4}-\d{2}-\d{2}/.test(m.date || "")) continue;
     const ym = periodKey(m.date.slice(0, 10), monthStartDay);
     if (!m.tag || m.tag.length === 0) continue;
@@ -191,12 +195,11 @@ export function plannedOpsByTagMonth(
     const inc = m.income > 0 ? toBase(m.income, m.incomeInstrument, on) : 0;
     const outc = m.outcome > 0 ? toBase(m.outcome, m.outcomeInstrument, on) : 0;
     if (inc === 0 && outc === 0) continue;
-    for (const tagId of m.tag) {
-      const cur = out.get(plannedKey(tagId, ym)) || { income: 0, outcome: 0 };
-      cur.income += inc;
-      cur.outcome += outc;
-      out.set(plannedKey(tagId, ym), cur);
-    }
+    const tagId = m.tag[0];
+    const cur = out.get(plannedKey(tagId, ym)) || { income: 0, outcome: 0 };
+    cur.income += inc;
+    cur.outcome += outc;
+    out.set(plannedKey(tagId, ym), cur);
   }
   return out;
 }

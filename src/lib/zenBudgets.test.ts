@@ -474,3 +474,37 @@ describe("plannedOpsByTagMonth — отчётный период", () => {
     expect([...period.keys()]).toEqual(["food|2026-09"]);
   });
 });
+
+describe("plannedOpsByTagMonth — сверено с «Планами» вживую 25.10.2026", () => {
+  const rub = { id: 2, title: "Рубль", shortTitle: "RUB", symbol: "₽", rate: 1 } as ZenInstrument;
+  const mk = (p: Partial<ZenReminderMarker>): ZenReminderMarker => ({
+    id: "m",
+    user: 1,
+    changed: 0,
+    date: "2026-10-20",
+    income: 0,
+    incomeInstrument: 2,
+    outcome: 0,
+    outcomeInstrument: 2,
+    tag: ["health"],
+    reminder: "r",
+    state: "planned",
+    ...p,
+  });
+
+  it("просроченная плановая входит в план месяца («Здоровье» 5 000 → 6 234)", () => {
+    const m = plannedOpsByTagMonth([mk({ outcome: 1234 })], [rub], 2);
+    expect(m.get("health|2026-10")?.outcome).toBe(1234);
+  });
+
+  it("…но не во «впереди»", () => {
+    const m = plannedOpsByTagMonth([mk({ outcome: 1234 })], [rub], 2, "2026-10-25");
+    expect(m.get("health|2026-10")).toBeUndefined();
+  });
+
+  it("плановая с двумя категориями идёт только в первую («Подарки» остались 5 000)", () => {
+    const m = plannedOpsByTagMonth([mk({ outcome: 777, tag: ["health", "gifts"], date: "2026-10-28" })], [rub], 2);
+    expect(m.get("health|2026-10")?.outcome).toBe(777);
+    expect(m.get("gifts|2026-10")).toBeUndefined();
+  });
+});
