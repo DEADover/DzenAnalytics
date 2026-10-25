@@ -22,6 +22,8 @@ import { colorForCategory } from "../lib/categoryColor";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useDataStore } from "../store/useDataStore";
 import { useLiveAccounts } from "../hooks/useLiveAccounts";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
+import { accountKeyOf, txAccountKey, txInKey, txOutKey } from "../lib/accountKey";
 import {
   evalAmount,
   round2,
@@ -94,18 +96,20 @@ export function SplitTransactionModal({
   // счёт, по которому ещё не было операций, в истории не найдётся, а выбрать
   // его надо; архивные не предлагаем — операцию на них не создать.
   const liveAccounts = useLiveAccounts();
+  // Варианты — ключи счетов: у тёзок одно название на двоих.
+  const dir = useAccountDirectory();
   const accountOptions = useMemo(() => {
     const seen = new Set<string>();
     for (const a of liveAccounts ?? []) {
-      if (!a.archive) seen.add(a.title);
+      if (!a.archive) seen.add(accountKeyOf(a));
     }
     for (const t of allTransactions) {
-      for (const a of [t.account, t.outcomeAccount, t.incomeAccount]) {
-        if (a) seen.add(a);
-      }
+      if (t.account) seen.add(txAccountKey(t));
+      if (t.outcomeAccount) seen.add(txOutKey(t));
+      if (t.incomeAccount) seen.add(txInKey(t));
     }
-    return [...seen].sort((a, b) => a.localeCompare(b, "ru"));
-  }, [allTransactions, liveAccounts]);
+    return [...seen].sort((a, b) => dir.label(a).localeCompare(dir.label(b), "ru"));
+  }, [allTransactions, liveAccounts, dir]);
 
   // Метки для автодополнения — из комментариев всех операций: тот же список,
   // что предлагает карточка операции, иначе в разбивке завёлся бы свой набор.
@@ -137,7 +141,7 @@ export function SplitTransactionModal({
   // Отдельно от чисел: пока строка «1200+» дописывается, числа у неё нет.
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [payee, setPayee] = useState(tx.brand || tx.payee || "");
-  const [account, setAccount] = useState(tx.account);
+  const [account, setAccount] = useState(() => txAccountKey(tx));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -292,6 +296,7 @@ export function SplitTransactionModal({
               <Combobox
                 value={account}
                 options={accountOptions}
+                labelOf={dir.label}
                 onChange={setAccount}
                 placeholder="Счёт"
                 allowCustom={false}

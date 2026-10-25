@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { accountKindLabel } from "../lib/accountType";
-import { getLiveAccountsFromCache, getBrandTitlesFromCache } from "../store/useZenmoneyStore";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
+import { getBrandTitlesFromCache } from "../store/useZenmoneyStore";
 import {
   Wand2,
   Plus,
@@ -247,29 +248,28 @@ export function RulesPage() {
    * панели фильтров, — чтобы список читался одинаково в обоих местах. В режиме
    * CSV метаданных нет, тогда группировки просто не будет.
    */
-  const [accountKinds, setAccountKinds] = useState<Map<string, string>>(new Map());
-  useEffect(() => {
-    let cancelled = false;
-    void getLiveAccountsFromCache().then((live) => {
-      if (cancelled || !live) return;
-      const m = new Map<string, string>();
-      for (const a of live) m.set(a.title, accountKindLabel(a.type, a.savings));
-      setAccountKinds(m);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Счета — из справочника: в том числе те, по которым ещё нет ни одной
+  // операции (новая карта, вклад без движения), — правило на них заводят
+  // заранее. Условие правила сравнивает НАЗВАНИЕ счёта, поэтому тёзки здесь —
+  // одна строка: правило с ним сработает на обоих.
+  const dir = useAccountDirectory();
+  const accountKinds = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of dir.list)
+      if (e.type && !m.has(e.title)) m.set(e.title, accountKindLabel(e.type, e.savings));
+    return m;
+  }, [dir]);
 
   const allAccounts = useMemo(() => {
     const set = new Set<string>();
+    for (const e of dir.list) if (e.title) set.add(e.title);
     for (const t of transactions) {
       for (const a of [t.account, t.outcomeAccount, t.incomeAccount]) {
         if (a) set.add(a);
       }
     }
     return [...set].sort((a, b) => a.localeCompare(b, "ru"));
-  }, [transactions]);
+  }, [transactions, dir]);
 
   const accountGroups = useMemo(() => {
     if (accountKinds.size === 0) return undefined;

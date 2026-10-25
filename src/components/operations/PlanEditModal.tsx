@@ -19,6 +19,8 @@ import type { ZenReminder, ZenReminderMarker } from "../../lib/zenmoney";
 import type { PlannedOp } from "../../lib/plannedOps";
 import { useCategoryNodes } from "../../hooks/useCategoryNodes";
 import { useLiveAccounts } from "../../hooks/useLiveAccounts";
+import { accountRef, useAccountDirectory } from "../../hooks/useAccountDirectory";
+import { accountKeyOf } from "../../lib/accountKey";
 import { useDataStore } from "../../store/useDataStore";
 import { usePlanActionsStore } from "../../store/usePlanActionsStore";
 import { useCounterpartyEditsStore } from "../../store/useCounterpartyEditsStore";
@@ -72,8 +74,9 @@ export function PlanEditModal({
       date: plan.date,
       category: transfer ? "" : category,
       subcategory: transfer ? "" : rest.join(" / "),
-      account: plan.account,
-      toAccount: plan.toAccount ?? "",
+      // Счета в форме — ключами: у тёзок одно название на двоих.
+      account: plan.accountKey ?? plan.account,
+      toAccount: plan.toAccountKey ?? plan.toAccount ?? "",
       payee: plan.payee,
       comment: plan.comment,
     };
@@ -110,11 +113,14 @@ export function PlanEditModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const dir = useAccountDirectory();
   const accountOptions = useMemo(() => {
     const seen = new Set<string>();
-    for (const a of liveAccounts ?? []) if (!a.archive) seen.add(a.title);
-    return [...seen].sort((a, b) => a.localeCompare(b, "ru"));
-  }, [liveAccounts]);
+    for (const a of liveAccounts ?? []) if (!a.archive) seen.add(accountKeyOf(a));
+    return [...seen].sort((a, b) => dir.label(a).localeCompare(dir.label(b), "ru"));
+  }, [liveAccounts, dir]);
+  const titleOf = (key: string) => accountRef(dir, key).title;
+  const idOf = (key: string) => accountRef(dir, key).id;
   const payeeOptions = useMemo(() => {
     const seen = new Set<string>();
     for (const t of allTransactions) {
@@ -152,8 +158,10 @@ export function PlanEditModal({
         kind: plan.kind,
         date: form.date,
         amount: round2(amount),
-        account: form.account,
-        incomeAccount: transfer ? form.toAccount : undefined,
+        account: titleOf(form.account),
+        accountId: idOf(form.account),
+        incomeAccount: transfer ? titleOf(form.toAccount) : undefined,
+        incomeAccountId: transfer ? idOf(form.toAccount) : undefined,
         incomeAmount: transfer ? evalAmount(form.toAmount) ?? undefined : undefined,
         category: transfer ? undefined : form.category || "Без категории",
         subcategory: transfer ? undefined : form.subcategory || null,
@@ -318,6 +326,7 @@ export function PlanEditModal({
             <Combobox
               value={form.account}
               options={accountOptions}
+              labelOf={dir.label}
               onChange={(v) => set("account", v)}
               allowCustom={false}
               searchable
@@ -330,6 +339,7 @@ export function PlanEditModal({
               <Combobox
                 value={form.toAccount}
                 options={accountOptions}
+                labelOf={dir.label}
                 onChange={(v) => set("toAccount", v)}
                 allowCustom={false}
                 searchable

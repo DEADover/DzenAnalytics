@@ -31,6 +31,7 @@ import { useDraftsStore } from "../store/useDraftsStore";
 import { useSplitGroupsStore, type SplitGroup } from "../store/useSplitGroupsStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { useDataStore } from "../store/useDataStore";
+import { accountRef, getAccountDirectory } from "./useAccountDirectory";
 
 export function useSplitTransaction() {
   const addMany = useDraftsStore((s) => s.addMany);
@@ -48,7 +49,8 @@ export function useSplitTransaction() {
       parts: SplitDraftPart[],
       /** Контрагент, общий для всех частей. Пусто — оставляем как был. */
       payee?: string,
-      /** Счёт, общий для всех частей. Пусто — оставляем как был. */
+      /** Ключ счёта, общего для всех частей (`lib/accountKey`). Пусто —
+       *  оставляем как был. */
       account?: string
     ): Promise<string | null> => {
       const cache = await loadZenCache();
@@ -66,6 +68,9 @@ export function useSplitTransaction() {
       // Собираем ВСЕ части заранее: если хоть одна не собирается (статьи нет
       // в справочнике), не трогаем ничего. Половина разбивки хуже, чем её
       // отсутствие: сумма разъедется, а откатывать нечего.
+      const target = account
+        ? accountRef(getAccountDirectory(), account)
+        : { title: tx.account, id: tx.accountId };
       const built: ZenTransaction[] = [];
       for (const part of parts) {
         const result = buildDraftTransaction(
@@ -74,7 +79,8 @@ export function useSplitTransaction() {
             kind: tx.kind,
             date: tx.date,
             amount: round2(part.amount),
-            account: account || tx.account,
+            account: target.title,
+            accountId: target.id,
             createdSeconds: Number.isFinite(created) ? created : undefined,
             category: part.category,
             subcategory: part.subcategory,

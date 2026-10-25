@@ -48,6 +48,8 @@ import { EditTransactionModal } from "./EditTransactionModal";
 import { CategoryDot } from "./CategoryDot";
 import { formatMoney, formatDate, displayPayee, monthTitle } from "../lib/format";
 import { accountKindLabel } from "../lib/accountType";
+import { txAccountKey, txInKey, txOutKey } from "../lib/accountKey";
+import { getAccountDirectory } from "../hooks/useAccountDirectory";
 import { pluralRu } from "../lib/plural";
 import { kindLabel, kindColorClass } from "../lib/txKindStyle";
 import type { Transaction } from "../types";
@@ -69,6 +71,7 @@ interface Aspect {
 }
 
 const dash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
+const accountLabel = (key: string) => getAccountDirectory().label(key);
 
 const ASPECTS: Aspect[] = [
   { keys: ["date"], label: "Дата", get: (t) => formatDate(t.date) },
@@ -109,9 +112,23 @@ const ASPECTS: Aspect[] = [
     get: (t) => formatMoney(t.amount, t.currency),
   },
   { keys: ["kind"], label: "Тип", get: (t) => kindLabel(t.kind) },
-  { keys: ["account"], label: "Счёт", get: (t) => dash(t.account) },
-  { keys: ["outcomeAccount"], label: "Счёт списания", get: (t) => dash(t.outcomeAccount) },
-  { keys: ["incomeAccount"], label: "Счёт зачисления", get: (t) => dash(t.incomeAccount) },
+  // Счета — подписью из справочника: перенос между тёзками иначе читался бы
+  // как «Т-Банк → Т-Банк».
+  {
+    keys: ["account", "accountId", "accountKey"],
+    label: "Счёт",
+    get: (t) => dash(t.account && accountLabel(txAccountKey(t))),
+  },
+  {
+    keys: ["outcomeAccount", "outcomeAccountId", "outcomeAccountKey"],
+    label: "Счёт списания",
+    get: (t) => dash(t.outcomeAccount && accountLabel(txOutKey(t))),
+  },
+  {
+    keys: ["incomeAccount", "incomeAccountId", "incomeAccountKey"],
+    label: "Счёт зачисления",
+    get: (t) => dash(t.incomeAccount && accountLabel(txInKey(t))),
+  },
   {
     keys: ["incomeAmount", "incomeCurrency"],
     label: "Сумма зачисления",

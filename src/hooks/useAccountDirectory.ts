@@ -26,3 +26,21 @@ export function useAccountDirectorySync(): void {
     useAccountDirStore.setState({ dir: buildAccountDirectory(live, transactions) });
   }, [live, transactions]);
 }
+
+/** Справочник вне компонентов — для действий (разделение, отправка). */
+export function getAccountDirectory(): AccountDirectory {
+  return useAccountDirStore.getState().dir;
+}
+
+/**
+ * Название и номер счёта по ключу — то, что нужно сборке операции. Номера
+ * нет у долгов (их счетов по валюте несколько) и у счетов из CSV — там счёт
+ * ищется по названию.
+ */
+export function accountRef(
+  dir: AccountDirectory,
+  key: string
+): { title: string; id: string | undefined } {
+  const e = dir.byKey.get(key);
+  return { title: e?.title ?? key, id: e && e.ids.length === 1 ? e.ids[0] : undefined };
+}

@@ -8,6 +8,8 @@ import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { loadZenCache } from "../lib/zenmoneyCache";
 import { liveCategoryNodes } from "../lib/categoryTree";
 import { accountKindLabel } from "../lib/accountType";
+import { accountKeyOf } from "../lib/accountKey";
+import { getAccountDirectory } from "../hooks/useAccountDirectory";
 import { exportImportTemplate, SHEET_OPS, TEMPLATE_VERSION } from "../lib/importTemplate";
 import { readXlsxSheet } from "../lib/xlsxRead";
 import { merchantKey } from "../lib/zenmoneyPush";
@@ -19,6 +21,7 @@ import {
   matchHeader,
   readRow,
   rowToVerdict,
+  type AccountRef,
   type ImportDicts,
   type ImportPlan,
   type ParsedRow,
@@ -87,12 +90,20 @@ export function ImportXlsxCard() {
     if (!cache) throw new Error(NO_DICTS);
     const instruments = new Map(cache.instruments.map((i) => [i.id, i.shortTitle]));
     const live = cache.accounts.filter((a) => !a.archive);
+    // Тёзки в шаблоне — подписями с уточнением («Т-Банк · Сбербанк»): по
+    // одному названию не понять, на какой из них класть операцию.
+    const dir = getAccountDirectory();
+    const refs = new Map<string, AccountRef>();
     const rich = {
-      accounts: live.map((a) => ({
-        title: a.title,
-        currency: instruments.get(a.instrument) ?? "RUB",
-        kind: accountKindLabel(a.type, a.savings),
-      })),
+      accounts: live.map((a) => {
+        const label = dir.label(accountKeyOf(a));
+        if (label !== a.title) refs.set(label, { title: a.title, id: a.id });
+        return {
+          title: label,
+          currency: instruments.get(a.instrument) ?? "RUB",
+          kind: accountKindLabel(a.type, a.savings),
+        };
+      }),
     };
     const nodes = liveCategoryNodes(cache.tags);
     const categories = nodes.flatMap((n) =>
@@ -100,6 +111,7 @@ export function ImportXlsxCard() {
     );
     return {
       accounts: rich.accounts.map((a) => a.title),
+      refs,
       categories,
       // Первым пунктом «Без категории» — как в форме создания: снять категорию
       // осознанно надо уметь и здесь, а тега для этого в Дзен-мани нет.
@@ -162,6 +174,7 @@ export function ImportXlsxCard() {
       const d = await dictsFromCache();
       const dicts: ImportDicts = {
         accounts: d.accounts,
+        refs: d.refs,
         categories: d.categories,
         payees: d.payees,
       };

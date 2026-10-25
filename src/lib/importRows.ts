@@ -51,12 +51,25 @@ const KIND_BY_LABEL: Record<OpTypeLabel, TxKind> = {
 };
 
 export interface ImportDicts {
-  /** Названия счетов ровно так, как они записаны в Дзен-мани. */
+  /** Названия счетов ровно так, как они записаны в Дзен-мани; у тёзок —
+   *  подписи с уточнением («Т-Банк · Сбербанк»), иначе их не различить. */
   accounts: string[];
+  /** Подпись → счёт: название и номер. Нет записи — подпись и есть название. */
+  refs?: Map<string, AccountRef>;
   /** Полные пути категорий: «Еда / Кафе». */
   categories: string[];
   /** Контрагенты из справочника. */
   payees: string[];
+}
+
+/** Счёт, на который ложится строка: название и, если известен, номер. */
+export interface AccountRef {
+  title: string;
+  id?: string;
+}
+
+function refOf(label: string, dicts: ImportDicts): AccountRef {
+  return dicts.refs?.get(label) ?? { title: label };
 }
 
 /** Что мы поняли из строки — до того, как за неё взялся билдер. */
@@ -426,7 +439,9 @@ export function rowToVerdict(
   // ячейке, потом то, чего в ней не видно.
   const payee = minter.resolve(row.payee);
   const mainAccount = kind === "expense" || kind === "transfer" ? outAcc.value : inAcc.value;
-  const isDebt = isDebtAccount(mainAccount, cache) || isDebtAccount(inAcc.value, cache);
+  const main = refOf(mainAccount, dicts);
+  const dest = refOf(inAcc.value, dicts);
+  const isDebt = isDebtAccount(main, cache) || isDebtAccount(dest, cache);
 
   const semantic = validateOperation({
     kind,
@@ -449,8 +464,10 @@ export function rowToVerdict(
     kind,
     date: row.date,
     amount: row.amount,
-    account: mainAccount,
-    incomeAccount: kind === "transfer" ? inAcc.value : undefined,
+    account: main.title,
+    accountId: main.id,
+    incomeAccount: kind === "transfer" ? dest.title : undefined,
+    incomeAccountId: kind === "transfer" ? dest.id : undefined,
     incomeAmount: row.incomeAmount ?? undefined,
     createdSeconds: createdSeconds(row),
     category: parts?.category,
@@ -474,7 +491,7 @@ export function rowToVerdict(
   return {
     ok: true,
     zen: built.zen,
-    currency: accountCurrency(mainAccount, cache),
+    currency: accountCurrency(main, cache),
     ...(payee?.isNew ? { newCounterparty: { id: payee.id, title: payee.title } } : {}),
     ...(payee?.isNew ? { payeeHint: nearestPayee(payee.title, dicts.payees) } : {}),
   };
@@ -572,16 +589,19 @@ export function buildImportPlan(
     // Счёт берём в написании справочника: строка с вердиктом «ок» точно
     // совпала с ним, но могла быть набрана в другом регистре — а подпись
     // сравнивается с подписями уже имеющихся операций, где название настоящее.
-    const account = canonical(
-      kind === "expense" || kind === "transfer" ? row.outAccount : row.inAccount,
-      dicts.accounts
-    ).value;
+    const account = refOf(
+      canonical(
+        kind === "expense" || kind === "transfer" ? row.outAccount : row.inAccount,
+        dicts.accounts
+      ).value,
+      dicts
+    );
     const sig = rowSignature({
       kind,
       payee: row.payee,
       amount: row.amount ?? 0,
       currency: accountCurrency(account, cache),
-      account,
+      account: account.title,
     });
     const near = (seen.get(sig) ?? []).some((d) => daysApart(d, row.date) <= DUP_DAYS);
     remember(sig, row.date);
@@ -620,8 +640,15 @@ function createdSeconds(row: ParsedRow): number | undefined {
 }
 
 /** Валюта счёта по кэшу — нужна только для подписи дубля. */
-function accountCurrency(title: string, cache: ZenCache): string {
-  const acc = cache.accounts.find((a) => a.title === title);
+function findAccount(ref: AccountRef, cache: ZenCache) {
+  return (
+    (ref.id ? cache.accounts.find((a) => a.id === ref.id) : undefined) ??
+    cache.accounts.find((a) => a.title === ref.title)
+  );
+}
+
+function accountCurrency(ref: AccountRef, cache: ZenCache): string {
+  const acc = findAccount(ref, cache);
   const inst = acc ? cache.instruments.find((i) => i.id === acc.instrument) : undefined;
   return inst?.shortTitle ?? "RUB";
 }
@@ -640,8 +667,8 @@ function categoryAllowsIncome(full: string, cache: ZenCache): boolean {
 }
 
 /** Долговой ли счёт — по типу из справочника, а не по названию. */
-function isDebtAccount(title: string, cache: ZenCache): boolean {
-  if (!title) return false;
-  const acc = cache.accounts.find((a) => a.title === title);
+function isDebtAccount(ref: AccountRef, cache: ZenCache): boolean {
+  if (!ref.title) return false;
+  const acc = findAccount(ref, cache);
   return acc ? acc.type === "loan" || acc.type === "credit" || acc.type === "debt" : false;
 }

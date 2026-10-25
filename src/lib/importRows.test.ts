@@ -681,3 +681,35 @@ describe("createCounterpartyMinter", () => {
     expect(m.resolve("Пятерочка")).toMatchObject({ id: "cp-1", isNew: true });
   });
 });
+
+describe("тёзки: два счёта с одним названием", () => {
+  it("строка с подписью «Т-Банк · Сбербанк» ложится на свой счёт, а не на первый одноимённый", () => {
+    const c = cache();
+    c.accounts.push({ id: "acc-card2", title: "Т-Банк", instrument: RUB, archive: false, type: "ccard" } as never);
+    const d: ImportDicts = {
+      ...dicts,
+      accounts: ["Наличные", "Т-Банк · Тинькофф", "Т-Банк · Сбербанк", "FFin $", "Долги"],
+      refs: new Map([
+        ["Т-Банк · Тинькофф", { title: "Т-Банк", id: "acc-card" }],
+        ["Т-Банк · Сбербанк", { title: "Т-Банк", id: "acc-card2" }],
+      ]),
+    };
+    const v = rowToVerdict(parsed({ outAccount: "Т-Банк · Сбербанк" }), d, c, 1_700_000_000, () => "draft-1");
+    expect(v.ok).toBe(true);
+    if (!v.ok) return;
+    expect(v.zen.outcomeAccount).toBe("acc-card2");
+    expect(v.zen.incomeAccount).toBe("acc-card2");
+
+    const t = rowToVerdict(
+      parsed({ type: "Перевод", category: "", outAccount: "Т-Банк · Тинькофф", inAccount: "Т-Банк · Сбербанк" }),
+      d,
+      c,
+      1_700_000_000,
+      () => "draft-2"
+    );
+    expect(t.ok).toBe(true);
+    if (!t.ok) return;
+    expect(t.zen.outcomeAccount).toBe("acc-card");
+    expect(t.zen.incomeAccount).toBe("acc-card2");
+  });
+});

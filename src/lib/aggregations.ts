@@ -1238,6 +1238,7 @@ export function detectDuplicates(
   excluded?: Set<string>
 ): DuplicateGroup[] {
   const groups = new Map<string, Transaction[]>();
+  const legacy = new Map<string, string>();
   for (const t of txs) {
     if (t.kind === "transfer") continue;
     // Счёт — часть приметы (issue #66). Одна и та же покупка, списанная с ДВУХ
@@ -1247,15 +1248,19 @@ export function detectDuplicates(
     // рубля: комиссии 0,22 ₽ и 0,01 ₽ обе давали ноль и попадали в одну группу.
     // Округляем всё равно — иначе дробная арифметика развела бы одинаковые
     // суммы, — но на два знака, а не на ноль.
-    const sig = `${t.kind}|${duplicateIdent(t)}|${Math.round(t.amount * 100)}|${t.currency}|${
-      t.account || "?"
-    }`;
+    // Счёт — ключом: тёзки (два «Т-Банка») — разные счета.
+    const head = `${t.kind}|${duplicateIdent(t)}|${Math.round(t.amount * 100)}|${t.currency}|`;
+    const sig = `${head}${(t.account && txAccountKey(t)) || "?"}`;
     if (!groups.has(sig)) groups.set(sig, []);
     groups.get(sig)!.push(t);
+    // Прежняя примета — с названием счёта: под ней хранятся старые пометки
+    // «не дубликаты».
+    legacy.set(sig, `${head}${t.account || "?"}`);
   }
   const out: DuplicateGroup[] = [];
   for (const [sig, list] of groups) {
-    if (excluded?.has(sig)) continue; // user said these aren't duplicates
+    // user said these aren't duplicates
+    if (excluded?.has(sig) || excluded?.has(legacy.get(sig)!)) continue;
     if (list.length < 2) continue;
     list.sort((a, b) => a.date.localeCompare(b.date));
     const cluster: Transaction[] = [list[0]];
