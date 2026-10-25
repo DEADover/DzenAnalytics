@@ -321,6 +321,56 @@ function transferTx(p: Partial<ZenTransaction> = {}): ZenTransaction {
   } as ZenTransaction;
 }
 
+describe("buildPushItems — счета с одинаковыми названиями", () => {
+  // Два счёта «Т-Банк»: правка с номером уходит на тот, что выбран, а не на
+  // первый попавшийся по названию.
+  function twinCache(t: ZenTransaction): ZenCache {
+    return {
+      ...multiCache(t),
+      accounts: [
+        { id: "acc-1", title: "Т-Банк", instrument: 2 } as ZenAccount,
+        { id: "acc-2", title: "Т-Банк", instrument: 2 } as ZenAccount,
+      ],
+    };
+  }
+
+  it("перенос на второй одноимённый счёт — по номеру", () => {
+    const t = fullTx({ outcome: 500, outcomeAccount: "acc-1", incomeAccount: "acc-1" });
+    const { toPush, skipped } = buildPushItems(
+      { [t.id]: { account: "Т-Банк", accountId: "acc-2" } },
+      twinCache(t)
+    );
+    expect(skipped).toHaveLength(0);
+    expect(toPush[0].zen.outcomeAccount).toBe("acc-2");
+    expect(toPush[0].zen.incomeAccount).toBe("acc-2");
+  });
+
+  it("правка без смены счёта не трогает счёт, даже если название совпадает с другим", () => {
+    const t = fullTx({ outcome: 500, outcomeAccount: "acc-2", incomeAccount: "acc-2" });
+    const { toPush } = buildPushItems({ [t.id]: { comment: "x" } }, twinCache(t));
+    expect(toPush[0].zen.outcomeAccount).toBe("acc-2");
+  });
+
+  it("перевод между двумя одноимёнными счетами", () => {
+    const t = fullTx({ outcome: 500, outcomeAccount: "acc-1", incomeAccount: "acc-1" });
+    const { toPush, skipped } = buildPushItems(
+      {
+        [t.id]: {
+          kind: "transfer",
+          outcomeAccount: "Т-Банк",
+          outcomeAccountId: "acc-1",
+          incomeAccount: "Т-Банк",
+          incomeAccountId: "acc-2",
+        },
+      },
+      twinCache(t)
+    );
+    expect(skipped).toHaveLength(0);
+    expect(toPush[0].zen.outcomeAccount).toBe("acc-1");
+    expect(toPush[0].zen.incomeAccount).toBe("acc-2");
+  });
+});
+
 describe("buildPushItems — account change", () => {
   it("moves both legs to the new same-currency account", () => {
     const { toPush, skipped } = pushIn(fullTx({ outcome: 500 }), { account: "Наличные" });

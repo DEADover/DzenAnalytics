@@ -143,6 +143,48 @@ function classifyOriginal(
   return { kind, account: inAcc, outAcc, inAcc };
 }
 
+/**
+ * Счёт для отправки: сначала по номеру, и только если номера нет — по
+ * названию (правки, сохранённые до появления номеров, и импорт из файлов).
+ *
+ * Названия в Дзен-мани не уникальны: по одному названию нашёлся бы не тот
+ * из двух «Т-Банков», и операция уехала бы на чужой счёт.
+ */
+export function pickAccount(
+  accountsById: Map<string, ZenAccount>,
+  accountsByTitle: Map<string, ZenAccount>,
+  id: string | undefined,
+  title: string | undefined
+): ZenAccount | undefined {
+  if (id) {
+    const byId = accountsById.get(id);
+    if (byId) return byId;
+  }
+  return title !== undefined ? accountsByTitle.get(title) : undefined;
+}
+
+/** Карта «название → счёт» для правок без номера: при совпадении названий —
+ *  не архивный. */
+export function accountsByTitleIndex(accounts: ZenAccount[]): Map<string, ZenAccount> {
+  const out = new Map<string, ZenAccount>();
+  for (const a of accounts) {
+    const prev = out.get(a.title);
+    if (!prev || (prev.archive && !a.archive)) out.set(a.title, a);
+  }
+  return out;
+}
+
+/** Меняет ли правка счёт: по номеру, если он в правке есть, иначе по названию. */
+function accountChanged(
+  editId: string | undefined,
+  editTitle: string | undefined,
+  origId: string,
+  origTitle: string
+): boolean {
+  if (editId !== undefined) return editId !== origId;
+  return editTitle !== undefined && editTitle !== origTitle;
+}
+
 /** Convert an edited `createdAt` (ISO) into Zenmoney's `created` (unix
  *  seconds). Zenmoney has no time column — the operation's time-of-day rides
  *  on `created`, same as Zerro. */
@@ -206,7 +248,8 @@ function buildTransferTarget(
   edit: TransactionEdit,
   orig: { outAcc: string; inAcc: string },
   accountsByTitle: Map<string, ZenAccount>,
-  origIsTransfer: boolean
+  origIsTransfer: boolean,
+  accountsById: Map<string, ZenAccount>
 ): { zen?: ZenTransaction; skip?: string } {
   // Op-amounts (operation currency ≠ account currency) only matter when we're
   // EDITING an existing transfer — there they carry real per-leg FX info we
@@ -224,8 +267,15 @@ function buildTransferTarget(
   }
   const srcTitle = edit.outcomeAccount ?? orig.outAcc;
   const dstTitle = edit.incomeAccount ?? orig.inAcc;
-  const src = accountsByTitle.get(srcTitle);
-  const dst = accountsByTitle.get(dstTitle);
+  // Нога без правки — счёт исходной операции, по её номеру.
+  const src =
+    edit.outcomeAccountId !== undefined || edit.outcomeAccount !== undefined
+      ? pickAccount(accountsById, accountsByTitle, edit.outcomeAccountId, edit.outcomeAccount)
+      : accountsById.get(original.outcomeAccount);
+  const dst =
+    edit.incomeAccountId !== undefined || edit.incomeAccount !== undefined
+      ? pickAccount(accountsById, accountsByTitle, edit.incomeAccountId, edit.incomeAccount)
+      : accountsById.get(original.incomeAccount);
   if (!src) return { skip: `Счёт списания «${srcTitle}» не найден в Дзен-мани — выберите другой` };
   if (!dst) return { skip: `Счёт зачисления «${dstTitle}» не найден в Дзен-мани — выберите другой` };
   if (src.id === dst.id) {
@@ -300,7 +350,8 @@ function collapseTransfer(
   targetKind: TxKind,
   accountsByTitle: Map<string, ZenAccount>,
   tagsByTitle: Map<string, ZenTag[]>,
-  tagsById: Map<string, ZenTag>
+  tagsById: Map<string, ZenTag>,
+  accountsById: Map<string, ZenAccount>
 ): { zen?: ZenTransaction; skip?: string } {
   if ((original.opIncome || 0) > 0 || (original.opOutcome || 0) > 0) {
     return {
@@ -312,7 +363,10 @@ function collapseTransfer(
   const keepInstr =
     keepLeg === "outcome" ? original.outcomeInstrument : original.incomeInstrument;
   const wantTitle = edit.account ?? (keepLeg === "outcome" ? orig.outAcc : orig.inAcc);
-  const acc = accountsByTitle.get(wantTitle);
+  const acc =
+    edit.accountId !== undefined || edit.account !== undefined
+      ? pickAccount(accountsById, accountsByTitle, edit.accountId, edit.account)
+      : accountsById.get(keepLeg === "outcome" ? original.outcomeAccount : original.incomeAccount);
   if (!acc) return { skip: `Счёт «${wantTitle}» не найден в Дзен-мани — выберите другой` };
   if (acc.instrument !== keepInstr) {
     return {
@@ -513,14 +567,8 @@ export function buildPushItems(
     cache.instruments.map((i) => [i.shortTitle, i])
   );
   const accountsById = new Map(cache.accounts.map((a) => [a.id, a]));
-  // Reverse map for resolving an edited account NAME back to its id (account
-  // changes push to cloud). Titles should be unique per user, but if two
-  // collide prefer the non-archived one — that's the account the user means.
-  const accountsByTitle = new Map<string, ZenAccount>();
-  for (const a of cache.accounts) {
-    const prev = accountsByTitle.get(a.title);
-    if (!prev || (prev.archive && !a.archive)) accountsByTitle.set(a.title, a);
-  }
+  // Названия — только для правок без номера счёта (см. `pickAccount`).
+  const accountsByTitle = accountsByTitleIndex(cache.accounts);
   // Merchant dictionary indexed by title (case-insensitive trimmed key
   // for tolerance). `brand` edits get resolved to a merchant id through
   // this map. New brand titles (not in the dictionary) are refused —
@@ -654,12 +702,14 @@ export function buildPushItems(
       // Account-leg swaps (titles → ids). Keep the leg roles and refuse a
       // change of the account's currency (the debt leg structure stays).
       const swapLeg = (
+        accId: string | undefined,
         title: string | undefined,
         origTitle: string,
         leg: "outcome" | "income"
       ): string | null => {
-        if (title === undefined || title === origTitle) return null;
-        const a = accountsByTitle.get(title);
+        const origId = leg === "outcome" ? original.outcomeAccount : original.incomeAccount;
+        if (!accountChanged(accId, title, origId, origTitle)) return null;
+        const a = pickAccount(accountsById, accountsByTitle, accId, title);
         if (!a) return `Счёт «${title}» не найден в Дзен-мани`;
         const curInstr = leg === "outcome" ? original.outcomeInstrument : original.incomeInstrument;
         if (a.instrument !== curInstr) {
@@ -672,13 +722,18 @@ export function buildPushItems(
         }
         return null;
       };
-      const errOut = origIsTransfer ? swapLeg(edit.outcomeAccount, orig.outAcc, "outcome") : null;
-      const errIn = origIsTransfer ? swapLeg(edit.incomeAccount, orig.inAcc, "income") : null;
+      const errOut = origIsTransfer
+        ? swapLeg(edit.outcomeAccountId, edit.outcomeAccount, orig.outAcc, "outcome")
+        : null;
+      const errIn = origIsTransfer
+        ? swapLeg(edit.incomeAccountId, edit.incomeAccount, orig.inAcc, "income")
+        : null;
       // Single-leg debt op (interest paid etc.): both legs share one account.
       const errSingle =
-        !origIsTransfer && edit.account !== undefined && edit.account !== orig.account
+        !origIsTransfer &&
+        accountChanged(edit.accountId, edit.account, original.outcomeAccount, orig.account)
           ? (() => {
-              const a = accountsByTitle.get(edit.account!);
+              const a = pickAccount(accountsById, accountsByTitle, edit.accountId, edit.account);
               if (!a) return `Счёт «${edit.account}» не найден в Дзен-мани`;
               if (a.instrument !== original.outcomeInstrument)
                 return "Смена счёта на счёт в другой валюте у долговой операции пока не поддерживается — отредактируйте операцию в Дзен-мани";
@@ -723,7 +778,8 @@ export function buildPushItems(
         edit,
         orig,
         accountsByTitle,
-        origIsTransfer
+        origIsTransfer,
+        accountsById
       );
       if (built.skip) {
         skipped.push({ id, reason: built.skip });
@@ -745,7 +801,8 @@ export function buildPushItems(
         targetKind,
         accountsByTitle,
         tagsByTitle,
-        tagsById
+        tagsById,
+        accountsById
       );
       if (built.skip) {
         skipped.push({ id, reason: built.skip });
@@ -909,8 +966,9 @@ export function buildPushItems(
     // Account change (non-transfer rows). Runs last so the effective leg
     // instrument already reflects any kind-flip and currency edit above —
     // that keeps account+kind and account+currency combos correct.
-    if (edit.account !== undefined && edit.account !== orig.account) {
-      const newAcc = accountsByTitle.get(edit.account);
+    const origLegId = targetLeg === "outcome" ? original.outcomeAccount : original.incomeAccount;
+    if (accountChanged(edit.accountId, edit.account, origLegId, orig.account)) {
+      const newAcc = pickAccount(accountsById, accountsByTitle, edit.accountId, edit.account);
       if (!newAcc) {
         skipped.push({ id, reason: `Счёт «${edit.account}» не найден в Дзен-мани — выберите другой` });
         continue;
@@ -1201,8 +1259,12 @@ export interface DraftFields {
   /** Primary account title: source for expense/transfer, destination for
    *  income/refund. For a transfer, `incomeAccount` names the destination. */
   account: string;
+  /** Номер счёта к `account` — по нему счёт и ищется (названия не уникальны). */
+  accountId?: string;
   /** Transfer destination account title (transfer only). */
   incomeAccount?: string;
+  /** Номер счёта зачисления к `incomeAccount`. */
+  incomeAccountId?: string;
   /** Destination-leg amount for a cross-currency transfer (in the
    *  destination account's currency). Ignored when both legs share a
    *  currency (income mirrors `amount`). */
@@ -1272,11 +1334,8 @@ export function buildDraftTransaction(
     return { skip: "Укажите сумму больше нуля" };
   }
 
-  const accountsByTitle = new Map<string, ZenAccount>();
-  for (const a of cache.accounts) {
-    const prev = accountsByTitle.get(a.title);
-    if (!prev || (prev.archive && !a.archive)) accountsByTitle.set(a.title, a);
-  }
+  const accountsByTitle = accountsByTitleIndex(cache.accounts);
+  const accountsById = new Map(cache.accounts.map((a) => [a.id, a]));
   const tagsByTitle = new Map<string, ZenTag[]>();
   for (const t of cache.tags) {
     if (t.archive) continue;
@@ -1325,10 +1384,11 @@ export function buildDraftTransaction(
   };
 
   if (fields.kind === "transfer") {
-    const src = accountsByTitle.get(fields.account);
-    const dst = fields.incomeAccount
-      ? accountsByTitle.get(fields.incomeAccount)
-      : undefined;
+    const src = pickAccount(accountsById, accountsByTitle, fields.accountId, fields.account);
+    const dst =
+      fields.incomeAccountId || fields.incomeAccount
+        ? pickAccount(accountsById, accountsByTitle, fields.incomeAccountId, fields.incomeAccount)
+        : undefined;
     if (!src) return { skip: `Счёт «${fields.account}» не найден в Дзен-мани — выберите другой` };
     if (!dst) {
       return { skip: `Счёт зачисления «${fields.incomeAccount ?? ""}» не найден в Дзен-мани — выберите другой` };
@@ -1347,7 +1407,7 @@ export function buildDraftTransaction(
     zen.income = incomeAmount!;
   } else {
     // Single-leg: expense leaves the account, income/refund lands in it.
-    const acc = accountsByTitle.get(fields.account);
+    const acc = pickAccount(accountsById, accountsByTitle, fields.accountId, fields.account);
     if (!acc) return { skip: `Счёт «${fields.account}» не найден в Дзен-мани — выберите другой` };
     zen.outcomeAccount = acc.id;
     zen.incomeAccount = acc.id;

@@ -37,6 +37,11 @@ export type EditableField =
   | "amount"
   | "currency"
   | "account"
+  // Номера счетов к названиям выше — по ним правка уходит в Дзен-мани:
+  // у двух счетов может быть одно название.
+  | "accountId"
+  | "outcomeAccountId"
+  | "incomeAccountId"
   // Transfer-aware fields. Editing `kind` lets the user fix
   | "kind"
   // misclassified expense/income/transfer rows; the two side-fields

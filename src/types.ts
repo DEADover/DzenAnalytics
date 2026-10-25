@@ -76,6 +76,19 @@ export interface Transaction {
   amount: number;
   currency: Currency;
   account: string;
+  /**
+   * Номера счетов в Дзен-мани (`ZenAccount.id`) — к названиям выше.
+   *
+   * Названия счетов в Дзен-мани не уникальны: у человека бывает два счёта
+   * «Т-Банк» или «Наличные» в разных валютах. Отбирать, группировать и
+   * отправлять в облако по названию значит склеивать такие счета и уводить
+   * правку не на тот. Поэтому тождество счёта — номер, а название — подпись.
+   * `undefined` у операций из CSV: там счёт известен только по названию (см.
+   * `accountKey`).
+   */
+  accountId?: string;
+  outcomeAccountId?: string;
+  incomeAccountId?: string;
   amountBase: number;
   /** Bank-original operation amount when the bank converted currencies
    *  (e.g. 5 000 TRY on a USD account). Null when op currency = account currency. */

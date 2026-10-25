@@ -203,21 +203,26 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
     const isTransfer =
       outcome > 0 && income > 0 && zt.outcomeAccount !== zt.incomeAccount;
 
+    // Номер счёта операции — той же ноги, что даёт название (см. `accountId`).
+    let accountId: string | undefined;
     if (isTransfer) {
       kind = "transfer";
       amount = outcome;
       currency = outCurrency;
       account = outAcc?.title || "";
+      accountId = outAcc?.id;
     } else if (outcome > 0) {
       kind = "expense";
       amount = outcome;
       currency = outCurrency;
       account = outAcc?.title || "";
+      accountId = outAcc?.id;
     } else {
       kind = "income";
       amount = income;
       currency = inCurrency;
       account = inAcc?.title || "";
+      accountId = inAcc?.id;
 
       // Refund detection: an income-side movement tagged with an
       // *expense* category (a tag whose `showOutcome` is on while
@@ -310,15 +315,18 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
       brand: zt.merchant ? merchantsById.get(zt.merchant) || null : null,
       comment: zt.comment || "",
       outcomeAccount: outAcc?.title || "",
+      ...(outAcc ? { outcomeAccountId: outAcc.id } : {}),
       outcomeAmount: outcome,
       outcomeCurrency: outCurrency,
       incomeAccount: inAcc?.title || "",
+      ...(inAcc ? { incomeAccountId: inAcc.id } : {}),
       incomeAmount: income,
       incomeCurrency: inCurrency,
       kind,
       amount,
       currency,
       account,
+      ...(accountId ? { accountId } : {}),
       amountBase: toBase(amount, currency),
       opAmount: opAmountResolved,
       opCurrency: opAmountResolved != null ? opCurrencyResolved : null,
