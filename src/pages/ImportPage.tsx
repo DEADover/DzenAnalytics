@@ -94,6 +94,7 @@ import { usePendingChanges } from "../hooks/usePendingChanges";
 import * as db from "../lib/db";
 import { ImportXlsxCard } from "../components/ImportXlsxCard";
 import { SettingRange } from "../components/Slider";
+import { withViewTransition } from "../lib/viewTransition";
 import {
   CONTENT_WIDTH_MAX,
   CONTENT_WIDTH_MIN,
@@ -245,9 +246,14 @@ export function ImportPage() {
   const columnResize = useDisplayStore((s) => s.columnResize);
   const contentWidth = useDisplayStore((s) => s.contentWidth);
   const setContentWidth = useDisplayStore((s) => s.setContentWidth);
+  const contentWidthDraft = useDisplayStore((s) => s.contentWidthDraft);
+  const setContentWidthDraft = useDisplayStore((s) => s.setContentWidthDraft);
+  // Пока бегунок тянут — показываем выбираемое, иначе — применённое.
+  const shownWidth = contentWidthDraft ?? contentWidth;
+  const widthCommitTimer = useRef<number | undefined>(undefined);
   // Шире ли экран выбранной колонки: на более узком ограничение ничего не
   // меняет, и об этом честнее сказать в статусе, чем молча двигать бегунок.
-  const screenWiderThanColumn = useMediaQuery(`(min-width: ${(contentWidth || CONTENT_WIDTH_MAX) + 1}px)`);
+  const screenWiderThanColumn = useMediaQuery(`(min-width: ${(shownWidth || CONTENT_WIDTH_MAX) + 1}px)`);
   const setColumnResize = useDisplayStore((s) => s.setColumnResize);
   const customWidthTables = useColumnWidthsStore((s) => Object.keys(s.tables).length);
   const resetColumnWidths = useColumnWidthsStore((s) => s.resetAll);
@@ -1545,48 +1551,6 @@ export function ImportPage() {
         />
 
         <SettingRow
-          title="Ширина сервиса"
-          status={
-            contentWidth === 0
-              ? "Во весь экран"
-              : `${formatContentWidth(contentWidth)} — ${
-                  screenWiderThanColumn ? "колонкой по центру экрана" : "на этом экране не видно: он уже"
-                }`
-          }
-          help={
-            <>
-              <p>
-                На широком мониторе (например, 21:9) сервис растягивается до
-                краёв окна, и строки таблиц и графики приходится читать
-                поворотом головы. Сдвиньте бегунок влево — шапка, панель
-                фильтров и страница встанут колонкой по центру экрана, а фон и
-                подложка шапки останутся во всю ширину.
-              </p>
-              <p className="mt-2">
-                Ширина — от {formatNum(CONTENT_WIDTH_MIN)} до{" "}
-                {formatNum(CONTENT_WIDTH_MAX)} пикселей, меняется сразу;
-                крайнее правое положение — «Во весь экран», как по умолчанию.
-                На экране уже выбранной ширины ничего не меняется. Боковая
-                панель операций и окна остаются своей ширины.
-              </p>
-            </>
-          }
-          control={
-            <SettingRange
-              value={contentWidthToSlider(contentWidth)}
-              min={CONTENT_WIDTH_MIN}
-              max={CONTENT_WIDTH_SLIDER_FULL}
-              step={CONTENT_WIDTH_STEP}
-              onChange={(v) => void setContentWidth(sliderToContentWidth(v))}
-              ariaLabel="Ширина сервиса"
-              valueText={formatContentWidth(contentWidth)}
-              start={<ChevronsRightLeft className="w-3.5 h-3.5" />}
-              end={<ChevronsLeftRight className="w-[18px] h-[18px]" />}
-            />
-          }
-        />
-
-        <SettingRow
           title="Дробная часть сумм"
           status={`Например: ${formatMoney(1234.1, rates.base)}`}
           help={
@@ -1923,6 +1887,64 @@ export function ImportPage() {
                 onChange={(next) => setColumnResize(next)}
               />
             </div>
+          }
+        />
+
+        <SettingRow
+          title="Ширина сервиса"
+          status={
+            shownWidth === 0
+              ? "Во весь экран"
+              : `${formatContentWidth(shownWidth)} — ${
+                  screenWiderThanColumn ? "колонкой по центру экрана" : "на этом экране не видно: он уже"
+                }`
+          }
+          help={
+            <>
+              <p>
+                На широком мониторе (например, 21:9) сервис растягивается до
+                краёв окна, и строки таблиц и графики приходится читать
+                поворотом головы. Сдвиньте бегунок влево — шапка, панель
+                фильтров и страница встанут колонкой по центру экрана, а фон и
+                подложка шапки останутся во всю ширину.
+              </p>
+              <p className="mt-2">
+                Ширина — от {formatNum(CONTENT_WIDTH_MIN)} до{" "}
+                {formatNum(CONTENT_WIDTH_MAX)} пикселей; крайнее правое
+                положение — «Во весь экран», как по умолчанию. Пока бегунок
+                тянут, края будущей колонки показаны линиями, а сервис стоит
+                на месте; отпустите — и он плавно встанет в новую ширину.
+                На экране уже выбранной ширины ничего не меняется. Боковая
+                панель операций и окна остаются своей ширины.
+              </p>
+            </>
+          }
+          control={
+            <SettingRange
+              value={contentWidthToSlider(shownWidth)}
+              min={CONTENT_WIDTH_MIN}
+              max={CONTENT_WIDTH_SLIDER_FULL}
+              step={CONTENT_WIDTH_STEP}
+              onChange={(v) => setContentWidthDraft(sliderToContentWidth(v))}
+              onCommit={(v, via) => {
+                // Стрелки жмут подряд: применяем, когда человек остановился, —
+                // иначе каждое нажатие перестраивало бы вёрстку, а нажатие во
+                // время смены кадров терялось. Мышь — сразу при отпускании.
+                window.clearTimeout(widthCommitTimer.current);
+                const apply = () => {
+                  const next = sliderToContentWidth(v);
+                  setContentWidthDraft(null);
+                  if (next === useDisplayStore.getState().contentWidth) return;
+                  withViewTransition(() => void setContentWidth(next));
+                };
+                if (via === "key") widthCommitTimer.current = window.setTimeout(apply, 400);
+                else apply();
+              }}
+              ariaLabel="Ширина сервиса"
+              valueText={formatContentWidth(shownWidth)}
+              start={<ChevronsRightLeft className="w-3.5 h-3.5" />}
+              end={<ChevronsLeftRight className="w-[18px] h-[18px]" />}
+            />
           }
         />
 

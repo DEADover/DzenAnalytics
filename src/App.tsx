@@ -74,6 +74,7 @@ import { usePlannedDeletionsStore } from "./store/usePlannedDeletionsStore";
 import { usePlanActionsStore } from "./store/usePlanActionsStore";
 import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
 import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
+import { ContentWidthGuide } from "./components/ContentWidthGuide";
 import { ScrollTopButton } from "./components/ScrollTopButton";
 import { DemoBanner } from "./components/DemoBanner";
 import { useDuplicateExclusionsStore } from "./store/useDuplicateExclusionsStore";
@@ -526,6 +527,7 @@ function App() {
       {/* «Наверх» — одна на всё приложение: появляется на любой странице,
           прокрученной дальше первого экрана. */}
       <ScrollTopButton />
+      <ContentWidthGuide />
     </div>
   );
 }

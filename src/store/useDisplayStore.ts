@@ -160,6 +160,14 @@ interface DisplayState {
    * `lib/contentWidth`.
    */
   contentWidth: number;
+  /**
+   * Ширина, которую сейчас выбирают бегунком, — ещё не применённая. Пока
+   * бегунок тянут, сервис стоит на месте, а края будущей колонки показывают
+   * направляющие (`ContentWidthGuide`): перестраивать всю вёрстку на каждом
+   * шаге было тяжело и дёргано. `null` — бегунок не трогают. Не сохраняется.
+   */
+  contentWidthDraft: number | null;
+  setContentWidthDraft: (width: number | null) => void;
   loaded: boolean;
   hydrate: () => Promise<void>;
   setFractionDigits: (n: FractionDigits) => Promise<void>;
@@ -193,6 +201,9 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   monthKind: "period",
   windowKind: "30d",
   contentWidth: 0,
+  contentWidthDraft: null,
+  setContentWidthDraft: (width) =>
+    set({ contentWidthDraft: width === null ? null : normalizeContentWidth(width) }),
   loaded: false,
 
   hydrate: async () => {

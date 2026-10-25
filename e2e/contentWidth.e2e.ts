@@ -162,7 +162,7 @@ test("ширина сервиса: настройка в «Оформлении�
   for (let i = 0; i < 4; i++) await slider.press("ArrowRight");
   await expect(slider).toHaveAttribute("aria-valuetext", /^1\s600 px$/);
   await expect(page.getByText(/^1\s600 px — колонкой по центру экрана$/)).toBeVisible();
-  expect(await contentMax()).toBe("1600px");
+  await expect.poll(contentMax).toBe("1600px");
 
   // Та же строка, что у размера текста таблиц: дорожка той же ширины и на
   // той же вертикали — контролы встают ровной колонкой у правого края.
@@ -174,5 +174,24 @@ test("ширина сервиса: настройка в «Оформлении�
   // End — снова во весь экран.
   await slider.press("End");
   await expect(slider).toHaveAttribute("aria-valuetext", "Во весь экран");
+  await expect.poll(contentMax).toBe("100%");
+
+  // Строка стоит прямо перед «Размером текста в таблицах».
+  expect(box.y).toBeLessThan(fontBox.y);
+
+  // Перетаскивание: пока бегунок держат, сервис на месте, видны направляющие;
+  // отпустили — ширина применилась, направляющих нет.
+  // Дождаться конца плавной смены кадров после End: пока она идёт, страница
+  // закрыта снимком и мышь до бегунка не доходит.
+  await page.waitForTimeout(500);
+  const b = (await slider.boundingBox())!;
+  const guide = page.locator("[data-content-width-guide]");
+  await page.mouse.move(b.x + b.width - 4, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + 6, b.y + b.height / 2, { steps: 8 });
+  await expect(guide).toBeVisible();
   expect(await contentMax()).toBe("100%");
+  await page.mouse.up();
+  await expect(guide).toHaveCount(0);
+  await expect.poll(contentMax).toBe("1280px");
 });

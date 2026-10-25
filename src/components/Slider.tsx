@@ -1,4 +1,5 @@
 import { useId, type CSSProperties, type ReactNode } from "react";
+import type React from "react";
 import clsx from "clsx";
 
 interface RangeProps {
@@ -7,6 +8,12 @@ interface RangeProps {
   max: number;
   step?: number;
   onChange: (next: number) => void;
+  /**
+   * Значение выбрано: бегунок отпустили (мышью или пальцем) или шагнули
+   * клавишей. Для настроек, применять которые на каждом шаге перетаскивания
+   * дорого, — например, ширины всего сервиса.
+   */
+  onCommit?: (next: number, via: "pointer" | "key" | "blur") => void;
   disabled?: boolean;
 }
 
@@ -20,6 +27,7 @@ export function RangeInput({
   max,
   step = 1,
   onChange,
+  onCommit,
   disabled,
   id,
   ariaLabel,
@@ -44,6 +52,16 @@ export function RangeInput({
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(Number(e.target.value))}
+      {...(onCommit
+        ? {
+            onPointerUp: (e: React.PointerEvent<HTMLInputElement>) =>
+              onCommit(Number(e.currentTarget.value), "pointer"),
+            onKeyUp: (e: React.KeyboardEvent<HTMLInputElement>) =>
+              onCommit(Number(e.currentTarget.value), "key"),
+            onBlur: (e: React.FocusEvent<HTMLInputElement>) =>
+              onCommit(Number(e.currentTarget.value), "blur"),
+          }
+        : {})}
       aria-label={ariaLabel}
       aria-valuetext={valueText}
       className={clsx("range", className)}
