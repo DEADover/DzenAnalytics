@@ -17,8 +17,8 @@ import {
   getHistoricalRubRate,
   resetDayCache,
   seedDayRates,
-  isWeekendUTC,
   isNoQuoteDayUTC,
+  rateDateMayBeStale,
   resetMirrorProbe,
   retryAfterMs,
   setRateRequestIntervalMs,
@@ -40,7 +40,7 @@ function installFetch() {
   globalThis.fetch = vi.fn(async (input: unknown) => {
     const url = String(input);
     fetchCalls.push(url);
-    if (isWeekendUTC(dateFromUrl(url))) throw new TypeError("Failed to fetch");
+    if (isNoQuoteDayUTC(dateFromUrl(url))) throw new TypeError("Failed to fetch");
     return {
       ok: true,
       status: 200,
@@ -66,7 +66,7 @@ function installFetchWithGaps(missing: string[], mirrorUp = true) {
       return { ok: true, status: 200 } as unknown as Response;
     }
     const date = dateFromUrl(url);
-    if (gap.has(date) || isWeekendUTC(date)) throw new TypeError("Failed to fetch");
+    if (gap.has(date) || isNoQuoteDayUTC(date)) throw new TypeError("Failed to fetch");
     return {
       ok: true,
       status: 200,
@@ -87,21 +87,26 @@ beforeEach(() => {
   installFetch();
 });
 
-describe("historicalRates — weekend skip & de-dup", () => {
-  it("never requests a weekend URL (Sat/Sun are skipped, not fetched)", async () => {
-    await fetchHistoricalRubRates(["2021-03-14"]); // a Sunday
+describe("historicalRates — выходные: курс субботы действует до вторника", () => {
+  it("воскресенье и понедельник берут субботний файл, в сеть за ними не ходят", async () => {
+    await fetchHistoricalRubRates(["2026-08-16", "2026-08-17"]); // вс и пн
     const days = fetchCalls.map(dateFromUrl);
-    expect(days).not.toContain("2021-03-14"); // Sun
-    expect(days).not.toContain("2021-03-13"); // Sat
-    expect(days).toContain("2021-03-12"); // → resolves to Friday
-    expect(fetchCalls.every((u) => !isWeekendUTC(dateFromUrl(u)))).toBe(true);
+    expect(days).not.toContain("2026-08-16");
+    expect(days).not.toContain("2026-08-17");
+    expect(days).toContain("2026-08-15"); // суббота — курс, установленный в пятницу
+    expect(days).not.toContain("2026-08-14");
   });
 
-  it("de-dups concurrent look-ups that resolve to the same business day", async () => {
-    // Sat + Sun both roll back to Fri 2021-03-12 — it must be fetched once.
-    await fetchHistoricalRubRates(["2021-03-13", "2021-03-14"]);
-    const fridayHits = fetchCalls.filter((u) => u.includes("2021/03/12")).length;
-    expect(fridayHits).toBe(1);
+  it("суббота запрашивается сама: у неё свой курс", async () => {
+    await fetchHistoricalRubRates(["2026-10-17"]);
+    expect(fetchCalls.map(dateFromUrl)).toEqual(["2026-10-17"]);
+  });
+
+  it("de-dups concurrent look-ups that resolve to the same day", async () => {
+    // Вс и пн откатываются к одной субботе — запрос к ней один.
+    await fetchHistoricalRubRates(["2021-03-14", "2021-03-15"]);
+    const saturdayHits = fetchCalls.filter((u) => u.includes("2021/03/13")).length;
+    expect(saturdayHits).toBe(1);
   });
 
   it("benchmark: 90 dates warm with requests bounded by business days only", async () => {
@@ -109,17 +114,17 @@ describe("historicalRates — weekend skip & de-dup", () => {
     for (let d = 1; d <= 90; d++) {
       dates.push(new Date(Date.UTC(2022, 0, d)).toISOString().slice(0, 10));
     }
-    const businessDays = dates.filter((d) => !isWeekendUTC(d));
+    const businessDays = dates.filter((d) => !isNoQuoteDayUTC(d));
     const weekendDates = dates.length - businessDays.length;
 
     const t0 = performance.now();
     const out = await fetchHistoricalRubRates(dates);
     const ms = Math.round(performance.now() - t0);
 
-    // Every date got a resolved entry (weekends map to the prior Friday).
+    // Every date got a resolved entry (Sun/Mon map to the Saturday).
     expect(Object.keys(out).length).toBe(dates.length);
-    // Not one weekend URL was requested.
-    expect(fetchCalls.every((u) => !isWeekendUTC(dateFromUrl(u)))).toBe(true);
+    // Not one Sun/Mon URL was requested.
+    expect(fetchCalls.every((u) => !isNoQuoteDayUTC(dateFromUrl(u)))).toBe(true);
     // No day is ever fetched twice (in-flight de-dup + IDB day-cache).
     expect(fetchCalls.length).toBe(new Set(fetchCalls).size);
     // Requests are bounded by the business days (+ at most a couple of Fridays
@@ -176,11 +181,11 @@ describe("historicalRates — темп запросов", () => {
     // что человек смотрит.
     setRateRequestIntervalMs(0);
     installFetch();
-    await fetchHistoricalRubRates(["2026-03-16", "2026-03-20", "2026-03-18"]);
+    await fetchHistoricalRubRates(["2026-03-17", "2026-03-20", "2026-03-18"]);
     expect(archiveCalls().map(dateFromUrl)).toEqual([
       "2026-03-20",
       "2026-03-18",
-      "2026-03-16",
+      "2026-03-17",
     ]);
   });
 
@@ -213,15 +218,15 @@ describe("historicalRates — темп запросов", () => {
     expect(again).toEqual(first);
   });
 
-  it("выходной из индекса помнит, что курс от предыдущего рабочего дня", async () => {
-    // 14.03.2021 — воскресенье, курс берётся от пятницы 12-го.
+  it("воскресенье из индекса помнит, что курс — субботний", async () => {
+    // 14.03.2021 — воскресенье, действует курс, установленный на субботу 13-го.
     const warmed = await fetchHistoricalRubRates(["2021-03-14"]);
     resetDayCache();
     installFetch();
     seedDayRates(warmed);
     const hit = await getHistoricalRubRate("2021-03-14", "USD");
     expect(archiveCalls()).toHaveLength(0);
-    expect(hit).toEqual({ rate: 90, rateDate: "2021-03-12" });
+    expect(hit).toEqual({ rate: 90, rateDate: "2021-03-13" });
   });
 });
 
@@ -249,11 +254,19 @@ describe("retryAfterMs", () => {
 });
 
 describe("historicalRates — пропуски в архиве ЦБ (issue #53)", () => {
-  it("не запрашивает праздники: 8 января не уходит в сеть", async () => {
-    expect(isNoQuoteDayUTC("2026-01-08")).toBe(true); // Thu, но праздник
+  it("праздник запрашивается: курс на него ЦБ иногда устанавливает", async () => {
     installFetchWithGaps([]);
-    await fetchHistoricalRubRates(["2026-01-08"]);
-    expect(archiveCalls().map(dateFromUrl)).not.toContain("2026-01-08");
+    await fetchHistoricalRubRates(["2026-05-09"]); // суббота и праздник — файл есть
+    expect(archiveCalls().map(dateFromUrl)).toContain("2026-05-09");
+  });
+
+  it("rateDateMayBeStale: выходные, понедельник и неделя после праздника", () => {
+    expect(rateDateMayBeStale("2026-08-15")).toBe(true); // сб
+    expect(rateDateMayBeStale("2026-08-16")).toBe(true); // вс
+    expect(rateDateMayBeStale("2026-08-17")).toBe(true); // пн
+    expect(rateDateMayBeStale("2026-08-18")).toBe(false); // вт
+    expect(rateDateMayBeStale("2026-05-12")).toBe(true); // вт после 9 мая
+    expect(rateDateMayBeStale("2026-10-14")).toBe(false); // ср
   });
 
   it("новогодний провал в архиве перекрывается окном отката", async () => {
@@ -270,23 +283,23 @@ describe("historicalRates — пропуски в архиве ЦБ (issue #53)"
   });
 
   it("отсутствующая дата запоминается как пропуск и не перезапрашивается", async () => {
-    // Понедельник, которого просто нет в архиве зеркала.
-    installFetchWithGaps(["2026-07-20"]);
-    await fetchHistoricalRubRates(["2026-07-20"]);
-    expect(archiveCalls().map(dateFromUrl)).toContain("2026-07-20");
+    // Вторник, которого просто нет в архиве зеркала (так бывает после праздника).
+    installFetchWithGaps(["2026-07-21"]);
+    await fetchHistoricalRubRates(["2026-07-21"]);
+    expect(archiveCalls().map(dateFromUrl)).toContain("2026-07-21");
 
     // Второй прогрев (новая сессия страницы: кэш дат в IDB остаётся).
-    installFetchWithGaps(["2026-07-20"]);
+    installFetchWithGaps(["2026-07-21"]);
     resetMirrorProbe();
-    await fetchHistoricalRubRates(["2026-07-20"]);
-    expect(archiveCalls().map(dateFromUrl)).not.toContain("2026-07-20");
+    await fetchHistoricalRubRates(["2026-07-21"]);
+    expect(archiveCalls().map(dateFromUrl)).not.toContain("2026-07-21");
   });
 
   it("когда сервис курсов лежит, дата НЕ считается пропуском и будет перезапрошена", async () => {
     // Полный обрыв: не отвечает ни архив, ни проверочный документ.
-    const allDates = ["2026-07-20", "2026-07-17", "2026-07-16", "2026-07-15",
-      "2026-07-14", "2026-07-13", "2026-07-10", "2026-07-09", "2026-07-08",
-      "2026-07-07", "2026-07-06", "2026-07-03", "2026-07-02", "2026-07-01"];
+    const allDates: string[] = [];
+    for (let d = 0; d <= 20; d++)
+      allDates.push(new Date(Date.UTC(2026, 6, 20 - d)).toISOString().slice(0, 10));
     installFetchWithGaps(allDates, /* mirrorUp */ false);
     const out = await fetchHistoricalRubRates(["2026-07-20"]);
     // Ничего достоверного — дата остаётся «неизвестной», а не «курса нет».

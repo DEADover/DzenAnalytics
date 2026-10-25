@@ -212,31 +212,47 @@ function shiftDate(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Sat/Sun — CBR NEVER publishes a rate on these, so we skip the request
- *  entirely and let the look-back fall through to the previous business day.
- *  This matters because the mirror's 404 for a missing day carries no CORS
- *  header, so a browser fetch of a weekend URL doesn't return status 404 — it
- *  THROWS `TypeError: Failed to fetch`, costing a doomed request (and a red
- *  console/network entry) for every weekend op date. */
-export function isWeekendUTC(date: string): boolean {
-  const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
-  return dow === 0 || dow === 6;
-}
-
-/** Федеральные нерабочие дни (ММ-ДД) — ЦБ в них курс не публикует. Список
- *  фиксированный: переносы выходных сюда не входят, такой день просто получит
- *  один запрос-мимо и запомнится как пропуск. */
-const RU_HOLIDAYS_MMDD = new Set([
+/** Федеральные нерабочие дни (ММ-ДД). Курс на них ЦБ иногда УСТАНАВЛИВАЕТ
+ *  (в архиве есть 1 и 9 мая, 12 июня 2026), поэтому заранее их не пропускаем;
+ *  список нужен только чтобы найти сохранённые курсы, посчитанные по старому
+ *  правилу (`rateDateMayBeStale`). */
+const RU_HOLIDAYS_MMDD = [
   "01-01", "01-02", "01-03", "01-04", "01-05", "01-06", "01-07", "01-08",
   "02-23", "03-08", "05-01", "05-09", "06-12", "11-04",
-]);
+];
 
-/** День, на который курса заведомо не будет: выходной или праздник. Такие даты
- *  мы не запрашиваем вовсе — и потому, что запрос обречён, и потому, что 404 с
- *  этого зеркала приходит БЕЗ CORS-заголовка: в браузере он превращается в
- *  красный `TypeError: Failed to fetch` в консоли. */
+/**
+ * День, на который курса ЦБ заведомо нет: воскресенье и понедельник.
+ *
+ * Архив хранит курс по дате, С КОТОРОЙ он действует. В пятницу ЦБ
+ * устанавливает курс на субботу, и он действует до вторника — поэтому файла на
+ * субботу хватает и для воскресенья, и для понедельника, а своих файлов у них
+ * нет никогда. Раньше мы пропускали и субботу и откатывались к пятничному
+ * файлу — то есть к курсу четверга: валютная трата в воскресенье считалась по
+ * курсу на 0,5–1 % не тем, что у Дзен-мани (сверено: 16–17.08.2026 у
+ * приложения 84,5449, у нас было 83,8058, а 84,5449 — файл на 15 августа).
+ *
+ * Праздники заранее не пропускаем: курс на праздник ЦБ иногда устанавливает,
+ * а запрос мимо запоминается как пропуск и второй раз не уходит.
+ */
 export function isNoQuoteDayUTC(date: string): boolean {
-  return isWeekendUTC(date) || RU_HOLIDAYS_MMDD.has(date.slice(5, 10));
+  const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return dow === 0 || dow === 1;
+}
+
+/**
+ * Курс на эту дату мог быть найден по старому правилу (суббота и праздники
+ * пропускались) и оказаться не тем. Такие записи индекса выбрасываются один
+ * раз и догружаются заново: суббота, воскресенье, понедельник и неделя после
+ * праздника.
+ */
+export function rateDateMayBeStale(date: string): boolean {
+  const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+  if (dow === 6 || dow === 0 || dow === 1) return true;
+  for (let back = 0; back <= 7; back++) {
+    if (RU_HOLIDAYS_MMDD.includes(shiftDate(date, -back).slice(5, 10))) return true;
+  }
+  return false;
 }
 
 /**

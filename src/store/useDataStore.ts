@@ -5,6 +5,7 @@ import {
   baseWithHistory,
   fetchHistoricalRubRates,
   purgeLegacyDayCache,
+  rateDateMayBeStale,
   seedDayRates,
   type HistDayRates,
 } from "../lib/historicalRates";
@@ -196,6 +197,10 @@ interface DataState {
 // Key under which the resolved CBR day→currency rate index is persisted, so a
 // reload reprices instantly without re-fetching (and without a sync-time flash).
 const HIST_RATES_KEY = "histDayRates";
+/** Версия правила «курс на дату» — по ней один раз выбрасываются записи,
+ *  найденные по прежнему правилу. 2 — курс субботы действует до вторника. */
+const HIST_RATES_RULE_KEY = "histDayRatesRule";
+const HIST_RATES_RULE = 2;
 
 function recalcBase(
   txs: Transaction[],
@@ -671,7 +676,17 @@ export const useDataStore = create<DataState>((set, get) => ({
         loadManualAliasesFromStore(),
       ]);
     const rates = mergeRatesWithDefaults(savedRates);
-    const hist = savedHist || {};
+    let hist = savedHist || {};
+    // Курсы, найденные по старому правилу (суббота и праздники пропускались,
+    // и воскресенье с понедельником брали курс четверга), выбрасываем один раз:
+    // прогрев догрузит их заново, уже как у Дзен-мани (см. `isNoQuoteDayUTC`).
+    if ((await db.loadJSON<number>(HIST_RATES_RULE_KEY)) !== HIST_RATES_RULE) {
+      hist = Object.fromEntries(
+        Object.entries(hist).filter(([date]) => !rateDateMayBeStale(date))
+      );
+      await db.saveJSON(HIST_RATES_KEY, hist);
+      await db.saveJSON(HIST_RATES_RULE_KEY, HIST_RATES_RULE);
+    }
     // Seed histDayRates BEFORE finalize() (which reads it from the store).
     set({ histDayRates: hist });
     // Индекс — единственное постоянное хранилище курсов: отдаём его загрузчику
