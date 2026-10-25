@@ -3,6 +3,7 @@ import {
   accountGroup,
   buildZenPlanRules,
   openingBalance,
+  planResidue,
   zenPlanSettings,
   type PlanAccount,
 } from "./zenPlanRules";
@@ -197,5 +198,14 @@ describe("openingBalance", () => {
       { date: "2026-10-08", income: 0, outcome: 1, incomeAccount: "a", outcomeAccount: "a", deleted: true },
     ];
     expect(openingBalance(accounts, txs, "2026-10-01", (v) => v)).toBe(50_000 - 20_000 + 3_000);
+  });
+});
+
+describe("planResidue", () => {
+  it("как в приложении: без плана ноль, не меньше назначенного и нуля", () => {
+    expect(planResidue(0, 500, 0)).toBe(0);
+    expect(planResidue(10_000, 4_000, 0)).toBe(6_000);
+    expect(planResidue(10_000, 12_000, 0)).toBe(0);
+    expect(planResidue(10_000, 9_000, 3_000)).toBe(3_000);
   });
 });

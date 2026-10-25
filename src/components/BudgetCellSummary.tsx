@@ -4,22 +4,13 @@ import { ProgressBar } from "./ProgressBar";
 import { CategoryDot } from "./CategoryDot";
 import { formatDate, formatMoney } from "../lib/format";
 import type { PlannedOp } from "../lib/plannedOps";
+import { planResidue } from "../lib/zenPlanRules";
 
 export interface BudgetCellSub {
   name: string;
   plan: number;
   fact: number;
   onOpen: () => void;
-}
-
-/**
- * Остаток статьи — как в «Планах» Дзен-мани: без плана — ноль; иначе не меньше
- * того, что ещё назначено на даты, и не меньше нуля. Перерасход остатком не
- * считается — он показан отдельно.
- */
-export function cellResidue(plan: number, fact: number, ahead: number): number {
-  if (plan === 0) return 0;
-  return Math.max(0, ahead, plan - fact);
 }
 
 /**
@@ -49,7 +40,7 @@ export function BudgetCellSummary({
   base: string;
 }) {
   const income = kind === "income";
-  const residue = cellResidue(plan, fact, ahead);
+  const residue = planResidue(plan, fact, ahead);
   const over = plan > 0 && fact > plan ? fact - plan : 0;
   return (
     <div className="space-y-3" data-budget-cell-summary>

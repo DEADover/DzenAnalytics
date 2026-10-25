@@ -235,3 +235,13 @@ export function openingBalance(
   for (const [id, v] of native) sum += toBase(v, instr.get(id)!);
   return sum;
 }
+
+/**
+ * Остаток статьи — как в «Планах» Дзен-мани: без плана — ноль; иначе не меньше
+ * того, что ещё назначено на даты, и не меньше нуля. Перерасход остатком не
+ * считается — он показан отдельно.
+ */
+export function planResidue(plan: number, fact: number, ahead: number): number {
+  if (plan === 0) return 0;
+  return Math.max(0, ahead, plan - fact);
+}
