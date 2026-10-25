@@ -549,7 +549,10 @@ function zenPlanSeeds(cache: ZenCache) {
     // можно связать с уже существующей операцией, и такой маркер
     // перестаёт быть `planned` — план месяца от этого проваливался
     // (issue #86).
-    fulfilled
+    fulfilled,
+    // С включёнными прогнозами Дзен-мани прибавляет к плану и прогнозные
+    // плановые операции.
+    cache.user?.[0]?.isForecastEnabled === true
   );
   return zenPlanList(cache.budgets, cache.tags, planned);
 }

@@ -39,6 +39,7 @@ import { MenuItem } from "../components/MenuItem";
 import { Popover } from "../components/Popover";
 import { CategoryCascadePicker, type CategoryNode } from "../components/CategoryCascadePicker";
 import { MonthCashflowChart } from "../components/MonthCashflowChart";
+import { BudgetCellSummary } from "../components/BudgetCellSummary";
 import { BudgetFillModal, type FillItem } from "../components/BudgetFillModal";
 import { BudgetYearTable } from "../components/BudgetYearTable";
 import { BudgetSettingsPopover } from "../components/BudgetSettingsPopover";
@@ -50,6 +51,8 @@ import {
 } from "../lib/budgetYear";
 import { useLiveCategoryPaths } from "../hooks/useDictionaries";
 import { useOffBalanceExcluded } from "../hooks/useInBalanceTransactions";
+import { useZenOpeningBalance, useZenPlanRules } from "../hooks/useZenPlanRules";
+import { OPENING_BALANCE_LABEL } from "../lib/zenPlanRules";
 import { nameKey } from "../lib/budgetLines";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
 import { BudgetDashboardPrint } from "../components/BudgetDashboardPrint";
@@ -127,6 +130,14 @@ interface Row {
    * потрачены.
    */
   plannable?: boolean;
+  /**
+   * Перевод через границу баланса по правилам «Планов» Дзен-мани:
+   * «Накопления», «Кредиты и кредитки», «Долги»… Входит в итоги, стоит в конце
+   * списка, плана у неё нет.
+   */
+  planGroup?: boolean;
+  /** «Входящий баланс» — остаток на счетах к началу периода. */
+  opening?: boolean;
 }
 
 export function BudgetsPage() {
@@ -166,13 +177,18 @@ export function BudgetsPage() {
   // «Все счета» — все, кроме счетов вне баланса, пока они не считаются: то же
   // правило, что во всех итогах сервиса, и так же считает сам Дзен-мани.
   const offBalanceExcluded = useOffBalanceExcluded();
+  // Правила «Планов» Дзен-мани: какие переводы идут в бюджет, вычитать ли
+  // возвраты, показывать ли входящий баланс — по настройкам самого
+  // пользователя в приложении (см. `zenPlanRules`).
+  const zenRules = useZenPlanRules();
   const scope = useMemo(
     () => ({
       accounts: new Set(settings.accounts),
       excluded: offBalanceExcluded,
       perimeterTransfers: settings.perimeterTransfers,
+      zen: zenRules,
     }),
-    [settings.accounts, settings.perimeterTransfers, offBalanceExcluded]
+    [settings.accounts, settings.perimeterTransfers, offBalanceExcluded, zenRules]
   );
   // График движения денег считает сам по операциям — ему отдаём только то, что
   // внутри периметра.
@@ -228,6 +244,13 @@ export function BudgetsPage() {
   const isCurrent = ym === cur;
   /** Границы выбранного отчётного месяца — по ним отбираются все его операции. */
   const range = useMemo(() => periodRange(ym, monthStartDay), [ym, monthStartDay]);
+  // Входящий баланс периода — строкой поступлений, если так в настройках
+  // «Планов» Дзен-мани.
+  const openingBalanceSum = useZenOpeningBalance(
+    zenRules,
+    range.from,
+    new Date().toISOString().slice(0, 10)
+  );
   const inMonth = useCallback(
     (date: string | undefined) => {
       const day = (date || "").slice(0, 10);
@@ -607,7 +630,11 @@ export function BudgetsPage() {
         // ZENMONEY's own auto-forecast (so numbers match Дзен, and tags Дзен
         // doesn't forecast get no phantom «≈»); in CSV mode fall back to a local
         // median. Never pushed to Дзен.
-        if (planned === 0 && line.kind === "income") {
+        // С подключением прогноз берётся у самого Дзен-мани и только если он
+        // включён у пользователя в настройках «Планов» — тогда для обеих
+        // сторон, как в приложении. Без подключения — своя медиана по доходам.
+        const wantForecast = zenForecasts ? !!zenRules?.forecasts : line.kind === "income";
+        if (planned === 0 && wantForecast) {
           let fc: number;
           if (!zenLoaded) fc = 0; // still reading cache — avoid a median flash
           else if (zenForecasts)
@@ -711,6 +738,7 @@ export function BudgetsPage() {
     transactions,
     zenForecasts,
     zenLoaded,
+    zenRules,
     scope,
     rowOrder,
     plannedAsPlan,
@@ -733,18 +761,25 @@ export function BudgetsPage() {
   const unplannedRows = useMemo<Row[]>(() => {
     const agg = new Map<
       string,
-      { kind: BudgetKind; category: string; subcategory: string | null; fact: number }
+      {
+        kind: BudgetKind;
+        category: string;
+        subcategory: string | null;
+        fact: number;
+        planGroup?: boolean;
+      }
     >();
     const add = (
       kind: BudgetKind,
       category: string,
       subcategory: string | null,
-      amount: number
+      amount: number,
+      planGroup?: boolean
     ) => {
       const key = budgetKey(kind, category, subcategory);
       const cur = agg.get(key);
       if (cur) cur.fact += amount;
-      else agg.set(key, { kind, category, subcategory, fact: amount });
+      else agg.set(key, { kind, category, subcategory, fact: amount, planGroup });
     };
     const inScope = (account: string | undefined) => inPerimeter(scope, account);
     for (const t of transactions) {
@@ -759,7 +794,21 @@ export function BudgetsPage() {
         continue;
       }
       for (const hit of budgetHits(t, scope))
-        add(hit.kind, hit.category, hit.subcategory, hit.amount);
+        add(hit.kind, hit.category, hit.subcategory, hit.amount, hit.planGroup);
+    }
+    // Группа переводов — строка категории с подстроками по счетам: родителя
+    // у неё в операциях нет, заводим его сами, иначе подстроки повиснут без
+    // заголовка.
+    for (const u of [...agg.values()]) {
+      if (!u.planGroup || u.subcategory === null) continue;
+      if (!agg.has(budgetKey(u.kind, u.category, null)))
+        agg.set(budgetKey(u.kind, u.category, null), {
+          kind: u.kind,
+          category: u.category,
+          subcategory: null,
+          fact: 0,
+          planGroup: true,
+        });
     }
     const shown = new Set(
       rows.map((r) => budgetKey(r.line.kind, r.line.category, r.line.subcategory ?? null))
@@ -771,7 +820,7 @@ export function BudgetsPage() {
     return [...agg.values()]
       .filter(
         (u) =>
-          u.fact !== 0 &&
+          (u.fact !== 0 || (u.planGroup && u.subcategory === null)) &&
           // Переводы — не статья бюджета: плана по ним не бывает, а в сводке
           // они идут своей строкой «оборот по счетам».
           u.category !== TRANSFER_CATEGORY &&
@@ -795,7 +844,8 @@ export function BudgetsPage() {
           fact: u.fact,
           forecast: false,
           unplanned: true,
-          plannable: u.category !== NO_CATEGORY,
+          plannable: u.category !== NO_CATEGORY && !u.planGroup,
+          ...(u.planGroup ? { planGroup: true } : {}),
         })
       );
   }, [transactions, ym, inMonth, rows, scope]);
@@ -901,15 +951,41 @@ export function BudgetsPage() {
   /** Всё вместе — и запланированное, и нет. Сводка считается по этому списку,
    *  поэтому итог месяца сходится с лентой операций за тот же месяц. */
   const allRows = useMemo(() => {
-    const merged = [...rows, ...unplannedRows, ...catalogRows];
+    const opening: Row[] =
+      openingBalanceSum === null
+        ? []
+        : [
+            {
+              line: {
+                id: "opening",
+                kind: "income",
+                category: OPENING_BALANCE_LABEL,
+                subcategory: null,
+                amount: 0,
+                recurrence: "monthly",
+                startMonth: ym,
+                endMonth: null,
+                createdAt: "",
+              },
+              planned: openingBalanceSum,
+              fact: openingBalanceSum,
+              forecast: false,
+              unplanned: true,
+              plannable: false,
+              opening: true,
+            },
+          ];
+    const merged = [...opening, ...rows, ...unplannedRows, ...catalogRows];
     const catFact = new Map<string, number>();
     const catKey = (r: Row) => `${r.line.kind}\u0000${r.line.category}`;
     for (const r of merged) catFact.set(catKey(r), (catFact.get(catKey(r)) ?? 0) + r.fact);
     return merged.sort((a, b) => {
+      // Входящий баланс — первым в поступлениях, как в приложении.
+      if (!!a.opening !== !!b.opening) return a.opening ? -1 : 1;
       if (a.line.category !== b.line.category)
         return compareBudgetRows(
-          { name: a.line.category, amount: catFact.get(catKey(a)) ?? 0 },
-          { name: b.line.category, amount: catFact.get(catKey(b)) ?? 0 },
+          { name: a.line.category, amount: catFact.get(catKey(a)) ?? 0, transfer: a.planGroup },
+          { name: b.line.category, amount: catFact.get(catKey(b)) ?? 0, transfer: b.planGroup },
           rowOrder
         );
       const as = a.line.subcategory ?? "";
@@ -917,7 +993,7 @@ export function BudgetsPage() {
       if (!as || !bs) return as ? 1 : bs ? -1 : 0;
       return compareBudgetRows({ name: as, amount: a.fact }, { name: bs, amount: b.fact }, rowOrder);
     });
-  }, [rows, unplannedRows, catalogRows, rowOrder]);
+  }, [rows, unplannedRows, catalogRows, rowOrder, openingBalanceSum, ym]);
 
   const expenseRows = allRows.filter((r) => r.line.kind === "expense");
   const incomeRows = allRows.filter((r) => r.line.kind === "income");
@@ -970,7 +1046,65 @@ export function BudgetsPage() {
       monthStartDay
     );
     const label = sub ? `${cat} › ${sub}` : cat;
-    showDrill(`${label} · ${monthTitle(month)}`, txs, "Бюджет");
+    showDrill(
+      `${label} · ${monthTitle(month)}`,
+      txs,
+      "Бюджет",
+      month === ym ? cellSummary(cat, sub, kind) : undefined
+    );
+  }
+
+  /**
+   * Сводка статьи над её операциями — как в Дзен-мани, когда нажимаешь на
+   * категорию в «Планах»: план, сколько прошло, остаток, подкатегории и
+   * назначенные платежи. Числа — те же, что в строке раздела.
+   */
+  function cellSummary(cat: string, sub: string | null, kind?: BudgetKind) {
+    const inCat = allRows.filter(
+      (r) => r.line.category === cat && (!kind || r.line.kind === kind)
+    );
+    if (inCat.length === 0) return undefined;
+    const k: BudgetKind = kind ?? inCat[0].line.kind;
+    const same = inCat.filter((r) => r.line.kind === k);
+    if (same.some((r) => r.opening)) return undefined;
+    const aheadOf = (r: Row) =>
+      aheadByTag.get([r.line.kind, r.line.category, r.line.subcategory ?? ""].join("\u0000"));
+    const parent = same.find((r) => !r.line.subcategory);
+    const subs = same.filter((r) => !!r.line.subcategory);
+    const picked = sub === null ? [...(parent ? [parent] : []), ...subs] : same.filter((r) => r.line.subcategory === sub);
+    if (picked.length === 0) return undefined;
+    const plan =
+      sub === null
+        ? parent?.locked
+          ? parent.planned
+          : picked.reduce((s, r) => s + r.planned, 0)
+        : picked[0].planned;
+    const fact = picked.reduce((s, r) => s + r.fact, 0);
+    const ahead = picked.reduce((s, r) => s + (aheadOf(r)?.sum ?? 0), 0);
+    const upcoming = picked
+      .flatMap((r) => aheadOf(r)?.ops ?? [])
+      .sort((a, b) => a.date.localeCompare(b.date));
+    return (
+      <BudgetCellSummary
+        kind={k}
+        plan={plan}
+        fact={fact}
+        ahead={ahead}
+        category={cat}
+        base={base}
+        upcoming={upcoming}
+        subs={
+          sub === null
+            ? subs.map((r) => ({
+                name: r.line.subcategory as string,
+                plan: r.planned,
+                fact: r.fact,
+                onOpen: () => openCategory(cat, r.line.subcategory ?? null, ym, k),
+              }))
+            : []
+        }
+      />
+    );
   }
 
   // Click a day on the cash-flow chart → drill into that day's operations.
@@ -1014,8 +1148,11 @@ export function BudgetsPage() {
   }
   // Дельта = доходы − расходы, отдельно по плану и по факту. Переводы входят в
   // обе части и внутри бюджета гасятся; перевод наружу — настоящий отток.
-  const planDelta = incPlan - expPlan;
-  const factDelta = incFact + incTransfers - (expFact + expTransfers);
+  // Входящий баланс в разницу не идёт: это остаток прошлых месяцев, а не
+  // поступление этого — «без учёта входящего баланса», как в приложении.
+  const opening = openingBalanceSum ?? 0;
+  const planDelta = incPlan - opening - expPlan;
+  const factDelta = incFact - opening + incTransfers - (expFact + expTransfers);
 
   // Inline draft row (appears inside a section after the «+»). Mirrors a normal
   // budget row: category/sub picker · amount · ✓ · ✗.

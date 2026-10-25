@@ -41,7 +41,7 @@ import { queryMatcher } from "../lib/keyboardLayout";
 
 
 export function TransactionsDrawer() {
-  const { open, title, subtitle, transactions, close, show } = useDrillStore();
+  const { open, title, subtitle, transactions, header, close, show } = useDrillStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const base = useDataStore((s) => s.rates.base);
   const allTransactions = useDataStore((s) => s.transactions);
@@ -388,6 +388,10 @@ export function TransactionsDrawer() {
           </button>
         </Tooltip>
       </div>
+
+        {header && (
+          <div className="px-5 md:px-6 py-3 border-b border-border bg-panel">{header}</div>
+        )}
 
         {transactions.length === 1 && (
           <div className="px-5 py-2 border-b border-border flex items-center gap-2 flex-wrap text-xs bg-accent/5">

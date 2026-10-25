@@ -3,6 +3,7 @@ import { affectsExpense, expenseDelta } from "./txKindStyle";
 import type { BudgetKind } from "./budgets";
 import { NO_CATEGORY } from "./zenmoneyMap";
 import { periodRange } from "./period";
+import { categoryKey, type ZenPlanRules } from "./zenPlanRules";
 
 /**
  * Периметр бюджета: какие счета в него входят и что делать с переводами.
@@ -32,10 +33,26 @@ export interface BudgetScope {
   excluded?: Set<string>;
   /** Считать переводы: списание — в расходы, зачисление — в доходы. */
   perimeterTransfers: boolean;
+  /**
+   * Правила «Планов» Дзен-мани (см. `zenPlanRules`). Работают, когда периметр —
+   * все счета и своя настройка «Учитывать переводы» выключена: тогда бюджет
+   * считает ровно как приложение — переводы через границу баланса строками
+   * своих групп, возвраты по режиму пользователя.
+   */
+  zen?: ZenPlanRules;
+}
+
+/** Действуют ли сейчас правила «Планов» Дзен-мани. */
+export function zenRulesOn(scope: BudgetScope): ZenPlanRules | null {
+  if (!scope.zen || scope.perimeterTransfers || scope.accounts.size > 0) return null;
+  return scope.zen;
 }
 
 /** Входит ли счёт в периметр — единственная проверка на весь раздел. */
 export function inPerimeter(scope: BudgetScope, account: string | null | undefined): boolean {
+  const zen = zenRulesOn(scope);
+  // По правилам Дзен-мани периметр — счета «в балансе».
+  if (zen) return !account || zen.inside.has(account);
   if (scope.accounts.size > 0) return !!account && scope.accounts.has(account);
   return !account || !scope.excluded?.has(account);
 }
@@ -63,6 +80,12 @@ export interface BudgetHit {
   amount: number;
   /** Нога перевода, а не настоящий доход/расход — считается итогом отдельно. */
   transfer?: boolean;
+  /**
+   * Перевод через границу баланса по правилам «Планов» Дзен-мани. В отличие от
+   * `transfer` это настоящая строка бюджета и входит в итоги, но плана у неё
+   * нет: в Дзен-мани такой строке план не задать.
+   */
+  planGroup?: boolean;
 }
 
 /**
@@ -77,6 +100,29 @@ export interface BudgetHit {
  */
 export function budgetHits(t: Transaction, scope: BudgetScope): BudgetHit[] {
   const inside = (account: string | undefined) => inPerimeter(scope, account);
+  const zen = zenRulesOn(scope);
+
+  if (t.kind === "transfer" && zen) {
+    const outIn = !!t.outcomeAccount && zen.inside.has(t.outcomeAccount);
+    const inIn = !!t.incomeAccount && zen.inside.has(t.incomeAccount);
+    // Между своими счетами в балансе и между двумя внешними — мимо планов.
+    if (outIn === inIn) return [];
+    const side = outIn ? "to" : "from";
+    const other = (outIn ? t.incomeAccount : t.outcomeAccount) || "";
+    const group = zen.groupOf.get(other) ?? "other";
+    if (zen.excluded.has(`${side}:${group}`)) return [];
+    return [
+      {
+        kind: side === "to" ? "expense" : "income",
+        category: zen.labels[side][group],
+        // Строки внутри группы — по счёту на той стороне, у долгов — по
+        // человеку: счёт у всех долгов один.
+        subcategory: group === "debts" ? t.payee || other || null : other || null,
+        amount: t.amountBase,
+        planGroup: true,
+      },
+    ];
+  }
 
   if (t.kind === "transfer") {
     if (!scope.perimeterTransfers) return [];
@@ -115,6 +161,33 @@ export function budgetHits(t: Transaction, scope: BudgetScope): BudgetHit[] {
         category: t.category,
         subcategory: t.subcategory ?? null,
         amount: t.amountBase,
+      },
+    ];
+  if (zen && t.kind === "refund" && !zen.refunds)
+    // «Баланс vs Расходы»: возврат из расходов не вычитается — это поступление
+    // по той же категории.
+    return [
+      {
+        kind: "income",
+        category: t.category,
+        subcategory: t.subcategory ?? null,
+        amount: t.amountBase,
+      },
+    ];
+  if (
+    zen &&
+    zen.refunds &&
+    t.kind === "expense" &&
+    zen.incomeOnly.has(categoryKey(t.category, t.subcategory))
+  )
+    // Трата в категории «только для доходов» — зеркальный возврат: Дзен-мани
+    // вычитает её из дохода категории, а не заводит расход.
+    return [
+      {
+        kind: "income",
+        category: t.category,
+        subcategory: t.subcategory ?? null,
+        amount: -t.amountBase,
       },
     ];
   if (affectsExpense(t.kind))

@@ -14,6 +14,7 @@
 
 import { useMemo, useSyncExternalStore } from "react";
 import { peekZenCache, subscribeZenCache } from "../lib/zenCacheMemo";
+import { zenPlanSettings } from "../lib/zenPlanRules";
 import { useFreeMoneyStore } from "../store/useFreeMoneyStore";
 import { useDataStore } from "../store/useDataStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -110,10 +111,12 @@ export function useFreeMoney(
     // День начала месяца берём у Дзен-мани, свой — только пока его нет.
     const startDay =
       typeof me?.monthStartDay === "number" ? me.monthStartDay : ownStartDay;
-    const balanceMode: BalanceMode =
-      me?.planBalanceMode === "includeOpeningBalance"
-        ? "includeOpeningBalance"
-        : "excludeOpeningBalance";
+    // Значения `includeOpeningBalance` у `planBalanceMode` не бывает: входящий
+    // баланс учитывается в режиме «Баланс vs Расходы» или по галочке в
+    // `planSettings` (см. `zenPlanRules`).
+    const balanceMode: BalanceMode = zenPlanSettings(me).openingBalance
+      ? "includeOpeningBalance"
+      : "excludeOpeningBalance";
 
     const ym = periodKey(today, startDay);
     const range = periodRange(ym, startDay);

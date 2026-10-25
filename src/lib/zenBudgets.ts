@@ -143,7 +143,9 @@ export function plannedOpsByTagMonth(
    * на него ссылается, — значит план был и он исполнен. Отменённый вручную
    * маркер ссылок на себя не имеет и в план по-прежнему не идёт.
    */
-  fulfilled?: ReadonlySet<string>
+  fulfilled?: ReadonlySet<string>,
+  /** Прогнозы Дзен-мани включены у пользователя — прогнозные операции тоже план. */
+  withForecasts = false
 ): Map<string, PlannedOps> {
   const out = new Map<string, PlannedOps>();
   if (!markers || markers.length === 0) return out;
@@ -167,7 +169,7 @@ export function plannedOpsByTagMonth(
     // регулярности и в «Ещё в плане» их НЕ показывает: там только то, что
     // человек назначил сам. Без этого условия зарплата, достроенная Дзеном,
     // прибавлялась к плану, и «Работа» показывала 465 900 вместо 305 000.
-    if (m.isForecast === true) continue;
+    if (m.isForecast === true && !withForecasts) continue;
     // Просроченный план — тот, что остался `planned`, хотя день прошёл, —
     // не считается: он не исполнился, и обещать его задним числом неправильно.
     // Исполненные (`processed`) при этом идут в план целиком, независимо от
