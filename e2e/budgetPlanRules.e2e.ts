@@ -37,8 +37,9 @@ async function setup(page: Page, zen: Zen, mode: string, settings: string[] = []
 test("«Баланс vs Расходы»: накопления строками и входящий баланс", async ({ page, zen }) => {
   await setup(page, zen, "balance");
   const main = page.locator("main");
-  await expect(main.getByRole("button", { name: "Накопления", exact: true })).toBeVisible();
-  await expect(main.getByRole("button", { name: "Из накоплений", exact: true })).toBeVisible();
+  // Одинаковые подписи с обеих сторон, как в приложении: «Накопления» — и
+  // перевод на накопительный (расход), и с него (поступление).
+  await expect(main.getByRole("button", { name: "Накопления", exact: true })).toHaveCount(2);
   await expect(main.getByText("Входящий баланс", { exact: true })).toBeVisible();
 
   // Строку перевода нельзя запланировать: в Дзен-мани плана у неё нет.
@@ -70,7 +71,7 @@ test("будущий месяц: входящий баланс — прогно�
 test("«Доходы vs Расходы»: выключенная группа и без входящего баланса", async ({ page, zen }) => {
   await setup(page, zen, "excludeOpeningBalance", ["excludeTransferToSavings"]);
   const main = page.locator("main");
-  await expect(main.getByRole("button", { name: "Из накоплений", exact: true })).toBeVisible();
-  await expect(main.getByRole("button", { name: "Накопления", exact: true })).toHaveCount(0);
+  // Перевод НА накопительный выключен — осталась только строка поступления.
+  await expect(main.getByRole("button", { name: "Накопления", exact: true })).toHaveCount(1);
   await expect(main.getByText("Входящий баланс", { exact: true })).toHaveCount(0);
 });

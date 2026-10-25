@@ -98,10 +98,10 @@ describe("budgetHits по правилам «Планов»", () => {
     ]);
   });
 
-  it("перевод из накоплений — поступление «Из накоплений»", () => {
+  it("перевод из накоплений — поступление «Накопления», как в приложении", () => {
     expect(budgetHits(move("Копилка", "Карта"), balance)[0]).toMatchObject({
       kind: "income",
-      category: "Из накоплений",
+      category: "Накопления",
       subcategory: "Копилка",
     });
   });
@@ -109,7 +109,10 @@ describe("budgetHits по правилам «Планов»", () => {
   it("платёж по кредитке и кредиту — «Кредиты и кредитки»", () => {
     expect(budgetHits(move("Карта", "Кредитка"), balance)[0].category).toBe("Кредиты и кредитки");
     expect(budgetHits(move("Карта", "Ипотека"), balance)[0].category).toBe("Кредиты и кредитки");
-    expect(budgetHits(move("Кредитка", "Карта"), balance)[0].category).toBe("С кредитных счетов");
+    expect(budgetHits(move("Кредитка", "Карта"), balance)[0]).toMatchObject({
+      kind: "income",
+      category: "Кредиты и кредитки",
+    });
   });
 
   it("долг — «Долги» по человеку", () => {
