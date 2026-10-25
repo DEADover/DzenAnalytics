@@ -142,46 +142,37 @@ test("ширина сервиса: на экране уже колонки ни�
   expect(after.vw - after.mainRight).toBe(24);
 });
 
-test("ширина сервиса: настройка в «Оформлении» — переключатель и бегунок одним рядом", async ({ page }) => {
+test("ширина сервиса: настройка в «Оформлении» — бегунок как у размера текста таблиц", async ({ page }) => {
   await page.setViewportSize({ width: 2560, height: 1200 });
   await connectZen(page, "/settings?tab=interface");
 
-  const group = page.getByRole("group", { name: "Ширина сервиса", exact: true });
-  await expect(group).toBeVisible();
-  // Ряд контрола: капсула бегунка (когда ширина ограничена) и переключатель.
-  const row = group.locator("xpath=..");
-  await group.getByRole("button", { name: "Ограничить" }).click();
-
-  const slider = page.getByRole("slider", { name: "Ширина", exact: true });
+  const contentMax = () => page.evaluate(() => document.documentElement.style.getPropertyValue("--content-max"));
+  const slider = page.getByRole("slider", { name: "Ширина сервиса", exact: true });
+  const fontSlider = page.getByRole("slider", { name: "Размер текста в таблицах", exact: true });
   await expect(slider).toBeVisible();
-  await expect(page.getByText(/Не шире 1\s920 px — колонкой по центру экрана/)).toBeVisible();
 
-  // Бегунок с клавиатуры: четыре шага влево — 1600.
+  // По умолчанию — во весь экран: бегунок в крайнем правом положении.
+  await expect(slider).toHaveAttribute("aria-valuetext", "Во весь экран");
+  expect(await slider.evaluate((el: HTMLInputElement) => el.value === el.max)).toBe(true);
+  expect(await contentMax()).toBe("100%");
+
+  // С клавиатуры: Home — самая узкая колонка, четыре шага вправо — 1600.
   await slider.focus();
-  for (let i = 0; i < 4; i++) await slider.press("ArrowLeft");
-  await expect(page.getByText(/Не шире 1\s600 px/)).toBeVisible();
-  const css = await page.evaluate(() => document.documentElement.style.getPropertyValue("--content-max"));
-  expect(css).toBe("1600px");
+  await slider.press("Home");
+  for (let i = 0; i < 4; i++) await slider.press("ArrowRight");
+  await expect(slider).toHaveAttribute("aria-valuetext", /^1\s600 px$/);
+  await expect(page.getByText(/^1\s600 px — колонкой по центру экрана$/)).toBeVisible();
+  expect(await contentMax()).toBe("1600px");
 
-  // Капсула бегунка и переключатель — одной высоты, в одну строку, подписи целиком.
-  const boxes = await row.evaluate((el) =>
-    [...el.children].map((c) => {
-      const r = c.getBoundingClientRect();
-      return { top: Math.round(r.top), h: Math.round(r.height) };
-    })
-  );
-  expect(boxes.length).toBe(2);
-  expect(new Set(boxes.map((b) => b.top)).size).toBe(1);
-  expect(new Set(boxes.map((b) => b.h)).size).toBe(1);
-  const cut = await row.locator("label, output, button").evaluateAll((els) =>
-    els.some((e) => e.scrollWidth > e.clientWidth + 1)
-  );
-  expect(cut).toBe(false);
+  // Та же строка, что у размера текста таблиц: дорожка той же ширины и на
+  // той же вертикали — контролы встают ровной колонкой у правого края.
+  const box = (await slider.boundingBox())!;
+  const fontBox = (await fontSlider.boundingBox())!;
+  expect(Math.round(box.width)).toBe(Math.round(fontBox.width));
+  expect(Math.abs(box.x + box.width - (fontBox.x + fontBox.width))).toBeLessThanOrEqual(24);
 
-  // «Во весь экран» — прежний вид; «Ограничить» возвращает последнюю ширину.
-  await group.getByRole("button", { name: "Во весь экран" }).click();
-  await expect(slider).toBeHidden();
-  expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--content-max"))).toBe("100%");
-  await group.getByRole("button", { name: "Ограничить" }).click();
-  await expect(page.getByText(/Не шире 1\s600 px/)).toBeVisible();
+  // End — снова во весь экран.
+  await slider.press("End");
+  await expect(slider).toHaveAttribute("aria-valuetext", "Во весь экран");
+  expect(await contentMax()).toBe("100%");
 });

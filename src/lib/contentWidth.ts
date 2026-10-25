@@ -13,6 +13,8 @@
  * отступы колонки считаются из неё прямо в CSS, без перерисовки React.
  */
 
+import { formatNum } from "./format";
+
 /** «Во весь экран» — ограничения нет. */
 export const CONTENT_WIDTH_FULL = 0;
 /**
@@ -24,8 +26,13 @@ export const CONTENT_WIDTH_MIN = 1280;
 export const CONTENT_WIDTH_MAX = 2560;
 /** Шаг бегунка: шестнадцать ступеней между краями. */
 export const CONTENT_WIDTH_STEP = 80;
-/** С чего начинается ограничение, когда его включают впервые. */
-export const CONTENT_WIDTH_DEFAULT = 1920;
+/**
+ * Крайнее правое положение бегунка — «Во весь экран». Следующая ступень после
+ * самой широкой колонки: двигая бегунок вправо, человек расширяет колонку, а
+ * в конце снимает ограничение вовсе. Отдельного переключателя нет — строка
+ * устроена так же, как «Размер текста в таблицах».
+ */
+export const CONTENT_WIDTH_SLIDER_FULL = CONTENT_WIDTH_MAX + CONTENT_WIDTH_STEP;
 
 /**
  * Привести пришедшее (с диска, из облака, с бегунка) к допустимому значению:
@@ -44,6 +51,24 @@ export function normalizeContentWidth(v: unknown): number {
 /** Годится ли значение как есть — проверка записи с другого устройства. */
 export function isContentWidth(v: unknown): v is number {
   return typeof v === "number" && normalizeContentWidth(v) === v;
+}
+
+/** Положение бегунка для сохранённой ширины. */
+export function contentWidthToSlider(width: number): number {
+  const w = normalizeContentWidth(width);
+  return w === CONTENT_WIDTH_FULL ? CONTENT_WIDTH_SLIDER_FULL : w;
+}
+
+/** Ширина для положения бегунка: крайнее правое — во весь экран. */
+export function sliderToContentWidth(position: number): number {
+  if (!Number.isFinite(position) || position >= CONTENT_WIDTH_SLIDER_FULL) return CONTENT_WIDTH_FULL;
+  return normalizeContentWidth(position);
+}
+
+/** Значение словами: «Во весь экран» или «1 920 px». */
+export function formatContentWidth(width: number): string {
+  const w = normalizeContentWidth(width);
+  return w === CONTENT_WIDTH_FULL ? "Во весь экран" : `${formatNum(w)} px`;
 }
 
 /**

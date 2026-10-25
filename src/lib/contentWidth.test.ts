@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
-  CONTENT_WIDTH_DEFAULT,
   CONTENT_WIDTH_MAX,
   CONTENT_WIDTH_MIN,
+  CONTENT_WIDTH_SLIDER_FULL,
   CONTENT_WIDTH_STEP,
   contentMaxCss,
+  contentWidthToSlider,
+  formatContentWidth,
   isContentWidth,
   normalizeContentWidth,
+  sliderToContentWidth,
 } from "./contentWidth";
 
 describe("ширина сервиса", () => {
@@ -30,8 +33,25 @@ describe("ширина сервиса", () => {
     }
   });
 
-  it("начальная ширина — одна из ступеней", () => {
-    expect(isContentWidth(CONTENT_WIDTH_DEFAULT)).toBe(true);
+  it("бегунок: крайнее правое положение — во весь экран (по умолчанию)", () => {
+    expect(CONTENT_WIDTH_SLIDER_FULL).toBe(CONTENT_WIDTH_MAX + CONTENT_WIDTH_STEP);
+    expect(contentWidthToSlider(0)).toBe(CONTENT_WIDTH_SLIDER_FULL);
+    expect(sliderToContentWidth(CONTENT_WIDTH_SLIDER_FULL)).toBe(0);
+    expect(sliderToContentWidth(CONTENT_WIDTH_MAX)).toBe(CONTENT_WIDTH_MAX);
+    expect(sliderToContentWidth(CONTENT_WIDTH_MIN)).toBe(CONTENT_WIDTH_MIN);
+  });
+
+  it("бегунок и ширина переводятся туда и обратно без потерь", () => {
+    for (let p = CONTENT_WIDTH_MIN; p <= CONTENT_WIDTH_SLIDER_FULL; p += CONTENT_WIDTH_STEP) {
+      expect(contentWidthToSlider(sliderToContentWidth(p))).toBe(p);
+    }
+    // Ступени по одной на каждое положение: 17 ширин и «Во весь экран».
+    expect((CONTENT_WIDTH_SLIDER_FULL - CONTENT_WIDTH_MIN) / CONTENT_WIDTH_STEP + 1).toBe(18);
+  });
+
+  it("значение словами", () => {
+    expect(formatContentWidth(0)).toBe("Во весь экран");
+    expect(formatContentWidth(1920).replace(/\s/g, " ")).toBe("1 920 px");
   });
 
   it("с другого устройства принимается только готовое значение", () => {

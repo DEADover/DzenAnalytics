@@ -53,6 +53,39 @@ export function RangeInput({
 }
 
 /**
+ * Бегунок в строке настройки (`SettingRow.control`): дорожка между двумя
+ * метками краёв — маленькая и большая «А» у размера текста таблиц, узкие и
+ * широкие стрелки у ширины сервиса. Значение словами — в статусе строки, а не
+ * рядом с дорожкой, поэтому строки с бегунками в настройках выглядят одинаково.
+ */
+export function SettingRange({
+  start,
+  end,
+  ariaLabel,
+  valueText,
+  ...range
+}: RangeProps & {
+  /** Метка левого края — то, к чему ведёт движение влево. */
+  start: ReactNode;
+  /** Метка правого края. */
+  end: ReactNode;
+  ariaLabel: string;
+  valueText?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-muted inline-flex items-center" aria-hidden>
+        {start}
+      </span>
+      <RangeInput {...range} ariaLabel={ariaLabel} valueText={valueText} className="w-40" />
+      <span className="text-muted inline-flex items-center" aria-hidden>
+        {end}
+      </span>
+    </div>
+  );
+}
+
+/**
  * Бегунок с подписью и значением — один на продукт.
  *
  * `row` — капсула в ряду контролов: подпись, дорожка и значение в строку, та

@@ -7,6 +7,8 @@ import {
   AlertTriangle,
   Trash2,
   Palette,
+  ChevronsLeftRight,
+  ChevronsRightLeft,
   PanelTop,
   Replace,
   Layers,
@@ -91,12 +93,15 @@ import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
 import { usePendingChanges } from "../hooks/usePendingChanges";
 import * as db from "../lib/db";
 import { ImportXlsxCard } from "../components/ImportXlsxCard";
-import { RangeInput, Slider } from "../components/Slider";
+import { SettingRange } from "../components/Slider";
 import {
-  CONTENT_WIDTH_DEFAULT,
   CONTENT_WIDTH_MAX,
   CONTENT_WIDTH_MIN,
+  CONTENT_WIDTH_SLIDER_FULL,
   CONTENT_WIDTH_STEP,
+  contentWidthToSlider,
+  formatContentWidth,
+  sliderToContentWidth,
 } from "../lib/contentWidth";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 
@@ -243,10 +248,6 @@ export function ImportPage() {
   // Шире ли экран выбранной колонки: на более узком ограничение ничего не
   // меняет, и об этом честнее сказать в статусе, чем молча двигать бегунок.
   const screenWiderThanColumn = useMediaQuery(`(min-width: ${(contentWidth || CONTENT_WIDTH_MAX) + 1}px)`);
-  // Последняя выбранная ширина: «Во весь экран» → «Ограничить» возвращает её,
-  // а не начинает заново с 1920.
-  const [lastContentWidth, setLastContentWidth] = useState(contentWidth || CONTENT_WIDTH_DEFAULT);
-  if (contentWidth > 0 && contentWidth !== lastContentWidth) setLastContentWidth(contentWidth);
   const setColumnResize = useDisplayStore((s) => s.setColumnResize);
   const customWidthTables = useColumnWidthsStore((s) => Object.keys(s.tables).length);
   const resetColumnWidths = useColumnWidthsStore((s) => s.resetAll);
@@ -1547,53 +1548,41 @@ export function ImportPage() {
           title="Ширина сервиса"
           status={
             contentWidth === 0
-              ? "Во весь экран — от края до края окна"
-              : screenWiderThanColumn
-                ? `Не шире ${formatNum(contentWidth)} px — колонкой по центру экрана`
-                : `Не шире ${formatNum(contentWidth)} px — на этом экране не видно: он уже`
+              ? "Во весь экран"
+              : `${formatContentWidth(contentWidth)} — ${
+                  screenWiderThanColumn ? "колонкой по центру экрана" : "на этом экране не видно: он уже"
+                }`
           }
           help={
             <>
               <p>
                 На широком мониторе (например, 21:9) сервис растягивается до
                 краёв окна, и строки таблиц и графики приходится читать
-                поворотом головы. Ограничьте ширину — шапка, панель фильтров и
-                страница встанут колонкой по центру экрана, а фон и подложка
-                шапки останутся во всю ширину.
+                поворотом головы. Сдвиньте бегунок влево — шапка, панель
+                фильтров и страница встанут колонкой по центру экрана, а фон и
+                подложка шапки останутся во всю ширину.
               </p>
               <p className="mt-2">
-                Ширина задаётся бегунком, от {formatNum(CONTENT_WIDTH_MIN)} до{" "}
-                {formatNum(CONTENT_WIDTH_MAX)} пикселей, и меняется сразу. На
-                экране уже выбранной ширины ничего не меняется. Боковая
+                Ширина — от {formatNum(CONTENT_WIDTH_MIN)} до{" "}
+                {formatNum(CONTENT_WIDTH_MAX)} пикселей, меняется сразу;
+                крайнее правое положение — «Во весь экран», как по умолчанию.
+                На экране уже выбранной ширины ничего не меняется. Боковая
                 панель операций и окна остаются своей ширины.
               </p>
             </>
           }
           control={
-            // Бегунок — перед переключателем: переключатель при этом стоит на
-            // месте, и щелчок по «Ограничить» не уводит его из-под курсора.
-            <div className="flex items-center gap-2">
-              {contentWidth > 0 && (
-                <Slider
-                  label="Ширина"
-                  value={contentWidth}
-                  min={CONTENT_WIDTH_MIN}
-                  max={CONTENT_WIDTH_MAX}
-                  step={CONTENT_WIDTH_STEP}
-                  format={(v) => `${formatNum(v)} px`}
-                  onChange={(v) => void setContentWidth(v)}
-                />
-              )}
-              <Segmented
-                label="Ширина сервиса"
-                value={contentWidth > 0 ? "limit" : "full"}
-                onChange={(v) => void setContentWidth(v === "limit" ? lastContentWidth : 0)}
-                options={[
-                  { value: "full", label: "Во весь экран" },
-                  { value: "limit", label: "Ограничить", title: "Колонкой по центру экрана" },
-                ]}
-              />
-            </div>
+            <SettingRange
+              value={contentWidthToSlider(contentWidth)}
+              min={CONTENT_WIDTH_MIN}
+              max={CONTENT_WIDTH_SLIDER_FULL}
+              step={CONTENT_WIDTH_STEP}
+              onChange={(v) => void setContentWidth(sliderToContentWidth(v))}
+              ariaLabel="Ширина сервиса"
+              valueText={formatContentWidth(contentWidth)}
+              start={<ChevronsRightLeft className="w-3.5 h-3.5" />}
+              end={<ChevronsLeftRight className="w-[18px] h-[18px]" />}
+            />
           }
         />
 
@@ -1948,23 +1937,16 @@ export function ImportPage() {
             </p>
           }
           control={
-            <div className="flex items-center gap-2">
-              <span className="text-muted text-[12px]" aria-hidden>
-                А
-              </span>
-              <RangeInput
-                value={tableFontLevel}
-                min={1}
-                max={5}
-                onChange={(v) => setTableFontLevel(v as TableFontLevel)}
-                ariaLabel="Размер текста в таблицах"
-                valueText={TABLE_FONT_LABELS[tableFontLevel]}
-                className="w-40"
-              />
-              <span className="text-muted text-[18px]" aria-hidden>
-                А
-              </span>
-            </div>
+            <SettingRange
+              value={tableFontLevel}
+              min={1}
+              max={5}
+              onChange={(v) => setTableFontLevel(v as TableFontLevel)}
+              ariaLabel="Размер текста в таблицах"
+              valueText={TABLE_FONT_LABELS[tableFontLevel]}
+              start={<span className="text-[12px]">А</span>}
+              end={<span className="text-[18px]">А</span>}
+            />
           }
         >
           {/* Живой пример — на той же CSS-переменной, что и таблицы, поэтому
