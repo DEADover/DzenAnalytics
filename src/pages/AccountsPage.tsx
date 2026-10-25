@@ -176,6 +176,8 @@ const DEFAULT_DIR: Record<SortBy, SortDir> = {
   income: "desc",
   expense: "desc",
   count: "desc",
+  owner: "asc",
+  status: "asc",
 };
 
 /** Bucket for accounts with no bank attached — cash, manual accounts, and
@@ -595,6 +597,14 @@ export function AccountsPage() {
     [membersOwnerId, memberList, memberAliases]
   );
 
+  /** Владелец для столбца «Владелец»: имя участника, у общего счёта —
+   *  «Общий» (в Дзен-мани у него нет владельца, его видят все). */
+  const ownerOf = useCallback(
+    (member: number | null | undefined): string =>
+      member == null ? "Общий" : userLabel(member, memberList, memberAliases),
+    [memberList, memberAliases]
+  );
+
   const showDrill = useDrillStore((s) => s.show);
   const calibration = useCalibrationStore((s) => s.calibration);
   const setCalibration = useCalibrationStore((s) => s.set);
@@ -896,7 +906,14 @@ export function AccountsPage() {
   // Пилюля с именем участника занимает место в колонке названия, а колонки у
   // таблицы фиксированные: без запаса имя наезжало бы на соседний столбец.
   // Запас нужен только на общем аккаунте — на личном пилюль нет ни одной.
-  const hasMemberPills = accountRows.some((r) => memberLabelOf(r.member) != null);
+  // Столбец «Владелец» — только когда в аккаунте Дзен-мани больше одного
+  // участника (совместный доступ). На личном владелец у всех счетов один, и
+  // столбец повторял бы одно имя.
+  const showOwner = memberList.length > 1;
+  // «Статус» — когда в списке есть что отметить: архив или вне баланса.
+  const showStatus = accountRows.some((r) => (r.archive && showArchived) || r.offBalance);
+  /** Сколько столбцов между «Типом» и деньгами — для строк групп и долгов. */
+  const extraCols = (showOwner ? 1 : 0) + (showStatus ? 1 : 0);
   // Своя ширина столбцов — у каждой вкладки свой набор колонок и свои ширины.
   const accountColumns = useMemo<ResizeColumn[]>(
     () => [
@@ -907,6 +924,8 @@ export function AccountsPage() {
       // как у остальных таблиц: в пикселях «Поступления» и «Операции» на
       // «Движении» резались многоточием.
       { key: "type", label: "Тип", type: "text", width: "10.75rem" },
+      ...(showOwner ? [{ key: "owner", label: "Владелец", type: "text" as const, width: "9.5rem" }] : []),
+      ...(showStatus ? [{ key: "status", label: "Статус", type: "text" as const, width: "10.5rem" }] : []),
       ...(capitalView
         ? [
             { key: "balance", label: "Остаток", type: "balance", width: hasForeignCurrency ? "14.5rem" : "8.75rem" },
@@ -922,7 +941,7 @@ export function AccountsPage() {
           ]),
       { key: "actions", label: "Действия", type: "actions", width: "7.5rem", resizable: false },
     ],
-    [capitalView, hasForeignCurrency]
+    [capitalView, hasForeignCurrency, showOwner, showStatus]
   );
   const accountsResize = useColumnResize(
     capitalView ? "accounts-capital" : "accounts-movement",
@@ -1029,6 +1048,17 @@ export function AccountsPage() {
         case "type":
           cmp = (x.kind || NO_TYPE).localeCompare(y.kind || NO_TYPE, "ru");
           break;
+        case "owner":
+          // Общие — в конец: при сортировке по владельцу ищут чьи-то личные.
+          if ((x.member == null) !== (y.member == null)) return x.member == null ? 1 : -1;
+          cmp = ownerOf(x.member).localeCompare(ownerOf(y.member), "ru");
+          break;
+        case "status": {
+          // Сначала с пометками: вне баланса, потом архив; без пометок — в конец.
+          const rank = (r: typeof x) => (r.offBalance ? 0 : r.archive ? 1 : 2);
+          cmp = rank(x) - rank(y);
+          break;
+        }
         case "delta":
           cmp = x.delta - y.delta;
           break;
@@ -1060,6 +1090,7 @@ export function AccountsPage() {
     sortBy,
     sortDir,
     capitalView,
+    ownerOf,
   ]);
 
   /**
@@ -2456,7 +2487,7 @@ export function AccountsPage() {
                       : 670
                     : hasForeignCurrency
                       ? 1212
-                      : 1122) + (hasMemberPills ? 130 : 0),
+                      : 1122) + (showOwner ? 152 : 0) + (showStatus ? 168 : 0),
               }}
             >
               <colgroup>
@@ -2473,6 +2504,16 @@ export function AccountsPage() {
                   <SortTh sortKey="type" col="type" resize={accountsResize} {...sortHead}>
                     Тип
                   </SortTh>
+                  {showOwner && (
+                    <SortTh sortKey="owner" col="owner" resize={accountsResize} {...sortHead}>
+                      Владелец
+                    </SortTh>
+                  )}
+                  {showStatus && (
+                    <SortTh sortKey="status" col="status" resize={accountsResize} {...sortHead}>
+                      Статус
+                    </SortTh>
+                  )}
                   {/* Столбцы по вкладке: на «Капитале» — сколько лежит и какая
                       это доля, на «Движении» — что происходило за период. Раньше
                       и то и другое стояло в одной таблице, из-за чего строка
@@ -2519,7 +2560,7 @@ export function AccountsPage() {
                             {pluralRu(item.count, ["счёт", "счёта", "счетов"])}
                           </span>
                         </td>
-                        <td className="table-td" />
+                        <td className="table-td" colSpan={1 + extraCols} />
                         {/* Сумма группы стоит ровно под колонкой с деньгами:
                             на «Капитале» это остаток (прижат влево, как он), на
                             «Движении» — поступления (вправо). Хвост добивается
@@ -2651,16 +2692,24 @@ export function AccountsPage() {
                               Изменён
                             </Badge>
                           )}
-                          {hasReal && (
-                            <AccountMarks
-                              offBalance={a.offBalance}
-                              archive={a.archive}
-                              owner={memberLabelOf(a.member)}
-                            />
-                          )}
                         </div>
                       </td>
                       <td className={cellClass("text", { muted: true, className: "truncate" })}>{a.kind}</td>
+                      {/* Владелец и пометки — своими столбцами, а не чипами у
+                          названия: так их видно столбцом и по ним сортируется. */}
+                      {showOwner && (
+                        <td
+                          className={cellClass("text", { muted: a.member == null, className: "truncate" })}
+                          title={a.member == null ? "Общий счёт — его видят все участники" : undefined}
+                        >
+                          {ownerOf(a.member)}
+                        </td>
+                      )}
+                      {showStatus && (
+                        <td className={cellClass("text")}>
+                          <AccountMarks offBalance={a.offBalance} archive={a.archive} />
+                        </td>
+                      )}
                       {capitalView && (
                         <td
                           className={cellClass("balance", { tone: headlineTone })}
@@ -2791,6 +2840,7 @@ export function AccountsPage() {
                                 ? "Должны вам"
                                 : "Должны вы"}
                           </td>
+                          {extraCols > 0 && <td className="table-td" colSpan={extraCols} />}
                           {/* Сумма встаёт под ту же колонку, что и у счёта:
                               на «Капитале» это остаток, на «Движении» —
                               изменение за период. */}
@@ -2848,6 +2898,7 @@ export function AccountsPage() {
                         <td className={cellClass("text", { muted: true, className: "truncate" })}>
                           {unallocated > 0 ? "Должны вам" : "Должны вы"}
                         </td>
+                        {extraCols > 0 && <td className="table-td" colSpan={extraCols} />}
                         {!capitalView && <td className="table-td" colSpan={2} />}
                         <td className={cellClass(capitalView ? "balance" : "money", { muted: true })}>
                           {formatMoney(Math.abs(unallocated), base)}

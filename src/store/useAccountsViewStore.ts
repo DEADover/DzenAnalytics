@@ -34,7 +34,9 @@ export type AccountsSortBy =
   | "delta"
   | "income"
   | "expense"
-  | "count";
+  | "count"
+  | "owner"
+  | "status";
 export type AccountsSortDir = "asc" | "desc";
 export type AccountsGroupBy = "none" | "type" | "bank";
 /** Три состояния вместо двух галочек-антонимов: «в балансе» и «вне баланса»
@@ -97,6 +99,8 @@ const SORT_KEYS = new Set<string>([
   "income",
   "expense",
   "count",
+  "owner",
+  "status",
 ]);
 
 /**
