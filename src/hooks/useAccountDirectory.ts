@@ -1,15 +1,28 @@
-import { useMemo } from "react";
+import { useEffect } from "react";
+import { create } from "zustand";
 import { useDataStore } from "../store/useDataStore";
 import { useLiveAccounts } from "./useLiveAccounts";
 import { buildAccountDirectory, type AccountDirectory } from "../lib/accountDirectory";
 
 /**
- * Справочник счетов сервиса: живые счета Дзен-мани плюс встреченные в
- * операциях (CSV, удалённые). Ключи и подписи — отсюда, см.
- * `lib/accountDirectory`.
+ * Справочник счетов сервиса — один на приложение: живые счета Дзен-мани плюс
+ * встреченные в операциях (CSV, удалённые). Собирается в корне
+ * (`useAccountDirectorySync` в `App`) при смене счетов или операций; экраны и строки лент
+ * только читают — иначе каждая строка пересобирала бы его по всем операциям.
  */
+const useAccountDirStore = create<{ dir: AccountDirectory }>(() => ({
+  dir: buildAccountDirectory(null, []),
+}));
+
 export function useAccountDirectory(): AccountDirectory {
+  return useAccountDirStore((s) => s.dir);
+}
+
+/** Держит справочник в актуальном виде. Вызывается один раз — в `App`. */
+export function useAccountDirectorySync(): void {
   const live = useLiveAccounts();
   const transactions = useDataStore((s) => s.transactions);
-  return useMemo(() => buildAccountDirectory(live, transactions), [live, transactions]);
+  useEffect(() => {
+    useAccountDirStore.setState({ dir: buildAccountDirectory(live, transactions) });
+  }, [live, transactions]);
 }

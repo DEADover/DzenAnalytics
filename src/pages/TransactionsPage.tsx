@@ -1,3 +1,5 @@
+import { txAccountKey } from "../lib/accountKey";
+import { AccountName } from "../components/AccountName";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Download,
@@ -1177,9 +1179,7 @@ function Row({
       )}
       {/* Без `title`: подсказка повторяла бы название, которое тут же и написано. */}
       <OperationCategory tx={tx} edited={edited} draft={draft} />
-      <div className="truncate text-muted" title={tx.account}>
-        {tx.account}
-      </div>
+      <AccountName accountKey={txAccountKey(tx)} title={tx.account} className="truncate text-muted" />
       <OperationPayee tx={tx} />
       <OperationComment text={tx.comment} />
       <div

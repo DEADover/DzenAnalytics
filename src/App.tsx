@@ -74,6 +74,7 @@ import { usePlannedDeletionsStore } from "./store/usePlannedDeletionsStore";
 import { usePlanActionsStore } from "./store/usePlanActionsStore";
 import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
 import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
+import { useAccountDirectorySync } from "./hooks/useAccountDirectory";
 import { ContentWidthGuide } from "./components/ContentWidthGuide";
 import { ScrollTopButton } from "./components/ScrollTopButton";
 import { DemoBanner } from "./components/DemoBanner";
@@ -126,6 +127,8 @@ function PlainLayout() {
 }
 
 function App() {
+  // Справочник счетов — один на приложение (ключи и подписи тёзок).
+  useAccountDirectorySync();
   const hydrate = useDataStore((s) => s.hydrate);
   const loaded = useDataStore((s) => s.loaded);
   const hasData = useDataStore((s) => s.transactions.length > 0);

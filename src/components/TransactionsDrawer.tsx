@@ -1,3 +1,6 @@
+import { txAccountKey, txInKey } from "../lib/accountKey";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
+import { AccountName } from "./AccountName";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   X,
@@ -42,6 +45,7 @@ import { queryMatcher } from "../lib/keyboardLayout";
 
 export function TransactionsDrawer() {
   const { open, title, subtitle, transactions, header, close, show } = useDrillStore();
+  const dir = useAccountDirectory();
   const scrollRef = useRef<HTMLDivElement>(null);
   const base = useDataStore((s) => s.rates.base);
   const allTransactions = useDataStore((s) => s.transactions);
@@ -223,7 +227,7 @@ export function TransactionsDrawer() {
       width: "11rem",
       label: "Счёт",
       sortValue: (t) => t.account,
-      render: (t) => t.account,
+      render: (t) => <AccountName accountKey={txAccountKey(t)} title={t.account} />,
     },
     {
       key: "payee",
@@ -470,7 +474,7 @@ export function TransactionsDrawer() {
                     else next.add(t.id);
                     setSelected(next);
                   };
-                  const who = displayPayee(t) || transferCounterparty(t);
+                  const who = displayPayee(t) || (transferCounterparty(t) ? dir.label(txInKey(t)) : null);
                   return (
                     <OperationListRow key={t.id} template="auto" selected={on} onToggleSelect={toggle} onOpen={() => setEditing(t)}>
                       <Checkbox checked={on} stopPropagation onChange={toggle} label="Выбрать операцию" />

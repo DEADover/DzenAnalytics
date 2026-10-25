@@ -1,3 +1,5 @@
+import { txAccountKey } from "../lib/accountKey";
+import { AccountName } from "../components/AccountName";
 import { useMemo, useState } from "react";
 import { Checkbox } from "../components/Checkbox";
 import { Select } from "../components/Select";
@@ -411,7 +413,7 @@ export function SearchPage() {
               width: "10rem",
               label: "Счёт",
               sortValue: (t) => t.account,
-              render: (t) => t.account,
+              render: (t) => <AccountName accountKey={txAccountKey(t)} title={t.account} />,
             },
             {
               key: "amount",

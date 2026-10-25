@@ -6,6 +6,8 @@
  * содержимое ячеек; раскладку (сетка ленты или таблица шторки) и цвет суммы
  * задаёт место, где строка стоит.
  */
+import { txInKey } from "../../lib/accountKey";
+import { useAccountDirectory } from "../../hooks/useAccountDirectory";
 import { ArrowLeftRight, Copy, HandCoins, Pencil, Scissors, Trash2 } from "lucide-react";
 import type { Transaction } from "../../types";
 import { useDisplayStore } from "../../store/useDisplayStore";
@@ -84,7 +86,10 @@ export function OperationCategory({
 export function OperationPayee({ tx }: { tx: Transaction }) {
   const statementLine = useDisplayStore((s) => s.statementLine);
   const counterparty = displayPayee(tx);
-  const primary = counterparty || transferCounterparty(tx) || "";
+  const dir = useAccountDirectory();
+  // Счёт-получатель перевода — подписью из справочника: у тёзок с уточнением.
+  const toAccount = transferCounterparty(tx) ? dir.label(txInKey(tx)) : "";
+  const primary = counterparty || toAccount || "";
   const secondary = statementLine ? secondaryPayee(tx, "statement") : null;
   const tooltip = secondary ? `${primary} — ${secondary}` : primary;
   return (
