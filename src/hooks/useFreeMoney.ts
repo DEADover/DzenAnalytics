@@ -207,7 +207,9 @@ export function useFreeMoney(
       today,
       (dateIso, code) => histDayRates[dateIso]?.[code] ?? null,
       (id) => cache.instruments.find((i) => i.id === id)?.shortTitle,
-      fulfilled
+      fulfilled,
+      false,
+      startDay
     );
     // СЧЁТ У ПЛАНОВОЙ ОПЕРАЦИИ НЕ СМОТРИМ. Проценты по вкладу приходят на
     // накопительный счёт, которого нет среди повседневных, — но деньги эти
@@ -269,7 +271,12 @@ export function useFreeMoney(
       ),
       cache.instruments,
       me?.currency,
-      today
+      today,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      startDay
     );
     for (const [key, ops] of upcoming) {
       const sep = key.lastIndexOf("|");

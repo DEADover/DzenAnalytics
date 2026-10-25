@@ -552,7 +552,9 @@ function zenPlanSeeds(cache: ZenCache) {
     fulfilled,
     // С включёнными прогнозами Дзен-мани прибавляет к плану и прогнозные
     // плановые операции.
-    cache.user?.[0]?.isForecastEnabled === true
+    cache.user?.[0]?.isForecastEnabled === true,
+    // Плановые операции раскладываются по отчётным периодам, как и факт.
+    cache.user?.[0]?.monthStartDay ?? useReportPeriodStore.getState().monthStartDay
   );
   return zenPlanList(cache.budgets, cache.tags, planned);
 }

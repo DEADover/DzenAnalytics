@@ -451,3 +451,26 @@ describe("plannedRateDates", () => {
     expect(dates).toEqual(["2026-10-13"]);
   });
 });
+
+describe("plannedOpsByTagMonth — отчётный период", () => {
+  it("операция 3 октября при первом дне 15 — в плане «Сентября»", () => {
+    const m: ZenReminderMarker = {
+      id: "m",
+      user: 1,
+      changed: 0,
+      date: "2026-10-03",
+      income: 0,
+      incomeInstrument: 2,
+      outcome: 1000,
+      outcomeInstrument: 2,
+      tag: ["food"],
+      reminder: "r",
+      state: "planned",
+    };
+    const rub = { id: 2, title: "Рубль", shortTitle: "RUB", symbol: "₽", rate: 1 } as ZenInstrument;
+    const calendar = plannedOpsByTagMonth([m], [rub], 2, "2026-10-01");
+    expect([...calendar.keys()]).toEqual(["food|2026-10"]);
+    const period = plannedOpsByTagMonth([m], [rub], 2, "2026-10-01", undefined, undefined, undefined, false, 15);
+    expect([...period.keys()]).toEqual(["food|2026-09"]);
+  });
+});

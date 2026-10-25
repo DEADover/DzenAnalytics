@@ -17,6 +17,7 @@
 // (see `plannedOpsByTagMonth`), otherwise a category with scheduled income (e.g.
 // «Работа» with a planned salary) reads far too low (or even negative).
 
+import { periodKey } from "./period";
 import type {
   ZenBudget,
   ZenInstrument,
@@ -145,7 +146,13 @@ export function plannedOpsByTagMonth(
    */
   fulfilled?: ReadonlySet<string>,
   /** Прогнозы Дзен-мани включены у пользователя — прогнозные операции тоже план. */
-  withForecasts = false
+  withForecasts = false,
+  /**
+   * Первый день отчётного месяца. Плановая операция попадает в план того
+   * ПЕРИОДА, в который она входит, — как и факт: с первым днём 15 операция
+   * 3 октября относится к «Сентябрю» (15.09–14.10), а не к октябрю.
+   */
+  monthStartDay = 1
 ): Map<string, PlannedOps> {
   const out = new Map<string, PlannedOps>();
   if (!markers || markers.length === 0) return out;
@@ -175,8 +182,8 @@ export function plannedOpsByTagMonth(
     // Исполненные (`processed`) при этом идут в план целиком, независимо от
     // даты: план месяца — это сколько всего собирались потратить.
     if (m.state === "planned" && !linked && (m.date || "") < todayIso) continue;
-    const ym = (m.date || "").slice(0, 7);
-    if (!/^\d{4}-\d{2}$/.test(ym)) continue;
+    if (!/^\d{4}-\d{2}-\d{2}/.test(m.date || "")) continue;
+    const ym = periodKey(m.date.slice(0, 10), monthStartDay);
     if (!m.tag || m.tag.length === 0) continue;
     // Исполненную считаем по курсу её дня — как считается её же факт;
     // будущую по справочному, другого для неё и нет.
