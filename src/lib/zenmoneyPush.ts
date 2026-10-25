@@ -1100,20 +1100,19 @@ export function makeCategoryChecker(
 export function makeKindChecks(
   cache: Pick<ZenCache, "accounts" | "instruments" | "tags"> & Partial<Pick<ZenCache, "transactions">>
 ): {
-  isDebtAccount: (title: string) => boolean;
+  /** Счёт — номером или названием (номер в приоритете: названия не уникальны). */
+  isDebtAccount: (ref: string) => boolean;
   hasOperationAmounts: (id: string) => boolean;
-  accountCurrency: (title: string) => string | null;
+  accountCurrency: (ref: string) => string | null;
   categorySides: (
     category: string,
     subcategory: string | null
   ) => { income: boolean; outcome: boolean } | null;
 } {
   const instruments = new Map((cache.instruments ?? []).map((i) => [i.id, i.shortTitle]));
-  const accounts = new Map<string, ZenAccount>();
-  for (const a of cache.accounts ?? []) {
-    // Живой счёт важнее архивного с тем же именем — как у отправки.
-    if (!accounts.has(a.title) || accounts.get(a.title)!.archive) accounts.set(a.title, a);
-  }
+  const accounts = accountsByTitleIndex(cache.accounts ?? []);
+  const accountsById = new Map((cache.accounts ?? []).map((a) => [a.id, a]));
+  const accountOf = (ref: string) => accountsById.get(ref) ?? accounts.get(ref);
   const byTitle = new Map<string, ZenTag[]>();
   const byId = new Map<string, ZenTag>();
   for (const t of cache.tags ?? []) {
@@ -1131,10 +1130,10 @@ export function makeKindChecks(
       .map((t) => t.id)
   );
   return {
-    isDebtAccount: (title) => DEBT_ACCOUNT_TYPES.has(accounts.get(title)?.type || ""),
+    isDebtAccount: (ref) => DEBT_ACCOUNT_TYPES.has(accountOf(ref)?.type || ""),
     hasOperationAmounts: (id) => withOp.has(id),
-    accountCurrency: (title) => {
-      const a = accounts.get(title);
+    accountCurrency: (ref) => {
+      const a = accountOf(ref);
       return a ? instruments.get(a.instrument) ?? null : null;
     },
     categorySides: (category, subcategory) => {

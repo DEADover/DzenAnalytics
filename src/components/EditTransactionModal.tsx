@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
 import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Check, ListPlus, ArrowUpToLine, Wand2 } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
+import { txAccountKey, txInKey, txOutKey } from "../lib/accountKey";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
@@ -13,7 +15,6 @@ import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import {
   getBrandTitlesFromCache,
-  getLiveAccountsFromCache,
   useZenmoneyStore,
 } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
@@ -262,8 +263,13 @@ export function EditTransactionModal({
   //   • incoming («Долги» → real): «Мне дали в долг | Мне вернули долг»
   const [debtOutgoing, setDebtOutgoing] = useState(true);
   // The real (non-debt) account leg.
+  // Счета формы — КЛЮЧАМИ (`lib/accountKey`), а не названиями: у двух
+  // счетов бывает одно название. Название и номер для правки — из справочника.
+  const dir = useAccountDirectory();
+  const outKey0 = tx.outcomeAccount ? txOutKey(tx) : txAccountKey(tx);
+  const inKey0 = tx.incomeAccount ? txInKey(tx) : "";
   const [realAcc, setRealAcc] = useState(
-    tx.category === "Долг" ? tx.outcomeAccount || tx.incomeAccount || "" : ""
+    tx.category === "Долг" ? (tx.outcomeAccount ? outKey0 : inKey0) : ""
   );
   const [debtAccountTitle, setDebtAccountTitle] = useState<string | null>(null);
   useEffect(() => {
@@ -278,11 +284,11 @@ export function EditTransactionModal({
         if (tx.outcomeAccount === d.title) {
           // «Долги» → real account: money came IN.
           setDebtOutgoing(false);
-          setRealAcc(tx.incomeAccount || "");
+          setRealAcc(inKey0);
         } else {
           // real account → «Долги»: money went OUT.
           setDebtOutgoing(true);
-          setRealAcc(tx.outcomeAccount || tx.account || "");
+          setRealAcc(outKey0);
         }
       }
     });
@@ -397,38 +403,42 @@ export function EditTransactionModal({
   );
   const [defaultAccount, setDefaultAccount] = useState<string | null>(null);
   const [archivedAccounts, setArchivedAccounts] = useState<Set<string>>(new Set());
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    let cancelled = false;
-    getLiveAccountsFromCache().then((list) => {
-      if (cancelled || !list) return;
-      setAccountCurrency(new Map(list.map((a) => [a.title, a.currency])));
-      setArchivedAccounts(new Set(list.filter((a) => a.archive).map((a) => a.title)));
-      // Новая операция открывается на последнем использованном счёте, если он
-      // ещё жив; иначе — на первом активном (эффект ниже подставит его).
-      const last = loadLastAccount();
-      const lastLive = last ? list.find((a) => a.title === last && !a.archive) : undefined;
-      const firstActive = lastLive ?? list.find((a) => !a.archive) ?? list[0];
-      if (firstActive) setDefaultAccount(firstActive.title);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    const live = dir.list.filter((e) => e.live);
+    if (live.length === 0) return;
+    setAccountCurrency(new Map(live.map((e) => [e.key, e.currency ?? ""])));
+    setArchivedAccounts(new Set(live.filter((e) => e.archive).map((e) => e.key)));
+    // Новая операция открывается на последнем использованном счёте, если он
+    // ещё жив; иначе — на первом активном (эффект ниже подставит его). Раньше
+    // последний счёт запоминался названием — его понимаем тоже.
+    const last = loadLastAccount();
+    const lastKey = last ? (dir.byKey.has(last) ? last : dir.keysByTitle(last)[0]) : undefined;
+    const lastLive = lastKey ? live.find((e) => e.key === lastKey && !e.archive) : undefined;
+    const firstActive = lastLive ?? live.find((e) => !e.archive) ?? live[0];
+    if (firstActive) setDefaultAccount(firstActive.key);
+  }, [dir]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+  /** Название и номер счёта по ключу — для правки и черновика. */
+  const titleOf = (key: string) => dir.byKey.get(key)?.title ?? key;
+  const idOf = (key: string) => {
+    const ids = dir.byKey.get(key)?.ids ?? [];
+    // У долгов счетов несколько (по валюте) — номер не выбрать, остаётся название.
+    return ids.length === 1 ? ids[0] : undefined;
+  };
   // All account names ever used in the dataset (debit / cash / credit /
   // debt — anything that's appeared either as `account`, `outcomeAccount`
   // or `incomeAccount`), PLUS every live account from the Zenmoney cache.
   // The cache matters for create mode: a freshly-opened account with no
   // transactions yet still needs to be pickable. Sorted alphabetically.
-  const accountOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const t of allTransactions) {
-      if (t.account) set.add(t.account);
-      if (t.outcomeAccount) set.add(t.outcomeAccount);
-      if (t.incomeAccount) set.add(t.incomeAccount);
-    }
-    for (const title of accountCurrency.keys()) set.add(title);
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [allTransactions, accountCurrency]);
+  const accountOptions = useMemo(
+    () =>
+      dir.list
+        .filter((e) => e.title)
+        .map((e) => e.key)
+        .sort((a, b) => dir.label(a).localeCompare(dir.label(b), "ru")),
+    [dir]
+  );
 
   // Grouped account list for the pickers: «Часто используемые» (top-10 by how
   // many transactions touch the account), then «Активные» / «Архивные» (archive
@@ -437,7 +447,11 @@ export function EditTransactionModal({
     const counts = new Map<string, number>();
     for (const t of allTransactions) {
       const accs = new Set(
-        [t.account, t.outcomeAccount, t.incomeAccount].filter(Boolean)
+        [
+          t.account ? txAccountKey(t) : "",
+          t.outcomeAccount ? txOutKey(t) : "",
+          t.incomeAccount ? txInKey(t) : "",
+        ].filter(Boolean)
       );
       for (const a of accs) counts.set(a, (counts.get(a) ?? 0) + 1);
     }
@@ -561,7 +575,7 @@ export function EditTransactionModal({
         brand: "",
         comment,
         categoryFull: subcategory ? `${category} / ${subcategory}` : category,
-        account,
+        account: titleOf(account),
         kind: isDebt ? "debt" : kind,
         amountBase: ruleAmountBase(),
         // Сравнивается с тем, что сохранено: правило видит операции до правок.
@@ -615,11 +629,11 @@ export function EditTransactionModal({
   // этого её и делают.
   const [amount, setAmount] = useState(isCreate && !isCopy ? "" : String(tx.amount));
   const [currency, setCurrency] = useState(tx.currency);
-  const [account, setAccount] = useState(tx.account);
+  const [account, setAccount] = useState(tx.account ? txAccountKey(tx) : "");
   // Transfer-specific: outcome / income accounts. For income/expense we
   // hide these and rely on the single `account` field above.
-  const [outAcc, setOutAcc] = useState(tx.outcomeAccount || tx.account);
-  const [inAcc, setInAcc] = useState(tx.incomeAccount || "");
+  const [outAcc, setOutAcc] = useState(outKey0);
+  const [inAcc, setInAcc] = useState(inKey0);
   // Destination-leg amount, only used for a cross-currency transfer.
   const [inAmount, setInAmount] = useState(
     tx.incomeAmount ? String(tx.incomeAmount) : ""
@@ -686,12 +700,12 @@ export function EditTransactionModal({
   useEffect(() => {
     if (inInitRef.current || accountCurrency.size === 0) return;
     inInitRef.current = true;
-    const oc = accountCurrency.get((tx.outcomeAccount || tx.account).trim());
-    const ic = accountCurrency.get((tx.incomeAccount || "").trim());
+    const oc = accountCurrency.get(outKey0);
+    const ic = accountCurrency.get(inKey0);
     if (tx.kind === "transfer" && tx.incomeAmount > 0 && oc && ic && oc !== ic) {
       setManualIn(true);
     }
-  }, [accountCurrency, tx]);
+  }, [accountCurrency, tx, outKey0, inKey0]);
   /* eslint-enable react-hooks/set-state-in-effect */
   // Non-transfer moved onto an account whose native currency differs from the
   // operation currency → it becomes an FX row on push. Hint the user that the
@@ -789,6 +803,8 @@ export function EditTransactionModal({
     const debtT = debtAccountTitle ?? "";
     const debtSrc = debtOutgoing ? realAcc.trim() : debtT;
     const debtDst = debtOutgoing ? debtT : realAcc.trim();
+    const srcKey = isDebt ? debtSrc : kind === "transfer" ? outAcc.trim() : account.trim();
+    const dstKey = isDebt ? debtDst : kind === "transfer" ? inAcc.trim() : undefined;
     return {
       id,
       kind: isDebt ? "transfer" : kind,
@@ -797,12 +813,10 @@ export function EditTransactionModal({
         ? Math.floor(dateTimeToDate(date, time).getTime() / 1000)
         : undefined,
       amount: parseAmountInput(amount),
-      account: isDebt ? debtSrc : kind === "transfer" ? outAcc.trim() : account.trim(),
-      incomeAccount: isDebt
-        ? debtDst
-        : kind === "transfer"
-          ? inAcc.trim()
-          : undefined,
+      account: titleOf(srcKey),
+      accountId: idOf(srcKey),
+      incomeAccount: dstKey !== undefined ? titleOf(dstKey) : undefined,
+      incomeAccountId: dstKey !== undefined ? idOf(dstKey) : undefined,
       incomeAmount:
         !isDebt && kind === "transfer" && isCrossCurrencyTransfer
           ? parseAmountInput(inAmountValue)
@@ -1000,6 +1014,18 @@ export function EditTransactionModal({
       const norm = (v: string | null | undefined) => (v ?? "").trim();
       const changed = (next: string, before: string | null | undefined) =>
         norm(next) !== norm(before);
+      /** Ноги правки — ключами: в правку уходят и название, и номер, и ключ. */
+      const setLegs = (p: Record<string, unknown>, out: string, inc: string, main: string) => {
+        p.outcomeAccount = out ? titleOf(out) : "";
+        p.outcomeAccountId = out ? idOf(out) ?? "" : "";
+        p.outcomeAccountKey = out;
+        p.incomeAccount = inc ? titleOf(inc) : "";
+        p.incomeAccountId = inc ? idOf(inc) ?? "" : "";
+        p.incomeAccountKey = inc;
+        p.account = titleOf(main);
+        p.accountId = idOf(main) ?? "";
+        p.accountKey = main;
+      };
 
       if (safeDate !== tx.date) patch.date = safeDate;
 
@@ -1055,13 +1081,11 @@ export function EditTransactionModal({
         // already carried by `patch.brand` above (the push debt-branch maps
         // it back onto the required `payee`).
         const debtT = debtAccountTitle ?? "";
-        const real = realAcc.trim() || tx.outcomeAccount || tx.incomeAccount;
+        const real = realAcc.trim() || (tx.outcomeAccount ? outKey0 : inKey0);
         const src = debtOutgoing ? real : debtT;
         const dst = debtOutgoing ? debtT : real;
-        if (changed(src, tx.outcomeAccount) || changed(dst, tx.incomeAccount)) {
-          patch.outcomeAccount = src;
-          patch.incomeAccount = dst;
-          patch.account = src;
+        if (changed(src, outKey0) || changed(dst, inKey0)) {
+          setLegs(patch, src, dst, src);
         }
       } else if (kind === "transfer") {
         // For transfers we need both legs in sync. Whether or not the
@@ -1069,16 +1093,15 @@ export function EditTransactionModal({
         // pipeline never sees half-stale data. The push transformer
         // will compare against the original to decide if it's a real
         // change worth refusing.
-        const src = outAcc.trim() || tx.outcomeAccount || tx.account;
-        const dst = inAcc.trim() || tx.incomeAccount || "";
+        const src = outAcc.trim() || outKey0;
+        const dst = inAcc.trim() || inKey0;
         const accountsChanged =
-          changed(src, tx.outcomeAccount) ||
-          changed(dst, tx.incomeAccount) ||
-          changed(src, tx.account);
+          changed(src, outKey0) ||
+          changed(dst, inKey0) ||
+          changed(src, tx.account ? txAccountKey(tx) : "");
         if (accountsChanged) {
-          patch.outcomeAccount = src;
-          patch.incomeAccount = dst;
-          patch.account = src; // mapper convention: transfer rows live under source
+          // mapper convention: transfer rows live under source
+          setLegs(patch, src, dst, src);
         }
         // Cross-currency: carry the destination amount (in the destination
         // account's currency) so the push can build the second leg. Only
@@ -1098,19 +1121,14 @@ export function EditTransactionModal({
           }
         }
       } else {
-        const nextAccount = account.trim() || tx.account;
-        if (changed(nextAccount, tx.account)) {
-          patch.account = nextAccount;
+        const origKey = tx.account ? txAccountKey(tx) : "";
+        const nextAccount = account.trim() || origKey;
+        if (changed(nextAccount, origKey)) {
           // Refund is an income-side flow too — the merchant returned
           // money TO the account — so the same convention as `income`
           // applies for which leg gets the account id.
-          if (kind === "income" || kind === "refund") {
-            patch.incomeAccount = nextAccount;
-            patch.outcomeAccount = "";
-          } else {
-            patch.outcomeAccount = nextAccount;
-            patch.incomeAccount = "";
-          }
+          if (kind === "income" || kind === "refund") setLegs(patch, "", nextAccount, nextAccount);
+          else setLegs(patch, nextAccount, "", nextAccount);
         }
       }
 
@@ -1356,6 +1374,9 @@ export function EditTransactionModal({
                 value={realAcc}
                 options={accountOptions}
                 groups={accountGroups}
+                labelOf={dir.label}
+                allowCustom={false}
+                searchable
                 onChange={setRealAcc}
                 placeholder="Реальный счёт"
                 maxHeight={DROPDOWN_MAX}
@@ -1373,6 +1394,9 @@ export function EditTransactionModal({
                 value={outAcc}
                 options={accountOptions}
                 groups={accountGroups}
+                labelOf={dir.label}
+                allowCustom={false}
+                searchable
                 onChange={setOutAcc}
                 placeholder="Источник"
                 maxHeight={DROPDOWN_MAX}
@@ -1383,6 +1407,9 @@ export function EditTransactionModal({
                 value={inAcc}
                 options={accountOptions}
                 groups={accountGroups}
+                labelOf={dir.label}
+                allowCustom={false}
+                searchable
                 onChange={setInAcc}
                 placeholder="Получатель"
                 maxHeight={DROPDOWN_MAX}
@@ -1413,6 +1440,9 @@ export function EditTransactionModal({
                   value={account}
                   options={accountOptions}
                   groups={accountGroups}
+                  labelOf={dir.label}
+                  allowCustom={false}
+                  searchable
                   onChange={setAccount}
                   placeholder="Выберите счёт"
                   maxHeight={DROPDOWN_MAX}

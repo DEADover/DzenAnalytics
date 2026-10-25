@@ -69,6 +69,14 @@ export interface ComboboxProps {
    * где такой же префикс стоит слева от текста.
    */
   prefix?: string;
+  /**
+   * Подпись значения — когда значение не годится для показа: например, ключ
+   * счёта (номер), а показывать надо название с уточнением для тёзок. Поле и
+   * пункты показывают подпись, поиск идёт по ней, `onChange` получает
+   * значение. Только вместе с `allowCustom={false}`: набранный текст — это
+   * подпись, а не значение.
+   */
+  labelOf?: (value: string) => string;
 }
 
 /**
@@ -93,9 +101,11 @@ export function Combobox({
   prefix,
   searchable = false,
   renderIcon,
+  labelOf,
 }: ComboboxProps) {
+  const show = (v: string) => (labelOf && v ? labelOf(v) : v);
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState(value);
+  const [query, setQuery] = useState(() => show(value));
   // Filter only when the user has actively typed *after* opening (clicking the
   // chevron on a populated field should reveal ALL options, not just matches
   // for the current value).
@@ -116,8 +126,9 @@ export function Combobox({
   // pure derived value. The extra render is intentional and harmless.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setQuery(value);
-  }, [value]);
+    setQuery(show(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, labelOf]);
 
   // Close when the user clicks outside.
   useEffect(() => {
@@ -133,13 +144,14 @@ export function Combobox({
       // возвращаем то, что выбрано на самом деле, иначе в поле остался бы
       // обрывок вроде «нал», которого нет ни в списке, ни в данных.
       if (searchable && !allowCustom) {
-        setQuery(value);
+        setQuery(show(value));
         setFiltering(false);
       }
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
-  }, [open, searchable, allowCustom, value]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, searchable, allowCustom, value, labelOf]);
 
   useLayoutEffect(() => {
     // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
@@ -179,8 +191,9 @@ export function Combobox({
     if (!filtering) return options;
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter((o) => textMatches(o, q));
-  }, [filtering, query, options]);
+    return options.filter((o) => textMatches(show(o), q));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtering, query, options, labelOf]);
 
   // Grouped variant: filter each group's items individually, then drop
   // empty groups so the header doesn't render for sections with no
@@ -191,10 +204,11 @@ export function Combobox({
     return groups
       .map((g) => ({
         label: g.label,
-        items: q ? g.items.filter((i) => textMatches(i, q)) : g.items,
+        items: q ? g.items.filter((i) => textMatches(show(i), q)) : g.items,
       }))
       .filter((g) => g.items.length > 0);
-  }, [groups, filtering, query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, filtering, query, labelOf]);
 
   const popupHasItems = filteredGroups
     ? filteredGroups.length > 0
@@ -208,7 +222,7 @@ export function Combobox({
   const nav = useListNav(flat.length, open && popupHasItems);
 
   function commit(next: string) {
-    setQuery(next);
+    setQuery(show(next));
     onChange(next);
     setFiltering(false);
     setOpen(false);
@@ -231,7 +245,7 @@ export function Combobox({
   function closeList() {
     setOpen(false);
     if (searchable && !allowCustom) {
-      setQuery(value);
+      setQuery(show(value));
       setFiltering(false);
     }
   }
@@ -259,7 +273,7 @@ export function Combobox({
         } ${isCurrent ? "text-accent" : ""}`}
       >
         {renderIcon && <span className="shrink-0">{renderIcon(opt)}</span>}
-        <span className="truncate">{opt}</span>
+        <span className="truncate">{show(opt)}</span>
       </button>
     );
   };
