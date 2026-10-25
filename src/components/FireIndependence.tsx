@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Flame, Wallet, ChevronDown, Check } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFireStore } from "../store/useFireStore";
-import { useFireCapital } from "../hooks/useFireCapital";
+import { useFireCapital, useFireExcluded } from "../hooks/useFireCapital";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { groupByMonth } from "../lib/aggregations";
@@ -65,8 +65,12 @@ export function FireIndependence({
   // savings rate and «лет до цели» counted turnover the user had switched off.
   const transactions = useAnalyticsTransactions();
   const base = useDataStore((s) => s.rates.base);
-  const excluded = useFireStore((s) => s.excluded);
-  const toggleExcluded = useFireStore((s) => s.toggle);
+  const excluded = useFireExcluded();
+  const replaceExcluded = useFireStore((s) => s.replaceExcluded);
+  const toggleExcluded = (key: string) =>
+    void replaceExcluded(
+      excluded.includes(key) ? excluded.filter((k) => k !== key) : [...excluded, key]
+    );
   const { capital, capitalAccounts } = useFireCapital();
 
   // Savings pace (income − all expense, last 6 mo) drives «лет до цели».
@@ -201,7 +205,7 @@ export function FireIndependence({
             className={`w-3.5 h-3.5 transition-transform ${showAccounts ? "rotate-180" : ""}`}
           />
           Счета в капитале:{" "}
-          {capitalAccounts.filter((a) => !excluded.includes(a.title)).length}
+          {capitalAccounts.filter((a) => !excluded.includes(a.key)).length}
           {" / "}
           {capitalAccounts.length}
         </button>
@@ -213,12 +217,12 @@ export function FireIndependence({
       {showAccounts && capitalAccounts.length > 0 && (
         <div className="mt-3 pt-3 border-t border-border space-y-1">
           {capitalAccounts.map((a) => {
-            const on = !excluded.includes(a.title);
+            const on = !excluded.includes(a.key);
             return (
               <button
-                key={a.title}
+                key={a.key}
                 type="button"
-                onClick={() => toggleExcluded(a.title)}
+                onClick={() => toggleExcluded(a.key)}
                 className="w-full flex items-center gap-2 py-1 text-left text-sm hover:bg-bg/50 rounded px-1"
               >
                 <span
@@ -229,7 +233,7 @@ export function FireIndependence({
                   {on && <Check className="w-3 h-3 text-accent-fg" />}
                 </span>
                 <span className={`flex-1 truncate ${on ? "" : "text-muted line-through"}`}>
-                  {a.title}
+                  {a.label}
                   {a.savings && (
                     <span className="ml-1.5 text-[10px] pill align-middle">Накопит.</span>
                   )}
@@ -265,7 +269,7 @@ export function FireIndependence({
                     facts={[
                       {
                         label: "Счетов учтено",
-                        value: `${capitalAccounts.filter((a) => !excluded.includes(a.title)).length} из ${capitalAccounts.length}`,
+                        value: `${capitalAccounts.filter((a) => !excluded.includes(a.key)).length} из ${capitalAccounts.length}`,
                       },
                       { label: "Итого", value: formatMoney(capital, base) },
                     ]}

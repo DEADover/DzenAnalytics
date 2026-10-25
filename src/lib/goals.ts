@@ -11,6 +11,10 @@ import type { CurrencyRates } from "../types";
 
 /** То, что цели нужно знать о счёте. */
 export interface GoalAccount {
+  /** Ключ счёта (`lib/accountKey`); не задан — название. */
+  key?: string;
+  /** Подпись: у тёзок — с уточнением. Не задана — название. */
+  label?: string;
   title: string;
   balance: number;
   currency: string;
@@ -89,23 +93,35 @@ export function goalProgress(
   rates: CurrencyRates,
   cbr: RubRates
 ): GoalProgress {
-  const titles = goalSources(g);
-  if (titles.length === 0) return { current: g.current, sources: [], bound: false, missing: [] };
+  const refs = goalSources(g);
+  if (refs.length === 0) return { current: g.current, sources: [], bound: false, missing: [] };
 
-  const byTitle = new Map(accounts.map((a) => [a.title, a]));
-  const sources: GoalSourceBalance[] = titles.map((title) => {
-    const a = byTitle.get(title);
-    return a
-      ? {
-          title,
-          balance: a.balance,
-          currency: a.currency,
-          balanceBase: toBaseNow(a.balance, a.currency, rates, cbr),
-        }
-      : { title, balance: null, currency: null, balanceBase: 0 };
-  });
-  const missing = sources.filter((s) => s.balance == null).map((s) => s.title);
-  if (missing.length === titles.length) {
+  // Источник — ключ счёта. Цели прежних версий помнят счёт названием: такая
+  // ссылка значит все счета с этим названием (тёзки различаются только ключом).
+  const keyOf = (a: GoalAccount) => a.key ?? a.title;
+  const sources: GoalSourceBalance[] = [];
+  const missing: string[] = [];
+  const taken = new Set<string>();
+  for (const ref of refs) {
+    let found = accounts.filter((a) => keyOf(a) === ref);
+    if (found.length === 0) found = accounts.filter((a) => a.title === ref);
+    if (found.length === 0) {
+      sources.push({ title: ref, balance: null, currency: null, balanceBase: 0 });
+      missing.push(ref);
+      continue;
+    }
+    for (const a of found) {
+      if (taken.has(keyOf(a))) continue;
+      taken.add(keyOf(a));
+      sources.push({
+        title: a.label ?? a.title,
+        balance: a.balance,
+        currency: a.currency,
+        balanceBase: toBaseNow(a.balance, a.currency, rates, cbr),
+      });
+    }
+  }
+  if (missing.length === refs.length) {
     return { current: g.current, sources, bound: false, missing };
   }
   const current = sources.reduce((sum, s) => sum + s.balanceBase, 0);

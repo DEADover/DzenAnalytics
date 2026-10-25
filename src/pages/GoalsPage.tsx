@@ -42,6 +42,8 @@ import { DateField } from "../components/DateField";
 import { CardHeader } from "../components/CardHeader";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { ProgressBar } from "../components/ProgressBar";
+import { accountKeyOf } from "../lib/accountKey";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
 
 function monthsBetween(fromIso: string, toIso: string): number {
   const a = new Date(fromIso);
@@ -193,6 +195,7 @@ export function GoalsPage() {
         live
           .filter((a) => !a.archive)
           .map((a) => ({
+            key: accountKeyOf(a),
             title: a.title,
             balance: a.balance,
             currency: a.currency,
@@ -230,11 +233,18 @@ export function GoalsPage() {
     };
   }, [quoteKey]);
 
-  const money = useMemo<Money>(() => ({ accounts, rates, cbr }), [accounts, rates, cbr]);
-  const accountTitles = useMemo(() => accounts.map((a) => a.title), [accounts]);
+  // Подписи — из справочника: у тёзок с уточнением.
+  const dir = useAccountDirectory();
+  const labeled = useMemo(
+    () => accounts.map((a) => ({ ...a, label: dir.label(a.key ?? a.title) })),
+    [accounts, dir]
+  );
+  const money = useMemo<Money>(() => ({ accounts: labeled, rates, cbr }), [labeled, rates, cbr]);
+  /** Ключи счетов — варианты источников цели. */
+  const accountTitles = useMemo(() => accounts.map((a) => a.key ?? a.title), [accounts]);
   /** Сколько сейчас на выбранных счетах в базовой валюте; `null` — ни одного. */
   const balanceOf = (titles: readonly string[]) =>
-    titles.length > 0 ? goalProgress({ current: 0, accountTitles: titles }, accounts, rates, cbr) : null;
+    titles.length > 0 ? goalProgress({ current: 0, accountTitles: titles }, labeled, rates, cbr) : null;
 
   // Summary across all goals (bound-aware) for the tiles.
   const summary = useMemo(() => {
@@ -525,6 +535,7 @@ function GoalForm({
    */
   fieldPicker?: boolean;
 }) {
+  const dir = useAccountDirectory();
   return (
     <div
       className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 ${
@@ -561,7 +572,8 @@ function GoalForm({
           options={accountTitles}
           selected={sourcesToSet(sources, accountTitles)}
           onChange={(next) => setSources(setToSources(next, accountTitles))}
-          renderIcon={(title) => <AccountLogo title={title} size={18} />}
+          renderIcon={(key) => <AccountLogo title={dir.byKey.get(key)?.title ?? key} size={18} />}
+          labelOf={dir.label}
           unitForms={["счёт", "счёта", "счетов"]}
           searchPlaceholder="Поиск счёта"
           noneSummary="Сумма вручную"
@@ -668,7 +680,9 @@ function GoalCard({
   const [target, setTarget] = useState(String(g.target));
   const [current, setCurrent] = useState(String(g.current));
   const [deadline, setDeadline] = useState(g.deadline ?? "");
-  const [sources, setSources] = useState<string[]>(() => goalSources(g));
+  // Старые цели помнят счёт названием — в форме он сразу становится ключами.
+  const dir = useAccountDirectory();
+  const [sources, setSources] = useState<string[]>(() => [...dir.resolve(goalSources(g))]);
   const [monthly, setMonthly] = useState(
     g.monthlyContribution ? String(g.monthlyContribution) : ""
   );
@@ -678,7 +692,7 @@ function GoalCard({
     setTarget(String(g.target));
     setCurrent(String(g.current));
     setDeadline(g.deadline ?? "");
-    setSources(goalSources(g));
+    setSources([...dir.resolve(goalSources(g))]);
     setMonthly(g.monthlyContribution ? String(g.monthlyContribution) : "");
     setClosing(false);
     setEditing(true);

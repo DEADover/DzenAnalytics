@@ -6,9 +6,9 @@ import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useHealthScore } from "../hooks/useHealthScore";
 import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
-import { useFireCapital } from "../hooks/useFireCapital";
+import { useFireCapital, useFireExcluded } from "../hooks/useFireCapital";
+import { accountKeyOf } from "../lib/accountKey";
 import { useLiveAccounts } from "../hooks/useLiveAccounts";
-import { useFireStore } from "../store/useFireStore";
 import { fireSeries } from "../lib/aggregations";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -27,7 +27,7 @@ export function HealthPage() {
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const score = useHealthScore();
   const { capitalAccounts } = useFireCapital();
-  const excluded = useFireStore((s) => s.excluded);
+  const excluded = useFireExcluded();
   const liveAccounts = useLiveAccounts();
 
   /**
@@ -43,8 +43,8 @@ export function HealthPage() {
   const fireAccounts = useMemo(() => {
     if (!liveAccounts || capitalAccounts.length === 0) return null;
     return liveAccounts
-      .filter((a) => a.archive || !excluded.includes(a.title))
-      .map((a) => a.title);
+      .filter((a) => a.archive || !excluded.includes(accountKeyOf(a)))
+      .map(accountKeyOf);
   }, [liveAccounts, capitalAccounts.length, excluded]);
   // Последняя точка — по курсу синхронизации, как и капитал в блоке, так что
   // «месяцы жизни» на графике и «% до FIRE» считаются из одного числа.

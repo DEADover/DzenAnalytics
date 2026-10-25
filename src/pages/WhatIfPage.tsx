@@ -27,7 +27,8 @@ import {
 import { netWorthSeries } from "../lib/aggregations";
 import { currentPeriod } from "../lib/period";
 import { pluralRu } from "../lib/plural";
-import { useFireCapital } from "../hooks/useFireCapital";
+import { useFireCapital, useFireExcluded } from "../hooks/useFireCapital";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
 import { useFireStore } from "../store/useFireStore";
 import { isScenarioChanged, useWhatIfStore } from "../store/useWhatIfStore";
 import { FILTER_NONE } from "../store/useFiltersStore";
@@ -199,9 +200,11 @@ export function WhatIfPage() {
 
   // Счета капитала — общий с FIRE выбор: капитал везде считается одинаково.
   const { capital, capitalAccounts } = useFireCapital();
-  const excluded = useFireStore((s) => s.excluded);
+  const excluded = useFireExcluded();
   const replaceExcluded = useFireStore((s) => s.replaceExcluded);
-  const accountTitles = useMemo(() => capitalAccounts.map((a) => a.title), [capitalAccounts]);
+  const dir = useAccountDirectory();
+  /** Ключи счетов капитала. */
+  const accountTitles = useMemo(() => capitalAccounts.map((a) => a.key), [capitalAccounts]);
   const pickedCount = accountTitles.filter((t) => !excluded.includes(t)).length;
   // Счета есть и хоть один выбран — капитал по их балансам; иначе своя сумма,
   // а без своей — остаток по всем операциям.
@@ -382,7 +385,8 @@ export function WhatIfPage() {
                   onChange={(next) =>
                     void replaceExcluded(setToExcluded(next, accountTitles, excluded))
                   }
-                  renderIcon={(title) => <AccountLogo title={title} size={18} />}
+                  renderIcon={(key) => <AccountLogo title={dir.byKey.get(key)?.title ?? key} size={18} />}
+                  labelOf={dir.label}
                   unitForms={["счёт", "счёта", "счетов"]}
                   searchPlaceholder="Поиск счёта"
                   noneSummary="Сумма вручную"
