@@ -49,7 +49,9 @@ export function planTotals(
   for (const line of lines) {
     if (line.subcategory && lockedParents.has(`${line.kind}\u0000${line.category}`)) continue;
     const planned = plannedFor(line, ym);
-    if (planned <= 0) continue;
+    // Отрицательный свой план категории — поправка к подкатегориям, его
+    // тоже складываем (см. `importFromZen`).
+    if (planned === 0) continue;
     if (line.kind === "income") income += planned;
     else expense += planned;
   }

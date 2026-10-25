@@ -342,7 +342,7 @@ export function BudgetsPage() {
   const budgetedThisMonth = useMemo(() => {
     const s = new Set<string>();
     for (const l of lines)
-      if (plannedFor(l, ym) > 0) s.add(budgetKey(l.kind, l.category, l.subcategory ?? null));
+      if (plannedFor(l, ym) !== 0) s.add(budgetKey(l.kind, l.category, l.subcategory ?? null));
     return s;
   }, [lines, ym]);
   const dupLine = budgetedThisMonth.has(budgetKey(dKind, fCat, fSub || null));
@@ -624,7 +624,9 @@ export function BudgetsPage() {
     // «Вне плана»), so a parent never overstates % when one child is budgeted and
     // another is only auto-forecast (e.g. Банки → Кэшбек budgeted, Проценты only
     // forecast). Unbudgeted tags surface under «Без бюджета».
-    const shown = inWindow.filter((r) => r.planned > 0);
+    // Отрицательный свой план категории остаётся: это поправка Дзен-мани к
+    // сумме подкатегорий, без неё план категории выходит завышенным.
+    const shown = inWindow.filter((r) => r.planned !== 0);
     // Статьи, у которых своего плана нет, но на этот месяц НАЗНАЧЕНА операция:
     // сумма и дата известны, и держать такую статью вне бюджета до самого
     // списания незачем. Там, где план есть, ничего не добавляем — Дзен-мани уже

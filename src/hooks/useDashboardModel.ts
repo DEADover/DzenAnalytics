@@ -419,7 +419,7 @@ export function useDashboardModel(): DashboardModel {
     for (const line of budgetLines) {
       if (line.kind === "income") continue;
       const p = plannedFor(line, ym);
-      if (p <= 0) continue;
+      if (p === 0) continue;
       map.set(line.category, (map.get(line.category) ?? 0) + p);
     }
     return map;

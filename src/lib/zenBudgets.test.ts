@@ -6,6 +6,7 @@ import {
   zenPlanKey,
   plannedOpsByTagMonth,
   fulfilledMarkerIds,
+  plannedRateDates,
 } from "./zenBudgets";
 import type {
   ZenBudget,
@@ -389,5 +390,64 @@ describe("связанные плановые операции (issue #86)", () 
       { reminderMarker: null },
     ]);
     expect([...ids]).toEqual(["a"]);
+  });
+});
+
+describe("отрицательный свой план категории", () => {
+  const tags = [tag("banks", "Банки"), tag("pct", "Проценты", "banks"), tag("cb", "Кэшбек", "banks")];
+
+  it("сохраняется: это поправка Дзен-мани к сумме подкатегорий", () => {
+    // Живой аккаунт, октябрь 2026: «Банки» income −956,72 без замка, дети
+    // 24 500 и 1 500 с замком → на экране «Планов» 25 043.
+    const list = zenPlanList(
+      [
+        budget({ tag: "banks", income: -956.72, date: "2026-10-01" }),
+        budget({ tag: "pct", income: 24500, incomeLock: true, date: "2026-10-01" }),
+        budget({ tag: "cb", income: 1500, incomeLock: true, date: "2026-10-01" }),
+      ],
+      tags
+    );
+    const own = list.find((e) => e.tagId === "banks");
+    expect(own?.amount).toBe(-956.72);
+    expect(Math.round(list.reduce((s, e) => s + e.amount, 0))).toBe(25043);
+  });
+});
+
+describe("plannedRateDates", () => {
+  const mk = (m: Partial<ZenReminderMarker>): ZenReminderMarker => ({
+    id: "m",
+    user: 1,
+    changed: 0,
+    date: "2026-10-17",
+    income: 0,
+    incomeInstrument: 2,
+    outcome: 0,
+    outcomeInstrument: 2,
+    tag: ["subs"],
+    reminder: "r1",
+    state: "processed",
+    ...m,
+  });
+
+  it("берёт дни исполненных планов в чужой валюте", () => {
+    const dates = plannedRateDates(
+      [
+        mk({ id: "usd", outcome: 116, outcomeInstrument: 1, date: "2026-10-17" }),
+        mk({ id: "rub", outcome: 300, date: "2026-10-07" }),
+        mk({ id: "future", outcome: 10, outcomeInstrument: 1, state: "planned", date: "2026-10-28" }),
+        mk({ id: "fc", outcome: 5, outcomeInstrument: 1, isForecast: true, date: "2026-10-20" }),
+      ],
+      2
+    );
+    expect(dates).toEqual(["2026-10-17"]);
+  });
+
+  it("связанный с операцией план считается исполненным", () => {
+    const dates = plannedRateDates(
+      [mk({ id: "linked", outcome: 9, outcomeInstrument: 1, state: "planned", date: "2026-10-13" })],
+      2,
+      new Set(["linked"])
+    );
+    expect(dates).toEqual(["2026-10-13"]);
   });
 });

@@ -193,6 +193,30 @@ export function plannedOpsByTagMonth(
 }
 
 /**
+ * Дни исполненных плановых операций в чужой валюте — курс на них нужен, чтобы
+ * перевести такой план в базовую валюту так же, как Дзен-мани: по курсу дня.
+ *
+ * Операция, которой план исполнен, часто рублёвая (подписка в долларах
+ * списана с рублёвой карты), и по операциям этот день курсов не получает.
+ */
+export function plannedRateDates(
+  markers: ZenReminderMarker[] | undefined,
+  baseCurrencyId: number | undefined,
+  fulfilled?: ReadonlySet<string>
+): string[] {
+  const out = new Set<string>();
+  for (const m of markers || []) {
+    const done = m.state === "processed" || fulfilled?.has(m.id) === true;
+    if (!done || m.isForecast === true || !m.date) continue;
+    const foreign =
+      (m.income > 0 && m.incomeInstrument !== baseCurrencyId) ||
+      (m.outcome > 0 && m.outcomeInstrument !== baseCurrencyId);
+    if (foreign) out.add(m.date.slice(0, 10));
+  }
+  return [...out].sort();
+}
+
+/**
  * Resolve a tag id to `{category, subcategory}`: a sub-tag → its parent's title
  * + own title; a top-level tag → own title + null. `null` when tag is unknown.
  */
@@ -215,7 +239,8 @@ export function resolveTagPath(
 /**
  * Flatten the cached budgets + tags into a list of per-tag plan entries.
  * Unknown tags, the whole-month aggregate, auto-forecast values and
- * zero/negative amounts are skipped.
+ * zero amounts are skipped. A NEGATIVE amount is kept: an unlocked parent
+ * stores a correction to its children there (see `importFromZen`).
  */
 function collect(
   budgets: ZenBudget[] | undefined,
@@ -249,7 +274,7 @@ function collect(
     // would invent a diff and mark the cell as «ждёт отправки» for nothing.
     const outAdded = !b.outcomeLock && !!p;
     const incAdded = !b.incomeLock && !!p;
-    if (outFc === wantForecast && outVal > 0)
+    if (outFc === wantForecast && outVal !== 0)
       out.push({
         kind: "expense",
         tagId: b.tag,
@@ -258,7 +283,7 @@ function collect(
         amount: outAdded ? Math.round(outVal) : outVal,
         locked: !!b.outcomeLock,
       });
-    if (incFc === wantForecast && incVal > 0)
+    if (incFc === wantForecast && incVal !== 0)
       out.push({
         kind: "income",
         tagId: b.tag,

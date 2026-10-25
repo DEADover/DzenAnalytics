@@ -400,6 +400,15 @@ describe("planTotals — план месяца одним правилом", () 
     expect(planTotals(lines, "2026-09").expense).toBe(36000);
   });
 
+  it("отрицательный свой план родителя уменьшает итог", () => {
+    const lines = [
+      line({ id: "p", category: "Банки", kind: "income", amount: -956.72 }),
+      line({ id: "s1", category: "Банки", subcategory: "Проценты", kind: "income", amount: 24500 }),
+      line({ id: "s2", category: "Банки", subcategory: "Кэшбек", kind: "income", amount: 1500 }),
+    ];
+    expect(Math.round(planTotals(lines, "2026-10").income)).toBe(25043);
+  });
+
   it("родитель без замка складывается с детьми", () => {
     const lines = [
       line({ id: "p", category: "Еда", amount: 5000 }),

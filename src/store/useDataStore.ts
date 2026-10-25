@@ -110,6 +110,16 @@ interface DataState {
    *  then reprice. Fire-and-forget; safe to call repeatedly (only fetches the
    *  gaps). No-op when the base currency isn't RUB (CBR is RUB-centric). */
   warmHistoricalRates: () => Promise<void>;
+  /**
+   * Дни, курс которых нужен не операциям, а плановым операциям Дзен-мани.
+   *
+   * Подписка в долларах списывается с рублёвой карты: операция рублёвая, и её
+   * день прогрев не берёт. А исполненный план Дзен-мани переводит в рубли по
+   * курсу своего дня — без этого курса план статьи расходится с приложением.
+   */
+  extraRateDates: string[];
+  /** Добавить дни к прогреву курсов и догрузить недостающие. */
+  requestRateDates: (dates: string[]) => void;
   /** Убрать предупреждение о недогруженных курсах, ничего не перезапрашивая. */
   dismissHistRatesWarning: () => void;
   setTransactions: (txs: Transaction[], meta: ImportMeta) => Promise<void>;
@@ -643,6 +653,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   transactionsRaw: [],
   rates: DEFAULT_RATES,
   histDayRates: {},
+  extraRateDates: [],
   histWarming: null,
   histRatesUnavailable: 0,
   importMeta: null,
@@ -712,6 +723,10 @@ export const useDataStore = create<DataState>((set, get) => ({
       if (!first || t.date < first) first = t.date;
       if (!(t.date in histDayRates)) missing.add(t.date);
     }
+    // Дни плановых операций в валюте (см. `extraRateDates`).
+    for (const d of get().extraRateDates) {
+      if (!(d in histDayRates)) missing.add(d);
+    }
     // И первые числа месяцев: остаток валютного счёта оценивается по курсу
     // своего дня, а операций на нём может не быть месяцами — без этих точек
     // доллары, пролежавшие год, весь год стояли бы по курсу одного дня.
@@ -764,6 +779,19 @@ export const useDataStore = create<DataState>((set, get) => ({
     } finally {
       set({ histWarming: null, histRatesUnavailable: unresolved });
     }
+  },
+
+  requestRateDates: (dates) => {
+    const valid = dates.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    const known = new Set(get().extraRateDates);
+    if (valid.some((d) => !known.has(d))) {
+      set({ extraRateDates: [...new Set([...known, ...valid])].sort() });
+    }
+    // Догружаем, только если курса на какой-то из дней и правда нет: иначе
+    // каждый перенос планов дёргал бы прогрев впустую. Идущий прогрев новые
+    // дни не возьмёт — их подхватит следующий вызов после него.
+    const hist = get().histDayRates;
+    if (valid.some((d) => !(d in hist))) void get().warmHistoricalRates();
   },
 
   dismissHistRatesWarning: () => set({ histRatesUnavailable: 0 }),

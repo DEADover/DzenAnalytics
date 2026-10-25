@@ -94,6 +94,7 @@ import { useBudgetsStore } from "./useBudgetsStore";
 import {
   zenPlanList,
   zenForecastsFromBudgets,
+  plannedRateDates,
   plannedOpsByTagMonth,
   fulfilledMarkerIds,
 } from "../lib/zenBudgets";
@@ -526,6 +527,13 @@ export function hasPendingPush(): boolean {
 /** Планы облака по ячейкам: бюджет плюс плановые операции у ячеек без замка. */
 function zenPlanSeeds(cache: ZenCache) {
   if (!cache.budgets || cache.budgets.length === 0) return [];
+  const fulfilled = fulfilledMarkerIds(cache.transactions);
+  // Курсы на дни исполненных валютных планов: без них план берётся по
+  // сегодняшнему курсу. Когда курсы догрузятся, планы перенесутся заново
+  // (см. подписку на `histDayRates` ниже).
+  useDataStore
+    .getState()
+    .requestRateDates(plannedRateDates(cache.reminderMarkers, cache.user?.[0]?.currency, fulfilled));
   // Effective plan = stored budget + planned ops for unlocked cells.
   const planned = plannedOpsByTagMonth(
     cache.reminderMarkers,
@@ -541,10 +549,33 @@ function zenPlanSeeds(cache: ZenCache) {
     // можно связать с уже существующей операцией, и такой маркер
     // перестаёт быть `planned` — план месяца от этого проваливался
     // (issue #86).
-    fulfilledMarkerIds(cache.transactions)
+    fulfilled
   );
   return zenPlanList(cache.budgets, cache.tags, planned);
 }
+
+/**
+ * Перенести планы заново, когда догрузились курсы на даты.
+ *
+ * Перенос идёт на синхронизации, а курсы ЦБ догружаются после неё, в фоне.
+ * Исполненный валютный план, перенесённый раньше курсов, считался по
+ * сегодняшнему курсу и таким оставался до следующей синхронизации: «Подписки»
+ * показывали 22 406 ₽ против 22 897 в Дзен-мани.
+ *
+ * Срабатывает, только когда курсов стало БОЛЬШЕ: прогрев, который ничего не
+ * нашёл, состояние тоже обновляет, и без этой проверки получилась бы петля.
+ */
+let ratesSeen = Object.keys(useDataStore.getState().histDayRates).length;
+useDataStore.subscribe((s) => {
+  if (s.histWarming) return;
+  const n = Object.keys(s.histDayRates).length;
+  if (n <= ratesSeen) return;
+  ratesSeen = n;
+  void (async () => {
+    const cache = await loadZenCache();
+    if (cache) await mirrorZenPlans(cache);
+  })();
+});
 
 /**
  * Перенести «Планы» Дзен-мани в строки бюджета — на каждой синхронизации.
