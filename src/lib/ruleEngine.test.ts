@@ -848,3 +848,54 @@ describe("условие по сумме", () => {
     expect(opsForField("payee")).not.toContain("gt");
   });
 });
+
+describe("тёзки в правилах: «Счёт равен» и перевод по номеру счёта", () => {
+  const twinA = { account: "Т-Банк", outcomeAccount: "Т-Банк", accountId: "a1", outcomeAccountId: "a1", accountKey: "a1", outcomeAccountKey: "a1" };
+  const twinB = { account: "Т-Банк", outcomeAccount: "Т-Банк", accountId: "a2", outcomeAccountId: "a2", accountKey: "a2", outcomeAccountKey: "a2" };
+
+  it("с номером — ловит только свой счёт", () => {
+    const c = cond({ field: "account", op: "equals", value: "Т-Банк", refId: "a2" });
+    expect(conditionMatches(tx(twinA), c)).toBe(false);
+    expect(conditionMatches(tx(twinB), c)).toBe(true);
+  });
+
+  it("без номера (старое правило) — оба, как раньше", () => {
+    const c = cond({ field: "account", op: "equals", value: "Т-Банк" });
+    expect(conditionMatches(tx(twinA), c)).toBe(true);
+    expect(conditionMatches(tx(twinB), c)).toBe(true);
+  });
+
+  it("операция без номеров (CSV, старое хранилище) — по названию", () => {
+    const c = cond({ field: "account", op: "equals", value: "Т-Банк", refId: "a2" });
+    expect(conditionMatches(tx({ account: "Т-Банк", outcomeAccount: "Т-Банк" }), c)).toBe(true);
+  });
+
+  it("долги: ключ — название, номер валютного счёта не мешает", () => {
+    const c = cond({ field: "account", op: "equals", value: "Долги", refId: "d-rub" });
+    const debtUsd = tx({ account: "Долги", outcomeAccount: "Долги", accountId: "d-usd", accountKey: "Долги", outcomeAccountId: "d-usd", outcomeAccountKey: "Долги" });
+    expect(conditionMatches(debtUsd, c)).toBe(true);
+  });
+
+  it("перевод на тёзку: номер второго счёта уходит в правку", () => {
+    const r = rule({
+      conditions: [cond({ field: "account", op: "equals", value: "Т-Банк", refId: "a1" })],
+      actions: [{ kind: "setTransfer", value: "Т-Банк", refId: "a2" }],
+    });
+    const [hit] = collectRuleHits(tx(twinA), [r]);
+    expect(hit.patch).toMatchObject({
+      kind: "transfer",
+      outcomeAccount: "Т-Банк",
+      outcomeAccountId: "a1",
+      incomeAccount: "Т-Банк",
+      incomeAccountId: "a2",
+    });
+  });
+
+  it("описание правила — подписью тёзки", () => {
+    const r = rule({
+      conditions: [cond({ field: "account", op: "equals", value: "Т-Банк", refId: "a2" })],
+      actions: [{ kind: "setCategory", value: "Еда" }],
+    });
+    expect(describeRule(r, (v, id) => (id === "a2" ? `${v} · Сбербанк` : v))).toContain("«Т-Банк · Сбербанк»");
+  });
+});

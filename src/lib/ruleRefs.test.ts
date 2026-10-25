@@ -130,3 +130,28 @@ describe("ссылки правил на справочники Дзен-ман�
     expect(rules[0]).toBe(r);
   });
 });
+
+describe("тёзки: ссылка на счёт не перескакивает", () => {
+  it("номер одного из тёзок сохраняется после синхронизации", () => {
+    const r = rule({
+      groups: [{ join: "and", conditions: [cond("account", "equals", "Наличные", { refId: "a-cash2" })] }],
+    });
+    const { rules, changed } = reconcileRulesRefs([r], dict);
+    expect(changed).toBe(false);
+    expect(rules[0].groups[0].conditions[0].refId).toBe("a-cash2");
+  });
+
+  it("ссылка на архивного тёзку не переезжает на живого", () => {
+    const d: RefDictionary = {
+      ...dict,
+      accounts: [
+        { id: "v-old", title: "Вклад", archive: true },
+        { id: "v-new", title: "Вклад" },
+      ],
+    };
+    const r = rule({
+      groups: [{ join: "and", conditions: [cond("account", "equals", "Вклад", { refId: "v-old" })] }],
+    });
+    expect(reconcileRulesRefs([r], d).rules[0].groups[0].conditions[0].refId).toBe("v-old");
+  });
+});

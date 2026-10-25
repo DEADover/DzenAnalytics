@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { accountKindLabel } from "../lib/accountType";
-import { useAccountDirectory } from "../hooks/useAccountDirectory";
+import { refAccountLabel, useAccountDirectory } from "../hooks/useAccountDirectory";
+import { txAccountKey, txInKey, txOutKey } from "../lib/accountKey";
 import { getBrandTitlesFromCache } from "../store/useZenmoneyStore";
 import {
   Wand2,
@@ -250,40 +251,38 @@ export function RulesPage() {
    */
   // Счета — из справочника: в том числе те, по которым ещё нет ни одной
   // операции (новая карта, вклад без движения), — правило на них заводят
-  // заранее. Условие правила сравнивает НАЗВАНИЕ счёта, поэтому тёзки здесь —
-  // одна строка: правило с ним сработает на обоих.
+  // заранее. Ключами: тёзки — разными пунктами с уточнением, правило
+  // запоминает номер выбранного (`RuleCondition.refId`).
   const dir = useAccountDirectory();
-  const accountKinds = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const e of dir.list)
-      if (e.type && !m.has(e.title)) m.set(e.title, accountKindLabel(e.type, e.savings));
-    return m;
-  }, [dir]);
-
+  const accountName = useCallback(
+    (value: string, refId?: string) => refAccountLabel(dir, value, refId),
+    [dir]
+  );
   const allAccounts = useMemo(() => {
     const set = new Set<string>();
-    for (const e of dir.list) if (e.title) set.add(e.title);
+    for (const e of dir.list) set.add(e.key);
     for (const t of transactions) {
-      for (const a of [t.account, t.outcomeAccount, t.incomeAccount]) {
-        if (a) set.add(a);
-      }
+      if (t.account) set.add(txAccountKey(t));
+      if (t.outcomeAccount) set.add(txOutKey(t));
+      if (t.incomeAccount) set.add(txInKey(t));
     }
-    return [...set].sort((a, b) => a.localeCompare(b, "ru"));
+    return [...set].sort((a, b) => dir.label(a).localeCompare(dir.label(b), "ru"));
   }, [transactions, dir]);
 
   const accountGroups = useMemo(() => {
-    if (accountKinds.size === 0) return undefined;
+    if (!dir.list.some((e) => e.type)) return undefined;
     const byKind = new Map<string, string[]>();
-    for (const title of allAccounts) {
-      const kind = accountKinds.get(title) || "Прочие";
+    for (const key of allAccounts) {
+      const e = dir.byKey.get(key);
+      const kind = e?.type ? accountKindLabel(e.type, e.savings) : "Прочие";
       const list = byKind.get(kind);
-      if (list) list.push(title);
-      else byKind.set(kind, [title]);
+      if (list) list.push(key);
+      else byKind.set(kind, [key]);
     }
     return [...byKind.entries()]
       .sort((a, b) => a[0].localeCompare(b[0], "ru"))
       .map(([label, items]) => ({ label, items }));
-  }, [allAccounts, accountKinds]);
+  }, [allAccounts, dir]);
 
   const allPayees = useMemo(() => {
     const set = new Set<string>();
@@ -415,7 +414,7 @@ export function RulesPage() {
       transactionsRaw.filter((t) => ruleMatchesV2(t, rule, compiled)).map((t) => t.id)
     );
     const matches = transactions.filter((t) => ids.has(t.id));
-    showDrill(`Совпадений: ${matches.length}`, matches, describeRule(rule));
+    showDrill(`Совпадений: ${matches.length}`, matches, describeRule(rule, accountName));
   }
 
   async function saveRule(draft: RuleDraft) {
@@ -901,8 +900,8 @@ export function RulesPage() {
                               />
                             </Tooltip>
                           )}
-                          <span className="truncate group-hover:text-accent" title={describeRule(rule)}>
-                            {describeRule(rule) || "Правило не дописано"}
+                          <span className="truncate group-hover:text-accent" title={describeRule(rule, accountName)}>
+                            {describeRule(rule, accountName) || "Правило не дописано"}
                           </span>
                         </div>
                         {targets.length > 0 && (

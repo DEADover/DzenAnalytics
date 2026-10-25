@@ -58,6 +58,7 @@ import type { RulePrefill } from "../lib/ruleFromTransaction";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { InfoPopover } from "./InfoPopover";
 import { findTwinRule } from "../store/useCategoryRulesStore";
+import { accountRef, refAccountLabel, useAccountDirectory } from "../hooks/useAccountDirectory";
 
 const RULE_FIELDS: { value: RuleField; label: string }[] = (
   Object.keys(FIELD_LABELS) as RuleField[]
@@ -199,9 +200,10 @@ interface Props {
   liveCategories?: CategoryNode[] | null;
   /** Подсказки получателей для действия «Получатель». */
   payees: string[];
-  /** Названия счетов — для пикера в условии «Счёт». */
+  /** Ключи счетов (`lib/accountKey`) — для пикера в условии «Счёт» и в
+   *  действии «Перевод на счёт». Тёзки — разными пунктами с уточнением. */
   accounts: string[];
-  /** Те же счета, разложенные по виду («Карта», «Депозит»…). Нет в режиме CSV. */
+  /** Те же ключи, разложенные по виду («Карта», «Депозит»…). Нет в режиме CSV. */
   accountGroups?: { label: string; items: string[] }[];
   onClose: () => void;
   onSave: (draft: RuleDraft) => void | Promise<void>;
@@ -244,6 +246,12 @@ function valueForOp(c: RuleCondition, next: ConditionOp): string {
  */
 function withoutStaleRef<T extends { refId?: string }>(item: T, patch: Partial<T>): T {
   const next = { ...item, ...patch };
+  // Ссылку задали вместе со значением (выбор счёта из списка) — она и верна.
+  if ("refId" in patch) {
+    if (next.refId !== undefined) return next;
+    const { refId: _none, ...rest } = next;
+    return rest as T;
+  }
   const touched = Object.keys(patch).some((k) => k !== "caseInsensitive" && k !== "separator");
   if (!touched || next.refId === undefined) return next;
   const { refId: _stale, ...rest } = next;
@@ -401,6 +409,25 @@ export function RuleEditModal({
   onSave,
 }: Props) {
   const [showMatches, setShowMatches] = useState(false);
+
+  // Счёт в правиле — название и номер (`refId`): тёзки различаются только
+  // номером. В пикере — ключ справочника с подписью.
+  const dir = useAccountDirectory();
+  /** Ключ счёта, на который указывает строка правила. Старое правило без
+   *  номера с названием тёзок — показываем как есть, названием. */
+  const pickedAccount = (item: { value: string; refId?: string }): string => {
+    if (item.refId) {
+      const hit = dir.list.find((e) => e.ids.includes(item.refId!));
+      if (hit) return hit.key;
+    }
+    const keys = dir.keysByTitle(item.value);
+    return keys.length === 1 ? keys[0] : item.value;
+  };
+  /** Правка строки правила при выборе счёта из списка. */
+  const accountPatch = (key: string) => {
+    const ref = accountRef(dir, key);
+    return { value: ref.title, refId: ref.id };
+  };
 
   /**
    * Категории для каскадного пикера: верхний уровень — родители, справа их
@@ -651,8 +678,8 @@ export function RuleEditModal({
         // Описание показываем, только когда правило уже что-то значит: на пустом
         // бланке «Получатель содержит «»» — шум, а не подсказка.
         title={
-          <span title={hasSubstance ? describeRule(cleaned) : undefined}>
-            {hasSubstance ? describeRule(cleaned) : "Условие → что изменить"}
+          <span title={hasSubstance ? describeRule(cleaned, (v, id) => refAccountLabel(dir, v, id)) : undefined}>
+            {hasSubstance ? describeRule(cleaned, (v, id) => refAccountLabel(dir, v, id)) : "Условие → что изменить"}
           </span>
         }
       />
@@ -804,16 +831,17 @@ export function RuleEditModal({
                       ) : c.field === "account" && c.op === "equals" ? (
                         <div className="flex-1 min-w-0">
                           <Combobox
-                            value={c.value}
+                            value={pickedAccount(c)}
                             options={accounts}
                             groups={accountGroups}
-                            renderIcon={(title) => (
-                              <AccountLogo title={title} size={18} />
+                            labelOf={dir.label}
+                            renderIcon={(key) => (
+                              <AccountLogo title={dir.byKey.get(key)?.title ?? key} size={18} />
                             )}
                             allowCustom={false}
                             searchable
                             portal
-                            onChange={(v) => patchCondition(c.id!, { value: v })}
+                            onChange={(key) => patchCondition(c.id!, accountPatch(key))}
                             placeholder="Поиск счёта"
                           />
                         </div>
@@ -1024,14 +1052,17 @@ export function RuleEditModal({
                   <div className="flex-1 min-w-0">
                     {target === "kind" ? (
                       <Combobox
-                        value={a.value}
+                        value={pickedAccount(a)}
                         options={accounts}
                         groups={accountGroups}
-                        renderIcon={(title) => <AccountLogo title={title} size={18} />}
+                        labelOf={dir.label}
+                        renderIcon={(key) => (
+                          <AccountLogo title={dir.byKey.get(key)?.title ?? key} size={18} />
+                        )}
                         allowCustom={false}
                         searchable
                         portal
-                        onChange={(v) => patchAction(a.id!, { value: v })}
+                        onChange={(key) => patchAction(a.id!, accountPatch(key))}
                         placeholder="Второй счёт"
                       />
                     ) : target === "seen" ? (

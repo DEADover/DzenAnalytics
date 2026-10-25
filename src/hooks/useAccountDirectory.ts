@@ -44,3 +44,15 @@ export function accountRef(
   const e = dir.byKey.get(key);
   return { title: e?.title ?? key, id: e && e.ids.length === 1 ? e.ids[0] : undefined };
 }
+
+/**
+ * Подпись счёта из правила: по номеру (`refId`), если он есть, иначе по
+ * названию. Тёзки различаются только номером — без него остаётся название.
+ */
+export function refAccountLabel(dir: AccountDirectory, value: string, refId?: string): string {
+  if (refId) {
+    const hit = dir.list.find((e) => e.ids.includes(refId));
+    if (hit) return hit.label;
+  }
+  return value;
+}

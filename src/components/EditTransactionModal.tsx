@@ -576,6 +576,8 @@ export function EditTransactionModal({
         comment,
         categoryFull: subcategory ? `${category} / ${subcategory}` : category,
         account: titleOf(account),
+        accountId: idOf(account),
+        accountKey: account,
         kind: isDebt ? "debt" : kind,
         amountBase: ruleAmountBase(),
         // Сравнивается с тем, что сохранено: правило видит операции до правок.

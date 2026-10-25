@@ -2876,7 +2876,7 @@ export function AccountsPage() {
           icon={chartView === "stacked" ? Layers : LineChartIcon}
           title={
             capitalPick
-              ? `${hasRealBalances ? "Остаток по счёту" : "Накоплено по счёту"}: ${capitalPick}`
+              ? `${hasRealBalances ? "Остаток по счёту" : "Накоплено по счёту"}: ${dir.label(capitalPick)}`
               : chartView === "stacked"
                 ? hasRealBalances
                   ? "Остатки по счетам"

@@ -103,14 +103,17 @@ export function kindBlockReason(
   if (target === "transfer") {
     const other = t.kind === "expense" ? patch.incomeAccount : patch.outcomeAccount;
     if (!other) return null;
-    if (checks && checks.accountCurrency(other) === null) {
+    // Справочник ищет счёт по номеру, а без него — по названию: у тёзок
+    // название одно, а валюты могут быть разные.
+    const otherRef = (t.kind === "expense" ? patch.incomeAccountId : patch.outcomeAccountId) ?? other;
+    if (checks && checks.accountCurrency(otherRef) === null) {
       return `счёта «${other}» нет в Дзен-мани`;
     }
-    if (checks?.isDebtAccount(other)) {
+    if (checks?.isDebtAccount(otherRef)) {
       return `«${other}» — долговой счёт: такой перевод стал бы долгом, его заводят вручную`;
     }
-    const mine = accountCurrency(t.account);
-    const theirs = accountCurrency(other);
+    const mine = accountCurrency(t.accountId ?? t.account);
+    const theirs = accountCurrency(otherRef);
     if (mine && theirs && mine !== theirs) {
       return `«${other}» в другой валюте — для перевода нужна сумма зачисления, укажите её вручную`;
     }
@@ -381,7 +384,17 @@ export function buildRulePlan(
           written?.incomeAccount === patch.incomeAccount,
         () => {
           toWrite.kind = patch.kind;
-          for (const k of ["account", "outcomeAccount", "incomeAccount"] as const) {
+          for (const k of [
+            "account",
+            "outcomeAccount",
+            "incomeAccount",
+            "accountId",
+            "outcomeAccountId",
+            "incomeAccountId",
+            "accountKey",
+            "outcomeAccountKey",
+            "incomeAccountKey",
+          ] as const) {
             if (patch[k] !== undefined) toWrite[k] = patch[k];
           }
         }

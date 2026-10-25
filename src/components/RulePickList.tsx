@@ -13,6 +13,7 @@ import {
 import { ruleModeOf } from "../lib/ruleMode";
 import { formatNum } from "../lib/format";
 import { queryMatcher } from "../lib/keyboardLayout";
+import { refAccountLabel, useAccountDirectory } from "../hooks/useAccountDirectory";
 
 export interface RulePickItem {
   /** Ключ строки. У правил из файла id может повторяться, поэтому не всегда id. */
@@ -41,14 +42,15 @@ export function RulePickList({
   onChange: (next: Set<string>) => void;
 }) {
   const [query, setQuery] = useState("");
+  const dir = useAccountDirectory();
 
   const described = useMemo(
     () =>
       items.map((it) => ({
         ...it,
-        text: describeRule(it.rule) || "Правило не дописано",
+        text: describeRule(it.rule, (v, id) => refAccountLabel(dir, v, id)) || "Правило не дописано",
       })),
-    [items]
+    [items, dir]
   );
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();

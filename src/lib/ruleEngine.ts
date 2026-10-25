@@ -190,8 +190,8 @@ export interface RuleCondition {
   /**
    * id тега, счёта или контрагента Дзен-мани, на который указывает `value`, —
    * только у «равно» по категории, счёту и получателю. По нему название
-   * подтягивается после переименования (`lib/ruleRefs`). Движок на него не
-   * смотрит: сравнивает по-прежнему `value`.
+   * подтягивается после переименования (`lib/ruleRefs`). У счёта движок
+   * сравнивает и номер — так различаются тёзки; у остального — `value`.
    */
   refId?: string;
 }
@@ -246,7 +246,8 @@ export interface RuleAction {
    *  строка означает «вплотную», и это осмысленный выбор, поэтому отличаем её
    *  от «не задано». */
   separator?: string;
-  /** id тега (категория) или контрагента (получатель) Дзен-мани — см. `RuleCondition.refId`. */
+  /** id тега (категория), контрагента (получатель) или счёта (перевод на
+   *  счёт) Дзен-мани — см. `RuleCondition.refId`. */
   refId?: string;
 }
 
@@ -471,6 +472,30 @@ export function conditionValues(t: Transaction, field: RuleField): string[] {
   }
 }
 
+/**
+ * «Счёт равен» по ссылке на счёт (`refId`).
+ *
+ * Сторона операции подходит, если её название совпало и номер — тот самый.
+ * Номера может не быть (операция из CSV, сохранённая до появления номеров) —
+ * тогда, как прежде, хватает названия. У долгов ключ — название (счетов по
+ * валюте несколько, для человека это один счёт), номер там не сравниваем.
+ */
+function accountLegMatches(t: Transaction, c: RuleCondition): boolean {
+  const norm = (v: string) => (c.caseInsensitive ? v.toLowerCase() : v).trim();
+  const needle = norm(c.value);
+  const legs: [string | undefined, string | undefined, string | undefined][] = [
+    [t.account, t.accountId, t.accountKey],
+    [t.outcomeAccount, t.outcomeAccountId, t.outcomeAccountKey],
+    [t.incomeAccount, t.incomeAccountId, t.incomeAccountKey],
+  ];
+  return legs.some(([title, id, key]) => {
+    if (!title || norm(title) !== needle) return false;
+    if (!id) return true;
+    if (key && key === title) return true;
+    return id === c.refId;
+  });
+}
+
 /** Пустое ли поле по смыслу. «Без категории» — это и есть незаполненная
  *  категория, хотя текст в поле есть. */
 export function isBlankField(raw: string, field: RuleField): boolean {
@@ -577,6 +602,10 @@ export function conditionMatches(
         return false;
     }
   }
+
+  // «Счёт равен» со ссылкой на счёт — по его номеру: у тёзок одно название
+  // на двоих, и сравнение по тексту поймало бы оба.
+  if (c.field === "account" && c.op === "equals" && c.refId) return accountLegMatches(t, c);
 
   const values = conditionValues(t, c.field);
   // Неизвестное поле не выполняется ни при какой операции — в том числе при
@@ -712,7 +741,7 @@ export function ruleActionsToEdit(
       }
       case "setKind":
       case "setTransfer":
-        Object.assign(patch, kindPatch(t, a.kind, value));
+        Object.assign(patch, kindPatch(t, a.kind, value, a.refId));
         break;
       case "addTag": {
         // У перевода и долга категорий нет — и вторых тоже.
@@ -758,7 +787,9 @@ export function ruleActionsToEdit(
 export function kindPatch(
   t: Transaction,
   kind: "setKind" | "setTransfer",
-  value: string
+  value: string,
+  /** Номер второго счёта — у «перевода на счёт» (`RuleAction.refId`). */
+  refId?: string
 ): TransactionEdit {
   if (ruleKindOf(t) === "debt") return {};
   if (kind === "setKind") {
@@ -766,17 +797,41 @@ export function kindPatch(
     if (t.kind !== "transfer") return { kind: value };
     // Перевод → одна нога: расход остаётся на счёте списания, доход и возврат —
     // на счёте зачисления. Поля ног — как у обычной операции этого типа.
+    // Номер и ключ — той же стороны: у тёзок по названию счёт не найти.
+    const out = !!t.outcomeAccount;
     const keep = value === "expense" ? t.outcomeAccount || t.account : t.incomeAccount;
     if (!keep) return {};
+    const id = value === "expense" ? (out ? t.outcomeAccountId : t.accountId) : t.incomeAccountId;
+    const key = value === "expense" ? (out ? t.outcomeAccountKey : t.accountKey) : t.incomeAccountKey;
+    const ref = { ...(id ? { accountId: id } : {}), ...(key ? { accountKey: key } : {}) };
     return value === "expense"
-      ? { kind: value, account: keep, outcomeAccount: keep, incomeAccount: "" }
-      : { kind: value, account: keep, incomeAccount: keep, outcomeAccount: "" };
+      ? { kind: value, account: keep, outcomeAccount: keep, incomeAccount: "", ...ref,
+          ...(id ? { outcomeAccountId: id } : {}), ...(key ? { outcomeAccountKey: key } : {}) }
+      : { kind: value, account: keep, incomeAccount: keep, outcomeAccount: "", ...ref,
+          ...(id ? { incomeAccountId: id } : {}), ...(key ? { incomeAccountKey: key } : {}) };
   }
   const other = value.trim();
-  if (!other || t.kind === "transfer" || other === t.account) return {};
-  const from = t.kind === "expense" ? t.account : other;
-  const to = t.kind === "expense" ? other : t.account;
-  return { kind: "transfer", outcomeAccount: from, incomeAccount: to, account: from };
+  if (!other || t.kind === "transfer") return {};
+  // Тот же счёт — не перевод. Тёзка с другим номером — перевод.
+  if (refId && t.accountId ? refId === t.accountId : other === t.account) return {};
+  const mine = {
+    title: t.account,
+    id: t.accountId,
+    key: t.accountKey,
+  };
+  const theirs = { title: other, id: refId, key: refId };
+  const from = t.kind === "expense" ? mine : theirs;
+  const to = t.kind === "expense" ? theirs : mine;
+  return {
+    kind: "transfer",
+    outcomeAccount: from.title,
+    incomeAccount: to.title,
+    account: from.title,
+    ...(from.id ? { outcomeAccountId: from.id, accountId: from.id } : {}),
+    ...(from.key ? { outcomeAccountKey: from.key, accountKey: from.key } : {}),
+    ...(to.id ? { incomeAccountId: to.id } : {}),
+    ...(to.key ? { incomeAccountKey: to.key } : {}),
+  };
 }
 
 /** «Еда / Кафе» → категория и подкатегория. */
@@ -1004,7 +1059,13 @@ export function mergeHits(hits: RuleHit[]): Record<string, TransactionEdit> {
 }
 
 /** Человекочитаемое описание правила — для строки таблицы и заголовка окна. */
-export function describeRule(rule: CategoryRuleV2): string {
+export function describeRule(
+  rule: CategoryRuleV2,
+  /** Подпись счёта по названию и номеру — у тёзок с уточнением. Не задана —
+   *  название как есть. */
+  accountName?: (value: string, refId?: string) => string
+): string {
+  const acc = (value: string, refId?: string) => (accountName ? accountName(value, refId) : value);
   if (rule.title?.trim()) return rule.title.trim();
   const word = (j: ConditionJoin) => (j === "or" ? " ИЛИ " : " И ");
   const describeOne = (c: RuleCondition) => {
@@ -1025,6 +1086,7 @@ export function describeRule(rule: CategoryRuleV2): string {
       return [f, from && `от ${from}`, to && `до ${to}`].filter(Boolean).join(" ");
     }
     if (NUMERIC_FIELDS.has(c.field)) return `${f} ${op} ${c.value}`;
+    if (c.field === "account" && c.op === "equals") return `${f} ${op} «${acc(c.value, c.refId)}»`;
     return `${f} ${op} «${c.value}»`;
   };
   const parts = rule.groups
@@ -1049,7 +1111,7 @@ export function describeRule(rule: CategoryRuleV2): string {
         : a.kind === "setKind"
         ? `${ACTION_LABELS[a.kind]} = «${KIND_VALUE_LABELS[a.value as RuleKindValue] ?? a.value}»`
         : a.kind === "setTransfer"
-          ? `Перевод, второй счёт «${a.value}»`
+          ? `Перевод, второй счёт «${acc(a.value, a.refId)}»`
           : `${ACTION_LABELS[a.kind] ?? a.kind} = «${a.value}»`
     )
     .join(", ");

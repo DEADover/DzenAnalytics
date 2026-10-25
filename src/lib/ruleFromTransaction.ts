@@ -19,7 +19,8 @@ export interface RulePrefill {
   actions: RuleAction[];
 }
 
-export interface RuleSource extends Pick<Transaction, "payee" | "brand" | "comment" | "categoryFull" | "account"> {
+export interface RuleSource
+  extends Pick<Transaction, "payee" | "brand" | "comment" | "categoryFull" | "account" | "accountId" | "accountKey"> {
   /** Тип в терминах правил: долг отдельно от перевода (`ruleKindOf`). */
   kind: RuleKindValue;
   /** Сумма в валюте отчётов без знака — так её сравнивает условие. */
@@ -37,7 +38,15 @@ export function ruleDraftFromTransaction(t: RuleSource): RulePrefill {
   // Порядок — от общего к частному, как в списке полей редактора.
   const conditions: RuleCondition[] = [];
   conditions.push({ field: "kind", op: "equals", value: t.kind, caseInsensitive: true });
-  if (account) conditions.push({ field: "account", op: "equals", value: account, caseInsensitive: true });
+  if (account) conditions.push({
+      field: "account",
+      op: "equals",
+      value: account,
+      caseInsensitive: true,
+      // Номер — чтобы правило не поймало тёзку. У долгов ключ — название
+      // (счетов по валюте несколько), номер там ни к чему.
+      ...(t.accountId && t.accountKey !== t.account ? { refId: t.accountId } : {}),
+    });
   // «Перевод» и «Долг» уже сказаны типом операции — повторять их категорией незачем.
   const current = (t.currentCategory ?? "").trim();
   if (!current || current === NO_CATEGORY)

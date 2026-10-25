@@ -72,10 +72,48 @@ test("тёзки — две строки на «Счетах» и два пун�
   await connectZen(page, "/accounts");
   await expect(page.getByText("Т-Банк · Тинькофф", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Т-Банк · Сбербанк", { exact: true }).first()).toBeVisible();
+  // Выбранный счёт в заголовке графика — подписью, а не номером счёта.
+  await page.getByText("Т-Банк · Сбербанк", { exact: true }).first().click();
+  await expect(page.getByText(/по счёту: Т-Банк · Сбербанк/).first()).toBeVisible();
+  await expect(page.getByText(/по счёту: acc-/)).toHaveCount(0);
 
   await page.goto("/budgets");
   await page.getByRole("button", { name: "Настройки бюджета" }).click();
   await page.getByRole("button", { name: /^Счета/ }).last().click();
   await expect(page.getByText("Т-Банк · Тинькофф", { exact: true }).last()).toBeVisible();
   await expect(page.getByText("Т-Банк · Сбербанк", { exact: true }).last()).toBeVisible();
+});
+
+test("тёзки в правилах: правило из операции помнит свой счёт, в списке оба", async ({ page, zen }) => {
+  zen.patchFull = (diff) => ({
+    ...diff,
+    company: [
+      { id: 1, title: "Тинькофф" },
+      { id: 2, title: "Сбербанк" },
+    ],
+    account: diff.account.map((a) =>
+      a.id === "acc-tbank"
+        ? { ...a, company: 1 }
+        : a.id === "acc-sber"
+          ? { ...a, title: "Т-Банк", company: 2 }
+          : a
+    ),
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/transactions");
+  const row = page
+    .getByText("Ресторан", { exact: true })
+    .first()
+    .locator("xpath=ancestor::*[.//button[@aria-label='Изменить операцию']][1]");
+  await row.hover();
+  await row.getByRole("button", { name: "Изменить операцию" }).click();
+  const op = page.getByRole("dialog").filter({ has: page.getByRole("button", { name: "Создать правило" }) });
+  await op.getByRole("button", { name: "Создать правило" }).click();
+
+  const editor = page.getByRole("dialog");
+  const picker = editor.getByRole("combobox", { name: "Поиск счёта" });
+  await expect(picker).toHaveValue("Т-Банк · Сбербанк");
+  await picker.click();
+  await expect(page.getByRole("option", { name: "Т-Банк · Тинькофф" })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Т-Банк · Сбербанк" })).toBeVisible();
 });
