@@ -112,11 +112,24 @@ export function mergeLiveByTitle<T extends TitledBalance>(
   accounts: readonly T[],
   toBase: (amount: number, currency: string) => number
 ): Map<string, MergedTitle<T>> {
+  return mergeLiveByKey(accounts, (a) => a.title, toBase);
+}
+
+/**
+ * То же, что `mergeLiveByTitle`, но по ключу счёта (`lib/accountKey`): тёзки
+ * остаются разными строками, сводятся только долговые счета по валютам.
+ */
+export function mergeLiveByKey<T extends TitledBalance>(
+  accounts: readonly T[],
+  keyOf: (a: T) => string,
+  toBase: (amount: number, currency: string) => number
+): Map<string, MergedTitle<T>> {
   const out = new Map<string, MergedTitle<T>>();
   for (const a of accounts) {
-    const prev = out.get(a.title);
+    const key = keyOf(a);
+    const prev = out.get(key);
     if (!prev) {
-      out.set(a.title, {
+      out.set(key, {
         lead: a,
         base: toBase(a.balance, a.currency),
         count: 1,

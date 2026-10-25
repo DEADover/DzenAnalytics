@@ -1,4 +1,4 @@
-import { txAccountKey } from "../lib/accountKey";
+import { accountKeyOf, txAccountKey } from "../lib/accountKey";
 import { AccountName } from "../components/AccountName";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -407,7 +407,7 @@ export function TransactionsPage() {
     let cancelled = false;
     getLiveAccountsFromCache().then((live) => {
       if (cancelled || !live) return;
-      setSavingsAccounts(new Set(live.filter((a) => a.savings).map((a) => a.title)));
+      setSavingsAccounts(new Set(live.filter((a) => a.savings).map(accountKeyOf)));
     });
     return () => {
       cancelled = true;

@@ -117,7 +117,9 @@ import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { Segmented } from "../components/Segmented";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
-import { capitalShare, mergeLiveByTitle, positiveBalanceTotal } from "../lib/accountOptions";
+import { capitalShare, mergeLiveByKey, positiveBalanceTotal } from "../lib/accountOptions";
+import { accountKeyOf, txInKey, txOutKey } from "../lib/accountKey";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
 import { depositTotals, projectDeposit, type DepositRow } from "../lib/deposits";
 import { SectionCard } from "../components/SectionCard";
 import { CardHeader } from "../components/CardHeader";
@@ -451,6 +453,9 @@ export function AccountsPage() {
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
+  /** Справочник счетов: подписи тёзок и старые ссылки по названию. */
+  const dir = useAccountDirectory();
+  /** Выбранный счёт — его ключ (`lib/accountKey`). */
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   /**
    * Выбор счёта в списке перестраивает график вкладки — «Изменение по счёту»
@@ -501,9 +506,11 @@ export function AccountsPage() {
   // Множества собираем из хранимых массивов: в IDB `Set` не кладётся, а вся
   // страница ниже работает именно множествами (соглашение MultiSelect —
   // пусто = «все», {FILTER_NONE} = «ничего»).
+  // Счета графика запоминались названиями — старая запись значит все счета с
+  // этим названием.
   const chartAccounts = useMemo(
-    () => new Set(prefs.chartAccounts),
-    [prefs.chartAccounts]
+    () => dir.resolve(prefs.chartAccounts),
+    [prefs.chartAccounts, dir]
   );
   const setChartAccounts = (next: Set<string>) =>
     void patchPrefs({ chartAccounts: [...next] });
@@ -598,13 +605,13 @@ export function AccountsPage() {
   const currentSlice = activeSlice({ slices: sliceList, activeId: sliceActiveId });
   const sliceName = currentSlice.name;
   const sliceExcludedAccounts = useMemo(
-    () => new Set(currentSlice.excludedAccounts),
-    [currentSlice]
+    () => dir.resolve(currentSlice.excludedAccounts),
+    [currentSlice, dir]
   );
-  const toggleSliceAccount = (title: string) => {
+  const toggleSliceAccount = (key: string) => {
     const next = new Set(sliceExcludedAccounts);
-    if (next.has(title)) next.delete(title);
-    else next.add(title);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     return setSliceAccounts(currentSlice.id, [...next]);
   };
   const clearCalibration = useCalibrationStore((s) => s.clear);
@@ -710,9 +717,10 @@ export function AccountsPage() {
    *  на «Капитале» и отобранный период на «Движении». */
   const debtSource = capitalView ? transactions : filtered;
 
-  /** Названия долговых счетов — по справочнику Дзен-мани. */
+  /** Ключи долговых счетов — по справочнику Дзен-мани (у долгов ключ —
+   *  общее название, см. `lib/accountKey`). */
   const debtAccountTitles = useMemo(
-    () => new Set(liveList.filter((a) => DEBT_TYPES.has(a.type)).map((a) => a.title)),
+    () => new Set(liveList.filter((a) => DEBT_TYPES.has(a.type)).map(accountKeyOf)),
     [liveList]
   );
 
@@ -730,13 +738,15 @@ export function AccountsPage() {
     // Дзен-мани долговых счетов столько, сколько валют, и называются они все
     // «Долги». Карта по названию оставляла последний, и в списке стоял остаток
     // случайной валюты вместо суммы долгов (issue #89).
-    const merged = mergeLiveByTitle(liveList, toBase);
+    // Тёзки (два «Т-Банка» в разных банках) — разные строки: сводятся
+    // только счета с одним ключом, то есть долги по валютам.
+    const merged = mergeLiveByKey(liveList, accountKeyOf, toBase);
     // На «Капитале» список строится по ВСЕЙ истории: остаток на счёте не
     // зависит от того, какие операции сейчас отобраны, и счёт не должен
     // пропадать из перечня только потому, что в выбранном периоде по нему не
     // было движения. На «Движении» наоборот — там показаны обороты за фильтр.
     const source = capitalView ? accountsAll : accounts;
-    const txByTitle = new Map(source.map((a) => [a.account, a]));
+    const txByKey = new Map(source.map((a) => [a.account, a]));
 
     // Список на этой странице — справочник счетов, поэтому внебалансовые счета
     // в нём есть ВСЕГДА, с пометкой «Вне баланса» и отдельным фильтром. Раньше
@@ -744,14 +754,14 @@ export function AccountsPage() {
     // в периоде, и молча пропадала, если операций не было. Глобальная настройка
     // «Счета вне баланса» продолжает управлять расчётами (совокупный баланс,
     // Главная), но прятать сами счета из их же списка ей незачем.
-    const titles = new Set<string>();
-    for (const a of source) titles.add(a.account);
+    const keys = new Set<string>();
+    for (const a of source) keys.add(a.account);
     // Сколько живых счетов вообще не попало в список: нулевой остаток и ни
     // одной операции в окне фильтра. Нужно, чтобы подпись под итогом честно
     // говорила, что показано не всё.
     let dormant = 0;
-    for (const [title, m] of merged) {
-      const hasOps = txByTitle.has(title);
+    for (const [key, m] of merged) {
+      const hasOps = txByKey.has(key);
       // На «Движении» список отвечает на вопрос «что происходило», и счёт без
       // единой операции в периоде там лишний, даже если на нём лежат деньги:
       // строка из одних нулей ничего не рассказывает. На «Капитале» ровно
@@ -769,15 +779,19 @@ export function AccountsPage() {
         dormant += m.count;
         continue;
       }
-      titles.add(title);
+      keys.add(key);
     }
 
-    const rows = [...titles].map((title) => {
-      const m = merged.get(title);
+    const rows = [...keys].map((key) => {
+      const m = merged.get(key);
       const live = m?.lead;
-      const tx = txByTitle.get(title);
+      const tx = txByKey.get(key);
+      const title = live?.title ?? tx?.title ?? key;
       return {
-        account: title,
+        /** Ключ счёта — им строка отбирается, выбирается и запоминается. */
+        account: key,
+        /** Название счёта в Дзен-мани — для значка и правок. */
+        title,
         delta: tx?.balance ?? 0,
         income: tx?.income ?? 0,
         expense: tx?.expense ?? 0,
@@ -798,7 +812,7 @@ export function AccountsPage() {
         /** Вид счёта одной подписью — с учётом «накопительного». */
         kind: live ? accountKindLabel(live.type, live.savings) : "",
         /** Название с учётом неотправленной правки — только для показа. */
-        displayTitle: (live && accountEdits[live.id]?.title) || title,
+        displayTitle: (live && accountEdits[live.id]?.title) || dir.label(key),
         /** Есть неотправленная правка — строка помечается в списке. */
         edited: !!(live && accountEdits[live.id]),
         // Null bank ≠ «no bank»: for a CSV account we simply don't know. Both
@@ -816,7 +830,7 @@ export function AccountsPage() {
       return (y.balanceBase ?? y.delta) - (x.balanceBase ?? x.delta);
     });
     return { rows, dormant };
-  }, [accounts, accountsAll, capitalView, liveList, accountEdits, toBase]);
+  }, [accounts, accountsAll, capitalView, liveList, accountEdits, toBase, dir]);
 
   /**
    * Вклады с посчитанной доходностью (issue #81).
@@ -1002,7 +1016,7 @@ export function AccountsPage() {
       const key = capitalView && flowKeys.includes(sortBy) ? "balance" : sortBy;
       switch (key) {
         case "alpha":
-          cmp = x.account.localeCompare(y.account, "ru");
+          cmp = x.displayTitle.localeCompare(y.displayTitle, "ru");
           break;
         case "bank": {
           const bx = x.bank ?? "";
@@ -1033,7 +1047,7 @@ export function AccountsPage() {
       // Равные значения — вторым ключом сумма, потом название: иначе строки
       // прыгают между перерисовками при сортировке по колонке с нулями.
       if (cmp === 0) cmp = headline(x) - headline(y);
-      if (cmp === 0) return x.account.localeCompare(y.account, "ru");
+      if (cmp === 0) return x.displayTitle.localeCompare(y.displayTitle, "ru");
       return cmp * sign;
     });
   }, [
@@ -1247,13 +1261,13 @@ export function AccountsPage() {
     const base = accountOptions(
       accountRows.map((r) => r.account),
       [],
-      { archived, kinds }
+      { archived, kinds, labelOf: dir.label }
     );
     const debts = new Set(
       accountRows.filter((r) => DEBT_TYPES.has(r.type)).map((r) => r.account)
     );
     return withDebtCounterparties(base, debts, transactions);
-  }, [accountRows, transactions]);
+  }, [accountRows, transactions, dir]);
   /** Вид счёта для заголовков групп — как в глобальном фильтре. */
   const chartAccountGroup = useCallback(
     (name: string) => {
@@ -1423,8 +1437,8 @@ export function AccountsPage() {
         amountBase: p.amountBase,
         toAmountBase:
           p.toAmount != null && p.toCurrency ? toBaseCurrency(p.toAmount, p.toCurrency, rates) : null,
-        account: p.account,
-        toAccount: p.toAccount,
+        account: p.accountKey ?? p.account,
+        toAccount: p.toAccountKey ?? p.toAccount,
         title: p.payee || p.comment || p.category || "Без категории",
       }));
     return balanceForecast(last.net, ops, (a) => picked.has(a), last.date, forecastUntil);
@@ -1557,7 +1571,7 @@ export function AccountsPage() {
     const total =
       datum.total ?? allRows.reduce((s, r) => s + r.value, 0);
     const facts: TooltipFact[] = rows.map((r) => ({
-      label: parseDebtKey(r.acc)?.payee ?? r.acc,
+      label: parseDebtKey(r.acc)?.payee ?? dir.label(r.acc),
       value: formatMoney(r.value, base, { signed: true }),
       swatchColor: r.color,
       tone: r.value < 0 ? "expense" : undefined,
@@ -1709,10 +1723,8 @@ export function AccountsPage() {
   }
 
   function openAccount(account: string) {
-    const txs = filtered.filter(
-      (t) => t.outcomeAccount === account || t.incomeAccount === account
-    );
-    showDrill(account, txs, "Операции по счёту");
+    const txs = filtered.filter((t) => txOutKey(t) === account || txInKey(t) === account);
+    showDrill(dir.label(account), txs, "Операции по счёту");
   }
 
   /**
@@ -1729,10 +1741,10 @@ export function AccountsPage() {
     // лежать несколько написаний одного контрагента («OZON» и «Ozon»).
     const txs = debtSource.filter(
       (t) =>
-        (t.outcomeAccount === account || t.incomeAccount === account) &&
+        (txOutKey(t) === account || txInKey(t) === account) &&
         debtPayeeKey((t.payee || "").trim() || NO_COUNTERPARTY) === row.key
     );
-    showDrill(`${account} · ${row.payee}`, txs, "Долги");
+    showDrill(`${dir.label(account)} · ${row.payee}`, txs, "Долги");
   }
 
   if (transactions.length === 0) return <EmptyState />;
@@ -2292,7 +2304,7 @@ export function AccountsPage() {
                       className="flex items-center gap-2 min-w-0 text-left flex-1"
                       title={a.displayTitle}
                     >
-                      <AccountLogo title={a.account} type={a.type} />
+                      <AccountLogo title={a.title} type={a.type} />
                       <span className="min-w-0">
                         <span className="font-medium text-sm truncate block">
                           {a.displayTitle}
@@ -2593,7 +2605,7 @@ export function AccountsPage() {
                           <span className="flex shrink-0">
                             {/* 20 px — в строку таблицы 37 px; крупнее значок
                                 раздвигал бы строку. */}
-                            <AccountLogo title={a.account} type={a.type} size={20} />
+                            <AccountLogo title={a.title} type={a.type} size={20} />
                           </span>
                           {/* Нижний предел ширины — чтобы пометки справа не
                               дожимали название до одной буквы: колонка скорее
@@ -2991,10 +3003,10 @@ export function AccountsPage() {
                 parseDebtKey(name) ? (
                   <Users className="w-[18px] h-[18px] text-muted" />
                 ) : (
-                  <AccountLogo title={name} size={18} />
+                  <AccountLogo title={dir.byKey.get(name)?.title ?? name} size={18} />
                 )
               }
-              labelOf={(name) => parseDebtKey(name)?.payee ?? name}
+              labelOf={(name) => parseDebtKey(name)?.payee ?? dir.label(name)}
               nestedOf={(name) => parseDebtKey(name) !== null}
               nestedUnitForms={["контрагент", "контрагента", "контрагентов"]}
               groupOf={chartAccountGroup}
@@ -3099,7 +3111,7 @@ export function AccountsPage() {
                     // Слой контрагента подписан человеком, а не служебным
                     // ключом: в легенде и подсказке нужно имя, по которому его
                     // и выбирали.
-                    name={parseDebtKey(acc)?.payee ?? acc}
+                    name={parseDebtKey(acc)?.payee ?? dir.label(acc)}
                     stackId="plus"
                     stroke={STACK_COLORS[i % STACK_COLORS.length]}
                     fill={STACK_COLORS[i % STACK_COLORS.length]}
@@ -3379,7 +3391,7 @@ export function AccountsPage() {
         {tab === "flow" && (<>
         <CardHeader
           icon={TrendingUp}
-          title={selectedAccount ? `Изменение по счёту: ${selectedAccount}` : "Изменение по фильтру"}
+          title={selectedAccount ? `Изменение по счёту: ${dir.label(selectedAccount)}` : "Изменение по фильтру"}
           subtitle="Нарастающим итогом с начала периода"
           right={
             selectedAccount && (
@@ -3481,7 +3493,7 @@ export function AccountsPage() {
                 {depositRows.map((r) => {
                   const p = r.projection;
                   const done = p.daysLeft === 0;
-                  const isSel = selectedAccount === r.account.title;
+                  const isSel = selectedAccount === accountKeyOf(r.account);
                   // Условия договора — в подсказке к названию: они объясняют
                   // все числа строки, но строка таблицы остаётся одной.
                   const terms = `${formatDate(r.account.startDate ?? "", "short")} — ${formatDate(p.endDate, "short")}${p.compounded ? " · С капитализацией" : ""}`;
@@ -3489,13 +3501,13 @@ export function AccountsPage() {
                     <tr
                       key={r.account.id}
                       onClick={() =>
-                        selectAccount(isSel ? null : r.account.title)
+                        selectAccount(isSel ? null : accountKeyOf(r.account))
                       }
                       className={`cursor-pointer group ${
                         isSel ? "bg-accent/10" : "hover:bg-panel2/50"
                       }`}
                     >
-                      <td className={cellClass("text")} title={`${r.account.title}: ${terms}`}>
+                      <td className={cellClass("text")} title={`${dir.label(accountKeyOf(r.account))}: ${terms}`}>
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="flex shrink-0">
                             <AccountLogo
@@ -3505,7 +3517,7 @@ export function AccountsPage() {
                             />
                           </span>
                           <span className="truncate group-hover:text-accent">
-                            {r.account.title}
+                            {dir.label(accountKeyOf(r.account))}
                           </span>
                         </div>
                       </td>

@@ -56,8 +56,13 @@ import {
   type FreeMoney,
 } from "../lib/dashboardModel";
 import type { Currency } from "../types";
+import { accountKeyOf } from "../lib/accountKey";
+import { useAccountDirectory } from "./useAccountDirectory";
 
 export interface DashboardAccount {
+  /** Ключ счёта (`lib/accountKey`) — по нему открываются операции. */
+  key: string;
+  /** Название, у тёзок — с уточнением. */
   title: string;
   balanceBase: number;
   nativeBalance: number;
@@ -269,13 +274,15 @@ export function useDashboardModel(): DashboardModel {
     return buildNeedsWants(txs, categoryMeta);
   }, [months, ym, transactions, monthStartDay, categoryMeta]);
 
+  const dir = useAccountDirectory();
   const accountsAll = useMemo<DashboardAccount[]>(() => {
     if (liveAccounts && liveAccounts.length > 0) {
       return liveAccounts
         .filter((a) => !a.archive)
         .filter((a) => Math.abs(a.balance) > 0.005)
         .map((a) => ({
-          title: a.title,
+          key: accountKeyOf(a),
+          title: dir.label(accountKeyOf(a)),
           balanceBase:
             a.currency === base ? a.balance : a.balance * (rates.rates[a.currency] || 1),
           nativeBalance: a.balance,
@@ -290,7 +297,8 @@ export function useDashboardModel(): DashboardModel {
     return balancesByAccount(transactions)
       .filter((a) => Math.abs(a.balance) > 0.005)
       .map((a) => ({
-        title: a.account,
+        key: a.account,
+        title: dir.label(a.account),
         balanceBase: a.balance,
         nativeBalance: a.balance,
         nativeCurrency: base,
@@ -300,7 +308,7 @@ export function useDashboardModel(): DashboardModel {
         offBalance: false,
       }))
       .sort((a, b) => Math.abs(b.balanceBase) - Math.abs(a.balanceBase));
-  }, [liveAccounts, transactions, base, rates]);
+  }, [liveAccounts, transactions, base, rates, dir]);
   const accounts = useMemo(
     () => (includeOffBalance ? accountsAll : accountsAll.filter((a) => !a.offBalance)),
     [accountsAll, includeOffBalance]

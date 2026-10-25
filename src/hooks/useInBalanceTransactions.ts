@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useDataStore } from "../store/useDataStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import { useLiveAccounts } from "./useLiveAccounts";
+import { accountKeyOf } from "../lib/accountKey";
 import { stripFromAnalytics } from "../lib/aggregations";
 import type { Transaction } from "../types";
 
@@ -22,8 +23,8 @@ export function useOffBalanceExcluded(): Set<string> | undefined {
   const liveAccounts = useLiveAccounts();
   return useMemo(() => {
     if (includeOffBalance || !liveAccounts) return undefined;
-    const titles = liveAccounts.filter((a) => !a.inBalance).map((a) => a.title);
-    return titles.length ? new Set(titles) : undefined;
+    const keys = liveAccounts.filter((a) => !a.inBalance).map(accountKeyOf);
+    return keys.length ? new Set(keys) : undefined;
   }, [includeOffBalance, liveAccounts]);
 }
 
@@ -43,7 +44,7 @@ export function useInBalanceTransactions(): Transaction[] {
   const transactions = useDataStore((s) => s.transactions);
   const offBalance = useOffBalanceExcluded();
   return useMemo(
-    () => stripFromAnalytics(transactions, { offBalanceTitles: offBalance }),
+    () => stripFromAnalytics(transactions, { offBalanceKeys: offBalance }),
     [transactions, offBalance]
   );
 }

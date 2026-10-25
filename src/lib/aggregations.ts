@@ -4,6 +4,7 @@ import { periodKey } from "./period";
 import { MONTHS } from "./months";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
 import { counterpartyOf, debtKey } from "./debtFilter";
+import { txAccountKey, txInKey, txOutKey } from "./accountKey";
 
 export interface MonthBucket {
   ym: string;
@@ -83,7 +84,10 @@ export function groupByCategory(
 }
 
 export interface AccountBalance {
+  /** Ключ счёта (`lib/accountKey`): тёзки — разные строки. */
   account: string;
+  /** Название счёта — для подписи, когда справочника под рукой нет. */
+  title: string;
   balance: number;
   income: number;
   expense: number;
@@ -93,24 +97,24 @@ export interface AccountBalance {
 export function balancesByAccount(txs: Transaction[]): AccountBalance[] {
   const map = new Map<string, AccountBalance>();
   for (const t of txs) {
-    const accs: { acc: string; delta: number }[] = [];
-    if (t.kind === "expense") accs.push({ acc: t.outcomeAccount, delta: -t.amountBase });
+    const accs: { acc: string; title: string; delta: number }[] = [];
+    if (t.kind === "expense") accs.push({ acc: txOutKey(t), title: t.outcomeAccount, delta: -t.amountBase });
     else if (t.kind === "income" || t.kind === "refund") {
       // Refund is a real cash inflow on the account (the merchant
       // gave money back to the card), so the account's running
       // balance grows just like with regular income. The semantic
       // difference vs. income only matters at the category / KPI
       // level, not at the account level.
-      accs.push({ acc: t.incomeAccount, delta: t.amountBase });
+      accs.push({ acc: txInKey(t), title: t.incomeAccount, delta: t.amountBase });
     } else if (t.kind === "transfer") {
-      accs.push({ acc: t.outcomeAccount, delta: -t.amountBase });
-      accs.push({ acc: t.incomeAccount, delta: t.amountBase });
+      accs.push({ acc: txOutKey(t), title: t.outcomeAccount, delta: -t.amountBase });
+      accs.push({ acc: txInKey(t), title: t.incomeAccount, delta: t.amountBase });
     }
-    for (const { acc, delta } of accs) {
+    for (const { acc, title, delta } of accs) {
       if (!acc) continue;
       let b = map.get(acc);
       if (!b) {
-        b = { account: acc, balance: 0, income: 0, expense: 0, count: 0 };
+        b = { account: acc, title, balance: 0, income: 0, expense: 0, count: 0 };
         map.set(acc, b);
       }
       b.balance += delta;
@@ -139,8 +143,8 @@ export function dailyBalanceSeries(
     let delta = 0;
     if (account) {
       // Refund is an inflow on the account-of-record, same as income.
-      if (t.outcomeAccount === account && (t.kind === "expense" || t.kind === "transfer")) delta -= t.amountBase;
-      if (t.incomeAccount === account && (t.kind === "income" || t.kind === "refund" || t.kind === "transfer")) delta += t.amountBase;
+      if (txOutKey(t) === account && (t.kind === "expense" || t.kind === "transfer")) delta -= t.amountBase;
+      if (txInKey(t) === account && (t.kind === "income" || t.kind === "refund" || t.kind === "transfer")) delta += t.amountBase;
     } else {
       if (t.kind === "income" || t.kind === "refund") delta += t.amountBase;
       else if (t.kind === "expense") delta -= t.amountBase;
@@ -271,10 +275,10 @@ export function transactionLegs(
   t: Transaction
 ): { account: string; currency: string; amount: number }[] {
   if (t.kind === "expense") {
-    return [{ account: t.outcomeAccount, currency: t.currency, amount: -t.amount }];
+    return [{ account: txOutKey(t), currency: t.currency, amount: -t.amount }];
   }
   if (t.kind === "income" || t.kind === "refund") {
-    return [{ account: t.incomeAccount, currency: t.currency, amount: t.amount }];
+    return [{ account: txInKey(t), currency: t.currency, amount: t.amount }];
   }
   if (t.kind === "transfer") {
     const scale = t.outcomeAmount > 0 ? t.amount / t.outcomeAmount : 1;
@@ -283,8 +287,8 @@ export function transactionLegs(
         ? { currency: t.incomeCurrency, amount: t.incomeAmount * scale }
         : { currency: t.currency, amount: t.amount };
     return [
-      { account: t.outcomeAccount, currency: t.currency, amount: -t.amount },
-      { account: t.incomeAccount, ...incoming },
+      { account: txOutKey(t), currency: t.currency, amount: -t.amount },
+      { account: txInKey(t), ...incoming },
     ];
   }
   return [];
@@ -485,14 +489,14 @@ function flowLines(
       }
       if (unsynced) unsyncedFlow.set(key, (unsyncedFlow.get(key) || 0) + delta);
     };
-    if (t.kind === "expense") apply(t.outcomeAccount, -t.amountBase);
+    if (t.kind === "expense") apply(txOutKey(t), -t.amountBase);
     else if (t.kind === "income" || t.kind === "refund") {
       // Refund is a cash inflow on the account — treat like income for
       // the running stacked-balance series.
-      apply(t.incomeAccount, t.amountBase);
+      apply(txInKey(t), t.amountBase);
     } else if (t.kind === "transfer") {
-      apply(t.outcomeAccount, -t.amountBase);
-      apply(t.incomeAccount, t.amountBase);
+      apply(txOutKey(t), -t.amountBase);
+      apply(txInKey(t), t.amountBase);
     }
   }
 
@@ -1909,13 +1913,13 @@ export function accountMonthlyDeltas(
     const ym = periodKey(t.date, monthStartDay);
     if (!ym) continue;
     let delta = 0;
-    if (t.outcomeAccount === account && (t.kind === "expense" || t.kind === "transfer")) {
+    if (txOutKey(t) === account && (t.kind === "expense" || t.kind === "transfer")) {
       delta -= t.amountBase;
     }
     // Refund lands on the account's income side (the merchant gave
     // money back) so it bumps the monthly delta upward.
     if (
-      t.incomeAccount === account &&
+      txInKey(t) === account &&
       (t.kind === "income" || t.kind === "refund" || t.kind === "transfer")
     ) {
       delta += t.amountBase;
@@ -2918,7 +2922,7 @@ export function scaleKPI(kpi: KPI, periods: number): KPI {
  * ЯВНО, а не сложением ±: при переводе между накопительными в разных валютах
  * ноги не равны, и сумма-разность оставила бы курсовой «хвост».
  *
- * `savingsTitles` — названия счетов с признаком «накопительный», ВКЛЮЧАЯ
+ * `savingsKeys` — названия счетов с признаком «накопительный», ВКЛЮЧАЯ
  * архивные: пара «архивный ↔ активный» иначе перестала бы схлопываться в ноль.
  */
 /**
@@ -2949,15 +2953,15 @@ export function kindTotals(txs: Transaction[]): {
 
 export function transferTotals(
   txs: Transaction[],
-  savingsTitles: Set<string>
+  savingsKeys: Set<string>
 ): { xfer: number; savings: number } {
   let xfer = 0;
   let savings = 0;
   for (const t of txs) {
     if (t.kind !== "transfer") continue;
     xfer += t.amountBase;
-    const toSavings = savingsTitles.has(t.incomeAccount);
-    const fromSavings = savingsTitles.has(t.outcomeAccount);
+    const toSavings = savingsKeys.has(txInKey(t));
+    const fromSavings = savingsKeys.has(txOutKey(t));
     if (toSavings && !fromSavings) savings += t.amountBase;
     else if (fromSavings && !toSavings) savings -= t.amountBase;
   }
@@ -2973,7 +2977,7 @@ export function transferTotals(
  * so excluding a root («Переводы») covers all of its sub-categories, while a
  * sub-category can be excluded on its own («Родитель / Подкатегория»).
  *
- * `offBalanceTitles` is honoured only when passed non-empty — the caller gates
+ * `offBalanceKeys` is honoured only when passed non-empty — the caller gates
  * it on the global «учитывать внебалансовые счета» switch (empty set = keep
  * off-balance flows). A transfer is dropped if ANY of its legs touches such an
  * account (belt-and-suspenders, same rule as the global filter).
@@ -2983,10 +2987,10 @@ export function transferTotals(
  */
 export function stripFromAnalytics(
   txs: Transaction[],
-  opts: { excludedCategories?: Set<string>; offBalanceTitles?: Set<string> } = {}
+  opts: { excludedCategories?: Set<string>; offBalanceKeys?: Set<string> } = {}
 ): Transaction[] {
   const cats = opts.excludedCategories;
-  const accts = opts.offBalanceTitles;
+  const accts = opts.offBalanceKeys;
   const hasCats = !!cats && cats.size > 0;
   const hasAccts = !!accts && accts.size > 0;
   if (!hasCats && !hasAccts) return txs;
@@ -2994,9 +2998,9 @@ export function stripFromAnalytics(
     if (hasCats && (cats!.has(t.category) || cats!.has(t.categoryFull))) return false;
     if (
       hasAccts &&
-      (accts!.has(t.account) ||
-        accts!.has(t.outcomeAccount) ||
-        accts!.has(t.incomeAccount))
+      (accts!.has(txAccountKey(t)) ||
+        accts!.has(txOutKey(t)) ||
+        accts!.has(txInKey(t)))
     )
       return false;
     return true;

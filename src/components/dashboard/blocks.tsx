@@ -849,7 +849,7 @@ export function AccountsBlock({
   /** Выбор виджета; `undefined` — как в «Расчётах». */
   offBalance: boolean | undefined;
   onOffBalanceChange: (next: boolean) => void;
-  onAccount?: (title: string) => void;
+  onAccount?: (key: string, label: string) => void;
 }) {
   const show = offBalance ?? m.includeOffBalance;
   const offSum = m.accountsAll.reduce((s, a) => (a.offBalance ? s + a.balanceBase : s), 0);
@@ -915,7 +915,7 @@ export function AccountsList({
   m: DashboardModel;
   /** Какие счета показать; по умолчанию — по настройке «Счета вне баланса». */
   accounts?: DashboardAccount[];
-  onAccount?: (title: string) => void;
+  onAccount?: (key: string, label: string) => void;
 }) {
   if (accounts.length === 0) {
     return <SectionEmpty variant="compact">Счетов пока нет</SectionEmpty>;
@@ -936,9 +936,9 @@ export function AccountsList({
             : "";
         return (
         <button
-          key={a.title}
+          key={a.key}
           type="button"
-          onClick={() => onAccount?.(a.title)}
+          onClick={() => onAccount?.(a.key, a.title)}
           className="flex h-[56px] shrink-0 items-center justify-between gap-3 border-b border-border last:border-0 text-left group rounded-lg px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           <span className="flex items-center gap-2.5 min-w-0">

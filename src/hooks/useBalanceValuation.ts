@@ -6,6 +6,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import type { LiveAccount } from "../store/useZenmoneyStore";
 import { useLiveAccounts } from "./useLiveAccounts";
+import { accountKeyOf } from "../lib/accountKey";
 
 /**
  * Оценка остатков по правилам Дзен-мани — одна на все графики остатков:
@@ -30,10 +31,10 @@ export function useBalanceValuation(
     const balances: Record<string, number> = {};
     const universe = new Set<string>();
     for (const a of list) {
-      const key = balanceKey(a.title, a.currency);
+      const key = balanceKey(accountKeyOf(a), a.currency);
       balances[key] = (balances[key] || 0) + a.balance;
       // Архивные участвуют: закрытый счёт в прошлом держал настоящие деньги.
-      if (a.inBalance || includeOffBalance) universe.add(a.title);
+      if (a.inBalance || includeOffBalance) universe.add(accountKeyOf(a));
     }
     return {
       balances,

@@ -34,6 +34,7 @@ import { YearPicker } from "../components/MonthPicker";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionControls } from "../components/SectionControls";
 import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
+import { accountKeyOf } from "../lib/accountKey";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const MONTHS = [
@@ -104,7 +105,7 @@ export function CalendarPage() {
     let cancelled = false;
     getLiveAccountsFromCache().then((live) => {
       if (cancelled || !live) return;
-      setSavingsAccounts(new Set(live.filter((a) => a.savings).map((a) => a.title)));
+      setSavingsAccounts(new Set(live.filter((a) => a.savings).map(accountKeyOf)));
     });
     return () => {
       cancelled = true;

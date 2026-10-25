@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useDataStore } from "../store/useDataStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { useOffBalanceExcluded } from "./useInBalanceTransactions";
+import { useAccountDirectory } from "./useAccountDirectory";
 import { stripFromAnalytics } from "../lib/aggregations";
 import type { Transaction } from "../types";
 
@@ -26,7 +27,8 @@ export function useAnalyticsTransactions(): Transaction[] {
   const exclLoaded = useSlicesStore((s) => s.loaded);
   const hydrateExcl = useSlicesStore((s) => s.hydrate);
   const slice = activeSlice({ slices, activeId });
-  const offBalanceTitles = useOffBalanceExcluded();
+  const offBalanceKeys = useOffBalanceExcluded();
+  const dir = useAccountDirectory();
 
   useEffect(() => {
     if (!exclLoaded) hydrateExcl();
@@ -40,13 +42,13 @@ export function useAnalyticsTransactions(): Transaction[] {
   // Счета разреза и внебалансовые складываются: и то и другое — «эти деньги в
   // картину не входят», разделять их в селекторе незачем.
   const skipAccounts = useMemo(() => {
-    const out = new Set(slice.excludedAccounts);
-    if (offBalanceTitles) for (const t of offBalanceTitles) out.add(t);
+    const out = dir.resolve(slice.excludedAccounts);
+    if (offBalanceKeys) for (const t of offBalanceKeys) out.add(t);
     return out.size ? out : undefined;
-  }, [slice.excludedAccounts, offBalanceTitles]);
+  }, [slice.excludedAccounts, offBalanceKeys, dir]);
 
   return useMemo(
-    () => stripFromAnalytics(transactions, { excludedCategories: excluded, offBalanceTitles: skipAccounts }),
+    () => stripFromAnalytics(transactions, { excludedCategories: excluded, offBalanceKeys: skipAccounts }),
     [transactions, excluded, skipAccounts]
   );
 }

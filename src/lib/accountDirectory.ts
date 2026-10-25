@@ -50,6 +50,12 @@ export interface AccountDirectory {
   /** Ключи всех счетов с таким названием — для старых записей, где счёт
    *  запомнен названием. */
   keysByTitle: (title: string) => string[];
+  /**
+   * Ключи по сохранённым ссылкам на счета. Раньше настройки запоминали счёт
+   * названием — такая запись относится ко всем счетам с этим названием (так
+   * она и работала). Ключ остаётся ключом; неизвестное — как есть.
+   */
+  resolve: (refs: Iterable<string>) => Set<string>;
 }
 
 /**
@@ -131,10 +137,23 @@ export function buildAccountDirectory(
   }
   for (const g of byTitle.values()) if (g.length > 1) disambiguate(g);
   const list = [...byKey.values()];
+  const keysByTitle = (title: string) => (byTitle.get(title) ?? []).map((e) => e.key);
   return {
     list,
     byKey,
     label: (key) => byKey.get(key)?.label ?? key,
-    keysByTitle: (title) => (byTitle.get(title) ?? []).map((e) => e.key),
+    keysByTitle,
+    resolve: (refs) => {
+      const out = new Set<string>();
+      for (const r of refs) {
+        if (byKey.has(r)) out.add(r);
+        else {
+          const keys = keysByTitle(r);
+          if (keys.length) for (const k of keys) out.add(k);
+          else out.add(r);
+        }
+      }
+      return out;
+    },
   };
 }

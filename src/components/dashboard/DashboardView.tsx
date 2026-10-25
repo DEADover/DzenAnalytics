@@ -76,6 +76,7 @@ import { affectsExpense } from "../../lib/txKindStyle";
 import { ProgressBar } from "../ProgressBar";
 import { Popover } from "../Popover";
 import { Check, ChevronDown } from "lucide-react";
+import { txAccountKey, txInKey, txOutKey } from "../../lib/accountKey";
 
 /** Название месяца отдельно от года: в пилюле год только шумит. */
 function monthName(ym: string): string {
@@ -770,11 +771,11 @@ export function DashboardView() {
           transactions.filter((t) => t.date.slice(0, 10) === date),
           "Операции за день"
         ),
-      onAccount: (title: string) =>
+      onAccount: (key: string, label: string) =>
         showDrill(
-          title,
+          label,
           transactions.filter(
-            (t) => t.account === title || t.outcomeAccount === title || t.incomeAccount === title
+            (t) => txAccountKey(t) === key || txOutKey(t) === key || txInKey(t) === key
           ),
           "Операции по счёту"
         ),
