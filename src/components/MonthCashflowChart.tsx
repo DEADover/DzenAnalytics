@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
+  Area,
   ComposedChart,
   Line,
   XAxis,
@@ -136,6 +137,49 @@ function CashflowTip({
   );
 }
 
+/** Подсказка полосы «Разница» — тем же видом, что подсказка линий. */
+function DiffTip({
+  active,
+  payload,
+  label,
+  base,
+  dateOf,
+}: {
+  active?: boolean;
+  payload?: { dataKey?: string | number; value?: number | null }[];
+  label?: string | number;
+  base: string;
+  dateOf: (day: number) => string | undefined;
+}) {
+  const row = (payload ?? []).find((p) => p.value != null);
+  if (!active || !row) return null;
+  const v = toNum(row.value);
+  const forecast = String(row.dataKey) === "diffF";
+  return (
+    <ChartTooltipCard>
+      <TooltipFacts
+        title={dayLabelOf(dateOf(Number(label)))}
+        facts={[
+          {
+            label: forecast ? "Прогноз разницы" : "Разница",
+            value: formatMoney(v, base, { signed: true }),
+            icon: <Scale />,
+            tone: v >= 0 ? "income" : "expense",
+            strong: true,
+          },
+        ]}
+      />
+    </ChartTooltipCard>
+  );
+}
+
+/** Доля высоты от верха области, где проходит ноль, — точка смены цвета. */
+function zeroOffset(values: number[]): number {
+  const max = Math.max(0, ...values);
+  const min = Math.min(0, ...values);
+  return max - min > 0 ? max / (max - min) : 1;
+}
+
 export function MonthCashflowChart({
   transactions,
   ym,
@@ -234,6 +278,33 @@ export function MonthCashflowChart({
         }
     return lo < 0 ? null : niceScale(hi * 1.1);
   }, [cf.points]);
+  /**
+   * Разница «поступления − расходы» нарастающим итогом — своей полосой под
+   * графиком и со своей шкалой. На общей шкале две линии по 1,8 млн и разница
+   * в десятки тысяч сливались: разница занимала несколько процентов высоты.
+   */
+  const diffPoints = useMemo(
+    () =>
+      cf.points.map((p) => ({
+        day: p.day,
+        diff: p.income != null && p.expense != null ? p.income - p.expense : null,
+        diffF: p.incomeF != null && p.expenseF != null ? p.incomeF - p.expenseF : null,
+      })),
+    [cf.points]
+  );
+  const diffScale = useMemo(() => {
+    const vals = diffPoints.flatMap((p) => [p.diff, p.diffF]).filter((v): v is number => v != null);
+    const lo = Math.min(0, ...vals);
+    const hi = Math.max(0, ...vals);
+    const top = hi > 0 ? niceScale(hi * 1.1, 2) : null;
+    const bottom = lo < 0 ? niceScale(-lo * 1.1, 2) : null;
+    return {
+      domain: [bottom ? -bottom.max : 0, top ? top.max : 0] as [number, number],
+      fact: zeroOffset(diffPoints.map((p) => p.diff).filter((v): v is number => v != null)),
+      forecast: zeroOffset(diffPoints.map((p) => p.diffF).filter((v): v is number => v != null)),
+    };
+  }, [diffPoints]);
+  const uid = useId().replace(/:/g, "");
   /** Календарная дата по номеру дня в периоде — для подписей и переходов. */
   const dateOf = (day: number) => cf.points[day - 1]?.date;
 
@@ -305,7 +376,7 @@ export function MonthCashflowChart({
         }}
       >
         <ChartContainer>
-          <ComposedChart data={cf.points} margin={{ top: 18, right: 12, bottom: 0, left: 8 }}>
+          <ComposedChart data={cf.points} syncId={`cf-${uid}`} margin={{ top: 18, right: 12, bottom: 0, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
             <XAxis
               dataKey="day"
@@ -348,6 +419,66 @@ export function MonthCashflowChart({
             {/* Forecast — dashed continuation from today */}
             <Line type="monotone" dataKey="incomeF" name="Прогноз поступлений" stroke={INCOME} strokeWidth={2} strokeDasharray="4 3" strokeOpacity={0.7} dot={false} isAnimationActive={false} />
             <Line type="monotone" dataKey="expenseF" name="Прогноз расходов" stroke={EXPENSE} strokeWidth={2} strokeDasharray="4 3" strokeOpacity={0.7} dot={false} isAnimationActive={false} />
+          </ComposedChart>
+        </ChartContainer>
+      </div>
+      {/* Полоса «Разница»: та же ось дней и те же поля, что у графика выше, —
+          дни стоят ровно друг под другом, подсказки двух графиков связаны. */}
+      <div className="mt-3 flex items-center gap-2 text-xs text-muted">
+        <Scale className="w-3.5 h-3.5" aria-hidden />
+        Разница поступлений и расходов
+      </div>
+      <div className="h-24" data-testid="month-diff-strip">
+        <ChartContainer>
+          <ComposedChart data={diffPoints} syncId={`cf-${uid}`} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
+            <defs>
+              <linearGradient id={`diff-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset={diffScale.fact} stopColor={INCOME} />
+                <stop offset={diffScale.fact} stopColor={EXPENSE} />
+              </linearGradient>
+              <linearGradient id={`diffF-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset={diffScale.forecast} stopColor={INCOME} />
+                <stop offset={diffScale.forecast} stopColor={EXPENSE} />
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="day" hide />
+            <YAxis
+              stroke={chartAxisStroke}
+              fontSize={10}
+              tickLine={false}
+              width={48}
+              domain={diffScale.domain}
+              ticks={[diffScale.domain[0], 0, diffScale.domain[1]].filter((v, i, a) => a.indexOf(v) === i)}
+              tickFormatter={(v) => formatNum(v, { compact: true })}
+            />
+            <ChartTooltip
+              cursor={chartTooltipProps.cursor}
+              wrapperStyle={chartTooltipProps.wrapperStyle}
+              content={<DiffTip base={base} dateOf={dateOf} />}
+            />
+            <ReferenceLine y={0} stroke={chartAxisStroke} />
+            {hasForecast && <ReferenceLine x={cf.todayDay} stroke={chartAxisStroke} strokeDasharray="2 2" />}
+            <Area
+              type="monotone"
+              dataKey="diff"
+              baseValue={0}
+              stroke={`url(#diff-${uid})`}
+              fill={`url(#diff-${uid})`}
+              fillOpacity={0.18}
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="diffF"
+              stroke={`url(#diffF-${uid})`}
+              strokeWidth={2}
+              strokeDasharray="4 3"
+              strokeOpacity={0.7}
+              dot={false}
+              isAnimationActive={false}
+            />
           </ComposedChart>
         </ChartContainer>
       </div>

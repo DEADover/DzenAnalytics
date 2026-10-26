@@ -64,6 +64,8 @@ test("бюджет: «Размазывать план» на графике ме
   await expect(summary).toContainText(/ещё в планах/i);
   await expect(summary).toContainText(/ещё поступит/i);
   await expect(summary).toContainText(/(свободно на конец месяца|не хватает до конца месяца)/i);
+  // Разница — своей полосой под графиком, со своей шкалой и линией нуля.
+  await expect(page.getByTestId("month-diff-strip").locator(".recharts-area")).toHaveCount(1);
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "false");
   // Настройка одна: на «Сравнении» она тоже выключена.
