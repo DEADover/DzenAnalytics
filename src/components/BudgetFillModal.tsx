@@ -56,7 +56,11 @@ export function BudgetFillModal({
   onParamsChange,
   onApply,
   onClose,
+  focusKind,
 }: {
+  /** Раздел, из которого открыли окно (кнопка у «Поступлений» или
+   *  «Расходов»): его статьи идут первыми. */
+  focusKind?: BudgetKind;
   /** Месяц, который заполняем. */
   ym: string;
   transactions: Transaction[];
@@ -343,8 +347,17 @@ export function BudgetFillModal({
                 Выбрано статей: {picked.length} из {changes.length}
               </span>
             </div>
-            {group("Расходы", expense, "expense")}
-            {group("Доходы", income, "income")}
+            {focusKind === "income" ? (
+              <>
+                {group("Поступления", income, "income")}
+                {group("Расходы", expense, "expense")}
+              </>
+            ) : (
+              <>
+                {group("Расходы", expense, "expense")}
+                {group("Поступления", income, "income")}
+              </>
+            )}
           </>
         )}
       </ModalBody>

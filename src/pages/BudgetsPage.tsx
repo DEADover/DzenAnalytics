@@ -634,7 +634,8 @@ export function BudgetsPage() {
   };
 
   // ── Заполнение по среднему ──
-  const [fillOpen, setFillOpen] = useState(false);
+  /** Окно «Заполнить план» — открыто из раздела этого вида (или закрыто). */
+  const [fillKind, setFillKind] = useState<BudgetKind | null>(null);
   /** Разложить предложенные суммы по статьям. Планы пишутся одной правкой
    *  (иначе шесть параллельных записей затирают друг друга), а в очередь
    *  отправки в Дзен-мани каждая статья идёт своей строкой. */
@@ -1419,16 +1420,32 @@ export function BudgetsPage() {
     </div>
   );
 
+  /**
+   * Действия в шапке раздела: добавить статью и заполнить план. Заполнение
+   * живёт здесь, рядом с самими планами, а не в шапке страницы: только в
+   * месячном виде и есть что заполнять, и правятся планы тоже в разделах.
+   */
   const addButton = (kind: BudgetKind) => (
-    <Tooltip content={kind === "expense" ? "Добавить категорию расходов" : "Добавить категорию доходов"}>
-      <button
-        onClick={() => startDraft(kind)}
-        className="btn-primary btn-square"
-        aria-label="Добавить категорию"
-      >
-        <Plus className="w-4 h-4" />
-      </button>
-    </Tooltip>
+    <div className="flex items-center gap-2">
+      <Tooltip content={kind === "expense" ? "Добавить категорию расходов" : "Добавить категорию доходов"}>
+        <button
+          onClick={() => startDraft(kind)}
+          className="btn-primary btn-square"
+          aria-label="Добавить категорию"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      </Tooltip>
+      <Tooltip content="Заполнить план: подставить суммы сразу по всем статьям — по истории операций, как в прошлом месяце или по факту месяца">
+        <button
+          onClick={() => setFillKind(kind)}
+          className="btn-ghost btn-square"
+          aria-label="Заполнить план"
+        >
+          <Wand2 className="w-4 h-4" />
+        </button>
+      </Tooltip>
+    </div>
   );
 
   return (
@@ -1443,33 +1460,6 @@ export function BudgetsPage() {
         {/* На узком экране вид и листание месяцев переносятся на две строки —
             в одну они не входят и тащили страницу вбок. */}
         <div className="flex items-center gap-1.5 flex-wrap gap-y-2">
-          {/* Действия раздела — перед видом и периодом. Ряд прижат вправо,
-              поэтому кнопка, которая меняется от вида к виду («Экспорт» у
-              года, «Заполнить план» у месяца), стоит с краю и не сдвигает
-              переключатель вида и выбор месяца. */}
-          {/* Только в годовом своде: на дашборде кнопка лишняя, выгрузка та же
-              (Excel или сводка PDF) — из «Года». */}
-          {view === "year" && (
-            <Tooltip content="Годовой отчёт файлом: таблицами в Excel или сводкой в PDF">
-              <button onClick={() => setExportOpen(true)} className="btn-ghost btn-lg text-sm mr-1.5">
-                <Download className="w-4 h-4" />
-                Экспорт
-              </button>
-            </Tooltip>
-          )}
-          {/* Заполнение подставляет планы в ОДИН месяц — выбранный. Поэтому
-              кнопка живёт только в месячном виде: в годовом своде на экране
-              двенадцать месяцев сразу, и «в какой из них попадут суммы» —
-              вопрос, которого быть не должно. На дашборде то же самое: это
-              отчёт, а не место, где правят планы. */}
-          {view === "month" && (
-            <Tooltip content="Подставить план сразу по всем статьям: по истории операций, как в прошлом месяце или по факту месяца">
-              <button onClick={() => setFillOpen(true)} className="btn-ghost btn-lg text-sm mr-1.5">
-                <Wand2 className="w-4 h-4" />
-                Заполнить план
-              </button>
-            </Tooltip>
-          )}
           <Segmented
             label="Вид бюджета"
             value={view}
@@ -1509,7 +1499,7 @@ export function BudgetsPage() {
         </div>
       </SectionControls>
 
-      {fillOpen && (
+      {fillKind && (
         <BudgetFillModal
           ym={ym}
           transactions={transactions}
@@ -1524,7 +1514,8 @@ export function BudgetsPage() {
             void settings.update({ forecastMonths: months, forecastBasis: basis })
           }
           onApply={applyFill}
-          onClose={() => setFillOpen(false)}
+          focusKind={fillKind}
+          onClose={() => setFillKind(null)}
         />
       )}
 
@@ -1536,6 +1527,20 @@ export function BudgetsPage() {
           onExport={runExport}
           onClose={() => setExportOpen(false)}
         />
+      )}
+
+      {/* Выгрузка — у самой таблицы, которую она выгружает, как «CSV» у
+          таблиц в других разделах, а не в шапке страницы. */}
+      {view === "year" && (
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-semibold text-lg">Бюджет на {year} год</h2>
+          <Tooltip content="Годовой отчёт файлом: таблицами в Excel или сводкой в PDF">
+            <button onClick={() => setExportOpen(true)} className="btn-ghost text-sm">
+              <Download className="w-4 h-4" />
+              Экспорт
+            </button>
+          </Tooltip>
+        </div>
       )}
 
       {view === "year" && (
