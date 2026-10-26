@@ -122,3 +122,34 @@ describe("mapZenmoneyDiff — что считается долгом (как в 
     expect(run("deposit").categoryFull).toBe("Перевод");
   });
 });
+
+describe("mapZenmoneyDiff — возврат дохода", () => {
+  const run = (showIncome: boolean, showOutcome: boolean) => {
+    const diff = {
+      instrument: [{ id: 2, shortTitle: "RUB", rate: 1 }],
+      user: [{ id: 1, currency: 2 }],
+      account: [{ id: "a", title: "Карта", instrument: 2, type: "ccard", archive: false, inBalance: true }],
+      tag: [tag({ id: "nina", title: "Нина", showIncome, showOutcome })],
+      transaction: [
+        {
+          id: "tx", date: "2026-10-01", created: 0, deleted: false,
+          outcome: 2150, outcomeAccount: "a", outcomeInstrument: 2,
+          income: 0, incomeAccount: "a", incomeInstrument: 2,
+          tag: ["nina"], payee: "", comment: "", merchant: null,
+        },
+      ],
+    } as unknown as ZenDiffResponse;
+    return mapZenmoneyDiff(diff).transactions[0];
+  };
+
+  it("трата в категории «только доход» — тратой, но с пометкой возврата дохода", () => {
+    const t = run(true, false);
+    expect(t.kind).toBe("expense");
+    expect(t.incomeRefund).toBe(true);
+  });
+
+  it("в обычной или двойной категории пометки нет", () => {
+    expect(run(false, true).incomeRefund).toBeUndefined();
+    expect(run(true, true).incomeRefund).toBeUndefined();
+  });
+});

@@ -21,6 +21,10 @@ import {
   transferTotals,
   kindTotals,
   stripFromAnalytics,
+  zenPeriodTotals,
+  buildHierarchy,
+  LOAN_CATEGORY,
+  FEE_CATEGORY,
   scaleKPI,
   buildStreamData,
   buildMirrorData,
@@ -949,6 +953,128 @@ describe("stripFromAnalytics — per-category + off-balance exclusion (#14)", ()
       offBalanceKeys: new Set(["Брокер"]),
     });
     expect(out.map((t) => t.categoryFull)).toEqual(["Еда", "Еда / Кафе"]);
+  });
+});
+
+describe("stripFromAnalytics — правила «Аналитики» Дзен-мани", () => {
+  const xfer = (from: string, to: string, out: number, inc: number, cur = "RUB", toCur = cur) =>
+    tx({
+      id: `${from}-${to}-${out}`,
+      kind: "transfer",
+      category: "Перевод",
+      categoryFull: "Перевод",
+      account: from,
+      outcomeAccount: from,
+      incomeAccount: to,
+      outcomeAmount: out,
+      incomeAmount: inc,
+      outcomeCurrency: cur,
+      incomeCurrency: toCur,
+      amount: out,
+      amountBase: out,
+    });
+  const OFF = new Set(["Кредитка", "Цель", "Долги"]);
+  const LOANS = new Set(["Кредитка"]);
+
+  it("погашение кредитки вне баланса — расход «Кредиты и кредитки»", () => {
+    const out = stripFromAnalytics([xfer("Карта", "Кредитка", 5000, 5000)], { offBalanceKeys: OFF, loanKeys: LOANS });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ kind: "expense", category: LOAN_CATEGORY, subcategory: "Кредитка", amountBase: 5000 });
+  });
+
+  it("накопления, долги и деньги С кредитки — ни расход, ни доход", () => {
+    const out = stripFromAnalytics(
+      [xfer("Карта", "Цель", 1000, 1000), xfer("Карта", "Долги", 700, 700), xfer("Кредитка", "Карта", 300, 300)],
+      { offBalanceKeys: OFF, loanKeys: LOANS }
+    );
+    expect(out).toHaveLength(0);
+  });
+
+  it("перевод внутри баланса с комиссией — расход «Комиссии за переводы» на разницу", () => {
+    const t = xfer("Карта", "Наличные", 1030, 1000);
+    const out = stripFromAnalytics([t], { offBalanceKeys: OFF, loanKeys: LOANS });
+    expect(out[0]).toBe(t);
+    expect(out[1]).toMatchObject({ kind: "expense", category: FEE_CATEGORY, amountBase: 30, sourceId: t.id });
+  });
+
+  it("между валютами комиссии нет — разница курса не расход", () => {
+    const out = stripFromAnalytics([xfer("Карта", "Доллары", 9000, 100, "RUB", "USD")], {});
+    expect(out).toHaveLength(1);
+  });
+
+  it("кредитка в балансе — перевод на неё внутренний", () => {
+    const out = stripFromAnalytics([xfer("Карта", "Кредитка", 5000, 5000)], { loanKeys: LOANS });
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe("transfer");
+  });
+});
+
+describe("buildHierarchy — строки не ниже нуля, как в Дзен-мани", () => {
+  it("возвраты, перекрывшие траты подкатегории, дают ноль и не уменьшают соседей", () => {
+    const tree = buildHierarchy(
+      [
+        tx({ kind: "expense", category: "Еда", subcategory: "Кафе", categoryFull: "Еда / Кафе", amount: 100, amountBase: 100 }),
+        tx({ kind: "refund", category: "Еда", subcategory: "Кафе", categoryFull: "Еда / Кафе", amount: 300, amountBase: 300 }),
+        tx({ kind: "expense", category: "Еда", categoryFull: "Еда", amount: 500, amountBase: 500 }),
+      ],
+      "expense"
+    );
+    expect(tree).toHaveLength(1);
+    expect(tree[0].total).toBe(500);
+    expect(tree[0].subs).toHaveLength(0);
+  });
+
+  it("категория целиком в минусе пропадает, итог не уменьшается", () => {
+    const tree = buildHierarchy(
+      [
+        tx({ kind: "refund", category: "Техника", categoryFull: "Техника", amount: 900, amountBase: 900 }),
+        tx({ kind: "expense", category: "Еда", categoryFull: "Еда", amount: 200, amountBase: 200 }),
+      ],
+      "expense"
+    );
+    expect(tree.map((n) => [n.name, n.total])).toEqual([["Еда", 200]]);
+  });
+});
+
+describe("возврат дохода — трата в категории «только доход»", () => {
+  it("в аналитике — минус доход категории, не расход", () => {
+    const gift = tx({ kind: "income", category: "Нина", categoryFull: "Нина", amount: 3000, amountBase: 3000 });
+    const back = tx({ kind: "expense", category: "Нина", categoryFull: "Нина", amount: 2150, amountBase: 2150, incomeRefund: true });
+    const out = stripFromAnalytics([gift, back]);
+    expect(buildHierarchy(out, "expense")).toHaveLength(0);
+    expect(buildHierarchy(out, "income").map((n) => [n.name, n.total])).toEqual([["Нина", 850]]);
+  });
+
+  it("в итогах ленты — вычитается из дохода", () => {
+    const r = zenPeriodTotals(
+      [tx({ kind: "expense", account: "Карта", amount: 2150, amountBase: 2150, incomeRefund: true })],
+      () => true
+    );
+    expect(r).toEqual({ inc: -2150, exp: 0, xfer: 0 });
+  });
+});
+
+describe("zenPeriodTotals — «Итоги за период» ленты Дзен-мани", () => {
+  const mk = (o: NonNullable<Parameters<typeof tx>[0]>) => tx({ amount: o.amountBase, ...o });
+  const S = new Set(["Карта", "Наличные"]);
+  const inside = (k: string) => S.has(k);
+  const tr = (from: string, to: string, out: number, inc = out) =>
+    mk({ kind: "transfer", account: from, outcomeAccount: from, incomeAccount: to, outcomeAmount: out, incomeAmount: inc, outcomeCurrency: "RUB", incomeCurrency: "RUB", amountBase: out });
+
+  it("перевод наружу — расход, внутрь — доход, внутри — только комиссия", () => {
+    const r = zenPeriodTotals(
+      [
+        mk({ kind: "expense", account: "Карта", amountBase: 100 }),
+        mk({ kind: "income", account: "Наличные", amountBase: 1000 }),
+        mk({ kind: "expense", account: "Криптокошелёк", amountBase: 5000 }),
+        tr("Карта", "Цель", 300),
+        tr("Кредит", "Карта", 2000),
+        tr("Карта", "Наличные", 510, 500),
+        tr("Цель", "Кредит", 999),
+      ],
+      inside
+    );
+    expect(r).toEqual({ inc: 3000, exp: 410, xfer: 510 });
   });
 });
 

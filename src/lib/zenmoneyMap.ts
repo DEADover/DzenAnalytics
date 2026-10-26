@@ -28,6 +28,15 @@ import { isDebtAccountType } from "./accountType";
  */
 export const NO_CATEGORY = "Без категории";
 
+/** Первая категория операции — «только доход»: доходы включены, расходы нет. */
+function incomeOnlyTag(
+  tag: string[] | null | undefined,
+  tagsById: Map<string, { showIncome?: boolean; showOutcome?: boolean }>
+): boolean {
+  const first = tag && tag.length > 0 ? tagsById.get(tag[0]) : null;
+  return !!first && !!first.showIncome && !first.showOutcome;
+}
+
 /**
  * Ярлыки сервиса на месте категории: «Перевод» и «Долг».
  *
@@ -343,6 +352,9 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
       // У перевода предпочитаем личную ногу: перевод, коснувшийся личного
       // счёта, принадлежит его хозяину, а не «общему котлу».
       member: outAcc?.role ?? inAcc?.role ?? null,
+      // Трата в категории «только доход» — возврат дохода (зеркало возврата
+      // траты выше): Дзен-мани вычитает её из дохода категории.
+      ...(kind === "expense" && incomeOnlyTag(zt.tag, tagsById) ? { incomeRefund: true } : {}),
       ...(extraCategories.length > 0 ? { extraCategories } : {}),
     });
   }

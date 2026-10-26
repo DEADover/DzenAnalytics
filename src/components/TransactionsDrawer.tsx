@@ -188,7 +188,17 @@ export function TransactionsDrawer() {
   // is the source of truth, so we re-derive a fresh list by id-lookup.
   const liveTransactions = useMemo(() => {
     const byId = new Map(allTransactions.map((t) => [t.id, t]));
-    return transactions.map((t) => byId.get(t.id) || t);
+    // Строки, достроенные аналитикой (комиссия перевода), — это та операция,
+    // из которой они взяты: показываем и открываем её.
+    const seen = new Set<string>();
+    const out: Transaction[] = [];
+    for (const t of transactions) {
+      const real = byId.get(t.sourceId ?? t.id) || t;
+      if (seen.has(real.id)) continue;
+      seen.add(real.id);
+      out.push(real);
+    }
+    return out;
   }, [transactions, allTransactions]);
 
   const filtered = useMemo(() => {

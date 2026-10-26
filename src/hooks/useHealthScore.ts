@@ -6,7 +6,7 @@ import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { useLiveAccounts } from "./useLiveAccounts";
-import { useOffBalanceExcluded } from "./useInBalanceTransactions";
+import { useLoanAccountKeys, useOffBalanceExcluded } from "./useInBalanceTransactions";
 import { useAccountDirectory } from "./useAccountDirectory";
 import { computeHealthScore, type HealthScore } from "../lib/health";
 import { stripFromAnalytics } from "../lib/aggregations";
@@ -42,6 +42,7 @@ export function useHealthScore(): HealthScore | null {
   const liveAccounts = useLiveAccounts();
   // Чьи операции не считаются — то же правило, что во всём сервисе.
   const offBalanceExcluded = useOffBalanceExcluded();
+  const loanKeys = useLoanAccountKeys();
   const dir = useAccountDirectory();
 
   useEffect(() => {
@@ -72,6 +73,8 @@ export function useHealthScore(): HealthScore | null {
     const scored = stripFromAnalytics(transactions, {
       excludedCategories: new Set(slice.excludedCategories),
       offBalanceKeys: skipAccounts.size ? skipAccounts : undefined,
+      loanKeys,
+      labelOf: dir.label,
     });
 
     return computeHealthScore({
@@ -91,6 +94,7 @@ export function useHealthScore(): HealthScore | null {
     includeOffBalance,
     liveAccounts,
     offBalanceExcluded,
+    loanKeys,
     dir,
     slice,
     monthStartDay,

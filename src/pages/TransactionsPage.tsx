@@ -25,7 +25,7 @@ import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useSearchParams } from "react-router-dom";
-import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
+import { useFiltersStore, applyFilters, FILTER_NONE } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useZenmoneyStore, getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { confirm, useConfirmStore } from "../store/useConfirmStore";
@@ -46,7 +46,10 @@ import { useSplitTransaction } from "../hooks/useSplitTransaction";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { confirmBulkDelete } from "../lib/confirmBulkDelete";
-import { kindTotals, transferTotals } from "../lib/aggregations";
+import { kindTotals, transferTotals, zenPeriodTotals } from "../lib/aggregations";
+import { useOffBalanceExcluded } from "../hooks/useInBalanceTransactions";
+import { useAccountDirectory } from "../hooks/useAccountDirectory";
+import { parseDebtKey } from "../lib/debtFilter";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { Popover } from "../components/Popover";
@@ -414,19 +417,28 @@ export function TransactionsPage() {
     };
   }, [transactions]);
 
-  const totals = useMemo(() => {
-    let inc = 0;
-    let exp = 0;
-    for (const t of searched) {
-      if (t.kind === "income") inc += t.amountBase;
-      else if (t.kind === "expense") exp += t.amountBase;
-      // Refunds reduce the displayed expense total in the feed
-      // footer — they're not earnings.
-      else if (t.kind === "refund") exp -= t.amountBase;
+  /**
+   * Счета, по которым считаются итоги, — как блок «Итоги за период» в ленте
+   * Дзен-мани: выбранные в фильтре «Счета», а без выбора — счета в балансе.
+   * Сама лента показывает всё; итоги — только движение денег этих счетов.
+   */
+  const offBalance = useOffBalanceExcluded();
+  const accountDir = useAccountDirectory();
+  const insideTotals = useMemo(() => {
+    const picked = filters.accounts;
+    if (picked.size > 0 && !picked.has(FILTER_NONE)) {
+      const set = new Set<string>();
+      for (const k of accountDir.resolve(picked)) set.add(parseDebtKey(k)?.account ?? k);
+      return (key: string) => set.has(key);
     }
-    const { xfer, savings } = transferTotals(searched, savingsAccounts);
+    return (key: string) => !offBalance?.has(key);
+  }, [filters.accounts, accountDir, offBalance]);
+
+  const totals = useMemo(() => {
+    const { inc, exp, xfer } = zenPeriodTotals(searched, insideTotals);
+    const { savings } = transferTotals(searched, savingsAccounts);
     return { inc, exp, xfer, savings, net: inc - exp, count: searched.length };
-  }, [searched, savingsAccounts]);
+  }, [searched, savingsAccounts, insideTotals]);
 
   // Lazy reveal: render PAGE_SIZE rows initially; an IntersectionObserver at
   // the bottom of the list increases this by another PAGE_SIZE whenever the
@@ -608,12 +620,14 @@ export function TransactionsPage() {
           value={formatMoney(totals.inc, base)}
           tone="income"
           icon={<ArrowUp className="w-4 h-4" />}
+          tooltip="Как в Дзен-мани: поступления на счета в балансе (или на выбранные в фильтре) и переводы на них с остальных счетов — с накопительных, кредитов, из долга"
         />
         <StatCell
           label="Расходы"
           value={formatMoney(totals.exp, base)}
           tone="expense"
           icon={<ArrowDown className="w-4 h-4" />}
+          tooltip="Как в Дзен-мани: траты со счетов в балансе (или с выбранных в фильтре), переводы с них на остальные счета — в накопления, на кредиты, в долг — и комиссии переводов. Возвраты уменьшают расход"
         />
         <StatCell
           label="Разница"
@@ -625,7 +639,7 @@ export function TransactionsPage() {
           label="Переводы"
           value={formatMoney(totals.xfer, base)}
           icon={<ArrowLeftRight className="w-4 h-4" />}
-          tooltip="Сумма переводов между своими счетами за период"
+          tooltip="Переводы между счетами в балансе (или между выбранными в фильтре) — перекладывание своих денег, не доход и не расход"
         />
         <StatCell
           label="Накопления"

@@ -2885,11 +2885,19 @@ export function buildHierarchy(
       sub.count++;
     }
   }
+  // Как в «Аналитике» Дзен-мани: каждая конечная строка — свои
+  // операции категории и каждая подкатегория — не ниже нуля, итог категории —
+  // сумма уже ограниченных строк. Возвраты, перекрывшие траты, дают ноль, а не
+  // минус, и не уменьшают чужие строки и общий итог.
   for (const node of map.values()) {
+    const subsRaw = node.subs.reduce((sum, sub) => sum + sub.total, 0);
+    const own = Math.max(0, node.total - subsRaw);
+    for (const sub of node.subs) sub.total = Math.max(0, sub.total);
+    node.subs = node.subs.filter((sub) => sub.total !== 0);
+    node.total = own + node.subs.reduce((sum, sub) => sum + sub.total, 0);
     node.subs.sort((a, b) => b.total - a.total);
   }
-  // Категории, схлопнувшиеся ровно в ноль, убираем; ушедшие в минус оставляем —
-  // это полезный сигнал «возвраты перекрыли траты», и на него стоит взглянуть.
+  // Категории, схлопнувшиеся в ноль, убираем.
   return Array.from(map.values())
     .filter((n) => n.total !== 0)
     .sort((a, b) => b.total - a.total);
@@ -2977,40 +2985,162 @@ export function transferTotals(
 }
 
 /**
- * Drop operations that should not count in the aggregate analytics widgets
- * (issue #14): pure turnover / mutual-settlement categories the user marked as
- * «не учитывать в аналитике», plus flows on off-balance accounts.
+ * Доходы и расходы ленты за период — как блок «Итоги за период» в ленте
+ * Дзен-мани (по набору счетов S):
  *
- * A category is matched by ROOT (`tx.category`) or FULL PATH (`tx.categoryFull`),
- * so excluding a root («Переводы») covers all of its sub-categories, while a
- * sub-category can be excluded on its own («Родитель / Подкатегория»).
+ * - доход — если счёт зачисления в S, расход — если счёт списания в S
+ *   (возврат уменьшает расход, возврат дохода — доход);
+ * - перевод внутри S — не доход и не расход; в одной валюте разница
+ *   «списано − зачислено» — расход (комиссия), между валютами — ноль;
+ * - перевод из S наружу — расход, снаружи в S — доход: деньги ушли на
+ *   накопительный, кредит, в долг — или пришли оттуда;
+ * - операции, у которых обе стороны вне S, в итог не идут.
  *
- * `offBalanceKeys` is honoured only when passed non-empty — the caller gates
- * it on the global «учитывать внебалансовые счета» switch (empty set = keep
- * off-balance flows). A transfer is dropped if ANY of its legs touches such an
- * account (belt-and-suspenders, same rule as the global filter).
+ * `inside` — S: выбранные в фильтре счета, а без выбора — счета в балансе.
+ * `xfer` — переводы внутри S (перекладывание между своими счетами).
+ */
+export function zenPeriodTotals(
+  txs: readonly Transaction[],
+  inside: (key: string) => boolean
+): { inc: number; exp: number; xfer: number } {
+  let inc = 0;
+  let exp = 0;
+  let xfer = 0;
+  for (const t of txs) {
+    if (t.kind === "transfer") {
+      const outIn = inside(txOutKey(t));
+      const inIn = inside(txInKey(t));
+      if (outIn && inIn) {
+        xfer += t.amountBase;
+        const fee = transferFee(t);
+        if (fee) exp += fee.amountBase;
+      } else if (outIn) exp += t.amountBase;
+      else if (inIn) inc += t.amountBase;
+      continue;
+    }
+    if (!inside(txAccountKey(t))) continue;
+    if (t.kind === "income") inc += t.amountBase;
+    else if (t.kind === "expense" && t.incomeRefund) inc -= t.amountBase;
+    else if (t.kind === "expense") exp += t.amountBase;
+    else if (t.kind === "refund") exp -= t.amountBase;
+  }
+  return { inc, exp, xfer };
+}
+
+/** Строка аналитики «Кредиты и кредитки» — как в Дзен-мани. */
+export const LOAN_CATEGORY = "Кредиты и кредитки";
+/** Строка аналитики «Комиссии за переводы» — как в Дзен-мани. */
+export const FEE_CATEGORY = "Комиссии за переводы";
+
+/**
+ * Операции, из которых считается сводная аналитика, — по правилам «Аналитики»
+ * Дзен-мани:
  *
- * Pure and allocation-light: returns the same array reference when nothing is
- * excluded, so callers can keep it inside a `useMemo` without churn.
+ * - счета вне набора (`offBalanceKeys` — вне баланса, пока они не считаются,
+ *   плюс вынесенные разрезом) в отчёт не идут: ни их траты, ни поступления;
+ * - перевод внутри набора — не расход; но если валюта одна и списано больше,
+ *   чем зачислено, разница — расход «Комиссии за переводы»;
+ * - перевод из набора на кредит или кредитку вне набора (`loanKeys`) — расход
+ *   «Кредиты и кредитки», подкатегория — счёт кредита. Остальные переводы через
+ *   границу (накопления, долги, прочие счета) — ни расход, ни доход;
+ * - категории, вынесенные из аналитики (#14), — не идут, по корню или по
+ *   полному пути;
+ * - трата в категории «только доход» (`incomeRefund`) — минус доход этой
+ *   категории, а не расход (зеркало возврата траты).
+ *
+ * Чистая; возвращает тот же массив, когда менять нечего.
  */
 export function stripFromAnalytics(
   txs: Transaction[],
-  opts: { excludedCategories?: Set<string>; offBalanceKeys?: Set<string> } = {}
+  opts: {
+    excludedCategories?: Set<string>;
+    offBalanceKeys?: Set<string>;
+    /** Счета-кредиты и кредитки (кредит или карта с кредитным лимитом). */
+    loanKeys?: Set<string>;
+    /** Подпись счёта по ключу — для подкатегории «Кредиты и кредитки». */
+    labelOf?: (key: string) => string;
+  } = {}
 ): Transaction[] {
   const cats = opts.excludedCategories;
   const accts = opts.offBalanceKeys;
+  const loans = opts.loanKeys;
   const hasCats = !!cats && cats.size > 0;
   const hasAccts = !!accts && accts.size > 0;
-  if (!hasCats && !hasAccts) return txs;
-  return txs.filter((t) => {
-    if (hasCats && (cats!.has(t.category) || cats!.has(t.categoryFull))) return false;
-    if (
-      hasAccts &&
-      (accts!.has(txAccountKey(t)) ||
-        accts!.has(txOutKey(t)) ||
-        accts!.has(txInKey(t)))
-    )
-      return false;
-    return true;
-  });
+  const outside = (key: string) => hasAccts && accts!.has(key);
+  const out: Transaction[] = [];
+  let changed = false;
+  for (const t of txs) {
+    if (hasCats && (cats!.has(t.category) || cats!.has(t.categoryFull))) {
+      changed = true;
+      continue;
+    }
+    if (t.kind === "transfer") {
+      const outKey = txOutKey(t);
+      const inKey = txInKey(t);
+      const outOut = outside(outKey);
+      const inOut = outside(inKey);
+      if (!outOut && !inOut) {
+        out.push(t);
+        const fee = transferFee(t);
+        if (fee) {
+          out.push(fee);
+          changed = true;
+        }
+        continue;
+      }
+      changed = true;
+      if (!outOut && inOut && loans?.has(inKey)) {
+        const sub = (opts.labelOf ? opts.labelOf(inKey) : "") || t.incomeAccount || "";
+        out.push({
+          ...t,
+          kind: "expense",
+          category: LOAN_CATEGORY,
+          subcategory: sub || null,
+          categoryFull: sub ? `${LOAN_CATEGORY} / ${sub}` : LOAN_CATEGORY,
+          account: t.outcomeAccount,
+          accountKey: outKey,
+        });
+      }
+      continue;
+    }
+    if (outside(txAccountKey(t)) || outside(txOutKey(t)) || outside(txInKey(t))) {
+      changed = true;
+      continue;
+    }
+    // Возврат дохода (трата в категории «только доход») — минус доход своей
+    // категории, как в Дзен-мани, а не расход.
+    if (t.kind === "expense" && t.incomeRefund) {
+      out.push({ ...t, kind: "income", amountBase: -t.amountBase, amount: -t.amount });
+      changed = true;
+      continue;
+    }
+    out.push(t);
+  }
+  return changed ? out : txs;
+}
+
+/**
+ * Комиссия перевода в одной валюте: списано больше, чем зачислено. Расход
+ * «Комиссии за переводы» со ссылкой на сам перевод (`sourceId`). Между
+ * валютами — ничего: разницу курса Дзен-мани в расходы не пишет.
+ */
+function transferFee(t: Transaction): Transaction | null {
+  if (!t.outcomeCurrency || t.outcomeCurrency !== t.incomeCurrency) return null;
+  const diff = (t.outcomeAmount || 0) - (t.incomeAmount || 0);
+  if (!(diff > 0.005) || !(t.outcomeAmount > 0)) return null;
+  const base = t.amountBase * (diff / t.outcomeAmount);
+  return {
+    ...t,
+    id: `${t.id}~fee`,
+    sourceId: t.id,
+    kind: "expense",
+    amount: diff,
+    currency: t.outcomeCurrency,
+    amountBase: base,
+    category: FEE_CATEGORY,
+    subcategory: null,
+    categoryFull: FEE_CATEGORY,
+    account: t.outcomeAccount,
+    accountKey: txOutKey(t),
+  };
 }

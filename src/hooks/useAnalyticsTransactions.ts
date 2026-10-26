@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useDataStore } from "../store/useDataStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
-import { useOffBalanceExcluded } from "./useInBalanceTransactions";
+import { useLoanAccountKeys, useOffBalanceExcluded } from "./useInBalanceTransactions";
 import { useAccountDirectory } from "./useAccountDirectory";
 import { stripFromAnalytics } from "../lib/aggregations";
 import type { Transaction } from "../types";
@@ -28,6 +28,7 @@ export function useAnalyticsTransactions(): Transaction[] {
   const hydrateExcl = useSlicesStore((s) => s.hydrate);
   const slice = activeSlice({ slices, activeId });
   const offBalanceKeys = useOffBalanceExcluded();
+  const loanKeys = useLoanAccountKeys();
   const dir = useAccountDirectory();
 
   useEffect(() => {
@@ -48,7 +49,13 @@ export function useAnalyticsTransactions(): Transaction[] {
   }, [slice.excludedAccounts, offBalanceKeys, dir]);
 
   return useMemo(
-    () => stripFromAnalytics(transactions, { excludedCategories: excluded, offBalanceKeys: skipAccounts }),
-    [transactions, excluded, skipAccounts]
+    () =>
+      stripFromAnalytics(transactions, {
+        excludedCategories: excluded,
+        offBalanceKeys: skipAccounts,
+        loanKeys,
+        labelOf: dir.label,
+      }),
+    [transactions, excluded, skipAccounts, loanKeys, dir]
   );
 }
