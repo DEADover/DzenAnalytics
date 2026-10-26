@@ -555,11 +555,6 @@ export function BudgetsPage() {
    * местом в разделе, где период выбирался не в шапке.
    */
   const dashboardMonth = Number(ym.slice(5, 7)) - 1;
-  /** Название месяца по номеру: «Август» с заглавной или «август» в перечне. */
-  const monthOf = (idx: number, capital = false) => {
-    const name = new Date(2000, idx, 1).toLocaleDateString("ru-RU", { month: "long" });
-    return capital ? name.charAt(0).toUpperCase() + name.slice(1) : name;
-  };
   const reportMonthIndex =
     view === "dashboard" ? dashboardMonth : (pickedMonth ?? defaultReportMonth);
   /** Смена месяца отчёта из окна выгрузки: на дашборде она двигает период. */
@@ -1330,24 +1325,6 @@ export function BudgetsPage() {
             onSelectMonth={setYm}
             onSelectYear={(y) => setYm((m) => `${y}-${m.slice(5, 7)}`)}
           />
-          {/* Что именно считает выбранный месяц — подсказкой, а не строкой на
-              экране: два из трёх фактов видно и так (заголовки плиток и сам
-              период в шапке), а третий нужен раз в жизни. */}
-          {view === "dashboard" && (
-            <InfoPopover label="За какой период показатели на этом экране">
-              <TooltipFacts
-                title="Показатели на этом экране"
-                facts={[
-                  { label: "За месяц", value: `${monthOf(dashboardMonth, true)} ${year}` },
-                  {
-                    label: "С начала года",
-                    value: `Январь — ${monthOf(dashboardMonth)}`,
-                  },
-                ]}
-                note={<span className="italic">Прошлый год берётся тем же отрезком</span>}
-              />
-            </InfoPopover>
-          )}
         </div>
         <div className="flex items-center gap-2">
           {yearView && (
