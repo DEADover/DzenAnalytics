@@ -437,10 +437,18 @@ export function ComparePage() {
     [transactions, filters]
   );
 
-  const maxDate = useMemo(
-    () => filtered.reduce((m, t) => (t.date > m ? t.date : m), ""),
-    [filtered]
-  );
+  // Конец данных — сегодня, даже если сегодня ещё не было операций: иначе
+  // идущий месяц обрывался на вчерашнем дне, и «к тому же дню» сравнивало
+  // не с сегодняшним числом. Операции с будущей датой сдвигают конец дальше.
+  // Данные давно кончились (только старый CSV) — конец остаётся по ним, иначе
+  // по умолчанию открывался бы пустой текущий месяц.
+  const maxDate = useMemo(() => {
+    const last = filtered.reduce((m, t) => (t.date > m ? t.date : m), "");
+    if (!last) return "";
+    const today = toIsoDate(new Date());
+    if (last >= today) return last;
+    return spanDays(last, today) <= 31 ? today : last;
+  }, [filtered]);
   const minDate = useMemo(
     () => filtered.reduce((m, t) => (!m || t.date < m ? t.date : m), ""),
     [filtered]

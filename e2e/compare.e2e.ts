@@ -38,6 +38,18 @@ test("нарастающий итог по дням: идущий месяц д�
   await expect(page.getByText("Сравнение расходов по категориям")).toBeVisible();
 });
 
+test("нарастающий итог: сегодня без операций — линия всё равно до сегодня", async ({ page, zen }) => {
+  // Сегодня (15.10) трат ещё не было — сравнение всё равно на сегодняшнее
+  // число, а не на вчерашнее, когда была последняя операция.
+  zen.patchFull = (diff) => ({
+    ...diff,
+    transaction: diff.transaction.filter((t: { date: string }) => t.date !== "2026-10-15"),
+  });
+  await connectZen(page, "/compare");
+  const card = page.locator(".card-tray", { has: page.getByText("График сравнения расходов") });
+  await expect(card.getByTestId("compare-track-summary")).toContainText("на 15 октября");
+});
+
 test("один и тот же месяц в А и Б выбрать нельзя, календарь — по центру кнопки", async ({ page }) => {
   await connectZen(page, "/compare");
   // Октябрь против сентября. Открываем календарь периода Б.
