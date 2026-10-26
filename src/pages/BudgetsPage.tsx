@@ -1563,17 +1563,9 @@ export function BudgetsPage() {
 
       {view === "month" && (
         <>
-      {/* Summary: расходы / доходы / дельта — у каждого явные «Факт» и «План» */}
+      {/* Сводка: поступления / расходы / разница — у каждой «Факт» и «План».
+          Поступления первыми, как и разделы ниже (порядок «Планов»). */}
       <StatRow>
-        <PlanFactCard
-          title="Расходы за месяц"
-          fact={expFact}
-          plan={expPlan}
-          tone="expense"
-          base={base}
-          kind="expense"
-          withTransfers={settings.perimeterTransfers ? expFact + expTransfers : undefined}
-        />
         <PlanFactCard
           title={incomeTitle}
           fact={incFact}
@@ -1582,6 +1574,15 @@ export function BudgetsPage() {
           base={base}
           kind="income"
           withTransfers={settings.perimeterTransfers ? incFact + incTransfers : undefined}
+        />
+        <PlanFactCard
+          title="Расходы за месяц"
+          fact={expFact}
+          plan={expPlan}
+          tone="expense"
+          base={base}
+          kind="expense"
+          withTransfers={settings.perimeterTransfers ? expFact + expTransfers : undefined}
         />
         <PlanFactCard
           title={`Разница (${incomeTitleShort} − расходы)`}
@@ -1616,25 +1617,8 @@ export function BudgetsPage() {
       />
 
       <div className="space-y-6">
-        <Section
-          heading="Расходы"
-          rows={expenseRows}
-          ym={ym}
-          isCurrent={isCurrent}
-          monthProgress={monthProgress}
-          base={base}
-          onOpen={openCategory}
-          setPlan={setPlan}
-          budgetEdits={budgetEdits}
-          aheadByTag={aheadByTag}
-          hideEmpty={settings.hideEmptyRows}
-          showAll={settings.allCategories}
-          prevTotalOf={prevTotalOf}
-          prevSubsOf={prevSubsOf}
-          savePlans={savePlans}
-          headerAction={addButton("expense")}
-          prepend={draftKind === "expense" ? draftRow : undefined}
-        />
+        {/* Поступления — над расходами, как в «Планах» Дзен-мани: сначала
+            деньги на месяц, потом на что они уходят. */}
         <Section
           heading={incomeHeading}
           rows={incomeRows}
@@ -1653,6 +1637,25 @@ export function BudgetsPage() {
           savePlans={savePlans}
           headerAction={addButton("income")}
           prepend={draftKind === "income" ? draftRow : undefined}
+        />
+        <Section
+          heading="Расходы"
+          rows={expenseRows}
+          ym={ym}
+          isCurrent={isCurrent}
+          monthProgress={monthProgress}
+          base={base}
+          onOpen={openCategory}
+          setPlan={setPlan}
+          budgetEdits={budgetEdits}
+          aheadByTag={aheadByTag}
+          hideEmpty={settings.hideEmptyRows}
+          showAll={settings.allCategories}
+          prevTotalOf={prevTotalOf}
+          prevSubsOf={prevSubsOf}
+          savePlans={savePlans}
+          headerAction={addButton("expense")}
+          prepend={draftKind === "expense" ? draftRow : undefined}
         />
         {/* Отдельного блока «Без бюджета» больше нет: статьи без плана стоят в
             общем списке доходов и расходов с планом 0. Раньше их приходилось

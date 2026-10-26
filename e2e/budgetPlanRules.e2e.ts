@@ -45,8 +45,12 @@ test("«Баланс vs Расходы»: накопления строками 
   await expect(main.getByText(/деньги на месяц/i).first()).toBeVisible();
 
   // Строку перевода нельзя запланировать: в Дзен-мани плана у неё нет.
-  const row = main.locator(".card", { has: page.getByRole("button", { name: "Накопления", exact: true }) }).first();
-  await expect(row).toContainText("20 000");
+  // Поступления теперь над расходами (как в «Планах») — строку расходов
+  // («в копилку», 20 000) берём по сумме, а не первой по порядку.
+  const row = main
+    .locator(".card", { has: page.getByRole("button", { name: "Накопления", exact: true }) })
+    .filter({ hasText: "20 000" });
+  await expect(row).toHaveCount(1);
 
   // Окно статьи: сводка над операциями.
   await main.getByRole("button", { name: "Продукты", exact: true }).click();
@@ -120,9 +124,18 @@ test("«Счета вне баланса» в настройках бюджет�
   await expect(expenseCard).not.toHaveText(before);
 });
 
+test("поступления — над расходами, как в «Планах»", async ({ page, zen }) => {
+  await setup(page, zen, "balance");
+  const main = page.locator("main");
+  const income = main.locator("h2", { hasText: /^(Деньги на месяц|Поступления)$/ }).first();
+  const expense = main.locator("h2", { hasText: /^Расходы$/ }).first();
+  expect((await income.boundingBox())!.y).toBeLessThan((await expense.boundingBox())!.y);
+});
+
 test("строки как в «Планах»: группы переводов, затем «Вне плана» свёрнутой строкой; «Платежи на …» у группы", async ({ page, zen }) => {
   zen.patchFull = (diff) => {
-    const m = diff.reminderMarker[0];
+    const markers = diff.reminderMarker ?? [];
+    const m = markers[0];
     // Назначенный перевод на накопительный вне баланса — «Платежи на …».
     const toSave = {
       ...m,
@@ -140,7 +153,7 @@ test("строки как в «Планах»: группы переводов, 
     return {
       ...diff,
       account: diff.account.map((a) => (a.id === "acc-save" ? { ...a, inBalance: false } : a)),
-      reminderMarker: [...diff.reminderMarker, toSave],
+      reminderMarker: [...markers, toSave],
       user: diff.user.map((u) => ({ ...u, planBalanceMode: "balance", planSettings: "[]" })),
     };
   };
