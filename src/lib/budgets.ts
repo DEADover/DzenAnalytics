@@ -412,6 +412,14 @@ export function buildMonthCashflow(
      * операции ступеньками в свои дни. По умолчанию включено.
      */
     smear?: boolean;
+    /**
+     * Факт по дням ПЕРИОДА (1-индексированные массивы) — готовый, по тем же
+     * правилам, что итоги бюджета над графиком (переводы через границу
+     * баланса, входящий баланс в первый день). Задан — операции `txs` для
+     * факта не разбираются.
+     */
+    incomeByDay?: number[];
+    expenseByDay?: number[];
   }
 ): MonthCashflow {
   // Ось графика — отчётный период, а не календарь: с первым днём 15 «Сентябрь»
@@ -425,7 +433,12 @@ export function buildMonthCashflow(
 
   const incDelta = new Array(days + 1).fill(0);
   const expDelta = new Array(days + 1).fill(0);
-  for (const t of txs) {
+  if (opts?.incomeByDay || opts?.expenseByDay) {
+    for (let d = 1; d <= days; d++) {
+      incDelta[d] = opts.incomeByDay?.[d] ?? 0;
+      expDelta[d] = opts.expenseByDay?.[d] ?? 0;
+    }
+  } else for (const t of txs) {
     const date = (t.date || "").slice(0, 10);
     if (date < from || date > to) continue;
     const d = spanDays(from, date);

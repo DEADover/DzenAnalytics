@@ -150,6 +150,8 @@ export function MonthCashflowChart({
   leftExpense,
   smear = true,
   leftover = null,
+  incomeByDay,
+  expenseByDay,
 }: {
   transactions: Transaction[];
   ym: string;
@@ -176,6 +178,9 @@ export function MonthCashflowChart({
   /** «Свободно / Не хватает до конца месяца» по правилу Дзен-мани; `null` —
    *  не показывать (не текущий месяц или нет подключения). */
   leftover?: number | null;
+  /** Факт по дням периода — как у итогов бюджета (см. `buildMonthCashflow`). */
+  incomeByDay?: number[];
+  expenseByDay?: number[];
 }) {
   // «Сегодня» снимаем один раз при монтировании, а не читаем часы прямо в
   // рендере. Час в зависимостях `useMemo` не значился, поэтому вертикаль
@@ -193,6 +198,8 @@ export function MonthCashflowChart({
         leftIncome,
         leftExpense,
         smear,
+        incomeByDay,
+        expenseByDay,
       }),
     [
       transactions,
@@ -206,6 +213,8 @@ export function MonthCashflowChart({
       leftIncome,
       leftExpense,
       smear,
+      incomeByDay,
+      expenseByDay,
     ]
   );
   const hasForecast = cf.todayDay > 0 && cf.todayDay < cf.days;

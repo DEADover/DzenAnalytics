@@ -64,8 +64,10 @@ import { nameKey } from "../lib/budgetLines";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
 import { BudgetDashboardPrint } from "../components/BudgetDashboardPrint";
 import { BudgetDashboardView } from "../components/BudgetDashboardView";
+import type { Transaction } from "../types";
 import {
   budgetHits,
+  type BudgetHit,
   inPerimeter,
   insidePerimeter,
   transactionsForCell,
@@ -898,6 +900,54 @@ export function BudgetsPage() {
     return sum;
   }, [balanceNow, ym, cur, buildRows, zenPlanned, scope, monthStartDay, zenRules]);
   const openingShown = ym > cur ? forecastOpening : openingBalanceSum;
+
+  /**
+   * Куда операция ложится в бюджете — одно правило на строки статей и на
+   * график месяца, иначе линии графика расходились бы с итогами над ним
+   * (переводы через границу баланса, «Без категории»). Нога перевода «внутри
+   * периметра» (`transfer`) — не статья: в итог она не идёт.
+   *
+   * «Без категории» `budgetHits` отсеивает — планировать неразобранное
+   * нечего. Но деньги-то потрачены, и без них итог месяца не сойдётся с
+   * операциями. Собираем их отдельной строкой, которую нельзя планировать.
+   */
+  const factHits = useCallback(
+    (t: Transaction): BudgetHit[] => {
+      if (t.kind !== "transfer" && (!t.category || t.category === NO_CATEGORY)) {
+        if (!inPerimeter(scope, t.account ? txAccountKey(t) : undefined)) return [];
+        if (t.kind === "income")
+          return [{ kind: "income", category: NO_CATEGORY, subcategory: null, amount: t.amountBase }];
+        if (affectsExpense(t.kind))
+          return [{ kind: "expense", category: NO_CATEGORY, subcategory: null, amount: expenseDelta(t) }];
+        return [];
+      }
+      return budgetHits(t, scope);
+    },
+    [scope]
+  );
+
+  /**
+   * Факт месяца по дням — для графика «Планы на месяц», тем же правилом, что
+   * итоги над ним: линии доходят ровно до «Расходы за месяц» и «Поступления»
+   * / «Деньги на месяц». Входящий баланс (когда он учитывается) — в первый
+   * день: линия поступлений начинается с него, как в приложении.
+   */
+  const factByDay = useMemo(() => {
+    const days = spanDays(range.from, range.to);
+    const income = new Array(days + 1).fill(0);
+    const expense = new Array(days + 1).fill(0);
+    if (openingShown != null && days >= 1) income[1] += openingShown;
+    for (const t of transactions) {
+      if (!inMonth(t.date)) continue;
+      const d = spanDays(range.from, t.date.slice(0, 10));
+      if (!(d >= 1 && d <= days)) continue;
+      for (const hit of factHits(t)) {
+        if (hit.transfer) continue;
+        (hit.kind === "income" ? income : expense)[d] += hit.amount;
+      }
+    }
+    return { income, expense };
+  }, [transactions, inMonth, range, factHits, openingShown]);
   /**
    * Статьи, по которым в этом месяце были деньги, но плана нет.
    *
@@ -934,20 +984,9 @@ export function BudgetsPage() {
       if (cur) cur.fact += amount;
       else agg.set(key, { kind, category, subcategory, fact: amount, planGroup });
     };
-    const inScope = (account: string | undefined) => inPerimeter(scope, account);
     for (const t of transactions) {
       if (!inMonth(t.date)) continue;
-      // «Без категории» `budgetHits` отсеивает — планировать неразобранное
-      // нечего. Но деньги-то потрачены, и без них итог месяца не сойдётся с
-      // операциями. Собираем их отдельной строкой, которую нельзя планировать.
-      if (t.kind !== "transfer" && (!t.category || t.category === NO_CATEGORY)) {
-        if (!inScope(t.account ? txAccountKey(t) : undefined)) continue;
-        if (t.kind === "income") add("income", NO_CATEGORY, null, t.amountBase);
-        else if (affectsExpense(t.kind)) add("expense", NO_CATEGORY, null, expenseDelta(t));
-        continue;
-      }
-      for (const hit of budgetHits(t, scope))
-        add(hit.kind, hit.category, hit.subcategory, hit.amount, hit.planGroup);
+      for (const hit of factHits(t)) add(hit.kind, hit.category, hit.subcategory, hit.amount, hit.planGroup);
     }
     // Группа переводов — строка категории с подстроками по счетам: родителя
     // у неё в операциях нет, заводим его сами, иначе подстроки повиснут без
@@ -1001,7 +1040,7 @@ export function BudgetsPage() {
           ...(u.planGroup ? { planGroup: true } : {}),
         })
       );
-  }, [transactions, ym, inMonth, rows, scope]);
+  }, [transactions, ym, inMonth, rows, factHits]);
 
   /**
    * «Все категории» (настройка бюджета): остальные категории справочника —
@@ -1559,6 +1598,8 @@ export function BudgetsPage() {
         leftExpense={monthLeft.expense}
         smear={settings.smearPlan}
         leftover={monthLeftover}
+        incomeByDay={factByDay.income}
+        expenseByDay={factByDay.expense}
       />
 
       <div className="space-y-6">
