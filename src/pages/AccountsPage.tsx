@@ -1297,14 +1297,33 @@ export function AccountsPage() {
    * счёт раскрыт по контрагентам: выбранный человек получает СВОЙ слой на
    * графике — историю того, сколько он должен вам (или вы ему).
    */
+  /**
+   * Выбор счетов графика без счетов вне баланса. Раньше меню их предлагало,
+   * и снятая галочка у одного счёта сохраняла «все пункты, кроме него» —
+   * вместе с внебалансовыми. Такой сохранённый выбор чистим здесь: график,
+   * меню и быстрый выбор накоплений видят только счета из «Все».
+   */
+  const chartPicked = useMemo(() => {
+    const universe = valuation?.universe;
+    if (!universe || chartAccounts.has(FILTER_NONE)) return chartAccounts;
+    const out = new Set(
+      [...chartAccounts].filter((k) => universe.has(parseDebtKey(k)?.account ?? k))
+    );
+    return out.size === chartAccounts.size ? chartAccounts : out;
+  }, [chartAccounts, valuation]);
   const chartAccountOptions = useMemo(() => {
     // Порядок — как в глобальном фильтре: по виду счёта, архивные внизу. Иначе
     // `MultiSelect` рисует заголовок группы столько раз, сколько раз она
     // встретилась в списке, а список счетов сортируется по своим правилам.
     const kinds = new Map(accountRows.map((r) => [r.account, r.kind]));
     const archived = new Set(accountRows.filter((r) => r.archive).map((r) => r.account));
+    // Только счета из «Все» — те, что в балансе (или все, если в настройках
+    // включены счета вне баланса). Иначе снятая галочка у одного счёта
+    // добавляла в график все внебалансовые: ипотека или вклад вне баланса
+    // сдвигали линию на миллионы при «исключении» счёта с оборотом в 1–2 тыс.
+    const universe = valuation?.universe;
     const base = accountOptions(
-      accountRows.map((r) => r.account),
+      accountRows.filter((r) => !universe || universe.has(r.account)).map((r) => r.account),
       [],
       { archived, kinds, labelOf: dir.label }
     );
@@ -1312,7 +1331,7 @@ export function AccountsPage() {
       accountRows.filter((r) => DEBT_TYPES.has(r.type)).map((r) => r.account)
     );
     return withDebtCounterparties(base, debts, transactions);
-  }, [accountRows, transactions, dir]);
+  }, [accountRows, transactions, dir, valuation]);
   /** Вид счёта для заголовков групп — как в глобальном фильтре. */
   const chartAccountGroup = useCallback(
     (name: string) => {
@@ -1342,10 +1361,10 @@ export function AccountsPage() {
   const chartView = capitalPick ? "stacked" : view;
   const chartOnly = useMemo<string[] | null>(() => {
     if (capitalPick) return [capitalPick];
-    if (chartAccounts.size === 0) return null;
-    if (chartAccounts.has(FILTER_NONE)) return [];
-    return [...chartAccounts];
-  }, [chartAccounts, capitalPick]);
+    if (chartPicked.size === 0) return null;
+    if (chartPicked.has(FILTER_NONE)) return [];
+    return [...chartPicked];
+  }, [chartPicked, capitalPick]);
   const chartFiltered = chartOnly !== null && chartOnly.length > 0;
   const chartNothingPicked = chartOnly !== null && chartOnly.length === 0;
 
@@ -1415,13 +1434,13 @@ export function AccountsPage() {
     };
   }, [accountRows, valuation]);
   const savingsMode = useMemo<"all" | "noSavings" | "savings" | "custom">(() => {
-    if (chartAccounts.size === 0) return "all";
+    if (chartPicked.size === 0) return "all";
     const same = (list: string[]) =>
-      list.length === chartAccounts.size && list.every((t) => chartAccounts.has(t));
+      list.length === chartPicked.size && list.every((t) => chartPicked.has(t));
     if (same(savingsPresets.noSavings)) return "noSavings";
     if (same(savingsPresets.savings)) return "savings";
     return "custom";
-  }, [chartAccounts, savingsPresets]);
+  }, [chartPicked, savingsPresets]);
   const netChartAll = useNetWorthSeries(transactions, netChartAccounts);
   const netChart = useMemo(
     () => (chartNothingPicked ? [] : clip(netChartAll)),
@@ -3056,7 +3075,7 @@ export function AccountsPage() {
               className="w-48 shrink-0"
               label="Счета"
               options={chartAccountOptions}
-              selected={chartAccounts}
+              selected={chartPicked}
               onChange={setChartAccounts}
               renderIcon={(name) =>
                 parseDebtKey(name) ? (
