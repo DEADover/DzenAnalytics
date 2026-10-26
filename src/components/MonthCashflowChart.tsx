@@ -14,6 +14,7 @@ import { Scale } from "lucide-react";
 import { buildMonthCashflow } from "../lib/budgets";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "./TooltipFacts";
 import { SmearPlanToggle } from "./SmearPlanToggle";
+import { FactTile } from "./FactTile";
 import { niceScale } from "../lib/dashboardModel";
 import {
   formatMoney,
@@ -259,32 +260,23 @@ export function MonthCashflowChart({
         </div>
       </div>
       {/* Цифры «Планов» Дзен-мани: сколько ещё в планах и что останется к
-          концу месяца. Без них график показывал форму прогноза, но не его итог. */}
+          концу месяца. Без них график показывал форму прогноза, но не его итог.
+          Плитками общего вида — как факты в «Годе в цифрах». */}
       {hasForecast && (leftExpense != null || leftover != null) && (
-        <div className="flex items-center gap-x-5 gap-y-1 flex-wrap text-sm mb-2" data-testid="month-plan-summary">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3" data-testid="month-plan-summary">
           {leftExpense != null && (
-            <span className="flex items-baseline gap-1.5">
-              <span className="text-muted">Ещё в планах: расходы</span>
-              <span className="font-semibold tabular-nums">{formatMoney(leftExpense, base)}</span>
-            </span>
+            <FactTile label="Ещё в планах" value={formatMoney(leftExpense, base)} sub="Потратится по плану до конца месяца" />
           )}
           {leftIncome != null && (
-            <span className="flex items-baseline gap-1.5">
-              <span className="text-muted">поступления</span>
-              <span className="font-semibold tabular-nums">{formatMoney(leftIncome, base)}</span>
-            </span>
+            <FactTile label="Ещё поступит" value={formatMoney(leftIncome, base)} sub="Придёт по плану до конца месяца" />
           )}
           {leftover != null && (
-            <span className="flex items-baseline gap-1.5">
-              <span className="text-muted">
-                {leftover < 0 ? "Не хватает до конца месяца" : "Свободно на конец месяца"}
-              </span>
-              <span
-                className={`font-semibold tabular-nums ${leftover < 0 ? "text-expense" : "text-income"}`}
-              >
-                {formatMoney(Math.abs(leftover), base)}
-              </span>
-            </span>
+            <FactTile
+              label={leftover < 0 ? "Не хватает до конца месяца" : "Свободно на конец месяца"}
+              value={formatMoney(Math.abs(leftover), base)}
+              tone={leftover < 0 ? "expense" : "income"}
+              sub="Остаток на счетах после всех планов"
+            />
           )}
         </div>
       )}

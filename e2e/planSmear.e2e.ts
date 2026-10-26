@@ -61,8 +61,9 @@ test("бюджет: «Размазывать план» на графике ме
   await expect(toggle).toHaveAttribute("aria-checked", "true");
   // Цифры «Планов» Дзен-мани над графиком: ещё в планах и итог к концу месяца.
   const summary = page.getByTestId("month-plan-summary");
-  await expect(summary).toContainText("Ещё в планах: расходы");
-  await expect(summary).toContainText(/(Свободно на конец месяца|Не хватает до конца месяца)/);
+  await expect(summary).toContainText(/ещё в планах/i);
+  await expect(summary).toContainText(/ещё поступит/i);
+  await expect(summary).toContainText(/(свободно на конец месяца|не хватает до конца месяца)/i);
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "false");
   // Настройка одна: на «Сравнении» она тоже выключена.
