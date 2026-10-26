@@ -61,7 +61,7 @@ test("будущий месяц: входящий баланс — прогно�
   await expect(main.getByText("Входящий баланс", { exact: true })).toBeVisible();
   const next = main.locator("button", { has: page.locator("svg.lucide-chevron-right") }).first();
   await next.click();
-  await expect(main.getByText(/Ноя\. 2026/).first()).toBeVisible();
+  await expect(main.getByRole("button", { name: "Ноябрь 26 г." })).toBeVisible();
   // В будущем месяце строка есть — прогноз остатка на конец текущего.
   const row = main.locator(".card", { hasText: "Входящий баланс" }).first();
   await expect(row).toBeVisible();

@@ -3,8 +3,6 @@ import {
   Plus,
   Trash2,
   Wallet,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   MoreHorizontal,
   Pencil,
@@ -46,6 +44,7 @@ import { BudgetFillModal, type FillItem } from "../components/BudgetFillModal";
 import { BudgetYearTable } from "../components/BudgetYearTable";
 import { BudgetSettingsPopover } from "../components/BudgetSettingsPopover";
 import { SectionControls } from "../components/SectionControls";
+import { PeriodStepper } from "../components/PeriodStepper";
 import {
   buildBudgetYear,
   categoryPathKey,
@@ -95,7 +94,6 @@ import {
 import { StatCell, StatRow, type StatTone } from "../components/SectionCard";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
-import { DateField } from "../components/DateField";
 import { BudgetExportModal } from "../components/BudgetExportModal";
 import {
   budgetExportFileName,
@@ -1316,64 +1314,22 @@ export function BudgetsPage() {
             ]}
             className="mr-1.5"
           />
-          {/* Стрелки и период — одним куском: переносятся только вместе. */}
-          <div className="flex items-center gap-1.5">
-          <Tooltip content={monthPeriod ? "Предыдущий месяц" : "Предыдущий год"}>
-            <button
-              onClick={() => (monthPeriod ? setYm((m) => addMonths(m, -1)) : shiftYear(-1))}
-              // Ряд переключателей раздела — крупная ступень 42: вид бюджета,
-              // стрелки, месяц и действия стоят вровень.
-              className="btn-ghost btn-square-lg"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-          </Tooltip>
-          {monthPeriod ? (
-            <DateField
-              granularity="month"
-              value={ym}
-              onChange={(e) => e.target.value && setYm(e.target.value)}
-              // Ширина фиксированная и посчитана под самое длинное сокращение:
-              // при `min-width` кнопка дышала на каждом шаге, и соседние
-              // стрелки ездили вместе с ней. Поля уже обычного поля ввода —
-              // тут не текст набирают, а листают месяцы.
-              //
-              // Было 138 пикселей и центрирование. Центрирование держалось на
-              // невидимой распорке слева — противовесе значку календаря
-              // справа, — и вместе с запасом ширины давало заметную пустоту
-              // перед названием месяца. Подпись выровнена по левому краю, как
-              // в любом другом поле продукта, ширина посчитана по факту:
-              // 79 (самое длинное «Февр. 2026», замерено) + 16 (значок) +
-              // 8 (просвет) + 24 (поля) + 2 (кант) = 129, берём 132. Поля стали
-              // по 12: у пилюли восьмипиксельные прижимали подпись к канту.
-              // Скругление — общее у поля: пилюлей оно было, пока пилюлями были
-              // и кнопки вокруг.
-              className="input text-sm font-medium w-[132px] !px-3 !py-2.5"
-            />
-          ) : (
-            <span className="input w-auto text-sm font-medium tabular-nums !px-4 !py-2.5">
-              {year}
-            </span>
-          )}
-          <Tooltip content={monthPeriod ? "Следующий месяц" : "Следующий год"}>
-            <button
-              onClick={() => (monthPeriod ? setYm((m) => addMonths(m, 1)) : shiftYear(1))}
-              className="btn-ghost btn-square-lg"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </Tooltip>
-          </div>
-          {(monthPeriod ? !isCurrent : year !== Number(cur.slice(0, 4))) && (
-            <button
-              onClick={() => setYm(cur)}
-              className="text-xs text-accent hover:underline ml-1"
-            >
-              {/* Одно слово в обоих видах: рядом стоит сам период, и «текущий
-                  что» из него понятно без повтора. */}
-              Текущий
-            </button>
-          )}
+          {/* Период — тот же контрол, что в общем фильтре: стрелки, название
+              со списком и возврат к текущему значком в одной дорожке. Прежде
+              здесь были свои стрелки, родное поле месяца и ссылка «Текущий»,
+              которая появлялась и пропадала и двигала соседей. */}
+          <PeriodStepper
+            // Ступень 42 — как у соседей по шапке («Дашборд / Месяц / Год»,
+            // «Заполнить план»); в общем фильтре дорожка мельче, под его ряд.
+            size="md"
+            monthYM={ym}
+            mode={monthPeriod ? "month" : "year"}
+            onStep={(dir) => (monthPeriod ? setYm((m) => addMonths(m, dir)) : shiftYear(dir))}
+            onCurrent={() => setYm(cur)}
+            atCurrent={monthPeriod ? isCurrent : year === Number(cur.slice(0, 4))}
+            onSelectMonth={setYm}
+            onSelectYear={(y) => setYm((m) => `${y}-${m.slice(5, 7)}`)}
+          />
           {/* Что именно считает выбранный месяц — подсказкой, а не строкой на
               экране: два из трёх фактов видно и так (заголовки плиток и сам
               период в шапке), а третий нужен раз в жизни. */}

@@ -1,21 +1,10 @@
-import { useRef, useState } from "react";
-import { CalendarCheck, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { DateField } from "./DateField";
-import { MonthMenu } from "./MonthMenu";
-import { monthLabelFull } from "../lib/format";
-import { quarterLabel, quarterOf, shiftDays, shiftPeriod, spanDays } from "../lib/period";
+import { PeriodStepper } from "./PeriodStepper";
+import { quarterOf, shiftDays, shiftPeriod, spanDays } from "../lib/period";
 import { MONTHS, MONTHS_SHORT } from "../lib/months";
 import { StableWidth } from "./StableWidth";
-
-/**
- * Все двенадцать подписей месяцев этого года — по ним кнопка берёт ширину.
- * Считать «самый длинный» по числу букв нельзя: шрифт пропорциональный, и
- * «Февраль» шире «Сентября» в одних начертаниях и уже в других.
- */
-function monthLabels(year: number): string[] {
-  return MONTHS.map((_, i) => monthLabelFull(`${year}-${String(i + 1).padStart(2, "0")}`));
-}
 
 /**
  * «01 авг. 2026» — дата словами, всегда одной длины.
@@ -160,8 +149,6 @@ export function PeriodPicker({
   onCurrent: () => void;
   atCurrent: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const monthBtnRef = useRef<HTMLButtonElement>(null);
   const icon = size === "md" ? "seg-icon-md" : "seg-icon-sm";
   const item = size === "md" ? "seg-item-md" : "seg-item-sm";
   const isYear = mode === "year";
@@ -208,63 +195,34 @@ export function PeriodPicker({
 
   return (
     <div className="flex items-center gap-2 flex-1 min-w-fit max-sm:w-full max-sm:flex-wrap max-sm:min-w-0">
-      {/* Выбранный период */}
-      <div className={clsx("seg-track shrink-0", monthActive && activeTrack)}>
-        <button
-          type="button"
-          onClick={() => onStep(-1)}
-          disabled={windowPreset ? !canPrev : !canPrevUnit}
-          className={clsx("seg-icon", icon)}
-          title={windowPreset ? prevTitle : canPrevUnit || blank ? `Предыдущий ${unitTitle}` : "Раньше операций нет"}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        <button
-          ref={monthBtnRef}
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-          title={monthHint ?? (isYear ? "Выбрать год" : isQuarter ? "Выбрать квартал" : "Выбрать месяц")}
-          className={clsx("seg-item shrink-0", item, monthActive && "seg-on")}
-        >
-          {/* Ширина держится по месяцам даже в режиме года и квартала:
-              «2026» вдвое уже «Сентября», и переключение дёргало бы ряд. */}
-          <StableWidth
-            value={
-              blank ? "—" : isYear ? year : isQuarter ? quarterLabel(monthYM) : monthLabelFull(monthYM)
-            }
-            candidates={monthLabels(year)}
-          />
-          <ChevronDown className="w-3 h-3 opacity-60" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onStep(1)}
-          disabled={windowPreset ? !canNext : !canNextUnit}
-          className={clsx("seg-icon", icon)}
-          title={windowPreset ? nextTitle : canNextUnit || blank ? `Следующий ${unitTitle}` : "Дальше операций нет"}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={onCurrent}
-          disabled={atCurrent}
-          className={clsx("seg-icon", icon)}
-          title={
-            windowPreset
-              ? atCurrent
-                ? "Это последние дни"
-                : "Вернуться к последним дням"
-              : atCurrent
-                ? `Это текущий ${isYear ? "год" : isQuarter ? "квартал" : "месяц"}`
-                : `Вернуться к текущему ${isYear ? "году" : isQuarter ? "кварталу" : "месяцу"}`
-          }
-        >
-          <CalendarCheck className="w-4 h-4" />
-        </button>
-      </div>
+      {/* Выбранный период — общий контрол с бюджетом. */}
+      <PeriodStepper
+        monthYM={monthYM}
+        minYM={minYM}
+        maxYM={maxYM}
+        mode={mode}
+        active={monthActive}
+        hint={monthHint}
+        size={size}
+        blank={blank}
+        onStep={onStep}
+        onCurrent={onCurrent}
+        atCurrent={atCurrent}
+        onSelectMonth={onSelectMonth}
+        onSelectYear={onSelectYear}
+        onSelectQuarter={onSelectQuarter}
+        override={
+          windowPreset
+            ? {
+                canPrev,
+                canNext,
+                prevTitle,
+                nextTitle,
+                currentTitle: atCurrent ? "Это последние дни" : "Вернуться к последним дням",
+              }
+            : undefined
+        }
+      />
 
       {/* Свободный отрезок */}
       <div
@@ -338,21 +296,6 @@ export function PeriodPicker({
         </button>
       </div>
 
-      <MonthMenu
-        // Новый ключ на каждое открытие: панель начинает с года выбранного
-        // месяца, а не с того, где её оставили в прошлый раз.
-        key={open ? monthYM : "closed"}
-        open={open}
-        onClose={() => setOpen(false)}
-        anchorRef={monthBtnRef}
-        value={monthYM}
-        minYM={minYM}
-        maxYM={maxYM}
-        mode={mode}
-        onSelect={onSelectMonth}
-        onSelectYear={onSelectYear}
-        onSelectQuarter={onSelectQuarter}
-      />
     </div>
   );
 }
