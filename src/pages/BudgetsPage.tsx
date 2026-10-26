@@ -45,6 +45,7 @@ import { BudgetCellSummary } from "../components/BudgetCellSummary";
 import { BudgetFillModal, type FillItem } from "../components/BudgetFillModal";
 import { BudgetYearTable } from "../components/BudgetYearTable";
 import { BudgetSettingsPopover } from "../components/BudgetSettingsPopover";
+import { SectionControls } from "../components/SectionControls";
 import {
   buildBudgetYear,
   categoryPathKey,
@@ -1293,8 +1294,8 @@ export function BudgetsPage() {
         title="Бюджет"
       />
 
-      {/* Панель: вид и период (слева), действия (справа). */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* Панель: вид и период, действия — в шапке раздела (`SectionControls`). */}
+      <SectionControls>
         {/* На узком экране вид и листание месяцев переносятся на две строки —
             в одну они не входят и тащили страницу вбок. */}
         <div className="flex items-center gap-1.5 flex-wrap gap-y-2">
@@ -1416,7 +1417,7 @@ export function BudgetsPage() {
           )}
           <BudgetSettingsPopover />
         </div>
-      </div>
+      </SectionControls>
 
       {fillOpen && (
         <BudgetFillModal

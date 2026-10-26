@@ -49,6 +49,7 @@ import { nextSort, sortRows, type SortState } from "../components/table/tableKit
 import type { Transaction } from "../types";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { useLazyList } from "../hooks/useLazyList";
+import { SectionControls } from "../components/SectionControls";
 
 
 type Tab = "week" | "month";
@@ -108,15 +109,17 @@ export function DigestPage() {
 
       {/* Переключатель — общий контрол продукта, а не свои пилюли: те же две
           кнопки на других страницах выглядели иначе. */}
-      <Segmented
-        value={tab}
-        onChange={setTab}
-        label="Период дайджеста"
-        options={[
-          { value: "month" as Tab, label: "По месяцам" },
-          { value: "week" as Tab, label: "По неделям" },
-        ]}
-      />
+      <SectionControls>
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          label="Период дайджеста"
+          options={[
+            { value: "month" as Tab, label: "По месяцам" },
+            { value: "week" as Tab, label: "По неделям" },
+          ]}
+        />
+      </SectionControls>
 
       {filtered.length === 0 ? (
         <SectionEmpty icon={Newspaper} title="Нет завершённых периодов для дайджеста" />

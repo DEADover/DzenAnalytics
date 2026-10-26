@@ -33,6 +33,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Segmented } from "../components/Segmented";
 import type { Transaction } from "../types";
 import { SectionEmpty } from "../components/SectionEmpty";
+import { SectionControls } from "../components/SectionControls";
 
 const SCALES: ReportScale[] = ["month", "quarter", "year", "total"];
 
@@ -363,10 +364,10 @@ export function ReportPage() {
 
       <GlobalFilters period={lp} />
 
+      <SectionControls>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="label">Разбивка</span>
         <Segmented
-          size="sm"
           label="Разбивка"
           value={scale}
           onChange={setScale}
@@ -418,11 +419,10 @@ export function ReportPage() {
             быстрый способ разобраться в неожиданной цифре.
           </p>
         </InfoPopover>
-        {/* Выгрузка — в одной строке с настройкой столбцов: кнопка относится к
-            тому, что ниже, а не к заголовку страницы. */}
-        <span className="flex-1 min-w-2" />
+      </div>
+        {/* Выгрузка — рядом с настройкой столбцов: относится к отчёту ниже. */}
         <button
-          className="btn-ghost text-xs shrink-0"
+          className="btn-ghost btn-lg text-sm shrink-0"
           onClick={() => setExportOpen(true)}
           disabled={empty}
           title="Скачать отчёт в Excel"
@@ -430,7 +430,7 @@ export function ReportPage() {
           <Download className="w-4 h-4" aria-hidden />
           Excel
         </button>
-      </div>
+      </SectionControls>
 
       {exportOpen && (
         <ReportExportModal

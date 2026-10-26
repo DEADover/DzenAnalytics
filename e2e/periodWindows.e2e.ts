@@ -7,7 +7,10 @@
 import { test, expect, connectZen } from "./harness";
 import type { Page } from "@playwright/test";
 
-const pressed = (page: Page) => page.locator('[aria-pressed="true"]').first();
+// Нажатая кнопка ряда периода — внутри его группы: в шапке раздела стоят
+// свои переключатели («Расходы / Доходы»), и первая нажатая на странице — они.
+const pressed = (page: Page) =>
+  page.getByRole("group", { name: "Период" }).locator('[aria-pressed="true"]').first();
 // Дорожка дат — по самим датам, стрелка — первая кнопка в ней. Не по
 // подписи: под мышью её забирает мост подсказок (`nativeTooltips`), и поиск
 // по ней перескакивал на другую стрелку.

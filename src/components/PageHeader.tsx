@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { sectionGroupTitle } from "../lib/navSections";
+import { setHeaderSlot } from "../store/useHeaderSlotStore";
 
 interface Props {
   /**
@@ -20,12 +21,13 @@ interface Props {
    */
   info?: ReactNode;
   /**
-   * Правый угол — только действия над разделом целиком («Новая цель»,
-   * «Удалить окончательно»), компактной ступенью 34.
+   * Правый угол — действия над разделом целиком («Новая цель»,
+   * «Удалить окончательно»).
    *
-   * Настройкам того, что показано, — бегункам, году, режиму, периоду — здесь
-   * не место: они стоят в `SectionControls` под общим фильтром, рядом с тем,
-   * что меняют.
+   * Настройки показанного — сторону, вкладку, вид, год, бегунок — сюда
+   * передавать не нужно: `SectionControls` сам встаёт в шапку, перед этим
+   * углом (решение 26.10.2026: отдельный ряд под фильтром оставлял пустую
+   * полосу через всю ширину).
    */
   right?: ReactNode;
 }
@@ -83,7 +85,14 @@ export function PageHeader({
         {info}
       </div>
 
-      {right && <div className="ml-auto shrink-0">{right}</div>}
+      {/* Настройки раздела (`SectionControls`) — порталом сюда, справа. На
+          телефоне — своей строкой во всю ширину под крошками: справа от них
+          длинные вкладки не помещались и тащили страницу вбок. */}
+      <div
+        ref={setHeaderSlot}
+        className="ml-auto min-w-0 max-w-full flex flex-wrap items-center justify-end gap-3 empty:hidden max-sm:ml-0 max-sm:basis-full max-sm:justify-start"
+      />
+      {right && <div className="shrink-0">{right}</div>}
     </div>
   );
 }
