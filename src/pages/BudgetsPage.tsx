@@ -1420,32 +1420,16 @@ export function BudgetsPage() {
     </div>
   );
 
-  /**
-   * Действия в шапке раздела: добавить статью и заполнить план. Заполнение
-   * живёт здесь, рядом с самими планами, а не в шапке страницы: только в
-   * месячном виде и есть что заполнять, и правятся планы тоже в разделах.
-   */
   const addButton = (kind: BudgetKind) => (
-    <div className="flex items-center gap-2">
-      <Tooltip content={kind === "expense" ? "Добавить категорию расходов" : "Добавить категорию доходов"}>
-        <button
-          onClick={() => startDraft(kind)}
-          className="btn-primary btn-square"
-          aria-label="Добавить категорию"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </Tooltip>
-      <Tooltip content="Заполнить план: подставить суммы сразу по всем статьям — по истории операций, как в прошлом месяце или по факту месяца">
-        <button
-          onClick={() => setFillKind(kind)}
-          className="btn-ghost btn-square"
-          aria-label="Заполнить план"
-        >
-          <Wand2 className="w-4 h-4" />
-        </button>
-      </Tooltip>
-    </div>
+    <Tooltip content={kind === "expense" ? "Добавить категорию расходов" : "Добавить категорию доходов"}>
+      <button
+        onClick={() => startDraft(kind)}
+        className="btn-primary btn-square"
+        aria-label="Добавить категорию"
+      >
+        <Plus className="w-4 h-4" />
+      </button>
+    </Tooltip>
   );
 
   return (
@@ -1495,6 +1479,31 @@ export function BudgetsPage() {
           />
         </div>
         <div className="flex items-center gap-2">
+          {/* Одна кнопка-значок на постоянном месте рядом с настройками: в
+              месяце — «Заполнить план», в году и на дашборде — годовой отчёт
+              файлом. Ряд не меняется по ширине при переключении видов, и
+              ничего не сдвигается. */}
+          {view === "month" ? (
+            <Tooltip content="Заполнить план: подставить суммы сразу по всем статьям — по истории операций, как в прошлом месяце или по факту месяца">
+              <button
+                onClick={() => setFillKind("income")}
+                className="btn-ghost btn-square-lg"
+                aria-label="Заполнить план"
+              >
+                <Wand2 className="w-4 h-4" />
+              </button>
+            </Tooltip>
+          ) : (
+            <Tooltip content="Скачать годовой отчёт: таблицами в Excel или сводкой в PDF">
+              <button
+                onClick={() => setExportOpen(true)}
+                className="btn-ghost btn-square-lg"
+                aria-label="Скачать годовой отчёт"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            </Tooltip>
+          )}
           <BudgetSettingsPopover />
         </div>
       </SectionControls>
@@ -1529,20 +1538,6 @@ export function BudgetsPage() {
         />
       )}
 
-      {/* Выгрузка — у самой таблицы, которую она выгружает, как «CSV» у
-          таблиц в других разделах, а не в шапке страницы. */}
-      {view === "year" && (
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="font-semibold text-lg">Бюджет на {year} год</h2>
-          <Tooltip content="Годовой отчёт файлом: таблицами в Excel или сводкой в PDF">
-            <button onClick={() => setExportOpen(true)} className="btn-ghost text-sm">
-              <Download className="w-4 h-4" />
-              Экспорт
-            </button>
-          </Tooltip>
-        </div>
-      )}
-
       {view === "year" && (
         <BudgetYearTable
           report={yearReport}
@@ -1569,8 +1564,8 @@ export function BudgetsPage() {
       )}
 
       {/* Печатная вёрстка: на экране скрыта, в PDF — единственное, что попадёт
-          на лист. Держим её в обоих годовых видах: «Экспорт» — в «Годе», а на
-          дашборде её печатает и обычная печать браузера. */}
+          на лист. Держим её в обоих годовых видах: из каждого кнопкой рядом с
+          настройками скачивается годовой отчёт. */}
       {yearView && <BudgetDashboardPrint dashboard={printDashboard} base={base} />}
 
       {view === "month" && (

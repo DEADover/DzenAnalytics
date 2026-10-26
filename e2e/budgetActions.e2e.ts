@@ -1,31 +1,41 @@
 /**
- * Действия бюджета — у того, к чему относятся: «Заполнить план» в шапках
- * разделов «Поступления» / «Расходы» (окно открывается на своём разделе),
- * «Экспорт» — над годовой таблицей. В шапке страницы их нет.
+ * Действие бюджета — одна кнопка-значок рядом с настройками: в «Месяце» —
+ * «Заполнить план», в «Годе» и на «Дашборде» — годовой отчёт файлом. Место
+ * постоянное: при переключении видов ничего в шапке не сдвигается.
  */
 import { test, expect, connectZen } from "./harness";
 
-test("«Заполнить план» — в шапке раздела, окно на своём разделе; «Экспорт» — над годовой таблицей", async ({ page }) => {
+test("кнопка рядом с настройками: «Заполнить план» в месяце, отчёт в году и на дашборде, без сдвигов", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await connectZen(page, "/budgets");
-  await page.getByRole("button", { name: "Месяц", exact: true }).first().click();
-  const main = page.locator("main");
-  // В шапке страницы кнопок больше нет.
-  await expect(page.getByRole("button", { name: /^Заполнить план$/ })).toHaveCount(2);
+  const settings = page.getByRole("button", { name: "Настройки бюджета" });
+  const xOf = async () => (await settings.boundingBox())!.x;
+  const segX = async () =>
+    (await page.getByRole("button", { name: "Дашборд", exact: true }).first().boundingBox())!.x;
 
-  const incomeHead = main.locator("h2", { hasText: /^(Поступления|Деньги на месяц)$/ }).locator("xpath=..");
-  await incomeHead.getByRole("button", { name: "Заполнить план" }).click();
+  await page.getByRole("button", { name: "Месяц", exact: true }).first().click();
+  const fill = page.getByRole("button", { name: "Заполнить план" });
+  await expect(fill).toHaveCount(1);
+  const monthX = await xOf();
+  const monthSeg = await segX();
+  await fill.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
+  // Поступления первыми — как и на странице.
   const text = await dialog.innerText();
-  const inc = text.search(/Поступления/i);
-  const exp = text.search(/Расходы/i);
-  expect(inc).toBeGreaterThanOrEqual(0);
-  expect(exp).toBeGreaterThan(inc);
+  expect(text.search(/Поступления/i)).toBeGreaterThanOrEqual(0);
+  expect(text.search(/Расходы/i)).toBeGreaterThan(text.search(/Поступления/i));
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "Год", exact: true }).first().click();
-  await expect(main.getByText("Бюджет на 2026 год", { exact: true })).toBeVisible();
-  await main.getByRole("button", { name: /Экспорт/ }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  for (const view of ["Год", "Дашборд"]) {
+    await page.getByRole("button", { name: view, exact: true }).first().click();
+    await expect(page.getByRole("button", { name: "Заполнить план" })).toHaveCount(0);
+    const report = page.getByRole("button", { name: "Скачать годовой отчёт" });
+    await expect(report).toHaveCount(1);
+    expect(await xOf()).toBe(monthX);
+    expect(await segX()).toBe(monthSeg);
+    await report.click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+  }
 });
