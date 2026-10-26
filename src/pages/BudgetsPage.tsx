@@ -1172,9 +1172,22 @@ export function BudgetsPage() {
     const catFact = new Map<string, number>();
     const catKey = (r: Row) => `${r.line.kind}\u0000${r.line.category}`;
     for (const r of merged) catFact.set(catKey(r), (catFact.get(catKey(r)) ?? 0) + r.fact);
+    // Группы переводов — в порядке «Планов» (и их настроек): накопления,
+    // кредиты и кредитки, долги, остальные переводы.
+    const groupRank = new Map<string, number>();
+    if (zenRules)
+      for (const side of ["to", "from"] as const)
+        (["savings", "loans", "debts", "other"] as const).forEach((g, i) =>
+          groupRank.set(zenRules.labels[side][g], i)
+        );
     return merged.sort((a, b) => {
       // Входящий баланс — первым в поступлениях, как в приложении.
       if (!!a.opening !== !!b.opening) return a.opening ? -1 : 1;
+      if (a.planGroup && b.planGroup && a.line.category !== b.line.category) {
+        const ra = groupRank.get(a.line.category) ?? 9;
+        const rb = groupRank.get(b.line.category) ?? 9;
+        if (ra !== rb) return ra - rb;
+      }
       if (a.line.category !== b.line.category)
         return compareBudgetRows(
           { name: a.line.category, amount: catFact.get(catKey(a)) ?? 0, transfer: a.planGroup },
@@ -1186,7 +1199,7 @@ export function BudgetsPage() {
       if (!as || !bs) return as ? 1 : bs ? -1 : 0;
       return compareBudgetRows({ name: as, amount: a.fact }, { name: bs, amount: b.fact }, rowOrder);
     });
-  }, [rows, unplannedRows, catalogRows, rowOrder, openingShown, ym, cur]);
+  }, [rows, unplannedRows, catalogRows, rowOrder, openingShown, ym, cur, zenRules]);
 
   const expenseRows = allRows.filter((r) => r.line.kind === "expense");
   const incomeRows = allRows.filter((r) => r.line.kind === "income");
@@ -1797,6 +1810,13 @@ function Section({
   const aheadKey = (r: Row) =>
     [r.line.kind, r.line.category, r.line.subcategory ?? ""].join("\u0000");
   const aheadOf = (r: Row) => aheadByTag.get(aheadKey(r))?.sum ?? 0;
+  /** Всё назначенное по категории — со всеми подкатегориями, даже без строк. */
+  const groupAheadOf = (kind: BudgetKind, cat: string) => {
+    const prefix = `${kind}\u0000${cat}\u0000`;
+    let sum = 0;
+    for (const [k, v] of aheadByTag) if (k.startsWith(prefix)) sum += v.sum;
+    return sum;
+  };
   // Group rows by parent category (parent line first, then its sub-tags),
   // preserving the incoming order so the biggest categories stay on top.
   const order: string[] = [];
@@ -1849,6 +1869,15 @@ function Section({
   const emptyNoun = sectionKind === "income" ? "поступлений" : "трат";
   const withOps: string[] = [];
   const emptyCats: string[] = [];
+  // «Вне плана» — статьи без плана на месяц, по которым были деньги. В
+  // «Планах» Дзен-мани они свёрнуты в одну строку в конце раздела («Расходы
+  // по другим категориям»), после статей с планом и групп переводов.
+  const outOfPlan: string[] = [];
+  let outOfPlanTotal = 0;
+  const isOutOfPlan = (g: { parent?: Row; subs: Row[] }) => {
+    const all = g.parent ? [g.parent, ...g.subs] : g.subs;
+    return all.length > 0 && all.every((r) => r.unplanned && !r.opening && !r.planGroup);
+  };
   for (const cat of order) {
     const g = groups.get(cat)!;
     const rollupFact = (g.parent?.fact ?? 0) + g.subs.reduce((s, r) => s + r.fact, 0);
@@ -1856,8 +1885,13 @@ function Section({
     // было по определению, но дата и сумма известны — это «ожидается», а не
     // «пусто», и прятать её значит прятать ровно то, ради чего строка есть.
     const scheduled = !!g.parent?.scheduled || g.subs.some((r) => r.scheduled);
-    (rollupFact === 0 && !scheduled ? emptyCats : withOps).push(cat);
+    if (rollupFact === 0 && !scheduled) emptyCats.push(cat);
+    else if (isOutOfPlan(g)) {
+      outOfPlan.push(cat);
+      outOfPlanTotal += rollupFact;
+    } else withOps.push(cat);
   }
+  const [outOfPlanOpen, setOutOfPlanOpen] = useState(false);
 
   const renderCat = (cat: string) => {
     const g = groups.get(cat)!;
@@ -1898,10 +1932,15 @@ function Section({
             hasSubs ? parent.fact + g.subs.reduce((s, r) => s + r.fact, 0) : undefined
           }
           // «Ещё в плане» у категории — своё плюс все подкатегории, как и факт.
+          // У группы переводов — все назначенные переводы группы, в том числе
+          // на счёт, по которому в этом месяце ещё не было движения и своей
+          // подстроки нет (платёж по кредиту 31-го при первом платеже).
           rollupAhead={
-            hasSubs
-              ? aheadOf(parent) + g.subs.reduce((s, r) => s + aheadOf(r), 0)
-              : aheadOf(parent)
+            parent.planGroup
+              ? groupAheadOf(parent.line.kind, cat)
+              : hasSubs
+                ? aheadOf(parent) + g.subs.reduce((s, r) => s + aheadOf(r), 0)
+                : aheadOf(parent)
           }
           // План категории — СВОЙ план плюс планы подкатегорий, ровно как в
           // Дзен-мани: «Еда дома 50 000» и «Алкоголь 5 000» дают в строке
@@ -1993,6 +2032,27 @@ function Section({
       </div>
       {prepend}
       {withOps.map(renderCat)}
+      {outOfPlan.length > 0 && (
+        <div className="space-y-3">
+          <OutOfPlanRow
+            kind={sectionKind}
+            total={outOfPlanTotal}
+            count={outOfPlan.length}
+            open={outOfPlanOpen}
+            onToggle={() => setOutOfPlanOpen((o) => !o)}
+            base={base}
+          />
+          <div
+            className={`grid transition-all duration-300 ease-in-out ${
+              outOfPlanOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="space-y-3 pl-6">{outOfPlan.map(renderCat)}</div>
+            </div>
+          </div>
+        </div>
+      )}
       {emptyCats.length > 0 && (
         <div className="space-y-3">
           <button
@@ -2019,6 +2079,65 @@ function Section({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * «Вне плана» — свёрнутые в одну строку статьи без плана, по которым были
+ * деньги, как в «Планах» Дзен-мани («Расходы по другим категориям»). Щелчок
+ * раскрывает сами статьи — те же строки, что и выше, их можно запланировать.
+ */
+function OutOfPlanRow({
+  kind,
+  total,
+  count,
+  open,
+  onToggle,
+  base,
+}: {
+  kind: BudgetKind;
+  total: number;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  base: string;
+}) {
+  return (
+    <div className="card">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        // Та же сетка, что у строки статьи (`BudgetRow`): шеврон, значок, имя
+        // шириной 15rem, место полосы, колонка сумм, процент, отметка отправки
+        // и меню — сумма встаёт ровно под суммами статей.
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left rounded-[inherit] hover:bg-panel2/30"
+      >
+        <ChevronDown
+          className={`w-4 h-4 shrink-0 text-muted transition-transform duration-300 ${open ? "" : "-rotate-90"}`}
+        />
+        <span className="w-7 h-7 rounded-full bg-panel2 flex items-center justify-center shrink-0">
+          <MoreHorizontal className="w-4 h-4 text-muted" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1 sm:flex-none sm:w-60 sm:shrink-0">
+          <span className="block text-sm font-medium">Вне плана</span>
+          <span className="block text-xs text-muted truncate">
+            {kind === "income" ? "Поступления" : "Расходы"} по другим категориям · {count}
+          </span>
+        </span>
+        <span className="hidden sm:block flex-1" />
+        {/* «/ —» — как у статей без плана: плана у этой строки нет, и колонка
+            сумм выравнивается по той же косой черте. */}
+        <span className="shrink-0 sm:w-44 inline-flex items-center justify-end gap-1 text-sm tabular-nums whitespace-nowrap">
+          <span>{formatMoney(total, base)}</span>
+          <span className="text-muted">/</span>
+          <span className="text-muted">—</span>
+        </span>
+        <span className="hidden sm:block w-16 shrink-0" />
+        <span className="hidden sm:block w-4 shrink-0" />
+        <span className="hidden sm:block w-7 shrink-0" />
+      </button>
     </div>
   );
 }
@@ -2497,16 +2616,28 @@ function BudgetRow({
         <CategoryDot category={line.category} size="w-7 h-7" />
       )}
 
-      <Tooltip content={isSub ? `${line.category} › ${line.subcategory}` : line.category}>
-        <button
-          onClick={() => onOpen(line.category, line.subcategory ?? null)}
-          className={`truncate text-left flex-1 min-w-0 sm:flex-none sm:w-60 sm:shrink-0 hover:text-accent ${
-            isSub ? "text-sm text-muted" : "text-sm font-medium"
-          }`}
-        >
-          {nested && isSub ? line.subcategory : line.category}
-        </button>
-      </Tooltip>
+      <div className="flex flex-col flex-1 min-w-0 sm:flex-none sm:w-60 sm:shrink-0">
+        <Tooltip content={isSub ? `${line.category} › ${line.subcategory}` : line.category}>
+          <button
+            onClick={() => onOpen(line.category, line.subcategory ?? null)}
+            className={`truncate text-left hover:text-accent ${
+              isSub ? "text-sm text-muted" : "text-sm font-medium"
+            }`}
+          >
+            {nested && isSub ? line.subcategory : line.category}
+          </button>
+        </Tooltip>
+        {/* Подписи как в «Планах» Дзен-мани: у входящего баланса — что это, у
+            групп переводов — назначенное на остаток месяца («Платежи на …» по
+            кредиту, «Ещё в плане …» с копилки). Плана у групп нет, и без
+            подписи эти суммы было видно только в подсказке полосы. */}
+        {row.opening && <span className="text-xs text-muted truncate">Баланс на начало месяца</span>}
+        {row.planGroup && !nested && ahead > 0 && (
+          <span className={`text-xs truncate ${isIncome ? "text-muted" : "text-expense"}`}>
+            {isIncome ? "Ещё в плане" : "Платежи на"} {formatMoney(ahead, base)}
+          </span>
+        )}
+      </div>
 
       <div className="order-last basis-full flex items-center gap-2.5 pl-6 sm:contents">
       <BudgetBar

@@ -119,3 +119,43 @@ test("«Счета вне баланса» в настройках бюджет�
   await expect(main.getByRole("button", { name: "Накопления", exact: true })).toHaveCount(0);
   await expect(expenseCard).not.toHaveText(before);
 });
+
+test("строки как в «Планах»: группы переводов, затем «Вне плана» свёрнутой строкой; «Платежи на …» у группы", async ({ page, zen }) => {
+  zen.patchFull = (diff) => {
+    const m = diff.reminderMarker[0];
+    // Назначенный перевод на накопительный вне баланса — «Платежи на …».
+    const toSave = {
+      ...m,
+      id: "mk-to-save",
+      date: "2026-10-28",
+      outcome: 7_000,
+      income: 7_000,
+      outcomeAccount: "acc-tbank",
+      incomeAccount: "acc-save",
+      tag: null,
+      reminder: m.reminder,
+      payee: "",
+      comment: "В копилку",
+    };
+    return {
+      ...diff,
+      account: diff.account.map((a) => (a.id === "acc-save" ? { ...a, inBalance: false } : a)),
+      reminderMarker: [...diff.reminderMarker, toSave],
+      user: diff.user.map((u) => ({ ...u, planBalanceMode: "balance", planSettings: "[]" })),
+    };
+  };
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/budgets");
+  const main = page.locator("main");
+  const savings = main.getByRole("button", { name: "Накопления", exact: true }).first();
+  const outOfPlan = main.getByRole("button", { name: /Вне плана/ }).first();
+  await expect(outOfPlan).toBeVisible();
+  await expect(outOfPlan).toHaveAttribute("aria-expanded", "false");
+  // «Вне плана» — после групп переводов.
+  expect((await outOfPlan.boundingBox())!.y).toBeGreaterThan((await savings.boundingBox())!.y);
+  // У группы — назначенное на остаток месяца.
+  await expect(main.getByText(/Платежи на 7\s000/).first()).toBeVisible();
+  // Раскрывается — внутри сами статьи без плана.
+  await outOfPlan.click();
+  await expect(outOfPlan).toHaveAttribute("aria-expanded", "true");
+});
