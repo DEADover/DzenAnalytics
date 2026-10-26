@@ -4901,7 +4901,7 @@ export function HelpPage() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader icon={HelpCircle} title="Справка" />
 
       {/* Дерево слева, лента разделов справа. На узком экране дерево

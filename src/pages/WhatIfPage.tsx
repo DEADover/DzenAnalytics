@@ -301,7 +301,7 @@ export function WhatIfPage() {
   const deltaHorizon = actProj.capitalAtHorizon - nowProj.capitalAtHorizon;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader
         icon={FlaskConical}
         title="Что-если"

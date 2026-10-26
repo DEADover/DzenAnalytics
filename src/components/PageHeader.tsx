@@ -66,7 +66,11 @@ export function PageHeader({
     // `pl-1.5` — на ширину рамки поддона (`.tray` p-1.5, `.card-tray` 6 px):
     // вровень с внешним краем карточки строка казалась выдвинутой влево, глаз
     // меряет от белой поверхности внутри рамки, а не от скруглённого канта.
-    <div className="-mb-3 pl-1.5 flex items-center flex-wrap gap-x-3 gap-y-1">
+    //
+    // `min-h-[42px]` — ступень кнопок в шапке (`SectionControls`): строка
+    // одной высоты на всех страницах, с кнопками и без. Иначе крошки и общий
+    // фильтр под ними стояли на 18 px выше там, где кнопок нет.
+    <div className="-mb-3 pl-1.5 min-h-[42px] flex items-center flex-wrap gap-x-3 gap-y-1">
       <div className="min-w-0 flex items-center gap-2">
         {Icon && <Icon aria-hidden className="w-4 h-4 shrink-0 text-accent" />}
         <div className="min-w-0 flex items-center gap-1.5 text-[15px] leading-6">

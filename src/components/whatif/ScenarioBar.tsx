@@ -137,7 +137,9 @@ function ScenarioTab({
             if (open) close();
             else setOpen(true);
           }}
-          className="w-6 h-6 grid place-items-center rounded-md opacity-60 hover:opacity-100 hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          // −2 px сверху и снизу: кнопка 24 в пункте 32 растягивала дорожку до
+          // 46, и шапка «Что если» была выше, чем у остальных разделов (42).
+          className="w-6 h-6 -my-0.5 grid place-items-center rounded-md opacity-60 hover:opacity-100 hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           <MoreVertical className="w-4 h-4" />
         </button>
