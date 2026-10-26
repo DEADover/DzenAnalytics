@@ -41,6 +41,8 @@ test("«Баланс vs Расходы»: накопления строками 
   // перевод на накопительный (расход), и с него (поступление).
   await expect(main.getByRole("button", { name: "Накопления", exact: true })).toHaveCount(2);
   await expect(main.getByText("Входящий баланс", { exact: true })).toBeVisible();
+  // С входящим балансом сторона поступлений — «Деньги на месяц», как в приложении.
+  await expect(main.getByText(/деньги на месяц/i).first()).toBeVisible();
 
   // Строку перевода нельзя запланировать: в Дзен-мани плана у неё нет.
   const row = main.locator(".card", { has: page.getByRole("button", { name: "Накопления", exact: true }) }).first();
@@ -74,6 +76,9 @@ test("«Доходы vs Расходы»: выключенная группа и
   // Перевод НА накопительный выключен — осталась только строка поступления.
   await expect(main.getByRole("button", { name: "Накопления", exact: true })).toHaveCount(1);
   await expect(main.getByText("Входящий баланс", { exact: true })).toHaveCount(0);
+  // Без входящего баланса — «Поступления», как в «Планах» Дзен-мани.
+  await expect(main.getByText(/поступления за месяц/i).first()).toBeVisible();
+  await expect(main.getByText("Деньги на месяц", { exact: true })).toHaveCount(0);
 });
 
 test("«Счета вне баланса» в настройках бюджета: накопления — внутренний перевод, трата с него — в факт", async ({ page, zen }) => {

@@ -1284,6 +1284,13 @@ export function BudgetsPage() {
     r.line.subcategory && lockedParents.has(`${r.line.kind}\u0000${r.line.category}`)
       ? 0
       : r.planned;
+  // Как в «Планах» Дзен-мани: сторона поступлений называется «Деньги на
+  // месяц», когда в настройках «Планов» учитывается входящий баланс (он идёт
+  // первой строкой), и «Поступления» — когда нет. Сверено в приложении.
+  const withOpening = !!zenRules?.openingBalance;
+  const incomeHeading = withOpening ? "Деньги на месяц" : "Поступления";
+  const incomeTitle = withOpening ? "Деньги на месяц" : "Поступления за месяц";
+  const incomeTitleShort = withOpening ? "деньги на месяц" : "поступления";
   const expPlan = expenseRows.reduce((s, r) => s + planOf(r), 0);
   const expFact = expenseRows.reduce((s, r) => s + r.fact, 0);
   const incPlan = incomeRows.reduce((s, r) => s + planOf(r), 0);
@@ -1516,7 +1523,7 @@ export function BudgetsPage() {
           withTransfers={settings.perimeterTransfers ? expFact + expTransfers : undefined}
         />
         <PlanFactCard
-          title="Доходы за месяц"
+          title={incomeTitle}
           fact={incFact}
           plan={incPlan}
           tone="income"
@@ -1525,7 +1532,7 @@ export function BudgetsPage() {
           withTransfers={settings.perimeterTransfers ? incFact + incTransfers : undefined}
         />
         <PlanFactCard
-          title="Разница (доходы − расходы)"
+          title={`Разница (${incomeTitleShort} − расходы)`}
           fact={factDelta}
           plan={planDelta}
           tone={factDelta >= 0 ? "income" : "expense"}
@@ -1575,7 +1582,7 @@ export function BudgetsPage() {
           prepend={draftKind === "expense" ? draftRow : undefined}
         />
         <Section
-          heading="Доходы"
+          heading={incomeHeading}
           rows={incomeRows}
           ym={ym}
           isCurrent={isCurrent}
