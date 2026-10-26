@@ -350,6 +350,26 @@ function pruneOrphanTransactions(cache: ZenCache): ZenCache {
     : { ...cache, transactions };
 }
 
+/** Итоговая строка бюджета «весь месяц» — тег из одних нулей, категории за ним нет. */
+const MONTH_TOTAL_TAG = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Выбросить бюджеты категорий, которых больше нет.
+ *
+ * Удаляя категорию, сервер удаляет и её бюджеты, но в diff приходит только
+ * `deletion` самой категории — у бюджета нет `id`, отдельной записи об
+ * удалении для него не бывает. Без чистки бюджет удалённой категории жил в
+ * кэше вечно и добавлял её план к остатку месяца (на живом аккаунте — 7 000 ₽
+ * расходов и 3 000 ₽ доходов). Итог месяца (тег из нулей) остаётся.
+ */
+function pruneOrphanBudgets(cache: ZenCache): ZenCache {
+  const tagIds = new Set(cache.tags.map((t) => String(t.id)));
+  const budgets = (cache.budgets || []).filter(
+    (b) => !b.tag || b.tag === MONTH_TOTAL_TAG || tagIds.has(String(b.tag))
+  );
+  return budgets.length === (cache.budgets || []).length ? cache : { ...cache, budgets };
+}
+
 /**
  * Apply a server diff onto the previous cache, returning a fresh cache.
  * If `prev` is null this is the initial full sync result.
@@ -367,7 +387,7 @@ export function applyDiff(
     // sections missing (the field is just absent rather than `[]`).
     // Default each to an empty array so downstream code can always
     // iterate without an `is not iterable` runtime error.
-    return pruneOrphanTransactions({
+    return pruneOrphanBudgets(pruneOrphanTransactions({
       serverTimestamp: diff.serverTimestamp,
       instruments: diff.instrument || [],
       accounts: diff.account || [],
@@ -386,10 +406,10 @@ export function applyDiff(
       reminders: diff.reminder || [],
       companies: diff.company || [],
       cacheSchemaVersion: CACHE_SCHEMA_VERSION,
-    });
+    }));
   }
   const deletions = diff.deletion || [];
-  return pruneOrphanTransactions({
+  return pruneOrphanBudgets(pruneOrphanTransactions({
     serverTimestamp: diff.serverTimestamp,
     // Any completed merge leaves the cache at the current schema — the caller
     // requested whatever back-fill `backfillEntities` asked for.
@@ -415,7 +435,7 @@ export function applyDiff(
     ),
     reminders: merge(prev.reminders || [], diff.reminder, "reminder", deletions),
     companies: merge(prev.companies || [], diff.company, "company", deletions),
-  });
+  }));
 }
 
 /**

@@ -235,7 +235,6 @@ export function MonthCashflowChart({
             </span>
           )}
           {hasForecast && <SmearPlanToggle />}
-          {onDayClick && <span>Клик по дню — его операции</span>}
         </div>
       </div>
       <div

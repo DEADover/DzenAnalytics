@@ -81,6 +81,26 @@ describe("applyDiff — orphan transaction pruning", () => {
   });
 });
 
+describe("applyDiff — бюджеты удалённых категорий", () => {
+  const tag = (id: string) => ({ id, title: id }) as unknown as ZenCache["tags"][number];
+  const bud = (t: string) =>
+    ({ tag: t, date: "2026-10-01", outcome: 7000, income: 3000 }) as unknown as NonNullable<ZenCache["budgets"]>[number];
+  const TOTAL = "00000000-0000-0000-0000-000000000000";
+
+  it("удаление категории убирает и её бюджет, итог месяца остаётся", () => {
+    const prev = cache({ tags: [tag("food"), tag("gone")], budgets: [bud("food"), bud("gone"), bud(TOTAL)] });
+    const next = applyDiff(prev, { serverTimestamp: 2, deletion: [del("gone", "tag")] } as ZenDiffResponse);
+    expect(next.budgets!.map((b) => b.tag)).toEqual(["food", TOTAL]);
+  });
+
+  it("кэш с уже застрявшим бюджетом лечится на следующей синхронизации", () => {
+    // Категория удалена раньше, а её бюджет в кэше остался.
+    const prev = cache({ tags: [tag("food")], budgets: [bud("food"), bud("gone")] });
+    const next = applyDiff(prev, { serverTimestamp: 2 } as ZenDiffResponse);
+    expect(next.budgets!.map((b) => b.tag)).toEqual(["food"]);
+  });
+});
+
 describe("applyDiff — transaction deletions", () => {
   // The push flow folds the deletions IT sent into the merge (the Zenmoney
   // response doesn't echo our own deletions), so the just-deleted rows must
