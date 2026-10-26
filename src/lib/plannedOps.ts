@@ -1,6 +1,7 @@
 import { accountKeyOf } from "./accountKey";
 import type { ZenCache } from "./zenmoneyCache";
 import type { CurrencyRates, Transaction } from "../types";
+import { isDebtAccountType } from "./accountType";
 
 /**
  * Planned / forecast operations (issue #47).
@@ -108,9 +109,7 @@ export function plannedOps(
     return parent ? `${parent.title} / ${tag.title}` : tag.title;
   };
 
-  /** Loan / credit / debt legs — same set the transaction mapper uses. */
-  const DEBT_TYPES = ["loan", "credit", "debt"];
-
+  // Долг — сторона со счётом «Долги» (`isDebtAccountType`), как и в разборе операций.
   // Исполненные — по состоянию или по ссылке настоящей операции (issue #86).
   const linked = opts.withProcessed
     ? new Set(
@@ -128,7 +127,7 @@ export function plannedOps(
     const outAcc = m.outcomeAccount ? accountById.get(m.outcomeAccount) : undefined;
     const inAcc = m.incomeAccount ? accountById.get(m.incomeAccount) : undefined;
     const involvesDebt =
-      DEBT_TYPES.includes(outAcc?.type || "") || DEBT_TYPES.includes(inAcc?.type || "");
+      isDebtAccountType(outAcc?.type) || isDebtAccountType(inAcc?.type);
     const isTransfer =
       m.outcome > 0 && m.income > 0 && m.outcomeAccount !== m.incomeAccount;
 

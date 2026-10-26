@@ -8,13 +8,20 @@ import { test, expect, connectZen } from "./harness";
 import type { Page } from "@playwright/test";
 
 const pressed = (page: Page) => page.locator('[aria-pressed="true"]').first();
-const prevRange = (page: Page) => page.locator('button[title^="Предыдущ"]').nth(1);
+// Дорожка дат — по самим датам, стрелка — первая кнопка в ней. Не по
+// подписи: под мышью её забирает мост подсказок (`nativeTooltips`), и поиск
+// по ней перескакивал на другую стрелку.
+const rangeTrack = (page: Page) =>
+  page.locator("div.seg-track").filter({ hasText: /\d\d\.\d\d\.\d\d/ }).first();
+const prevRange = (page: Page) => rangeTrack(page).locator("button").first();
 
 test("«30 дней»: ровно тридцать дней и стрелки листают окнами", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await connectZen(page, "/categories");
-  await page.getByRole("button", { name: /^30 дней/ }).first().click();
-  const track = prevRange(page).locator("xpath=..");
+  // Кнопка окна подписана последним выбранным окном — по умолчанию «30 дней».
+  await page.getByRole("group", { name: "Период" }).getByRole("button", { name: "30 дней", exact: true }).click();
+  await expect(pressed(page)).toHaveText(/30 дней/);
+  const track = rangeTrack(page);
   const first = await track.innerText();
   // Тридцать дней, включая последний: начало — за 29 дней до конца.
   const [from, to] = first.replace(/\s+/g, " ").match(/\d\d\.\d\d\.\d\d/g)!;
@@ -23,6 +30,7 @@ test("«30 дней»: ровно тридцать дней и стрелки л
 
   await prevRange(page).click();
   await expect(pressed(page)).toHaveText(/30 дней/);
+  await expect(track).not.toHaveText(first);
   const [from2, to2] = (await track.innerText()).replace(/\s+/g, " ").match(/\d\d\.\d\d\.\d\d/g)!;
   // Предыдущее окно кончается накануне начала текущего.
   expect((d(from) - d(to2)) / 86_400_000).toBe(1);

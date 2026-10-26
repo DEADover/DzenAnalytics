@@ -18,6 +18,7 @@ import type {
   ZenInstrument,
 } from "./zenmoney";
 import { SYNTHETIC_CATEGORY_COLORS } from "./categoryColor";
+import { isDebtAccountType } from "./accountType";
 
 /**
  * Label for an operation with NO category. Zenmoney has no «uncategorized» tag —
@@ -275,10 +276,9 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
     //
     // These never round-trip to Zenmoney — there's no push code path. The
     // original tag is kept in `*Original` for rules, search, and reset.
-    const DEBT_TYPES = ["loan", "credit", "debt"];
-    const involvesDebt =
-      DEBT_TYPES.includes(outAcc?.type || "") ||
-      DEBT_TYPES.includes(inAcc?.type || "");
+    // Долг — только операция со счётом «Долги», как в Дзен-мани: платёж
+    // по кредиту и перевод на кредитку — обычные переводы.
+    const involvesDebt = isDebtAccountType(outAcc?.type) || isDebtAccountType(inAcc?.type);
     let display = cat;
     if (involvesDebt) {
       display = { category: "Долг", subcategory: null, full: "Долг" };

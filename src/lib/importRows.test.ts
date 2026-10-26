@@ -42,7 +42,8 @@ const cache = (): ZenCache =>
       { id: "acc-cash", title: "Наличные", instrument: RUB, archive: false, type: "cash" },
       { id: "acc-card", title: "Т-Банк", instrument: RUB, archive: false, type: "ccard" },
       { id: "acc-usd", title: "FFin $", instrument: USD, archive: false, type: "ccard" },
-      { id: "acc-debt", title: "Долги", instrument: RUB, archive: false, type: "loan" },
+      { id: "acc-debt", title: "Долги", instrument: RUB, archive: false, type: "debt" },
+      { id: "acc-loan", title: "Ипотека", instrument: RUB, archive: false, type: "loan" },
     ],
     tags: [
       { id: "t-food", title: "Еда", parent: null, archive: false, showIncome: false },
@@ -55,7 +56,7 @@ const cache = (): ZenCache =>
   }) as unknown as ZenCache;
 
 const dicts: ImportDicts = {
-  accounts: ["Наличные", "Т-Банк", "FFin $", "Долги"],
+  accounts: ["Наличные", "Т-Банк", "FFin $", "Долги", "Ипотека"],
   categories: ["Еда", "Еда / Кафе", "Зарплата"],
   payees: ["Пятёрочка"],
 };
@@ -711,5 +712,16 @@ describe("тёзки: два счёта с одним названием", () =>
     if (!t.ok) return;
     expect(t.zen.outcomeAccount).toBe("acc-card");
     expect(t.zen.incomeAccount).toBe("acc-card2");
+  });
+});
+
+
+describe("кредит — не долг (как в Дзен-мани)", () => {
+  it("перевод на кредитный счёт — обычный перевод, контрагент не нужен", () => {
+    const v = verdict({ type: "Перевод", category: "", outAccount: "Т-Банк", inAccount: "Ипотека", payee: "" });
+    expect(v.ok).toBe(true);
+    if (!v.ok) return;
+    expect(v.zen.outcomeAccount).toBe("acc-card");
+    expect(v.zen.incomeAccount).toBe("acc-loan");
   });
 });

@@ -58,7 +58,7 @@
  * запланированное. Разные вопросы, разные ответы.
  */
 
-import { DEBT_TYPES } from "./accountType";
+import { LIABILITY_TYPES } from "./accountType";
 
 /** Как делить свободные деньги по дням. */
 export type DailyMethod = "cumulative" | "daily";
@@ -100,7 +100,7 @@ export interface SpendableAccount {
  */
 export function spendableAccounts<T extends SpendableAccount>(accounts: T[]): T[] {
   return accounts.filter(
-    (a) => !a.archive && !a.offBalance && !a.savings && !DEBT_TYPES.has(a.type)
+    (a) => !a.archive && !a.offBalance && !a.savings && !LIABILITY_TYPES.has(a.type)
   );
 }
 

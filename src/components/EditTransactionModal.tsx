@@ -49,6 +49,7 @@ import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { InfoPopover } from "./InfoPopover";
 import { ruleDraftFromTransaction, setPendingRulePrefill } from "../lib/ruleFromTransaction";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
+import { DEBT_TYPES } from "../lib/accountType";
 
 interface Props {
   /** The transaction to edit. Omit (or null) to open the modal in
@@ -95,7 +96,7 @@ interface Props {
 }
 
 /** Zenmoney account types that make an operation a debt/loan/credit move. */
-const DEBT_ACCOUNT_TYPES = new Set(["loan", "credit", "debt"]);
+const DEBT_ACCOUNT_TYPES = DEBT_TYPES;
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 

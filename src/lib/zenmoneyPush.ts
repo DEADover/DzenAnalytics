@@ -64,6 +64,7 @@ import type { ZenCache } from "./zenmoneyCache";
 import { NO_CATEGORY, SERVICE_CATEGORIES } from "./zenmoneyMap";
 import type { TransactionEdit } from "../store/useEditsStore";
 import type { TxKind } from "../types";
+import { DEBT_TYPES } from "./accountType";
 
 export interface PushItem {
   id: string;
@@ -94,7 +95,7 @@ const SYNTHETIC_CATEGORIES = SERVICE_CATEGORIES;
 
 /** Zenmoney account types that mark an operation as a debt/loan/credit move.
  *  Mirrors the forward mapper (`zenmoneyMap.ts`) which labels these «Долг». */
-const DEBT_ACCOUNT_TYPES = new Set(["loan", "credit", "debt"]);
+const DEBT_ACCOUNT_TYPES = DEBT_TYPES;
 
 /**
  * Поля правки, которые не меняют структуру операции: их можно наложить прямо
@@ -298,7 +299,7 @@ function buildTransferTarget(
       };
     }
   }
-  // A leg on a loan/credit/debt account makes this a «Долг» op — Zenmoney then
+  // A leg on the «Долги» (type debt) account makes this a «Долг» op — Zenmoney then
   // REQUIRES a non-null payee (the counterparty). This is the path for
   // converting a regular operation INTO a debt one (the original isn't a debt
   // op, so the dedicated debt branch upstream doesn't fire). Keep/require the

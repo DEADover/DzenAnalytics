@@ -94,7 +94,18 @@ describe("plannedOps — маппинг планируемых операций"
     expect(out[0]).toMatchObject({ kind: "income", amountBase: 900 });
   });
 
-  it("нога по кредиту/займу помечается как «Долг», а не как перевод", () => {
+  it("нога по счёту «Долги» — «Долг»", () => {
+    const out = plannedOps(
+      cache(
+        [marker({ outcome: 5000, income: 5000, outcomeAccount: "card", incomeAccount: "debts" })],
+        [acc("debts", "Долги", "debt")]
+      ),
+      rates
+    );
+    expect(out[0].category).toBe("Долг");
+  });
+
+  it("платёж по кредиту — обычный перевод, как в Дзен-мани", () => {
     const out = plannedOps(
       cache(
         [marker({ outcome: 5000, income: 5000, outcomeAccount: "card", incomeAccount: "loan" })],
@@ -102,7 +113,8 @@ describe("plannedOps — маппинг планируемых операций"
       ),
       rates
     );
-    expect(out[0].category).toBe("Долг");
+    expect(out[0].kind).toBe("transfer");
+    expect(out[0].category).not.toBe("Долг");
   });
 
   it("маркер с нулевыми суммами пропускается (не «доход 0 ₽»)", () => {

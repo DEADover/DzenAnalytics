@@ -87,3 +87,38 @@ describe("mapZenmoneyDiff — вторые категории (#69)", () => {
     expect(run(["food", "food", "ghost", "vac"]).extraCategories).toEqual(["Отпуск"]);
   });
 });
+
+describe("mapZenmoneyDiff — что считается долгом (как в Дзен-мани)", () => {
+  const run = (toType: string, payee = "") => {
+    const diff = {
+      instrument: [{ id: 2, shortTitle: "RUB", rate: 1 }],
+      user: [{ id: 1, currency: 2 }],
+      account: [
+        { id: "a", title: "Карта", instrument: 2, type: "ccard", archive: false, inBalance: true },
+        { id: "b", title: "Второй", instrument: 2, type: toType, archive: false, inBalance: true },
+      ],
+      tag: [],
+      transaction: [
+        {
+          id: "tx", date: "2026-09-01", created: 0, deleted: false,
+          outcome: 500, outcomeAccount: "a", outcomeInstrument: 2,
+          income: 500, incomeAccount: "b", incomeInstrument: 2,
+          tag: null, payee, comment: "", merchant: null,
+        },
+      ],
+    } as unknown as ZenDiffResponse;
+    return mapZenmoneyDiff(diff).transactions[0];
+  };
+
+  it("операция со счётом «Долги» — «Долг»", () => {
+    expect(run("debt", "Иван").categoryFull).toBe("Долг");
+  });
+
+  it("платёж по кредиту — «Перевод», а не долг", () => {
+    expect(run("loan").categoryFull).toBe("Перевод");
+  });
+
+  it("перевод на вклад — тоже «Перевод»", () => {
+    expect(run("deposit").categoryFull).toBe("Перевод");
+  });
+});

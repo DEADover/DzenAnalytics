@@ -38,6 +38,7 @@ import { validateOperation } from "./operationValidation";
 import { splitCategoryFull } from "./ruleEngine";
 import { OPS_COLUMNS, OP_TYPES, type OpsColumn, type OpTypeLabel } from "./importTemplate";
 import { cellNumber, cellText, colOf, rowOf, serialToParts, type XlsxSheet } from "./xlsxRead";
+import { isDebtAccountType } from "./accountType";
 
 /** Больше тысячи строк за раз — повод разбить файл, а не ждать зависшую вкладку. */
 export const MAX_ROWS = 1000;
@@ -670,5 +671,5 @@ function categoryAllowsIncome(full: string, cache: ZenCache): boolean {
 function isDebtAccount(ref: AccountRef, cache: ZenCache): boolean {
   if (!ref.title) return false;
   const acc = findAccount(ref, cache);
-  return acc ? acc.type === "loan" || acc.type === "credit" || acc.type === "debt" : false;
+  return acc ? isDebtAccountType(acc.type) : false;
 }
