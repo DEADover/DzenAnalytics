@@ -2040,7 +2040,6 @@ function Section({
           <OutOfPlanRow
             kind={sectionKind}
             total={outOfPlanTotal}
-            count={outOfPlan.length}
             open={outOfPlanOpen}
             onToggle={() => setOutOfPlanOpen((o) => !o)}
             base={base}
@@ -2094,14 +2093,12 @@ function Section({
 function OutOfPlanRow({
   kind,
   total,
-  count,
   open,
   onToggle,
   base,
 }: {
   kind: BudgetKind;
   total: number;
-  count: number;
   open: boolean;
   onToggle: () => void;
   base: string;
@@ -2126,7 +2123,7 @@ function OutOfPlanRow({
         <span className="min-w-0 flex-1 sm:flex-none sm:w-60 sm:shrink-0">
           <span className="block text-sm font-medium">Вне плана</span>
           <span className="block text-xs text-muted truncate">
-            {kind === "income" ? "Поступления" : "Расходы"} по другим категориям · {count}
+            {kind === "income" ? "Поступления" : "Расходы"} по другим категориям
           </span>
         </span>
         <span className="hidden sm:block flex-1" />
