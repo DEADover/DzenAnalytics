@@ -2941,6 +2941,142 @@ export function AccountsPage() {
         )}
       </div>
 
+      {/* Доходность вкладов — сразу под списком счетов: это подробности по части
+          тех же счетов, а не отдельный отчёт после графиков, где блок стоял
+          раньше. Только на «Капитале»: на «Движении» речь про обороты
+          за период, а вклад отвечает на другой вопрос — сколько он принесёт. */}
+      {capitalView && depositRows.length > 0 && (
+        <SectionCard
+          icon={PiggyBank} tone="income"
+          title="Вклады"
+          info={
+            <p>
+              Проценты считаются от <InfoTerm>текущего остатка</InfoTerm> по
+              ставке, сроку и капитализации, которые заданы у счёта в Дзен-мани.
+              Это прогноз «сколько набежит, если ничего не трогать», а не выписка
+              банка: будущие пополнения и снятия не учитываются — их никто не
+              обещал. Налог с процентов тоже не считаем: он зависит от ключевой
+              ставки и от всех ваших вкладов сразу, включая те, которых в
+              Дзен-мани нет. Вклад без ставки или без срока в список не попадает
+              — про него нечего сказать.
+            </p>
+          }
+          right={
+            <span className="text-[11px] text-muted tabular-nums">
+              {formatNum(depositRows.length)}{" "}
+              {pluralRu(depositRows.length, ["вклад", "вклада", "вкладов"])}
+            </span>
+          }
+        >
+          {/* Ширины колонок ЗАДАНЫ, а не подобраны по содержимому: иначе один
+              вклад с длинным названием сдвигал бы столбцы с деньгами у всех
+              остальных. Резиновым остаётся только название. */}
+          <div className="overflow-x-auto -mx-1 px-1">
+            <table className="w-full table-fixed min-w-[50rem]">
+              <colgroup>
+                {DEPOSIT_COLUMNS.map((c) => {
+                  const w = depositsResize.custom ? depositsResize.widthOf(c.key) : c.width;
+                  return <col key={c.key} data-col={c.key} style={w ? { width: w } : undefined} />;
+                })}
+              </colgroup>
+              <thead>
+                <tr>
+                  {DEPOSIT_COLUMNS.map((c) => (
+                    <HeadCell
+                      key={c.key}
+                      type={c.type as ColumnType}
+                      label={c.label}
+                      colKey={c.key}
+                      resize={depositsResize.handle(c.key)}
+                    />
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {depositRows.map((r) => {
+                  const p = r.projection;
+                  const done = p.daysLeft === 0;
+                  const isSel = selectedAccount === accountKeyOf(r.account);
+                  // Условия договора — в подсказке к названию: они объясняют
+                  // все числа строки, но строка таблицы остаётся одной.
+                  const terms = `${formatDate(r.account.startDate ?? "", "short")} — ${formatDate(p.endDate, "short")}${p.compounded ? " · С капитализацией" : ""}`;
+                  return (
+                    <tr
+                      key={r.account.id}
+                      onClick={() =>
+                        selectAccount(isSel ? null : accountKeyOf(r.account))
+                      }
+                      className={`cursor-pointer group ${
+                        isSel ? "bg-accent/10" : "hover:bg-panel2/50"
+                      }`}
+                    >
+                      <td className={cellClass("text")} title={`${dir.label(accountKeyOf(r.account))}: ${terms}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="flex shrink-0">
+                            <AccountLogo
+                              title={r.account.title}
+                              type={r.account.type}
+                              size={20}
+                            />
+                          </span>
+                          <span className="truncate group-hover:text-accent">
+                            {dir.label(accountKeyOf(r.account))}
+                          </span>
+                        </div>
+                      </td>
+                      <td className={cellClass("number")}>
+                        {formatPct(p.percent / 100, 1)}
+                      </td>
+                      <td className={cellClass("number", { className: done ? "text-warn" : undefined })}>
+                        {done
+                          ? "Срок вышел"
+                          : `${formatNum(p.daysLeft)} ${pluralRu(p.daysLeft, [
+                              "день",
+                              "дня",
+                              "дней",
+                            ])}`}
+                      </td>
+                      <td className={cellClass("money")}>
+                        {formatMoney(r.balance, base)}
+                      </td>
+                      <td className={cellClass("money", { muted: done })}>
+                        {done ? "—" : `+${formatMoney(p.interestLeft, base)}`}
+                      </td>
+                      <td className={cellClass("main")}>
+                        {formatMoney(p.atMaturity, base)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {/* Итог строкой таблицы, а не подписью под ней: каждое число
+                  стоит под своим столбцом и читается как сумма колонки. */}
+              <tfoot>
+                <tr className="table-group-row">
+                  <td className={cellClass("text")}>Итого</td>
+                  <td
+                    className={cellClass("number", { muted: true, className: "font-normal" })}
+                    title="Средняя ставка, взвешенная остатком вклада"
+                  >
+                    {formatPct(depositSum.avgPercent / 100, 1)}
+                  </td>
+                  <td className="table-td" />
+                  <td className={cellClass("money")}>
+                    {formatMoney(depositSum.balance, base)}
+                  </td>
+                  <td className={cellClass("money")}>
+                    +{formatMoney(depositSum.interestLeft, base)}
+                  </td>
+                  <td className={cellClass("money")}>
+                    {formatMoney(depositSum.atMaturity, base)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </SectionCard>
+      )}
+
       <div
         ref={capitalChartRef}
         className={tab === "capital" ? "card-tray card-pad" : "hidden"}
@@ -3517,140 +3653,6 @@ export function AccountsPage() {
         </div>
       </>)}
       </div>
-
-      {/* Доходность вкладов. Только на «Капитале»: на «Движении» речь про обороты
-          за период, а вклад отвечает на другой вопрос — сколько он принесёт. */}
-      {capitalView && depositRows.length > 0 && (
-        <SectionCard
-          icon={PiggyBank} tone="income"
-          title="Вклады"
-          info={
-            <p>
-              Проценты считаются от <InfoTerm>текущего остатка</InfoTerm> по
-              ставке, сроку и капитализации, которые заданы у счёта в Дзен-мани.
-              Это прогноз «сколько набежит, если ничего не трогать», а не выписка
-              банка: будущие пополнения и снятия не учитываются — их никто не
-              обещал. Налог с процентов тоже не считаем: он зависит от ключевой
-              ставки и от всех ваших вкладов сразу, включая те, которых в
-              Дзен-мани нет. Вклад без ставки или без срока в список не попадает
-              — про него нечего сказать.
-            </p>
-          }
-          right={
-            <span className="text-[11px] text-muted tabular-nums">
-              {formatNum(depositRows.length)}{" "}
-              {pluralRu(depositRows.length, ["вклад", "вклада", "вкладов"])}
-            </span>
-          }
-        >
-          {/* Ширины колонок ЗАДАНЫ, а не подобраны по содержимому: иначе один
-              вклад с длинным названием сдвигал бы столбцы с деньгами у всех
-              остальных. Резиновым остаётся только название. */}
-          <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full table-fixed min-w-[50rem]">
-              <colgroup>
-                {DEPOSIT_COLUMNS.map((c) => {
-                  const w = depositsResize.custom ? depositsResize.widthOf(c.key) : c.width;
-                  return <col key={c.key} data-col={c.key} style={w ? { width: w } : undefined} />;
-                })}
-              </colgroup>
-              <thead>
-                <tr>
-                  {DEPOSIT_COLUMNS.map((c) => (
-                    <HeadCell
-                      key={c.key}
-                      type={c.type as ColumnType}
-                      label={c.label}
-                      colKey={c.key}
-                      resize={depositsResize.handle(c.key)}
-                    />
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {depositRows.map((r) => {
-                  const p = r.projection;
-                  const done = p.daysLeft === 0;
-                  const isSel = selectedAccount === accountKeyOf(r.account);
-                  // Условия договора — в подсказке к названию: они объясняют
-                  // все числа строки, но строка таблицы остаётся одной.
-                  const terms = `${formatDate(r.account.startDate ?? "", "short")} — ${formatDate(p.endDate, "short")}${p.compounded ? " · С капитализацией" : ""}`;
-                  return (
-                    <tr
-                      key={r.account.id}
-                      onClick={() =>
-                        selectAccount(isSel ? null : accountKeyOf(r.account))
-                      }
-                      className={`cursor-pointer group ${
-                        isSel ? "bg-accent/10" : "hover:bg-panel2/50"
-                      }`}
-                    >
-                      <td className={cellClass("text")} title={`${dir.label(accountKeyOf(r.account))}: ${terms}`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="flex shrink-0">
-                            <AccountLogo
-                              title={r.account.title}
-                              type={r.account.type}
-                              size={20}
-                            />
-                          </span>
-                          <span className="truncate group-hover:text-accent">
-                            {dir.label(accountKeyOf(r.account))}
-                          </span>
-                        </div>
-                      </td>
-                      <td className={cellClass("number")}>
-                        {formatPct(p.percent / 100, 1)}
-                      </td>
-                      <td className={cellClass("number", { className: done ? "text-warn" : undefined })}>
-                        {done
-                          ? "Срок вышел"
-                          : `${formatNum(p.daysLeft)} ${pluralRu(p.daysLeft, [
-                              "день",
-                              "дня",
-                              "дней",
-                            ])}`}
-                      </td>
-                      <td className={cellClass("money")}>
-                        {formatMoney(r.balance, base)}
-                      </td>
-                      <td className={cellClass("money", { muted: done })}>
-                        {done ? "—" : `+${formatMoney(p.interestLeft, base)}`}
-                      </td>
-                      <td className={cellClass("main")}>
-                        {formatMoney(p.atMaturity, base)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              {/* Итог строкой таблицы, а не подписью под ней: каждое число
-                  стоит под своим столбцом и читается как сумма колонки. */}
-              <tfoot>
-                <tr className="table-group-row">
-                  <td className={cellClass("text")}>Итого</td>
-                  <td
-                    className={cellClass("number", { muted: true, className: "font-normal" })}
-                    title="Средняя ставка, взвешенная остатком вклада"
-                  >
-                    {formatPct(depositSum.avgPercent / 100, 1)}
-                  </td>
-                  <td className="table-td" />
-                  <td className={cellClass("money")}>
-                    {formatMoney(depositSum.balance, base)}
-                  </td>
-                  <td className={cellClass("money")}>
-                    +{formatMoney(depositSum.interestLeft, base)}
-                  </td>
-                  <td className={cellClass("money")}>
-                    {formatMoney(depositSum.atMaturity, base)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </SectionCard>
-      )}
 
       {editingAccount && (
         <AccountEditModal
