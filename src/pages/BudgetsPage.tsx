@@ -24,7 +24,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { getZenForecastsFromCache } from "../store/useZenmoneyStore";
 import { loadZenCache } from "../lib/zenmoneyCache";
-import { plannedOps, type PlannedOp } from "../lib/plannedOps";
+import { plannedAsTransaction, plannedOps, type PlannedOp } from "../lib/plannedOps";
 import { plannedPlans } from "../lib/plannedPlans";
 import { txAccountKey } from "../lib/accountKey";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
@@ -310,10 +310,17 @@ export function BudgetsPage() {
       if (p.forecast) continue;
       const day = p.date.slice(0, 10);
       if (day < range.from || day > range.to) continue;
-      if (!inScope(p.accountKey ?? p.account)) continue;
       // Индекс — номер дня ВНУТРИ периода, как и ось графика.
       const d = spanDays(range.from, day);
       if (!(d >= 1 && d <= days)) continue;
+      // Перевод через границу баланса — ступенькой своей стороны, как в
+      // приложении (платёж по кредиту 31-го — расход 31-го).
+      if (p.kind === "transfer") {
+        for (const hit of budgetHits(plannedAsTransaction(p), scope))
+          if (hit.planGroup) (hit.kind === "income" ? income : expense)[d] += hit.amount;
+        continue;
+      }
+      if (!inScope(p.accountKey ?? p.account)) continue;
       if (p.kind === "income") income[d] += p.amountBase;
       else if (p.kind === "expense") expense[d] += p.amountBase;
     }
@@ -330,7 +337,12 @@ export function BudgetsPage() {
    * нет, никуда не сохраняется и в Дзен-мани не уходит.
    */
   const plannedAsPlan = useMemo(
-    () => plannedPlans(zenPlannedAll, scope, undefined, monthStartDay, !!zenRules?.forecasts),
+    // Строки групп переводов («Кредиты и кредитки», «Накопления»…) плана не
+    // получают — в приложении у них только «Платежи на …».
+    () =>
+      plannedPlans(zenPlannedAll, scope, undefined, monthStartDay, !!zenRules?.forecasts).filter(
+        (p) => !p.planGroup
+      ),
     [zenPlannedAll, scope, monthStartDay, zenRules]
   );
 
@@ -790,10 +802,16 @@ export function BudgetsPage() {
    */
   const monthLeft = useMemo(() => {
     const pending = new Map<string, number>();
-    for (const p of plannedPlans(zenPlanned, scope, undefined, monthStartDay, !!zenRules?.forecasts))
-      if (p.ym === ym)
-        pending.set([p.kind, p.category, p.subcategory ?? ""].join("\u0000"), p.amount);
-    return monthResidues(
+    // Назначенные переводы через границу баланса («Платежи на …» у строк
+    // «Кредиты и кредитки», «Накопления») — у них плана нет, остаток строки
+    // = то, что ещё впереди. Сверено: «Ещё в планах» 86 935 = 19 721 + 67 214.
+    const groupAhead = { income: 0, expense: 0 };
+    for (const p of plannedPlans(zenPlanned, scope, undefined, monthStartDay, !!zenRules?.forecasts)) {
+      if (p.ym !== ym) continue;
+      if (p.planGroup) groupAhead[p.kind] += p.ahead;
+      else pending.set([p.kind, p.category, p.subcategory ?? ""].join("\u0000"), p.amount);
+    }
+    const left = monthResidues(
       rows.map((r) => ({
         kind: r.line.kind,
         category: r.line.category,
@@ -805,6 +823,7 @@ export function BudgetsPage() {
         locked: r.locked,
       }))
     );
+    return { income: left.income + groupAhead.income, expense: left.expense + groupAhead.expense };
   }, [rows, zenPlanned, scope, monthStartDay, zenRules, ym]);
 
   /**
@@ -839,8 +858,15 @@ export function BudgetsPage() {
     // Ещё не исполненные плановые — вместе с просроченными: у Дзен-мани они
     // держат остаток статьи.
     const pending = new Map<string, number>();
-    for (const p of plannedPlans(zenPlanned, scope, undefined, monthStartDay, !!zenRules?.forecasts))
-      pending.set(pendingKey(p.kind, p.category, p.subcategory, p.ym), p.amount);
+    // Назначенные переводы через границу баланса — своим итогом по месяцу
+    // (у строк групп плана нет, остаток = что впереди).
+    const groupAhead = new Map<string, number>();
+    for (const p of plannedPlans(zenPlanned, scope, undefined, monthStartDay, !!zenRules?.forecasts)) {
+      if (p.planGroup) {
+        const k = `${p.ym}:${p.kind}`;
+        groupAhead.set(k, (groupAhead.get(k) ?? 0) + p.ahead);
+      } else pending.set(pendingKey(p.kind, p.category, p.subcategory, p.ym), p.amount);
+    }
     // Прогноз приложение считает копией расчёта в режиме «Баланс vs Расходы»:
     // все переводы через границу, возвраты не вычитаются, — если в «Доходах vs
     // Расходах» выбрано что-то кроме одного входящего баланса (сверено: иначе
@@ -863,7 +889,11 @@ export function BudgetsPage() {
           locked: r.locked,
         }))
       );
-      sum += left.income - left.expense;
+      sum +=
+        left.income +
+        (groupAhead.get(`${m}:income`) ?? 0) -
+        left.expense -
+        (groupAhead.get(`${m}:expense`) ?? 0);
     }
     return sum;
   }, [balanceNow, ym, cur, buildRows, zenPlanned, scope, monthStartDay, zenRules]);

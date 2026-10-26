@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { plannedPlans } from "./plannedPlans";
 import { ALL_ACCOUNTS } from "./budgetScope";
+import { buildZenPlanRules, zenPlanSettings } from "./zenPlanRules";
 import type { PlannedOp } from "./plannedOps";
 
 let seq = 0;
@@ -152,5 +153,38 @@ describe("plannedPlans — исполненные плановые операц�
     const ops = [op({ date: "2026-09-25", amountBase: 500, category: "Садик", forecast: true })];
     expect(plannedPlans(ops, ALL_ACCOUNTS)).toHaveLength(0);
     expect(plannedPlans(ops, ALL_ACCOUNTS, undefined, 1, true)[0].amount).toBe(500);
+  });
+});
+
+describe("plannedPlans — назначенные переводы через границу баланса", () => {
+  const zen = buildZenPlanRules(
+    [
+      { title: "Карта", type: "ccard", savings: false, creditLimit: 0, inBalance: true },
+      { title: "Кредит", type: "loan", savings: false, creditLimit: 0, inBalance: false },
+      { title: "Копилка", type: "checking", savings: true, creditLimit: 0, inBalance: false },
+    ],
+    zenPlanSettings({ planBalanceMode: "balance" }),
+    []
+  );
+  const scope = { accounts: new Set<string>(), perimeterTransfers: false, zen };
+
+  it("платёж по кредиту — «Платежи на …» строки кредитов, с копилки — поступление; плана не создают", () => {
+    const r = plannedPlans(
+      [
+        op({ kind: "transfer", account: "Карта", toAccount: "Кредит", category: "", amountBase: 67_214, date: "2026-10-31" }),
+        op({ kind: "transfer", account: "Копилка", toAccount: "Карта", category: "", amountBase: 1900, date: "2026-10-27" }),
+      ],
+      scope,
+      "2026-10-26"
+    );
+    const loan = r.find((x) => x.kind === "expense")!;
+    expect(loan).toMatchObject({ planGroup: true, ahead: 67_214, ym: "2026-10" });
+    const back = r.find((x) => x.kind === "income")!;
+    expect(back).toMatchObject({ planGroup: true, ahead: 1900 });
+  });
+
+  it("без правил Дзен-мани переводы статьями не планируются", () => {
+    const r = plannedPlans([op({ kind: "transfer", account: "Карта", toAccount: "Кредит", category: "" })], ALL_ACCOUNTS);
+    expect(r).toHaveLength(0);
   });
 });

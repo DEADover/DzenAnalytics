@@ -15,6 +15,9 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { peekZenCache, subscribeZenCache } from "../lib/zenCacheMemo";
 import { zenPlanSettings } from "../lib/zenPlanRules";
+import { plannedPlans } from "../lib/plannedPlans";
+import { useZenPlanRules } from "./useZenPlanRules";
+import { useZenPlanned } from "./useZenPlanned";
 import { useFreeMoneyStore } from "../store/useFreeMoneyStore";
 import { useDataStore } from "../store/useDataStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -203,16 +206,27 @@ export function useZenPlanLeft(
   const histDayRates = useDataStore((s) => s.histDayRates);
   const plannedDeletions = usePlannedDeletionsStore((s) => s.deletions);
   const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
+  // Назначенные переводы через границу баланса — «Платежи на …» у строк
+  // «Кредиты и кредитки», «Накопления» в «Планах»: входят в «Ещё в планах» и
+  // «ещё поступит», как в бюджете (см. `plannedPlans`, `planGroup`).
+  const rules = useZenPlanRules();
+  const planned = useZenPlanned(today, "9999-12-31");
   return useMemo(() => {
     if (!cache) return null;
     const core = zenPeriodPlan(cache, today, ownStartDay, rates, histDayRates, plannedDeletions);
+    const groupAhead = { income: 0, expense: 0 };
+    if (rules && planned) {
+      const scope = { accounts: new Set<string>(), perimeterTransfers: false, zen: rules };
+      for (const p of plannedPlans(planned, scope, today, core.startDay, rules.forecasts))
+        if (p.planGroup && p.ym === core.ym) groupAhead[p.kind] += p.ahead;
+    }
     return {
       from: core.range.from,
       to: core.range.to,
-      expense: core.plan.total,
-      income: core.stillToCome,
+      expense: core.plan.total + groupAhead.expense,
+      income: core.stillToCome + groupAhead.income,
     };
-  }, [cache, today, ownStartDay, rates, histDayRates, plannedDeletions]);
+  }, [cache, today, ownStartDay, rates, histDayRates, plannedDeletions, rules, planned]);
 }
 
 /**
@@ -361,7 +375,11 @@ export function zenPeriodPlan(
     // остаётся. Дзен-мани её не показывает и в «Ещё в планах» не считает —
     // и мы не считаем (сверено: 7 000 ₽ лишнего остатка на живом аккаунте).
     if (!tagById.has(tag)) continue;
-    if ((b.outcome || 0) > 0) {
+    // Отрицательный бюджет — поправка Дзен-мани к назначенным операциям: план
+    // статьи = поправка + назначенные («Покупки»: −13 000 + 19 675 = 6 675 ₽,
+    // как «из 6 675 ₽» в «Планах»). Без строки поправка терялась, и остаток
+    // считался от одних назначенных — на живом аккаунте +14 тыс. ₽.
+    if ((b.outcome || 0) !== 0) {
       planRows.push({
         tagId: tag,
         title: tagById.get(tag)?.title ?? "Без категории",
@@ -414,6 +432,7 @@ export function zenPeriodPlan(
   const plan = planRemainder(planRows, aheadOut, factByTag, parents);
   return {
     balanceMode,
+    startDay,
     ym,
     range,
     daysTotal,
