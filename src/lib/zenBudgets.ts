@@ -249,6 +249,58 @@ export function resolveTagPath(
 }
 
 /**
+ * Какой тег стоит за строкой бюджета «категория / подкатегория» в месяце.
+ *
+ * Бюджет у нас — по НАЗВАНИЮ категории, а в Дзен-мани названия тегов не
+ * уникальны: старая «Подарки и помощь» в архиве и новая с тем же именем.
+ * Раньше при чтении планы обоих тегов писались в одну строку (побеждал
+ * последний), а при отправке план уходил тегу, найденному по названию, —
+ * часто не тому, что показан. Правка уходила в архивный тег, а
+ * синхронизация возвращала прежнюю цифру действующего: «меняю, а оно
+ * восстанавливается».
+ *
+ * Правило одно на чтение и на отправку: из тегов с этим путём берётся тот, у
+ * которого в этом месяце УЖЕ есть план, причём действующий раньше архивного;
+ * плана нет ни у кого — действующий (если все в архиве — первый).
+ */
+export interface BudgetTagPicker {
+  /** Тег для строки бюджета в месяце; `null` — категории с таким путём нет. */
+  pick: (category: string, subcategory: string | null, ym: string) => string | null;
+}
+
+export function budgetTagPicker(
+  tags: readonly ZenTag[] | undefined,
+  budgets: readonly ZenBudget[] | undefined
+): BudgetTagPicker {
+  const byId = new Map((tags || []).map((t) => [t.id, t]));
+  const candidates = new Map<string, ZenTag[]>();
+  for (const t of tags || []) {
+    const r = resolveTagPath(t.id, byId);
+    if (!r) continue;
+    const key = [r.category, r.subcategory ?? ""].join(SEP);
+    const list = candidates.get(key) ?? [];
+    list.push(t);
+    candidates.set(key, list);
+  }
+  // Действующие — первыми; порядок справочника внутри сохраняется.
+  for (const list of candidates.values()) list.sort((a, b) => Number(!!a.archive) - Number(!!b.archive));
+  const hasPlan = new Set<string>();
+  for (const b of budgets || []) {
+    if (!b.tag || b.tag === NULL_TAG) continue;
+    hasPlan.add([b.tag, (b.date || "").slice(0, 7)].join(SEP));
+  }
+  return {
+    pick: (category, subcategory, ym) => {
+      const list = candidates.get([category, subcategory ?? ""].join(SEP));
+      if (!list || list.length === 0) return null;
+      if (list.length === 1) return list[0].id;
+      const withPlan = list.find((t) => hasPlan.has([t.id, ym].join(SEP)));
+      return (withPlan ?? list[0]).id;
+    },
+  };
+}
+
+/**
  * Flatten the cached budgets + tags into a list of per-tag plan entries.
  * Unknown tags, the whole-month aggregate, auto-forecast values and
  * zero amounts are skipped. A NEGATIVE amount is kept: an unlocked parent
@@ -263,6 +315,7 @@ function collect(
   const out: ZenPlanEntry[] = [];
   if (!budgets || budgets.length === 0) return out;
   const byId = new Map((tags || []).map((t) => [t.id, t]));
+  const picker = budgetTagPicker(tags, budgets);
 
   for (const b of budgets) {
     if (!b.tag || b.tag === NULL_TAG) continue;
@@ -270,6 +323,9 @@ function collect(
     if (!r) continue;
     const ym = (b.date || "").slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(ym)) continue;
+    // Тёзка (архивный двойник) — не в эту строку: её план берётся у того же
+    // тега, которому уйдёт правка (`budgetTagPicker`).
+    if (picker.pick(r.category, r.subcategory, ym) !== b.tag) continue;
     // A REAL (user-set) plan is one Zenmoney did NOT auto-forecast; a forecast
     // is one it DID — `wantForecast` picks which side we return.
     const outFc = !!b.isOutcomeForecast;

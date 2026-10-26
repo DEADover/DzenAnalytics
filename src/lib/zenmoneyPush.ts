@@ -65,6 +65,7 @@ import { NO_CATEGORY, SERVICE_CATEGORIES } from "./zenmoneyMap";
 import type { TransactionEdit } from "../store/useEditsStore";
 import type { TxKind } from "../types";
 import { DEBT_TYPES } from "./accountType";
+import { budgetTagPicker } from "./zenBudgets";
 
 export interface PushItem {
   id: string;
@@ -2109,26 +2110,18 @@ export function buildBudgetPush(
 
   const userId = cacheBudgets[0]?.user ?? cacheTags[0]?.user ?? null;
   const byId = new Map(cacheTags.map((t) => [t.id, t]));
-  // Reverse name→tag lookups: top-level by title, sub by "parentTitle\0subTitle".
-  const topByTitle = new Map<string, ZenTag>();
-  const subByPath = new Map<string, ZenTag>();
-  for (const t of cacheTags) {
-    if (!t.parent) {
-      topByTitle.set(t.title, t);
-    } else {
-      const p = byId.get(t.parent);
-      if (p) subByPath.set([p.title, t.title].join("\u0000"), t);
-    }
-  }
+  // Тег — тем же правилом, что при чтении планов: у тёзок (архивный двойник
+  // с тем же названием) правка уходит тому тегу, чей план показан в строке.
+  // Раньше брался последний по названию, и правка уходила не тому тегу.
+  const picker = budgetTagPicker(cacheTags, cacheBudgets);
   const existingByKey = new Map(
     cacheBudgets.map((b) => [[b.tag, b.date].join("\u0000"), b])
   );
 
   for (const e of edits) {
     const id = budgetEditId(e);
-    const tag = e.subcategory
-      ? subByPath.get([e.category, e.subcategory].join("\u0000"))
-      : topByTitle.get(e.category);
+    const tagId = picker.pick(e.category, e.subcategory, e.ym);
+    const tag = tagId ? byId.get(tagId) : undefined;
     if (!tag) {
       skipped.push({ id, reason: "Категория не найдена в Дзен-мани — синхронизируйтесь и повторите" });
       continue;

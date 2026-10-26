@@ -508,3 +508,28 @@ describe("plannedOpsByTagMonth — сверено с «Планами» вжив
     expect(m.get("gifts|2026-10")).toBeUndefined();
   });
 });
+
+describe("тёзки категорий при чтении планов", () => {
+  const live = tag("gift-new", "Подарки и помощь");
+  const old = { ...tag("gift-old", "Подарки и помощь"), archive: true };
+
+  it("архивный двойник не перебивает план действующего", () => {
+    const plans = zenPlansFromBudgets(
+      [
+        budget({ tag: "gift-new", outcome: 7000, outcomeLock: true }),
+        budget({ tag: "gift-old", outcome: 5000, outcomeLock: true }),
+      ],
+      // Архивный — последним: раньше побеждал он.
+      [live, old]
+    );
+    expect(plans.get(zenPlanKey("expense", "Подарки и помощь", null, "2026-06"))).toBe(7000);
+  });
+
+  it("план есть только у архивного — показывается он", () => {
+    const plans = zenPlansFromBudgets(
+      [budget({ tag: "gift-old", outcome: 5000, outcomeLock: true })],
+      [live, old]
+    );
+    expect(plans.get(zenPlanKey("expense", "Подарки и помощь", null, "2026-06"))).toBe(5000);
+  });
+});

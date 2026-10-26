@@ -177,3 +177,34 @@ describe("applyBudgetSkipBump (auto-drop stale edits)", () => {
     expect(edits.b.skips).toBe(0);
   });
 });
+
+describe("тёзки категорий: архивный двойник с тем же названием", () => {
+  // Сначала архивный, потом действующий — и наоборот: раньше побеждал
+  // последний по списку, и правка уходила архивному тегу.
+  const live = tag("gift-new", "Подарки и помощь");
+  const old = { ...tag("gift-old", "Подарки и помощь"), archive: true };
+
+  for (const order of [[old, live], [live, old]]) {
+    it(`правка уходит действующему тегу (${order[0].id} первым)`, () => {
+      const { budgets } = buildBudgetPush(
+        [edit({ category: "Подарки и помощь", amount: 7000 })],
+        [budget({ tag: "gift-new", outcome: 5000, outcomeLock: true })],
+        order,
+        100
+      );
+      expect(budgets).toHaveLength(1);
+      expect(budgets[0].tag).toBe("gift-new");
+      expect(budgets[0].outcome).toBe(7000);
+    });
+  }
+
+  it("план месяца лежит у архивного — правка идёт туда же, откуда он показан", () => {
+    const { budgets } = buildBudgetPush(
+      [edit({ category: "Подарки и помощь", amount: 7000 })],
+      [budget({ tag: "gift-old", outcome: 5000, outcomeLock: true })],
+      [live, old],
+      100
+    );
+    expect(budgets[0].tag).toBe("gift-old");
+  });
+});
