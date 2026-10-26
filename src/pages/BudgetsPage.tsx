@@ -1443,6 +1443,31 @@ export function BudgetsPage() {
         {/* На узком экране вид и листание месяцев переносятся на две строки —
             в одну они не входят и тащили страницу вбок. */}
         <div className="flex items-center gap-1.5 flex-wrap gap-y-2">
+          {/* Действия раздела — перед видом и периодом. Ряд прижат вправо,
+              поэтому кнопка, которая меняется от вида к виду («Экспорт» у
+              года, «Заполнить план» у месяца), стоит с краю и не сдвигает
+              переключатель вида и выбор месяца. */}
+          {yearView && (
+            <Tooltip content="Годовой отчёт файлом: таблицами в Excel или сводкой в PDF">
+              <button onClick={() => setExportOpen(true)} className="btn-ghost btn-lg text-sm mr-1.5">
+                <Download className="w-4 h-4" />
+                Экспорт
+              </button>
+            </Tooltip>
+          )}
+          {/* Заполнение подставляет планы в ОДИН месяц — выбранный. Поэтому
+              кнопка живёт только в месячном виде: в годовом своде на экране
+              двенадцать месяцев сразу, и «в какой из них попадут суммы» —
+              вопрос, которого быть не должно. На дашборде то же самое: это
+              отчёт, а не место, где правят планы. */}
+          {view === "month" && (
+            <Tooltip content="Подставить план сразу по всем статьям: по истории операций, как в прошлом месяце или по факту месяца">
+              <button onClick={() => setFillOpen(true)} className="btn-ghost btn-lg text-sm mr-1.5">
+                <Wand2 className="w-4 h-4" />
+                Заполнить план
+              </button>
+            </Tooltip>
+          )}
           <Segmented
             label="Вид бюджета"
             value={view}
@@ -1478,27 +1503,6 @@ export function BudgetsPage() {
           />
         </div>
         <div className="flex items-center gap-2">
-          {yearView && (
-            <Tooltip content="Годовой отчёт файлом: таблицами в Excel или сводкой в PDF">
-              <button onClick={() => setExportOpen(true)} className="btn-ghost btn-lg text-sm">
-                <Download className="w-4 h-4" />
-                Экспорт
-              </button>
-            </Tooltip>
-          )}
-          {/* Заполнение подставляет планы в ОДИН месяц — выбранный. Поэтому
-              кнопка живёт только в месячном виде: в годовом своде на экране
-              двенадцать месяцев сразу, и «в какой из них попадут суммы» —
-              вопрос, которого быть не должно. На дашборде то же самое: это
-              отчёт, а не место, где правят планы. */}
-          {view === "month" && (
-            <Tooltip content="Подставить план сразу по всем статьям: по истории операций, как в прошлом месяце или по факту месяца">
-              <button onClick={() => setFillOpen(true)} className="btn-ghost btn-lg text-sm">
-                <Wand2 className="w-4 h-4" />
-                Заполнить план
-              </button>
-            </Tooltip>
-          )}
           <BudgetSettingsPopover />
         </div>
       </SectionControls>
