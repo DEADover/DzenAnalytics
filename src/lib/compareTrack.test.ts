@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction } from "../types";
-import { buildCompareTrack } from "./compareTrack";
+import { buildCompareTrack, withForecast } from "./compareTrack";
 
 const tx = (date: string, kind: Transaction["kind"], amountBase: number) =>
   ({ date, kind, amountBase }) as Transaction;
@@ -153,5 +153,41 @@ describe("buildCompareTrack", () => {
       expect(t.points.find((x) => x.dateA === "2025-03-01")!.b).toBe(5);
       expect(t.bTotal).toBe(5);
     });
+  });
+});
+
+describe("withForecast", () => {
+  const octFull = { from: "2026-10-01", to: "2026-10-31" };
+  const sep = { from: "2026-09-01", to: "2026-09-30" };
+  const txs = [tx("2026-10-01", "expense", 1000), tx("2026-10-10", "expense", 500)];
+  const base = buildCompareTrack(txs, "expense", { full: octFull, to: "2026-10-11" }, [sep]);
+  const f = (t: ReturnType<typeof withForecast>, d: number) => t.points[d - 1].f;
+
+  it("назначенные — ступенькой в свой день, остаток плана — ровно до конца", () => {
+    const t = withForecast(base, "2026-10-11", [{ date: "2026-10-20", amount: 300 }], 2300);
+    // До сегодня прогноза нет, сегодня — от факта.
+    expect(f(t, 10)).toBeNull();
+    expect(f(t, 11)).toBe(1500);
+    // Ровный остаток 2 000 на 20 дней — по 100 в день, плюс 300 двадцатого.
+    expect(f(t, 19)).toBeCloseTo(2300, 6);
+    expect(f(t, 20)).toBeCloseTo(2700, 6);
+    expect(f(t, 31)).toBeCloseTo(3800, 6);
+  });
+
+  it("без размазывания — только назначенные", () => {
+    const t = withForecast(base, "2026-10-11", [{ date: "2026-10-20", amount: 300 }], null);
+    expect(f(t, 19)).toBe(1500);
+    expect(f(t, 31)).toBe(1800);
+  });
+
+  it("назначенные крупнее остатка — ровной части нет", () => {
+    const t = withForecast(base, "2026-10-11", [{ date: "2026-10-20", amount: 300 }], 100);
+    expect(f(t, 31)).toBe(1800);
+  });
+
+  it("прошлый период и период, оборванный не сегодня, — без прогноза", () => {
+    const past = buildCompareTrack(txs, "expense", { full: sep, to: sep.to }, [octFull]);
+    expect(withForecast(past, "2026-10-11", [], 1000)).toBe(past);
+    expect(withForecast(base, "2026-10-12", [], 1000)).toBe(base);
   });
 });

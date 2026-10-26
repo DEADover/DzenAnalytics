@@ -297,6 +297,47 @@ describe("запланированные операции на графике м
     expect(withNone.projIncome).toBe(90000);
     expect(withNone.points.find((p) => p.day === 31)!.incomeF).toBeCloseTo(90000, 6);
   });
+
+  it("остаток по правилу Дзен-мани: перерасход одной статьи не гасит остальные", () => {
+    // Итог плана 50 000 при факте 60 000 — «план − факт» уже в минусе, но у
+    // других статей остаток 30 000: как в «Плане на день», линия растёт к нему.
+    const flow = buildMonthCashflow([day(3, "expense", 60000)], "2026-08", now, {
+      plannedExpense: 50000,
+      leftExpense: 30000,
+    });
+    const at = (d: number) => flow.points.find((p) => p.day === d)!.expenseF!;
+    expect(at(7)).toBe(60000);
+    expect(at(31)).toBeCloseTo(90000, 6);
+    // Ровно: шаг каждый день одинаковый.
+    expect(at(20) - at(19)).toBeCloseTo(at(30) - at(29), 6);
+  });
+
+  it("назначенные операции уже внутри остатка — не прибавляются второй раз", () => {
+    const byDay = new Array(32).fill(0);
+    byDay[20] = 10000;
+    const flow = buildMonthCashflow([], "2026-08", now, {
+      leftExpense: 30000,
+      plannedExpenseByDay: byDay,
+    });
+    expect(flow.points.find((p) => p.day === 31)!.expenseF).toBeCloseTo(30000, 6);
+    expect(flow.projExpense).toBeCloseTo(30000, 6);
+  });
+
+  it("без размазывания — только ступеньки назначенных операций", () => {
+    const byDay = new Array(32).fill(0);
+    byDay[20] = 10000;
+    const flow = buildMonthCashflow([day(3, "expense", 5000)], "2026-08", now, {
+      plannedExpense: 100000,
+      leftExpense: 95000,
+      plannedExpenseByDay: byDay,
+      smear: false,
+    });
+    const at = (d: number) => flow.points.find((p) => p.day === d)!.expenseF!;
+    expect(at(19)).toBe(5000);
+    expect(at(20)).toBe(15000);
+    expect(at(31)).toBe(15000);
+    expect(flow.projExpense).toBe(15000);
+  });
 });
 
 /**

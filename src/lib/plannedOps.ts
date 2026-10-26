@@ -260,6 +260,15 @@ export function plannedAsTransaction(p: PlannedOp): Transaction {
     amount: p.amount,
     currency: p.currency,
     account: p.account,
+    // Ключи счетов — по ним фильтр «Счета» отбирает операции; без них план на
+    // одном из счетов-тёзок ловился бы по названию у обоих (или ни у одного).
+    accountKey: p.accountKey,
+    outcomeAccountKey: p.kind === "income" ? undefined : p.accountKey,
+    incomeAccountKey: transfer
+      ? (p.toAccountKey ?? undefined)
+      : p.kind === "income"
+        ? p.accountKey
+        : undefined,
     amountBase: p.amountBase,
     opAmount: null,
     opCurrency: null,

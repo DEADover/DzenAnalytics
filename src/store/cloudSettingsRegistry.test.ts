@@ -49,6 +49,7 @@ describe("реестр переносимых настроек", () => {
       "budget.hideEmptyRows",
       "budget.perimeterTransfers",
       "budget.rowOrder",
+      "budget.smearPlan",
       "budget.yearTotalPinned",
       "budget.yearTotalPlace",
     ]);

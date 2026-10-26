@@ -29,8 +29,9 @@ test("нарастающий итог по дням: идущий месяц д�
   await expect(summary).toContainText("к тому же дню");
   await expect(summary).toContainText(/▲ 11\s955 ₽ \(25%\)/);
   await expect(summary).toContainText("целиком");
-  // Две линии: сплошная (октябрь) и пунктир (сентябрь).
-  await expect(card.locator(".recharts-line")).toHaveCount(2);
+  // Три линии: сплошная (октябрь), пунктир сентября и пунктир прогноза
+  // октября до конца месяца.
+  await expect(card.locator(".recharts-line")).toHaveCount(3);
 
   // Переключатель свой: таблица категорий остаётся на расходах.
   await card.getByRole("radio", { name: /Доходы/ }).or(card.getByRole("button", { name: /Доходы/ })).first().click();

@@ -29,6 +29,7 @@ import {
   periodKey,
   periodRange,
   previousWindows,
+  shiftDays,
   shiftPeriod,
   spanDays,
   toIsoDate,
@@ -43,7 +44,11 @@ import { CategoryTable, type CategoryTableRow } from "../components/CategoryTabl
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useDiffMode } from "../store/useDiffModeStore";
 import { colorForCategory } from "../lib/categoryColor";
-import { buildCompareTrack } from "../lib/compareTrack";
+import { buildCompareTrack, withForecast } from "../lib/compareTrack";
+import { plannedAsTransaction } from "../lib/plannedOps";
+import { useZenPlanned } from "../hooks/useZenPlanned";
+import { useZenPlanLeft } from "../hooks/useFreeMoney";
+import { useBudgetSettingsStore } from "../store/useBudgetSettingsStore";
 import { CompareTrackChart } from "../components/CompareTrackChart";
 import type { Transaction } from "../types";
 
@@ -521,14 +526,18 @@ export function ComparePage() {
 
   // Нарастающий итог по дням (#117): А — от начала своего периода до последнего
   // дня с данными, Б — целиком, без выравнивания.
+  /** Период А целиком — до календарного конца, даже если он ещё идёт. */
+  const trackFullA = useMemo<DayRange>(() => {
+    const r = trackRanges.a;
+    return preset === "months" || preset === "avg"
+      ? periodRange(months.a, monthStartDay)
+      : preset === "years"
+        ? yearRange(years.a, monthStartDay)
+        : { from: r.from, to: r.to };
+  }, [trackRanges, preset, months.a, years.a, monthStartDay]);
   const track = useMemo(() => {
     const r = trackRanges.a;
-    const full =
-      preset === "months" || preset === "avg"
-        ? periodRange(months.a, monthStartDay)
-        : preset === "years"
-          ? yearRange(years.a, monthStartDay)
-          : { from: r.from, to: r.to };
+    const full = trackFullA;
     return buildCompareTrack(
       filtered,
       trackKind,
@@ -543,7 +552,56 @@ export function ComparePage() {
           ? isRunningPeriod(yearRange(years.b, monthStartDay), maxDate)
           : false
     );
-  }, [filtered, trackKind, trackRanges, preset, months.a, months.b, years.a, years.b, monthStartDay, maxDate]);
+  }, [filtered, trackKind, trackRanges, trackFullA, preset, months.b, years.b, monthStartDay, maxDate]);
+
+  /**
+   * Прогноз идущего периода А до конца — пунктиром, как «План на день» в
+   * Дзен-мани: назначенные операции ступенькой в свои дни (через те же общие
+   * фильтры, что и операции), а остаток бюджета — ровно по оставшимся дням.
+   * Остаток бюджета берётся, только когда А — это и есть период бюджета
+   * Дзен-мани и отбор не сужен: остаток всего бюджета к одной категории или
+   * счёту не относится.
+   */
+  const todayIso = toIsoDate(new Date());
+  const plannedAhead = useZenPlanned(shiftDays(todayIso, 1), trackFullA.to || todayIso);
+  const planLeft = useZenPlanLeft(todayIso);
+  const smearPlan = useBudgetSettingsStore((s) => s.smearPlan);
+  const narrowed =
+    filters.accounts.size > 0 ||
+    filters.categories.size > 0 ||
+    filters.currencies.size > 0 ||
+    filters.users.size > 0 ||
+    filters.search.trim().length > 0 ||
+    filters.minAmount != null ||
+    filters.maxAmount != null ||
+    filters.types.size > 0 ||
+    filters.onlyUncategorized ||
+    filters.onlyWithComment ||
+    filters.onlyWithoutComment ||
+    filters.onlyNew;
+  const smearApplies =
+    !narrowed && !!planLeft && planLeft.from === trackFullA.from && planLeft.to === trackFullA.to;
+  const trackShown = useMemo(() => {
+    if (!track.running) return track;
+    const kindOps = (plannedAhead ?? []).filter((p) => !p.forecast && p.kind === trackKind);
+    const passed = new Set(
+      applyFilters(
+        kindOps.map(plannedAsTransaction),
+        { ...filters, preset: "all", from: null, to: null },
+        monthStartDay
+      ).map((t) => t.id)
+    );
+    const steps = kindOps
+      .filter((p) => passed.has(p.id))
+      .map((p) => ({ date: p.date, amount: p.amountBase }));
+    const left =
+      smearPlan && smearApplies && planLeft
+        ? trackKind === "expense"
+          ? planLeft.expense
+          : planLeft.income
+        : null;
+    return withForecast(track, todayIso, steps, left);
+  }, [track, plannedAhead, trackKind, filters, monthStartDay, smearPlan, smearApplies, planLeft, todayIso]);
   // В «Среднем» суммы Б собраны за несколько месяцев — приводим к одному.
   const kpiB = useMemo(
     () => scaleKPI(computeKPI(txsB), divisorB),
@@ -1059,7 +1117,8 @@ export function ComparePage() {
       {/* Свой переключатель «Расходы / Доходы» у графика и у таблицы категорий:
           карточки и таблица выше показывают доходы и расходы одновременно. */}
       <CompareTrackChart
-        track={track}
+        track={trackShown}
+        smearToggle={smearApplies}
         kind={trackKind}
         onKindChange={setTrackKind}
         base={base}

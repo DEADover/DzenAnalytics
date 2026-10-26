@@ -398,6 +398,20 @@ export function buildMonthCashflow(
     plannedExpenseByDay?: number[];
     /** Первый день отчётного месяца, 1–31. */
     monthStartDay?: number;
+    /**
+     * Сколько ещё осталось по плану — по правилу Дзен-мани: сумма остатков
+     * статей (перерасход одной не съедает остаток другой), назначенные
+     * операции впереди уже внутри. Задан — прогноз тянется к «факт + остаток»,
+     * а не к «план целиком».
+     */
+    leftIncome?: number;
+    leftExpense?: number;
+    /**
+     * Размазывать ли остаток плана по оставшимся дням ровной линией (как
+     * «План на день» в Дзен-мани). Выключено — в прогнозе только назначенные
+     * операции ступеньками в свои дни. По умолчанию включено.
+     */
+    smear?: boolean;
   }
 ): MonthCashflow {
   // Ось графика — отчётный период, а не календарь: с первым днём 15 «Сентябрь»
@@ -459,8 +473,20 @@ export function buildMonthCashflow(
   // ступенька увела бы линию выше собственного прогноза.
   targetIncome = Math.max(targetIncome, factIncome + futIncTotal);
   targetExpense = Math.max(targetExpense, factExpense + futExpTotal);
-  const smoothInc = Math.max(0, targetIncome - factIncome - futIncTotal);
-  const smoothExp = Math.max(0, targetExpense - factExpense - futExpTotal);
+  // Остаток по правилу Дзен-мани (сумма остатков статей) — главнее итога
+  // «план − факт»: у того перерасход в одной статье гасил остаток всех
+  // остальных, и пунктир лежал плоско, хотя в приложении он растёт.
+  if (hasForecast && opts?.leftIncome != null)
+    targetIncome = factIncome + Math.max(futIncTotal, opts.leftIncome);
+  if (hasForecast && opts?.leftExpense != null)
+    targetExpense = factExpense + Math.max(futExpTotal, opts.leftExpense);
+  const smear = opts?.smear ?? true;
+  const smoothInc = smear ? Math.max(0, targetIncome - factIncome - futIncTotal) : 0;
+  const smoothExp = smear ? Math.max(0, targetExpense - factExpense - futExpTotal) : 0;
+  if (!smear) {
+    targetIncome = factIncome + futIncTotal;
+    targetExpense = factExpense + futExpTotal;
+  }
 
   const points: CashflowPoint[] = [];
   let cumInc = 0;

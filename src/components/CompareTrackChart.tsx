@@ -14,6 +14,7 @@ import { SectionCard } from "./SectionCard";
 import { KindSwitcher } from "./KindSwitcher";
 import { DeviationPill } from "./DeviationPill";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "./TooltipFacts";
+import { SmearPlanToggle } from "./SmearPlanToggle";
 import type { CompareTrack, TrackKind, TrackPoint } from "../lib/compareTrack";
 import {
   chartAxisStroke,
@@ -68,8 +69,10 @@ function TrackTip({
   axis: TrackAxis;
 }) {
   const p = payload?.[0]?.payload;
-  if (!active || !p || (p.a == null && p.b == null)) return null;
+  if (!active || !p || (p.a == null && p.b == null && p.f == null)) return null;
   const facts: TooltipFact[] = [];
+  // Прогноз — там, где факта уже нет: в сегодняшней точке они совпадают.
+  const fc = p.a == null && p.f != null ? p.f : null;
   // По номеру дня у каждого периода своя дата — пишем обе в строках.
   const byIndex = axis === "dayIndex";
   if (p.a != null)
@@ -81,16 +84,24 @@ function TrackTip({
   // Даты в строках — только по номеру дня (30/90 дней, свои даты): там у
   // периодов разные числа. Месяцы совмещаются по числу, годы — по дате, и
   // дата одна — в заголовке.
+  if (fc != null)
+    facts.push({
+      label: byIndex && p.dateA ? `Прогноз · ${dayLabel(p.dateA)}` : "Прогноз",
+      value: formatMoney(fc, base),
+      swatchColor: color,
+      swatch: "opacity-60",
+    });
   if (p.b != null)
     facts.push({
       label: datesB && byIndex && p.dateB ? `${labelB} · ${dayLabel(p.dateB)}` : labelB,
       value: formatMoney(p.b, base),
       swatch: "bg-muted opacity-60",
     });
-  if (p.a != null && p.b != null)
+  const aOrF = p.a ?? fc;
+  if (aOrF != null && p.b != null)
     facts.push({
       label: "Разница",
-      value: formatMoney(p.a - p.b, base, { signed: true }),
+      value: formatMoney(aOrF - p.b, base, { signed: true }),
       icon: <Scale />,
       strong: true,
     });
@@ -117,6 +128,7 @@ export function CompareTrackChart({
   labelB,
   datesB,
   axis,
+  smearToggle = false,
 }: {
   track: CompareTrack;
   kind: TrackKind;
@@ -128,6 +140,9 @@ export function CompareTrackChart({
   datesB: boolean;
   /** Подписи оси: числа месяца, месяцы или номер дня — см. {@link TrackAxis}. */
   axis: TrackAxis;
+  /** Показать «Размазывать план» у прогноза: остаток бюджета к этому
+   *  периоду применим (см. ComparePage). */
+  smearToggle?: boolean;
 }) {
   const color = kind === "expense" ? chartColor.expense : chartColor.income;
   const muted = chartColor.muted;
@@ -136,6 +151,8 @@ export function CompareTrackChart({
   // Один из периодов ещё идёт — сравниваем на последнем общем дне и отмечаем
   // его на графике.
   const limited = track.limited;
+  // Прогноз до конца А — последняя точка пунктира.
+  const lastF = [...track.points].reverse().find((p) => p.f != null && p.a == null) ?? null;
   const cmp = track.cmpDay > 0 ? track.points[track.cmpDay - 1] : null;
   const atDay = limited && cmp?.dateA ? ` на ${dayLabel(cmp.dateA)}` : limited ? ` на ${formatNum(track.cmpDay)}-й день` : "";
   // У годов деления — на первый день каждого месяца периода А.
@@ -155,11 +172,24 @@ export function CompareTrackChart({
           {` «${labelA}»`}, пунктир — {`«${labelB}»`}. Месяцы совмещаются по
           числам, годы — по датам, остальные отрезки — по номеру дня от начала.
           Законченные периоды сравниваются целиком, как в таблице выше. Идущий
-          период обрывается на последнем дне с операциями, и тогда периоды
-          сравниваются на этом дне.
+          период доходит до сегодня, и периоды сравниваются на этом дне. Дальше
+          — прогноз пунктиром: запланированные операции в свои дни и, если
+          включено «Размазывать план», остаток бюджета ровно по оставшимся
+          дням, как «План на день» в Дзен-мани.
         </p>
       }
-      right={<KindSwitcher kind={kind} onChange={onKindChange} />}
+      right={
+        <div className="flex items-center gap-4 flex-wrap justify-end">
+          {/* Рядом с переключателем вида, а не в легенде: в легенде он
+              переносился отдельной строкой уже на 1440. */}
+          {lastF && smearToggle && (
+            <span className="text-sm text-muted">
+              <SmearPlanToggle />
+            </span>
+          )}
+          <KindSwitcher kind={kind} onChange={onKindChange} />
+        </div>
+      }
     >
       <div className="flex items-center gap-x-5 gap-y-1 flex-wrap text-sm mt-1 mb-2" data-testid="compare-track-summary">
         <span className="flex items-center gap-1.5">
@@ -208,6 +238,16 @@ export function CompareTrackChart({
           <span className="text-muted">
             {labelA} целиком —{" "}
             <span className="text-text tabular-nums">{formatMoney(track.aTotal, base)}</span>
+          </span>
+        )}
+        {lastF?.f != null && (
+          <span className="flex items-center gap-1.5" data-testid="compare-track-forecast">
+            <span
+              className="inline-block w-3.5 border-t-2 border-dashed"
+              style={{ borderColor: color }}
+            />
+            <span className="text-muted">Прогноз к {dayLabel(lastF.dateA)}</span>
+            <span className="font-semibold tabular-nums">{formatMoney(lastF.f, base)}</span>
           </span>
         )}
       </div>
@@ -267,6 +307,20 @@ export function CompareTrackChart({
               connectNulls={false}
               isAnimationActive={false}
             />
+            {lastF && (
+              <Line
+                type="monotone"
+                dataKey="f"
+                name="Прогноз"
+                stroke={color}
+                strokeWidth={2}
+                strokeDasharray="4 3"
+                strokeOpacity={0.7}
+                dot={false}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            )}
             {limited && cmp && cmp.b != null && (
               <ReferenceDot x={cmp.day} y={cmp.b} r={3.5} fill={muted} stroke="none" />
             )}

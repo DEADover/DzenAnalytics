@@ -13,6 +13,7 @@ import type { Transaction } from "../types";
 import { Scale } from "lucide-react";
 import { buildMonthCashflow } from "../lib/budgets";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "./TooltipFacts";
+import { SmearPlanToggle } from "./SmearPlanToggle";
 import {
   formatMoney,
   formatNum,
@@ -143,6 +144,9 @@ export function MonthCashflowChart({
   plannedExpense,
   plannedIncomeByDay,
   plannedExpenseByDay,
+  leftIncome,
+  leftExpense,
+  smear = true,
 }: {
   transactions: Transaction[];
   ym: string;
@@ -160,6 +164,12 @@ export function MonthCashflowChart({
    *  ступенькой в свой день, а не размазывает ровно до конца месяца. */
   plannedIncomeByDay?: number[];
   plannedExpenseByDay?: number[];
+  /** Остаток плана по правилу Дзен-мани (сумма остатков статей) — к нему
+   *  тянется прогноз; см. `buildMonthCashflow`. */
+  leftIncome?: number;
+  leftExpense?: number;
+  /** Размазывать остаток плана по дням (настройка `smearPlan`). */
+  smear?: boolean;
 }) {
   // «Сегодня» снимаем один раз при монтировании, а не читаем часы прямо в
   // рендере. Час в зависимостях `useMemo` не значился, поэтому вертикаль
@@ -174,6 +184,9 @@ export function MonthCashflowChart({
         plannedIncomeByDay,
         plannedExpenseByDay,
         monthStartDay,
+        leftIncome,
+        leftExpense,
+        smear,
       }),
     [
       transactions,
@@ -184,6 +197,9 @@ export function MonthCashflowChart({
       plannedIncomeByDay,
       plannedExpenseByDay,
       monthStartDay,
+      leftIncome,
+      leftExpense,
+      smear,
     ]
   );
   const hasForecast = cf.todayDay > 0 && cf.todayDay < cf.days;
@@ -218,6 +234,7 @@ export function MonthCashflowChart({
               Прогноз до конца месяца
             </span>
           )}
+          {hasForecast && <SmearPlanToggle />}
           {onDayClick && <span>Клик по дню — его операции</span>}
         </div>
       </div>

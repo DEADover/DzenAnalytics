@@ -41,6 +41,12 @@ export interface BudgetSettings {
   /** Окно прогноза по умолчанию в окне «Заполнить по среднему». */
   forecastMonths: number;
   forecastBasis: ForecastBasis;
+  /**
+   * Прогноз до конца месяца на графиках (бюджет, «Сравнение»): остаток плана
+   * ровно по оставшимся дням, как «План на день» в Дзен-мани. Выключено —
+   * только назначенные операции ступеньками в свои дни.
+   */
+  smearPlan: boolean;
 }
 
 export const DEFAULT_BUDGET_SETTINGS: BudgetSettings = {
@@ -54,6 +60,7 @@ export const DEFAULT_BUDGET_SETTINGS: BudgetSettings = {
   yearTotalPinned: true,
   forecastMonths: 3,
   forecastBasis: "average",
+  smearPlan: true,
 };
 
 const KEY = "budgetSettings";
@@ -95,5 +102,6 @@ function pick(s: BudgetSettings): BudgetSettings {
     yearTotalPinned: s.yearTotalPinned,
     forecastMonths: s.forecastMonths,
     forecastBasis: s.forecastBasis,
+    smearPlan: s.smearPlan,
   };
 }

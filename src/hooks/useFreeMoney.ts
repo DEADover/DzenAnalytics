@@ -107,187 +107,27 @@ export function useFreeMoney(
 
   return useMemo(() => {
     if (!cache || mine.length === 0) return EMPTY;
-    const me = cache.user?.[0];
-    // День начала месяца берём у Дзен-мани, свой — только пока его нет.
-    const startDay =
-      typeof me?.monthStartDay === "number" ? me.monthStartDay : ownStartDay;
-    // Значения `includeOpeningBalance` у `planBalanceMode` не бывает: входящий
-    // баланс учитывается в режиме «Баланс vs Расходы» или по галочке в
-    // `planSettings` (см. `zenPlanRules`).
-    const balanceMode: BalanceMode = zenPlanSettings(me).openingBalance
-      ? "includeOpeningBalance"
-      : "excludeOpeningBalance";
-
-    const ym = periodKey(today, startDay);
-    const range = periodRange(ym, startDay);
-    // Дни — тем же счётом, что и пилюля месяца: сегодняшний считается
-    // оставшимся, и лимит «на день» делится ровно на показанное число.
-    const days = periodDayCount(range, today);
-    const daysTotal = Math.max(1, days.days);
-    const dayIndex = Math.min(daysTotal, Math.max(1, days.day));
-    const daysLeft = Math.max(1, days.left);
-
-    const conv = converter(cache, rates);
-    // Баланс периода и факт по статьям — по счетам «в балансе», как у
-    // Дзен-мани, вместе с накопительными. Проценты, пришедшие на
-    // накопительный счёт, в приложении входят в баланс и гасят доходный
-    // бюджет; у нас их не было вовсе, и баланс выходил меньше ровно на них.
-    // Сверено на живом аккаунте до разницы курса. Повседневные счета (`mine`)
-    // остаются для режима «с остатком на начало» — его на живых данных пока
-    // не сверяли.
-    const ours = inBalanceIds(cache);
-    const tagById = new Map((cache.tags ?? []).map((t) => [t.id, t]));
-    const parents = parentLinks(tagById);
-
-    // ── Баланс периода ────────────────────────────────────────────────────
-    // «excludeOpeningBalance»: деньги, лежавшие на счетах к началу периода, в
-    // расчёт не идут — только то, что пришло и ушло за него.
-    let income = 0;
-    let expense = 0;
-    // Расход за сегодня — отдельно: по нему считается, сколько свободных денег
-    // съел именно сегодняшний день (см. ниже про вчерашний срез).
-    let expenseToday = 0;
-    const factByTag = new Map<string, number>();
-    const factYesterday = new Map<string, number>();
-    // Сколько дохода по каждой категории уже пришло на счета из расчёта —
-    // вычитается из «ещё поступит» (см. `incomeStillToCome`).
-    const receivedByTag = new Map<string, number>();
-    for (const t of cache.transactions) {
-      if (t.deleted) continue;
-      if (t.date < range.from || t.date > today) continue;
-      const out = t.outcome || 0;
-      const inc = t.income || 0;
-      if (out > 0 && inc > 0) continue; // перевод: деньги не появились и не ушли
-      const isToday = t.date === today;
-      if (out > 0 && ours.has(t.outcomeAccount)) {
-        const v = conv(out, t.outcomeInstrument);
-        expense += v;
-        if (isToday) expenseToday += v;
-        // Без категории — мимо плана: строки бюджета у такой траты нет, и
-        // приписывать её чужой значило бы съесть чужой лимит.
-        const tag = firstTag(t.tag);
-        if (tag) {
-          factByTag.set(tag, (factByTag.get(tag) ?? 0) + v);
-          if (!isToday) factYesterday.set(tag, (factYesterday.get(tag) ?? 0) + v);
-        }
-      }
-      if (inc > 0 && ours.has(t.incomeAccount)) {
-        const v = conv(inc, t.incomeInstrument);
-        income += v;
-        // ВОЗВРАТ УМЕНЬШАЕТ ФАКТ КАТЕГОРИИ. Поступление с расходным тегом —
-        // это вернувшиеся деньги, а не доход по статье: Дзен-мани вычитает их
-        // из потраченного. У доходных категорий строки бюджета-расхода нет, и
-        // вычитание там просто никуда не попадает. Проверено на «Еде дома»:
-        // 6,36 ₽ возврата Ozon дают 40 909 ₽ остатка вместо 40 902.
-        const tag = firstTag(t.tag);
-        if (tag) {
-          factByTag.set(tag, (factByTag.get(tag) ?? 0) - v);
-          if (!isToday) factYesterday.set(tag, (factYesterday.get(tag) ?? 0) - v);
-          receivedByTag.set(tag, (receivedByTag.get(tag) ?? 0) + v);
-        }
-      }
-    }
+    const core = zenPeriodPlan(cache, today, ownStartDay, rates, histDayRates, plannedDeletions);
+    const {
+      balanceMode,
+      range,
+      daysTotal,
+      dayIndex,
+      daysLeft,
+      income,
+      expense,
+      expenseToday,
+      factYesterday,
+      planRows,
+      aheadOut,
+      parents,
+      stillToCome,
+      plan,
+    } = core;
     const balance =
       balanceMode === "includeOpeningBalance"
         ? mine.reduce((s, a) => s + a.balanceBase, 0)
         : income - expense;
-
-    // ── Назначенные операции периода ──────────────────────────────────────
-    // Считаем ровно тем же правилом, что и «Бюджеты», — своего здесь быть не
-    // должно: план месяца один. Оттуда же и неочевидное: ИСПОЛНЕННЫЕ плановые
-    // операции остаются в плане (план отвечает на «сколько собирались», а факт
-    // вычитается отдельно), просроченные — нет, прогнозы Дзена — нет.
-    // Проверено на живом аккаунте: «Квартира» — 21 000 ₽ бюджета плюс
-    // исполненный платёж 4 000 минус 5 309 факта = 19 691 ₽, как на экране.
-    const fulfilled = fulfilledMarkerIds(cache.transactions);
-    const planned = plannedOpsByTagMonth(
-      (cache.reminderMarkers ?? []).filter((m) => plannedDeletions[m.id] === undefined),
-      cache.instruments,
-      me?.currency,
-      // План месяца — вместе с просроченными плановыми, как у Дзен-мани.
-      undefined,
-      (dateIso, code) => histDayRates[dateIso]?.[code] ?? null,
-      (id) => cache.instruments.find((i) => i.id === id)?.shortTitle,
-      fulfilled,
-      false,
-      startDay
-    );
-    // СЧЁТ У ПЛАНОВОЙ ОПЕРАЦИИ НЕ СМОТРИМ. Проценты по вкладу приходят на
-    // накопительный счёт, которого нет среди повседневных, — но деньги эти
-    // ваши, и Дзен-мани их считает. Проверено: без них «ещё поступит» выходило
-    // 173 100 ₽ вместо 174 600.
-    const aheadOut = new Map<string, number>();
-    const aheadIn = new Map<string, number>();
-    for (const [key, ops] of planned) {
-      const sep = key.lastIndexOf("|");
-      if (key.slice(sep + 1) !== ym) continue;
-      const tag = key.slice(0, sep);
-      if (ops.outcome > 0) aheadOut.set(tag, (aheadOut.get(tag) ?? 0) + ops.outcome);
-      if (ops.income > 0) aheadIn.set(tag, (aheadIn.get(tag) ?? 0) + ops.income);
-    }
-
-    // ── Бюджет месяца ─────────────────────────────────────────────────────
-    const month = `${ym}-01`;
-    const planRows: PlanRow[] = [];
-    const incomePlan = new Map<string, number>();
-    for (const b of cache.budgets ?? []) {
-      if (b.date !== month) continue;
-      // Строка без тега — это итог месяца целиком, а не категория. Дзен-мани её
-      // в списке не показывает и в остаток плана не берёт; взяв, мы задваивали
-      // бы весь бюджет (на живом аккаунте — лишние 120 252 ₽).
-      const tag = b.tag;
-      if (!tag || tag === NULL_TAG) continue;
-      if ((b.outcome || 0) > 0) {
-        planRows.push({
-          tagId: tag,
-          title: tagById.get(tag)?.title ?? "Без категории",
-          plan: b.outcome,
-          locked: b.outcomeLock === true,
-        });
-      }
-      if ((b.income || 0) > 0) incomePlan.set(tag, b.income);
-    }
-    // Категории, у которых бюджета нет, но есть назначенные списания: без
-    // строки их обязательства просто пропали бы из остатка плана.
-    for (const tag of aheadOut.keys()) {
-      if (planRows.some((r) => r.tagId === tag)) continue;
-      planRows.push({
-        tagId: tag,
-        title: tagById.get(tag)?.title ?? "Без категории",
-        plan: 0,
-        locked: false,
-      });
-    }
-
-    // «Ещё поступит» — по каждой доходной категории большее из будущих
-    // назначенных поступлений и остатка бюджета после пришедшего (issue #100).
-    // Будущие — только ещё не исполненные: исполненное уже в факте.
-    const upcomingIn = new Map<string, number>();
-    const upcoming = plannedOpsByTagMonth(
-      (cache.reminderMarkers ?? []).filter(
-        (m) =>
-          m.state === "planned" &&
-          !fulfilled.has(m.id) &&
-          plannedDeletions[m.id] === undefined
-      ),
-      cache.instruments,
-      me?.currency,
-      today,
-      undefined,
-      undefined,
-      undefined,
-      false,
-      startDay
-    );
-    for (const [key, ops] of upcoming) {
-      const sep = key.lastIndexOf("|");
-      if (key.slice(sep + 1) !== ym || !(ops.income > 0)) continue;
-      const tag = key.slice(0, sep);
-      upcomingIn.set(tag, (upcomingIn.get(tag) ?? 0) + ops.income);
-    }
-    const stillToCome = incomeStillToCome(incomePlan, upcomingIn, receivedByTag, parents);
-
-    const plan = planRemainder(planRows, aheadOut, factByTag, parents);
     const money = moneyBreakdown({ balance, stillToCome, excluded: reserve });
     const free = freeToSpend(money, plan.total);
 
@@ -350,6 +190,248 @@ export function useFreeMoney(
 }
 
 /**
+ * Сколько ещё осталось по плану текущего периода Дзен-мани — для прогноза до
+ * конца месяца на графиках. Тот же расчёт, что у «Свободных денег»: расходы —
+ * сумма остатков статей (назначенные операции внутри), доходы — «ещё
+ * поступит». `null` — Дзен-мани не подключён.
+ */
+export function useZenPlanLeft(
+  today: string
+): { from: string; to: string; expense: number; income: number } | null {
+  const ownStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  const rates = useDataStore((s) => s.rates);
+  const histDayRates = useDataStore((s) => s.histDayRates);
+  const plannedDeletions = usePlannedDeletionsStore((s) => s.deletions);
+  const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
+  return useMemo(() => {
+    if (!cache) return null;
+    const core = zenPeriodPlan(cache, today, ownStartDay, rates, histDayRates, plannedDeletions);
+    return {
+      from: core.range.from,
+      to: core.range.to,
+      expense: core.plan.total,
+      income: core.stillToCome,
+    };
+  }, [cache, today, ownStartDay, rates, histDayRates, plannedDeletions]);
+}
+
+/**
+ * План периода Дзен-мани на сегодня: факт по статьям, назначенные операции,
+ * остаток плана расходов (сумма остатков статей) и «ещё поступит».
+ *
+ * Отдельно от виджета, потому что остаток плана нужен и графикам: прогноз до
+ * конца месяца тянется к нему (как «План на день» в приложении). Счета виджета
+ * здесь не нужны — только кэш Дзен-мани.
+ */
+export function zenPeriodPlan(
+  cache: ZenCache,
+  today: string,
+  ownStartDay: number,
+  rates: CurrencyRates,
+  histDayRates: Record<string, Record<string, number>>,
+  plannedDeletions: Record<string, unknown>
+) {
+  const me = cache.user?.[0];
+  // День начала месяца берём у Дзен-мани, свой — только пока его нет.
+  const startDay =
+    typeof me?.monthStartDay === "number" ? me.monthStartDay : ownStartDay;
+  // Значения `includeOpeningBalance` у `planBalanceMode` не бывает: входящий
+  // баланс учитывается в режиме «Баланс vs Расходы» или по галочке в
+  // `planSettings` (см. `zenPlanRules`).
+  const balanceMode: BalanceMode = zenPlanSettings(me).openingBalance
+    ? "includeOpeningBalance"
+    : "excludeOpeningBalance";
+
+  const ym = periodKey(today, startDay);
+  const range = periodRange(ym, startDay);
+  // Дни — тем же счётом, что и пилюля месяца: сегодняшний считается
+  // оставшимся, и лимит «на день» делится ровно на показанное число.
+  const days = periodDayCount(range, today);
+  const daysTotal = Math.max(1, days.days);
+  const dayIndex = Math.min(daysTotal, Math.max(1, days.day));
+  const daysLeft = Math.max(1, days.left);
+
+  const conv = converter(cache, rates, histDayRates);
+  // Баланс периода и факт по статьям — по счетам «в балансе», как у
+  // Дзен-мани, вместе с накопительными. Проценты, пришедшие на
+  // накопительный счёт, в приложении входят в баланс и гасят доходный
+  // бюджет; у нас их не было вовсе, и баланс выходил меньше ровно на них.
+  // Сверено на живом аккаунте до разницы курса. Повседневные счета (`mine`)
+  // остаются для режима «с остатком на начало» — его на живых данных пока
+  // не сверяли.
+  const ours = inBalanceIds(cache);
+  const tagById = new Map((cache.tags ?? []).map((t) => [t.id, t]));
+  const parents = parentLinks(tagById);
+
+  // ── Баланс периода ────────────────────────────────────────────────────
+  // «excludeOpeningBalance»: деньги, лежавшие на счетах к началу периода, в
+  // расчёт не идут — только то, что пришло и ушло за него.
+  let income = 0;
+  let expense = 0;
+  // Расход за сегодня — отдельно: по нему считается, сколько свободных денег
+  // съел именно сегодняшний день (см. ниже про вчерашний срез).
+  let expenseToday = 0;
+  const factByTag = new Map<string, number>();
+  const factYesterday = new Map<string, number>();
+  // Сколько дохода по каждой категории уже пришло на счета из расчёта —
+  // вычитается из «ещё поступит» (см. `incomeStillToCome`).
+  const receivedByTag = new Map<string, number>();
+  for (const t of cache.transactions) {
+    if (t.deleted) continue;
+    if (t.date < range.from || t.date > today) continue;
+    const out = t.outcome || 0;
+    const inc = t.income || 0;
+    if (out > 0 && inc > 0) continue; // перевод: деньги не появились и не ушли
+    const isToday = t.date === today;
+    if (out > 0 && ours.has(t.outcomeAccount)) {
+      const v = conv(out, t.outcomeInstrument, t.date);
+      expense += v;
+      if (isToday) expenseToday += v;
+      // Без категории — мимо плана: строки бюджета у такой траты нет, и
+      // приписывать её чужой значило бы съесть чужой лимит.
+      const tag = firstTag(t.tag);
+      if (tag) {
+        factByTag.set(tag, (factByTag.get(tag) ?? 0) + v);
+        if (!isToday) factYesterday.set(tag, (factYesterday.get(tag) ?? 0) + v);
+      }
+    }
+    if (inc > 0 && ours.has(t.incomeAccount)) {
+      const v = conv(inc, t.incomeInstrument, t.date);
+      income += v;
+      // ВОЗВРАТ УМЕНЬШАЕТ ФАКТ КАТЕГОРИИ. Поступление с расходным тегом —
+      // это вернувшиеся деньги, а не доход по статье: Дзен-мани вычитает их
+      // из потраченного. У доходных категорий строки бюджета-расхода нет, и
+      // вычитание там просто никуда не попадает. Проверено на «Еде дома»:
+      // 6,36 ₽ возврата Ozon дают 40 909 ₽ остатка вместо 40 902.
+      const tag = firstTag(t.tag);
+      if (tag) {
+        factByTag.set(tag, (factByTag.get(tag) ?? 0) - v);
+        if (!isToday) factYesterday.set(tag, (factYesterday.get(tag) ?? 0) - v);
+        receivedByTag.set(tag, (receivedByTag.get(tag) ?? 0) + v);
+      }
+    }
+  }
+
+  // ── Назначенные операции периода ──────────────────────────────────────
+  // Считаем ровно тем же правилом, что и «Бюджеты», — своего здесь быть не
+  // должно: план месяца один. Оттуда же и неочевидное: ИСПОЛНЕННЫЕ плановые
+  // операции остаются в плане (план отвечает на «сколько собирались», а факт
+  // вычитается отдельно), просроченные — нет, прогнозы Дзена — нет.
+  // Проверено на живом аккаунте: «Квартира» — 21 000 ₽ бюджета плюс
+  // исполненный платёж 4 000 минус 5 309 факта = 19 691 ₽, как на экране.
+  const fulfilled = fulfilledMarkerIds(cache.transactions);
+  const planned = plannedOpsByTagMonth(
+    (cache.reminderMarkers ?? []).filter((m) => plannedDeletions[m.id] === undefined),
+    cache.instruments,
+    me?.currency,
+    // План месяца — вместе с просроченными плановыми, как у Дзен-мани.
+    undefined,
+    (dateIso, code) => histDayRates[dateIso]?.[code] ?? null,
+    (id) => cache.instruments.find((i) => i.id === id)?.shortTitle,
+    fulfilled,
+    false,
+    startDay
+  );
+  // СЧЁТ У ПЛАНОВОЙ ОПЕРАЦИИ НЕ СМОТРИМ. Проценты по вкладу приходят на
+  // накопительный счёт, которого нет среди повседневных, — но деньги эти
+  // ваши, и Дзен-мани их считает. Проверено: без них «ещё поступит» выходило
+  // 173 100 ₽ вместо 174 600.
+  const aheadOut = new Map<string, number>();
+  const aheadIn = new Map<string, number>();
+  for (const [key, ops] of planned) {
+    const sep = key.lastIndexOf("|");
+    if (key.slice(sep + 1) !== ym) continue;
+    const tag = key.slice(0, sep);
+    if (ops.outcome > 0) aheadOut.set(tag, (aheadOut.get(tag) ?? 0) + ops.outcome);
+    if (ops.income > 0) aheadIn.set(tag, (aheadIn.get(tag) ?? 0) + ops.income);
+  }
+
+  // ── Бюджет месяца ─────────────────────────────────────────────────────
+  const month = `${ym}-01`;
+  const planRows: PlanRow[] = [];
+  const incomePlan = new Map<string, number>();
+  for (const b of cache.budgets ?? []) {
+    if (b.date !== month) continue;
+    // Строка без тега — это итог месяца целиком, а не категория. Дзен-мани её
+    // в списке не показывает и в остаток плана не берёт; взяв, мы задваивали
+    // бы весь бюджет (на живом аккаунте — лишние 120 252 ₽).
+    const tag = b.tag;
+    if (!tag || tag === NULL_TAG) continue;
+    // Бюджет удалённой категории: категории нет, а запись бюджета на сервере
+    // остаётся. Дзен-мани её не показывает и в «Ещё в планах» не считает —
+    // и мы не считаем (сверено: 7 000 ₽ лишнего остатка на живом аккаунте).
+    if (!tagById.has(tag)) continue;
+    if ((b.outcome || 0) > 0) {
+      planRows.push({
+        tagId: tag,
+        title: tagById.get(tag)?.title ?? "Без категории",
+        plan: b.outcome,
+        locked: b.outcomeLock === true,
+      });
+    }
+    if ((b.income || 0) > 0) incomePlan.set(tag, b.income);
+  }
+  // Категории, у которых бюджета нет, но есть назначенные списания: без
+  // строки их обязательства просто пропали бы из остатка плана.
+  for (const tag of aheadOut.keys()) {
+    if (planRows.some((r) => r.tagId === tag)) continue;
+    planRows.push({
+      tagId: tag,
+      title: tagById.get(tag)?.title ?? "Без категории",
+      plan: 0,
+      locked: false,
+    });
+  }
+
+  // «Ещё поступит» — по каждой доходной категории большее из будущих
+  // назначенных поступлений и остатка бюджета после пришедшего (issue #100).
+  // Будущие — только ещё не исполненные: исполненное уже в факте.
+  const upcomingIn = new Map<string, number>();
+  const upcoming = plannedOpsByTagMonth(
+    (cache.reminderMarkers ?? []).filter(
+      (m) =>
+        m.state === "planned" &&
+        !fulfilled.has(m.id) &&
+        plannedDeletions[m.id] === undefined
+    ),
+    cache.instruments,
+    me?.currency,
+    today,
+    undefined,
+    undefined,
+    undefined,
+    false,
+    startDay
+  );
+  for (const [key, ops] of upcoming) {
+    const sep = key.lastIndexOf("|");
+    if (key.slice(sep + 1) !== ym || !(ops.income > 0)) continue;
+    const tag = key.slice(0, sep);
+    upcomingIn.set(tag, (upcomingIn.get(tag) ?? 0) + ops.income);
+  }
+  const stillToCome = incomeStillToCome(incomePlan, upcomingIn, receivedByTag, parents);
+
+  const plan = planRemainder(planRows, aheadOut, factByTag, parents);
+  return {
+    balanceMode,
+    ym,
+    range,
+    daysTotal,
+    dayIndex,
+    daysLeft,
+    income,
+    expense,
+    expenseToday,
+    factYesterday,
+    planRows,
+    aheadOut,
+    parents,
+    stillToCome,
+    plan,
+  };
+}
+
+/**
  * Итоговая строка бюджета «весь месяц» приходит с тегом из одних нулей — это не
  * категория, а сводка, и в список категорий она не идёт.
  */
@@ -384,12 +466,21 @@ function inBalanceIds(cache: ZenCache): Set<string> {
   return out;
 }
 
-/** Перевод суммы в базовую валюту по коду инструмента. */
-function converter(cache: ZenCache, rates: CurrencyRates) {
+/**
+ * Перевод суммы в базовую валюту по коду инструмента — по курсу ДНЯ операции,
+ * как у Дзен-мани и в «Бюджетах»; курса дня ещё нет — по сегодняшнему.
+ * По сегодняшнему для всех факт долларовых подписок расходился с приложением
+ * (на живом аккаунте — 494 ₽ остатка «Подписок»).
+ */
+function converter(
+  cache: ZenCache,
+  rates: CurrencyRates,
+  hist: Record<string, Record<string, number>>
+) {
   const code = new Map(cache.instruments.map((i) => [i.id, i.shortTitle]));
-  return (amount: number, instrument: number) => {
+  return (amount: number, instrument: number, date: string) => {
     const cur = code.get(instrument);
     if (!cur || cur === rates.base) return amount;
-    return amount * (rates.rates[cur] || 1);
+    return amount * (hist[date]?.[cur] || rates.rates[cur] || 1);
   };
 }

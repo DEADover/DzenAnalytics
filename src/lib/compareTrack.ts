@@ -33,6 +33,11 @@ export interface TrackPoint {
   a: number | null;
   /** Нарастающий итог Б (среднее по окнам); null — за концом самого длинного окна. */
   b: number | null;
+  /**
+   * Прогноз А до конца периода (см. {@link withForecast}): от сегодняшней точки
+   * пунктиром; null — до сегодня и за концом А, или прогноза нет.
+   */
+  f?: number | null;
 }
 
 export interface CompareTrack {
@@ -176,4 +181,47 @@ export function buildCompareTrack(
     running,
     bShorter,
   };
+}
+
+/** Назначенная операция для прогноза: дата и сумма в базовой валюте. */
+export interface ForecastStep {
+  date: string;
+  amount: number;
+}
+
+/**
+ * Прогноз идущего периода А до его конца — как «План на день» в Дзен-мани:
+ * от сегодняшнего итога назначенные операции встают ступенькой в свой день, а
+ * остаток плана (`left`, назначенные уже внутри) идёт ровно по оставшимся
+ * дням. Без `left` (размазывание выключено или плана нет) — только ступеньки.
+ *
+ * Прогноз есть, только когда А ещё идёт и его данные кончаются сегодня: у
+ * прошлого периода прогноза быть не может, а у будущего не от чего отсчитать.
+ */
+export function withForecast(
+  track: CompareTrack,
+  today: string,
+  steps: readonly ForecastStep[],
+  left: number | null
+): CompareTrack {
+  if (!track.running || track.aDays === 0) return track;
+  const anchor = track.points[track.aDays - 1];
+  if (!anchor || anchor.dateA !== today || anchor.a == null) return track;
+  const last = [...track.points].reverse().find((p) => p.dateA != null);
+  if (!last || last.day <= anchor.day) return track;
+
+  const ahead = steps.filter((s) => s.date > today && s.date <= last.dateA!);
+  const stepsTotal = ahead.reduce((s, x) => s + x.amount, 0);
+  const smooth = left != null ? Math.max(0, left - stepsTotal) : 0;
+  const span = last.day - anchor.day;
+  const start = anchor.a;
+
+  const points = track.points.map((p) => {
+    if (p.day < anchor.day || p.dateA == null) return { ...p, f: null };
+    if (p.day === anchor.day) return { ...p, f: start };
+    let stepped = 0;
+    for (const s of ahead) if (s.date <= p.dateA) stepped += s.amount;
+    return { ...p, f: start + stepped + (smooth * (p.day - anchor.day)) / span };
+  });
+  return { ...track, points };
 }

@@ -765,6 +765,32 @@ export function BudgetsPage() {
   const rows = useMemo(() => buildRows(ym), [buildRows, ym]);
 
   /**
+   * Сколько ещё осталось по плану выбранного месяца — по правилу Дзен-мани:
+   * сумма остатков статей, назначенные операции впереди внутри. К этому
+   * остатку тянется пунктир графика «Планы на месяц», как «План на день» в
+   * приложении. Итог «план − факт» тут не годится: перерасход одной статьи
+   * гасил в нём остаток всех остальных, и пунктир лежал плоско.
+   */
+  const monthLeft = useMemo(() => {
+    const pending = new Map<string, number>();
+    for (const p of plannedPlans(zenPlanned, scope, undefined, monthStartDay, !!zenRules?.forecasts))
+      if (p.ym === ym)
+        pending.set([p.kind, p.category, p.subcategory ?? ""].join("\u0000"), p.amount);
+    return monthResidues(
+      rows.map((r) => ({
+        kind: r.line.kind,
+        category: r.line.category,
+        subcategory: r.line.subcategory ?? null,
+        planned: r.planned,
+        fact: r.fact,
+        ahead:
+          pending.get([r.line.kind, r.line.category, r.line.subcategory ?? ""].join("\u0000")) ?? 0,
+        locked: r.locked,
+      }))
+    );
+  }, [rows, zenPlanned, scope, monthStartDay, zenRules, ym]);
+
+  /**
    * Входящий баланс будущего месяца — прогнозный, как у Дзен-мани: остаток на
    * счетах сейчас плюс то, что по плану ещё поступит, минус то, что ещё
    * потратится, — по текущему месяцу и по каждому месяцу до выбранного.
@@ -1456,6 +1482,9 @@ export function BudgetsPage() {
         plannedExpense={expPlan}
         plannedIncomeByDay={plannedByDay.income}
         plannedExpenseByDay={plannedByDay.expense}
+        leftIncome={monthLeft.income}
+        leftExpense={monthLeft.expense}
+        smear={settings.smearPlan}
       />
 
       <div className="space-y-6">
