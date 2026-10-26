@@ -49,7 +49,7 @@ test("«Капитал»: счёт с нулём и без операций в �
     const { useAccountsViewStore } = await store("useAccountsViewStore");
     await useAccountsViewStore.getState().patch({ balanceScope: "out", onlySavings: true, showArchived: false });
   });
-  await page.getByRole("button", { name: "Сбросить фильтры" }).click();
+  await page.getByRole("button", { name: "Сбросить фильтры", exact: true }).click();
   await expect(table.getByText("Пустая карта", { exact: true })).toBeVisible();
   const showArchived = await page.evaluate(async () => {
     type S = { getState: () => { showArchived: boolean } };
@@ -58,4 +58,20 @@ test("«Капитал»: счёт с нулём и без операций в �
     return useAccountsViewStore.getState().showArchived;
   });
   expect(showArchived).toBe(false);
+});
+
+test("«Счета»: кнопка сброса фильтров списка рядом с группировкой", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/accounts");
+  const reset = page.getByRole("button", { name: "Сбросить фильтры списка счетов" });
+  await expect(reset).toBeDisabled();
+  await page.evaluate(async () => {
+    type S = { getState: () => { patch: (p: Record<string, unknown>) => Promise<void> } };
+    const store = (window as unknown as { __store: (n: string) => Promise<Record<string, S>> }).__store;
+    const { useAccountsViewStore } = await store("useAccountsViewStore");
+    await useAccountsViewStore.getState().patch({ onlySavings: true });
+  });
+  await expect(reset).toBeEnabled();
+  await reset.click();
+  await expect(reset).toBeDisabled();
 });

@@ -144,6 +144,7 @@ import { pluralRu } from "../lib/plural";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { Badge } from "../components/Badge";
 import { SectionControls } from "../components/SectionControls";
+import { FilterResetButton } from "../components/FilterResetButton";
 
 const STACK_COLORS = [
   "#22D3EE", "#A78BFA", "#F59E0B", "#10B981", "#EC4899",
@@ -953,6 +954,22 @@ export function AccountsPage() {
     (effectiveScope === "all" ? 0 : 1) +
     (effectiveSavings ? 1 : 0) +
     (showArchived ? 1 : 0);
+  /** Заданы ли фильтры списка: тип, банк, признаки (группировка — вид, не фильтр). */
+  const listFiltersActive = typeFilter.size > 0 || bankFilter.size > 0 || flagsActive > 0;
+  /**
+   * Сброс фильтров списка — к настройкам по умолчанию, архив скрыт. Архив
+   * открываем, только если кроме него показать нечего — иначе сброс снова
+   * дал бы пустоту. Раньше сброс сам включал «Показать архивные», и это
+   * выглядело как чужая воля.
+   */
+  const resetListFilters = () =>
+    void patchPrefs({
+      typeFilter: [],
+      bankFilter: [],
+      balanceScope: "all",
+      onlySavings: false,
+      showArchived: !accountRows.some((r) => !r.archive),
+    });
 
   /** Пояснение к колонкам. Раньше висело абзацем над списком и занимало место
    *  каждый раз, хотя нужно один раз при первом знакомстве. */
@@ -2198,6 +2215,13 @@ export function AccountsPage() {
               }
             </DropdownMenu>
           )}
+          {/* Сброс фильтров списка — тот же значок, что у общего фильтра. */}
+          <FilterResetButton
+            onReset={resetListFilters}
+            disabled={!listFiltersActive}
+            label="Сбросить фильтры списка счетов"
+            hint={listFiltersActive ? "Сбросить тип, банк и признаки" : "Фильтры списка не заданы"}
+          />
           <Segmented
             size="sm"
             label="Вид списка счетов"
@@ -2238,22 +2262,7 @@ export function AccountsPage() {
           <SectionEmpty
             variant="inline"
             action={
-              <button
-                onClick={() =>
-                  void patchPrefs({
-                    typeFilter: [],
-                    bankFilter: [],
-                    balanceScope: "all",
-                    onlySavings: false,
-                    // Сброс — к настройкам по умолчанию, архив скрыт. Раньше
-                    // кнопка сама включала «Показать архивные», и это выглядело как
-                    // чужая воля. Архив открываем, только если кроме него
-                    // показать нечего — иначе сброс снова дал бы пустоту.
-                    showArchived: !accountRows.some((r) => !r.archive),
-                  })
-                }
-                className="btn-ghost text-sm"
-              >
+              <button onClick={resetListFilters} className="btn-ghost text-sm">
                 Сбросить фильтры
               </button>
             }

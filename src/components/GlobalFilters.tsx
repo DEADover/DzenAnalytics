@@ -8,7 +8,6 @@ import type { Transaction } from "../types";
 import {
   X,
   ChevronDown,
-  FilterX,
   Filter,
   SlidersHorizontal,
   Coins,
@@ -59,6 +58,7 @@ import {
   type ZenUserOption,
 } from "../lib/zenUsers";
 import { useMembersStore } from "../store/useMembersStore";
+import { FilterResetButton } from "./FilterResetButton";
 
 /**
  * Пресеты периода.
@@ -927,7 +927,11 @@ export function GlobalFilters({
                 onCurrent={goCurrent}
                 atCurrent={atCurrent}
               />
-              <ResetButton
+              {/* `ml-auto` — сброс у правого края панели, вровень с концом
+                  нижней строки: он относится ко всем фильтрам сразу, а не к
+                  периоду, за которым стоит. */}
+              <FilterResetButton
+                className="ml-auto"
                 onReset={f.reset}
                 disabled={!hasFilters || !showDataFilters}
                 hint={!showDataFilters ? dataFiltersHint : hasFilters ? "Сбросить все фильтры" : "Фильтры не заданы"}
@@ -1088,38 +1092,3 @@ export function GlobalFilters({
   return docked && dockEl ? createPortal(panel, dockEl) : panel;
 }
 
-/**
- * Сброс всех фильтров. Стоит в ряду дважды и показывается там, где не окажется
- * один: пока период держится в первой строке — в её конце, а когда он уезжает
- * на свою строку — рядом с поиском. Разметка одна, различаются только классы
- * видимости.
- */
-function ResetButton({
-  className,
-  onReset,
-  disabled,
-  hint,
-}: {
-  className?: string;
-  onReset: () => void;
-  disabled: boolean;
-  hint?: string;
-}) {
-  return (
-    <button
-      onClick={onReset}
-      disabled={disabled}
-      title={hint}
-      aria-label="Сбросить все фильтры"
-      className={clsx(
-        // `ml-auto` — сброс у правого края панели, вровень с концом нижней
-        // строки: он относится ко всем фильтрам сразу, а не к периоду, за
-        // которым стоит.
-        "btn-ghost text-xs px-3 shrink-0 ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-panel2",
-        className
-      )}
-    >
-      <FilterX className="w-4 h-4" />
-    </button>
-  );
-}
