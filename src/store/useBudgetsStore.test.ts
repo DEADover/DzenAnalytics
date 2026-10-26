@@ -378,3 +378,58 @@ describe("adoptTags — имена статей вслед за справочн
     expect(disk.has(KEY)).toBe(false);
   });
 });
+
+describe("importFromZen — категория и расходная, и доходная", () => {
+  it("расходный и доходный планы одного тега — две строки, и ни один не затирает другой", async () => {
+    useBudgetsStore.setState({ lines: [], loaded: true });
+    const plans = [
+      { kind: "expense" as const, tagId: "tag-gift", category: "Подарки и помощь", subcategory: null, ym: "2026-10", amount: 5000, locked: true },
+      { kind: "income" as const, tagId: "tag-gift", category: "Подарки и помощь", subcategory: null, ym: "2026-10", amount: 3000, locked: true },
+    ];
+    await useBudgetsStore.getState().importFromZen(plans);
+    // Второй синк — уже по существующим строкам: обе находят СВОЙ план.
+    await useBudgetsStore.getState().importFromZen(plans);
+    const lines = useBudgetsStore.getState().lines;
+    expect(lines).toHaveLength(2);
+    expect(lines.find((l) => l.kind === "expense")?.overrides?.["2026-10"]).toBe(5000);
+    expect(lines.find((l) => l.kind === "income")?.overrides?.["2026-10"]).toBe(3000);
+  });
+});
+
+describe("importFromZen — лечение склеенной строки", () => {
+  it("доходная цифра, осевшая в расходной строке, обнуляется там, где у тега есть запись плана", async () => {
+    // Наследство старой склейки: расходная строка тега несёт доходные 3000 за
+    // сентябрь, а в Дзен-мани в сентябре у тега только доходный план.
+    useBudgetsStore.setState({
+      loaded: true,
+      lines: [
+        {
+          id: "l1",
+          tagId: "tag-gift",
+          kind: "expense",
+          category: "Подарки и помощь",
+          subcategory: null,
+          amount: 0,
+          recurrence: "monthly",
+          startMonth: "2026-09",
+          endMonth: null,
+          overrides: { "2026-09": 3000, "2026-10": 5000 },
+          createdAt: "2026-01-01T00:00:00Z",
+        } as BudgetLine,
+      ],
+    });
+    await useBudgetsStore.getState().importFromZen(
+      [
+        { kind: "income", tagId: "tag-gift", category: "Подарки и помощь", subcategory: null, ym: "2026-09", amount: 3000 },
+        { kind: "expense", tagId: "tag-gift", category: "Подарки и помощь", subcategory: null, ym: "2026-10", amount: 5000 },
+      ],
+      new Set(),
+      new Set(["tag-gift\u00002026-09", "tag-gift\u00002026-10"])
+    );
+    const lines = useBudgetsStore.getState().lines;
+    const exp = lines.find((l) => l.kind === "expense")!;
+    expect(exp.overrides?.["2026-09"]).toBe(0);
+    expect(exp.overrides?.["2026-10"]).toBe(5000);
+    expect(lines.find((l) => l.kind === "income")?.overrides?.["2026-09"]).toBe(3000);
+  });
+});

@@ -208,3 +208,27 @@ describe("тёзки категорий: архивный двойник с те
     expect(budgets[0].tag).toBe("gift-old");
   });
 });
+
+describe("категория и расходная, и доходная: обе стороны месяца — одна запись", () => {
+  it("новый месяц: расход и доход уходят одной записью, без двух с одним ключом", () => {
+    const { budgets } = buildBudgetPush(
+      [edit({ category: "Работа", kind: "expense", amount: 5000 }), edit({ category: "Работа", kind: "income", amount: 3000 })],
+      [],
+      tags,
+      100
+    );
+    expect(budgets).toHaveLength(1);
+    expect(budgets[0]).toMatchObject({ tag: "work", outcome: 5000, outcomeLock: true, income: 3000, incomeLock: true });
+  });
+
+  it("есть запись в облаке: вторая правка не затирает первую старым значением", () => {
+    const { budgets } = buildBudgetPush(
+      [edit({ category: "Работа", kind: "expense", amount: 7000 }), edit({ category: "Работа", kind: "income", amount: 0 })],
+      [budget({ tag: "work", outcome: 5000, outcomeLock: true, income: 100, incomeLock: true })],
+      tags,
+      100
+    );
+    expect(budgets).toHaveLength(1);
+    expect(budgets[0]).toMatchObject({ outcome: 7000, income: 0 });
+  });
+});

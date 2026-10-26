@@ -2117,6 +2117,15 @@ export function buildBudgetPush(
   const existingByKey = new Map(
     cacheBudgets.map((b) => [[b.tag, b.date].join("\u0000"), b])
   );
+  /**
+   * Собранные записи по (тег, месяц). У категории, которая и расходная, и
+   * доходная, правки обеих сторон одного месяца — ОДНА запись `budget`. Раньше
+   * каждая правка давала свою запись от кэша: вторая несла старое значение
+   * чужой стороны и затирала первую (план «восстанавливался» после синка), а
+   * для нового месяца сервер отвергал весь запрос из-за двух записей с одним
+   * ключом.
+   */
+  const built = new Map<string, ZenBudget>();
 
   for (const e of edits) {
     const id = budgetEditId(e);
@@ -2131,7 +2140,8 @@ export function buildBudgetPush(
       continue;
     }
     const date = `${e.ym}-01`;
-    const existing = existingByKey.get([tag.id, date].join("\u0000"));
+    const key = [tag.id, date].join("\u0000");
+    const existing = built.get(key) ?? existingByKey.get(key);
     // No-op: cloud already equals this edit AS A LOCKED (exact) budget. An
     // unlocked cell whose number matches is NOT the same effective plan — the
     // planned operations still get added — so it must be re-pushed as locked.
@@ -2166,8 +2176,9 @@ export function buildBudgetPush(
       next.incomeLock = true; // exact budget — Zenmoney must NOT add planned ops
       next.isIncomeForecast = false;
     }
-    budgets.push(next);
+    built.set(key, next);
   }
+  budgets.push(...built.values());
   return { budgets, skipped };
 }
 

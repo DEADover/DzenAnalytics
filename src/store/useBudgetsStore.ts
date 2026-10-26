@@ -82,7 +82,14 @@ interface BudgetsState {
    *  Called after every sync so plan changes propagate automatically. */
   importFromZen: (
     plans: ZenPlanSeed[],
-    protectedKeys?: Set<string>
+    protectedKeys?: Set<string>,
+    /**
+     * Ячейки «тег + месяц», у которых в Дзен-мани ЕСТЬ запись плана
+     * (`${tagId}\u0000${ym}`). Сторона, которой в такой записи нет, — это
+     * план 0, и строка его принимает. Без этого число, попавшее в строку
+     * чужой стороны (склейка расхода с доходом), оставалось бы навсегда.
+     */
+    knownCells?: Set<string>
   ) => Promise<void>;
   clearAll: () => Promise<void>;
 }
@@ -245,7 +252,10 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
     set({ lines: list });
   },
 
-  importFromZen: async (plans, protectedKeys) => {
+  importFromZen: async (plans, protectedKeys, knownCells) => {
+    /** Строка плана по тегу — тег И сторона: у двусторонней категории тег один. */
+    const tagGroupKey = (kind: string, tagId: string | undefined) =>
+      tagId ? `tag\u0000${kind}\u0000${tagId}` : null;
     // Identity is per TAG: (kind, category, subcategory). NUL-joined so titles
     // with «:» don't collide.
     // Имена нормализуются: хвостовой или неразрывный пробел в названии тега
@@ -283,8 +293,11 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
       if (!p.amount) continue;
       // Группируем ПО ТЕГУ, если он известен: в Дзен-мани две разные статьи
       // могут называться одинаково, и по именам их планы сливались в один —
-      // на экране оставалась сумма только одной из них.
-      const key = p.tagId ? `tag\u0000${p.tagId}` : idOf(p.kind, p.category, p.subcategory);
+      // на экране оставалась сумма только одной из них. И по СТОРОНЕ: у
+      // категории, которая и расходная, и доходная, один тег на оба плана —
+      // без стороны в ключе доходный план затирал расходный («правлю расход,
+      // а после синхронизации там другая цифра»).
+      const key = tagGroupKey(p.kind, p.tagId) ?? idOf(p.kind, p.category, p.subcategory);
       let g = groups.get(key);
       if (!g) {
         g = {
@@ -315,17 +328,46 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
     // по названию. При первой же синхронизации они тег получат.
     const byName = new Map<string, PlanGroup>();
     for (const g of groups.values()) {
-      if (g.tagId) byTag.set(g.tagId, g);
+      if (g.tagId) byTag.set(tagGroupKey(g.kind, g.tagId)!, g);
       byName.set(idOf(g.kind, g.category, g.subcategory), g);
     }
+
+    /**
+     * Месяцы, где у тега в Дзен-мани есть запись, а этой стороны в ней нет:
+     * план стороны — 0. Новый набор планов строки или `undefined`, если
+     * менять нечего.
+     */
+    const zeroMissing = (
+      l: BudgetLine,
+      months: Map<string, number>,
+      base?: Record<string, number>
+    ): Record<string, number> | undefined => {
+      if (!l.tagId || !knownCells) return base;
+      let out = base;
+      for (const [ym, amt] of Object.entries(l.overrides ?? {})) {
+        if (!amt || months.has(ym)) continue;
+        if (!knownCells.has(`${l.tagId}\u0000${ym}`)) continue;
+        if (protectedSet.has(budgetCellKey(l.kind, l.category, l.subcategory ?? null, ym))) continue;
+        if (!out) out = { ...(l.overrides ?? {}) };
+        out[ym] = 0;
+      }
+      return out;
+    };
 
     // 1) Update EXISTING lines in place — adopt Zen's per-month value unless the
     //    cell is locally edited (protected) or already equal.
     const updated = get().lines.map((l) => {
-      const byTagId = l.tagId ? byTag.get(l.tagId) : undefined;
+      const byTagId = l.tagId ? byTag.get(tagGroupKey(l.kind, l.tagId)!) : undefined;
       const g = byTagId ?? byName.get(idOf(l.kind, l.category, l.subcategory ?? null));
-      if (!g) return l;
-      const key = g.tagId ? `tag\u0000${g.tagId}` : idOf(g.kind, g.category, g.subcategory);
+      if (!g) {
+        // Своей стороны в планах Дзен-мани нет вовсе — но если у тега есть
+        // записи, в этих месяцах план стороны 0.
+        const zeroed = zeroMissing(l, new Map());
+        if (!zeroed) return l;
+        changed = true;
+        return { ...l, overrides: zeroed };
+      }
+      const key = tagGroupKey(g.kind, g.tagId) ?? idOf(g.kind, g.category, g.subcategory);
       seen.add(key);
       // Тег переименовали — строка та же, имена новые. Заодно ставим тег тем
       // строкам, что завелись до его появления.
@@ -360,6 +402,8 @@ export const useBudgetsStore = create<BudgetsState>((set, get) => ({
         if (!next) next = { ...(l.overrides ?? {}) };
         next[ym] = amt;
       }
+      const zeroed = zeroMissing(l, g.months, next);
+      if (zeroed) next = zeroed;
       if (!next && !nextLocks && Object.keys(stamp).length === 0) return l;
       changed = true;
       return {

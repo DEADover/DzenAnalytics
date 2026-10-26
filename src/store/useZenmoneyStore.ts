@@ -619,7 +619,13 @@ async function mirrorZenPlans(cache: ZenCache): Promise<void> {
     if (cloudByCell.get(cell) === e.amount) satisfiedEditIds.push(id);
     else protectedKeys.add(cell);
   }
-  await useBudgetsStore.getState().importFromZen(seeds, protectedKeys);
+  // Ячейки, где в Дзен-мани есть запись плана, — по ним сторона без плана
+  // становится нулём (см. `importFromZen`).
+  const knownCells = new Set<string>();
+  for (const b of cache.budgets ?? []) {
+    if (b.tag) knownCells.add(`${b.tag}\u0000${(b.date || "").slice(0, 7)}`);
+  }
+  await useBudgetsStore.getState().importFromZen(seeds, protectedKeys, knownCells);
   if (satisfiedEditIds.length > 0) {
     await useBudgetEditsStore.getState().clearMany(satisfiedEditIds);
   }
