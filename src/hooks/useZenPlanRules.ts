@@ -102,3 +102,32 @@ export function useZenBalanceNow(rules: ZenPlanRules | undefined | null): number
     return sum;
   }, [rules, cache, rates]);
 }
+
+/**
+ * Остатки на счетах «в балансе» — на начало периода и сейчас, ОБА по
+ * сегодняшнему курсу. Из них Дзен-мани считает «Свободно / Не хватает до конца
+ * месяца»: изменение остатков за период (плюс входящий баланс, если так в
+ * настройках «Планов») + «ещё поступит» − «ещё в планах». Один курс на оба
+ * конца — так в приложении: сверено на живом аккаунте до рубля (−108 ₽), а с
+ * курсом начала периода переоценка долларового счёта давала −3 817 ₽.
+ * `null` — подключения нет или период ещё не начался.
+ */
+export function useZenBalanceSpan(
+  fromIso: string,
+  todayIso: string
+): { start: number; now: number } | null {
+  const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
+  const rates = useDataStore((s) => s.rates);
+  return useMemo(() => {
+    if (!cache || fromIso > todayIso) return null;
+    const code = new Map(cache.instruments.map((i) => [i.id, i.shortTitle]));
+    const toBase = (amount: number, instrument: number) => {
+      const cur = code.get(instrument);
+      if (!cur || cur === rates.base) return amount;
+      return amount * (rates.rates[cur] ?? 1);
+    };
+    let now = 0;
+    for (const a of cache.accounts) if (a.inBalance) now += toBase(a.balance, a.instrument);
+    return { start: openingBalance(cache.accounts, cache.transactions, fromIso, toBase), now };
+  }, [cache, fromIso, todayIso, rates]);
+}

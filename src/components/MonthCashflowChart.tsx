@@ -14,6 +14,7 @@ import { Scale } from "lucide-react";
 import { buildMonthCashflow } from "../lib/budgets";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "./TooltipFacts";
 import { SmearPlanToggle } from "./SmearPlanToggle";
+import { niceScale } from "../lib/dashboardModel";
 import {
   formatMoney,
   formatNum,
@@ -147,6 +148,7 @@ export function MonthCashflowChart({
   leftIncome,
   leftExpense,
   smear = true,
+  leftover = null,
 }: {
   transactions: Transaction[];
   ym: string;
@@ -170,6 +172,9 @@ export function MonthCashflowChart({
   leftExpense?: number;
   /** Размазывать остаток плана по дням (настройка `smearPlan`). */
   smear?: boolean;
+  /** «Свободно / Не хватает до конца месяца» по правилу Дзен-мани; `null` —
+   *  не показывать (не текущий месяц или нет подключения). */
+  leftover?: number | null;
 }) {
   // «Сегодня» снимаем один раз при монтировании, а не читаем часы прямо в
   // рендере. Час в зависимостях `useMemo` не значился, поэтому вертикаль
@@ -203,6 +208,22 @@ export function MonthCashflowChart({
     ]
   );
   const hasForecast = cf.todayDay > 0 && cf.todayDay < cf.days;
+  /**
+   * Шкала с запасом сверху на десятую, как в Дзен-мани: иначе конец прогноза
+   * упирался в верхнюю границу и линия сливалась с рамкой. Деления круглые.
+   * Ниже нуля (возвраты больше трат) — шкала по данным, как раньше.
+   */
+  const yScale = useMemo(() => {
+    let lo = 0;
+    let hi = 0;
+    for (const p of cf.points)
+      for (const v of [p.income, p.expense, p.incomeF, p.expenseF])
+        if (v != null) {
+          lo = Math.min(lo, v);
+          hi = Math.max(hi, v);
+        }
+    return lo < 0 ? null : niceScale(hi * 1.1);
+  }, [cf.points]);
   /** Календарная дата по номеру дня в периоде — для подписей и переходов. */
   const dateOf = (day: number) => cf.points[day - 1]?.date;
 
@@ -237,6 +258,36 @@ export function MonthCashflowChart({
           {hasForecast && <SmearPlanToggle />}
         </div>
       </div>
+      {/* Цифры «Планов» Дзен-мани: сколько ещё в планах и что останется к
+          концу месяца. Без них график показывал форму прогноза, но не его итог. */}
+      {hasForecast && (leftExpense != null || leftover != null) && (
+        <div className="flex items-center gap-x-5 gap-y-1 flex-wrap text-sm mb-2" data-testid="month-plan-summary">
+          {leftExpense != null && (
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-muted">Ещё в планах: расходы</span>
+              <span className="font-semibold tabular-nums">{formatMoney(leftExpense, base)}</span>
+            </span>
+          )}
+          {leftIncome != null && (
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-muted">поступления</span>
+              <span className="font-semibold tabular-nums">{formatMoney(leftIncome, base)}</span>
+            </span>
+          )}
+          {leftover != null && (
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-muted">
+                {leftover < 0 ? "Не хватает до конца месяца" : "Свободно на конец месяца"}
+              </span>
+              <span
+                className={`font-semibold tabular-nums ${leftover < 0 ? "text-expense" : "text-income"}`}
+              >
+                {formatMoney(Math.abs(leftover), base)}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
       <div
         className={`h-64 ${onDayClick ? "cursor-pointer" : ""}`}
         onClick={(e) => {
@@ -273,6 +324,8 @@ export function MonthCashflowChart({
               fontSize={11}
               tickLine={false}
               width={48}
+              domain={yScale && yScale.max > 0 ? [0, yScale.max] : undefined}
+              ticks={yScale && yScale.max > 0 ? yScale.ticks : undefined}
               tickFormatter={(v) => formatNum(v, { compact: true })}
             />
             <ChartTooltip

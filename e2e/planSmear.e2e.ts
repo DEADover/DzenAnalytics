@@ -59,6 +59,10 @@ test("бюджет: «Размазывать план» на графике ме
   const toggle = page.getByRole("switch", { name: "Размазывать план по дням" });
   await expect(toggle).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
+  // Цифры «Планов» Дзен-мани над графиком: ещё в планах и итог к концу месяца.
+  const summary = page.getByTestId("month-plan-summary");
+  await expect(summary).toContainText("Ещё в планах: расходы");
+  await expect(summary).toContainText(/(Свободно на конец месяца|Не хватает до конца месяца)/);
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "false");
   // Настройка одна: на «Сравнении» она тоже выключена.

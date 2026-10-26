@@ -15,6 +15,7 @@ import { KindSwitcher } from "./KindSwitcher";
 import { DeviationPill } from "./DeviationPill";
 import { ChartTooltipCard, TooltipFacts, type TooltipFact } from "./TooltipFacts";
 import { SmearPlanToggle } from "./SmearPlanToggle";
+import { niceScale } from "../lib/dashboardModel";
 import type { CompareTrack, TrackKind, TrackPoint } from "../lib/compareTrack";
 import {
   chartAxisStroke,
@@ -153,6 +154,18 @@ export function CompareTrackChart({
   const limited = track.limited;
   // Прогноз до конца А — последняя точка пунктира.
   const lastF = [...track.points].reverse().find((p) => p.f != null && p.a == null) ?? null;
+  // Запас сверху на десятую и круглые деления — как на графике месяца в
+  // бюджете (и в Дзен-мани): конец прогноза не упирается в рамку. Ниже нуля
+  // (возвраты больше трат) — шкала по данным.
+  let lo = 0;
+  let hi = 0;
+  for (const p of track.points)
+    for (const v of [p.a, p.b, p.f])
+      if (v != null) {
+        lo = Math.min(lo, v);
+        hi = Math.max(hi, v);
+      }
+  const yScale = lo < 0 || hi <= 0 ? null : niceScale(hi * 1.1);
   const cmp = track.cmpDay > 0 ? track.points[track.cmpDay - 1] : null;
   const atDay = limited && cmp?.dateA ? ` на ${dayLabel(cmp.dateA)}` : limited ? ` на ${formatNum(track.cmpDay)}-й день` : "";
   // У годов деления — на первый день каждого месяца периода А.
@@ -273,6 +286,8 @@ export function CompareTrackChart({
               fontSize={11}
               tickLine={false}
               width={48}
+              domain={yScale ? [0, yScale.max] : undefined}
+              ticks={yScale ? yScale.ticks : undefined}
               tickFormatter={(v) => formatNum(v, { compact: true })}
             />
             <ChartTooltip

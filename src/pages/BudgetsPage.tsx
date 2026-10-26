@@ -53,7 +53,12 @@ import {
 } from "../lib/budgetYear";
 import { useLiveCategoryPaths } from "../hooks/useDictionaries";
 import { useOffBalanceExcluded } from "../hooks/useInBalanceTransactions";
-import { useZenBalanceNow, useZenOpeningBalance, useZenPlanRules } from "../hooks/useZenPlanRules";
+import {
+  useZenBalanceNow,
+  useZenBalanceSpan,
+  useZenOpeningBalance,
+  useZenPlanRules,
+} from "../hooks/useZenPlanRules";
 import { OPENING_BALANCE_LABEL, monthResidues } from "../lib/zenPlanRules";
 import { nameKey } from "../lib/budgetLines";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
@@ -791,6 +796,21 @@ export function BudgetsPage() {
   }, [rows, zenPlanned, scope, monthStartDay, zenRules, ym]);
 
   /**
+   * «Свободно / Не хватает до конца месяца» — как в «Планах» Дзен-мани:
+   * изменение остатков на счетах «в балансе» за период (или весь остаток, если
+   * в настройках учитывается входящий баланс) + «ещё поступит» − «ещё в
+   * планах». Только у текущего месяца: у прошлых итог виден в карточках, у
+   * будущих — во входящем балансе.
+   */
+  const balanceSpan = useZenBalanceSpan(range.from, new Date().toISOString().slice(0, 10));
+  const monthLeftover =
+    isCurrent && balanceSpan
+      ? (zenRules?.openingBalance ? balanceSpan.now : balanceSpan.now - balanceSpan.start) +
+        monthLeft.income -
+        monthLeft.expense
+      : null;
+
+  /**
    * Входящий баланс будущего месяца — прогнозный, как у Дзен-мани: остаток на
    * счетах сейчас плюс то, что по плану ещё поступит, минус то, что ещё
    * потратится, — по текущему месяцу и по каждому месяцу до выбранного.
@@ -1485,6 +1505,7 @@ export function BudgetsPage() {
         leftIncome={monthLeft.income}
         leftExpense={monthLeft.expense}
         smear={settings.smearPlan}
+        leftover={monthLeftover}
       />
 
       <div className="space-y-6">
