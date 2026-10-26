@@ -1076,6 +1076,11 @@ describe("zenPeriodTotals — «Итоги за период» ленты Дзе
     );
     expect(r).toEqual({ inc: 3000, exp: 410, xfer: 510 });
   });
+
+  it("выдача кредита со страховкой — доходом то, что пришло на карту", () => {
+    const r = zenPeriodTotals([tr("Кредит", "Карта", 358_575, 200_000)], inside);
+    expect(r.inc).toBeCloseTo(200_000, 6);
+  });
 });
 
 describe("scaleKPI", () => {

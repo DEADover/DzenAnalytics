@@ -244,3 +244,23 @@ describe("monthResidues", () => {
     expect(r.expense).toBe(26_703);
   });
 });
+
+describe("выдача кредита с удержанием — в поступлениях то, что пришло", () => {
+  it("строка группы берёт сумму зачисления, а не списания с кредитного счёта", () => {
+    const t = tx({
+      kind: "transfer",
+      outcomeAccount: "Ипотека",
+      incomeAccount: "Карта",
+      account: "Ипотека",
+      outcomeAmount: 358_575,
+      incomeAmount: 200_000,
+      outcomeCurrency: "RUB",
+      incomeCurrency: "RUB",
+      amount: 358_575,
+      amountBase: 358_575,
+    });
+    const hits = budgetHits(t, scopeFor({ planBalanceMode: "balance" }));
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ kind: "income", amount: 200_000, planGroup: true });
+  });
+});

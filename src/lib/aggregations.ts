@@ -1,3 +1,4 @@
+import { incomeLegBase } from "./legAmount";
 import type { Transaction } from "../types";
 import { ymKey, ymdKey } from "./format";
 import { periodKey } from "./period";
@@ -3015,7 +3016,8 @@ export function zenPeriodTotals(
         const fee = transferFee(t);
         if (fee) exp += fee.amountBase;
       } else if (outIn) exp += t.amountBase;
-      else if (inIn) inc += t.amountBase;
+      // Доход — сколько пришло (у выдачи кредита меньше списанного).
+      else if (inIn) inc += incomeLegBase(t);
       continue;
     }
     if (!inside(txAccountKey(t))) continue;

@@ -1,3 +1,4 @@
+import { incomeLegBase } from "./legAmount";
 import type { Transaction } from "../types";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
 import type { BudgetKind } from "./budgets";
@@ -127,7 +128,9 @@ export function budgetHits(t: Transaction, scope: BudgetScope): BudgetHit[] {
         // Строки внутри группы — по счёту на той стороне, у долгов — по
         // человеку: счёт у всех долгов один.
         subcategory: group === "debts" ? t.payee || other || null : other || null,
-        amount: t.amountBase,
+        // Поступление — то, что пришло на счёт в балансе (у выдачи кредита
+        // это меньше списанного: банк удерживает страховку и комиссию).
+        amount: side === "to" ? t.amountBase : incomeLegBase(t),
         planGroup: true,
       },
     ];
