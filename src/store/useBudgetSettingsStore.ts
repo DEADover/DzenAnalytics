@@ -47,6 +47,14 @@ export interface BudgetSettings {
    * только назначенные операции ступеньками в свои дни.
    */
   smearPlan: boolean;
+  /**
+   * Считать в бюджете и счета вне баланса — как будто они в балансе: их траты
+   * и поступления идут в факт, переводы между ними и остальными счетами —
+   * внутренние. По умолчанию выключено: так считает сам Дзен-мани (периметр
+   * «Планов» — счета в балансе). Только для бюджета; остальные итоги решает
+   * «Счета вне баланса» в Расчётах.
+   */
+  includeOffBalance: boolean;
 }
 
 export const DEFAULT_BUDGET_SETTINGS: BudgetSettings = {
@@ -61,6 +69,7 @@ export const DEFAULT_BUDGET_SETTINGS: BudgetSettings = {
   forecastMonths: 3,
   forecastBasis: "average",
   smearPlan: true,
+  includeOffBalance: false,
 };
 
 const KEY = "budgetSettings";
@@ -103,5 +112,6 @@ function pick(s: BudgetSettings): BudgetSettings {
     forecastMonths: s.forecastMonths,
     forecastBasis: s.forecastBasis,
     smearPlan: s.smearPlan,
+    includeOffBalance: s.includeOffBalance,
   };
 }

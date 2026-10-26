@@ -161,6 +161,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useBudgetSettingsStore, "budget.smearPlan", (s) => s.smearPlan, (v, s) =>
     isBool(v) ? s.update({ smearPlan: v }) : undefined
   ),
+  field(useBudgetSettingsStore, "budget.includeOffBalance", (s) => s.includeOffBalance, (v, s) =>
+    isBool(v) ? s.update({ includeOffBalance: v }) : undefined
+  ),
 
   // Какой разрез данных включён. Сами разрезы — отдельным списком
   // (`cloudSettingsCollections`), здесь только выбор.

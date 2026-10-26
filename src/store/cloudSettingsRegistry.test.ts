@@ -47,6 +47,7 @@ describe("реестр переносимых настроек", () => {
       "budget.forecastBasis",
       "budget.forecastMonths",
       "budget.hideEmptyRows",
+      "budget.includeOffBalance",
       "budget.perimeterTransfers",
       "budget.rowOrder",
       "budget.smearPlan",

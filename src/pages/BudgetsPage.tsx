@@ -187,19 +187,30 @@ export function BudgetsPage() {
   // Правила «Планов» Дзен-мани: какие переводы идут в бюджет, вычитать ли
   // возвраты, показывать ли входящий баланс — по настройкам самого
   // пользователя в приложении (см. `zenPlanRules`).
-  const zenRules = useZenPlanRules();
+  const zenRulesRaw = useZenPlanRules();
   const accountDir = useAccountDirectory();
+  // «Счета вне баланса» в настройках бюджета: такие счета считаются, как будто
+  // они в балансе, — их траты и поступления идут в факт, переводы между ними и
+  // остальными — внутренние, а не строки «Накопления» / «На кредиты». Только в
+  // бюджете: остальные итоги решает настройка в «Расчётах».
+  const includeOff = settings.includeOffBalance;
+  const zenRules = useMemo(() => {
+    if (!includeOff || !zenRulesRaw) return zenRulesRaw;
+    const inside = new Set(zenRulesRaw.inside);
+    for (const e of accountDir.list) if (e.live) inside.add(e.key);
+    return { ...zenRulesRaw, inside };
+  }, [zenRulesRaw, includeOff, accountDir]);
   const scope = useMemo(
     () => ({
       // Счета периметра запоминались названиями — старая запись значит все
       // счета с этим названием.
       accounts: accountDir.resolve(settings.accounts),
-      excluded: offBalanceExcluded,
+      excluded: includeOff ? undefined : offBalanceExcluded,
       perimeterTransfers: settings.perimeterTransfers,
       zen: zenRules,
       labelOf: accountDir.label,
     }),
-    [settings.accounts, settings.perimeterTransfers, offBalanceExcluded, zenRules, accountDir]
+    [settings.accounts, settings.perimeterTransfers, offBalanceExcluded, includeOff, zenRules, accountDir]
   );
   // График движения денег считает сам по операциям — ему отдаём только то, что
   // внутри периметра.
@@ -272,7 +283,8 @@ export function BudgetsPage() {
   const openingBalanceSum = useZenOpeningBalance(
     zenRules,
     range.from,
-    new Date().toISOString().slice(0, 10)
+    new Date().toISOString().slice(0, 10),
+    settings.includeOffBalance
   );
   const inMonth = useCallback(
     (date: string | undefined) => {
@@ -802,7 +814,11 @@ export function BudgetsPage() {
    * планах». Только у текущего месяца: у прошлых итог виден в карточках, у
    * будущих — во входящем балансе.
    */
-  const balanceSpan = useZenBalanceSpan(range.from, new Date().toISOString().slice(0, 10));
+  const balanceSpan = useZenBalanceSpan(
+    range.from,
+    new Date().toISOString().slice(0, 10),
+    settings.includeOffBalance
+  );
   const monthLeftover =
     isCurrent && balanceSpan
       ? (zenRules?.openingBalance ? balanceSpan.now : balanceSpan.now - balanceSpan.start) +
@@ -815,7 +831,7 @@ export function BudgetsPage() {
    * счетах сейчас плюс то, что по плану ещё поступит, минус то, что ещё
    * потратится, — по текущему месяцу и по каждому месяцу до выбранного.
    */
-  const balanceNow = useZenBalanceNow(zenRules);
+  const balanceNow = useZenBalanceNow(zenRules, settings.includeOffBalance);
   const forecastOpening = useMemo(() => {
     if (balanceNow === null || ym <= cur) return null;
     const pendingKey = (kind: string, c: string, sub: string | null, m: string) =>

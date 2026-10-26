@@ -75,3 +75,42 @@ test("«Доходы vs Расходы»: выключенная группа и
   await expect(main.getByRole("button", { name: "Накопления", exact: true })).toHaveCount(1);
   await expect(main.getByText("Входящий баланс", { exact: true })).toHaveCount(0);
 });
+
+test("«Счета вне баланса» в настройках бюджета: накопления — внутренний перевод, трата с него — в факт", async ({ page, zen }) => {
+  zen.patchFull = (diff) => {
+    const food = diff.transaction.find((t) => t.tag?.[0] === "tag-food" && t.outcome > 0 && !t.income)!;
+    const spend: ZenTransaction = {
+      ...food,
+      id: "tx-off-spend",
+      date: "2026-10-08",
+      outcome: 7_777,
+      outcomeAccount: "acc-save",
+      incomeAccount: "acc-save",
+      comment: "С накопительного",
+    };
+    return {
+      ...diff,
+      account: diff.account.map((a) => (a.id === "acc-save" ? { ...a, inBalance: false } : a)),
+      transaction: [...diff.transaction, spend],
+      user: diff.user.map((u) => ({ ...u, planBalanceMode: "balance", planSettings: "[]" })),
+    };
+  };
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/budgets");
+  const main = page.locator("main");
+  // По умолчанию — как в Дзен-мани: перевод на накопительный строкой.
+  await expect(main.getByRole("button", { name: "Накопления", exact: true })).toHaveCount(1);
+  const expenseCard = main.getByText("Расходы за месяц").locator("xpath=ancestor::*[contains(@class,'card') or contains(@class,'tray-core')][1]");
+  const before = await expenseCard.innerText();
+
+  await page.getByRole("button", { name: "Настройки бюджета" }).click();
+  const sw = page.getByRole("switch", { name: "Счета вне баланса в бюджете" });
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+
+  // Накопительный теперь внутри: строк «Накопления» нет, трата с него — в факте.
+  await expect(main.getByRole("button", { name: "Накопления", exact: true })).toHaveCount(0);
+  await expect(expenseCard).not.toHaveText(before);
+});

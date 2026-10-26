@@ -57,7 +57,9 @@ export function BudgetSettingsPopover() {
   const selected = useMemo(() => dir.resolve(s.accounts), [s.accounts, dir]);
   // Пустой выбор — все счета; пока счета вне баланса не считаются, без них.
   const offBalance = useOffBalanceExcluded();
-  const allAccounts = selected.size === 0 && !offBalance?.size;
+  const allAccounts = selected.size === 0 && (s.includeOffBalance || !offBalance?.size);
+  /** Есть ли вообще счета вне баланса — иначе переключатель ни на что не влияет. */
+  const hasOffBalance = useMemo(() => dir.list.some((e) => e.live && !e.inBalance), [dir]);
 
   return (
     <div ref={anchorRef} className="relative">
@@ -95,9 +97,8 @@ export function BudgetSettingsPopover() {
               <p>
                 Пустой выбор означает все счета — то же соглашение, что и у
                 фильтров в остальном сервисе. Счета вне баланса в «все» не
-                входят, пока они не считаются (Настройки → Расчёты → «Счета вне
-                баланса»), — так же считает сам Дзен-мани. Выберите такой счёт
-                явно, и он войдёт в бюджет.
+                входят — так же считает сам Дзен-мани. Включите их строкой ниже
+                или выберите такой счёт явно.
               </p>
             </>
           }
@@ -117,6 +118,36 @@ export function BudgetSettingsPopover() {
             />
           }
         />
+
+        {hasOffBalance && (
+          <SettingRow
+            dense
+            title="Счета вне баланса"
+            help={
+              <>
+                <p>
+                  Считать в бюджете и счета вне баланса — как будто они в
+                  балансе: их траты и поступления идут в факт статей, а переводы
+                  между ними и остальными счетами становятся внутренними, а не
+                  строками «Накопления» или «На кредиты».
+                </p>
+                <p>
+                  По умолчанию выключено: так считают «Планы» в Дзен-мани, и
+                  цифры бюджета совпадают с приложением. Настройка только для
+                  бюджета — остальные итоги решает «Счета вне баланса» в
+                  Настройках → Расчёты.
+                </p>
+              </>
+            }
+            control={
+              <Switch
+                checked={s.includeOffBalance}
+                onChange={(v) => void s.update({ includeOffBalance: v })}
+                label="Счета вне баланса в бюджете"
+              />
+            }
+          />
+        )}
 
         <SettingRow
           dense

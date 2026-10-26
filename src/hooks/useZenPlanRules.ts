@@ -55,7 +55,9 @@ function shiftDay(iso: string, days: number): string {
 export function useZenOpeningBalance(
   rules: ZenPlanRules | undefined | null,
   fromIso: string,
-  todayIso: string
+  todayIso: string,
+  /** Считать и счета вне баланса (настройка бюджета). */
+  includeOffBalance = false
 ): number | null {
   const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
   const rates = useDataStore((s) => s.rates);
@@ -78,8 +80,8 @@ export function useZenOpeningBalance(
       const r = rates.base === "RUB" ? histDayRates[dayBefore]?.[cur] : undefined;
       return amount * (r ?? rates.rates[cur] ?? 1);
     };
-    return openingBalance(cache.accounts, cache.transactions, fromIso, toBase);
-  }, [rules, cache, fromIso, todayIso, rates, histDayRates]);
+    return openingBalance(withOffBalance(cache.accounts, includeOffBalance), cache.transactions, fromIso, toBase);
+  }, [rules, cache, fromIso, todayIso, rates, histDayRates, includeOffBalance]);
 }
 
 /**
@@ -87,7 +89,11 @@ export function useZenOpeningBalance(
  * прогноза входящего баланса будущих месяцев. `null` — правила его не просят
  * или подключения нет.
  */
-export function useZenBalanceNow(rules: ZenPlanRules | undefined | null): number | null {
+export function useZenBalanceNow(
+  rules: ZenPlanRules | undefined | null,
+  /** Считать и счета вне баланса (настройка бюджета). */
+  includeOffBalance = false
+): number | null {
   const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
   const rates = useDataStore((s) => s.rates);
   return useMemo(() => {
@@ -95,12 +101,12 @@ export function useZenBalanceNow(rules: ZenPlanRules | undefined | null): number
     const code = new Map(cache.instruments.map((i) => [i.id, i.shortTitle]));
     let sum = 0;
     for (const a of cache.accounts) {
-      if (!a.inBalance) continue;
+      if (!a.inBalance && !includeOffBalance) continue;
       const cur = code.get(a.instrument);
       sum += !cur || cur === rates.base ? a.balance : a.balance * (rates.rates[cur] ?? 1);
     }
     return sum;
-  }, [rules, cache, rates]);
+  }, [rules, cache, rates, includeOffBalance]);
 }
 
 /**
@@ -114,7 +120,9 @@ export function useZenBalanceNow(rules: ZenPlanRules | undefined | null): number
  */
 export function useZenBalanceSpan(
   fromIso: string,
-  todayIso: string
+  todayIso: string,
+  /** Считать и счета вне баланса (настройка бюджета). */
+  includeOffBalance = false
 ): { start: number; now: number } | null {
   const cache = useSyncExternalStore(subscribeZenCache, peekZenCache, peekZenCache);
   const rates = useDataStore((s) => s.rates);
@@ -126,8 +134,14 @@ export function useZenBalanceSpan(
       if (!cur || cur === rates.base) return amount;
       return amount * (rates.rates[cur] ?? 1);
     };
+    const accounts = withOffBalance(cache.accounts, includeOffBalance);
     let now = 0;
-    for (const a of cache.accounts) if (a.inBalance) now += toBase(a.balance, a.instrument);
-    return { start: openingBalance(cache.accounts, cache.transactions, fromIso, toBase), now };
-  }, [cache, fromIso, todayIso, rates]);
+    for (const a of accounts) if (a.inBalance) now += toBase(a.balance, a.instrument);
+    return { start: openingBalance(accounts, cache.transactions, fromIso, toBase), now };
+  }, [cache, fromIso, todayIso, rates, includeOffBalance]);
+}
+
+/** Счета «как в балансе» все разом — когда бюджет считает и счета вне баланса. */
+function withOffBalance<T extends { inBalance: boolean }>(accounts: T[], include: boolean): T[] {
+  return include ? accounts.map((a) => (a.inBalance ? a : { ...a, inBalance: true })) : accounts;
 }
