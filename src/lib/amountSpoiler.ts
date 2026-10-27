@@ -77,14 +77,19 @@ export function startAmountSpoiler(): () => void {
   canvas.setAttribute("aria-hidden", "true");
   canvas.dataset.amountSpoiler = "";
   Object.assign(canvas.style, {
-    position: "fixed",
-    inset: "0",
-    width: "100vw",
-    height: "100vh",
+    // Залипающий слой первым в странице, а не `fixed` поверх окна. Неподвижный
+    // слой отрывался от сумм: «пружина» у края страницы при резкой прокрутке и
+    // проявление страницы при переходе сдвигают содержимое мимо координат
+    // элементов, и частицы висели в пустоте. Залипающий браузер сдвигает
+    // вместе со страницей — как и шапку. Места он не занимает: отрицательный
+    // нижний отступ во всю его высоту.
+    position: "sticky",
+    top: "0",
+    display: "block",
     pointerEvents: "none",
     zIndex: "2147483000",
   } satisfies Partial<CSSStyleDeclaration>);
-  document.body.appendChild(canvas);
+  document.body.prepend(canvas);
   const ctx = canvas.getContext("2d")!;
   const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
@@ -95,10 +100,18 @@ export function startAmountSpoiler(): () => void {
   let raf = 0;
   let last = performance.now();
 
+  // Ширина — без полосы прокрутки: 100vw дал бы прокрутку вбок.
+  let vw = 0;
+  let vh = 0;
   const size = () => {
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(window.innerWidth * dpr);
-    canvas.height = Math.round(window.innerHeight * dpr);
+    vw = document.documentElement.clientWidth;
+    vh = window.innerHeight;
+    canvas.style.width = `${vw}px`;
+    canvas.style.height = `${vh}px`;
+    canvas.style.marginBottom = `-${vh}px`;
+    canvas.width = Math.round(vw * dpr);
+    canvas.height = Math.round(vh * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
   size();
@@ -192,7 +205,7 @@ export function startAmountSpoiler(): () => void {
     const checkOcclusion = now - lastOcclusion > 250;
     if (checkOcclusion) lastOcclusion = now;
 
-    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    ctx.clearRect(0, 0, vw, vh);
     for (const it of items) {
       const rects = rectsOf(it);
       if (rects.length === 0) continue;
