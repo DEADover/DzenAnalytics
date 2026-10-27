@@ -1600,7 +1600,28 @@ export function AccountsPage() {
     if (floor >= 0) {
       return { domain: [0, top] as [number, number], ticks, scale: 1, floor: 0 };
     }
-    const zone = Math.max(-floor, top * NEG_ZONE);
+    // Крупные минусы (ипотека, большие долги) не растягиваем — ось честная
+    // целиком, и под нулём такие же деления, как над ним. Раньше там стояло
+    // одно нижнее деление, и на шкале было видно только «0» и «−6,8 млн».
+    if (-floor >= top * NEG_ZONE) {
+      // До десяти делений на всю высоту: шаг «круглый», лишнего места мало.
+      const honestStep = niceStep((peak - floor) / 10);
+      const honestTop = Math.ceil(peak / honestStep) * honestStep || honestStep;
+      const bottom = -Math.ceil(-floor / honestStep) * honestStep;
+      const honestTicks: number[] = [];
+      for (let v = bottom; v <= honestTop + honestStep / 2; v += honestStep) {
+        // Ноль — ровно ноль, без хвоста от сложения дробных шагов.
+        honestTicks.push(Math.abs(v) < honestStep / 1e6 ? 0 : Math.round(v / honestStep) * honestStep);
+      }
+      return {
+        domain: [bottom, honestTop] as [number, number],
+        ticks: honestTicks,
+        scale: 1,
+        // Подпись нижнего деления — его собственное значение: растяжения нет.
+        floor: bottom,
+      };
+    }
+    const zone = top * NEG_ZONE;
     ticks.unshift(-zone);
     return {
       domain: [-zone, top] as [number, number],
