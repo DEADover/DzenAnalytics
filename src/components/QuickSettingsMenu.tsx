@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
-import { ArrowRight, Loader2, Pencil, Settings, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Loader2, Pencil, Settings } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { Popover } from "./Popover";
 import { Segmented } from "./Segmented";
@@ -16,8 +16,8 @@ import { useMembersStore } from "../store/useMembersStore";
 import { useZenmoneyStore, type PushMode } from "../store/useZenmoneyStore";
 
 /**
- * Шестерёнка в шапке: по клику — панель быстрых настроек, внизу — переход во
- * все «Настройки». Набор и порядок пунктов человек собирает сам (карандаш в
+ * Шестерёнка в шапке: по клику — панель быстрых настроек, в её шапке — переход
+ * во все «Настройки». Набор и порядок пунктов человек собирает сам (карандаш в
  * углу панели → `QuickSettingsModal`).
  *
  * Пока включено «Скрыть суммы», на шестерёнке горит точка: забытый режим
@@ -91,18 +91,31 @@ function QuickSettingsPanel({ onClose }: { onClose: () => void }) {
     <div role="dialog" aria-label="Быстрые настройки">
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="label">Быстрые настройки</div>
-        <button
-          type="button"
-          className="btn-icon"
-          onClick={() => {
-            onClose();
-            openEditor();
-          }}
-          aria-label="Настроить быстрые настройки"
-          title="Настроить панель"
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
+        {/* «Все настройки» — в шапке рядом с карандашом, а не отдельной
+            строкой внизу: панель короче, а оба действия «про саму панель»
+            стоят вместе. */}
+        <span className="flex items-center gap-1">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-control-sm px-2 py-1 text-xs text-accent hover:bg-accent/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            onClick={() => smoothNavigate("/settings", onClose)}
+          >
+            Все настройки
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={() => {
+              onClose();
+              openEditor();
+            }}
+            aria-label="Настроить быстрые настройки"
+            title="Настроить панель"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        </span>
       </div>
       {blocks.length > 0 ? (
         <div className="space-y-3">{blocks}</div>
@@ -111,17 +124,6 @@ function QuickSettingsPanel({ onClose }: { onClose: () => void }) {
           Панель пуста. Карандаш справа вверху — выбрать, что в ней стоит.
         </p>
       )}
-      <div className="mt-3 pt-2.5 border-t border-border">
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
-          onClick={() => smoothNavigate("/settings", onClose)}
-        >
-          <SlidersHorizontal className="w-4 h-4" />
-          Все настройки
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
     </div>
   );
 }
@@ -332,7 +334,6 @@ function QuickControl({ id }: { id: string }) {
           <span className="text-muted text-[18px]" aria-hidden>
             А
           </span>
-          <span className="text-xs text-muted w-24 text-right">{TABLE_FONT_LABELS[tableFontLevel]}</span>
         </div>
       );
     default:
