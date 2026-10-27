@@ -6,7 +6,7 @@ import { zenIconToLucide } from "../lib/zenIconLucide";
 import { pluralOps } from "../lib/plural";
 import { useDrillStore } from "../store/useDrillStore";
 import { KindSwitcher } from "./KindSwitcher";
-import { CategoryTable, type CategoryTableRow } from "./CategoryTable";
+import { CategoryTable, ownCategoryRow, type CategoryTableRow } from "./CategoryTable";
 
 // A Budgera-style two-ring category donut: the inner ring is the top-level
 // categories (each with its glyph), the outer thin ring breaks every category
@@ -30,6 +30,9 @@ export interface SunburstCat {
   total: number;
   count: number;
   subs: SunburstSub[];
+  /** Операции самой категории, без подкатегории. Без него — остаток от подкатегорий. */
+  own?: number;
+  ownCount?: number;
 }
 
 type Meta = Record<string, { color?: string | null; icon?: string | null } | undefined>;
@@ -56,6 +59,8 @@ interface Props {
   onOpenCategory: (name: string) => void;
   /** Open the transactions list for a subcategory (full «Parent / Sub» path). */
   onOpenSubcategory: (fullName: string) => void;
+  /** Операции самой категории, без подкатегории (строка «Без подкатегории»). */
+  onOpenOwn?: (category: string) => void;
 }
 
 // ── SVG geometry (viewBox 0 0 320 320, scaled by CSS) ──────────────────────
@@ -94,6 +99,7 @@ export function CategorySunburst({
   onKindChange,
   onOpenCategory,
   onOpenSubcategory,
+  onOpenOwn,
   compact,
 }: Props) {
   // В плитке вид задан самим виджетом: переключателя нет, и рисовать его
@@ -175,7 +181,7 @@ export function CategorySunburst({
       share: ringTotal > 0 ? c.total / ringTotal : 0,
       children: c.subs
         .filter((sub) => sub.total > 0)
-        .map((sub) => ({
+        .map((sub): CategoryTableRow => ({
           key: sub.fullName,
           name: sub.name,
           parent: c.name,
@@ -183,7 +189,20 @@ export function CategorySunburst({
           count: sub.count,
           share: ringTotal > 0 ? sub.total / ringTotal : 0,
           dotFallback: cc,
-        })),
+        }))
+        .concat(
+          (() => {
+            const subs = c.subs.filter((sub) => sub.total > 0);
+            const own = c.own ?? c.total - subs.reduce((s, sub) => s + sub.total, 0);
+            const ownCount = c.ownCount ?? c.count - c.subs.reduce((s, sub) => s + sub.count, 0);
+            return ownCategoryRow(c.name, subs.length > 0, {
+              value: own,
+              count: ownCount,
+              share: ringTotal > 0 ? own / ringTotal : 0,
+              dotFallback: cc,
+            });
+          })()
+        ),
     };
   });
   const hoverKey = hover
@@ -559,11 +578,19 @@ export function CategorySunburst({
               hoverKey={hoverKey}
               onHover={(r) =>
                 setHover(
-                  r ? (r.parent ? { cat: r.parent, sub: r.name } : { cat: r.name }) : null
+                  r
+                    ? r.own
+                      ? { cat: r.parent! }
+                      : r.parent
+                        ? { cat: r.parent, sub: r.name }
+                        : { cat: r.name }
+                    : null
                 )
               }
               onRowClick={(r) => {
-                if (r.parent) onOpenSubcategory(r.key);
+                // Операции самой категории: у них полное имя — имя категории.
+                if (r.own) (onOpenOwn ?? onOpenSubcategory)(r.parent!);
+                else if (r.parent) onOpenSubcategory(r.key);
                 // Категорию в минусе в кольце не приблизить — её сектора нет.
                 else if (effectiveDrill || !r.children?.length || r.value < 0) onOpenCategory(r.name);
                 else drillInto(r.name);

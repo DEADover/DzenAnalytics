@@ -2849,6 +2849,10 @@ export interface CategoryNode {
   total: number;
   count: number;
   subs: SubNode[];
+  /** Сумма операций самой категории, без подкатегории (не ниже нуля). */
+  own: number;
+  /** Сколько операций записано на саму категорию, без подкатегории. */
+  ownCount: number;
 }
 
 /**
@@ -2871,7 +2875,7 @@ export function buildHierarchy(
     const delta = kind === "expense" ? expenseDelta(t) : t.amountBase;
     let node = map.get(t.category);
     if (!node) {
-      node = { name: t.category, total: 0, count: 0, subs: [] };
+      node = { name: t.category, total: 0, count: 0, subs: [], own: 0, ownCount: 0 };
       map.set(t.category, node);
     }
     node.total += delta;
@@ -2884,6 +2888,8 @@ export function buildHierarchy(
       }
       sub.total += delta;
       sub.count++;
+    } else {
+      node.ownCount++;
     }
   }
   // Как в «Аналитике» Дзен-мани: каждая конечная строка — свои
@@ -2893,6 +2899,7 @@ export function buildHierarchy(
   for (const node of map.values()) {
     const subsRaw = node.subs.reduce((sum, sub) => sum + sub.total, 0);
     const own = Math.max(0, node.total - subsRaw);
+    node.own = own;
     for (const sub of node.subs) sub.total = Math.max(0, sub.total);
     node.subs = node.subs.filter((sub) => sub.total !== 0);
     node.total = own + node.subs.reduce((sum, sub) => sum + sub.total, 0);

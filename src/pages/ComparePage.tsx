@@ -40,7 +40,7 @@ import { DateField } from "../components/DateField";
 import { KindSwitcher } from "../components/KindSwitcher";
 import { DeviationPill } from "../components/DeviationPill";
 import { DiffModeToggle } from "../components/DiffModeToggle";
-import { CategoryTable, type CategoryTableRow } from "../components/CategoryTable";
+import { CategoryTable, ownCategoryRow, type CategoryTableRow } from "../components/CategoryTable";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useDiffMode } from "../store/useDiffModeStore";
 import { colorForCategory } from "../lib/categoryColor";
@@ -631,7 +631,11 @@ export function ComparePage() {
     const match = (t: Transaction) =>
       chartKind === "expense" ? affectsExpense(t.kind) : t.kind === "income";
     const txs = (label === "A" ? txsA : txsB).filter(
-      (t) => match(t) && t.category === category && (sub === null || t.subcategory === sub)
+      (t) =>
+        match(t) &&
+        t.category === category &&
+        // «Без подкатегории» — операции самой категории.
+        (row.own ? !t.subcategory : sub === null || t.subcategory === sub)
     );
     const range = label === "A" ? ranges.a : ranges.b;
     const what = chartKind === "expense" ? "Расходы" : "Доходы";
@@ -664,6 +668,9 @@ export function ComparePage() {
           a: a?.total ?? 0,
           b: (b?.total ?? 0) / divisorB,
           count: a?.count ?? 0,
+          own: a?.own ?? 0,
+          ownB: (b?.own ?? 0) / divisorB,
+          ownCount: a?.ownCount ?? 0,
           subs: [...subNames]
             .map((sn) => ({
               name: sn,
@@ -700,7 +707,7 @@ export function ComparePage() {
           count: row.count,
           share: rowsTotalA > 0 ? row.a / rowsTotalA : 0,
           color,
-          children: row.subs.map((sub) => ({
+          children: row.subs.map((sub): CategoryTableRow => ({
             key: `${row.name} / ${sub.name}`,
             name: sub.name,
             parent: row.name,
@@ -710,7 +717,16 @@ export function ComparePage() {
             share: rowsTotalA > 0 ? sub.a / rowsTotalA : 0,
             color,
             dotFallback: color,
-          })),
+          })).concat(
+            ownCategoryRow(row.name, row.subs.length > 0, {
+              value: row.own,
+              compare: row.ownB,
+              count: row.ownCount,
+              share: rowsTotalA > 0 ? row.own / rowsTotalA : 0,
+              color,
+              dotFallback: color,
+            })
+          ),
         };
       }),
     [rows, rowsTotalA, categoryMeta]

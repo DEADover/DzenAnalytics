@@ -23,7 +23,7 @@ import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { CategorySunburst } from "../components/CategorySunburst";
-import { CategoryTable, type CategoryTableRow } from "../components/CategoryTable";
+import { CategoryTable, ownCategoryRow, OWN_ROW_LABEL, type CategoryTableRow } from "../components/CategoryTable";
 import { KindSwitcher } from "../components/KindSwitcher";
 import { PieChart as PieChartIcon } from "lucide-react";
 import type { Transaction } from "../types";
@@ -350,6 +350,7 @@ export function CategoriesPage() {
       comparable: false,
       cat: new Map<string, number>(),
       sub: new Map<string, number>(),
+      own: new Map<string, number>(),
     };
     if (!curRange.from || !curRange.to) return empty;
 
@@ -366,6 +367,7 @@ export function CategoriesPage() {
     // Sum each category/subcategory across all windows, then divide by N.
     const catSum = new Map<string, number>();
     const subSum = new Map<string, number>();
+    const ownSum = new Map<string, number>();
     for (const w of windows) {
       const wt = applyFilters(
         transactions,
@@ -374,6 +376,7 @@ export function CategoriesPage() {
       );
       for (const n of buildHierarchy(wt, kind)) {
         catSum.set(n.name, (catSum.get(n.name) || 0) + n.total);
+        ownSum.set(n.name, (ownSum.get(n.name) || 0) + n.own);
         for (const s of n.subs) {
           subSum.set(s.fullName, (subSum.get(s.fullName) || 0) + s.total);
         }
@@ -383,7 +386,9 @@ export function CategoriesPage() {
     const sub = new Map<string, number>();
     for (const [k, v] of catSum) cat.set(k, v / avgMonths);
     for (const [k, v] of subSum) sub.set(k, v / avgMonths);
-    return { comparable: true, cat, sub };
+    const own = new Map<string, number>();
+    for (const [k, v] of ownSum) own.set(k, v / avgMonths);
+    return { comparable: true, cat, sub, own };
   }, [transactions, filters, monthStartDay, kind, avgMonths]);
 
   // «Отклонение» — ₽, % of the N-month average or both (toggle in the header,
@@ -503,6 +508,18 @@ export function CategoriesPage() {
       kind === "expense" ? "Расходы по подкатегории" : "Доходы по подкатегории"
     );
   }
+  /** Операции самой категории, без подкатегории. */
+  function openOwn(category: string) {
+    const matches = (t: Transaction) =>
+      (kind === "expense" ? affectsExpense(t.kind) : t.kind === kind) &&
+      t.category === category &&
+      !t.subcategory;
+    showDrill(
+      `${category} / ${OWN_ROW_LABEL}`,
+      filtered.filter(matches),
+      kind === "expense" ? "Расходы без подкатегории" : "Доходы без подкатегории"
+    );
+  }
 
   // Строки таблицы «Полос»: категории и их подкатегории с тем же средним.
   const barRows = useMemo<CategoryTableRow[]>(
@@ -519,7 +536,7 @@ export function CategoriesPage() {
           color,
           children: node.subs
             .filter((sub) => sub.total > 0)
-            .map((sub) => {
+            .map((sub): CategoryTableRow => {
               const own = subcategoryColor(sub.fullName, categoryMeta) || color;
               return {
                 key: sub.fullName,
@@ -532,7 +549,17 @@ export function CategoriesPage() {
                 color: own,
                 dotFallback: own,
               };
-            }),
+            })
+            .concat(
+              ownCategoryRow(node.name, node.subs.some((sub) => sub.total > 0), {
+                value: node.own,
+                count: node.ownCount,
+                share: totalAll > 0 ? node.own / totalAll : 0,
+                compare: avgComp.own.get(node.name),
+                color,
+                dotFallback: color,
+              })
+            ),
         };
       }),
     [tree, resolvedCategoryColors, totalAll, avgComp, categoryMeta]
@@ -625,6 +652,7 @@ export function CategoriesPage() {
               kind={kind}
               onOpenCategory={openCategory}
               onOpenSubcategory={openSubcategory}
+              onOpenOwn={openOwn}
             />
           )}
           {view === "treemap" && (
@@ -652,7 +680,9 @@ export function CategoriesPage() {
               }}
               expanded={expanded}
               onExpandedChange={setExpanded}
-              onRowClick={(r) => (r.parent ? openSubcategory(r.key) : openCategory(r.key))}
+              onRowClick={(r) =>
+                r.own ? openOwn(r.parent!) : r.parent ? openSubcategory(r.key) : openCategory(r.key)
+              }
               exportName={`categories_${kind}`}
               exportSlot={exportSlot}
             />

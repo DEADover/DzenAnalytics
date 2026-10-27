@@ -28,7 +28,27 @@ export interface CategoryTableRow {
   color?: string;
   /** Цвет значка, если у подкатегории своего нет. */
   dotFallback?: string;
+  /** «Без подкатегории»: операции самой категории, не разнесённые по подкатегориям. */
+  own?: boolean;
   children?: CategoryTableRow[];
+}
+
+/** Подпись строки с операциями самой категории, без подкатегории. */
+export const OWN_ROW_LABEL = "Без подкатегории";
+
+/**
+ * Строка «Без подкатегории» под категорией — та часть суммы, что записана на
+ * саму категорию. Без неё подкатегории не складывались в итог категории, и
+ * разница ничем не объяснялась. Нужна, только если у категории есть
+ * подкатегории (`hasSubs`) и на ней самой что-то есть.
+ */
+export function ownCategoryRow(
+  parent: string,
+  hasSubs: boolean,
+  row: Omit<CategoryTableRow, "key" | "name" | "parent" | "own">
+): CategoryTableRow[] {
+  if (!hasSubs || (row.value <= 0.0001 && (row.compare ?? 0) <= 0.0001)) return [];
+  return [{ ...row, key: `${parent}::own`, name: OWN_ROW_LABEL, parent, own: true }];
 }
 
 interface CompareSpec {
@@ -113,13 +133,19 @@ export function CategoryTable({
       type: "text",
       label: "Категория",
       sortValue: (r) => r.name,
-      exportValue: (r) => r.key,
+      exportValue: (r) => (r.own ? `${r.parent} / ${r.name}` : r.key),
       cellTitle: (r) => (r.parent ? `${r.parent} / ${r.name}` : r.name),
       render: (r) => (
         <span className="flex items-center gap-2 min-w-0">
-          <CategoryDot category={r.name} parent={r.parent} fallback={r.dotFallback} size="w-5 h-5" />
+          {/* У «Без подкатегории» значок самой категории — это её операции. */}
+          <CategoryDot
+            category={r.own ? r.parent! : r.name}
+            parent={r.own ? undefined : r.parent}
+            fallback={r.dotFallback}
+            size="w-5 h-5"
+          />
           <span className="flex-1 min-w-0">
-            <span className="block truncate">{r.name}</span>
+            <span className={r.own ? "block truncate text-muted" : "block truncate"}>{r.name}</span>
             {bar && <CategoryBar row={r} max={max} markerLabel={compare?.markerLabel} base={base} />}
           </span>
         </span>
@@ -231,6 +257,7 @@ export function CategoryTable({
       columns={columns}
       rowKey={(r) => r.key}
       subRows={(r) => r.children}
+      pinLast={(r) => !!r.own}
       expanded={expanded}
       onExpandedChange={onExpandedChange}
       defaultSortKey="value"

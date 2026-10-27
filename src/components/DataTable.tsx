@@ -146,6 +146,9 @@ interface Props<T> {
    * внутри родителя тем же порядком.
    */
   subRows?: (row: T) => readonly T[] | undefined;
+  /** Подстрока всегда внизу своего родителя, при любой сортировке
+   *  («Без подкатегории» под подкатегориями). */
+  pinLast?: (row: T) => boolean;
   expanded?: ReadonlySet<string>;
   onExpandedChange?: (next: Set<string>) => void;
 
@@ -202,6 +205,7 @@ export function DataTable<T>({
   minWidth,
   selection,
   subRows,
+  pinLast,
   expanded: controlledExpanded,
   onExpandedChange,
   footer,
@@ -306,12 +310,18 @@ export function DataTable<T>({
         const children = subRows?.(row);
         const hasChildren = !!children && children.length > 0;
         out.push({ row, key, depth, last: i === rows.length - 1, hasChildren, index: i });
-        if (hasChildren && expanded.has(key)) walk(order(children!), depth + 1, key);
+        if (hasChildren && expanded.has(key)) {
+          const sortedKids = order(children!);
+          const kids = pinLast
+            ? [...sortedKids.filter((r) => !pinLast(r)), ...sortedKids.filter(pinLast)]
+            : sortedKids;
+          walk(kids, depth + 1, key);
+        }
       });
     };
     walk(visible, 0, "");
     return out;
-  }, [visible, subRows, expanded, order, rowKey]);
+  }, [visible, subRows, pinLast, expanded, order, rowKey]);
 
   const toggleExpanded = (key: string) => {
     const next = new Set(expanded);
