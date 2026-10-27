@@ -71,6 +71,22 @@ function textColor(node: Text): string {
   return cs.color || "rgb(128,128,128)";
 }
 
+/**
+ * Прозрачный слой во весь экран без фона и размытия — ловушка кликов, а не
+ * окно: под ним всё видно.
+ */
+function isClickShield(el: Element): boolean {
+  if (!(el instanceof HTMLElement) || el.childElementCount > 0) return false;
+  const r = el.getBoundingClientRect();
+  if (r.width < window.innerWidth - 2 || r.height < window.innerHeight - 2) return false;
+  const cs = getComputedStyle(el);
+  if (cs.position !== "fixed") return false;
+  const bg = cs.backgroundColor;
+  const clear = bg === "transparent" || /rgba\([^)]*,\s*0\)$/.test(bg);
+  const blur = cs.backdropFilter && cs.backdropFilter !== "none";
+  return clear && !blur && cs.backgroundImage === "none";
+}
+
 /** Запустить слой частиц. Возвращает остановку. */
 export function startAmountSpoiler(): () => void {
   const canvas = document.createElement("canvas");
@@ -188,10 +204,16 @@ export function startAmountSpoiler(): () => void {
     const y = r.top + r.height / 2;
     if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) return true;
     // Холст с `pointer-events: none` — сквозь него поиск видит страницу.
-    const hit = document.elementFromPoint(x, y);
+    // Прозрачные «ловушки кликов» во весь экран (за всплывающим меню, чтобы
+    // закрыть его кликом мимо) ничего не закрывают — их пропускаем. Иначе с
+    // открытой панелью частицы пропадали со всей страницы.
     const owner = it.node.parentElement;
-    if (!hit || !owner) return true;
-    return !(hit === owner || owner.contains(hit) || hit.contains(owner));
+    if (!owner) return true;
+    for (const hit of document.elementsFromPoint(x, y)) {
+      if (isClickShield(hit)) continue;
+      return !(hit === owner || owner.contains(hit) || hit.contains(owner));
+    }
+    return true;
   };
 
   const frame = (now: number) => {
