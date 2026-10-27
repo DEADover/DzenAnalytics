@@ -111,7 +111,7 @@ function QuickSettingsPanel({ onClose }: { onClose: () => void }) {
           Панель пуста. Карандаш справа вверху — выбрать, что в ней стоит.
         </p>
       )}
-      <div className="mt-3 pt-2.5 border-t border-border flex items-center justify-between gap-2">
+      <div className="mt-3 pt-2.5 border-t border-border">
         <button
           type="button"
           className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
@@ -121,9 +121,6 @@ function QuickSettingsPanel({ onClose }: { onClose: () => void }) {
           Все настройки
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
-        <span className="text-xs text-muted">
-          <kbd className="kbd">g</kbd> <kbd className="kbd">i</kbd>
-        </span>
       </div>
     </div>
   );
