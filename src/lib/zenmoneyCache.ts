@@ -59,7 +59,7 @@ export interface ZenCache {
 }
 
 /** Bump when a new entity type starts being consumed AND needs a back-fill. */
-export const CACHE_SCHEMA_VERSION = 7;
+export const CACHE_SCHEMA_VERSION = 8;
 
 /** Entity types to force-fetch once when upgrading TO that version. */
 const BACKFILL_BY_VERSION: Record<number, string[]> = {
@@ -83,6 +83,10 @@ const BACKFILL_BY_VERSION: Record<number, string[]> = {
   // на отправку, а не в синхронизации, оставляла у нас старые даты плана
   // навсегда. Полный список вычищает уже застрявшие.
   7: ["reminderMarker"],
+  // Номер занят, доливки нет. 27.10.2026 здесь был разовый перезабор
+  // контрагентов (логотипы брендов); его откатили, но часть кэшей уже успела
+  // перейти на 8 — новая доливка должна идти под 9, иначе они её пропустят.
+  8: [],
 };
 
 /**

@@ -339,6 +339,10 @@ describe("смена расписания плана в ответе на отп
 
   it("застрявшие даты вычищаются разовым перезабором планов", () => {
     expect(backfillEntities(cache({ cacheSchemaVersion: 6 }))).toEqual(["reminderMarker"]);
-    expect(CACHE_SCHEMA_VERSION).toBe(7);
+  });
+
+  it("версия 8 занята без доливки — кэшу на 7 доливать нечего", () => {
+    expect(backfillEntities(cache({ cacheSchemaVersion: 7 }))).toEqual([]);
+    expect(CACHE_SCHEMA_VERSION).toBe(8);
   });
 });
