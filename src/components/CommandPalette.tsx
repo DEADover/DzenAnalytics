@@ -196,7 +196,7 @@ export function CommandPalette({ open, onClose }: Props) {
         id: "quick-settings:edit",
         group: "Действия",
         title: "Настроить быстрые настройки",
-        hint: "Что стоит в панели шестерёнки",
+        hint: "Что доступно в панели быстрых настроек",
         icon: SlidersHorizontal,
         action: () => useQuickSettingsStore.getState().openEditor(),
       },

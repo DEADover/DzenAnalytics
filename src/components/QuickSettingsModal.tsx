@@ -31,12 +31,12 @@ function QuickSettingsModalContent({ onClose }: { onClose: () => void }) {
       <ModalHeader
         icon={SlidersHorizontal}
         title="Быстрые настройки"
-        subtitle="Что стоит в панели шестерёнки в шапке"
+        subtitle="Что доступно в панели быстрых настроек"
       />
       <ModalBody scroll gap={0}>
         <div className="grid gap-4 md:grid-cols-2 items-start">
           <section className="rounded-2xl border border-accent/30 bg-accent/5 p-3">
-            <PickHalfHeader icon={SlidersHorizontal} title="В панели" hint="Под шестерёнкой" accent />
+            <PickHalfHeader icon={SlidersHorizontal} title="В панели" hint="Быстрые настройки" accent />
             {inPanel.length === 0 ? (
               <p className="text-sm text-muted py-2">
                 Панель пуста. Добавьте нужное кнопкой «+» справа.
@@ -78,11 +78,6 @@ function QuickSettingsModalContent({ onClose }: { onClose: () => void }) {
                 ))}
               </ul>
             )}
-            <p className="text-xs text-muted mt-3 px-1">
-              Переключатели встают плитками по две в ряд наверху панели, выбор
-              из вариантов и бегунки — строками под ними. Пункты, которые сейчас
-              ни к чему (отправка без Дзен-мани), в панели не показываются.
-            </p>
           </section>
 
           <section className="rounded-2xl border border-border bg-panel2/40 p-3">
