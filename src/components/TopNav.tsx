@@ -306,7 +306,16 @@ export function TopNav({
             дорожке меню, перед «Главной», а меню прижато к левому краю. Ниже
             `lg` меню разделов в шапке нет — оно в кнопке справа, — и знак стоит
             слева сам по себе, иначе шапка осталась бы без опознавательного знака. */}
-        <img src={logoDa} alt="DzenAnalytics" className="lg:hidden h-9 w-auto shrink-0" />
+        {/* Знак ведёт на «Главную» — привычно для любого сайта. */}
+        <SmoothNavLink
+          to="/"
+          end
+          aria-label="На главную"
+          onNavigate={() => setMoreOpen(false)}
+          className="lg:hidden shrink-0 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <img src={logoDa} alt="DzenAnalytics" className="h-9 w-auto block" />
+        </SmoothNavLink>
 
         {/* Обёртка держит свободное место и на узком экране, где само меню
             спрятано: без неё кнопки справа сползались бы к знаку. */}
@@ -328,11 +337,15 @@ export function TopNav({
             1024–1279 меню со значками налезало на кнопки справа. Подписи
             короткие и без значков читаются. */}
         <nav data-tour="nav" className="seg-track hidden lg:inline-flex min-w-0 max-w-full">
-          <img
-            src={logoDa}
-            alt="DzenAnalytics"
-            className="h-[26px] w-auto shrink-0 mx-2.5"
-          />
+          <SmoothNavLink
+            to="/"
+            end
+            aria-label="На главную"
+            onNavigate={() => setMoreOpen(false)}
+            className="shrink-0 mx-2.5 self-center rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <img src={logoDa} alt="DzenAnalytics" className="h-[26px] w-auto block" />
+          </SmoothNavLink>
           {/* `-my-1 py-1` — место под свечение выбранного пункта: полоса с
               прокруткой обрезает всё, что выходит за её край. */}
           <div
