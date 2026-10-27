@@ -102,31 +102,27 @@ export function getMoneyFractionDigits(): number {
 }
 
 /**
- * «Скрыть суммы»: сумма целиком — со знаком и валютой — заменяется заглушкой,
- * по которой бегут частицы (`lib/amountSpoiler`), как в банковских
- * приложениях. Как и копейки — переменная модуля, которую ставит хранилище
- * (`usePrivacyStore`); при переключении содержимое страниц пересобирается
- * целиком (App), чтобы ни одна запомненная строка не осталась с цифрами.
+ * Невидимые метки вокруг каждой суммы — для режима «Скрыть суммы».
  *
- * Заглушка — неразрывные пробелы шириной в цифру (U+2007) между невидимыми
- * метками (U+2060): на экране это пустое место постоянной длины, а метки
- * позволяют холсту частиц найти его в любом тексте, в том числе в подписях
- * графиков. Длина одна для любой суммы — по ней не прочитать порядок.
+ * `formatMoney` и сокращённые числа (`formatNum` с `compact` — подписи осей
+ * графиков) всегда оборачиваются в пару меток нулевой ширины. По ним слой
+ * частиц (`lib/amountSpoiler`) находит суммы в любом тексте страницы, в том
+ * числе в подписях SVG-графиков, и при включении режима подменяет на месте
+ * только их текст — страница не перерисовывается, а при выключении текст
+ * возвращается ровно туда же.
  *
- * Прячутся суммы (`formatMoney`) и сокращённые числа (`formatNum` с `compact`)
- * — это подписи осей графиков, по которым масштаб читается не хуже суммы.
- * Счётчики, проценты и даты остаются: они не про деньги.
+ * Метки — «соединитель слов» (U+2060) в начале и «невидимый разделитель»
+ * (U+2063) в конце: на экране и в ширине строки их нет, и перенос строки они
+ * не разрешают — «₽» не уедет от скобки на новую строку. При копировании
+ * метки вычищает `stripAmountMarks` (обработчик в App).
+ * Счётчики, проценты и даты меток не получают: они не про деньги.
  */
-export const HIDDEN_MARK = "\u2060";
-export const HIDDEN_AMOUNT = `${HIDDEN_MARK}${"\u2007".repeat(6)}${HIDDEN_MARK}`;
-/** Короче — для подписей осей, где места мало. */
-export const HIDDEN_AMOUNT_SHORT = `${HIDDEN_MARK}${"\u2007".repeat(4)}${HIDDEN_MARK}`;
-let _hideAmounts = false;
-export function setHideAmounts(on: boolean): void {
-  _hideAmounts = on;
-}
-export function amountsHidden(): boolean {
-  return _hideAmounts;
+export const AMOUNT_OPEN = "\u2060";
+export const AMOUNT_CLOSE = "\u2063";
+const marked = (s: string) => `${AMOUNT_OPEN}${s}${AMOUNT_CLOSE}`;
+/** Строка без меток сумм — для буфера обмена и сравнений. */
+export function stripAmountMarks(s: string): string {
+  return s.replace(/[\u2060\u2063]/g, "");
 }
 
 /**
@@ -163,9 +159,8 @@ export function formatMoney(
     maximumFractionDigits: dec,
   });
   const symbol = symbolByCurrency[currency] || currency;
-  if (_hideAmounts) return opts?.compact ? HIDDEN_AMOUNT_SHORT : HIDDEN_AMOUNT;
   const value = fmt.format(abs);
-  return `${sign}${value} ${symbol}`;
+  return marked(`${sign}${value} ${symbol}`);
 }
 
 /**
@@ -201,9 +196,7 @@ export function formatNum(
   value: number,
   opts?: { compact?: boolean; fractionDigits?: number }
 ): string {
-  // Сокращённые числа — подписи осей с деньгами; ноль оставляем, он опора оси.
-  if (_hideAmounts && opts?.compact && value !== 0) return HIDDEN_AMOUNT_SHORT;
-  return new Intl.NumberFormat("ru-RU", {
+  const text = new Intl.NumberFormat("ru-RU", {
     notation: opts?.compact ? "compact" : "standard",
     // Округляем по МОДУЛЮ: сравнение самого значения отбрасывало копейки только
     // у положительных, и в колонке рядом стояли «20 010» и «−20 010,09». В
@@ -212,6 +205,9 @@ export function formatNum(
       opts?.fractionDigits ??
       (opts?.compact ? 1 : Math.abs(value) >= 1000 ? 0 : 2),
   }).format(value);
+  // Сокращённые числа — подписи осей с деньгами: прячутся вместе с суммами.
+  // Ноль — опора оси, его оставляем.
+  return opts?.compact && value !== 0 ? marked(text) : text;
 }
 
 /**

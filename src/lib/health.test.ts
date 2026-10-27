@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { computeHealthScore } from "./health";
 import { tx } from "../test/fixtures";
+import { stripAmountMarks } from "./format";
 
 describe("computeHealthScore — emergency fund counts off-balance (issue #4)", () => {
   // Six months, 1000 expense each → avg monthly expense = 1000. Calibration
@@ -41,11 +42,11 @@ describe("computeHealthScore — «Норма сбережений» показ�
 
   it("называет формулу и три средних за период", () => {
     const d = detail();
-    expect(d).toContain("(доход − расход) ÷ доход");
+    expect(stripAmountMarks(d)).toContain("(доход − расход) ÷ доход");
     // formatMoney разделяет разряды НЕРАЗРЫВНЫМ пробелом — матчим по \s.
-    expect(d).toMatch(/доход — 10\s000/);
-    expect(d).toMatch(/расход — 6\s000/);
-    expect(d).toMatch(/остаётся — 4\s000/);
+    expect(stripAmountMarks(d)).toMatch(/доход — 10\s000/);
+    expect(stripAmountMarks(d)).toMatch(/расход — 6\s000/);
+    expect(stripAmountMarks(d)).toMatch(/остаётся — 4\s000/);
   });
 
   it("не приписывает цифры, когда данных нет", () => {
@@ -55,7 +56,7 @@ describe("computeHealthScore — «Норма сбережений» показ�
       calibration: { date: "2026-06-30", amount: 0 },
       categoryMeta: {},
     }).components.find((c) => c.id === "savings_rate")!.detail;
-    expect(d).not.toContain("Средние за период");
+    expect(stripAmountMarks(d)).not.toContain("Средние за период");
   });
 });
 
@@ -80,9 +81,9 @@ describe("computeHealthScore — остальные метрики показы�
       tx({ id: "e" + i, date: `2026-${m}-15`, kind: "expense", amount: 1000, amountBase: 1000 })
     );
     const d = detailOf("emergency_fund", { transactions: txs, extraLiquid: 3000 });
-    expect(d).toMatch(/накопления — 3\s000/);
-    expect(d).toMatch(/средний расход — 1\s000/);
-    expect(d).toContain("хватит на — 3.0 мес");
+    expect(stripAmountMarks(d)).toMatch(/накопления — 3\s000/);
+    expect(stripAmountMarks(d)).toMatch(/средний расход — 1\s000/);
+    expect(stripAmountMarks(d)).toContain("хватит на — 3.0 мес");
   });
 
   it("«Чистота категоризации» называет, сколько операций без категории", () => {
@@ -93,8 +94,8 @@ describe("computeHealthScore — остальные метрики показы�
       tx({ id: "d", date: "2026-01-13", kind: "expense", category: "Еда" }),
     ];
     const d = detailOf("uncategorized", { transactions: txs });
-    expect(d).toContain("без категории — 2 из 4 операций");
-    expect(d).toContain("50.0%");
+    expect(stripAmountMarks(d)).toContain("без категории — 2 из 4 операций");
+    expect(stripAmountMarks(d)).toContain("50.0%");
   });
 
   it("«Стабильность сбережений» называет период, среднее и разброс", () => {
@@ -110,10 +111,10 @@ describe("computeHealthScore — остальные метрики показы�
       }),
     ]);
     const d = detailOf("stability", { transactions: txs });
-    expect(d).toContain("месяцев в расчёте — 6");
-    expect(d).toContain("откладываете в среднем — 30% дохода");
-    expect(d).toContain("разброс по месяцам — ±10 п.п.");
-    expect(d).toMatch(/разброс ÷ среднее = 0\.33/);
+    expect(stripAmountMarks(d)).toContain("месяцев в расчёте — 6");
+    expect(stripAmountMarks(d)).toContain("откладываете в среднем — 30% дохода");
+    expect(stripAmountMarks(d)).toContain("разброс по месяцам — ±10 п.п.");
+    expect(stripAmountMarks(d)).toMatch(/разброс ÷ среднее = 0\.33/);
   });
 
   it("«Обязательные траты» называют доход, сумму обязательных и долю", () => {
@@ -132,9 +133,9 @@ describe("computeHealthScore — остальные метрики показы�
       transactions: txs,
       categoryMeta: { "Жильё": { required: true } },
     });
-    expect(d).toMatch(/доход — 10\s000/);
-    expect(d).toMatch(/обязательные траты — 4\s000/);
-    expect(d).toContain("доля — 40.0%");
+    expect(stripAmountMarks(d)).toMatch(/доход — 10\s000/);
+    expect(stripAmountMarks(d)).toMatch(/обязательные траты — 4\s000/);
+    expect(stripAmountMarks(d)).toContain("доля — 40.0%");
   });
 
   it("без данных цифры не приписываются", () => {
@@ -163,15 +164,15 @@ describe("computeHealthScore — месяц отчётный, а не кален
 
   it("«Норма сбережений» берёт отрезок 28.08–27.09 как один месяц", () => {
     const d = run(28).components.find((c) => c.id === "savings_rate")!.detail;
-    expect(d).toMatch(/доход — 10\s000/);
-    expect(d).toMatch(/расход — 6\s000/);
-    expect(d).toMatch(/остаётся — 4\s000/);
+    expect(stripAmountMarks(d)).toMatch(/доход — 10\s000/);
+    expect(stripAmountMarks(d)).toMatch(/расход — 6\s000/);
+    expect(stripAmountMarks(d)).toMatch(/остаётся — 4\s000/);
   });
 
   it("по умолчанию (день 1) те же операции остаются двумя месяцами", () => {
     const d = run().components.find((c) => c.id === "savings_rate")!.detail;
-    expect(d).toMatch(/доход — 5\s000/);
-    expect(d).toMatch(/расход — 3\s000/);
+    expect(stripAmountMarks(d)).toMatch(/доход — 5\s000/);
+    expect(stripAmountMarks(d)).toMatch(/расход — 3\s000/);
   });
 
   it("средние обязательные траты тоже считаются по отчётным месяцам", () => {

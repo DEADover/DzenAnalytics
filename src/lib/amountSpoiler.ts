@@ -1,21 +1,40 @@
 /**
  * Частицы вместо сумм — режим «Скрыть суммы», как в банковских приложениях.
  *
- * `formatMoney` в этом режиме отдаёт вместо суммы заглушку (`HIDDEN_AMOUNT`):
- * пустое место постоянной ширины между невидимыми метками. Здесь один
- * прозрачный холст поверх страницы находит такие заглушки в тексте — где бы
- * он ни стоял: в таблице, подсказке, подписи графика — и рисует на их месте
- * мерцающие частицы цветом самого текста.
+ * Каждая сумма на странице обёрнута невидимыми метками (`formatMoney`,
+ * `AMOUNT_OPEN` … `AMOUNT_CLOSE`). При включении режима слой сам подменяет НА
+ * МЕСТЕ текст каждой суммы — вместе со знаком перед ней — на заглушку:
+ * пустое место постоянной ширины. Страница не перерисовывается: меняется
+ * только текст сумм, а при выключении он возвращается ровно туда же.
+ * Суммы, появившиеся позже (новая страница, подсказка, обновлённые данные),
+ * маскируются наблюдателем изменений ещё до того, как браузер их нарисует.
  *
- * Почему холст, а не элемент в каждой сумме: сумма везде — просто строка, её
- * собирают сотни мест, и в подписи SVG-графика элемент не вставить вовсе.
+ * На месте заглушек один прозрачный холст рисует мерцающие частицы цветом
+ * самого текста — где бы сумма ни стояла: в таблице, подсказке, подписи
+ * SVG-графика. Почему холст, а не элемент в каждой сумме: сумма везде —
+ * просто строка, её собирают сотни мест, и в подпись графика элемент не
+ * вставить вовсе.
  *
  * Заглушку, закрытую окном или уехавшую за край прокручиваемой области, не
  * рисуем: проверяем, что в её центре сверху лежит она сама.
  */
 
-const MARK = "⁠";
-const RE = /⁠ +⁠/g;
+const OPEN = "\u2060";
+const CLOSE = "\u2063";
+const FILL = "\u2007";
+/** Заглушка: метки вокруг неразрывных пробелов шириной в цифру. */
+const PLACEHOLDER_RE = /\u2060\u2007+\u2063/g;
+/** Настоящая сумма (не заглушка) — со знаком вплотную перед ней. */
+const AMOUNT_RE = /[+\u2212-]?\u2060([^\u2060\u2063]*)\u2063/g;
+const SIGN_TAIL = /[+\u2212-]$/;
+const SIGN_ONLY = /^\s*[+\u2212-]\s*$/;
+
+function placeholderFor(inner: string): string {
+  // Длина одна на любую сумму — по ней не прочитать порядок. Короче — у
+  // коротких подписей (оси графиков), где места мало.
+  const n = inner.replace(/[\s\u00a0\u202f]/g, "").length <= 5 ? 4 : 6;
+  return `${OPEN}${FILL.repeat(n)}${CLOSE}`;
+}
 
 interface Item {
   node: Text;
@@ -133,52 +152,103 @@ export function startAmountSpoiler(): () => void {
   size();
 
   /**
-   * Знак перед суммой — «+», «−» — многие места дописывают сами, вне
-   * `formatMoney`. Прятать надо сумму целиком, поэтому знак вплотную перед
-   * заглушкой стираем прямо в тексте: в том же узле или в соседнем перед ним
-   * (`−{formatMoney(…)}` в разметке — это два текстовых узла). При выключении
-   * режима страница пересобирается заново, и знаки возвращаются.
+   * Подменённые узлы: исходный текст и то, что мы туда записали. По второму
+   * отличаем свою правку от чужой: React переписал узел — значит, это свежая
+   * сумма, её запоминаем и маскируем заново.
    */
-  const SIGN = /[+\u2212-]$/;
-  const stripSign = (n: Text, at: number) => {
-    if (at > 0) {
-      if (SIGN.test(n.data.slice(0, at))) n.deleteData(at - 1, 1);
-      return;
-    }
+  const original = new Map<Text, string>();
+  const written = new WeakMap<Text, string>();
+  const write = (n: Text, next: string) => {
+    if (!original.has(n)) original.set(n, n.data);
+    written.set(n, next);
+    n.data = next;
+  };
+  const ours = (n: Text) => written.get(n) === n.data;
+
+  /**
+   * Знак перед суммой — «+», «−» — многие места дописывают сами, вне
+   * `formatMoney`, отдельным текстовым узлом или элементом. Прятать надо сумму
+   * целиком, поэтому стираем и его: в соседнем узле перед суммой или в
+   * ближайшем предыдущем тексте, если тот — один только знак.
+   */
+  const signNodes = new Set<Text>();
+  const stripSignBefore = (n: Text) => {
     const prev = n.previousSibling;
     if (prev && prev.nodeType === Node.TEXT_NODE) {
       const t = prev as Text;
-      if (SIGN.test(t.data)) t.deleteData(t.data.length - 1, 1);
+      if (SIGN_TAIL.test(t.data)) {
+        signNodes.add(t);
+        write(t, t.data.slice(0, -1));
+      }
       return;
     }
-    // Знак отдельным элементом перед суммой (`<span>−</span><span>сумма</span>`):
-    // ближайший предыдущий текст на странице, если он — один только знак.
     const back = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     back.currentNode = n;
     for (let p = back.previousNode() as Text | null; p; p = back.previousNode() as Text | null) {
-      const trimmed = p.data.trim();
-      if (trimmed === "") continue;
-      if (/^[+\u2212-]$/.test(trimmed)) p.data = p.data.replace(trimmed, "");
+      if (p.data.trim() === "") continue;
+      if (SIGN_ONLY.test(p.data)) {
+        signNodes.add(p);
+        write(p, "");
+      }
       return;
     }
   };
 
-  const scan = () => {
-    const found: Item[] = [];
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) =>
-        (n as Text).data.includes(MARK) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+  /** Замаскировать суммы в узле, если там есть настоящие. */
+  const maskNode = (n: Text) => {
+    if (!n.data.includes(OPEN) || ours(n)) return;
+    let real = false;
+    let startsWithAmount = false;
+    const next = n.data.replace(AMOUNT_RE, (whole, inner: string, offset: number) => {
+      if (/^\u2007+$/.test(inner)) return whole; // уже заглушка
+      real = true;
+      if (offset === 0 && whole.startsWith(OPEN)) startsWithAmount = true;
+      return placeholderFor(inner);
+    });
+    if (!real) return;
+    // Свежий текст от React — он и есть исходный для этого узла.
+    original.set(n, n.data);
+    written.set(n, next);
+    n.data = next;
+    if (startsWithAmount) stripSignBefore(n);
+    dirty = true;
+  };
+
+  /** Узел-знак, который React переписал обратно, — стереть снова. */
+  const recheckSign = (n: Text) => {
+    if (ours(n)) return;
+    original.set(n, n.data);
+    if (SIGN_ONLY.test(n.data)) write(n, "");
+    else if (SIGN_TAIL.test(n.data)) write(n, n.data.slice(0, -1));
+  };
+
+  const maskTree = (root: Node) => {
+    if (root.nodeType === Node.TEXT_NODE) {
+      maskNode(root as Text);
+      return;
+    }
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: (t) =>
+        (t as Text).data.includes(OPEN) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
     });
     const nodes: Text[] = [];
-    for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) nodes.push(n);
-    for (const n of nodes) {
-      // Сначала знаки — после правки текста позиции заглушек сдвигаются.
-      for (let i = n.data.lastIndexOf(MARK + "\u2007"); i >= 0; i = i > 0 ? n.data.lastIndexOf(MARK + "\u2007", i - 1) : -1) {
-        stripSign(n, i);
+    for (let t = walker.nextNode() as Text | null; t; t = walker.nextNode() as Text | null) nodes.push(t);
+    nodes.forEach(maskNode);
+  };
+
+  /** Где рисовать частицы — все заглушки на странице. */
+  const scan = () => {
+    const found: Item[] = [];
+    for (const n of original.keys()) {
+      if (!n.isConnected) {
+        original.delete(n);
+        signNodes.delete(n);
+        continue;
       }
+      if (!n.data.includes(OPEN)) continue;
       const color = textColor(n);
-      RE.lastIndex = 0;
-      for (let m = RE.exec(n.data); m; m = RE.exec(n.data)) {
+      PLACEHOLDER_RE.lastIndex = 0;
+      for (let m = PLACEHOLDER_RE.exec(n.data); m; m = PLACEHOLDER_RE.exec(n.data)) {
         found.push({ node: n, start: m.index, end: m.index + m[0].length, color, visible: true });
       }
     }
@@ -260,9 +330,23 @@ export function startAmountSpoiler(): () => void {
     ctx.globalAlpha = 1;
   };
 
-  const observer = new MutationObserver(() => {
+  // Маскируем сразу, в той же микрозадаче, что и правка страницы: браузер
+  // ещё не успел её нарисовать, и цифры не мелькают.
+  const observer = new MutationObserver((records) => {
+    for (const r of records) {
+      if (r.type === "characterData") {
+        const t = r.target as Text;
+        if (signNodes.has(t)) recheckSign(t);
+        else maskNode(t);
+      } else {
+        r.addedNodes.forEach((n) => {
+          if (n !== canvas) maskTree(n);
+        });
+      }
+    }
     dirty = true;
   });
+  maskTree(document.body);
   observer.observe(document.body, { subtree: true, childList: true, characterData: true });
   const onResize = () => {
     size();
@@ -274,6 +358,12 @@ export function startAmountSpoiler(): () => void {
   return () => {
     cancelAnimationFrame(raf);
     observer.disconnect();
+    // Вернуть текст на место — только там, где он всё ещё наш.
+    for (const [n, text] of original) {
+      if (n.isConnected && ours(n)) n.data = text;
+    }
+    original.clear();
+    signNodes.clear();
     window.removeEventListener("resize", onResize);
     range.detach?.();
     canvas.remove();

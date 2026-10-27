@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildNotices, type NoticesInput } from "./dashboardNotices";
+import { stripAmountMarks } from "./format";
 import type { Insight, MonthSpike, RecurringCandidate } from "./aggregations";
 
 function rec(over: Partial<RecurringCandidate>): RecurringCandidate {
@@ -55,7 +56,7 @@ describe("buildNotices — порядок наблюдений", () => {
     expect(n.map((x) => x.title)).toEqual(["Продукты", "Кафе"]);
     // Разделитель разрядов ставит сам `toLocaleString` — он неразрывный,
     // поэтому сверяем по смыслу, а не по точному коду пробела.
-    expect(n[0].body).toMatch(/^План 40.000\s?₽ — превышен на 18%$/);
+    expect(stripAmountMarks(n[0].body)).toMatch(/^План 40.000\s?₽ — превышен на 18%$/);
     expect(n[0].value).toBe(47300);
   });
 

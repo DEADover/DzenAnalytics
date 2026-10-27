@@ -47,6 +47,11 @@ for (const width of [1440, 768]) {
     await field.pressSequentially("а");
     await expect(list).toBeHidden();
     await field.press("Backspace");
+    // Список после стирания должен улечься: пока он перестраивается, страница
+    // сдвигается, и только что открытая подсказка честно закрывается как
+    // уехавшая от поля. Человек так быстро метку не нажмёт.
+    await expect.poll(() => payees.count()).toBeGreaterThan(nFilter);
+    await page.waitForTimeout(150);
 
     // Метка открывает подсказку; щелчок «В фильтре» — обратно.
     await badge.click();

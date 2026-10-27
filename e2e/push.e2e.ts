@@ -24,7 +24,7 @@ test.describe("правка одних только планов", () => {
     await review.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Бюджет", { exact: true })).toBeVisible();
-    await expect(dialog.getByText(/Расходы · Октябрь 2026 · План 31\s000/)).toBeVisible();
+    await expect(dialog.getByText(/Расходы · Октябрь 2026 · План \u2060?31\s000/)).toBeVisible();
     await page.keyboard.press("Escape");
 
     await page.locator('button[title="Отправить изменения в Дзен-мани"]').click();

@@ -56,11 +56,16 @@ test("«Скрыть суммы»: ни одной суммы цифрами н�
   await page.setViewportSize({ width: 1440, height: 900 });
   await connectZen(page, "/");
   await expect(page.getByText(/\d ₽/).first()).toBeVisible();
+  // Метка на странице переживёт переключение, только если страницу не пересоздали.
+  await page.evaluate(() => document.querySelector("main > div")?.setAttribute("data-keep", "1"));
 
   await page.keyboard.press("h");
   await expect(gear(page)).toHaveAttribute("title", /Суммы скрыты/);
   // Частицы — одним слоем поверх страницы.
   await expect(page.locator("canvas[data-amount-spoiler]")).toHaveCount(1);
+  // Страница не перерисовывалась — подменён только текст сумм.
+  await expect(page.locator("[data-keep]")).toHaveCount(1);
+  await expect(page.locator("main").getByText(/\d ₽/)).toHaveCount(0);
 
   const money = /\d[\d   ,]*\s?[₽$€]/;
   const leaks: string[] = [];
@@ -71,7 +76,7 @@ test("«Скрыть суммы»: ни одной суммы цифрами н�
     const m = text.match(money);
     if (m) leaks.push(`${route}: «${m[0]}»`);
     // Знак скрывается вместе с суммой.
-    const sign = text.match(/[+\u2212-]\u2060/);
+    const sign = text.match(/[+\u2212-]\u2060\u2007/);
     if (sign) leaks.push(`${route}: знак перед суммой`);
   }
   expect(leaks).toEqual([]);

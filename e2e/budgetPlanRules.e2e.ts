@@ -167,7 +167,7 @@ test("строки как в «Планах»: группы переводов, 
   // «Вне плана» — после групп переводов.
   expect((await outOfPlan.boundingBox())!.y).toBeGreaterThan((await savings.boundingBox())!.y);
   // У группы — назначенное на остаток месяца.
-  await expect(main.getByText(/Платежи на 7\s000/).first()).toBeVisible();
+  await expect(main.getByText(/Платежи на \u2060?7\s000/).first()).toBeVisible();
   // Раскрывается — внутри сами статьи без плана.
   await outOfPlan.click();
   await expect(outOfPlan).toHaveAttribute("aria-expanded", "true");

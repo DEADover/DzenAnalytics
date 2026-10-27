@@ -63,7 +63,7 @@ test("«Зеркало»: итог месяца, ось по данным, по�
   // Ось по данным: доходов в тестовом аккаунте больше — низ оси короче верха.
   // Подписи оси Y — суммы («50 тыс.», «0»), в отличие от месяцев оси X.
   const ticks = (await surface.locator(".recharts-cartesian-axis-tick-label").allTextContents()).filter((t) =>
-    /^(0|[\d,\s]+(тыс|млн)\.?)$/.test(t.trim())
+    /^(0|[\d,\s]+(тыс|млн)\.?)$/.test(t.replace(/[\u2060\u2063]/g, "").trim())
   );
   expect(ticks.length).toBeGreaterThan(2);
   expect(ticks[0]).not.toBe(ticks[ticks.length - 1]);

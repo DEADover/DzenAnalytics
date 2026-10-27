@@ -51,7 +51,7 @@ test("три режима по кругу и запоминаются для к�
   const t = toggle(page);
   await expect(t).toHaveAttribute("aria-label", MODE.money);
   const pills = page.locator("table tbody td span.rounded-full", { hasText: /[▲▼]/ });
-  await expect(pills.first()).toHaveText(/^[▲▼] [\d\s ]+₽$/);
+  await expect(pills.first()).toHaveText(/^[▲▼] \u2060?[\d\s ]+₽\u2063?$/);
 
   await t.click();
   await expect(t).toHaveAttribute("aria-label", MODE.pct);
@@ -60,7 +60,7 @@ test("три режима по кругу и запоминаются для к�
 
   await t.click();
   await expect(t).toHaveAttribute("aria-label", MODE.both);
-  await expect(pills.filter({ hasText: /₽ \((менее 1|\d+)%\)$/ }).first()).toBeVisible();
+  await expect(pills.filter({ hasText: /₽\u2063? \((менее 1|\d+)%\)$/ }).first()).toBeVisible();
 
   // Режим «Сравнения» свой и не задет.
   await go(page, "/compare");

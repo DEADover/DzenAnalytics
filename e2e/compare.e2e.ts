@@ -8,7 +8,7 @@ test("«Изменение»: разница в единицах метрики 
   const table = page.locator("table").first();
   const change = (label: string) => table.locator("tr", { hasText: label }).locator("td").last();
   // Октябрь (по 15-е, со всплеском в кафе) против того же отрезка сентября.
-  await expect(change("Расходы")).toHaveText(/^▲ 11\s955 ₽ \(25%\)$/);
+  await expect(change("Расходы")).toHaveText(/^▲ \u2060?11\s955 ₽\u2063? \(25%\)$/);
   await expect(change("Операций")).toHaveText(/^▲ 3 \(27%\)$/);
   // Пилюля целиком в своей ячейке.
   const fits = await change("Средний чек").evaluate((td) => {
@@ -27,7 +27,7 @@ test("нарастающий итог по дням: идущий месяц д�
   // та же разница, что у «Расходов» в таблице выше.
   await expect(summary).toContainText("на 15 октября");
   await expect(summary).toContainText("к тому же дню");
-  await expect(summary).toContainText(/▲ 11\s955 ₽ \(25%\)/);
+  await expect(summary).toContainText(/▲ \u2060?11\s955 ₽\u2063? \(25%\)/);
   await expect(summary).toContainText("целиком");
   // Три линии: сплошная (октябрь), пунктир сентября и пунктир прогноза
   // октября до конца месяца.

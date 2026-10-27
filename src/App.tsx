@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { isViewTransitionUpdate } from "./lib/viewTransition";
 import { TopNav } from "./components/TopNav";
@@ -10,6 +10,7 @@ import { HeaderNavModal } from "./components/HeaderNavModal";
 import { QuickSettingsModal } from "./components/QuickSettingsModal";
 import { usePrivacyStore } from "./store/usePrivacyStore";
 import { startAmountSpoiler } from "./lib/amountSpoiler";
+import { stripAmountMarks } from "./lib/format";
 import { useQuickSettingsStore } from "./store/useQuickSettingsStore";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HistRatesProgress } from "./components/HistRatesProgress";
@@ -118,15 +119,12 @@ function PlainLayout() {
   if (enter.path !== pathname) {
     setEnter({ path: pathname, animate: !isViewTransitionUpdate() });
   }
-  // «Скрыть суммы» пересобирает страницу целиком: запомненные строки с
-  // цифрами (useMemo, подписи графиков) иначе остались бы на экране.
-  const hideAmounts = usePrivacyStore((s) => s.hideAmounts);
   return (
     <ErrorBoundary key={pathname}>
       {/* Обёртка нужна только ради появления: ключ по адресу заставляет её
           пересоздаваться на каждом переходе, а с новым узлом заново
           проигрывается и анимация. */}
-      <div key={`${pathname}|${hideAmounts}`} className={enter.animate ? "page-enter" : undefined}>
+      <div key={pathname} className={enter.animate ? "page-enter" : undefined}>
         <Outlet />
       </div>
     </ErrorBoundary>
@@ -151,10 +149,24 @@ function App() {
   // toggle flips, so every formatMoney call re-evaluates with the new
   // fraction setting (which lives as a module variable in lib/format).
   useDisplayStore((s) => s.fractionDigits);
-  // То же для «Скрыть суммы»; страница при этом ещё и пересобирается (PlainLayout).
+  // «Скрыть суммы»: слой сам подменяет текст сумм на месте и возвращает его —
+  // страница не перерисовывается (lib/amountSpoiler).
   const hideAmounts = usePrivacyStore((s) => s.hideAmounts);
-  // Частицы на месте скрытых сумм — один слой поверх всего приложения.
-  useEffect(() => (hideAmounts ? startAmountSpoiler() : undefined), [hideAmounts]);
+  const privacyLoaded = usePrivacyStore((s) => s.loaded);
+  // До отрисовки кадра: после перезагрузки с включённым режимом цифры не мелькнут.
+  useLayoutEffect(() => (hideAmounts ? startAmountSpoiler() : undefined), [hideAmounts]);
+  // Копирование — без невидимых меток сумм: иначе в таблицу вставлялся бы не
+  // разбираемый как число текст.
+  useEffect(() => {
+    const onCopy = (e: ClipboardEvent) => {
+      const text = window.getSelection()?.toString() ?? "";
+      if (!/[\u2060\u2063]/.test(text) || !e.clipboardData) return;
+      e.clipboardData.setData("text/plain", stripAmountMarks(text));
+      e.preventDefault();
+    };
+    document.addEventListener("copy", onCopy);
+    return () => document.removeEventListener("copy", onCopy);
+  }, []);
 
   // Данные прочитаны — заглушка перехода между аккаунтами растворяется.
   useEffect(() => {
@@ -465,7 +477,9 @@ function App() {
     };
   }, []);
 
-  if (!loaded) {
+  // Ждём и «Скрыть суммы»: иначе после перезагрузки цифры мелькнули бы до
+  // того, как режим прочитан.
+  if (!loaded || !privacyLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted">
         Загрузка…

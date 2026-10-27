@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
-import { setHideAmounts } from "../lib/format";
 
 /**
  * «Скрыть суммы» — частицы вместо денег во всём сервисе (`lib/format`, `lib/amountSpoiler`).
@@ -24,12 +23,10 @@ export const usePrivacyStore = create<PrivacyState>((set, get) => ({
   loaded: false,
   hydrate: async () => {
     const on = (await db.loadJSON<boolean>(KEY)) === true;
-    setHideAmounts(on); // форматтер — до первой отрисовки с данными
     set({ hideAmounts: on, loaded: true });
   },
   setHideAmounts: async (on) => {
-    setHideAmounts(on); // сначала форматтер…
-    set({ hideAmounts: on }); // …потом перерисовка
+    set({ hideAmounts: on });
     await db.saveJSON(KEY, on);
   },
   toggle: () => get().setHideAmounts(!get().hideAmounts),

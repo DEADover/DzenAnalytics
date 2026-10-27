@@ -164,7 +164,7 @@ test("новые контрагенты: в блоке все из шапки, �
   const fresh = page.locator(".card-tray", { has: page.getByText("Новые контрагенты", { exact: true }) });
   await fresh.getByRole("button", { name: "Показать за последние 365 дней" }).click();
   const count = Number((await fresh.getByText(/^\d+ контрагент/).textContent())!.match(/^\d+/)![0]);
-  await expect(fresh.getByRole("button", { name: /₽$/ })).toHaveCount(count);
+  await expect(fresh.getByRole("button", { name: /₽\u2063?$/ })).toHaveCount(count);
   await expect(fresh.getByText(/^Показано/)).toHaveCount(0);
   const list = fresh.locator(".scroll-soft");
   const { scrollable, height } = await list.evaluate((el) => ({

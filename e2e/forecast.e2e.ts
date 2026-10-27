@@ -10,7 +10,7 @@ test("«Совокупно»: прогноз до конца месяца по �
   // в прогноз не идёт, иначе было бы +27 000.
   const caption = page.getByText(/Прогноз по запланированным операциям: к 31 октября 2026/);
   await expect(caption).toBeVisible();
-  await expect(caption).toContainText(/\(\+30\s000\s₽\)/);
+  await expect(caption).toContainText(/\(\u2060?\+30\s000\s₽\u2063?\)/);
 });
 
 test("прошлый месяц — без прогноза", async ({ page }) => {
