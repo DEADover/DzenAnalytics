@@ -59,6 +59,8 @@ test("«Скрыть суммы»: ни одной суммы цифрами н�
 
   await page.keyboard.press("h");
   await expect(gear(page)).toHaveAttribute("title", /Суммы скрыты/);
+  // Частицы — одним слоем поверх страницы.
+  await expect(page.locator("canvas[data-amount-spoiler]")).toHaveCount(1);
 
   const money = /\d[\d   ,]*\s?[₽$€]/;
   const leaks: string[] = [];
@@ -68,6 +70,9 @@ test("«Скрыть суммы»: ни одной суммы цифрами н�
     const text = await page.locator("main").innerText();
     const m = text.match(money);
     if (m) leaks.push(`${route}: «${m[0]}»`);
+    // Знак скрывается вместе с суммой.
+    const sign = text.match(/[+\u2212-]\u2060/);
+    if (sign) leaks.push(`${route}: знак перед суммой`);
   }
   expect(leaks).toEqual([]);
 
@@ -79,4 +84,5 @@ test("«Скрыть суммы»: ни одной суммы цифрами н�
   await tile.click();
   await page.keyboard.press("Escape");
   await expect(page.locator("main").getByText(/\d ₽/).first()).toBeVisible();
+  await expect(page.locator("canvas[data-amount-spoiler]")).toHaveCount(0);
 });

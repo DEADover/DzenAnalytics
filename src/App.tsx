@@ -9,6 +9,7 @@ import { ThemeModal } from "./components/ThemeModal";
 import { HeaderNavModal } from "./components/HeaderNavModal";
 import { QuickSettingsModal } from "./components/QuickSettingsModal";
 import { usePrivacyStore } from "./store/usePrivacyStore";
+import { startAmountSpoiler } from "./lib/amountSpoiler";
 import { useQuickSettingsStore } from "./store/useQuickSettingsStore";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HistRatesProgress } from "./components/HistRatesProgress";
@@ -151,7 +152,9 @@ function App() {
   // fraction setting (which lives as a module variable in lib/format).
   useDisplayStore((s) => s.fractionDigits);
   // То же для «Скрыть суммы»; страница при этом ещё и пересобирается (PlainLayout).
-  usePrivacyStore((s) => s.hideAmounts);
+  const hideAmounts = usePrivacyStore((s) => s.hideAmounts);
+  // Частицы на месте скрытых сумм — один слой поверх всего приложения.
+  useEffect(() => (hideAmounts ? startAmountSpoiler() : undefined), [hideAmounts]);
 
   // Данные прочитаны — заглушка перехода между аккаунтами растворяется.
   useEffect(() => {

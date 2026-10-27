@@ -188,7 +188,7 @@ export function CommandPalette({ open, onClose }: Props) {
         id: "privacy:toggle",
         group: "Действия",
         title: "Скрыть или показать суммы",
-        hint: "Точки вместо денег — клавиша H",
+        hint: "Частицы вместо денег — клавиша H",
         icon: EyeOff,
         action: () => void usePrivacyStore.getState().toggle(),
       },
