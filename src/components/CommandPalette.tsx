@@ -34,12 +34,16 @@ import {
   User,
   GraduationCap,
   Store,
+  EyeOff,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useTourStore } from "../store/useTourStore";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { useThemeModalStore } from "../store/useThemeModalStore";
+import { usePrivacyStore } from "../store/usePrivacyStore";
+import { useQuickSettingsStore } from "../store/useQuickSettingsStore";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
 import { useFiltersStore } from "../store/useFiltersStore";
 import { useSavedViewsStore } from "../store/useSavedViewsStore";
@@ -180,6 +184,22 @@ export function CommandPalette({ open, onClose }: Props) {
         action: () => useThemeModalStore.getState().edit(useThemeStore.getState().resolved),
       },
       { id: "header-nav:edit", group: "Действия", title: "Настроить основное меню", icon: PanelTop, action: openHeaderNavEditor },
+      {
+        id: "privacy:toggle",
+        group: "Действия",
+        title: "Скрыть или показать суммы",
+        hint: "Точки вместо денег — клавиша H",
+        icon: EyeOff,
+        action: () => void usePrivacyStore.getState().toggle(),
+      },
+      {
+        id: "quick-settings:edit",
+        group: "Действия",
+        title: "Настроить быстрые настройки",
+        hint: "Что стоит в панели шестерёнки",
+        icon: SlidersHorizontal,
+        action: () => useQuickSettingsStore.getState().openEditor(),
+      },
       { id: "tour:hub", group: "Действия", title: "Центр обучения", hint: "Короткие туры по интерфейсу", icon: GraduationCap, action: () => useTourStore.getState().openHub() },
       // Все двенадцать тем: «тема лагуна» или «уголь» находит нужную сразу.
       // Из палитры тему просят увидеть — поэтому включаем и её вид.

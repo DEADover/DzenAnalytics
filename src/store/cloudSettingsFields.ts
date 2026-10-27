@@ -27,6 +27,7 @@ import { normalizeAccountsView, pickAccountsView, useAccountsViewStore } from ".
 import { useThemeStore } from "./useThemeStore";
 import { useDashboardLayoutStore } from "./useDashboardLayoutStore";
 import { useHeaderNavStore } from "./useHeaderNavStore";
+import { useQuickSettingsStore } from "./useQuickSettingsStore";
 import { useBudgetSettingsStore } from "./useBudgetSettingsStore";
 import { useReportPeriodStore } from "./useReportPeriodStore";
 import { useFireStore } from "./useFireStore";
@@ -288,6 +289,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   ),
   field(useHeaderNavStore, "home.headerNavIconWidth", (s) => s.iconWidth, (v, s) =>
     typeof v === "number" ? s.setIconWidth(v) : undefined
+  ),
+  field(useQuickSettingsStore, "home.quickSettings", (s) => s.items, (v, s) =>
+    Array.isArray(v) ? s.replaceItems(v) : undefined
   ),
 ];
 

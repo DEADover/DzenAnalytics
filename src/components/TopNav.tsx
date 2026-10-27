@@ -29,6 +29,7 @@ import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useSyncCommands } from "../hooks/useSyncCommands";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 import { SmoothNavLink } from "./SmoothNavLink";
+import { QuickSettingsMenu } from "./QuickSettingsMenu";
 import { FiltersDock } from "./FiltersDock";
 import { headerSections, iconButtonWidth, moreGroups } from "../lib/headerNav";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
@@ -486,17 +487,10 @@ export function TopNav({
         <div className="hidden md:contents">
         <ThemeSwitcher />
 
-        {/* Settings — gear icon. Выбранный — той же заливкой, что пункт меню. */}
-        <SmoothNavLink
-          to="/settings"
-          onNavigate={() => setMoreOpen(false)}
-          title="Настройки"
-          className={({ isActive }) => iconItem(isActive)}
-        >
-          <Settings
-            className="w-4 h-4 transition-transform duration-500 ease-out group-hover:rotate-90"
-          />
-        </SmoothNavLink>
+        {/* Шестерёнка — быстрые настройки; внизу их панели — переход во все
+            «Настройки». Подсвечена, пока панель открыта или открыты сами
+            настройки. */}
+        <QuickSettingsMenu className={iconItem} />
 
         {/* Настройка главной. Стоит здесь, а не на самой странице: это действие
             над экраном, как тема и настройки, а не ещё один его блок. Работает

@@ -102,6 +102,25 @@ export function getMoneyFractionDigits(): number {
 }
 
 /**
+ * «Скрыть суммы»: вместо цифр — точки, чтобы показать экран другому человеку.
+ * Как и копейки — переменная модуля, которую ставит хранилище (`usePrivacyStore`);
+ * при переключении содержимое страниц пересобирается целиком (App), чтобы ни
+ * одна запомненная строка не осталась с цифрами.
+ *
+ * Прячутся суммы (`formatMoney`) и сокращённые числа (`formatNum` с `compact`)
+ * — это подписи осей графиков, по которым масштаб читается не хуже суммы.
+ * Счётчики, проценты и даты остаются: они не про деньги.
+ */
+export const HIDDEN_AMOUNT = "•••";
+let _hideAmounts = false;
+export function setHideAmounts(on: boolean): void {
+  _hideAmounts = on;
+}
+export function amountsHidden(): boolean {
+  return _hideAmounts;
+}
+
+/**
  * Знак валюты для подписей, где сумма не выводится, а ожидается: «Сумма, ₽»,
  * переключатель «₽ / %». Раньше такие подписи были захардкожены рублём и
  * врали, если базовая валюта другая (issue #57).
@@ -135,6 +154,7 @@ export function formatMoney(
     maximumFractionDigits: dec,
   });
   const symbol = symbolByCurrency[currency] || currency;
+  if (_hideAmounts) return `${sign}${HIDDEN_AMOUNT} ${symbol}`;
   const value = fmt.format(abs);
   return `${sign}${value} ${symbol}`;
 }
@@ -172,6 +192,8 @@ export function formatNum(
   value: number,
   opts?: { compact?: boolean; fractionDigits?: number }
 ): string {
+  // Сокращённые числа — подписи осей с деньгами; ноль оставляем, он опора оси.
+  if (_hideAmounts && opts?.compact && value !== 0) return HIDDEN_AMOUNT;
   return new Intl.NumberFormat("ru-RU", {
     notation: opts?.compact ? "compact" : "standard",
     // Округляем по МОДУЛЮ: сравнение самого значения отбрасывало копейки только

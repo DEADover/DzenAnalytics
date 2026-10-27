@@ -7,6 +7,9 @@ import { TransactionsDrawer } from "./components/TransactionsDrawer";
 import { CommandPalette } from "./components/CommandPalette";
 import { ThemeModal } from "./components/ThemeModal";
 import { HeaderNavModal } from "./components/HeaderNavModal";
+import { QuickSettingsModal } from "./components/QuickSettingsModal";
+import { usePrivacyStore } from "./store/usePrivacyStore";
+import { useQuickSettingsStore } from "./store/useQuickSettingsStore";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HistRatesProgress } from "./components/HistRatesProgress";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
@@ -114,12 +117,15 @@ function PlainLayout() {
   if (enter.path !== pathname) {
     setEnter({ path: pathname, animate: !isViewTransitionUpdate() });
   }
+  // «Скрыть суммы» пересобирает страницу целиком: запомненные строки с
+  // цифрами (useMemo, подписи графиков) иначе остались бы на экране.
+  const hideAmounts = usePrivacyStore((s) => s.hideAmounts);
   return (
     <ErrorBoundary key={pathname}>
       {/* Обёртка нужна только ради появления: ключ по адресу заставляет её
           пересоздаваться на каждом переходе, а с новым узлом заново
           проигрывается и анимация. */}
-      <div key={pathname} className={enter.animate ? "page-enter" : undefined}>
+      <div key={`${pathname}|${hideAmounts}`} className={enter.animate ? "page-enter" : undefined}>
         <Outlet />
       </div>
     </ErrorBoundary>
@@ -144,6 +150,8 @@ function App() {
   // toggle flips, so every formatMoney call re-evaluates with the new
   // fraction setting (which lives as a module variable in lib/format).
   useDisplayStore((s) => s.fractionDigits);
+  // То же для «Скрыть суммы»; страница при этом ещё и пересобирается (PlainLayout).
+  usePrivacyStore((s) => s.hideAmounts);
 
   // Данные прочитаны — заглушка перехода между аккаунтами растворяется.
   useEffect(() => {
@@ -181,6 +189,8 @@ function App() {
     useColumnWidthsStore.getState().hydrate();
     useDiffModeStore.getState().hydrate();
     useOffBalanceStore.getState().hydrate();
+    usePrivacyStore.getState().hydrate();
+    useQuickSettingsStore.getState().hydrate();
     useSlicesStore.getState().hydrate();
     useNewCategoriesStore.getState().hydrate();
     useCounterpartyEditsStore.getState().hydrate();
@@ -525,6 +535,7 @@ function App() {
       <TourOverlay />
       <ThemeModal />
       <HeaderNavModal />
+      <QuickSettingsModal />
       <ConfirmDialog />
       <HistRatesProgress />
       {/* «Наверх» — одна на всё приложение: появляется на любой странице,

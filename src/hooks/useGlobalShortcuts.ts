@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFiltersDockStore } from "../store/useFiltersDockStore";
+import { usePrivacyStore } from "../store/usePrivacyStore";
 
 /**
  * Global keyboard shortcuts: ⌘/Ctrl+K and `/` open the palette; `g` followed
  * by a single key (within 1.5s) navigates to a known route; `F` shows or hides
- * the filters panel.
+ * the filters panel; `H` hides or shows amounts.
  *
  * Lives in its own file (not in CommandPalette.tsx) so the component file
  * exports only React components — required for Vite/React fast-refresh.
@@ -81,6 +82,23 @@ export function useGlobalShortcuts(onOpenPalette: () => void) {
       ) {
         e.preventDefault();
         useFiltersDockStore.getState().toggle();
+        lastG = 0;
+        return;
+      }
+
+      // H — «Скрыть суммы» (hide): быстро спрятать деньги, когда к экрану
+      // подошли. По физической клавише, как F; посреди `g`-комбинации это
+      // «Справка» (`g h`), поэтому — только без приставки.
+      if (
+        e.code === "KeyH" &&
+        !armed &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !document.querySelector('[role="dialog"][aria-modal="true"]')
+      ) {
+        e.preventDefault();
+        void usePrivacyStore.getState().toggle();
         lastG = 0;
         return;
       }

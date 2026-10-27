@@ -40,6 +40,15 @@ export const isWindowKind = (v: unknown): v is WindowKind =>
 /** 1 (smallest) … 5 (largest); 3 is the default 14px baseline. */
 export type TableFontLevel = 1 | 2 | 3 | 4 | 5;
 
+/** Ступени «Размера текста в таблицах» словами — в «Настройках» и быстрой панели. */
+export const TABLE_FONT_LABELS: Record<TableFontLevel, string> = {
+  1: "Мелкий",
+  2: "Компактный",
+  3: "Обычный",
+  4: "Крупный",
+  5: "Очень крупный",
+};
+
 // Level → font-size for operation tables. Each step is 1px at a 16px root.
 // Level 3 = 0.875rem (14px) is the unified default.
 const TABLE_FONT_REM: Record<TableFontLevel, string> = {

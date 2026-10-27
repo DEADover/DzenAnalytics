@@ -79,7 +79,7 @@ import { Combobox } from "../components/Combobox";
 import { PageHeader } from "../components/PageHeader";
 import { formatNum, formatDate, formatMoney } from "../lib/format";
 import { useFilterMemoryStore } from "../store/useFilterMemoryStore";
-import { useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
+import { TABLE_FONT_LABELS, useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { useThemeModalStore } from "../store/useThemeModalStore";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
@@ -118,13 +118,6 @@ const CSV_NO_ROWS = "В файле не нашлось ни одной опер�
  * fuzzy auto target applies again. Local input state keeps typing
  * snappy across hundreds of rows.
  */
-const TABLE_FONT_LABELS: Record<TableFontLevel, string> = {
-  1: "Мелкий",
-  2: "Компактный",
-  3: "Обычный",
-  4: "Крупный",
-  5: "Очень крупный",
-};
 
 /* Отключено вместе с блоком «Группировка получателей» — см. ниже.
 function AutoGroupRow({
