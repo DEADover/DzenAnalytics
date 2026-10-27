@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useZenUsers } from "../hooks/useZenUsers";
 import { CounterpartyNoteButton } from "../components/CounterpartyNote";
 import { Checkbox } from "../components/Checkbox";
 import {
@@ -65,12 +66,9 @@ import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { confirm } from "../store/useConfirmStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
-import {
-  getLiveAccountsFromCache,
-  getZenUsersFromCache,
-} from "../store/useZenmoneyStore";
+import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { useMembersStore } from "../store/useMembersStore";
-import { userLabel, type ZenUserOption } from "../lib/zenUsers";
+import { userLabel } from "../lib/zenUsers";
 import { useAccountEditsStore } from "../store/useAccountEditsStore";
 import {
   useAccountsViewStore,
@@ -572,16 +570,7 @@ export function AccountsPage() {
   // ними, отдельной синхронизации не нужно.
   const membersOwnerId = useMembersStore((s) => s.ownerId);
   const memberAliases = useMembersStore((s) => s.aliases);
-  const [memberList, setMemberList] = useState<ZenUserOption[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    getZenUsersFromCache().then((list) => {
-      if (!cancelled && list) setMemberList(list);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions]);
+  const memberList = useZenUsers();
   /**
    * Как подписать счёт участника — или `null`, если подписывать нечего.
    *
@@ -907,7 +896,11 @@ export function AccountsPage() {
   // Столбец «Владелец» — только когда в аккаунте Дзен-мани больше одного
   // участника (совместный доступ). На личном владелец у всех счетов один, и
   // столбец повторял бы одно имя.
-  const showOwner = memberList.length > 1;
+  //
+  // Решаем и по самим счетам: у счёта на общем аккаунте указан участник, а
+  // счета есть с первой отрисовки. Иначе столбец появлялся мгновением позже
+  // списка участников, и «Тип» перескакивал на его место.
+  const showOwner = memberList.length > 1 || accountRows.some((r) => r.member != null);
   // «Статус» — когда в списке есть что отметить: архив или вне баланса.
   const showStatus = accountRows.some((r) => (r.archive && showArchived) || r.offBalance);
   /** Сколько столбцов между «Типом» и деньгами — для строк групп и долгов. */

@@ -75,3 +75,34 @@ test("«Счета»: кнопка сброса фильтров списка р
   await reset.click();
   await expect(reset).toBeDisabled();
 });
+
+test("совместный доступ: при переходе в «Счета» столбцы и владельцы не перескакивают", async ({ page, zen }) => {
+  zen.patchFull = (diff) => ({
+    ...diff,
+    user: [...diff.user, { ...diff.user[0], id: SPOUSE, login: "spouse" }],
+    account: diff.account.map((a, i) => ({ ...a, role: i === 0 ? null : a.id === "acc-sber" ? SPOUSE : diff.user[0].id })),
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await connectZen(page, "/");
+  await page.waitForTimeout(500);
+  // Шапка и первые владельцы — в каждом кадре перехода; меняться не должны.
+  const seen = await page.evaluate(async () => {
+    const a = [...document.querySelectorAll("nav a")].find((x) => x.textContent?.trim() === "Счета") as HTMLElement;
+    a.click();
+    const out: string[] = [];
+    const t0 = performance.now();
+    while (performance.now() - t0 < 1200) {
+      const th = [...document.querySelectorAll("main table thead th")].map((x) => x.textContent?.trim()).join("|");
+      const owners = [...document.querySelectorAll("main table tbody tr")]
+        .slice(0, 3)
+        .map((r) => r.children[2]?.textContent?.trim())
+        .join(",");
+      const s = `${th} :: ${owners}`;
+      if (th && out[out.length - 1] !== s) out.push(s);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    return out;
+  });
+  expect(seen).toHaveLength(1);
+  expect(seen[0]).toContain("Тип|Владелец");
+});

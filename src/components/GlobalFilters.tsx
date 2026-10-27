@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useZenUsers } from "../hooks/useZenUsers";
 import { createPortal } from "react-dom";
 import { Popover } from "./Popover";
 import { useFiltersDockStore } from "../store/useFiltersDockStore";
@@ -29,10 +30,7 @@ import clsx from "clsx";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
 import { txAccountKey } from "../lib/accountKey";
 import { useDataStore } from "../store/useDataStore";
-import {
-  getCategoryTagsFromCache,
-  getZenUsersFromCache,
-} from "../store/useZenmoneyStore";
+import { getCategoryTagsFromCache } from "../store/useZenmoneyStore";
 import { accountOptions } from "../lib/accountOptions";
 import {
   FILTER_NONE,
@@ -55,7 +53,6 @@ import {
   hasSharedItems,
   userLabel,
   MEMBER_SHARED,
-  type ZenUserOption,
 } from "../lib/zenUsers";
 import { useMembersStore } from "../store/useMembersStore";
 import { FilterResetButton } from "./FilterResetButton";
@@ -399,16 +396,7 @@ export function GlobalFilters({
     return out;
   }, [memberIds, transactions]);
   const userAliases = useMembersStore((s) => s.aliases);
-  const [zenUserList, setZenUserList] = useState<ZenUserOption[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    getZenUsersFromCache().then((list) => {
-      if (!cancelled && list) setZenUserList(list);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions]);
+  const zenUserList = useZenUsers();
 
   const currencies = useMemo(() => {
     const set = new Set<string>();

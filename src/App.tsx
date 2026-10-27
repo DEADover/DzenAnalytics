@@ -10,6 +10,7 @@ import { HeaderNavModal } from "./components/HeaderNavModal";
 import { QuickSettingsModal } from "./components/QuickSettingsModal";
 import { usePrivacyStore } from "./store/usePrivacyStore";
 import { startAmountSpoiler } from "./lib/amountSpoiler";
+import { preloadZenUsers } from "./hooks/useZenUsers";
 import { stripAmountMarks } from "./lib/format";
 import { useQuickSettingsStore } from "./store/useQuickSettingsStore";
 import { ConfirmDialog } from "./components/ConfirmDialog";
@@ -155,6 +156,10 @@ function App() {
   const privacyLoaded = usePrivacyStore((s) => s.loaded);
   // До отрисовки кадра: после перезагрузки с включённым режимом цифры не мелькнут.
   useLayoutEffect(() => (hideAmounts ? startAmountSpoiler() : undefined), [hideAmounts]);
+  // Участники аккаунта — заранее и заново после каждой синхронизации:
+  // «Счета» и общий фильтр рисуются с ними сразу, без перескока имён.
+  const allTransactions = useDataStore((s) => s.transactions);
+  useEffect(() => preloadZenUsers(), [allTransactions]);
   // Копирование — без невидимых меток сумм: иначе в таблицу вставлялся бы не
   // разбираемый как число текст.
   useEffect(() => {
