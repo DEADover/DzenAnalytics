@@ -1461,6 +1461,32 @@ h2,
 .animate-flash-in { animation: flashSlideDown 0.22s ease-out; }
 .animate-flash-out { animation: flashFadeOut 0.18s ease-in forwards; }
 
+/* Панель быстрых настроек (QuickSettingsMenu) вырастает из шестерёнки — от
+   правого верхнего угла, где кнопка, — и так же уходит обратно. Плитки и
+   строки внутри проявляются коротким каскадом (`animate-menu-item`). */
+@keyframes quickPanelIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes quickPanelOut {
+  to { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+.animate-quick-panel-in {
+  animation: quickPanelIn 0.24s cubic-bezier(0.32, 0.72, 0, 1) both;
+  transform-origin: top right;
+}
+.animate-quick-panel-out {
+  animation: quickPanelOut 0.14s ease-in forwards;
+  transform-origin: top right;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-quick-panel-in,
+  .animate-quick-panel-out,
+  .animate-quick-panel-in .animate-menu-item {
+    animation: none;
+  }
+}
+
 /* Лента одних запланированных (PlannedFeedList): первые дни выезжают по
    очереди, остальные — вместе с последним, чтобы длинный список не
    «сыпался» секунду. Обратно к операциям — простое проявление. */

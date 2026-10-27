@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { ArrowRight, Loader2, Pencil, Settings } from "lucide-react";
 import { useLocation } from "react-router-dom";
@@ -23,8 +23,33 @@ import { useZenmoneyStore, type PushMode } from "../store/useZenmoneyStore";
  * Пока включено «Скрыть суммы», на шестерёнке горит точка: забытый режим
  * иначе выглядел бы как пропавшие данные.
  */
+/** Сколько длится уход панели — столько она ещё стоит на экране после закрытия. */
+const CLOSE_MS = 140;
+
 export function QuickSettingsMenu({ className }: { className: (active: boolean) => string }) {
   const [open, setOpen] = useState(false);
+  // Закрытие — с анимацией ухода: панель ещё на экране, пока не доиграет.
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  const close = () => {
+    if (!open || closing) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      setOpen(false);
+      return;
+    }
+    setClosing(true);
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+    }, CLOSE_MS);
+  };
+  const toggle = () => {
+    if (open && !closing) close();
+    else if (!open) setOpen(true);
+  };
   const anchorRef = useRef<HTMLSpanElement>(null);
   const { pathname } = useLocation();
   const hidden = usePrivacyStore((s) => s.hideAmounts);
@@ -35,12 +60,12 @@ export function QuickSettingsMenu({ className }: { className: (active: boolean) 
       <button
         type="button"
         data-tour="quick-settings"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         aria-haspopup="dialog"
-        aria-expanded={open}
+        aria-expanded={open && !closing}
         aria-label="Быстрые настройки"
         title={hidden ? "Быстрые настройки\nСуммы скрыты" : "Быстрые настройки"}
-        className={className(open || onSettings)}
+        className={className((open && !closing) || onSettings)}
       >
         <Settings className="w-4 h-4 transition-transform duration-500 ease-out group-hover:rotate-90" />
         {hidden && (
@@ -53,11 +78,14 @@ export function QuickSettingsMenu({ className }: { className: (active: boolean) 
       <Popover
         open={open}
         anchorRef={anchorRef}
-        onClose={() => setOpen(false)}
+        onClose={close}
         align="right"
-        className="w-[22rem] card p-3 shadow-lg"
+        className={clsx(
+          "w-[22rem] card p-3 shadow-lg",
+          closing ? "animate-quick-panel-out pointer-events-none" : "animate-quick-panel-in"
+        )}
       >
-        <QuickSettingsPanel onClose={() => setOpen(false)} />
+        <QuickSettingsPanel onClose={close} />
       </Popover>
     </span>
   );
@@ -79,13 +107,15 @@ function QuickSettingsPanel({ onClose }: { onClose: () => void }) {
   if (tiles.length > 0) {
     blocks.push(
       <div key="tiles" className="grid grid-cols-2 gap-2">
-        {tiles.map((s) => (
-          <QuickTile key={s.id} setting={s} />
+        {tiles.map((s, i) => (
+          <QuickTile key={s.id} setting={s} delay={40 + i * 25} />
         ))}
       </div>
     );
   }
-  for (const s of rows) blocks.push(<QuickRow key={s.id} setting={s} />);
+  rows.forEach((s, i) =>
+    blocks.push(<QuickRow key={s.id} setting={s} delay={40 + (tiles.length + i) * 25} />)
+  );
 
   return (
     <div role="dialog" aria-label="Быстрые настройки">
@@ -143,7 +173,7 @@ export function useAvailableQuickSettings(): (id: string) => boolean {
 }
 
 /** Плитка-тумблер или действие: значок в круге, название и состояние словами. */
-function QuickTile({ setting }: { setting: QuickSetting }) {
+function QuickTile({ setting, delay }: { setting: QuickSetting; delay: number }) {
   const t = useToggle(setting.id);
   if (!t) return null;
   const Icon = setting.icon;
@@ -155,8 +185,9 @@ function QuickTile({ setting }: { setting: QuickSetting }) {
       aria-checked={isAction ? undefined : t.on}
       onClick={t.run}
       disabled={t.busy}
+      style={{ animationDelay: `${delay}ms` }}
       className={clsx(
-        "flex items-center gap-2.5 min-w-0 rounded-control border px-2.5 py-2 text-left transition-colors",
+        "animate-menu-item flex items-center gap-2.5 min-w-0 rounded-control border px-2.5 py-2 text-left transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
         t.on ? "border-accent/40 bg-accent/10" : "border-border bg-panel2/50 hover:border-accent/40"
       )}
@@ -239,10 +270,10 @@ function useToggle(id: string): ToggleView | null {
 }
 
 /** Строка во всю ширину: название и переключатель вариантов или бегунок. */
-function QuickRow({ setting }: { setting: QuickSetting }) {
+function QuickRow({ setting, delay }: { setting: QuickSetting; delay: number }) {
   const Icon = setting.icon;
   return (
-    <div>
+    <div className="animate-menu-item" style={{ animationDelay: `${delay}ms` }}>
       <div className="flex items-center gap-1.5 mb-1.5 text-xs text-muted">
         <Icon className="w-3.5 h-3.5" aria-hidden />
         {setting.label}
