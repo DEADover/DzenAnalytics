@@ -17,6 +17,7 @@ describe("настройки страницы «Счета» — чтение и
       tab: "flow",
       chartView: "single",
       chartAccounts: ["Карта", "Наличные"],
+      chartOffBalance: true,
       listView: "cards",
       typeFilter: ["Карта"],
       bankFilter: ["Т-Банк"],

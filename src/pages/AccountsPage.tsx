@@ -1298,19 +1298,37 @@ export function AccountsPage() {
    * графике — историю того, сколько он должен вам (или вы ему).
    */
   /**
+   * Все счета, включая те, что вне баланса, — для варианта «Все (с
+   * внебалансовыми)». Ключи — как у оценки остатков, по тем же живым счетам.
+   */
+  const allChartKeys = useMemo(() => new Set(liveList.map(accountKeyOf)), [liveList]);
+  /**
+   * «Все (с внебалансовыми)» действует, только когда такие счета есть и они
+   * ещё не в «Все» (в настройках можно включить счета вне баланса везде —
+   * тогда вариант лишний и не показывается).
+   */
+  const hasOffBalanceExtra = useMemo(() => {
+    const universe = valuation?.universe;
+    return !!universe && [...allChartKeys].some((k) => !universe.has(k));
+  }, [allChartKeys, valuation]);
+  const chartWithOff = prefs.chartOffBalance && hasOffBalanceExtra;
+  /** Какие счета видят график и его меню: «Все» или все вместе с внебалансовыми. */
+  const chartUniverse = chartWithOff ? allChartKeys : valuation?.universe;
+  /**
    * Выбор счетов графика без счетов вне баланса. Раньше меню их предлагало,
    * и снятая галочка у одного счёта сохраняла «все пункты, кроме него» —
    * вместе с внебалансовыми. Такой сохранённый выбор чистим здесь: график,
-   * меню и быстрый выбор накоплений видят только счета из «Все».
+   * меню и быстрый выбор накоплений видят только счета из «Все». С вариантом
+   * «Все (с внебалансовыми)» — все счета.
    */
   const chartPicked = useMemo(() => {
-    const universe = valuation?.universe;
+    const universe = chartUniverse;
     if (!universe || chartAccounts.has(FILTER_NONE)) return chartAccounts;
     const out = new Set(
       [...chartAccounts].filter((k) => universe.has(parseDebtKey(k)?.account ?? k))
     );
     return out.size === chartAccounts.size ? chartAccounts : out;
-  }, [chartAccounts, valuation]);
+  }, [chartAccounts, chartUniverse]);
   const chartAccountOptions = useMemo(() => {
     // Порядок — как в глобальном фильтре: по виду счёта, архивные внизу. Иначе
     // `MultiSelect` рисует заголовок группы столько раз, сколько раз она
@@ -1321,7 +1339,8 @@ export function AccountsPage() {
     // включены счета вне баланса). Иначе снятая галочка у одного счёта
     // добавляла в график все внебалансовые: ипотека или вклад вне баланса
     // сдвигали линию на миллионы при «исключении» счёта с оборотом в 1–2 тыс.
-    const universe = valuation?.universe;
+    // Вариант «Все (с внебалансовыми)» открывает меню и для них.
+    const universe = chartUniverse;
     const base = accountOptions(
       accountRows.filter((r) => !universe || universe.has(r.account)).map((r) => r.account),
       [],
@@ -1331,7 +1350,7 @@ export function AccountsPage() {
       accountRows.filter((r) => DEBT_TYPES.has(r.type)).map((r) => r.account)
     );
     return withDebtCounterparties(base, debts, transactions);
-  }, [accountRows, transactions, dir, valuation]);
+  }, [accountRows, transactions, dir, chartUniverse]);
   /** Вид счёта для заголовков групп — как в глобальном фильтре. */
   const chartAccountGroup = useCallback(
     (name: string) => {
@@ -1361,11 +1380,15 @@ export function AccountsPage() {
   const chartView = capitalPick ? "stacked" : view;
   const chartOnly = useMemo<string[] | null>(() => {
     if (capitalPick) return [capitalPick];
-    if (chartPicked.size === 0) return null;
+    // «Все (с внебалансовыми)» без выбора — все счета явным списком: без
+    // списка график берёт только счета «в балансе».
+    if (chartPicked.size === 0) return chartWithOff ? [...allChartKeys] : null;
     if (chartPicked.has(FILTER_NONE)) return [];
     return [...chartPicked];
-  }, [chartPicked, capitalPick]);
-  const chartFiltered = chartOnly !== null && chartOnly.length > 0;
+  }, [chartPicked, capitalPick, chartWithOff, allChartKeys]);
+  /** Все счета вместе с внебалансовыми — это не выбор, а «все», подпись как у «Все». */
+  const chartAllWithOff = chartWithOff && !capitalPick && chartPicked.size === 0;
+  const chartFiltered = chartOnly !== null && chartOnly.length > 0 && !chartAllWithOff;
   const chartNothingPicked = chartOnly !== null && chartOnly.length === 0;
 
   /**
@@ -1433,14 +1456,15 @@ export function AccountsPage() {
       savings: universe.filter((t) => savingsOf.get(t)),
     };
   }, [accountRows, valuation]);
-  const savingsMode = useMemo<"all" | "noSavings" | "savings" | "custom">(() => {
+  const savingsMode = useMemo<"all" | "allOff" | "noSavings" | "savings" | "custom">(() => {
+    if (chartWithOff) return chartPicked.size === 0 ? "allOff" : "custom";
     if (chartPicked.size === 0) return "all";
     const same = (list: string[]) =>
       list.length === chartPicked.size && list.every((t) => chartPicked.has(t));
     if (same(savingsPresets.noSavings)) return "noSavings";
     if (same(savingsPresets.savings)) return "savings";
     return "custom";
-  }, [chartPicked, savingsPresets]);
+  }, [chartPicked, savingsPresets, chartWithOff]);
   const netChartAll = useNetWorthSeries(transactions, netChartAccounts);
   const netChart = useMemo(
     () => (chartNothingPicked ? [] : clip(netChartAll)),
@@ -3179,16 +3203,33 @@ export function AccountsPage() {
             (как у карточки сравнения), и выделение ничего не двигает. */}
         <div className="flex items-center gap-3 flex-wrap min-h-10 mb-3">
           {!capitalPick && chartAccountOptions.length > 1 && hasRealBalances && (
-            <Segmented<"all" | "noSavings" | "savings" | "custom">
+            <Segmented<"all" | "allOff" | "noSavings" | "savings" | "custom">
               size="sm"
               tight
               label="Накопительные счета на графике"
               value={savingsMode}
               onChange={(v) => {
-                if (v !== "custom") setChartAccounts(new Set(savingsPresets[v]));
+                if (v === "custom") return;
+                // «Все (с внебалансовыми)» открывает меню «Счета» и для счетов
+                // вне баланса; остальные варианты — снова только «Все».
+                if (v === "allOff") void patchPrefs({ chartAccounts: [], chartOffBalance: true });
+                else void patchPrefs({ chartAccounts: savingsPresets[v], chartOffBalance: false });
               }}
               options={[
-                { value: "all", label: "Все", title: "Все счета" },
+                {
+                  value: "all",
+                  label: "Все",
+                  title: hasOffBalanceExtra ? "Все счета в балансе" : "Все счета",
+                },
+                ...(hasOffBalanceExtra
+                  ? [
+                      {
+                        value: "allOff" as const,
+                        label: "Все (с внебалансовыми)",
+                        title: "Все счета, включая счета вне баланса — их можно выбрать и в меню «Счета»",
+                      },
+                    ]
+                  : []),
                 // Пустой выбор значит «все счета», поэтому вариант без
                 // единого счёта выключен, а не молча показывает всё.
                 {

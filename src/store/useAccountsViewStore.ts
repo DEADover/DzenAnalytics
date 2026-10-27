@@ -53,6 +53,8 @@ export interface AccountsViewPrefs {
   chartView: AccountsChartView;
   /** Счета, выбранные для графика остатков. Пусто — автоматика (крупнейшие). */
   chartAccounts: string[];
+  /** «Все (с внебалансовыми)»: график и его меню счетов видят и счета вне баланса. */
+  chartOffBalance: boolean;
   listView: AccountsListView;
   typeFilter: string[];
   bankFilter: string[];
@@ -72,6 +74,7 @@ export const ACCOUNTS_VIEW_DEFAULTS: AccountsViewPrefs = {
   tab: "capital",
   chartView: "stacked",
   chartAccounts: [],
+  chartOffBalance: false,
   listView: "table",
   typeFilter: [],
   bankFilter: [],
@@ -132,6 +135,7 @@ export function normalizeAccountsView(raw: Partial<AccountsViewPrefs> | null): A
     tab: oneOf(raw.tab, ["capital", "flow"] as const, d.tab),
     chartView: oneOf(raw.chartView, ["stacked", "single"] as const, d.chartView),
     chartAccounts: strings(raw.chartAccounts),
+    chartOffBalance: raw.chartOffBalance === true,
     listView,
     typeFilter: strings(raw.typeFilter),
     bankFilter: strings(raw.bankFilter),
@@ -150,6 +154,7 @@ export function pickAccountsView(s: AccountsViewPrefs): AccountsViewPrefs {
     tab: s.tab,
     chartView: s.chartView,
     chartAccounts: s.chartAccounts,
+    chartOffBalance: s.chartOffBalance,
     listView: s.listView,
     typeFilter: s.typeFilter,
     bankFilter: s.bankFilter,
