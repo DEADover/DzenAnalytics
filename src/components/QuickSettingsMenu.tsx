@@ -15,7 +15,7 @@ import { useFilterMemoryStore } from "../store/useFilterMemoryStore";
 import { useMembersStore } from "../store/useMembersStore";
 import { useZenmoneyStore, type PushMode } from "../store/useZenmoneyStore";
 import { useDataStore } from "../store/useDataStore";
-import { currencySymbol } from "../lib/format";
+import { formatMoneyExample } from "../lib/format";
 
 /**
  * Шестерёнка в шапке: по клику — панель быстрых настроек, в её шапке — переход
@@ -252,13 +252,12 @@ function useToggle(id: string): ToggleView | null {
     case "offBalance":
       return sw(offBalance, setOffBalance, "Учитываются", "Не учитываются");
     case "kopecks":
-      // Пример суммы, как в «Настройках». Собран руками, а не `formatMoney`:
-      // в режиме «Скрыть суммы» тот спрятал бы под частицы и сам пример.
+      // Пример суммы, как в «Настройках»; образец формата «Скрыть суммы» не прячет.
       return sw(
         fractionDigits === 2,
         (v) => setFractionDigits(v ? 2 : 0),
-        `1\u00a0234,10 ${currencySymbol(base)}`,
-        `1\u00a0234 ${currencySymbol(base)}`
+        formatMoneyExample(1234.1, base, { decimals: 2 }),
+        formatMoneyExample(1234.1, base, { decimals: 0 })
       );
     case "statementLine":
       return sw(statementLine, setStatementLine, "Показана", "Скрыта");

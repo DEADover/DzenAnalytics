@@ -120,6 +120,18 @@ export function getMoneyFractionDigits(): number {
 export const AMOUNT_OPEN = "\u2060";
 export const AMOUNT_CLOSE = "\u2063";
 const marked = (s: string) => `${AMOUNT_OPEN}${s}${AMOUNT_CLOSE}`;
+/**
+ * Образец формата, а не деньги («Например: 1 234,10 ₽» в настройках) — без
+ * меток, поэтому «Скрыть суммы» его не прячет: по нему выбирают вид сумм.
+ */
+export function formatMoneyExample(
+  amount: number,
+  currency: Currency = "RUB",
+  opts?: { decimals?: number }
+): string {
+  return stripAmountMarks(formatMoney(amount, currency, opts));
+}
+
 /** Строка без меток сумм — для буфера обмена и сравнений. */
 export function stripAmountMarks(s: string): string {
   return s.replace(/[\u2060\u2063]/g, "");

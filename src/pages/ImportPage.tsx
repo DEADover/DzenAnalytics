@@ -77,7 +77,7 @@ import { useFreeMoneyStore } from "../store/useFreeMoneyStore";
 import { useTagModeStore } from "../store/useTagModeStore";
 import { Combobox } from "../components/Combobox";
 import { PageHeader } from "../components/PageHeader";
-import { formatNum, formatDate, formatMoney } from "../lib/format";
+import { formatNum, formatDate, formatMoney, formatMoneyExample } from "../lib/format";
 import { useFilterMemoryStore } from "../store/useFilterMemoryStore";
 import { TABLE_FONT_LABELS, useDisplayStore, type TableFontLevel } from "../store/useDisplayStore";
 import { useThemeStore } from "../store/useThemeStore";
@@ -1545,7 +1545,7 @@ export function ImportPage() {
 
         <SettingRow
           title="Дробная часть сумм"
-          status={`Например: ${formatMoney(1234.1, rates.base)}`}
+          status={`Например: ${formatMoneyExample(1234.1, rates.base)}`}
           help={
             <p>
               Показывать ли копейки, центы и прочую мелочь. Влияет на все суммы:
@@ -1977,7 +1977,7 @@ export function ImportPage() {
               className="tabular-nums font-medium text-expense whitespace-nowrap"
               style={{ fontSize: "var(--tbl-font)" }}
             >
-              {formatMoney(-1234, rates.base)}
+              {formatMoneyExample(-1234, rates.base)}
             </span>
           </div>
         </SettingRow>
