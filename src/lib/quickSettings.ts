@@ -6,7 +6,6 @@ import {
   History,
   PanelTop,
   ReceiptText,
-  RefreshCw,
   Scale,
   Type,
   Upload,
@@ -21,11 +20,11 @@ import {
  * порядок пунктов человек собирает сам (`QuickSettingsModal`).
  *
  * Здесь — только перечень и его порядок по умолчанию; как каждый пункт
- * читает и меняет свою настройку, решает сама панель. Темы здесь нет: для неё
- * в шапке своя кнопка.
+ * читает и меняет свою настройку, решает сама панель. Темы и синхронизации
+ * здесь нет: для них в шапке свои кнопки.
  *
  * `kind` задаёт вид: плитка-тумблер (`toggle`), переключатель из нескольких
- * вариантов (`choice`), бегунок (`range`) или действие (`action`).
+ * вариантов (`choice`) или бегунок (`range`).
  */
 export interface QuickSetting {
   id: string;
@@ -33,7 +32,7 @@ export interface QuickSetting {
   /** Что делает — для окна настройки панели. */
   hint: string;
   icon: LucideIcon;
-  kind: "toggle" | "choice" | "range" | "action";
+  kind: "toggle" | "choice" | "range";
 }
 
 export const QUICK_SETTINGS: readonly QuickSetting[] = [
@@ -49,7 +48,6 @@ export const QUICK_SETTINGS: readonly QuickSetting[] = [
   { id: "columnResize", label: "Своя ширина столбцов", hint: "Двигать границы столбцов мышью", icon: Columns3, kind: "toggle" },
   { id: "hideForeign", label: "Скрывать чужие личные счета", hint: "Личные счета других участников", icon: Users, kind: "toggle" },
   { id: "pushMode", label: "Отправка правок в облако", hint: "Когда отправлять правки в Дзен-мани", icon: Upload, kind: "choice" },
-  { id: "sync", label: "Синхронизировать", hint: "Забрать свежие данные из Дзен-мани", icon: RefreshCw, kind: "action" },
 ];
 
 const BY_ID = new Map(QUICK_SETTINGS.map((s) => [s.id, s]));

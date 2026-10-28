@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
-import { ArrowRight, Loader2, Pencil, Settings } from "lucide-react";
+import { ArrowRight, Pencil, Settings } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { Popover } from "./Popover";
 import { Segmented } from "./Segmented";
@@ -103,7 +103,7 @@ function QuickSettingsPanel({ onClose }: { onClose: () => void }) {
   // Плитки — сеткой в две колонки наверху, выбор из вариантов и бегунки —
   // строками под ними. Вперемешку плитка вставала между строками одна в
   // полупустом ряду. Внутри каждой части порядок — тот, что задал человек.
-  const tiles = shown.filter((s) => s.kind === "toggle" || s.kind === "action");
+  const tiles = shown.filter((s) => s.kind === "toggle");
   const rows = shown.filter((s) => s.kind === "choice" || s.kind === "range");
   const blocks: ReactNode[] = [];
   if (tiles.length > 0) {
@@ -167,31 +167,26 @@ export function useAvailableQuickSettings(): (id: string) => boolean {
   const token = useZenmoneyStore((s) => s.token);
   const ownerId = useMembersStore((s) => s.ownerId);
   return (id) => {
-    if (id === "pushMode" || id === "sync") return !!token;
+    if (id === "pushMode") return !!token;
     if (id === "hideForeign") return ownerId != null;
     return true;
   };
 }
 
-/** Плитка-тумблер или действие: значок в круге, название и состояние словами. */
+/** Плитка-тумблер: значок в круге, название и состояние словами. */
 function QuickTile({ setting, delay }: { setting: QuickSetting; delay: number }) {
   const t = useToggle(setting.id);
   if (!t) return null;
   const Icon = setting.icon;
-  const isAction = setting.kind === "action";
   return (
     <button
       type="button"
-      role={isAction ? undefined : "switch"}
-      aria-checked={isAction ? undefined : t.on}
+      role="switch"
+      aria-checked={t.on}
       onClick={t.run}
-      disabled={t.busy}
       style={{ animationDelay: `${delay}ms` }}
       className={clsx(
         "animate-menu-item flex items-center gap-2.5 min-w-0 rounded-control border px-2.5 py-2 text-left transition-colors",
-        // Действие — во всю ширину: это не переключатель, и длинное название
-        // («Синхронизировать») в половине ряда не помещалось.
-        isAction && "col-span-2",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
         t.on ? "border-accent/40 bg-accent/10" : "border-border bg-panel2/50 hover:border-accent/40"
       )}
@@ -202,7 +197,7 @@ function QuickTile({ setting, delay }: { setting: QuickSetting; delay: number })
           t.on ? "bg-accent text-white" : "bg-panel text-muted"
         )}
       >
-        {t.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
+        <Icon className="w-4 h-4" />
       </span>
       <span className="min-w-0">
         <span className={clsx("block text-[13px] leading-4 font-medium", t.on && "text-accent")}>
@@ -218,7 +213,6 @@ interface ToggleView {
   on: boolean;
   state: string;
   run: () => void;
-  busy?: boolean;
 }
 
 /** Состояние и действие плитки — по её пункту. */
@@ -240,8 +234,6 @@ function useToggle(id: string): ToggleView | null {
   const setRemember = useFilterMemoryStore((s) => s.setEnabled);
   const hideForeign = useMembersStore((s) => s.hideForeignPrivate);
   const setHideForeign = useMembersStore((s) => s.setHideForeignPrivate);
-  const status = useZenmoneyStore((s) => s.status);
-  const sync = useZenmoneyStore((s) => s.sync);
 
   const sw = (on: boolean, set: (v: boolean) => unknown, yes: string, no: string): ToggleView => ({
     on,
@@ -271,10 +263,6 @@ function useToggle(id: string): ToggleView | null {
       return sw(columnResize, setColumnResize, "Включено", "Выключено");
     case "hideForeign":
       return sw(hideForeign, setHideForeign, "Скрыты", "Видны");
-    case "sync": {
-      const busy = status === "syncing" || status === "checking";
-      return { on: false, state: busy ? "Синхронизирую…" : "Забрать данные", run: () => void sync(), busy };
-    }
     default:
       return null;
   }
