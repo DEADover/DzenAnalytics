@@ -346,15 +346,15 @@ function QuickControl({ id }: { id: string }) {
       return (
         <Segmented<PushMode>
           size="sm"
-          tight
+          block
           label="Отправка правок в облако"
           value={pushMode}
           onChange={(m) => void setPushMode(m)}
           options={[
-            { value: "off", label: "Выключена" },
+            { value: "off", label: "Выкл" },
             { value: "manual", label: "Вручную" },
             { value: "auto", label: "Авто" },
-            { value: "on-sync", label: "При синхронизации" },
+            { value: "on-sync", label: "При синхр." },
           ]}
         />
       );
