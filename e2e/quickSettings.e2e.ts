@@ -107,3 +107,34 @@ test("«Счета вне баланса»: клавиша B переключа�
   await expect(tile).toHaveAttribute("aria-checked", "true");
   await expect(tile).toContainText("Учитываются");
 });
+
+test("быстрые настройки можно выключить — шестерёнка сразу ведёт в «Настройки»", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/settings?tab=interface");
+  const toggle = page.getByRole("switch", { name: "Быстрые настройки", exact: true });
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  // Сразу после «Своей ширины столбцов».
+  const order = await page.evaluate(() =>
+    [...document.querySelectorAll('[role="switch"]')].map((e) => e.getAttribute("aria-label"))
+  );
+  expect(order.indexOf("Быстрые настройки")).toBe(order.indexOf("Своя ширина столбцов") + 1);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await page.evaluate(() => {
+    history.pushState(null, "", "/");
+    dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await page.getByRole("link", { name: "Настройки", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings/);
+  await expect(page.getByRole("dialog", { name: "Быстрые настройки" })).toHaveCount(0);
+
+  // Включили обратно — шестерёнка снова открывает панель.
+  await page.evaluate(() => {
+    history.pushState(null, "", "/settings?tab=interface");
+    dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await page.getByRole("switch", { name: "Быстрые настройки", exact: true }).click();
+  await page.getByRole("button", { name: "Быстрые настройки", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Быстрые настройки" })).toBeVisible();
+});

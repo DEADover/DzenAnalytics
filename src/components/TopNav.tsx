@@ -30,6 +30,7 @@ import { useSyncCommands } from "../hooks/useSyncCommands";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 import { SmoothNavLink } from "./SmoothNavLink";
 import { QuickSettingsMenu } from "./QuickSettingsMenu";
+import { usePrivacyStore } from "../store/usePrivacyStore";
 import { FiltersDock } from "./FiltersDock";
 import { headerSections, iconButtonWidth, moreGroups } from "../lib/headerNav";
 import { useHeaderNavStore } from "../store/useHeaderNavStore";
@@ -204,6 +205,8 @@ export function TopNav({
   // Работает только на разделах из шапки: с «Отчёта» или «Календаря»
   // прыжок в «Операции» был бы неожиданностью. Кольца нет — на «Главной» левая
   // стрелка ничего не делает, иначе с края экрана улетаешь на другой край.
+  const quickSettingsOn = useDisplayStore((s) => s.quickSettings);
+  const amountsHidden = usePrivacyStore((s) => s.hideAmounts);
   const smoothNavigate = useSmoothNavigate();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -487,10 +490,26 @@ export function TopNav({
         <div className="hidden md:contents">
         <ThemeSwitcher />
 
-        {/* Шестерёнка — быстрые настройки; внизу их панели — переход во все
+        {/* Шестерёнка — быстрые настройки; в шапке их панели — переход во все
             «Настройки». Подсвечена, пока панель открыта или открыты сами
-            настройки. */}
-        <QuickSettingsMenu className={iconItem} />
+            настройки. Быстрые настройки выключены — шестерёнка сразу ведёт в
+            «Настройки», как раньше. */}
+        {quickSettingsOn ? (
+          <QuickSettingsMenu className={iconItem} />
+        ) : (
+          <SmoothNavLink
+            to="/settings"
+            onNavigate={() => setMoreOpen(false)}
+            title={amountsHidden ? "Настройки\nСуммы скрыты" : "Настройки"}
+            aria-label="Настройки"
+            className={({ isActive }) => iconItem(isActive)}
+          >
+            <Settings className="w-4 h-4 transition-transform duration-500 ease-out group-hover:rotate-90" />
+            {amountsHidden && (
+              <span aria-hidden className="absolute top-1 right-1 w-2 h-2 rounded-full bg-accent ring-2 ring-panel" />
+            )}
+          </SmoothNavLink>
+        )}
 
         {/* Настройка главной. Стоит здесь, а не на самой странице: это действие
             над экраном, как тема и настройки, а не ещё один его блок. Работает

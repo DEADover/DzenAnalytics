@@ -232,6 +232,8 @@ export function ImportPage() {
   const filtersMode = useDisplayStore((s) => s.filtersMode);
   const setFiltersMode = useDisplayStore((s) => s.setFiltersMode);
   const hideThanks = useDisplayStore((s) => s.hideThanks);
+  const quickSettingsOn = useDisplayStore((s) => s.quickSettings);
+  const setQuickSettingsOn = useDisplayStore((s) => s.setQuickSettings);
   const setHideThanks = useDisplayStore((s) => s.setHideThanks);
   const setFractionDigits = useDisplayStore((s) => s.setFractionDigits);
   const tableFontLevel = useDisplayStore((s) => s.tableFontLevel);
@@ -1880,6 +1882,30 @@ export function ImportPage() {
                 onChange={(next) => setColumnResize(next)}
               />
             </div>
+          }
+        />
+
+        <SettingRow
+          title="Быстрые настройки"
+          status={
+            quickSettingsOn
+              ? "Шестерёнка в шапке открывает панель быстрых настроек"
+              : "Шестерёнка в шапке сразу открывает «Настройки»"
+          }
+          help={
+            <p>
+              Панель под шестерёнкой — то, что удобно переключать на ходу:
+              скрыть суммы, счета вне баланса, дробную часть сумм и другое, что вы
+              в неё поставите. Выключите — и шестерёнка снова будет сразу вести
+              сюда, в «Настройки». Клавиши H, B и F работают в любом случае.
+            </p>
+          }
+          control={
+            <Switch
+              checked={quickSettingsOn}
+              label="Быстрые настройки"
+              onChange={(next) => setQuickSettingsOn(next)}
+            />
           }
         />
 

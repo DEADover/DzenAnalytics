@@ -149,6 +149,11 @@ interface DisplayState {
    * телефона. По умолчанию значок есть: раньше ссылка стояла в подвале.
    */
   hideThanks: boolean;
+  /**
+   * Шестерёнка в шапке открывает панель быстрых настроек. Выключено —
+   * шестерёнка сразу ведёт в «Настройки», как раньше. По умолчанию включено.
+   */
+  quickSettings: boolean;
   filtersMode: FiltersMode;
   /**
    * Какой месяц подставляет кнопка месяца в фильтре: отчётный (со своего
@@ -189,6 +194,7 @@ interface DisplayState {
   setFeedPlannedMode: (mode: FeedPlannedMode) => Promise<void>;
   setSyncLogOpen: (on: boolean) => Promise<void>;
   setHideThanks: (on: boolean) => Promise<void>;
+  setQuickSettings: (on: boolean) => Promise<void>;
   setFiltersMode: (mode: FiltersMode) => Promise<void>;
   setMonthKind: (kind: MonthKind) => Promise<void>;
   setWindowKind: (kind: WindowKind) => Promise<void>;
@@ -206,6 +212,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   feedPlannedMode: "bar",
   syncLogOpen: false,
   hideThanks: false,
+  quickSettings: true,
   filtersMode: "page",
   monthKind: "period",
   windowKind: "30d",
@@ -227,6 +234,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       feedPlannedMode?: unknown;
       syncLogOpen?: boolean;
       hideThanks?: boolean;
+      quickSettings?: boolean;
       filtersMode?: string;
       monthKind?: string;
       windowKind?: string;
@@ -249,6 +257,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       feedPlannedMode: isFeedPlannedMode(stored?.feedPlannedMode) ? stored.feedPlannedMode : "bar",
       syncLogOpen: stored?.syncLogOpen === true,
       hideThanks: stored?.hideThanks === true,
+      quickSettings: stored?.quickSettings !== false,
       // По умолчанию фильтры стоят на странице; панель по кнопке — выбор человека.
       filtersMode: stored?.filtersMode === "button" ? "button" : "page",
       monthKind: stored?.monthKind === "month" ? "month" : "period",
@@ -311,6 +320,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     await db.saveJSON(KEY, { ...persisted(get()), hideThanks: on });
   },
 
+  setQuickSettings: async (on) => {
+    set({ quickSettings: on });
+    await db.saveJSON(KEY, { ...persisted(get()), quickSettings: on });
+  },
+
   setFiltersMode: async (filtersMode) => {
     set({ filtersMode });
     await db.saveJSON(KEY, { ...persisted(get()), filtersMode });
@@ -350,6 +364,7 @@ function persisted(s: DisplayState) {
     feedPlannedMode: s.feedPlannedMode,
     syncLogOpen: s.syncLogOpen,
     hideThanks: s.hideThanks,
+    quickSettings: s.quickSettings,
     filtersMode: s.filtersMode,
     monthKind: s.monthKind,
     windowKind: s.windowKind,
