@@ -38,17 +38,17 @@ export interface QuickSetting {
 
 export const QUICK_SETTINGS: readonly QuickSetting[] = [
   { id: "hideAmounts", label: "Скрыть суммы", hint: "Частицы вместо денег на экране", icon: EyeOff, kind: "toggle" },
-  { id: "offBalance", label: "Счета вне баланса", hint: "Учитывать их во всех итогах", icon: Scale, kind: "toggle" },
+  { id: "offBalance", label: "Счета вне баланса", hint: "Считать их везде, как обычные", icon: Scale, kind: "toggle" },
   { id: "feedPlanned", label: "Запланированные в ленте", hint: "Скрыть, строкой или в ленте", icon: CalendarClock, kind: "choice" },
   { id: "kopecks", label: "Дробная часть сумм", hint: "Копейки и центы в суммах", icon: Coins, kind: "toggle" },
   { id: "tableFont", label: "Размер текста в таблицах", hint: "Шрифт списков операций", icon: Type, kind: "range" },
-  { id: "statementLine", label: "Строка из выписки", hint: "Исходный текст банка под операцией", icon: ReceiptText, kind: "toggle" },
-  { id: "commentWrap", label: "Длинные комментарии", hint: "Переносить, а не обрезать", icon: TextWrap, kind: "toggle" },
-  { id: "rememberFilters", label: "Запоминать фильтры", hint: "Свои фильтры у каждого раздела", icon: History, kind: "toggle" },
-  { id: "filtersMode", label: "Панель фильтров", hint: "На странице или по кнопке в шапке", icon: PanelTop, kind: "choice" },
+  { id: "statementLine", label: "Строка из выписки", hint: "Исходный текст банка под контрагентом", icon: ReceiptText, kind: "toggle" },
+  { id: "commentWrap", label: "Длинные комментарии", hint: "До двух строк или в одну строку", icon: TextWrap, kind: "toggle" },
+  { id: "rememberFilters", label: "Запоминать фильтры", hint: "Сохранять фильтры между сессиями", icon: History, kind: "toggle" },
+  { id: "filtersMode", label: "Панель фильтров", hint: "По кнопке в шапке или на странице", icon: PanelTop, kind: "choice" },
   { id: "columnResize", label: "Своя ширина столбцов", hint: "Двигать границы столбцов мышью", icon: Columns3, kind: "toggle" },
-  { id: "hideForeign", label: "Чужие личные счета", hint: "Скрывать счета других людей", icon: Users, kind: "toggle" },
-  { id: "pushMode", label: "Отправка в Дзен-мани", hint: "Когда отправлять правки", icon: Upload, kind: "choice" },
+  { id: "hideForeign", label: "Скрывать чужие личные счета", hint: "Личные счета других участников", icon: Users, kind: "toggle" },
+  { id: "pushMode", label: "Отправка правок в облако", hint: "Когда отправлять правки в Дзен-мани", icon: Upload, kind: "choice" },
   { id: "sync", label: "Синхронизировать", hint: "Забрать свежие данные из Дзен-мани", icon: RefreshCw, kind: "action" },
 ];
 

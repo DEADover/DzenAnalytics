@@ -83,7 +83,7 @@ export function QuickSettingsMenu({ className }: { className: (active: boolean) 
         onClose={close}
         align="right"
         className={clsx(
-          "w-[22rem] card p-3 shadow-lg",
+          "w-[24rem] card p-3 shadow-lg",
           closing ? "animate-quick-panel-out pointer-events-none" : "animate-quick-panel-in"
         )}
       >
@@ -143,7 +143,6 @@ function QuickSettingsPanel({ onClose }: { onClose: () => void }) {
               openEditor();
             }}
             aria-label="Настроить быстрые настройки"
-            title="Настроить панель"
           >
             <Pencil className="w-4 h-4" />
           </button>
@@ -190,6 +189,9 @@ function QuickTile({ setting, delay }: { setting: QuickSetting; delay: number })
       style={{ animationDelay: `${delay}ms` }}
       className={clsx(
         "animate-menu-item flex items-center gap-2.5 min-w-0 rounded-control border px-2.5 py-2 text-left transition-colors",
+        // Действие — во всю ширину: это не переключатель, и длинное название
+        // («Синхронизировать») в половине ряда не помещалось.
+        isAction && "col-span-2",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
         t.on ? "border-accent/40 bg-accent/10" : "border-border bg-panel2/50 hover:border-accent/40"
       )}
@@ -250,7 +252,7 @@ function useToggle(id: string): ToggleView | null {
     case "hideAmounts":
       return { on: hideAmounts, state: hideAmounts ? "Скрыты · H" : "Видны · H", run: () => void toggleHide() };
     case "offBalance":
-      return sw(offBalance, setOffBalance, "Учитываются", "Не учитываются");
+      return sw(offBalance, setOffBalance, "Считаются везде", "Не в итогах");
     case "kopecks":
       // Пример суммы, как в «Настройках»; образец формата «Скрыть суммы» не прячет.
       return sw(
@@ -260,18 +262,18 @@ function useToggle(id: string): ToggleView | null {
         formatMoneyExample(1234.1, base, { decimals: 0 })
       );
     case "statementLine":
-      return sw(statementLine, setStatementLine, "Показана", "Скрыта");
+      return sw(statementLine, setStatementLine, "Показывается", "Скрыта");
     case "commentWrap":
-      return sw(commentWrap, setCommentWrap, "Целиком", "Обрезаются");
+      return sw(commentWrap, setCommentWrap, "До двух строк", "В одну строку");
     case "rememberFilters":
-      return sw(remember, setRemember, "Включено", "Выключено");
+      return sw(remember, setRemember, "Сохраняются", "Сбрасываются");
     case "columnResize":
-      return sw(columnResize, setColumnResize, "Включена", "Выключена");
+      return sw(columnResize, setColumnResize, "Включено", "Выключено");
     case "hideForeign":
       return sw(hideForeign, setHideForeign, "Скрыты", "Видны");
     case "sync": {
       const busy = status === "syncing" || status === "checking";
-      return { on: false, state: busy ? "Идёт…" : "Забрать данные", run: () => void sync(), busy };
+      return { on: false, state: busy ? "Синхронизирую…" : "Забрать данные", run: () => void sync(), busy };
     }
     default:
       return null;
@@ -335,8 +337,8 @@ function QuickControl({ id }: { id: string }) {
           value={filtersMode}
           onChange={(m) => void setFiltersMode(m)}
           options={[
-            { value: "page" as const, label: "На странице" },
             { value: "button" as const, label: "По кнопке" },
+            { value: "page" as const, label: "На странице" },
           ]}
         />
       );
@@ -344,15 +346,15 @@ function QuickControl({ id }: { id: string }) {
       return (
         <Segmented<PushMode>
           size="sm"
-          block
-          label="Отправка в Дзен-мани"
+          tight
+          label="Отправка правок в облако"
           value={pushMode}
           onChange={(m) => void setPushMode(m)}
           options={[
-            { value: "off", label: "Выкл", title: "Отправка выключена" },
+            { value: "off", label: "Выключена" },
             { value: "manual", label: "Вручную" },
             { value: "auto", label: "Авто" },
-            { value: "on-sync", label: "С синхр.", title: "При синхронизации" },
+            { value: "on-sync", label: "При синхронизации" },
           ]}
         />
       );
