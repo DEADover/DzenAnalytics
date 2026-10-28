@@ -295,12 +295,16 @@ function useToggle(id: string): ToggleView | null {
 /** Строка во всю ширину: название и переключатель вариантов или бегунок. */
 function QuickRow({ setting, delay }: { setting: QuickSetting; delay: number }) {
   const Icon = setting.icon;
+  // F прячет и показывает панель фильтров, только когда она открывается по
+  // кнопке, — на странице клавише делать нечего, и значок не показываем.
+  const filtersMode = useDisplayStore((s) => s.filtersMode);
+  const hotkey = setting.id === "filtersMode" && filtersMode !== "button" ? undefined : setting.hotkey;
   return (
     <div className="animate-menu-item" style={{ animationDelay: `${delay}ms` }}>
       <div className="flex items-center gap-1.5 mb-1.5 text-xs text-muted">
         <Icon className="w-3.5 h-3.5" aria-hidden />
         {setting.label}
-        {setting.hotkey && <HotkeyBadge keyName={setting.hotkey} className="ml-auto" />}
+        {hotkey && <HotkeyBadge keyName={hotkey} className="ml-auto" />}
       </div>
       <QuickControl id={setting.id} />
     </div>
