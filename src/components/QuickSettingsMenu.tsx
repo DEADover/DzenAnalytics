@@ -108,7 +108,8 @@ function QuickSettingsPanel({ onClose }: { onClose: () => void }) {
   const blocks: ReactNode[] = [];
   if (tiles.length > 0) {
     blocks.push(
-      <div key="tiles" className="grid grid-cols-2 gap-2">
+      // Нечётная последняя плитка — во всю ширину: пустой половины ряда нет.
+      <div key="tiles" className="grid grid-cols-2 gap-2 [&>*:last-child:nth-child(odd)]:col-span-2">
         {tiles.map((s, i) => (
           <QuickTile key={s.id} setting={s} delay={40 + i * 25} />
         ))}
