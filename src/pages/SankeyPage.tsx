@@ -20,6 +20,7 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 const COLORS = {
   income: chartColor.income,
@@ -46,6 +47,20 @@ export function SankeyPage() {
 
   const filtered = useMemo(() => applyFilters(transactions, filters, monthStartDay), [transactions, filters, monthStartDay]);
   const data = useMemo(() => buildSankey(filtered), [filtered]);
+  /**
+   * Узкий экран: полей по 170 px под подписи с обеих сторон не остаётся —
+   * колонки сходились в одну полосу, подписи налезали друг на друга. Там
+   * подписи встают ВНУТРЬ, к центру: у источников — справа от полосы, у статей
+   * — слева, с обводкой цветом фона поверх лент, а диаграмма вытягивается в
+   * высоту под число статей.
+   */
+  const narrow = !useMediaQuery("(min-width: 640px)");
+  const chartHeight = useMemo(() => {
+    if (!narrow) return 600;
+    const left = data.nodes.filter((n) => n.kind === "income" || n.kind === "funding").length;
+    const right = data.nodes.filter((n) => n.kind === "category" || n.kind === "savings").length;
+    return Math.max(600, Math.max(left, right) * 46 + 40);
+  }, [narrow, data]);
 
   /** Итоги того же фильтра: диаграмма отвечает «куда», а не «сколько». */
   const totals = useMemo(() => {
@@ -160,14 +175,14 @@ export function SankeyPage() {
       </StatRow>
 
       <div className="card-tray px-4 py-3">
-        <div className="h-[600px]">
+        <div style={{ height: chartHeight }}>
           <ChartContainer>
             <Sankey
               data={data}
               // Поля под подписи: узлы стоят вплотную к краям области, а имя
               // рисуется СНАРУЖИ прямоугольника — без полей текст обрезался
               // границей svg, и диаграмма стояла безымянными полосами.
-              margin={{ top: 8, right: 170, bottom: 8, left: 170 }}
+              margin={narrow ? { top: 8, right: 4, bottom: 8, left: 4 } : { top: 8, right: 170, bottom: 8, left: 170 }}
               nodePadding={20}
               nodeWidth={14}
               linkCurvature={0.5}
@@ -234,8 +249,16 @@ export function SankeyPage() {
                   kind === "category" && payload?.name
                     ? colorForCategory(payload.name, categoryMeta)
                     : COLORS[kind];
-                const isLeft = xv < 200;
                 const name = payload?.name ?? "";
+                // Где подпись: на широком — снаружи узла (слева у левой
+                // колонки, справа у остальных); на узком — внутри, к центру.
+                const rightColumn = kind === "category" || kind === "savings";
+                const isLeft = narrow ? rightColumn : xv < 200;
+                const label = narrow && name.length > 22 ? `${name.slice(0, 21)}…` : name;
+                // Поверх лент подпись читается с обводкой цветом карточки.
+                const halo = narrow
+                  ? { stroke: "rgb(var(--c-panel))", strokeWidth: 3, paintOrder: "stroke" as const, strokeLinejoin: "round" as const }
+                  : {};
                 // «Прочие» — не статья, а всё, что не попало в перечисленные:
                 // открывать по ним нечего, и вид у них обычный, без курсора.
                 const clickable =
@@ -261,8 +284,9 @@ export function SankeyPage() {
                       dominantBaseline="middle"
                       fontSize={11}
                       fill="rgb(var(--c-text))"
+                      {...halo}
                     >
-                      {name}
+                      {label}
                     </text>
                     {h > 26 && (
                       <text
@@ -272,6 +296,7 @@ export function SankeyPage() {
                         dominantBaseline="middle"
                         fontSize={10}
                         fill="rgb(var(--c-muted))"
+                        {...halo}
                       >
                         {formatMoney(payload?.value ?? 0, base, { compact: true })}
                       </text>
