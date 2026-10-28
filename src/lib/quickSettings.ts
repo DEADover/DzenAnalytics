@@ -46,7 +46,7 @@ export const QUICK_SETTINGS: readonly QuickSetting[] = [
   { id: "statementLine", label: "Строка из выписки", hint: "Исходный текст банка под контрагентом", icon: ReceiptText, kind: "toggle" },
   { id: "commentWrap", label: "Длинные комментарии", hint: "До двух строк или в одну строку", icon: TextWrap, kind: "toggle" },
   { id: "rememberFilters", label: "Запоминать фильтры", hint: "Сохранять фильтры между сессиями", icon: History, kind: "toggle" },
-  { id: "filtersMode", label: "Панель фильтров", hint: "По кнопке в шапке или на странице", icon: PanelTop, kind: "choice" },
+  { id: "filtersMode", label: "Панель фильтров", hint: "По кнопке в шапке или на странице", icon: PanelTop, kind: "choice", hotkey: "F" },
   { id: "columnResize", label: "Своя ширина столбцов", hint: "Двигать границы столбцов мышью", icon: Columns3, kind: "toggle" },
   { id: "hideForeign", label: "Скрывать чужие личные счета", hint: "Личные счета других участников", icon: Users, kind: "toggle" },
   { id: "pushMode", label: "Отправка правок в облако", hint: "Когда отправлять правки в Дзен-мани", icon: Upload, kind: "choice" },

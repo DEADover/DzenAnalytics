@@ -204,7 +204,7 @@ function QuickTile({ setting, delay }: { setting: QuickSetting; delay: number })
         {/* Место под клавишу в углу — только у названия: состояние ниже
             значка и занимает всю ширину. */}
         <span
-          className={clsx("block text-[13px] leading-4 font-medium", setting.hotkey && "pr-4", t.on && "text-accent")}
+          className={clsx("block text-[13px] leading-4 font-medium", setting.hotkey && "pr-3", t.on && "text-accent")}
         >
           {setting.label}
         </span>
@@ -212,12 +212,24 @@ function QuickTile({ setting, delay }: { setting: QuickSetting; delay: number })
       </span>
       {/* Клавиша — отдельным значком в углу, а не в тексте состояния: длинное
           «Не учитываются» обрезало её многоточием. */}
-      {setting.hotkey && (
-        <kbd className="kbd absolute top-1.5 right-1.5 text-[10px] leading-4 px-1.5" aria-hidden>
-          {setting.hotkey}
-        </kbd>
-      )}
+      {setting.hotkey && <HotkeyBadge keyName={setting.hotkey} className="absolute top-1 right-1" />}
     </button>
+  );
+}
+
+/** Клавиша пункта — маленьким значком, одним видом на плитках и строках. */
+function HotkeyBadge({ keyName, className }: { keyName: string; className?: string }) {
+  return (
+    <kbd
+      aria-hidden
+      className={clsx(
+        "inline-flex items-center justify-center min-w-[14px] h-[14px] px-[3px] rounded-[3px]",
+        "border border-border bg-panel text-[9px] leading-none font-medium text-muted",
+        className
+      )}
+    >
+      {keyName}
+    </kbd>
   );
 }
 
@@ -288,6 +300,7 @@ function QuickRow({ setting, delay }: { setting: QuickSetting; delay: number }) 
       <div className="flex items-center gap-1.5 mb-1.5 text-xs text-muted">
         <Icon className="w-3.5 h-3.5" aria-hidden />
         {setting.label}
+        {setting.hotkey && <HotkeyBadge keyName={setting.hotkey} className="ml-auto" />}
       </div>
       <QuickControl id={setting.id} />
     </div>
@@ -337,8 +350,7 @@ function QuickControl({ id }: { id: string }) {
           value={filtersMode}
           onChange={(m) => void setFiltersMode(m)}
           options={[
-            // Клавиша — как у «Скрыть суммы»: F показывает и прячет панель.
-            { value: "button" as const, label: "По кнопке · F" },
+            { value: "button" as const, label: "По кнопке" },
             { value: "page" as const, label: "На странице" },
           ]}
         />
