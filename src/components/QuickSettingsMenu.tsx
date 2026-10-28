@@ -187,7 +187,7 @@ function QuickTile({ setting, delay }: { setting: QuickSetting; delay: number })
       onClick={t.run}
       style={{ animationDelay: `${delay}ms` }}
       className={clsx(
-        "animate-menu-item flex items-center gap-2.5 min-w-0 rounded-control border px-2.5 py-2 text-left transition-colors",
+        "animate-menu-item relative flex items-center gap-2.5 min-w-0 rounded-control border px-2.5 py-2 text-left transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
         t.on ? "border-accent/40 bg-accent/10" : "border-border bg-panel2/50 hover:border-accent/40"
       )}
@@ -201,11 +201,22 @@ function QuickTile({ setting, delay }: { setting: QuickSetting; delay: number })
         <Icon className="w-4 h-4" />
       </span>
       <span className="min-w-0">
-        <span className={clsx("block text-[13px] leading-4 font-medium", t.on && "text-accent")}>
+        {/* Место под клавишу в углу — только у названия: состояние ниже
+            значка и занимает всю ширину. */}
+        <span
+          className={clsx("block text-[13px] leading-4 font-medium", setting.hotkey && "pr-4", t.on && "text-accent")}
+        >
           {setting.label}
         </span>
         <span className="block text-xs text-muted leading-4 mt-0.5 truncate">{t.state}</span>
       </span>
+      {/* Клавиша — отдельным значком в углу, а не в тексте состояния: длинное
+          «Не учитываются» обрезало её многоточием. */}
+      {setting.hotkey && (
+        <kbd className="kbd absolute top-1.5 right-1.5 text-[10px] leading-4 px-1.5" aria-hidden>
+          {setting.hotkey}
+        </kbd>
+      )}
     </button>
   );
 }
@@ -243,9 +254,9 @@ function useToggle(id: string): ToggleView | null {
   });
   switch (id) {
     case "hideAmounts":
-      return { on: hideAmounts, state: hideAmounts ? "Скрыты · H" : "Видны · H", run: () => void toggleHide() };
+      return { on: hideAmounts, state: hideAmounts ? "Скрыты" : "Видны", run: () => void toggleHide() };
     case "offBalance":
-      return sw(offBalance, setOffBalance, "Учитываются · B", "Не учитываются · B");
+      return sw(offBalance, setOffBalance, "Учитываются", "Не учитываются");
     case "kopecks":
       // Пример суммы, как в «Настройках»; образец формата «Скрыть суммы» не прячет.
       return sw(

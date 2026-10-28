@@ -98,11 +98,12 @@ test("«Счета вне баланса»: клавиша B переключа�
   const gearBtn = page.getByRole("button", { name: "Быстрые настройки", exact: true });
   const tile = page.getByRole("switch", { name: /Счета вне баланса/ });
   await gearBtn.click();
-  await expect(tile).toContainText("Не учитываются · B");
+  await expect(tile).toContainText("Не учитываются");
+  await expect(tile.locator("kbd")).toHaveText("B");
   await page.keyboard.press("Escape");
   await expect(tile).toHaveCount(0);
   await page.keyboard.press("b");
   await gearBtn.click();
   await expect(tile).toHaveAttribute("aria-checked", "true");
-  await expect(tile).toContainText("Учитываются · B");
+  await expect(tile).toContainText("Учитываются");
 });

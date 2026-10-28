@@ -33,11 +33,13 @@ export interface QuickSetting {
   hint: string;
   icon: LucideIcon;
   kind: "toggle" | "choice" | "range";
+  /** Клавиша, которая переключает пункт без панели, — значком в углу плитки. */
+  hotkey?: string;
 }
 
 export const QUICK_SETTINGS: readonly QuickSetting[] = [
-  { id: "hideAmounts", label: "Скрыть суммы", hint: "Частицы вместо денег на экране", icon: EyeOff, kind: "toggle" },
-  { id: "offBalance", label: "Счета вне баланса", hint: "Считать их везде, как обычные", icon: Scale, kind: "toggle" },
+  { id: "hideAmounts", label: "Скрыть суммы", hint: "Частицы вместо денег на экране", icon: EyeOff, kind: "toggle", hotkey: "H" },
+  { id: "offBalance", label: "Счета вне баланса", hint: "Считать их везде, как обычные", icon: Scale, kind: "toggle", hotkey: "B" },
   { id: "feedPlanned", label: "Запланированные в ленте", hint: "Скрыть, строкой или в ленте", icon: CalendarClock, kind: "choice" },
   { id: "kopecks", label: "Дробная часть сумм", hint: "Копейки и центы в суммах", icon: Coins, kind: "toggle" },
   { id: "tableFont", label: "Размер текста в таблицах", hint: "Шрифт списков операций", icon: Type, kind: "range" },
