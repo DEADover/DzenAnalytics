@@ -249,7 +249,7 @@ function useToggle(id: string): ToggleView | null {
     case "offBalance":
       return sw(offBalance, setOffBalance, "Учитываются", "Не учитываются");
     case "kopecks":
-      return sw(fractionDigits === 2, (v) => setFractionDigits(v ? 2 : 0), "Показаны", "Скрыты");
+      return sw(fractionDigits === 2, (v) => setFractionDigits(v ? 2 : 0), "Показана", "Скрыта");
     case "statementLine":
       return sw(statementLine, setStatementLine, "Показана", "Скрыта");
     case "commentWrap":
