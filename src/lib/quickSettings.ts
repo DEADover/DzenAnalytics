@@ -40,7 +40,7 @@ export const QUICK_SETTINGS: readonly QuickSetting[] = [
   { id: "hideAmounts", label: "Скрыть суммы", hint: "Частицы вместо денег на экране", icon: EyeOff, kind: "toggle" },
   { id: "offBalance", label: "Счета вне баланса", hint: "Учитывать их во всех итогах", icon: Scale, kind: "toggle" },
   { id: "feedPlanned", label: "Запланированные в ленте", hint: "Скрыть, строкой или в ленте", icon: CalendarClock, kind: "choice" },
-  { id: "kopecks", label: "Копейки", hint: "Дробная часть сумм", icon: Coins, kind: "toggle" },
+  { id: "kopecks", label: "Дробная часть сумм", hint: "Копейки и центы в суммах", icon: Coins, kind: "toggle" },
   { id: "tableFont", label: "Размер текста в таблицах", hint: "Шрифт списков операций", icon: Type, kind: "range" },
   { id: "statementLine", label: "Строка из выписки", hint: "Исходный текст банка под операцией", icon: ReceiptText, kind: "toggle" },
   { id: "commentWrap", label: "Длинные комментарии", hint: "Переносить, а не обрезать", icon: TextWrap, kind: "toggle" },

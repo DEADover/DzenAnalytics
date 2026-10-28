@@ -31,7 +31,7 @@ test("панель: набор по умолчанию, свой набор, п�
   await expect(p.getByRole("switch", { name: /Строка из выписки/ })).toHaveCount(0);
 
   // Плитка переключает настройку прямо в панели.
-  const kopecks = p.getByRole("switch", { name: /Копейки/ });
+  const kopecks = p.getByRole("switch", { name: /Дробная часть сумм/ });
   await expect(kopecks).toHaveAttribute("aria-checked", "false");
   await kopecks.click();
   await expect(kopecks).toHaveAttribute("aria-checked", "true");
