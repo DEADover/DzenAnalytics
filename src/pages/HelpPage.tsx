@@ -4608,6 +4608,13 @@ const SECTIONS: Section[] = [
               </td>
             </tr>
             <tr className="border-b border-border">
+              <td className="py-2"><kbd className="kbd">B</kbd></td>
+              <td className="py-2 text-muted">
+                Учитывать счета вне баланса во всех итогах или нет. Работает и в
+                русской раскладке.
+              </td>
+            </tr>
+            <tr className="border-b border-border">
               <td className="py-2"><kbd className="kbd">H</kbd></td>
               <td className="py-2 text-muted">
                 Скрыть или показать суммы — частицы вместо денег. Работает и в

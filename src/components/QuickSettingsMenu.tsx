@@ -245,7 +245,7 @@ function useToggle(id: string): ToggleView | null {
     case "hideAmounts":
       return { on: hideAmounts, state: hideAmounts ? "Скрыты · H" : "Видны · H", run: () => void toggleHide() };
     case "offBalance":
-      return sw(offBalance, setOffBalance, "Считаются везде", "Не в итогах");
+      return sw(offBalance, setOffBalance, "Учитываются · B", "Не учитываются · B");
     case "kopecks":
       // Пример суммы, как в «Настройках»; образец формата «Скрыть суммы» не прячет.
       return sw(

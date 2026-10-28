@@ -91,3 +91,18 @@ test("«Скрыть суммы»: ни одной суммы цифрами н�
   await expect(page.locator("main").getByText(/\d ₽/).first()).toBeVisible();
   await expect(page.locator("canvas[data-amount-spoiler]")).toHaveCount(0);
 });
+
+test("«Счета вне баланса»: клавиша B переключает, плитка подписывает клавишу", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/");
+  const gearBtn = page.getByRole("button", { name: "Быстрые настройки", exact: true });
+  const tile = page.getByRole("switch", { name: /Счета вне баланса/ });
+  await gearBtn.click();
+  await expect(tile).toContainText("Не учитываются · B");
+  await page.keyboard.press("Escape");
+  await expect(tile).toHaveCount(0);
+  await page.keyboard.press("b");
+  await gearBtn.click();
+  await expect(tile).toHaveAttribute("aria-checked", "true");
+  await expect(tile).toContainText("Учитываются · B");
+});

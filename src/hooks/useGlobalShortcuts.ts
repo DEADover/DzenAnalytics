@@ -2,11 +2,13 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFiltersDockStore } from "../store/useFiltersDockStore";
 import { usePrivacyStore } from "../store/usePrivacyStore";
+import { useOffBalanceStore } from "../store/useOffBalanceStore";
 
 /**
  * Global keyboard shortcuts: ⌘/Ctrl+K and `/` open the palette; `g` followed
  * by a single key (within 1.5s) navigates to a known route; `F` shows or hides
- * the filters panel; `H` hides or shows amounts.
+ * the filters panel; `H` hides or shows amounts; `B` counts off-balance
+ * accounts in every total or not.
  *
  * Lives in its own file (not in CommandPalette.tsx) so the component file
  * exports only React components — required for Vite/React fast-refresh.
@@ -99,6 +101,24 @@ export function useGlobalShortcuts(onOpenPalette: () => void) {
       ) {
         e.preventDefault();
         void usePrivacyStore.getState().toggle();
+        lastG = 0;
+        return;
+      }
+
+      // B — «Счета вне баланса» (balance): учитывать их во всех итогах или
+      // нет. Так же, как F и H: по физической клавише, без модификаторов и
+      // приставки (`g b` — «Бюджет»).
+      if (
+        e.code === "KeyB" &&
+        !armed &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !document.querySelector('[role="dialog"][aria-modal="true"]')
+      ) {
+        e.preventDefault();
+        const s = useOffBalanceStore.getState();
+        void s.setIncludeOffBalance(!s.includeOffBalance);
         lastG = 0;
         return;
       }
