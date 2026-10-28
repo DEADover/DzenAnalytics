@@ -326,7 +326,8 @@ function QuickControl({ id }: { id: string }) {
           value={filtersMode}
           onChange={(m) => void setFiltersMode(m)}
           options={[
-            { value: "button" as const, label: "По кнопке" },
+            // Клавиша — как у «Скрыть суммы»: F показывает и прячет панель.
+            { value: "button" as const, label: "По кнопке · F" },
             { value: "page" as const, label: "На странице" },
           ]}
         />
