@@ -62,7 +62,7 @@ test("«Скрыть суммы»: ни одной суммы цифрами н�
   await page.keyboard.press("h");
   await expect(gear(page)).toHaveAttribute("title", /Суммы скрыты/);
   // Частицы — одним слоем поверх страницы.
-  await expect(page.locator("canvas[data-amount-spoiler]")).toHaveCount(1);
+  await expect(page.locator("canvas[data-amount-spoiler]")).toHaveCount(2);
   // Страница не перерисовывалась — подменён только текст сумм.
   await expect(page.locator("[data-keep]")).toHaveCount(1);
   await expect(page.locator("main").getByText(/\d ₽/)).toHaveCount(0);

@@ -41,6 +41,8 @@ interface Item {
   start: number;
   end: number;
   color: string;
+  /** Сумма на самой странице (в `main`) — рисуется слоем ПОД шапкой. */
+  onPage: boolean;
   /** Видна ли (не закрыта окном, не обрезана прокруткой) — по последней проверке. */
   visible: boolean;
 }
@@ -108,24 +110,36 @@ function isClickShield(el: Element): boolean {
 
 /** Запустить слой частиц. Возвращает остановку. */
 export function startAmountSpoiler(): () => void {
-  const canvas = document.createElement("canvas");
-  canvas.setAttribute("aria-hidden", "true");
-  canvas.dataset.amountSpoiler = "";
-  Object.assign(canvas.style, {
-    // Залипающий слой первым в странице, а не `fixed` поверх окна. Неподвижный
-    // слой отрывался от сумм: «пружина» у края страницы при резкой прокрутке и
-    // проявление страницы при переходе сдвигают содержимое мимо координат
-    // элементов, и частицы висели в пустоте. Залипающий браузер сдвигает
-    // вместе со страницей — как и шапку. Места он не занимает: отрицательный
-    // нижний отступ во всю его высоту.
-    position: "sticky",
-    top: "0",
-    display: "block",
-    pointerEvents: "none",
-    zIndex: "2147483000",
-  } satisfies Partial<CSSStyleDeclaration>);
-  document.body.prepend(canvas);
-  const ctx = canvas.getContext("2d")!;
+  /**
+   * Два слоя. Суммы самой страницы рисуются слоем ПОД шапкой (z 20 < 30 у
+   * шапки): прокрученные под её стекло частицы закрываются и размываются им,
+   * как и остальное содержимое, а не висят поверх. Суммы в окнах, боковой
+   * панели, всплывающих меню и подсказках — слоем поверх всего, иначе их
+   * частицы ушли бы под само окно.
+   *
+   * Слои залипающие, первыми в странице, а не `fixed` поверх окна: неподвижный
+   * слой отрывался от сумм — «пружина» у края при резкой прокрутке и
+   * проявление страницы при переходе сдвигают содержимое мимо координат
+   * элементов. Залипающий браузер сдвигает вместе со страницей, как и шапку.
+   * Места слой не занимает: отрицательный нижний отступ во всю его высоту.
+   */
+  const makeLayer = (z: string) => {
+    const c = document.createElement("canvas");
+    c.setAttribute("aria-hidden", "true");
+    c.dataset.amountSpoiler = "";
+    Object.assign(c.style, {
+      position: "sticky",
+      top: "0",
+      display: "block",
+      pointerEvents: "none",
+      zIndex: z,
+    } satisfies Partial<CSSStyleDeclaration>);
+    document.body.prepend(c);
+    return { canvas: c, ctx: c.getContext("2d")! };
+  };
+  const page = makeLayer("20");
+  const over = makeLayer("2147483000");
+  const layers = [page, over];
   const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
   let items: Item[] = [];
@@ -142,12 +156,14 @@ export function startAmountSpoiler(): () => void {
     const dpr = window.devicePixelRatio || 1;
     vw = document.documentElement.clientWidth;
     vh = window.innerHeight;
-    canvas.style.width = `${vw}px`;
-    canvas.style.height = `${vh}px`;
-    canvas.style.marginBottom = `-${vh}px`;
-    canvas.width = Math.round(vw * dpr);
-    canvas.height = Math.round(vh * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (const { canvas, ctx } of layers) {
+      canvas.style.width = `${vw}px`;
+      canvas.style.height = `${vh}px`;
+      canvas.style.marginBottom = `-${vh}px`;
+      canvas.width = Math.round(vw * dpr);
+      canvas.height = Math.round(vh * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
   };
   size();
 
@@ -249,7 +265,14 @@ export function startAmountSpoiler(): () => void {
       const color = textColor(n);
       PLACEHOLDER_RE.lastIndex = 0;
       for (let m = PLACEHOLDER_RE.exec(n.data); m; m = PLACEHOLDER_RE.exec(n.data)) {
-        found.push({ node: n, start: m.index, end: m.index + m[0].length, color, visible: true });
+        found.push({
+          node: n,
+          start: m.index,
+          end: m.index + m[0].length,
+          color,
+          onPage: !!n.parentElement?.closest("main"),
+          visible: true,
+        });
       }
     }
     items = found;
@@ -297,8 +320,9 @@ export function startAmountSpoiler(): () => void {
     const checkOcclusion = now - lastOcclusion > 250;
     if (checkOcclusion) lastOcclusion = now;
 
-    ctx.clearRect(0, 0, vw, vh);
+    for (const { ctx } of layers) ctx.clearRect(0, 0, vw, vh);
     for (const it of items) {
+      const ctx = it.onPage ? page.ctx : over.ctx;
       const rects = rectsOf(it);
       if (rects.length === 0) continue;
       if (checkOcclusion) it.visible = !occluded(it, rects[0]);
@@ -327,7 +351,7 @@ export function startAmountSpoiler(): () => void {
         }
       });
     }
-    ctx.globalAlpha = 1;
+    for (const { ctx } of layers) ctx.globalAlpha = 1;
   };
 
   // Маскируем сразу, в той же микрозадаче, что и правка страницы: браузер
@@ -340,7 +364,7 @@ export function startAmountSpoiler(): () => void {
         else maskNode(t);
       } else {
         r.addedNodes.forEach((n) => {
-          if (n !== canvas) maskTree(n);
+          if (n !== page.canvas && n !== over.canvas) maskTree(n);
         });
       }
     }
@@ -366,6 +390,6 @@ export function startAmountSpoiler(): () => void {
     signNodes.clear();
     window.removeEventListener("resize", onResize);
     range.detach?.();
-    canvas.remove();
+    for (const { canvas } of layers) canvas.remove();
   };
 }
