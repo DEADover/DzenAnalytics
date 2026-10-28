@@ -14,6 +14,8 @@ import { TABLE_FONT_LABELS, useDisplayStore, type TableFontLevel } from "../stor
 import { useFilterMemoryStore } from "../store/useFilterMemoryStore";
 import { useMembersStore } from "../store/useMembersStore";
 import { useZenmoneyStore, type PushMode } from "../store/useZenmoneyStore";
+import { useDataStore } from "../store/useDataStore";
+import { currencySymbol } from "../lib/format";
 
 /**
  * Шестерёнка в шапке: по клику — панель быстрых настроек, в её шапке — переход
@@ -225,6 +227,7 @@ function useToggle(id: string): ToggleView | null {
   const setOffBalance = useOffBalanceStore((s) => s.setIncludeOffBalance);
   const fractionDigits = useDisplayStore((s) => s.fractionDigits);
   const setFractionDigits = useDisplayStore((s) => s.setFractionDigits);
+  const base = useDataStore((s) => s.rates.base);
   const statementLine = useDisplayStore((s) => s.statementLine);
   const setStatementLine = useDisplayStore((s) => s.setStatementLine);
   const commentWrap = useDisplayStore((s) => s.commentWrap);
@@ -249,7 +252,14 @@ function useToggle(id: string): ToggleView | null {
     case "offBalance":
       return sw(offBalance, setOffBalance, "Учитываются", "Не учитываются");
     case "kopecks":
-      return sw(fractionDigits === 2, (v) => setFractionDigits(v ? 2 : 0), "Показана", "Скрыта");
+      // Пример суммы, как в «Настройках». Собран руками, а не `formatMoney`:
+      // в режиме «Скрыть суммы» тот спрятал бы под частицы и сам пример.
+      return sw(
+        fractionDigits === 2,
+        (v) => setFractionDigits(v ? 2 : 0),
+        `1\u00a0234,10 ${currencySymbol(base)}`,
+        `1\u00a0234 ${currencySymbol(base)}`
+      );
     case "statementLine":
       return sw(statementLine, setStatementLine, "Показана", "Скрыта");
     case "commentWrap":
