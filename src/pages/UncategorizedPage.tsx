@@ -644,7 +644,7 @@ function SuggestionCell({
       className="flex items-center gap-1.5 min-w-0"
       title={suggestionReason(suggestion)}
     >
-      <Sparkles className="w-3.5 h-3.5 shrink-0 text-accent2" />
+      <Sparkles className="w-3.5 h-3.5 shrink-0 text-accent" />
       <span className="truncate">{suggestion.suggested}</span>
       <span className={`tabular-nums shrink-0 ${tone}`}>{formatPct(suggestion.confidence, 0)}</span>
     </div>

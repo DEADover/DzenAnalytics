@@ -4,11 +4,10 @@ import clsx from "clsx";
 import { InfoPopover } from "./InfoPopover";
 
 /** Цвет значка: акцент, а другой — когда карточка про расходы, доходы и т. п. */
-export type CardHeaderTone = "accent" | "accent2" | "income" | "expense" | "warn" | "muted";
+export type CardHeaderTone = "accent" | "income" | "expense" | "warn" | "muted";
 
 const ICON_TONE: Record<CardHeaderTone, string> = {
   accent: "text-accent",
-  accent2: "text-accent2",
   income: "text-income",
   expense: "text-expense",
   warn: "text-warn",

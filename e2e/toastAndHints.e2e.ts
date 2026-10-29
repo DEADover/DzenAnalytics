@@ -60,3 +60,23 @@ test("«Всплывающие подсказки» выключены — по�
   await expect(page.locator('button[data-native-title^="Синхронизация с Дзен-мани"]')).toHaveCount(1);
   await expect(page.locator('button[title^="Синхронизация с Дзен-мани"]')).toHaveCount(0);
 });
+
+test("плашка с отсчётом не заслоняет окно правки операции", async ({ page }) => {
+  await connectZen(page, "/transactions");
+  await page.locator(".op-row").first().getByRole("button", { name: "Удалить операцию" }).click();
+  const t = toastEl(page);
+  await expect(t).toContainText("Операция удалена");
+  await page.locator(".op-row").nth(1).dblclick();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  // В точке плашки сверху — окно правки, а не плашка.
+  const box = (await t.boundingBox())!;
+  const onTop = await page.evaluate(
+    ([x, y]) => {
+      const el = document.elementFromPoint(x, y);
+      return { inToast: !!el?.closest("[data-toast]"), inDialog: !!el?.closest('[role="dialog"]') };
+    },
+    [box.x + box.width / 2, box.y + box.height / 2]
+  );
+  expect(onTop.inToast).toBe(false);
+  expect(onTop.inDialog).toBe(true);
+});

@@ -188,7 +188,7 @@ export function FiltersMenu() {
         onClick={() => setOpen((o) => !o)}
         className={clsx(
           "relative btn-ghost text-[12.5px] leading-4 w-52 max-sm:w-full",
-          activeView && "text-accent2"
+          activeView && "text-accent"
         )}
         title="Фильтры"
       >
@@ -222,7 +222,7 @@ export function FiltersMenu() {
               className="w-full flex items-center gap-2 text-left text-xs px-2 py-1.5 rounded hover:bg-panel2"
             >
               {!activeView ? (
-                <Check className="w-3.5 h-3.5 text-accent2 shrink-0" />
+                <Check className="w-3.5 h-3.5 text-accent shrink-0" />
               ) : (
                 <span className="w-3.5 shrink-0" />
               )}
@@ -255,7 +255,7 @@ export function FiltersMenu() {
                     title={v.name}
                   >
                     {v.id === activeId ? (
-                      <Check className="w-3.5 h-3.5 text-accent2 shrink-0" />
+                      <Check className="w-3.5 h-3.5 text-accent shrink-0" />
                     ) : (
                       <span className="w-3.5 shrink-0" />
                     )}
@@ -303,7 +303,7 @@ export function FiltersMenu() {
                 className="w-full flex items-center gap-2 text-left text-xs px-2 py-1.5 rounded hover:bg-panel2 disabled:opacity-40 disabled:hover:bg-transparent"
                 title={dirty ? "Сохранить текущие настройки в этот фильтр" : "Изменений нет"}
               >
-                <Save className="w-3.5 h-3.5 text-accent2 shrink-0" />
+                <Save className="w-3.5 h-3.5 text-accent shrink-0" />
                 <span className="truncate">Обновить «{activeView.name}»</span>
               </button>
             )}

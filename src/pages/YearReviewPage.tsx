@@ -401,7 +401,7 @@ export function YearReviewPage() {
               остаётся там, где контрагент к операции не привязан.
             </p>
           }
-          icon={Users} tone="accent2"
+          icon={Users}
           items={review.topPayees}
           baseCurrency={baseCurrency}
           total={review.totalExpense}
@@ -476,7 +476,7 @@ export function YearReviewPage() {
         </SectionCard>
 
         <SectionCard
-          icon={Sparkles} tone="accent2"
+          icon={Sparkles}
           title="Любопытные факты"
           info={
             <p>
@@ -799,7 +799,7 @@ function Quarters({
   const ROMAN = ["I", "II", "III", "IV"];
   return (
     <SectionCard
-      icon={CalendarRange} tone="accent2"
+      icon={CalendarRange}
       title="По кварталам"
       info={
         <p>

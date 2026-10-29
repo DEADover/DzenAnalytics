@@ -71,7 +71,7 @@ export function SortMenu<V extends string>({
                 setOpen(false);
               }}
               className={`w-full flex items-center gap-2 text-left text-xs px-2 py-1.5 rounded hover:bg-panel2 ${
-                value === o.value ? "bg-panel2 text-accent2 font-medium" : ""
+                value === o.value ? "bg-panel2 text-accent font-medium" : ""
               }`}
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />

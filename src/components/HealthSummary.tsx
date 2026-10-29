@@ -170,7 +170,7 @@ function ScoreRow({ c, base }: { c: HealthComponent; base: string }) {
 
           {showAdvice && advice && (
             <div className="text-[11px] text-muted mt-1.5 flex items-start gap-1.5">
-              <Sparkles className="w-3 h-3 text-accent2 shrink-0 mt-0.5" />
+              <Sparkles className="w-3 h-3 text-accent shrink-0 mt-0.5" />
               <span className="leading-snug">{advice}</span>
             </div>
           )}

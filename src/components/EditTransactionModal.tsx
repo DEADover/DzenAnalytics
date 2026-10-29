@@ -1217,8 +1217,7 @@ export function EditTransactionModal({
     <Modal onClose={onClose} width="xl" className="h-[860px]">
       <ModalHeader
         icon={isCreate ? Plus : Pencil}
-        tone="accent2"
-        title={planMarker ? "Сохранить как факт" : isCopy ? "Копия операции" : isCreate ? "Новая операция" : "Редактирование операции"}
+                title={planMarker ? "Сохранить как факт" : isCopy ? "Копия операции" : isCreate ? "Новая операция" : "Редактирование операции"}
         actions={
           !isCreate && onNavigate ? (
             <span

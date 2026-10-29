@@ -65,7 +65,7 @@ export function OperationCategory({
         <div className="flex items-center gap-2 min-w-0">
           <span className="truncate">{tx.category}</span>
           {edited && !draft && (
-            <Pencil className="w-3 h-3 text-accent2 shrink-0" aria-label="Отредактировано" />
+            <Pencil className="w-3 h-3 text-accent shrink-0" aria-label="Отредактировано" />
           )}
         </div>
         {tx.subcategory && (

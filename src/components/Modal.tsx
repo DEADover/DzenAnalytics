@@ -219,7 +219,6 @@ export function Modal({
 
 const CHIP_TONE = {
   accent: "bg-accent/10 text-accent",
-  accent2: "bg-accent2/10 text-accent2",
   expense: "bg-expense/10 text-expense",
   warn: "bg-warn/10 text-warn",
   income: "bg-income/10 text-income",

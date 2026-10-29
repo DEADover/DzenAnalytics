@@ -1949,7 +1949,7 @@ export function AccountsPage() {
           <button
             onClick={() => setCalibOpen((o) => !o)}
             aria-expanded={calibOpen}
-            className={`btn-ghost btn-lg ${calibration ? "border-accent2 text-accent2" : ""}`}
+            className={`btn-ghost btn-lg ${calibration ? "border-accent text-accent" : ""}`}
             title="Привязать график к фактическому балансу"
           >
             <Settings2 className="w-4 h-4" />
@@ -1959,8 +1959,8 @@ export function AccountsPage() {
       </SectionControls>
 
       {tab === "capital" && calibOpen && !zenToken && (
-        <div className="card card-pad bg-accent2/5 border-accent2/40">
-          <CardHeader icon={Settings2} tone="accent2" title="Калибровка совокупного баланса" />
+        <div className="card card-pad bg-accent/5 border-accent/40">
+          <CardHeader icon={Settings2} title="Калибровка совокупного баланса" />
           <p className="text-xs text-muted mb-4">
             В CSV нет начальных остатков счетов, поэтому без калибровки график
             показывает <em>изменение</em>, а не реальный баланс. Укажите, сколько

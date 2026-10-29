@@ -45,6 +45,8 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
     toast(`Удалены все правила «Не дубликаты»: ${total}`, {
       undo: () => useDuplicateExclusionsStore.getState().replaceAll(before),
     });
+    // Список пуст — окно закрываем: плашка с «Отменить» живёт под окнами.
+    onClose();
   }
 
   return (

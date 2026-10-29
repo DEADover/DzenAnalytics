@@ -170,10 +170,10 @@ export function QuickCalibration() {
   }
 
   return (
-    <div className="card card-pad bg-accent2/5 border-accent2/40">
+    <div className="card card-pad bg-accent/5 border-accent/40">
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex items-start gap-3">
-          <Settings2 className="w-5 h-5 text-accent2 mt-0.5 shrink-0" />
+          <Settings2 className="w-5 h-5 text-accent mt-0.5 shrink-0" />
           <div>
             <div className="font-semibold">
               {editing ? "Изменить калибровку" : "Калибровка совокупного баланса"}

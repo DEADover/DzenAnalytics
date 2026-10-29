@@ -228,7 +228,7 @@ export function SplitTransactionModal({
 
   return (
     <Modal onClose={onClose} width="5xl">
-      <ModalHeader icon={Scissors} tone="accent2" title="Разделить операцию">
+      <ModalHeader icon={Scissors} title="Разделить операцию">
         <InfoPopover label="Как работает разделение">
           <p>
             Одна покупка часто состоит из разного: в чеке из супермаркета и

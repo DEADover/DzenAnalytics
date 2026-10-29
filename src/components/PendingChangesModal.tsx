@@ -596,6 +596,9 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
         await reapply();
       },
     });
+    // Откатывать больше нечего — окно закрываем: плашка с «Отменить» живёт
+    // под окнами и за открытым окном была бы недоступна.
+    onClose();
   }
 
   const label = (t: Transaction) =>

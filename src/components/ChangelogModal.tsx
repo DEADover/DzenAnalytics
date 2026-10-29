@@ -21,8 +21,7 @@ export function ChangelogModal({
     <Modal onClose={onClose} width="2xl">
       <ModalHeader
         icon={History}
-        tone="accent2"
-        title="История изменений"
+                title="История изменений"
         actions={
           <a
             href={PROJECT_URL}

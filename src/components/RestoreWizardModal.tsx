@@ -71,7 +71,7 @@ export function RestoreWizardModal({
 
   return (
     <Modal onClose={onClose} busy={busy} width="2xl">
-      <ModalHeader icon={History} tone="accent2" title="Восстановление снимка Дзен-мани" />
+      <ModalHeader icon={History} title="Восстановление снимка Дзен-мани" />
 
       <WizardSteps steps={STEPS} active={active} done={w.phase === "done"} />
 
@@ -587,7 +587,7 @@ function ReadyStep({
             )}
           </p>
           <ProgressBar
-            tone="accent2"
+            tone="accent"
             value={progress.total > 0 ? progress.current / progress.total : 0}
             label="Восстановление"
           />

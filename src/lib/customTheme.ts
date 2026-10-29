@@ -32,7 +32,7 @@ export const CUSTOM_COLOR_TOKENS = [
   { key: "text", token: "--c-text", label: "Текст", hint: "Основной текст и суммы" },
   { key: "accent", token: "--c-accent", label: "Акцент", hint: "Главные кнопки, выбранная вкладка, ссылки" },
   { key: "accentFg", token: "--c-accent-fg", label: "Текст на акценте", hint: "Подписи на главных кнопках" },
-  { key: "accent2", token: "--c-accent2", label: "Второй акцент", hint: "Значки, отметки, полосы прогресса" },
+  { key: "accent2", token: "--c-accent2", label: "Второй акцент", hint: "Возвраты, пометки, линии графиков" },
   { key: "income", token: "--c-income", label: "Доходы", hint: "Суммы доходов, «в плюсе»" },
   { key: "expense", token: "--c-expense", label: "Расходы", hint: "Суммы расходов, удаление, ошибки" },
   { key: "warn", token: "--c-warn", label: "Предупреждение", hint: "Предупреждения и пометки «внимание»" },

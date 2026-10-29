@@ -236,7 +236,7 @@ function SegmentedMenu<T extends string | number>({
             title={m.title}
             className={clsx(
               "w-full text-left text-xs px-2 py-1.5 rounded-control-xs whitespace-nowrap hover:bg-panel2",
-              value === m.value && "bg-panel2 text-accent2 font-medium"
+              value === m.value && "bg-panel2 text-accent font-medium"
             )}
           >
             {m.label}
