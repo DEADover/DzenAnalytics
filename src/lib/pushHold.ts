@@ -13,8 +13,15 @@
  */
 let heldUntil = 0;
 
+/**
+ * Самое долгое ожидание. Плашка с отменой держит отправку, пока видна, а
+ * видна она дольше обычного, пока на ней мышь, — но не бесконечно: если
+ * плашку почему-то никто не снял, правки всё равно уйдут.
+ */
+export const MAX_HOLD_MS = 60_000;
+
 /** Не отправлять ещё `ms` миллисекунд (продлевает, но не укорачивает). */
-export function holdPush(ms: number): void {
+export function holdPush(ms: number = MAX_HOLD_MS): void {
   heldUntil = Math.max(heldUntil, Date.now() + ms);
 }
 

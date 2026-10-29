@@ -333,9 +333,10 @@ function App() {
         timer = null;
         // Висит плашка с «Отменить» — ждём её: отменённое не должно успеть
         // уйти в облако (см. lib/pushHold).
+        // Проверяем часто: плашку могут закрыть раньше, и ждать тогда незачем.
         const held = pushHoldLeft();
         if (held > 0) {
-          timer = setTimeout(fire, held);
+          timer = setTimeout(fire, Math.min(held, 500));
           return;
         }
         const live = useZenmoneyStore.getState();

@@ -36,8 +36,12 @@ export const useToastStore = create<ToastState>((set, get) => ({
 
   show: (text, opts) => {
     const duration = opts?.duration ?? (opts?.undo ? UNDO_MS : PLAIN_MS);
-    // Пока можно отменить, автоматическая отправка ждёт (см. lib/pushHold).
-    if (opts?.undo) holdPush(duration + 500);
+    // Пока можно отменить, автоматическая отправка ждёт — столько, сколько
+    // плашка на экране, с паузой на наведении (см. lib/pushHold). Новая
+    // плашка без отмены сменила прежнюю — прежнее действие стало
+    // окончательным, ждать больше нечего.
+    if (opts?.undo) holdPush();
+    else releasePush();
     set({ toast: { id: ++seq, text, undo: opts?.undo, duration } });
   },
 

@@ -23,7 +23,7 @@ test("удаление: без окна-вопроса, с плашкой; «О�
   await expect.poll(firstText).not.toBe(before);
   if (process.env.E2E_SHOTS) {
     await page.waitForTimeout(400);
-    await page.screenshot({ path: process.env.E2E_SHOTS + "/toast.png", clip: { x: 0, y: 700, width: 720, height: 200 } });
+    await page.screenshot({ path: process.env.E2E_SHOTS + "/toast.png", clip: { x: 400, y: 760, width: 640, height: 140 } });
   }
 
   await toastEl(page).getByRole("button", { name: "Отменить" }).click();
@@ -177,4 +177,34 @@ test("«Откатить все»: без вопроса, «Отменить» �
 
   await toastEl(page).getByRole("button", { name: "Отменить" }).click();
   await expect(review).toHaveText("2");
+});
+
+test("плашка: по центру снизу, над панелью выделения; отсчёт идёт и стоит на наведении", async ({ page }) => {
+  await connectZen(page, "/transactions");
+  // Выделили строку — внизу панель выделения; удалили другую — плашка над ней.
+  await page.locator(".op-row").nth(1).click();
+  const bar = page.getByRole("region", { name: "Массовые действия" });
+  await expect(bar).toBeVisible();
+  await page.locator(".op-row").nth(2).getByRole("button", { name: "Удалить операцию" }).click();
+
+  const t = toastEl(page);
+  await expect(t).toBeVisible();
+  await page.waitForTimeout(400); // появление доиграло
+  const box = (await t.boundingBox())!;
+  const barBox = (await bar.boundingBox())!;
+  expect(Math.abs(box.x + box.width / 2 - 720)).toBeLessThan(2);
+  expect(box.y + box.height).toBeLessThanOrEqual(barBox.y);
+  if (process.env.E2E_SHOTS)
+    await page.screenshot({ path: process.env.E2E_SHOTS + "/toast-over-bar.png", clip: { x: 360, y: 680, width: 720, height: 220 } });
+
+  const secs = () => t.locator("[data-countdown]").getAttribute("data-countdown").then(Number);
+  expect(await secs()).toBe(6);
+  await expect.poll(secs, { timeout: 3000 }).toBeLessThanOrEqual(4);
+  // Мышь на плашке — отсчёт стоит.
+  await t.hover();
+  const held = await secs();
+  await page.waitForTimeout(1500);
+  expect(await secs()).toBe(held);
+  await page.mouse.move(10, 10);
+  await expect(t).toHaveCount(0, { timeout: 8000 });
 });

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { ArrowDown, ArrowLeftRight, ArrowUp, X } from "lucide-react";
 import clsx from "clsx";
 import { formatMoney, formatNum } from "../lib/format";
@@ -36,8 +36,25 @@ export function SelectionBar({
   children: ReactNode;
 }) {
   const sums = totals && (totals.inc > 0 || totals.exp > 0 || totals.xfer > 0) ? totals : null;
+  // Пока панель на экране, плашка «Отменить» встаёт над ней, а не на неё:
+  // обе живут внизу по центру (см. Toaster).
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const apply = () => root.style.setProperty("--selection-stack", `${el.offsetHeight + 12}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--selection-stack");
+    };
+  }, []);
   return (
     <div
+      ref={ref}
       role="region"
       aria-label="Массовые действия"
       className={clsx(
