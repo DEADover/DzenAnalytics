@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { isViewTransitionUpdate } from "./lib/viewTransition";
 import { TopNav } from "./components/TopNav";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -16,6 +16,8 @@ import { useQuickSettingsStore } from "./store/useQuickSettingsStore";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HistRatesProgress } from "./components/HistRatesProgress";
 import { Toaster } from "./components/Toaster";
+import { ConnectZenDialog } from "./components/ConnectZenDialog";
+import { connectZen } from "./store/useConnectStore";
 import { pushHoldLeft } from "./lib/pushHold";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useTourStore } from "./store/useTourStore";
@@ -140,6 +142,23 @@ function App() {
   const hydrate = useDataStore((s) => s.hydrate);
   const loaded = useDataStore((s) => s.loaded);
   const hasData = useDataStore((s) => s.transactions.length > 0);
+
+  // `?connect=1` — «Подключить свой Дзен-мани» из демо: после выхода из демо
+  // страница перезагружается, и подключение надо продолжить уже здесь. Данных
+  // нет — то же окно, что на первом экране; есть (вернулись в аккаунт с CSV
+  // или уже подключённый) — настройки источника, как раньше.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const wantsConnect = new URLSearchParams(location.search).get("connect") === "1";
+  useEffect(() => {
+    if (!wantsConnect || !loaded) return;
+    if (hasData) {
+      navigate("/settings?tab=source&source=api", { replace: true });
+      return;
+    }
+    navigate(location.pathname, { replace: true });
+    connectZen();
+  }, [wantsConnect, loaded, hasData, navigate, location.pathname]);
   const initTheme = useThemeStore((s) => s.init);
   const backupHydrate = useBackupStore((s) => s.hydrate);
   const backupRunIfDue = useBackupStore((s) => s.runIfDue);
@@ -574,6 +593,7 @@ function App() {
       <ConfirmDialog />
       <HistRatesProgress />
       <Toaster />
+      <ConnectZenDialog />
       {/* «Наверх» — одна на всё приложение: появляется на любой странице,
           прокрученной дальше первого экрана. */}
       <ScrollTopButton />

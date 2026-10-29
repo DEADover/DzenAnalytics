@@ -28,7 +28,9 @@ export function DemoBanner() {
         <button
           type="button"
           className="btn-primary"
-          onClick={() => exitDemo("/settings?tab=source&source=api")}
+          // После выхода из демо подключение продолжится окном на первом
+          // экране (`?connect=1`, см. App), а не в настройках.
+          onClick={() => exitDemo("/?connect=1")}
         >
           Подключить свой Дзен-мани
         </button>

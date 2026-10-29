@@ -4,6 +4,7 @@ import { ArrowRight, Cloud, FlaskConical, GraduationCap, Lock, Upload, type Luci
 import { Badge } from "./Badge";
 import { startDemo } from "../hooks/useDemo";
 import { useTourStore } from "../store/useTourStore";
+import { connectZen } from "../store/useConnectStore";
 
 /** Карточка одного способа начать: значок, название, пояснение, действие внизу. */
 function StartCard({
@@ -45,8 +46,9 @@ const CARD =
 /**
  * Пустая панель — на каждом разделе, пока данных нет. Три способа начать
  * одинаковыми карточками: подключить Дзен-мани (рекомендуем), загрузить
- * CSV-выгрузку или посмотреть демо-данные выдуманной семьи. Подключение и CSV
- * ведут в нужную вкладку «Настройки → Источник данных», демо открывается сразу.
+ * CSV-выгрузку или посмотреть демо-данные выдуманной семьи. Подключение идёт
+ * на месте (`connectZen`), CSV ведёт в «Настройки → Источник данных», демо
+ * открывается сразу.
  */
 export function EmptyState() {
   return (
@@ -63,12 +65,14 @@ export function EmptyState() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl">
-        <Link to="/settings?source=api" className={CARD}>
+        {/* Подключают на месте: вход через Дзен-мани или окно с токеном, а не
+            переход в настройки, где поле токена теряется среди остального. */}
+        <button type="button" onClick={connectZen} className={CARD}>
           <StartCard icon={Cloud} title="Подключить Дзен-мани" badge="Рекомендуем" action="Подключить">
             Онлайн-синхронизация: операции, счета и категории подтянутся
             сами и будут обновляться.
           </StartCard>
-        </Link>
+        </button>
         <Link to="/settings?source=csv" className={CARD}>
           <StartCard icon={Upload} title="Загрузить CSV" action="Загрузить">
             Выгрузка из приложения Дзен-мани — для разовой аналитики без
