@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Undo2, X } from "lucide-react";
+import { AlertTriangle, Check, Undo2, X } from "lucide-react";
 import { useToastStore, type Toast } from "../store/useToastStore";
 import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 
@@ -7,7 +7,8 @@ import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 const TICK_MS = 100;
 
 /**
- * Плашка-отклик внизу по центру: «Операция удалена · Отменить».
+ * Плашка-отклик внизу по центру: «Операция удалена · Отменить», итог
+ * синхронизации и отправки, «Дзен-мани подключён».
  *
  * Ставится ОДИН раз в корне приложения. Центр — туда смотрят после действия,
  * и там же стоит панель выделения; пока она видна, плашка встаёт над ней
@@ -83,7 +84,14 @@ export function Toaster() {
         className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border bg-panel shadow-xl pl-3 pr-1.5 py-1.5 text-sm text-text max-w-[min(30rem,100%)]"
       >
         {shown.undo && <Countdown left={Math.max(0, left)} total={shown.duration} paused={hover} />}
-        <span className={`min-w-0 py-1 ${shown.undo ? "" : "pl-0.5"}`}>{shown.text}</span>
+        {/* Итог — значком тона, как прежде у плашки синхронизации в шапке. */}
+        {!shown.undo && shown.tone === "ok" && (
+          <Check className="w-4 h-4 shrink-0 text-income" aria-hidden />
+        )}
+        {!shown.undo && shown.tone === "err" && (
+          <AlertTriangle className="w-4 h-4 shrink-0 text-expense" aria-hidden />
+        )}
+        <span className={`min-w-0 py-1 ${shown.undo || shown.tone ? "" : "pl-0.5"}`}>{shown.text}</span>
         {shown.undo && (
           <button
             type="button"

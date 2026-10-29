@@ -1410,17 +1410,6 @@ h2,
   from { opacity: 0; }
   to { opacity: 1; }
 }
-@keyframes flashSlideDown {
-  /* Used by the header sync result toast: slide down + fade in from
-     above the buttons, lands ~6px below them. Short distance & quick
-     timing so it feels attached to the click, not floating in. */
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes flashFadeOut {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(-4px); }
-}
 @keyframes catSubsIn {
   from { opacity: 0; transform: translateX(-8px); }
   to   { opacity: 1; transform: translateX(0); }
@@ -1469,8 +1458,6 @@ h2,
 .animate-fade { animation: fadeIn var(--motion-base) var(--ease-soft); }
 .animate-cat-subs { animation: catSubsIn var(--motion-base) var(--ease-soft); }
 .animate-menu-item { animation: menuItemIn var(--motion-base) var(--ease-soft) both; }
-.animate-flash-in { animation: flashSlideDown 0.22s ease-out; }
-.animate-flash-out { animation: flashFadeOut 0.18s ease-in forwards; }
 
 /* Окна: проявляются, вырастая из 96 %, а уходят слепком — затемнение гаснет,
    панель (`data-exit-panel`) гаснет и чуть уменьшается (lib/exitGhost.ts).

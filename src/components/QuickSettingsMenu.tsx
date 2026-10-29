@@ -229,6 +229,8 @@ function useToggle(id: string): ToggleView | null {
   const setCommentWrap = useDisplayStore((s) => s.setCommentWrap);
   const columnResize = useDisplayStore((s) => s.columnResize);
   const setColumnResize = useDisplayStore((s) => s.setColumnResize);
+  const hints = useDisplayStore((s) => s.hints);
+  const setHints = useDisplayStore((s) => s.setHints);
   const remember = useFilterMemoryStore((s) => s.enabled);
   const setRemember = useFilterMemoryStore((s) => s.setEnabled);
   const hideForeign = useMembersStore((s) => s.hideForeignPrivate);
@@ -260,6 +262,8 @@ function useToggle(id: string): ToggleView | null {
       return sw(remember, setRemember, "Сохраняются", "Сбрасываются");
     case "columnResize":
       return sw(columnResize, setColumnResize, "Включено", "Выключено");
+    case "hints":
+      return sw(hints, setHints, "Показываются", "Выключены");
     case "hideForeign":
       return sw(hideForeign, setHideForeign, "Скрыты", "Видны");
     default:

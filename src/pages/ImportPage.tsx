@@ -237,6 +237,8 @@ export function ImportPage() {
   const hideThanks = useDisplayStore((s) => s.hideThanks);
   const quickSettingsOn = useDisplayStore((s) => s.quickSettings);
   const setQuickSettingsOn = useDisplayStore((s) => s.setQuickSettings);
+  const hintsOn = useDisplayStore((s) => s.hints);
+  const setHintsOn = useDisplayStore((s) => s.setHints);
   const setHideThanks = useDisplayStore((s) => s.setHideThanks);
   const setFractionDigits = useDisplayStore((s) => s.setFractionDigits);
   const tableFontLevel = useDisplayStore((s) => s.tableFontLevel);
@@ -1908,6 +1910,30 @@ export function ImportPage() {
               checked={quickSettingsOn}
               label="Быстрые настройки"
               onChange={(next) => setQuickSettingsOn(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Всплывающие подсказки"
+          status={
+            hintsOn
+              ? "Пояснения появляются при наведении на кнопки и значки"
+              : "Пояснений при наведении нет — только значения на графиках"
+          }
+          help={
+            <p>
+              Пузырь с пояснением, который появляется, если задержать мышь на
+              кнопке, значке или подписи. Освоились — выключите, чтобы не мешали.
+              Значения на графиках и полный текст обрезанной подписи остаются:
+              это сами данные. Окошки «?» открываются щелчком, как и раньше.
+            </p>
+          }
+          control={
+            <Switch
+              checked={hintsOn}
+              label="Всплывающие подсказки"
+              onChange={(next) => setHintsOn(next)}
             />
           }
         />

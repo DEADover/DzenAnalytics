@@ -26,13 +26,32 @@ interface State {
 
 const KEY = "categoryMeta";
 
+/**
+ * Идущее чтение с диска. Перечитать просит каждая точка категории, пока
+ * настройки не загружены (`CategoryDot`), а в справочнике или ленте их сотни:
+ * без общего чтения каждая получала свою копию с диска, каждая копия — новый
+ * объект, и список перерисовывался столько же раз (в «Справочниках» — больше
+ * тысячи раз подряд, вкладка открывалась рывками). Одновременные вызовы
+ * теперь ждут одно чтение; следующий вызов после него читает заново.
+ */
+let hydrating: Promise<void> | null = null;
+
 export const useCategoryMetaStore = create<State>((set, get) => ({
   meta: {},
   loaded: false,
 
-  hydrate: async () => {
-    const data = await db.loadJSON<Record<string, CategoryMeta>>(KEY);
-    set({ meta: data || {}, loaded: true });
+  hydrate: () => {
+    if (!hydrating) {
+      hydrating = (async () => {
+        try {
+          const data = await db.loadJSON<Record<string, CategoryMeta>>(KEY);
+          set({ meta: data || {}, loaded: true });
+        } finally {
+          hydrating = null;
+        }
+      })();
+    }
+    return hydrating;
   },
 
   setAll: async (m) => {

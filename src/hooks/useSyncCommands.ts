@@ -1,10 +1,10 @@
 import { useZenmoneyStore, type SyncResult } from "../store/useZenmoneyStore";
 import { pluralRu } from "../lib/plural";
-import { useSyncFlashStore } from "../store/useSyncFlashStore";
+import { toast } from "../store/useToastStore";
 import { confirm } from "../store/useConfirmStore";
 import { formatNum } from "../lib/format";
 
-/** Итог синхронизации одной фразой — для плашки под кнопками шапки. */
+/** Итог синхронизации одной фразой — для плашки внизу по центру. */
 export function formatSyncResult(r: SyncResult): string {
   if (r.full) return `Полная синхронизация: ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
   if (r.delta.transactions === 0 && r.delta.deletions === 0) {
@@ -25,17 +25,14 @@ export function formatSyncResult(r: SyncResult): string {
 export function useSyncCommands() {
   const status = useZenmoneyStore((s) => s.status);
   const sync = useZenmoneyStore((s) => s.sync);
-  const show = useSyncFlashStore((s) => s.show);
-  const clear = useSyncFlashStore((s) => s.clear);
   const busy = status === "syncing" || status === "checking";
 
   async function runIncremental() {
     if (busy) return;
-    clear();
     try {
-      show({ tone: "ok", text: formatSyncResult(await sync()) });
+      toast(formatSyncResult(await sync()), { tone: "ok" });
     } catch {
-      show({ tone: "err", text: useZenmoneyStore.getState().error || "Синхронизация не прошла. Попробуйте ещё раз" });
+      toast(useZenmoneyStore.getState().error || "Синхронизация не прошла. Попробуйте ещё раз", { tone: "err" });
     }
   }
 
@@ -49,11 +46,10 @@ export function useSyncCommands() {
       tone: "warning",
     });
     if (!ok) return;
-    clear();
     try {
-      show({ tone: "ok", text: formatSyncResult(await sync({ force: true })) });
+      toast(formatSyncResult(await sync({ force: true })), { tone: "ok" });
     } catch {
-      show({ tone: "err", text: useZenmoneyStore.getState().error || "Синхронизация не прошла. Попробуйте ещё раз" });
+      toast(useZenmoneyStore.getState().error || "Синхронизация не прошла. Попробуйте ещё раз", { tone: "err" });
     }
   }
 

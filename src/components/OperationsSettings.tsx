@@ -5,6 +5,7 @@ import { CounterpartyManager } from "./CounterpartyManager";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { useDictionaryCounts } from "../hooks/useDictionaries";
 import { Segmented } from "./Segmented";
+import { useMountAfter } from "../hooks/useMountAfter";
 
 type SubTab = "categories" | "counterparties";
 
@@ -20,6 +21,9 @@ type SubTab = "categories" | "counterparties";
 export function OperationsSettings() {
   const [sub, setSub] = useState<SubTab>("categories");
   const counts = useDictionaryCounts();
+  // Справочник — сотни строк: вставляем его, когда доиграло переключение
+  // вкладки, иначе её подсветка застревала на полпути (см. useMountAfter).
+  const ready = useMountAfter(sub);
 
   const tabs: { id: SubTab; label: string; icon: typeof Tags; count: number | null }[] =
     [
@@ -65,8 +69,16 @@ export function OperationsSettings() {
         className="mb-4"
       />
 
-      {sub === "categories" && <CategoryManager />}
-      {sub === "counterparties" && <CounterpartyManager />}
+      {/* Пока список не вставлен — пустое место его высоты, чтобы карточка
+          не схлопывалась и не прыгала; список проявляется мягко. */}
+      {!ready ? (
+        <div className="min-h-[60vh]" aria-busy="true" />
+      ) : (
+        <div className="animate-fade">
+          {sub === "categories" && <CategoryManager />}
+          {sub === "counterparties" && <CounterpartyManager />}
+        </div>
+      )}
     </div>
   );
 }

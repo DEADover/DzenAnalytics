@@ -203,6 +203,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useDisplayStore, "display.quickSettings", (s) => s.quickSettings, (v, s) =>
     isBool(v) ? s.setQuickSettings(v) : undefined
   ),
+  field(useDisplayStore, "display.hints", (s) => s.hints, (v, s) =>
+    isBool(v) ? s.setHints(v) : undefined
+  ),
   field(useDisplayStore, "display.filtersMode", (s) => s.filtersMode, (v, s) =>
     v === "button" || v === "page" ? s.setFiltersMode(v) : undefined
   ),

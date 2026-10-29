@@ -154,6 +154,13 @@ interface DisplayState {
    * шестерёнка сразу ведёт в «Настройки», как раньше. По умолчанию включено.
    */
   quickSettings: boolean;
+  /**
+   * Всплывающие подсказки при наведении — на кнопках, значках и подписях.
+   * Выключено — их нет совсем (и серых системных тоже). Остаются значения на
+   * графиках и полный текст обрезанной подписи: это данные, а не пояснения.
+   * По умолчанию включено.
+   */
+  hints: boolean;
   filtersMode: FiltersMode;
   /**
    * Какой месяц подставляет кнопка месяца в фильтре: отчётный (со своего
@@ -195,6 +202,7 @@ interface DisplayState {
   setSyncLogOpen: (on: boolean) => Promise<void>;
   setHideThanks: (on: boolean) => Promise<void>;
   setQuickSettings: (on: boolean) => Promise<void>;
+  setHints: (on: boolean) => Promise<void>;
   setFiltersMode: (mode: FiltersMode) => Promise<void>;
   setMonthKind: (kind: MonthKind) => Promise<void>;
   setWindowKind: (kind: WindowKind) => Promise<void>;
@@ -213,6 +221,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   syncLogOpen: false,
   hideThanks: false,
   quickSettings: true,
+  hints: true,
   filtersMode: "page",
   monthKind: "period",
   windowKind: "30d",
@@ -235,6 +244,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       syncLogOpen?: boolean;
       hideThanks?: boolean;
       quickSettings?: boolean;
+      hints?: boolean;
       filtersMode?: string;
       monthKind?: string;
       windowKind?: string;
@@ -258,6 +268,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       syncLogOpen: stored?.syncLogOpen === true,
       hideThanks: stored?.hideThanks === true,
       quickSettings: stored?.quickSettings !== false,
+      hints: stored?.hints !== false,
       // По умолчанию фильтры стоят на странице; панель по кнопке — выбор человека.
       filtersMode: stored?.filtersMode === "button" ? "button" : "page",
       monthKind: stored?.monthKind === "month" ? "month" : "period",
@@ -325,6 +336,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     await db.saveJSON(KEY, { ...persisted(get()), quickSettings: on });
   },
 
+  setHints: async (on) => {
+    set({ hints: on });
+    await db.saveJSON(KEY, { ...persisted(get()), hints: on });
+  },
+
   setFiltersMode: async (filtersMode) => {
     set({ filtersMode });
     await db.saveJSON(KEY, { ...persisted(get()), filtersMode });
@@ -365,6 +381,7 @@ function persisted(s: DisplayState) {
     syncLogOpen: s.syncLogOpen,
     hideThanks: s.hideThanks,
     quickSettings: s.quickSettings,
+    hints: s.hints,
     filtersMode: s.filtersMode,
     monthKind: s.monthKind,
     windowKind: s.windowKind,

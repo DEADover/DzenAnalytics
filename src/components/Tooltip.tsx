@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { fromTouch } from "../lib/touchInput";
+import { useDisplayStore } from "../store/useDisplayStore";
 
 interface Props {
   /** Tooltip body. When falsy, the child renders with no tooltip at all. */
@@ -72,14 +73,17 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
   const [pos, setPos] = useState({ left: 0, top: 0, ready: false });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const id = useId();
+  // «Всплывающие подсказки» выключены — пузырь не открывается вовсе.
+  const hintsOn = useDisplayStore((s) => s.hints);
 
   const open = useCallback(() => {
+    if (!hintsOn) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       setPos((p) => ({ ...p, ready: false }));
       setShown(true);
     }, delay);
-  }, [delay]);
+  }, [delay, hintsOn]);
 
   const close = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);

@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { RefreshCw, CloudDownload, Check, AlertTriangle, UploadCloud, ListChecks, KeyRound } from "lucide-react";
+import { RefreshCw, CloudDownload, UploadCloud, ListChecks, KeyRound } from "lucide-react";
 import clsx from "clsx";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
-import { useSyncFlashStore } from "../store/useSyncFlashStore";
+import { toast } from "../store/useToastStore";
 import { useSyncCommands } from "../hooks/useSyncCommands";
 import { confirm } from "../store/useConfirmStore";
 import { snapshotPromiseText } from "../lib/cloudSnapshots";
@@ -30,10 +30,8 @@ import { friendlyFailure, isAuthExpired, isFailureActive } from "../lib/syncDiag
  * the Settings page is where you connect a token, so hiding here
  * keeps the header tidy for CSV-mode users.
  *
- * Result feedback drops down BELOW the buttons as an absolutely-
- * positioned toast — keeps the header row from reflowing and avoids
- * the chip pushing the search box off-screen. Auto-dismisses after
- * five seconds (animated fade-out the last ~180ms).
+ * Итог синхронизации и отправки — общей плашкой внизу по центру
+ * (`toast`, см. Toaster), той же, что «Отменить».
  */
 export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
   const token = useZenmoneyStore((s) => s.token);
@@ -55,14 +53,6 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
   const pushFailure = useZenmoneyStore((s) => s.pushFailure);
   const navigate = useSmoothNavigate();
 
-  // Плашка итога живёт в сторе: полную синхронизацию на телефоне запускают из
-  // меню, а итог показывает шапка. Исчезает в два шага — пока `closing`,
-  // доигрывает затухание, потом снимается.
-  const flash = useSyncFlashStore((s) => s.flash);
-  const closing = useSyncFlashStore((s) => s.closing);
-  const showFlash = useSyncFlashStore((s) => s.show);
-  const startClosing = useSyncFlashStore((s) => s.startClosing);
-  const clearFlash = useSyncFlashStore((s) => s.clear);
 
   // Hydrate the token from IndexedDB on first mount so the buttons
   // appear straight away if the user is already connected (header
@@ -71,16 +61,6 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
     if (!loaded) hydrate();
   }, [loaded, hydrate]);
 
-  // Schedule: 5s visible, then 0.18s fade-out, then unmount.
-  useEffect(() => {
-    if (!flash) return;
-    const tFade = setTimeout(startClosing, 5000);
-    const tDrop = setTimeout(clearFlash, 5000 + 200);
-    return () => {
-      clearTimeout(tFade);
-      clearTimeout(tDrop);
-    };
-  }, [flash, startClosing, clearFlash]);
 
   // Без Дзен-мани обмениваться с облаком нечем, но слот в начале дорожки —
   // переключатель аккаунта и разреза — остаётся: из пустого нового аккаунта
@@ -146,14 +126,12 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
       if (res.pushed > 0) parts.push(`отправлено ${formatNum(res.pushed)}`);
       if (res.created > 0) parts.push(`создано ${formatNum(res.created)}`);
       if (res.skipped.length > 0) parts.push(`пропущено ${formatNum(res.skipped.length)}`);
-      showFlash({
+      toast(parts.length ? `Отправка: ${parts.join(", ")}` : "Отправка завершена", {
         tone: res.skipped.length > 0 ? "err" : "ok",
-        text: parts.length ? `Отправка: ${parts.join(", ")}` : "Отправка завершена",
       });
     } catch {
-      showFlash({
+      toast(useZenmoneyStore.getState().pushError || "Правки не отправились. Попробуйте ещё раз", {
         tone: "err",
-        text: useZenmoneyStore.getState().pushError || "Правки не отправились. Попробуйте ещё раз",
       });
     }
   }
@@ -173,7 +151,7 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
           // обойма со своим скруглением — в ряду, где всё остальное одного
           // вида, она читалась деталью из другого набора.
           "seg-track",
-          (error || failing) && !busy && !flash
+          (error || failing) && !busy
             ? "!border-expense/40"
             : hasPending && "!border-accent/40 !bg-accent/5"
         )}
@@ -263,44 +241,8 @@ export function HeaderSyncActions({ leading }: { leading?: ReactNode }) {
         </button>
       </div>
 
-      {/* Toast — absolutely positioned, right-aligned with the
-          button group. Frosted-glass aesthetic (`backdrop-blur` over
-          a translucent panel) keeps it readable on top of any page
-          content but visually distinct from the solid header bar
-          above. The tone (success / error) is carried by a thin
-          left-edge accent bar and the icon colour, not by tinting the
-          whole background — keeps the chip neutral and quiet. */}
       {reviewOpen && <PendingChangesModal onClose={() => setReviewOpen(false)} />}
 
-      {flash && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={clsx(
-            "absolute right-0 top-full mt-2 z-30 w-[320px] sm:w-[360px] pointer-events-none",
-            closing ? "animate-flash-out" : "animate-flash-in"
-          )}
-        >
-          <div className="flex items-stretch overflow-hidden rounded-lg border border-border bg-panel/70 backdrop-blur-md shadow-lg">
-            {/* Tone accent bar — 3px wide, full height. Reads as a
-                "status stripe" so the chip itself can stay neutral. */}
-            <div
-              className={clsx(
-                "w-[3px] shrink-0",
-                flash.tone === "ok" ? "bg-income" : "bg-expense"
-              )}
-            />
-            <div className="flex items-start gap-2 px-3 py-2 text-xs leading-snug text-text/90">
-              {flash.tone === "ok" ? (
-                <Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-income" />
-              ) : (
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-expense" />
-              )}
-              <span className="whitespace-normal break-words">{flash.text}</span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

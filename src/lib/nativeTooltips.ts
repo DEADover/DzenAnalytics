@@ -42,6 +42,19 @@ function isClipped(el: HTMLElement): boolean {
   return el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
 }
 
+/**
+ * Подсказки-пояснения включены (настройка «Всплывающие подсказки»). Выключены
+ * — мост по-прежнему снимает `title`, чтобы не вылезла серая системная
+ * подсказка, но своей не показывает. Полный текст обрезанной подписи остаётся:
+ * это не пояснение, а то, что не уместилось.
+ */
+let hintsOn = true;
+
+export function setHintsEnabled(on: boolean): void {
+  hintsOn = on;
+  if (!on) hide();
+}
+
 /** Should this element show a tooltip at all? */
 function wants(el: HTMLElement, text: string): boolean {
   if (!text.trim()) return false;
@@ -49,7 +62,7 @@ function wants(el: HTMLElement, text: string): boolean {
   if (isTruncationCell(el)) {
     return (el.textContent || "").trim().length > 0 && isClipped(el);
   }
-  return true;
+  return hintsOn;
 }
 
 function ensureBubble(): HTMLDivElement {

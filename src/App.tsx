@@ -65,7 +65,7 @@ import { useDraftsStore } from "./store/useDraftsStore";
 import { useTagEditsStore } from "./store/useTagEditsStore";
 import { useAccountEditsStore } from "./store/useAccountEditsStore";
 import { useBudgetEditsStore } from "./store/useBudgetEditsStore";
-import { installNativeTooltips } from "./lib/nativeTooltips";
+import { installNativeTooltips, setHintsEnabled } from "./lib/nativeTooltips";
 import { useColumnWidthsStore } from "./store/useColumnWidthsStore";
 import { useDiffModeStore } from "./store/useDiffModeStore";
 import { useDisplayStore } from "./store/useDisplayStore";
@@ -292,6 +292,9 @@ function App() {
   // one delegated listener covers the whole app (and absorbs the old rule that
   // a truncating cell only gets a tooltip while its text is actually clipped).
   useEffect(() => installNativeTooltips(), []);
+  // «Всплывающие подсказки» — мост подсказок живёт вне React, флаг ему передаём.
+  const hintsOn = useDisplayStore((s) => s.hints);
+  useEffect(() => setHintsEnabled(hintsOn), [hintsOn]);
 
   // Once the report-period setting is known, reset the filter's "current
   // month" to the matching billing period — so that fresh visits always
