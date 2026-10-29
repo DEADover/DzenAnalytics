@@ -30,7 +30,7 @@ import { EditTransactionModal } from "../components/EditTransactionModal";
 import { DuplicateExclusionsModal } from "../components/DuplicateExclusionsModal";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { Tooltip } from "../components/Tooltip";
-import { confirmBulkDelete } from "../lib/confirmBulkDelete";
+import { deleteWithUndo } from "../lib/undoable";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { SectionControls } from "../components/SectionControls";
 import { Slider } from "../components/Slider";
@@ -93,7 +93,6 @@ export function DuplicatesPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
   const reapplyRules = useDataStore((s) => s.reapplyRules);
-  const deleteTransactionMany = useDataStore((s) => s.deleteTransactionMany);
   const setEditMany = useEditsStore((s) => s.setEditMany);
   const edits = useEditsStore((s) => s.edits);
 
@@ -180,15 +179,12 @@ export function DuplicatesPage() {
   async function deleteBulk() {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
-    const ok = await confirmBulkDelete(ids.length);
-    if (!ok) return;
-    await deleteTransactionMany(ids);
+    await deleteWithUndo(ids);
     setSelected(new Set());
   }
 
   async function deleteOne(t: Transaction) {
-    if (!(await confirmBulkDelete(1))) return;
-    await deleteTransactionMany([t.id]);
+    await deleteWithUndo([t.id]);
   }
 
   // Reset selection when the detected groups change (window / data).

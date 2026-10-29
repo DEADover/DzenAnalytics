@@ -16,7 +16,7 @@ import { StatCell, StatRow } from "../components/SectionCard";
 import { BulkEditModal } from "../components/BulkEditModal";
 import { DataTable } from "../components/DataTable";
 import { DateField } from "../components/DateField";
-import { confirmBulkDelete } from "../lib/confirmBulkDelete";
+import { deleteWithUndo } from "../lib/undoable";
 import { kindTotals } from "../lib/aggregations";
 import type { Transaction } from "../types";
 import { SearchInput } from "../components/SearchInput";
@@ -63,7 +63,6 @@ export function SearchPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
   const reapplyRules = useDataStore((s) => s.reapplyRules);
-  const deleteTransactionMany = useDataStore((s) => s.deleteTransactionMany);
   const setEditMany = useEditsStore((s) => s.setEditMany);
   const showDrill = useDrillStore((s) => s.show);
 
@@ -93,9 +92,7 @@ export function SearchPage() {
   async function deleteBulk() {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
-    const ok = await confirmBulkDelete(ids.length);
-    if (!ok) return;
-    await deleteTransactionMany(ids);
+    await deleteWithUndo(ids);
     setSelected(new Set());
   }
 

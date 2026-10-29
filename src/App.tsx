@@ -15,6 +15,8 @@ import { stripAmountMarks } from "./lib/format";
 import { useQuickSettingsStore } from "./store/useQuickSettingsStore";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HistRatesProgress } from "./components/HistRatesProgress";
+import { Toaster } from "./components/Toaster";
+import { pushHoldLeft } from "./lib/pushHold";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useTourStore } from "./store/useTourStore";
 import { TourHub } from "./components/tour/TourHub";
@@ -327,17 +329,27 @@ function App() {
       // Та же проверка, что у «При синке», — одна на всё приложение.
       if (!hasPendingPush()) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
+      const fire = () => {
         timer = null;
+        // Висит плашка с «Отменить» — ждём её: отменённое не должно успеть
+        // уйти в облако (см. lib/pushHold).
+        const held = pushHoldLeft();
+        if (held > 0) {
+          timer = setTimeout(fire, held);
+          return;
+        }
         const live = useZenmoneyStore.getState();
         // Re-check at fire-time: user may have toggled mode off while
         // the debounce was pending.
         if (live.pushMode !== "auto") return;
         if (live.pushStatus === "syncing") return;
+        // Отменили всё, что ждало, — отправлять нечего.
+        if (!hasPendingPush()) return;
         void useZenmoneyStore.getState().pushPendingEdits().catch(() => {
           /* surfaced via pushError + sync log */
         });
-      }, 2000);
+      };
+      timer = setTimeout(fire, 2000);
     };
     // Only schedule on changes that ADD pending work — otherwise the
     // post-push cleanup (clearing an edit from the overlay) would
@@ -560,6 +572,7 @@ function App() {
       <QuickSettingsModal />
       <ConfirmDialog />
       <HistRatesProgress />
+      <Toaster />
       {/* «Наверх» — одна на всё приложение: появляется на любой странице,
           прокрученной дальше первого экрана. */}
       <ScrollTopButton />

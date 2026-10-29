@@ -95,6 +95,15 @@ interface EditsState {
    *  switching CSV → API, where ids change), so they can neither apply nor push. */
   clearMany: (ids: string[]) => Promise<void>;
   clearAll: () => Promise<void>;
+  /** Снимок правок и их авторов — чтобы потом вернуть ровно как было. */
+  snapshot: (ids: readonly string[]) => EditsSnapshot;
+  /** Вернуть правки этих операций к снимку: была правка — она, не было — никакой. */
+  restore: (snap: EditsSnapshot) => Promise<void>;
+}
+
+export interface EditsSnapshot {
+  edits: Record<string, TransactionEdit | undefined>;
+  origins: Record<string, EditableField[] | undefined>;
 }
 
 const KEY = "transactionEdits";
@@ -193,5 +202,30 @@ export const useEditsStore = create<EditsState>((set, get) => ({
   clearAll: async () => {
     await persist({}, {});
     set({ edits: {}, origins: {} });
+  },
+
+  snapshot: (ids) => {
+    const { edits, origins } = get();
+    const snap: EditsSnapshot = { edits: {}, origins: {} };
+    for (const id of ids) {
+      snap.edits[id] = edits[id] ? { ...edits[id] } : undefined;
+      snap.origins[id] = origins[id] ? [...origins[id]] : undefined;
+    }
+    return snap;
+  },
+
+  restore: async (snap) => {
+    const edits = { ...get().edits };
+    const origins = { ...get().origins };
+    for (const id of Object.keys(snap.edits)) {
+      const e = snap.edits[id];
+      if (e) edits[id] = e;
+      else delete edits[id];
+      const o = snap.origins[id];
+      if (o) origins[id] = o;
+      else delete origins[id];
+    }
+    await persist(edits, origins);
+    set({ edits, origins });
   },
 }));

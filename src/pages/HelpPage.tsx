@@ -3055,7 +3055,9 @@ const SECTIONS: Section[] = [
             <strong>доходы</strong>, <strong>расходы</strong> и{" "}
             <strong>переводы</strong> (показываются только ненулевые). Ниже, одним рядом, —
             кнопки <strong>«Изменить»</strong>, <strong>«Удалить»</strong>{" "}
-            (массовое удаление, вернуть можно на странице «Удалённые») и крестик
+            (массовое удаление: сразу, без вопроса — внизу слева на несколько
+            секунд встаёт плашка «Отменить»; позже вернуть можно на странице
+            «Удалённые») и крестик
             «Снять выделение» (или клавиша Esc).
           </li>
           <li>
@@ -4623,6 +4625,21 @@ const SECTIONS: Section[] = [
               <td className="py-2 text-muted">
                 Скрыть или показать суммы — частицы вместо денег. Работает и в
                 русской раскладке.
+              </td>
+            </tr>
+            <tr className="border-b border-border">
+              <td className="py-2"><kbd className="kbd">Ctrl/⌘ + Z</kbd></td>
+              <td className="py-2 text-muted">
+                «Отменить» на плашке после удаления или правки — пока плашка
+                видна. В поле ввода отменяет набранный текст, как обычно.
+              </td>
+            </tr>
+            <tr className="border-b border-border">
+              <td className="py-2"><kbd className="kbd">Ctrl/⌘ + Enter</kbd></td>
+              <td className="py-2 text-muted">
+                Сохранить операцию в окне правки — из любого поля. С{" "}
+                <kbd className="kbd">Shift</kbd> — «К следующей» в разделе «Без
+                категории»: сохранить и открыть следующую операцию.
               </td>
             </tr>
             <tr className="border-b border-border">

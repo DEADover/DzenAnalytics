@@ -45,7 +45,7 @@ import { useDisplayStore } from "../store/useDisplayStore";
 import { useSplitTransaction } from "../hooks/useSplitTransaction";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import { BulkEditModal } from "../components/BulkEditModal";
-import { confirmBulkDelete } from "../lib/confirmBulkDelete";
+import { deleteWithUndo } from "../lib/undoable";
 import { kindTotals, transferTotals, zenPeriodTotals } from "../lib/aggregations";
 import { useOffBalanceExcluded } from "../hooks/useInBalanceTransactions";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
@@ -147,8 +147,6 @@ const PAGE_SIZE = 100;
 export function TransactionsPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
-  const deleteTransaction = useDataStore((s) => s.deleteTransaction);
-  const deleteTransactionMany = useDataStore((s) => s.deleteTransactionMany);
   const deletedCount = useDeletedStore((s) => s.deletedIds.length);
   const purgeDeleted = useDataStore((s) => s.purgeDeleted);
   const zenToken = useZenmoneyStore((s) => s.token);
@@ -199,18 +197,9 @@ export function TransactionsPage() {
     setMonth(monthParam);
   }, [monthParam, setMonth]);
 
+  // Без окна «Удалить?» — сразу, с плашкой «Отменить» (lib/undoable).
   async function handleDelete(tx: Transaction) {
-    const pushMode = useZenmoneyStore.getState().pushMode;
-    const ok = await confirm({
-      title: "Удалить операцию?",
-      message:
-        pushMode !== "off"
-          ? "Операция скроется из всех расчётов и списков. Так как отправка в Дзен-мани включена, при следующей отправке она будет удалена и в облаке. Вернуть можно на странице «Удалённые» — в т. ч. в облако."
-          : "Операция скроется из всех расчётов и списков. Вернуть можно на странице «Удалённые». В облаке Дзен-мани она не тронется.",
-      confirmLabel: "Удалить",
-      tone: "danger",
-    });
-    if (ok) await deleteTransaction(tx.id);
+    await deleteWithUndo([tx.id]);
   }
 
   const edits = useEditsStore((s) => s.edits);
@@ -335,9 +324,7 @@ export function TransactionsPage() {
   async function deleteBulk() {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
-    const ok = await confirmBulkDelete(ids.length);
-    if (!ok) return;
-    await deleteTransactionMany(ids);
+    await deleteWithUndo(ids);
     setSelected(new Set());
   }
 

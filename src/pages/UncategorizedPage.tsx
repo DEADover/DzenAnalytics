@@ -317,6 +317,15 @@ export function UncategorizedPage() {
     />
   );
 
+  // «К следующей» в окне операции: разбор идёт по одной, в порядке ленты.
+  // Следующая — та, что ниже; у последней — та, что выше. Сохранённая с
+  // категорией из ленты уйдёт сама, поэтому соседа берём заранее.
+  const nextAfter = (t: Transaction): Transaction | null => {
+    const i = sorted.findIndex((x) => x.id === t.id);
+    if (i < 0) return sorted[0] ?? null;
+    return sorted[i + 1] ?? sorted[i - 1] ?? null;
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader icon={Tag} title="Без категории" />
@@ -499,6 +508,7 @@ export function UncategorizedPage() {
           key={editing.id}
           tx={editing}
           onClose={() => setEditing(null)}
+          onSaveNext={nextAfter(editing) ? () => setEditing(nextAfter(editing)) : undefined}
         />
       )}
 

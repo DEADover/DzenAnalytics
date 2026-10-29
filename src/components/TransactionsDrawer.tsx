@@ -20,11 +20,10 @@ import { useEditsStore } from "../store/useEditsStore";
 import type { TransactionEdit } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
-import { confirm } from "../store/useConfirmStore";
 import { Tooltip } from "./Tooltip";
 import { EditTransactionModal } from "./EditTransactionModal";
 import { BulkEditModal } from "./BulkEditModal";
-import { confirmBulkDelete } from "../lib/confirmBulkDelete";
+import { deleteWithUndo } from "../lib/undoable";
 import { formatMoney, formatDate, formatNum, displayPayee, payeeSearchText, transferCounterparty } from "../lib/format";
 import { kindLabel, operationTone } from "../lib/txKindStyle";
 import { DataTable, type Column, type SortState } from "./DataTable";
@@ -50,23 +49,12 @@ export function TransactionsDrawer() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const base = useDataStore((s) => s.rates.base);
   const allTransactions = useDataStore((s) => s.transactions);
-  const deleteTransaction = useDataStore((s) => s.deleteTransaction);
   const reapplyRules = useDataStore((s) => s.reapplyRules);
-  const deleteTransactionMany = useDataStore((s) => s.deleteTransactionMany);
   const setEditMany = useEditsStore((s) => s.setEditMany);
 
+  // Без окна «Удалить?» — сразу, с плашкой «Отменить» (lib/undoable).
   async function handleDelete(tx: Transaction) {
-    const pushMode = useZenmoneyStore.getState().pushMode;
-    const ok = await confirm({
-      title: "Удалить операцию?",
-      message:
-        pushMode !== "off"
-          ? "Операция скроется из всех расчётов и списков. Так как отправка в Дзен-мани включена, при следующей отправке она будет удалена и в облаке. Вернуть можно на странице «Удалённые» — в т. ч. в облако."
-          : "Операция скроется из всех расчётов и списков. Вернуть можно на странице «Удалённые». В облаке Дзен-мани она не тронется.",
-      confirmLabel: "Удалить",
-      tone: "danger",
-    });
-    if (ok) await deleteTransaction(tx.id);
+    await deleteWithUndo([tx.id]);
   }
 
   const [search, setSearch] = useState("");
@@ -99,9 +87,7 @@ export function TransactionsDrawer() {
   async function deleteBulk() {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
-    const ok = await confirmBulkDelete(ids.length);
-    if (!ok) return;
-    await deleteTransactionMany(ids);
+    await deleteWithUndo(ids);
     setSelected(new Set());
   }
 

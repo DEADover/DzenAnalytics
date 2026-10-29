@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { Badge } from "./Badge";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
-import { Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Check, ListPlus, ArrowUpToLine, Wand2 } from "lucide-react";
+import { ChevronsRight, Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Check, ListPlus, ArrowUpToLine, Wand2 } from "lucide-react";
 import { extractHashtags } from "../lib/aggregations";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
 import { txAccountKey, txInKey, txOutKey } from "../lib/accountKey";
@@ -13,11 +13,9 @@ import { usePlanActionsStore } from "../store/usePlanActionsStore";
 import { buildOneOffPlan } from "../lib/planCreate";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
-import {
-  getBrandTitlesFromCache,
-  useZenmoneyStore,
-} from "../store/useZenmoneyStore";
-import { confirm } from "../store/useConfirmStore";
+import { getBrandTitlesFromCache } from "../store/useZenmoneyStore";
+import { toast } from "../store/useToastStore";
+import { deleteWithUndo, editUndo } from "../lib/undoable";
 import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
 import {
   buildDraftTransaction,
@@ -93,6 +91,12 @@ interface Props {
    *  caller's current order. Wired to ←/→ keys; the caller swaps which `tx`
    *  is being edited. Omit to disable arrow navigation. */
   onNavigate?: (dir: -1 | 1) => void;
+  /**
+   * Edit mode only. Есть — в подвале кнопка «Сохранить и к следующей»: после
+   * сохранения окно не закрывается, а вызывающий открывает следующую операцию
+   * (разбор без категории — по одной, без возврата к списку).
+   */
+  onSaveNext?: () => void;
 }
 
 /** Zenmoney account types that make an operation a debt/loan/credit move. */
@@ -177,6 +181,7 @@ export function EditTransactionModal({
   onSplit,
   onMakeRecurring,
   onNavigate,
+  onSaveNext,
 }: Props) {
   const isCreate = !txProp;
   /** Создание по образцу: поля заполнены, но операция всё равно новая. */
@@ -232,24 +237,13 @@ export function EditTransactionModal({
   // A not-yet-pushed draft: deleting discards it permanently (no cloud row, no
   // restore), so the confirm copy below is tailored for that case.
   const isDraftEdit = useDraftsStore((s) => !isCreate && Boolean(s.drafts[tx.id]));
-  const deleteTransaction = useDataStore((s) => s.deleteTransaction);
   const [error, setError] = useState<string | null>(null);
 
+  // Без окна «Удалить?»: сразу, с плашкой «Отменить» — она возвращает и
+  // операцию, и её неотправленные правки, и черновик (lib/undoable).
   async function handleDelete() {
-    const pushMode = useZenmoneyStore.getState().pushMode;
-    const ok = await confirm({
-      title: isDraftEdit ? "Удалить черновик?" : "Удалить операцию?",
-      message: isDraftEdit
-        ? "Это неотправленный черновик — он будет удалён локально и не отправится в Дзен-мани. Действие необратимо."
-        : pushMode !== "off"
-          ? "Операция скроется из всех расчётов и списков. Так как отправка в Дзен-мани включена, при следующей отправке она будет удалена и в облаке. Вернуть можно на странице «Удалённые» — в т. ч. в облако."
-          : "Операция скроется из всех расчётов и списков. Вернуть можно на странице «Удалённые». В облаке Дзен-мани она не тронется.",
-      confirmLabel: "Удалить",
-      tone: "danger",
-    });
-    if (!ok) return;
-    await deleteTransaction(tx.id);
     onClose();
+    await deleteWithUndo([tx.id]);
   }
 
   const [kind, setKind] = useState<TxKind>(tx.kind);
@@ -796,6 +790,23 @@ export function EditTransactionModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onNavigate, isCreate]);
 
+  // ⌘Enter / Ctrl+Enter — сохранить из любого поля, как в почте и
+  // мессенджерах; с Shift — «Сохранить и к следующей», если она есть.
+  const saveRef = useRef(save);
+  // Свежая `save` (она замыкает поля формы) — после каждой отрисовки.
+  useEffect(() => {
+    saveRef.current = save;
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey) || e.altKey) return;
+      e.preventDefault();
+      void saveRef.current(false, e.shiftKey);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Create mode: build a fresh ZenTransaction from the form and store it as
   // a draft. Validation/resolution lives in `buildDraftTransaction` (pure,
   // unit-tested); we surface its skip reason inline on failure.
@@ -917,6 +928,17 @@ export function EditTransactionModal({
       return;
     }
     onClose();
+    if (futurePlan) toast("Запланировано");
+    else if (planMarker) toast("Сохранено как факт");
+    else {
+      const id = built.zen.id;
+      toast("Операция создана", {
+        undo: async () => {
+          await useDraftsStore.getState().remove(id);
+          await refresh();
+        },
+      });
+    }
   }
 
   // Editing a not-yet-pushed draft: rebuild it IN PLACE (same id) so the change
@@ -938,9 +960,18 @@ export function EditTransactionModal({
       setError(built.skip ?? "Операция не сохранилась. Проверьте поля и попробуйте ещё раз");
       return;
     }
+    const before = useDraftsStore.getState().drafts[tx.id];
     await updateDraft(built.zen);
     await refresh();
     onClose();
+    toast("Операция сохранена", {
+      undo: before
+        ? async () => {
+            await useDraftsStore.getState().update(before);
+            await refresh();
+          }
+        : undefined,
+    });
   }
 
   // Semantic validation BEFORE we persist — so the user gets an inline error
@@ -979,7 +1010,12 @@ export function EditTransactionModal({
     });
   }
 
-  async function save(keepOpen = false) {
+  /**
+   * `keepOpen` — «Создать и продолжить» у новой операции; `next` — «Сохранить
+   * и к следующей» у существующей: окно остаётся, следующую открывает
+   * вызывающий.
+   */
+  async function save(keepOpen = false, next = false) {
     const err = validate();
     if (err) {
       setError(err);
@@ -1135,15 +1171,19 @@ export function EditTransactionModal({
         }
       }
 
+      const leave = next && onSaveNext ? onSaveNext : onClose;
       // Nothing changed — bail without writing an empty overlay entry.
       if (Object.keys(patch).length === 0) {
-        onClose();
+        leave();
         return;
       }
 
+      // Снимок — до записи: «Отменить» вернёт правку такой, какой она была.
+      const undo = editUndo([tx.id]);
       await setEdit(tx.id, patch);
       await reapply();
-      onClose();
+      leave();
+      toast("Операция сохранена", { undo });
     } catch (e) {
       // Сборщик черновика умеет и бросить — например, на неполном кэше. Без
       // этого разбора нажатие «Создать» просто ничего не делало: ошибка уходила
@@ -1747,6 +1787,18 @@ export function EditTransactionModal({
             <X className="w-3.5 h-3.5" />
             Отмена
           </button>
+          {!isCreate && onSaveNext && (
+            <Tooltip content="Сохранить и открыть следующую операцию (⇧⌘Enter)">
+              <button
+                onClick={() => void save(false, true)}
+                disabled={saving}
+                className="btn-ghost text-sm"
+              >
+                <ChevronsRight className="w-3.5 h-3.5" />
+                К следующей
+              </button>
+            </Tooltip>
+          )}
           <button
             onClick={() => void save()}
             disabled={saving}
