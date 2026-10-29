@@ -40,6 +40,7 @@ import {
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
 import { SearchInput } from "./SearchInput";
+import { StickyToolbar } from "./StickyToolbar";
 import { Badge } from "./Badge";
 import { queryMatcher } from "../lib/keyboardLayout";
 import { scaledWidth } from "./table/tableKit";
@@ -458,8 +459,9 @@ export function CounterpartyManager() {
   // Bare content — the card + heading come from OperationsSettings.
   return (
     <div className="space-y-3">
-      {/* Toolbar: search + «?» info popover + pending/reset/push + Добавить. */}
-      <div className="flex items-center gap-2 flex-wrap">
+      {/* Toolbar: search + «?» info popover + pending/reset/push + Добавить.
+          Липнет под шапкой при прокрутке длинного списка (StickyToolbar). */}
+      <StickyToolbar>
         <SearchInput
           value={query}
           onChange={setQuery}
@@ -557,7 +559,7 @@ export function CounterpartyManager() {
           <Plus className="w-4 h-4" />
           Добавить
         </button>
-      </div>
+      </StickyToolbar>
 
       {/* Floating bulk-action bar — same shape as Операции and the drawer:
           pinned bottom-centre, count on top, actions underneath. */}
@@ -602,7 +604,7 @@ export function CounterpartyManager() {
           all the operations and one empty. Each group folds into the row that
           holds the most operations. */}
       {dupOnly && (
-        <div className="border border-border rounded-lg overflow-hidden">
+        <div className="border border-border rounded-lg overflow-clip">
           <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border bg-panel">
             {/* One fact only: how many rows the merge removes. The group count
                 is already on the «Дубли N» toolbar chip. */}
@@ -622,7 +624,7 @@ export function CounterpartyManager() {
           >
             {/* Column header — the counts need a name, and the fixed widths
                 below keep them (and the buttons) on one grid. */}
-            <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
+            <div className="list-head sticky sticky-under-toolbar z-10 bg-panel flex items-center gap-3 px-3 py-2">
               <span className="flex-1 min-w-0">Контрагент</span>
               <span className="shrink-0 text-right" style={{ width: scaledWidth("6rem") }}>Операций</span>
               <span className="shrink-0 text-right" style={{ width: scaledWidth("9rem") }}>Действия</span>
@@ -695,7 +697,7 @@ export function CounterpartyManager() {
       )}
 
       {orphanOnly && (
-        <div className="border border-border rounded-lg overflow-hidden">
+        <div className="border border-border rounded-lg overflow-clip">
           <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border bg-panel">
             {/* Объяснение прямо тут, а не только под «?»: вопрос «а что это
                 вообще такое» возникает ровно на этом экране. */}
@@ -738,7 +740,7 @@ export function CounterpartyManager() {
           <div
             style={{ fontSize: "var(--tbl-font)" }}
           >
-            <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
+            <div className="list-head sticky sticky-under-toolbar z-10 bg-panel flex items-center gap-3 px-3 py-2">
               <span className="w-6 shrink-0 flex items-center justify-center">
                 <Checkbox
                   checked={
@@ -850,9 +852,9 @@ export function CounterpartyManager() {
       )}
 
       {!dupOnly && !orphanOnly && (
-      <div className="border border-border rounded-lg overflow-hidden">
+      <div className="border border-border rounded-lg overflow-clip">
         <div style={{ fontSize: "var(--tbl-font)" }}>
-          <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
+          <div className="list-head sticky sticky-under-toolbar z-10 bg-panel flex items-center gap-3 px-3 py-2">
             <span className="w-6 shrink-0 flex items-center justify-center">
               <Checkbox
                 checked={allSelected}

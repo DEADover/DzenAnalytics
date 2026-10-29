@@ -1456,6 +1456,9 @@ h2,
 .animate-dock-out { animation: dockOut 0.22s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
 .animate-slide { animation: drawerSlide var(--motion-slow) var(--ease-soft); }
 .animate-fade { animation: fadeIn var(--motion-base) var(--ease-soft); }
+/* Шапка колонок длинного списка липнет под строкой поиска (StickyToolbar),
+   а та — под шапкой сервиса. */
+.sticky-under-toolbar { top: calc(var(--app-header-h) + var(--toolbar-h, 0px)); }
 .animate-cat-subs { animation: catSubsIn var(--motion-base) var(--ease-soft); }
 .animate-menu-item { animation: menuItemIn var(--motion-base) var(--ease-soft) both; }
 

@@ -49,6 +49,7 @@ import { InfoPopover } from "./InfoPopover";
 import { CountSortHeader, type SortMode } from "./CountSortHeader";
 import { SectionEmpty } from "./SectionEmpty";
 import { SearchInput } from "./SearchInput";
+import { StickyToolbar } from "./StickyToolbar";
 import { Badge } from "./Badge";
 import { queryMatcher } from "../lib/keyboardLayout";
 import { scaledWidth } from "./table/tableKit";
@@ -346,8 +347,9 @@ export function CategoryManager() {
   // Bare content — the card + heading come from OperationsSettings.
   return (
     <div className="space-y-3">
-      {/* Toolbar: search + «?» info popover + pending/reset/push + Добавить. */}
-      <div className="flex items-center gap-2 flex-wrap">
+      {/* Toolbar: search + «?» info popover + pending/reset/push + Добавить.
+          Липнет под шапкой при прокрутке длинного списка (StickyToolbar). */}
+      <StickyToolbar>
         <SearchInput
           value={query}
           onChange={setQuery}
@@ -416,17 +418,17 @@ export function CategoryManager() {
           <Plus className="w-4 h-4" />
           Добавить
         </button>
-      </div>
+      </StickyToolbar>
 
       {/* One scroll container holds the sticky header AND the rows, so both
           share the exact same content width and scrollbar gutter — the columns
           line up regardless of whether the list overflows. */}
-      <div className="border border-border rounded-lg overflow-hidden">
+      <div className="border border-border rounded-lg overflow-clip">
         <div
           // Obeys the «Размер текста в таблицах» slider — rows inherit this.
           style={{ fontSize: "var(--tbl-font)" }}
         >
-          <div className="list-head sticky top-0 z-10 bg-panel flex items-center gap-3 px-3 py-2">
+          <div className="list-head sticky sticky-under-toolbar z-10 bg-panel flex items-center gap-3 px-3 py-2">
             <span className="flex-1 min-w-0">Категория</span>
             <span className="hidden sm:block shrink-0 text-center" style={{ width: scaledWidth("6rem") }}>Расходная</span>
             <span className="hidden sm:block shrink-0 text-center" style={{ width: scaledWidth("6rem") }}>Доходная</span>
