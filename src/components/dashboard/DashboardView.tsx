@@ -452,19 +452,22 @@ function HeroOpen({ m, sunken, pill }: { m: DashboardModel; sunken?: boolean; pi
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
-        {/* Лента и отчёт открываются за тот месяц, о котором весь этот экран,
-            а не за период с прошлого раза или всю историю. На утопленной
-            подложке вторая кнопка белая: обычная заливка там почти пропадала. */}
+        {/* Лента и итоги открываются за тот месяц, о котором весь этот экран,
+            а не за период с прошлого раза или всю историю. Итоги — разбор
+            месяца в «Дайджесте» («Главное за …», траты по дням, где тратили):
+            таблица «Доходов и расходов» в один столбец на итоги не тянула. На
+            утопленной подложке вторая кнопка белая: обычная заливка там почти
+            пропадала. */}
         <CtaLink to={`/transactions?month=${m.ym}`} size={sunken ? "md" : "lg"}>
           Лента операций
         </CtaLink>
         <CtaLink
-          to={`/report?month=${m.ym}`}
+          to={`/digest?month=${m.ym}`}
           variant="secondary"
           size={sunken ? "md" : "lg"}
           onPlate={sunken}
         >
-          Месячный отчёт
+          Разбор месяца
         </CtaLink>
       </div>
 
@@ -579,8 +582,8 @@ function HeroSplit({ m, pill }: { m: DashboardModel; pill: ReactNode }) {
               рядом не встают, а главное из них должно остаться заметным. */}
           <div className="flex flex-col items-start gap-2.5 mt-4">
             <CtaLink to={`/transactions?month=${m.ym}`}>Лента операций</CtaLink>
-            <CtaLink to={`/report?month=${m.ym}`} variant="secondary">
-              Месячный отчёт
+            <CtaLink to={`/digest?month=${m.ym}`} variant="secondary">
+              Разбор месяца
             </CtaLink>
           </div>
 

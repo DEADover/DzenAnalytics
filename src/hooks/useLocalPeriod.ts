@@ -33,7 +33,7 @@ export interface PeriodController {
  * (setRange → preset "custom", setMonth/stepPeriod → preset "month"/"year"), just held
  * in component state so it never touches the global «месяц».
  *
- * Второй аргумент — месяц из ссылки: им пользуется «Месячный отчёт» с главной.
+ * Второй аргумент — месяц из ссылки (`/report?month=2026-08`).
  */
 export function useLocalPeriod(
   defaultPreset: DatePreset = "12m",
@@ -59,8 +59,8 @@ export function useLocalPeriod(
   // page should still open on its own wide span.
   const pinned = initialMonthYM || null;
   const [preset, setPreset] = useState<DatePreset>(
-    // Месяц из ссылки — отчётный: страницу открывают с главной, и отрезок
-    // должен совпасть с тем, что показал её виджет.
+    // Месяц из ссылки — отчётный, как на главной: отрезок должен совпасть с
+    // тем, что называют «месяцем» остальные разделы.
     pinned ? "period" : gPreset === "custom" ? "custom" : defaultPreset
   );
   const [monthYM, setMonthYM] = useState<string | null>(

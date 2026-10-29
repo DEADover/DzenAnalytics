@@ -15,6 +15,7 @@ import {
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
+import { useLocalPeriod } from "../hooks/useLocalPeriod";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useCategoryRulesStore } from "../store/useCategoryRulesStore";
 import { confirm } from "../store/useConfirmStore";
@@ -132,12 +133,24 @@ export function UncategorizedPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
 
+  // Свой период, по умолчанию «Всё»: задача раздела — разнести всё, что
+  // осталось без категории, а не только за текущий месяц. На общем «месяце»
+  // раздел открывался пустым («ничего не найдено, всего — 2»), а расширенный
+  // здесь период оставался потом во всём приложении. Свой период общего не
+  // трогает; сохранённый фильтр с датами, применённый где угодно, он
+  // подхватывает, как «Доходы и расходы». Остальные фильтры — общие.
+  const lp = useLocalPeriod("all");
+  const effectiveFilters = useMemo(
+    () => ({ ...filters, preset: lp.preset, windowShift: lp.windowShift, monthYM: lp.monthYM, from: lp.from, to: lp.to }),
+    [filters, lp.preset, lp.windowShift, lp.monthYM, lp.from, lp.to]
+  );
+
   // Скользящие периоды («30 дней», «12 мес») считаются от последней операции
   // ВСЕЙ ленты, как на соседних страницах с тем же фильтром.
   const maxDate = useMemo(() => lastTransactionDate(transactions), [transactions]);
   const scoped = useMemo(
-    () => applyFilters(transactions, filters, monthStartDay, { maxDate: maxDate || undefined }),
-    [transactions, filters, monthStartDay, maxDate]
+    () => applyFilters(transactions, effectiveFilters, monthStartDay, { maxDate: maxDate || undefined }),
+    [transactions, effectiveFilters, monthStartDay, maxDate]
   );
 
   /** Всё без категории — за всю историю и под фильтрами. */
@@ -307,7 +320,7 @@ export function UncategorizedPage() {
   return (
     <div className="space-y-6">
       <PageHeader icon={Tag} title="Без категории" />
-      <GlobalFilters />
+      <GlobalFilters period={lp} />
 
       <StatRow>
         <StatCell
@@ -375,12 +388,25 @@ export function UncategorizedPage() {
         }
       >
         {sorted.length === 0 ? (
-          <SectionEmpty variant="inline">
+          <SectionEmpty
+            variant="inline"
+            action={
+              // Короткий путь к остальным: раньше их приходилось искать самому,
+              // перебирая период.
+              allUncategorized.length > 0 && lp.preset !== "all" ? (
+                <button type="button" className="btn-ghost text-sm" onClick={() => lp.setPreset("all")}>
+                  Показать за всё время
+                </button>
+              ) : undefined
+            }
+          >
             {allUncategorized.length === 0
               ? "Все операции размечены — категория есть у каждой."
-              : `По текущим фильтрам ничего не найдено. Всего без категории — ${formatNum(
-                  allUncategorized.length
-                )}: выберите другой период или сбросьте фильтры.`}
+              : lp.preset !== "all"
+                ? `За выбранный период таких операций нет. Всего без категории —\u00a0${formatNum(allUncategorized.length)}.`
+                : `По текущим фильтрам ничего не найдено. Всего без категории —\u00a0${formatNum(
+                    allUncategorized.length
+                  )}: сбросьте фильтры.`}
           </SectionEmpty>
         ) : (
           <div>

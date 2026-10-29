@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CounterpartyName, CounterpartyNoteMark } from "../components/CounterpartyNote";
 import { pluralRu } from "../lib/plural";
 import {
@@ -16,6 +17,7 @@ import {
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip } from "recharts";
 import { ChartContainer } from "../components/ChartContainer";
 import { useDataStore } from "../store/useDataStore";
+import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useDrillStore } from "../store/useDrillStore";
 import {
@@ -61,9 +63,33 @@ export function DigestPage() {
   const baseCurrency = useDataStore((s) => s.rates.base);
   const showDrill = useDrillStore((s) => s.show);
 
-  const all = useMemo(() => buildDigestHistory(transactions), [transactions]);
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  const all = useMemo(
+    () => buildDigestHistory(transactions, new Date(), monthStartDay),
+    [transactions, monthStartDay]
+  );
   const [tab, setTab] = useState<Tab>("month");
-  const [selected, setSelected] = useState<string | null>(null);
+
+  // Месяц из ссылки (`/digest?month=2026-10`) — по нему приходят с главной,
+  // из «Разбора месяца». Ставится начальным значением, а не эффектом, чтобы
+  // первый кадр уже был про нужный месяц.
+  const [searchParams] = useSearchParams();
+  const monthParam = useMemo(() => {
+    const q = searchParams.get("month");
+    return q && /^\d{4}-\d{2}$/.test(q) ? q : null;
+  }, [searchParams]);
+  const [selected, setSelected] = useState<string | null>(monthParam ? `month-${monthParam}` : null);
+  // «Назад»/«вперёд» в браузере меняют ссылку на той же странице — компонент
+  // не перемонтируется, и выбор нужно поправить вслед за ней. Правится в том
+  // же проходе отрисовки, а не эффектом: иначе один кадр был бы про старый месяц.
+  const [prevMonthParam, setPrevMonthParam] = useState(monthParam);
+  if (prevMonthParam !== monthParam) {
+    setPrevMonthParam(monthParam);
+    if (monthParam) {
+      setTab("month");
+      setSelected(`month-${monthParam}`);
+    }
+  }
 
   const filtered = useMemo(
     () => all.filter((e) => e.period === tab),
@@ -74,8 +100,12 @@ export function DigestPage() {
   const { shown: lazyShown, hasMore: lazyMore, attachSentinel } = useLazyList(filtered, 60);
   const lazyVisible = useMemo(() => filtered.slice(0, lazyShown), [filtered, lazyShown]);
 
-  const currentId = selected || filtered[0]?.id || null;
-  const current = filtered.find((e) => e.id === currentId) || filtered[0] || null;
+  // Без выбора открывается свежий период. Идущий месяц — только когда в нём
+  // уже есть на что смотреть: в первую неделю месяца человек приходит за
+  // итогами прошлого, а не за тремя днями нового.
+  const fallback =
+    filtered[0]?.running && filtered[0].running.day < 7 && filtered[1] ? filtered[1] : filtered[0];
+  const current = (selected && filtered.find((e) => e.id === selected)) || fallback || null;
 
   if (transactions.length === 0) return <EmptyState />;
 
@@ -87,16 +117,19 @@ export function DigestPage() {
         info={
           <InfoPopover>
             <p>
-              Итоги считаются только по <InfoTerm>завершённым периодам</InfoTerm>:
-              текущего месяца и текущей недели в списке нет — на середине месяца
-              сравнивать не с чем, любые «−40% к прошлому» были бы неправдой.
-              Недели считаем с понедельника; и недели, и месяцы идут за всю
-              историю, до самой первой операции. Периоды без единой операции в
-              ленту не попадают.
+              Месяцы — отчётные, как на главной и в бюджете. Текущий месяц
+              стоит первым с пометкой <InfoTerm>«Идёт»</InfoTerm> и сравнивается
+              с тем же числом дней: расход — с обычным темпом к этому дню, доход —
+              с тем, что обычно приходит за те же дни. Сравнить середину месяца
+              с целым прошлым было бы неправдой — отсюда «−40%» на пустом месте.
+              Недели — только завершённые, с понедельника. И недели, и месяцы
+              идут за всю историю, до самой первой операции; периоды без единой
+              операции в ленту не попадают.
             </p>
             <p>
               Все сравнения — с <InfoTerm>предыдущим таким же периодом</InfoTerm>:
-              месяц с месяцем, неделя с неделей. Проценты в карточках категорий —
+              месяц с месяцем, неделя с неделей, у идущего месяца — те же дни
+              прошлого. Проценты в карточках категорий —
               оттуда же: насколько потратили больше или меньше, чем в прошлый раз.
             </p>
             <p>
@@ -122,7 +155,7 @@ export function DigestPage() {
       </SectionControls>
 
       {filtered.length === 0 ? (
-        <SectionEmpty icon={Newspaper} title="Нет завершённых периодов для дайджеста" />
+        <SectionEmpty icon={Newspaper} title="Нет периодов для дайджеста" />
       ) : (
         <div className="grid md:grid-cols-[260px_minmax(0,1fr)] gap-4">
           {/* Список периодов. На широком экране панель тянется во всю высоту
@@ -152,7 +185,9 @@ export function DigestPage() {
                   <div className="flex-1 min-w-0">
                     <div className="truncate font-medium">{e.label}</div>
                     <div className="text-[11px] text-muted truncate">
-                      {formatMoney(e.expense, baseCurrency)} расход
+                      {e.running
+                        ? `Идёт · день ${e.running.day} из ${e.running.days}`
+                        : `${formatMoney(e.expense, baseCurrency)} расход`}
                     </div>
                   </div>
                   <ChevronRight className="w-3.5 h-3.5 shrink-0 opacity-50" />
@@ -274,7 +309,7 @@ function DigestDetail({
           value={formatMoney(entry.income, baseCurrency)}
           icon={<TrendingUp className="w-4 h-4" />}
           tone="income"
-          note={compareNote(entry.income, entry.typical?.income, entry.incomeDelta)}
+          note={compareNote(entry.income, entry.typical?.income, entry.incomeDelta, !!entry.running)}
           noteCls={incCls}
           tooltip={compareTip(entry, "income", baseCurrency)}
         />
@@ -283,7 +318,7 @@ function DigestDetail({
           value={formatMoney(entry.expense, baseCurrency)}
           icon={<TrendingDown className="w-4 h-4" />}
           tone="expense"
-          note={compareNote(entry.expense, entry.typical?.expense, entry.expenseDelta)}
+          note={compareNote(entry.expense, entry.typical?.expense, entry.expenseDelta, !!entry.running)}
           noteCls={expCls}
           tooltip={compareTip(entry, "expense", baseCurrency)}
         />
@@ -294,7 +329,7 @@ function DigestDetail({
           tone={entry.net >= 0 ? "income" : "expense"}
           note={
             entry.typical
-              ? `Обычно ${formatMoney(entry.typical.net, baseCurrency, { signed: true })}`
+              ? `Обычно${entry.running ? " к этому дню" : ""} ${formatMoney(entry.typical.net, baseCurrency, { signed: true })}`
               : deltaNote(
                   Math.abs(entry.prevNet) > 0.01
                     ? (entry.net - entry.prevNet) / Math.abs(entry.prevNet)
@@ -327,7 +362,11 @@ function DigestDetail({
           страницах, ряд больших чисел. */}
       {/* Обычной карточкой, как соседние блоки: цветная плашка выбивалась
           из страницы и читалась как предупреждение. */}
-      <SectionCard icon={Newspaper} title={`Главное за ${periodTitle(entry)}`}>
+      <SectionCard
+        icon={Newspaper}
+        title={`Главное за ${periodTitle(entry)}`}
+        subtitle={periodSubtitle(entry)}
+      >
         <p className="text-sm leading-relaxed">{headline(entry, baseCurrency)}</p>
       </SectionCard>
 
@@ -479,30 +518,59 @@ function DigestDetail({
 }
 
 /** «+12% к прошлому периоду» — или пусто, если изменение в пределах процента. */
-function deltaNote(delta: number): string | undefined {
-  if (Math.abs(delta) <= 0.01) return "≈ как в прошлый раз";
-  return `${delta > 0 ? "+" : ""}${formatPct(delta, 0)} к прошлому периоду`;
+function deltaNote(delta: number, running = false): string | undefined {
+  if (Math.abs(delta) <= 0.01) return running ? "Как в прошлом месяце на этот день" : "≈ как в прошлый раз";
+  return `${delta > 0 ? "+" : ""}${formatPct(delta, 0)} к ${running ? "прошлому месяцу на этот день" : "прошлому периоду"}`;
 }
 
 /** Сравнение с обычным периодом, а без него — с прошлым. */
-function compareNote(value: number, typical: number | undefined, prevDelta: number): string | undefined {
-  if (typical == null) return deltaNote(prevDelta);
+function compareNote(
+  value: number,
+  typical: number | undefined,
+  prevDelta: number,
+  running = false
+): string | undefined {
+  if (typical == null) return deltaNote(prevDelta, running);
   if (Math.abs(typical) < 0.01) return undefined;
   const rel = (value - typical) / Math.abs(typical);
-  if (Math.abs(rel) <= 0.03) return "Как обычно";
-  return `${rel > 0 ? "+" : ""}${formatPct(rel, 0)} к обычному`;
+  if (Math.abs(rel) <= 0.03) return running ? "Как обычно на этот день" : "Как обычно";
+  return `${rel > 0 ? "+" : ""}${formatPct(rel, 0)} к обычному${running ? " на этот день" : ""}`;
+}
+
+/**
+ * Подпись под «Главное за …»: идёт ли месяц и какие у него даты, если он не
+ * календарный. У обычного завершённого месяца подписи нет — всё в названии.
+ */
+function periodSubtitle(entry: DigestEntry): string | undefined {
+  const parts: string[] = [];
+  if (entry.running) {
+    parts.push(
+      `Месяц идёт: день ${entry.running.day} из ${entry.running.days} — сравниваем с тем же числом дней`
+    );
+  }
+  const calendar = entry.period === "week" || entry.start.endsWith("-01");
+  if (!calendar) parts.push(`${formatDate(entry.start, "full")} – ${formatDate(entry.end, "full")}`);
+  return parts.length ? parts.join(" · ") : undefined;
 }
 
 /** Подсказка итога: с чем именно сравнили. */
 function compareTip(entry: DigestEntry, key: "income" | "expense", base: string) {
   const prev = key === "income" ? entry.prevIncome : entry.prevExpense;
+  const day = entry.running?.day;
   const facts = [
-    { label: "За период", value: formatMoney(entry[key], base), strong: true },
-    { label: entry.period === "month" ? "Прошлый месяц" : "Прошлая неделя", value: formatMoney(prev, base) },
+    { label: day ? `За ${day} ${pluralRu(day, ["день", "дня", "дней"])}` : "За период", value: formatMoney(entry[key], base), strong: true },
+    {
+      label: day
+        ? `Прошлый месяц за те же дни`
+        : entry.period === "month"
+          ? "Прошлый месяц"
+          : "Прошлая неделя",
+      value: formatMoney(prev, base),
+    },
   ];
   if (entry.typical)
     facts.push({
-      label: `Обычно — среднее за ${entry.typical.periods} ${
+      label: `Обычно${day ? " к этому дню" : ""} — среднее за ${entry.typical.periods} ${
         entry.period === "month"
           ? pluralRu(entry.typical.periods, ["месяц", "месяца", "месяцев"])
           : pluralRu(entry.typical.periods, ["неделю", "недели", "недель"])
@@ -519,32 +587,41 @@ function compareTip(entry: DigestEntry, key: "income" | "expense", base: string)
  */
 function headline(entry: DigestEntry, base: string): string {
   const parts: string[] = [];
-  // Период — в заголовке карточки, фраза начинается сразу с дела.
-  const spent = `Потратили ${formatMoney(entry.expense, base)}`;
+  // Период — в заголовке карточки, фраза начинается сразу с дела. У идущего
+  // месяца — «к этому дню»: сравниваем с тем же числом дней, а не с целым.
+  const day = entry.running?.day;
+  const spent = day
+    ? `За ${day} ${pluralRu(day, ["день", "дня", "дней"])} потратили ${formatMoney(entry.expense, base)}`
+    : `Потратили ${formatMoney(entry.expense, base)}`;
   const typ = entry.typical?.expense;
   if (typ && Math.abs(typ) > 0.01) {
     const rel = (entry.expense - typ) / typ;
     parts.push(
       Math.abs(rel) <= 0.03
-        ? `${spent} — как обычно`
-        : `${spent} — на ${formatPct(Math.abs(rel), 0)} ${rel > 0 ? "больше" : "меньше"} обычного`
+        ? `${spent} — как обычно${day ? " к этому дню" : ""}`
+        : `${spent} — на ${formatPct(Math.abs(rel), 0)} ${rel > 0 ? "больше" : "меньше"}${day ? ", чем обычно к этому дню" : " обычного"}`
     );
   } else parts.push(spent);
   if (entry.income > 0) {
     parts.push(
       entry.net >= 0
-        ? `Отложили ${formatPct(entry.savingsRate, 0)} дохода`
-        : `Расходы превысили доход на ${formatMoney(-entry.net, base)}`
+        ? `${day ? "Пока отложили" : "Отложили"} ${formatPct(entry.savingsRate, 0)} ${day ? "пришедшего " : ""}дохода`
+        : `${day ? "Пока расходы превышают" : "Расходы превысили"} доход на ${formatMoney(-entry.net, base)}`
     );
   }
   const up = entry.movers.find((m) => m.current > m.previous);
-  if (up) parts.push(`Сильнее всего выросли траты в категории «${up.category}»: +${formatMoney(up.current - up.previous, base)}`);
+  if (up)
+    parts.push(
+      `Сильнее всего выросли траты в категории «${up.category}»: +${formatMoney(up.current - up.previous, base)}${
+        day ? " к тем же дням прошлого месяца" : ""
+      }`
+    );
   return parts.join(". ") + ".";
 }
 
 function daysSubtitle(entry: DigestEntry, base: string): string {
   const parts = [
-    `Без трат — ${formatNum(entry.noSpendDays)} ${pluralRu(entry.noSpendDays, ["день", "дня", "дней"])} из ${formatNum(entry.days.length)}`,
+    `Без трат — ${formatNum(entry.noSpendDays)} ${pluralRu(entry.noSpendDays, ["день", "дня", "дней"])} из ${formatNum(entry.running?.day ?? entry.days.length)}${entry.running ? " прожитых" : ""}`,
   ];
   if (entry.biggestDay)
     parts.push(`Самый дорогой — ${formatDate(entry.biggestDay.date, "full")}, ${formatMoney(entry.biggestDay.expense, base)}`);

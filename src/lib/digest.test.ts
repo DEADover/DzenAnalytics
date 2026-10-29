@@ -19,15 +19,15 @@ const labels = (txs: Transaction[], today: Date) =>
     .map((e) => e.label);
 
 describe("buildDigestHistory: месяцы", () => {
-  it("последний месяц — прошлый календарный, а не месяц последней операции", () => {
-    // Данные идут по август, сегодня 5 августа: в своде должен быть июль.
-    // Текущий месяц не берём — он ещё не кончился.
-    const out = labels(
+  it("идущий месяц — первым, с пометкой; завершённые — за ним", () => {
+    // Данные идут по август, сегодня 5 августа: август идёт, июль закончен.
+    const hist = buildDigestHistory(
       monthly(["2026-05", "2026-06", "2026-07", "2026-08"]),
       new Date(2026, 7, 5)
-    );
-    expect(out[0]).toBe("Июль 2026");
-    expect(out).not.toContain("Август 2026");
+    ).filter((e) => e.period === "month");
+    expect(hist.map((e) => e.label)).toEqual(["Август 2026", "Июль 2026", "Июнь 2026", "Май 2026"]);
+    expect(hist[0].running).toEqual({ day: 5, days: 31 });
+    expect(hist[1].running).toBeUndefined();
   });
 
   it("месяц с данными не выпадает, если операция в нём одна и первого числа", () => {
@@ -46,7 +46,7 @@ describe("buildDigestHistory: месяцы", () => {
     // Причина той пропажи оказалась в другом (перебор месяцев), а пустые строки
     // на длинной истории превращались в сотни «0,00 ₽».
     const out = labels(monthly(["2026-05", "2026-06", "2026-08"]), new Date(2026, 7, 5));
-    expect(out).toEqual(["Июнь 2026", "Май 2026"]);
+    expect(out).toEqual(["Август 2026", "Июнь 2026", "Май 2026"]);
   });
 
   it("после последней операции пустые месяцы не выдумываются", () => {
@@ -200,10 +200,10 @@ describe("длинная история не съедает последний �
     const months = buildDigestHistory(txs, new Date(2026, 7, 11))
       .filter((e) => e.period === "month")
       .map((e) => e.label);
-    expect(months[0]).toBe("Июль 2026");
+    expect(months[1]).toBe("Июль 2026");
     // Полвека пустоты между 1970-м и наши днями в ленту не идут — остаются
     // только месяцы с операциями и короткие провалы между ними.
-    expect(months).toEqual(["Июль 2026", "Июнь 2026", "Март 1970"]);
+    expect(months).toEqual(["Август 2026", "Июль 2026", "Июнь 2026", "Март 1970"]);
   });
 });
 
@@ -225,7 +225,7 @@ describe("длинные пробелы не заполняются пустым
       new Date(2026, 7, 11)
     );
     const months = hist.filter((e) => e.period === "month").map((e) => e.label);
-    expect(months).toEqual(["Май 2026"]);
+    expect(months).toEqual(["Август 2026", "Май 2026"]);
   });
 });
 
@@ -267,6 +267,75 @@ describe("подробности периода", () => {
   it("у самого первого периода обычного нет", () => {
     const june = buildDigestHistory(txs, new Date(2026, 7, 7)).find((e) => e.id === "month-2026-06")!;
     expect(june.typical).toBeNull();
+  });
+});
+
+describe("идущий месяц сравнивается с теми же днями", () => {
+  // Сегодня 10 августа. Каждый прошлый месяц: аренда 1-го, кафе 20-го,
+  // зарплата 5-го и премия 25-го.
+  const past = (m: string): Transaction[] => [
+    tx({ date: `${m}-01`, amount: 30000, kind: "expense", category: "Дом" }),
+    tx({ date: `${m}-20`, amount: 10000, kind: "expense", category: "Кафе" }),
+    tx({ date: `${m}-05`, amount: 80000, kind: "income" }),
+    tx({ date: `${m}-25`, amount: 20000, kind: "income" }),
+  ];
+  const txs = [
+    ...past("2026-06"),
+    ...past("2026-07"),
+    tx({ date: "2026-08-01", amount: 30000, kind: "expense", category: "Дом" }),
+    tx({ date: "2026-08-03", amount: 5000, kind: "expense", category: "Кафе" }),
+    tx({ date: "2026-08-05", amount: 80000, kind: "income" }),
+  ];
+  const aug = () =>
+    buildDigestHistory(txs, new Date(2026, 7, 10)).find((e) => e.id === "month-2026-08")!;
+
+  it("прошлый — первые 10 дней июля, а не весь июль", () => {
+    const e = aug();
+    expect(e.running).toEqual({ day: 10, days: 31 });
+    expect(e.prevExpense).toBe(30000);
+    expect(e.prevIncome).toBe(80000);
+  });
+
+  it("обычный расход — средний месяц в доле прожитых дней, как на главной", () => {
+    expect(aug().typical!.expense).toBeCloseTo(40000 * (10 / 31), 5);
+  });
+
+  it("обычный доход — что приходит за те же дни, без деления зарплаты по дням", () => {
+    expect(aug().typical!.income).toBe(80000);
+  });
+
+  it("статьи сравниваются с теми же днями прошлого месяца", () => {
+    const cafe = aug().movers.find((m) => m.category === "Кафе")!;
+    expect(cafe.previous).toBe(0);
+    expect(cafe.current).toBe(5000);
+  });
+
+  it("дни без трат — только прожитые", () => {
+    // Прожито 10 дней, траты были 1-го и 3-го.
+    expect(aug().noSpendDays).toBe(8);
+    expect(aug().days).toHaveLength(31);
+  });
+});
+
+describe("свой первый день месяца", () => {
+  it("месяцы — отчётные: с днём 28 «Июль» — это 28.07–27.08", () => {
+    const txs = [
+      tx({ date: "2026-07-27", amount: 100, kind: "expense" }),
+      tx({ date: "2026-07-28", amount: 200, kind: "expense" }),
+      tx({ date: "2026-08-27", amount: 300, kind: "expense" }),
+    ];
+    const months = buildDigestHistory(txs, new Date(2026, 8, 5), 28).filter((e) => e.period === "month");
+    expect(months.map((e) => [e.label, e.start, e.end, e.expense])).toEqual([
+      ["Июль 2026", "2026-07-28", "2026-08-27", 500],
+      ["Июнь 2026", "2026-06-28", "2026-07-27", 100],
+    ]);
+  });
+
+  it("идущий отчётный месяц назван по месяцу начала", () => {
+    const txs = [tx({ date: "2026-09-01", amount: 100, kind: "expense" })];
+    const [m] = buildDigestHistory(txs, new Date(2026, 8, 5), 28).filter((e) => e.period === "month");
+    expect(m.label).toBe("Август 2026");
+    expect(m.running).toEqual({ day: 9, days: 31 });
   });
 });
 

@@ -2,6 +2,7 @@ import type { Transaction } from "../types";
 import { groupByCategory } from "./aggregations";
 import { counterpartyOf } from "./yearReview";
 import { expenseDelta } from "./txKindStyle";
+import { currentPeriod, endAfterDays, periodKey, periodRange, shiftPeriod, spanDays } from "./period";
 
 export type DigestPeriod = "week" | "month";
 
@@ -52,6 +53,17 @@ export interface DigestEntry {
    * `null` — предыдущих периодов нет.
    */
   typical: { income: number; expense: number; net: number; periods: number } | null;
+  /**
+   * Месяц ещё идёт: прожит `day` день из `days` (сегодняшний — прожит).
+   *
+   * Такой месяц сравнивается не с полными прошлыми — «−40 % к прошлому» в
+   * середине месяца было бы неправдой, — а с тем же числом дней: «прошлый» —
+   * его первые `day` дней, «обычный» расход — средний месяц, урезанный до
+   * прожитой доли (тот же темп, что на главной), «обычный» доход — средний
+   * доход первых `day` дней: зарплата приходит одним днём, и делить её по
+   * дням нельзя. У завершённых периодов поля нет.
+   */
+  running?: { day: number; days: number };
 }
 
 export interface DigestDay {
@@ -377,7 +389,21 @@ export function buildMonthDigest(
   // Месяца без операций для одиночного вызова нет: карточке «прошлый месяц» на
   // Главной нечего показывать. В ленте это решается иначе — см. monthEntry.
   if (cur.length === 0) return null;
-  return monthEntry(transactions, start, end, sorted, firstSeen);
+  const prevStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
+  const prevEnd = new Date(start.getFullYear(), start.getMonth(), 0);
+  return monthEntry(
+    transactions,
+    `${start.getFullYear()}-${pad2(start.getMonth() + 1)}`,
+    { from: ymdLocal(start), to: ymdLocal(end) },
+    { from: ymdLocal(prevStart), to: ymdLocal(prevEnd) },
+    sorted,
+    firstSeen
+  );
+}
+
+interface IsoRange {
+  from: string;
+  to: string;
 }
 
 /**
@@ -387,21 +413,21 @@ export function buildMonthDigest(
  * было ни одной операции» надо показать, а не молча пропустить. Пропущенный
  * месяц читается как поломка — именно так и выглядело, когда лента обрывалась
  * на июне при данных до августа (issue #65).
+ *
+ * `range` — весь месяц (отчётный, если у пользователя свой первый день), `prev`
+ * — с чем сравнивать: у завершённого месяца это весь прошлый, у идущего — те
+ * же дни прошлого.
  */
 function monthEntry(
   transactions: Transaction[],
-  start: Date,
-  end: Date,
+  ym: string,
+  range: IsoRange,
+  prevRange: IsoRange,
   sorted: boolean,
   firstSeen?: Map<string, string>
 ): DigestEntry {
-  const startIso = ymdLocal(start);
-  const endIso = ymdLocal(end);
-  const cur = txsInRange(transactions, startIso, endIso, sorted);
-
-  const prevStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
-  const prevEnd = new Date(start.getFullYear(), start.getMonth(), 0);
-  const prev = txsInRange(transactions, ymdLocal(prevStart), ymdLocal(prevEnd), sorted);
+  const cur = txsInRange(transactions, range.from, range.to, sorted);
+  const prev = txsInRange(transactions, prevRange.from, prevRange.to, sorted);
 
   const curAgg = aggregate(cur);
   const prevAgg = aggregate(prev);
@@ -411,12 +437,13 @@ function monthEntry(
     .sort((a, b) => b.amountBase - a.amountBase)
     .slice(0, 5);
 
+  const [y, m] = ym.split("-").map(Number);
   return {
-    id: `month-${start.getFullYear()}-${pad2(start.getMonth() + 1)}`,
+    id: `month-${ym}`,
     period: "month",
-    start: startIso,
-    end: endIso,
-    label: `${RU_MONTHS[start.getMonth()]} ${start.getFullYear()}`,
+    start: range.from,
+    end: range.to,
+    label: `${RU_MONTHS[m - 1]} ${y}`,
     generatedAt: new Date().toISOString(),
     income: curAgg.income,
     expense: curAgg.expense,
@@ -430,7 +457,7 @@ function monthEntry(
     movers: categoryMovers(cur, prev, 5),
     topTransactions: top,
     savingsRate: curAgg.income > 0 ? curAgg.net / curAgg.income : 0,
-    ...periodDetails(cur, startIso, endIso, firstSeen ?? firstSeenByPayee(transactions)),
+    ...periodDetails(cur, range.from, range.to, firstSeen ?? firstSeenByPayee(transactions)),
     typical: null,
   };
 }
@@ -449,7 +476,13 @@ function ymdToLocalDate(ymd: string): Date {
  */
 export function buildDigestHistory(
   transactions: Transaction[],
-  today = new Date()
+  today = new Date(),
+  /**
+   * Первый день отчётного месяца. Месяцы дайджеста — отчётные, как на главной
+   * и в бюджете: с днём 28 «Август» — это 28.08–27.09, и кнопка с главной
+   * открывает здесь ровно тот отрезок, о котором шла речь.
+   */
+  monthStartDay = 1
 ): DigestEntry[] {
   if (transactions.length === 0) return [];
 
@@ -468,29 +501,48 @@ export function buildDigestHistory(
 
   const out: DigestEntry[] = [];
 
-  // Месяцы: от первого месяца с данными до последнего ЗАВЕРШЁННОГО.
+  // Месяцы: от первого месяца с данными до ТЕКУЩЕГО включительно.
   //
-  // Верхнюю границу больше НЕ задаёт дата последней операции. Это была
-  // единственная причина, по которой лента месяцев могла оборваться раньше
-  // ленты недель: у недель такой границы нет, они идут от сегодняшнего
-  // понедельника назад. Стоило чему-нибудь исказить «дату последней операции» —
-  // и месяцы кончались там, где недели показывали данные (issue #65).
+  // Верхнюю границу НЕ задаёт дата последней операции. Это была единственная
+  // причина, по которой лента месяцев могла оборваться раньше ленты недель: у
+  // недель такой границы нет, они идут от сегодняшнего понедельника назад.
+  // Стоило чему-нибудь исказить «дату последней операции» — и месяцы кончались
+  // там, где недели показывали данные (issue #65).
+  //
+  // Текущий месяц идёт в ленту с пометкой `running`: на главной итоги месяца
+  // видны с первого дня, и их подробности не должны ждать первого числа.
+  // Сравнивается он с тем же числом дней — см. `running` у `DigestEntry`.
   //
   // Месяц без единой операции в ленту не идёт. Короткое время было наоборот —
-  // я показывал такие месяцы с нулями, чтобы список не обрывался «в никуда»,
+  // такие месяцы показывались с нулями, чтобы список не обрывался «в никуда»,
   // когда в середине истории провал. Повод отпал: пропажа месяца, ради которой
-  // это делалось, оказалась ошибкой перебора выше (сдвиг переводов часов), а
+  // это делалось, оказалась ошибкой перебора (сдвиг переводов часов), а
   // побочный эффект остался — одна случайная операция многолетней давности
   // растягивала ленту на сотни строк «0,00 ₽» (issue #65).
-  const monthIndex = (y: number, m: number) => y * 12 + m;
-  const lastIndex = monthIndex(today.getFullYear(), today.getMonth()) - 1;
-  const startIndex = monthIndex(minD.getFullYear(), minD.getMonth());
-  for (let i = startIndex; i <= lastIndex; i++) {
-    const y = Math.floor(i / 12);
-    const mo = i % 12;
-    const entry = buildMonthDigest(byDate, new Date(y, mo, 1), new Date(y, mo + 1, 0), true, firstSeen);
-    if (entry) out.push(entry);
+  //
+  // Месяцы перебираются по номеру, а не датами: шаг в один отчётный месяц
+  // через `shiftPeriod` не копит сдвигов.
+  const todayIso = ymdLocal(today);
+  const curYm = currentPeriod(monthStartDay, today);
+  const months: DigestEntry[] = [];
+  for (let ym = periodKey(byDate[0].date, monthStartDay); ym <= curYm; ym = shiftPeriod(ym, 1)) {
+    const range = periodRange(ym, monthStartDay);
+    if (txsInRange(byDate, range.from, range.to, true).length === 0) continue;
+    const prevFull = periodRange(shiftPeriod(ym, -1), monthStartDay);
+    const running = ym === curYm && todayIso < range.to;
+    if (!running) {
+      months.push(monthEntry(byDate, ym, range, prevFull, true, firstSeen));
+      continue;
+    }
+    const day = spanDays(range.from, todayIso);
+    const prevSpan = { from: prevFull.from, to: minIso(prevFull.to, endAfterDays(prevFull.from, day)) };
+    const entry = monthEntry(byDate, ym, range, prevSpan, true, firstSeen);
+    entry.running = { day, days: spanDays(range.from, range.to) };
+    // Дни без трат — только прожитые: завтрашний день «без трат» ещё не прошёл.
+    entry.noSpendDays = entry.days.filter((d) => d.date <= todayIso && d.expense <= 0).length;
+    months.push(entry);
   }
+  out.push(...months);
 
   // Недели: все завершённые, до первой недели с данными — так же, как месяцы.
   //
@@ -513,20 +565,35 @@ export function buildDigestHistory(
 
   // Sort newest first.
   out.sort((a, b) => b.end.localeCompare(a.end));
-  attachTypical(out.filter((e) => e.period === "month"));
-  attachTypical(out.filter((e) => e.period === "week"));
+  attachTypical(out.filter((e) => e.period === "month"), byDate);
+  attachTypical(out.filter((e) => e.period === "week"), byDate);
   return out;
+}
+
+function minIso(a: string, b: string): string {
+  return a < b ? a : b;
 }
 
 /**
  * «Обычный» период — среднее за предыдущие (до шести) периоды того же вида.
  * Список идёт от свежего к старому, поэтому предыдущие — дальше по списку.
  */
-function attachTypical(entries: DigestEntry[]): void {
+function attachTypical(entries: DigestEntry[], sorted: Transaction[]): void {
   entries.forEach((e, i) => {
     const prev = entries.slice(i + 1, i + 1 + TYPICAL_PERIODS);
     if (prev.length === 0) return;
     const avg = (f: (x: DigestEntry) => number) => prev.reduce((s, x) => s + f(x), 0) / prev.length;
+    if (e.running) {
+      // Идущий месяц: расход — обычный темп к этому дню, как на главной;
+      // доход — сколько обычно приходит за те же первые дни.
+      const { day, days } = e.running;
+      const income = avg(
+        (x) => aggregate(txsInRange(sorted, x.start, minIso(x.end, endAfterDays(x.start, day)), true)).income
+      );
+      const expense = avg((x) => x.expense) * (day / days);
+      e.typical = { income, expense, net: income - expense, periods: prev.length };
+      return;
+    }
     e.typical = {
       income: avg((x) => x.income),
       expense: avg((x) => x.expense),
