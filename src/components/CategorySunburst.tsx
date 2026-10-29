@@ -8,7 +8,7 @@ import { useDrillStore } from "../store/useDrillStore";
 import { KindSwitcher } from "./KindSwitcher";
 import { CategoryTable, ownCategoryRow, type CategoryTableRow } from "./CategoryTable";
 
-// A Budgera-style two-ring category donut: the inner ring is the top-level
+// A two-ring category donut: the inner ring is the top-level
 // categories (each with its glyph), the outer thin ring breaks every category
 // into its subcategories. Hovering focuses one slice (the rest dims); clicking
 // a category drills the donut INTO it (one category split into its subs) with a

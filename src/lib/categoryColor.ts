@@ -69,7 +69,7 @@ export function subcategoryColor(
 // round-trips through the decoder. These are the encode/decode helpers the
 // editor uses to translate between a `#RRGGBB` hex and that int.
 
-/** Swatch palette for the color picker (roughly the Zenmoney/Budgera set). */
+/** Swatch palette for the color picker (roughly the Дзен-мани set). */
 export const CATEGORY_EDIT_PALETTE = [
   "#EF4444", "#F97316", "#FBBF24", "#86EFAC", "#22C55E", "#166534",
   "#0D9488", "#2DD4BF", "#38BDF8", "#0EA5E9", "#2563EB", "#818CF8",
