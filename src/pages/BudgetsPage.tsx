@@ -111,6 +111,7 @@ import { Badge, type BadgeTone } from "../components/Badge";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { currentPeriod, periodRange, spanDays } from "../lib/period";
 import { monthProgress as progressOf } from "../lib/dashboardModel";
+import { Collapse } from "../components/Collapse";
 
 interface Row {
   line: BudgetLine;
@@ -1973,26 +1974,18 @@ function Section({
           {...rest}
         />
         {hasSubs && (
-          <div
-            className={`grid transition-all duration-300 ease-in-out ${
-              isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-            }`}
-          >
-            <div className="overflow-hidden">
-              <div className="border-t border-border">
-                {g.subs.map((s) => (
-                            <BudgetRow
-                    key={s.line.id}
-                    row={s}
-                    base={base}
-                    rollupAhead={aheadOf(s)}
-                    nested
-                    {...rest}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
+          <Collapse open={isOpen} keepMounted className="border-t border-border">
+            {g.subs.map((s) => (
+              <BudgetRow
+                key={s.line.id}
+                row={s}
+                base={base}
+                rollupAhead={aheadOf(s)}
+                nested
+                {...rest}
+              />
+            ))}
+          </Collapse>
         )}
       </div>
     );
@@ -2051,15 +2044,9 @@ function Section({
             onToggle={() => setOutOfPlanOpen((o) => !o)}
             base={base}
           />
-          <div
-            className={`grid transition-all duration-300 ease-in-out ${
-              outOfPlanOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-            }`}
-          >
-            <div className="overflow-hidden">
-              <div className="space-y-3 pl-6">{outOfPlan.map(renderCat)}</div>
-            </div>
-          </div>
+          <Collapse open={outOfPlanOpen} keepMounted className="space-y-3 pl-6">
+            {outOfPlan.map(renderCat)}
+          </Collapse>
         </div>
       )}
       {emptyCats.length > 0 && (
@@ -2077,15 +2064,9 @@ function Section({
             <span className="whitespace-nowrap">Без {emptyNoun} в этом месяце · {emptyCats.length}</span>
             <span className="h-px flex-1 bg-border" />
           </button>
-          <div
-            className={`grid transition-all duration-300 ease-in-out ${
-              emptyOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-            }`}
-          >
-            <div className="overflow-hidden">
-              <div className="space-y-3">{emptyCats.map(renderCat)}</div>
-            </div>
-          </div>
+          <Collapse open={emptyOpen} keepMounted className="space-y-3">
+            {emptyCats.map(renderCat)}
+          </Collapse>
         </div>
       )}
     </div>
@@ -2611,7 +2592,7 @@ function BudgetRow({
           aria-expanded={expanded}
           aria-label={expanded ? "Свернуть подкатегории" : "Показать подкатегории"}
         >
-          <ChevronDown className={`w-4 h-4 transition-transform duration-300 ease-in-out ${expanded ? "" : "-rotate-90"}`} />
+          <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? "" : "-rotate-90"}`} />
         </button>
       ) : (
         !nested && <span className="w-4 shrink-0" />

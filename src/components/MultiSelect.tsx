@@ -370,7 +370,7 @@ export function MultiSelect({
     maxHeight: number;
   };
   const [pos, setPos] = useState<MenuPos | null>(null);
-  const { mounted, closing } = usePresence(open);
+  const { mounted, closing, openKey } = usePresence(open);
   const MENU_W = menuMinWidth ?? 288;
 
   useLayoutEffect(() => {
@@ -538,6 +538,7 @@ export function MultiSelect({
             <div
               ref={menuRef}
               {...{ [SURFACE_ATTR]: "" }}
+              key={openKey}
               {...popSurfaceProps(closing, pos.bottom != null ? "up" : "down")}
               className="fixed z-[80] overflow-auto card p-2"
               style={{

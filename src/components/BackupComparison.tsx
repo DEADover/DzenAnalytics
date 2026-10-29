@@ -1,4 +1,5 @@
 import { HeadCell } from "./table/TableParts";
+import { Collapse } from "./Collapse";
 import { cellClass } from "./table/tableKit";
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
@@ -35,16 +36,7 @@ export function BackupComparison() {
         />
         Чем копия сервиса отличается от снимка аккаунта
       </button>
-      {/* Раскрытие через сетку: `<details>` высоту не анимирует, а `max-height`
-          наугад либо режет содержимое, либо тормозит на коротком. Переход
-          `0fr → 1fr` берёт настоящую высоту и работает при любой длине. */}
-      <div
-        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-        }`}
-      >
-        <div className="overflow-hidden">
-      <div className="px-4 pb-4 space-y-3">
+      <Collapse open={open} keepMounted className="px-4 pb-4 space-y-3">
       <div className="overflow-x-auto -mx-1 px-1">
         <table className="w-full">
           <thead>
@@ -87,9 +79,7 @@ export function BackupComparison() {
         из файла операции доживут до первой синхронизации, а потом исчезнут:
         в облаке их нет. Вернуть их в Дзен-мани может только облачный снимок.
       </Callout>
-      </div>
-        </div>
-      </div>
+      </Collapse>
     </div>
   );
 }

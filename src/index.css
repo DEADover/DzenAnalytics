@@ -1530,6 +1530,35 @@ h2,
   }
 }
 
+/* Раскрывающийся блок (Collapse): высота — строкой сетки `0fr → 1fr`,
+   содержимое проявляется вместе с ней. */
+.collapse-box {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--motion-slow) var(--ease-soft),
+    opacity var(--motion-slow) var(--ease-soft);
+}
+.collapse-box[data-open] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .collapse-box { transition: none; }
+}
+
+/* Подстроки таблицы, появившиеся при раскрытии ветки (useRevealRows):
+   проявляются на месте. Без сдвига: строка, которая едет, тянет за собой
+   свои кнопки, и окошко, открытое с них в эти мгновения, считало бы, что
+   кнопка уехала, и закрывалось при первой прокрутке. */
+@keyframes treeRowIn {
+  from { opacity: 0; }
+}
+.animate-tree-row { animation: treeRowIn var(--motion-base) var(--ease-soft) backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-tree-row { animation: none; }
+}
+
 /* Всплывающие списки и меню — одним движением на всё приложение: вырастают
    из 97 % с проявлением и так же, только быстрее, уходят. Растут от края,
    который смотрит на кнопку: `data-pop="up"` — список раскрылся над ней.

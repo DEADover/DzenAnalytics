@@ -80,3 +80,46 @@ test("«уменьшить движение»: всё мгновенно, сле
   await expect(page.locator(".exit-ghost")).toHaveCount(0);
   await expect(page.locator("[data-pop]")).toHaveCount(0);
 });
+
+test("раскрытие: высота меняется плавно, свёрнутое снимается с дерева", async ({ page }) => {
+  await connectZen(page, "/help");
+  const box = page.locator(".collapse-box").first();
+  const toggle = page.getByRole("button", { name: /^Меню «Основное»/ });
+  await expect(box).toHaveAttribute("data-open", "");
+  expect(await box.evaluate((el) => getComputedStyle(el).transitionProperty)).toContain("grid-template-rows");
+  // Раскрытый блок краёв не режет — иначе обрезались бы кольца фокуса.
+  await expect(box.locator("> div")).not.toHaveClass(/overflow-hidden/);
+  const count = await page.locator(".collapse-box").count();
+  await toggle.click();
+  // Сворачивается — и только потом уходит из дерева.
+  await expect(page.locator(".collapse-box")).toHaveCount(count - 1);
+  await toggle.click();
+  await expect(page.locator(".collapse-box")).toHaveCount(count);
+  await expect(page.locator(".collapse-box").first()).toHaveAttribute("data-open", "");
+});
+
+test("подстроки таблицы проявляются только при раскрытии нажатием", async ({ page }) => {
+  await connectZen(page, "/categories");
+  await expect(page.locator("tr.animate-tree-row")).toHaveCount(0);
+  await page.getByRole("button", { name: "Раскрыть", exact: true }).first().click();
+  await expect(page.locator("tr.animate-tree-row").first()).toBeVisible();
+});
+
+test("график: смена периода проявляет новый, пересчёт сумм — нет", async ({ page }) => {
+  await connectZen(page, "/cashflow");
+  await expect(page.locator(".recharts-surface").first()).toBeVisible();
+  const swaps = () =>
+    page.evaluate(
+      () =>
+        document
+          .getAnimations()
+          .filter((a) => !("animationName" in a) && !("transitionProperty" in a)).length
+    );
+  // Отчётный месяц — его можно листать назад в пределах истории.
+  await page.getByRole("button", { name: "Отчётный месяц", exact: true }).first().click();
+  // Спокойно стоит — не мигает.
+  await page.waitForTimeout(800);
+  expect(await swaps()).toBe(0);
+  await page.getByRole("button", { name: "Предыдущий период" }).first().click();
+  await expect.poll(swaps, { timeout: 2000 }).toBeGreaterThan(0);
+});

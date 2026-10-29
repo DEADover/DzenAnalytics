@@ -61,7 +61,7 @@ export function InfoPopover({
   const [pos, setPos] = useState<{ left: number; top: number; maxH: number; up: boolean } | null>(
     null
   );
-  const { mounted, closing } = usePresence(open);
+  const { mounted, closing, openKey } = usePresence(open);
 
   useLayoutEffect(() => {
     // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
@@ -150,6 +150,7 @@ export function InfoPopover({
             {!closing && <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} />}
             <div
               ref={panelRef}
+              key={openKey}
               {...popSurfaceProps(closing, pos?.up ? "up-right" : "right")}
               // Своя прокрутка панели не должна закрывать окно, из которого
               // её открыли (настройки режима правила — это `Popover`).

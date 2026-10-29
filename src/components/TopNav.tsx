@@ -610,7 +610,11 @@ export function TopNav({
             />
           )}
           <div className="hidden lg:block absolute left-0 right-0 top-full z-20 app-gutter pt-1">
-            <div {...popSurfaceProps(morePresence.closing)} className="card-tray relative p-5 3xl:p-6">
+            <div
+              key={morePresence.openKey}
+              {...popSurfaceProps(morePresence.closing)}
+              className="card-tray relative p-5 3xl:p-6"
+            >
               {/* Настройка основного меню — значком в углу панели: тут видно,
                   чего не хватает в шапке, и значок не отнимает места у разделов.
                   Верх угла свободен при любом числе столбцов — заголовки групп

@@ -16,6 +16,7 @@ import { ColorPicker } from "./ColorPicker";
 import { CategoryDot } from "./CategoryDot";
 import { Segmented } from "./Segmented";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 
 interface Props {
   /** Root categories eligible as a parent. */
@@ -353,6 +354,7 @@ function ParentSelect({
   onChange: (id: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { mounted, closing, openKey } = usePresence(open);
   const currentTitle = value ? options.find((o) => o.id === value)?.title ?? null : null;
   return (
     <div className="relative">
@@ -373,8 +375,12 @@ function ParentSelect({
         />
       </button>
 
-      {open && (
-        <div className="absolute left-0 right-0 z-30 mt-2 border border-border rounded-lg bg-panel p-1 shadow-xl max-h-56 overflow-y-auto">
+      {mounted && (
+        <div
+          key={openKey}
+          {...popSurfaceProps(closing)}
+          className="absolute left-0 right-0 z-30 mt-2 border border-border rounded-lg bg-panel p-1 shadow-xl max-h-56 overflow-y-auto"
+        >
           <button
             type="button"
             onClick={() => {

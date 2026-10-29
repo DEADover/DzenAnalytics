@@ -122,6 +122,7 @@ import { depositTotals, projectDeposit, type DepositRow } from "../lib/deposits"
 import { SectionCard } from "../components/SectionCard";
 import { CardHeader } from "../components/CardHeader";
 import { HeadCell, TreeElbow } from "../components/table/TableParts";
+import { useRevealRows } from "../hooks/useRevealRows";
 import { cellClass, toneOfSigned, treeIndent, type ColumnType, type Tone } from "../components/table/tableKit";
 import { toIsoDate } from "../lib/period";
 import { clipBalances } from "../lib/capital";
@@ -706,13 +707,15 @@ export function AccountsPage() {
 
   /** Раскрытые долговые счета: разбивка по контрагентам под строкой счёта. */
   const [openDebts, setOpenDebts] = useState<Set<string>>(new Set());
-  const toggleDebts = (account: string) =>
-    setOpenDebts((prev) => {
-      const next = new Set(prev);
-      if (next.has(account)) next.delete(account);
-      else next.add(account);
-      return next;
-    });
+  // Раскрытые нажатием контрагенты проявляются, а не возникают рывком.
+  const debtReveal = useRevealRows();
+  const toggleDebts = (account: string) => {
+    const next = new Set(openDebts);
+    if (next.has(account)) next.delete(account);
+    else next.add(account);
+    debtReveal.mark(openDebts, next);
+    setOpenDebts(next);
+  };
 
   /** Операции, по которым считаем долги: как и сама строка счёта — вся история
    *  на «Капитале» и отобранный период на «Движении». */
@@ -2885,7 +2888,10 @@ export function AccountsPage() {
                         <tr
                           key={`${a.account} ${d.payee}`}
                           onClick={() => openDebtCounterparty(a.account, d)}
-                          className="cursor-pointer hover:bg-panel2/50"
+                          className={clsx(
+                            "cursor-pointer hover:bg-panel2/50",
+                            debtReveal.isOpenedNow(a.account) && "animate-tree-row"
+                          )}
                         >
                           {/* Строка под счётом с уголком к нему — как подстрока
                               любого дерева в таблицах. Сколько операций и когда
@@ -2945,6 +2951,7 @@ export function AccountsPage() {
                         сумма долгов у нас просто неверная (issue #80). */}
                     {debtsOpen && unallocated !== 0 && (
                       <tr
+                        className={debtReveal.isOpenedNow(a.account) ? "animate-tree-row" : undefined}
                         title={
                           "Начальный остаток, операции вне истории или курсовая разница. " +
                           "Остаток счёта из Дзен-мани минус сумма по контрагентам: " +

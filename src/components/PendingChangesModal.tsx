@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import {
   CloudOff,
@@ -56,6 +56,7 @@ import type { Transaction } from "../types";
 import { Modal, ModalBody, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
 import { Badge } from "./Badge";
+import { Collapse } from "./Collapse";
 
 // Which patch fields map to which human-readable «changed aspect».
 /** Одна «грань» операции: какие ключи патча её задевают, как она называется и
@@ -954,39 +955,19 @@ function Row({
   );
 }
 
-/**
- * Раскрывающееся сравнение «было → стало».
- *
- * Высота измеряется и анимируется явно, а не через модный `grid-template-rows:
- * 0fr → 1fr`: числовая высота предсказуемо анимируется в любом движке и не
- * зависит от поддержки интерполяции `fr`. `scrollHeight` снимаем после
- * отрисовки строк, поэтому панель подстраивается под своё содержимое.
- */
+/** Раскрывающееся сравнение «было → стало». */
 function DiffPanel({ diff, open }: { diff: FieldDiff[]; open: boolean }) {
-  const inner = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState(0);
-
-  useLayoutEffect(() => {
-    if (inner.current) setHeight(inner.current.scrollHeight);
-  }, [diff]);
-
   return (
-    <div
-      className="overflow-hidden transition-[height] duration-200 ease-out"
-      style={{ height: open ? height : 0 }}
-      aria-hidden={!open}
-    >
-      <div ref={inner} className="pb-2.5 pl-10 pr-1 space-y-1">
-        {diff.map((d) => (
-          <div key={d.label} className="flex items-baseline gap-2 text-xs">
-            <span className="text-muted shrink-0 min-w-[7rem]">{d.label}:</span>
-            <span className="text-muted line-through truncate">{d.from}</span>
-            <ArrowRight className="w-3 h-3 text-muted shrink-0" />
-            <span className="text-text truncate">{d.to}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <Collapse open={open} className="pb-2.5 pl-10 pr-1 space-y-1">
+      {diff.map((d) => (
+        <div key={d.label} className="flex items-baseline gap-2 text-xs">
+          <span className="text-muted shrink-0 min-w-[7rem]">{d.label}:</span>
+          <span className="text-muted line-through truncate">{d.from}</span>
+          <ArrowRight className="w-3 h-3 text-muted shrink-0" />
+          <span className="text-text truncate">{d.to}</span>
+        </div>
+      ))}
+    </Collapse>
   );
 }
 

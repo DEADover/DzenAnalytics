@@ -57,7 +57,7 @@ export function Popover({
     null
   );
   // Закрытое окно ещё доигрывает уход — до этого оно в дереве.
-  const { mounted, closing } = usePresence(open);
+  const { mounted, closing, openKey } = usePresence(open);
 
   useLayoutEffect(() => {
     // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
@@ -135,6 +135,7 @@ export function Popover({
       <div
         ref={menuRef}
         {...{ [SURFACE_ATTR]: "" }}
+        key={openKey}
         {...popSurfaceProps(closing, origin)}
         className={clsx("fixed z-[80]", className)}
         style={

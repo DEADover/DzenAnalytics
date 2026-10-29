@@ -25,6 +25,7 @@ import { pluralRu } from "../lib/plural";
 import { Callout } from "./Callout";
 import { Badge } from "./Badge";
 import { formatFixed } from "../lib/format";
+import { Collapse } from "./Collapse";
 
 /**
  * Sync log table.
@@ -141,7 +142,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
           className="flex items-center gap-2 text-left"
         >
           <ChevronRight
-            className={`w-4 h-4 shrink-0 text-muted transition-transform duration-500 ease-in-out ${
+            className={`w-4 h-4 shrink-0 text-muted transition-transform ${
               open ? "rotate-90" : ""
             }`}
           />
@@ -215,24 +216,10 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
         </div>
       </div>
 
-      {/* Раскрытие через сетку `0fr → 1fr`: `max-height` наугад либо режет
-          длинный список, либо тормозит на коротком, а `<details>` высоту не
-          анимирует вовсе. Тот же приём, что у таблицы сравнения бэкапов. */}
-      <div
-        className={`grid transition-[grid-template-rows] duration-500 ease-in-out ${
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-        }`}
-      >
-        {/* Отступ под заголовком — ВНУТРИ раскрывающейся части, а не `mb-3` у
-            шапки: снаружи он оставался и в свёрнутом виде, и под строкой висела
-            пустая полоса. Прозрачность идёт вместе с высотой — содержимое
-            проявляется, а не проступает разом в щели. */}
-        <div
-          className={`overflow-hidden transition-opacity duration-500 ease-in-out ${
-            open ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <div className="pt-3">
+      {/* Отступ под заголовком — ВНУТРИ раскрывающейся части, а не `mb-3` у
+          шапки: снаружи он оставался и в свёрнутом виде, и под строкой висела
+          пустая полоса. */}
+      <Collapse open={open} keepMounted className="pt-3">
       {entries.length === 0 ? (
         <p className="text-xs text-muted">
           История пуста. После первой синхронизации, отправки правок или снимка
@@ -365,9 +352,7 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
           )}
         </>
       )}
-          </div>
-        </div>
-      </div>
+      </Collapse>
     </div>
   );
 }

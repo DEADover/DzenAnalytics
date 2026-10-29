@@ -223,7 +223,7 @@ export function Combobox({
     [filteredGroups, filtered]
   );
   const nav = useListNav(flat.length, open && popupHasItems);
-  const { mounted, closing } = usePresence(open && popupHasItems);
+  const { mounted, closing, openKey } = usePresence(open && popupHasItems);
 
   function commit(next: string) {
     setQuery(show(next));
@@ -407,6 +407,7 @@ export function Combobox({
           ref={popupRef}
           id={nav.listId}
           role="listbox"
+          key={openKey}
           {...popSurfaceProps(closing, portal && pos?.up ? "up" : "down")}
           className={
             portal

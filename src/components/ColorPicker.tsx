@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import clsx from "clsx";
 import { CATEGORY_EDIT_PALETTE } from "../lib/categoryColor";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 
 interface Props {
   /** Current colour as `#RRGGBB`, or null (no colour set). */
@@ -71,6 +72,7 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
  */
 export function ColorPicker({ value, onChange }: Props) {
   const [open, setOpen] = useState(false);
+  const { mounted, closing, openKey } = usePresence(open);
   const [hsv, setHsv] = useState(() => {
     const rgb = value ? hexToRgb(value) : null;
     return rgb ? rgbToHsv(rgb.r, rgb.g, rgb.b) : { h: 210, s: 0.55, v: 0.85 };
@@ -154,8 +156,12 @@ export function ColorPicker({ value, onChange }: Props) {
         style={{ background: current ?? hsvHex }}
       />
 
-      {open && (
-        <div className="absolute right-0 z-20 mt-2 border border-border rounded-xl bg-panel p-3 shadow-xl w-64 space-y-3">
+      {mounted && (
+        <div
+          key={openKey}
+          {...popSurfaceProps(closing, "right")}
+          className="absolute right-0 z-20 mt-2 border border-border rounded-xl bg-panel p-3 shadow-xl w-64 space-y-3"
+        >
           {/* Quick-pick palette */}
           <div className="grid grid-cols-9 gap-1.5">
             {CATEGORY_EDIT_PALETTE.map((c) => {

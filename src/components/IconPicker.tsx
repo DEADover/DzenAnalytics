@@ -5,6 +5,7 @@ import { ZEN_ICON_IDS } from "../lib/zenIconLucide";
 import { ZenIcon } from "./ZenIcon";
 import { SearchInput } from "./SearchInput";
 import { queryMatcher } from "../lib/keyboardLayout";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 
 interface Props {
   /** Current Zenmoney icon id, or null. */
@@ -23,6 +24,7 @@ interface Props {
  */
 export function IconPicker({ value, color, onChange }: Props) {
   const [open, setOpen] = useState(false);
+  const { mounted, closing, openKey } = usePresence(open);
   const [query, setQuery] = useState("");
 
 
@@ -61,8 +63,12 @@ export function IconPicker({ value, color, onChange }: Props) {
         />
       </button>
 
-      {open && (
-        <div className="absolute left-0 right-0 z-30 mt-2 border border-border rounded-lg bg-panel p-2 shadow-xl">
+      {mounted && (
+        <div
+          key={openKey}
+          {...popSurfaceProps(closing)}
+          className="absolute left-0 right-0 z-30 mt-2 border border-border rounded-lg bg-panel p-2 shadow-xl"
+        >
           <SearchInput
             size="sm"
             value={query}

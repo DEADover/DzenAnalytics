@@ -55,7 +55,7 @@ export function HeaderSwitcher({
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
-  const { mounted, closing } = usePresence(open);
+  const { mounted, closing, openKey } = usePresence(open);
 
   // Меню рисуем порталом: внутри общей панели шапки стоит `overflow-hidden`
   // (он же делает скруглённые края у сегментов), и выпадающий список просто
@@ -126,6 +126,7 @@ export function HeaderSwitcher({
         createPortal(
           <div
             ref={menuRef}
+            key={openKey}
             {...popSurfaceProps(closing)}
             className="fixed z-[95] w-max min-w-[11rem] max-w-[min(16rem,calc(100vw-1rem))] border border-border rounded-xl bg-panel p-1 shadow-xl"
             style={{

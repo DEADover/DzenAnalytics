@@ -125,7 +125,7 @@ export function DateField({
   typeable = false,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const { mounted, closing } = usePresence(open);
+  const { mounted, closing, openKey } = usePresence(open);
   const btnRef = useRef<HTMLButtonElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   /** Набираемый текст; `null` — не редактируется, в поле видна сама дата. */
@@ -241,6 +241,7 @@ export function DateField({
         </div>
         {mounted && (
           <CalendarPopup
+            key={openKey}
             closing={closing}
             anchorRef={boxRef}
             value={value}
@@ -285,6 +286,7 @@ export function DateField({
       </button>
       {mounted && (
         <CalendarPopup
+          key={openKey}
           closing={closing}
           anchorRef={btnRef}
           value={value}

@@ -73,7 +73,7 @@ export function CategoryCascadePicker({
     listHeight: number;
     up: boolean;
   } | null>(null);
-  const { mounted, closing } = usePresence(open);
+  const { mounted, closing, openKey } = usePresence(open);
 
   useLayoutEffect(() => {
     // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
@@ -351,6 +351,7 @@ export function CategoryCascadePicker({
       {mounted && renderPopup(
         <div
           ref={popupRef}
+          key={openKey}
           {...popSurfaceProps(closing, portal && pos?.up ? "up" : "down")}
           className={
             portal

@@ -19,6 +19,7 @@ import { CategoryDot } from "./CategoryDot";
 import { TRANSFER_CATEGORY } from "../lib/budgetScope";
 import { Tooltip } from "./Tooltip";
 import { ExpandChevron, TreeElbow } from "./table/TableParts";
+import { useRevealRows } from "../hooks/useRevealRows";
 import { treeIndent } from "./table/tableKit";
 import { TooltipFacts } from "./TooltipFacts";
 import { InfoPopover } from "./InfoPopover";
@@ -96,13 +97,16 @@ export function BudgetYearTable({
 }) {
   // Подкатегории раскрываются по категории, как в месячном виде.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggle = (key: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  // Раскрытые нажатием строки проявляются, а не возникают рывком.
+  const subReveal = useRevealRows();
+  const emptyReveal = useRevealRows();
+  const toggle = (key: string) => {
+    const next = new Set(expanded);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    subReveal.mark(expanded, next);
+    setExpanded(next);
+  };
 
   /**
    * Раскрыть или свернуть все подкатегории РАЗДЕЛА — щёлкать каждую в своде за
@@ -122,14 +126,14 @@ export function BudgetYearTable({
     const keys = sectionKeys(section);
     return keys.length > 0 && keys.every((k) => expanded.has(k));
   };
-  const toggleSection = (section: YearSection) =>
-    setExpanded((prev) => {
-      const keys = sectionKeys(section);
-      const next = new Set(prev);
-      if (keys.every((k) => next.has(k))) keys.forEach((k) => next.delete(k));
-      else keys.forEach((k) => next.add(k));
-      return next;
-    });
+  const toggleSection = (section: YearSection) => {
+    const keys = sectionKeys(section);
+    const next = new Set(expanded);
+    if (keys.every((k) => next.has(k))) keys.forEach((k) => next.delete(k));
+    else keys.forEach((k) => next.add(k));
+    subReveal.mark(expanded, next);
+    setExpanded(next);
+  };
 
   /**
    * Статьи без единой операции за год — под спойлером, как «Без трат в этом
@@ -142,8 +146,11 @@ export function BudgetYearTable({
    */
   const [emptyOpen, setEmptyOpen] = useState<Partial<Record<BudgetKind, boolean>>>({});
   const emptyShown = (kind: BudgetKind) => emptyOpen[kind] ?? !hideEmpty;
-  const toggleEmpty = (kind: BudgetKind) =>
-    setEmptyOpen((prev) => ({ ...prev, [kind]: !(prev[kind] ?? !hideEmpty) }));
+  const toggleEmpty = (kind: BudgetKind) => {
+    const shown = emptyShown(kind);
+    emptyReveal.mark(new Set(), new Set(shown ? [] : [kind]));
+    setEmptyOpen((prev) => ({ ...prev, [kind]: !shown }));
+  };
 
   /**
    * Правка плана (issue #106): в текущем месяце и дальше план ячейки
@@ -534,6 +541,8 @@ export function BudgetYearTable({
       own?: YearRow;
       /** Категория, к которой относится строка, — для правки плана. */
       owner: YearGroup;
+      /** Строка появилась от раскрытия — проявляется. */
+      reveal?: boolean;
     }
   ) => {
     const rowYear = monthCells(
@@ -550,7 +559,7 @@ export function BudgetYearTable({
     // Закреплённый первый столбец красится отдельно и НЕПРОЗРАЧНЫМ цветом:
     // под ним при прокрутке уезжают ячейки этой же строки, и полупрозрачная
     // подсветка показала бы их насквозь.
-    <tr key={row.key} className="group hover:bg-panel2">
+    <tr key={row.key} className={`group hover:bg-panel2${opts.reveal ? " animate-tree-row" : ""}`}>
       {/* Подкатегория — строкой под родителем с уголком и приглушённым именем,
           как в дереве любой таблицы; числа — обычным цветом. */}
       <th
@@ -640,19 +649,22 @@ export function BudgetYearTable({
     emptyShown(g.total.kind) ? g.subs : g.subs.filter(rowIsLive);
 
   /** Строка категории и, если раскрыта, её подкатегории. */
-  const groupRows = (g: YearGroup) => {
+  const groupRows = (g: YearGroup, reveal = false) => {
     const subs = subsOf(g);
+    const key = `${g.total.kind} ${g.category}`;
+    const subsReveal = reveal || subReveal.isOpenedNow(key);
     return (
       <Fragment key={g.category}>
         {dataRow(g.total, {
-          group: subs.length > 0 ? `${g.total.kind} ${g.category}` : undefined,
+          group: subs.length > 0 ? key : undefined,
           own: subs.length > 0 ? g.parent : undefined,
           owner: g,
+          reveal,
         })}
         {subs.length > 0 &&
-          expanded.has(`${g.total.kind} ${g.category}`) &&
+          expanded.has(key) &&
           subs.map((s, i) =>
-            dataRow(s, { nested: true, last: i === subs.length - 1, owner: g })
+            dataRow(s, { nested: true, last: i === subs.length - 1, owner: g, reveal: subsReveal })
           )}
       </Fragment>
     );
@@ -755,7 +767,7 @@ export function BudgetYearTable({
           "nothing",
           <span className="text-muted whitespace-nowrap">За этот год ничего нет.</span>
         )}
-      {liveGroups(section).map(groupRows)}
+      {liveGroups(section).map((g) => groupRows(g))}
       {/* Статья с планом, но без единой операции за год — это строка, в которой
           нечего читать. Она никуда не девается: разделитель говорит, сколько
           таких статей, и открывает их. Итоги раздела всегда считаются по всем
@@ -790,7 +802,8 @@ export function BudgetYearTable({
               rest: <div className="h-px bg-border" />,
             }
           )}
-          {emptyShown(section.kind) && emptyGroups(section).map(groupRows)}
+          {emptyShown(section.kind) &&
+            emptyGroups(section).map((g) => groupRows(g, emptyReveal.isOpenedNow(section.kind)))}
         </>
       )}
       <tr className="font-medium border-t-2 border-border">

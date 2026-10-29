@@ -16,6 +16,7 @@ import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { CategoryDot } from "./CategoryDot";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 
 /** A category offered as the new home for the deleted one's operations. */
 export interface ReplacementOption {
@@ -147,6 +148,7 @@ function ReplacementSelect({
   onChange: (id: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { mounted, closing, openKey } = usePresence(open);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const current = useMemo(
@@ -194,8 +196,12 @@ function ReplacementSelect({
         />
       </button>
 
-      {open && (
-        <div className="absolute left-0 right-0 z-30 mt-2 border border-border rounded-lg bg-panel p-1 shadow-xl max-h-56 overflow-y-auto">
+      {mounted && (
+        <div
+          key={openKey}
+          {...popSurfaceProps(closing)}
+          className="absolute left-0 right-0 z-30 mt-2 border border-border rounded-lg bg-panel p-1 shadow-xl max-h-56 overflow-y-auto"
+        >
           <button
             type="button"
             onClick={() => {

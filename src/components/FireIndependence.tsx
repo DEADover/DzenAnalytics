@@ -12,6 +12,7 @@ import { TooltipFacts } from "./TooltipFacts";
 import { CardHeader } from "./CardHeader";
 import { ProgressBar } from "./ProgressBar";
 import { Slider } from "./Slider";
+import { Collapse } from "./Collapse";
 
 /** FIRE goal on the 4%-rule: 25 годовых расходов = 300 месяцев. */
 const FIRE_MONTHS = 300;
@@ -214,7 +215,7 @@ export function FireIndependence({
           Подключите Дзен-мани, чтобы капитал считался автоматически по балансам счетов.
         </div>
       )}
-      {showAccounts && capitalAccounts.length > 0 && (
+      <Collapse open={showAccounts && capitalAccounts.length > 0}>
         <div className="mt-3 pt-3 border-t border-border space-y-1">
           {capitalAccounts.map((a) => {
             const on = !excluded.includes(a.key);
@@ -253,7 +254,7 @@ export function FireIndependence({
             исключить счёт из капитала FIRE.
           </p>
         </div>
-      )}
+      </Collapse>
 
       {/* KPI band — every metric carries its formula WITH the actual numbers,
           so the figure can be checked by hand (issue #35). */}

@@ -53,7 +53,7 @@ export function MonthMenu({
   );
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
-  const { mounted, closing } = usePresence(open);
+  const { mounted, closing, openKey } = usePresence(open);
 
   const year = Number(value?.slice(0, 4)) || new Date().getFullYear();
   const minY = Number(minYM?.slice(0, 4)) || 1970;
@@ -99,6 +99,7 @@ export function MonthMenu({
       {!closing && <div className="fixed inset-0 z-[70]" onClick={onClose} />}
       <div
         ref={menuRef}
+        key={openKey}
         {...popSurfaceProps(closing, pos.bottom != null ? "up" : "down")}
         className="fixed z-[80] card p-3 w-64"
         style={{ left: pos.left, top: pos.top, bottom: pos.bottom }}

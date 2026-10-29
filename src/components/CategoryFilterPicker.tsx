@@ -221,7 +221,7 @@ export function CategoryFilterPicker({
   // means a checkbox-focus scroll never dismisses the picker mid-selection.
   type MenuPos = { left: number; width: number; top?: number; bottom?: number; maxHeight: number };
   const [pos, setPos] = useState<MenuPos | null>(null);
-  const { mounted, closing } = usePresence(open);
+  const { mounted, closing, openKey } = usePresence(open);
   const computePos = useCallback(() => {
     const el = btnRef.current;
     // Закрытое меню доигрывает уход на прежнем месте — координаты не трогаем.
@@ -302,6 +302,7 @@ export function CategoryFilterPicker({
             <div
               ref={menuRef}
               {...{ [SURFACE_ATTR]: "" }}
+              key={openKey}
               {...popSurfaceProps(closing, pos.bottom != null ? "up" : "down")}
               className="fixed z-[80] card p-0 overflow-hidden flex flex-col transition-[width,left] duration-300 ease-[var(--ease-soft)]"
               style={{ left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight }}

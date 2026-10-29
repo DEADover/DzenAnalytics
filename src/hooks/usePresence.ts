@@ -16,21 +16,27 @@ function reducedMotion(): boolean {
  * пришло `open = false`, а не эффектом: иначе поверхность на один проход
  * снималась бы с дерева и монтировалась заново — с начала анимации появления.
  *
+ * `openKey` — номер открытия, его ставят ключом поверхности. Открыли снова,
+ * пока прежняя ещё гаснет, — монтируется новая: иначе гаснущая ожила бы как
+ * есть, и поле с `autoFocus` внутри не получило бы фокус.
+ *
  * При «уменьшить движение» ухода нет — закрытие мгновенное.
  */
 export function usePresence(open: boolean, exitMs = EXIT_MS) {
   const [prevOpen, setPrevOpen] = useState(open);
   const [closing, setClosing] = useState(false);
+  const [openKey, setOpenKey] = useState(0);
   if (open !== prevOpen) {
     setPrevOpen(open);
     setClosing(!open && exitMs > 0 && !reducedMotion());
+    if (open) setOpenKey((k) => k + 1);
   }
   useEffect(() => {
     if (!closing) return;
     const t = window.setTimeout(() => setClosing(false), exitMs);
     return () => window.clearTimeout(t);
   }, [closing, exitMs]);
-  return { mounted: open || closing, closing: closing && !open };
+  return { mounted: open || closing, closing: closing && !open, openKey };
 }
 
 /** С какого края растёт поверхность: от кнопки вниз, вверх, от правого края. */

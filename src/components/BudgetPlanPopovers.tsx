@@ -4,6 +4,7 @@ import { Tooltip } from "./Tooltip";
 import { Popover } from "./Popover";
 import { MONTHS, MONTHS_IN, MONTHS_SHORT } from "../lib/months";
 import { formatMoney } from "../lib/format";
+import { Collapse } from "./Collapse";
 
 /** Название месяца по ключу `YYYY-MM`: полное или короткое. */
 const monthName = (ym: string, short = false) =>
@@ -170,25 +171,10 @@ export function PlanCellPopover({
           </p>
         )}
         {targets.length > 0 && (
-          // Раскрытие высотой строки сетки (0fr → 1fr) — тот же приём, что у
-          // журнала синхронизаций: высоту заранее знать не нужно. Свёрнутые
-          // чипы выключены из обхода с клавиатуры (`inert`).
-          <div
-            className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none ${
-              copyOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-            }`}
-          >
-            <div
-              inert={!copyOpen}
-              className={`min-h-0 overflow-hidden transition-opacity duration-300 motion-reduce:transition-none ${
-                copyOpen ? "opacity-100" : "opacity-0"
-              }`}
-            >
-              <div className="pt-2.5">
-                <MonthTargets source={ym} months={targets} picked={picked} onChange={setPicked} />
-              </div>
-            </div>
-          </div>
+          // Свёрнутые чипы выключены из обхода с клавиатуры (`inert` в Collapse).
+          <Collapse open={copyOpen} keepMounted className="pt-2.5">
+            <MonthTargets source={ym} months={targets} picked={picked} onChange={setPicked} />
+          </Collapse>
         )}
         {/* Копия квадратом и «Сохранить» — рядом, вместе ровно в ширину поля. */}
         <div className="flex gap-1.5 mt-2.5">

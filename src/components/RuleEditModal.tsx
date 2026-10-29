@@ -59,6 +59,7 @@ import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { InfoPopover } from "./InfoPopover";
 import { findTwinRule } from "../store/useCategoryRulesStore";
 import { accountRef, refAccountLabel, useAccountDirectory } from "../hooks/useAccountDirectory";
+import { Collapse } from "./Collapse";
 
 const RULE_FIELDS: { value: RuleField; label: string }[] = (
   Object.keys(FIELD_LABELS) as RuleField[]
@@ -1200,7 +1201,7 @@ export function RuleEditModal({
             )}
           </div>
 
-          {showMatches && count > 0 && (
+          <Collapse open={showMatches && count > 0}>
             <div
               id="rule-matches"
               className="border-t border-border max-h-60 overflow-y-auto px-3 py-2 space-y-1"
@@ -1231,7 +1232,7 @@ export function RuleEditModal({
                 </div>
               )}
             </div>
-          )}
+          </Collapse>
         </div>
       </ModalBody>
 

@@ -74,6 +74,7 @@ import { GithubMark } from "../components/GithubMark";
 import { CHANNEL_TITLE, CHANNEL_URL, PROJECT_URL, SITE_URL, SUPPORT_TITLE, SUPPORT_URL } from "../lib/support";
 import { formatReleaseDate, parseRelease } from "../lib/releaseInfo";
 import changelogRaw from "../../CHANGELOG.md?raw";
+import { Collapse } from "../components/Collapse";
 
 type Group = "main" | "more" | "concepts";
 
@@ -5219,20 +5220,18 @@ function HelpTree({
               <span className="truncate">{GROUP_LABEL[g]}</span>
               <span className="ml-auto tabular-nums opacity-70">{items.length}</span>
             </button>
-            {isOpen && (
-              <div className="space-y-0.5 mt-0.5">
-                {items.map((s) => (
-                  <HelpLink
-                    key={s.id}
-                    icon={s.icon}
-                    title={s.short ?? s.title}
-                    active={current === s.id}
-                    nested
-                    onClick={() => onOpen(s.id)}
-                  />
-                ))}
-              </div>
-            )}
+            <Collapse open={isOpen} className="space-y-0.5 pt-0.5">
+              {items.map((s) => (
+                <HelpLink
+                  key={s.id}
+                  icon={s.icon}
+                  title={s.short ?? s.title}
+                  active={current === s.id}
+                  nested
+                  onClick={() => onOpen(s.id)}
+                />
+              ))}
+            </Collapse>
           </div>
         );
       })}

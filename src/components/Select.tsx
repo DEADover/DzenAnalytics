@@ -61,7 +61,7 @@ export function Select<T extends string>({
   } | null>(null);
   const current = options.find((o) => o.value === value)?.label ?? "";
   const nav = useListNav(options.length, open);
-  const { mounted, closing } = usePresence(open);
+  const { mounted, closing, openKey } = usePresence(open);
 
   /** Открыть с подсветкой на текущем значении (его нет — на первом пункте). */
   function openList() {
@@ -146,6 +146,7 @@ export function Select<T extends string>({
       ref={popupRef}
       id={nav.listId}
       role="listbox"
+      key={openKey}
       {...popSurfaceProps(closing, portal && pos?.bottom != null ? "up" : "down")}
       className={clsx(
         "border border-border rounded-lg bg-panel p-1 shadow-xl overflow-y-auto",

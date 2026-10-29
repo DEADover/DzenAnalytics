@@ -9,6 +9,7 @@ import { LazyListFooter } from "./operations/OperationList";
 import { CardHeader } from "./CardHeader";
 import { Checkbox } from "./Checkbox";
 import { Cell, ExpandChevron, ExportButton, HeadCell, ShowMore, TreeElbow } from "./table/TableParts";
+import { useRevealRows } from "../hooks/useRevealRows";
 import {
   COLUMN_TYPES,
   buildCsv,
@@ -223,7 +224,9 @@ export function DataTable<T>({
 
   const [ownExpanded, setOwnExpanded] = useState<Set<string>>(() => new Set());
   const expanded = controlledExpanded ?? ownExpanded;
+  const reveal = useRevealRows();
   const setExpanded = (next: Set<string>) => {
+    reveal.mark(expanded, next);
     if (!controlledExpanded) setOwnExpanded(next);
     onExpandedChange?.(next);
   };
@@ -479,6 +482,7 @@ export function DataTable<T>({
                     className={clsx(
                       isSelected ? "bg-accent/5" : clickable && "hover:bg-panel2/50",
                       clickable && "cursor-pointer",
+                      f.depth > 0 && reveal.isNew(f.key) && "animate-tree-row",
                       rowClassName?.(f.row)
                     )}
                   >
