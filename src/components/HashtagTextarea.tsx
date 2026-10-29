@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { popSurfaceProps } from "../hooks/usePresence";
 import { Hash } from "lucide-react";
 import { prefixMatcher } from "../lib/keyboardLayout";
 import { acceptSuggestion, type SuggestContext } from "../lib/commentSuggest";
@@ -311,6 +312,9 @@ export function HashtagTextarea({
         createPortal(
           <div
             ref={menuRef}
+            // Только появление: подсказки меняются на каждой букве, и уходящий
+            // список показывал бы уже не те варианты.
+            {...popSurfaceProps(false, pos.bottom != null ? "up" : "down")}
             className="fixed z-[80] overflow-auto rounded-lg border border-border bg-panel shadow-xl"
             style={{
               left: pos.left,

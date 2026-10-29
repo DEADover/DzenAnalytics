@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { MONTHS, MONTHS_SHORT } from "../lib/months";
 import { applyDateMaskKey, parseTypedDate } from "../lib/dateInput";
@@ -124,6 +125,7 @@ export function DateField({
   typeable = false,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const { mounted, closing } = usePresence(open);
   const btnRef = useRef<HTMLButtonElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   /** Набираемый текст; `null` — не редактируется, в поле видна сама дата. */
@@ -237,8 +239,9 @@ export function DateField({
             </button>
           )}
         </div>
-        {open && (
+        {mounted && (
           <CalendarPopup
+            closing={closing}
             anchorRef={boxRef}
             value={value}
             granularity="day"
@@ -280,8 +283,9 @@ export function DateField({
         </span>
         {icon && <Calendar className="w-4 h-4 shrink-0 text-muted" />}
       </button>
-      {open && (
+      {mounted && (
         <CalendarPopup
+          closing={closing}
           anchorRef={btnRef}
           value={value}
           granularity={granularity}
@@ -301,7 +305,7 @@ export function DateField({
 }
 
 function computePos(anchor: HTMLElement | null) {
-  if (!anchor) return { left: 8, top: 8 };
+  if (!anchor) return { left: 8, top: 8, up: false };
   const r = anchor.getBoundingClientRect();
   const W = 268;
   const H = 322;
@@ -310,11 +314,13 @@ function computePos(anchor: HTMLElement | null) {
   if (left + W > window.innerWidth - 8) left = window.innerWidth - W - 8;
   if (left < 8) left = 8;
   // Flip above the field if there's no room below.
-  if (top + H > window.innerHeight - 8 && r.top - H - 4 > 8) top = r.top - H - 4;
-  return { left, top };
+  const up = top + H > window.innerHeight - 8 && r.top - H - 4 > 8;
+  if (up) top = r.top - H - 4;
+  return { left, top, up };
 }
 
 function CalendarPopup({
+  closing = false,
   anchorRef,
   value,
   granularity = "day",
@@ -322,6 +328,8 @@ function CalendarPopup({
   onClear,
   onClose,
 }: {
+  /** Календарь уже закрыт и доигрывает уход. */
+  closing?: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   value: string;
   granularity?: "day" | "month";
@@ -356,7 +364,11 @@ function CalendarPopup({
   // Position against the anchor in a layout effect — reading the ref's
   // .current during render is unsafe (and lint-flagged); a layout effect
   // runs before paint so there's no flash at the default 8/8 spot.
-  const [pos, setPos] = useState<{ left: number; top: number }>({ left: 8, top: 8 });
+  const [pos, setPos] = useState<{ left: number; top: number; up: boolean }>({
+    left: 8,
+    top: 8,
+    up: false,
+  });
   useLayoutEffect(() => {
     setPos(computePos(anchorRef.current));
   }, [anchorRef]);
@@ -400,7 +412,8 @@ function CalendarPopup({
       ref={ref}
       role="dialog"
       aria-label="Выбор даты"
-      className="fixed z-[70] w-[268px] rounded-xl border border-border bg-panel shadow-xl p-3 animate-fade"
+      {...popSurfaceProps(closing, pos.up ? "up" : "down")}
+      className="fixed z-[70] w-[268px] rounded-xl border border-border bg-panel shadow-xl p-3"
       style={{ left: pos.left, top: pos.top }}
     >
       {mode === "days" && (

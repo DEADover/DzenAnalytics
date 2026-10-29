@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { MONTHS_SHORT } from "../lib/months";
@@ -52,6 +53,7 @@ export function MonthMenu({
   );
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
+  const { mounted, closing } = usePresence(open);
 
   const year = Number(value?.slice(0, 4)) || new Date().getFullYear();
   const minY = Number(minYM?.slice(0, 4)) || 1970;
@@ -90,13 +92,14 @@ export function MonthMenu({
     };
   }, [open, onClose]);
 
-  if (!open || !pos) return null;
+  if (!mounted || !pos) return null;
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-[70]" onClick={onClose} />
+      {!closing && <div className="fixed inset-0 z-[70]" onClick={onClose} />}
       <div
         ref={menuRef}
+        {...popSurfaceProps(closing, pos.bottom != null ? "up" : "down")}
         className="fixed z-[80] card p-3 w-64"
         style={{ left: pos.left, top: pos.top, bottom: pos.bottom }}
       >

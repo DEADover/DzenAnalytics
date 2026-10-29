@@ -8,6 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 
 /**
  * Метка всплывающей поверхности.
@@ -52,7 +53,11 @@ export function Popover({
   children,
 }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number; width?: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; width?: number; up: boolean } | null>(
+    null
+  );
+  // Закрытое окно ещё доигрывает уход — до этого оно в дереве.
+  const { mounted, closing } = usePresence(open);
 
   useLayoutEffect(() => {
     // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
@@ -72,6 +77,7 @@ export function Popover({
       left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
       top: openUp ? Math.max(8, a.top - height - 4) : a.bottom + 4,
       width: matchWidth ? width : undefined,
+      up: openUp,
     });
     // Content is static while open; recompute only on open/align/width changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -120,13 +126,16 @@ export function Popover({
     };
   }, [open, onClose, anchorRef]);
 
-  if (!open) return null;
+  if (!mounted) return null;
+  const origin = pos?.up ? (align === "right" ? "up-right" : "up") : align === "right" ? "right" : "down";
   return createPortal(
     <>
-      <div className="fixed inset-0 z-[70]" onClick={onClose} />
+      {/* Уходящее окно кликов уже не перехватывает — щит снимается сразу. */}
+      {!closing && <div className="fixed inset-0 z-[70]" onClick={onClose} />}
       <div
         ref={menuRef}
         {...{ [SURFACE_ATTR]: "" }}
+        {...popSurfaceProps(closing, origin)}
         className={clsx("fixed z-[80]", className)}
         style={
           pos

@@ -5,6 +5,7 @@ import { CategoryDot } from "./CategoryDot";
 import { SearchInput } from "./SearchInput";
 import { textMatches } from "../lib/keyboardLayout";
 import { useListNav } from "./useListNav";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 
 export interface CategoryNode {
   name: string;
@@ -70,7 +71,9 @@ export function CategoryCascadePicker({
     top: number;
     width: number;
     listHeight: number;
+    up: boolean;
   } | null>(null);
+  const { mounted, closing } = usePresence(open);
 
   useLayoutEffect(() => {
     // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
@@ -98,6 +101,7 @@ export function CategoryCascadePicker({
         top: dropUp ? r.top - gap - (listHeight + CHROME) : r.bottom + gap,
         width: r.width,
         listHeight,
+        up: dropUp,
       });
     };
     place();
@@ -344,9 +348,10 @@ export function CategoryCascadePicker({
           <X className="w-3.5 h-3.5" />
         </button>
       )}
-      {open && renderPopup(
+      {mounted && renderPopup(
         <div
           ref={popupRef}
+          {...popSurfaceProps(closing, portal && pos?.up ? "up" : "down")}
           className={
             portal
               ? "fixed z-[70] bg-panel border border-border rounded-lg shadow-lg overflow-hidden"

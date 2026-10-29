@@ -10,6 +10,7 @@ import {
 import { Checkbox } from "./Checkbox";
 import { createPortal } from "react-dom";
 import { SURFACE_ATTR } from "./Popover";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
 
 // Narrow by default (just the categories + the one-line header); widens by
@@ -220,12 +221,11 @@ export function CategoryFilterPicker({
   // means a checkbox-focus scroll never dismisses the picker mid-selection.
   type MenuPos = { left: number; width: number; top?: number; bottom?: number; maxHeight: number };
   const [pos, setPos] = useState<MenuPos | null>(null);
+  const { mounted, closing } = usePresence(open);
   const computePos = useCallback(() => {
     const el = btnRef.current;
-    if (!open || !el) {
-      setPos(null);
-      return;
-    }
+    // Закрытое меню доигрывает уход на прежнем месте — координаты не трогаем.
+    if (!open || !el) return;
     const r = el.getBoundingClientRect();
     if (r.bottom < 0 || r.top > window.innerHeight) {
       setOpen(false);
@@ -294,15 +294,16 @@ export function CategoryFilterPicker({
         </span>
         <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
       </button>
-      {open &&
+      {mounted &&
         pos &&
         createPortal(
           <>
-            <div className="fixed inset-0 z-[70]" onClick={() => setOpen(false)} />
+            {!closing && <div className="fixed inset-0 z-[70]" onClick={() => setOpen(false)} />}
             <div
               ref={menuRef}
               {...{ [SURFACE_ATTR]: "" }}
-              className="fixed z-[80] card p-0 overflow-hidden flex flex-col transition-[width,left] duration-200 ease-out"
+              {...popSurfaceProps(closing, pos.bottom != null ? "up" : "down")}
+              className="fixed z-[80] card p-0 overflow-hidden flex flex-col transition-[width,left] duration-300 ease-[var(--ease-soft)]"
               style={{ left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight }}
             >
               <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border/60">

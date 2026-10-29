@@ -38,6 +38,17 @@
   --grid: #E2E8F0;
   --tooltip-bg: #ffffff;
   --tooltip-border: rgb(203 213 225);
+  /* Движение — одно на всё приложение. Быстрый старт и долгое мягкое
+     торможение (`--ease-soft`) у всего, что появляется: меню, списки, окна,
+     раскрытия. `--ease-standard` — для смены цвета при наведении. Ступени
+     длительности: уход и наведение — 150, появление — 250, раскрытие по
+     высоте и выезд шторки — 300. Новые анимации берут значения отсюда, а не
+     числами. */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-fast: 150ms;
+  --motion-base: 250ms;
+  --motion-slow: 300ms;
   /* Operation-table text size (overridden at runtime by the «Размер текста в
      таблицах» setting, levels 1–5). Default 0.875rem = 14px. Theme-independent,
      but lives here so it has a value before the store hydrates. */
@@ -602,7 +613,7 @@ h2,
   .pill-link {
     @apply inline-flex shrink-0 items-center gap-1.5 rounded-control-sm border border-border
            bg-panel2/60 px-3 py-1.5 text-[12.5px] font-medium text-accent
-           transition-colors duration-200 hover:border-accent/50 hover:bg-panel2
+           transition-colors duration-150 hover:border-accent/50 hover:bg-panel2
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
   }
   /**
@@ -628,7 +639,7 @@ h2,
     @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-control
            border border-transparent
            text-sm font-medium
-           transition-[color,background-color,box-shadow,transform,opacity] duration-200
+           transition-[color,background-color,box-shadow,transform,opacity] duration-150
            active:scale-[0.97]
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg
            disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
@@ -658,7 +669,7 @@ h2,
    */
   .btn-icon {
     @apply inline-flex items-center justify-center p-1.5 rounded-control-sm text-muted
-           transition-colors duration-200
+           transition-colors duration-150
            hover:text-accent hover:bg-panel2
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted;
@@ -690,7 +701,7 @@ h2,
    */
   .btn-text {
     @apply inline-flex items-center rounded-control-xs px-2 py-0.5 text-sm font-semibold
-           transition-colors duration-200 hover:bg-panel2
+           transition-colors duration-150 hover:bg-panel2
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
   }
   /**
@@ -767,7 +778,7 @@ h2,
   }
   .seg-item {
     @apply inline-flex items-center justify-center gap-1.5 rounded-control whitespace-nowrap font-medium
-           text-muted transition-colors duration-200
+           text-muted transition-colors duration-150
            hover:text-text hover:bg-panel/70
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted;
@@ -795,7 +806,7 @@ h2,
   }
   /* Значок в дорожке: 24 в дорожке 34, 32 в дорожке 42. */
   .seg-icon {
-    @apply inline-flex items-center justify-center rounded-control text-muted transition-colors duration-200
+    @apply inline-flex items-center justify-center rounded-control text-muted transition-colors duration-150
            hover:text-accent hover:bg-panel/70
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
@@ -1019,7 +1030,7 @@ h2,
    */
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-control border border-border bg-panel2 px-3 py-2
-           text-xs leading-4 text-muted whitespace-nowrap transition-colors duration-200
+           text-xs leading-4 text-muted whitespace-nowrap transition-colors duration-150
            hover:text-text
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
   }
@@ -1454,37 +1465,101 @@ h2,
 }
 .animate-dock-in { animation: dockIn 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
 .animate-dock-out { animation: dockOut 0.22s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
-.animate-slide { animation: drawerSlide 0.18s ease-out; }
-.animate-fade { animation: fadeIn 0.18s ease-out; }
-.animate-cat-subs { animation: catSubsIn 0.18s ease-out; }
-.animate-menu-item { animation: menuItemIn 0.18s ease-out both; }
+.animate-slide { animation: drawerSlide var(--motion-slow) var(--ease-soft); }
+.animate-fade { animation: fadeIn var(--motion-base) var(--ease-soft); }
+.animate-cat-subs { animation: catSubsIn var(--motion-base) var(--ease-soft); }
+.animate-menu-item { animation: menuItemIn var(--motion-base) var(--ease-soft) both; }
 .animate-flash-in { animation: flashSlideDown 0.22s ease-out; }
 .animate-flash-out { animation: flashFadeOut 0.18s ease-in forwards; }
 
-/* Панель быстрых настроек (QuickSettingsMenu) вырастает из шестерёнки — от
-   правого верхнего угла, где кнопка, — и так же уходит обратно. Плитки и
-   строки внутри проявляются коротким каскадом (`animate-menu-item`). */
-@keyframes quickPanelIn {
-  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
-  to   { opacity: 1; transform: none; }
+/* Окна: проявляются, вырастая из 96 %, а уходят слепком — затемнение гаснет,
+   панель (`data-exit-panel`) гаснет и чуть уменьшается (lib/exitGhost.ts).
+   Заливка появления `backwards`: после него на окне не остаётся `transform`,
+   иначе оно стало бы контейнером для `position: fixed` внутри. */
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.96); }
 }
-@keyframes quickPanelOut {
-  to { opacity: 0; transform: translateY(-4px) scale(0.98); }
+@keyframes modalOut {
+  to { opacity: 0; transform: scale(0.96); }
 }
-.animate-quick-panel-in {
-  animation: quickPanelIn 0.24s cubic-bezier(0.32, 0.72, 0, 1) both;
-  transform-origin: top right;
+@keyframes fadeOut {
+  to { opacity: 0; }
 }
-.animate-quick-panel-out {
-  animation: quickPanelOut 0.14s ease-in forwards;
-  transform-origin: top right;
+.animate-modal-in { animation: modalIn var(--motion-base) var(--ease-soft) backwards; }
+.exit-ghost {
+  animation: fadeOut var(--motion-fast) var(--ease-soft) forwards;
+  pointer-events: none;
+}
+.exit-ghost [data-exit-panel] {
+  animation: modalOut var(--motion-fast) var(--ease-soft) forwards;
 }
 @media (prefers-reduced-motion: reduce) {
-  .animate-quick-panel-in,
-  .animate-quick-panel-out,
-  .animate-quick-panel-in .animate-menu-item {
-    animation: none;
+  .animate-modal-in,
+  .exit-ghost,
+  .exit-ghost [data-exit-panel] { animation: none; }
+}
+
+/* Наведение — плавно везде. Подсветка строк и кнопок, набранная прямо в
+   разметке (`hover:bg-…`, `hover:text-…`), без своего перехода включалась
+   рывком — рядом с общими кнопками, где цвет меняется плавно, это выглядело
+   как два разных приложения. `:where` не добавляет веса: всё, где переход
+   задан явно (`transition-…`, `duration-…`), остаётся как задано. */
+:where(
+  [class*="hover:bg-"],
+  [class*="hover:text-"],
+  [class*="hover:border-"],
+  [class*="hover:opacity-"],
+  [class*="hover:shadow"],
+  [class*="hover:ring-"]
+) {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke,
+    opacity, box-shadow;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    [class*="hover:bg-"],
+    [class*="hover:text-"],
+    [class*="hover:border-"],
+    [class*="hover:opacity-"],
+    [class*="hover:shadow"],
+    [class*="hover:ring-"]
+  ) {
+    transition-duration: 0s;
   }
+}
+
+/* Всплывающие списки и меню — одним движением на всё приложение: вырастают
+   из 97 % с проявлением и так же, только быстрее, уходят. Растут от края,
+   который смотрит на кнопку: `data-pop="up"` — список раскрылся над ней.
+   Метку и признак ухода ставит `popSurfaceProps` (hooks/usePresence), он же
+   держит список в дереве, пока идёт уход.
+
+   Заливка `backwards`, а не `both`: после появления на поверхности не должно
+   остаться `transform` — он сделал бы её контейнером для `position: fixed`
+   потомков и сдвинул бы вложенные списки. */
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.97); }
+}
+@keyframes popOut {
+  to { opacity: 0; transform: scale(0.99); }
+}
+[data-pop] {
+  animation: popIn var(--motion-base) var(--ease-soft) backwards;
+  transform-origin: top center;
+}
+[data-pop="up"] { transform-origin: bottom center; }
+[data-pop="right"] { transform-origin: top right; }
+[data-pop="up-right"] { transform-origin: bottom right; }
+[data-pop][data-closing] {
+  animation: popOut var(--motion-fast) var(--ease-soft) forwards;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-pop],
+  [data-pop][data-closing],
+  [data-pop] .animate-menu-item { animation: none; }
 }
 
 /* Лента одних запланированных (PlannedFeedList): первые дни выезжают по

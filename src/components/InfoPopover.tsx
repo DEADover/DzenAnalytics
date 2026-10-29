@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { HelpCircle } from "lucide-react";
 import clsx from "clsx";
 import { SURFACE_ATTR } from "./Popover";
@@ -57,9 +58,10 @@ export function InfoPopover({
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number; maxH: number } | null>(
+  const [pos, setPos] = useState<{ left: number; top: number; maxH: number; up: boolean } | null>(
     null
   );
+  const { mounted, closing } = usePresence(open);
 
   useLayoutEffect(() => {
     // Сбрасывать `pos` не нужно: список живёт только при `open`, а при
@@ -91,7 +93,7 @@ export function InfoPopover({
       // длинное содержимое прокручивается внутри панели.
       const flip = vh > 0 && spaceBelow < MIN_BELOW && spaceAbove > spaceBelow;
       const top = flip ? Math.max(MARGIN, a.top - Math.min(h, spaceAbove) - 6) : below;
-      setPos({ left, top, maxH: Math.max(120, flip ? spaceAbove : spaceBelow) });
+      setPos({ left, top, maxH: Math.max(120, flip ? spaceAbove : spaceBelow), up: flip });
     };
     place();
     window.addEventListener("scroll", place, true);
@@ -142,12 +144,13 @@ export function InfoPopover({
             область нажатия остаётся 24×24. */}
         <HelpCircle className="w-4 h-4" />
       </button>
-      {open &&
+      {mounted &&
         createPortal(
           <>
-            <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} />
+            {!closing && <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} />}
             <div
               ref={panelRef}
+              {...popSurfaceProps(closing, pos?.up ? "up-right" : "right")}
               // Своя прокрутка панели не должна закрывать окно, из которого
               // её открыли (настройки режима правила — это `Popover`).
               {...{ [SURFACE_ATTR]: "" }}

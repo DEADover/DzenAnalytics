@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { textMatches } from "../lib/keyboardLayout";
 import { useListNav } from "./useListNav";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 
 /**
  * Optional grouped variant of the dropdown — items split into named
@@ -118,6 +119,7 @@ export function Combobox({
     top: number;
     width: number;
     maxHeight: number;
+    up: boolean;
   } | null>(null);
 
   // Sync the editable input text when the controlled `value` changes
@@ -174,6 +176,7 @@ export function Combobox({
         top: dropUp ? r.top - gap - maxHeight : r.bottom + gap,
         width: r.width,
         maxHeight,
+        up: dropUp,
       });
     };
     place();
@@ -220,6 +223,7 @@ export function Combobox({
     [filteredGroups, filtered]
   );
   const nav = useListNav(flat.length, open && popupHasItems);
+  const { mounted, closing } = usePresence(open && popupHasItems);
 
   function commit(next: string) {
     setQuery(show(next));
@@ -398,11 +402,12 @@ export function Combobox({
           />
         </button>
       </div>
-      {open && popupHasItems && renderPopup(
+      {mounted && renderPopup(
         <div
           ref={popupRef}
           id={nav.listId}
           role="listbox"
+          {...popSurfaceProps(closing, portal && pos?.up ? "up" : "down")}
           className={
             portal
               ? // Тот же слой, что у `Select`: список обязан быть выше окна,

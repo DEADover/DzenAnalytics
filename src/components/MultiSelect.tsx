@@ -20,6 +20,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { SURFACE_ATTR } from "./Popover";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
 import { FILTER_NONE } from "../store/useFiltersStore";
@@ -369,6 +370,7 @@ export function MultiSelect({
     maxHeight: number;
   };
   const [pos, setPos] = useState<MenuPos | null>(null);
+  const { mounted, closing } = usePresence(open);
   const MENU_W = menuMinWidth ?? 288;
 
   useLayoutEffect(() => {
@@ -413,7 +415,9 @@ export function MultiSelect({
             maxHeight: Math.min(MENU_MAX_H, below),
           };
     }
-    setPos(next);
+    // Закрытое меню ещё доигрывает уход на прежнем месте — координаты не
+    // сбрасываем; при следующем открытии они пересчитаются до первого кадра.
+    if (next) setPos(next);
     // Прикидка зависит от показанных строк, а их число — в зависимостях;
     // сам массив `visible` новый на каждой отрисовке и зациклил бы эффект.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -526,14 +530,15 @@ export function MultiSelect({
           )}
         />
       </button>
-      {open &&
+      {mounted &&
         pos &&
         createPortal(
           <>
-            <div className="fixed inset-0 z-[70]" onClick={() => setOpen(false)} />
+            {!closing && <div className="fixed inset-0 z-[70]" onClick={() => setOpen(false)} />}
             <div
               ref={menuRef}
               {...{ [SURFACE_ATTR]: "" }}
+              {...popSurfaceProps(closing, pos.bottom != null ? "up" : "down")}
               className="fixed z-[80] overflow-auto card p-2"
               style={{
                 left: pos.left,

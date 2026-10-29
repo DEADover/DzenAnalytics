@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { Link } from "react-router-dom";
 import { Check, Settings2, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
@@ -54,6 +55,7 @@ export function HeaderSwitcher({
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const { mounted, closing } = usePresence(open);
 
   // Меню рисуем порталом: внутри общей панели шапки стоит `overflow-hidden`
   // (он же делает скруглённые края у сегментов), и выпадающий список просто
@@ -120,10 +122,11 @@ export function HeaderSwitcher({
           </>
         )}
       </button>
-      {open &&
+      {mounted &&
         createPortal(
           <div
             ref={menuRef}
+            {...popSurfaceProps(closing)}
             className="fixed z-[95] w-max min-w-[11rem] max-w-[min(16rem,calc(100vw-1rem))] border border-border rounded-xl bg-panel p-1 shadow-xl"
             style={{
               left: pos?.left ?? -9999,

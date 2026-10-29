@@ -27,7 +27,9 @@ for (const width of [1440, 768]) {
     const nFilter = await count("filter");
     const nAll = await count("all");
     expect(nAll).toBeGreaterThan(nFilter);
-    const popWidth = await list.evaluate((el) => el.getBoundingClientRect().width);
+    // Ширина по разметке, а не по рамке: список вырастает из 97 %, и рамка в
+    // первые мгновения чуть уже.
+    const popWidth = await list.evaluate((el) => (el as HTMLElement).offsetWidth);
 
     const payees = page.locator("[data-cell='payee']").filter({ hasText: "Пятёрочка" });
     await expect(payees).toHaveCount(nFilter);
@@ -68,7 +70,7 @@ for (const width of [1440, 768]) {
     await field.fill("Пят");
     await expect(list).toBeVisible();
     // Другие числа — та же ширина окошка; подписи не обрезаны.
-    expect(await list.evaluate((el) => el.getBoundingClientRect().width)).toBe(popWidth);
+    expect(await list.evaluate((el) => (el as HTMLElement).offsetWidth)).toBe(popWidth);
     for (const o of await list.getByRole("option").all()) {
       expect(await o.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     }

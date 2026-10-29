@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useDrillStore } from "../store/useDrillStore";
 import { ScrollTopButton } from "./ScrollTopButton";
+import { ExitGhost } from "./ExitGhost";
 import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
 import type { TransactionEdit } from "../store/useEditsStore";
@@ -343,13 +344,17 @@ export function TransactionsDrawer() {
         куда-то, а не закрытием. Затемнение сохраняет контекст, а карточка
         наконец говорит на том же языке, что и остальной продукт: скругление,
         кант, мягкая тень. */}
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6">
+    <div data-exit-root className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6">
+      <ExitGhost />
       <div
         className="drawer-backdrop absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade"
         onClick={close}
         aria-hidden
       />
-      <aside className="relative w-[96vw] max-w-[1800px] h-[94vh] card overflow-hidden flex flex-col animate-fade">
+      <aside
+        data-exit-panel
+        className="relative w-[96vw] max-w-[1800px] h-[94vh] card overflow-hidden flex flex-col animate-modal-in"
+      >
       {/* Шапка — одной строкой: название и, мелко, откуда список открыт
           («Категория», «Получатель»). Пояснение, которое повторяет название
           («Расходы месяца» при «Расходы · Нояб. 25 г.»), не пишем — раньше

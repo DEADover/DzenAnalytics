@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { ArrowRight, Pencil, Settings } from "lucide-react";
 import { useLocation } from "react-router-dom";
@@ -25,33 +25,11 @@ import { formatMoneyExample } from "../lib/format";
  * Пока включено «Скрыть суммы», на шестерёнке горит точка: забытый режим
  * иначе выглядел бы как пропавшие данные.
  */
-/** Сколько длится уход панели — столько она ещё стоит на экране после закрытия. */
-const CLOSE_MS = 140;
-
 export function QuickSettingsMenu({ className }: { className: (active: boolean) => string }) {
   const [open, setOpen] = useState(false);
-  // Закрытие — с анимацией ухода: панель ещё на экране, пока не доиграет.
-  const [closing, setClosing] = useState(false);
-  const closeTimer = useRef(0);
-  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
-  const close = () => {
-    if (!open || closing) return;
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      setOpen(false);
-      return;
-    }
-    setClosing(true);
-    window.clearTimeout(closeTimer.current);
-    closeTimer.current = window.setTimeout(() => {
-      setOpen(false);
-      setClosing(false);
-    }, CLOSE_MS);
-  };
-  const toggle = () => {
-    if (open && !closing) close();
-    else if (!open) setOpen(true);
-  };
+  // Уход панели доигрывает сам Popover — закрываем сразу.
+  const close = () => setOpen(false);
+  const toggle = () => setOpen((v) => !v);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const { pathname } = useLocation();
   const hidden = usePrivacyStore((s) => s.hideAmounts);
@@ -64,10 +42,10 @@ export function QuickSettingsMenu({ className }: { className: (active: boolean) 
         data-tour="quick-settings"
         onClick={toggle}
         aria-haspopup="dialog"
-        aria-expanded={open && !closing}
+        aria-expanded={open}
         aria-label="Быстрые настройки"
         title={hidden ? "Быстрые настройки\nСуммы скрыты" : "Быстрые настройки"}
-        className={className((open && !closing) || onSettings)}
+        className={className(open || onSettings)}
       >
         <Settings className="w-4 h-4 transition-transform duration-500 ease-out group-hover:rotate-90" />
         {hidden && (
@@ -82,10 +60,7 @@ export function QuickSettingsMenu({ className }: { className: (active: boolean) 
         anchorRef={anchorRef}
         onClose={close}
         align="right"
-        className={clsx(
-          "w-[24rem] card p-3 shadow-lg",
-          closing ? "animate-quick-panel-out pointer-events-none" : "animate-quick-panel-in"
-        )}
+        className="w-[24rem] card p-3 shadow-lg"
       >
         <QuickSettingsPanel onClose={close} />
       </Popover>

@@ -21,6 +21,7 @@ import { useThemeStore } from "../store/useThemeStore";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { HeaderSyncActions } from "./HeaderSyncActions";
 import { SliceSwitcher } from "./SliceSwitcher";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { useProfileLoginSync, useProfiles } from "../hooks/useProfiles";
 import { useSlicesStore } from "../store/useSlicesStore";
@@ -146,6 +147,8 @@ export function TopNav({
   // Все разделы переехали в меню — «Ещё» больше нет, и открытой панели тоже:
   // пустую панель не показываем, даже если её открыли до последней правки.
   const moreOpen = moreOpenState && groups.length > 0;
+  // Панель «Ещё» доигрывает уход после закрытия.
+  const morePresence = usePresence(moreOpen);
 
   const navScrollRef = useRef<HTMLDivElement>(null);
   /** Есть ли разделы за левым и правым краем полосы — для затухания краёв. */
@@ -597,15 +600,17 @@ export function TopNav({
           того, сколько разделов в шапке, и панель ездила бы вслед за ним.
           Группы — из `moreGroups`: не поместившиеся в шапку, убранные из неё
           основные разделы и прежние группы без того, что стоит в шапке. */}
-      {moreOpen && (
+      {morePresence.mounted && (
         <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setMoreOpen(false)}
-            aria-hidden="true"
-          />
+          {!morePresence.closing && (
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setMoreOpen(false)}
+              aria-hidden="true"
+            />
+          )}
           <div className="hidden lg:block absolute left-0 right-0 top-full z-20 app-gutter pt-1">
-            <div className="card-tray relative p-5 3xl:p-6">
+            <div {...popSurfaceProps(morePresence.closing)} className="card-tray relative p-5 3xl:p-6">
               {/* Настройка основного меню — значком в углу панели: тут видно,
                   чего не хватает в шапке, и значок не отнимает места у разделов.
                   Верх угла свободен при любом числе столбцов — заголовки групп

@@ -52,6 +52,7 @@ import { monthLabel } from "../lib/format";
 import { periodKey } from "../lib/period";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { SectionEmpty } from "./SectionEmpty";
+import { ExitGhost } from "./ExitGhost";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
 import { ALL_SCHEMES } from "../lib/themeSchemes";
 import { queryMatcher, swapLayout } from "../lib/keyboardLayout";
@@ -474,16 +475,16 @@ export function CommandPalette({ open, onClose }: Props) {
   let lastGroup: string | null = null;
 
   return (
-    <>
+    <div data-exit-root className="fixed inset-0 z-50">
+      <ExitGhost />
       {/* Plain dim scrim — no backdrop-filter. A full-viewport blur over
           the chart page intermittently flashes the white root background
           on open (Chromium snapshots the page to blur it). */}
+      <div className="absolute inset-0 bg-black/50 animate-fade" onClick={onClose} />
+      {/* По центру полями, а не сдвигом: `transform` занят появлением окна. */}
       <div
-        className="fixed inset-0 bg-black/50 z-50 animate-fade"
-        onClick={onClose}
-      />
-      <div
-        className="fixed top-[12%] left-1/2 -translate-x-1/2 w-[92vw] max-w-[640px] z-50 card flex flex-col"
+        data-exit-panel
+        className="fixed top-[12%] inset-x-0 mx-auto w-[92vw] max-w-[640px] card flex flex-col animate-modal-in"
         style={{ maxHeight: "70vh" }}
       >
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
@@ -553,7 +554,7 @@ export function CommandPalette({ open, onClose }: Props) {
           <span className="ml-auto">{filtered.length} из {items.length}</span>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

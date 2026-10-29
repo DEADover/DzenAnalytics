@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import { X, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
 import { ScrollTopButton } from "./ScrollTopButton";
+import { dropGhost, leaveGhost } from "../lib/exitGhost";
 
 /**
  * Модальное окно — одна оболочка на весь сервис.
@@ -113,11 +114,18 @@ export function Modal({
   useLayoutEffect(() => {
     // Своё же закрытие не в счёт: в разработке React монтирует эффекты
     // дважды, и окно «закрывалось» перед собственным открытием.
+    dropGhost(id);
     if (lastClosed.id !== id && performance.now() - lastClosed.at < SWAP_MS) {
+      // Замена окна — ни ухода старого, ни появления нового: карточка
+      // просто меняет содержимое на месте.
+      dropGhost();
       backdropRef.current?.classList.remove("animate-fade");
+      panelRef.current?.classList.remove("animate-modal-in");
     }
+    const backdrop = backdropRef.current;
     return () => {
       lastClosed = { id, at: performance.now() };
+      leaveGhost(backdrop, id);
     };
   }, [id]);
   // Свежие значения для слушателя, который вешается один раз.
@@ -187,11 +195,12 @@ export function Modal({
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
+        data-exit-panel
         aria-labelledby={label ? undefined : titleId}
         aria-label={label}
         aria-describedby={describedBy}
         className={clsx(
-          "w-full flex flex-col max-h-[calc(100dvh-2rem)] rounded-2xl border bg-panel shadow-2xl outline-none",
+          "w-full flex flex-col max-h-[calc(100dvh-2rem)] rounded-2xl border bg-panel shadow-2xl outline-none animate-modal-in",
           WIDTH[width],
           tone === "danger"
             ? "border-expense/40"

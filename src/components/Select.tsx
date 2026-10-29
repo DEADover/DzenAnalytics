@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 import clsx from "clsx";
 import { useListNav } from "./useListNav";
+import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 
 /**
  * Пикер в стиле остальных полей сервиса: строка `.input` с текущим значением и
@@ -60,6 +61,7 @@ export function Select<T extends string>({
   } | null>(null);
   const current = options.find((o) => o.value === value)?.label ?? "";
   const nav = useListNav(options.length, open);
+  const { mounted, closing } = usePresence(open);
 
   /** Открыть с подсветкой на текущем значении (его нет — на первом пункте). */
   function openList() {
@@ -144,6 +146,7 @@ export function Select<T extends string>({
       ref={popupRef}
       id={nav.listId}
       role="listbox"
+      {...popSurfaceProps(closing, portal && pos?.bottom != null ? "up" : "down")}
       className={clsx(
         "border border-border rounded-lg bg-panel p-1 shadow-xl overflow-y-auto",
         // z-96: ВЫШЕ всплывающих окон (`Popover` — 80, `InfoPopover` — 91,
@@ -253,7 +256,7 @@ export function Select<T extends string>({
           )}
         />
       </button>
-      {open && (portal ? (pos ? createPortal(list, document.body) : null) : list)}
+      {mounted && (portal ? (pos ? createPortal(list, document.body) : null) : list)}
     </div>
   );
 }
