@@ -64,7 +64,7 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { useMembersStore } from "../store/useMembersStore";
@@ -2032,14 +2032,13 @@ export function AccountsPage() {
               {calibration && (
                 <button
                   onClick={async () => {
-                    const ok = await confirm({
-                      title: "Сбросить калибровку?",
-                      message:
-                        "Текущая балансовая привязка будет удалена. Можно будет настроить заново.",
-                      confirmLabel: "Сбросить",
-                      tone: "danger",
-                    });
-                    if (ok) clearCalibration();
+                    // Без вопроса: привязку вернёт «Отменить» на плашке.
+                    const before = useCalibrationStore.getState().calibration;
+                    await clearCalibration();
+                    if (before)
+                      toast("Калибровка сброшена", {
+                        undo: () => useCalibrationStore.getState().set(before),
+                      });
                   }}
                   className="btn-danger text-sm"
                   title="Сбросить"

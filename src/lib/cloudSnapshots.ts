@@ -240,6 +240,25 @@ export async function pruneForeignSnapshots(currentUserId: number): Promise<numb
   return foreign.length;
 }
 
+/**
+ * Запомнить снимок перед удалением — вернёт функцию, которая положит его
+ * обратно («Отменить» на плашке). Хранится он только на этом компьютере,
+ * поэтому достаточно вернуть его запись и строку в оглавлении.
+ */
+export async function snapshotDeletionUndo(id: string): Promise<() => Promise<void>> {
+  const record = await db.loadJSON<StoredSnapshot>(snapshotKey(id));
+  const summary = (await loadSnapshotIndex()).find((s) => s.id === id);
+  return async () => {
+    if (!record || !summary) return;
+    await db.saveJSON(snapshotKey(id), record);
+    const idx = await loadSnapshotIndex();
+    if (idx.some((s) => s.id === id)) return;
+    // Оглавление идёт от свежего к старому — встаём на своё место по дате.
+    const next = [...idx, summary].sort((a, b) => b.createdAt - a.createdAt);
+    await db.saveJSON(INDEX_KEY, next);
+  };
+}
+
 export async function deleteSnapshot(id: string): Promise<void> {
   await db.saveJSON(snapshotKey(id), null);
   const idx = await loadSnapshotIndex();

@@ -18,7 +18,8 @@ import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useLocalPeriod } from "../hooks/useLocalPeriod";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useCategoryRulesStore } from "../store/useCategoryRulesStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
+import { snapshotStores } from "../lib/storeSnapshot";
 import {
   detectUncategorized,
   kindTotals,
@@ -233,13 +234,13 @@ export function UncategorizedPage() {
     });
     if (rules.length === 0) return;
 
-    const ok = await confirm({
-      title: rules.length === 1 ? "Применить подсказку?" : `Применить ${rules.length} ${pluralRu(rules.length, ["подсказку", "подсказки", "подсказок"])}?`,
-      message:
-        "Для каждой создастся правило — по контрагенту, а если его нет, по комментарию. Правило разметит и похожие операции, в том числе будущие; отменить можно в разделе «Правила».",
-      confirmLabel: "Применить",
-    });
-    if (!ok) return;
+    // Без вопроса: созданные правила и разметку операций вернёт «Отменить» на
+    // плашке — снимок правок и правил до применения.
+    const undo = await snapshotStores([
+      [useEditsStore, ["transactionEdits", "transactionEditOrigins"]],
+      [useCategoryRulesStore, ["categoryRules"]],
+    ]);
+    const txIds = rules.map((r) => r.txId);
 
     setBusy(true);
     try {
@@ -260,8 +261,20 @@ export function UncategorizedPage() {
       // операции, поэтому применяем правила сразу, как кнопка «Проверить и
       // применить» в разделе «Правила».
       await applyRulesNow(ids);
-      setApplied((prev) => new Set([...prev, ...rules.map((r) => r.txId)]));
+      setApplied((prev) => new Set([...prev, ...txIds]));
       setSelected(new Set());
+      toast(
+        rules.length === 1
+          ? "Подсказка применена, правило создано"
+          : `${pluralRu(rules.length, ["Применена", "Применены", "Применено"])} ${rules.length} ${pluralRu(rules.length, ["подсказка", "подсказки", "подсказок"])}`,
+        {
+          undo: async () => {
+            await undo();
+            await reapplyRules();
+            setApplied((prev) => new Set([...prev].filter((id) => !txIds.includes(id))));
+          },
+        }
+      );
     } finally {
       setBusy(false);
     }

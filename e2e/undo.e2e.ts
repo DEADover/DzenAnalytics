@@ -109,3 +109,72 @@ test("«Без категории»: «К следующей» сохраняе�
   await expect(toastEl(page)).toContainText("Операция сохранена");
   await expect(page.locator(".op-row", { hasText: "Первая" })).toHaveCount(0);
 });
+
+type AnyStore = { getState: () => Record<string, (...a: unknown[]) => Promise<unknown>> & { loaded: boolean } };
+type StoreWindow = { __store: (n: string) => Promise<Record<string, AnyStore>> };
+
+test("правило: удаляется без вопроса, «Отменить» возвращает его на прежнее место", async ({ page }) => {
+  await connectZen(page, "/rules");
+  const rule = (title: string, value: string) => ({
+    enabled: true,
+    title,
+    join: "and",
+    conditions: [{ field: "comment", op: "contains", value, caseInsensitive: true }],
+    actions: [{ kind: "prependComment", value: "[магазин]" }],
+  });
+  await page.evaluate(async (list) => {
+    const { useCategoryRulesStore } = await (window as unknown as StoreWindow).__store("useCategoryRulesStore");
+    if (!useCategoryRulesStore.getState().loaded) await useCategoryRulesStore.getState().hydrate();
+    await useCategoryRulesStore.getState().addMany(list);
+  }, [rule("Первое", "первое"), rule("Второе", "второе"), rule("Третье", "третье")]);
+
+  const rows = page.locator("tbody tr");
+  await expect(rows).toHaveCount(3);
+  await rows.nth(1).getByRole("button", { name: "Удалить правило" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(rows).toHaveCount(2);
+  await expect(toastEl(page)).toContainText("Правило удалено");
+
+  await toastEl(page).getByRole("button", { name: "Отменить" }).click();
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(1)).toContainText("Второе");
+});
+
+test("цель: удаляется без вопроса, «Отменить» возвращает", async ({ page }) => {
+  await connectZen(page, "/goals");
+  await page.evaluate(async () => {
+    const { useGoalsStore } = await (window as unknown as StoreWindow).__store("useGoalsStore");
+    if (!useGoalsStore.getState().loaded) await useGoalsStore.getState().hydrate();
+    await useGoalsStore.getState().add({ name: "Отпуск", target: 100_000, current: 0, deadline: null });
+  });
+  await expect(page.getByText("Отпуск").first()).toBeVisible();
+  await page.getByRole("button", { name: "Удалить цель" }).first().click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(toastEl(page)).toContainText("Цель «Отпуск» удалена");
+  await expect(page.getByText("Отпуск")).toHaveCount(1); // только в плашке
+  await toastEl(page).getByRole("button", { name: "Отменить" }).click();
+  await expect(page.locator("main").getByText("Отпуск").first()).toBeVisible();
+});
+
+test("«Откатить все»: без вопроса, «Отменить» возвращает все неотправленные изменения", async ({ page }) => {
+  await connectZen(page, "/transactions");
+  await setPushMode(page, "manual");
+  // Две правки: удаление и смена комментария.
+  await page.locator(".op-row").first().getByRole("button", { name: "Удалить операцию" }).click();
+  await page.locator(".op-row").first().dblclick();
+  await page.getByRole("dialog").locator("textarea").first().fill("Откат и возврат");
+  await page.keyboard.press("ControlOrMeta+Enter");
+
+  // Счётчик в шапке: с правками — «Просмотреть…», без них — «Нет изменений…».
+  const review = page.locator(
+    'button[title^="Просмотреть изменения перед отправкой"], button[title="Нет изменений, ожидающих отправки"]'
+  );
+  await expect(review).toHaveText("2");
+  await review.click();
+  await page.getByRole("dialog").getByRole("button", { name: "Откатить все" }).click();
+  await expect(toastEl(page)).toContainText("Откачены 2 изменения");
+  await expect(review).toHaveText("0");
+
+  await toastEl(page).getByRole("button", { name: "Отменить" }).click();
+  await expect(review).toHaveText("2");
+});

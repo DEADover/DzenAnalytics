@@ -32,8 +32,8 @@ import type { ZenCache } from "../lib/zenmoneyCache";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { ImportXlsxModal } from "./ImportXlsxModal";
 import { formatDate, formatNum } from "../lib/format";
-import { pluralRu } from "../lib/plural";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
+import { snapshotStores } from "../lib/storeSnapshot";
 import { Tooltip } from "./Tooltip";
 
 const NO_DICTS = "Справочники Дзен-мани ещё не загружены — синхронизируйтесь и попробуйте ещё раз.";
@@ -269,18 +269,14 @@ export function ImportXlsxCard() {
   async function undoLast() {
     if (!lastBatch) return;
     const cps = lastBatch.counterpartyIds ?? [];
-    const ok = await confirm({
-      title: "Отменить импорт?",
-      message:
-        `Удалим ${formatNum(lastBatch.draftIds.length)} ${pluralRu(lastBatch.draftIds.length, ["операцию", "операции", "операций"])} из файла «${lastBatch.fileName}»` +
-        (cps.length > 0
-          ? ` и ${formatNum(cps.length)} ${pluralRu(cps.length, ["заведённого контрагента", "заведённых контрагента", "заведённых контрагентов"])}`
-          : "") +
-        ". В Дзен-мани они ещё не уехали, так что след не останется.",
-      confirmLabel: "Отменить импорт",
-      tone: "danger",
-    });
-    if (!ok) return;
+    // «Отменить импорт» — само по себе отмена, переспрашивать её незачем. Если
+    // нажали зря, плашка вернёт операции, контрагентов и сам импорт: в облако
+    // они ещё не уехали, всё лежит в этих трёх хранилищах.
+    const undo = await snapshotStores([
+      [useDraftsStore, ["pendingTransactions"]],
+      [useCounterpartyEditsStore, ["counterpartyEdits"]],
+      [useImportBatchesStore, ["importBatches"]],
+    ]);
     await clearMany(lastBatch.draftIds);
     if (cps.length > 0) await removeCounterparties(cps);
     await removeBatch(lastBatch.id);
@@ -290,6 +286,13 @@ export function ImportXlsxCard() {
         ? "Импорт отменён — операции и заведённые контрагенты удалены"
         : "Импорт отменён — созданные операции удалены"
     );
+    toast("Импорт отменён", {
+      undo: async () => {
+        await undo();
+        await refresh();
+        setDone(null);
+      },
+    });
   }
 
   /**

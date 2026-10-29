@@ -43,6 +43,8 @@ import {
   type LiveAccount,
 } from "../store/useZenmoneyStore";
 import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
+import { snapshotPending } from "../lib/undoable";
 import { snapshotPromiseText } from "../lib/cloudSnapshots";
 import { EditTransactionModal } from "./EditTransactionModal";
 import { CategoryDot } from "./CategoryDot";
@@ -569,14 +571,11 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
       });
   }
 
+  // Без вопроса: все неотправленные изменения — правки, черновики, удаления,
+  // справочники, бюджет — вернёт «Отменить» на плашке (снимок их хранилищ).
   async function revertAll() {
-    const ok = await confirm({
-      title: "Откатить все изменения?",
-      message: `Все неотправленные изменения (${total}) будут отменены локально: правки, черновики, удаления. В облаке Дзен-мани ничего не тронется.`,
-      confirmLabel: "Откатить все",
-      tone: "danger",
-    });
-    if (!ok) return;
+    const n = total;
+    const undo = await snapshotPending();
     await clearAllEdits();
     await clearAllDrafts();
     if (deletedIds.length) await restoreManyDeleted(deletedIds);
@@ -591,6 +590,12 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
     // Бюджет — одной записью: поштучная отмена затирала бы соседние правки.
     if (budgetItems.length > 0) await revertBudgetEdits(Object.keys(budgetEdits));
     await reapply();
+    toast(`${pluralRu(n, ["Откачено", "Откачены", "Откачено"])} ${n} ${pluralRu(n, ["изменение", "изменения", "изменений"])}`, {
+      undo: async () => {
+        await undo();
+        await reapply();
+      },
+    });
   }
 
   const label = (t: Transaction) =>

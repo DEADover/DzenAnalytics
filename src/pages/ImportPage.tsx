@@ -67,6 +67,9 @@ import { useCloudSnapshotStore } from "../store/useCloudSnapshotStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
+import { editUndo } from "../lib/undoable";
+import { snapshotDeletionUndo } from "../lib/cloudSnapshots";
 import { pluralRu } from "../lib/plural";
 import { useBackupStore, type BackupInterval } from "../store/useBackupStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -2832,13 +2835,15 @@ export function ImportPage() {
                     </button>
                     <button
                       onClick={async () => {
-                        const ok = await confirm({
-                          title: "Удалить снимок?",
-                          message: `Снимок от ${new Date(s.createdAt).toLocaleString("ru-RU")} будет удалён с этого компьютера.`,
-                          confirmLabel: "Удалить",
-                          tone: "danger",
+                        // Без вопроса: снимок вернёт «Отменить» на плашке.
+                        const undo = await snapshotDeletionUndo(s.id);
+                        await deleteCloudSnapshot(s.id);
+                        toast("Снимок удалён", {
+                          undo: async () => {
+                            await undo();
+                            await useCloudSnapshotStore.getState().hydrate();
+                          },
                         });
-                        if (ok) deleteCloudSnapshot(s.id);
                       }}
                       className="btn-icon-danger shrink-0"
                       title="Удалить снимок с этого компьютера"
@@ -3099,16 +3104,12 @@ export function ImportPage() {
                             type="button"
                             className="text-expense hover:underline"
                             onClick={async () => {
+                              // Без вопроса: правки вернёт «Отменить» на плашке.
                               const n = orphanEditIds.length;
-                              const ok = await confirm({
-                                title: "Убрать зависшие правки?",
-                                message: `${n} ${pluralRu(n, ["правка", "правки", "правок"])} без подходящей операции ${pluralRu(n, ["будет удалена", "будут удалены", "будут удалены"])} из локального оверлея. На облако не влияет.`,
-                                confirmLabel: "Убрать",
-                                tone: "danger",
-                              });
-                              if (!ok) return;
+                              const undo = editUndo(orphanEditIds);
                               await clearManyEdits(orphanEditIds);
                               await reapplyRules();
+                              toast(`${pluralRu(n, ["Убрана", "Убраны", "Убрано"])} ${n} ${pluralRu(n, ["зависшая правка", "зависшие правки", "зависших правок"])}`, { undo });
                             }}
                           >
                             убрать

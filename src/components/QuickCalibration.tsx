@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Settings2, CheckCircle2, X, Sparkles, Pencil, Trash2 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
 import {
   useZenmoneyStore,
   getLiveAccountsFromCache,
@@ -143,14 +143,13 @@ export function QuickCalibration() {
             </button>
             <button
               onClick={async () => {
-                const ok = await confirm({
-                  title: "Сбросить калибровку?",
-                  message:
-                    "Текущая балансовая привязка будет удалена. Можно будет настроить заново.",
-                  confirmLabel: "Сбросить",
-                  tone: "danger",
-                });
-                if (ok) clearCalibration();
+                // Без вопроса: привязку вернёт «Отменить» на плашке.
+                const before = useCalibrationStore.getState().calibration;
+                await clearCalibration();
+                if (before)
+                  toast("Калибровка сброшена", {
+                    undo: () => useCalibrationStore.getState().set(before),
+                  });
               }}
               className="btn-ghost text-xs text-muted hover:text-expense"
               title="Сбросить"

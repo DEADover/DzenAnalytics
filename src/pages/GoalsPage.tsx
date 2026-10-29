@@ -18,7 +18,8 @@ import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useGoalsStore, type Goal } from "../store/useGoalsStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
+import { reinsert } from "../lib/storeSnapshot";
 import { groupByMonth } from "../lib/aggregations";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
@@ -152,6 +153,20 @@ export function GoalsPage() {
   const addGoal = useGoalsStore((s) => s.add);
   const updateGoal = useGoalsStore((s) => s.update);
   const removeGoal = useGoalsStore((s) => s.remove);
+  // Без вопроса: цель вернёт «Отменить» на плашке, на прежнее место.
+  const removeGoalWithUndo = async (id: string) => {
+    const list = useGoalsStore.getState().goals;
+    const index = list.findIndex((g) => g.id === id);
+    const goal = list[index];
+    if (!goal) return;
+    await removeGoal(id);
+    toast(`Цель «${goal.name}» удалена`, {
+      undo: async () => {
+        const cur = useGoalsStore.getState();
+        await cur.replaceAll(reinsert(cur.goals, goal, index));
+      },
+    });
+  };
   const hydrate = useGoalsStore((s) => s.hydrate);
   const loaded = useGoalsStore((s) => s.loaded);
 
@@ -433,7 +448,7 @@ export function GoalsPage() {
               accountTitles={accountTitles}
               balanceOf={balanceOf}
               onUpdate={updateGoal}
-              onRemove={removeGoal}
+              onRemove={removeGoalWithUndo}
             />
           ))}
         </div>
@@ -759,15 +774,7 @@ function GoalCard({
             </Tooltip>
             <Tooltip content="Удалить цель">
               <button
-                onClick={async () => {
-                  const ok = await confirm({
-                    title: "Удалить цель?",
-                    message: `«${g.name}» будет удалена.`,
-                    confirmLabel: "Удалить",
-                    tone: "danger",
-                  });
-                  if (ok) onRemove(g.id);
-                }}
+                onClick={() => onRemove(g.id)}
                 className="btn-icon-danger"
                 aria-label="Удалить цель"
               >

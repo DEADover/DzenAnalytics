@@ -26,7 +26,8 @@ import { useCategoryRulesStore } from "../store/useCategoryRulesStore";
 import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
+import { snapshotStores } from "../lib/storeSnapshot";
 import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { Combobox } from "./Combobox";
@@ -376,16 +377,18 @@ export function CounterpartyManager() {
       (n, g) => n + g.dups.reduce((m, d) => m + d.count, 0),
       0
     );
-    const ok = await confirm({
-      title: `Объединить ${formatNum(dupGroups.length)} ${pluralRu(dupGroups.length, ["группу", "группы", "групп"])} дублей?`,
-      message: `Лишних записей: ${formatNum(dupCount)}. ${formatNum(moving)} ${pluralRu(moving, ["операция переедет", "операции переедут", "операций переедут"])} на оставшегося контрагента, дубли удалятся. Всё уйдёт в Дзен-мани при отправке в облако.`,
-      confirmLabel: "Объединить",
-    });
-    if (!ok) return;
+    // Без вопроса: объединение ждёт отправки, и «Отменить» на плашке вернёт
+    // справочник как был.
+    const undo = await snapshotStores([[useCounterpartyEditsStore, ["counterpartyEdits"]]]);
+    const groups = dupGroups.length;
     await useCounterpartyEditsStore.getState().mergeMany(
       dupGroups.flatMap((g) =>
         g.dups.map((d) => ({ id: d.id, survivorId: g.survivor.id }))
       )
+    );
+    toast(
+      `${pluralRu(groups, ["Объединена", "Объединены", "Объединено"])} ${formatNum(groups)} ${pluralRu(groups, ["группа", "группы", "групп"])}: ${formatNum(dupCount)} ${pluralRu(dupCount, ["дубль", "дубля", "дублей"])}, ${formatNum(moving)} ${pluralRu(moving, ["операция", "операции", "операций"])}`,
+      { undo }
     );
   }
 
@@ -410,23 +413,12 @@ export function CounterpartyManager() {
     );
     const ops = items.reduce((n, o) => n + o.count, 0);
     const toCreate = items.filter((o) => !liveKeys.has(dupKey(targetOf(o))));
-    const ok = await confirm({
-      title: renameTo?.trim()
-        ? `Привязать как «${renameTo.trim()}»?`
-        : `Привязать ${formatNum(items.length)} ${pluralRu(items.length, ["получателя", "получателей", "получателей"])}?`,
-      message:
-        (renameTo?.trim()
-          ? `У операций получатель сменится с «${items[0].title}» на «${renameTo.trim()}». `
-          : "") +
-        (toCreate.length > 0
-          ? `В справочнике появится ${formatNum(toCreate.length)} ${pluralRu(toCreate.length, ["новая запись", "новые записи", "новых записей"])}` +
-            (toCreate.length < items.length ? ", остальные уже есть. " : ". ")
-          : "Все записи в справочнике уже есть. ") +
-        `Контрагент проставится у ${formatNum(ops)} ${pluralRu(ops, ["операции", "операций", "операций"])} — вместо текста от банка там будет ссылка на запись справочника. ` +
-        "Всё уйдёт в Дзен-мани при отправке в облако; до неё правки можно откатить в списке изменений.",
-      confirmLabel: "Привязать",
-    });
-    if (!ok) return;
+    // Без вопроса: новые записи справочника и привязку операций вернёт
+    // «Отменить» на плашке — снимок справочника и правок до привязки.
+    const undo = await snapshotStores([
+      [useCounterpartyEditsStore, ["counterpartyEdits"]],
+      [useEditsStore, ["transactionEdits", "transactionEditOrigins"]],
+    ]);
     await useCounterpartyEditsStore.getState().addManyNew(
       toCreate.map((o) => ({ id: crypto.randomUUID(), title: targetOf(o) }))
     );
@@ -440,6 +432,17 @@ export function CounterpartyManager() {
     // списке до перезагрузки — как это делает и редактор операции.
     await useDataStore.getState().reapplyRules();
     setOrphanSel(new Set());
+    toast(
+      renameTo?.trim()
+        ? `Привязано как «${renameTo.trim()}»: ${formatNum(ops)} ${pluralRu(ops, ["операция", "операции", "операций"])}`
+        : `${pluralRu(items.length, ["Привязан", "Привязаны", "Привязано"])} ${formatNum(items.length)} ${pluralRu(items.length, ["получатель", "получателя", "получателей"])}: ${formatNum(ops)} ${pluralRu(ops, ["операция", "операции", "операций"])}`,
+      {
+        undo: async () => {
+          await undo();
+          await useDataStore.getState().reapplyRules();
+        },
+      }
+    );
   }
 
   // CSV mode — no Zenmoney cache, nothing to edit / sync.

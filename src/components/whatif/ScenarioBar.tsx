@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import clsx from "clsx";
 import { Copy, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
-import { MAX_SCENARIOS, useWhatIfStore } from "../../store/useWhatIfStore";
-import { confirm } from "../../store/useConfirmStore";
+import { MAX_SCENARIOS, pickWhatIf, useWhatIfStore } from "../../store/useWhatIfStore";
+import { toast } from "../../store/useToastStore";
+import { reinsert } from "../../lib/storeSnapshot";
 import { SectionControls } from "../SectionControls";
 import { Select } from "../Select";
 import { Popover } from "../Popover";
@@ -102,13 +103,21 @@ function ScenarioTab({
 
   async function remove() {
     close();
-    const ok = await confirm({
-      title: `Удалить сценарий «${name}»?`,
-      message: "Настройки и события этого сценария удалятся на всех устройствах.",
-      confirmLabel: "Удалить",
-      tone: "danger",
+    // Без вопроса: сценарий со всеми событиями вернёт «Отменить» на плашке —
+    // вместе с тем, какой был открыт и с каким сравнивали.
+    const st = useWhatIfStore.getState();
+    const index = st.scenarios.findIndex((x) => x.id === id);
+    const scenario = st.scenarios[index];
+    if (!scenario) return;
+    const { activeId, compareId } = st;
+    await s.removeScenario(id);
+    toast(`Сценарий «${name}» удалён`, {
+      undo: async () => {
+        const cur = useWhatIfStore.getState();
+        const scenarios = reinsert(cur.scenarios, scenario, index);
+        await cur.replace({ ...pickWhatIf(cur), scenarios, activeId, compareId });
+      },
     });
-    if (ok) await s.removeScenario(id);
   }
 
   return (

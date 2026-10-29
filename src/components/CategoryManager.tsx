@@ -36,7 +36,7 @@ import { useNewCategoriesStore, type NewCategory } from "../store/useNewCategori
 import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
 import { colorForCategory } from "../lib/categoryColor";
 import { formatNum } from "../lib/format";
 import { CategoryDot } from "./CategoryDot";
@@ -271,18 +271,20 @@ export function CategoryManager() {
    *  dropped; a cached one goes through the «куда перенести операции» dialog. */
   async function onDelete(t: CategoryTag) {
     if (newIds.has(t.id)) {
+      // Черновик ещё не в облаке — удаляем без вопроса, вместе с новыми
+      // подкатегориями; «Отменить» на плашке вернёт их все.
       const kids = childrenOf(t.id);
-      const ok = await confirm({
-        title: "Удалить новую категорию?",
-        message: kids.length
-          ? `«${t.title}» ещё не отправлена в облако — черновик удалится вместе с подкатегориями: ${formatNum(kids.length)}.`
-          : `«${t.title}» ещё не отправлена в облако — черновик просто удалится.`,
-        confirmLabel: "Удалить",
-        tone: "danger",
-      });
-      if (!ok) return;
       const store = useNewCategoriesStore.getState();
-      await store.removeMany([t.id, ...kids.filter((c) => newIds.has(c.id)).map((c) => c.id)]);
+      const ids = new Set([t.id, ...kids.filter((c) => newIds.has(c.id)).map((c) => c.id)]);
+      const removed = store.items.filter((c) => ids.has(c.id));
+      await store.removeMany([...ids]);
+      toast(`Категория «${t.title}» удалена`, {
+        undo: async () => {
+          const cur = useNewCategoriesStore.getState();
+          const have = new Set(cur.items.map((c) => c.id));
+          for (const c of removed) if (!have.has(c.id)) await useNewCategoriesStore.getState().add(c);
+        },
+      });
       return;
     }
     setModal({ kind: "delete", tag: t });

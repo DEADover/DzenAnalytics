@@ -15,7 +15,7 @@ import {
   type SyncLogEntry,
   type SyncLogStatus,
 } from "../store/useSyncLogStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
 import { InfoPopover } from "./InfoPopover";
 import { ExpandChevron, HeadCell } from "./table/TableParts";
 import { cellClass } from "./table/tableKit";
@@ -197,14 +197,12 @@ export function SyncLog({ embedded, status }: SyncLogProps = {}) {
           {entries.length > 0 && (
             <button
               onClick={async () => {
-                const ok = await confirm({
-                  title: "Очистить журнал синхронизаций?",
-                  message:
-                    "История синхронизаций будет удалена. Действие необратимо.",
-                  confirmLabel: "Очистить",
-                  tone: "danger",
+                // Без вопроса: записи вернёт «Отменить» на плашке.
+                const before = useSyncLogStore.getState().entries;
+                await clear();
+                toast("Журнал очищен", {
+                  undo: () => useSyncLogStore.getState().restore(before),
                 });
-                if (ok) await clear();
               }}
               className="btn-ghost text-xs text-muted"
               title="Удалить все записи"

@@ -14,6 +14,15 @@ import { useDeletedStore } from "../store/useDeletedStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { toast } from "../store/useToastStore";
 import { pluralOps, pluralRu } from "./plural";
+import { snapshotStores } from "./storeSnapshot";
+import { useTagEditsStore } from "../store/useTagEditsStore";
+import { useAccountEditsStore } from "../store/useAccountEditsStore";
+import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
+import { useTagDeletionsStore } from "../store/useTagDeletionsStore";
+import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
+import { usePlanActionsStore } from "../store/usePlanActionsStore";
+import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
+import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 
 /** «Операция удалена», «Удалены 3 операции», «Удалено 12 операций». */
 export function deletedText(n: number): string {
@@ -62,4 +71,24 @@ export function editUndo(ids: readonly string[]): () => Promise<void> {
     await useEditsStore.getState().restore(snap);
     await useDataStore.getState().reapplyRules();
   };
+}
+
+/**
+ * Хранилища всего, что ждёт отправки в Дзен-мани, — для «Отменить» после
+ * «Откатить все изменения»: откат задевает их все разом.
+ */
+export async function snapshotPending(): Promise<() => Promise<void>> {
+  return snapshotStores([
+    [useEditsStore, ["transactionEdits", "transactionEditOrigins"]],
+    [useDraftsStore, ["pendingTransactions"]],
+    [useDeletedStore, ["deletedTransactions", "deletedTransactionsAt"]],
+    [useTagEditsStore, ["tagEdits"]],
+    [useAccountEditsStore, ["accountEdits"]],
+    [useNewCategoriesStore, ["newCategories"]],
+    [useTagDeletionsStore, ["tagDeletions"]],
+    [usePlannedDeletionsStore, ["plannedDeletions"]],
+    [usePlanActionsStore, ["planActions"]],
+    [useBudgetEditsStore, ["budgetEdits"]],
+    [useCounterpartyEditsStore, ["counterpartyEdits"]],
+  ]);
 }

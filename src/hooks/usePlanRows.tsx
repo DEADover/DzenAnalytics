@@ -5,7 +5,7 @@ import type { Transaction } from "../types";
 import { formatPlanDate as formatShort, planTitle, plannedAsTransaction, type PlannedOp } from "../lib/plannedOps";
 import { localToday } from "./usePlannedFeed";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
 import { operationTone } from "../lib/txKindStyle";
 import { TONE_CLASS } from "../components/table/tableKit";
 import { EditTransactionModal } from "../components/EditTransactionModal";
@@ -32,33 +32,29 @@ export function usePlanRows(template: string) {
   const [link, setLink] = useState<PlannedOp | null>(null);
   const [edit, setEdit] = useState<PlannedOp | null>(null);
 
+  // Удаление плана сначала встаёт в очередь на отправку, поэтому окно-вопрос
+  // не нужно: «Отменить» на плашке снимает его из очереди (или возвращает
+  // прежний выбор, если план там уже стоял).
+  async function queueDeletion(p: PlannedOp, wholePlan: boolean, text: string) {
+    const store = usePlannedDeletionsStore.getState();
+    const before = store.deletions[p.id];
+    await store.remove({ id: p.id, wholePlan, date: p.date, title: planTitle(p) });
+    toast(text, {
+      undo: async () => {
+        const cur = usePlannedDeletionsStore.getState();
+        if (before) await cur.remove(before);
+        else await cur.restore(p.id);
+      },
+    });
+  }
+
   async function removeDate(p: PlannedOp) {
     const oneOff = p.repeating === false;
-    const ok = await confirm({
-      title: oneOff ? "Удалить план?" : `Удалить план на ${formatShort(p.date)}?`,
-      message: oneOff
-        ? "Это разовый план — он удалится целиком."
-        : "Уберётся только эта дата, остальные повторения останутся.",
-      confirmLabel: "Удалить",
-      tone: "danger",
-    });
-    if (!ok) return;
-    await usePlannedDeletionsStore
-      .getState()
-      .remove({ id: p.id, wholePlan: oneOff, date: p.date, title: planTitle(p) });
+    await queueDeletion(p, oneOff, oneOff ? "План удалён" : `План на ${formatShort(p.date)} удалён`);
   }
 
   async function removeChain(p: PlannedOp) {
-    const ok = await confirm({
-      title: "Удалить всю цепочку?",
-      message: "Удалится сам план со всеми будущими повторениями. Проведённые операции останутся.",
-      confirmLabel: "Удалить цепочку",
-      tone: "danger",
-    });
-    if (!ok) return;
-    await usePlannedDeletionsStore
-      .getState()
-      .remove({ id: p.id, wholePlan: true, date: p.date, title: planTitle(p) });
+    await queueDeletion(p, true, "Цепочка плана удалена");
   }
 
   /** Строка плана; `grouped` — лента по дням, дата стоит в шапке дня. */

@@ -96,6 +96,11 @@ interface State {
    *  "перейти к логу" toast that scrolls to this exact row. */
   append: (entry: Omit<SyncLogEntry, "id" | "ts">) => Promise<SyncLogEntry>;
   clear: () => Promise<void>;
+  /**
+   * Вернуть очищенные записи («Отменить» после «Очистить»). Записи, что
+   * успели прийти после очистки, остаются сверху.
+   */
+  restore: (entries: SyncLogEntry[]) => Promise<void>;
 }
 
 export const useSyncLogStore = create<State>((set, get) => ({
@@ -130,5 +135,12 @@ export const useSyncLogStore = create<State>((set, get) => ({
   clear: async () => {
     set({ entries: [] });
     await db.saveJSON(KEY, []);
+  },
+
+  restore: async (old) => {
+    const have = new Set(get().entries.map((e) => e.id));
+    const next = [...get().entries, ...old.filter((e) => !have.has(e.id))].slice(0, MAX_ENTRIES);
+    set({ entries: next });
+    await db.saveJSON(KEY, next);
   },
 }));

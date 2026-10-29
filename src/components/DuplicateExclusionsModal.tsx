@@ -1,9 +1,8 @@
 import { DataTable } from "./DataTable";
-import { pluralRu } from "../lib/plural";
 import { useMemo, useState } from "react";
 import { ShieldOff, X, Trash2 } from "lucide-react";
 import { useDuplicateExclusionsStore } from "../store/useDuplicateExclusionsStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
 import { formatDate, formatMoney } from "../lib/format";
 import { kindLabel } from "../lib/txKindStyle";
 import { Modal, ModalBody, ModalHeader } from "./Modal";
@@ -39,14 +38,13 @@ export function DuplicateExclusionsModal({ onClose }: { onClose: () => void }) {
 
   const total = Object.keys(rules).length;
 
+  // Без вопроса: все правила «Не дубликаты» вернёт «Отменить» на плашке.
   async function handleClearAll() {
-    const ok = await confirm({
-      title: "Удалить все правила?",
-      message: `Все ${total} ${pluralRu(total, ["правило", "правила", "правил"])} «Не дубликаты» будут удалены — отмеченные группы снова начнут проверяться.`,
-      confirmLabel: "Удалить все",
-      tone: "danger",
+    const before = useDuplicateExclusionsStore.getState().rules;
+    await clearAll();
+    toast(`Удалены все правила «Не дубликаты»: ${total}`, {
+      undo: () => useDuplicateExclusionsStore.getState().replaceAll(before),
     });
-    if (ok) await clearAll();
   }
 
   return (

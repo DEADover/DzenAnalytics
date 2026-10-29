@@ -19,7 +19,8 @@ import {
   hasWhatFilters,
   type SavedView,
 } from "../store/useSavedViewsStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
+import { reinsert } from "../lib/storeSnapshot";
 
 /**
  * Single «Фильтры» menu — replaces the old split «Виды» + «Сохранить» buttons.
@@ -133,14 +134,13 @@ export function FiltersMenu() {
       (v) => v.name.toLowerCase() === trimmed.toLowerCase()
     );
     if (existing) {
-      const ok = await confirm({
-        title: "Перезаписать фильтр?",
-        message: `«${existing.name}» будет обновлён текущими настройками.`,
-        confirmLabel: "Перезаписать",
-      });
-      if (!ok) return;
+      // Без вопроса: прежние настройки фильтра вернёт «Отменить» на плашке.
+      const { id: _id, createdAt: _at, ...before } = existing;
       await update(existing.id, { ...capture(withPeriod), name: existing.name });
       setActiveId(existing.id);
+      toast(`Фильтр «${existing.name}» обновлён`, {
+        undo: () => useSavedViewsStore.getState().update(existing.id, before),
+      });
     } else {
       const id = await add({ ...capture(withPeriod), name: trimmed });
       setActiveId(id);
@@ -156,13 +156,17 @@ export function FiltersMenu() {
   }
 
   async function del(v: SavedView) {
-    const ok = await confirm({
-      title: "Удалить фильтр?",
-      message: `«${v.name}» будет удалён из списка.`,
-      confirmLabel: "Удалить",
-      tone: "danger",
+    const st = useSavedViewsStore.getState();
+    const index = st.views.findIndex((x) => x.id === v.id);
+    const wasActive = st.activeId === v.id;
+    await remove(v.id);
+    toast(`Фильтр «${v.name}» удалён`, {
+      undo: async () => {
+        const cur = useSavedViewsStore.getState();
+        await cur.replaceAll(reinsert(cur.views, v, index));
+        if (wasActive) cur.setActiveId(v.id);
+      },
     });
-    if (ok) remove(v.id);
   }
 
   async function commitRename() {

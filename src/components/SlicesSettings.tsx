@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { Layers, Plus, Pencil, Trash2, Check, X } from "lucide-react";
 import clsx from "clsx";
 import { useSlicesStore } from "../store/useSlicesStore";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
+import { reinsert } from "../lib/storeSnapshot";
 import { formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
@@ -28,15 +29,22 @@ export function SlicesSettings() {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
+  // Без вопроса: разрез вернёт «Отменить» на плашке — на прежнее место и,
+  // если он был выбран, снова выбранным.
   async function askRemove(id: string, name: string) {
-    const ok = await confirm({
-      title: `Удалить разрез «${name}»?`,
-      message:
-        "Операции и настройки категорий не пострадают — удалится только этот набор исключений.",
-      confirmLabel: "Удалить",
-      tone: "danger",
+    const st = useSlicesStore.getState();
+    const index = st.slices.findIndex((x) => x.id === id);
+    const slice = st.slices[index];
+    const wasActive = st.activeId === id;
+    if (!slice) return;
+    await remove(id);
+    toast(`Разрез «${name}» удалён`, {
+      undo: async () => {
+        const cur = useSlicesStore.getState();
+        await cur.replaceAll(reinsert(cur.slices, slice, index));
+        if (wasActive) await useSlicesStore.getState().setActive(id);
+      },
     });
-    if (ok) await remove(id);
   }
 
   return (

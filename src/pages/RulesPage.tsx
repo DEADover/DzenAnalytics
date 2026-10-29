@@ -33,7 +33,8 @@ import {
   isOnlyNewRule,
   migrateRule,
 } from "../lib/ruleEngine";
-import { confirm } from "../store/useConfirmStore";
+import { toast } from "../store/useToastStore";
+import { reinsert } from "../lib/storeSnapshot";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { useEditsStore } from "../store/useEditsStore";
@@ -434,18 +435,20 @@ export function RulesPage() {
     await reapplyRules();
   }
 
+  // Без вопроса: правило вернёт «Отменить» на плашке — на прежнее место в
+  // списке, порядок правил важен. Уже записанные им правки операций удаление
+  // и так не трогает.
   async function removeRule(rule: StoredCategoryRule) {
-    const ok = await confirm({
-      title: "Удалить правило?",
-      message:
-        "Правило перестанет предлагать изменения. То, что уже записано кнопкой «Проверить и применить», останется — это обычные правки операций, их отменяют построчно в списке изменений.",
-      confirmLabel: "Удалить",
-      tone: "danger",
+    const index = useCategoryRulesStore.getState().rules.findIndex((r) => r.id === rule.id);
+    await remove(rule.id);
+    await reapplyRules();
+    toast("Правило удалено", {
+      undo: async () => {
+        const cur = useCategoryRulesStore.getState();
+        await cur.replaceAll(reinsert(cur.rules, rule, index));
+        await reapplyRules();
+      },
     });
-    if (ok) {
-      await remove(rule.id);
-      await reapplyRules();
-    }
   }
 
   async function applyRows(rows: RuleRow[]) {
