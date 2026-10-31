@@ -377,7 +377,7 @@ export function RecurringPage() {
 
   function openCandidate(c: { txIds: string[]; payee: string }) {
     const txs = transactions.filter((t) => c.txIds.includes(t.id));
-    showDrill(c.payee, txs, "Регулярные платежи");
+    showDrill(c.payee, txs, "Запланированные");
   }
 
   const plannedTabs = [
@@ -389,8 +389,8 @@ export function RecurringPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Регулярные платежи"
-        icon={Repeat}
+        title="Запланированные"
+        icon={CalendarClock}
         info={
           <InfoPopover label="Что на этой странице">
             <p>
@@ -474,7 +474,7 @@ export function RecurringPage() {
           <div className="card-tray card-pad space-y-4">
             <CardHeader
               icon={CalendarClock}
-              title="Планируемые операции"
+              title="Запланированные операции"
               right={
                 <Segmented
                   size="sm"

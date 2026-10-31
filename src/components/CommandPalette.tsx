@@ -14,7 +14,6 @@ import {
   CalendarDays,
   TrendingUp,
   Hash,
-  Repeat,
   Zap,
   Copy,
   Tag,
@@ -36,6 +35,7 @@ import {
   Store,
   EyeOff,
   SlidersHorizontal,
+  CalendarClock,
 } from "lucide-react";
 import { useTourStore } from "../store/useTourStore";
 import { useDataStore } from "../store/useDataStore";
@@ -89,7 +89,7 @@ const PAGE_ITEMS: { path: string; title: string; icon: React.ComponentType<{ cla
   { path: "/top", title: "Топ", icon: TrendingUp, aliases: ["top"] },
   { path: "/counterparties", title: "Контрагенты", icon: Store, aliases: ["counterparties", "места", "магазины", "получатели", "merchants"] },
   { path: "/tags", title: "Теги", icon: Hash, aliases: ["tags"] },
-  { path: "/recurring", title: "Регулярные", icon: Repeat, aliases: ["recurring", "subscriptions"] },
+  { path: "/recurring", title: "Запланированные", icon: CalendarClock, aliases: ["planned", "recurring", "subscriptions", "регулярные", "подписки"] },
   { path: "/anomalies", title: "Аномалии", icon: Zap, aliases: ["anomalies"] },
   { path: "/duplicates", title: "Дубликаты", icon: Copy, aliases: ["duplicates"] },
   { path: "/uncategorized", title: "Без категории", icon: Tag, aliases: ["uncategorized"] },

@@ -838,7 +838,7 @@ export function DashboardView() {
         const zen = widgetView(widgetMeta("upcoming"), p.view)?.id === "zen";
         return (
           <>
-            <BlockTitle title="Запланированные операции" to="/recurring" linkLabel="Регулярные" />
+            <BlockTitle title="Запланированные операции" to="/recurring" linkLabel="Запланированные" />
             {/* Итог подан так же, как совокупный баланс у соседней карточки:
                 крупным числом под заголовком. Мелкой строчкой в шапке он
                 выбивался из ряда. */}
