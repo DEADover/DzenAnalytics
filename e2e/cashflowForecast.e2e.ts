@@ -73,30 +73,44 @@ test("год до декабря — прогноз до конца года; п
   await expect(side(page).getByText("Помесячная сводка", { exact: true })).toBeVisible();
 });
 
-test("сводку можно свернуть — график во всю ширину, выбор запоминается", async ({ page }) => {
+test("шеврон сворачивает сводку плавно — график во всю ширину, выбор запоминается", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await connectZen(page, "/cashflow");
   const chart = page.locator(".recharts-wrapper").first();
+  const toggle = page.locator("[data-cashflow-toggle]");
   await side(page).scrollIntoViewIfNeeded();
   const narrow = (await chart.boundingBox())!.width;
-  // Кнопки в шапке панели — одной высоты.
-  const heights = await side(page).locator("button, .seg-track").evaluateAll((els) =>
-    [...new Set(els.filter((e) => e.matches(".seg-track, .btn-ghost")).map((e) => Math.round(e.getBoundingClientRect().height)))]
-  );
-  expect(heights).toEqual([34]);
+  // Шеврон — маленький, на разделительной линии между графиком и сводкой.
+  const t = (await toggle.boundingBox())!;
+  const p = (await side(page).locator("> div").boundingBox())!;
+  expect(t.width).toBeLessThanOrEqual(24);
+  expect(Math.abs(t.x + t.width / 2 - p.x)).toBeLessThan(2);
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
 
-  await side(page).getByRole("button", { name: "Свернуть сводку" }).click();
-  await expect(side(page)).toHaveCount(0);
+  // Плавно: колонка сводки сужается через промежуточные ширины, а не скачком.
+  const [before, widths] = await page.evaluate(async () => {
+    const sec = document.getElementById("cashflow-side")!;
+    const w0 = sec.getBoundingClientRect().width;
+    (document.querySelector("[data-cashflow-toggle]") as HTMLElement).click();
+    const seen: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+      seen.push(sec.getBoundingClientRect().width);
+    }
+    return [w0, seen] as const;
+  });
+  expect(widths.some((w) => w > 5 && w < before - 5)).toBe(true);
   await expect.poll(async () => (await chart.boundingBox())!.width).toBeGreaterThan(narrow + 300);
-  const expand = page.locator('button[title="Показать помесячную сводку справа от графика"], button[data-native-title="Показать помесячную сводку справа от графика"]');
-  await expect(expand).toBeVisible();
+  await expect(side(page)).toHaveCount(0);
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
   if (process.env.E2E_SHOTS)
-    await page.locator(".card-tray", { has: expand }).screenshot({ path: process.env.E2E_SHOTS + "/cashflow-collapsed.png" });
+    await page.locator(".card-tray", { has: toggle }).screenshot({ path: process.env.E2E_SHOTS + "/cashflow-collapsed.png" });
 
   await page.reload();
-  await expect(expand).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(side(page)).toHaveCount(0);
 
-  await expand.click();
+  await toggle.click();
   await expect(side(page)).toBeVisible();
-  await expect(page.locator('button[title="Показать помесячную сводку справа от графика"]')).toHaveCount(0);
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
 });

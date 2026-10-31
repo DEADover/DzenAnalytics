@@ -26,11 +26,12 @@ import {
   LineChart as LineChartIcon,
   Sparkles,
   Table as TableIcon,
-  PanelRightClose,
-  PanelRightOpen,
+  ChevronRight,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDisplayStore } from "../store/useDisplayStore";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import clsx from "clsx";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
 import { useFiltersStore, applyFilters, presetToRange } from "../store/useFiltersStore";
@@ -102,6 +103,10 @@ export function CashflowPage() {
   // Сводку справа можно свернуть — тогда график во всю ширину. Запоминается.
   const summaryOpen = useDisplayStore((s) => s.cashflowSummary);
   const setSummaryOpen = useDisplayStore((s) => s.setCashflowSummary);
+  // Сворачивается только рядом с графиком: на узком окне сводка стоит под
+  // ним и места не отнимает.
+  const wide = useMediaQuery("(min-width: 1024px)");
+  const summaryShown = summaryOpen || !wide;
 
   // This is a history chart, so it has its OWN period (default «12 мес») rather
   // than inheriting the global «месяц» filter — otherwise a first visit would
@@ -436,26 +441,39 @@ export function CashflowPage() {
                 ]}
               />
               <div className="text-xs text-muted">{daily ? `${dayKeys!.length} дн.` : `${months.length} мес.`}</div>
-              {!summaryOpen && (
-                <button
-                  type="button"
-                  className="btn-ghost text-xs shrink-0"
-                  onClick={() => void setSummaryOpen(true)}
-                  title="Показать помесячную сводку справа от графика"
-                  aria-expanded={false}
-                >
-                  <PanelRightOpen className="w-3.5 h-3.5" aria-hidden />
-                  Сводка
-                </button>
-              )}
             </>
           }
         />
         {/* Справа от графика — помесячная сводка, а где прогноз уместен, по
             переключателю — и он. Отдельной таблицей во всю ширину под
             страницей сводка была растянута ради нескольких узких столбцов. */}
-        <div className={summaryOpen ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_28rem]" : "grid"}>
-        <div className="min-w-0">
+        {/* Шеврон на разделительной линии сворачивает сводку вправо: колонка
+            плавно сужается до нуля, график плавно встаёт во всю ширину. */}
+        <div
+          className={clsx(
+            "grid gap-4 lg:gap-0 lg:transition-[grid-template-columns] lg:duration-[var(--motion-slow)] lg:ease-[var(--ease-soft)] motion-reduce:transition-none",
+            summaryShown ? "lg:grid-cols-[minmax(0,1fr)_29rem]" : "lg:grid-cols-[minmax(0,1fr)_0rem]"
+          )}
+        >
+        <div className="relative min-w-0 lg:pr-4">
+        <button
+          type="button"
+          onClick={() => void setSummaryOpen(!summaryOpen)}
+          aria-expanded={summaryShown}
+          aria-controls="cashflow-side"
+          aria-label={summaryShown ? "Скрыть сводку" : "Показать сводку"}
+          title={summaryShown ? "Скрыть сводку" : "Показать сводку"}
+          data-cashflow-toggle
+          className="hidden lg:grid place-items-center absolute right-0 top-1/2 z-10 w-6 h-6 translate-x-1/2 -translate-y-1/2 rounded-full border border-border bg-panel text-muted shadow-sm transition-colors duration-[var(--motion-fast)] hover:text-accent hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <ChevronRight
+            className={clsx(
+              "w-3.5 h-3.5 transition-transform duration-[var(--motion-slow)] ease-[var(--ease-soft)] motion-reduce:transition-none",
+              !summaryShown && "rotate-180"
+            )}
+            aria-hidden
+          />
+        </button>
         {/* «Зеркалу» выше: под графиком ещё легенда по сторонам. */}
         <div className={vizMode === "mirror" ? "h-[32rem]" : "h-80"}>
           {vizMode === "bars" && daily ? (
@@ -659,15 +677,13 @@ export function CashflowPage() {
         </div>
         {vizMode !== "mirror" && vsAvgRow}
         </div>
-        {summaryOpen && (
-          <MonthlySidePanel
-            months={months}
-            forecast={forecast}
-            base={base}
-            onMonth={openMonth}
-            onCollapse={() => void setSummaryOpen(false)}
-          />
-        )}
+        <MonthlySidePanel
+          months={months}
+          forecast={forecast}
+          base={base}
+          onMonth={openMonth}
+          shown={summaryShown}
+        />
         </div>
       </div>
 
@@ -849,26 +865,36 @@ function MonthlySidePanel({
   forecast,
   base,
   onMonth,
-  onCollapse,
+  shown,
 }: {
   months: MonthBucket[];
   forecast: ScenarioForecast[];
   base: string;
   onMonth: (ym: string) => void;
-  /** Свернуть панель: график встаёт во всю ширину, вернуть — кнопкой «Сводка» в шапке. */
-  onCollapse: () => void;
+  /** Свёрнута шевроном — колонка сужена до нуля, содержимое гаснет и недоступно. */
+  shown: boolean;
 }) {
   const [tab, setTab] = useState<"summary" | "forecast">("summary");
   const [exportSlot, setExportSlot] = useState<HTMLSpanElement | null>(null);
   const showForecast = tab === "forecast" && forecast.length > 0;
   const rate = (m: MonthBucket) => (m.income > 0 ? (m.income - m.expense) / m.income : null);
   return (
+    // Содержимое — постоянной ширины и прижато влево: пока колонка сужается,
+    // таблица не перестраивается, а уезжает за край и гаснет.
     <section
+      id="cashflow-side"
       aria-label={showForecast ? "Прогноз по месяцам" : "Помесячная сводка"}
-      data-cashflow-side
-      className="relative min-w-0 lg:border-l lg:border-border lg:pl-4 animate-fade"
+      data-cashflow-side={shown ? "" : undefined}
+      inert={!shown}
+      className="relative min-w-0 lg:overflow-hidden"
     >
-      <div className="flex flex-col lg:absolute lg:inset-0 lg:left-4">
+      <div
+        className={clsx(
+          "flex flex-col lg:absolute lg:inset-y-0 lg:left-0 lg:w-[29rem] lg:border-l lg:border-border lg:pl-4",
+          "transition-opacity duration-[var(--motion-slow)] ease-[var(--ease-soft)] motion-reduce:transition-none",
+          !shown && "opacity-0"
+        )}
+      >
         <div className="flex items-center justify-between gap-2 mb-2 min-h-[34px]">
           {forecast.length > 0 ? (
             <Segmented
@@ -887,19 +913,7 @@ function MonthlySidePanel({
               Помесячная сводка
             </span>
           )}
-          <div className="flex items-center gap-2">
-            {!showForecast && <span ref={setExportSlot} className="flex" />}
-            <button
-              type="button"
-              className="btn-ghost text-xs shrink-0"
-              onClick={onCollapse}
-              title="Свернуть сводку — график во всю ширину"
-              aria-label="Свернуть сводку"
-              aria-expanded
-            >
-              <PanelRightClose className="w-4 h-4" aria-hidden />
-            </button>
-          </div>
+          {!showForecast && <span ref={setExportSlot} className="flex" />}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto max-lg:max-h-80">
           {showForecast ? (
