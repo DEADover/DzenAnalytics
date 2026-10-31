@@ -936,7 +936,9 @@ function MonthlySidePanel({
           )}
           {!showForecast && <span ref={setExportSlot} className="flex" />}
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto max-lg:max-h-80">
+        {/* Место под полосу прокрутки — всегда: иначе с прокруткой и без неё
+            столбцы были бы разной ширины. */}
+        <div data-cashflow-scroll className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] max-lg:max-h-80">
           {showForecast ? (
             <DataTable<ScenarioForecast>
               bare

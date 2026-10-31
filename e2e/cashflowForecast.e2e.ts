@@ -124,3 +124,25 @@ test("шеврон сворачивает сводку плавно — граф
   await expect(side(page)).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
 });
+
+test("столбцы сводки одной ширины — с прокруткой и без", async ({ page }) => {
+  await connectZen(page, "/cashflow");
+  const scroll = side(page).locator("[data-cashflow-scroll]");
+  await scroll.scrollIntoViewIfNeeded();
+  const widths = () =>
+    scroll.locator("thead th").evaluateAll((ths) => ths.map((th) => Math.round(th.getBoundingClientRect().width)));
+  const hasScroll = () => scroll.evaluate((el) => el.scrollHeight > el.clientHeight);
+  expect(await hasScroll()).toBe(false);
+  const without = await widths();
+  // Низкая панель — строки не помещаются, появляется прокрутка.
+  await scroll.evaluate((el) => {
+    el.style.flex = "none";
+    el.style.height = "120px";
+  });
+  expect(await hasScroll()).toBe(true);
+  expect(await widths()).toEqual(without);
+  // Браузер тестов полосы прокрутки не рисует, поэтому ширины выше совпали бы
+  // и так. Главное — место под полосу зарезервировано всегда, и у системы с
+  // видимой полосой столбцы не сужаются, когда она появляется.
+  expect(await scroll.evaluate((el) => getComputedStyle(el).scrollbarGutter)).toBe("stable");
+});
