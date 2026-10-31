@@ -411,8 +411,8 @@ export function RecurringPage() {
               в <InfoTerm>двух разных месяцах</InfoTerm>, а средний промежуток
               между ними — от <InfoTerm>5 до 95 дней</InfoTerm>. Разовая покупка
               и платежи раз в год так не находятся. Дальше смотрим, насколько
-              ровные суммы и промежутки: если скачет и то и другое, платёж
-              регулярным не считаем.
+              ровные суммы и промежутки: если скачет и то и другое, платёж в
+              список не попадает.
             </p>
             <p>
               <InfoTerm>«≈ в месяц»</InfoTerm> — все найденные платежи,
@@ -465,7 +465,7 @@ export function RecurringPage() {
               ) : (
                 <>
                   Планы и прогнозы появятся после синхронизации с Дзен-мани.
-                  Автоопределённые регулярные платежи — во вкладке «Планы
+                  Платежи, найденные по вашей истории, — во вкладке «Планы
                   DzenAnalytics».
                 </>
               )}
@@ -538,7 +538,7 @@ export function RecurringPage() {
           label="Найдено"
           value={formatNum(candidates.length)}
           icon={<Repeat className="w-4 h-4" />}
-          note="регулярных платежей"
+          note="запланированных платежей"
         />
         <StatCell
           label="≈ в месяц"
@@ -624,7 +624,7 @@ export function RecurringPage() {
       {candidates.length === 0 && (
         <SectionEmpty
           icon={AlertCircle}
-          title="Регулярных платежей не найдено"
+          title="Запланированных платежей не найдено"
         >
           Нужно минимум 3 повтора одного получателя с интервалом ~раз в месяц.
         </SectionEmpty>
@@ -666,7 +666,7 @@ export function RecurringPage() {
       {candidates.length > 0 && (
         <DataTable<RecurringCandidate>
           icon={ListChecks}
-          title="Все регулярные платежи"
+          title="Все запланированные платежи"
           data={candidates}
           columns={recurringColumns}
           // 63,5rem узких колонок (64,5 — в режиме «₽ %») и по ~8,5rem
