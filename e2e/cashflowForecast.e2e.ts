@@ -82,24 +82,27 @@ test("шеврон сворачивает сводку плавно — граф
   const narrow = (await chart.boundingBox())!.width;
   // Шеврон — маленький, на разделительной линии между графиком и сводкой.
   const t = (await toggle.boundingBox())!;
-  const p = (await side(page).locator("> div").boundingBox())!;
+  const p = (await page.locator("#cashflow-side-body").boundingBox())!;
   expect(t.width).toBeLessThanOrEqual(24);
   expect(Math.abs(t.x + t.width / 2 - p.x)).toBeLessThan(2);
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
 
-  // Плавно: колонка сводки сужается через промежуточные ширины, а не скачком.
-  const [before, widths] = await page.evaluate(async () => {
+  // Плавно: сводка уезжает вправо сдвигом через промежуточные положения, а не
+  // пропадает скачком; ширина у неё при этом прежняя — ничего не перестраивается.
+  const [before, lefts] = await page.evaluate(async () => {
     const sec = document.getElementById("cashflow-side")!;
-    const w0 = sec.getBoundingClientRect().width;
+    const x0 = sec.getBoundingClientRect().left;
     (document.querySelector("[data-cashflow-toggle]") as HTMLElement).click();
     const seen: number[] = [];
     for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 25));
-      seen.push(sec.getBoundingClientRect().width);
+      seen.push(sec.getBoundingClientRect().left);
     }
-    return [w0, seen] as const;
+    return [x0, seen] as const;
   });
-  expect(widths.some((w) => w > 5 && w < before - 5)).toBe(true);
+  const end = lefts[lefts.length - 1];
+  expect(end).toBeGreaterThan(before + 300);
+  expect(lefts.some((x) => x > before + 5 && x < end - 5)).toBe(true);
   await expect.poll(async () => (await chart.boundingBox())!.width).toBeGreaterThan(narrow + 300);
   await expect(side(page)).toHaveCount(0);
   await expect(toggle).toHaveAttribute("aria-expanded", "false");

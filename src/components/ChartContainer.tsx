@@ -1,6 +1,27 @@
 import { Children, isValidElement, useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import { ResponsiveContainer } from "recharts";
 
+/** Скачок ширины, после которого график проявляется заново, px. */
+const JUMP_PX = 120;
+
+/** Мягкое проявление графика после перестройки: из лёгкого размытия. */
+function softRedraw(el: HTMLElement | null) {
+  if (!el || typeof el.animate !== "function") return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  // Длительность и кривая — общие для движения (index.css).
+  const root = getComputedStyle(document.documentElement);
+  el.animate(
+    [
+      { opacity: 0.35, filter: "blur(2px)" },
+      { opacity: 1, filter: "blur(0)" },
+    ],
+    {
+      duration: parseFloat(root.getPropertyValue("--motion-base")) || 250,
+      easing: root.getPropertyValue("--ease-soft").trim() || "ease-out",
+    }
+  );
+}
+
 /**
  * Контейнер графика на всё место родителя — единственный способ ставить
  * графики Recharts в панели (вместо ResponsiveContainer напрямую).
@@ -33,22 +54,25 @@ export function ChartContainer({ children }: { children: ReactElement }) {
   useLayoutEffect(() => {
     if (shape === lastShape.current) return;
     lastShape.current = shape;
-    const el = ref.current;
-    if (!el || typeof el.animate !== "function") return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    // Длительность и кривая — общие для движения (index.css).
-    const root = getComputedStyle(document.documentElement);
-    el.animate(
-      [
-        { opacity: 0.35, filter: "blur(2px)" },
-        { opacity: 1, filter: "blur(0)" },
-      ],
-      {
-        duration: parseFloat(root.getPropertyValue("--motion-base")) || 250,
-        easing: root.getPropertyValue("--ease-soft").trim() || "ease-out",
-      }
-    );
+    softRedraw(ref.current);
   }, [shape]);
+
+  // Место резко поменялось — свернули панель рядом, открыли сводку: график
+  // перестраивается под новую ширину один раз и так же мягко проявляется,
+  // а не перескакивает. Плавное перетягивание окна сюда не попадает: там
+  // ширина меняется понемногу.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let width = el.getBoundingClientRect().width;
+    const ro = new ResizeObserver(() => {
+      const w = el.getBoundingClientRect().width;
+      if (width > 1 && Math.abs(w - width) > JUMP_PX) softRedraw(el);
+      width = w;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <div ref={ref} style={{ width: "100%", height: "100%" }}>

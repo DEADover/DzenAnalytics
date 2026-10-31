@@ -100,13 +100,6 @@ export function CashflowPage() {
 
   const showDrill = useDrillStore((s) => s.show);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
-  // Сводку справа можно свернуть — тогда график во всю ширину. Запоминается.
-  const summaryOpen = useDisplayStore((s) => s.cashflowSummary);
-  const setSummaryOpen = useDisplayStore((s) => s.setCashflowSummary);
-  // Сворачивается только рядом с графиком: на узком окне сводка стоит под
-  // ним и места не отнимает.
-  const wide = useMediaQuery("(min-width: 1024px)");
-  const summaryShown = summaryOpen || !wide;
 
   // This is a history chart, so it has its OWN period (default «12 мес») rather
   // than inheriting the global «месяц» filter — otherwise a first visit would
@@ -447,33 +440,13 @@ export function CashflowPage() {
         {/* Справа от графика — помесячная сводка, а где прогноз уместен, по
             переключателю — и он. Отдельной таблицей во всю ширину под
             страницей сводка была растянута ради нескольких узких столбцов. */}
-        {/* Шеврон на разделительной линии сворачивает сводку вправо: колонка
-            плавно сужается до нуля, график плавно встаёт во всю ширину. */}
-        <div
-          className={clsx(
-            "grid gap-4 lg:gap-0 lg:transition-[grid-template-columns] lg:duration-[var(--motion-slow)] lg:ease-[var(--ease-soft)] motion-reduce:transition-none",
-            summaryShown ? "lg:grid-cols-[minmax(0,1fr)_29rem]" : "lg:grid-cols-[minmax(0,1fr)_0rem]"
-          )}
-        >
-        <div className="relative min-w-0 lg:pr-4">
-        <button
-          type="button"
-          onClick={() => void setSummaryOpen(!summaryOpen)}
-          aria-expanded={summaryShown}
-          aria-controls="cashflow-side"
-          aria-label={summaryShown ? "Скрыть сводку" : "Показать сводку"}
-          title={summaryShown ? "Скрыть сводку" : "Показать сводку"}
-          data-cashflow-toggle
-          className="hidden lg:grid place-items-center absolute right-0 top-1/2 z-10 w-6 h-6 translate-x-1/2 -translate-y-1/2 rounded-full border border-border bg-panel text-muted shadow-sm transition-colors duration-[var(--motion-fast)] hover:text-accent hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-        >
-          <ChevronRight
-            className={clsx(
-              "w-3.5 h-3.5 transition-transform duration-[var(--motion-slow)] ease-[var(--ease-soft)] motion-reduce:transition-none",
-              !summaryShown && "rotate-180"
-            )}
-            aria-hidden
-          />
-        </button>
+        {/* Сводка справа — поверх запаса справа у графика. Шеврон на линии
+            между ними уводит её вправо сдвигом (transform — без перестройки
+            страницы на каждом кадре, поэтому плавно), а график перестраивается
+            под новую ширину один раз и мягко проявляется (ChartContainer).
+            Анимировать саму ширину колонки нельзя: график перерисовывался бы
+            на каждом кадре и дёргался. */}
+        <SummarySplit panel={{ months, forecast, base, onMonth: openMonth }}>
         {/* «Зеркалу» выше: под графиком ещё легенда по сторонам. */}
         <div className={vizMode === "mirror" ? "h-[32rem]" : "h-80"}>
           {vizMode === "bars" && daily ? (
@@ -676,15 +649,7 @@ export function CashflowPage() {
           )}
         </div>
         {vizMode !== "mirror" && vsAvgRow}
-        </div>
-        <MonthlySidePanel
-          months={months}
-          forecast={forecast}
-          base={base}
-          onMonth={openMonth}
-          shown={summaryShown}
-        />
-        </div>
+        </SummarySplit>
       </div>
 
       {allYears.length >= 2 && (
@@ -851,6 +816,35 @@ export function CashflowPage() {
 }
 
 /**
+ * График и сводка справа от него. Свёрнута ли сводка, знает только этот
+ * компонент: график сюда приходит готовым (`children`), и по шеврону
+ * перерисовываются лишь обёртка и панель, а не вся страница с её графиками —
+ * иначе в момент нажатия анимация запиналась.
+ */
+function SummarySplit({
+  children,
+  panel,
+}: {
+  children: ReactNode;
+  panel: Omit<Parameters<typeof MonthlySidePanel>[0], "shown" | "onToggle">;
+}) {
+  // Выбор запоминается. Сворачивается только рядом с графиком: на узком окне
+  // сводка стоит под ним и места не отнимает.
+  const open = useDisplayStore((s) => s.cashflowSummary);
+  const setOpen = useDisplayStore((s) => s.setCashflowSummary);
+  const wide = useMediaQuery("(min-width: 1024px)");
+  const shown = open || !wide;
+  return (
+    <div className="relative lg:overflow-x-clip">
+      <div className={clsx("min-w-0 [&_.recharts-tooltip-wrapper]:z-20", shown ? "lg:pr-[30rem]" : "lg:pr-8")}>
+        {children}
+      </div>
+      <MonthlySidePanel {...panel} shown={shown} onToggle={() => void setOpen(!open)} />
+    </div>
+  );
+}
+
+/**
  * Помесячная сводка справа от графика. Где прогноз уместен (см.
  * lib/cashflowForecast), переключатель «Сводка / Прогноз» показывает и
  * прогнозные месяцы. Норма сбережений и число операций — в подсказке
@@ -866,33 +860,58 @@ function MonthlySidePanel({
   base,
   onMonth,
   shown,
+  onToggle,
 }: {
   months: MonthBucket[];
   forecast: ScenarioForecast[];
   base: string;
   onMonth: (ym: string) => void;
-  /** Свёрнута шевроном — колонка сужена до нуля, содержимое гаснет и недоступно. */
+  /** Свёрнута шевроном — уехала вправо, содержимое погасло и недоступно. */
   shown: boolean;
+  onToggle: () => void;
 }) {
   const [tab, setTab] = useState<"summary" | "forecast">("summary");
   const [exportSlot, setExportSlot] = useState<HTMLSpanElement | null>(null);
   const showForecast = tab === "forecast" && forecast.length > 0;
   const rate = (m: MonthBucket) => (m.income > 0 ? (m.income - m.expense) / m.income : null);
   return (
-    // Содержимое — постоянной ширины и прижато влево: пока колонка сужается,
-    // таблица не перестраивается, а уезжает за край и гаснет.
+    // Свёрнутая — сдвинута вправо почти целиком: на виду остаётся только
+    // шеврон у правого края графика.
     <section
       id="cashflow-side"
       aria-label={showForecast ? "Прогноз по месяцам" : "Помесячная сводка"}
       data-cashflow-side={shown ? "" : undefined}
-      inert={!shown}
-      className="relative min-w-0 lg:overflow-hidden"
+      className={clsx(
+        "relative min-w-0 max-lg:mt-4 lg:absolute lg:inset-y-0 lg:right-0 lg:w-[29rem]",
+        "lg:transition-transform lg:duration-[var(--motion-slow)] lg:ease-[var(--ease-soft)] motion-reduce:transition-none",
+        !shown && "lg:translate-x-[calc(29rem-0.75rem)]"
+      )}
     >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={shown}
+        aria-controls="cashflow-side-body"
+        aria-label={shown ? "Скрыть сводку" : "Показать сводку"}
+        title={shown ? "Скрыть сводку" : "Показать сводку"}
+        data-cashflow-toggle
+        className="hidden lg:grid place-items-center absolute left-0 top-1/2 z-10 w-6 h-6 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border bg-panel text-muted shadow-sm transition-colors duration-[var(--motion-fast)] hover:text-accent hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
+        <ChevronRight
+          className={clsx(
+            "w-3.5 h-3.5 transition-transform duration-[var(--motion-slow)] ease-[var(--ease-soft)] motion-reduce:transition-none",
+            !shown && "rotate-180"
+          )}
+          aria-hidden
+        />
+      </button>
       <div
+        id="cashflow-side-body"
+        inert={!shown}
         className={clsx(
-          "flex flex-col lg:absolute lg:inset-y-0 lg:left-0 lg:w-[29rem] lg:border-l lg:border-border lg:pl-4",
+          "flex flex-col lg:h-full lg:border-l lg:border-border lg:pl-4",
           "transition-opacity duration-[var(--motion-slow)] ease-[var(--ease-soft)] motion-reduce:transition-none",
-          !shown && "opacity-0"
+          !shown && "lg:opacity-0"
         )}
       >
         <div className="flex items-center justify-between gap-2 mb-2 min-h-[34px]">
