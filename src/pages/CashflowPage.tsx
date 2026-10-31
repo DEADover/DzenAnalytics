@@ -42,7 +42,6 @@ import { periodKey, periodRange, shiftDays, spanDays } from "../lib/period";
 import {
   groupByMonth,
   computeKPI,
-  buildInsights,
   buildScenarioForecast,
   yearOverYearMonthly,
   vsAverageStats,
@@ -52,7 +51,6 @@ import {
   type MirrorLayer,
   type MirrorPoint,
 } from "../lib/aggregations";
-import { InsightsPanel } from "../components/InsightsPanel";
 import {
   formatMoney,
   formatPct,
@@ -127,7 +125,6 @@ export function CashflowPage() {
     [filtered, monthStartDay]
   );
   const kpi = useMemo(() => computeKPI(filtered), [filtered]);
-  const insights = useMemo(() => buildInsights(filtered, monthStartDay), [filtered, monthStartDay]);
   const vsAvg = useMemo(
     () => vsAverageStats(filtered, { monthStartDay }),
     [filtered, monthStartDay]
@@ -398,8 +395,6 @@ export function CashflowPage() {
           note={`${kpi.daysSpan} дн · ${kpi.uniqueCategories} кат · ${kpi.uniquePayees} получ.`}
         />
       </StatRow>
-
-      <InsightsPanel insights={insights} base={base} />
 
       <div className="card-tray card-pad">
         <CardHeader

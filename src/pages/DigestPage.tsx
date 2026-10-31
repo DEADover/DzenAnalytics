@@ -52,6 +52,8 @@ import type { Transaction } from "../types";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { useLazyList } from "../hooks/useLazyList";
 import { SectionControls } from "../components/SectionControls";
+import { DigestObservations } from "../components/DigestObservations";
+import { buildObservations, type DigestObservation } from "../lib/digestObservations";
 
 
 type Tab = "week" | "month";
@@ -106,6 +108,10 @@ export function DigestPage() {
   const fallback =
     filtered[0]?.running && filtered[0].running.day < 7 && filtered[1] ? filtered[1] : filtered[0];
   const current = (selected && filtered.find((e) => e.id === selected)) || fallback || null;
+  const observations = useMemo(
+    () => (current ? buildObservations(transactions, current) : []),
+    [transactions, current]
+  );
 
   if (transactions.length === 0) return <EmptyState />;
 
@@ -202,6 +208,7 @@ export function DigestPage() {
           {current && (
             <DigestDetail
               entry={current}
+              observations={observations}
               baseCurrency={baseCurrency}
               onOpenTx={(txs, title) => showDrill(title, txs, "Дайджест")}
               onOpenDay={(date) =>
@@ -247,12 +254,15 @@ const MOVER_COLUMNS: MeterCell[] = [
 
 function DigestDetail({
   entry,
+  observations,
   baseCurrency,
   onOpenTx,
   onOpenDay,
   onOpenCategory,
 }: {
   entry: DigestEntry;
+  /** Наблюдения периода — см. lib/digestObservations. */
+  observations: DigestObservation[];
   baseCurrency: string;
   onOpenTx: (txs: Transaction[], title: string) => void;
   /** Операции одной статьи за этот период. */
@@ -383,6 +393,10 @@ function DigestDetail({
           onDay={onOpenDay}
         />
       </SectionCard>
+
+      {/* Наблюдения — сразу под днями: будни и выходные, день недели,
+          половины месяца — про то же, как траты ложатся по дням. */}
+      <DigestObservations items={observations} entry={entry} base={baseCurrency} />
 
       {(entry.topPayees.length > 0 || entry.newPayees.length > 0) && (
         <div className="grid gap-4 lg:grid-cols-2">
