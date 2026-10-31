@@ -72,3 +72,31 @@ test("год до декабря — прогноз до конца года; п
   await expect(forecastTab(page)).toHaveCount(0);
   await expect(side(page).getByText("Помесячная сводка", { exact: true })).toBeVisible();
 });
+
+test("сводку можно свернуть — график во всю ширину, выбор запоминается", async ({ page }) => {
+  await connectZen(page, "/cashflow");
+  const chart = page.locator(".recharts-wrapper").first();
+  await side(page).scrollIntoViewIfNeeded();
+  const narrow = (await chart.boundingBox())!.width;
+  // Кнопки в шапке панели — одной высоты.
+  const heights = await side(page).locator("button, .seg-track").evaluateAll((els) =>
+    [...new Set(els.filter((e) => e.matches(".seg-track, .btn-ghost")).map((e) => Math.round(e.getBoundingClientRect().height)))]
+  );
+  expect(heights).toEqual([34]);
+
+  await side(page).getByRole("button", { name: "Свернуть сводку" }).click();
+  await expect(side(page)).toHaveCount(0);
+  await expect.poll(async () => (await chart.boundingBox())!.width).toBeGreaterThan(narrow + 300);
+  const expand = page.locator('button[title="Показать помесячную сводку справа от графика"], button[data-native-title="Показать помесячную сводку справа от графика"]');
+  await expect(expand).toBeVisible();
+  if (process.env.E2E_SHOTS)
+    await page.locator(".card-tray", { has: expand }).screenshot({ path: process.env.E2E_SHOTS + "/cashflow-collapsed.png" });
+
+  await page.reload();
+  await expect(expand).toBeVisible();
+  await expect(side(page)).toHaveCount(0);
+
+  await expand.click();
+  await expect(side(page)).toBeVisible();
+  await expect(page.locator('button[title="Показать помесячную сводку справа от графика"]')).toHaveCount(0);
+});

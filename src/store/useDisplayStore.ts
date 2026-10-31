@@ -144,6 +144,8 @@ interface DisplayState {
    * объект под одним ключом и входит в бэкап.
    */
   syncLogOpen: boolean;
+  /** Помесячная сводка справа от графика «Cash-flow» развёрнута. */
+  cashflowSummary: boolean;
   /**
    * Спрятать значок-сердечко «Отблагодарить автора» в шапке и строку в меню
    * телефона. По умолчанию значок есть: раньше ссылка стояла в подвале.
@@ -200,6 +202,7 @@ interface DisplayState {
   setFeedPlanned: (on: boolean) => Promise<void>;
   setFeedPlannedMode: (mode: FeedPlannedMode) => Promise<void>;
   setSyncLogOpen: (on: boolean) => Promise<void>;
+  setCashflowSummary: (on: boolean) => Promise<void>;
   setHideThanks: (on: boolean) => Promise<void>;
   setQuickSettings: (on: boolean) => Promise<void>;
   setHints: (on: boolean) => Promise<void>;
@@ -219,6 +222,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   feedPlanned: true,
   feedPlannedMode: "bar",
   syncLogOpen: false,
+  cashflowSummary: true,
   hideThanks: false,
   quickSettings: true,
   hints: true,
@@ -242,6 +246,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       feedPlanned?: boolean;
       feedPlannedMode?: unknown;
       syncLogOpen?: boolean;
+      cashflowSummary?: boolean;
       hideThanks?: boolean;
       quickSettings?: boolean;
       hints?: boolean;
@@ -266,6 +271,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       feedPlanned: stored?.feedPlanned !== false,
       feedPlannedMode: isFeedPlannedMode(stored?.feedPlannedMode) ? stored.feedPlannedMode : "bar",
       syncLogOpen: stored?.syncLogOpen === true,
+      cashflowSummary: stored?.cashflowSummary !== false,
       hideThanks: stored?.hideThanks === true,
       quickSettings: stored?.quickSettings !== false,
       hints: stored?.hints !== false,
@@ -326,6 +332,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     await db.saveJSON(KEY, { ...persisted(get()), syncLogOpen: on });
   },
 
+  setCashflowSummary: async (on) => {
+    set({ cashflowSummary: on });
+    await db.saveJSON(KEY, { ...persisted(get()), cashflowSummary: on });
+  },
+
   setHideThanks: async (on) => {
     set({ hideThanks: on });
     await db.saveJSON(KEY, { ...persisted(get()), hideThanks: on });
@@ -379,6 +390,7 @@ function persisted(s: DisplayState) {
     feedPlanned: s.feedPlanned,
     feedPlannedMode: s.feedPlannedMode,
     syncLogOpen: s.syncLogOpen,
+    cashflowSummary: s.cashflowSummary,
     hideThanks: s.hideThanks,
     quickSettings: s.quickSettings,
     hints: s.hints,

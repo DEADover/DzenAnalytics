@@ -26,8 +26,11 @@ import {
   LineChart as LineChartIcon,
   Sparkles,
   Table as TableIcon,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { colorForCategory } from "../lib/categoryColor";
 import { useFiltersStore, applyFilters, presetToRange } from "../store/useFiltersStore";
@@ -96,6 +99,9 @@ export function CashflowPage() {
 
   const showDrill = useDrillStore((s) => s.show);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  // Сводку справа можно свернуть — тогда график во всю ширину. Запоминается.
+  const summaryOpen = useDisplayStore((s) => s.cashflowSummary);
+  const setSummaryOpen = useDisplayStore((s) => s.setCashflowSummary);
 
   // This is a history chart, so it has its OWN period (default «12 мес») rather
   // than inheriting the global «месяц» filter — otherwise a first visit would
@@ -430,13 +436,25 @@ export function CashflowPage() {
                 ]}
               />
               <div className="text-xs text-muted">{daily ? `${dayKeys!.length} дн.` : `${months.length} мес.`}</div>
+              {!summaryOpen && (
+                <button
+                  type="button"
+                  className="btn-ghost text-xs shrink-0"
+                  onClick={() => void setSummaryOpen(true)}
+                  title="Показать помесячную сводку справа от графика"
+                  aria-expanded={false}
+                >
+                  <PanelRightOpen className="w-3.5 h-3.5" aria-hidden />
+                  Сводка
+                </button>
+              )}
             </>
           }
         />
         {/* Справа от графика — помесячная сводка, а где прогноз уместен, по
             переключателю — и он. Отдельной таблицей во всю ширину под
             страницей сводка была растянута ради нескольких узких столбцов. */}
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_28rem]">
+        <div className={summaryOpen ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_28rem]" : "grid"}>
         <div className="min-w-0">
         {/* «Зеркалу» выше: под графиком ещё легенда по сторонам. */}
         <div className={vizMode === "mirror" ? "h-[32rem]" : "h-80"}>
@@ -641,7 +659,15 @@ export function CashflowPage() {
         </div>
         {vizMode !== "mirror" && vsAvgRow}
         </div>
-        <MonthlySidePanel months={months} forecast={forecast} base={base} onMonth={openMonth} />
+        {summaryOpen && (
+          <MonthlySidePanel
+            months={months}
+            forecast={forecast}
+            base={base}
+            onMonth={openMonth}
+            onCollapse={() => void setSummaryOpen(false)}
+          />
+        )}
         </div>
       </div>
 
@@ -823,11 +849,14 @@ function MonthlySidePanel({
   forecast,
   base,
   onMonth,
+  onCollapse,
 }: {
   months: MonthBucket[];
   forecast: ScenarioForecast[];
   base: string;
   onMonth: (ym: string) => void;
+  /** Свернуть панель: график встаёт во всю ширину, вернуть — кнопкой «Сводка» в шапке. */
+  onCollapse: () => void;
 }) {
   const [tab, setTab] = useState<"summary" | "forecast">("summary");
   const [exportSlot, setExportSlot] = useState<HTMLSpanElement | null>(null);
@@ -837,7 +866,7 @@ function MonthlySidePanel({
     <section
       aria-label={showForecast ? "Прогноз по месяцам" : "Помесячная сводка"}
       data-cashflow-side
-      className="relative min-w-0 lg:border-l lg:border-border lg:pl-4"
+      className="relative min-w-0 lg:border-l lg:border-border lg:pl-4 animate-fade"
     >
       <div className="flex flex-col lg:absolute lg:inset-0 lg:left-4">
         <div className="flex items-center justify-between gap-2 mb-2 min-h-[34px]">
@@ -858,7 +887,19 @@ function MonthlySidePanel({
               Помесячная сводка
             </span>
           )}
-          {!showForecast && <span ref={setExportSlot} className="flex" />}
+          <div className="flex items-center gap-2">
+            {!showForecast && <span ref={setExportSlot} className="flex" />}
+            <button
+              type="button"
+              className="btn-ghost text-xs shrink-0"
+              onClick={onCollapse}
+              title="Свернуть сводку — график во всю ширину"
+              aria-label="Свернуть сводку"
+              aria-expanded
+            >
+              <PanelRightClose className="w-4 h-4" aria-hidden />
+            </button>
+          </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto max-lg:max-h-80">
           {showForecast ? (
