@@ -76,8 +76,9 @@ import { pluralRu } from "../lib/plural";
 import { ChartTooltipCard, TooltipFacts, SeriesTooltip } from "../components/TooltipFacts";
 import { DataTable } from "../components/DataTable";
 import { toneOfSigned } from "../components/table/tableKit";
-import type { MonthBucket } from "../lib/aggregations";
+import type { MonthBucket, ScenarioForecast } from "../lib/aggregations";
 import { clickedRow } from "../lib/chartClick";
+import { forecastMonths } from "../lib/cashflowForecast";
 import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 
 export function CashflowPage() {
@@ -258,14 +259,26 @@ export function CashflowPage() {
 
   if (transactions.length === 0) return <EmptyState />;
 
-  // Forecast is built from the full history; show only the SELECTED period's
-  // historical bars (plus the forecast months, always). income/expense are
-  // populated for EVERY month (historical or forecast) so both use the same two
-  // bar series — no empty reserved slots, no gap between past and forecast. The
-  // forecast months are styled apart via <Cell> (lighter + dashed).
+  // Прогноз считается по всей истории, а на графике — столбцы только
+  // выбранного периода и прогнозные месяцы, если период доходит до конца
+  // истории (см. lib/cashflowForecast: для прошлого периода прогноза нет, на
+  // коротком он короче). Доходы и расходы заполнены у всех месяцев — и
+  // прошлых, и прогнозных: две серии столбцов без пустых мест и без разрыва
+  // между прошлым и прогнозом. Прогнозные месяцы отличаются оформлением
+  // (<Cell>: светлее и пунктиром).
   const periodYms = new Set(months.map((m) => m.ym));
-  const chartData = scenarios
-    .filter((p) => p.isForecast || periodYms.has(p.ym))
+  const history = scenarios.filter((p) => !p.isForecast);
+  const lastHistYm = history.length ? history[history.length - 1].ym : null;
+  const periodEnd = lp.preset === "custom" ? lp.to : periodBounds.to;
+  const nForecast = daily
+    ? 0
+    : forecastMonths({
+        lastHistYm,
+        periodEndYm: periodEnd ? (monthStartDay === 1 ? ymKey(periodEnd) : periodKey(periodEnd, monthStartDay)) : null,
+        shownMonths: history.filter((p) => periodYms.has(p.ym)).length,
+      });
+  const forecast = scenarios.filter((p) => p.isForecast).slice(0, nForecast);
+  const chartData = [...history.filter((p) => periodYms.has(p.ym)), ...forecast]
     .map((p) => ({
       ym: p.ym,
       month: monthLabel(p.ym),
@@ -420,6 +433,11 @@ export function CashflowPage() {
             </>
           }
         />
+        {/* Справа от графика — помесячная сводка, а где прогноз уместен, по
+            переключателю — и он. Отдельной таблицей во всю ширину под
+            страницей сводка была растянута ради нескольких узких столбцов. */}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_28rem]">
+        <div className="min-w-0">
         {/* «Зеркалу» выше: под графиком ещё легенда по сторонам. */}
         <div className={vizMode === "mirror" ? "h-[32rem]" : "h-80"}>
           {vizMode === "bars" && daily ? (
@@ -479,7 +497,7 @@ export function CashflowPage() {
                       { label: "Расходы", color: chartColor.expense, bar: true },
                       { label: "Чистый поток", color: chartColor.accent, bar: false },
                       { label: "Прогноз", color: chartColor.accent2, bar: false, dashed: true },
-                    ].map((it) => (
+                    ].filter((it) => it.label !== "Прогноз" || forecast.length > 0).map((it) => (
                       <span key={it.label} className="inline-flex items-center gap-1.5" style={{ color: it.color }}>
                         {it.bar ? (
                           <span style={{ width: 12, height: 12, borderRadius: 2, background: it.color }} />
@@ -622,6 +640,9 @@ export function CashflowPage() {
           )}
         </div>
         {vizMode !== "mirror" && vsAvgRow}
+        </div>
+        <MonthlySidePanel months={months} forecast={forecast} base={base} onMonth={openMonth} />
+        </div>
       </div>
 
       {allYears.length >= 2 && (
@@ -783,62 +804,176 @@ export function CashflowPage() {
         </div>
       )}
 
-      <DataTable<MonthBucket>
-        icon={TableIcon}
-        title="Помесячная сводка"
-        data={months}
-        rowKey={(m) => m.ym}
-        defaultSortKey="ym"
-        defaultSortDir="desc"
-        onRowClick={(m) => openMonth(m.ym)}
-        exportName="cashflow_monthly"
-        columns={[
-          {
-            key: "ym",
-            type: "text",
-            label: "Месяц",
-            sortValue: (m) => m.ym,
-            render: (m) => monthLabelFull(m.ym),
-          },
-          {
-            key: "income",
-            type: "money",
-            label: "Доходы",
-            sortValue: (m) => m.income,
-            render: (m) => formatMoney(m.income, base),
-          },
-          {
-            key: "expense",
-            type: "money",
-            label: "Расходы",
-            sortValue: (m) => m.expense,
-            render: (m) => formatMoney(m.expense, base),
-          },
-          {
-            key: "net",
-            type: "main",
-            tone: (m) => toneOfSigned(m.net),
-            label: "Чистый",
-            sortValue: (m) => m.net,
-            render: (m) => formatMoney(m.net, base, { signed: true }),
-          },
-          {
-            key: "rate",
-            type: "pct",
-            label: "Норма сбер.",
-            sortValue: (m) => (m.income > 0 ? (m.income - m.expense) / m.income : null),
-            render: (m) => (m.income > 0 ? formatPct((m.income - m.expense) / m.income, 0) : "—"),
-          },
-          {
-            key: "count",
-            type: "count",
-            label: "Операций",
-            sortValue: (m) => m.count,
-            render: (m) => formatNum(m.count),
-          },
-        ]}
-      />
     </div>
+  );
+}
+
+/**
+ * Помесячная сводка справа от графика. Где прогноз уместен (см.
+ * lib/cashflowForecast), переключатель «Сводка / Прогноз» показывает и
+ * прогнозные месяцы. Норма сбережений и число операций — в подсказке
+ * «Чистого»: отдельными столбцами панель не помещалась рядом с графиком, а в
+ * выгрузке CSV они есть.
+ *
+ * На широком окне панель ровно в высоту графика и прокручивается внутри;
+ * на узком встаёт под графиком.
+ */
+function MonthlySidePanel({
+  months,
+  forecast,
+  base,
+  onMonth,
+}: {
+  months: MonthBucket[];
+  forecast: ScenarioForecast[];
+  base: string;
+  onMonth: (ym: string) => void;
+}) {
+  const [tab, setTab] = useState<"summary" | "forecast">("summary");
+  const [exportSlot, setExportSlot] = useState<HTMLSpanElement | null>(null);
+  const showForecast = tab === "forecast" && forecast.length > 0;
+  const rate = (m: MonthBucket) => (m.income > 0 ? (m.income - m.expense) / m.income : null);
+  return (
+    <section
+      aria-label={showForecast ? "Прогноз по месяцам" : "Помесячная сводка"}
+      data-cashflow-side
+      className="relative min-w-0 lg:border-l lg:border-border lg:pl-4"
+    >
+      <div className="flex flex-col lg:absolute lg:inset-0 lg:left-4">
+        <div className="flex items-center justify-between gap-2 mb-2 min-h-[34px]">
+          {forecast.length > 0 ? (
+            <Segmented
+              size="sm"
+              label="Сводка или прогноз"
+              value={showForecast ? "forecast" : "summary"}
+              onChange={setTab}
+              options={[
+                { value: "summary", label: "Сводка", icon: TableIcon },
+                { value: "forecast", label: "Прогноз", icon: Sparkles },
+              ]}
+            />
+          ) : (
+            <span className="inline-flex items-center gap-2 text-sm font-semibold">
+              <TableIcon className="w-4 h-4 text-accent" aria-hidden />
+              Помесячная сводка
+            </span>
+          )}
+          {!showForecast && <span ref={setExportSlot} className="flex" />}
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto max-lg:max-h-80">
+          {showForecast ? (
+            <DataTable<ScenarioForecast>
+              bare
+              stickyHead
+              density="compact"
+              exportable={false}
+              data={forecast}
+              rowKey={(p) => p.ym}
+              columns={[
+                {
+                  key: "ym",
+                  type: "text",
+                  label: "Месяц",
+                  sortable: false,
+                  render: (p) => <span className="whitespace-nowrap">{monthLabel(p.ym)}</span>,
+                },
+                {
+                  key: "income",
+                  type: "money",
+                  label: "Доходы",
+                  sortable: false,
+                  render: (p) => formatMoney(p.income, base),
+                },
+                {
+                  key: "expense",
+                  type: "money",
+                  label: "Расходы",
+                  sortable: false,
+                  render: (p) => formatMoney(p.expense, base),
+                },
+                {
+                  key: "net",
+                  type: "main",
+                  tone: (p) => toneOfSigned(p.realistic),
+                  label: "Чистый",
+                  sortable: false,
+                  cellTitle: (p) =>
+                    `Коридор: от ${formatMoney(p.pessimistic, base, { signed: true })} до ${formatMoney(p.optimistic, base, { signed: true })}`,
+                  render: (p) => formatMoney(p.realistic, base, { signed: true }),
+                },
+              ]}
+            />
+          ) : (
+            <DataTable<MonthBucket>
+              bare
+              stickyHead
+              density="compact"
+              exportSlot={exportSlot}
+              exportName="cashflow_monthly"
+              data={months}
+              rowKey={(m) => m.ym}
+              defaultSortKey="ym"
+              defaultSortDir="desc"
+              onRowClick={(m) => onMonth(m.ym)}
+              columns={[
+                {
+                  key: "ym",
+                  type: "text",
+                  label: "Месяц",
+                  sortValue: (m) => m.ym,
+                  exportValue: (m) => monthLabelFull(m.ym),
+                  render: (m) => <span className="whitespace-nowrap">{monthLabel(m.ym)}</span>,
+                },
+                {
+                  key: "income",
+                  type: "money",
+                  label: "Доходы",
+                  sortValue: (m) => m.income,
+                  render: (m) => formatMoney(m.income, base),
+                },
+                {
+                  key: "expense",
+                  type: "money",
+                  label: "Расходы",
+                  sortValue: (m) => m.expense,
+                  render: (m) => formatMoney(m.expense, base),
+                },
+                {
+                  key: "net",
+                  type: "main",
+                  tone: (m) => toneOfSigned(m.net),
+                  label: "Чистый",
+                  sortValue: (m) => m.net,
+                  cellTitle: (m) => {
+                    const r = rate(m);
+                    const ops = `${formatNum(m.count)} ${pluralRu(m.count, ["операция", "операции", "операций"])}`;
+                    return r === null ? ops : `Норма сбережений ${formatPct(r, 0)} · ${ops}`;
+                  },
+                  render: (m) => formatMoney(m.net, base, { signed: true }),
+                },
+                // Только в выгрузке: в панели не помещаются, видны в подсказке «Чистого».
+                {
+                  key: "rate",
+                  type: "pct",
+                  label: "Норма сбер.",
+                  exportOnly: true,
+                  sortValue: rate,
+                  render: () => null,
+                },
+                {
+                  key: "count",
+                  type: "count",
+                  label: "Операций",
+                  exportOnly: true,
+                  sortValue: (m) => m.count,
+                  render: () => null,
+                },
+              ]}
+            />
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

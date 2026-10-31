@@ -49,6 +49,11 @@ export interface Column<T> {
   exportValue?: (row: T) => SortValue;
   /** Не выгружать колонку вовсе. */
   exportSkip?: boolean;
+  /**
+   * Только в выгрузке: на экране колонки нет. Для узкой таблицы, где
+   * второстепенное видно в подсказке, а в CSV нужно отдельным столбцом.
+   */
+  exportOnly?: boolean;
   /** Вторичный текст или второстепенная сумма — приглушённо. */
   muted?: boolean;
   /** Цвет главной суммы или метки — на всю колонку или по строке. */
@@ -178,7 +183,7 @@ const LAZY_PAGE = 100;
 
 export function DataTable<T>({
   data,
-  columns,
+  columns: allColumns,
   rowKey,
   defaultSortKey,
   defaultSortDir,
@@ -211,6 +216,11 @@ export function DataTable<T>({
   onExpandedChange,
   footer,
 }: Props<T>) {
+  // Колонки «только в выгрузку» на экране не рисуются.
+  const columns = useMemo(
+    () => (allColumns.some((c) => c.exportOnly) ? allColumns.filter((c) => !c.exportOnly) : allColumns),
+    [allColumns]
+  );
   const defaultCol = columns.find((c) => c.key === defaultSortKey);
   const [ownSort, setOwnSort] = useState<SortState>({
     key: defaultSortKey,
@@ -337,7 +347,7 @@ export function DataTable<T>({
     : [];
   const allExpanded = expandableKeys.length > 0 && expandableKeys.every((k) => expanded.has(k));
 
-  const exportCols = columns.filter((c) => COLUMN_TYPES[c.type].exported && !c.exportSkip);
+  const exportCols = allColumns.filter((c) => COLUMN_TYPES[c.type].exported && !c.exportSkip);
   const showExport = exportable && sorted.length > 0 && exportCols.length > 0;
   const exportCsv = () => {
     const text = buildCsv(
