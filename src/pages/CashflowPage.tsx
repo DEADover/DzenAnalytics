@@ -294,10 +294,12 @@ export function CashflowPage() {
       netForecastMid: p.isForecast ? Math.round(p.realistic) : null,
       isForecast: p.isForecast,
     }));
-  // Bridge the solid «Чистый поток» line into the dashed forecast line: give the
-  // last historical month the forecast values too, so the lines/band connect.
+  // Стык сплошной линии «Чистый поток» с пунктиром прогноза: последнему
+  // месяцу истории даём и прогнозные значения, чтобы линии и коридор
+  // сходились. Только когда прогноз есть — иначе у прошлого периода в
+  // подсказке последнего месяца появлялся «Прогноз (реалист)».
   const lastHistIdx = chartData.reduce((acc, r, i) => (r.isForecast ? acc : i), -1);
-  if (lastHistIdx >= 0) {
+  if (lastHistIdx >= 0 && forecast.length > 0) {
     const n = chartData[lastHistIdx].net;
     chartData[lastHistIdx].netForecastMid = n;
     chartData[lastHistIdx].netForecastTop = n;

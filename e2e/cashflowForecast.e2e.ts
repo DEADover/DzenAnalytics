@@ -70,6 +70,13 @@ test("год до декабря — прогноз до конца года; п
   await page.getByRole("button", { name: "Предыдущий квартал" }).first().click();
   await expect(legendForecast(page)).toHaveCount(0);
   await expect(forecastTab(page)).toHaveCount(0);
+  // И в подсказке последнего месяца — ни строки прогноза.
+  const surface = page.locator(".recharts-wrapper > svg.recharts-surface").first();
+  const box = (await surface.boundingBox())!;
+  await page.mouse.move(box.x + box.width - 30, box.y + box.height / 2);
+  const tip = page.locator(".recharts-tooltip-wrapper").first();
+  await expect(tip).toContainText("Чистый поток");
+  await expect(tip).not.toContainText("Прогноз");
   await expect(side(page).getByText("Помесячная сводка", { exact: true })).toBeVisible();
 });
 
