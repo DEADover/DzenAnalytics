@@ -155,3 +155,30 @@ test("в карточках сверху — знак валюты, а не ко
   expect((await income.innerText()).replace(/[\u2060-\u2064]/g, "")).toMatch(/\d ₽ \/ мес$/);
   await expect(page.locator("main")).not.toContainText("RUB");
 });
+
+test("месяц (график по дням) — без прогноза, в панели только сводка", async ({ page }) => {
+  await connectZen(page, "/cashflow");
+  await expect(legendForecast(page)).toBeVisible();
+  await page.getByRole("button", { name: "Отчётный месяц", exact: true }).first().click();
+  await expect(legendForecast(page)).toHaveCount(0);
+  await expect(forecastTab(page)).toHaveCount(0);
+  await expect(side(page).getByText("Помесячная сводка", { exact: true })).toBeVisible();
+});
+
+for (const width of [1000, 768]) {
+  test(`узкий экран ${width}px — сводка под графиком, без прокрутки вбок`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await connectZen(page, "/cashflow");
+    const panel = side(page);
+    await panel.scrollIntoViewIfNeeded();
+    const c = (await page.locator(".recharts-wrapper").first().boundingBox())!;
+    const p = (await panel.boundingBox())!;
+    expect(p.y).toBeGreaterThanOrEqual(c.y + c.height - 1);
+    expect(p.width).toBeGreaterThan(width * 0.6);
+    // Шеврон сворачивания — только на широком экране, где сводка сбоку.
+    await expect(page.locator("[data-cashflow-toggle]")).toBeHidden();
+    await expect(panel.locator("tbody tr").first()).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+}
