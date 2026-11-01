@@ -156,6 +156,18 @@ test("в карточках сверху — знак валюты, а не ко
   await expect(page.locator("main")).not.toContainText("RUB");
 });
 
+test("текущий квартал по дням — на графике прогноза нет, в панели — до конца квартала", async ({ page }) => {
+  await connectZen(page, "/cashflow");
+  await expect(legendForecast(page)).toBeVisible();
+  // Часы тестов — 15 октября: квартал октябрь–декабрь рисуется по дням.
+  await page.locator("button", { hasText: /^Квартал$/ }).first().click();
+  await expect(legendForecast(page)).toHaveCount(0);
+  await forecastTab(page).click();
+  await expect(side(page)).toHaveAttribute("aria-label", "Прогноз по месяцам");
+  const months = await side(page).locator("tbody tr").allInnerTexts();
+  expect(months.map((m) => m.slice(0, 3))).toEqual(["Ноя", "Дек"]);
+});
+
 test("месяц (график по дням) — без прогноза, в панели только сводка", async ({ page }) => {
   await connectZen(page, "/cashflow");
   await expect(legendForecast(page)).toBeVisible();

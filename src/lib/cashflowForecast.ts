@@ -15,17 +15,25 @@
  * `lastHistYm` — последний месяц истории, `periodEndYm` — месяц, в котором
  * заканчивается период (`null` — период без конца, «Всё время»), оба в виде
  * `YYYY-MM`. `shownMonths` — сколько месяцев истории на графике.
+ *
+ * `toPeriodEndOnly` — для короткого периода, который рисуется по дням (месяц,
+ * текущий квартал в первые два месяца). Помесячного прогноза на таком графике
+ * нет, но в панели справа он уместен, если период ещё не кончился: у квартала
+ * «октябрь–декабрь» в середине октября — ноябрь и декабрь. Период, который
+ * кончается вместе с историей (текущий месяц), прогноза не получает.
  */
 export function forecastMonths(opts: {
   lastHistYm: string | null;
   periodEndYm: string | null;
   shownMonths: number;
   max?: number;
+  toPeriodEndOnly?: boolean;
 }): number {
   const { lastHistYm, periodEndYm, shownMonths } = opts;
   const max = opts.max ?? 6;
   if (!lastHistYm || shownMonths <= 0) return 0;
   if (periodEndYm && periodEndYm < lastHistYm) return 0;
+  if (opts.toPeriodEndOnly && !(periodEndYm && periodEndYm > lastHistYm)) return 0;
   if (periodEndYm && periodEndYm > lastHistYm) return Math.min(max, ymIndex(periodEndYm) - ymIndex(lastHistYm));
   return Math.min(max, Math.max(1, Math.ceil(shownMonths / 2)));
 }

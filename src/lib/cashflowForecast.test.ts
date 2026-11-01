@@ -23,6 +23,16 @@ describe("forecastMonths", () => {
     expect(forecastMonths({ lastHistYm: "2026-10", periodEndYm: "2027-12", shownMonths: 10 })).toBe(6);
   });
 
+  it("график по дням — прогноз только до конца ещё идущего периода", () => {
+    const o = { lastHistYm: "2026-10", shownMonths: 1, toPeriodEndOnly: true };
+    // Квартал октябрь–декабрь в середине октября — ноябрь и декабрь.
+    expect(forecastMonths({ ...o, periodEndYm: "2026-12" })).toBe(2);
+    // Текущий месяц кончается вместе с историей — прогноза нет.
+    expect(forecastMonths({ ...o, periodEndYm: "2026-10" })).toBe(0);
+    expect(forecastMonths({ ...o, periodEndYm: null })).toBe(0);
+    expect(forecastMonths({ ...o, periodEndYm: "2026-09" })).toBe(0);
+  });
+
   it("истории нет — прогноза нет", () => {
     expect(forecastMonths({ lastHistYm: null, periodEndYm: null, shownMonths: 0 })).toBe(0);
     expect(forecastMonths({ lastHistYm: "2026-10", periodEndYm: null, shownMonths: 0 })).toBe(0);

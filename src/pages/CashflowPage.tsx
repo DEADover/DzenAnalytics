@@ -271,14 +271,16 @@ export function CashflowPage() {
   const history = scenarios.filter((p) => !p.isForecast);
   const lastHistYm = history.length ? history[history.length - 1].ym : null;
   const periodEnd = lp.preset === "custom" ? lp.to : periodBounds.to;
-  const nForecast = daily
-    ? 0
-    : forecastMonths({
-        lastHistYm,
-        periodEndYm: periodEnd ? (monthStartDay === 1 ? ymKey(periodEnd) : periodKey(periodEnd, monthStartDay)) : null,
-        shownMonths: history.filter((p) => periodYms.has(p.ym)).length,
-      });
-  const forecast = scenarios.filter((p) => p.isForecast).slice(0, nForecast);
+  // На графике по дням помесячного прогноза нет; в панели справа он есть,
+  // если короткий период ещё не кончился (квартал в первые два месяца).
+  const nForecast = forecastMonths({
+    lastHistYm,
+    periodEndYm: periodEnd ? (monthStartDay === 1 ? ymKey(periodEnd) : periodKey(periodEnd, monthStartDay)) : null,
+    shownMonths: history.filter((p) => periodYms.has(p.ym)).length,
+    toPeriodEndOnly: daily,
+  });
+  const panelForecast = scenarios.filter((p) => p.isForecast).slice(0, nForecast);
+  const forecast = daily ? [] : panelForecast;
   const chartData = [...history.filter((p) => periodYms.has(p.ym)), ...forecast]
     .map((p) => ({
       ym: p.ym,
@@ -443,7 +445,7 @@ export function CashflowPage() {
             под новую ширину один раз и мягко проявляется (ChartContainer).
             Анимировать саму ширину колонки нельзя: график перерисовывался бы
             на каждом кадре и дёргался. */}
-        <SummarySplit panel={{ months, forecast, base, onMonth: openMonth }}>
+        <SummarySplit panel={{ months, forecast: panelForecast, base, onMonth: openMonth }}>
         {/* «Зеркалу» выше: под графиком ещё легенда по сторонам. */}
         <div className={vizMode === "mirror" ? "h-[32rem]" : "h-80"}>
           {vizMode === "bars" && daily ? (
