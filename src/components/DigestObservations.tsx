@@ -206,7 +206,7 @@ function describe(
         label: "Пять крупных покупок",
         value: formatPct(o.share, 0),
         tone: "neutral",
-        text: `всех трат — пять покупок из ${o.purchases}.`,
+        text: `Всех трат — пять покупок из ${o.purchases}.`,
         viz: <ShareBar share={o.share} />,
       };
     case "avgCheck": {
