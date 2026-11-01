@@ -360,14 +360,14 @@ export function CashflowPage() {
           value={formatMoney(kpi.income, base)}
           tone="income"
           icon={<TrendingUp className="w-4 h-4" />}
-          note={`${formatNum(avgMonthlyIncome)} ${base} / мес`}
+          note={`${formatMoney(avgMonthlyIncome, base, { decimals: 0 })} / мес`}
         />
         <StatCell
           label="Расходы"
           value={formatMoney(kpi.expense, base)}
           tone="expense"
           icon={<TrendingDown className="w-4 h-4" />}
-          note={`${formatNum(avgMonthlyExpense)} ${base} / мес`}
+          note={`${formatMoney(avgMonthlyExpense, base, { decimals: 0 })} / мес`}
         />
         <StatCell
           label="Чистый поток"

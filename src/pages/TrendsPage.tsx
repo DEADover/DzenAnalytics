@@ -517,7 +517,7 @@ function Row({
             key={c.hour}
             title={
               c.count > 0
-                ? `${label} ${String(c.hour).padStart(2, "0")}:00 — ${c.total.toLocaleString("ru-RU")} ${base}, ${c.count} оп.`
+                ? `${label} ${String(c.hour).padStart(2, "0")}:00 — ${formatMoney(c.total, base)}, ${c.count} оп.`
                 : `${label} ${String(c.hour).padStart(2, "0")}:00`
             }
             className="aspect-square rounded-[2px] border border-border/20"

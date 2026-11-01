@@ -37,7 +37,7 @@ import {
   type RuleKindValue,
   type RuleTargetField,
 } from "../lib/ruleEngine";
-import { displayPayee, formatDate, formatMoney, formatNum } from "../lib/format";
+import { currencySymbol, displayPayee, formatDate, formatMoney, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { CategoryDot } from "./CategoryDot";
 import { AccountLogo } from "./AccountLogo";
@@ -931,7 +931,7 @@ export function RuleEditModal({
                       (c.op === "equals" && (c.field === "account" || c.field === "category")) ? null : NUMERIC_FIELDS.has(c.field) ? (
                         <Tooltip content="Сумма берётся в валюте отчётов и без знака: «больше 1000» поймает и трату, и поступление">
                           <span className="text-xs text-muted shrink-0 whitespace-nowrap border-b border-dotted border-border cursor-help">
-                            {base}
+                            {currencySymbol(base)}
                           </span>
                         </Tooltip>
                       ) : (

@@ -146,3 +146,12 @@ test("столбцы сводки одной ширины — с прокрут�
   // видимой полосой столбцы не сужаются, когда она появляется.
   expect(await scroll.evaluate((el) => getComputedStyle(el).scrollbarGutter)).toBe("stable");
 });
+
+test("в карточках сверху — знак валюты, а не код: «₽ / мес», без «RUB»", async ({ page }) => {
+  await connectZen(page, "/cashflow");
+  const income = page.getByText(/\/ мес$/).first();
+  await expect(income).toBeVisible();
+  // Вокруг суммы formatMoney ставит невидимые метки — сверяем без них.
+  expect((await income.innerText()).replace(/[\u2060-\u2064]/g, "")).toMatch(/\d ₽ \/ мес$/);
+  await expect(page.locator("main")).not.toContainText("RUB");
+});

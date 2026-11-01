@@ -13,7 +13,7 @@ import {
   type PlanCellEdit,
 } from "../lib/budgetYear";
 import type { BudgetKind } from "../lib/budgets";
-import { formatMoney, formatNum, monthLabel, monthLabelFull } from "../lib/format";
+import { currencySymbol, formatMoney, formatNum, monthLabel, monthLabelFull } from "../lib/format";
 import { AccountLogo } from "./AccountLogo";
 import { CategoryDot } from "./CategoryDot";
 import { TRANSFER_CATEGORY } from "../lib/budgetScope";
@@ -941,7 +941,7 @@ export function BudgetYearTable({
             )}
             <InfoPopover label="Как читать таблицу" focusable={!forClone}>
               <p>
-                Суммы в {base}. «Разница» у расходов — сколько осталось до
+                Суммы в {currencySymbol(base)}. «Разница» у расходов — сколько осталось до
                 плана, у доходов — насколько план перевыполнен; больше нуля
                 везде значит «хорошо».
               </p>
