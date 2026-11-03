@@ -155,6 +155,8 @@ const DOUBLE_CLICK_MS = 220;
 
 /**
  * Строка ленты. Клик выделяет её, двойной клик открывает (`onOpen`).
+ * Настройка «Выделение строки щелчком» выключена — одиночный клик ничего не
+ * делает (отмечают галочкой), двойной открывает сразу.
  *
  * Клики по кнопкам и полям внутри строки не выделяют: у них своё действие, и
  * попутное выделение читалось бы как случайное.
@@ -177,6 +179,8 @@ export function OperationListRow({
   onOpen?: () => void;
   children: ReactNode;
 }) {
+  const clickSelects = useDisplayStore((s) => s.rowClickSelect);
+  const onClickSelect = clickSelects ? onToggleSelect : undefined;
   // Двойной клик В ЛЮБОМ СЛУЧАЕ проходит через одиночные, и строка успевала
   // мигнуть выделением. Поэтому выделение откладываем на порог двойного
   // клика: пришёл второй клик — отменяем, не пришёл — выделяем.
@@ -192,7 +196,7 @@ export function OperationListRow({
   return (
     <div
       onClick={(e) => {
-        if (!onToggleSelect) return;
+        if (!onClickSelect) return;
         // Второй клик двойного — гасим отложенное выделение и уходим.
         if (e.detail > 1) {
           cancelPendingSelect();
@@ -206,12 +210,12 @@ export function OperationListRow({
         if ((window.getSelection()?.toString() || "").length > 0) return;
         cancelPendingSelect();
         if (!onOpen) {
-          onToggleSelect();
+          onClickSelect();
           return;
         }
         clickTimer.current = setTimeout(() => {
           clickTimer.current = null;
-          onToggleSelect?.();
+          onClickSelect();
         }, DOUBLE_CLICK_MS);
       }}
       onDoubleClick={
@@ -223,7 +227,7 @@ export function OperationListRow({
       }
       className={clsx(
         "op-row grid items-center gap-3 px-3 py-2 border-b border-border/40 group text-[length:var(--tbl-font)]",
-        (onToggleSelect || onOpen) && "cursor-pointer",
+        (onClickSelect || onOpen) && "cursor-pointer",
         selected ? "bg-accent/5" : "hover:bg-panel2/40",
         className
       )}

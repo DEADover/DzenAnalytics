@@ -239,6 +239,8 @@ export function ImportPage() {
   const setQuickSettingsOn = useDisplayStore((s) => s.setQuickSettings);
   const hintsOn = useDisplayStore((s) => s.hints);
   const setHintsOn = useDisplayStore((s) => s.setHints);
+  const rowClickSelect = useDisplayStore((s) => s.rowClickSelect);
+  const setRowClickSelect = useDisplayStore((s) => s.setRowClickSelect);
   const setHideThanks = useDisplayStore((s) => s.setHideThanks);
   const setFractionDigits = useDisplayStore((s) => s.setFractionDigits);
   const tableFontLevel = useDisplayStore((s) => s.tableFontLevel);
@@ -1934,6 +1936,32 @@ export function ImportPage() {
               checked={hintsOn}
               label="Всплывающие подсказки"
               onChange={(next) => setHintsOn(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Выделение строки щелчком"
+          status={
+            rowClickSelect
+              ? "Щелчок по операции отмечает её, двойной — открывает"
+              : "Щелчок по операции ничего не делает: отмечать — галочкой, открывать — двойным щелчком"
+          }
+          help={
+            <p>
+              В лентах операций — «Операции», «Без категории», «Дубликаты»,
+              «Удалённые» и список операций в шторке — один щелчок по строке
+              отмечает её для действий над выбранными. Если строки
+              отмечаются случайно, когда вы просто кликаете по ленте,
+              выключите: отмечать можно галочкой в начале строки, открывать
+              операцию — двойным щелчком, как и раньше.
+            </p>
+          }
+          control={
+            <Switch
+              checked={rowClickSelect}
+              label="Выделение строки щелчком"
+              onChange={(next) => setRowClickSelect(next)}
             />
           }
         />

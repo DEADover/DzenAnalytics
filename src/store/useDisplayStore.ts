@@ -163,6 +163,12 @@ interface DisplayState {
    * По умолчанию включено.
    */
   hints: boolean;
+  /**
+   * Щелчок по строке операции выделяет её. Выключено — строка на одиночный
+   * щелчок не откликается: выделять — галочкой, открывать — двойным щелчком.
+   * По умолчанию включено.
+   */
+  rowClickSelect: boolean;
   filtersMode: FiltersMode;
   /**
    * Какой месяц подставляет кнопка месяца в фильтре: отчётный (со своего
@@ -206,6 +212,7 @@ interface DisplayState {
   setHideThanks: (on: boolean) => Promise<void>;
   setQuickSettings: (on: boolean) => Promise<void>;
   setHints: (on: boolean) => Promise<void>;
+  setRowClickSelect: (on: boolean) => Promise<void>;
   setFiltersMode: (mode: FiltersMode) => Promise<void>;
   setMonthKind: (kind: MonthKind) => Promise<void>;
   setWindowKind: (kind: WindowKind) => Promise<void>;
@@ -226,6 +233,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   hideThanks: false,
   quickSettings: true,
   hints: true,
+  rowClickSelect: true,
   filtersMode: "page",
   monthKind: "period",
   windowKind: "30d",
@@ -250,6 +258,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       hideThanks?: boolean;
       quickSettings?: boolean;
       hints?: boolean;
+      rowClickSelect?: boolean;
       filtersMode?: string;
       monthKind?: string;
       windowKind?: string;
@@ -275,6 +284,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       hideThanks: stored?.hideThanks === true,
       quickSettings: stored?.quickSettings !== false,
       hints: stored?.hints !== false,
+      rowClickSelect: stored?.rowClickSelect !== false,
       // По умолчанию фильтры стоят на странице; панель по кнопке — выбор человека.
       filtersMode: stored?.filtersMode === "button" ? "button" : "page",
       monthKind: stored?.monthKind === "month" ? "month" : "period",
@@ -352,6 +362,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
     await db.saveJSON(KEY, { ...persisted(get()), hints: on });
   },
 
+  setRowClickSelect: async (on) => {
+    set({ rowClickSelect: on });
+    await db.saveJSON(KEY, { ...persisted(get()), rowClickSelect: on });
+  },
+
   setFiltersMode: async (filtersMode) => {
     set({ filtersMode });
     await db.saveJSON(KEY, { ...persisted(get()), filtersMode });
@@ -394,6 +409,7 @@ function persisted(s: DisplayState) {
     hideThanks: s.hideThanks,
     quickSettings: s.quickSettings,
     hints: s.hints,
+    rowClickSelect: s.rowClickSelect,
     filtersMode: s.filtersMode,
     monthKind: s.monthKind,
     windowKind: s.windowKind,
