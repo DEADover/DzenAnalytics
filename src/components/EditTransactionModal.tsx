@@ -764,7 +764,7 @@ export function EditTransactionModal({
     }
   }
 
-  // Escape и щелчок мимо обрабатывает `Modal`; здесь — только перелистывание.
+  // Escape и клик мимо обрабатывает `Modal`; здесь — только перелистывание.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // ←/→ step to the previous/next operation — but only when not typing in

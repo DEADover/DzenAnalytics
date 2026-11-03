@@ -87,7 +87,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
   runUndo: async () => {
     const cur = get().toast;
     if (!cur?.undo) return;
-    // Плашку убираем сразу: второй щелчок не должен отменить дважды.
+    // Плашку убираем сразу: второй клик не должен отменить дважды.
     set({ toast: null });
     try {
       await cur.undo();

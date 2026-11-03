@@ -218,7 +218,7 @@ export function CategoryCascadePicker({
     subNav.set(Math.max(0, cur), true);
   }
 
-  /** Щелчок по пункту не уводит фокус из поиска — стрелки работают и дальше. */
+  /** Клик по пункту не уводит фокус из поиска — стрелки работают и дальше. */
   const keepSearchFocus = (e: React.MouseEvent) => e.preventDefault();
 
   function onSearchKey(e: React.KeyboardEvent<HTMLInputElement>) {

@@ -141,7 +141,7 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
     },
     onFocus: (e: unknown) => {
       call("onFocus")(e);
-      // Только фокус с клавиатуры: касание и щелчок тоже ставят фокус на
+      // Только фокус с клавиатуры: касание и клик тоже ставят фокус на
       // кнопку, и подсказка висела бы, пока не нажмёшь что-то другое.
       const el = (e as { currentTarget?: Element }).currentTarget;
       if (!el || el.matches(":focus-visible")) open();

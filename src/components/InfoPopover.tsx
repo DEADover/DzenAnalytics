@@ -50,7 +50,7 @@ export function InfoPopover({
   tone?: "default" | "expense";
   /**
    * `false` — копия в двойнике липкой шапки: до неё не дотягивается Tab, а
-   * щелчок не оставляет фокус внутри `aria-hidden`-поддерева.
+   * клик не оставляет фокус внутри `aria-hidden`-поддерева.
    */
   focusable?: boolean;
   children: ReactNode;

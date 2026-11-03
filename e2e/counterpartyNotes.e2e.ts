@@ -68,7 +68,7 @@ test("заметка: карточка контрагента, пометка в
   await noteBtn.click();
   const popupField = page.getByLabel(`Заметка: ${NAME}`);
   await expect(popupField).toHaveValue("Карта лояльности — каждый 6-й кофе бесплатно");
-  // Щелчок по заметке не открывает операции контрагента.
+  // Клик по заметке не открывает операции контрагента.
   await expect(page.getByRole("dialog", { name: /Операции/ })).toHaveCount(0);
   await popupField.fill("Вернёт до конца месяца");
   if (process.env.E2E_SHOTS) await page.screenshot({ path: process.env.E2E_SHOTS + "/note-popup.png", clip: { x: 500, y: 0, width: 940, height: 700 } });

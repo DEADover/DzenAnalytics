@@ -31,7 +31,7 @@ export function AccountsSettings() {
 
   async function remove(id: string) {
     const p = profiles.find((x) => x.id === id);
-    // Текущий удалить нельзя — кнопка погашена, но щелчок до неё доходит.
+    // Текущий удалить нельзя — кнопка погашена, но клик до неё доходит.
     if (!p || id === activeId) return;
     const ok = await confirm({
       title: `Удалить аккаунт «${profileLabel(p)}»?`,

@@ -246,7 +246,7 @@ export function MultiSelect({
   const pickedBranches = () =>
     new Set([...branches.children.keys()].filter(isPartial));
 
-  /** Подпись переключателя ветки: сколько под ним и что сделает щелчок. */
+  /** Подпись переключателя ветки: сколько под ним и что сделает клик. */
   const branchHint = (count: number, shown: boolean) =>
     `${shown ? "Скрыть" : "Показать"} ${count} ` +
     pluralRu(count, nestedUnitForms ?? ["вариант", "варианта", "вариантов"]);
@@ -635,7 +635,7 @@ export function MultiSelect({
                         {/* Переключатель веток. Во время поиска его нет: там
                             найденное показано целиком, и сворачивать нечего.
                             `preventDefault` держит его отдельно от галочки —
-                            щелчок по кнопке внутри `<label>` иначе отобрал бы
+                            клик по кнопке внутри `<label>` иначе отобрал бы
                             весь счёт заодно. */}
                         {kids.length > 0 && !q && (
                           <button

@@ -218,7 +218,7 @@ export function Select<T extends string>({
           }
           if (!open) return;
           if (e.key === "Enter" || e.key === " ") {
-            // Иначе кнопка поля сработала бы щелчком и просто закрыла список.
+            // Иначе кнопка поля сработала бы кликом и просто закрыла список.
             e.preventDefault();
             e.stopPropagation();
             if (nav.active >= 0) pick(options[nav.active].value);

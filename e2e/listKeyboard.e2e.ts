@@ -28,7 +28,7 @@ test("окно операции: счёт, категория с подкате�
   await setPushMode(page, "manual");
   const card = page.getByRole("dialog").filter({ hasText: "Новая операция" });
   // Смена режима отправки перерисовывает шапку — меню «Добавить» может
-  // пересобраться прямо под щелчком, поэтому открываем его с повтором.
+  // пересобраться прямо под кликом, поэтому открываем его с повтором.
   await expect(async () => {
     await page.locator(`button[title="Добавить новую операцию"]`).first().click();
     await page.getByRole("menuitem", { name: "Расход" }).or(page.getByRole("button", { name: "Расход", exact: true })).first().click({ timeout: 2000 });

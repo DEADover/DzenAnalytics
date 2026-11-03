@@ -104,7 +104,7 @@ export function CounterpartyNoteField({
 
 /**
  * Кнопка заметки для строки таблицы: значок закрашен акцентом, когда заметка
- * есть, её текст — в подсказке; щелчок открывает поле в окошке рядом.
+ * есть, её текст — в подсказке; клик открывает поле в окошке рядом.
  */
 export function CounterpartyNoteButton({ name, className }: { name: string; className?: string }) {
   const note = useCounterpartyNote(name);
@@ -125,7 +125,7 @@ export function CounterpartyNoteButton({ name, className }: { name: string; clas
         <button
           type="button"
           onClick={(e) => {
-            // Строка таблицы сама открывает операции — щелчок по заметке не она.
+            // Строка таблицы сама открывает операции — клик по заметке не она.
             e.stopPropagation();
             setOpen((o) => !o);
           }}
@@ -139,7 +139,7 @@ export function CounterpartyNoteButton({ name, className }: { name: string; clas
         </button>
       </Tooltip>
       <Popover open={open} anchorRef={anchor} onClose={() => setOpen(false)} align="right" className="card p-3 w-80">
-        {/* Щелчки внутри окошка не доходят до строки под ним. */}
+        {/* Клики внутри окошка не доходят до строки под ним. */}
         <div onClick={(e) => e.stopPropagation()} className="space-y-2">
           <div className="text-xs text-muted truncate">Заметка · {name}</div>
           <CounterpartyNoteField key={name} name={name} rows={5} autoFocus />

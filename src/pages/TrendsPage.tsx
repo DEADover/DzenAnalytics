@@ -252,7 +252,7 @@ export function TrendsPage() {
               onClick={(e: unknown) => {
                 const ym = (clickedRow(e, series) as { ym?: string } | undefined)?.ym;
                 if (!ym) return;
-                // Щёлкнули по точке линии — её категория; мимо линий — все
+                // Кликнули по точке линии — её категория; мимо линий — все
                 // показанные категории этого месяца.
                 const cat = clickedDataKey(e);
                 if (cat && activeCategories.includes(cat)) openCategoryMonth(cat, ym);

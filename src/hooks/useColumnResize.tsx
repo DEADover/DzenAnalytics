@@ -404,7 +404,7 @@ export function useColumnResize(
           aria-orientation="vertical"
           aria-label={`Граница между столбцами «${label}»`}
           tabIndex={0}
-          title="Потяните, чтобы поделить место между соседними столбцами. Двойной щелчок — вернуть как было"
+          title="Потяните, чтобы поделить место между соседними столбцами. Двойной клик — вернуть как было"
           className="col-resize-handle"
           onPointerDown={onPointerDown}
           onKeyDown={onKeyDown}

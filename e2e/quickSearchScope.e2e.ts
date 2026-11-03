@@ -55,10 +55,10 @@ for (const width of [1440, 768]) {
     await expect.poll(() => payees.count()).toBeGreaterThan(nFilter);
     await page.waitForTimeout(150);
 
-    // Метка открывает подсказку; щелчок «В фильтре» — обратно.
+    // Метка открывает подсказку; клик «В фильтре» — обратно.
     await badge.click();
     await expect(list).toBeVisible();
-    // Без прокрутки к пункту: Playwright перед щелчком прокручивает элемент в
+    // Без прокрутки к пункту: Playwright перед кликом прокручивает элемент в
     // видимую область, якорь подсказки при этом едет — и она честно
     // закрывается, как любое всплывающее окно. Человек к пункту не листает.
     await list.locator("[data-search-scope='filter']").dispatchEvent("click");

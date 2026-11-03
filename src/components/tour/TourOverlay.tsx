@@ -371,7 +371,7 @@ export function TourOverlay() {
 
   return createPortal(
     <div className="fixed inset-0 z-[120]" role="dialog" aria-modal="true" aria-label={`Обучение: ${chapter.title}`}>
-      {/* Щелчки мимо карточки — не в панель под туром. */}
+      {/* Клики мимо карточки — не в панель под туром. */}
       <div className="absolute inset-0" onClick={(e) => e.stopPropagation()} />
       <div className={clsx("tour-dim", !animate && "tour-still")} style={{ clipPath: dimPath(box) }} aria-hidden />
       <div

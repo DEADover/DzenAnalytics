@@ -24,8 +24,8 @@ const OPTIONS: { value: SearchScope; label: string; icon: typeof Filter }[] = [
  * Быстрый поиск по ленте с выбором, где искать, — без кнопок сбоку.
  *
  * Пока набирается текст, под полем всплывает подсказка из двух пунктов с
- * числом найденного: «В фильтре» и «Везде». Выбрать — щелчком или стрелками и
- * Enter; Esc прячет подсказку. «Везде» видно меткой в самом поле, щелчок по
+ * числом найденного: «В фильтре» и «Везде». Выбрать — кликом или стрелками и
+ * Enter; Esc прячет подсказку. «Везде» видно меткой в самом поле, клик по
  * ней открывает подсказку снова.
  */
 export function ScopedSearchInput({
@@ -88,7 +88,7 @@ export function ScopedSearchInput({
                 setOpen((o) => !o);
               }}
               className="pill text-[11px] leading-none py-1 px-2 bg-accent/15 text-accent hover:bg-accent/25 inline-flex items-center gap-1"
-              title="Ищется по всем операциям, без общего фильтра. Щёлкните, чтобы искать в фильтре"
+              title="Ищется по всем операциям, без общего фильтра. Кликните, чтобы искать в фильтре"
               data-search-scope-badge
             >
               <Globe className="w-3 h-3" aria-hidden />

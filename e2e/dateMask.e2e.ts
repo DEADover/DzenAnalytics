@@ -1,10 +1,10 @@
 /**
- * Поле даты в окне операции набирается по маске «дд.мм.гггг» (#125): щелчок
+ * Поле даты в окне операции набирается по маске «дд.мм.гггг» (#125): клик
  * выделяет дату целиком, цифры заменяют, а не вставляются, точки встают сами.
  */
 import { test, expect, connectZen } from "./harness";
 
-test("дата по маске: щелчок в середину и набор не ломают дату", async ({ page }) => {
+test("дата по маске: клик в середину и набор не ломают дату", async ({ page }) => {
   await connectZen(page, "/transactions");
   await page.locator(`button[title="Добавить новую операцию"]`).first().click();
   await page.getByRole("menuitem", { name: "Расход" }).or(page.getByRole("button", { name: "Расход", exact: true })).first().click();
@@ -12,7 +12,7 @@ test("дата по маске: щелчок в середину и набор �
   const date = card.getByLabel("Дата", { exact: true }).first();
   await expect(date).toHaveValue("15.10.2026");
 
-  // Щелчок между «15» и «.10» — как на скриншоте из задачи. Дата выделяется
+  // Клик между «15» и «.10» — как на скриншоте из задачи. Дата выделяется
   // целиком, набор начинается с нуля, точки ставит маска.
   const box = (await date.boundingBox())!;
   await page.mouse.click(box.x + 18, box.y + box.height / 2);

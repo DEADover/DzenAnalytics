@@ -133,7 +133,7 @@ export function DateField({
   const inputRef = useRef<HTMLInputElement>(null);
   /** Куда поставить курсор после того, как маска переписала текст. */
   const caretRef = useRef<number | null>(null);
-  /** Поле только что получило фокус щелчком — выделение не сбрасывать. */
+  /** Поле только что получило фокус кликом — выделение не сбрасывать. */
   const focusClickRef = useRef(false);
   useLayoutEffect(() => {
     const el = inputRef.current;
@@ -182,9 +182,9 @@ export function DateField({
               setTyped(display);
               e.target.select();
             }}
-            // Щелчок, которым поле получило фокус, ставил курсор в точку
-            // щелчка и снимал выделение — набранное вставлялось в середину
-            // старой даты (#125). Первый щелчок оставляет дату выделенной.
+            // Клик, которым поле получило фокус, ставил курсор в точку
+            // клика и снимал выделение — набранное вставлялось в середину
+            // старой даты (#125). Первый клик оставляет дату выделенной.
             onMouseUp={(e) => {
               if (focusClickRef.current) {
                 e.preventDefault();

@@ -426,7 +426,7 @@ export function CategoryFilterPicker({
                             </span>
                             {/* Весь тип разом — иначе расходных категорий три
                                 десятка, и «оставить только доходы» это тридцать
-                                щелчков. */}
+                                кликов. */}
                             <button
                               type="button"
                               onClick={() => setMany(kindLeaves, !kindAllOn)}

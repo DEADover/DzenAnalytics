@@ -154,7 +154,7 @@ function ScenarioTab({
         </button>
       </span>
       <Popover open={open} anchorRef={anchorRef} onClose={close} className="w-64 card p-2 shadow-lg">
-        {/* Щелчок внутри меню не должен переключать вкладку под ним. */}
+        {/* Клик внутри меню не должен переключать вкладку под ним. */}
         <div className="flex flex-col text-text font-normal" onClick={(e) => e.stopPropagation()}>
           {renaming !== null ? (
             <form

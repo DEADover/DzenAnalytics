@@ -245,7 +245,7 @@ export function Combobox({
     setOpen(true);
   }
 
-  /** Закрыть без выбора; недонабранный поиск откатывается, как при щелчке мимо. */
+  /** Закрыть без выбора; недонабранный поиск откатывается, как при клике мимо. */
   function closeList() {
     setOpen(false);
     if (searchable && !allowCustom) {
