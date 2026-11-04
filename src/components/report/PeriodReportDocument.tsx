@@ -2,9 +2,10 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import logoDa from "../../assets/logo-da.png";
 import type { PeriodReport } from "../../hooks/usePeriodReport";
-import { currencySymbol, formatDate, formatMoney, formatPct, monthTitle, niceStep } from "../../lib/format";
+import { currencySymbol, formatDate, formatMoney, formatPct, monthTitle, niceStep, truncateWords } from "../../lib/format";
 import { describeObservation } from "../../lib/observationTile";
 import { digestHeadline } from "../../lib/digestHeadline";
+import { compareNote, deltaNote, deltaTone, netTone, type NoteTone } from "../../lib/digestNotes";
 import { spanDays } from "../../lib/period";
 import { changeOf, packSections, rangeText, tableRows, type ReportBucket, type ReportCategory } from "../../lib/periodReport";
 import { pluralRu } from "../../lib/plural";
@@ -56,25 +57,6 @@ function cumulative(xs: number[]): number[] {
 
 function money(v: number, base: string, signed = false): string {
   return formatMoney(v, base, { decimals: 0, signed });
-}
-
-const VS = "к прошлому периоду";
-
-/** «+12% к прошлому периоду» с цветом по смыслу: `upIsGood` — рост к лучшему. */
-function Delta({ now, prev, upIsGood }: { now: number; prev: number | null | undefined; upIsGood: boolean }) {
-  const ch = changeOf(now, prev);
-  if (ch === null) return <span className="pr-delta">{prev === 0 && now !== 0 ? "В прошлом периоде не было" : "—"}</span>;
-  if (Math.abs(ch) < 0.005) return <span className="pr-delta">Как в прошлом периоде</span>;
-  const good = ch > 0 === upIsGood;
-  return (
-    <span className="pr-delta">
-      <b className={good ? "pr-good" : "pr-bad"}>
-        {ch > 0 ? "+" : "−"}
-        {formatPct(Math.abs(ch), 0)}
-      </b>{" "}
-      {VS}
-    </span>
-  );
 }
 
 function PageHead() {
@@ -244,8 +226,16 @@ function Typical({ report, value }: { report: PeriodReport; value: number | unde
   );
 }
 
+/** Подпись под числом плитки — цветом по смыслу, как в «Дайджесте». */
+function Note({ text, tone }: { text: string | undefined; tone: NoteTone }) {
+  if (!text) return null;
+  return <span className={clsx("pr-delta", tone === "good" && "pr-good", tone === "bad" && "pr-bad")}>{text}</span>;
+}
+
 function Cover({ report }: { report: PeriodReport }) {
   const { totals: t, prevTotals: p, base } = report;
+  const incDelta = changeOf(t.income, p?.income) ?? 0;
+  const expDelta = changeOf(t.expense, p?.expense) ?? 0;
   return (
     <>
       <div>
@@ -284,42 +274,47 @@ function Cover({ report }: { report: PeriodReport }) {
         <div className="pr-kpi">
           <span className="pr-kpi-label">Доходы</span>
           <span className="pr-kpi-value pr-income">{money(t.income, base)}</span>
-          {p && <Delta now={t.income} prev={p.income} upIsGood />}
+          <Note text={compareNote(t.income, report.typical?.income, incDelta, report.running)} tone={deltaTone(incDelta, true)} />
           <Typical report={report} value={report.typical?.income} />
         </div>
         <div className="pr-kpi">
           <span className="pr-kpi-label">Расходы</span>
           <span className="pr-kpi-value pr-expense">{money(t.expense, base)}</span>
-          {p && <Delta now={t.expense} prev={p.expense} upIsGood={false} />}
+          <Note text={compareNote(t.expense, report.typical?.expense, expDelta, report.running)} tone={deltaTone(expDelta, false)} />
           <Typical report={report} value={report.typical?.expense} />
         </div>
         <div className="pr-kpi">
           <span className="pr-kpi-label">Чистый поток</span>
-          <span className="pr-kpi-value">{money(t.net, base, true)}</span>
-          {p && (
-            <span className="pr-delta">
-              {Math.abs(p.net - t.net) < 0.5 ? (
-                "Как в прошлом периоде"
-              ) : (
-                <>
-                  <b className={t.net > p.net ? "pr-good" : "pr-bad"}>{money(t.net - p.net, base, true)}</b> {VS}
-                </>
-              )}
-            </span>
-          )}
+          <span className={clsx("pr-kpi-value", t.net >= 0 ? "pr-income" : "pr-expense")}>{money(t.net, base, true)}</span>
+          <Note
+            text={
+              report.typical
+                ? `Обычно${report.running ? " к этому дню" : ""} ${money(report.typical.net, base, true)}`
+                : deltaNote(p && Math.abs(p.net) > 0.01 ? (t.net - p.net) / Math.abs(p.net) : 0)
+            }
+            tone={p ? netTone(t.net, p.net) : "muted"}
+          />
         </div>
         <div className="pr-kpi">
           <span className="pr-kpi-label">Норма сбережений</span>
-          <span className="pr-kpi-value">{t.rate === null ? "—" : formatPct(t.rate, 0)}</span>
-          {p && t.rate !== null && p.rate !== null && (
-            <span className="pr-delta">
-              <b className={t.rate >= p.rate ? "pr-good" : "pr-bad"}>
-                {t.rate >= p.rate ? "+" : "−"}
-                {Math.abs(Math.round((t.rate - p.rate) * 100))} п. п.
-              </b>{" "}
-              {VS}
-            </span>
-          )}
+          <span
+            className={clsx(
+              "pr-kpi-value",
+              t.income > 0 && (t.rate ?? 0) >= 0.2 ? "pr-income" : (t.rate ?? 0) < 0 ? "pr-expense" : undefined
+            )}
+          >
+            {t.income > 0 && t.rate !== null && t.rate >= -1 ? formatPct(t.rate, 0) : "—"}
+          </span>
+          <Note
+            text={
+              t.income > 0 && t.rate !== null && t.rate < -1
+                ? "Расход больше дохода"
+                : t.income <= 0
+                  ? "Доходов не было"
+                  : `${t.count} ${pluralRu(t.count, ["операция", "операции", "операций"])}`
+            }
+            tone="muted"
+          />
         </div>
       </div>
 
@@ -396,71 +391,62 @@ function Categories({ report }: { report: PeriodReport }) {
   );
 }
 
-function PayeesIncome({ report }: { report: PeriodReport }) {
-  const { base } = report;
+function PayeeTable({ rows, base, empty }: { rows: PeriodReport["payees"]; base: string; empty: string }) {
+  if (rows.length === 0) return <p className="pr-empty">{empty}</p>;
+  return (
+    <table className="pr-table">
+      <thead>
+        <tr>
+          <th>Получатель</th>
+          <th className="pr-num">Покупок</th>
+          <th className="pr-num">Сумма</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((p) => (
+          <tr key={p.name}>
+            <td className="pr-name">{p.name}</td>
+            <td className="pr-num pr-muted">{p.count}</td>
+            <td className="pr-num">{money(p.total, base)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** «Где тратили» и «Впервые» — рядом, как в «Дайджесте». */
+function PayeesNew({ report }: { report: PeriodReport }) {
   return (
     <div className="pr-cols">
       <div>
         <h3 className="pr-h3">Где тратили</h3>
-        {report.payees.length > 0 ? (
-          <table className="pr-table">
-            <thead>
-              <tr>
-                <th>Получатель</th>
-                <th className="pr-num">Покупок</th>
-                <th className="pr-num">Сумма</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.payees.map((p) => (
-                <tr key={p.name}>
-                  <td className="pr-name">{p.name}</td>
-                  <td className="pr-num pr-muted">{p.count}</td>
-                  <td className="pr-num">{money(p.total, base)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="pr-empty">Нет трат с получателем.</p>
-        )}
+        <PayeeTable rows={report.payees} base={report.base} empty="Трат с получателем не было" />
       </div>
       <div>
-        <h3 className="pr-h3">Откуда пришли деньги</h3>
-        {report.incomeCategories.length > 0 ? (
-          <table className="pr-table">
-            <thead>
-              <tr>
-                <th>Категория</th>
-                <th className="pr-num">Доля</th>
-                <th className="pr-num">Сумма</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.incomeCategories.map((c) => (
-                <tr key={c.name}>
-                  <td className="pr-name">
-                    <i className="pr-dot" style={{ background: c.color, display: "inline-block", marginRight: 8 }} />
-                    {c.name}
-                  </td>
-                  <td className="pr-num pr-muted">{formatPct(c.share, 0)}</td>
-                  <td className="pr-num">{money(c.total, base)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="pr-empty">Доходов за период нет.</p>
-        )}
+        <h3 className="pr-h3">Впервые</h3>
+        <PayeeTable rows={report.newPayees} base={report.base} empty="Новых получателей не было" />
       </div>
     </div>
+  );
+}
+
+function Income({ report }: { report: PeriodReport }) {
+  return (
+    <>
+      <div>
+        <h2 className="pr-h2">Откуда пришли деньги</h2>
+        <p className="pr-sub">Доходы по категориям, доля от всех поступлений{report.prevTotals ? " и изменение к прошлому периоду" : ""}</p>
+      </div>
+      <CategoryBars rows={report.incomeCategories} base={report.base} upIsGood />
+    </>
   );
 }
 
 function Operations({ report }: { report: PeriodReport }) {
   return (
     <>
-      <h3 className="pr-h3">Крупные траты</h3>
+      <h2 className="pr-h2">Самое дорогое за период</h2>
       <table className="pr-table">
         <thead>
           <tr>
@@ -474,13 +460,14 @@ function Operations({ report }: { report: PeriodReport }) {
           {report.operations.map((o) => (
             <tr key={o.id}>
               <td className="pr-date">{formatDate(o.date, "full")}</td>
-              <td className="pr-name" style={{ width: "40%" }}>
-                {o.payee || "Без получателя"}
+              <td className="pr-name" style={{ width: "45%" }}>
+                {o.payee || o.category || "—"}
+                {o.comment.trim() && <span className="pr-comment">{truncateWords(o.comment, 140)}</span>}
               </td>
-              <td className="pr-name pr-muted" style={{ width: "35%" }}>
+              <td className="pr-name pr-muted" style={{ width: "30%" }}>
                 {o.category}
               </td>
-              <td className="pr-num">{money(o.amount, report.base)}</td>
+              <td className="pr-num pr-bad">{money(o.amount, report.base)}</td>
             </tr>
           ))}
         </tbody>
@@ -680,9 +667,12 @@ function Observations({ report }: { report: PeriodReport }) {
         {report.observations.map((o) => {
           const tile = describeObservation(
             o,
-            { period: "month", running: report.running ? { day: lived, days: spanDays(report.range.from, report.range.to) } : undefined, days: [] },
-            report.base,
-            report.isMonth ? undefined : "чем за такой же срок до периода"
+            {
+              period: report.isMonth ? "month" : "week",
+              running: report.running ? { day: lived, days: spanDays(report.range.from, report.range.to) } : undefined,
+              days: [],
+            },
+            report.base
           );
           const Icon = tile.icon;
           return (
@@ -777,100 +767,66 @@ function Days({ report }: { report: PeriodReport }) {
           </span>
         </div>
       </div>
-      {report.bucket === "month" && days.series.length <= DAYS_CHART_MAX && <DaysChart report={report} />}
+      {days.series.length > 0 && days.series.length <= DAYS_CHART_MAX && <DaysChart report={report} />}
     </>
   );
 }
 
-function MoversNew({ report }: { report: PeriodReport }) {
+/** «Категории, где «выстрелило»» — как в «Дайджесте»: изменение в рублях, полоса — его величина. */
+function Movers({ report }: { report: PeriodReport }) {
   const { base } = report;
+  const maxMove = Math.max(...report.movers.map((m) => Math.abs(m.now - m.prev)), 1);
   return (
-    <div className="pr-cols">
+    <>
       <div>
-        <h3 className="pr-h3">Сильнее всего изменились</h3>
-        {report.movers.length > 0 ? (
-          <table className="pr-table">
-            <thead>
-              <tr>
-                <th>Категория</th>
-                <th className="pr-num">Было → стало</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.movers.map((m) => {
-                const d = m.now - m.prev;
-                return (
-                  <tr key={m.category}>
-                    <td className="pr-name">{m.category}</td>
-                    <td className="pr-num">
-                      <span className="pr-move">
-                        <span className="pr-muted">
-                          {money(m.prev, base)} → {money(m.now, base)}
-                        </span>
-                        <b className={d > 0 ? "pr-bad" : "pr-good"}>{money(d, base, true)}</b>
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <p className="pr-empty">Сравнивать не с чем.</p>
-        )}
+        <h2 className="pr-h2">Категории, где «выстрелило»</h2>
+        <p className="pr-sub">Самые большие изменения против прошлого такого же периода — в рублях</p>
       </div>
-      <div>
-        <h3 className="pr-h3">Впервые</h3>
-        {report.newPayees.length > 0 ? (
-          <table className="pr-table">
-            <thead>
-              <tr>
-                <th>Получатель</th>
-                <th className="pr-num">Покупок</th>
-                <th className="pr-num">Сумма</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.newPayees.map((p) => (
-                <tr key={p.name}>
-                  <td className="pr-name">{p.name}</td>
-                  <td className="pr-num pr-muted">{p.count}</td>
-                  <td className="pr-num">{money(p.total, base)}</td>
-                </tr>
-              ))}
-              {report.newPayeesCount > report.newPayees.length && (
-                <tr>
-                  <td className="pr-name pr-muted" colSpan={3}>
-                    И ещё {report.newPayeesCount - report.newPayees.length}{" "}
-                    {pluralRu(report.newPayeesCount - report.newPayees.length, ["получатель", "получателя", "получателей"])}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        ) : (
-          <p className="pr-empty">Новых получателей нет — все траты у знакомых.</p>
-        )}
+      <div className="pr-bars">
+        {report.movers.map((m) => {
+          const d = m.now - m.prev;
+          const up = d > 0;
+          return (
+            <div key={m.category} className="pr-move-row">
+              <span className="pr-bar-name">
+                <span>{m.category}</span>
+              </span>
+              <span className="pr-track">
+                <span className="pr-fill" style={{ display: "block", width: `${(Math.abs(d) / maxMove) * 100}%`, background: up ? "#dc2626" : "#16a34a" }} />
+              </span>
+              <span className="pr-bar-share">{m.prev > 0 ? `${up ? "+" : ""}${formatPct(m.now / m.prev - 1, 0)}` : "—"}</span>
+              <span className="pr-muted pr-bar-num" style={{ fontWeight: 400 }}>
+                {money(m.prev, base)} → {money(m.now, base)}
+              </span>
+              <span className={clsx("pr-bar-num", up ? "pr-bad" : "pr-good")}>{money(d, base, true)}</span>
+            </div>
+          );
+        })}
       </div>
-    </div>
+    </>
   );
 }
 
-/** Блоки отчёта по порядку — те, которым есть что показать. */
+/**
+ * Блоки отчёта по порядку — те, которым есть что показать. Сначала всё, что
+ * есть на странице «Дайджеста», в его порядке; потом то, чего там нет:
+ * категории, доходы, месяцы, счета, бюджет.
+ */
 function sectionsOf(report: PeriodReport): { key: string; node: ReactNode }[] {
   const out: { key: string; node: ReactNode }[] = [
     { key: "cover", node: <Cover report={report} /> },
     { key: "flow", node: <Flow report={report} /> },
     { key: "days", node: <Days report={report} /> },
-    { key: "categories", node: <Categories report={report} /> },
   ];
-  if (report.movers.length > 0 || report.newPayees.length > 0) out.push({ key: "movers", node: <MoversNew report={report} /> });
-  out.push({ key: "payees", node: <PayeesIncome report={report} /> });
+  if (report.observations.length > 0) out.push({ key: "observations", node: <Observations report={report} /> });
+  out.push({ key: "payees", node: <PayeesNew report={report} /> });
+  if (report.movers.length > 0) out.push({ key: "movers", node: <Movers report={report} /> });
   if (report.operations.length > 0) out.push({ key: "operations", node: <Operations report={report} /> });
+  out.push({ key: "categories", node: <Categories report={report} /> });
+  if (report.incomeCategories.length > 0) out.push({ key: "income", node: <Income report={report} /> });
   if (tableRows(report).length > 0) out.push({ key: "months", node: <Months report={report} /> });
   if (report.accounts.length > 0) out.push({ key: "accounts", node: <Accounts report={report} /> });
   if (report.budget) out.push({ key: "budget", node: <Budget report={report} /> });
-  if (report.observations.length > 0) out.push({ key: "observations", node: <Observations report={report} /> });
   return out;
 }
 

@@ -84,3 +84,46 @@ test("«Скрыть суммы» — скачать нельзя, причин�
   await expect(dialog(page).locator("[data-report-download]")).toBeDisabled();
   await expect(dialog(page).locator("[data-report-blocked]")).toContainText("Скрыть суммы");
 });
+
+for (const pick of ["текущий месяц", "Сентябрь 2026", "неделя"] as const) {
+  test(`в отчёте — всё, что на странице «Дайджеста» (${pick}): итоги, получатели, впервые, «выстрелило», самое дорогое, наблюдения`, async ({ page }) => {
+    await connectZen(page, "/digest");
+    if (pick === "неделя") await page.getByRole("radio", { name: "По неделям" }).or(page.getByRole("button", { name: "По неделям", exact: true })).first().click();
+    if (pick === "Сентябрь 2026") await page.getByRole("button", { name: /^Сентябрь 2026/ }).first().click();
+    const clean = (s: string) => s.replace(/[\u2060\u2063]/g, "").replace(/[\u00a0\u202f]/g, " ").replace(/\s+/g, " ").trim();
+    const card = (title: string) => page.locator("section, .card, [class*=card]").filter({ has: page.getByText(title, { exact: true }) }).last();
+    const lines = async (title: string) =>
+      (await card(title).count()) ? (await card(title).innerText()).split("\n").map(clean).filter(Boolean).slice(1) : [];
+
+    // Что должно попасть в отчёт — прочитано с самой страницы.
+    const expected: string[] = [];
+    const main = (await page.locator("main").innerText()).split("\n").map(clean).filter(Boolean);
+    for (const label of ["ДОХОД", "РАСХОД", "ЧИСТЫЙ ПОТОК", "НОРМА СБЕРЕЖЕНИЙ"]) {
+      const i = main.indexOf(label);
+      expected.push(main[i + 1], main[i + 2]); // число и подпись под ним
+    }
+    const names = (ls: string[]) => ls.filter((l) => !/₽|покуп|^[A-ZА-ЯЁ →]+$|%|не было/.test(l));
+    expected.push(...names(await lines("Где тратили")), ...names(await lines("Впервые")));
+    expected.push(...names(await lines("Категории, где «выстрелило»")));
+    const pricey = await lines("Самое дорогое за период");
+    for (let i = 0; i + 2 < pricey.length; i += 3) {
+      expected.push(pricey[i]);
+      const parts = pricey[i + 1].split(" · ");
+      if (parts.length > 2) expected.push(parts.slice(2).join(" · ")); // комментарий
+    }
+    for (const tile of await page.locator("[data-observation]").all()) {
+      expected.push((await tile.getAttribute("data-observation"))!);
+      expected.push(clean(await tile.locator(".text-2xl").innerText()));
+      expected.push(clean(await tile.locator("p").last().innerText()));
+    }
+
+    const html = await download(page, "HTML");
+    const file = await page.context().newPage();
+    await file.setContent(await readFile((await html.path())!, "utf8"));
+    const report = clean(await file.locator(".pr-doc").innerText());
+    const missing = expected.filter((s) => s && !report.includes(s));
+    expect(missing, `нет в отчёте: ${missing.join(" | ")}`).toEqual([]);
+    expect(expected.length).toBeGreaterThan(12);
+    await file.close();
+  });
+}

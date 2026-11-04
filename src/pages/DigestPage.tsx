@@ -55,6 +55,9 @@ import { useLazyList } from "../hooks/useLazyList";
 import { SectionControls } from "../components/SectionControls";
 import { DigestObservations } from "../components/DigestObservations";
 import { digestHeadline } from "../lib/digestHeadline";
+import { compareNote, deltaNote, deltaTone, netTone, type NoteTone } from "../lib/digestNotes";
+
+const TONE_CLS: Record<NoteTone, string> = { good: "text-income", bad: "text-expense", muted: "text-muted" };
 import { DigestReportModal } from "../components/DigestReportModal";
 import { Tooltip } from "../components/Tooltip";
 import type { ReportSpec } from "../hooks/usePeriodReport";
@@ -127,12 +130,11 @@ export function DigestPage() {
             kind: current.period,
             range: { from: current.start, to: current.end },
             title: current.period === "month" ? current.label : periodTitle(current).replace(/^неделю/, "Неделя"),
-            typical: current.typical
-              ? { income: current.typical.income, expense: current.typical.expense, periods: current.typical.periods }
-              : null,
+            digest: current,
+            observations,
           }
         : null,
-    [current]
+    [current, observations]
   );
 
   if (transactions.length === 0) return <EmptyState />;
@@ -306,24 +308,9 @@ function DigestDetail({
   /** Траты одного дня — по клику на столбик графика. */
   onOpenDay: (date: string) => void;
 }) {
-  const expCls =
-    entry.expenseDelta > 0.05
-      ? "text-expense"
-      : entry.expenseDelta < -0.05
-        ? "text-income"
-        : "text-muted";
-  const incCls =
-    entry.incomeDelta > 0.05
-      ? "text-income"
-      : entry.incomeDelta < -0.05
-        ? "text-expense"
-        : "text-muted";
-  const netCls =
-    entry.net > entry.prevNet + 100
-      ? "text-income"
-      : entry.net < entry.prevNet - 100
-        ? "text-expense"
-        : "text-muted";
+  const expCls = TONE_CLS[deltaTone(entry.expenseDelta, false)];
+  const incCls = TONE_CLS[deltaTone(entry.incomeDelta, true)];
+  const netCls = TONE_CLS[netTone(entry.net, entry.prevNet)];
 
   const maxMove = Math.max(
     ...entry.movers.map((m) => Math.abs(m.current - m.previous)),
@@ -565,26 +552,6 @@ function DigestDetail({
       )}
     </div>
   );
-}
-
-/** «+12% к прошлому периоду» — или пусто, если изменение в пределах процента. */
-function deltaNote(delta: number, running = false): string | undefined {
-  if (Math.abs(delta) <= 0.01) return running ? "Как в прошлом месяце на этот день" : "≈ как в прошлый раз";
-  return `${delta > 0 ? "+" : ""}${formatPct(delta, 0)} к ${running ? "прошлому месяцу на этот день" : "прошлому периоду"}`;
-}
-
-/** Сравнение с обычным периодом, а без него — с прошлым. */
-function compareNote(
-  value: number,
-  typical: number | undefined,
-  prevDelta: number,
-  running = false
-): string | undefined {
-  if (typical == null) return deltaNote(prevDelta, running);
-  if (Math.abs(typical) < 0.01) return undefined;
-  const rel = (value - typical) / Math.abs(typical);
-  if (Math.abs(rel) <= 0.03) return running ? "Как обычно на этот день" : "Как обычно";
-  return `${rel > 0 ? "+" : ""}${formatPct(rel, 0)} к обычному${running ? " на этот день" : ""}`;
 }
 
 /**

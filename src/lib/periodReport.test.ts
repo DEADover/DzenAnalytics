@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPeriodReport, changeOf, previousRange, rangeText, REST_LABEL, tableRows, packSections, previousRanges } from "./periodReport";
+import { buildPeriodReport, changeOf, previousRange, rangeText, REST_LABEL, tableRows, packSections, previousRanges, applyDigest } from "./periodReport";
 import { tx } from "../test/fixtures";
 import type { Transaction } from "../types";
 
@@ -196,5 +196,25 @@ describe("buildPeriodReport — блоки из «Дайджеста»", () => {
     const r = base({ txs: history.slice(1), history, range: mar });
     expect(r.newPayees).toEqual([{ name: "Новый магазин", total: 700, count: 1 }]);
     expect(r.newPayeesCount).toBe(1);
+  });
+});
+
+describe("applyDigest", () => {
+  it("блоки страницы «Дайджеста» — из его записи, остальное — из расчёта отчёта", async () => {
+    const { buildMonthDigest } = await import("./digest");
+    const txs = [
+      tx({ date: "2026-02-10", category: "Кафе", payee: "Кафе", amount: 100 }),
+      tx({ date: "2026-03-05", category: "Кафе", payee: "Кафе", amount: 900, comment: "Ужин" }),
+      tx({ date: "2026-03-06", kind: "income", category: "Зарплата", amount: 5000 }),
+    ];
+    const entry = buildMonthDigest(txs, new Date(2026, 2, 1), new Date(2026, 2, 31))!;
+    const m = applyDigest(base({ txs, range: { from: "2026-03-01", to: "2026-03-31" } }), entry, []);
+    expect(m.totals).toMatchObject({ income: entry.income, expense: entry.expense, count: entry.txCount });
+    expect(m.prevTotals).toMatchObject({ expense: entry.prevExpense });
+    expect(m.movers).toEqual(entry.movers.map((x) => ({ category: x.category, now: x.current, prev: x.previous })));
+    expect(m.operations[0]).toMatchObject({ payee: "Кафе", comment: "Ужин", amount: 900 });
+    expect(m.days.noSpend).toBe(entry.noSpendDays);
+    // Категории и движение денег — по-прежнему из отчёта.
+    expect(m.expenseCategories[0].name).toBe("Кафе");
   });
 });

@@ -108,6 +108,8 @@ export const PERIOD_REPORT_CSS = `
 .pr-bar-share { text-align: right; color: var(--pr-muted); }
 .pr-bar-delta { text-align: right; font-size: 11px; white-space: nowrap; }
 
+.pr-move-row { display: grid; grid-template-columns: 158px minmax(0, 1fr) 46px 170px 90px; align-items: center; gap: 10px; font-size: 12px; }
+.pr-comment { display: block; font-size: 10.5px; color: var(--pr-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pr-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
 
 .pr-budget-sum { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }

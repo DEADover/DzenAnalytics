@@ -21,7 +21,7 @@ import {
   topTransactions,
 } from "./aggregations";
 import { buildObservations, type DigestObservation } from "./digestObservations";
-import { firstSeenByPayee } from "./digest";
+import { firstSeenByPayee, type DigestEntry } from "./digest";
 import { expenseDelta } from "./txKindStyle";
 import { counterpartyOf } from "./yearReview";
 import { formatDate } from "./format";
@@ -88,6 +88,7 @@ export interface ReportOperation {
   payee: string;
   category: string;
   amount: number;
+  comment: string;
 }
 
 export interface ReportMover {
@@ -416,6 +417,7 @@ export function buildPeriodReport(input: {
     payee: counterpartyOf(t),
     category: t.categoryFull,
     amount: t.amountBase,
+    comment: t.comment ?? "",
   }));
 
   return {
@@ -499,4 +501,57 @@ export function packSections(heights: readonly number[], room: number, gap: numb
   });
   if (cur.length > 0) pages.push(cur);
   return pages;
+}
+
+/**
+ * Отчёт из «Дайджеста»: блоки, которые есть на его странице, берутся из
+ * самой записи «Дайджеста», а не считаются заново. Иначе отчёт мог разойтись
+ * с экраном в мелочах: другой набор «выстреливших» категорий, другое
+ * «обычно», другой список получателей. Итоги, сравнение с прошлым, траты по
+ * дням, «Где тратили», «Впервые», «Самое дорогое» и наблюдения — как на
+ * странице; всё остальное (движение денег, категории, счета, бюджет) —
+ * из расчёта отчёта.
+ */
+export function applyDigest(
+  m: PeriodReportModel,
+  e: DigestEntry,
+  observations: DigestObservation[]
+): PeriodReportModel {
+  const rateOf = (inc: number, exp: number) => (inc > 0 ? (inc - exp) / inc : null);
+  const lived = e.running?.day ?? e.days.length;
+  const livedDays = e.days.slice(0, lived);
+  return {
+    ...m,
+    totals: { income: e.income, expense: e.expense, net: e.net, rate: e.income > 0 ? e.savingsRate : null, count: e.txCount },
+    prevTotals: {
+      income: e.prevIncome,
+      expense: e.prevExpense,
+      net: e.prevNet,
+      rate: rateOf(e.prevIncome, e.prevExpense),
+      count: m.prevTotals?.count ?? 0,
+    },
+    typical: e.typical
+      ? { income: e.typical.income, expense: e.typical.expense, net: e.typical.net, rate: rateOf(e.typical.income, e.typical.expense), count: 0, periods: e.typical.periods }
+      : null,
+    days: {
+      lived,
+      noSpend: e.noSpendDays,
+      biggest: e.biggestDay,
+      avg: lived > 0 ? livedDays.reduce((s, d) => s + d.expense, 0) / lived : 0,
+      series: livedDays,
+    },
+    movers: e.movers.map((x) => ({ category: x.category, now: x.current, prev: x.previous })),
+    payees: e.topPayees.map((p) => ({ name: p.name, total: p.expense, count: p.count })),
+    newPayees: e.newPayees.map((p) => ({ name: p.name, total: p.expense, count: p.count })),
+    newPayeesCount: e.newPayees.length,
+    operations: e.topTransactions.map((t) => ({
+      id: t.id,
+      date: t.date.slice(0, 10),
+      payee: counterpartyOf(t),
+      category: t.categoryFull,
+      amount: t.amountBase,
+      comment: t.comment ?? "",
+    })),
+    observations,
+  };
 }

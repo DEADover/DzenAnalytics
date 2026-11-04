@@ -1,8 +1,10 @@
 import { useEffect, useMemo } from "react";
 import { netWorthSeries, stackedBalanceByAccount } from "../lib/aggregations";
 import { colorForCategory } from "../lib/categoryColor";
-import { periodKey, shiftDays, shiftPeriod, type DayRange } from "../lib/period";
-import { buildPeriodReport, previousRange, rangeText, type PeriodReportModel } from "../lib/periodReport";
+import type { DigestEntry } from "../lib/digest";
+import type { DigestObservation } from "../lib/digestObservations";
+import { endAfterDays, periodKey, shiftDays, shiftPeriod, type DayRange } from "../lib/period";
+import { applyDigest, buildPeriodReport, previousRange, rangeText, type PeriodReportModel } from "../lib/periodReport";
 import { buildReportBudget, type ReportBudget } from "../lib/periodReportBudget";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
@@ -28,8 +30,13 @@ export interface ReportSpec {
   range: DayRange;
   /** Название на обложке: «Октябрь 2026», «Неделя 12–18 октября 2026». */
   title: string;
-  /** «Обычно» из «Дайджеста» — чтобы числа совпадали с экраном. */
-  typical: { income: number; expense: number; periods: number } | null;
+  /**
+   * Запись «Дайджеста» за этот период и его наблюдения: всё, что есть на его
+   * странице, отчёт берёт отсюда — числа и слова совпадают с экраном
+   * (`applyDigest`).
+   */
+  digest: DigestEntry;
+  observations: DigestObservation[];
 }
 
 export interface PeriodReport extends PeriodReportModel {
@@ -98,17 +105,21 @@ export function usePeriodReport(spec: ReportSpec | null): PeriodReport | null {
     // Месяц — отчётный, со своим первым днём, как в «Дайджесте»; неделя —
     // прошлые семь дней.
     const monthYM = spec.kind === "month" ? periodKey(range.from, monthStartDay) : null;
-    return buildPeriodReport({
+    // Идущий месяц «Дайджест» считает по сегодняшний день, а не по последней
+    // операции: отчёт режет период там же, иначе «к этому дню» разошлось бы.
+    const lastDay = spec.digest.running ? endAfterDays(range.from, spec.digest.running.day) : maxDate;
+    const model = buildPeriodReport({
       txs,
       range,
       prevRange: previousRange(spec.kind === "month" ? "period" : "custom", range, monthYM, monthStartDay),
-      maxDate,
+      maxDate: lastDay,
       monthStartDay,
       isMonth: spec.kind === "month",
       colorOf: (name) => colorForCategory(name, meta),
-      typical: spec.typical,
+      typical: null,
       history: txs,
     });
+    return applyDigest(model, spec.digest, spec.observations);
   }, [spec, txs, maxDate, monthStartDay, meta]);
 
   // Остатки: с Дзен-мани — по счетам, как «Остатки по счетам» и «Капитал»;
