@@ -74,6 +74,9 @@ test("отчёт за неделю — без бюджета: план поме�
   expect(text).toMatch(/Неделя \d/);
   expect(text).not.toContain('data-report-section="budget"');
   expect(text).toContain('data-report-section="days"');
+  // Неделя ужата: ниже график, без второго графика трат по дням — три листа.
+  expect((text.match(/data-report-page="/g) ?? []).length).toBeLessThanOrEqual(3);
+  expect(text).not.toContain('aria-label="Траты по дням"');
 });
 
 test("«Скрыть суммы» — скачать нельзя, причина в окне", async ({ page }) => {

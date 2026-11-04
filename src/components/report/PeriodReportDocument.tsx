@@ -106,7 +106,8 @@ function bucketTitle(b: ReportBucket, kind: "month" | "day"): string {
 function CashflowChart({ report }: { report: PeriodReport }) {
   const { buckets, bucket, base } = report;
   const W = CONTENT_W;
-  const H = 236;
+  // У недели семь столбиков — им хватит и меньшей высоты; лист не пустеет.
+  const H = report.isMonth || report.bucket === "month" ? 236 : 168;
   const left = 56;
   const top = 10;
   const bottom = H - 24;
@@ -767,7 +768,11 @@ function Days({ report }: { report: PeriodReport }) {
           </span>
         </div>
       </div>
-      {days.series.length > 0 && days.series.length <= DAYS_CHART_MAX && <DaysChart report={report} />}
+      {/* У недели дни и так видны столбиками в «Движении денег» выше —
+          второй такой же график только отнимал бы место. */}
+      {report.isMonth || report.bucket === "month"
+        ? days.series.length > 0 && days.series.length <= DAYS_CHART_MAX && <DaysChart report={report} />
+        : null}
     </>
   );
 }
