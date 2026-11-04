@@ -15,6 +15,7 @@ import {
   type BudgetExportFormat,
 } from "../lib/budgetExportName";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
+import { FormatChoice, type FormatOption } from "./FormatChoice";
 
 export type { BudgetExportFormat };
 
@@ -30,12 +31,7 @@ interface Props {
   onClose: () => void;
 }
 
-const FORMATS: {
-  value: BudgetExportFormat;
-  label: string;
-  icon: typeof FileText;
-  what: string;
-}[] = [
+const FORMATS: FormatOption<BudgetExportFormat>[] = [
   {
     value: "xlsx",
     label: "Excel",
@@ -83,38 +79,7 @@ export function BudgetExportModal({
       />
 
       <ModalBody>
-        <div>
-          <div className="label mb-2">Формат</div>
-          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Формат">
-            {FORMATS.map((f) => (
-              <button
-                key={f.value}
-                type="button"
-                role="radio"
-                aria-checked={f.value === format}
-                onClick={() => setFormat(f.value)}
-                disabled={busy}
-                className={clsx(
-                  "rounded-xl border p-3 text-left transition-colors disabled:opacity-60",
-                  f.value === format
-                    ? "border-accent bg-accent/5"
-                    : "border-border hover:bg-panel2"
-                )}
-              >
-                <span
-                  className={clsx(
-                    "flex items-center gap-2 font-medium",
-                    f.value === format ? "text-accent" : "text-text"
-                  )}
-                >
-                  <f.icon className="w-4 h-4 shrink-0" />
-                  {f.label}
-                </span>
-                <span className="block text-xs text-muted mt-1.5">{f.what}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <FormatChoice options={FORMATS} value={format} onChange={setFormat} disabled={busy} />
 
         {/* Месяц — только у PDF. В книге он переключается прямо на листе
             «Дашборд», и выбирать его заранее не нужно: там лежат все

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPeriodReport, changeOf, previousRange, rangeText, reportTitle, REST_LABEL, tableRows, packSections, previousRanges } from "./periodReport";
+import { buildPeriodReport, changeOf, previousRange, rangeText, REST_LABEL, tableRows, packSections, previousRanges } from "./periodReport";
 import { tx } from "../test/fixtures";
 import type { Transaction } from "../types";
 
@@ -120,12 +120,8 @@ describe("changeOf", () => {
   });
 });
 
-describe("reportTitle", () => {
-  it("короткие имена периодов и даты для остальных", () => {
-    expect(reportTitle("period", { from: "2026-10-15", to: "2026-11-14" }, "2026-10")).toBe("Октябрь 2026");
-    expect(reportTitle("quarter", { from: "2026-10-01", to: "2026-12-31" }, "2026-11")).toBe("IV квартал 2026");
-    expect(reportTitle("year", { from: "2026-01-01", to: "2026-12-31" }, null)).toBe("2026 год");
-    expect(reportTitle("custom", { from: "2026-03-10", to: "2026-03-19" }, null)).toBe(rangeText({ from: "2026-03-10", to: "2026-03-19" }));
+describe("rangeText", () => {
+  it("даты периода строкой", () => {
     expect(rangeText({ from: "2026-03-10", to: "2026-03-19" })).toBe("10.03.2026 — 19.03.2026");
   });
 });

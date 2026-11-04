@@ -24,12 +24,11 @@ import { buildObservations, type DigestObservation } from "./digestObservations"
 import { firstSeenByPayee } from "./digest";
 import { expenseDelta } from "./txKindStyle";
 import { counterpartyOf } from "./yearReview";
-import { formatDate, monthTitle } from "./format";
+import { formatDate } from "./format";
 import {
   comparableRanges,
   periodKey,
   periodRange,
-  quarterLabel,
   quarterRange,
   shiftDays,
   shiftPeriod,
@@ -277,6 +276,12 @@ export function buildPeriodReport(input: {
   /** Предыдущие такие же периоды для «обычного» (`previousRanges`). */
   typicalRanges?: readonly DayRange[];
   /**
+   * Готовое «обычно» — из «Дайджеста»: отчёт из него обязан повторять его
+   * числа, а «Дайджест» считает обычный расход идущего месяца темпом, а не
+   * по тем же дням прошлых. Задано — `typicalRanges` не нужны.
+   */
+  typical?: { income: number; expense: number; periods: number } | null;
+  /**
    * Вся история без фильтров — по ней «впервые»: получатель, которому платили
    * с другого счёта, новым не считается. Не задана — `txs`.
    */
@@ -346,7 +351,12 @@ export function buildPeriodReport(input: {
     .filter((w) => firstDay && w.from >= firstDay)
     .map((w) => comparableRanges(range, w, maxDate, true).b);
   let typical: PeriodReportModel["typical"] = null;
-  if (windows.length > 0) {
+  if (input.typical !== undefined) {
+    const t = input.typical;
+    typical = t
+      ? { income: t.income, expense: t.expense, net: t.income - t.expense, rate: t.income > 0 ? (t.income - t.expense) / t.income : null, count: 0, periods: t.periods }
+      : null;
+  } else if (windows.length > 0) {
     const sums = windows.map((w) => totalsOf(inRange(input.txs, w)));
     const avg = (f: (t: ReportTotals) => number) => sums.reduce((a, t) => a + f(t), 0) / sums.length;
     const income = avg((t) => t.income);
@@ -441,19 +451,6 @@ export function rangeText(r: DayRange): string {
   return r.from === r.to ? formatDate(r.from, "full") : `${formatDate(r.from, "full")} — ${formatDate(r.to, "full")}`;
 }
 
-/**
- * Название периода для обложки: «Октябрь 2026», «IV кв. 2026», «2026 год» —
- * или даты, если у периода нет короткого имени. Отчётный месяц со своим
- * первым днём называется по месяцу начала, как в Дзен-мани; даты — второй
- * строкой обложки.
- */
-export function reportTitle(preset: DatePreset, range: DayRange, monthYM: string | null): string {
-  if ((preset === "month" || preset === "period") && monthYM) return monthTitle(monthYM);
-  if (preset === "quarter") return quarterLabel(range.from.slice(0, 7)).replace("кв.", "квартал");
-  if (preset === "year") return `${range.from.slice(0, 4)} год`;
-  if (preset === "all") return "Всё время";
-  return rangeText(range);
-}
 
 /** Сколько строк помещается в таблицу «По месяцам» на листе. */
 export const MONTH_TABLE_MAX = 13;

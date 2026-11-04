@@ -265,15 +265,6 @@ function Cover({ report }: { report: PeriodReport }) {
             report.isMonth ? "месяца" : "периода"
           )}
         </p>
-        {report.filters.length > 0 && (
-          <div className="pr-filters">
-            {report.filters.map((f) => (
-              <span key={f} className="pr-chip">
-                {f}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="pr-kpis">

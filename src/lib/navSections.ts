@@ -14,7 +14,6 @@ import {
   BarChart3,
   CalendarClock,
   CalendarDays,
-  FileText,
   ClipboardList,
   Cloud,
   Copy,
@@ -78,7 +77,6 @@ export const SECONDARY_GROUPS: { title: string; items: NavSection[] }[] = [
       { to: "/sankey", label: "Потоки", icon: GitFork, hint: "Откуда пришли деньги и куда ушли" },
       { to: "/year-review", label: "Год в цифрах", icon: Sparkles, hint: "Итоги и рекорды года" },
       { to: "/digest", label: "Дайджест", icon: Newspaper, hint: "Итоги прошедших недель и месяцев" },
-      { to: "/period-report", label: "Отчёт за период", icon: FileText, hint: "Итоги периода файлом: PDF и HTML" },
     ],
   },
   {

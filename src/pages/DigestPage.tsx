@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Store,
   Sparkles,
+  FileText,
 } from "lucide-react";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip } from "recharts";
 import { ChartContainer } from "../components/ChartContainer";
@@ -54,6 +55,9 @@ import { useLazyList } from "../hooks/useLazyList";
 import { SectionControls } from "../components/SectionControls";
 import { DigestObservations } from "../components/DigestObservations";
 import { digestHeadline } from "../lib/digestHeadline";
+import { DigestReportModal } from "../components/DigestReportModal";
+import { Tooltip } from "../components/Tooltip";
+import type { ReportSpec } from "../hooks/usePeriodReport";
 import { buildObservations, type DigestObservation } from "../lib/digestObservations";
 
 
@@ -113,6 +117,23 @@ export function DigestPage() {
     () => (current ? buildObservations(transactions, current) : []),
     [transactions, current]
   );
+  // «Отчёт» — за выбранный здесь период, с «обычно» самого «Дайджеста»:
+  // числа отчёта совпадают с экраном.
+  const [reportOpen, setReportOpen] = useState(false);
+  const reportSpec = useMemo<ReportSpec | null>(
+    () =>
+      current
+        ? {
+            kind: current.period,
+            range: { from: current.start, to: current.end },
+            title: current.period === "month" ? current.label : periodTitle(current).replace(/^неделю/, "Неделя"),
+            typical: current.typical
+              ? { income: current.typical.income, expense: current.typical.expense, periods: current.typical.periods }
+              : null,
+          }
+        : null,
+    [current]
+  );
 
   if (transactions.length === 0) return <EmptyState />;
 
@@ -159,7 +180,20 @@ export function DigestPage() {
             { value: "week" as Tab, label: "По неделям" },
           ]}
         />
+        <Tooltip content="Скачать отчёт за выбранный период в PDF или HTML">
+          <button
+            type="button"
+            className="btn-ghost h-[42px] rounded-control"
+            onClick={() => setReportOpen(true)}
+            disabled={!reportSpec}
+            data-digest-report
+          >
+            <FileText className="w-4 h-4" aria-hidden />
+            Отчёт
+          </button>
+        </Tooltip>
       </SectionControls>
+      {reportOpen && reportSpec && <DigestReportModal spec={reportSpec} onClose={() => setReportOpen(false)} />}
 
       {filtered.length === 0 ? (
         <SectionEmpty icon={Newspaper} title="Нет периодов для дайджеста" />

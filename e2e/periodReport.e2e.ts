@@ -1,76 +1,82 @@
 /**
- * «Отчёт за период»: листы на экране, выгрузка в PDF и HTML, запрет выгрузки
- * при скрытых суммах.
+ * «Отчёт» в «Дайджесте»: выбор формата, выгрузка в PDF и HTML за выбранный
+ * период, запрет выгрузки при скрытых суммах.
  */
 import { readFile } from "node:fs/promises";
+import type { Page } from "@playwright/test";
 import { test, expect, connectZen } from "./harness";
 
-const pages = (page: import("@playwright/test").Page) => page.locator("[data-report-preview] .pr-page");
+const dialog = (page: Page) => page.getByRole("dialog").filter({ hasText: "Отчёт за" });
 
-test("листы отчёта: итоги, расходы, месяцы и счета — числа как в «Cash-flow»", async ({ page }) => {
-  await connectZen(page, "/period-report");
-  await expect(pages(page).first()).toBeVisible();
-  const n = await pages(page).count();
-  expect(n).toBeGreaterThanOrEqual(2);
-  // Нумерация «1 / N» внизу каждого листа.
-  await expect(pages(page).first().locator(".pr-foot")).toContainText(`1 / ${n}`);
-  const cover = pages(page).first();
-  await expect(cover.locator("[data-report-section=cover] .pr-kpi")).toHaveCount(4);
-  await expect(cover.getByText("Движение денег")).toBeVisible();
-  await expect(page.locator("[data-report-section=categories]")).toContainText("Куда ушли деньги");
-  // Блоки из «Дайджеста»: главное одной фразой, траты по дням.
-  await expect(page.locator("[data-report-headline]")).toContainText(/потратили/);
-  await expect(page.locator("[data-report-section=days]")).toContainText("Дней без трат");
-  // Блоки раскладываются по листам без пустых: в каждом листе хоть один блок.
-  for (let i = 0; i < n; i++) expect(await pages(page).nth(i).locator("[data-report-section]").count()).toBeGreaterThan(0);
+async function download(page: Page, format: "PDF" | "HTML") {
+  await page.locator("[data-digest-report]").click();
+  await expect(dialog(page)).toBeVisible();
+  await dialog(page).getByRole("radio", { name: new RegExp(`^${format}`) }).click();
+  const [file] = await Promise.all([page.waitForEvent("download"), dialog(page).locator("[data-report-download]").click()]);
+  await expect(dialog(page)).toHaveCount(0);
+  return file;
+}
 
-  // Лист не шире колонки: превью ужато, а сам лист — настоящего размера A4.
-  const box = (await cover.boundingBox())!;
-  const col = (await page.locator("[data-report-preview]").boundingBox())!;
-  expect(box.width).toBeLessThanOrEqual(col.width + 1);
-  expect(await cover.evaluate((el) => (el as HTMLElement).offsetWidth)).toBe(794);
+test("отчёт за месяц: PDF — файл PDF, HTML — самостоятельная страница с блоками отчёта", async ({ page }) => {
+  await connectZen(page, "/digest");
+  await page.locator("[data-digest-report]").click();
+  await expect(dialog(page)).toContainText("Отчёт за октябрь 2026");
+  await expect(dialog(page).getByRole("radio")).toHaveCount(2);
+  await dialog(page).getByRole("button", { name: "Отмена" }).click();
 
-});
+  const pdf = await download(page, "PDF");
+  expect(pdf.suggestedFilename()).toMatch(/^DzenAnalytics — отчёт 01\.10\.2026–31\.10\.2026\.pdf$/);
+  expect((await readFile((await pdf.path())!)).subarray(0, 5).toString()).toBe("%PDF-");
 
-test("выгрузка: PDF — файл PDF, HTML — самостоятельная страница без меток сумм", async ({ page }) => {
-  await connectZen(page, "/period-report");
-  await expect(pages(page).first()).toBeVisible();
-
-  const [pdf] = await Promise.all([page.waitForEvent("download"), page.locator("[data-report-export=pdf]").click()]);
-  expect(pdf.suggestedFilename()).toMatch(/^DzenAnalytics — отчёт .+\.pdf$/);
-  const pdfBytes = await readFile((await pdf.path())!);
-  expect(pdfBytes.subarray(0, 5).toString()).toBe("%PDF-");
-
-  const [html] = await Promise.all([page.waitForEvent("download"), page.locator("[data-report-export=html]").click()]);
-  expect(html.suggestedFilename()).toMatch(/\.html$/);
+  const html = await download(page, "HTML");
   const text = await readFile((await html.path())!, "utf8");
   expect(text.startsWith("<!doctype html>")).toBe(true);
-  expect(text).toContain("Отчёт за период");
+  expect(text).toContain("Октябрь 2026");
   expect(text).toContain("@font-face");
   expect(text).toMatch(/<img[^>]* src="data:image\/png;base64,/);
-  expect(text).not.toMatch(/[\u2060\u2063]/);
+  expect(text).not.toMatch(/[⁠⁣]/);
+  // Листы за краем экрана после закрытия окна убраны.
+  await expect(page.locator("[data-report-offscreen]")).toHaveCount(0);
 
-  // Файл открывается сам по себе и выглядит как превью.
   const file = await page.context().newPage();
+  await file.setViewportSize({ width: 900, height: 1200 });
   await file.setContent(text);
-  await expect(file.locator(".pr-page").first()).toBeVisible();
-  expect(await file.locator(".pr-page").count()).toBe(await pages(page).count());
-  if (process.env.E2E_SHOTS) {
-    await file.setViewportSize({ width: 900, height: 1200 });
-    const sheets = file.locator(".pr-page");
-    for (let i = 0; i < (await sheets.count()); i++)
-      await sheets.nth(i).screenshot({ path: `${process.env.E2E_SHOTS}/period-report-${i + 1}.png` });
+  const sheets = file.locator(".pr-page");
+  await expect(sheets.first()).toBeVisible();
+  const n = await sheets.count();
+  expect(n).toBeGreaterThanOrEqual(2);
+  await expect(sheets.first().locator(".pr-foot")).toContainText(`1 / ${n}`);
+  await expect(file.locator("[data-report-section=cover] .pr-kpi")).toHaveCount(4);
+  // «Главное» — той же фразой, что в «Дайджесте».
+  const headline = (await page.getByText(/^За \d+ дн/).first().innerText()).replace(/[⁠⁣]/g, "");
+  expect((await file.locator("[data-report-headline]").innerText()).trim()).toBe(headline.trim());
+  for (const key of ["days", "categories", "budget"]) await expect(file.locator(`[data-report-section=${key}]`)).toHaveCount(1);
+  for (let i = 0; i < n; i++) {
+    expect(await sheets.nth(i).locator("[data-report-section]").count()).toBeGreaterThan(0);
+    expect(await sheets.nth(i).evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+    if (process.env.E2E_SHOTS) await sheets.nth(i).screenshot({ path: `${process.env.E2E_SHOTS}/digest-report-${i + 1}.png` });
   }
   await file.close();
 });
 
-test("«Скрыть суммы» — выгрузка недоступна", async ({ page }) => {
-  await connectZen(page, "/period-report");
+test("отчёт за неделю — без бюджета: план помесячный", async ({ page }) => {
+  await connectZen(page, "/digest");
+  await page.getByRole("radio", { name: "По неделям" }).or(page.getByRole("button", { name: "По неделям", exact: true })).first().click();
+  const html = await download(page, "HTML");
+  const text = await readFile((await html.path())!, "utf8");
+  expect(text).toMatch(/Неделя \d/);
+  expect(text).not.toContain('data-report-section="budget"');
+  expect(text).toContain('data-report-section="days"');
+});
+
+test("«Скрыть суммы» — скачать нельзя, причина в окне", async ({ page }) => {
+  await connectZen(page, "/digest");
   await page.evaluate(async () => {
     type S = { usePrivacyStore: { getState: () => { setHideAmounts: (v: boolean) => Promise<void> } } };
     const { usePrivacyStore } = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("usePrivacyStore");
     await usePrivacyStore.getState().setHideAmounts(true);
   });
-  await expect(page.locator("[data-report-export=pdf]")).toBeDisabled();
-  await expect(page.locator("[data-report-export=html]")).toBeDisabled();
+  await page.locator("[data-digest-report]").click();
+  await expect(dialog(page).locator("[data-report-download]")).toBeDisabled();
+  await expect(dialog(page).locator("[data-report-blocked]")).toContainText("Скрыть суммы");
 });

@@ -55,8 +55,6 @@ export const PERIOD_REPORT_CSS = `
 .pr-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--pr-accent); }
 .pr-title { font-size: 46px; font-weight: 700; letter-spacing: -.035em; line-height: 1.02; margin-top: 8px; }
 .pr-dates { font-size: 14px; color: var(--pr-muted); margin-top: 8px; }
-.pr-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.pr-chip { font-size: 11px; color: var(--pr-ink2); background: var(--pr-soft); border-radius: 999px; padding: 3px 10px; }
 
 .pr-h2 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
 .pr-h3 { font-size: 15px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 10px; }

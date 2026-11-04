@@ -2,22 +2,13 @@ import { useEffect, useMemo } from "react";
 import { netWorthSeries, stackedBalanceByAccount } from "../lib/aggregations";
 import { colorForCategory } from "../lib/categoryColor";
 import { periodKey, shiftDays, shiftPeriod, type DayRange } from "../lib/period";
-import {
-  buildPeriodReport,
-  previousRange,
-  previousRanges,
-  rangeText,
-  reportTitle,
-  TYPICAL_PERIODS,
-  type PeriodReportModel,
-} from "../lib/periodReport";
+import { buildPeriodReport, previousRange, rangeText, type PeriodReportModel } from "../lib/periodReport";
 import { buildReportBudget, type ReportBudget } from "../lib/periodReportBudget";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useDataStore } from "../store/useDataStore";
 import { useDraftsStore } from "../store/useDraftsStore";
-import { applyFilters, presetToRange, useFiltersStore } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useAccountDirectory } from "./useAccountDirectory";
 import { useAnalyticsTransactions } from "./useAnalyticsTransactions";
@@ -31,19 +22,28 @@ export interface ReportAccountRow {
   end: number;
 }
 
+/** Какой период отчёта — из «Дайджеста»: месяц или неделя. */
+export interface ReportSpec {
+  kind: "month" | "week";
+  range: DayRange;
+  /** Название на обложке: «Октябрь 2026», «Неделя 12–18 октября 2026». */
+  title: string;
+  /** «Обычно» из «Дайджеста» — чтобы числа совпадали с экраном. */
+  typical: { income: number; expense: number; periods: number } | null;
+}
+
 export interface PeriodReport extends PeriodReportModel {
   title: string;
-  /** Период — месяц (календарный или отчётный). */
+  /** Период — месяц: «Половины месяца», «к тем же дням прошлого месяца». */
   isMonth: boolean;
   /** Даты периода строкой — подзаголовок обложки. */
   dates: string;
   base: string;
-  /** Что сузили общие фильтры — «Счета: Тинькофф, Наличные». Пусто — всё. */
-  filters: string[];
   /** Капитал на начало и конец. `null` — история не начиналась. */
   capital: { start: number; end: number } | null;
   /** Остатки по счетам (только с подключённым Дзен-мани). */
   accounts: ReportAccountRow[];
+  /** Бюджет — у месяца; у недели нет: план помесячный, и неделю с ним не сравнить. */
   budget: ReportBudget | null;
 }
 
@@ -58,19 +58,18 @@ function valueAt<T extends { date: string }>(series: readonly T[], date: string,
 }
 
 /**
- * «Отчёт за период»: период и фильтры — общие, сверху страницы; всё остальное
- * — из тех же расчётов, что в разделах (см. `lib/periodReport`).
+ * Отчёт за период «Дайджеста» — из тех же расчётов, что разделы сервиса (см.
+ * `lib/periodReport`). Операции — `useAnalyticsTransactions`, как у самого
+ * «Дайджеста»: без счетов вне баланса (пока они не считаются) и без того, что
+ * исключает активный разрез; общие фильтры не действуют, как и в «Дайджесте».
+ * Бюджет — по периметру и правилам раздела «Бюджеты» (`useBudgetScope`).
  *
- * Операции — `useAnalyticsTransactions`, как у главной, «Дайджеста» и «Доходов
- * и расходов»: без счетов вне баланса (пока они не считаются) и без того, что
- * исключает активный разрез. Бюджет — по своему периметру и правилам раздела
- * «Бюджеты» (`useBudgetScope`), как и там.
+ * `spec` — `null`, пока отчёт не нужен: тогда ничего не считается.
  */
-export function usePeriodReport(): PeriodReport | null {
+export function usePeriodReport(spec: ReportSpec | null): PeriodReport | null {
   const txs = useAnalyticsTransactions();
   const rawTxs = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
-  const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const meta = useCategoryMetaStore((s) => s.meta);
   const metaLoaded = useCategoryMetaStore((s) => s.loaded);
@@ -85,45 +84,32 @@ export function usePeriodReport(): PeriodReport | null {
   const calibration = useCalibrationStore((s) => s.calibration);
 
   useEffect(() => {
-    if (!metaLoaded) hydrateMeta();
-  }, [metaLoaded, hydrateMeta]);
+    if (spec && !metaLoaded) hydrateMeta();
+  }, [spec, metaLoaded, hydrateMeta]);
   useEffect(() => {
-    if (!budgetsLoaded) hydrateBudgets();
-  }, [budgetsLoaded, hydrateBudgets]);
+    if (spec && !budgetsLoaded) hydrateBudgets();
+  }, [spec, budgetsLoaded, hydrateBudgets]);
 
-  // Все фильтры, кроме периода: из них берутся и период, и прошлый для сравнения.
-  const scoped = useMemo(
-    () => applyFilters(txs, { ...filters, preset: "all" }, monthStartDay),
-    [txs, filters, monthStartDay]
-  );
   const maxDate = useMemo(() => txs.reduce((m, t) => (t.date > m ? t.date : m), "").slice(0, 10), [txs]);
 
-  const range = useMemo<DayRange | null>(() => {
-    if (filters.preset === "all") {
-      const min = scoped.reduce((m, t) => (!m || t.date < m ? t.date : m), "").slice(0, 10);
-      return min && maxDate ? { from: min, to: maxDate } : null;
-    }
-    const r =
-      filters.preset === "custom"
-        ? { from: filters.from, to: filters.to }
-        : presetToRange(filters.preset, maxDate, filters.monthYM, monthStartDay, filters.windowShift);
-    return r.from && r.to ? { from: r.from.slice(0, 10), to: r.to.slice(0, 10) } : null;
-  }, [filters, scoped, maxDate, monthStartDay]);
-
   const model = useMemo(() => {
-    if (!range) return null;
+    if (!spec) return null;
+    const { range } = spec;
+    // Месяц — отчётный, со своим первым днём, как в «Дайджесте»; неделя —
+    // прошлые семь дней.
+    const monthYM = spec.kind === "month" ? periodKey(range.from, monthStartDay) : null;
     return buildPeriodReport({
-      txs: scoped,
+      txs,
       range,
-      prevRange: previousRange(filters.preset, range, filters.monthYM, monthStartDay),
+      prevRange: previousRange(spec.kind === "month" ? "period" : "custom", range, monthYM, monthStartDay),
       maxDate,
       monthStartDay,
-      isMonth: filters.preset === "month" || filters.preset === "period",
+      isMonth: spec.kind === "month",
       colorOf: (name) => colorForCategory(name, meta),
-      typicalRanges: previousRanges(filters.preset, range, filters.monthYM, monthStartDay, TYPICAL_PERIODS),
+      typical: spec.typical,
       history: txs,
     });
-  }, [scoped, range, filters.preset, filters.monthYM, monthStartDay, maxDate, meta, txs]);
+  }, [spec, txs, maxDate, monthStartDay, meta]);
 
   // Остатки: с Дзен-мани — по счетам, как «Остатки по счетам» и «Капитал»;
   // без него (CSV) — только капитал от нуля с калибровкой.
@@ -132,8 +118,7 @@ export function usePeriodReport(): PeriodReport | null {
     const before = shiftDays(model.range.from, -1);
     const end = model.lastDay;
     if (valuation) {
-      const universe = [...(valuation.universe ?? [])];
-      const picked = filters.accounts.size > 0 ? universe.filter((k) => filters.accounts.has(k)) : universe;
+      const picked = [...(valuation.universe ?? [])];
       if (picked.length === 0) return { capital: null, accounts: [] };
       const { series } = stackedBalanceByAccount(txs, 0, null, new Set(Object.keys(drafts)), picked, null, valuation);
       const num = (v: unknown) => (typeof v === "number" ? v : 0);
@@ -153,37 +138,24 @@ export function usePeriodReport(): PeriodReport | null {
     const series = netWorthSeries(txs, calibration);
     const e = valueAt(series, end, (p) => p.net);
     return { capital: e === null ? null : { start: valueAt(series, before, (p) => p.net) ?? 0, end: e }, accounts: [] };
-  }, [model, valuation, filters.accounts, txs, drafts, dir, calibration]);
+  }, [model, valuation, txs, drafts, dir, calibration]);
 
   const budget = useMemo(() => {
-    if (!model) return null;
+    if (!model || spec?.kind !== "month") return null;
     const months: string[] = [];
     const last = periodKey(model.lastDay, monthStartDay);
     for (let ym = periodKey(model.range.from, monthStartDay); ym <= last && months.length < 600; ym = shiftPeriod(ym, 1))
       months.push(ym);
     return buildReportBudget(lines, rawTxs, months, scope, monthStartDay);
-  }, [model, lines, rawTxs, scope, monthStartDay]);
+  }, [model, spec?.kind, lines, rawTxs, scope, monthStartDay]);
 
-  const filterNotes = useMemo(() => {
-    const out: string[] = [];
-    const names = (keys: Iterable<string>, of: (k: string) => string) => {
-      const list = [...keys].map(of);
-      return list.length <= 3 ? list.join(", ") : `${list.slice(0, 3).join(", ")} и ещё ${list.length - 3}`;
-    };
-    if (filters.accounts.size > 0) out.push(`Счета: ${names(filters.accounts, dir.label)}`);
-    if (filters.categories.size > 0) out.push(`Категории: ${names(filters.categories, (c) => c)}`);
-    if (filters.search.trim()) out.push(`Поиск: «${filters.search.trim()}»`);
-    return out;
-  }, [filters.accounts, filters.categories, filters.search, dir]);
-
-  if (!model) return null;
+  if (!model || !spec) return null;
   return {
     ...model,
-    title: reportTitle(filters.preset, model.range, filters.monthYM),
-    isMonth: filters.preset === "month" || filters.preset === "period",
+    title: spec.title,
+    isMonth: spec.kind === "month",
     dates: rangeText(model.range),
     base,
-    filters: filterNotes,
     capital: balances.capital,
     accounts: balances.accounts,
     budget,
