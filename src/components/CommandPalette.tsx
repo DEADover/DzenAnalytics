@@ -36,6 +36,7 @@ import {
   EyeOff,
   SlidersHorizontal,
   CalendarClock,
+  FileText,
 } from "lucide-react";
 import { useTourStore } from "../store/useTourStore";
 import { useDataStore } from "../store/useDataStore";
@@ -78,6 +79,7 @@ const PAGE_ITEMS: { path: string; title: string; icon: React.ComponentType<{ cla
   { path: "/transactions", title: "Операции", icon: ListChecks, aliases: ["transactions", "лента", "операции", "operations"] },
   { path: "/cashflow", title: "Cash-flow", icon: LineChart, aliases: ["кешфлоу", "cashflow", "потоки"] },
   { path: "/categories", title: "Категории", icon: PieChart, aliases: ["categories"] },
+  { path: "/period-report", title: "Отчёт за период", icon: FileText, aliases: ["report", "pdf", "html", "отчёт", "отчет", "итоги", "экспорт", "печать"] },
   { path: "/report", title: "Доходы и расходы", icon: Table, aliases: ["report", "отчёт", "отчет", "excel", "сводная", "таблица"] },
   { path: "/dynamics", title: "Динамика", icon: Activity, aliases: ["dynamics", "динамика", "график", "частота"] },
   { path: "/accounts", title: "Счета", icon: Wallet, aliases: ["accounts"] },

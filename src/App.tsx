@@ -54,6 +54,7 @@ import { HealthPage } from "./pages/HealthPage";
 import { WhatIfPage } from "./pages/WhatIfPage";
 import { YearReviewPage } from "./pages/YearReviewPage";
 import { DigestPage } from "./pages/DigestPage";
+import { PeriodReportPage } from "./pages/PeriodReportPage";
 import { useDataStore } from "./store/useDataStore";
 import { useThemeStore } from "./store/useThemeStore";
 import { useBackupStore } from "./store/useBackupStore";
@@ -559,6 +560,7 @@ function App() {
             <Route path="/whatif" element={<WhatIfPage />} />
             <Route path="/year-review" element={<YearReviewPage />} />
             <Route path="/digest" element={<DigestPage />} />
+            <Route path="/period-report" element={<PeriodReportPage />} />
             {/* Filtered pages: GlobalFilters is rendered INSIDE each page right
                 after PageHeader (see TransactionsPage, CashflowPage, etc.) so
                 the title sits above the filter bar.

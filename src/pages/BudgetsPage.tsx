@@ -27,7 +27,7 @@ import { loadZenCache } from "../lib/zenmoneyCache";
 import { plannedAsTransaction, plannedOps, type PlannedOp } from "../lib/plannedOps";
 import { plannedPlans } from "../lib/plannedPlans";
 import { txAccountKey } from "../lib/accountKey";
-import { useAccountDirectory } from "../hooks/useAccountDirectory";
+import { useBudgetScope } from "../hooks/useBudgetScope";
 import { zenPlanKey } from "../lib/zenBudgets";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
@@ -52,12 +52,10 @@ import {
   type PlanCellEdit,
 } from "../lib/budgetYear";
 import { useLiveCategoryPaths } from "../hooks/useDictionaries";
-import { useOffBalanceExcluded } from "../hooks/useInBalanceTransactions";
 import {
   useZenBalanceNow,
   useZenBalanceSpan,
   useZenOpeningBalance,
-  useZenPlanRules,
 } from "../hooks/useZenPlanRules";
 import { OPENING_BALANCE_LABEL, monthResidues } from "../lib/zenPlanRules";
 import { nameKey } from "../lib/budgetLines";
@@ -175,46 +173,13 @@ export function BudgetsPage() {
   // Настройки бюджета: периметр счетов, переводы, вид и прогноз по умолчанию.
   const settings = useBudgetSettingsStore();
   const settingsLoaded = settings.loaded;
-  const hydrateSettings = settings.hydrate;
 
   useEffect(() => {
     if (!loaded) hydrate();
   }, [loaded, hydrate]);
-  useEffect(() => {
-    if (!settingsLoaded) hydrateSettings();
-  }, [settingsLoaded, hydrateSettings]);
+  // Периметр и правила «Планов» — общие с «Отчётом за период».
+  const { scope, zenRules } = useBudgetScope();
 
-  // «Все счета» — все, кроме счетов вне баланса, пока они не считаются: то же
-  // правило, что во всех итогах сервиса, и так же считает сам Дзен-мани.
-  const offBalanceExcluded = useOffBalanceExcluded();
-  // Правила «Планов» Дзен-мани: какие переводы идут в бюджет, вычитать ли
-  // возвраты, показывать ли входящий баланс — по настройкам самого
-  // пользователя в приложении (см. `zenPlanRules`).
-  const zenRulesRaw = useZenPlanRules();
-  const accountDir = useAccountDirectory();
-  // «Счета вне баланса» в настройках бюджета: такие счета считаются, как будто
-  // они в балансе, — их траты и поступления идут в факт, переводы между ними и
-  // остальными — внутренние, а не строки «Накопления» / «На кредиты». Только в
-  // бюджете: остальные итоги решает настройка в «Расчётах».
-  const includeOff = settings.includeOffBalance;
-  const zenRules = useMemo(() => {
-    if (!includeOff || !zenRulesRaw) return zenRulesRaw;
-    const inside = new Set(zenRulesRaw.inside);
-    for (const e of accountDir.list) if (e.live) inside.add(e.key);
-    return { ...zenRulesRaw, inside };
-  }, [zenRulesRaw, includeOff, accountDir]);
-  const scope = useMemo(
-    () => ({
-      // Счета периметра запоминались названиями — старая запись значит все
-      // счета с этим названием.
-      accounts: accountDir.resolve(settings.accounts),
-      excluded: includeOff ? undefined : offBalanceExcluded,
-      perimeterTransfers: settings.perimeterTransfers,
-      zen: zenRules,
-      labelOf: accountDir.label,
-    }),
-    [settings.accounts, settings.perimeterTransfers, offBalanceExcluded, includeOff, zenRules, accountDir]
-  );
   // График движения денег считает сам по операциям — ему отдаём только то, что
   // внутри периметра.
   const scopedTx = useMemo(() => insidePerimeter(transactions, scope), [transactions, scope]);

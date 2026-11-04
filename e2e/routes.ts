@@ -18,6 +18,7 @@ export const ROUTES = [
   "/health",
   "/help",
   "/import",
+  "/period-report",
   "/recurring",
   "/report",
   "/rules",
