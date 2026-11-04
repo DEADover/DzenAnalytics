@@ -15,9 +15,12 @@ test("листы отчёта: итоги, расходы, месяцы и сч�
   // Нумерация «1 / N» внизу каждого листа.
   await expect(pages(page).first().locator(".pr-foot")).toContainText(`1 / ${n}`);
   const cover = pages(page).first();
-  await expect(cover.locator(".pr-kpi")).toHaveCount(4);
+  await expect(cover.locator("[data-report-section=cover] .pr-kpi")).toHaveCount(4);
   await expect(cover.getByText("Движение денег")).toBeVisible();
   await expect(page.locator("[data-report-section=categories]")).toContainText("Куда ушли деньги");
+  // Блоки из «Дайджеста»: главное одной фразой, траты по дням.
+  await expect(page.locator("[data-report-headline]")).toContainText(/потратили/);
+  await expect(page.locator("[data-report-section=days]")).toContainText("Дней без трат");
   // Блоки раскладываются по листам без пустых: в каждом листе хоть один блок.
   for (let i = 0; i < n; i++) expect(await pages(page).nth(i).locator("[data-report-section]").count()).toBeGreaterThan(0);
 

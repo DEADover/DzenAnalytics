@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPeriodReport, changeOf, previousRange, rangeText, reportTitle, REST_LABEL, tableRows, packSections } from "./periodReport";
+import { buildPeriodReport, changeOf, previousRange, rangeText, reportTitle, REST_LABEL, tableRows, packSections, previousRanges } from "./periodReport";
 import { tx } from "../test/fixtures";
 import type { Transaction } from "../types";
 
@@ -151,5 +151,54 @@ describe("packSections", () => {
   });
   it("блок выше листа — на своём листе", () => {
     expect(packSections([100, 900, 100], 700, 20)).toEqual([[0], [1], [2]]);
+  });
+});
+
+describe("buildPeriodReport — блоки из «Дайджеста»", () => {
+  const mar = { from: "2026-03-01", to: "2026-03-31" };
+
+  it("«обычно» — среднее предыдущих периодов внутри истории", () => {
+    const txs = [
+      tx({ date: "2026-01-10", amount: 100 }),
+      tx({ date: "2026-02-10", amount: 300 }),
+      tx({ date: "2026-03-10", amount: 500 }),
+    ];
+    const ranges = previousRanges("month", mar, "2026-03", 1, 6);
+    expect(ranges).toHaveLength(6);
+    expect(ranges[0]).toEqual({ from: "2026-02-01", to: "2026-02-28" });
+    const r = base({ txs, range: mar, typicalRanges: ranges });
+    // Январь неполный (история с 10-го), декабрь и раньше — до первой
+    // операции: в среднее идёт только февраль.
+    expect(r.typical).toMatchObject({ expense: 300, periods: 1 });
+  });
+
+  it("траты по дням: дни без трат, самый дорогой день, в среднем", () => {
+    const txs = [tx({ date: "2026-03-02", amount: 300 }), tx({ date: "2026-03-05", amount: 900 }), tx({ date: "2026-03-05", kind: "refund", amount: 100 })];
+    const r = base({ txs, range: { from: "2026-03-01", to: "2026-03-10" } });
+    expect(r.days).toMatchObject({ lived: 10, noSpend: 8, biggest: { date: "2026-03-05", expense: 800 } });
+    expect(r.days.avg).toBeCloseTo(110);
+  });
+
+  it("где «выстрелило» — по модулю разницы, и рост, и падение", () => {
+    const txs = [
+      tx({ date: "2026-02-10", category: "Кафе", amount: 100 }),
+      tx({ date: "2026-02-10", category: "Дом", amount: 5000 }),
+      tx({ date: "2026-03-10", category: "Кафе", amount: 2100 }),
+      tx({ date: "2026-03-10", category: "Дом", amount: 4900 }),
+    ];
+    const r = base({ txs, range: mar, prevRange: { from: "2026-02-01", to: "2026-02-28" } });
+    expect(r.movers.map((m) => m.category)).toEqual(["Кафе", "Дом"]);
+    expect(r.movers[0]).toEqual({ category: "Кафе", now: 2100, prev: 100 });
+  });
+
+  it("впервые — по всей истории, а не по отфильтрованным операциям", () => {
+    const history = [
+      tx({ date: "2025-05-01", payee: "Кофейня", account: "Наличные", amount: 50 }),
+      tx({ date: "2026-03-03", payee: "Кофейня", amount: 200 }),
+      tx({ date: "2026-03-04", payee: "Новый магазин", amount: 700 }),
+    ];
+    const r = base({ txs: history.slice(1), history, range: mar });
+    expect(r.newPayees).toEqual([{ name: "Новый магазин", total: 700, count: 1 }]);
+    expect(r.newPayeesCount).toBe(1);
   });
 });

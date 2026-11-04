@@ -34,7 +34,8 @@ export const PERIOD_REPORT_CSS = `
   line-height: 1.35;
 }
 .pr-doc *, .pr-doc *::before, .pr-doc *::after { box-sizing: border-box; }
-.pr-doc h1, .pr-doc h2, .pr-doc h3, .pr-doc p { margin: 0; }
+/* Сброс — слабее классов ниже (:where), чтобы их отступы работали. */
+.pr-doc :where(h1, h2, h3, p) { margin: 0; }
 .pr-page {
   position: relative;
   width: ${SHEET_W}px;
@@ -130,6 +131,11 @@ export const PERIOD_REPORT_CSS = `
 .pr-ob-label svg { width: 13px; height: 13px; color: var(--pr-accent); flex: none; }
 .pr-ob-value { font-size: 19px; font-weight: 700; letter-spacing: -.015em; }
 .pr-ob-text { font-size: 11.5px; color: var(--pr-ink2); }
+.pr-lead { font-size: 14px; line-height: 1.5; color: var(--pr-ink2); margin-top: 14px; max-width: 640px; }
+.pr-typ { font-size: 11px; color: var(--pr-faint); }
+.pr-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.pr-stat-value { font-size: 17px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; }
+.pr-move { display: flex; align-items: baseline; gap: 6px; justify-content: flex-end; white-space: nowrap; }
 .pr-empty { font-size: 12px; color: var(--pr-muted); background: var(--pr-soft); border-radius: 12px; padding: 14px 16px; }
 `;
 

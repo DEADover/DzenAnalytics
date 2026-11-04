@@ -4,6 +4,7 @@ import logoDa from "../../assets/logo-da.png";
 import type { PeriodReport } from "../../hooks/usePeriodReport";
 import { currencySymbol, formatDate, formatMoney, formatPct, monthTitle, niceStep } from "../../lib/format";
 import { describeObservation } from "../../lib/observationTile";
+import { digestHeadline } from "../../lib/digestHeadline";
 import { spanDays } from "../../lib/period";
 import { changeOf, packSections, rangeText, tableRows, type ReportBucket, type ReportCategory } from "../../lib/periodReport";
 import { pluralRu } from "../../lib/plural";
@@ -220,6 +221,16 @@ function CategoryBars({ rows, base, upIsGood }: { rows: ReportCategory[]; base: 
   );
 }
 
+/** «Обычно 210 000 ₽» — среднее за прошлые такие же периоды. */
+function Typical({ report, value }: { report: PeriodReport; value: number | undefined }) {
+  if (value === undefined || !report.typical) return null;
+  return (
+    <span className="pr-typ">
+      Обычно {money(value, report.base)}
+    </span>
+  );
+}
+
 function Cover({ report }: { report: PeriodReport }) {
   const { totals: t, prevTotals: p, base } = report;
   return (
@@ -231,7 +242,29 @@ function Cover({ report }: { report: PeriodReport }) {
           {report.title !== report.dates && report.dates}
           {report.running && `${report.title !== report.dates ? " · " : ""}период идёт, данные по ${formatDate(report.lastDay, "full")}`}
         </div>
-        {report.prevRange && <div className="pr-sub">Сравнение — с {rangeText(report.prevRange)}</div>}
+        {(report.prevRange || report.typical) && (
+          <div className="pr-sub">
+            {report.prevRange && `Сравнение — с ${rangeText(report.prevRange)}`}
+            {report.prevRange && report.typical && "; "}
+            {report.typical &&
+              `«обычно» — среднее за ${report.typical.periods} ${pluralRu(report.typical.periods, ["прошлый такой же период", "прошлых таких же периода", "прошлых таких же периодов"])}${report.running ? " к этому дню" : ""}`}
+          </div>
+        )}
+        <p className="pr-lead" data-report-headline>
+          {digestHeadline(
+            {
+              expense: t.expense,
+              income: t.income,
+              net: t.net,
+              savingsRate: t.rate ?? 0,
+              typical: report.typical,
+              movers: report.movers.map((m) => ({ category: m.category, current: m.now, previous: m.prev, delta: 0 })),
+              running: report.running ? { day: report.days.lived, days: spanDays(report.range.from, report.range.to) } : undefined,
+            },
+            base,
+            report.isMonth ? "месяца" : "периода"
+          )}
+        </p>
         {report.filters.length > 0 && (
           <div className="pr-filters">
             {report.filters.map((f) => (
@@ -248,11 +281,13 @@ function Cover({ report }: { report: PeriodReport }) {
           <span className="pr-kpi-label">Доходы</span>
           <span className="pr-kpi-value pr-income">{money(t.income, base)}</span>
           {p && <Delta now={t.income} prev={p.income} upIsGood />}
+          <Typical report={report} value={report.typical?.income} />
         </div>
         <div className="pr-kpi">
           <span className="pr-kpi-label">Расходы</span>
           <span className="pr-kpi-value pr-expense">{money(t.expense, base)}</span>
           {p && <Delta now={t.expense} prev={p.expense} upIsGood={false} />}
+          <Typical report={report} value={report.typical?.expense} />
         </div>
         <div className="pr-kpi">
           <span className="pr-kpi-label">Чистый поток</span>
@@ -662,14 +697,171 @@ function Observations({ report }: { report: PeriodReport }) {
   );
 }
 
+/** Расход по дням столбиками; самый дорогой день — темнее. */
+function DaysChart({ report }: { report: PeriodReport }) {
+  const { series, biggest } = report.days;
+  const W = CONTENT_W;
+  const H = 110;
+  const left = 56;
+  const bottom = H - 4;
+  const max = Math.max(1, ...series.map((d) => d.expense));
+  const step = niceStep(max / 2);
+  const hi = Math.ceil(max / step) * step;
+  const y = (v: number) => 6 + ((hi - v) / hi) * (bottom - 6);
+  const slot = (W - left) / Math.max(1, series.length);
+  const bw = Math.max(1, slot * 0.7);
+  return (
+    <svg className="pr-chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="Траты по дням">
+      {[0, step, hi].filter((v, i, a) => a.indexOf(v) === i).map((v) => (
+        <g key={v}>
+          <line className={v === 0 ? "pr-zero" : "pr-grid"} x1={left} x2={W} y1={y(v)} y2={y(v)} />
+          <text className="pr-axis" x={left - 8} y={y(v) + 3} textAnchor="end">
+            {formatMoney(v, report.base, { compact: true })}
+          </text>
+        </g>
+      ))}
+      {series.map((d, i) =>
+        d.expense > 0 ? (
+          <rect
+            key={d.date}
+            x={left + slot * i + (slot - bw) / 2}
+            y={y(d.expense)}
+            width={bw}
+            height={Math.max(0.5, y(0) - y(d.expense))}
+            fill={d.date === biggest?.date ? "#b91c1c" : "#dc2626"}
+            fillOpacity={d.date === biggest?.date ? 1 : 0.55}
+          />
+        ) : null
+      )}
+    </svg>
+  );
+}
+
+/** Сколько дней в графике трат по дням — длиннее он превращается в штриховку. */
+const DAYS_CHART_MAX = 400;
+
+function Days({ report }: { report: PeriodReport }) {
+  const { days, base } = report;
+  return (
+    <>
+      <div>
+        <h2 className="pr-h2">Траты по дням</h2>
+        <p className="pr-sub">
+          {report.running ? "Прожитые дни периода" : "Все дни периода"} — {days.lived} {pluralRu(days.lived, ["день", "дня", "дней"])}
+        </p>
+      </div>
+      <div className="pr-stats">
+        <div className="pr-kpi">
+          <span className="pr-kpi-label">Дней без трат</span>
+          <span className="pr-stat-value">
+            {days.noSpend} из {days.lived}
+          </span>
+          <span className="pr-delta">{formatPct(days.lived ? days.noSpend / days.lived : 0, 0)} дней периода</span>
+        </div>
+        <div className="pr-kpi">
+          <span className="pr-kpi-label">Самый дорогой день</span>
+          <span className="pr-stat-value">{days.biggest ? money(days.biggest.expense, base) : "—"}</span>
+          <span className="pr-delta">{days.biggest ? formatDate(days.biggest.date, "full") : "Трат не было"}</span>
+        </div>
+        <div className="pr-kpi">
+          <span className="pr-kpi-label">В среднем за день</span>
+          <span className="pr-stat-value">{money(days.avg, base)}</span>
+          <span className="pr-delta">
+            {report.typical && report.typical.expense > 0
+              ? `Обычно ${money(report.typical.expense / Math.max(1, days.lived), base)}`
+              : "Расход, делённый на дни"}
+          </span>
+        </div>
+      </div>
+      {report.bucket === "month" && days.series.length <= DAYS_CHART_MAX && <DaysChart report={report} />}
+    </>
+  );
+}
+
+function MoversNew({ report }: { report: PeriodReport }) {
+  const { base } = report;
+  return (
+    <div className="pr-cols">
+      <div>
+        <h3 className="pr-h3">Сильнее всего изменились</h3>
+        {report.movers.length > 0 ? (
+          <table className="pr-table">
+            <thead>
+              <tr>
+                <th>Категория</th>
+                <th className="pr-num">Было → стало</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.movers.map((m) => {
+                const d = m.now - m.prev;
+                return (
+                  <tr key={m.category}>
+                    <td className="pr-name">{m.category}</td>
+                    <td className="pr-num">
+                      <span className="pr-move">
+                        <span className="pr-muted">
+                          {money(m.prev, base)} → {money(m.now, base)}
+                        </span>
+                        <b className={d > 0 ? "pr-bad" : "pr-good"}>{money(d, base, true)}</b>
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <p className="pr-empty">Сравнивать не с чем.</p>
+        )}
+      </div>
+      <div>
+        <h3 className="pr-h3">Впервые</h3>
+        {report.newPayees.length > 0 ? (
+          <table className="pr-table">
+            <thead>
+              <tr>
+                <th>Получатель</th>
+                <th className="pr-num">Покупок</th>
+                <th className="pr-num">Сумма</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.newPayees.map((p) => (
+                <tr key={p.name}>
+                  <td className="pr-name">{p.name}</td>
+                  <td className="pr-num pr-muted">{p.count}</td>
+                  <td className="pr-num">{money(p.total, base)}</td>
+                </tr>
+              ))}
+              {report.newPayeesCount > report.newPayees.length && (
+                <tr>
+                  <td className="pr-name pr-muted" colSpan={3}>
+                    И ещё {report.newPayeesCount - report.newPayees.length}{" "}
+                    {pluralRu(report.newPayeesCount - report.newPayees.length, ["получатель", "получателя", "получателей"])}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        ) : (
+          <p className="pr-empty">Новых получателей нет — все траты у знакомых.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Блоки отчёта по порядку — те, которым есть что показать. */
 function sectionsOf(report: PeriodReport): { key: string; node: ReactNode }[] {
   const out: { key: string; node: ReactNode }[] = [
     { key: "cover", node: <Cover report={report} /> },
     { key: "flow", node: <Flow report={report} /> },
+    { key: "days", node: <Days report={report} /> },
     { key: "categories", node: <Categories report={report} /> },
-    { key: "payees", node: <PayeesIncome report={report} /> },
   ];
+  if (report.movers.length > 0 || report.newPayees.length > 0) out.push({ key: "movers", node: <MoversNew report={report} /> });
+  out.push({ key: "payees", node: <PayeesIncome report={report} /> });
   if (report.operations.length > 0) out.push({ key: "operations", node: <Operations report={report} /> });
   if (tableRows(report).length > 0) out.push({ key: "months", node: <Months report={report} /> });
   if (report.accounts.length > 0) out.push({ key: "accounts", node: <Accounts report={report} /> });

@@ -15,11 +15,14 @@ import type { DatePreset } from "../store/useFiltersStore";
 import {
   buildHierarchy,
   computeKPI,
+  groupByCategory,
   groupByMonth,
   topPayees,
   topTransactions,
 } from "./aggregations";
 import { buildObservations, type DigestObservation } from "./digestObservations";
+import { firstSeenByPayee } from "./digest";
+import { expenseDelta } from "./txKindStyle";
 import { counterpartyOf } from "./yearReview";
 import { formatDate, monthTitle } from "./format";
 import {
@@ -88,6 +91,30 @@ export interface ReportOperation {
   amount: number;
 }
 
+export interface ReportMover {
+  category: string;
+  now: number;
+  prev: number;
+}
+
+export interface ReportDays {
+  /** Прожитые дни периода — у идущего до последней операции. */
+  lived: number;
+  /** Дней без единой траты. */
+  noSpend: number;
+  /** Самый дорогой день; `null` — трат не было. */
+  biggest: { date: string; expense: number } | null;
+  /** Средний расход за прожитый день. */
+  avg: number;
+  /** Расход по дням прожитой части периода — для графика. */
+  series: { date: string; expense: number }[];
+}
+
+/** Сколько предыдущих периодов берём в «обычное» — как в «Дайджесте». */
+export const TYPICAL_PERIODS = 6;
+export const TOP_MOVERS = 5;
+export const TOP_NEW_PAYEES = 6;
+
 export interface PeriodReportModel {
   range: DayRange;
   /** Последний день с данными внутри периода — у идущего периода раньше `to`. */
@@ -98,6 +125,12 @@ export interface PeriodReportModel {
   prevRange: DayRange | null;
   totals: ReportTotals;
   prevTotals: ReportTotals | null;
+  /**
+   * «Обычно» — среднее за предыдущие такие же периоды (до шести), у идущего —
+   * за те же дни каждого. Прошлый период бывает нетипичным, со средним
+   * сравнивать честнее. `null` — предыдущих периодов в истории нет.
+   */
+  typical: (ReportTotals & { periods: number }) | null;
   bucket: "month" | "day";
   buckets: ReportBucket[];
   expenseCategories: ReportCategory[];
@@ -105,6 +138,13 @@ export interface PeriodReportModel {
   payees: ReportPayee[];
   operations: ReportOperation[];
   observations: DigestObservation[];
+  days: ReportDays;
+  /** Категории, где траты изменились сильнее всего, — по модулю разницы в деньгах. */
+  movers: ReportMover[];
+  /** Кому в этом периоде заплатили впервые за всю историю. */
+  newPayees: ReportPayee[];
+  /** Сколько всего новых получателей (в `newPayees` — только крупнейшие). */
+  newPayeesCount: number;
 }
 
 /** Операции, попавшие в отрезок (дни включительно). */
@@ -151,6 +191,28 @@ export function previousRange(
   const len = spanDays(range.from, range.to);
   if (len <= 0) return null;
   return { from: shiftDays(range.from, -len), to: shiftDays(range.from, -1) };
+}
+
+/**
+ * До `count` предыдущих сопоставимых периодов подряд, от ближнего к дальнему —
+ * основа «обычного». Шагает тем же правилом, что `previousRange`.
+ */
+export function previousRanges(
+  preset: DatePreset,
+  range: DayRange,
+  monthYM: string | null,
+  monthStartDay: number,
+  count: number
+): DayRange[] {
+  const out: DayRange[] = [];
+  let r: DayRange | null = range;
+  let ym = monthYM;
+  for (let k = 0; k < count && r; k++) {
+    r = previousRange(preset, r, ym, monthStartDay);
+    if (r) out.push(r);
+    ym = ym ? shiftPeriod(ym, -1) : null;
+  }
+  return out;
 }
 
 /** Ключи отчётных месяцев от `from` до `to` подряд, без пропусков. */
@@ -212,6 +274,13 @@ export function buildPeriodReport(input: {
   /** Отчётный месяц: «Половины месяца» в наблюдениях только у него. */
   isMonth: boolean;
   colorOf: (category: string) => string;
+  /** Предыдущие такие же периоды для «обычного» (`previousRanges`). */
+  typicalRanges?: readonly DayRange[];
+  /**
+   * Вся история без фильтров — по ней «впервые»: получатель, которому платили
+   * с другого счёта, новым не считается. Не задана — `txs`.
+   */
+  history?: readonly Transaction[];
 }): PeriodReportModel {
   const { range, maxDate, monthStartDay, colorOf } = input;
   const running = !!maxDate && maxDate < range.to && maxDate >= range.from;
@@ -269,6 +338,68 @@ export function buildPeriodReport(input: {
     total: p.total,
     count: p.count,
   }));
+  // «Обычно»: только периоды целиком внутри истории — окна до первой
+  // операции дали бы нули и занизили среднее.
+  const history = input.history ?? input.txs;
+  const firstDay = history.reduce((m, t) => (!m || t.date < m ? t.date : m), "").slice(0, 10);
+  const windows = (input.typicalRanges ?? [])
+    .filter((w) => firstDay && w.from >= firstDay)
+    .map((w) => comparableRanges(range, w, maxDate, true).b);
+  let typical: PeriodReportModel["typical"] = null;
+  if (windows.length > 0) {
+    const sums = windows.map((w) => totalsOf(inRange(input.txs, w)));
+    const avg = (f: (t: ReportTotals) => number) => sums.reduce((a, t) => a + f(t), 0) / sums.length;
+    const income = avg((t) => t.income);
+    const expense = avg((t) => t.expense);
+    typical = {
+      income,
+      expense,
+      net: income - expense,
+      rate: income > 0 ? (income - expense) / income : null,
+      count: Math.round(avg((t) => t.count)),
+      periods: sums.length,
+    };
+  }
+
+  // Траты по дням — как в «Дайджесте»: возврат уменьшает трату своего дня.
+  const lived = allDays.filter((d) => d.date <= lastDay).map((d) => ({ date: d.date, expense: Math.max(0, d.expense) }));
+  const biggest = lived.reduce<ReportDays["biggest"]>((b, d) => (d.expense > 0 && (!b || d.expense > b.expense) ? d : b), null);
+  const livedSum = lived.reduce((s, d) => s + d.expense, 0);
+  const daysInfo: ReportDays = {
+    lived: lived.length,
+    noSpend: lived.filter((d) => d.expense <= 0).length,
+    biggest,
+    avg: lived.length ? livedSum / lived.length : 0,
+    series: lived,
+  };
+
+  // Где «выстрелило»: по категориям с подкатегориями отдельно, как в «Дайджесте».
+  let movers: ReportMover[] = [];
+  if (prev) {
+    const prevBy = new Map(groupByCategory(prev).map((c) => [c.category, c.expense]));
+    const nowBy = new Map(groupByCategory(now).map((c) => [c.category, c.expense]));
+    const names = new Set([...nowBy.keys(), ...prevBy.keys()]);
+    movers = [...names]
+      .map((category) => ({ category, now: Math.max(0, nowBy.get(category) ?? 0), prev: Math.max(0, prevBy.get(category) ?? 0) }))
+      .filter((m) => Math.abs(m.now - m.prev) >= 1)
+      .sort((a, b) => Math.abs(b.now - b.prev) - Math.abs(a.now - a.prev))
+      .slice(0, TOP_MOVERS);
+  }
+
+  // Впервые: получатели, чья первая операция во всей истории — в этом периоде.
+  const firstSeen = firstSeenByPayee([...history]);
+  const fresh = new Map<string, ReportPayee>();
+  for (const t of now) {
+    if (t.kind !== "expense" && t.kind !== "refund") continue;
+    const name = counterpartyOf(t);
+    if (!name || (firstSeen.get(name) ?? "") < range.from) continue;
+    const p = fresh.get(name) ?? { name, total: 0, count: 0 };
+    p.total += expenseDelta(t);
+    if (t.kind === "expense") p.count++;
+    fresh.set(name, p);
+  }
+  const freshList = [...fresh.values()].filter((p) => p.total > 0).sort((a, b) => b.total - a.total);
+
   const operations = topTransactions(now, "expense", TOP_OPERATIONS).map((t) => ({
     id: t.id,
     date: t.date.slice(0, 10),
@@ -284,6 +415,7 @@ export function buildPeriodReport(input: {
     prevRange,
     totals: totalsOf(now),
     prevTotals: prev ? totalsOf(prev) : null,
+    typical,
     bucket: daily ? "day" : "month",
     buckets,
     expenseCategories: categories(now, prev, "expense", TOP_EXPENSE_CATEGORIES, colorOf),
@@ -291,6 +423,10 @@ export function buildPeriodReport(input: {
     payees,
     operations,
     observations,
+    days: daysInfo,
+    movers,
+    newPayees: freshList.slice(0, TOP_NEW_PAYEES),
+    newPayeesCount: freshList.length,
   };
 }
 

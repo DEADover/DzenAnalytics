@@ -5,8 +5,10 @@ import { periodKey, shiftDays, shiftPeriod, type DayRange } from "../lib/period"
 import {
   buildPeriodReport,
   previousRange,
+  previousRanges,
   rangeText,
   reportTitle,
+  TYPICAL_PERIODS,
   type PeriodReportModel,
 } from "../lib/periodReport";
 import { buildReportBudget, type ReportBudget } from "../lib/periodReportBudget";
@@ -118,8 +120,10 @@ export function usePeriodReport(): PeriodReport | null {
       monthStartDay,
       isMonth: filters.preset === "month" || filters.preset === "period",
       colorOf: (name) => colorForCategory(name, meta),
+      typicalRanges: previousRanges(filters.preset, range, filters.monthYM, monthStartDay, TYPICAL_PERIODS),
+      history: txs,
     });
-  }, [scoped, range, filters.preset, filters.monthYM, monthStartDay, maxDate, meta]);
+  }, [scoped, range, filters.preset, filters.monthYM, monthStartDay, maxDate, meta, txs]);
 
   // Остатки: с Дзен-мани — по счетам, как «Остатки по счетам» и «Капитал»;
   // без него (CSV) — только капитал от нуля с калибровкой.
