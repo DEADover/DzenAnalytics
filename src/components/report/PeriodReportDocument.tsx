@@ -30,6 +30,19 @@ const SECTION_GAP = 22;
 /** Ширина содержимого листа: 794 минус поля по 48. */
 const CONTENT_W = 698;
 
+/*
+ * Оформление графиков — атрибутами SVG, а не классами: снимок для PDF
+ * копирует SVG целиком как есть, и стили из классов внутри него теряются —
+ * подписи осей выходили крупными и чёрными, а все подсказки разом ложились на
+ * график чёрной плашкой. Наведение в HTML-файле работает по-прежнему: правило
+ * CSS сильнее атрибута и проявляет подсказку (`.pr-col:hover .pr-tip`).
+ */
+const AXIS_TEXT = { fontSize: 9.5, fill: "#9aa1ad" } as const;
+const TIP_TEXT = { fontSize: 10, fontWeight: 600, fill: "#ffffff" } as const;
+function gridLine(zero: boolean) {
+  return { stroke: zero ? "#cfd4dc" : "#e5e7eb", strokeWidth: 1 } as const;
+}
+
 /** Накопленная сумма по порядку: 1, 2, 3 → 1, 3, 6. */
 function cumulative(xs: number[]): number[] {
   const out: number[] = [];
@@ -136,8 +149,8 @@ function CashflowChart({ report }: { report: PeriodReport }) {
     <svg className="pr-chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="Доходы и расходы">
       {ticks.map((v) => (
         <g key={v}>
-          <line className={v === 0 ? "pr-zero" : "pr-grid"} x1={left} x2={W} y1={y(v)} y2={y(v)} />
-          <text className="pr-axis" x={left - 8} y={y(v) + 3} textAnchor="end">
+          <line {...gridLine(v === 0)} x1={left} x2={W} y1={y(v)} y2={y(v)} />
+          <text {...AXIS_TEXT} x={left - 8} y={y(v) + 3} textAnchor="end">
             {formatMoney(v, base, { compact: true })}
           </text>
         </g>
@@ -149,7 +162,7 @@ function CashflowChart({ report }: { report: PeriodReport }) {
             <rect x={x - bw - 1} y={y(Math.max(0, b.income))} width={bw} height={Math.max(0, y(0) - y(Math.max(0, b.income)))} rx={Math.min(3, bw / 2)} fill="#16a34a" />
             <rect x={x + 1} y={y(Math.max(0, b.expense))} width={bw} height={Math.max(0, y(0) - y(Math.max(0, b.expense)))} rx={Math.min(3, bw / 2)} fill="#dc2626" fillOpacity={0.85} />
             {i % labelEvery === 0 && (
-              <text className="pr-axis" x={x} y={H - 6} textAnchor="middle">
+              <text {...AXIS_TEXT} x={x} y={H - 6} textAnchor="middle">
                 {bucketLabel(b, i >= labelEvery ? buckets[i - labelEvery] : null, bucket)}
               </text>
             )}
@@ -168,12 +181,12 @@ function CashflowChart({ report }: { report: PeriodReport }) {
         return (
           <g key={b.key} className="pr-col">
             <rect className="pr-hit" x={left + slot * i} y={top} width={slot} height={bottom - top} fill="transparent" />
-            <g className="pr-tip" transform={`translate(${tipX}, ${top})`}>
-              <rect width={tipW} height={66} rx={6} />
-              <text x={10} y={16}>{bucketTitle(b, bucket)}</text>
-              <text x={10} y={31}>Доходы {money(b.income, base)}</text>
-              <text x={10} y={45}>Расходы {money(b.expense, base)}</text>
-              <text x={10} y={59}>
+            <g className="pr-tip" opacity={0} transform={`translate(${tipX}, ${top})`}>
+              <rect width={tipW} height={66} rx={6} fill="#12161d" />
+              <text {...TIP_TEXT} x={10} y={16}>{bucketTitle(b, bucket)}</text>
+              <text {...TIP_TEXT} x={10} y={31}>Доходы {money(b.income, base)}</text>
+              <text {...TIP_TEXT} x={10} y={45}>Расходы {money(b.expense, base)}</text>
+              <text {...TIP_TEXT} x={10} y={59}>
                 {bucket === "day" ? "С начала периода" : "Чистый поток"} {money(line[i], base, true)}
               </text>
             </g>
@@ -705,8 +718,8 @@ function DaysChart({ report }: { report: PeriodReport }) {
     <svg className="pr-chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="Траты по дням">
       {[0, step, hi].filter((v, i, a) => a.indexOf(v) === i).map((v) => (
         <g key={v}>
-          <line className={v === 0 ? "pr-zero" : "pr-grid"} x1={left} x2={W} y1={y(v)} y2={y(v)} />
-          <text className="pr-axis" x={left - 8} y={y(v) + 3} textAnchor="end">
+          <line {...gridLine(v === 0)} x1={left} x2={W} y1={y(v)} y2={y(v)} />
+          <text {...AXIS_TEXT} x={left - 8} y={y(v) + 3} textAnchor="end">
             {formatMoney(v, report.base, { compact: true })}
           </text>
         </g>

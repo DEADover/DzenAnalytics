@@ -81,14 +81,9 @@ export const PERIOD_REPORT_CSS = `
 
 .pr-chart { width: 100%; display: block; overflow: visible; }
 .pr-chart text { font-family: inherit; }
-.pr-axis { font-size: 9.5px; fill: var(--pr-faint); }
-.pr-grid { stroke: var(--pr-line); stroke-width: 1; }
-.pr-zero { stroke: #cfd4dc; stroke-width: 1; }
-.pr-col .pr-tip { opacity: 0; pointer-events: none; transition: opacity .12s; }
+.pr-col .pr-tip { pointer-events: none; transition: opacity .12s; }
 .pr-col:hover .pr-tip { opacity: 1; }
 .pr-col:hover .pr-hit { fill: rgba(8, 145, 178, .06); }
-.pr-tip rect { fill: var(--pr-ink); }
-.pr-tip text { fill: #fff; font-size: 10px; font-weight: 600; }
 .pr-legend { display: flex; gap: 16px; font-size: 11px; color: var(--pr-muted); }
 .pr-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .pr-legend i.pr-line-mark { height: 2px; border-radius: 1px; vertical-align: 3px; }

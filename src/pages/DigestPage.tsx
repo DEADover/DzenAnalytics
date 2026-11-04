@@ -13,7 +13,7 @@ import {
   CalendarDays,
   Store,
   Sparkles,
-  FileText,
+  Download,
 } from "lucide-react";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip } from "recharts";
 import { ChartContainer } from "../components/ChartContainer";
@@ -180,16 +180,17 @@ export function DigestPage() {
             { value: "week" as Tab, label: "По неделям" },
           ]}
         />
-        <Tooltip content="Скачать отчёт за выбранный период в PDF или HTML">
+        {/* Значком, как «Скачать годовой отчёт» в «Бюджетах». */}
+        <Tooltip content="Скачать отчёт за выбранный период: PDF или HTML">
           <button
             type="button"
-            className="btn-ghost h-[42px] rounded-control"
+            className="btn-ghost btn-square-lg"
             onClick={() => setReportOpen(true)}
             disabled={!reportSpec}
+            aria-label="Скачать отчёт"
             data-digest-report
           >
-            <FileText className="w-4 h-4" aria-hidden />
-            Отчёт
+            <Download className="w-4 h-4" />
           </button>
         </Tooltip>
       </SectionControls>

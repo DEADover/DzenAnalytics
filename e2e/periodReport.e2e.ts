@@ -50,6 +50,10 @@ test("отчёт за месяц: PDF — файл PDF, HTML — самосто�
   // «Главное» — той же фразой, что в «Дайджесте».
   const headline = (await page.getByText(/^За \d+ дн/).first().innerText()).replace(/[⁠⁣]/g, "");
   expect((await file.locator("[data-report-headline]").innerText()).trim()).toBe(headline.trim());
+  // Оформление графиков — атрибутами: снимок для PDF теряет стили классов
+  // внутри SVG (подсказки ложились на график чёрной плашкой).
+  expect(await file.locator(".pr-tip").evaluateAll((els) => els.every((e) => e.getAttribute("opacity") === "0"))).toBe(true);
+  expect(await file.locator(".pr-chart text").evaluateAll((els) => els.every((e) => e.hasAttribute("font-size") || e.hasAttribute("fill")))).toBe(true);
   for (const key of ["days", "categories", "budget"]) await expect(file.locator(`[data-report-section=${key}]`)).toHaveCount(1);
   for (let i = 0; i < n; i++) {
     expect(await sheets.nth(i).locator("[data-report-section]").count()).toBeGreaterThan(0);
