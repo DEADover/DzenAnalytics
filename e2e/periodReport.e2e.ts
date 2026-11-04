@@ -66,6 +66,9 @@ test("отчёт за месяц: PDF — файл PDF, HTML — самосто�
 test("отчёт за неделю — без бюджета: план помесячный", async ({ page }) => {
   await connectZen(page, "/digest");
   await page.getByRole("radio", { name: "По неделям" }).or(page.getByRole("button", { name: "По неделям", exact: true })).first().click();
+  const pdf = await download(page, "PDF");
+  expect(pdf.suggestedFilename()).toMatch(/^DzenAnalytics — отчёт \d\d\.\d\d\.\d{4}–\d\d\.\d\d\.\d{4}\.pdf$/);
+  expect((await readFile((await pdf.path())!)).subarray(0, 5).toString()).toBe("%PDF-");
   const html = await download(page, "HTML");
   const text = await readFile((await html.path())!, "utf8");
   expect(text).toMatch(/Неделя \d/);
