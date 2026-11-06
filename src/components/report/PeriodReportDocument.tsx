@@ -4,11 +4,11 @@ import logoDa from "../../assets/logo-da.png";
 import type { PeriodReport } from "../../hooks/usePeriodReport";
 import { currencySymbol, formatDate, formatMoney, formatPct, monthTitle, niceStep, truncateWords } from "../../lib/format";
 import { describeObservation } from "../../lib/observationTile";
-import { digestHeadline } from "../../lib/digestHeadline";
 import { compareNote, deltaNote, deltaTone, netTone, type NoteTone } from "../../lib/digestNotes";
 import { spanDays } from "../../lib/period";
-import { changeOf, packSections, rangeText, tableRows, type ReportBucket, type ReportCategory } from "../../lib/periodReport";
+import { changeOf, packSections, tableRows, type ReportBucket, type ReportCategory } from "../../lib/periodReport";
 import { pluralRu } from "../../lib/plural";
+import { reportCompareNote, reportDatesNote, reportHeadline } from "../../lib/periodReportText";
 
 /**
  * «Отчёт за период» — листы A4 одним документом.
@@ -242,32 +242,10 @@ function Cover({ report }: { report: PeriodReport }) {
       <div>
         <div className="pr-eyebrow">Отчёт за период</div>
         <h1 className="pr-title">{report.title}</h1>
-        <div className="pr-dates">
-          {report.title !== report.dates && report.dates}
-          {report.running && `${report.title !== report.dates ? " · " : ""}период идёт, данные по ${formatDate(report.lastDay, "full")}`}
-        </div>
-        {(report.prevRange || report.typical) && (
-          <div className="pr-sub">
-            {report.prevRange && `Сравнение — с ${rangeText(report.prevRange)}`}
-            {report.prevRange && report.typical && "; "}
-            {report.typical &&
-              `«обычно» — среднее за ${report.typical.periods} ${pluralRu(report.typical.periods, ["прошлый такой же период", "прошлых таких же периода", "прошлых таких же периодов"])}${report.running ? " к этому дню" : ""}`}
-          </div>
-        )}
+        <div className="pr-dates">{reportDatesNote(report)}</div>
+        {(report.prevRange || report.typical) && <div className="pr-sub">{reportCompareNote(report)}</div>}
         <p className="pr-lead" data-report-headline>
-          {digestHeadline(
-            {
-              expense: t.expense,
-              income: t.income,
-              net: t.net,
-              savingsRate: t.rate ?? 0,
-              typical: report.typical,
-              movers: report.movers.map((m) => ({ category: m.category, current: m.now, previous: m.prev, delta: 0 })),
-              running: report.running ? { day: report.days.lived, days: spanDays(report.range.from, report.range.to) } : undefined,
-            },
-            base,
-            report.isMonth ? "месяца" : "периода"
-          )}
+          {reportHeadline(report)}
         </p>
       </div>
 

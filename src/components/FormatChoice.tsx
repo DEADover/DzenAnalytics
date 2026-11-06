@@ -27,7 +27,13 @@ export function FormatChoice<T extends string>({
   return (
     <div>
       <div className="label mb-2">Формат</div>
-      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Формат">
+      {/* Все форматы — в один ряд: столбцов столько, сколько карточек. */}
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+        role="radiogroup"
+        aria-label="Формат"
+      >
         {options.map((f) => (
           <button
             key={f.value}
@@ -37,7 +43,9 @@ export function FormatChoice<T extends string>({
             onClick={() => onChange(f.value)}
             disabled={disabled}
             className={clsx(
-              "rounded-xl border p-3 text-left transition-colors disabled:opacity-60",
+              // Содержимое — сверху: у кнопки оно по умолчанию по центру, и в
+              // карточке с коротким текстом название съезжало вниз.
+              "flex flex-col justify-start rounded-xl border p-3 text-left transition-colors disabled:opacity-60",
               f.value === value ? "border-accent bg-accent/5" : "border-border hover:bg-panel2"
             )}
           >

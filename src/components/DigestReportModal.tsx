@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Download, FileCode2, FileText, Loader2 } from "lucide-react";
+import { Download, FileCode2, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { usePeriodReport, type ReportSpec } from "../hooks/usePeriodReport";
 import { formatDate } from "../lib/format";
 import { PERIOD_REPORT_CSS } from "../lib/periodReportCss";
@@ -10,7 +10,7 @@ import { FormatChoice, type FormatOption } from "./FormatChoice";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { PeriodReportDocument } from "./report/PeriodReportDocument";
 
-type ReportFormat = "pdf" | "html";
+type ReportFormat = "pdf" | "html" | "xlsx";
 
 const FORMATS: FormatOption<ReportFormat>[] = [
   {
@@ -23,9 +23,17 @@ const FORMATS: FormatOption<ReportFormat>[] = [
     value: "html",
     label: "HTML",
     icon: FileCode2,
-    what: "Веб-страница одним файлом: открывается в браузере без сервиса и интернета, суммы у столбцов — по наведению",
+    what: "Страница одним файлом — откроется в браузере без интернета, суммы по наведению",
+  },
+  {
+    value: "xlsx",
+    label: "Excel",
+    icon: FileSpreadsheet,
+    what: "Разделы таблицами на своих листах — суммы числами, можно считать",
   },
 ];
+
+const FORMAT_LABEL: Record<ReportFormat, string> = { pdf: "PDF", html: "HTML", xlsx: "Excel" };
 
 /** Сколько ждать, пока листы отчёта разложатся, прежде чем снимать их. */
 const LAYOUT_WAIT_MS = 4000;
@@ -61,16 +69,22 @@ export function DigestReportModal({ spec, onClose }: { spec: ReportSpec; onClose
     if (busy || !host || !report) return;
     setBusy(true);
     try {
-      const root = await waitForPages(host);
       const { downloadReportHtml, downloadReportPdf, reportFileName } = await import("../lib/periodReportExport");
       const name = reportFileName(report.range.from, report.range.to, format);
       const title = `Отчёт — ${report.title}`;
-      if (format === "pdf") await downloadReportPdf(root, name, title);
-      else await downloadReportHtml(root, name, title);
+      if (format === "xlsx") {
+        // Таблицы собираются из модели отчёта — листы для снимка не нужны.
+        const { downloadReportXlsx } = await import("../lib/periodReportXlsx");
+        await downloadReportXlsx(report, generated, name);
+      } else {
+        const root = await waitForPages(host);
+        if (format === "pdf") await downloadReportPdf(root, name, title);
+        else await downloadReportHtml(root, name, title);
+      }
       onClose();
     } catch (e) {
       console.error(e);
-      toast(`Отчёт не выгрузился в ${format === "pdf" ? "PDF" : "HTML"}. Попробуйте ещё раз, а если повторится — обновите страницу.`, {
+      toast(`Отчёт не выгрузился в ${FORMAT_LABEL[format]}. Попробуйте ещё раз, а если повторится — обновите страницу.`, {
         tone: "err",
       });
     } finally {
@@ -80,7 +94,7 @@ export function DigestReportModal({ spec, onClose }: { spec: ReportSpec; onClose
 
   return (
     <>
-      <Modal onClose={onClose} busy={busy} width="lg">
+      <Modal onClose={onClose} busy={busy} width="2xl">
         <ModalHeader icon={FileText} title={`Отчёт за ${spec.kind === "month" ? spec.title.toLowerCase() : spec.title.replace(/^Неделя/, "неделю")}`} subtitle={report?.dates} />
         <ModalBody>
           <p className="text-sm text-muted">

@@ -1,14 +1,15 @@
 /**
- * «Отчёт» в «Дайджесте»: выбор формата, выгрузка в PDF и HTML за выбранный
+ * «Отчёт» в «Дайджесте»: выбор формата, выгрузка в PDF, HTML и Excel за выбранный
  * период, запрет выгрузки при скрытых суммах.
  */
 import { readFile } from "node:fs/promises";
+import { strFromU8, unzipSync } from "fflate";
 import type { Page } from "@playwright/test";
 import { test, expect, connectZen } from "./harness";
 
 const dialog = (page: Page) => page.getByRole("dialog").filter({ hasText: "Отчёт за" });
 
-async function download(page: Page, format: "PDF" | "HTML") {
+async function download(page: Page, format: "PDF" | "HTML" | "Excel") {
   await page.locator("[data-digest-report]").click();
   await expect(dialog(page)).toBeVisible();
   await dialog(page).getByRole("radio", { name: new RegExp(`^${format}`) }).click();
@@ -21,7 +22,7 @@ test("отчёт за месяц: PDF — файл PDF, HTML — самосто�
   await connectZen(page, "/digest");
   await page.locator("[data-digest-report]").click();
   await expect(dialog(page)).toContainText("Отчёт за октябрь 2026");
-  await expect(dialog(page).getByRole("radio")).toHaveCount(2);
+  await expect(dialog(page).getByRole("radio")).toHaveCount(3);
   await dialog(page).getByRole("button", { name: "Отмена" }).click();
 
   const pdf = await download(page, "PDF");
@@ -61,6 +62,21 @@ test("отчёт за месяц: PDF — файл PDF, HTML — самосто�
     if (process.env.E2E_SHOTS) await sheets.nth(i).screenshot({ path: `${process.env.E2E_SHOTS}/digest-report-${i + 1}.png` });
   }
   await file.close();
+});
+
+test("отчёт за месяц в Excel: листы по разделам, суммы — числами", async ({ page }) => {
+  await connectZen(page, "/digest");
+  const xlsx = await download(page, "Excel");
+  expect(xlsx.suggestedFilename()).toMatch(/^DzenAnalytics — отчёт 01\.10\.2026–31\.10\.2026\.xlsx$/);
+  if (process.env.E2E_SHOTS) await xlsx.saveAs(`${process.env.E2E_SHOTS}/digest-report.xlsx`);
+  const zip = unzipSync(new Uint8Array(await readFile((await xlsx.path())!)));
+  const workbook = strFromU8(zip["xl/workbook.xml"]);
+  for (const name of ["Итоги", "По дням", "Категории", "Получатели", "Самое дорогое", "Бюджет"]) expect(workbook).toContain(`name="${name}"`);
+  // Суммы — числами (<v>), а не текстом: по ним в Excel считаются формулы.
+  const sheets = Object.keys(zip).filter((k) => /^xl\/worksheets\/sheet\d+\.xml$/.test(k));
+  expect(sheets.some((k) => /<c r="B\d+"[^>]*><v>\d/.test(strFromU8(zip[k])))).toBe(true);
+  // Листы для снимка PDF Excel не нужны — и после закрытия их нет.
+  await expect(page.locator("[data-report-offscreen]")).toHaveCount(0);
 });
 
 test("отчёт за неделю — без бюджета: план помесячный", async ({ page }) => {
