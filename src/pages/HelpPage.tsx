@@ -72,7 +72,7 @@ import { useTourStore } from "../store/useTourStore";
 import { Callout } from "../components/Callout";
 import { ChangelogModal } from "../components/ChangelogModal";
 import { GithubMark } from "../components/GithubMark";
-import { CHANNEL_TITLE, CHANNEL_URL, PROJECT_URL, SITE_URL, SUPPORT_TITLE, SUPPORT_URL } from "../lib/support";
+import { CHANNEL_TITLE, CHANNEL_URL, LICENSES_FILE, PROJECT_URL, SITE_URL, SUPPORT_TITLE, SUPPORT_URL } from "../lib/support";
 import { formatReleaseDate, parseRelease } from "../lib/releaseInfo";
 import changelogRaw from "../../CHANGELOG.md?raw";
 import { Collapse } from "../components/Collapse";
@@ -5454,6 +5454,21 @@ function AboutSection({
           по названиям, но и по тексту разделов — достаточно слова, которое вы
           запомнили. Дальше справка читается подряд: следующий раздел подгружается
           сам, когда лента дочитана до низа.
+        </p>
+
+        <p className="text-muted">
+          DzenAnalytics — открытый проект под лицензией MIT. Внутри — открытые библиотеки
+          и шрифты других авторов; их список и тексты лицензий —{" "}
+          <a
+            href={`${import.meta.env.BASE_URL}${LICENSES_FILE}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent hover:underline"
+            data-third-party-licenses
+          >
+            в отдельном файле
+          </a>
+          .
         </p>
       </div>
     </>

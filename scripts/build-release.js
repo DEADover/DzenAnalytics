@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Build a single-file release archive: ZIP containing index.html + README.txt.
+// Build a single-file release archive: ZIP containing index.html, README.txt
+// and THIRD-PARTY-LICENSES.txt.
 // Usage: npm run release:zip  (runs build:standalone first if needed)
 
 import { execSync } from "node:child_process";
@@ -49,6 +50,14 @@ console.log(`→ standalone bundle: ${sizeKb} KB`);
 if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true });
 mkdirSync(stagingDir, { recursive: true });
 copyFileSync(indexHtml, join(stagingDir, "DzenAnalytics.html"));
+// Тексты лицензий библиотек внутри сборки (scripts/thirdPartyLicenses.ts) —
+// открытые лицензии просят класть их в каждую копию. Без файла архив не собираем.
+const licenses = join(distDir, "THIRD-PARTY-LICENSES.txt");
+if (!existsSync(licenses)) {
+  console.error("✗ build:standalone did not produce dist-standalone/THIRD-PARTY-LICENSES.txt");
+  process.exit(1);
+}
+copyFileSync(licenses, join(stagingDir, "THIRD-PARTY-LICENSES.txt"));
 
 const readme = `DzenAnalytics ${version} — локальная финансовая аналитика
 ===========================================================
@@ -99,6 +108,7 @@ Chrome, Edge, Firefox, Safari, Brave, Opera, Arc и т.п.
 
 Исходный код: https://github.com/DEADover/DzenAnalytics
 Лицензия: MIT
+Сторонние библиотеки и шрифты и тексты их лицензий: THIRD-PARTY-LICENSES.txt
 `;
 writeFileSync(join(stagingDir, "README.txt"), readme, "utf8");
 

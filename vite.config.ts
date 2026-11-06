@@ -4,6 +4,7 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 import { readFileSync, appendFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { createRequire } from "node:module";
+import { thirdPartyLicenses } from "./scripts/thirdPartyLicenses";
 
 // App version — single source of truth is package.json. Injected via `define`
 // and surfaced in the footer + «История изменений» help section.
@@ -118,6 +119,8 @@ export default defineConfig({
   plugins: [
     react(),
     devLogSink(),
+    // Тексты лицензий библиотек, попавших в сборку, — THIRD-PARTY-LICENSES.txt рядом.
+    thirdPartyLicenses(`DzenAnalytics ${pkgVersion}`, "dzenanalytics"),
     ...(standalone ? [inlineStandaloneAssets(), viteSingleFile()] : []),
   ],
   build: standalone

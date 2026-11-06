@@ -12,3 +12,8 @@ export const CHANNEL_URL = "https://t.me/dzenanalytics";
 export const CHANNEL_TITLE = "Канал в Telegram";
 export const SUPPORT_URL = "https://pay.cloudtips.ru/p/bbde8948";
 export const SUPPORT_TITLE = "Поддержать проект";
+/**
+ * Тексты лицензий библиотек внутри сборки — файл рядом с панелью (его кладёт
+ * сборка, scripts/thirdPartyLicenses.ts; в архиве standalone — рядом с HTML).
+ */
+export const LICENSES_FILE = "THIRD-PARTY-LICENSES.txt";
