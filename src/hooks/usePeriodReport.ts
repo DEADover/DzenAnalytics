@@ -3,9 +3,11 @@ import { netWorthSeries, stackedBalanceByAccount } from "../lib/aggregations";
 import { colorForCategory } from "../lib/categoryColor";
 import type { DigestEntry } from "../lib/digest";
 import type { DigestObservation } from "../lib/digestObservations";
-import { endAfterDays, periodKey, shiftDays, shiftPeriod, type DayRange } from "../lib/period";
+import { currentPeriod, endAfterDays, periodKey, periodRange, shiftDays, type DayRange } from "../lib/period";
 import { applyDigest, buildPeriodReport, previousRange, rangeText, type PeriodReportModel } from "../lib/periodReport";
-import { buildReportBudget, type ReportBudget } from "../lib/periodReportBudget";
+import { budgetMonthTotals, budgetPlanRows, budgetUnplannedRows, openingBudgetRow } from "../lib/budgetMonth";
+import { reportBudgetFromMonth, type ReportBudget } from "../lib/periodReportBudget";
+import { useBudgetSettingsStore } from "../store/useBudgetSettingsStore";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useCalibrationStore } from "../store/useCalibrationStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
@@ -15,7 +17,8 @@ import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useAccountDirectory } from "./useAccountDirectory";
 import { useAnalyticsTransactions } from "./useAnalyticsTransactions";
 import { useBalanceValuation } from "./useBalanceValuation";
-import { useBudgetScope } from "./useBudgetScope";
+import { useBudgetSources } from "./useBudgetSources";
+import { useZenOpeningBalance } from "./useZenPlanRules";
 
 export interface ReportAccountRow {
   key: string;
@@ -69,22 +72,32 @@ function valueAt<T extends { date: string }>(series: readonly T[], date: string,
  * `lib/periodReport`). Операции — `useAnalyticsTransactions`, как у самого
  * «Дайджеста»: без счетов вне баланса (пока они не считаются) и без того, что
  * исключает активный разрез; общие фильтры не действуют, как и в «Дайджесте».
- * Бюджет — по периметру и правилам раздела «Бюджеты» (`useBudgetScope`).
+ * Бюджет — тем же расчётом, что месячный вид раздела «Бюджеты»
+ * (`lib/budgetMonth`, источники — `useBudgetSources`).
  *
  * `spec` — `null`, пока отчёт не нужен: тогда ничего не считается.
  */
 export function usePeriodReport(spec: ReportSpec | null): PeriodReport | null {
   const txs = useAnalyticsTransactions();
-  const rawTxs = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const meta = useCategoryMetaStore((s) => s.meta);
   const metaLoaded = useCategoryMetaStore((s) => s.loaded);
   const hydrateMeta = useCategoryMetaStore((s) => s.hydrate);
-  const lines = useBudgetsStore((s) => s.lines);
   const budgetsLoaded = useBudgetsStore((s) => s.loaded);
   const hydrateBudgets = useBudgetsStore((s) => s.hydrate);
-  const { scope } = useBudgetScope();
+  // Бюджет — только у месяца; кэш Дзен-мани читаем, лишь пока отчёт нужен.
+  const { sources: budgetSources, scope, zenRules } = useBudgetSources(spec?.kind === "month");
+  const includeOffBalance = useBudgetSettingsStore((s) => s.includeOffBalance);
+  const budgetYm = spec?.kind === "month" ? periodKey(spec.range.from, monthStartDay) : null;
+  // Входящий баланс месяца — если в «Планах» он учитывается. Отчёт бывает
+  // только за прошедший или идущий месяц, прогноз будущего не нужен.
+  const openingBalance = useZenOpeningBalance(
+    budgetYm ? zenRules : null,
+    budgetYm ? periodRange(budgetYm, monthStartDay).from : "9999-12-31",
+    new Date().toISOString().slice(0, 10),
+    includeOffBalance
+  );
   const dir = useAccountDirectory();
   const valuation = useBalanceValuation();
   const drafts = useDraftsStore((s) => s.drafts);
@@ -152,13 +165,16 @@ export function usePeriodReport(spec: ReportSpec | null): PeriodReport | null {
   }, [model, valuation, txs, drafts, dir, calibration]);
 
   const budget = useMemo(() => {
-    if (!model || spec?.kind !== "month") return null;
-    const months: string[] = [];
-    const last = periodKey(model.lastDay, monthStartDay);
-    for (let ym = periodKey(model.range.from, monthStartDay); ym <= last && months.length < 600; ym = shiftPeriod(ym, 1))
-      months.push(ym);
-    return buildReportBudget(lines, rawTxs, months, scope, monthStartDay);
-  }, [model, spec?.kind, lines, rawTxs, scope, monthStartDay]);
+    if (!model || !budgetYm) return null;
+    // Ровно месячный вид раздела: статьи с планом, без плана, входящий баланс
+    // и итоги карточек — одной функцией (`lib/budgetMonth`).
+    const rows = budgetPlanRows(budgetSources, budgetYm, scope);
+    const unplanned = budgetUnplannedRows(budgetSources, budgetYm, scope, rows);
+    const opening = openingBudgetRow(openingBalance, budgetYm, currentPeriod(monthStartDay));
+    const all = [...(opening ? [opening] : []), ...rows, ...unplanned];
+    const totals = budgetMonthTotals(all, budgetSources, budgetYm, scope);
+    return reportBudgetFromMonth(all, totals, budgetYm, !!zenRules?.openingBalance);
+  }, [model, budgetYm, budgetSources, scope, openingBalance, monthStartDay, zenRules]);
 
   if (!model || !spec) return null;
   return {

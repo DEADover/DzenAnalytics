@@ -79,6 +79,28 @@ test("отчёт за месяц в Excel: листы по разделам, с�
   await expect(page.locator("[data-report-offscreen]")).toHaveCount(0);
 });
 
+test("бюджет в отчёте — те же итоги расходов и поступлений, что в карточках раздела «Бюджеты»", async ({ page }) => {
+  const clean = (x: string) => x.replace(/[\u2060\u2063]/g, "").replace(/[\u00a0\u202f]/g, " ").trim();
+  await connectZen(page, "/budgets");
+  const lines = (await page.locator("main").innerText()).split("\n").map(clean).filter(Boolean);
+  const card = (title: RegExp) => {
+    const i = lines.findIndex((l) => title.test(l));
+    return { fact: lines[i + 1], plan: lines[i + 2].replace(/^План /, "") };
+  };
+  const expense = card(/^РАСХОДЫ ЗА МЕСЯЦ$/);
+  const income = card(/^(ПОСТУПЛЕНИЯ|ДЕНЬГИ НА МЕСЯЦ)( ЗА МЕСЯЦ)?$/);
+  expect(expense.fact).toMatch(/₽$/);
+
+  await page.goto("/digest");
+  const html = await download(page, "HTML");
+  const file = await page.context().newPage();
+  await file.setContent(await readFile((await html.path())!, "utf8"));
+  const budget = clean(await file.locator("[data-report-section=budget]").innerText()).replace(/\s+/g, " ");
+  expect(budget).toContain(`Расходы ${expense.fact} из ${expense.plan}`);
+  expect(budget).toContain(`${income.fact} из ${income.plan}`);
+  await file.close();
+});
+
 test("отчёт за неделю — без бюджета: план помесячный", async ({ page }) => {
   await connectZen(page, "/digest");
   await page.getByRole("radio", { name: "По неделям" }).or(page.getByRole("button", { name: "По неделям", exact: true })).first().click();

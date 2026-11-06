@@ -88,12 +88,14 @@ describe("«Отчёт за период» в Excel", () => {
     const r = report({
       accounts: [{ key: "a1", label: "Карта", start: 100_000, end: 154_000 }],
       budget: {
-        months: ["2026-10"],
-        plan: { income: 90_000, expense: 40_000 },
-        fact: { income: 100_000, expense: 46_000 },
+        month: "2026-10",
+        incomeTitle: "Поступления",
+        income: { plan: 90_000, fact: 100_000 },
+        expense: { plan: 40_000, fact: 46_000 },
+        delta: { plan: 50_000, fact: 54_000 },
         rows: [{ category: "Продукты", plan: 15_000, fact: 16_000 }],
-        plannedFact: 16_000,
-        unplanned: 30_000,
+        unplanned: 25_000,
+        groups: [{ category: "Кредиты и кредитки", fact: 5_000 }],
       },
     });
     const sheets = buildPeriodReportWorkbook(r, "06.11.2026");
@@ -101,6 +103,12 @@ describe("«Отчёт за период» в Excel", () => {
     const row = rowOf(byName(sheets, "Бюджет"), "Продукты");
     expect(row.slice(1).map((c) => (c as Cell | null)?.value)).toEqual([15_000, 16_000, -1_000, 16_000 / 15_000]);
     expect(rowOf(byName(sheets, "Счета"), "Карта")[3]).toMatchObject({ value: 54_000 });
+    // Итоги — как карточки раздела «Бюджеты»; статьи, «вне плана» и переводы складываются в факт расходов.
+    const budget = byName(sheets, "Бюджет");
+    expect(rowOf(budget, "Расходы").slice(1, 3).map((c) => (c as Cell | null)?.value)).toEqual([40_000, 46_000]);
+    expect(rowOf(budget, "Вне плана")[2]).toMatchObject({ value: 25_000 });
+    expect(rowOf(budget, "Кредиты и кредитки")[2]).toMatchObject({ value: 5_000 });
+    expect(rowOf(budget, "Итого расходы")[2]).toMatchObject({ value: 46_000 });
   });
 
   it("длинный период — лист «По месяцам» с названиями месяцев", () => {

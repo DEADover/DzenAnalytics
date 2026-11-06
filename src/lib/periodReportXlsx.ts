@@ -257,24 +257,17 @@ function accountsSheet(r: PeriodReport, money: string): Sheet {
 
 function budgetSheet(r: PeriodReport, money: string): Sheet {
   const b = r.budget!;
-  const months = b.months.length === 1 ? monthTitle(b.months[0]) : `${monthTitle(b.months[0])} — ${monthTitle(b.months[b.months.length - 1])}`;
+  const share = (fact: number, plan: number) => num(plan > 0 ? fact / plan : null, PERCENT);
   const rows: Row[] = [
-    title(`Бюджет · ${months}`),
-    note(`План и факт по правилам раздела «Бюджеты»${r.running ? ", факт идущего месяца — на сегодня" : ""}`),
+    title(`Бюджет · ${monthTitle(b.month)}`),
+    note(`План и факт — как в разделе «Бюджеты»${r.running ? ", факт идущего месяца — на сегодня" : ""}`),
     blank,
     [head(""), head("План", true), head("Факт", true), head("Исполнение", true)],
-    // Как на листе отчёта: без плана строки нет — «0 из 150 000» ничего не говорит.
-    ...(b.plan.income > 0
-      ? [[text("Доходы"), num(b.plan.income, money), num(b.fact.income, money, { textColor: INCOME_TEXT }), num(b.fact.income / b.plan.income, PERCENT)]]
-      : []),
-    ...(b.plan.expense > 0
-      ? [
-          [text("Расходы по статьям с планом"), num(b.plan.expense, money), num(b.plannedFact, money, { textColor: EXPENSE_TEXT }), num(b.plannedFact / b.plan.expense, PERCENT)],
-          [text("Траты вне плана"), null, num(b.unplanned, money), null],
-        ]
-      : []),
+    [text(b.incomeTitle), num(b.income.plan, money), num(b.income.fact, money, { textColor: INCOME_TEXT }), share(b.income.fact, b.income.plan)],
+    [text("Расходы"), num(b.expense.plan, money), num(b.expense.fact, money, { textColor: EXPENSE_TEXT }), share(b.expense.fact, b.expense.plan)],
+    [text("Разница"), num(b.delta.plan, money), num(b.delta.fact, money), null],
     blank,
-    [head("Статья"), head("План", true), head("Факт", true), head("Остаток", true), head("Исполнение", true)],
+    [head("Статья расходов"), head("План", true), head("Факт", true), head("Остаток", true), head("Исполнение", true)],
   ];
   for (const row of b.rows) {
     rows.push([
@@ -282,9 +275,19 @@ function budgetSheet(r: PeriodReport, money: string): Sheet {
       num(row.plan, money),
       num(row.fact, money, row.fact > row.plan ? { textColor: EXPENSE_TEXT } : {}),
       num(row.plan - row.fact, money),
-      num(row.plan > 0 ? row.fact / row.plan : null, PERCENT),
+      share(row.fact, row.plan),
     ]);
   }
+  if (Math.abs(b.unplanned) >= 0.005) rows.push([text("Вне плана", { textColor: MUTED_TEXT }), null, num(b.unplanned, money), null, null]);
+  for (const g of b.groups) rows.push([text(g.category, { textColor: MUTED_TEXT }), null, num(g.fact, money), null, null]);
+  const bold = { fontWeight: "bold" as const, backgroundColor: TOTAL_BG };
+  rows.push([
+    text("Итого расходы", bold),
+    num(b.expense.plan, money, bold),
+    num(b.expense.fact, money, bold),
+    num(b.expense.plan - b.expense.fact, money, bold),
+    num(b.expense.plan > 0 ? b.expense.fact / b.expense.plan : null, PERCENT, bold),
+  ]);
   return { sheet: "Бюджет", data: rows, columns: [{ width: 34 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 14 }] };
 }
 

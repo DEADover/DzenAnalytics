@@ -560,76 +560,88 @@ function Accounts({ report }: { report: PeriodReport }) {
   );
 }
 
-/** Сколько статей бюджета на листе. */
-const BUDGET_MAX = 10;
+/** Сколько статей бюджета на листе; остальные — одной строкой. */
+const BUDGET_MAX = 14;
+
+/** «82 %» — доля факта в плане; плана нет — пусто. */
+const ofPlan = (fact: number, plan: number) => (plan > 0 ? formatPct(fact / plan, 0) : "");
 
 function Budget({ report }: { report: PeriodReport }) {
   const { base } = report;
   const budget = report.budget!;
-  const rows = budget.rows.slice(0, BUDGET_MAX);
-  const months =
-    budget.months.length === 1
-      ? monthTitle(budget.months[0])
-      : `${monthTitle(budget.months[0])} — ${monthTitle(budget.months[budget.months.length - 1])}`;
+  const shown = budget.rows.slice(0, BUDGET_MAX);
+  const rest = budget.rows.slice(BUDGET_MAX);
+  const restPlan = rest.reduce((s, r) => s + r.plan, 0);
+  const restFact = rest.reduce((s, r) => s + r.fact, 0);
+  const card = (label: string, fact: number, plan: number, signed = false) => (
+    <div className="pr-kpi">
+      <span className="pr-kpi-label">{label}</span>
+      <span className="pr-kpi-value">{money(fact, base, signed)}</span>
+      <span className="pr-delta">
+        {signed ? `План ${money(plan, base, true)}` : `из ${money(plan, base)}${plan > 0 ? ` · ${ofPlan(fact, plan)}` : ""}`}
+      </span>
+    </div>
+  );
+  const plain = (name: string, fact: number, key: string) => (
+    <div key={key} className="pr-plan">
+      <span className="pr-bar-name pr-muted">
+        <span>{name}</span>
+      </span>
+      <span />
+      <span className="pr-plan-num">{money(fact, base)}</span>
+    </div>
+  );
   return (
     <>
       <div>
         <h2 className="pr-h2">Бюджет</h2>
         <p className="pr-sub">
-          {months} · план и факт по правилам раздела «Бюджеты»
+          {monthTitle(budget.month)} · план и факт — как в разделе «Бюджеты»
           {report.running ? ", факт идущего месяца — на сегодня" : ""}
         </p>
       </div>
       <div className="pr-budget-sum">
-        {budget.plan.expense > 0 && (
-          <div className="pr-kpi">
-            <span className="pr-kpi-label">Расходы по статьям с планом</span>
-            <span className="pr-kpi-value">{formatPct(budget.plannedFact / budget.plan.expense, 0)}</span>
-            <span className="pr-delta">
-              {money(budget.plannedFact, base)} из {money(budget.plan.expense, base)}
-            </span>
-          </div>
-        )}
-        {budget.plan.expense > 0 && (
-          <div className="pr-kpi">
-            <span className="pr-kpi-label">Траты вне плана</span>
-            <span className="pr-kpi-value">{money(budget.unplanned, base)}</span>
-            <span className="pr-delta">В статьях, где плана нет</span>
-          </div>
-        )}
-        {budget.plan.income > 0 && (
-          <div className="pr-kpi">
-            <span className="pr-kpi-label">Доходы: факт из плана</span>
-            <span className="pr-kpi-value">{formatPct(budget.fact.income / budget.plan.income, 0)}</span>
-            <span className="pr-delta">
-              {money(budget.fact.income, base)} из {money(budget.plan.income, base)}
-            </span>
-          </div>
-        )}
+        {card(budget.incomeTitle, budget.income.fact, budget.income.plan)}
+        {card("Расходы", budget.expense.fact, budget.expense.plan)}
+        {card("Разница", budget.delta.fact, budget.delta.plan, true)}
       </div>
-      {rows.length > 0 && (
-        <div className="pr-bars">
-          {rows.map((r) => {
-            const scale = Math.max(r.plan, r.fact, 1);
-            const over = r.fact > r.plan;
-            return (
-              <div key={r.category} className="pr-plan">
-                <span className="pr-bar-name">
-                  <span>{r.category}</span>
-                </span>
-                <span className="pr-plan-track">
-                  <span className={clsx("pr-plan-fill", over && "pr-over")} style={{ width: `${(r.fact / scale) * 100}%` }} />
-                  <span className="pr-plan-mark" style={{ left: `calc(${(r.plan / scale) * 100}% - 1px)` }} />
-                </span>
-                <span className="pr-plan-num">
-                  <span className={over ? "pr-bad" : undefined}>{money(r.fact, base)}</span>
-                  <span className="pr-muted"> из {money(r.plan, base)}</span>
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <div className="pr-bars">
+        {shown.map((r) => {
+          const scale = Math.max(r.plan, r.fact, 1);
+          const over = r.fact > r.plan;
+          return (
+            <div key={r.category} className="pr-plan">
+              <span className="pr-bar-name">
+                <span>{r.category}</span>
+              </span>
+              <span className="pr-plan-track">
+                <span className={clsx("pr-plan-fill", over && "pr-over")} style={{ width: `${(r.fact / scale) * 100}%` }} />
+                <span className="pr-plan-mark" style={{ left: `calc(${(Math.max(r.plan, 0) / scale) * 100}% - 1px)` }} />
+              </span>
+              <span className="pr-plan-num">
+                <span className={over ? "pr-bad" : undefined}>{money(r.fact, base)}</span>
+                <span className="pr-muted"> из {money(r.plan, base)}</span>
+              </span>
+            </div>
+          );
+        })}
+        {rest.length > 0 && (
+          <div className="pr-plan">
+            <span className="pr-bar-name pr-muted">
+              <span>
+                Ещё {rest.length} {pluralRu(rest.length, ["статья", "статьи", "статей"])}
+              </span>
+            </span>
+            <span />
+            <span className="pr-plan-num">
+              {money(restFact, base)}
+              <span className="pr-muted"> из {money(restPlan, base)}</span>
+            </span>
+          </div>
+        )}
+        {Math.abs(budget.unplanned) >= 0.5 && plain("Вне плана", budget.unplanned, "unplanned")}
+        {budget.groups.map((g) => plain(g.category, g.fact, `group:${g.category}`))}
+      </div>
     </>
   );
 }

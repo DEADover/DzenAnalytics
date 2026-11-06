@@ -1,18 +1,16 @@
 /**
- * Бюджет в «Отчёте за период»: план и факт по статьям расходов за отчётные
- * месяцы периода.
+ * Бюджет в «Отчёте за период» — месяц ровно так, как его показывает раздел
+ * «Бюджеты».
  *
- * Бюджет в сервисе помесячный, поэтому план периода — сумма планов его
- * отчётных месяцев, а факт — по тем же месяцам и по тем же правилам, что в
- * разделе «Бюджеты»: периметр счетов, переводы по правилам «Планов» Дзен-мани
- * (`budgetHits`), замок родителя — его план уже включает подкатегории
- * (`planTotals`).
+ * Статьи и итоги приходят из того же расчёта, что у раздела
+ * (`lib/budgetMonth`): план с прогнозами и назначенными операциями Дзен-мани,
+ * факт со статьями без плана, «Без категории» и переводами по правилам
+ * «Планов», входящий баланс. Здесь — только свёртка для листа отчёта: статьи
+ * по категориям, «вне плана» одной строкой и группы переводов.
  */
 
-import type { Transaction } from "../types";
-import { lockedFor, plannedFor, type BudgetLine } from "./budgets";
-import { budgetHits, type BudgetScope } from "./budgetScope";
-import { periodKey } from "./period";
+import type { BudgetMonthRow, BudgetMonthTotals } from "./budgetMonth";
+import { rowPlanForTotal } from "./budgetMonth";
 
 export interface ReportBudgetRow {
   category: string;
@@ -21,75 +19,60 @@ export interface ReportBudgetRow {
 }
 
 export interface ReportBudget {
-  /** Отчётные месяцы, по которым сложены план и факт. */
-  months: string[];
-  plan: { income: number; expense: number };
-  fact: { income: number; expense: number };
-  /** Статьи расходов с планом — по убыванию плана. */
+  /** Отчётный месяц «YYYY-MM». */
+  month: string;
+  /** «Поступления» или «Деньги на месяц» (учитывается входящий баланс) — как в разделе. */
+  incomeTitle: string;
+  /** Итоги карточек раздела: план и факт поступлений, расходов и разница. */
+  income: { plan: number; fact: number };
+  expense: { plan: number; fact: number };
+  delta: { plan: number; fact: number };
+  /** Статьи расходов с планом, по категориям, — по убыванию плана. */
   rows: ReportBudgetRow[];
-  /** Факт по статьям расходов с планом — его и сравниваем с планом. */
-  plannedFact: number;
-  /** Траты в статьях без плана. */
+  /** Расходы в статьях без плана, включая «Без категории». */
   unplanned: number;
+  /** Переводы по правилам «Планов»: «Кредиты и кредитки», «Накопления»… */
+  groups: { category: string; fact: number }[];
 }
 
-const key = (kind: string, category: string) => `${kind}\u0000${category}`;
-
-export function buildReportBudget(
-  lines: readonly BudgetLine[],
-  txs: readonly Transaction[],
-  months: readonly string[],
-  scope: BudgetScope,
-  monthStartDay: number
+/**
+ * Свернуть строки месяца для отчёта. Сумма статей, «вне плана» и групп
+ * переводов равна факту расходов в карточке раздела.
+ */
+export function reportBudgetFromMonth(
+  rows: readonly BudgetMonthRow[],
+  totals: BudgetMonthTotals,
+  month: string,
+  withOpening: boolean
 ): ReportBudget | null {
-  if (months.length === 0) return null;
-
-  // План по статьям (категория целиком) и итоги — как `planTotals`. Ключ —
-  // статья и месяц: факт статьи берём только за месяцы, где у неё есть план,
-  // иначе план одного месяца сравнивался бы с тратами всего периода.
-  const planBy = new Map<string, number>();
-  const plan = { income: 0, expense: 0 };
-  for (const ym of months) {
-    const locked = new Set<string>();
-    for (const l of lines) if (!l.subcategory && lockedFor(l, ym)) locked.add(key(l.kind, l.category));
-    for (const l of lines) {
-      if (l.subcategory && locked.has(key(l.kind, l.category))) continue;
-      const p = plannedFor(l, ym);
-      if (p === 0) continue;
-      if (l.kind === "income") plan.income += p;
-      else plan.expense += p;
-      const k = `${key(l.kind, l.category)}\u0000${ym}`;
-      planBy.set(k, (planBy.get(k) ?? 0) + p);
-    }
-  }
-  if (plan.expense <= 0 && plan.income <= 0) return null;
-
-  // Факт — по отчётным месяцам периода, по правилам периметра бюджета.
-  const inMonths = new Set(months);
-  const factBy = new Map<string, number>();
-  const fact = { income: 0, expense: 0 };
-  for (const t of txs) {
-    const ym = periodKey(t.date.slice(0, 10), monthStartDay);
-    if (!inMonths.has(ym)) continue;
-    for (const hit of budgetHits(t, scope)) {
-      if (hit.transfer) continue;
-      if (hit.kind === "income") fact.income += hit.amount;
-      else fact.expense += hit.amount;
-      const k = `${key(hit.kind, hit.category)}\u0000${ym}`;
-      factBy.set(k, (factBy.get(k) ?? 0) + hit.amount);
-    }
-  }
-
+  if (totals.expense.plan <= 0 && totals.income.plan <= 0) return null;
+  const planOf = rowPlanForTotal(rows);
   const byCategory = new Map<string, ReportBudgetRow>();
-  for (const [k, p] of planBy) {
-    const [kind, category] = k.split("\u0000");
-    if (kind === "income" || p <= 0) continue;
-    const row = byCategory.get(category) ?? { category, plan: 0, fact: 0 };
-    row.plan += p;
-    row.fact += factBy.get(k) ?? 0;
-    byCategory.set(category, row);
+  const groups = new Map<string, number>();
+  let unplanned = 0;
+  for (const r of rows) {
+    if (r.line.kind !== "expense") continue;
+    if (r.planGroup) {
+      groups.set(r.line.category, (groups.get(r.line.category) ?? 0) + r.fact);
+      continue;
+    }
+    if (r.unplanned) {
+      unplanned += r.fact;
+      continue;
+    }
+    const row = byCategory.get(r.line.category) ?? { category: r.line.category, plan: 0, fact: 0 };
+    row.plan += planOf(r);
+    row.fact += r.fact;
+    byCategory.set(r.line.category, row);
   }
-  const rows = [...byCategory.values()].sort((a, b) => b.plan - a.plan);
-  const plannedFact = rows.reduce((s, r) => s + r.fact, 0);
-  return { months: [...months], plan, fact, rows, plannedFact, unplanned: Math.max(0, fact.expense - plannedFact) };
+  return {
+    month,
+    incomeTitle: withOpening ? "Деньги на месяц" : "Поступления",
+    income: totals.income,
+    expense: totals.expense,
+    delta: totals.delta,
+    rows: [...byCategory.values()].filter((r) => r.plan !== 0 || r.fact !== 0).sort((a, b) => b.plan - a.plan),
+    unplanned,
+    groups: [...groups.entries()].filter(([, fact]) => Math.abs(fact) >= 0.005).map(([category, fact]) => ({ category, fact })),
+  };
 }

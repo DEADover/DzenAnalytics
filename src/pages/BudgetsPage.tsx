@@ -22,13 +22,17 @@ import {
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
-import { getZenForecastsFromCache } from "../store/useZenmoneyStore";
-import { loadZenCache } from "../lib/zenmoneyCache";
-import { plannedAsTransaction, plannedOps, type PlannedOp } from "../lib/plannedOps";
+import { plannedAsTransaction, type PlannedOp } from "../lib/plannedOps";
 import { plannedPlans } from "../lib/plannedPlans";
-import { txAccountKey } from "../lib/accountKey";
-import { useBudgetScope } from "../hooks/useBudgetScope";
-import { zenPlanKey } from "../lib/zenBudgets";
+import { useBudgetSources } from "../hooks/useBudgetSources";
+import {
+  budgetFactHits,
+  budgetMonthTotals,
+  budgetPlanRows,
+  budgetUnplannedRows,
+  openingBudgetRow,
+  type BudgetMonthRow,
+} from "../lib/budgetMonth";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useBudgetEditsStore } from "../store/useBudgetEditsStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
@@ -47,17 +51,15 @@ import { SectionControls } from "../components/SectionControls";
 import { PeriodStepper } from "../components/PeriodStepper";
 import {
   buildBudgetYear,
-  categoryPathKey,
   copyMonthPlans,
   type PlanCellEdit,
 } from "../lib/budgetYear";
-import { useLiveCategoryPaths } from "../hooks/useDictionaries";
 import {
   useZenBalanceNow,
   useZenBalanceSpan,
   useZenOpeningBalance,
 } from "../hooks/useZenPlanRules";
-import { OPENING_BALANCE_LABEL, monthResidues } from "../lib/zenPlanRules";
+import { monthResidues } from "../lib/zenPlanRules";
 import { nameKey } from "../lib/budgetLines";
 import { buildBudgetDashboard } from "../lib/budgetDashboard";
 import { BudgetDashboardPrint } from "../components/BudgetDashboardPrint";
@@ -73,7 +75,6 @@ import {
   type BudgetScope,
 } from "../lib/budgetScope";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
-import { affectsExpense, expenseDelta } from "../lib/txKindStyle";
 import { useBudgetSettingsStore, type BudgetView } from "../store/useBudgetSettingsStore";
 import { Segmented } from "../components/Segmented";
 import { Tooltip } from "../components/Tooltip";
@@ -81,14 +82,10 @@ import { TooltipFacts, type TooltipFact } from "../components/TooltipFacts";
 import { groupByCategory } from "../lib/aggregations";
 import {
   plannedFor,
-  factFor,
-  forecastFor,
   addMonths,
   budgetTone,
   compareBudgetRows,
   lockedFor,
-  ownSubsIndex,
-  ownSubsFor,
   type BudgetKind,
   type BudgetLine,
 } from "../lib/budgets";
@@ -111,47 +108,12 @@ import { currentPeriod, periodRange, spanDays } from "../lib/period";
 import { monthProgress as progressOf } from "../lib/dashboardModel";
 import { Collapse } from "../components/Collapse";
 
-interface Row {
-  line: BudgetLine;
-  /** Effective plan for the month: the manual plan, or a history forecast. */
-  planned: number;
-  fact: number;
-  /** True when `planned` is a forecast (no manual plan this month). */
-  forecast: boolean;
-  /** План задан точной суммой (замок Дзен-мани). У категории это значит «вся
-   *  категория целиком»: планы подкатегорий уже внутри и не складываются. */
-  locked?: boolean;
-  /** План взят из назначенной операции Дзен-мани, своего плана у статьи нет. */
-  scheduled?: boolean;
-  /**
-   * Плана у статьи нет вовсе — строка собрана из одних фактов (issue #82).
-   *
-   * Такие статьи жили отдельным блоком «Без бюджета», и сводка их не считала:
-   * итог месяца показывал только то, что кто-то заранее запланировал, и не
-   * сходился с лентой операций за тот же месяц. План у строки ноль, а не
-   * «нет»: ноль — это честный ответ «столько собирались потратить».
-   */
-  unplanned?: boolean;
-  /**
-   * Плану тут взяться неоткуда: «Без категории» — не статья, планировать
-   * неразобранное нечего. В сумму месяца эти деньги при этом входят: они
-   * потрачены.
-   */
-  plannable?: boolean;
-  /**
-   * Перевод через границу баланса по правилам «Планов» Дзен-мани:
-   * «Накопления», «Кредиты и кредитки», «Долги»… Входит в итоги, стоит в конце
-   * списка, плана у неё нет.
-   */
-  planGroup?: boolean;
-  /** «Входящий баланс» — остаток на счетах к началу периода. */
-  opening?: boolean;
-}
+/** Строка бюджета месяца — общая с «Отчётом за период» (`lib/budgetMonth`). */
+type Row = BudgetMonthRow;
 
 export function BudgetsPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
-  const rates = useDataStore((s) => s.rates);
   const showDrill = useDrillStore((s) => s.show);
   // Первый день отчётного месяца — тот же, что во всей аналитике и в Дзен-мани.
   // Весь раздел считает по ОТЧЁТНОМУ периоду: ключ месяца («2026-09») приходит
@@ -177,57 +139,15 @@ export function BudgetsPage() {
   useEffect(() => {
     if (!loaded) hydrate();
   }, [loaded, hydrate]);
-  // Периметр и правила «Планов» — общие с «Отчётом за период».
-  const { scope, zenRules } = useBudgetScope();
+  // Периметр, правила «Планов», прогнозы и назначенные операции Дзен-мани,
+  // живой справочник — общие с «Отчётом за период»: бюджет месяца у обоих
+  // считается одной функцией (`lib/budgetMonth`).
+  const { sources, scope, zenRules, zenPlanned, plannedAsPlan, livePaths } = useBudgetSources();
 
   // График движения денег считает сам по операциям — ему отдаём только то, что
   // внутри периметра.
   const scopedTx = useMemo(() => insidePerimeter(transactions, scope), [transactions, scope]);
 
-  // Zenmoney's OWN auto-forecasts («из X»). In API mode we show these for
-  // income tags without a manual plan — instead of a local median — so «≈»
-  // planы match Дзен exactly. `zenLoaded` distinguishes «not yet read» from
-  // «CSV mode / no cache» (where the median fallback still applies).
-  const [zenForecasts, setZenForecasts] = useState<Map<string, number> | null>(null);
-  const [zenLoaded, setZenLoaded] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    getZenForecastsFromCache().then((m) => {
-      if (!alive) return;
-      setZenForecasts(m);
-      setZenLoaded(true);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [transactions]);
-
-  // Запланированные операции Дзен-мани этого месяца, разложенные по дням: на
-  // графике они видны ступенькой в свой день, а не размазаны до конца месяца
-  // (issue #72). Прогнозы самого Дзена не берём — это не назначенная дата, а
-  // достроенная регулярность, обещать её конкретным днём неправильно.
-  const [zenPlanned, setZenPlanned] = useState<PlannedOp[]>([]);
-  // Те же плановые операции вместе с исполненными — для плана статей без
-  // своего плана: у Дзен-мани их план — все плановые операции месяца, и
-  // исполненные тоже (в прошлом месяце «Садик 12 000» исполнен — план 12 000).
-  const [zenPlannedAll, setZenPlannedAll] = useState<PlannedOp[]>([]);
-  const histDayRates = useDataStore((s) => s.histDayRates);
-  useEffect(() => {
-    let alive = true;
-    loadZenCache().then((c) => {
-      if (!alive) return;
-      setZenPlanned(plannedOps(c, rates));
-      setZenPlannedAll(
-        plannedOps(c, rates, {
-          withProcessed: true,
-          histRate: (d, code) => histDayRates[d]?.[code] ?? null,
-        })
-      );
-    });
-    return () => {
-      alive = false;
-    };
-  }, [transactions, rates, histDayRates]);
 
   const cur = currentPeriod(monthStartDay);
   const [ym, setYm] = useState(() =>
@@ -295,24 +215,6 @@ export function BudgetsPage() {
     return { income, expense };
   }, [zenPlanned, range, scope]);
 
-  /**
-   * План из НАЗНАЧЕННЫХ операций Дзен-мани.
-   *
-   * Дзен прибавляет запланированные операции к плану статьи, но только если
-   * план у неё заведён. Статья без плана в бюджете не появлялась вовсе —
-   * оплата назначена, сумма известна, а строки нет до самого списания. Этот
-   * список закрывает ровно такие статьи: он показывается там, где своего плана
-   * нет, никуда не сохраняется и в Дзен-мани не уходит.
-   */
-  const plannedAsPlan = useMemo(
-    // Строки групп переводов («Кредиты и кредитки», «Накопления»…) плана не
-    // получают — в приложении у них только «Платежи на …».
-    () =>
-      plannedPlans(zenPlannedAll, scope, undefined, monthStartDay, !!zenRules?.forecasts).filter(
-        (p) => !p.planGroup
-      ),
-    [zenPlannedAll, scope, monthStartDay, zenRules]
-  );
 
   /**
    * «Ещё в плане» по статьям выбранного месяца — назначенные операции, которые
@@ -496,7 +398,6 @@ export function BudgetsPage() {
   // Живые категории — чтобы статьи с именем, которого в справочнике больше
   // нет, и без единой траты за год не висели в отчёте (#77). В режиме CSV
   // справочника нет, хук вернёт null, и ничего не отсеивается.
-  const livePaths = useLiveCategoryPaths();
   const yearReport = useMemo(
     () =>
       buildBudgetYear(
@@ -630,136 +531,10 @@ export function BudgetsPage() {
    * прогноз входящего баланса будущего месяца проходит по всем месяцам до
    * него (см. `forecastOpening`).
    */
-  const buildRows = useCallback((ym: string, sc: BudgetScope = scope): Row[] => {
-    // Первый проход — только планы: от фактов они не зависят, а факт категории
-    // зависит от того, какие под-строки в итоге окажутся на экране (issue #70).
-    const inWindow = lines
-      // A line belongs to a month only while it's inside its validity window
-      // [startMonth, endMonth]. A budget that starts in June must NOT appear
-      // in May/April, even if that category had spending then.
-      .filter(
-        (line) => ym >= line.startMonth && (!line.endMonth || ym <= line.endMonth)
-      )
-      .map((line) => {
-        const planned = plannedFor(line, ym);
-        // Income with no manual plan → show a forecast «≈ из X». In API mode use
-        // ZENMONEY's own auto-forecast (so numbers match Дзен, and tags Дзен
-        // doesn't forecast get no phantom «≈»); in CSV mode fall back to a local
-        // median. Never pushed to Дзен.
-        // С подключением прогноз берётся у самого Дзен-мани и только если он
-        // включён у пользователя в настройках «Планов» — тогда для обеих
-        // сторон, как в приложении. Без подключения — своя медиана по доходам.
-        const wantForecast = zenForecasts ? !!zenRules?.forecasts : line.kind === "income";
-        if (planned === 0 && wantForecast) {
-          let fc: number;
-          if (!zenLoaded) fc = 0; // still reading cache — avoid a median flash
-          else if (zenForecasts)
-            fc = zenForecasts.get(
-              zenPlanKey(line.kind, line.category, line.subcategory ?? null, ym)
-            ) ?? 0; // API: trust Дзен (missing = no forecast)
-          else fc = forecastFor(line, transactions, ym, 6, sc, monthStartDay); // CSV: median estimate
-          if (fc > 0) return { line, planned: fc, forecast: true };
-        }
-        return { line, planned, forecast: false, locked: lockedFor(line, ym) };
-      });
-    // Show only TAGS actually budgeted this month (план > 0). A sub-tag with no
-    // own plan is NOT rolled into its parent (Zenmoney puts such spending under
-    // «Вне плана»), so a parent never overstates % when one child is budgeted and
-    // another is only auto-forecast (e.g. Банки → Кэшбек budgeted, Проценты only
-    // forecast). Unbudgeted tags surface under «Без бюджета».
-    // Отрицательный свой план категории остаётся: это поправка Дзен-мани к
-    // сумме подкатегорий, без неё план категории выходит завышенным.
-    const shown = inWindow.filter((r) => r.planned !== 0);
-    // Статьи, у которых своего плана нет, но на этот месяц НАЗНАЧЕНА операция:
-    // сумма и дата известны, и держать такую статью вне бюджета до самого
-    // списания незачем. Там, где план есть, ничего не добавляем — Дзен-мани уже
-    // прибавил назначенные операции к нему сам.
-    const withPlan = new Set(
-      shown.map((r) => budgetKey(r.line.kind, r.line.category, r.line.subcategory ?? null))
-    );
-    const scheduled: { line: BudgetLine; planned: number; forecast: boolean; scheduled: true }[] =
-      [];
-    for (const p of plannedAsPlan) {
-      if (p.ym !== ym) continue;
-      const key = budgetKey(p.kind, p.category, p.subcategory);
-      if (withPlan.has(key)) continue;
-      scheduled.push({
-        line: {
-          id: `scheduled:${key}`,
-          category: p.category,
-          subcategory: p.subcategory,
-          kind: p.kind,
-          amount: 0,
-          recurrence: "monthly",
-          startMonth: ym,
-          endMonth: null,
-          createdAt: "",
-        },
-        planned: p.amount,
-        forecast: false,
-        scheduled: true,
-      });
-    }
-    const all = [...shown, ...scheduled];
-    // Второй проход — факты. Строка категории забирает и траты по своим
-    // подкатегориям, кроме тех, что показаны отдельной строкой прямо здесь.
-    const ownSubs = ownSubsIndex(all);
-    const budgeted = all
-      .map(
-        (r): Row => ({
-          ...r,
-          fact: factFor(
-            r.line,
-            transactions,
-            ym,
-            sc,
-            ownSubsFor(ownSubs, r.line),
-            monthStartDay
-          ),
-        })
-      )
-      // Призрак переименования: имени в справочнике больше нет, трат за месяц
-      // нет и быть не может — весь факт уехал на новое имя (#77). Тот же
-      // фильтр, что в годовом своде, только по факту месяца.
-      .filter(
-        (r) =>
-          !livePaths ||
-          r.fact !== 0 ||
-          r.line.category === TRANSFER_CATEGORY ||
-          livePaths.has(categoryPathKey(r.line.category, r.line.subcategory ?? null))
-      );
-    // Порядок статей — общий для всего раздела: по алфавиту или по сумме
-    // (issue #68). Раньше строки шли по времени создания плана — порядок,
-    // который виден только нам, а на экране выглядел случайным. Категории без
-    // трат за месяц отделяет уже сам раздел, отдельным спойлером.
-    const catFact = new Map<string, number>();
-    const catKey = (r: Row) => `${r.line.kind}\u0000${r.line.category}`;
-    for (const r of budgeted) catFact.set(catKey(r), (catFact.get(catKey(r)) ?? 0) + r.fact);
-    return budgeted.sort((a, b) => {
-      if (a.line.category !== b.line.category)
-        return compareBudgetRows(
-          { name: a.line.category, amount: catFact.get(catKey(a)) ?? 0 },
-          { name: b.line.category, amount: catFact.get(catKey(b)) ?? 0 },
-          rowOrder
-        );
-      // Внутри категории первой идёт она сама, следом её подкатегории.
-      const as = a.line.subcategory ?? "";
-      const bs = b.line.subcategory ?? "";
-      if (!as || !bs) return as ? 1 : bs ? -1 : 0;
-      return compareBudgetRows({ name: as, amount: a.fact }, { name: bs, amount: b.fact }, rowOrder);
-    });
-  }, [
-    lines,
-    transactions,
-    zenForecasts,
-    zenLoaded,
-    zenRules,
-    scope,
-    rowOrder,
-    plannedAsPlan,
-    livePaths,
-    monthStartDay,
-  ]);
+  const buildRows = useCallback(
+    (ym: string, sc: BudgetScope = scope): Row[] => budgetPlanRows(sources, ym, sc),
+    [sources, scope]
+  );
   const rows = useMemo(() => buildRows(ym), [buildRows, ym]);
 
   /**
@@ -878,20 +653,7 @@ export function BudgetsPage() {
    * нечего. Но деньги-то потрачены, и без них итог месяца не сойдётся с
    * операциями. Собираем их отдельной строкой, которую нельзя планировать.
    */
-  const factHits = useCallback(
-    (t: Transaction): BudgetHit[] => {
-      if (t.kind !== "transfer" && (!t.category || t.category === NO_CATEGORY)) {
-        if (!inPerimeter(scope, t.account ? txAccountKey(t) : undefined)) return [];
-        if (t.kind === "income")
-          return [{ kind: "income", category: NO_CATEGORY, subcategory: null, amount: t.amountBase }];
-        if (affectsExpense(t.kind))
-          return [{ kind: "expense", category: NO_CATEGORY, subcategory: null, amount: expenseDelta(t) }];
-        return [];
-      }
-      return budgetHits(t, scope);
-    },
-    [scope]
-  );
+  const factHits = useCallback((t: Transaction): BudgetHit[] => budgetFactHits(t, scope), [scope]);
 
   /**
    * Факт месяца по дням — для графика «Планы на месяц», тем же правилом, что
@@ -928,86 +690,10 @@ export function BudgetsPage() {
    * Считается ПОСЛЕ `rows`: статья попадает сюда, только если её ещё нет
    * наверху — ни своей строкой, ни внутри плана родительской категории.
    */
-  const unplannedRows = useMemo<Row[]>(() => {
-    const agg = new Map<
-      string,
-      {
-        kind: BudgetKind;
-        category: string;
-        subcategory: string | null;
-        fact: number;
-        planGroup?: boolean;
-      }
-    >();
-    const add = (
-      kind: BudgetKind,
-      category: string,
-      subcategory: string | null,
-      amount: number,
-      planGroup?: boolean
-    ) => {
-      const key = budgetKey(kind, category, subcategory);
-      const cur = agg.get(key);
-      if (cur) cur.fact += amount;
-      else agg.set(key, { kind, category, subcategory, fact: amount, planGroup });
-    };
-    for (const t of transactions) {
-      if (!inMonth(t.date)) continue;
-      for (const hit of factHits(t)) add(hit.kind, hit.category, hit.subcategory, hit.amount, hit.planGroup);
-    }
-    // Группа переводов — строка категории с подстроками по счетам: родителя
-    // у неё в операциях нет, заводим его сами, иначе подстроки повиснут без
-    // заголовка.
-    for (const u of [...agg.values()]) {
-      if (!u.planGroup || u.subcategory === null) continue;
-      if (!agg.has(budgetKey(u.kind, u.category, null)))
-        agg.set(budgetKey(u.kind, u.category, null), {
-          kind: u.kind,
-          category: u.category,
-          subcategory: null,
-          fact: 0,
-          planGroup: true,
-        });
-    }
-    const shown = new Set(
-      rows.map((r) => budgetKey(r.line.kind, r.line.category, r.line.subcategory ?? null))
-    );
-    // Подкатегория не «без плана», если план есть у её КАТЕГОРИИ: эти траты
-    // уже проедают родительский план и показаны в нём (#70).
-    const parentShown = (u: { kind: BudgetKind; category: string; subcategory: string | null }) =>
-      u.subcategory !== null && shown.has(budgetKey(u.kind, u.category, null));
-    return [...agg.values()]
-      .filter(
-        (u) =>
-          (u.fact !== 0 || (u.planGroup && u.subcategory === null)) &&
-          // Переводы — не статья бюджета: плана по ним не бывает, а в сводке
-          // они идут своей строкой «оборот по счетам».
-          u.category !== TRANSFER_CATEGORY &&
-          !shown.has(budgetKey(u.kind, u.category, u.subcategory)) &&
-          !parentShown(u)
-      )
-      .map(
-        (u): Row => ({
-          line: {
-            id: `unplanned:${budgetKey(u.kind, u.category, u.subcategory)}`,
-            kind: u.kind,
-            category: u.category,
-            subcategory: u.subcategory,
-            amount: 0,
-            recurrence: "monthly",
-            startMonth: ym,
-            endMonth: null,
-            createdAt: "",
-          },
-          planned: 0,
-          fact: u.fact,
-          forecast: false,
-          unplanned: true,
-          plannable: u.category !== NO_CATEGORY && !u.planGroup,
-          ...(u.planGroup ? { planGroup: true } : {}),
-        })
-      );
-  }, [transactions, ym, inMonth, rows, factHits]);
+  const unplannedRows = useMemo<Row[]>(
+    () => budgetUnplannedRows(sources, ym, scope, rows),
+    [sources, ym, scope, rows]
+  );
 
   /**
    * «Все категории» (настройка бюджета): остальные категории справочника —
@@ -1110,31 +796,8 @@ export function BudgetsPage() {
   /** Всё вместе — и запланированное, и нет. Сводка считается по этому списку,
    *  поэтому итог месяца сходится с лентой операций за тот же месяц. */
   const allRows = useMemo(() => {
-    const opening: Row[] =
-      openingShown === null
-        ? []
-        : [
-            {
-              line: {
-                id: "opening",
-                kind: "income",
-                category: OPENING_BALANCE_LABEL,
-                subcategory: null,
-                amount: 0,
-                recurrence: "monthly",
-                startMonth: ym,
-                endMonth: null,
-                createdAt: "",
-              },
-              planned: openingShown,
-              fact: openingShown,
-              // Будущий месяц — прогноз остатка, а не факт.
-              forecast: ym > cur,
-              unplanned: true,
-              plannable: false,
-              opening: true,
-            },
-          ];
+    const openingRow = openingBudgetRow(openingShown, ym, cur);
+    const opening: Row[] = openingRow ? [openingRow] : [];
     const merged = [...opening, ...rows, ...unplannedRows, ...catalogRows];
     const catFact = new Map<string, number>();
     const catKey = (r: Row) => `${r.line.kind}\u0000${r.line.category}`;
@@ -1291,18 +954,6 @@ export function BudgetsPage() {
 
   if (transactions.length === 0) return <EmptyState />;
 
-  // План раздела: у категории с ЗАМКОМ планы её подкатегорий уже внутри её
-  // числа, и прибавлять их второй раз нельзя — иначе итог раздела больше того,
-  // что показывает Дзен-мани, ровно на сумму таких подкатегорий.
-  const lockedParents = new Set(
-    rows
-      .filter((r) => !r.line.subcategory && r.locked)
-      .map((r) => `${r.line.kind}\u0000${r.line.category}`)
-  );
-  const planOf = (r: Row) =>
-    r.line.subcategory && lockedParents.has(`${r.line.kind}\u0000${r.line.category}`)
-      ? 0
-      : r.planned;
   // Как в «Планах» Дзен-мани: сторона поступлений называется «Деньги на
   // месяц», когда в настройках «Планов» учитывается входящий баланс (он идёт
   // первой строкой), и «Поступления» — когда нет. Сверено в приложении.
@@ -1310,29 +961,18 @@ export function BudgetsPage() {
   const incomeHeading = withOpening ? "Деньги на месяц" : "Поступления";
   const incomeTitle = withOpening ? "Деньги на месяц" : "Поступления за месяц";
   const incomeTitleShort = withOpening ? "деньги на месяц" : "поступления";
-  const expPlan = expenseRows.reduce((s, r) => s + planOf(r), 0);
-  const expFact = expenseRows.reduce((s, r) => s + r.fact, 0);
-  const incPlan = incomeRows.reduce((s, r) => s + planOf(r), 0);
-  const incFact = incomeRows.reduce((s, r) => s + r.fact, 0);
-  // Переводы за месяц — отдельно от статей: они не траты и не поступления, а
-  // оборот по счетам. Показываются второй строкой в карточках.
-  let expTransfers = 0;
-  let incTransfers = 0;
-  for (const t of transactions) {
-    if (!inMonth(t.date)) continue;
-    for (const hit of budgetHits(t, scope)) {
-      if (!hit.transfer) continue;
-      if (hit.kind === "expense") expTransfers += hit.amount;
-      else incTransfers += hit.amount;
-    }
-  }
-  // Дельта = доходы − расходы, отдельно по плану и по факту. Переводы входят в
-  // обе части и внутри бюджета гасятся; перевод наружу — настоящий отток.
-  // Входящий баланс в разницу не идёт: это остаток прошлых месяцев, а не
-  // поступление этого — «без учёта входящего баланса», как в приложении.
-  const opening = openingShown ?? 0;
-  const planDelta = incPlan - opening - expPlan;
-  const factDelta = incFact - opening + incTransfers - (expFact + expTransfers);
+  // Итоги месяца — одной функцией с «Отчётом за период» (`lib/budgetMonth`):
+  // в них всё — статьи с планом и без, «Без категории», группы переводов и
+  // входящий баланс; переводы — отдельно, оборотом по счетам.
+  const monthTotals = budgetMonthTotals(allRows, sources, ym, scope);
+  const expPlan = monthTotals.expense.plan;
+  const expFact = monthTotals.expense.fact;
+  const incPlan = monthTotals.income.plan;
+  const incFact = monthTotals.income.fact;
+  const expTransfers = monthTotals.transfers.expense;
+  const incTransfers = monthTotals.transfers.income;
+  const planDelta = monthTotals.delta.plan;
+  const factDelta = monthTotals.delta.fact;
 
   // Inline draft row (appears inside a section after the «+»). Mirrors a normal
   // budget row: category/sub picker · amount · ✓ · ✗.
