@@ -94,7 +94,7 @@
 
 ## Стек
 
-React 19 · TypeScript · Vite · Tailwind CSS.
+React 19 · TypeScript · Vite · Tailwind CSS. Как устроено приложение изнутри — данные, синхронизация с Дзен-мани, интерфейс, тесты и сборка — в [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## ❤️ Отблагодарить автора
 
