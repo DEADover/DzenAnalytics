@@ -38,6 +38,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { toast } from "../store/useToastStore";
 import { colorForCategory } from "../lib/categoryColor";
+import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { formatNum } from "../lib/format";
 import { CategoryDot } from "./CategoryDot";
 import { CategoryEditModal } from "./CategoryEditModal";
@@ -124,6 +125,8 @@ export function CategoryManager() {
   const toggleExcluded = useSlicesStore((s) => s.toggleCategory);
   const slice = activeSlice({ slices: sliceList, activeId: sliceActiveId });
   const excluded = useMemo(() => new Set(slice.excludedCategories), [slice]);
+  const noCategoryExcluded = excluded.has(NO_CATEGORY);
+  const noCategoryCount = countByFull.get(NO_CATEGORY) ?? 0;
 
   // (Re)load the category tags from cache. Re-runs after a sync (serverTimestamp
   // bumps) so freshly-pulled `required` values show up.
@@ -204,6 +207,14 @@ export function CategoryManager() {
         return d !== 0 ? d * dir : a.root.title.localeCompare(b.root.title, "ru");
       });
   }, [tags, allTags, query, sort, countByFull, countByRoot]);
+
+  // Строка «Без категории» закреплена первой при любой сортировке; поиск её
+  // прячет, как и прочие строки. Если в Дзен-мани завели настоящую категорию
+  // с таким названием, вторую строку не рисуем — ключ у них общий.
+  const showNoCategory =
+    Array.isArray(tags) &&
+    queryMatcher(query.trim().toLowerCase())(NO_CATEGORY) &&
+    !allTags.some((t) => !t.parent && t.title === NO_CATEGORY);
 
   // Показываем порциями по мере прокрутки страницы: режем ВЕРХНИЙ уровень,
   // подкатегории едут вместе со своим родителем — иначе группа разорвалась бы
@@ -391,8 +402,10 @@ export function CategoryManager() {
                   <strong className="text-text"> исключить</strong> категорию из
                   сводных виджетов (Цели и FIRE, Здоровье, Что-если, Год в цифрах,
                   Дайджест) — удобно для оборотов, взаимозачётов и возмещений.
-                  Исключение корневой категории охватывает и подкатегории. Настройка
-                  локальная, в облако не уходит.
+                  Исключение корневой категории охватывает и подкатегории. Первая
+                  строка, <strong className="text-text">«Без категории»</strong>, —
+                  операции, которым категорию ещё не назначили: их тоже можно
+                  исключить. Настройка локальная, в облако не уходит.
                 </p>
               </InfoPopover>
 
@@ -440,12 +453,56 @@ export function CategoryManager() {
             <span className="shrink-0 text-center whitespace-nowrap" style={{ width: scaledWidth("5rem") }}>Действия</span>
           </div>
 
-          {groups.length === 0 ? (
+          {groups.length === 0 && !showNoCategory ? (
             <SectionEmpty variant="compact">
               {tags.length === 0 ? "Категории не найдены." : "Ничего не найдено."}
             </SectionEmpty>
           ) : (
             <div className="divide-y divide-border/60">
+              {showNoCategory && (
+                // «Без категории» — не тег Дзен-мани, а операции, которым тег не
+                // назначен. Править и удалять нечего, а вынести из аналитики
+                // (и из разреза) — можно: ключ тот же, что у категории.
+                <div data-no-category className="flex items-center gap-3 px-3 py-1.5 hover:bg-panel2/40 select-none">
+                  <span className="flex items-center gap-2 min-w-0 flex-1">
+                    <CategoryDot category={NO_CATEGORY} size="w-7 h-7" />
+                    <span className="truncate">{NO_CATEGORY}</span>
+                  </span>
+                  <span className="hidden sm:block shrink-0" style={{ width: scaledWidth("6rem") }} />
+                  <span className="hidden sm:block shrink-0" style={{ width: scaledWidth("6rem") }} />
+                  <span className="hidden md:block shrink-0 text-muted" style={{ width: scaledWidth("9rem") }}>
+                    —
+                  </span>
+                  <span className="hidden lg:flex shrink-0 items-center justify-end" style={{ width: scaledWidth("7rem") }}>
+                    {noCategoryCount ? (
+                      <button
+                        onClick={() => openOperations(NO_CATEGORY)}
+                        title="Показать операции без категории"
+                        className="tabular-nums text-muted hover:text-accent hover:underline px-1 -mr-1 rounded"
+                      >
+                        {formatNum(noCategoryCount)}
+                      </button>
+                    ) : (
+                      <span className="text-muted tabular-nums">—</span>
+                    )}
+                  </span>
+                  <AnalyticsEye
+                    excluded={noCategoryExcluded}
+                    onToggle={() => toggleExcluded(NO_CATEGORY)}
+                    title={
+                      noCategoryExcluded
+                        ? `Операции без категории не учитываются в аналитике (Разрез «${slice.name}»)`
+                        : `Операции без категории учитываются в аналитике (Разрез «${slice.name}»)`
+                    }
+                    label={
+                      noCategoryExcluded
+                        ? "Вернуть операции без категории в аналитику"
+                        : "Исключить операции без категории из аналитики"
+                    }
+                  />
+                  <span className="shrink-0" style={{ width: scaledWidth("5rem") }} />
+                </div>
+              )}
               {visibleGroups.map(({ root, children }) => {
                 const hasKids = children.length > 0;
                 const rail = colorForCategory(root.title, meta);
@@ -514,27 +571,16 @@ export function CategoryManager() {
                           <span className="text-muted tabular-nums">—</span>
                         )}
                       </span>
-                      <span className="shrink-0 flex items-center justify-center" style={{ width: scaledWidth("7rem") }}>
-                        <button
-                          onClick={() => toggleExcluded(root.title)}
-                          aria-pressed={rExcluded}
-                          title={
-                            rExcluded
-                              ? `Не учитывается в аналитике вместе с подкатегориями (Разрез «${slice.name}»)`
-                              : `Учитывается в аналитике (Разрез «${slice.name}»)`
-                          }
-                          aria-label={
-                            rExcluded ? "Вернуть категорию в аналитику" : "Исключить категорию из аналитики"
-                          }
-                          className={clsx("btn-icon", rExcluded && "text-warn bg-warn/10 hover:text-warn")}
-                        >
-                          {rExcluded ? (
-                            <EyeOff className="w-4 h-4" />
-                          ) : (
-                            <Eye className="w-4 h-4" />
-                          )}
-                        </button>
-                      </span>
+                      <AnalyticsEye
+                        excluded={rExcluded}
+                        onToggle={() => toggleExcluded(root.title)}
+                        title={
+                          rExcluded
+                            ? `Не учитывается в аналитике вместе с подкатегориями (Разрез «${slice.name}»)`
+                            : `Учитывается в аналитике (Разрез «${slice.name}»)`
+                        }
+                        label={rExcluded ? "Вернуть категорию в аналитику" : "Исключить категорию из аналитики"}
+                      />
                       {/* Both row actions share ONE cell so the pair sits under
                           the «Действия» header as a block and the two icons stay
                           next to each other instead of drifting apart. */}
@@ -650,36 +696,23 @@ export function CategoryManager() {
                                   <span className="text-muted tabular-nums">—</span>
                                 )}
                               </span>
-                              <span className="shrink-0 flex items-center justify-center" style={{ width: scaledWidth("7rem") }}>
-                                <button
-                                  onClick={() => toggleExcluded(cKey)}
-                                  disabled={rExcluded}
-                                  aria-pressed={cExcluded}
-                                  title={
-                                    rExcluded
-                                      ? "Исключена вместе с родительской категорией"
-                                      : cOwnExcluded
-                                        ? `Не учитывается в аналитике (Разрез «${slice.name}»)`
-                                        : `Учитывается в аналитике (Разрез «${slice.name}»)`
-                                  }
-                                  aria-label={
-                                    cExcluded
-                                      ? "Вернуть подкатегорию в аналитику"
-                                      : "Исключить подкатегорию из аналитики"
-                                  }
-                                  className={clsx(
-                                    "btn-icon",
-                                    rExcluded && "opacity-40 cursor-not-allowed",
-                                    cExcluded && "text-warn bg-warn/10 hover:text-warn"
-                                  )}
-                                >
-                                  {cExcluded ? (
-                                    <EyeOff className="w-4 h-4" />
-                                  ) : (
-                                    <Eye className="w-4 h-4" />
-                                  )}
-                                </button>
-                              </span>
+                              <AnalyticsEye
+                                excluded={cExcluded}
+                                locked={rExcluded}
+                                onToggle={() => toggleExcluded(cKey)}
+                                title={
+                                  rExcluded
+                                    ? "Исключена вместе с родительской категорией"
+                                    : cOwnExcluded
+                                      ? `Не учитывается в аналитике (Разрез «${slice.name}»)`
+                                      : `Учитывается в аналитике (Разрез «${slice.name}»)`
+                                }
+                                label={
+                                  cExcluded
+                                    ? "Вернуть подкатегорию в аналитику"
+                                    : "Исключить подкатегорию из аналитики"
+                                }
+                              />
                               <span className="shrink-0 flex items-center justify-center gap-0.5" style={{ width: scaledWidth("5rem") }}>
                                 <button
                                   onClick={() => openEdit(c)}
@@ -771,5 +804,40 @@ export function CategoryManager() {
         />
       )}
     </div>
+  );
+}
+
+/** Глаз «В аналитике» — один на категорию, подкатегорию и «Без категории». */
+function AnalyticsEye({
+  excluded,
+  locked = false,
+  onToggle,
+  title,
+  label,
+}: {
+  excluded: boolean;
+  /** Подкатегория под исключённым родителем: правит родитель. */
+  locked?: boolean;
+  onToggle: () => void;
+  title: string;
+  label: string;
+}) {
+  return (
+    <span className="shrink-0 flex items-center justify-center" style={{ width: scaledWidth("7rem") }}>
+      <button
+        onClick={onToggle}
+        disabled={locked}
+        aria-pressed={excluded}
+        title={title}
+        aria-label={label}
+        className={clsx(
+          "btn-icon",
+          locked && "opacity-40 cursor-not-allowed",
+          excluded && "text-warn bg-warn/10 hover:text-warn"
+        )}
+      >
+        {excluded ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </span>
   );
 }

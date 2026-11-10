@@ -954,6 +954,18 @@ describe("stripFromAnalytics — per-category + off-balance exclusion (#14)", ()
     });
     expect(out.map((t) => t.categoryFull)).toEqual(["Еда", "Еда / Кафе"]);
   });
+
+  it("«Без категории» исключается как категория: доходы и расходы без тега уходят, переводы остаются", () => {
+    const bare = [
+      tx({ kind: "expense", category: "Без категории", categoryFull: "Без категории", amount: 30, amountBase: 30 }),
+      tx({ kind: "income", category: "Без категории", categoryFull: "Без категории", amount: 90, amountBase: 90 }),
+      tx({ kind: "transfer", category: "Перевод", categoryFull: "Перевод", outcomeAccount: "Карта", incomeAccount: "Вклад", amount: 200, amountBase: 200 }),
+    ];
+    const out = stripFromAnalytics([...txs, ...bare], { excludedCategories: new Set(["Без категории"]) });
+    const cats = out.map((t) => t.categoryFull);
+    expect(cats).not.toContain("Без категории");
+    expect(cats.slice(0, 5)).toEqual(["Еда", "Еда / Кафе", "Возмещения", "Техника", "Перевод"]);
+  });
 });
 
 describe("stripFromAnalytics — правила «Аналитики» Дзен-мани", () => {
