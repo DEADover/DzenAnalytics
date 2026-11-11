@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEscapeLayer } from "../lib/escapeStack";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { CategoryDot } from "./CategoryDot";
@@ -124,16 +125,11 @@ export function CategoryCascadePicker({
       if (popupRef.current?.contains(target)) return;
       setOpen(false);
     }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
     document.addEventListener("mousedown", onDoc);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
+  // Закрывает список, а не окно, в котором стоит поле (lib/escapeStack).
+  useEscapeLayer(open, () => setOpen(false));
 
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {

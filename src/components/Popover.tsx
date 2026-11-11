@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { useEscapeLayer } from "../lib/escapeStack";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { popSurfaceProps, usePresence } from "../hooks/usePresence";
@@ -113,18 +114,15 @@ export function Popover({
     // Изменился размер окна — якорь наверняка переехал, тут закрываем без
     // разбора, кто источник.
     const onResize = () => onClose();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", onResize);
-    window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", onResize);
-      window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose, anchorRef]);
+  // Escape — только верхнему слою: окно под списком остаётся (lib/escapeStack).
+  useEscapeLayer(open, onClose);
 
   if (!mounted) return null;
   const origin = pos?.up ? (align === "right" ? "up-right" : "up") : align === "right" ? "right" : "down";

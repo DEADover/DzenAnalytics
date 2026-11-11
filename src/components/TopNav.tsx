@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEscapeLayer } from "../lib/escapeStack";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import {
@@ -253,16 +254,10 @@ export function TopNav({
 
   // Панель закрывается по Escape — она большая, накрывает пол-экрана, и уводить
   // руку к мыши ради «передумал» незачем. Боковое меню узкого окна — так же.
-  useEffect(() => {
-    if (!moreOpen && !mobileOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setMoreOpen(false);
-      setMobileOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [moreOpen, mobileOpen]);
+  useEscapeLayer(moreOpen || mobileOpen, () => {
+    setMoreOpen(false);
+    setMobileOpen(false);
+  });
 
   // Высота шапки уезжает в CSS-переменную: под неё паркуются липкие шапки
   // таблиц. Числом её не задать — она зависит от размера корневого шрифта

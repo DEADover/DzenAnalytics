@@ -7,6 +7,8 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { SURFACE_ATTR } from "./Popover";
+import { useEscapeLayer } from "../lib/escapeStack";
 import { createPortal } from "react-dom";
 import { X, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
@@ -41,7 +43,11 @@ const WIDTH = {
   "7xl": "max-w-7xl",
 } as const;
 
-/** Открытые окна снизу вверх: Escape достаётся только последнему. */
+/** Что может получить фокус с клавиатуры — для круга Tab внутри окна. */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
+
+/** Открытые окна — пока есть хоть одно, под ними выключено размытие. Escape — в `lib/escapeStack`. */
 const stack: string[] = [];
 
 /**
@@ -140,18 +146,54 @@ export function Modal({
     // `.modal-open` в index.css): иначе Chromium на действиях и прокрутке в
     // окне перерисовывал стекло шапки под затемнением и моргал белым.
     document.documentElement.classList.add("modal-open");
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || stack[stack.length - 1] !== id) return;
-      const { busy: isBusy, closeOnEscape: canEscape, onClose: close } = latest.current;
-      if (!isBusy && canEscape) close();
-    };
-    window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("keydown", onKey);
       const i = stack.lastIndexOf(id);
       if (i >= 0) stack.splice(i, 1);
       if (stack.length === 0) document.documentElement.classList.remove("modal-open");
     };
+  }, [id]);
+
+  // Escape — общим стеком слоёв: список или календарь, открытый в окне,
+  // закрывается первым, окно — следующим нажатием. Занятое окно клавишу
+  // забирает, но не закрывается.
+  useEscapeLayer(true, () => {
+    const { busy: isBusy, closeOnEscape: canEscape, onClose: close } = latest.current;
+    if (!isBusy && canEscape) close();
+  });
+
+  // Tab ходит по кругу внутри верхнего окна: раньше после последней кнопки
+  // фокус уходил на страницу под затемнением, и с клавиатуры было не понять,
+  // где он. Списки и календарь, открытые из окна, живут в портале — там Tab
+  // остаётся их делом.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || stack[stack.length - 1] !== id) return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const active = document.activeElement;
+      if (active instanceof Element && !panel.contains(active) && active.closest(`[${SURFACE_ATTR}], [role="dialog"]`))
+        return;
+      const items = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (el) => el.offsetParent !== null || el === document.activeElement
+      );
+      if (items.length === 0) {
+        e.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      const inside = active instanceof Node && panel.contains(active);
+      if (e.shiftKey && (!inside || active === first || active === panel)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (!inside || active === last)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [id]);
 
   useEffect(() => {

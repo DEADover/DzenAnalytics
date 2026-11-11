@@ -8,6 +8,7 @@
 // Set semantics (shared with useFiltersStore): empty = everything selected,
 // {FILTER_NONE} = nothing selected, anything else = that exact subset.
 
+import { useEscapeLayer } from "../lib/escapeStack";
 import { Checkbox } from "./Checkbox";
 import {
   Fragment,
@@ -139,6 +140,8 @@ export function MultiSelect({
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  // Escape закрывает список — раньше с клавиатуры его было не убрать.
+  useEscapeLayer(open, () => setOpen(false));
   const [query, setQuery] = useState("");
   /**
    * Раскрытые ветки — по умолчанию ни одной.

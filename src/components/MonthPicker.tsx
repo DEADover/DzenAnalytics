@@ -1,9 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { popSurfaceProps, usePresence } from "../hooks/usePresence";
+import { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, CalendarRange } from "lucide-react";
 import clsx from "clsx";
-import { MONTHS_SHORT } from "../lib/months";
+import { MonthMenu } from "./MonthMenu";
 import { monthLabelFull } from "../lib/format";
 
 /** «YYYY-MM» плюс `n` месяцев. */
@@ -70,13 +68,9 @@ export function MonthPicker({
   exclude?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [viewYear, setViewYear] = useState(
-    () => Number(value?.slice(0, 4)) || new Date().getFullYear()
-  );
   const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
-  const { mounted, closing, openKey } = usePresence(open);
+  /** Панель пересоздаётся на каждое открытие — с годом выбранного месяца. */
+  const [openCount, setOpenCount] = useState(0);
 
   const year = Number(value?.slice(0, 4)) || new Date().getFullYear();
   const minY = Number(minYM?.slice(0, 4)) || 1970;
@@ -105,64 +99,6 @@ export function MonthPicker({
     if (isYear) onSelectYear?.(t.year);
     else onSelect(t.ym);
   };
-  const years: number[] = [];
-  for (let y = maxY; y >= minY; y--) years.push(y);
-
-  /** Поставить список под кнопкой (или над ней, если снизу тесно). `false` —
-   *  кнопка уехала за край окна, держать список открытым незачем. */
-  const place = (): boolean => {
-    const el = btnRef.current;
-    if (!el) return false;
-    const r = el.getBoundingClientRect();
-    if (r.bottom < 0 || r.top > window.innerHeight) return false;
-    const estH = 240;
-    const below = window.innerHeight - r.bottom - 8;
-    const flipUp = below < estH && r.top - 8 > below;
-    // Панель шириной 16rem — по центру кнопки и прижата к экрану: у пикера в
-    // правом углу шапки она иначе уезжала бы за границу окна.
-    const PANEL = 256; // w-64
-    const MARGIN = 8;
-    const vw = window.innerWidth || PANEL + MARGIN * 2;
-    const center = r.left + r.width / 2 - PANEL / 2;
-    const left = Math.min(Math.max(center, MARGIN), Math.max(MARGIN, vw - PANEL - MARGIN));
-    setPos(
-      flipUp
-        ? { left, bottom: window.innerHeight - r.top + 4 }
-        : { left, top: r.bottom + 4 }
-    );
-    return true;
-  };
-
-  // Сбрасывать `pos` при закрытии не нужно: список живёт только при `open`, а
-  // при следующем открытии координаты пересчитаются ДО того, как браузер
-  // нарисует кадр, — старое значение показать некому.
-  useLayoutEffect(() => {
-    if (open) place();
-  }, [open]);
-
-  // Прокрутка и смена размера окна не закрывают список, а двигают его вслед
-  // за кнопкой: внутри окна события или страницы, прокрученной на пару
-  // пикселей, он иначе исчезал прямо из-под мыши (issue #118). Закрываем,
-  // только когда сама кнопка ушла за край.
-  useEffect(() => {
-    if (!open) return;
-    let frame = 0;
-    const follow = (e: Event) => {
-      const t = e.target;
-      if (menuRef.current && t instanceof Node && menuRef.current.contains(t)) return;
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        if (!place()) setOpen(false);
-      });
-    };
-    window.addEventListener("scroll", follow, true);
-    window.addEventListener("resize", follow);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", follow, true);
-      window.removeEventListener("resize", follow);
-    };
-  }, [open]);
 
   return (
     <div
@@ -188,7 +124,7 @@ export function MonthPicker({
           // Открываем — показываем год выбранного месяца. Это следствие
           // нажатия, а не состояния: эффектом оно правилось уже ПОСЛЕ
           // отрисовки, лишним проходом, и год успевал мигнуть прошлым.
-          if (!open) setViewYear(Number(value?.slice(0, 4)) || new Date().getFullYear());
+          if (!open) setOpenCount((n) => n + 1);
           setOpen((o) => !o);
         }}
         aria-haspopup="dialog"
@@ -223,115 +159,21 @@ export function MonthPicker({
         <ChevronRight className="w-4 h-4" />
       </button>
 
-      {mounted &&
-        pos &&
-        createPortal(
-          <>
-            {!closing && <div className="fixed inset-0 z-[70]" onClick={() => setOpen(false)} />}
-            <div
-              ref={menuRef}
-              key={openKey}
-              {...popSurfaceProps(closing, pos.bottom != null ? "up" : "down")}
-              className="fixed z-[80] card p-3 w-64"
-              style={{ left: pos.left, top: pos.top, bottom: pos.bottom }}
-            >
-              {isYear ? (
-                <div className="grid grid-cols-3 gap-1 max-h-64 overflow-y-auto">
-                  {years.map((y) => (
-                    <button
-                      type="button"
-                      key={y}
-                      disabled={y === excludedYear}
-                      title={y === excludedYear ? "Уже выбран для другого периода" : undefined}
-                      onClick={() => {
-                        onSelectYear?.(y);
-                        setOpen(false);
-                      }}
-                      className={clsx(
-                        "px-2 py-2 rounded-md text-sm tabular-nums transition-colors",
-                        y === year
-                          ? "bg-accent text-accent-fg font-medium"
-                          : "text-text hover:bg-panel2",
-                        y === excludedYear && "opacity-30 cursor-not-allowed hover:bg-transparent"
-                      )}
-                    >
-                      {y}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-              <>
-              <div className="flex items-center justify-between mb-2">
-                <button
-                  type="button"
-                  onClick={() => setViewYear((y) => y - 1)}
-                  disabled={viewYear <= minY}
-                  className="btn-icon btn-icon-sm"
-                  title="Предыдущий год"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                {/* Год в шапке — кнопка: из списка месяцев часто нужен «весь
-                    этот год», а дорога к нему шла через кнопку «Год» в ряду
-                    пресетов и возврат к нужному году стрелками. */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectYear?.(viewYear);
-                    setOpen(false);
-                  }}
-                  disabled={!onSelectYear}
-                  className="px-2 py-0.5 rounded-md text-sm font-semibold tabular-nums transition-colors hover:bg-panel2 disabled:hover:bg-transparent"
-                  title={onSelectYear ? `Показать весь ${viewYear} год` : undefined}
-                >
-                  {viewYear}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewYear((y) => y + 1)}
-                  disabled={viewYear >= maxY}
-                  className="btn-icon btn-icon-sm"
-                  title="Следующий год"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-3 gap-1">
-                {MONTHS_SHORT.map((m, i) => {
-                  const ym = `${viewYear}-${String(i + 1).padStart(2, "0")}`;
-                  const disabled =
-                    (!!minYM && ym < minYM) || (!!maxYM && ym > maxYM) || ym === excludedYM;
-                  const isSel = ym === value;
-                  return (
-                    <button
-                      type="button"
-                      key={m}
-                      disabled={disabled}
-                      title={ym === excludedYM ? "Уже выбран для другого периода" : undefined}
-                      onClick={() => {
-                        onSelect(ym);
-                        setOpen(false);
-                      }}
-                      className={clsx(
-                        "px-2 py-2 rounded-md text-sm transition-colors",
-                        isSel
-                          ? "bg-accent text-accent-fg font-medium"
-                          : "text-text hover:bg-panel2",
-                        disabled && "opacity-30 cursor-not-allowed hover:bg-transparent"
-                      )}
-                    >
-                      {m}
-                    </button>
-                  );
-                })}
-              </div>
-              </>
-              )}
-            </div>
-          </>,
-          document.body
-        )}
+      <MonthMenu
+        key={openCount}
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={btnRef}
+        align="center"
+        value={value}
+        minYM={minYM}
+        maxYM={maxYM}
+        mode={isYear ? "year" : "month"}
+        yearsOnly={isYear}
+        exclude={exclude}
+        onSelect={onSelect}
+        onSelectYear={onSelectYear}
+      />
     </div>
   );
 }

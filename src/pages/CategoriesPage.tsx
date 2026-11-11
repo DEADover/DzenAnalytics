@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useEscapeLayer } from "../lib/escapeStack";
 import { Select } from "../components/Select";
 import { useSearchParams } from "react-router-dom";
 import { Tooltip, Treemap } from "recharts";
@@ -438,14 +439,7 @@ export function CategoriesPage() {
 
   // Fullscreen treemap (the «Карта категорий» can be cramped in the card).
   const [treemapFull, setTreemapFull] = useState(false);
-  useEffect(() => {
-    if (!treemapFull) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setTreemapFull(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [treemapFull]);
+  useEscapeLayer(treemapFull, () => setTreemapFull(false));
 
   function onTreemapClick(node: { fullName?: string; cat?: string; name?: string } | undefined) {
     if (node?.fullName) openSubcategory(node.fullName);

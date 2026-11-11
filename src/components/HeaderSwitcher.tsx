@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEscapeLayer } from "../lib/escapeStack";
 import { createPortal } from "react-dom";
 import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { Link } from "react-router-dom";
@@ -88,14 +89,10 @@ export function HeaderSwitcher({
       const t = e.target as Node;
       if (!boxRef.current?.contains(t) && !menuRef.current?.contains(t)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
+  useEscapeLayer(open, () => setOpen(false));
 
   const close = () => setOpen(false);
 

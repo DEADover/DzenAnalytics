@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useEscapeLayer } from "../lib/escapeStack";
 import { Checkbox } from "./Checkbox";
 import { createPortal } from "react-dom";
 import { SURFACE_ATTR } from "./Popover";
@@ -261,18 +262,14 @@ export function CategoryFilterPicker({
       setOpen(false);
     };
     const onResize = () => setOpen(false);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onResize);
-    window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
-      window.removeEventListener("keydown", onKey);
     };
   }, [open]);
+  useEscapeLayer(open, () => setOpen(false));
 
   return (
     <div className={clsx("relative", className)}>

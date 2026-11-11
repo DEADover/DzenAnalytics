@@ -52,6 +52,24 @@ test("сбой повторяется — одна строка журнала �
   await expect(syncButton(page)).toBeEnabled();
   await syncButton(page).click();
   await expect(syncButton(page)).toBeEnabled();
+  // Журнал пишется в базу следом за ошибкой; перезагрузка до конца записи её
+  // теряет — ждём, пока «×2» окажется в самой базе.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          new Promise<number>((resolve) => {
+            const req = indexedDB.open("dzenanalytics");
+            req.onsuccess = () => {
+              const get = req.result.transaction("meta").objectStore("meta").get("syncLog");
+              get.onsuccess = () => resolve((get.result as { repeat?: number }[] | undefined)?.[0]?.repeat ?? 1);
+              get.onerror = () => resolve(0);
+            };
+            req.onerror = () => resolve(0);
+          })
+      )
+    )
+    .toBe(2);
 
   await page.goto("/settings?tab=source&source=api");
   // Две одинаковые ошибки подряд — одна строка «×2», а не две.

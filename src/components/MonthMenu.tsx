@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEscapeLayer } from "../lib/escapeStack";
 import { createPortal } from "react-dom";
 import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -26,6 +27,9 @@ export function MonthMenu({
   onSelect,
   onSelectYear,
   onSelectQuarter,
+  yearsOnly = false,
+  exclude,
+  align = "left",
 }: {
   open: boolean;
   onClose: () => void;
@@ -44,6 +48,15 @@ export function MonthMenu({
   onSelectYear?: (year: number) => void;
   /** Есть — в панели строка кварталов. */
   onSelectQuarter?: (ym: string) => void;
+  /** Выбирают только год — панель показывает сетку лет. */
+  yearsOnly?: boolean;
+  /**
+   * Значение, которое выбрать нельзя: «YYYY-MM» (или год при `yearsOnly`). В
+   * «Сравнении» это второй период — сравнивать месяц с ним же незачем.
+   */
+  exclude?: string;
+  /** Панель от левого края кнопки или по её центру. */
+  align?: "left" | "center";
 }) {
   // Открытая панель показывает год выбранного месяца. Синхронизировать это
   // эффектом не нужно: потребитель пересоздаёт панель на каждое открытие
@@ -60,35 +73,63 @@ export function MonthMenu({
   const maxY = Number(maxYM?.slice(0, 4)) || 3000;
   const isYear = mode === "year";
 
-  useLayoutEffect(() => {
+  useEscapeLayer(open, onClose);
+
+  const excludedYear = yearsOnly && exclude ? Number(exclude.slice(0, 4)) : null;
+  const excludedYM = !yearsOnly && exclude ? exclude : null;
+  const years: number[] = [];
+  for (let y = maxY; y >= minY; y--) years.push(y);
+
+  /** Поставить панель под кнопкой (или над ней, если снизу тесно). `false` —
+   *  кнопка уехала за край окна, держать панель открытой незачем. */
+  const place = (): boolean => {
     const el = anchorRef.current;
-    if (!open || !el) return;
+    if (!el) return false;
     const r = el.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) return false;
     const estH = 240;
     const below = window.innerHeight - r.bottom - 8;
     const flipUp = below < estH && r.top - 8 > below;
-    // Прижимаем к экрану: панель рисуется от ЛЕВОГО края кнопки, и у контрола
-    // в правом углу она уезжала за границу окна.
+    // Прижимаем к экрану: у контрола в правом углу панель уезжала бы за
+    // границу окна.
     const PANEL = 256; // w-64
     const MARGIN = 8;
     const vw = window.innerWidth || PANEL + MARGIN * 2;
-    const left = Math.min(Math.max(r.left, MARGIN), Math.max(MARGIN, vw - PANEL - MARGIN));
+    const start = align === "center" ? r.left + r.width / 2 - PANEL / 2 : r.left;
+    const left = Math.min(Math.max(start, MARGIN), Math.max(MARGIN, vw - PANEL - MARGIN));
     setPos(flipUp ? { left, bottom: window.innerHeight - r.top + 4 } : { left, top: r.bottom + 4 });
-  }, [open, anchorRef]);
+    return true;
+  };
+  const placeRef = useRef(place);
+  useLayoutEffect(() => {
+    placeRef.current = place;
+  });
 
+  useLayoutEffect(() => {
+    if (open) placeRef.current();
+  }, [open]);
+
+  // Прокрутка и смена размера окна не закрывают панель, а двигают её вслед
+  // за кнопкой: внутри окна события или страницы, прокрученной на пару
+  // пикселей, она иначе исчезала прямо из-под мыши (issue #118). Закрываем,
+  // только когда сама кнопка ушла за край.
   useEffect(() => {
     if (!open) return;
-    const onScroll = (e: Event) => {
+    let frame = 0;
+    const follow = (e: Event) => {
       const t = e.target;
       if (menuRef.current && t instanceof Node && menuRef.current.contains(t)) return;
-      onClose();
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!placeRef.current()) onClose();
+      });
     };
-    const onResize = () => onClose();
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
     return () => {
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onResize);
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
     };
   }, [open, onClose]);
 
@@ -104,6 +145,30 @@ export function MonthMenu({
         className="fixed z-[80] card p-3 w-64"
         style={{ left: pos.left, top: pos.top, bottom: pos.bottom }}
       >
+        {yearsOnly ? (
+          <div className="grid grid-cols-3 gap-1 max-h-64 overflow-y-auto">
+            {years.map((y) => (
+              <button
+                type="button"
+                key={y}
+                disabled={y === excludedYear}
+                title={y === excludedYear ? "Уже выбран для другого периода" : undefined}
+                onClick={() => {
+                  onSelectYear?.(y);
+                  onClose();
+                }}
+                className={clsx(
+                  "px-2 py-2 rounded-md text-sm tabular-nums transition-colors",
+                  y === year ? "bg-accent text-accent-fg font-medium" : "text-text hover:bg-panel2",
+                  y === excludedYear && "opacity-30 cursor-not-allowed hover:bg-transparent"
+                )}
+              >
+                {y}
+              </button>
+            ))}
+          </div>
+        ) : (
+        <>
         {/* Одна панель на все три режима: год в шапке, под ним кварталы,
             ниже месяцы. Выделено то, что выбрано сейчас, а нажатие на любое
             переключает режим. Прежде у года была своя сетка лет, и из «Года»
@@ -174,12 +239,13 @@ export function MonthMenu({
         <div className="grid grid-cols-3 gap-1">
           {MONTHS_SHORT.map((m, i) => {
             const ym = `${viewYear}-${String(i + 1).padStart(2, "0")}`;
-            const disabled = (!!minYM && ym < minYM) || (!!maxYM && ym > maxYM);
+            const disabled = (!!minYM && ym < minYM) || (!!maxYM && ym > maxYM) || ym === excludedYM;
             const isSel = mode === "month" && ym === value;
             return (
               <button
                 key={m}
                 disabled={disabled}
+                title={ym === excludedYM ? "Уже выбран для другого периода" : undefined}
                 onClick={() => {
                   onSelect(ym);
                   onClose();
@@ -195,6 +261,8 @@ export function MonthMenu({
             );
           })}
         </div>
+        </>
+        )}
       </div>
     </>,
     document.body

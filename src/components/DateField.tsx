@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEscapeLayer } from "../lib/escapeStack";
 import { WEEKDAYS_SHORT } from "../lib/weekdays";
 import { createPortal } from "react-dom";
 import { popSurfaceProps, usePresence } from "../hooks/usePresence";
@@ -383,20 +384,18 @@ function CalendarPopup({
       if (anchorRef.current?.contains(t)) return;
       onClose();
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
     document.addEventListener("mousedown", onDoc);
-    window.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onClose, true);
     window.addEventListener("resize", onClose);
     return () => {
       document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onClose, true);
       window.removeEventListener("resize", onClose);
     };
   }, [anchorRef, onClose]);
+  // Escape закрывает календарь, а не окно операции под ним (lib/escapeStack).
+  // Уходящий календарь из стека уже вышел: следующее нажатие — окну.
+  useEscapeLayer(!closing, onClose);
 
   const firstDow = (new Date(view.y, view.m, 1).getDay() + 6) % 7; // Mon = 0
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
