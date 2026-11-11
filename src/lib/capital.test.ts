@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { capitalPeriodStart, capitalSlice, capitalSummary, clipBalances, thinCapital } from "./capital";
+import { capitalPeriodStart, capitalSlice, capitalSummary, clipBalances, thinBalances } from "./capital";
 
 const pts = (rows: [string, number][]) => rows.map(([date, net]) => ({ date, net }));
 
@@ -116,17 +116,38 @@ describe("capitalSummary", () => {
   });
 });
 
-describe("thinCapital", () => {
+describe("thinBalances", () => {
   it("короткую кривую не трогает", () => {
     const s = pts([["2026-01-01", 1], ["2026-01-02", 2]]);
-    expect(thinCapital(s, 10)).toBe(s);
+    expect(thinBalances(s, 10)).toBe(s);
   });
 
   it("длинную прореживает, первая и последняя на месте", () => {
     const s = Array.from({ length: 1000 }, (_, i) => ({ date: `d${i}`, net: i }));
-    const t = thinCapital(s, 100);
+    const t = thinBalances(s, 100);
     expect(t.length).toBeLessThanOrEqual(101);
     expect(t[0]).toBe(s[0]);
     expect(t[t.length - 1]).toBe(s[999]);
+  });
+});
+
+describe("thinBalances", () => {
+  const days = (n: number) => Array.from({ length: n }, (_, i) => ({ i }));
+  it("короткий ряд — тот же массив", () => {
+    const s = days(10);
+    expect(thinBalances(s, 10)).toBe(s);
+  });
+  it("не больше max точек, первая и последняя на месте, порядок сохранён", () => {
+    for (const n of [11, 801, 1000, 1600, 3653, 7300]) {
+      for (const max of [10, 400, 800]) {
+        if (n <= max) continue;
+        const out = thinBalances(days(n), max);
+        expect(out.length).toBeLessThanOrEqual(max);
+        expect(out.length).toBeGreaterThan(max / 3);
+        expect(out[0]!.i).toBe(0);
+        expect(out[out.length - 1]!.i).toBe(n - 1);
+        for (let k = 1; k < out.length; k++) expect(out[k]!.i).toBeGreaterThan(out[k - 1]!.i);
+      }
+    }
   });
 });

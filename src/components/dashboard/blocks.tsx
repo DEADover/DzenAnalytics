@@ -71,7 +71,7 @@ import {
   capitalPeriodStart,
   capitalSlice,
   capitalSummary,
-  thinCapital,
+  thinBalances,
   type CapitalPeriod,
   type CapitalPoint,
 } from "../../lib/capital";
@@ -517,7 +517,7 @@ export function CapitalBlock({
     [series, period, today]
   );
   const summary = useMemo(() => capitalSummary(points), [points]);
-  const chart = useMemo(() => thinCapital(points), [points]);
+  const chart = useMemo(() => thinBalances(points), [points]);
   // Сравнение двух дат протяжкой по графику — то же, что у «Совокупного
   // баланса» на «Счетах»: общий хук, общий расчёт и общая карточка итога.
   const chartDates = useMemo(() => chart.map((p) => p.date), [chart]);

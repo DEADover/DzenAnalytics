@@ -127,13 +127,14 @@ export function capitalSummary(points: CapitalPoint[]): CapitalSummary | null {
  * точек, а на ширину карточки их нужно несколько сотен. Берём последнюю точку
  * каждого шага — значение на конец недели или месяца, — и всегда сохраняем
  * первую и последнюю, чтобы график начинался и кончался там же, где числа
- * рядом.
+ * рядом. Общая для всех графиков остатков: короткий ряд — тот же массив.
  */
-export function thinCapital(points: CapitalPoint[], maxPoints = 400): CapitalPoint[] {
+export function thinBalances<T>(points: T[], maxPoints = 400): T[] {
   if (points.length <= maxPoints) return points;
-  const step = Math.ceil(points.length / maxPoints);
-  const out: CapitalPoint[] = [points[0]];
-  for (let i = step; i < points.length - 1; i += step) out.push(points[i]);
-  out.push(points[points.length - 1]);
+  // Первая и последняя — свои, между ними не больше `maxPoints − 2`.
+  const step = Math.ceil((points.length - 2) / Math.max(1, maxPoints - 2));
+  const out: T[] = [points[0]!];
+  for (let i = step; i < points.length - 1; i += step) out.push(points[i]!);
+  out.push(points[points.length - 1]!);
   return out;
 }

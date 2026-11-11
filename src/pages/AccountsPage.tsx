@@ -125,7 +125,7 @@ import { HeadCell, TreeElbow } from "../components/table/TableParts";
 import { useRevealRows } from "../hooks/useRevealRows";
 import { cellClass, toneOfSigned, treeIndent, type ColumnType, type Tone } from "../components/table/tableKit";
 import { toIsoDate } from "../lib/period";
-import { clipBalances } from "../lib/capital";
+import { clipBalances, thinBalances } from "../lib/capital";
 import { balanceForecast, type ForecastOp, type ForecastPoint } from "../lib/balanceForecast";
 import { useZenPlanned } from "../hooks/useZenPlanned";
 import { toBase as toBaseCurrency } from "../lib/csv";
@@ -153,6 +153,8 @@ const STACK_COLORS = [
 
 /** Доля высоты стопки, которая отводится минусам, если сами они мельче. */
 const NEG_ZONE = 0.1;
+/** Больше точек график не рисует — см. `thinBalances`. */
+const CHART_MAX_POINTS = 800;
 
 /** Цвет линии «Совокупного баланса» — и самой линии, и метки в подсказке. */
 const NET_STROKE = chartColor.accent;
@@ -1227,7 +1229,7 @@ export function AccountsPage() {
    */
   const valuation = useBalanceValuation(liveAccounts ? liveList : null);
   const series = useMemo(
-    () => dailyBalanceSeries(filtered, selectedAccount ?? undefined),
+    () => thinBalances(dailyBalanceSeries(filtered, selectedAccount ?? undefined), CHART_MAX_POINTS),
     [filtered, selectedAccount]
   );
   // Unsynced drafts are walked in the series but are not in the API balances —
@@ -1422,7 +1424,8 @@ export function AccountsPage() {
     [transactions, hasRealBalances, valuation, unsyncedIds, chartOnly, chartDebtSplit]
   );
   const stacked = useMemo(
-    () => ({ ...stackedAll, series: clip(stackedAll.series) }),
+    // Прореживание — см. `thinBalances`: за годы ежедневных точек тысячи.
+    () => ({ ...stackedAll, series: thinBalances(clip(stackedAll.series), CHART_MAX_POINTS) }),
     [stackedAll, clip]
   );
   const netWorthAll = useNetWorthSeries(transactions);
@@ -1464,7 +1467,7 @@ export function AccountsPage() {
   }, [chartPicked, savingsPresets]);
   const netChartAll = useNetWorthSeries(transactions, netChartAccounts);
   const netChart = useMemo(
-    () => (chartNothingPicked ? [] : clip(netChartAll)),
+    () => (chartNothingPicked ? [] : thinBalances(clip(netChartAll), CHART_MAX_POINTS)),
     [netChartAll, clip, chartNothingPicked]
   );
 
@@ -1650,6 +1653,27 @@ export function AccountsPage() {
       : chartColor.expense;
   /** Высота точки «Итого» на оси стопки: минусы на ней растянуты. */
   const stackY = (v: number) => (v < 0 ? v * stackAxis.scale : v);
+  /**
+   * Точки стопки с готовыми высотами слоёв: плюс и минус каждого счёта и
+   * «Итого» на оси. Раньше их считали функции в `dataKey` — заново на каждую
+   * точку при каждой перерисовке, в том числе на каждое движение мыши.
+   * Исходные остатки в точке остаются — их читает подсказка.
+   */
+  const stackRows = useMemo(
+    () =>
+      stacked.series.map((p) => {
+        const row: Record<string, unknown> = { ...p };
+        stacked.accounts.forEach((acc, i) => {
+          const v = toNum((p as Record<string, unknown>)[acc]);
+          row[`__plus${i}`] = Math.max(v, 0);
+          row[`__minus${i}`] = Math.min(v, 0) * stackAxis.scale;
+        });
+        const total = toNum(p.total);
+        row.__total = total < 0 ? total * stackAxis.scale : total;
+        return row;
+      }),
+    [stacked, stackAxis.scale]
+  );
 
   // Stacked-chart tooltip: per-account rows + a bold «Итого» — the day's net
   // worth, which the chart already carries on each datum as `total` (issue #27).
@@ -3337,7 +3361,7 @@ export function AccountsPage() {
                   — и зависит от порядка счетов. Отсюда и брались −5 млн на оси
                   при итоге −3,7 млн. */}
               <ComposedChart
-                data={stacked.series}
+                data={stackRows}
                 // Знак разведён не смещением, а двумя стопками (см. области
                 // ниже): «sign» умеет только складывать, а нам нужно ещё и
                 // рисовать половинки по отдельности.
@@ -3388,7 +3412,7 @@ export function AccountsPage() {
                   <Area
                     key={acc}
                     type="monotone"
-                    dataKey={(d: Record<string, number>) => Math.max(toNum(d[acc]), 0)}
+                    dataKey={`__plus${i}`}
                     // Слой контрагента подписан человеком, а не служебным
                     // ключом: в легенде и подсказке нужно имя, по которому его
                     // и выбирали.
@@ -3404,9 +3428,7 @@ export function AccountsPage() {
                   <Area
                     key={`${acc}\u0000minus`}
                     type="monotone"
-                    dataKey={(d: Record<string, number>) =>
-                      Math.min(toNum(d[acc]), 0) * stackAxis.scale
-                    }
+                    dataKey={`__minus${i}`}
                     // Половинка служебная: в легенде она была бы вторым таким же
                     // названием, а в подсказке — вторым таким же числом.
                     legendType="none"
@@ -3427,10 +3449,7 @@ export function AccountsPage() {
                   // Итог живёт на той же оси: если он ушёл в минус, его надо
                   // растянуть так же, как области под нулём, иначе линия
                   // разойдётся с лентой, из которой она и складывается.
-                  dataKey={(d: Record<string, number>) => {
-                    const v = toNum(d.total);
-                    return v < 0 ? v * stackAxis.scale : v;
-                  }}
+                  dataKey="__total"
                   name="Итого"
                   stroke={chartTotalStroke}
                   strokeWidth={2}
