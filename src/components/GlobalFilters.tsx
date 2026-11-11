@@ -55,6 +55,7 @@ import {
   MEMBER_SHARED,
 } from "../lib/zenUsers";
 import { useMembersStore } from "../store/useMembersStore";
+import { useDebouncedField } from "../hooks/useDebouncedField";
 import { FilterResetButton } from "./FilterResetButton";
 
 /**
@@ -174,6 +175,7 @@ export function GlobalFilters({
   // Фильтр сравнивает суммы в базовой валюте, поэтому и подпись — по ней.
   const base = useDataStore((s) => s.rates.base);
   const f = useFiltersStore();
+  const [search, setSearchSoon] = useDebouncedField(f.search, f.setSearch);
   const controlledPeriod = period !== undefined;
   // Period slice source: the local controller when controlled, else the store.
   // Both expose the same fields/handlers (preset/monthYM/from/to + setters).
@@ -1049,16 +1051,16 @@ export function GlobalFilters({
               выбивался из ряда единственным цветным пятном. */}
           <Filter className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
           <input
-            value={f.search}
-            onChange={(e) => f.setSearch(e.target.value)}
+            value={search}
+            onChange={(e) => setSearchSoon(e.target.value)}
             placeholder="Фильтр: получатель, комментарий"
             /* Высота ступени 34, как у соседних кнопок и дорожек: с py-1.5
                поле выходило на 30 и просаживалось в ряду. */
             className="input pl-9 pr-9 text-[12.5px] leading-4 h-[34px] py-0"
           />
-          {f.search && (
+          {search && (
             <button
-              onClick={() => f.setSearch("")}
+              onClick={() => setSearchSoon("", true)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-text"
             >
               <X className="w-4 h-4" />

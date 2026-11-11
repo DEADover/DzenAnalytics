@@ -1,6 +1,6 @@
 import { accountKeyOf, txAccountKey } from "../lib/accountKey";
 import { AccountName } from "../components/AccountName";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Download,
   Plus,
@@ -336,7 +336,10 @@ export function TransactionsPage() {
     [transactions, filters, monthStartDay]
   );
 
-  const query = pageSearch.trim();
+  // Поле отвечает сразу, лента догоняет, когда браузер свободен: на большом
+  // аккаунте отбор по всем операциям на каждую букву сбивал набор.
+  const deferredSearch = useDeferredValue(pageSearch);
+  const query = deferredSearch.trim();
   /** Подходит ли операция под быстрый поиск. Раскладка не важна — как в общем фильтре и списках. */
   const searchMatch = useMemo(() => {
     if (!query) return null;
@@ -367,7 +370,7 @@ export function TransactionsPage() {
   // конца года, за всё время — все. В итоги, выделение и выгрузку планы не
   // входят: это ещё не деньги, а намерение.
   const inlinePlans = useDisplayStore((s) => s.feedPlanned && s.feedPlannedMode === "inline") && apiConnected;
-  const planFeed = usePlannedFeed(pageSearch);
+  const planFeed = usePlannedFeed(deferredSearch);
   const planById = useMemo(() => {
     const m = new Map<string, PlannedOp>();
     if (inlinePlans) for (const p of planFeed.ops) m.set(p.id, p);
@@ -798,7 +801,7 @@ export function TransactionsPage() {
               setPlannedMode((v) => !v);
               setLeftPlanned(plannedMode);
             }}
-            query={pageSearch}
+            query={deferredSearch}
           />
         )}
         {apiConnected && plannedMode ? (
@@ -815,7 +818,7 @@ export function TransactionsPage() {
             <PlannedFeedList
               template={resize.template}
               grouped={byDate}
-              query={pageSearch}
+              query={deferredSearch}
             />
           </div>
         ) : feedRows.length === 0 ? (
