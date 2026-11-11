@@ -56,9 +56,6 @@ export type WizardPhase =
   /** Перенос прошёл. */
   | "done";
 
-/** Сколько сверка считается свежей. Дальше — пересверить. */
-export const CHECK_FRESH_MS = 60_000;
-
 interface State {
   phase: WizardPhase;
   /** Снимок, с которым работаем. */

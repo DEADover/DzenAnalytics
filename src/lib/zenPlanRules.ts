@@ -193,15 +193,6 @@ export function buildZenPlanRules(
   return { ...settings, inside, groupOf, labels, incomeOnly };
 }
 
-/** Все подписи групп — чтобы опознать строку перевода по категории. */
-export function planGroupLabels(rules: ZenPlanRules | undefined): Set<string> {
-  const out = new Set<string>();
-  if (!rules) return out;
-  for (const side of ["to", "from"] as const)
-    for (const label of Object.values(rules.labels[side])) out.add(label);
-  return out;
-}
-
 /**
  * Остаток на счетах «в балансе» к началу дня `dateIso` — входящий баланс
  * периода. Считается назад от текущего остатка: минус всё, что пришло на счёт

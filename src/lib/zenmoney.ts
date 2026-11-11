@@ -558,22 +558,6 @@ export async function pushDiff(
 }
 
 /**
- * Lightweight token check — sends a diff with serverTimestamp=now so the
- * response payload is small. Returns true on 2xx, false on 401, throws on
- * other errors.
- */
-export async function checkToken(token: string): Promise<boolean> {
-  const now = Math.floor(Date.now() / 1000);
-  try {
-    await fetchDiff(token, now);
-    return true;
-  } catch (e) {
-    if (e instanceof ZenApiError && e.status === 401) return false;
-    throw e;
-  }
-}
-
-/**
  * Чей это токен: id пользователей аккаунта Дзен-мани (у семейного их
  * несколько). Нужен при замене токена — новый должен быть от того же
  * аккаунта, иначе кэш и очередь правок одного аккаунта уехали бы в другой.

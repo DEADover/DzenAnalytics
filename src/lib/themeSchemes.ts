@@ -40,7 +40,6 @@ export const DARK_SCHEMES = [
 
 export type LightSchemeId = (typeof LIGHT_SCHEMES)[number]["id"];
 export type DarkSchemeId = (typeof DARK_SCHEMES)[number]["id"];
-export type SchemeId = LightSchemeId | DarkSchemeId;
 
 export const DEFAULT_LIGHT_SCHEME: LightSchemeId = "frost";
 export const DEFAULT_DARK_SCHEME: DarkSchemeId = "night";

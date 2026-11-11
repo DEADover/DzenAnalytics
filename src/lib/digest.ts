@@ -300,19 +300,6 @@ function periodDetails(
   };
 }
 
-export function lastCompleteWeekDigest(
-  transactions: Transaction[],
-  today = new Date()
-): DigestEntry | null {
-  // "Last complete week" = the Mon..Sun week before the current Monday.
-  const thisMonday = startOfMondayWeek(today);
-  const lastSunday = new Date(thisMonday);
-  lastSunday.setDate(lastSunday.getDate() - 1);
-  const lastMonday = new Date(thisMonday);
-  lastMonday.setDate(lastMonday.getDate() - 7);
-  return buildWeekDigest(transactions, lastMonday, lastSunday);
-}
-
 export function buildWeekDigest(
   transactions: Transaction[],
   start: Date,
@@ -364,16 +351,6 @@ export function buildWeekDigest(
     ...periodDetails(cur, startIso, endIso, firstSeen ?? firstSeenByPayee(transactions)),
     typical: null,
   };
-}
-
-export function lastCompleteMonthDigest(
-  transactions: Transaction[],
-  today = new Date()
-): DigestEntry | null {
-  // Last calendar month (the one fully past).
-  const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const end = new Date(today.getFullYear(), today.getMonth(), 0);
-  return buildMonthDigest(transactions, start, end);
 }
 
 export function buildMonthDigest(

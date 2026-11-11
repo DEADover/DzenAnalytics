@@ -22,11 +22,6 @@ export const DEFAULT_HEADER_NAV: readonly string[] = PRIMARY_SECTIONS.map((s) =>
 
 const BY_PATH = new Map(ALL_SECTIONS.map((s) => [s.to, s]));
 
-/** Раздел по пути среди всех, что можно поставить в шапку. */
-export function headerSection(to: string): NavSection | undefined {
-  return BY_PATH.get(to);
-}
-
 /**
  * Сохранённый список → рабочий: только известные разделы, без повторов.
  * Не массив (ничего не сохранено или мусор) — список по умолчанию. Пустой

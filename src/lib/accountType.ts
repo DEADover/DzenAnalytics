@@ -47,12 +47,6 @@ export function accountKindLabel(type: string, savings?: boolean): string {
   return EXTRA_TYPE_RU[type] || type;
 }
 
-/** Совместимая подпись по одному типу — там, где признак накопительного
- *  неизвестен (например, у счёта, собранного из CSV). */
-export function accountTypeLabel(type: string): string {
-  return accountKindLabel(type, false);
-}
-
 /**
  * Счёт «Долги» — единственный долговой счёт, как в самом Дзен-мани.
  *

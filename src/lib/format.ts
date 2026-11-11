@@ -97,9 +97,6 @@ let _moneyFractionDigits = 0;
 export function setMoneyFractionDigits(n: number): void {
   _moneyFractionDigits = n === 2 ? 2 : 0;
 }
-export function getMoneyFractionDigits(): number {
-  return _moneyFractionDigits;
-}
 
 /**
  * Невидимые метки вокруг каждой суммы — для режима «Скрыть суммы».

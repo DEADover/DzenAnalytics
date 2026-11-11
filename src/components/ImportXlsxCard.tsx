@@ -11,7 +11,7 @@ import { liveCategoryNodes } from "../lib/categoryTree";
 import { accountKindLabel } from "../lib/accountType";
 import { accountKeyOf } from "../lib/accountKey";
 import { getAccountDirectory } from "../hooks/useAccountDirectory";
-import { exportImportTemplate, SHEET_OPS, TEMPLATE_VERSION } from "../lib/importTemplate";
+import { exportImportTemplate, SHEET_OPS } from "../lib/importTemplate";
 import { readXlsxSheet } from "../lib/xlsxRead";
 import { merchantKey } from "../lib/zenmoneyPush";
 import { reconcileNewCounterparties } from "../lib/counterparties";
@@ -402,5 +402,3 @@ export function ImportXlsxCard() {
   );
 }
 
-/** Версия шаблона — показываем в справке, чтобы вопрос «а тот ли файл» имел ответ. */
-export const IMPORT_TEMPLATE_VERSION = TEMPLATE_VERSION;

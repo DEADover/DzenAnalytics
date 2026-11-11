@@ -637,112 +637,6 @@ export interface CalibrationInput {
   amount: number;
 }
 
-// ============= Waterfall =============
-
-export interface WaterfallStep {
-  label: string;
-  value: number;
-  cumulative: number;
-  kind: "open" | "income" | "expense" | "close";
-  start: number;
-  end: number;
-}
-
-export function buildWaterfall(
-  txs: Transaction[],
-  monthYM: string,
-  openingBalance: number,
-  topCategories = 8
-): WaterfallStep[] {
-  const monthTxs = txs.filter((t) => t.date.startsWith(monthYM));
-
-  let totalIncome = 0;
-  const expenseByCategory = new Map<string, number>();
-  for (const t of monthTxs) {
-    if (t.kind === "income") totalIncome += t.amountBase;
-    else if (t.kind === "expense") {
-      expenseByCategory.set(
-        t.category,
-        (expenseByCategory.get(t.category) || 0) + t.amountBase
-      );
-    } else if (t.kind === "refund") {
-      // Refund reduces that category's expense bar in the waterfall.
-      expenseByCategory.set(
-        t.category,
-        (expenseByCategory.get(t.category) || 0) - t.amountBase
-      );
-    }
-  }
-
-  const sortedCats = Array.from(expenseByCategory.entries()).sort(
-    (a, b) => b[1] - a[1]
-  );
-  const top = sortedCats.slice(0, topCategories);
-  const otherSum = sortedCats.slice(topCategories).reduce((s, [, v]) => s + v, 0);
-
-  const steps: WaterfallStep[] = [];
-  let cumulative = openingBalance;
-
-  steps.push({
-    label: "Начало",
-    value: openingBalance,
-    cumulative,
-    kind: "open",
-    start: 0,
-    end: cumulative,
-  });
-
-  if (totalIncome > 0) {
-    const start = cumulative;
-    cumulative += totalIncome;
-    steps.push({
-      label: "Доходы",
-      value: totalIncome,
-      cumulative,
-      kind: "income",
-      start,
-      end: cumulative,
-    });
-  }
-
-  for (const [cat, value] of top) {
-    const start = cumulative;
-    cumulative -= value;
-    steps.push({
-      label: cat,
-      value,
-      cumulative,
-      kind: "expense",
-      start: cumulative,
-      end: start,
-    });
-  }
-
-  if (otherSum > 0) {
-    const start = cumulative;
-    cumulative -= otherSum;
-    steps.push({
-      label: "Прочие",
-      value: otherSum,
-      cumulative,
-      kind: "expense",
-      start: cumulative,
-      end: start,
-    });
-  }
-
-  steps.push({
-    label: "Конец",
-    value: cumulative,
-    cumulative,
-    kind: "close",
-    start: 0,
-    end: cumulative,
-  });
-
-  return steps;
-}
-
 // ============= Stream graph data =============
 
 export interface StreamPoint {
@@ -932,7 +826,6 @@ export interface SeasonalityPoint {
   yearsSampled: number;
   expenseDeviationPct: number;
 }
-
 
 export function detectSeasonality(txs: Transaction[]): SeasonalityPoint[] {
   const monthly = new Map<string, { income: number; expense: number }>();

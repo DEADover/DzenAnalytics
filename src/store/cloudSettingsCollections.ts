@@ -67,6 +67,3 @@ export const SYNCED_COLLECTIONS: readonly SyncedCollection[] = [
   ),
 ];
 
-export function syncedCollection(type: string): SyncedCollection | undefined {
-  return SYNCED_COLLECTIONS.find((c) => c.type === type);
-}
