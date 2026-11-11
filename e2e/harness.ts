@@ -173,18 +173,26 @@ export const test = base.extend<{ zen: FakeZen }>({
     await use(zen);
   }, { auto: true }],
   page: async ({ page }, use) => {
-    await page.clock.setFixedTime(NOW);
-    // Доступ к сторам — тем же экземплярам, что у приложения. Адрес модуля
-    // прямой: в тестах нет горячей замены, и `?t=…` к нему не прилипает.
-    // (Искать его в Resource Timing нельзя — часы Playwright подменяют
-    // `performance`, и список ресурсов пуст.)
-    await page.addInitScript(() => {
-      (window as unknown as { __store: (name: string) => Promise<unknown> }).__store = (name) =>
-        import(/* @vite-ignore */ `/src/store/${name}.ts`);
-    });
+    await preparePage(page);
     await use(page);
   },
 });
+
+/**
+ * Подготовить страницу: остановленные часы и доступ к сторам. Фикстура `page`
+ * делает это сама; вторую вкладку того же аккаунта тест готовит этим вызовом.
+ */
+export async function preparePage(page: Page): Promise<void> {
+  await page.clock.setFixedTime(NOW);
+  // Доступ к сторам — тем же экземплярам, что у приложения. Адрес модуля
+  // прямой: в тестах нет горячей замены, и `?t=…` к нему не прилипает.
+  // (Искать его в Resource Timing нельзя — часы Playwright подменяют
+  // `performance`, и список ресурсов пуст.)
+  await page.addInitScript(() => {
+    (window as unknown as { __store: (name: string) => Promise<unknown> }).__store = (name) =>
+      import(/* @vite-ignore */ `/src/store/${name}.ts`);
+  });
+}
 
 export { expect };
 

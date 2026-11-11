@@ -20,8 +20,10 @@ test("бэкап: круг через настоящее хранилище во
       loadJSON: (k: string) => Promise<unknown>;
       saveJSON: (k: string, v: unknown) => Promise<void>;
     };
-    const backup = (await import(/* @vite-ignore */ "/src/lib/backup.ts")) as Backup;
-    const db = (await import(/* @vite-ignore */ "/src/lib/db.ts")) as Db;
+    // Адрес собираем строкой: это модуль приложения в браузере, а не файл теста.
+    const lib = (name: string) => `/src/lib/${name}.ts`;
+    const backup = (await import(/* @vite-ignore */ lib("backup"))) as Backup;
+    const db = (await import(/* @vite-ignore */ lib("db"))) as Db;
 
     await db.saveJSON("dataSlices", { slices: [{ id: "s1", name: "Личное", excludedCategories: ["Кафе"], excludedAccounts: [] }], activeId: "s1" });
     const before = (await db.loadTransactions()).length;

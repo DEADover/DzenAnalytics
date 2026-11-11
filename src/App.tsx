@@ -85,6 +85,7 @@ import { usePlanActionsStore } from "./store/usePlanActionsStore";
 import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
 import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
 import { useAccountDirectorySync } from "./hooks/useAccountDirectory";
+import { startCrossTabSync } from "./lib/crossTab";
 import { ContentWidthGuide } from "./components/ContentWidthGuide";
 import { ScrollTopButton } from "./components/ScrollTopButton";
 import { DemoBanner } from "./components/DemoBanner";
@@ -139,6 +140,9 @@ function PlainLayout() {
 function App() {
   // Справочник счетов — один на приложение (ключи и подписи тёзок).
   useAccountDirectorySync();
+  // Другая вкладка того же аккаунта что-то записала — подхватываем, чтобы не
+  // затереть её правки своими (см. lib/crossTab).
+  useEffect(() => startCrossTabSync(), []);
   const hydrate = useDataStore((s) => s.hydrate);
   const loaded = useDataStore((s) => s.loaded);
   const hasData = useDataStore((s) => s.transactions.length > 0);

@@ -2,6 +2,7 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { Transaction, CurrencyRates, ImportMeta } from "../types";
 
 import { activeProfileId, dbNameFor } from "./profiles";
+import { announceWrite, EVERYTHING_KEY, TRANSACTIONS_KEY } from "./tabChannel";
 
 const DB_VERSION = 1;
 
@@ -53,6 +54,7 @@ export async function saveTransactions(txs: Transaction[]): Promise<void> {
   // двадцать тысяч остановок. Пишем подряд и ждём транзакцию целиком — она
   // же откатит всё, если хоть одна запись не прошла.
   await Promise.all([tx.store.clear(), ...txs.map((t) => tx.store.put(t)), tx.done]);
+  announceWrite(TRANSACTIONS_KEY);
 }
 
 /**
@@ -77,6 +79,7 @@ export async function writeAll(data: {
   const meta = tx.objectStore("meta");
   for (const [key, value] of Object.entries(data.meta)) ops.push(meta.put(value, key));
   await Promise.all([...ops, tx.done]);
+  announceWrite(EVERYTHING_KEY);
 }
 
 export async function loadTransactions(): Promise<Transaction[]> {
@@ -87,11 +90,13 @@ export async function loadTransactions(): Promise<Transaction[]> {
 export async function clearTransactions(): Promise<void> {
   const db = await getDB();
   await db.clear("transactions");
+  announceWrite(TRANSACTIONS_KEY);
 }
 
 export async function saveRates(rates: CurrencyRates): Promise<void> {
   const db = await getDB();
   await db.put("meta", rates, "rates");
+  announceWrite("rates");
 }
 
 export async function loadRates(): Promise<CurrencyRates | null> {
@@ -102,6 +107,7 @@ export async function loadRates(): Promise<CurrencyRates | null> {
 export async function saveImportMeta(meta: ImportMeta): Promise<void> {
   const db = await getDB();
   await db.put("meta", meta, "import");
+  announceWrite("import");
 }
 
 export async function loadImportMeta(): Promise<ImportMeta | null> {
@@ -112,6 +118,7 @@ export async function loadImportMeta(): Promise<ImportMeta | null> {
 export async function saveJSON<T>(key: string, value: T): Promise<void> {
   const db = await getDB();
   await db.put("meta", value, key);
+  announceWrite(key);
 }
 
 export async function loadJSON<T>(key: string): Promise<T | null> {
@@ -158,4 +165,5 @@ export async function clearAllExcept(keepKeys: string[]): Promise<void> {
     if (!keep.has(k as string)) await tx.store.delete(k);
   }
   await tx.done;
+  announceWrite(EVERYTHING_KEY);
 }
