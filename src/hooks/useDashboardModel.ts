@@ -41,7 +41,7 @@ import { buildNeedsWants, type NeedsWantsSplit } from "../lib/needsWants";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { buildNotices, type Notice } from "../lib/dashboardNotices";
 import { plannedFor, planTotals } from "../lib/budgets";
-import { currentPeriod, periodKey, periodRange, shiftPeriod, yearRange } from "../lib/period";
+import { currentPeriod, periodKey, periodRange, shiftPeriod, yearRange, localToday } from "../lib/period";
 import {
   monthProgress,
   paceRatio,
@@ -361,7 +361,7 @@ export function useDashboardModel(): DashboardModel {
   // отдельным полем.
   const projIncome = factIncome;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   // Комментарий берём у последней операции группы: `txIds` идут по возрастанию
   // даты, и именно свежий комментарий объясняет, что это за платёж.
   const commentFor = useMemo(() => {

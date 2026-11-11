@@ -1530,7 +1530,13 @@ export function validateDrafts(
    * никуда, и отправлять такую операцию нельзя: в Дзен-мани она приедет с
    * пустым получателем, а починить это уже нечем.
    */
-  pendingMerchantIds: Iterable<string> = []
+  pendingMerchantIds: Iterable<string> = [],
+  /**
+   * Черновики, которые поправили, пока они ехали: в облаке лежит прежняя
+   * версия под тем же id, и «уже есть в Дзен-мани» тут не повод пропустить —
+   * операцию нужно обновить.
+   */
+  resendIds: ReadonlySet<string> = new Set()
 ): DraftPushResult {
   const accountIds = new Set(cache.accounts.map((a) => a.id));
   const instrumentIds = new Set(cache.instruments.map((i) => i.id));
@@ -1545,7 +1551,7 @@ export function validateDrafts(
   const ready: ZenTransaction[] = [];
   const skipped: { id: string; reason: string }[] = [];
   for (const [id, zt] of Object.entries(drafts)) {
-    if (liveTxIds.has(id)) {
+    if (liveTxIds.has(id) && !resendIds.has(id)) {
       // Already echoed back from a prior push — the store cleanup just
       // hasn't run yet. Skip silently-ish (caller drops it from the store).
       skipped.push({ id, reason: "Операция уже есть в Дзен-мани" });

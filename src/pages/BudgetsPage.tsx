@@ -104,7 +104,7 @@ import {
 import { InfoPopover } from "../components/InfoPopover";
 import { Badge, type BadgeTone } from "../components/Badge";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { currentPeriod, periodRange, spanDays } from "../lib/period";
+import { currentPeriod, periodRange, spanDays, localToday } from "../lib/period";
 import { monthProgress as progressOf } from "../lib/dashboardModel";
 import { Collapse } from "../components/Collapse";
 
@@ -171,7 +171,7 @@ export function BudgetsPage() {
   const openingBalanceSum = useZenOpeningBalance(
     zenRules,
     range.from,
-    new Date().toISOString().slice(0, 10),
+    localToday(),
     settings.includeOffBalance
   );
   const inMonth = useCallback(
@@ -225,7 +225,7 @@ export function BudgetsPage() {
    * ней нельзя было понять, свободны эти деньги или уже расписаны.
    */
   const aheadByTag = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     const m = new Map<string, { sum: number; ops: PlannedOp[] }>();
     for (const p of plannedPlans(zenPlanned, scope, today, monthStartDay, !!zenRules?.forecasts)) {
       if (p.ym !== ym || p.ahead <= 0) continue;
@@ -579,7 +579,7 @@ export function BudgetsPage() {
    */
   const balanceSpan = useZenBalanceSpan(
     range.from,
-    new Date().toISOString().slice(0, 10),
+    localToday(),
     settings.includeOffBalance
   );
   const monthLeftover =

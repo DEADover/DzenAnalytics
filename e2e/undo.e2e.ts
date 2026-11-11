@@ -208,3 +208,47 @@ test("плашка: по центру снизу, над панелью выде
   await page.mouse.move(10, 10);
   await expect(t).toHaveCount(0, { timeout: 8000 });
 });
+
+test("удалил → отменил → операцию удалили в Дзен-мани: копия не появляется", async ({ page, zen }) => {
+  await connectZen(page, "/transactions");
+  await setPushMode(page, "manual");
+  await page.locator(".op-row").first().getByRole("button", { name: "Удалить операцию" }).click();
+  await expect(toastEl(page)).toContainText("Операция удалена");
+  // Какую именно операцию спрятали — по списку удалённых.
+  const id = await page.evaluate(async () => {
+    type S = { useDeletedStore: { getState: () => { deletedIds: string[] } } };
+    const { useDeletedStore } = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useDeletedStore");
+    return useDeletedStore.getState().deletedIds[0];
+  });
+  expect(id).toBeTruthy();
+  await toastEl(page).getByRole("button", { name: "Отменить" }).click();
+  await expect(toastEl(page)).toContainText("Отменено");
+
+  // Снимок «на случай возврата» отмена забирает с собой.
+  const snapshots = () =>
+    page.evaluate(async () => {
+      type S = { useDeletedPayloadsStore: { getState: () => { payloads: Record<string, unknown> } } };
+      const { useDeletedPayloadsStore } = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useDeletedPayloadsStore");
+      return Object.keys(useDeletedPayloadsStore.getState().payloads);
+    });
+  await expect.poll(snapshots).toEqual([]);
+
+  // Операцию удаляют в самом Дзен-мани; мы синхронизируемся и что-то отправляем.
+  zen.cloudDeletes = [id];
+  await page.locator('button[title^="Синхронизация с Дзен-мани"]').click();
+  await expect(toastEl(page)).toContainText(/удален/);
+  await page.evaluate(async () => {
+    type S = {
+      useEditsStore: { getState: () => { setEdit: (id: string, p: unknown) => Promise<void> } };
+      useZenmoneyStore: { getState: () => { pushPendingEdits: () => Promise<unknown> } };
+    };
+    const store = (window as unknown as { __store: (n: string) => Promise<S> }).__store;
+    const { useEditsStore } = await store("useEditsStore");
+    const { useZenmoneyStore } = await store("useZenmoneyStore");
+    await useEditsStore.getState().setEdit("tx-0003", { comment: "что-то отправить" });
+    await useZenmoneyStore.getState().pushPendingEdits();
+  });
+  await expect.poll(() => zen.pushes.length).toBe(1);
+  // В запросе — только наша правка: удалённая в облаке операция не воскресла.
+  expect(zen.pushes[0].transaction?.map((t) => t.id)).toEqual(["tx-0003"]);
+});

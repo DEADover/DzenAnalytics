@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
+  localToday,
   alignWindows,
   currentPeriod,
   quarterLabel,
@@ -508,5 +509,22 @@ describe("periodDayCount — сколько дней периода остало
         running: true,
       });
     });
+  });
+});
+
+describe("localToday", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("после полуночи по местному времени — уже новый день, а не вчерашний по UTC", () => {
+    vi.useFakeTimers();
+    // 01:30 местного: в поясах восточнее Гринвича по UTC это ещё 10-е число.
+    vi.setSystemTime(new Date(2026, 10, 11, 1, 30));
+    expect(localToday()).toBe("2026-11-11");
+  });
+
+  it("поздний вечер — всё ещё сегодня", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 11, 23, 50));
+    expect(localToday()).toBe("2026-11-11");
   });
 });

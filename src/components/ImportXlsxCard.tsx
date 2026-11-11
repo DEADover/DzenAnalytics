@@ -1,3 +1,4 @@
+import { localToday } from "../lib/period";
 import { useState } from "react";
 import { Download, FileSpreadsheet, Undo2, Upload } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
@@ -129,7 +130,7 @@ export function ImportXlsxCard() {
       const d = await dictsFromCache();
       await exportImportTemplate(
         { accounts: d.rich.accounts, categories: d.categories, payees: d.payees, base: d.base },
-        new Date().toISOString().slice(0, 10)
+        localToday()
       );
     } catch (e) {
       setError(

@@ -15,7 +15,8 @@ import { Modal, ModalFooter } from "./Modal";
  *
  * Keyboard:
  *   • Escape → cancel
- *   • Enter  → confirm  (Cmd/Ctrl+Enter also)
+ *   • Enter  → confirm  (Cmd/Ctrl+Enter also) — кроме случая, когда фокус
+ *     стоит на «Отмена» или крестике: тогда Enter нажимает их
  * Backdrop click → cancel.
  * Confirm button is autofocused, so Enter "just works".
  */
@@ -41,7 +42,16 @@ export function ConfirmDialog() {
         const target = e.target as HTMLElement | null;
         const tag = target?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
+        // Фокус на другой кнопке окна («Отмена», крестик) — Enter нажимает
+        // её, а не подтверждает: иначе «Отмена» с клавиатуры удаляла бы.
+        const confirmBtn = confirmBtnRef.current;
+        const button = target?.closest("button, a");
+        if (button && button !== confirmBtn && confirmBtn?.closest('[role="dialog"]')?.contains(button)) {
+          return;
+        }
         e.stopPropagation();
+        // Без этого Enter ещё и «нажал» бы кнопку под фокусом вторым действием.
+        e.preventDefault();
         close(true);
       }
     };

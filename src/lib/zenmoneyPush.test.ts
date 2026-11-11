@@ -1558,6 +1558,16 @@ describe("buildDraftTransaction", () => {
       expect(out.ready).toEqual([]);
       expect(out.skipped[0].reason).toMatch(/уже есть/);
     });
+
+    it("черновик поправили, пока он ехал: в облаке прежняя версия — отправляем ещё раз", () => {
+      const d = { ...ok(), comment: "исправлено по ходу" };
+      const c = draftCache();
+      c.transactions = [{ id: d.id, deleted: false } as ZenTransaction];
+      const out = validateDrafts(byId([d]), c, 900, [], new Set([d.id]));
+      expect(out.skipped).toEqual([]);
+      expect(out.ready).toHaveLength(1);
+      expect(out.ready[0]).toMatchObject({ id: d.id, comment: "исправлено по ходу", changed: 900 });
+    });
   });
 });
 

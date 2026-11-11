@@ -65,7 +65,7 @@ import {
   chartAxisStroke,
 } from "../../lib/format";
 import { heatStep, robustCeiling, niceScale, monthEnd } from "../../lib/dashboardModel";
-import { periodRange, spanDays } from "../../lib/period";
+import { periodRange, spanDays, localToday } from "../../lib/period";
 import {
   CAPITAL_PERIODS,
   capitalPeriodStart,
@@ -1340,7 +1340,7 @@ export function ActivityHeat({
   const year = Number(gridYM.slice(0, 4));
   const monthIdx = Number(gridYM.slice(5, 7)) - 1;
   const days = new Date(year, monthIdx + 1, 0).getDate();
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = localToday();
 
   const ymd = (d: number) => `${gridYM}-${String(d).padStart(2, "0")}`;
   /** День принадлежит отчётному периоду. */

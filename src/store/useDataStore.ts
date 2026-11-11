@@ -1,3 +1,4 @@
+import { localToday } from "../lib/period";
 import { create } from "zustand";
 import type { Transaction, CurrencyRates, ImportMeta } from "../types";
 import * as db from "../lib/db";
@@ -257,8 +258,12 @@ async function finalize(
   // Append locally-created drafts (not-yet-pushed). Dedup by id against the
   // visible set: once a draft is pushed and echoed back into the cache, its
   // cloud row wins (and we then drop the draft from the store).
-  const drafts = await loadDraftRows(rates, visible);
-  const withDrafts = drafts.length === 0 ? visible : [...visible, ...drafts];
+  // Исключение — черновик, который поправили, пока он ехал (`resend`): в
+  // облаке прежняя версия, и до повторной отправки главный он.
+  const resend = useDraftsStore.getState().resend;
+  const cloud = resend.size === 0 ? visible : visible.filter((t) => !resend.has(t.id));
+  const drafts = await loadDraftRows(rates, cloud);
+  const withDrafts = drafts.length === 0 ? cloud : [...cloud, ...drafts];
   // Ключи счетов — тем операциям, что сохранены до их появления или
   // переписаны правкой прежних версий (см. `fillAccountKeys`).
   const keyed = fillAccountKeys(withDrafts, (await getZenCache())?.accounts);
@@ -751,7 +756,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     // своего дня, а операций на нём может не быть месяцами — без этих точек
     // доллары, пролежавшие год, весь год стояли бы по курсу одного дня.
     if (anyForeign && first >= "2000-01-01") {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       let ym = first.slice(0, 7);
       while (`${ym}-01` <= today) {
         if (!(`${ym}-01` in histDayRates)) missing.add(`${ym}-01`);

@@ -235,6 +235,17 @@ export function toIsoDate(date: Date): string {
   return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
 }
 
+/**
+ * Сегодня по МЕСТНОМУ времени — «ГГГГ-ММ-ДД».
+ *
+ * Одна на всё приложение. `new Date().toISOString()` отдаёт день по UTC: до
+ * трёх ночи по Москве это ещё вчера, и «сегодня» в бюджете, на главной и в
+ * новой операции оказывалось вчерашним числом.
+ */
+export function localToday(): string {
+  return toIsoDate(new Date());
+}
+
 /** Сдвинуть дату на `delta` дней (отрицательный — назад). */
 export function shiftDays(date: string, delta: number): string {
   const d = new Date(`${date}T00:00:00Z`);

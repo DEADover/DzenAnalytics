@@ -20,12 +20,21 @@ import * as db from "../lib/db";
 import type { ZenTransaction } from "../lib/zenmoney";
 
 const KEY = "pendingTransactions";
+const RESEND_KEY = "pendingTransactionsResend";
 
 interface DraftsState {
   /** id → full Zenmoney transaction built locally, not yet pushed. */
   drafts: Record<string, ZenTransaction>;
+  /**
+   * Черновики, которые поправили, пока они ехали в облако: там уже лежит
+   * прежняя версия под тем же id. Такой черновик не «уже отправлен» — его
+   * нужно отправить ещё раз, и до тех пор на экране главный он, а не облако.
+   */
+  resend: ReadonlySet<string>;
   loaded: boolean;
   hydrate: () => Promise<void>;
+  /** Пометить черновики для повторной отправки (см. `resend`). */
+  markResend: (ids: string[]) => Promise<void>;
   /** Insert a new draft (id is the transaction's own UUID). */
   add: (tx: ZenTransaction) => Promise<void>;
   /**
@@ -45,13 +54,34 @@ interface DraftsState {
   clearAll: () => Promise<void>;
 }
 
-export const useDraftsStore = create<DraftsState>((set, get) => ({
+export const useDraftsStore = create<DraftsState>((set, get) => {
+  /** Пометки живут только у существующих черновиков. */
+  async function dropResend(ids: readonly string[]) {
+    const cur = get().resend;
+    if (!ids.some((id) => cur.has(id))) return;
+    const next = new Set(cur);
+    for (const id of ids) next.delete(id);
+    await db.saveJSON(RESEND_KEY, [...next]);
+    set({ resend: next });
+  }
+
+  return {
   drafts: {},
+  resend: new Set<string>(),
   loaded: false,
 
   hydrate: async () => {
-    const data = await db.loadJSON<Record<string, ZenTransaction>>(KEY);
-    set({ drafts: data || {}, loaded: true });
+    const data = (await db.loadJSON<Record<string, ZenTransaction>>(KEY)) || {};
+    const marks = (await db.loadJSON<string[]>(RESEND_KEY)) || [];
+    set({ drafts: data, resend: new Set(marks.filter((id) => id in data)), loaded: true });
+  },
+
+  markResend: async (ids) => {
+    const fresh = ids.filter((id) => id in get().drafts && !get().resend.has(id));
+    if (fresh.length === 0) return;
+    const next = new Set([...get().resend, ...fresh]);
+    await db.saveJSON(RESEND_KEY, [...next]);
+    set({ resend: next });
   },
 
   add: async (tx) => {
@@ -80,6 +110,7 @@ export const useDraftsStore = create<DraftsState>((set, get) => ({
     delete next[id];
     await db.saveJSON(KEY, next);
     set({ drafts: next });
+    await dropResend([id]);
   },
 
   clearMany: async (ids) => {
@@ -95,13 +126,16 @@ export const useDraftsStore = create<DraftsState>((set, get) => ({
     if (!changed) return;
     await db.saveJSON(KEY, next);
     set({ drafts: next });
+    await dropResend(ids);
   },
 
   clearAll: async () => {
     await db.saveJSON(KEY, {});
-    set({ drafts: {} });
+    await db.saveJSON(RESEND_KEY, []);
+    set({ drafts: {}, resend: new Set<string>() });
   },
-}));
+  };
+});
 
 /** Read drafts without a hook — for the pipeline / push builder. Prefers
  *  the in-memory copy, falls back to disk before the first hydrate. */

@@ -1,3 +1,4 @@
+import { localToday } from "../lib/period";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Download, FileCode2, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
@@ -63,7 +64,7 @@ export function DigestReportModal({ spec, onClose }: { spec: ReportSpec; onClose
   const [format, setFormat] = useState<ReportFormat>("pdf");
   const [busy, setBusy] = useState(false);
   const [host, setHost] = useState<HTMLDivElement | null>(null);
-  const [generated] = useState(() => formatDate(new Date().toISOString().slice(0, 10), "full"));
+  const [generated] = useState(() => formatDate(localToday(), "full"));
 
   async function run() {
     if (busy || !host || !report) return;

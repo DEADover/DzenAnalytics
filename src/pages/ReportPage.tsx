@@ -1,3 +1,4 @@
+import { localToday } from "../lib/period";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Table as TableIcon,
@@ -281,7 +282,7 @@ export function ReportPage() {
   /** Имя файла показываем в окне выгрузки, поэтому считаем его в одном месте. */
   const exportFileName = `Доходы и расходы (${SCALE_LABELS[
     scale
-  ].toLowerCase()}) ${new Date().toISOString().slice(0, 10)}.xlsx`;
+  ].toLowerCase()}) ${localToday()}.xlsx`;
 
   async function exportXlsx(style: XlsxNumberStyle) {
     try {

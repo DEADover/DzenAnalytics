@@ -4,8 +4,10 @@
 // embed it in error messages we display, and never include it in the
 // backup/restore JSON path.
 
+import { localToday } from "../lib/period";
 import { create } from "zustand";
 import { pluralRu } from "../lib/plural";
+import { changedFields, unchangedSince } from "../lib/pushQueue";
 import * as db from "../lib/db";
 import { fetchDiff, fetchTokenUserIds } from "../lib/zenmoney";
 import {
@@ -88,6 +90,7 @@ import {
   useDeletedPayloadsStore,
   loadDeletedPayloads,
   hasPendingRestores,
+  pruneSpentSnapshots,
 } from "./useDeletedPayloadsStore";
 import { useSyncLogStore } from "./useSyncLogStore";
 import { useBudgetsStore } from "./useBudgetsStore";
@@ -712,7 +715,7 @@ export async function recalcBalanceCalibration(): Promise<void> {
       const cur = instrById.get(a.instrument)?.shortTitle || rates.base;
       return s + toBase(a.balance || 0, cur, rates);
     }, 0);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   await useCalibrationStore.getState().set({ date: today, amount: Math.round(total) });
 }
 
@@ -1031,6 +1034,9 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // by sending serverTimestamp=0. The merged cache is then re-mapped
       // in full so renames/deletions propagate everywhere.
       const prevCache = opts.force ? null : await loadZenCache();
+      // Залежавшиеся снимки возвращённых операций — до свежих данных облака
+      // (см. `pruneSpentSnapshots`).
+      await pruneSpentSnapshots(prevCache ?? (await loadZenCache()));
       const fromTs = prevCache?.serverTimestamp || 0;
       // Что дозапросить явно. При инкрементальной синхронизации это разовые
       // до-качивания по версии схемы; при полной (кэша нет) — весь список
@@ -1305,6 +1311,9 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         throw new Error(msg);
       }
       const edits = useEditsStore.getState().edits;
+      // Снимки возвращённых операций, которым возвращаться незачем, — убираем
+      // до свежих данных облака (см. `pruneSpentSnapshots`).
+      await pruneSpentSnapshots(cache);
 
       // 2a) Conflict detection. Pull a fresh diff since our last sync and
       //     check whether any transaction we're about to edit was changed
@@ -1415,11 +1424,15 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // Locally-created drafts (new operations not yet in the cloud). Each
       // is a complete ZenTransaction; validate references against the fresh
       // cache and re-stamp `changed`. They ride along in the same request.
+      // Снимок черновиков на момент сборки: после ответа по нему видно, какие
+      // успели поправить, пока шла отправка (см. lib/pushQueue).
+      const draftsSent = await loadDrafts();
       const draftPush = validateDrafts(
-        await loadDrafts(),
+        draftsSent,
         cache,
         Math.floor(Date.now() / 1000),
-        cpNew.map((m) => String(m.id))
+        cpNew.map((m) => String(m.id)),
+        useDraftsStore.getState().resend
       );
       const draftTxs = draftPush.ready;
       // Draft "skips" don't keep a row in limbo: an "already in cloud" draft
@@ -1624,8 +1637,13 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         });
         // Drop no-op budget edits even though we sent nothing — their cloud
         // value already matches, so the «ждёт отправки» arrow should clear.
-        if (doneBudgetIds.length > 0) {
-          await useBudgetEditsStore.getState().clearMany(doneBudgetIds);
+        const doneBudgetNow = unchangedSince(
+          doneBudgetIds,
+          budgetEdits,
+          useBudgetEditsStore.getState().edits
+        );
+        if (doneBudgetNow.length > 0) {
+          await useBudgetEditsStore.getState().clearMany(doneBudgetNow);
         }
         // Действия с планами, которым отправлять нечего (дату уже закрыли или
         // правка ничего не меняет), тоже не должны висеть в очереди.
@@ -1754,8 +1772,25 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       //    Time-recreates снимают накладку со СТАРОГО id: её смысл теперь живёт
       //    в свежесозданной строке с новым id. Оставь мы её — пересоздание
       //    повторялось бы на каждом пуше, ведь старого id в кэше уже нет.
-      const pushedIds = [...toPush.map((i) => i.id), ...recreates.map((r) => r.oldId)];
+      //
+      //    Снимаем только то, что уехало как есть. Запись, которую успели
+      //    поправить за время отправки, остаётся в очереди целиком и уйдёт
+      //    следующим заходом: сборка сравнивает её со свежим кэшем, и уже
+      //    доехавшие поля в запрос не попадут. У пересозданной операции всё,
+      //    что добавили по ходу, переезжает на её новый id.
+      const editsNow = useEditsStore.getState().edits;
+      const pushedIds = [
+        ...unchangedSince(toPush.map((i) => i.id), edits, editsNow),
+        ...recreates.map((r) => r.oldId),
+      ];
+      const carried = recreates.flatMap((r) => {
+        const cur = editsNow[r.oldId];
+        if (!cur) return [];
+        const patch = changedFields(edits[r.oldId], cur);
+        return Object.keys(patch).length > 0 ? [{ id: String(r.tx.id), patch }] : [];
+      });
       await useEditsStore.getState().clearMany(pushedIds);
+      for (const c of carried) await useEditsStore.getState().setEdit(c.id, c.patch);
 
       // 5b) Drop drafts that now live in the cloud (sent + echoed, or stale
       //     ones that were already there). The mapper re-creates them from
@@ -1766,9 +1801,13 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
             .filter((t) => !t.deleted)
             .map((t) => String(t.id))
         );
-        const sentIds = Object.keys(await loadDrafts()).filter((id) =>
-          liveNow.has(id)
-        );
+        const draftsNow = await loadDrafts();
+        const liveIds = Object.keys(draftsNow).filter((id) => liveNow.has(id));
+        // Черновик поправили, пока он ехал: в облаке лежит прежняя версия.
+        // Оставляем его и помечаем — следующая отправка обновит ту же операцию.
+        const sentIds = unchangedSince(liveIds, draftsSent, draftsNow);
+        const sentSet = new Set(sentIds);
+        await useDraftsStore.getState().markResend(liveIds.filter((id) => !sentSet.has(id)));
         if (sentIds.length > 0) {
           await useDraftsStore.getState().clearMany(sentIds);
           // Партия импорта, чьи операции уехали, больше не отменяется: в
@@ -1794,12 +1833,20 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // them from the overlay (same reasoning as transaction edits). Any
       // unresolved/no-op ones that remain are overlaid below so the UI keeps
       // showing the intended value until a re-sync resolves them.
-      const sentTagIds = tagPush.tags.map((t) => String(t.id));
+      const sentTagIds = unchangedSince(
+        tagPush.tags.map((t) => String(t.id)),
+        tagEdits,
+        useTagEditsStore.getState().edits
+      );
       if (sentTagIds.length > 0) {
         await useTagEditsStore.getState().clearMany(sentTagIds);
       }
       // Правки счетов, доехавшие до облака, больше не нужны в накладке.
-      const sentAccountIds = accPush.accounts.map((a) => String(a.id));
+      const sentAccountIds = unchangedSince(
+        accPush.accounts.map((a) => String(a.id)),
+        accEdits,
+        useAccountEditsStore.getState().edits
+      );
       if (sentAccountIds.length > 0) {
         await useAccountEditsStore.getState().clearMany(sentAccountIds);
       }
@@ -1847,8 +1894,13 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // cloud); keep only the ones we skipped (tag not in cache) for retry.
       // `doneBudgetIds` was computed up-front so the early-return path clears
       // the same set.
-      if (doneBudgetIds.length > 0) {
-        await useBudgetEditsStore.getState().clearMany(doneBudgetIds);
+      const doneBudgetNow = unchangedSince(
+        doneBudgetIds,
+        budgetEdits,
+        useBudgetEditsStore.getState().edits
+      );
+      if (doneBudgetNow.length > 0) {
+        await useBudgetEditsStore.getState().clearMany(doneBudgetNow);
       }
       overlayTagEdits(
         mapped.categoryMeta,

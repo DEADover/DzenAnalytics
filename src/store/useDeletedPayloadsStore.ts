@@ -13,6 +13,7 @@
 import { create } from "zustand";
 import * as db from "../lib/db";
 import type { ZenTransaction } from "../lib/zenmoney";
+import type { ZenCache } from "../lib/zenmoneyCache";
 import { useDeletedStore } from "./useDeletedStore";
 
 const KEY = "deletedPayloads";
@@ -87,4 +88,44 @@ export async function loadDeletedPayloads(): Promise<
   if (s.loaded) return s.payloads;
   const disk = await db.loadJSON<Record<string, ZenTransaction>>(KEY);
   return disk || {};
+}
+
+/**
+ * Снимки, которые больше не нужны: операция жива в облаке и у нас не спрятана.
+ *
+ * Так бывает после «Удалил → Отменить» и после возврата из «Удалённых» до
+ * отправки: удаление до облака не доехало, возвращать нечего. Оставь мы такой
+ * снимок — он годами ждал бы своего часа, и стоило бы потом удалить операцию
+ * в самом Дзен-мани, как следующая отправка создала бы её копию.
+ */
+export function spentSnapshotIds(
+  payloadIds: readonly string[],
+  cache: Pick<ZenCache, "transactions">,
+  hidden: ReadonlySet<string>
+): string[] {
+  const candidates = payloadIds.filter((id) => !hidden.has(id));
+  if (candidates.length === 0) return [];
+  const live = new Set(
+    cache.transactions.filter((t) => !t.deleted).map((t) => String(t.id))
+  );
+  return candidates.filter((id) => live.has(id));
+}
+
+/**
+ * Убрать ненужные снимки, сверяясь с кэшем.
+ *
+ * Звать ДО того, как в кэш влиты свежие изменения облака: после них операция,
+ * удалённая в Дзен-мани, уже не «жива», и её залежавшийся снимок выглядел бы
+ * как просьба её вернуть.
+ */
+export async function pruneSpentSnapshots(
+  cache: Pick<ZenCache, "transactions"> | null | undefined
+): Promise<void> {
+  if (!cache) return;
+  const spent = spentSnapshotIds(
+    Object.keys(await loadDeletedPayloads()),
+    cache,
+    useDeletedStore.getState().deletedSet
+  );
+  if (spent.length > 0) await useDeletedPayloadsStore.getState().removeMany(spent);
 }

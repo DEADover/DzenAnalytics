@@ -1,3 +1,4 @@
+import { localToday } from "../period";
 import type { ZenDiffResponse } from "../zenmoney";
 import { demoDiff } from "./demoAccount";
 
@@ -32,12 +33,6 @@ type DiffBody = Partial<Omit<ZenDiffResponse, "serverTimestamp">> & {
 
 let stamp = Math.floor(Date.now() / 1000);
 
-/** «Сегодня» по местному времени: история демо доходит ровно до него. */
-function todayIso(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
 
 const empty = (ts: number): ZenDiffResponse =>
   ({
@@ -66,7 +61,7 @@ export function respondDemo(body: DiffBody): ZenDiffResponse {
       reminderMarker: body.reminderMarker ?? [],
     } as ZenDiffResponse;
   }
-  const full = () => demoDiff(stamp, todayIso());
+  const full = () => demoDiff(stamp, localToday());
   if (!body.serverTimestamp) return full();
   // Дозапрос отдельных справочников — целиком, как у настоящего сервера.
   const out = empty(stamp) as unknown as Record<string, unknown>;

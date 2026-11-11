@@ -12,6 +12,8 @@ import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDraftsStore } from "../store/useDraftsStore";
+import { pruneSpentSnapshots } from "../store/useDeletedPayloadsStore";
+import { getZenCache } from "./zenCacheMemo";
 import { toast } from "../store/useToastStore";
 import { pluralOps, pluralRu } from "./plural";
 import { snapshotStores } from "./storeSnapshot";
@@ -53,6 +55,10 @@ export async function deleteWithUndo(ids: string[]): Promise<void> {
     undo: async () => {
       if (draftCopies.length) await useDraftsStore.getState().addMany(draftCopies);
       await useDeletedStore.getState().restoreMany(freshlyHidden);
+      // Удаление до облака не доехало — снимок «на случай возврата» больше
+      // не нужен. Если успело доехать, операции в кэше уже нет, и снимок
+      // остаётся: по нему её вернёт следующая отправка.
+      await pruneSpentSnapshots(await getZenCache());
       await useEditsStore.getState().restore(edits);
       await useDataStore.getState().refresh();
     },

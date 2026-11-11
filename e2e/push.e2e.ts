@@ -82,3 +82,57 @@ for (const width of [1440, 1280]) {
     if (process.env.E2E_SHOTS) await box.screenshot({ path: `${process.env.E2E_SHOTS}/push-mode-${width}.png` });
   });
 }
+
+/** Записать правку операции так, как это делает окно правки. */
+async function setEdit(page: Page, id: string, patch: Record<string, unknown>) {
+  await page.evaluate(
+    async ([txId, p]) => {
+      type S = {
+        useEditsStore: { getState: () => { setEdit: (id: string, p: unknown) => Promise<void> } };
+        useDataStore: { getState: () => { refresh: () => Promise<void> } };
+      };
+      const store = (window as unknown as { __store: (n: string) => Promise<S> }).__store;
+      const { useEditsStore } = await store("useEditsStore");
+      const { useDataStore } = await store("useDataStore");
+      await useEditsStore.getState().setEdit(txId as string, p);
+      await useDataStore.getState().refresh();
+    },
+    [id, patch] as const
+  );
+}
+
+async function pendingEdits(page: Page): Promise<Record<string, Record<string, unknown>>> {
+  return page.evaluate(async () => {
+    type S = { useEditsStore: { getState: () => { edits: Record<string, Record<string, unknown>> } } };
+    const { useEditsStore } = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useEditsStore");
+    return useEditsStore.getState().edits;
+  });
+}
+
+test("«Авто»: правка, сделанная пока шла отправка, не теряется и уходит следом", async ({ page, zen }) => {
+  await connectZen(page, "/transactions");
+  await setPushMode(page, "auto");
+  zen.pushDelayMs = 1500;
+
+  await setEdit(page, "tx-0003", { comment: "первая" });
+  // Запрос ушёл и ждёт ответа — самое время поправить ту же операцию ещё раз.
+  await expect.poll(() => zen.pushStarts, { timeout: 10_000 }).toBe(1);
+  await setEdit(page, "tx-0003", { comment: "вторая" });
+
+  // Первая отправка завершилась: в облаке «первая», а «вторая» всё ещё в очереди.
+  await expect.poll(() => zen.pushes.length, { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
+  expect(zen.pushes[0].transaction?.find((t) => t.id === "tx-0003")?.comment).toBe("первая");
+
+  // И уходит сама, второй отправкой.
+  await expect.poll(() => zen.pushes.length, { timeout: 15_000 }).toBe(2);
+  expect(zen.pushes[1].transaction?.find((t) => t.id === "tx-0003")?.comment).toBe("вторая");
+  await expect.poll(async () => Object.keys(await pendingEdits(page)).length).toBe(0);
+  // В ленте — то, что человек ввёл последним, а не откат к «первой».
+  const shown = () =>
+    page.evaluate(async () => {
+      type S = { useDataStore: { getState: () => { transactions: { id: string; comment?: string | null }[] } } };
+      const { useDataStore } = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useDataStore");
+      return useDataStore.getState().transactions.find((t) => t.id === "tx-0003")?.comment;
+    });
+  await expect.poll(shown).toBe("вторая");
+});

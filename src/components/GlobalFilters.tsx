@@ -42,7 +42,7 @@ import {
 } from "../store/useFiltersStore";
 import { categoryKeysOf } from "../lib/operationTags";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { currentPeriod, periodRange, quarterOf } from "../lib/period";
+import { currentPeriod, periodRange, quarterOf, localToday } from "../lib/period";
 import { formatDate } from "../lib/format";
 import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
@@ -586,7 +586,7 @@ export function GlobalFilters({
    * Границы истории для листания и выбора. Сверху — последняя операция или
    * сегодня, если позже: текущий месяц смотрят и до первой траты в нём.
    */
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localToday();
   const boundMaxYM =
     dataRange.maxYM && dataRange.maxYM > calendarNow ? dataRange.maxYM : calendarNow;
   const boundMaxDate =

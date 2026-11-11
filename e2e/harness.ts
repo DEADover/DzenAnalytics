@@ -42,6 +42,12 @@ export class FakeZen {
   readonly pushes: DiffBody[] = [];
   /** Сколько раз приложение скачивало изменения. */
   pulls = 0;
+  /** Сколько отправок дошло до сервера — считая те, что ещё не получили ответ. */
+  pushStarts = 0;
+  /** Задержка ответа на отправку, мс: чтобы успеть что-то сделать «по ходу». */
+  pushDelayMs = 0;
+  /** Операции, удалённые «на другом устройстве»: уедут со следующим скачиванием. */
+  cloudDeletes: string[] = [];
   /** Подправить выдуманный аккаунт под тест — до подключения. */
   patchFull: ((diff: ZenDiffResponse) => ZenDiffResponse) | null = null;
   /** Токены, которые сервер больше не принимает (ответ 401). */
@@ -78,6 +84,13 @@ export class FakeZen {
       const diff = fullDiff(this.stamp);
       return this.patchFull ? this.patchFull(diff) : diff;
     }
+    const deletion = this.cloudDeletes.map((id) => ({
+      id,
+      object: "transaction" as const,
+      stamp: this.stamp,
+      user: fullDiff(this.stamp).user[0]!.id,
+    }));
+    this.cloudDeletes = [];
     return {
       serverTimestamp: this.stamp,
       instrument: [],
@@ -86,6 +99,7 @@ export class FakeZen {
       merchant: [],
       transaction: [],
       user: users,
+      ...(deletion.length > 0 ? { deletion } : {}),
     };
   }
 }
@@ -136,6 +150,10 @@ export const test = base.extend<{ zen: FakeZen }>({
           contentType: "application/json",
           body: JSON.stringify({ error: { message: "Unauthorized" } }),
         });
+      }
+      if (ENTITY_KEYS.some((k) => (body[k]?.length ?? 0) > 0)) {
+        zen.pushStarts += 1;
+        if (zen.pushDelayMs > 0) await new Promise((r) => setTimeout(r, zen.pushDelayMs));
       }
       return route.fulfill({
         status: 200,

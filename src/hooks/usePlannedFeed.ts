@@ -1,16 +1,11 @@
 import { useMemo } from "react";
 import { queryMatcher } from "../lib/keyboardLayout";
-import { periodKey, periodRange } from "../lib/period";
+import { periodKey, periodRange, localToday } from "../lib/period";
 import { useZenPlanned } from "./useZenPlanned";
 import { useFiltersStore } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
 
-const pad2 = (n: number) => String(n).padStart(2, "0");
-export function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
 
 export interface PlannedFeedCounts {
   /** Просроченные (не прогнозы) — раньше сегодняшнего дня. */

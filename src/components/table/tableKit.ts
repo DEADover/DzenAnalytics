@@ -10,6 +10,7 @@
  *
  * Модуль без React: логику сортировки и выгрузки можно проверить тестами.
  */
+import { toIsoDate } from "../../lib/period";
 import clsx from "clsx";
 
 export type SortDir = "asc" | "desc";
@@ -227,7 +228,7 @@ export function buildCsv(header: readonly unknown[], rows: readonly (readonly un
 /** Имя файла выгрузки: `dzenanalytics_<имя>_<дата>.csv`. */
 export function csvFileName(name: string | undefined, date: Date = new Date()): string {
   const safe = (name || "table").toLowerCase().replace(/[^a-z0-9а-яё_-]+/gi, "_");
-  return `dzenanalytics_${safe}_${date.toISOString().slice(0, 10)}.csv`;
+  return `dzenanalytics_${safe}_${toIsoDate(date)}.csv`;
 }
 
 /** Скачать CSV. BOM в начале — чтобы Excel не принял UTF-8 за cp1251. */

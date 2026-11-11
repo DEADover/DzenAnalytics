@@ -1,3 +1,4 @@
+import { localToday } from "../lib/period";
 import { useEffect, useMemo, useState } from "react";
 import {
   Target,
@@ -86,11 +87,6 @@ interface Money {
   cbr: RubRates;
 }
 
-/** Сегодня по местному времени, yyyy-mm-dd — дата курса ЦБ. */
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 /** One forecast: months left at a given monthly pace, and the finish date. */
 interface Forecast {
@@ -234,7 +230,7 @@ export function GoalsPage() {
   useEffect(() => {
     if (!quoteKey) return;
     let cancelled = false;
-    const date = todayIso();
+    const date = localToday();
     Promise.all(
       quoteKey.split(",").map(async (c) => [c, (await getHistoricalRubRate(date, c))?.rate] as const)
     ).then((pairs) => {

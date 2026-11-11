@@ -58,7 +58,7 @@ import {
   dayTitle,
 } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
-import { periodRange } from "../../lib/period";
+import { periodRange, localToday } from "../../lib/period";
 import { useDashboardModel, type DashboardModel } from "../../hooks/useDashboardModel";
 import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
 import { useZenPlanned } from "../../hooks/useZenPlanned";
@@ -663,7 +663,7 @@ export function DashboardView() {
 
   // Планы Дзен-мани — второй вид «Запланированных платежей». Отрезок тот же,
   // что у своих регулярных: от сегодня до конца отчётного месяца.
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localToday();
   // С просроченными: платёж, который прошляпили, — главное, что виджет обязан
   // показать (issue #87).
   const zenPlannedAll = useZenPlanned(todayIso, monthEnd(m.ym, m.monthStartDay), true);

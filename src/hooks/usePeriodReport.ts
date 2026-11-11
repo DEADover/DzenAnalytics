@@ -3,7 +3,7 @@ import { netWorthSeries, stackedBalanceByAccount } from "../lib/aggregations";
 import { colorForCategory } from "../lib/categoryColor";
 import type { DigestEntry } from "../lib/digest";
 import type { DigestObservation } from "../lib/digestObservations";
-import { currentPeriod, endAfterDays, periodKey, periodRange, shiftDays, type DayRange } from "../lib/period";
+import { currentPeriod, endAfterDays, periodKey, periodRange, shiftDays, type DayRange, localToday } from "../lib/period";
 import { applyDigest, buildPeriodReport, previousRange, rangeText, type PeriodReportModel } from "../lib/periodReport";
 import { budgetMonthTotals, budgetPlanRows, budgetUnplannedRows, openingBudgetRow } from "../lib/budgetMonth";
 import { reportBudgetFromMonth, type ReportBudget } from "../lib/periodReportBudget";
@@ -95,7 +95,7 @@ export function usePeriodReport(spec: ReportSpec | null): PeriodReport | null {
   const openingBalance = useZenOpeningBalance(
     budgetYm ? zenRules : null,
     budgetYm ? periodRange(budgetYm, monthStartDay).from : "9999-12-31",
-    new Date().toISOString().slice(0, 10),
+    localToday(),
     includeOffBalance
   );
   const dir = useAccountDirectory();

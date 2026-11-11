@@ -365,7 +365,12 @@ function App() {
         // Re-check at fire-time: user may have toggled mode off while
         // the debounce was pending.
         if (live.pushMode !== "auto") return;
-        if (live.pushStatus === "syncing") return;
+        // Отправка уже идёт — дожидаемся её конца, а не бросаем: правка,
+        // сделанная по ходу, в тот запрос не попала и ждёт следующего.
+        if (live.pushStatus === "syncing") {
+          timer = setTimeout(fire, 500);
+          return;
+        }
         // Отменили всё, что ждало, — отправлять нечего.
         if (!hasPendingPush()) return;
         void useZenmoneyStore.getState().pushPendingEdits().catch(() => {
@@ -392,11 +397,12 @@ function App() {
       schedule();
     });
     // New drafts (locally-created operations) push on the same debounce.
-    // Fire only when a draft was ADDED (count grew) — the post-push
-    // cleanup that clears sent drafts must not re-trigger a no-op push.
+    // Fire when a draft was ADDED or EDITED (count grew or stayed) — but not
+    // when it shrank: the post-push cleanup that clears sent drafts must not
+    // re-trigger a no-op push.
     const unsubDrafts = useDraftsStore.subscribe((s, p) => {
       if (s.drafts === p.drafts) return;
-      if (Object.keys(s.drafts).length <= Object.keys(p.drafts).length) return;
+      if (Object.keys(s.drafts).length < Object.keys(p.drafts).length) return;
       schedule();
     });
     // Category-tag edits (the «обязательная» flag) push on the same debounce.

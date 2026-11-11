@@ -22,6 +22,7 @@ import { Segmented } from "../components/Segmented";
 import { Switch } from "../components/Switch";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import {
+  localToday,
   alignWindows,
   comparableRanges,
   isRunningPeriod,
@@ -384,7 +385,7 @@ function computeComparison({
 
   const raw = rangeOf(
     preset,
-    maxDate || new Date().toISOString().slice(0, 10),
+    maxDate || localToday(),
     monthStartDay,
     months,
     years

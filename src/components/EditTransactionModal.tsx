@@ -1,3 +1,4 @@
+import { localToday } from "../lib/period";
 import clsx from "clsx";
 import { Badge } from "./Badge";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -104,18 +105,6 @@ const DEBT_ACCOUNT_TYPES = DEBT_TYPES;
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
-/**
- * Today's date as ISO YYYY-MM-DD, for seeding a new draft.
- *
- * Дата берётся по МЕСТНОМУ времени, а не по UTC. `toISOString()` до трёх ночи
- * по Москве отдаёт вчерашнее число, и новая операция — как и копия, которой
- * дата ставится сегодняшней, — открывалась вчерашним днём.
- */
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
 /** Local "HH:MM" time-of-day from an ISO timestamp (the operation's `created`).
  *  Empty string when the timestamp is missing/invalid (e.g. some CSV rows). */
 function isoToLocalTime(iso: string): string {
@@ -199,12 +188,12 @@ export function EditTransactionModal({
           {
             ...template,
             id: "",
-            date: todayIso(),
-            createdAt: `${todayIso()}T00:00:00Z`,
+            date: localToday(),
+            createdAt: `${localToday()}T00:00:00Z`,
           }
         : {
         id: "",
-        date: todayIso(),
+        date: localToday(),
         category: "",
         subcategory: null,
         categoryFull: "",
@@ -224,7 +213,7 @@ export function EditTransactionModal({
         amountBase: 0,
         opAmount: null,
         opCurrency: null,
-        createdAt: `${todayIso()}T00:00:00Z`,
+        createdAt: `${localToday()}T00:00:00Z`,
       }),
     [txProp, template, rates.base, initialKind]
   );
@@ -472,7 +461,7 @@ export function EditTransactionModal({
   const [date, setDate] = useState(tx.date);
   // Как в Дзен-мани: новая операция (и копия) с датой позже сегодняшней
   // становится плановой (#120). Правку существующей операции это не касается.
-  const futurePlan = isCreate && !planMarker && date > todayIso();
+  const futurePlan = isCreate && !planMarker && date > localToday();
   // Operation time-of-day. New draft → seed with the current local time;
   // edit → the original `created` time. Persisted via the `createdAt` patch.
   const [time, setTime] = useState(() =>
@@ -499,7 +488,7 @@ export function EditTransactionModal({
     // повторов ниже.
     const top =
       brandSet.size + payeeSet.size > 10
-        ? rankPayees(allTransactions, { category: category.trim(), today: todayIso() })
+        ? rankPayees(allTransactions, { category: category.trim(), today: localToday() })
         : [];
     const topSet = new Set(top);
     if (top.length > 0) groups.push({ label: "Часто используемые", items: top });

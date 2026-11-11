@@ -1,3 +1,4 @@
+import { localToday } from "../../lib/period";
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Pencil, X } from "lucide-react";
 import { buildDraftTransaction, newDraftId } from "../../lib/zenmoneyPush";
@@ -7,7 +8,6 @@ import { extractHashtags } from "../../lib/aggregations";
 import { currencySymbol } from "../../lib/format";
 import type { PlanPatch, PlanReschedule } from "../../lib/planActions";
 import {
-  localToday,
   planHorizon,
   sameSchedule,
   scheduleDates,

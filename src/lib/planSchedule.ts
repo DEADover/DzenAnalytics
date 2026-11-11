@@ -220,9 +220,3 @@ export function reminderLabel(r: ReminderSchedule): string {
   return s ? scheduleLabel(s) : "Разово";
 }
 
-/** Сегодня по местному времени — «ГГГГ-ММ-ДД»: даты плана — дни пользователя, не UTC. */
-export function localToday(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}

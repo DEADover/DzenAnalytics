@@ -82,3 +82,24 @@ test("плашка с отсчётом не заслоняет окно прав
   expect(onTop.inToast).toBe(false);
   expect(onTop.inDialog).toBe(true);
 });
+
+test("окно подтверждения: Enter на «Отмена» отменяет, а не подтверждает", async ({ page, zen }) => {
+  await connectZen(page, "/transactions");
+  const pulls = zen.pulls;
+  // Не по `title`: после первого наведения мост подсказок забирает его себе.
+  const fullSync = page.getByRole("banner").locator("button:has(svg.lucide-cloud-download)");
+  await fullSync.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("Полная синхронизация?")).toBeVisible();
+  await dialog.getByRole("button", { name: "Отмена" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect(zen.pulls).toBe(pulls);
+
+  // А с фокусом на главной кнопке Enter по-прежнему подтверждает.
+  await fullSync.click();
+  await expect(dialog.getByRole("button", { name: "Синхронизировать всё" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => zen.pulls).toBeGreaterThan(pulls);
+});

@@ -1,3 +1,4 @@
+import { localToday } from "../../lib/period";
 import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, Check, Repeat, X } from "lucide-react";
 import type { Transaction } from "../../types";
@@ -6,7 +7,7 @@ import { loadZenCache } from "../../lib/zenmoneyCache";
 import { evalAmount, round2 } from "../../lib/splitTransaction";
 import { currencySymbol, displayPayee, formatDate, formatMoney } from "../../lib/format";
 import { buildNewPlan } from "../../lib/planCreate";
-import { firstAfter, localToday, planHorizon, scheduleDates, weekdayOf, type PlanSchedule } from "../../lib/planSchedule";
+import { firstAfter, planHorizon, scheduleDates, weekdayOf, type PlanSchedule } from "../../lib/planSchedule";
 import { usePlanActionsStore } from "../../store/usePlanActionsStore";
 import { ExprAmountInput } from "../ExprAmountInput";
 import { InfoPopover } from "../InfoPopover";

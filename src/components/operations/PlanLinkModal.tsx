@@ -1,3 +1,4 @@
+import { localToday } from "../../lib/period";
 import { useMemo, useState } from "react";
 import { CalendarClock, Check, Link2, X } from "lucide-react";
 import clsx from "clsx";
@@ -16,11 +17,6 @@ import { SearchInput } from "../SearchInput";
 import { txAccountKey } from "../../lib/accountKey";
 import { AccountName } from "../AccountName";
 
-const pad2 = (n: number) => String(n).padStart(2, "0");
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
 
 /**
  * «Связать план с фактом»: запланированная операция уже случилась — её привёз
