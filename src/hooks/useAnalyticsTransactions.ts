@@ -1,10 +1,37 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useDataStore } from "../store/useDataStore";
 import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { useLoanAccountKeys, useOffBalanceExcluded } from "./useInBalanceTransactions";
 import { useAccountDirectory } from "./useAccountDirectory";
 import { stripFromAnalytics } from "../lib/aggregations";
+import { memoLast } from "../lib/memoLast";
+import type { AccountDirectory } from "../lib/accountDirectory";
 import type { Transaction } from "../types";
+
+// Общие на модуль — на главной и в разделах хук стоит в нескольких
+// компонентах сразу (см. `memoLast`).
+const excludedSetOf = memoLast((categories: readonly string[]) => new Set(categories));
+
+// Счета разреза и внебалансовые складываются: и то и другое — «эти деньги в
+// картину не входят», разделять их в селекторе незачем.
+const skipAccountsOf = memoLast(
+  (excludedAccounts: readonly string[], offBalanceKeys: Set<string> | undefined, dir: AccountDirectory) => {
+    const out = dir.resolve(excludedAccounts);
+    if (offBalanceKeys) for (const t of offBalanceKeys) out.add(t);
+    return out.size ? out : undefined;
+  }
+);
+
+const analyticsOf = memoLast(
+  (
+    transactions: Transaction[],
+    excludedCategories: Set<string>,
+    offBalanceKeys: Set<string> | undefined,
+    loanKeys: Set<string> | undefined,
+    dir: AccountDirectory
+  ) =>
+    stripFromAnalytics(transactions, { excludedCategories, offBalanceKeys, loanKeys, labelOf: dir.label })
+);
 
 /**
  * Операции активного РАЗРЕЗА (issue #14): без категорий и счетов, которые
@@ -36,26 +63,7 @@ export function useAnalyticsTransactions(): Transaction[] {
   }, [exclLoaded, hydrateExcl]);
 
 
-  const excluded = useMemo(
-    () => new Set(slice.excludedCategories),
-    [slice.excludedCategories]
-  );
-  // Счета разреза и внебалансовые складываются: и то и другое — «эти деньги в
-  // картину не входят», разделять их в селекторе незачем.
-  const skipAccounts = useMemo(() => {
-    const out = dir.resolve(slice.excludedAccounts);
-    if (offBalanceKeys) for (const t of offBalanceKeys) out.add(t);
-    return out.size ? out : undefined;
-  }, [slice.excludedAccounts, offBalanceKeys, dir]);
-
-  return useMemo(
-    () =>
-      stripFromAnalytics(transactions, {
-        excludedCategories: excluded,
-        offBalanceKeys: skipAccounts,
-        loanKeys,
-        labelOf: dir.label,
-      }),
-    [transactions, excluded, skipAccounts, loanKeys, dir]
-  );
+  const excluded = excludedSetOf(slice.excludedCategories);
+  const skipAccounts = skipAccountsOf(slice.excludedAccounts, offBalanceKeys, dir);
+  return analyticsOf(transactions, excluded, skipAccounts, loanKeys, dir);
 }

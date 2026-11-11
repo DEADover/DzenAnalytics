@@ -185,6 +185,10 @@ export const useSlicesStore = create<State>((set, get) => {
 });
 
 /** Активный разрез — или разрез по умолчанию, пока хранилище не поднялось. */
+/** Запасной разрез — один объект: новые массивы на каждый вызов сбивали бы
+ *  кэши аналитики, где списки исключений в зависимостях. */
+const FALLBACK_SLICE: Slice = emptyDefault().slices[0]!;
+
 export function activeSlice(s: Pick<State, "slices" | "activeId">): Slice {
-  return s.slices.find((x) => x.id === s.activeId) ?? emptyDefault().slices[0];
+  return s.slices.find((x) => x.id === s.activeId) ?? FALLBACK_SLICE;
 }

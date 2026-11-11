@@ -1,11 +1,40 @@
-import { useMemo } from "react";
 import { useDataStore } from "../store/useDataStore";
 import { useOffBalanceStore } from "../store/useOffBalanceStore";
 import { useLiveAccounts } from "./useLiveAccounts";
 import { accountKeyOf } from "../lib/accountKey";
 import { useAccountDirectory } from "./useAccountDirectory";
 import { stripFromAnalytics } from "../lib/aggregations";
+import { memoLast } from "../lib/memoLast";
+import type { LiveAccount } from "../store/useZenmoneyStore";
+import type { AccountDirectory } from "../lib/accountDirectory";
 import type { Transaction } from "../types";
+
+// Общие на модуль: хуки вызываются во многих компонентах сразу, а считать по
+// всем операциям достаточно раз на смену данных (см. `memoLast`).
+const offBalanceKeysOf = memoLast(
+  (includeOffBalance: boolean, liveAccounts: LiveAccount[] | null | undefined): Set<string> | undefined => {
+    if (includeOffBalance || !liveAccounts) return undefined;
+    const keys = liveAccounts.filter((a) => !a.inBalance).map(accountKeyOf);
+    return keys.length ? new Set(keys) : undefined;
+  }
+);
+
+const loanKeysOf = memoLast((liveAccounts: LiveAccount[] | null | undefined): Set<string> | undefined => {
+  if (!liveAccounts) return undefined;
+  const keys = liveAccounts
+    .filter((a) => a.type === "loan" || (a.type === "ccard" && Math.abs(a.creditLimit || 0) >= 0.01))
+    .map(accountKeyOf);
+  return keys.length ? new Set(keys) : undefined;
+});
+
+const inBalanceOf = memoLast(
+  (
+    transactions: Transaction[],
+    offBalanceKeys: Set<string> | undefined,
+    loanKeys: Set<string> | undefined,
+    dir: AccountDirectory
+  ) => stripFromAnalytics(transactions, { offBalanceKeys, loanKeys, labelOf: dir.label })
+);
 
 /**
  * Счета вне баланса, которые сейчас НЕ считаются: переключатель «Счета вне
@@ -22,11 +51,7 @@ import type { Transaction } from "../types";
 export function useOffBalanceExcluded(): Set<string> | undefined {
   const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
   const liveAccounts = useLiveAccounts();
-  return useMemo(() => {
-    if (includeOffBalance || !liveAccounts) return undefined;
-    const keys = liveAccounts.filter((a) => !a.inBalance).map(accountKeyOf);
-    return keys.length ? new Set(keys) : undefined;
-  }, [includeOffBalance, liveAccounts]);
+  return offBalanceKeysOf(includeOffBalance, liveAccounts);
 }
 
 /**
@@ -36,13 +61,7 @@ export function useOffBalanceExcluded(): Set<string> | undefined {
  */
 export function useLoanAccountKeys(): Set<string> | undefined {
   const liveAccounts = useLiveAccounts();
-  return useMemo(() => {
-    if (!liveAccounts) return undefined;
-    const keys = liveAccounts
-      .filter((a) => a.type === "loan" || (a.type === "ccard" && Math.abs(a.creditLimit || 0) >= 0.01))
-      .map(accountKeyOf);
-    return keys.length ? new Set(keys) : undefined;
-  }, [liveAccounts]);
+  return loanKeysOf(liveAccounts);
 }
 
 /**
@@ -62,8 +81,5 @@ export function useInBalanceTransactions(): Transaction[] {
   const offBalance = useOffBalanceExcluded();
   const loanKeys = useLoanAccountKeys();
   const dir = useAccountDirectory();
-  return useMemo(
-    () => stripFromAnalytics(transactions, { offBalanceKeys: offBalance, loanKeys, labelOf: dir.label }),
-    [transactions, offBalance, loanKeys, dir]
-  );
+  return inBalanceOf(transactions, offBalance, loanKeys, dir);
 }

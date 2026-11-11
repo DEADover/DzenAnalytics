@@ -23,7 +23,13 @@ export function useAccountDirectorySync(): void {
   const live = useLiveAccounts();
   const transactions = useDataStore((s) => s.transactions);
   useEffect(() => {
-    useAccountDirStore.setState({ dir: buildAccountDirectory(live, transactions) });
+    const next = buildAccountDirectory(live, transactions);
+    // Состав тот же (обычно: правка или синхронизация без новых счетов) —
+    // прежний объект: иначе вся аналитика, где справочник в зависимостях,
+    // пересчитывается второй раз следом за операциями.
+    const prev = useAccountDirStore.getState().dir;
+    if (JSON.stringify(prev.list) === JSON.stringify(next.list)) return;
+    useAccountDirStore.setState({ dir: next });
   }, [live, transactions]);
 }
 

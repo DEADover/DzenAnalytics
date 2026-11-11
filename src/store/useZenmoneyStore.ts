@@ -7,7 +7,7 @@
 import { localToday } from "../lib/period";
 import { create } from "zustand";
 import { pluralRu } from "../lib/plural";
-import { changedFields, unchangedSince } from "../lib/pushQueue";
+import { changedFields, sameEntry, unchangedSince } from "../lib/pushQueue";
 import { zenExclusive } from "../lib/zenLock";
 import { pushHoldLeft } from "../lib/pushHold";
 import * as db from "../lib/db";
@@ -369,11 +369,16 @@ export function getLiveAccountsFromCache(): Promise<LiveAccount[] | null> {
     return Promise.resolve(liveAccountsMemo);
   }
   liveAccountsInFlight ??= readLiveAccounts().then(
-    (data) => {
+    (fresh) => {
+      // Состав не изменился (обычное дело после синхронизации) — оставляем
+      // прежний массив и подписчиков не будим: иначе вся аналитика, что
+      // зависит от счетов, пересчитывается впустую.
+      const same = liveAccountsMemo !== undefined && sameEntry(liveAccountsMemo, fresh);
+      const data = same ? (liveAccountsMemo as LiveAccount[] | null) : fresh;
       liveAccountsMemo = data;
       liveAccountsStale = false;
       liveAccountsInFlight = null;
-      for (const listener of liveAccountsListeners) listener();
+      if (!same) for (const listener of liveAccountsListeners) listener();
       return data;
     },
     (err) => {
