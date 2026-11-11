@@ -12,6 +12,7 @@ import {
   buildMerchantMergePush,
   buildTagDeletionPush,
   unifyPushTransactions,
+  buildAccountPush,
   buildPlannedDeletions,
   detectConflicts,
   makeCategoryChecker,
@@ -942,6 +943,12 @@ describe("buildTagPush", () => {
   it("drops a no-op edit (value already matches cache)", () => {
     const { tags: out } = buildTagPush({ t2: { required: false } }, tags, 1);
     expect(out).toEqual([]);
+  });
+
+  it("правка, совпавшая с облаком, — в `satisfied`: с очереди её снимают, а не держат вечно", () => {
+    const out = buildTagPush({ t2: { required: false }, t1: { required: true } }, tags, 1);
+    expect(out.satisfied).toEqual(["t2"]);
+    expect(out.tags.map((t) => t.id)).toEqual(["t1"]);
   });
 
   it("treats null and absent as equal (no-op)", () => {
@@ -2251,5 +2258,27 @@ describe("unifyPushTransactions — одна операция, одна запи
     expect(out.map((t) => t.id).sort()).toEqual(["a", "b"]);
     expect(out.find((t) => t.id === "a")).toEqual(a);
     expect(out.find((t) => t.id === "b")).toEqual(b);
+  });
+});
+
+describe("правки, которым отправляться некуда", () => {
+  it("операции больше нет в Дзен-мани — правка в `gone` и в журнале пропусков", () => {
+    const out = buildPushItems({ ghost: { comment: "x" } }, cache([]));
+    expect(out.toPush).toEqual([]);
+    expect(out.gone).toEqual(["ghost"]);
+    expect(out.skipped).toEqual([{ id: "ghost", reason: expect.stringContaining("больше нет") }]);
+  });
+
+  it("операция удалена в Дзен-мани (надгробие в кэше) — тоже `gone`", () => {
+    const out = buildPushItems({ a: { comment: "x" } }, cache([zt("a", 1, true)]));
+    expect(out.gone).toEqual(["a"]);
+    expect(out.skipped[0].reason).toMatch(/удалена/);
+  });
+
+  it("правка счёта, совпавшая с облаком, — в `satisfied`", () => {
+    const acc = { id: "acc-1", title: "Карта", archive: false } as unknown as import("./zenmoney").ZenAccount;
+    const out = buildAccountPush({ "acc-1": { title: "Карта" } }, [acc], 1);
+    expect(out.accounts).toEqual([]);
+    expect(out.satisfied).toEqual(["acc-1"]);
   });
 });

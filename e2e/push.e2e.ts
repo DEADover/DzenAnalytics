@@ -168,3 +168,40 @@ test("отправка, запущенная во время синхрониз�
   await page.waitForTimeout(2500);
   expect(await shown()).toBe("во время синхронизации");
 });
+
+test("правка категории, совпавшая с облаком, и правка исчезнувшей операции не висят в очереди", async ({ page, zen }) => {
+  await connectZen(page, "/transactions");
+  await setPushMode(page, "manual");
+  await page.evaluate(async () => {
+    type S = {
+      useTagEditsStore: { getState: () => { patch: (id: string, p: unknown) => Promise<void> } };
+      useEditsStore: { getState: () => { setEdit: (id: string, p: unknown) => Promise<void> } };
+    };
+    const store = (window as unknown as { __store: (n: string) => Promise<S> }).__store;
+    // Название то же, что в облаке: отправлять нечего.
+    await (await store("useTagEditsStore")).useTagEditsStore.getState().patch("tag-food", { title: "Продукты" });
+    // Операции с таким id в Дзен-мани нет.
+    await (await store("useEditsStore")).useEditsStore.getState().setEdit("no-such-operation", { comment: "x" });
+  });
+  const pending = () =>
+    page.evaluate(async () => {
+      type S = {
+        useTagEditsStore: { getState: () => { edits: Record<string, unknown> } };
+        useEditsStore: { getState: () => { edits: Record<string, unknown> } };
+        useZenmoneyStore: { getState: () => { pushPendingEdits: () => Promise<unknown> } };
+      };
+      const store = (window as unknown as { __store: (n: string) => Promise<S> }).__store;
+      const tags = (await store("useTagEditsStore")).useTagEditsStore.getState().edits;
+      const edits = (await store("useEditsStore")).useEditsStore.getState().edits;
+      return Object.keys(tags).length + Object.keys(edits).length;
+    });
+  expect(await pending()).toBe(2);
+  await page.evaluate(async () => {
+    type S = { useZenmoneyStore: { getState: () => { pushPendingEdits: () => Promise<unknown> } } };
+    const { useZenmoneyStore } = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useZenmoneyStore");
+    await useZenmoneyStore.getState().pushPendingEdits();
+  });
+  // В облако ничего не ушло, а очередь пуста.
+  expect(zen.pushes).toHaveLength(0);
+  expect(await pending()).toBe(0);
+});

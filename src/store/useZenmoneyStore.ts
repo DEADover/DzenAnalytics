@@ -1610,6 +1610,27 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           });
         }
       }
+      // То, что отправлять незачем, с очереди всё равно уходит — и когда запрос
+      // есть, и когда слать нечего: иначе счётчик «ждёт отправки» горел бы
+      // вечно. Это правки категорий и счетов, совпавшие с облаком, и правки
+      // операций, которых в Дзен-мани больше нет. Правку ещё не отправленного
+      // черновика «исчезнувшей» не считаем — её операция просто ещё не доехала.
+      const settleSatisfied = async () => {
+        const goneIds = built.gone.filter((id) => !(id in draftsSent));
+        if (goneIds.length > 0) await useEditsStore.getState().clearMany(goneIds);
+        const tagDone = unchangedSince(
+          tagPush.satisfied,
+          tagEdits,
+          useTagEditsStore.getState().edits
+        );
+        if (tagDone.length > 0) await useTagEditsStore.getState().clearMany(tagDone);
+        const accDone = unchangedSince(
+          accPush.satisfied,
+          accEdits,
+          useAccountEditsStore.getState().edits
+        );
+        if (accDone.length > 0) await useAccountEditsStore.getState().clearMany(accDone);
+      };
       if (
         toPush.length === 0 &&
         recreates.length === 0 &&
@@ -1669,6 +1690,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         // Действия с планами, которым отправлять нечего (дату уже закрыли или
         // правка ничего не меняет), тоже не должны висеть в очереди.
         await usePlanActionsStore.getState().clearPushed(planPush.doneIds);
+        await settleSatisfied();
         return result;
       }
 
@@ -1817,6 +1839,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       });
       await useEditsStore.getState().clearMany(pushedIds);
       for (const c of carried) await useEditsStore.getState().setEdit(c.id, c.patch);
+      await settleSatisfied();
 
       // 5b) Drop drafts that now live in the cloud (sent + echoed, or stale
       //     ones that were already there). The mapper re-creates them from

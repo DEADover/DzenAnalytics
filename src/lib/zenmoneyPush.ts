@@ -86,6 +86,13 @@ export interface PushBuildResult {
    * "Zenmoney won't update this in place → recreate" pattern.
    */
   recreates: Resurrection[];
+  /**
+   * Правки операций, которых в Дзен-мани больше нет: удалены там или уже
+   * пересозданы под новым id. Отправить их некуда и никогда не будет куда —
+   * вызывающий снимает их с очереди, иначе счётчик «ждёт отправки» горел бы
+   * вечно. Они же перечислены в `skipped` — для журнала.
+   */
+  gone: string[];
   /** Edits we couldn't transform — paired with a human-readable reason. */
   skipped: { id: string; reason: string }[];
 }
@@ -580,6 +587,7 @@ export function buildPushItems(
   const toPush: PushItem[] = [];
   const recreates: Resurrection[] = [];
   const skipped: { id: string; reason: string }[] = [];
+  const gone: string[] = [];
 
   // A built patch is either an in-place update (same id) or — when the user
   // changed the time-of-day (`created`) — a recreate (new id + delete old),
@@ -607,15 +615,13 @@ export function buildPushItems(
   for (const [id, edit] of Object.entries(edits)) {
     const original = transactionsById.get(id);
     if (!original) {
-      skipped.push({
-        id,
-        reason:
-          "Операции нет в локальной копии Дзен-мани — синхронизируйтесь и повторите",
-      });
+      skipped.push({ id, reason: "Операции больше нет в Дзен-мани — правка снята" });
+      gone.push(id);
       continue;
     }
     if (original.deleted) {
-      skipped.push({ id, reason: "Операция удалена в Дзен-мани" });
+      skipped.push({ id, reason: "Операция удалена в Дзен-мани — правка снята" });
+      gone.push(id);
       continue;
     }
 
@@ -1031,7 +1037,7 @@ export function buildPushItems(
     emit(id, zen, original);
   }
 
-  return { toPush, recreates, skipped };
+  return { toPush, recreates, skipped, gone };
 }
 
 /**
@@ -1660,10 +1666,16 @@ export function buildTagPush(
   edits: Record<string, TagEditPatch>,
   cacheTags: ZenTag[],
   stampSeconds: number
-): { tags: ZenTag[]; skipped: { id: string; reason: string }[] } {
+): {
+  tags: ZenTag[];
+  skipped: { id: string; reason: string }[];
+  /** Правки, которым отправлять нечего: в облаке уже так. Снимаются с очереди. */
+  satisfied: string[];
+} {
   const byId = new Map(cacheTags.map((t) => [t.id, t]));
   const tags: ZenTag[] = [];
   const skipped: { id: string; reason: string }[] = [];
+  const satisfied: string[] = [];
   for (const [id, edit] of Object.entries(edits)) {
     const orig = byId.get(id);
     if (!orig) {
@@ -1703,11 +1715,14 @@ export function buildTagPush(
       next.required = edit.required;
       changed = true;
     }
-    if (!changed) continue; // net no-op
+    if (!changed) {
+      satisfied.push(id); // net no-op
+      continue;
+    }
     next.changed = stampSeconds;
     tags.push(next);
   }
-  return { tags, skipped };
+  return { tags, skipped, satisfied };
 }
 
 /** A locally-created category to be pushed as a brand-new Zenmoney tag. */
@@ -2293,10 +2308,16 @@ export function buildAccountPush(
   edits: Record<string, import("../store/useAccountEditsStore").AccountEdit>,
   cacheAccounts: ZenAccount[],
   stampSeconds: number
-): { accounts: ZenAccount[]; skipped: { id: string; reason: string }[] } {
+): {
+  accounts: ZenAccount[];
+  skipped: { id: string; reason: string }[];
+  /** Правки, которым отправлять нечего: в облаке уже так. Снимаются с очереди. */
+  satisfied: string[];
+} {
   const byId = new Map(cacheAccounts.map((a) => [a.id, a]));
   const accounts: ZenAccount[] = [];
   const skipped: { id: string; reason: string }[] = [];
+  const satisfied: string[] = [];
   for (const [id, edit] of Object.entries(edits)) {
     const orig = byId.get(id);
     if (!orig) {
@@ -2338,7 +2359,10 @@ export function buildAccountPush(
     if (edit.payoffStep !== undefined) setIf("payoffStep", edit.payoffStep);
     if (edit.payoffInterval !== undefined)
       setIf("payoffInterval", edit.payoffInterval);
-    if (!changed) continue; // net no-op
+    if (!changed) {
+      satisfied.push(id); // net no-op
+      continue;
+    }
     // Вклад и кредит Дзен-мани принимает только с полным набором параметров
     // (ставка, срок, капитализация, периодичность выплат) — иначе отвечает
     // 400 и роняет ВЕСЬ пуш, а не одну запись. Проверено на живом API.
@@ -2364,7 +2388,7 @@ export function buildAccountPush(
     next.changed = stampSeconds;
     accounts.push(next);
   }
-  return { accounts, skipped };
+  return { accounts, skipped, satisfied };
 }
 
 /**
