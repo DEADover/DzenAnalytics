@@ -28,3 +28,10 @@ export function formatDayHeader(ymd: string): { label: string; weekday: string }
   if (ymd === yYmd) return { label: `Вчера, ${dateLabel}`, weekday };
   return { label: dateLabel, weekday };
 }
+
+/** «31 августа» — день с месяцем, без года: год и так текущий. */
+export function dayAndMonth(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+}

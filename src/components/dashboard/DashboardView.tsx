@@ -20,20 +20,13 @@ import { MONTHS_IN } from "../../lib/months";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { CtaLink } from "../CtaLink";
-import {
-  BlockTitle,
-  CashflowBars,
-  CapitalBlock,
-  AccountsBlock,
-  CategoriesList,
-  UpcomingList,
-  ObservationsList,
-  ActivityHeat,
-  ZenPlannedList,
-  MonthOverMonthBlock,
-  FreeMoneyBlock,
-  FreeMoneyCompactBlock,
-} from "./blocks";
+import { BlockTitle } from "./blocks/shared";
+import { CashflowBars } from "./blocks/cashflow";
+import { CapitalBlock } from "./blocks/capital";
+import { AccountsBlock, CategoriesList, ObservationsList, UpcomingList, ZenPlannedList } from "./blocks/lists";
+import { ActivityHeat } from "./blocks/activity";
+import { MonthOverMonthBlock } from "./blocks/monthOverMonth";
+import { FreeMoneyBlock, FreeMoneyCompactBlock } from "./blocks/freeMoney";
 import { LinksRow } from "./LinksRow";
 import {
   EmptyDashboard,
