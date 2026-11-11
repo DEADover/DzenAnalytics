@@ -116,6 +116,19 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
     };
   }, [shown, anchor, placement, content]);
 
+  // Кнопка одними значками безымянна для экранного чтеца — строка подсказки
+  // и есть её имя. Смотрим по готовому элементу: есть свой текст или свой
+  // `aria-label` — имя не трогаем.
+  useLayoutEffect(() => {
+    const el = anchor;
+    if (!el || typeof content !== "string") return;
+    if (el.hasAttribute("aria-labelledby") || (el.textContent || "").trim()) return;
+    const own = el.getAttribute("aria-label");
+    if (own && el.getAttribute("data-tooltip-label") == null) return;
+    el.setAttribute("aria-label", content);
+    el.setAttribute("data-tooltip-label", "");
+  }, [anchor, content]);
+
   if (!content || !isValidElement(children)) return children;
 
   // Merge our handlers/ref onto the child without adding a layout wrapper.
@@ -176,3 +189,4 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
     </>
   );
 }
+

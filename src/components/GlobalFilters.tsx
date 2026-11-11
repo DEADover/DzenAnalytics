@@ -1084,6 +1084,7 @@ export function GlobalFilters({
             value={search}
             onChange={(e) => setSearchSoon(e.target.value)}
             placeholder="Фильтр: получатель, комментарий"
+            aria-label="Фильтр: получатель, комментарий"
             /* Высота ступени 34, как у соседних кнопок и дорожек: с py-1.5
                поле выходило на 30 и просаживалось в ряду. */
             className="input pl-9 pr-9 text-[12.5px] leading-4 h-[34px] py-0"
@@ -1092,6 +1093,7 @@ export function GlobalFilters({
             <button
               onClick={() => setSearchSoon("", true)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-text"
+              aria-label="Очистить фильтр"
             >
               <X className="w-4 h-4" />
             </button>

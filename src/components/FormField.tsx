@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
 import clsx from "clsx";
 import { Badge } from "./Badge";
 import { Tooltip } from "./Tooltip";
@@ -32,13 +32,26 @@ export function FormField({
   className?: string;
   children: ReactNode;
 }) {
+  const labelId = useId();
+  const boxRef = useRef<HTMLDivElement>(null);
+  // Ярлык — имя поля для экранного чтеца. Поля внутри бывают любые (поле
+  // даты, список, текст), поэтому связываем по готовой разметке: первое
+  // поле без своего имени получает ярлык.
+  useLayoutEffect(() => {
+    const control = boxRef.current?.querySelector<HTMLElement>(
+      'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea, [role="combobox"]'
+    );
+    if (!control || control.hasAttribute("aria-label") || control.hasAttribute("aria-labelledby")) return;
+    control.setAttribute("aria-labelledby", labelId);
+  });
   return (
-    <div className={clsx("min-w-0", className, attention?.required && "field-attention")}>
+    <div ref={boxRef} className={clsx("min-w-0", className, attention?.required && "field-attention")}>
       <div className="flex items-center gap-1.5 mb-1 min-w-0 whitespace-nowrap">
         {/* «ⓘ» — внутри ярлыка, его шрифтом: отдельным значком он был выше
             строки ярлыка, и поле съезжало ниже соседних. */}
         <span className="label flex items-center gap-1">
-          {label}
+          {/* Имя поля — только сам ярлык, без «ⓘ». */}
+          <span id={labelId}>{label}</span>
           {hint && (
             <Tooltip content={hint}>
               <span className="text-muted/70 cursor-help normal-case tracking-normal">ⓘ</span>

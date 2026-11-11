@@ -242,6 +242,7 @@ export function SearchPage() {
                 value={exclude}
                 onChange={(e) => setExclude(e.target.value)}
                 placeholder="Слова, которых не должно быть"
+                aria-label="Исключить"
                 className="input text-sm pl-9"
               />
             </div>
@@ -251,7 +252,7 @@ export function SearchPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div>
             <label className="label block mb-1.5 flex items-center gap-1">
-              <Calendar className="w-3 h-3" />C
+              <Calendar className="w-3 h-3" />С
             </label>
             <DateField
               typeable
@@ -279,6 +280,7 @@ export function SearchPage() {
               value={minAmount}
               onChange={(e) => setMinAmount(e.target.value)}
               placeholder="0"
+              aria-label="Сумма от"
               className="input text-xs"
             />
           </div>
@@ -289,6 +291,7 @@ export function SearchPage() {
               value={maxAmount}
               onChange={(e) => setMaxAmount(e.target.value)}
               placeholder="∞"
+              aria-label="Сумма до"
               className="input text-xs"
             />
           </div>

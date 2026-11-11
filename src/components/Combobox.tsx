@@ -26,6 +26,8 @@ export interface ComboboxProps {
   groups?: ComboboxGroup[];
   onChange: (v: string) => void;
   placeholder?: string;
+  /** Имя поля для экранного чтеца, если рядом нет связанного ярлыка. */
+  ariaLabel?: string;
   /** Max popup height in CSS — defaults to "min(50vh, 320px)". */
   maxHeight?: string;
   /** If false, free-form typing is disabled (only listed options allowed). */
@@ -95,6 +97,7 @@ export function Combobox({
   groups,
   onChange,
   placeholder,
+  ariaLabel,
   maxHeight = "min(50vh, 320px)",
   allowCustom = true,
   clearable = false,
@@ -313,6 +316,7 @@ export function Combobox({
             openList();
           }}
           role="combobox"
+          aria-label={ariaLabel}
           aria-expanded={open && popupHasItems}
           aria-controls={open && popupHasItems ? nav.listId : undefined}
           aria-autocomplete="list"
@@ -396,6 +400,7 @@ export function Combobox({
           }}
           className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-text"
           tabIndex={-1}
+          aria-label={open ? "Скрыть список" : "Показать список"}
         >
           <ChevronDown
             className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`}

@@ -130,6 +130,7 @@ export function WhatIfCategories({
               options={free.map((c) => c.category)}
               onChange={add}
               placeholder="Другая категория…"
+              ariaLabel="Добавить категорию"
               allowCustom={false}
               searchable
               renderIcon={(name) => <CategoryDot category={name} />}

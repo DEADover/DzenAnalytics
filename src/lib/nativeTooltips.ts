@@ -16,6 +16,8 @@ import { fromTouch } from "./touchInput";
 // keeps `title` for anything reading it (a11y tooling, tests, copy).
 
 const STASH = "data-native-title";
+/** Пометка: `aria-label` поставил мост — на время, пока `title` снят. */
+const LENT_LABEL = "data-title-label";
 const DELAY_MS = 120;
 
 let bubble: HTMLDivElement | null = null;
@@ -157,6 +159,12 @@ function stash(el: HTMLElement): string | null {
   if (live != null) {
     el.setAttribute(STASH, live);
     el.removeAttribute("title");
+    // У кнопки одними значками `title` и есть её имя для экранного чтеца —
+    // без него на время подсказки она становилась безымянной.
+    if (!el.hasAttribute("aria-label") && !el.hasAttribute("aria-labelledby") && !(el.textContent || "").trim()) {
+      el.setAttribute("aria-label", live);
+      el.setAttribute(LENT_LABEL, "");
+    }
     return live;
   }
   return el.getAttribute(STASH);
@@ -172,6 +180,10 @@ function restore(el: Element): void {
   // уже нужного значения. Поэтому кладём обратно, только если атрибута нет.
   if (el.getAttribute("title") == null) el.setAttribute("title", saved);
   el.removeAttribute(STASH);
+  if (el.hasAttribute(LENT_LABEL)) {
+    el.removeAttribute("aria-label");
+    el.removeAttribute(LENT_LABEL);
+  }
 }
 
 function onOver(e: Event): void {
@@ -208,6 +220,28 @@ function onOut(e: Event): void {
   if (el === anchor || el === pending || anchor === null) hide();
 }
 
+/**
+ * Фокус с клавиатуры — та же подсказка, что при наведении: раньше пояснения
+ * `title` с клавиатуры не было видно вовсе. Фокус от клика мышью подсказку не
+ * открывает — для мыши есть наведение.
+ */
+function onFocusIn(e: Event): void {
+  const el = (e.target as Element | null)?.closest?.(`[title], [${STASH}]`) as HTMLElement | null;
+  if (!el || !(e.target instanceof Element) || !e.target.matches(":focus-visible")) return;
+  if (el === anchor) return;
+  const text = stash(el);
+  if (text == null) return;
+  hide();
+  if (wants(el, text)) show(el, text);
+}
+
+function onFocusOut(e: Event): void {
+  const el = (e.target as Element | null)?.closest?.(`[${STASH}]`);
+  if (!el) return;
+  restore(el);
+  if (el === anchor) hide();
+}
+
 /** Anything that moves the page under the bubble invalidates its position. */
 function onScroll(): void {
   if (anchor && bubble && bubble.style.opacity === "1") place(anchor);
@@ -219,9 +253,13 @@ export function installNativeTooltips(): () => void {
   // A click usually changes what's under the cursor (menus, dialogs) — drop the
   // bubble rather than leave it hanging over the new content.
   document.addEventListener("click", hide, true);
+  document.addEventListener("focusin", onFocusIn);
+  document.addEventListener("focusout", onFocusOut);
   window.addEventListener("scroll", onScroll, true);
   window.addEventListener("resize", onScroll);
   return () => {
+    document.removeEventListener("focusin", onFocusIn);
+    document.removeEventListener("focusout", onFocusOut);
     document.removeEventListener("mouseover", onOver, true);
     document.removeEventListener("mouseout", onOut, true);
     document.removeEventListener("click", hide, true);
