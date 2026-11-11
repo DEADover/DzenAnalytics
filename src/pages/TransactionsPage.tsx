@@ -1,6 +1,6 @@
 import { accountKeyOf, txAccountKey } from "../lib/accountKey";
 import { AccountName } from "../components/AccountName";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Download,
   Plus,
@@ -198,9 +198,9 @@ export function TransactionsPage() {
   }, [monthParam, setMonth]);
 
   // Без окна «Удалить?» — сразу, с плашкой «Отменить» (lib/undoable).
-  async function handleDelete(tx: Transaction) {
+  const handleDelete = useCallback(async (tx: Transaction) => {
     await deleteWithUndo([tx.id]);
-  }
+  }, []);
 
   const edits = useEditsStore((s) => s.edits);
   const editsLoaded = useEditsStore((s) => s.loaded);
@@ -231,12 +231,15 @@ export function TransactionsPage() {
   const [editing, setEditing] = useState<Transaction | null>(null);
   /** Открыть редактор. Открыли — значит операцию посмотрели: снимаем пометку
    *  «новая» сразу, как это делает приложение Дзен-мани. */
-  const openEditor = (t: Transaction) => {
-    setEditing(t);
-    if (t.unseen) {
-      void setEdit(t.id, { unseen: false }).then(() => refresh());
-    }
-  };
+  const openEditor = useCallback(
+    (t: Transaction) => {
+      setEditing(t);
+      if (t.unseen) {
+        void setEdit(t.id, { unseen: false }).then(() => refresh());
+      }
+    },
+    [setEdit, refresh]
+  );
   const [creating, setCreating] = useState<TxKind | null>(null);
   const [creatingDebt, setCreatingDebt] = useState(false);
   // Операция, с которой снимают копию (issue #78). Живёт отдельно от
@@ -290,14 +293,14 @@ export function TransactionsPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selected.size, anythingOnTop]);
 
-  function toggleSelect(id: string) {
+  const toggleSelect = useCallback((id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }
+  }, []);
 
   async function applyBulk(patch: TransactionEdit, commentAppend?: string) {
     const ids = Array.from(selected);
@@ -866,12 +869,12 @@ export function TransactionsPage() {
                 template={resize.template}
                 edited={!!edits[t.id]}
                 draft={!!drafts[t.id]}
-                onEdit={() => openEditor(t)}
-                onCopy={apiConnected ? () => setCopying(t) : undefined}
-                onDelete={() => handleDelete(t)}
-                onSplit={apiConnected ? () => setSplitting(t) : undefined}
+                onEdit={openEditor}
+                onCopy={apiConnected ? setCopying : undefined}
+                onDelete={handleDelete}
+                onSplit={apiConnected ? setSplitting : undefined}
                 selected={selected.has(t.id)}
-                onToggleSelect={() => toggleSelect(t.id)}
+                onToggleSelect={toggleSelect}
               />
             ))}
           </div>
@@ -1121,12 +1124,12 @@ function DayGroup({
           template={template}
           edited={!!edits[t.id]}
           draft={!!drafts[t.id]}
-          onEdit={() => onEdit(t)}
-          onCopy={onCopy && (() => onCopy(t))}
-          onDelete={() => onDelete(t)}
-          onSplit={onSplit && (() => onSplit(t))}
+          onEdit={onEdit}
+          onCopy={onCopy}
+          onDelete={onDelete}
+          onSplit={onSplit}
           selected={selected.has(t.id)}
-          onToggleSelect={() => onToggleSelect(t.id)}
+          onToggleSelect={onToggleSelect}
           hideDate
         />
       ))}
@@ -1134,7 +1137,12 @@ function DayGroup({
   );
 }
 
-function Row({
+/**
+ * Строка ленты. Обработчики принимают операцию и приходят стабильными, а
+ * привязка к строке — здесь: тогда `memo` пропускает строки, у которых ничего
+ * не поменялось (отметка одной галочки не перерисовывает всю ленту).
+ */
+const Row = memo(function Row({
   tx,
   template,
   edited,
@@ -1151,26 +1159,28 @@ function Row({
   template: string;
   edited: boolean;
   draft?: boolean;
-  onEdit: () => void;
-  onCopy?: () => void;
-  onDelete: () => void;
+  onEdit: (t: Transaction) => void;
+  onCopy?: (t: Transaction) => void;
+  onDelete: (t: Transaction) => void;
   /** Разделить операцию на части. Нет — делить нечего или незачем. */
-  onSplit?: () => void;
+  onSplit?: (t: Transaction) => void;
   selected: boolean;
-  onToggleSelect: () => void;
+  onToggleSelect: (id: string) => void;
   hideDate?: boolean;
 }) {
+  const open = () => onEdit(tx);
+  const toggle = () => onToggleSelect(tx.id);
   return (
     <OperationListRow
       template={template}
       selected={selected}
-      onToggleSelect={onToggleSelect}
-      onOpen={onEdit}
+      onToggleSelect={toggle}
+      onOpen={open}
     >
       <Checkbox
         checked={selected}
         stopPropagation
-        onChange={onToggleSelect}
+        onChange={toggle}
         label="Выбрать операцию"
       />
       {!hideDate && (
@@ -1189,10 +1199,15 @@ function Row({
       >
         <OperationAmount tx={tx} />
       </div>
-      <OperationActions onEdit={onEdit} onCopy={onCopy} onSplit={onSplit} onDelete={onDelete} />
+      <OperationActions
+        onEdit={open}
+        onCopy={onCopy && (() => onCopy(tx))}
+        onSplit={onSplit && (() => onSplit(tx))}
+        onDelete={() => onDelete(tx)}
+      />
     </OperationListRow>
   );
-}
+});
 
 /** Порядок ленты по выбранной сортировке — общий для операций и планов в ней. */
 function feedComparator(mode: SortMode): (a: Transaction, b: Transaction) => number {
