@@ -1,15 +1,6 @@
 import { useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  Calculator,
-  CalendarDays,
-  Check,
-  Info,
-  Plus,
-  Scissors,
-  Trash2,
-  X,
-} from "lucide-react";
+import { FooterNote } from "./FooterNote";
+import { Calculator, CalendarDays, Check, Plus, Scissors, Trash2, X } from "lucide-react";
 import type { Transaction } from "../types";
 import { CategoryCascadePicker } from "./CategoryCascadePicker";
 import { Combobox } from "./Combobox";
@@ -500,15 +491,9 @@ export function SplitTransactionModal({
             и так ожила, а зелёная плашка «Готово: 2 части на 1 122 ₽»
             лишь повторяла заголовок и надпись на кнопке. */}
         {error ? (
-          <div className="inline-flex items-start gap-2 max-w-md rounded-lg px-3 py-2 text-xs bg-expense/10 text-expense border border-expense/30">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
-            <span>{error}</span>
-          </div>
+          <FooterNote tone="error">{error}</FooterNote>
         ) : problem ? (
-          <div className="inline-flex items-start gap-2 max-w-md rounded-lg px-3 py-2 text-xs bg-warn/10 text-warn border border-warn/30">
-            <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
-            <span>{problem}</span>
-          </div>
+          <FooterNote tone="warn">{problem}</FooterNote>
         ) : (
           <span className="inline-flex items-center gap-1.5 text-xs text-muted">
             <Check className="w-3.5 h-3.5 shrink-0 text-income" />

@@ -1,6 +1,7 @@
 import { localToday } from "../../lib/period";
+import { FooterNote } from "../FooterNote";
 import { useEffect, useState } from "react";
-import { AlertTriangle, CalendarClock, Check, Repeat, X } from "lucide-react";
+import { CalendarClock, Check, Repeat, X } from "lucide-react";
 import type { Transaction } from "../../types";
 import type { ZenTransaction } from "../../lib/zenmoney";
 import { loadZenCache } from "../../lib/zenmoneyCache";
@@ -174,10 +175,7 @@ export function MakeRecurringModal({ tx, onClose }: { tx: Transaction; onClose: 
 
       <ModalFooter justify="between" className="flex-wrap">
         {error ? (
-          <div className="inline-flex items-start gap-2 max-w-md rounded-lg px-3 py-2 text-xs bg-expense/10 text-expense border border-expense/30">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
-            <span>{error}</span>
-          </div>
+          <FooterNote tone="error">{error}</FooterNote>
         ) : raw === null ? (
           <span className="text-xs text-muted max-w-xs">
             Операция ещё не в Дзен-мани — план можно будет завести после отправки

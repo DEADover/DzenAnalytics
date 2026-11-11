@@ -1,6 +1,7 @@
 import { localToday } from "../../lib/period";
+import { FooterNote } from "../FooterNote";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Check, Pencil, X } from "lucide-react";
+import { Check, Pencil, X } from "lucide-react";
 import { buildDraftTransaction, newDraftId } from "../../lib/zenmoneyPush";
 import { loadZenCache } from "../../lib/zenmoneyCache";
 import { evalAmount, round2 } from "../../lib/splitTransaction";
@@ -375,10 +376,7 @@ export function PlanEditModal({
 
       <ModalFooter justify="between" className="flex-wrap">
         {error ? (
-          <div className="inline-flex items-start gap-2 max-w-md rounded-lg px-3 py-2 text-xs bg-expense/10 text-expense border border-expense/30">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
-            <span>{error}</span>
-          </div>
+          <FooterNote tone="error">{error}</FooterNote>
         ) : (
           <span />
         )}

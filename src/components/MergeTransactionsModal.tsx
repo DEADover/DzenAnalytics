@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Info, Merge, X } from "lucide-react";
+import { FooterNote } from "./FooterNote";
+import { ArrowRight, Merge, X } from "lucide-react";
 import type { Transaction } from "../types";
 import { CategoryCascadePicker } from "./CategoryCascadePicker";
 import { Combobox } from "./Combobox";
@@ -237,15 +238,9 @@ export function MergeTransactionsModal({
 
       <ModalFooter justify="between" className="flex-wrap">
         {error ? (
-          <div className="inline-flex items-start gap-2 max-w-md rounded-lg px-3 py-2 text-xs bg-expense/10 text-expense border border-expense/30">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
-            <span>{error}</span>
-          </div>
+          <FooterNote tone="error">{error}</FooterNote>
         ) : blocker ? (
-          <div className="inline-flex items-start gap-2 max-w-md rounded-lg px-3 py-2 text-xs bg-warn/10 text-warn border border-warn/30">
-            <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
-            <span>{blocker}</span>
-          </div>
+          <FooterNote tone="warn">{blocker}</FooterNote>
         ) : (
           <span className="inline-flex items-center gap-1.5 text-xs text-muted">
             <ArrowRight className="w-3.5 h-3.5 shrink-0" />
