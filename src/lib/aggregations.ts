@@ -1103,24 +1103,61 @@ export function suggestCategoriesForUncategorized(
       payee: (t.payee || "").toLowerCase(),
     }));
 
+  // Индексы вместо перебора всей истории для каждой операции: в очки идут
+  // только операции с общим словом (иначе сходство ноль) и с похожим
+  // получателем (надбавка). Получателей различных намного меньше, чем
+  // операций, — подстроку проверяем по ним.
+  const byToken = new Map<string, number[]>();
+  const byPayee = new Map<string, number[]>();
+  corpus.forEach((c, i) => {
+    for (const tok of c.tokens) {
+      const list = byToken.get(tok);
+      if (list) list.push(i);
+      else byToken.set(tok, [i]);
+    }
+    if (!c.payee) return;
+    const list = byPayee.get(c.payee);
+    if (list) list.push(i);
+    else byPayee.set(c.payee, [i]);
+  });
+  // Одинаковые получатель и слова — одинаковый итог: считаем раз.
+  const scoredCache = new Map<string, { tx: Transaction; score: number }[]>();
+
   const suggestions: CategorySuggestion[] = [];
 
   for (const u of uncategorized) {
     const uTokens = tokenize(`${u.payee} ${u.comment}`);
     const uPayee = (u.payee || "").toLowerCase();
+    const cacheKey = `${uPayee}\u0000${[...uTokens].join(" ")}`;
 
-    const scored = corpus
-      .map((c) => {
-        const sim = jaccard(uTokens, c.tokens);
-        const payeeBoost =
-          uPayee && c.payee && (uPayee === c.payee || c.payee.includes(uPayee) || uPayee.includes(c.payee))
-            ? 0.5
-            : 0;
-        return { tx: c.tx, score: sim + payeeBoost };
-      })
-      .filter((x) => x.score > 0.05)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, k);
+    let scored = scoredCache.get(cacheKey);
+    if (!scored) {
+      const boosted = new Set<number>();
+      if (uPayee) {
+        for (const [p, ids] of byPayee) {
+          if (uPayee === p || p.includes(uPayee) || uPayee.includes(p)) for (const i of ids) boosted.add(i);
+        }
+      }
+      const seen = new Set<number>(boosted);
+      for (const tok of uTokens) for (const i of byToken.get(tok) ?? []) seen.add(i);
+      // Порядок истории при равных очках — как у прежнего полного перебора.
+      const candidates = Int32Array.from(seen).sort();
+      // Лучшие k за один проход вместо сортировки всех совпавших. Равные очки
+      // не вытесняют уже взятое — раньше в истории остаётся впереди.
+      const top: { tx: Transaction; score: number }[] = [];
+      for (const i of candidates) {
+        const c = corpus[i]!;
+        const score = jaccard(uTokens, c.tokens) + (boosted.has(i) ? 0.5 : 0);
+        if (score <= 0.05) continue;
+        if (top.length === k && score <= top[k - 1]!.score) continue;
+        let at = top.length;
+        while (at > 0 && top[at - 1]!.score < score) at--;
+        top.splice(at, 0, { tx: c.tx, score });
+        if (top.length > k) top.pop();
+      }
+      scored = top;
+      scoredCache.set(cacheKey, scored);
+    }
 
     if (scored.length === 0) continue;
 
